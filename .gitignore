@@ -1,0 +1,12 @@
+/cfg/
+/bin/
+/lib/
+/db/
+/dbd/
+/include/
+/templates/
+/configure/*.local
+O.*/
+*.orig
+*.log
+.*.swp

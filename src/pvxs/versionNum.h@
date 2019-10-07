@@ -1,0 +1,6 @@
+#ifndef PVXS_VERSION_H
+#  error Include pvxs/version.h instead of this file
+#endif
+#define PVXS_MAJOR_VERSION @PVXS_MAJOR_VERSION@
+#define PVXS_MINOR_VERSION @PVXS_MINOR_VERSION@
+#define PVXS_MAINTENANCE_VERSION @PVXS_MAINTENANCE_VERSION@
