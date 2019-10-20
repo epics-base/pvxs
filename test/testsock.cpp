@@ -7,6 +7,7 @@
 #include <epicsUnitTest.h>
 #include <testMain.h>
 #include <epicsThread.h>
+#include <osiSock.h>
 
 #include <evhelper.h>
 #include <pvxs/log.h>

@@ -14,8 +14,10 @@ addons:
     - clang
     - g++-mingw-w64-i686
     - qemu-system-x86
+    - cmake
 
 install:
+  - ./travis-libevent.sh
   - ./.ci/travis-prepare.sh
 
 script:
