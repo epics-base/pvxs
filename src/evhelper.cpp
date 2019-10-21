@@ -181,31 +181,6 @@ void evbase::assertInLoop()
     assert(pvt->worker.isCurrentThread());
 }
 
-
-static
-void evlog_handler(int severity, const char *msg)
-{
-    const char *sevr = "<\?\?\?>";
-    int lvl = PLVL_CRIT;
-    switch(severity) {
-#define CASE(EVLVL, PLVL) case EVENT_LOG_##EVLVL : lvl = PLVL_##PLVL; sevr = #PLVL; break
-    CASE(DEBUG, DEBUG);
-    CASE(MSG, INFO);
-    CASE(WARN, WARN);
-    CASE(ERR, ERR);
-#undef CASE
-    }
-    log_printf(logerr, lvl, "libevent %s: %s\n", sevr, msg);
-}
-
-void evhelper_ev2err()
-{
-    event_set_log_callback(&evlog_handler);
-
-    // Hook in to use epicsAssert() ?
-    // event_set_fatal_callback()
-}
-
 evevent::evevent(struct event_base *base, evutil_socket_t sock, short mask, event_callback_fn fn, void *arg)
     :ev(event_new(base, sock, mask, fn, arg))
 {

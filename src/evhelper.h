@@ -23,7 +23,8 @@
 namespace pvxsimpl {
 using namespace  pvxs;
 
-// in-line string builder (eg. for exception messages)
+//! in-line string builder (eg. for exception messages)
+//! eg. @code throw std::runtime_error(SB()<<"Some message"<<42); @endcode
 struct SB {
     std::ostringstream strm;
     SB() {}
@@ -34,9 +35,6 @@ struct SB {
 
 //! prepare libevent for use by multiple threads
 PVXS_API void evhelper_setup_thread();
-
-//! Setup forwarding of libevent log messages to errlog
-PVXS_API void evhelper_ev2err();
 
 //! Block the calling thread until any callback in-progress in the
 //! specified loop has completed.

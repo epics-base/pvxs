@@ -17,12 +17,32 @@
 #include <epicsMutex.h>
 #include <epicsGuard.h>
 
+#include "evhelper.h"
+
 typedef epicsGuard<epicsMutex> Guard;
 
 namespace {
 using namespace pvxs;
 
+DEFINE_LOGGER(logerr, "evlog");
+
 epicsThreadOnceId logger_once = EPICS_THREAD_ONCE_INIT;
+
+void evlog_handler(int severity, const char *msg)
+{
+    const char *sevr = "<\?\?\?>";
+    int lvl = PLVL_CRIT;
+    switch(severity) {
+#define CASE(EVLVL, PLVL) case EVENT_LOG_##EVLVL : lvl = PLVL_##PLVL; sevr = #PLVL; break
+    CASE(DEBUG, DEBUG);
+    CASE(MSG, INFO);
+    CASE(WARN, WARN);
+    CASE(ERR, ERR);
+#undef CASE
+    }
+    log_printf(logerr, lvl, "libevent %s: %s\n", sevr, msg);
+}
+
 
 int name2lvl(const std::string& name)
 {
@@ -40,6 +60,11 @@ struct logger_gbl_t {
     epicsMutex lock;
     std::map<std::string, int> config;
     std::multimap<std::string, logger*> loggers;
+
+    logger_gbl_t()
+    {
+        event_set_log_callback(&evlog_handler);
+    }
 
     int init(logger *logger)
     {
