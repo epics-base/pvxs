@@ -77,6 +77,8 @@ struct UDPCollector : public std::enable_shared_from_this<UDPCollector>
                 return;
             }
 
+            log_hex_printf(logio, PLVL_DEBUG, &buf[0], nrx, "UDP Rx from %s", msg.src.tostring().c_str());
+
             msgs.clear();
 
             sbuf<const uint8_t> packet(&buf[0], size_t(nrx));

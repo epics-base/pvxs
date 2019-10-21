@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
         }
         if(opts.peers.empty()) {
             log_printf(out, PLVL_DEBUG, "No peer filter\n");
-        } else if(pva::log_test(out, PLVL_DEBUG)) {
+        } else if(log_test(out, PLVL_DEBUG)) {
             for(const auto& tup : opts.peers) {
                 in_addr addr, netmask;
                 std::tie(addr.s_addr, netmask.s_addr) = tup;

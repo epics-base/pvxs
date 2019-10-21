@@ -10,6 +10,10 @@
 
 #include <pvxs/log.h>
 
+// must include before epicsStdio.h to avoid clash with printf macro
+#include <event2/util.h>
+#include <event2/buffer.h>
+
 #include <envDefs.h>
 #include <epicsAssert.h>
 #include <epicsStdio.h>
@@ -121,6 +125,47 @@ int logger_init(logger *logger)
 
     Guard G(logger_gbl->lock);
     return logger_gbl->init(logger);
+}
+
+void xerrlogHexPrintf(const void *buf, size_t buflen,
+                      const char *fmt, ...)
+{
+    const uint8_t* const cbuf = static_cast<const uint8_t*>(buf);
+    va_list args;
+
+    // whole buffer
+    for(size_t pos=0; pos<buflen;)
+    {
+        // printed line (4 groups of 4 bytes)
+        // addr : AAAAAAAA BBBBBBBB CCCCCCCC DDDDDDDD
+        char buf[4][9];
+        const unsigned addr = pos;
+
+        for(unsigned grp=0; grp<4 && pos<buflen ; grp++)
+        {
+            // group of 4 hex chars
+            unsigned chr=0;
+            for(; chr<8 && pos<buflen; pos++, chr+=2)
+            {
+                static const char hex[17]="0123456789ABCDEF";
+                uint8_t v = cbuf[pos];
+                buf[grp][chr+0] = hex[(v>>4)&0xf];
+                buf[grp][chr+1] = hex[(v>>0)&0xf];
+            }
+            for(; chr<8; chr+=2)
+            {
+                buf[grp][chr+0] = '\0';
+                buf[grp][chr+1] = '\0';
+            }
+            buf[grp][8] = '\0';
+        }
+
+        errlogPrintf("%04x : %s %s %s %s\n", addr, buf[0], buf[1], buf[2], buf[3]);
+    }
+
+    va_start(args, fmt);
+    errlogVprintf(fmt, args);
+    va_end(args);
 }
 
 void logger_level_set(const char *name, int lvl)

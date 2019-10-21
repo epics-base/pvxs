@@ -35,16 +35,24 @@ struct logger {
 PVXS_API int logger_init(logger *logger);
 
 static inline
-bool log_test(logger& logger, int lvl)
+bool _log_test(logger& logger, int lvl)
 {
     int cur = ::epics::atomic::get(logger.lvl);
     if(cur==-1) cur = logger_init(&logger);
     return cur>=lvl;
 }
 
+PVXS_API
+void xerrlogHexPrintf(const void *buf, size_t buflen,
+                      const char *fmt, ...) EPICS_PRINTF_STYLE(3,4);
+
+#define log_test(LOGGER, LVL) ::pvxs::_log_test(LOGGER, LVL)
+
 #define log_printf(LOGGER, LVL, ...) do{ if(log_test(LOGGER, LVL)) errlogPrintf(__VA_ARGS__); }while(0)
 
 #define log_vprintf(LOGGER, LVL, FMT, ARGS) do{ if(log_test(LOGGER, LVL)) errlogVprintf(FMT, ARGS); }while(0)
+
+#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, ...) do{ if(log_test(LOGGER, LVL)) xerrlogHexPrintf(BUF, BUFLEN, __VA_ARGS__); }while(0)
 
 //! Set level for a specific logger
 PVXS_API void logger_level_set(const char *name, int lvl);
