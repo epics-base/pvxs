@@ -325,15 +325,13 @@ void to_wire(sbuf<uint8_t>& buf, const evsockaddr& val, bool be)
             buf[i]=0;
         buf[10] = buf[11] = 0xff;
 
-        buf+=12;
-        to_wire(buf, val->in.sin_addr.s_addr, true);
+        memcpy(buf.pos+12, &val->in.sin_addr.s_addr, 4);
 
     } else if(val.family()==AF_INET6) {
         static_assert (sizeof(val->in6.sin6_addr)==16, "");
         memcpy(buf.pos, &val->in6.sin6_addr, 16);
-        buf += 16;
     }
-
+    buf += 16;
 }
 
 void from_wire(sbuf<const uint8_t> &buf, evsockaddr& val, bool be)
@@ -343,6 +341,7 @@ void from_wire(sbuf<const uint8_t> &buf, evsockaddr& val, bool be)
         return;
     }
 
+    // win32 lacks IN6_IS_ADDR_V4MAPPED()
     bool ismapped = true;
     for(unsigned i=0u; i<10; i++)
         ismapped &= buf[i]==0;
@@ -352,8 +351,7 @@ void from_wire(sbuf<const uint8_t> &buf, evsockaddr& val, bool be)
     if(ismapped) {
         val->in = {};
         val->in.sin_family = AF_INET;
-        buf += 12;
-        from_wire(buf, val->in.sin_addr.s_addr, true);
+        memcpy(&val->in.sin_addr.s_addr, buf.pos+12, 4);
 
     } else {
         val->in6 = {};
@@ -361,8 +359,8 @@ void from_wire(sbuf<const uint8_t> &buf, evsockaddr& val, bool be)
 
         static_assert (sizeof(val->in6.sin6_addr)==16, "");
         memcpy(&val->in6.sin6_addr, buf.pos, 16);
-        buf += 16;
     }
+    buf += 16;
 }
 
 std::ostream& operator<<(std::ostream& strm, const evsockaddr& addr)

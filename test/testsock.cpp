@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <cstring>
+
 #include <epicsUnitTest.h>
 #include <testMain.h>
 #include <epicsThread.h>
@@ -101,7 +103,7 @@ void test_local_mcast()
 
 }
 
-void test_wire()
+void test_from_wire()
 {
     testDiag("Enter %s", __func__);
 
@@ -139,6 +141,21 @@ void test_wire()
     }
 
     {
+        evsockaddr val;
+        const uint8_t buf[] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff, 0x7f,0,0,1, 0xde, 0xad, 0xbe, 0xef};
+        sbuf<const uint8_t> pkt(buf, 16);
+
+        from_wire(pkt, val, true);
+        testOk1(pkt.empty());
+        testOk1(val.family()==AF_INET);
+        testOk(val->in.sin_addr.s_addr==htonl(INADDR_LOOPBACK),
+               "%08x == 0x7f000001", (unsigned)ntohl(val->in.sin_addr.s_addr));
+    }
+}
+
+void test_to_wire()
+{
+    {
         const uint32_t val = 0xdeadbeef;
         uint8_t buf[8];
         sbuf<uint8_t> pkt(buf, 4);
@@ -163,6 +180,19 @@ void test_wire()
     }
 
     {
+        const evsockaddr val(evsockaddr::loopback(AF_INET));
+        uint8_t buf[16+4];
+        sbuf<uint8_t> pkt(buf, 16);
+
+        to_wire(pkt, val, true);
+        testOk1(pkt.empty());
+        testOk1(!pkt.err);
+
+        const uint8_t expect[16] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff, 0x7f,0,0,1};
+        testOk1(std::memcmp(buf, expect, 16)==0);
+    }
+
+    {
         const uint32_t val = 0xdeadbeef;
         uint8_t buf[8] = {0,0,0,0,0,0,0,0};
         sbuf<uint8_t> pkt(buf, 2);
@@ -179,10 +209,11 @@ void test_wire()
 
 MAIN(testsock)
 {
-    testPlan(26);
+    testPlan(32);
     test_udp();
     test_local_mcast();
-    test_wire();
+    test_from_wire();
+    test_to_wire();
     testDiag("Done");
     return testDone();
 }

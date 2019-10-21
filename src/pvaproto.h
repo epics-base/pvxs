@@ -47,13 +47,13 @@ struct sbuf {
 };
 
 template <unsigned N>
-inline void _from_wire(sbuf<const uint8_t>& buf, uint8_t *mem, bool be)
+inline void _from_wire(sbuf<const uint8_t>& buf, uint8_t *mem, bool reverse)
 {
     if(buf.err || buf.size()<N) {
         buf.err = true;
         return;
 
-    } else if(be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG)) {
+    } else if(reverse) {
         // byte order mis-match
         for(unsigned i=0; i<N; i++) {
             mem[i] = buf[N-1-i];
@@ -72,14 +72,14 @@ inline void _from_wire(sbuf<const uint8_t>& buf, uint8_t *mem, bool be)
  * @param val output variable
  * @param be  true if value encoded in buf is in MSBF order, false if in LSBF order
  */
-template<typename T, typename std::enable_if<std::is_pod<T>::value, int>::type =0>
+template<typename T, typename std::enable_if<std::is_scalar<T>::value, int>::type =0>
 inline void from_wire(sbuf<const uint8_t>& buf, T& val, bool be)
 {
     union {
         T v;
         uint8_t b[sizeof(T)];
     } pun;
-    _from_wire<sizeof(T)>(buf, pun.b, be);
+    _from_wire<sizeof(T)>(buf, pun.b, be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG));
     if(!buf.err)
         val = pun.v;
 }
@@ -95,13 +95,13 @@ PVXS_API
 void from_wire(sbuf<const uint8_t>& buf, Size<size_t> size, bool be);
 
 template<unsigned N>
-inline void _to_wire(sbuf<uint8_t>& buf, const uint8_t *mem, bool be)
+inline void _to_wire(sbuf<uint8_t>& buf, const uint8_t *mem, bool reverse)
 {
     if(buf.err || buf.size()<N) {
         buf.err = true;
         return;
 
-    } else if(be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG)) {
+    } else if(reverse) {
         // byte order mis-match
         for(unsigned i=0; i<N; i++) {
             buf[N-1-i] = mem[i];
@@ -128,7 +128,7 @@ inline void to_wire(sbuf<uint8_t>& buf, const T& val, bool be)
         uint8_t b[sizeof(T)];
     } pun;
     pun.v = val;
-    _to_wire<sizeof(T)>(buf, pun.b, be);
+    _to_wire<sizeof(T)>(buf, pun.b, be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG));
 }
 
 PVXS_API

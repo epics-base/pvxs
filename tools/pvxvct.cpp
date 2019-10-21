@@ -303,10 +303,7 @@ int main(int argc, char *argv[])
                     pva::evsockaddr addr;
                     uint16_t port = 0;
 
-                    if(M.size()>=12) {
-                        std::memcpy(guid, M.pos, 12);
-                    }
-                    M += 12;
+                    pva::_from_wire<sizeof(guid)>(M, guid, false);
                     M += 1; // flags/qos. unused
                     pva::from_wire(M, seq, be);
                     M += 2; // "change" count.  unused
