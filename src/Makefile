@@ -7,8 +7,6 @@ include $(TOP)/configure/CONFIG
 
 USR_CPPFLAGS += -DPVXS_API_BUILDING
 
-USR_CXXFLAGS += -std=c++11
-
 # fault on any undefined symbols (eg. from missing LIB_SYS_LIBS)
 USR_LDFLAGS_Linux += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
 USR_LDFLAGS_DEFAULT +=

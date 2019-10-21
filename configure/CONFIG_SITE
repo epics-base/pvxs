@@ -43,3 +43,7 @@ CHECK_RELEASE = YES
 
 # MSVC - skip defining min()/max() macros
 USR_CPPFLAGS_WIN32 += -DNOMINMAX
+
+ifneq ($(filter-out msvc,$(CMPLR_CLASS)),)
+USR_CXXFLAGS += -std=c++11
+endif

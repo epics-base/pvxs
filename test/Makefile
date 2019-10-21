@@ -8,8 +8,6 @@ include $(TOP)/configure/CONFIG
 # access to private headers
 USR_CPPFLAGS += -I$(TOP)/src
 
-USR_CXXFLAGS += -std=c++11
-
 PROD_LIBS += pvxs Com
 
 TESTPROD += testsock
