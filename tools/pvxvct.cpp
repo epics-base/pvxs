@@ -307,9 +307,9 @@ int main(int argc, char *argv[])
                         std::memcpy(guid, M.pos, 12);
                     }
                     M += 12;
-                    M += 1; // flags. unused
+                    M += 1; // flags/qos. unused
                     pva::from_wire(M, seq, be);
-                    M += 1; // "change" count.  unused
+                    M += 2; // "change" count.  unused
                     pva::from_wire(M, addr, be);
                     pva::from_wire(M, port, be);
                     addr.setPort(port);
