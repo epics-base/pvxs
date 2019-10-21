@@ -17,11 +17,11 @@ addons:
     - cmake
 
 install:
+  - ./withenv.sh ./.ci/travis-prepare.sh
   - ./travis-libevent.sh
-  - ./.ci/travis-prepare.sh
 
 script:
-  - ./.ci/travis-build.sh
+  - ./withenv.sh ./.ci/travis-build.sh
 
 # If you need to do more during install and build,
 # add a local directory to your module and do e.g.
@@ -37,6 +37,8 @@ script:
 
 matrix:
   include:
+  - env: BASE=7.0 EPICS_HOST_ARCH=win32-x86
+    os: windows
 
 # Different configurations of default gcc and clang
 

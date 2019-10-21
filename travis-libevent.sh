@@ -1,18 +1,20 @@
-#!/bin/sh
+#!/bin/bash
 set -e -x
 
 env
 
-BFLAGS=
+GFLAGS=()
+BFLAGS=()
 
 if [ "$TRAVIS_OS_NAME" = "windows" ]
 then
     pwd
-    # C:/Program Files (x86)/Microsoft Visual Studio/2017/BuildTools/VC/Tools/MSVC/14.16.27023/bin/Hostx86/x86/cl.exe
-    find "/c/Program Files (x86)" -name vcvars*.bat
-    ./msenv.bat "C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x86
+    ls /c/Users/travis/AppData/Local/Microsoft/WindowsApps
 
-    BFLAGS="$BFLAGS -G "\""Visual Studio 15 2017 x86"\"
+    # C:/Program Files (x86)/Microsoft Visual Studio/2017/BuildTools/VC/Tools/MSVC/14.16.27023/bin/Hostx86/x86/cl.exe
+    find "/c/Program Files (x86)/Microsoft Visual Studio"* -name vcvars*.bat
+
+    GFLAGS=("${GFLAGS[@]}" "-G" "Visual Studio 15 2017")
 fi
 
 perl --version
@@ -21,16 +23,16 @@ cmake --version
 cmake --help
 
 # cmake as of 3.13 knows how to involve parallel make (or whatever)
-cmake --build 2>&1|grep parallel && BFLAGS="$BFLAGS -j 2"
+cmake --build 2>&1|grep parallel && BFLAGS=("${BFLAGS[@]}" "-j" "2")
 
 git clone --branch patches-2.1 https://github.com/libevent/libevent.git
 
 mkdir host-libevent
 cd host-libevent
 
-cmake -DEVENT__DISABLE_OPENSSL=ON -DCMAKE_INSTALL_PREFIX:DIR=$PWD/usr ../libevent
-ls
-cmake --build . $BFLAGS --target install
+cmake "${GFLAGS[@]}" -DEVENT__DISABLE_OPENSSL=ON -DCMAKE_INSTALL_PREFIX:DIR=$PWD/usr ../libevent
+cmake --build . "${BFLAGS[@]}" --target install
+find usr
 
 case "$TRAVIS_OS_NAME" in
 linux) OS_CLASS=Linux;;
