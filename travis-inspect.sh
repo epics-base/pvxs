@@ -10,4 +10,9 @@ EOF
 
 fi
 
+echo "=== configure/RELEASE.local"
+cat configure/RELEASE.local
+echo "=== configure/CONFIG_SITE.local"
+cat configure/CONFIG_SITE.local
+
 exit 0
