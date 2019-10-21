@@ -44,6 +44,7 @@ esac
 cat <<EOF > ../configure/CONFIG_SITE.local
 USR_CPPFLAGS_${OS_CLASS}  += -I$PWD/usr/include
 USR_LDFLAGS_${OS_CLASS}   += -L$PWD/usr/lib
+USR_LDFLAGS_Linux         += -Wl,-rpath,$PWD/usr/lib
 EOF
 
 
