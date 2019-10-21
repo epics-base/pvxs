@@ -21,6 +21,7 @@ install:
   - ./travis-libevent.sh
 
 script:
+  - ./travis-inspect.sh
   - ./withenv.sh ./.ci/travis-build.sh
 
 # If you need to do more during install and build,
