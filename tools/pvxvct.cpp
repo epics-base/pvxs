@@ -60,8 +60,6 @@ parsePeer(const char *optarg)
     }
     in_addr addr, mask;
 
-    std::cerr<<"XXX '"<<match[0]<<"' '"<<match[1]<<"' '"<<match[2]<<"' "<<match.size()<<"\n";
-
     if(hostToIPAddr(match[1].str().c_str(), &addr)) {
         throw std::runtime_error(pva::SB()<<"Expected a host name or IP.  not "<<match[1].str());
     }
