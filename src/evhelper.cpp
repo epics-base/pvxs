@@ -284,10 +284,14 @@ evsockaddr evsockaddr::any(int af, unsigned port)
     evsockaddr ret(af);
     switch(af) {
     case AF_INET:
+        ret->in = {};
+        ret->in.sin_family = af;
         ret->in.sin_addr.s_addr = htonl(INADDR_ANY);
         ret->in.sin_port = htons(port);
         break;
     case AF_INET6:
+        ret->in6 = {};
+        ret->in6.sin6_family = af;
         ret->in6.sin6_addr = IN6ADDR_ANY_INIT;
         ret->in6.sin6_port = htons(port);
         break;
@@ -302,10 +306,14 @@ evsockaddr evsockaddr::loopback(int af, unsigned port)
     evsockaddr ret(af);
     switch(af) {
     case AF_INET:
+        ret->in = {};
+        ret->in.sin_family = af;
         ret->in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         ret->in.sin_port = htons(port);
         break;
     case AF_INET6:
+        ret->in6 = {};
+        ret->in6.sin6_family = af;
         ret->in6.sin6_addr = IN6ADDR_LOOPBACK_INIT;
         ret->in6.sin6_port = htons(port);
         break;
