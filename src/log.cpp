@@ -8,13 +8,14 @@
 #include <set>
 #include <string>
 
-#include <pvxs/log.h>
-
 // must include before epicsStdio.h to avoid clash with printf macro
 #include <event2/util.h>
 #include <event2/buffer.h>
 
+#include <pvxs/log.h>
+
 #include <envDefs.h>
+#include <osiSock.h>
 #include <epicsAssert.h>
 #include <epicsStdio.h>
 #include <epicsThread.h>
