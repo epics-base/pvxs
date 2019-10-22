@@ -438,7 +438,7 @@ void evsocket::bind(evsockaddr& addr) const
 {
     int ret = ::bind(sock, &addr->sa, sizeof(addr->ss));
     if(ret!=0)
-        throw std::runtime_error(std::string("Bind error: ")+evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+        throw std::runtime_error(SB()<<"Bind error to "<<addr<<" : "<<evutil_socket_error_to_string(evutil_socket_geterror(sock)));
 
     socklen_t slen = sizeof(addr->ss);
     ret = getsockname(sock, &addr->sa, &slen);
