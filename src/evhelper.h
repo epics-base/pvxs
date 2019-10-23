@@ -81,14 +81,14 @@ struct PVXS_API evevent {
 struct PVXS_API evsockaddr {
     union store_t {
         sockaddr sa;
-        sockaddr_storage ss;
         sockaddr_in in;
         sockaddr_in6 in6;
     } store;
 
     evsockaddr() :evsockaddr(AF_UNSPEC) {}
     explicit evsockaddr(int af);
-    explicit evsockaddr(const sockaddr_storage& ss);
+
+    inline size_t size() const { return sizeof(store); }
 
     inline unsigned short family() const { return store.sa.sa_family; }
     unsigned short port() const;

@@ -17,14 +17,9 @@
 namespace {
 using namespace pvxsimpl;
 
-DEFINE_LOGGER(testlog, "test");
-
 void test_udp()
 {
     testDiag("Enter %s", __func__);
-
-    log_printf(testlog, PLVL_CRIT, "Hello\n");
-    errlogFlush();
 
     evsocket A(AF_INET, SOCK_DGRAM, 0),
              B(AF_INET, SOCK_DGRAM, 0);
@@ -41,14 +36,14 @@ void test_udp()
            "sending from port port %u", send_addr.port());
 
     uint8_t msg[] = {0x12, 0x34, 0x56, 0x78};
-    int ret = sendto(B.sock, (char*)msg, sizeof(msg), 0, &bind_addr->sa, sizeof(bind_addr->ss));
+    int ret = sendto(B.sock, (char*)msg, sizeof(msg), 0, &bind_addr->sa, bind_addr.size());
     testOk(ret==(int)sizeof(msg), "Send test ret==%d", ret);
 
     uint8_t rxbuf[8] = {};
     evsockaddr src;
 
     testDiag("Call recvfrom()");
-    socklen_t slen = sizeof(src->ss);
+    socklen_t slen = src.size();
     ret = recvfrom(A.sock, (char*)rxbuf, sizeof(rxbuf), 0, &src->sa, &slen);
 
     testOk(ret==4 && rxbuf[0]==0x12 && rxbuf[1]==0x34 && rxbuf[2]==0x56 && rxbuf[3]==0x78,
@@ -87,14 +82,14 @@ void test_local_mcast()
     B.mcast_loop(true);
 
     uint8_t msg[] = {0x12, 0x34, 0x56, 0x78};
-    int ret = sendto(B.sock, (char*)msg, sizeof(msg), 0, &mcast_addr->sa, sizeof(mcast_addr->ss));
+    int ret = sendto(B.sock, (char*)msg, sizeof(msg), 0, &mcast_addr->sa, mcast_addr.size());
     testOk(ret==(int)sizeof(msg), "Send test ret==%d", ret);
 
     uint8_t rxbuf[8] = {};
     evsockaddr src;
 
     testDiag("Call recvfrom()");
-    socklen_t slen = sizeof(src->ss);
+    socklen_t slen = src.size();
     ret = recvfrom(A.sock, (char*)rxbuf, sizeof(rxbuf), 0, &src->sa, &slen);
     testOk(ret==4 && rxbuf[0]==0x12 && rxbuf[1]==0x34 && rxbuf[2]==0x56 && rxbuf[3]==0x78,
             "Recv'd %d [%u, %u, %u, %u]", ret, rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);

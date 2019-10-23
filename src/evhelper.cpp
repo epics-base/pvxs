@@ -224,15 +224,10 @@ void evevent::add(const struct timeval *tv)
 
 evsockaddr::evsockaddr(int af)
 {
-    memset(&store.ss, 0, sizeof(store));
+    memset(&store, 0, sizeof(store));
     store.sa.sa_family = af;
     if(af!=AF_INET && af!=AF_INET6 && af!=AF_UNSPEC)
         throw std::invalid_argument("Unsupported address family");
-}
-
-evsockaddr::evsockaddr(const sockaddr_storage& ss)
-{
-    memcpy(&store.ss, &ss, sizeof(ss));
 }
 
 unsigned short evsockaddr::port() const
@@ -257,7 +252,7 @@ void evsockaddr::setPort(unsigned short port)
 void evsockaddr::setAddress(const char *name)
 {
     evsockaddr temp;
-    int templen = sizeof(temp->ss);
+    int templen = sizeof(temp.store);
     if(evutil_parse_sockaddr_port(name, &temp->sa, &templen))
         throw std::runtime_error(std::string("Unable to parse as IP addresss: ")+name);
     (*this) = temp;
@@ -436,11 +431,11 @@ evsocket::~evsocket()
 
 void evsocket::bind(evsockaddr& addr) const
 {
-    int ret = ::bind(sock, &addr->sa, sizeof(addr->ss));
+    int ret = ::bind(sock, &addr->sa, sizeof(addr.store));
     if(ret!=0)
         throw std::runtime_error(SB()<<"Bind error to "<<addr<<" : "<<evutil_socket_error_to_string(evutil_socket_geterror(sock)));
 
-    socklen_t slen = sizeof(addr->ss);
+    socklen_t slen = sizeof(addr.store);
     ret = getsockname(sock, &addr->sa, &slen);
     if(ret)
         log_printf(logerr, PLVL_ERR, "Unable to fetch address of newly bound socket\n");

@@ -56,7 +56,7 @@ struct UDPCollector : public std::enable_shared_from_this<UDPCollector>
 
         for(unsigned i=0; i<4; i++)
         {
-            osiSocklen_t alen = sizeof(msg.src->ss);
+            osiSocklen_t alen = msg.src.size();
 
             const int nrx = recvfrom(sock.sock, (char*)&buf[0], buf.size(), 0, &msg.src->sa, &alen);
             log_printf(logio, PLVL_DEBUG, "recvfrom() -> %d\n", nrx);
@@ -284,7 +284,7 @@ UDPMsg::UDPMsg(UDPCollector *collector)
 
 bool UDPMsg::reply(const void *msg, size_t msglen) const
 {
-    int ntx = sendto(collector->sock.sock, (char*)msg, msglen, 0, &src->sa, sizeof(src->ss));
+    int ntx = sendto(collector->sock.sock, (char*)msg, msglen, 0, &src->sa, src.size());
     if(ntx<0) {
         int err = evutil_socket_geterror(collector->sock.sock);
         if(err==SOCK_EWOULDBLOCK || err==EAGAIN || err==SOCK_EINTR) {

@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
                     break;
                 case 'B': {
                     pva::evsockaddr addr;
-                    int slen = sizeof(addr->ss);
+                    int slen = addr.size();
                     if(evutil_parse_sockaddr_port(optarg, &addr->sa, &slen)) {
                         throw std::runtime_error(pva::SB()<<"Expected address[:port] to bind.  Not "<<optarg);
                     }
