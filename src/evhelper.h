@@ -33,13 +33,6 @@ struct SB {
     SB& operator<<(T i) { strm<<i; return *this; }
 };
 
-//! prepare libevent for use by multiple threads
-PVXS_API void evhelper_setup_thread();
-
-//! Block the calling thread until any callback in-progress in the
-//! specified loop has completed.
-PVXS_API void evhelper_sync(event_base *base);
-
 struct PVXS_API evbase {
     evbase();
     ~evbase();

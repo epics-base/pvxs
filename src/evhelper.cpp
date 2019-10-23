@@ -26,26 +26,6 @@ namespace pvxsimpl {
 
 DEFINE_LOGGER(logerr, "evloop");
 
-void evhelper_setup_thread()
-{
-#if defined(EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED)
-    evthread_use_windows_threads();
-
-#elif defined(EVTHREAD_USE_PTHREADS_IMPLEMENTED)
-    evthread_use_pthreads();
-
-#else
-#  error No threading support for this target
-    // TODO fallback to libCom ?
-#endif
-}
-
-static void evhelper_sync_done(evutil_socket_t _fd, short _ev, void *raw)
-{
-    epicsEvent *wait = static_cast<epicsEvent*>(raw);
-    wait->signal();
-}
-
 struct evbase::Pvt : public epicsThreadRunable
 {
     event_base* base;
@@ -57,7 +37,16 @@ struct evbase::Pvt : public epicsThreadRunable
                 epicsThreadGetStackSize(epicsThreadStackBig),
                 epicsThreadPriorityCAServerLow-4)
     {
-        evhelper_setup_thread();
+#if defined(EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED)
+        evthread_use_windows_threads();
+
+#elif defined(EVTHREAD_USE_PTHREADS_IMPLEMENTED)
+        evthread_use_pthreads();
+
+#else
+#  error No threading support for this target
+        // TODO fallback to libCom ?
+#endif
     }
 
     virtual ~Pvt() {
@@ -95,6 +84,12 @@ evbase::evbase()
 
 evbase::~evbase()
 {
+}
+
+static void evhelper_sync_done(evutil_socket_t _fd, short _ev, void *raw)
+{
+    epicsEvent *wait = static_cast<epicsEvent*>(raw);
+    wait->signal();
 }
 
 void evbase::sync()
