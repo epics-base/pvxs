@@ -144,7 +144,11 @@ struct UDPCollector : public std::enable_shared_from_this<UDPCollector>
     static void handle_static(evutil_socket_t fd, short ev, void *raw)
     {
         (void)fd;
-        static_cast<UDPCollector*>(raw)->handle(ev);
+        try {
+            static_cast<UDPCollector*>(raw)->handle(ev);
+        }catch(std::exception& e) {
+            log_printf(logio, PLVL_CRIT, "Ignoring unhandled exception in UDPManager::handle(): %s\n", e.what());
+        }
     }
 };
 
