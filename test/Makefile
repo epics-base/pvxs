@@ -14,6 +14,10 @@ TESTPROD += testsock
 testsock_SRCS += testsock.cpp
 TESTS += testsock
 
+TESTPROD += testev
+testev_SRCS += testev.cpp
+TESTS += testev
+
 PROD_SYS_LIBS += event_core
 
 PROD_SYS_LIBS_DEFAULT += event_pthreads

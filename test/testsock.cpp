@@ -1,6 +1,6 @@
 /**
  * Copyright - See the COPYRIGHT that is included with this distribution.
- * pvAccessCPP is distributed subject to a Software License Agreement found
+ * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
 
@@ -12,6 +12,7 @@
 #include <osiSock.h>
 
 #include <evhelper.h>
+#include <pvxs/unittest.h>
 #include <pvxs/log.h>
 
 namespace {
@@ -27,13 +28,13 @@ void test_udp()
     evsockaddr bind_addr(evsockaddr::loopback(AF_INET));
 
     A.bind(bind_addr);
-    testOk(bind_addr.port()!=0, "bound port %u", bind_addr.port());
+    testNotEq(bind_addr.port(), 0)<<"bound port";
 
     evsockaddr send_addr(bind_addr);
     send_addr.setPort(0);
     B.bind(send_addr);
-    testOk(send_addr.port()!=0 && send_addr.port()!=bind_addr.port(),
-           "sending from port port %u", send_addr.port());
+    testNotEq(send_addr.port(), 0);
+    testNotEq(send_addr.port(), bind_addr.port());
 
     uint8_t msg[] = {0x12, 0x34, 0x56, 0x78};
     int ret = sendto(B.sock, (char*)msg, sizeof(msg), 0, &bind_addr->sa, bind_addr.size());
@@ -48,7 +49,7 @@ void test_udp()
 
     testOk(ret==4 && rxbuf[0]==0x12 && rxbuf[1]==0x34 && rxbuf[2]==0x56 && rxbuf[3]==0x78,
             "Recv'd %d [%u, %u, %u, %u]", ret, rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);
-    testOk(src==send_addr, "Src %s==%s", src.tostring().c_str(), send_addr.tostring().c_str());
+    testEq(src, send_addr);
 }
 
 void test_local_mcast()
@@ -83,7 +84,7 @@ void test_local_mcast()
 
     uint8_t msg[] = {0x12, 0x34, 0x56, 0x78};
     int ret = sendto(B.sock, (char*)msg, sizeof(msg), 0, &mcast_addr->sa, mcast_addr.size());
-    testOk(ret==(int)sizeof(msg), "Send test ret==%d", ret);
+    testEq(ret, (int)sizeof(msg))<<"Send test";
 
     uint8_t rxbuf[8] = {};
     evsockaddr src;
@@ -94,8 +95,7 @@ void test_local_mcast()
     testOk(ret==4 && rxbuf[0]==0x12 && rxbuf[1]==0x34 && rxbuf[2]==0x56 && rxbuf[3]==0x78,
             "Recv'd %d [%u, %u, %u, %u]", ret, rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);
 
-    testOk(src==sender_addr, "Src %s==%s", src.tostring().c_str(), sender_addr.tostring().c_str());
-
+    testEq(src, sender_addr);
 }
 
 void test_from_wire()
@@ -204,7 +204,7 @@ void test_to_wire()
 
 MAIN(testsock)
 {
-    testPlan(32);
+    testPlan(33);
     test_udp();
     test_local_mcast();
     test_from_wire();

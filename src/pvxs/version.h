@@ -1,6 +1,6 @@
 /**
  * Copyright - See the COPYRIGHT that is included with this distribution.
- * pvAccessCPP is distributed subject to a Software License Agreement found
+ * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
 #ifndef PVXS_VERSION_H
@@ -33,6 +33,15 @@
 #define PVXS_VERSION VERSION_INT(PVXS_MAJOR_VERSION, PVXS_MINOR_VERSION, PVXS_MAINTENANCE_VERSION, 0)
 
 namespace pvxs {
+
+//! Library version as a string
+PVXS_API
+const char *version_str();
+
+//! Value of PVXS_VERSION captured at library compile time
+PVXS_API
+unsigned long version_int();
+
 }
 
 #endif // PVXS_VERSION_H

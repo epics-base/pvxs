@@ -1,6 +1,6 @@
 /**
  * Copyright - See the COPYRIGHT that is included with this distribution.
- * pvAccessCPP is distributed subject to a Software License Agreement found
+ * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
 
@@ -18,7 +18,9 @@
 
 namespace pvxsimpl {
 
-//! hold a bounded slice of some other array
+//! Hold a bounded slice of some other array.
+//! like std::span<T, std::dynamic_extent> (added in c++20)
+//! blending in error state tracking like std::iostream
 template<typename T>
 struct sbuf {
     typedef T value_type;

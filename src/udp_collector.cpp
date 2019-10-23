@@ -1,6 +1,6 @@
 /**
  * Copyright - See the COPYRIGHT that is included with this distribution.
- * pvAccessCPP is distributed subject to a Software License Agreement found
+ * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
 
@@ -160,7 +160,9 @@ struct UDPManager::Pvt : public std::enable_shared_from_this<Pvt> {
     // only manipulate from loop worker thread
     std::map<evsockaddr, UDPCollector*> collectors;
 
-    Pvt() {}
+    Pvt()
+        :loop("PVXUDP", epicsThreadPriorityCAServerLow-4)
+    {}
     ~Pvt()
     {
         // we should only be destroyed after that last collector has removed itself

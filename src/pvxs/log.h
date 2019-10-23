@@ -1,10 +1,10 @@
 /**
  * Copyright - See the COPYRIGHT that is included with this distribution.
- * pvAccessCPP is distributed subject to a Software License Agreement found
+ * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
-#ifndef LOG_H
-#define LOG_H
+#ifndef PVXS_LOG_H
+#define PVXS_LOG_H
 
 #include <stdarg.h>
 
@@ -65,4 +65,4 @@ PVXS_API void logger_config_env();
 
 } // namespace pvxs
 
-#endif // LOG_H
+#endif // PVXS_LOG_H

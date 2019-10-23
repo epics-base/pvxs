@@ -11,15 +11,24 @@ USR_CPPFLAGS += -DPVXS_API_BUILDING
 USR_LDFLAGS_Linux += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
 USR_LDFLAGS_DEFAULT +=
 
+EXPANDVARS += PVXS_MAJOR_VERSION
+EXPANDVARS += PVXS_MINOR_VERSION
+EXPANDVARS += PVXS_MAINTENANCE_VERSION
+
+EXPANDFLAGS += $(foreach var,$(EXPANDVARS),-D$(var)="$(strip $($(var)))")
+
 SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION)
 
 INC += pvxs/version.h
 INC += pvxs/versionNum.h
 INC += pvxs/log.h
+INC += pvxs/unittest.h
 
 LIBRARY = pvxs
 
 LIB_SRCS += log.cpp
+LIB_SRCS += unittest.cpp
+LIB_SRCS += util.cpp
 LIB_SRCS += evhelper.cpp
 LIB_SRCS += udp_collector.cpp
 

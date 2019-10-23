@@ -1,6 +1,6 @@
 /**
  * Copyright - See the COPYRIGHT that is included with this distribution.
- * pvAccessCPP is distributed subject to a Software License Agreement found
+ * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
 
@@ -31,11 +31,11 @@ struct evbase::Pvt : public epicsThreadRunable
     event_base* base;
     epicsThread worker;
 
-    Pvt()
+    Pvt(const std::string& name, unsigned prio)
         :base(nullptr)
-        ,worker(*this, "UDP",
+        ,worker(*this, name.c_str(),
                 epicsThreadGetStackSize(epicsThreadStackBig),
-                epicsThreadPriorityCAServerLow-4)
+                prio)
     {
 #if defined(EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED)
         evthread_use_windows_threads();
@@ -66,8 +66,8 @@ struct evbase::Pvt : public epicsThreadRunable
     }
 };
 
-evbase::evbase()
-    :pvt(new Pvt)
+evbase::evbase(const std::string &name, unsigned prio)
+    :pvt(new Pvt(name, prio))
     ,base(event_base_new())
 {
     if(!base) {
@@ -175,6 +175,12 @@ void evbase::assertInLoop()
 {
     assert(pvt->worker.isCurrentThread());
 }
+
+bool evbase::inLoop()
+{
+    return pvt->worker.isCurrentThread();
+}
+
 
 evevent::evevent(struct event_base *base, evutil_socket_t sock, short mask, event_callback_fn fn, void *arg)
     :ev(event_new(base, sock, mask, fn, arg))

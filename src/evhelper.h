@@ -1,6 +1,6 @@
 /**
  * Copyright - See the COPYRIGHT that is included with this distribution.
- * pvAccessCPP is distributed subject to a Software License Agreement found
+ * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
 
@@ -34,7 +34,7 @@ struct SB {
 };
 
 struct PVXS_API evbase {
-    evbase();
+    explicit evbase(const std::string& name, unsigned prio=0);
     ~evbase();
     void start();
 
@@ -46,6 +46,7 @@ struct PVXS_API evbase {
     void call(std::function<void()>&& fn);
 
     void assertInLoop();
+    bool inLoop();
 
 private:
     struct Pvt;
