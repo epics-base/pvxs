@@ -160,8 +160,7 @@ struct UDPManager::Pvt : public std::enable_shared_from_this<Pvt> {
     // only manipulate from loop worker thread
     std::map<evsockaddr, UDPCollector*> collectors;
 
-    Pvt()
-    {}
+    Pvt() {}
     ~Pvt()
     {
         // we should only be destroyed after that last collector has removed itself
@@ -193,8 +192,10 @@ UDPCollector::~UDPCollector()
     manager->loop.assertInLoop();
 }
 
-static epicsMutex* inst_lock;
-std::weak_ptr<UDPManager::Pvt> UDPManager::inst;
+static struct udp_gbl_t {
+    epicsMutex lock;
+    std::weak_ptr<UDPManager::Pvt> inst;
+} *udp_gbl;
 
 UDPManager::~UDPManager() {}
 
@@ -203,22 +204,22 @@ epicsThreadOnceId collector_once = EPICS_THREAD_ONCE_INIT;
 void collector_init(void *unused)
 {
     (void)unused;
-    inst_lock = new epicsMutex;
+    udp_gbl = new udp_gbl_t;
 }
 } // namespace
 
 UDPManager UDPManager::instance()
 {
     epicsThreadOnce(&collector_once, &collector_init, nullptr);
-    assert(inst_lock);
+    assert(udp_gbl);
 
-    Guard G(*inst_lock);
+    Guard G(udp_gbl->lock);
 
-    auto ret = inst.lock();
+    auto ret = udp_gbl->inst.lock();
 
     if(!ret) {
         ret.reset(new UDPManager::Pvt);
-        inst = ret;
+        udp_gbl->inst = ret;
     }
 
     return UDPManager(ret);

@@ -78,11 +78,11 @@ struct PVXS_API UDPManager
     explicit operator bool() const { return !!pvt; }
 
     UDPManager();
-private:
+
     struct Pvt;
+private:
     explicit inline UDPManager(const std::shared_ptr<Pvt>& pvt) :pvt(pvt) {}
     std::shared_ptr<Pvt> pvt;
-    static std::weak_ptr<Pvt> inst;
     friend struct UDPListener;
     friend struct UDPCollector;
 };
