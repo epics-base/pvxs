@@ -75,6 +75,12 @@ SockAddr::SockAddr(int af)
         throw std::invalid_argument("Unsupported address family");
 }
 
+SockAddr::SockAddr(int af, const char *address)
+    :SockAddr(af)
+{
+    setAddress(address);
+}
+
 unsigned short SockAddr::port() const
 {
     switch(store.sa.sa_family) {

@@ -55,10 +55,14 @@ struct PVXS_API SockAddr {
 #ifdef AF_INET6
         sockaddr_in6 in6;
 #endif
-    } store;
+    };
+private:
+    store_t  store;
+public:
 
-    SockAddr() :SockAddr(AF_UNSPEC) {}
-    explicit SockAddr(int af);
+    explicit SockAddr(int af = AF_UNSPEC);
+    explicit SockAddr(int af, const char *address);
+    inline explicit SockAddr(int af, const std::string& address) :SockAddr(af, address.c_str()) {}
 
     inline size_t size() const { return sizeof(store); }
 

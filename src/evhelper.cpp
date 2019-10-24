@@ -312,11 +312,11 @@ evsocket::~evsocket()
 
 void evsocket::bind(SockAddr& addr) const
 {
-    int ret = ::bind(sock, &addr->sa, sizeof(addr.store));
+    int ret = ::bind(sock, &addr->sa, addr.size());
     if(ret!=0)
         throw std::runtime_error(SB()<<"Bind error to "<<addr<<" : "<<evutil_socket_error_to_string(evutil_socket_geterror(sock)));
 
-    socklen_t slen = sizeof(addr.store);
+    socklen_t slen = addr.size();
     ret = getsockname(sock, &addr->sa, &slen);
     if(ret)
         log_printf(logerr, PLVL_ERR, "Unable to fetch address of newly bound socket\n");
