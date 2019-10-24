@@ -10,6 +10,7 @@
 #include <ostream>
 #include <type_traits>
 
+#include <osiSock.h>
 #include <event2/util.h>
 
 #include <pvxs/version.h>

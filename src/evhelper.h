@@ -14,6 +14,7 @@
 
 #include <event2/event.h>
 #include <event2/buffer.h>
+#include <event2/listener.h>
 #include <event2/bufferevent.h>
 
 #include <pvxs/version.h>
@@ -61,6 +62,41 @@ struct PVXS_API evevent {
     operator event*() const { return ev; }
 
     void add(const timeval *tv=nullptr);
+};
+
+struct evlisten {
+    evconnlistener * lev;
+
+    evlisten() :lev(nullptr) {}
+    evlisten(evlisten&& o) noexcept
+        :lev(o.lev)
+    {
+        o.lev = nullptr;
+    }
+    evlisten& operator=(evlisten&& o) noexcept
+    {
+        if(this!=&o) {
+            if(lev)
+                evconnlistener_free(lev);
+            lev = o.lev;
+            o.lev = nullptr;
+        }
+        return *this;
+    }
+    evlisten(const evlisten&) = delete;
+    evlisten& operator=(const evlisten&) = delete;
+
+    template<typename ...Args>
+    evlisten(Args...args)
+        :lev(evconnlistener_new(std::forward<Args>(args)...))
+    {
+        if(!lev)
+            throw std::bad_alloc();
+    }
+    ~evlisten() {
+        if(lev)
+            evconnlistener_free(lev);
+    }
 };
 
 PVXS_API

@@ -9,6 +9,7 @@
 #endif
 
 #include <cstring>
+#include <system_error>
 
 #include <event2/event.h>
 #include <event2/thread.h>
@@ -314,8 +315,10 @@ evsocket::~evsocket()
 void evsocket::bind(SockAddr& addr) const
 {
     int ret = ::bind(sock, &addr->sa, addr.size());
-    if(ret!=0)
-        throw std::runtime_error(SB()<<"Bind error to "<<addr<<" : "<<evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+    if(ret!=0) {
+        int err = evutil_socket_geterror(sock);
+        throw std::system_error(err, std::system_category());
+    }
 
     socklen_t slen = addr.size();
     ret = getsockname(sock, &addr->sa, &slen);
