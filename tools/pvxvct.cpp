@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
             std::set<std::string> pvnames;
         } opts;
 
-        std::vector<pva::evsockaddr> bindaddrs;
+        std::vector<pva::SockAddr> bindaddrs;
 
         {
             int opt;
@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
                     opts.server = true;
                     break;
                 case 'B': {
-                    pva::evsockaddr addr;
+                    pva::SockAddr addr;
                     int slen = addr.size();
                     if(evutil_parse_sockaddr_port(optarg, &addr->sa, &slen)) {
                         throw std::runtime_error(pva::SB()<<"Expected address[:port] to bind.  Not "<<optarg);
@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
             opts.client = opts.server = true;
         }
         if(bindaddrs.empty()) {
-            bindaddrs.emplace_back(pva::evsockaddr::any(AF_INET, 5076));
+            bindaddrs.emplace_back(pva::SockAddr::any(AF_INET, 5076));
         }
 
         pva::logger_level_set("pvxvct", PLVL_INFO);
@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
                 case pva::pva_app_msg::Search: {
                     uint32_t id;
                     uint8_t flags;
-                    pva::evsockaddr replyAddr;
+                    pva::SockAddr replyAddr;
 
                     pva::from_wire(M, id, be);
                     pva::from_wire(M, flags, be);
@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
                 case pva::pva_app_msg::Beacon: {
                     uint8_t guid[12] = {};
                     uint8_t seq =0;
-                    pva::evsockaddr addr;
+                    pva::SockAddr addr;
                     uint16_t port = 0;
 
                     pva::_from_wire<sizeof(guid)>(M, guid, false);

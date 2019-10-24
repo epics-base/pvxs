@@ -34,7 +34,7 @@ DEFINE_LOGGER(logsetup, "udp.setup");
 struct UDPCollector : public std::enable_shared_from_this<UDPCollector>
 {
     const std::shared_ptr<UDPManager::Pvt> manager;
-    evsockaddr bind_addr;
+    SockAddr bind_addr;
     std::string name;
     evsocket sock;
     evevent rx;
@@ -45,7 +45,7 @@ struct UDPCollector : public std::enable_shared_from_this<UDPCollector>
 
     std::set<UDPListener*> listeners;
 
-    UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, const evsockaddr& bind_addr);
+    UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, const SockAddr& bind_addr);
     ~UDPCollector();
 
     void handle(short ev)
@@ -158,7 +158,7 @@ struct UDPManager::Pvt : public std::enable_shared_from_this<Pvt> {
     evbase loop;
 
     // only manipulate from loop worker thread
-    std::map<evsockaddr, UDPCollector*> collectors;
+    std::map<SockAddr, UDPCollector*> collectors;
 
     Pvt()
         :loop("PVXUDP", epicsThreadPriorityCAServerLow-4)
@@ -170,7 +170,7 @@ struct UDPManager::Pvt : public std::enable_shared_from_this<Pvt> {
     }
 };
 
-UDPCollector::UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, const evsockaddr& bind_addr)
+UDPCollector::UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, const SockAddr& bind_addr)
     :manager(manager)
     ,bind_addr(bind_addr)
     ,sock(bind_addr.family(), SOCK_DGRAM, 0)
@@ -227,7 +227,7 @@ UDPManager UDPManager::instance()
     return UDPManager(ret);
 }
 
-std::unique_ptr<UDPListener> UDPManager::subscribe(evsockaddr& dest,
+std::unique_ptr<UDPListener> UDPManager::subscribe(SockAddr& dest,
                                                    std::function<void(const UDPMsg& msg)>&& cb)
 {
     if(!pvt)

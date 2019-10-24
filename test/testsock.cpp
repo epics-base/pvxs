@@ -25,12 +25,12 @@ void test_udp()
     evsocket A(AF_INET, SOCK_DGRAM, 0),
              B(AF_INET, SOCK_DGRAM, 0);
 
-    evsockaddr bind_addr(evsockaddr::loopback(AF_INET));
+    SockAddr bind_addr(SockAddr::loopback(AF_INET));
 
     A.bind(bind_addr);
     testNotEq(bind_addr.port(), 0)<<"bound port";
 
-    evsockaddr send_addr(bind_addr);
+    SockAddr send_addr(bind_addr);
     send_addr.setPort(0);
     B.bind(send_addr);
     testNotEq(send_addr.port(), 0);
@@ -41,7 +41,7 @@ void test_udp()
     testOk(ret==(int)sizeof(msg), "Send test ret==%d", ret);
 
     uint8_t rxbuf[8] = {};
-    evsockaddr src;
+    SockAddr src;
 
     testDiag("Call recvfrom()");
     socklen_t slen = src.size();
@@ -59,19 +59,19 @@ void test_local_mcast()
     evsocket A(AF_INET, SOCK_DGRAM, 0),
              B(AF_INET, SOCK_DGRAM, 0);
 
-    evsockaddr mcast_addr(AF_INET);
+    SockAddr mcast_addr(AF_INET);
     mcast_addr.setAddress("224.0.0.128");
 
 #ifdef _WIN32
-    evsockaddr bind_addr(evsockaddr::any(AF_INET));
+    SockAddr bind_addr(SockAddr::any(AF_INET));
 #else
-    evsockaddr bind_addr(mcast_addr);
+    SockAddr bind_addr(mcast_addr);
 #endif
 
     A.bind(bind_addr);
     mcast_addr.setPort(bind_addr.port());
 
-    evsockaddr sender_addr(evsockaddr::loopback(AF_INET));
+    SockAddr sender_addr(SockAddr::loopback(AF_INET));
     B.bind(sender_addr);
 
     // receiving socket joins on the loopback interface
@@ -87,7 +87,7 @@ void test_local_mcast()
     testEq(ret, (int)sizeof(msg))<<"Send test";
 
     uint8_t rxbuf[8] = {};
-    evsockaddr src;
+    SockAddr src;
 
     testDiag("Call recvfrom()");
     socklen_t slen = src.size();
@@ -136,7 +136,7 @@ void test_from_wire()
     }
 
     {
-        evsockaddr val;
+        SockAddr val;
         const uint8_t buf[] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff, 0x7f,0,0,1, 0xde, 0xad, 0xbe, 0xef};
         sbuf<const uint8_t> pkt(buf, 16);
 
@@ -175,7 +175,7 @@ void test_to_wire()
     }
 
     {
-        const evsockaddr val(evsockaddr::loopback(AF_INET));
+        const SockAddr val(SockAddr::loopback(AF_INET));
         uint8_t buf[16+4];
         sbuf<uint8_t> pkt(buf, 16);
 

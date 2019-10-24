@@ -17,6 +17,7 @@
 #include <event2/bufferevent.h>
 
 #include <pvxs/version.h>
+#include <pvxs/util.h>
 
 #include "pvaproto.h"
 
@@ -72,53 +73,11 @@ struct PVXS_API evevent {
     void add(const timeval *tv=nullptr);
 };
 
-struct PVXS_API evsockaddr {
-    union store_t {
-        sockaddr sa;
-        sockaddr_in in;
-        sockaddr_in6 in6;
-    } store;
-
-    evsockaddr() :evsockaddr(AF_UNSPEC) {}
-    explicit evsockaddr(int af);
-
-    inline size_t size() const { return sizeof(store); }
-
-    inline unsigned short family() const { return store.sa.sa_family; }
-    unsigned short port() const;
-    void setPort(unsigned short port);
-
-    void setAddress(const char *);
-
-    bool isLO() const;
-
-    store_t* operator->() { return &store; }
-    const store_t* operator->() const { return &store; }
-
-    std::string tostring() const;
-
-    static evsockaddr any(int af, unsigned port=0);
-    static evsockaddr loopback(int af, unsigned port=0);
-
-    inline bool operator<(const evsockaddr& o) const {
-        return evutil_sockaddr_cmp(&store.sa, &o.store.sa, true)<0;
-    }
-    inline bool operator==(const evsockaddr& o) const {
-        return evutil_sockaddr_cmp(&store.sa, &o.store.sa, true)==0;
-    }
-    inline bool operator!=(const evsockaddr& o) const {
-        return !(*this==o);
-    }
-};
+PVXS_API
+void to_wire(sbuf<uint8_t>& buf, const SockAddr& val, bool be);
 
 PVXS_API
-void to_wire(sbuf<uint8_t>& buf, const evsockaddr& val, bool be);
-
-PVXS_API
-void from_wire(sbuf<const uint8_t>& buf, evsockaddr& val, bool be);
-
-PVXS_API
-std::ostream& operator<<(std::ostream& strm, const evsockaddr& addr);
+void from_wire(sbuf<const uint8_t>& buf, SockAddr& val, bool be);
 
 struct PVXS_API evsocket
 {
@@ -146,10 +105,10 @@ struct PVXS_API evsocket
     // test validity
     inline operator bool() const { return sock!=-1; }
 
-    void bind(evsockaddr& addr) const;
+    void bind(SockAddr& addr) const;
     //! join mcast group.  Receive mcasts send to this group which arrive on the given interface
     //! @see IP_ADD_MEMBERSHIP
-    void mcast_join(const evsockaddr& grp, const evsockaddr& iface) const;
+    void mcast_join(const SockAddr& grp, const SockAddr& iface) const;
     //! Set time-to-live out mcasts sent from this socket
     //! @see IP_MULTICAST_TTL
     void mcast_ttl(unsigned ttl) const;
@@ -158,7 +117,7 @@ struct PVXS_API evsocket
     void mcast_loop(bool loop) const;
     //! Selects interface to use when sending mcasts
     //! @see IP_MULTICAST_IF
-    void mcast_iface(const evsockaddr& iface) const;
+    void mcast_iface(const SockAddr& iface) const;
 };
 
 } // namespace pvxsimpl

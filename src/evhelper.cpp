@@ -223,95 +223,7 @@ void evevent::add(const struct timeval *tv)
         throw std::runtime_error("event_add() fails");
 }
 
-evsockaddr::evsockaddr(int af)
-{
-    memset(&store, 0, sizeof(store));
-    store.sa.sa_family = af;
-    if(af!=AF_INET && af!=AF_INET6 && af!=AF_UNSPEC)
-        throw std::invalid_argument("Unsupported address family");
-}
-
-unsigned short evsockaddr::port() const
-{
-    switch(store.sa.sa_family) {
-    case AF_INET: return ntohs(store.in.sin_port);
-    case AF_INET6:return ntohs(store.in6.sin6_port);
-    default: return 0;
-    }
-}
-
-void evsockaddr::setPort(unsigned short port)
-{
-    switch(store.sa.sa_family) {
-    case AF_INET: store.in.sin_port = htons(port); break;
-    case AF_INET6:store.in6.sin6_port = htons(port); break;
-    default:
-        throw std::logic_error("evsockaddr: set family before port");
-    }
-}
-
-void evsockaddr::setAddress(const char *name)
-{
-    evsockaddr temp;
-    int templen = sizeof(temp.store);
-    if(evutil_parse_sockaddr_port(name, &temp->sa, &templen))
-        throw std::runtime_error(std::string("Unable to parse as IP addresss: ")+name);
-    (*this) = temp;
-}
-
-bool evsockaddr::isLO() const
-{
-    switch(store.sa.sa_family) {
-    case AF_INET: return store.in.sin_addr.s_addr==htonl(INADDR_LOOPBACK);
-    case AF_INET6: return IN6_IS_ADDR_LOOPBACK(&store.in6.sin6_addr);
-    default: return false;
-    }
-}
-
-std::string evsockaddr::tostring() const
-{
-    std::ostringstream strm;
-    strm<<(*this);
-    return strm.str();
-}
-
-evsockaddr evsockaddr::any(int af, unsigned port)
-{
-    evsockaddr ret(af);
-    switch(af) {
-    case AF_INET:
-        ret->in.sin_addr.s_addr = htonl(INADDR_ANY);
-        ret->in.sin_port = htons(port);
-        break;
-    case AF_INET6:
-        ret->in6.sin6_addr = IN6ADDR_ANY_INIT;
-        ret->in6.sin6_port = htons(port);
-        break;
-    default:
-        throw std::invalid_argument("Unsupported address family");
-    }
-    return ret;
-}
-
-evsockaddr evsockaddr::loopback(int af, unsigned port)
-{
-    evsockaddr ret(af);
-    switch(af) {
-    case AF_INET:
-        ret->in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        ret->in.sin_port = htons(port);
-        break;
-    case AF_INET6:
-        ret->in6.sin6_addr = IN6ADDR_LOOPBACK_INIT;
-        ret->in6.sin6_port = htons(port);
-        break;
-    default:
-        throw std::invalid_argument("Unsupported address family");
-    }
-    return ret;
-}
-
-void to_wire(sbuf<uint8_t>& buf, const evsockaddr& val, bool be)
+void to_wire(sbuf<uint8_t>& buf, const SockAddr &val, bool be)
 {
     if(buf.err || buf.size()<16) {
         buf.err = true;
@@ -330,7 +242,7 @@ void to_wire(sbuf<uint8_t>& buf, const evsockaddr& val, bool be)
     buf += 16;
 }
 
-void from_wire(sbuf<const uint8_t> &buf, evsockaddr& val, bool be)
+void from_wire(sbuf<const uint8_t> &buf, SockAddr& val, bool be)
 {
     if(buf.err || buf.size()<16) {
         buf.err = true;
@@ -357,38 +269,6 @@ void from_wire(sbuf<const uint8_t> &buf, evsockaddr& val, bool be)
         memcpy(&val->in6.sin6_addr, buf.pos, 16);
     }
     buf += 16;
-}
-
-std::ostream& operator<<(std::ostream& strm, const evsockaddr& addr)
-{
-    switch(addr->sa.sa_family) {
-    case AF_INET: {
-        char buf[INET_ADDRSTRLEN+1];
-        if(evutil_inet_ntop(AF_INET, &addr->in.sin_addr, buf, sizeof(buf))) {
-            buf[sizeof(buf)-1] = '\0'; // paranoia
-        } else {
-            strm<<"<\?\?\?>";
-        }
-        strm<<buf<<':'<<ntohs(addr->in.sin_port);
-        break;
-    }
-    case AF_INET6: {
-            char buf[INET6_ADDRSTRLEN+1];
-            if(evutil_inet_ntop(AF_INET6, &addr->in6.sin6_addr, buf, sizeof(buf))) {
-                buf[sizeof(buf)-1] = '\0'; // paranoia
-            } else {
-                strm<<"<\?\?\?>";
-            }
-            strm<<buf<<':'<<ntohs(addr->in6.sin6_port);
-            break;
-    }
-    case AF_UNSPEC:
-        strm<<"<>";
-        break;
-    default:
-        strm<<"<\?\?\?>";
-    }
-    return strm;
 }
 
 evsocket::evsocket(evutil_socket_t sock)
@@ -430,7 +310,7 @@ evsocket::~evsocket()
         evutil_closesocket(sock);
 }
 
-void evsocket::bind(evsockaddr& addr) const
+void evsocket::bind(SockAddr& addr) const
 {
     int ret = ::bind(sock, &addr->sa, sizeof(addr.store));
     if(ret!=0)
@@ -442,7 +322,7 @@ void evsocket::bind(evsockaddr& addr) const
         log_printf(logerr, PLVL_ERR, "Unable to fetch address of newly bound socket\n");
 }
 
-void evsocket::mcast_join(const evsockaddr& grp, const evsockaddr& iface) const
+void evsocket::mcast_join(const SockAddr& grp, const SockAddr& iface) const
 {
     if(grp.family()!=iface.family() || grp.family()!=AF_INET)
         throw std::invalid_argument("Unsupported address family");
@@ -481,7 +361,7 @@ void evsocket::mcast_loop(bool loop) const
     // IPV6_MULTICAST_LOOP
 }
 
-void evsocket::mcast_iface(const evsockaddr& iface) const
+void evsocket::mcast_iface(const SockAddr& iface) const
 {
     if(iface.family()!=AF_INET)
         throw std::invalid_argument("Unsupported address family");

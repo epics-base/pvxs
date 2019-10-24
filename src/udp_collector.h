@@ -21,7 +21,7 @@ struct UDPManager;
 
 struct UDPMsg {
     //! peer (source) address
-    evsockaddr src;
+    SockAddr src;
     //! points to the first byte of each message in a packet, followed by an empty message
     const sbuf<const uint8_t>* msgs;
 
@@ -43,7 +43,7 @@ struct PVXS_API UDPListener {
 private:
     friend struct UDPCollector;
     friend struct UDPManager;
-    evsockaddr dest;
+    SockAddr dest;
     std::shared_ptr<UDPCollector> collector;
     std::function<void(const UDPMsg& msg)> cb;
 };
@@ -72,7 +72,7 @@ struct PVXS_API UDPManager
      * @param dest Address to bind this socket.  Updated with actual address (cf. getsockname() ) after bind().
      * @param cb Called for each valid packet
      */
-    std::unique_ptr<UDPListener> subscribe(evsockaddr& dest,
+    std::unique_ptr<UDPListener> subscribe(SockAddr& dest,
                                            std::function<void(const UDPMsg& msg)>&& cb);
 
     explicit operator bool() const { return !!pvt; }
