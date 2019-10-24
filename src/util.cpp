@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <cstring>
 #include <sstream>
+#include <stdexcept>
 
 #include <ctype.h>
 

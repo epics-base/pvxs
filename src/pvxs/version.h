@@ -32,6 +32,10 @@
 
 #define PVXS_VERSION VERSION_INT(PVXS_MAJOR_VERSION, PVXS_MINOR_VERSION, PVXS_MAINTENANCE_VERSION, 0)
 
+#ifdef __GNUC__
+#  define GCC_VERSION VERSION_INT(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__, 0)
+#endif
+
 namespace pvxs {
 
 //! Library version as a string
