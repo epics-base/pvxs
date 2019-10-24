@@ -64,7 +64,7 @@ public:
     explicit SockAddr(int af, const char *address);
     inline explicit SockAddr(int af, const std::string& address) :SockAddr(af, address.c_str()) {}
 
-    inline size_t size() const { return sizeof(store); }
+    size_t size() const;
 
     inline unsigned short family() const { return store.sa.sa_family; }
     unsigned short port() const;

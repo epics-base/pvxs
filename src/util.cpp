@@ -81,6 +81,18 @@ SockAddr::SockAddr(int af, const char *address)
     setAddress(address);
 }
 
+size_t SockAddr::size() const
+{
+    switch(store.sa.sa_family) {
+    case AF_INET: return sizeof(store.in);
+#ifdef AF_INET6
+    case AF_INET6: return sizeof(store.in6);
+#endif
+    default: // AF_UNSPEC and others
+        return 0;
+    }
+}
+
 unsigned short SockAddr::port() const
 {
     switch(store.sa.sa_family) {
