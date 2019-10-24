@@ -17,22 +17,12 @@
 #include <event2/bufferevent.h>
 
 #include <pvxs/version.h>
-#include <pvxs/util.h>
+#include <utilpvt.h>
 
 #include "pvaproto.h"
 
 namespace pvxsimpl {
 using namespace  pvxs;
-
-//! in-line string builder (eg. for exception messages)
-//! eg. @code throw std::runtime_error(SB()<<"Some message"<<42); @endcode
-struct SB {
-    std::ostringstream strm;
-    SB() {}
-    operator std::string() const { return strm.str(); }
-    template<typename T>
-    SB& operator<<(T i) { strm<<i; return *this; }
-};
 
 struct PVXS_API evbase {
     explicit evbase(const std::string& name, unsigned prio=0);

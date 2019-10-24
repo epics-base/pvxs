@@ -20,6 +20,7 @@
 
 #include "evhelper.h"
 #include "pvaproto.h"
+#include "utilpvt.h"
 #include <pvxs/log.h>
 
 namespace pvxsimpl {

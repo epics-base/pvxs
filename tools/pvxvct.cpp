@@ -27,6 +27,7 @@
 #include <pvxs/log.h>
 
 #include <udp_collector.h>
+#include <utilpvt.h>
 #include <pvaproto.h>
 
 namespace pva = pvxsimpl;

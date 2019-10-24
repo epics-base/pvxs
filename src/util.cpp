@@ -10,7 +10,10 @@
 
 #include <ctype.h>
 
+#include <epicsStdlib.h>
+
 #include <pvxs/util.h>
+#include "utilpvt.h"
 
 namespace pvxs {
 
@@ -218,3 +221,19 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
 }
 
 }
+
+namespace pvxsimpl {
+namespace detail {
+
+template<>
+unsigned short as_str<unsigned short>::op(const char *s)
+{
+    epicsUInt16 ret;
+    if(int err = epicsParseUInt16(s, &ret, 0, nullptr)) {
+        (void)err;
+        throw std::runtime_error(SB()<<"Unable to parse as uint16 : "<<s);
+    }
+    return ret;
+}
+
+}}
