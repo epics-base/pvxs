@@ -92,7 +92,7 @@ size_t SockAddr::size() const
     case AF_INET6: return sizeof(store.in6);
 #endif
     default: // AF_UNSPEC and others
-        return 0;
+        return sizeof(store);
     }
 }
 
