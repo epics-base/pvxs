@@ -39,7 +39,6 @@ struct sbuf {
 
     sbuf& operator+=(size_t n) {
         if(size()<n) {
-            pos = limit;
             err = true;
         } else {
             pos += n;

@@ -100,10 +100,6 @@ struct PVXS_API evsockaddr {
     static evsockaddr any(int af, unsigned port=0);
     static evsockaddr loopback(int af, unsigned port=0);
 
-    //! encode as 16-byte ipv6 address
-    void wire_encode(uint8_t* buf, bool be) const;
-    void wire_decode(const uint8_t* buf, bool be);
-
     inline bool operator<(const evsockaddr& o) const {
         return evutil_sockaddr_cmp(&store.sa, &o.store.sa, true)<0;
     }

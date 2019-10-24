@@ -53,7 +53,7 @@ struct PVXS_API UDPManager
 {
     //! get process-wide singleton.
     static UDPManager instance();
-    virtual ~UDPManager();
+    ~UDPManager();
 
     /** Create subscription for UDP packets.
      *
