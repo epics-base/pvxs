@@ -22,6 +22,14 @@
 
 #include "pvaproto.h"
 
+// hooks for std::unique_ptr
+namespace std {
+template<>
+struct default_delete<event> {
+    inline void operator()(event* ev) { event_free(ev); }
+};
+}
+
 namespace pvxsimpl {
 using namespace  pvxs;
 
@@ -102,8 +110,35 @@ struct evlisten {
 PVXS_API
 void to_wire(sbuf<uint8_t>& buf, const SockAddr& val, bool be);
 
-PVXS_API
-void from_wire(sbuf<const uint8_t>& buf, SockAddr& val, bool be);
+template <typename B>
+void from_wire(sbuf<B> &buf, SockAddr& val, bool be)
+{
+    if(buf.err || buf.size()<16) {
+        buf.err = true;
+        return;
+    }
+
+    // win32 lacks IN6_IS_ADDR_V4MAPPED()
+    bool ismapped = true;
+    for(unsigned i=0u; i<10; i++)
+        ismapped &= buf[i]==0;
+    ismapped &= buf[10]==0xff;
+    ismapped &= buf[11]==0xff;
+
+    if(ismapped) {
+        val->in = {};
+        val->in.sin_family = AF_INET;
+        memcpy(&val->in.sin_addr.s_addr, buf.pos+12, 4);
+
+    } else {
+        val->in6 = {};
+        val->in6.sin6_family = AF_INET6;
+
+        static_assert (sizeof(val->in6.sin6_addr)==16, "");
+        memcpy(&val->in6.sin6_addr, buf.pos, 16);
+    }
+    buf += 16;
+}
 
 struct PVXS_API evsocket
 {

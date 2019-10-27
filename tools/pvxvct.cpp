@@ -195,154 +195,31 @@ int main(int argc, char *argv[])
             }
         }
 
-        auto cb = [&opts](const pva::UDPMsg& msg)
+        auto searchCB = [&opts](const pva::UDPManager::Search& msg)
         {
-            // later, from worker thread
-
-            // filter by sender
-            if(!opts.peers.empty()) {
-                if(msg.src.family()!=AF_INET)
-                    return;
-
-                bool match = false;
-                for(auto& tup : opts.peers) {
-                    uint32_t addr, mask;
-                    std::tie(addr, mask) = tup;
-                    if((msg.src->in.sin_addr.s_addr&mask)==addr) {
-                        match = true;
-                        break;
-                    }
-                }
-                if(!match)
-                    return;
-            }
-
-            bool showpeer=false;
-            auto lazypeer = [&showpeer, &msg]() {
-                if(!showpeer)
-                    log_printf(out, PLVL_INFO, "From %s\n", msg.src.tostring().c_str());
-                showpeer = true;
-            };
-
-            // allow that one UDP packet may contain several PVA messages
-            for(unsigned i=0; !msg.msgs[i].empty(); i++)
-            {
-                auto M = msg.msgs[i];
-                auto be = M[2]&pva::pva_flags::MSB;
-                auto cmd = M[3];
-                M+=4; // skip header
-                uint32_t blen;
-                pva::from_wire(M, blen, be);
-
-                switch(cmd) {
-                case pva::pva_app_msg::OriginTag:
-                    log_printf(out, PLVL_WARN, "Peer sends ORIGIN_TAG by unicast/broadcast.\n");
-                    break;
-
-                case pva::pva_app_msg::Search: {
-                    uint32_t id;
-                    uint8_t flags;
-                    pva::SockAddr replyAddr;
-
-                    pva::from_wire(M, id, be);
-                    pva::from_wire(M, flags, be);
-                    M += 3; // unused/reserved
-
-                    pva::from_wire(M, replyAddr, be);
-                    uint16_t port = 0;
-                    pva::from_wire(M, port, be);
-                    replyAddr.setPort(port);
-
-                    // so far, only "tcp" transport has ever been seen.
-                    // however, we will consider and ignore any others which might appear
-                    bool foundtcp = false;
-                    size_t nproto=0;
-                    pva::from_wire(M, pva::Size<size_t>(nproto), be);
-                    for(size_t i=0; i<nproto && !M.err; i++) {
-                        size_t nchar=0;
-                        pva::from_wire(M, pva::Size<size_t>(nchar), be);
-
-                        if(M.size()>=3 && nchar==3 && M[0]=='t' && M[1]=='c' && M[2]=='p') {
-                            foundtcp = true;
-                            M += 3;
-                            break;
-                        }
-                    }
-                    if(!foundtcp && !M.err) {
-                        // so far, not something which should actually happen
-                        log_printf(out, PLVL_DEBUG, "  Search w/o proto \"tcp\"\n");
-                        continue;
-                    }
-
-                    // one Search message can include many PV names.
-                    uint16_t nchan=0;
-                    pva::from_wire(M, nchan, be);
-
-                    for(size_t i=0; i<nchan && !M.err; i++) {
-                        uint32_t id=0xffffffff; // poison
-                        size_t chlen;
-
-                        pva::from_wire(M, id, be);
-                        pva::from_wire(M, pva::Size<size_t>(chlen), be);
-                        if(opts.client && chlen<=M.size() && !M.err) {
-                            std::string pvname(reinterpret_cast<const char*>(M.pos), chlen);
-                            if(opts.pvnames.empty() || opts.pvnames.find(pvname)!=opts.pvnames.end()) {
-                                lazypeer();
-                                log_printf(out, PLVL_INFO, "  Search 0x%08x '%s' (rsvp %s)\n",
-                                           unsigned(id), pvname.c_str(), replyAddr.tostring().c_str());
-                            }
-                        }
-                        M += chlen;
-                    }
-
-                    break;
-                }
-
-                case pva::pva_app_msg::Beacon: {
-                    uint8_t guid[12] = {};
-                    uint8_t seq =0;
-                    pva::SockAddr addr;
-                    uint16_t port = 0;
-
-                    pva::_from_wire<sizeof(guid)>(M, guid, false);
-                    M += 1; // flags/qos. unused
-                    pva::from_wire(M, seq, be);
-                    M += 2; // "change" count.  unused
-                    pva::from_wire(M, addr, be);
-                    pva::from_wire(M, port, be);
-                    addr.setPort(port);
-
-                    size_t protolen=0;
-                    pva::from_wire(M, pva::Size<size_t>(protolen), be);
-                    M += protolen; // ignore string
-
-                    // ignore remaining "server status" blob
-
-                    if(opts.server && !M.err) {
-                        lazypeer();
-                        log_printf(out, PLVL_INFO, "  Beacon %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s seq %u\n",
-                                   guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11],
-                                addr.tostring().c_str(), seq);
-                    }
-                }
-                    break;
-
-                default:
-                    log_printf(out, PLVL_WARN, "unknown command 0x%02x\n", cmd);
-                }
-
-                if(M.err) {
-                    log_printf(out, PLVL_ERR, "  Error while decoding\n");
-                }
+            log_printf(out, PLVL_INFO, "%s Searching for:\n", msg.src.tostring().c_str());
+            for(const auto pv : msg.names) {
+                log_printf(out, PLVL_INFO, "  \"%s\"\n", pv);
             }
         };
 
-        std::vector<std::unique_ptr<pva::UDPListener>> listeners;
+        auto beaconCB = [&opts](const pva::UDPManager::Beacon& msg)
+        {
+            const auto& guid = msg.guid;
+            log_printf(out, PLVL_INFO, "%s Beacon %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
+                       msg.src.tostring().c_str(),
+                       guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11],
+                       msg.server.tostring().c_str());
+
+        };
+
+        std::vector<std::tuple<std::unique_ptr<pva::UDPListener>, std::unique_ptr<pva::UDPListener>>> listeners;
         listeners.reserve(bindaddrs.size());
 
         for(auto& baddr : bindaddrs) {
-            listeners.push_back(pva::UDPManager::instance()
-                                .subscribe(baddr, cb));
+            auto manager = pva::UDPManager::instance();
+            listeners.emplace_back(manager.onSearch(baddr, searchCB),
+                                   manager.onBeacon(baddr, beaconCB));
             log_printf(out, PLVL_DEBUG, "Bind: %s\n", baddr.tostring().c_str());
         }
 

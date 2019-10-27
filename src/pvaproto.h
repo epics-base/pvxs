@@ -47,8 +47,8 @@ struct sbuf {
     }
 };
 
-template <unsigned N>
-inline void _from_wire(sbuf<const uint8_t>& buf, uint8_t *mem, bool reverse)
+template <unsigned N, typename B>
+inline void _from_wire(sbuf<B>& buf, uint8_t *mem, bool reverse)
 {
     if(buf.err || buf.size()<N) {
         buf.err = true;
@@ -73,8 +73,8 @@ inline void _from_wire(sbuf<const uint8_t>& buf, uint8_t *mem, bool reverse)
  * @param val output variable
  * @param be  true if value encoded in buf is in MSBF order, false if in LSBF order
  */
-template<typename T, typename std::enable_if<std::is_scalar<T>::value, int>::type =0>
-inline void from_wire(sbuf<const uint8_t>& buf, T& val, bool be)
+template<typename T, typename B, typename std::enable_if<std::is_scalar<T>::value, int>::type =0>
+inline void from_wire(sbuf<B>& buf, T& val, bool be)
 {
     union {
         T v;
@@ -92,8 +92,31 @@ struct Size {
     explicit Size(T& size) :size(&size) {}
 };
 
-PVXS_API
-void from_wire(sbuf<const uint8_t>& buf, Size<size_t> size, bool be);
+template<typename B>
+void from_wire(sbuf<B>& buf, Size<size_t> size, bool be)
+{
+    if(buf.err || buf.empty()) {
+        buf.err = true;
+        return;
+    }
+    uint8_t s=buf[0];
+    buf+=1;
+    if(s<254) {
+        *size.size = s;
+
+    } else if(s==255) {
+        // "null" size.  not sure it is used.  Replicate weirdness of pvDataCPP
+        *size.size = -1;
+
+    } else if(s==254) {
+        uint32_t ls = 0;
+        from_wire(buf, ls, be);
+        *size.size = ls;
+    } else {
+        // unreachable
+        buf.err = true;
+    }
+}
 
 template<unsigned N>
 inline void _to_wire(sbuf<uint8_t>& buf, const uint8_t *mem, bool reverse)

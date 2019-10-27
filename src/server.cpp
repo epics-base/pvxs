@@ -278,7 +278,7 @@ void Server::Pvt::start()
     for(auto& iface : interfaces) {
         auto addr = iface.bind_addr;
         addr.setPort(effective.default_udp);
-        iface.searchrx = manager.subscribe(addr, [](const UDPMsg& msg) {
+        iface.searchrx = manager.onSearch(addr, [](const UDPManager::Search& msg) {
             // TODO handle search
         });
     }
