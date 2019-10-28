@@ -37,7 +37,7 @@ struct UDPListener : public std::enable_shared_from_this<UDPListener>
     std::function<void(UDPManager::Beacon&)> beaconCB;
     std::shared_ptr<UDPCollector> collector;
     const SockAddr dest;
-    UDPListener(UDPManager::Pvt *manager, const SockAddr& dest);
+    UDPListener(UDPManager::Pvt *manager, SockAddr& dest);
     ~UDPListener();
 };
 
@@ -66,7 +66,6 @@ struct UDPCollector : public UDPManager::Search,
         // For Search messages, we use PV name strings in-place by adding nils.
         // Ensure one extra byte at the end of the buffer for a nil after the last PV name
         const int nrx = recvfrom(sock.sock, (char*)&buf[0], buf.size()-1, 0, &src->sa, &alen);
-        log_printf(logio, PLVL_DEBUG, "recvfrom() -> %d\n", nrx);
 
         if(nrx<0) {
             int err = evutil_socket_geterror(sock.sock);
@@ -97,7 +96,7 @@ struct UDPCollector : public UDPManager::Search,
             return true;
         }
 
-        log_hex_printf(logio, PLVL_DEBUG, &buf[0], nrx, "UDP Rx from %s", src.tostring().c_str());
+        log_hex_printf(logio, PLVL_DEBUG, &buf[0], nrx, "UDP Rx %d from %s\n", nrx, src.tostring().c_str());
 
         names.clear();
 
@@ -218,7 +217,7 @@ struct UDPCollector : public UDPManager::Search,
     }
     void handle(short ev)
     {
-        log_printf(logio, PLVL_DEBUG, "UDP %p event %x\n", rx.ev, ev);
+        log_printf(logio, PLVL_DEBUG, "UDP %p event %x\n", rx.get(), ev);
         if(!(ev&EV_READ))
             return;
 
@@ -262,7 +261,7 @@ UDPCollector::UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, cons
     :manager(manager)
     ,bind_addr(bind_addr)
     ,sock(bind_addr.family(), SOCK_DGRAM, 0)
-    ,rx(manager->loop.base, sock.sock, EV_READ|EV_PERSIST, &handle_static, this)
+    ,rx(event_new(manager->loop.base, sock.sock, EV_READ|EV_PERSIST, &handle_static, this))
     ,buf(0x10001)
     ,beaconMsg(src)
 {
@@ -274,7 +273,8 @@ UDPCollector::UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, cons
 
     log_printf(logsetup, PLVL_INFO, "Bound to %s\n", name.c_str());
 
-    rx.add();
+    if(event_add(rx.get(), nullptr))
+        throw std::runtime_error("Unable to create collector Rx event");
 }
 
 UDPCollector::~UDPCollector()
@@ -353,9 +353,19 @@ std::unique_ptr<UDPListener> UDPManager::onSearch(SockAddr& dest,
     return ret;
 }
 
-UDPListener::UDPListener(UDPManager::Pvt *manager, const SockAddr &dest)
+void UDPManager::sync()
+{
+    if(!pvt)
+        throw std::invalid_argument("UDPManager null");
+
+    pvt->loop.sync();
+}
+
+UDPListener::UDPListener(UDPManager::Pvt *manager, SockAddr &dest)
     :dest(dest)
 {
+    manager->loop.assertInLoop();
+
     if(dest.port()!=0) {
         auto it = manager->collectors.find(dest);
         if(it!=manager->collectors.end()) {
@@ -369,6 +379,7 @@ UDPListener::UDPListener(UDPManager::Pvt *manager, const SockAddr &dest)
 
     if(!collector) {
         collector.reset(new UDPCollector(manager->shared_from_this(), dest));
+        dest = collector->bind_addr;
     }
 
     collector->listeners.insert(this);
@@ -392,6 +403,8 @@ UDPListener::~UDPListener()
 
 bool UDPCollector::reply(const void *msg, size_t msglen) const
 {
+    manager->loop.assertInLoop();
+
     int ntx = sendto(sock.sock, (char*)msg, msglen, 0, &src->sa, src.size());
     if(ntx<0) {
         int err = evutil_socket_geterror(sock.sock);

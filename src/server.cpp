@@ -178,7 +178,7 @@ Server::Pvt::Pvt(Config&& conf)
     :effective(std::move(conf))
     ,acceptor_loop("PVXS Acceptor", epicsThreadPriorityCAServerLow-2)
     ,beaconSender(AF_INET, SOCK_DGRAM, 0)
-    ,beaconTimer(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this)
+    ,beaconTimer(event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this))
     ,state(Stopped)
 {
     // empty interface address list implies the wildcard
@@ -260,14 +260,14 @@ void Server::Pvt::start()
         log_printf(serversetup, PLVL_DEBUG, "Server starting\n");
 
         for(auto& iface : interfaces) {
-            if(evconnlistener_enable(iface.listener.lev)) {
+            if(evconnlistener_enable(iface.listener.get())) {
                 log_printf(serversetup, PLVL_ERR, "Error enabling listener on %s\n", iface.name.c_str());
             }
             log_printf(serversetup, PLVL_DEBUG, "Server enabled listener on %s\n", iface.name.c_str());
         }
 
         // send first beacon immediately
-        if(event_add(beaconTimer, nullptr))
+        if(event_add(beaconTimer.get(), nullptr))
             log_printf(serversetup, PLVL_ERR, "Error enabling beacon timer on\n");
 
         state = Running;
@@ -278,7 +278,8 @@ void Server::Pvt::start()
     for(auto& iface : interfaces) {
         auto addr = iface.bind_addr;
         addr.setPort(effective.default_udp);
-        iface.searchrx = manager.onSearch(addr, [](const UDPManager::Search& msg) {
+        iface.searchrx = manager.onSearch(addr, [](const UDPManager::Search& msg)
+        {
             // TODO handle search
         });
     }
@@ -297,7 +298,7 @@ void Server::Pvt::stop()
         }
         state = Stopping;
 
-        if(event_del(beaconTimer.ev))
+        if(event_del(beaconTimer.get()))
             log_printf(serversetup, PLVL_ERR, "Error disabling beacon timer on\n");
     });
 
@@ -311,7 +312,7 @@ void Server::Pvt::stop()
     {
 
         for(auto& iface : interfaces) {
-            if(evconnlistener_disable(iface.listener.lev)) {
+            if(evconnlistener_disable(iface.listener.get())) {
                 log_printf(serversetup, PLVL_ERR, "Error disabling listener on %s\n", iface.name.c_str());
             }
             log_printf(serversetup, PLVL_DEBUG, "Server disabled listener on %s\n", iface.name.c_str());
@@ -333,7 +334,7 @@ void Server::Pvt::doBeacons(short evt)
     // TODO send beacons
 
     timeval interval = {15, 0};
-    if(event_add(beaconTimer, &interval))
+    if(event_add(beaconTimer.get(), &interval))
         log_printf(serversetup, PLVL_ERR, "Error re-enabling beacon timer on\n");
 }
 
@@ -361,11 +362,12 @@ ServIface::ServIface(const std::string& addr, Server::Pvt *server)
     name = bind_addr.tostring();
 
     const int backlog = 4;
-    listener = evlisten(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED, backlog, sock.sock);
+    listener = evlisten(evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED, backlog, sock.sock));
 }
 
 void ServIface::onConn(evutil_socket_t sock, struct sockaddr *peer, int socklen)
 {
+    // TODO
     evutil_closesocket(sock);
 }
 

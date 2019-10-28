@@ -18,6 +18,10 @@ TESTPROD += testev
 testev_SRCS += testev.cpp
 TESTS += testev
 
+TESTPROD += testudp
+testudp_SRCS += testudp.cpp
+TESTS += testudp
+
 PROD_SYS_LIBS += event_core
 
 PROD_SYS_LIBS_DEFAULT += event_pthreads

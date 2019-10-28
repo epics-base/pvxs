@@ -39,6 +39,8 @@ public:
     testCase& operator=(testCase&&) noexcept;
     ~testCase();
 
+    explicit operator bool() const { return result==Pass; }
+
     template<typename T>
     inline testCase& operator<<(const T& v) {
         msg<<v;

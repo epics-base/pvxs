@@ -28,7 +28,7 @@ struct sbuf {
     T *pos, *limit;
     bool err;
 
-    sbuf(T *buf, T size)
+    sbuf(T *buf, size_t size)
         :pos(buf), limit(buf+size)
         ,err(false)
     {}

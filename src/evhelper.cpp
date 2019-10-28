@@ -183,48 +183,6 @@ bool evbase::inLoop()
     return pvt->worker.isCurrentThread();
 }
 
-
-evevent::evevent(struct event_base *base, evutil_socket_t sock, short mask, event_callback_fn fn, void *arg)
-    :ev(event_new(base, sock, mask, fn, arg))
-{
-    if(!ev)
-        throw std::bad_alloc();
-    log_printf(logerr, PLVL_DEBUG, "Create event %p on %p for %d (%x)\n",
-               ev, base, (int)sock, mask);
-}
-
-evevent::~evevent()
-{
-    if(ev) {
-        log_printf(logerr, PLVL_DEBUG, "Destroy event %p\n", ev);
-        event_free(ev);
-    }
-}
-
-evevent::evevent(evevent&& o) noexcept
-    :ev(o.ev)
-{
-    o.ev = nullptr;
-}
-
-evevent& evevent::operator=(evevent&& o) noexcept
-{
-    if(this!=&o) {
-        if(ev)
-            event_free(ev);
-        ev = o.ev;
-        o.ev = nullptr;
-    }
-    return *this;
-}
-
-void evevent::add(const struct timeval *tv)
-{
-    log_printf(logerr, PLVL_DEBUG, "Add event %p\n", ev);
-    if(event_add(ev, tv))
-        throw std::runtime_error("event_add() fails");
-}
-
 void to_wire(sbuf<uint8_t>& buf, const SockAddr &val, bool be)
 {
     if(buf.err || buf.size()<16) {

@@ -58,6 +58,8 @@ struct PVXS_API UDPManager
     std::unique_ptr<UDPListener> onSearch(SockAddr& dest,
                                           std::function<void(const Search&)>&& cb);
 
+    void sync();
+
     explicit operator bool() const { return !!pvt; }
 
     UDPManager();

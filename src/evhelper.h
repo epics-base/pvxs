@@ -28,10 +28,24 @@ template<>
 struct default_delete<event> {
     inline void operator()(event* ev) { event_free(ev); }
 };
+template<>
+struct default_delete<evconnlistener> {
+    inline void operator()(evconnlistener* ev) { evconnlistener_free(ev); }
+};
 }
 
 namespace pvxsimpl {
 using namespace  pvxs;
+
+template<typename T>
+struct owned_ptr : public std::unique_ptr<T>
+{
+    constexpr owned_ptr() {}
+    explicit owned_ptr(T* ptr) : std::unique_ptr<T>(ptr) {
+        if(!*this)
+            throw std::bad_alloc();
+    }
+};
 
 struct PVXS_API evbase {
     explicit evbase(const std::string& name, unsigned prio=0);
@@ -55,57 +69,9 @@ public:
     event_base* const base;
 };
 
-struct PVXS_API evevent {
-    event *ev;
+typedef owned_ptr<event> evevent;
+typedef owned_ptr<evconnlistener> evlisten;
 
-    constexpr evevent() :ev(nullptr) {}
-    evevent(struct event_base *base, evutil_socket_t sock, short mask, event_callback_fn fn, void *arg);
-    ~evevent();
-    evevent(evevent&&) noexcept;
-    evevent& operator=(evevent&&) noexcept;
-    evevent(const evevent&) = delete;
-    evevent& operator=(const evevent&) = delete;
-
-    operator bool() const { return ev; }
-    operator event*() const { return ev; }
-
-    void add(const timeval *tv=nullptr);
-};
-
-struct evlisten {
-    evconnlistener * lev;
-
-    evlisten() :lev(nullptr) {}
-    evlisten(evlisten&& o) noexcept
-        :lev(o.lev)
-    {
-        o.lev = nullptr;
-    }
-    evlisten& operator=(evlisten&& o) noexcept
-    {
-        if(this!=&o) {
-            if(lev)
-                evconnlistener_free(lev);
-            lev = o.lev;
-            o.lev = nullptr;
-        }
-        return *this;
-    }
-    evlisten(const evlisten&) = delete;
-    evlisten& operator=(const evlisten&) = delete;
-
-    template<typename ...Args>
-    evlisten(Args...args)
-        :lev(evconnlistener_new(std::forward<Args>(args)...))
-    {
-        if(!lev)
-            throw std::bad_alloc();
-    }
-    ~evlisten() {
-        if(lev)
-            evconnlistener_free(lev);
-    }
-};
 
 PVXS_API
 void to_wire(sbuf<uint8_t>& buf, const SockAddr& val, bool be);
