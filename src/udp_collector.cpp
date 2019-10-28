@@ -31,16 +31,6 @@ namespace pvxsimpl {
 DEFINE_LOGGER(logio, "udp.io");
 DEFINE_LOGGER(logsetup, "udp.setup");
 
-struct UDPListener : public std::enable_shared_from_this<UDPListener>
-{
-    std::function<void(UDPManager::Search&)> searchCB;
-    std::function<void(UDPManager::Beacon&)> beaconCB;
-    std::shared_ptr<UDPCollector> collector;
-    const SockAddr dest;
-    UDPListener(UDPManager::Pvt *manager, SockAddr& dest);
-    ~UDPListener();
-};
-
 struct UDPCollector : public UDPManager::Search,
                       public std::enable_shared_from_this<UDPCollector>
 {
@@ -119,36 +109,35 @@ struct UDPCollector : public UDPManager::Search,
         switch(cmd) {
 
         case pva_app_msg::Search: {
-            uint32_t id;
+            uint8_t flags = 0;
             SockAddr replyAddr;
+            uint16_t port = 0;
 
-            from_wire(M, id, be);
-            M += 4; // flags and unused/reserved
+            from_wire(M, searchID, be);
+            from_wire(M, flags, be);
+            mustReply = flags&pva_search_flags::MustReply;
+            M += 3; // unused/reserved
 
             from_wire(M, replyAddr, be);
-            uint16_t port = 0;
             from_wire(M, port, be);
+            if(replyAddr.isAny()) {
+                replyAddr = src;
+            }
             replyAddr.setPort(port);
 
             // so far, only "tcp" transport has ever been seen.
             // however, we will consider and ignore any others which might appear
             bool foundtcp = false;
-            size_t nproto=0;
-            from_wire(M, Size<size_t>(nproto), be);
-            for(size_t i=0; i<nproto && !M.err; i++) {
-                size_t nchar=0;
-                from_wire(M, Size<size_t>(nchar), be);
+            Size nproto{0};
+            from_wire(M, nproto, be);
+            for(size_t i=0; i<nproto.size && !M.err; i++) {
+                Size nchar{0};
+                from_wire(M, nchar, be);
 
-                if(M.size()>=3 && nchar==3 && M[0]=='t' && M[1]=='c' && M[2]=='p') {
-                    foundtcp = true;
-                    M += 3;
-                    break;
-                }
-            }
-            if(!foundtcp && !M.err) {
-                // so far, not something which should actually happen
-                log_printf(logio, PLVL_DEBUG, "  Search w/o proto \"tcp\"\n");
-                return true;
+                // shortcut to avoid allocating a std::string
+                // "tcp" is the only value we expect to see
+                foundtcp |= M.size()>=3 && nchar.size==3 && M[0]=='t' && M[1]=='c' && M[2]=='p';
+                M += nchar.size;
             }
 
             // one Search message can include many PV names.
@@ -160,17 +149,17 @@ struct UDPCollector : public UDPManager::Search,
 
             for(size_t i=0; i<nchan && !M.err; i++) {
                 uint32_t id=0xffffffff; // poison
-                size_t chlen;
+                Size chlen{0};
 
                 auto mundge = M.pos;
                 from_wire(M, id, be);
-                from_wire(M, Size<size_t>(chlen), be);
+                from_wire(M, chlen, be);
                 // inject nil for previous PV name
                 *mundge = '\0';
-                if(chlen<=M.size() && !M.err) {
-                    names.push_back(reinterpret_cast<const char*>(M.pos));
+                if(foundtcp && chlen.size<=M.size() && !M.err) {
+                    names.push_back(UDPManager::Search::Name{reinterpret_cast<const char*>(M.pos), id});
                 }
-                M += chlen;
+                M += chlen.size;
             }
 
             if(!M.err) {
@@ -194,11 +183,14 @@ struct UDPCollector : public UDPManager::Search,
             M += 4; // skip flags, seq, and change count.  unused
             from_wire(M, beaconMsg.server, be);
             from_wire(M, port, be);
+            if(beaconMsg.server.isAny()) {
+                beaconMsg.server = src;
+            }
             beaconMsg.server.setPort(port);
 
-            size_t protolen=0;
-            from_wire(M, Size<size_t>(protolen), be);
-            M += protolen; // ignore string
+            Size protolen{0};
+            from_wire(M, protolen, be);
+            M += protolen.size; // ignore string
 
             // ignore remaining "server status" blob
 
@@ -265,7 +257,7 @@ UDPCollector::UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, cons
     ,buf(0x10001)
     ,beaconMsg(src)
 {
-    beaconMsg.guid.resize(12);
+    manager->loop.assertInLoop();
 
     epicsSocketEnableAddressUseForDatagramFanout(sock.sock);
     sock.bind(this->bind_addr);
@@ -279,6 +271,8 @@ UDPCollector::UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, cons
 
 UDPCollector::~UDPCollector()
 {
+    manager->loop.assertInLoop();
+
     // we should only be destroyed after that last listener has removed itself
     assert(listeners.empty());
     manager->loop.assertInLoop();
@@ -363,6 +357,7 @@ void UDPManager::sync()
 
 UDPListener::UDPListener(UDPManager::Pvt *manager, SockAddr &dest)
     :dest(dest)
+    ,active(false)
 {
     manager->loop.assertInLoop();
 
@@ -381,24 +376,34 @@ UDPListener::UDPListener(UDPManager::Pvt *manager, SockAddr &dest)
         collector.reset(new UDPCollector(manager->shared_from_this(), dest));
         dest = collector->bind_addr;
     }
-
-    collector->listeners.insert(this);
 }
 
 UDPListener::~UDPListener()
 {
-    if(!collector)
-        return;
-
     auto manager = collector->manager;
     manager->loop.call([this](){
         // from event loop worker
 
-        collector->listeners.erase(this);
+        if(active)
+            collector->listeners.erase(this);
 
         collector.reset(); // destroy UDPCollector from worker
     });
     // UDPManager may be destroyed at this point, which joins its event loop worker
+}
+
+void UDPListener::start(bool s)
+{
+    collector->manager->loop.call([this, s](){
+        if(s && !active) {
+            collector->listeners.insert(this);
+
+        } else if(!s && active) {
+            collector->listeners.erase(this);
+        }
+
+        active = s;
+    });
 }
 
 bool UDPCollector::reply(const void *msg, size_t msglen) const
@@ -422,9 +427,3 @@ bool UDPCollector::reply(const void *msg, size_t msglen) const
 UDPManager::Search::~Search() {}
 
 } // namespace pvxsimpl
-
-namespace std {
-void default_delete<pvxsimpl::UDPListener>::operator()(pvxsimpl::UDPListener* listener) {
-    delete listener;
-};
-} // namespace std

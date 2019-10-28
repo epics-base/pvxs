@@ -66,7 +66,8 @@ private:
 public:
 
     explicit SockAddr(int af = AF_UNSPEC);
-    explicit SockAddr(int af, const char *address);
+    explicit SockAddr(int af, const char *address, unsigned short port=0);
+    explicit SockAddr(const sockaddr *addr, ev_socklen_t len);
     inline explicit SockAddr(int af, const std::string& address) :SockAddr(af, address.c_str()) {}
 
     size_t size() const;
@@ -75,8 +76,9 @@ public:
     unsigned short port() const;
     void setPort(unsigned short port);
 
-    void setAddress(const char *);
+    void setAddress(const char *, unsigned short port=0);
 
+    bool isAny() const;
     bool isLO() const;
 
     store_t* operator->() { return &store; }

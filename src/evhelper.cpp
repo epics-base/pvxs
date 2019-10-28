@@ -114,7 +114,7 @@ void dispatch_action(evutil_socket_t _fd, short _ev, void *raw)
         std::unique_ptr<std::function<void()> > action(reinterpret_cast<std::function<void()>*>(raw));
         (*action)();
     }catch(std::exception& e){
-        log_printf(logerr, PLVL_CRIT, "evhelper::call unhandled error: %s\n", e.what());
+        log_printf(logerr, PLVL_CRIT, "evhelper::call unhandled error %s : %s\n", typeid(&e).name(), e.what());
     }
 }
 }
@@ -308,7 +308,7 @@ void evsocket::mcast_iface(const SockAddr& iface) const
 }
 
 
-void from_wire(sbuf<const uint8_t>& buf, Size<size_t> size, bool be)
+void from_wire(sbuf<const uint8_t>& buf, Size& size, bool be)
 {
     if(buf.err || buf.empty()) {
         buf.err = true;
@@ -317,16 +317,16 @@ void from_wire(sbuf<const uint8_t>& buf, Size<size_t> size, bool be)
     uint8_t s=buf[0];
     buf+=1;
     if(s<254) {
-        *size.size = s;
+        size.size = s;
 
     } else if(s==255) {
         // "null" size.  not sure it is used.  Replicate weirdness of pvDataCPP
-        *size.size = -1;
+        size.size = -1;
 
     } else if(s==254) {
         uint32_t ls = 0;
         from_wire(buf, ls, be);
-        *size.size = ls;
+        size.size = ls;
     } else {
         // unreachable
         buf.err = true;

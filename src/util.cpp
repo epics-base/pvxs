@@ -79,10 +79,18 @@ SockAddr::SockAddr(int af)
         throw std::invalid_argument("Unsupported address family");
 }
 
-SockAddr::SockAddr(int af, const char *address)
+SockAddr::SockAddr(int af, const char *address, unsigned short port)
     :SockAddr(af)
 {
-    setAddress(address);
+    setAddress(address, port);
+}
+
+SockAddr::SockAddr(const sockaddr *addr, ev_socklen_t len)
+    :SockAddr(addr->sa_family)
+{
+    if(len<0 || len>ev_socklen_t(size()))
+        throw std::invalid_argument("Truncated Address");
+    memcpy(&store, addr, len);
 }
 
 size_t SockAddr::size() const
@@ -120,13 +128,26 @@ void SockAddr::setPort(unsigned short port)
     }
 }
 
-void SockAddr::setAddress(const char *name)
+void SockAddr::setAddress(const char *name, unsigned short port)
 {
     SockAddr temp;
     int templen = sizeof(temp.store);
     if(evutil_parse_sockaddr_port(name, &temp->sa, &templen))
         throw std::runtime_error(std::string("Unable to parse as IP addresss: ")+name);
+    if(temp.port()==0)
+        temp.setPort(port);
     (*this) = temp;
+}
+
+bool SockAddr::isAny() const
+{
+    switch(store.sa.sa_family) {
+    case AF_INET: return store.in.sin_addr.s_addr==htonl(INADDR_ANY);
+#ifdef AF_INET6
+    case AF_INET6: return IN6_IS_ADDR_UNSPECIFIED(&store.in6.sin6_addr);
+#endif
+    default: return false;
+    }
 }
 
 bool SockAddr::isLO() const

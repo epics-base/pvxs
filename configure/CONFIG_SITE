@@ -41,8 +41,8 @@ CHECK_RELEASE = YES
 -include $(TOP)/../CONFIG_SITE.local
 -include $(TOP)/configure/CONFIG_SITE.local
 
-# MSVC - skip defining min()/max() macros
-USR_CPPFLAGS_WIN32 += -DNOMINMAX
+# MSVC - skip defining min()/max() macros and enable APIs
+USR_CPPFLAGS_WIN32 += -DNOMINMAX -D_WIN32_WINNT=_WIN32_WINNT_VISTA
 
 ifneq ($(filter-out msvc,$(CMPLR_CLASS)),)
 USR_CXXFLAGS += -std=c++11

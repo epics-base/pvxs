@@ -13,6 +13,7 @@
 #include <tuple>
 #include <vector>
 #include <memory>
+#include <array>
 
 #include <pvxs/version.h>
 #include <pvxs/util.h>
@@ -76,24 +77,34 @@ struct FallbackHandler
 class Attachment {
 };
 */
+
+struct Handler;
+struct Source;
+
+/** PV Access protocol server instance
+ *
+ * Use a Server::Config to determine how this server will bind, listen,
+ * and announce itself.
+ */
 class PVXS_API Server
 {
 public:
     struct Config {
-        //! List of network interface addresses to which this server will bind (list of TCP connections).
+        //! List of network interface addresses to which this server will bind.
         //! interfaces.empty() treated as an alias for "0.0.0.0", which may also be given explicitly.
         //! Port numbers are optional and unused (parsed and ignored)
         std::vector<std::string> interfaces;
         //! Addresses to which (UDP) beacons message will be sent.
         //! May include broadcast and/or unicast addresses.
-        //! Special value "*" is expanded with all local interfaces broadcast addresses.
         std::vector<std::string> beaconDestinations;
         unsigned short tcp_port;
-        unsigned short default_udp;
+        unsigned short udp_port;
         bool auto_beacon;
 
+        std::array<uint8_t, 12> guid;
+
         PVXS_API static Config from_env();
-        Config() :tcp_port(5075), default_udp(5076), auto_beacon(true) {}
+        Config() :tcp_port(5075), udp_port(5076), auto_beacon(true), guid{} {}
     };
 
     //! An empty/dummy Server
@@ -108,20 +119,54 @@ public:
     //! effective config
     const Config& config() const;
 
-    /*
-    Attachment attach(const std::string& name,
-                      std::unique_ptr<Handler>&& handler);
+    Server& addSource(const std::string& name,
+                      const std::shared_ptr<Source>& src,
+                      int order =0);
 
-    Attachment attachFallback(std::unique_ptr<FallbackHandler>&& handler);
+    std::unique_ptr<Source> removeSource(const std::string& name);
 
-    void detach(Attachment&& attach);
-    */
+    std::unique_ptr<Source> getSource(const std::string& name);
+
+    void listSource(std::vector<std::string>& names);
 
     explicit operator bool() const { return !!pvt; }
 
     struct Pvt;
 private:
     std::unique_ptr<Pvt> pvt;
+};
+
+struct PVXS_API Source {
+    virtual ~Source();
+
+    struct Search {
+        class Name {
+            const char* _name;
+            bool _claim;
+            friend struct Server::Pvt;
+        public:
+            inline const char* name() const { return _name; }
+            inline void claim() { _claim = true; }
+        };
+    private:
+        typedef std::vector<Name> _names_t;
+        _names_t _names;
+        SockAddr _src;
+        friend struct Server::Pvt;
+    public:
+
+        _names_t::iterator begin() { return _names.begin(); }
+        _names_t::iterator end() { return _names.end(); }
+        const SockAddr& source() const { return _src; }
+    };
+    virtual void onSearch(Search& op) =0;
+
+    struct Create {
+        std::string name;
+        std::string src;
+        // credentials
+    };
+    virtual std::unique_ptr<Handler> onCreate(const Create& op) =0;
 };
 
 }} // namespace pvxs::server

@@ -40,13 +40,14 @@ void testBeacon(bool be)
     {
         testDiag("Beacon received");
         testEq(msg.src, sender);
-        testEq(msg.server, SockAddr::any(AF_INET, 0x1234));
+        testEq(msg.server, SockAddr::loopback(AF_INET, 0x1234));
 
         uint8_t expect[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
         testOk1(msg.guid.size()==12 && std::equal(msg.guid.begin(), msg.guid.end(), expect));
 
         rx.signal();
     });
+    sub->start();
 
     testDiag("Listen on %s", listener.tostring().c_str());
 
@@ -99,45 +100,40 @@ void testSearch(bool be, std::initializer_list<const char*> names)
     {
         testDiag("Search received");
         for(auto name : msg.names) {
-            testDiag("  For %s", name);
+            testDiag("  For %s", name.name);
         }
         if(testEq(msg.names.size(), names.size())) {
             size_t i=0;
             for(auto name : msg.names) {
-                testEq(msg.names[i++], name);
+                testEq(msg.names[i].id, i+1);
+                testEq(msg.names[i++].name, name.name);
             }
         }
         rx.signal();
     });
+    sub->start();
 
     std::vector<uint8_t> msg(1024, 0);
     sbuf<uint8_t> M(msg.data(), msg.size());
-    M[0] = 0xca;
-    M[1] = pva_version::client;
-    M[2] = be ? pva_flags::MSB : 0;
-    M[3] = pva_app_msg::Search;
-    M+=4;
-    M+=4; //come back to this later
+    to_wire(M, {0xca, pva_version::client, uint8_t(be ? pva_flags::MSB : 0), pva_app_msg::Search}, be);
+    auto blen = M.split(4);
     to_wire(M, uint32_t(0x12345678), be);
     M+=4;
     SockAddr reply(SockAddr::any(AF_INET, 0x1020));
     to_wire(M, reply, be);
     to_wire(M, uint16_t(reply.port()), be);
     // one protocol w/ 3 chars
-    M[0] = 1;
-    M[1] = 3;
-    M[2] = 't';
-    M[3] = 'c';
-    M[4] = 'p';
-    M+=5;
+    to_wire(M, {1}, be);
+    to_wire(M, "tcp", be);
     to_wire(M, uint16_t(names.size()), be);
     uint32_t i=1;
     for(auto name : names) {
         to_wire(M, i++, be);
-        M[0] = strlen(name);
-        memcpy((char*)M.pos+1, name, M[0]);
-        M+=1+M[0];
+        to_wire(M, name, be);
     }
+
+    to_wire(blen, uint32_t(M.pos-msg.data()-8), be);
+
     testOk1(!M.err);
     testDiag("Buffer pos %u of %u", unsigned(M.pos-msg.data()), unsigned(msg.size()));
 
@@ -151,7 +147,7 @@ void testSearch(bool be, std::initializer_list<const char*> names)
 
 int main(int argc, char *argv[])
 {
-    testPlan(32);
+    testPlan(38);
     pvxs::logger_config_env();
     testBeacon(true);
     testBeacon(false);

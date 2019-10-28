@@ -32,11 +32,20 @@ template<>
 struct default_delete<evconnlistener> {
     inline void operator()(evconnlistener* ev) { evconnlistener_free(ev); }
 };
+template<>
+struct default_delete<bufferevent> {
+    inline void operator()(bufferevent* ev) { bufferevent_free(ev); }
+};
+template<>
+struct default_delete<evbuffer> {
+    inline void operator()(evbuffer* ev) { evbuffer_free(ev); }
+};
 }
 
 namespace pvxsimpl {
 using namespace  pvxs;
 
+//! unique_ptr which is never constructed with NULL
 template<typename T>
 struct owned_ptr : public std::unique_ptr<T>
 {
@@ -71,7 +80,8 @@ public:
 
 typedef owned_ptr<event> evevent;
 typedef owned_ptr<evconnlistener> evlisten;
-
+typedef owned_ptr<bufferevent> evbufferevent;
+typedef owned_ptr<evbuffer> evbuf;
 
 PVXS_API
 void to_wire(sbuf<uint8_t>& buf, const SockAddr& val, bool be);

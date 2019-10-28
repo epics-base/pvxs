@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
         {
             log_printf(out, PLVL_INFO, "%s Searching for:\n", msg.src.tostring().c_str());
             for(const auto pv : msg.names) {
-                log_printf(out, PLVL_INFO, "  \"%s\"\n", pv);
+                log_printf(out, PLVL_INFO, "  \"%s\"\n", pv.name);
             }
         };
 
@@ -213,13 +213,15 @@ int main(int argc, char *argv[])
 
         };
 
-        std::vector<std::tuple<std::unique_ptr<pva::UDPListener>, std::unique_ptr<pva::UDPListener>>> listeners;
+        std::vector<std::pair<std::unique_ptr<pva::UDPListener>, std::unique_ptr<pva::UDPListener>>> listeners;
         listeners.reserve(bindaddrs.size());
 
         for(auto& baddr : bindaddrs) {
             auto manager = pva::UDPManager::instance();
             listeners.emplace_back(manager.onSearch(baddr, searchCB),
                                    manager.onBeacon(baddr, beaconCB));
+            listeners.back().first->start();
+            listeners.back().second->start();
             log_printf(out, PLVL_DEBUG, "Bind: %s\n", baddr.tostring().c_str());
         }
 
