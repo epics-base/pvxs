@@ -1,44 +1,65 @@
-# .travis.xml for use with EPICS Base ci-scripts
+# .travis.yml for use with EPICS Base ci-scripts
 # (see: https://github.com/epics-base/ci-scripts)
+
+# This is YAML - indentation levels are crucial
 
 language: cpp
 compiler: gcc
-dist: xenial
+dist: bionic
+
+cache:
+  directories:
+  - $HOME/.cache
+
+env:
+  global:
+    - SETUP_PATH=.ci-local:.ci
 
 addons:
   apt:
     packages:
+    # for all EPICS builds
     - libreadline6-dev
     - libncurses5-dev
     - perl
+    # for clang compiler
     - clang
+    # for mingw builds (32bit and 64bit)
     - g++-mingw-w64-i686
+    - g++-mingw-w64-x86-64
+    # for RTEMS cross builds
     - qemu-system-x86
     - cmake
 
 install:
-  - ./.ci/travis-prepare.sh
+  - ./.ci/travis/prepare.sh
   - ./.ci-local/travis-libevent.sh
 
 script:
-  - ./.ci/travis-build.sh
+  - ./.ci/travis/build.sh
 
 # If you need to do more during install and build,
 # add a local directory to your module and do e.g.
-#  - ./.ci-local/travis-install-extras.sh
+#  - ./.ci-local/travis/install-extras.sh
 
 # Define build jobs
 
 # Well-known variables to use
-# BASE     branch or release tag name of the EPICS Base to use
+# SET      source setup file
 # EXTRA    content will be added to make command line
 # STATIC   set to YES for static build (default: NO)
 # TEST     set to NO to skip running the tests (default: YES)
+# VV       set to make build scripts verbose (default: unset)
 
-matrix:
+# Usually from setup files, but may be specified or overridden
+#  on a job line
+# MODULES  list of dependency modules
+# BASE     branch or release tag name of the EPICS Base to use
+# <MODULE> branch or release tag for a specific module
+# ...      see README for setup file syntax description
+
+jobs:
   include:
-#  - env: BASE=7.0 EPICS_HOST_ARCH=win32-x86
-#    os: windows
 
 # Different configurations of default gcc and clang
 
@@ -47,20 +68,28 @@ matrix:
   - env: BASE=7.0
     compiler: clang
 
+  - env: BASE=7.0 EXTRA="CMD_CXXFLAGS=-std=c++11"
+
+  - env: BASE=7.0 EXTRA="CMD_CXXFLAGS=-std=c++11"
+    compiler: clang
+
 # Trusty: compiler versions very close to RHEL 7
 
   - env: BASE=7.0
     dist: trusty
 
-# Cross-compilation to Windows using MinGW and WINE
+  - env: BASE=7.0 EXTRA="CMD_CXXFLAGS=-std=c++11"
+    dist: trusty
+
+# Cross-compilations to Windows using MinGW and WINE
     
   - env: BASE=7.0 WINE=32 TEST=NO STATIC=YES
     compiler: mingw
 
-  - env: BASE=7.0 WINE=32 TEST=NO STATIC=NO
+  - env: BASE=7.0 WINE=64 TEST=NO STATIC=NO
     compiler: mingw
 
-# Other gcc versions (adding as an extra package)
+# Other gcc versions (added as an extra package)
 
   - env: BASE=7.0
     compiler: gcc-6
@@ -75,12 +104,4 @@ matrix:
   - env: BASE=7.0
     os: osx
     compiler: clang
-
-# Other
-
-  - env: BASE=3.15
-
-# All above jobs can be defined for other branches or releases of EPICS Base
-# by setting BASE to the branch name or release tag name, e.g.
-# BASE=3.15      (to use the 3.15 branch of Base)
-# BASE=R7.0.3    (to use the 7.0.3 release of Base)
+    addons: { homebrew: { packages: ["re2c"], update: true } }
