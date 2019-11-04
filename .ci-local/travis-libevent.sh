@@ -50,30 +50,36 @@ EOF
 
 cd ..
 
-if [ "$WINE" = "32" ]
+if [ "$WINE" ]
 then
-  echo "Cross mingw32"
+  echo "Cross mingw $WINE"
+
+  case "$WINE" in
+  32) MINGW="i686-w64-mingw32" ;;
+  64) MINGW="x86_64-w64-mingw32" ;;
+  *) false;;
+  esac
 
   mkdir mingw-libevent
   cd mingw-libevent
 
   # https://github.com/mdavidsaver/cmake4epics/tree/master/toolchains
-  ls /usr/i686-w64-mingw32
-  type i686-w64-mingw32-gcc
-  i686-w64-mingw32-gcc --version
-  cat <<EOF > i686-w64-mingw32.cmake
+  ls /usr/${MINGW}
+  type ${MINGW}-gcc
+  ${MINGW}-gcc --version
+  cat <<EOF > ${MINGW}.cmake
 SET(CMAKE_SYSTEM_NAME Windows)
 SET(CMAKE_SYSTEM_PROCESSOR x86)
-SET(CMAKE_C_COMPILER i686-w64-mingw32-gcc)
-SET(CMAKE_CXX_COMPILER i686-w64-mingw32-g++)
-SET(CMAKE_RC_COMPILER i686-w64-mingw32-windres)
-SET(CMAKE_FIND_ROOT_PATH  /usr/i686-w64-mingw32 )
+SET(CMAKE_C_COMPILER ${MINGW}-gcc)
+SET(CMAKE_CXX_COMPILER ${MINGW}-g++)
+SET(CMAKE_RC_COMPILER ${MINGW}-windres)
+SET(CMAKE_FIND_ROOT_PATH  /usr/${MINGW} )
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 EOF
 
-  cmake -DCMAKE_TOOLCHAIN_FILE=i686-w64-mingw32.cmake -DEVENT__DISABLE_OPENSSL=ON -DCMAKE_INSTALL_PREFIX:DIR=$PWD/usr ../libevent
+  cmake -DCMAKE_TOOLCHAIN_FILE=${MINGW}.cmake -DEVENT__DISABLE_OPENSSL=ON -DCMAKE_INSTALL_PREFIX:DIR=$PWD/usr ../libevent
   ls
   cmake --build . $BFLAGS --target install
 
