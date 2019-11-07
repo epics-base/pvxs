@@ -16,6 +16,8 @@
 #include <string>
 #include <sstream>
 
+#include <compilerDependencies.h>
+
 #include <pvxs/version.h>
 #include <pvxs/util.h>
 
@@ -58,26 +60,26 @@ struct Range {
 
     struct iterator : std::iterator_traits<std::forward_iterator_tag> {
         I val;
-        explicit iterator(I val) :val(val) {}
-        inline I operator*() const { return val; }
-        inline iterator& operator++() { val++; return *this; }
-        inline iterator operator++(int) { return iterator{val++}; }
-        inline bool operator==(const iterator& o) const { return val==o.val; }
-        inline bool operator!=(const iterator& o) const { return val!=o.val; }
+        explicit constexpr iterator(I val) :val(val) {}
+        EPICS_ALWAYS_INLINE I operator*() const { return val; }
+        EPICS_ALWAYS_INLINE iterator& operator++() { val++; return *this; }
+        EPICS_ALWAYS_INLINE iterator operator++(int) { return iterator{val++}; }
+        EPICS_ALWAYS_INLINE bool operator==(const iterator& o) const { return val==o.val; }
+        EPICS_ALWAYS_INLINE bool operator!=(const iterator& o) const { return val!=o.val; }
     };
 
-    inline iterator begin() const { return iterator{a}; }
-    inline iterator cbegin() const { return begin(); }
-    inline iterator end() const { return iterator{b}; }
-    inline iterator cend() const { return end(); }
+    EPICS_ALWAYS_INLINE iterator begin() const { return iterator{a}; }
+    EPICS_ALWAYS_INLINE iterator cbegin() const { return begin(); }
+    EPICS_ALWAYS_INLINE iterator end() const { return iterator{b}; }
+    EPICS_ALWAYS_INLINE iterator cend() const { return end(); }
 };
 } // namespace detail
 
 template<typename I>
-detail::Range<I> range(I end) { return detail::Range<I>{I(0), end}; }
+constexpr detail::Range<I> range(I end) { return detail::Range<I>{I(0), end}; }
 
 template<typename I>
-detail::Range<I> range(I begin, I end) { return detail::Range<I>{begin, end}; }
+constexpr detail::Range<I> range(I begin, I end) { return detail::Range<I>{begin, end}; }
 
 class RWLock
 {
