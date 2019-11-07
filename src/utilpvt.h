@@ -126,6 +126,9 @@ public:
     inline Writer& writer() { return _writer; }
 };
 
+
+void logger_shutdown();
+
 } // namespace pvxsimpl
 
 #endif // UTILPVT_H

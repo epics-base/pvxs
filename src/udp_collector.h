@@ -26,6 +26,7 @@ struct PVXS_API UDPManager
 {
     //! get process-wide singleton.
     static UDPManager instance();
+    static void cleanup();
     ~UDPManager();
 
     struct Beacon {

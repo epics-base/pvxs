@@ -114,31 +114,32 @@ void testSearch(bool be, std::initializer_list<const char*> names)
     sub->start();
 
     std::vector<uint8_t> msg(1024, 0);
-    sbuf<uint8_t> M(msg.data(), msg.size());
-    to_wire(M, {0xca, pva_version::client, uint8_t(be ? pva_flags::MSB : 0), pva_app_msg::Search}, be);
-    auto blen = M.split(4);
-    to_wire(M, uint32_t(0x12345678), be);
-    M+=4;
+    VectorOutBuf M(be, msg);
+
+    M.skip(8); // placeholder for header
+    to_wire(M, uint32_t(0x12345678));
+    M.skip(4);
     SockAddr reply(SockAddr::any(AF_INET, 0x1020));
-    to_wire(M, reply, be);
-    to_wire(M, uint16_t(reply.port()), be);
+    to_wire(M, reply);
+    to_wire(M, uint16_t(reply.port()));
     // one protocol w/ 3 chars
-    to_wire(M, {1}, be);
-    to_wire(M, "tcp", be);
-    to_wire(M, uint16_t(names.size()), be);
+    to_wire(M, Size{1});
+    to_wire(M, "tcp");
+    to_wire(M, uint16_t(names.size()));
     uint32_t i=1;
     for(auto name : names) {
-        to_wire(M, i++, be);
-        to_wire(M, name, be);
+        to_wire(M, i++);
+        to_wire(M, name);
     }
 
-    to_wire(blen, uint32_t(M.pos-msg.data()-8), be);
+    FixedBuf<uint8_t> H(be, msg.data(), 8);
+    to_wire(H, Header{pva_app_msg::Search, 0, uint32_t(M.size()-8)});
 
-    testOk1(!M.err);
-    testDiag("Buffer pos %u of %u", unsigned(M.pos-msg.data()), unsigned(msg.size()));
+    testOk1(M.good() && H.good());
+    testOk1(M.save()>=msg.data());
+    testOk1(M.save()<=msg.data()+msg.size());
 
-    const size_t ntx = M.pos-msg.data();
-    testOk1(sendto(sock.sock, (char*)msg.data(), ntx, 0, &listener->sa, listener.size())==int(ntx));
+    testOk1(sendto(sock.sock, (char*)msg.data(), M.size(), 0, &listener->sa, listener.size())==int(M.size()));
     manager.sync();
     testOk1(!!rx.wait(30.0));
 }
@@ -147,7 +148,7 @@ void testSearch(bool be, std::initializer_list<const char*> names)
 
 int main(int argc, char *argv[])
 {
-    testPlan(38);
+    testPlan(46);
     pvxs::logger_config_env();
     testBeacon(true);
     testBeacon(false);
@@ -155,5 +156,7 @@ int main(int argc, char *argv[])
     testSearch(false, {"hello"});
     testSearch(true , {"one", "two"});
     testSearch(false, {"one", "two"});
+    libevent_global_shutdown();
+    cleanup_for_valgrind();
     return testDone();
 }

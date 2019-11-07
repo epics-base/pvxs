@@ -46,6 +46,18 @@ const char *version_str();
 PVXS_API
 unsigned long version_int();
 
+/** Free some internal global allocations to avoid false positives in
+ *  valgrind (or similar) tools looking for memory leaks.
+ *
+ * @warning Use with caution!
+ *
+ * @pre Release all resources explicitly allocated through PVXS.
+ * @post Invalidates internal state.
+ *       Use of __any__ API functions afterwards is undefined!
+ */
+PVXS_API
+void cleanup_for_valgrind();
+
 }
 
 #endif // PVXS_VERSION_H

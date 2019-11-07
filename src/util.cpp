@@ -15,6 +15,7 @@
 
 #include <pvxs/util.h>
 #include "utilpvt.h"
+#include "udp_collector.h"
 
 namespace pvxs {
 
@@ -28,6 +29,12 @@ const char *version_str()
 unsigned long version_int()
 {
     return PVXS_VERSION;
+}
+
+void cleanup_for_valgrind()
+{
+    pvxsimpl::logger_shutdown();
+    pvxsimpl::UDPManager::cleanup();
 }
 
 namespace detail {

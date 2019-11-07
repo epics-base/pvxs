@@ -338,33 +338,32 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     if(nreply==0 && !msg.mustReply)
         return;
 
-    sbuf<uint8_t> M(searchReply.data(), searchReply.size());
+    VectorOutBuf M(true, searchReply);
 
-    const bool be = true;
-    to_wire(M, {0xca, pva_version::server, pva_flags::MSB|pva_flags::Server, pva_app_msg::SearchReply}, be);
-    auto blen = M.split(4);
+    M.skip(8); // fill in header after body length known
 
     _to_wire<12>(M, effective.guid.data(), false);
-    to_wire(M, msg.searchID, be);
-    to_wire(M, SockAddr::any(AF_INET), be);
-    to_wire(M, uint16_t(effective.udp_port), be);
-    to_wire(M, "tcp", be);
+    to_wire(M, msg.searchID);
+    to_wire(M, SockAddr::any(AF_INET));
+    to_wire(M, uint16_t(effective.udp_port));
+    to_wire(M, "tcp");
     // "found" flag
-    to_wire(M, {uint8_t(nreply!=0 ? 1 : 0)}, be);
+    to_wire(M, {uint8_t(nreply!=0 ? 1 : 0)});
 
-    to_wire(M, uint16_t(nreply), be);
+    to_wire(M, uint16_t(nreply));
     for(auto i : range(msg.names.size())) {
         if(searchOp._names[i]._claim)
-            to_wire(M, uint32_t(msg.names[i].id), be);
+            to_wire(M, uint32_t(msg.names[i].id));
     }
 
-    uint32_t ntx = M.pos-searchReply.data();
-    to_wire(blen, uint32_t(ntx-8), be);
+    // now going back to fill in header
+    FixedBuf<uint8_t> H(true, searchReply.data(), 8);
+    to_wire(H, Header{pva_app_msg::SearchReply, pva_flags::Server, uint32_t(M.size()-8)});
 
-    if(M.err || blen.err) {
+    if(!M.good() || !H.good()) {
         log_printf(serverio, PLVL_CRIT, "Logic error in Search buffer fill\n");
     } else {
-        (void)msg.reply(searchReply.data(), ntx);
+        (void)msg.reply(searchReply.data(), M.size());
     }
 }
 
@@ -372,23 +371,23 @@ void Server::Pvt::doBeacons(short evt)
 {
     log_printf(serversetup, PLVL_DEBUG, "Server beacon timer expires\n");
 
-    sbuf<uint8_t> M(beaconMsg.data(), beaconMsg.size());
-    const bool be = true;
-    to_wire(M, {0xca, pva_version::server, pva_flags::MSB|pva_flags::Server, pva_app_msg::Beacon}, be);
-    auto lenfld = M.split(4);
+    VectorOutBuf M(true, beaconMsg);
+    M.skip(8); // fill in header after body length known
 
     _to_wire<12>(M, effective.guid.data(), false);
-    M += 4; // ignored/unused
+    M.skip(4); // ignored/unused
 
-    to_wire(M, SockAddr::any(AF_INET), be);
-    to_wire(M, uint16_t(effective.tcp_port), be);
-    to_wire(M, "tcp", be);
+    to_wire(M, SockAddr::any(AF_INET));
+    to_wire(M, uint16_t(effective.tcp_port));
+    to_wire(M, "tcp");
     // "NULL" serverStatus
-    to_wire(M, {0xff}, be);
+    to_wire(M, {0xff});
 
-    to_wire(lenfld, uint32_t(M.pos - beaconMsg.data()), be);
+    // now going back to fill in header
+    FixedBuf<uint8_t> H(true, searchReply.data(), 8);
+    to_wire(H, Header{pva_app_msg::Beacon, pva_flags::Server, uint32_t(M.size()-8)});
 
-    assert(!M.err && !lenfld.err);
+    assert(M.good() && H.good());
 
     for(const auto& dest : beaconDest) {
         int ntx = sendto(beaconSender.sock, (char*)beaconMsg.data(), beaconMsg.size(), 0, &dest->sa, dest.size());

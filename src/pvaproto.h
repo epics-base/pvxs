@@ -12,6 +12,7 @@
 #include <cstring>
 #include <vector>
 #include <string>
+#include <type_traits>
 #include <initializer_list>
 
 #include <type_traits>
@@ -23,55 +24,125 @@
 
 namespace pvxsimpl {
 
-//! Hold a bounded slice of some other array.
-//! like std::span<T, std::dynamic_extent> (added in c++20)
-//! blending in error state tracking like std::iostream
-template<typename T>
-struct sbuf {
-    typedef T value_type;
+//! view of a slice of a buffer.
+//! Don't use directly.  cf. FixedBuf<E>
+template<typename E, typename Subclass>
+struct BufCommon {
+    typedef E value_type;
+    typedef void is_buffer;
 
-    T *pos, *limit;
+protected:
+    // valid range to read/write is [pos, limit)
+    E *pos, *limit;
     bool err;
 
-    sbuf(std::vector<T>& buf)
-        :sbuf(buf.data(), buf.size())
-    {}
-    sbuf(T *buf, size_t size)
-        :pos(buf), limit(buf+size)
-        ,err(false)
-    {}
+    constexpr BufCommon(bool be, E* buf, size_t n) :pos(buf), limit(buf+n), err(false), be(be) {}
+public:
+    const bool be;
 
-    inline bool empty() const { return limit==pos; }
-    inline size_t size() const { return limit-pos; }
-    inline T& operator[](size_t i) const { return pos[i]; }
+    // all sub-classes define
+    //   bool refill(size_t more)
 
-    sbuf& operator+=(size_t n) {
-        if(size()<n) {
-            err = true;
-        } else {
-            pos += n;
-        }
-        return *this;
+    EPICS_ALWAYS_INLINE void fault() { err = true; }
+    EPICS_ALWAYS_INLINE bool good() const { return !err; }
+
+    // ensure (be resize/refill) that size()>=i
+    inline bool ensure(size_t i) {
+        return !err && (i<=size() || static_cast<Subclass*>(this)->refill(i));
+    }
+    inline void skip(size_t i) {
+        do {
+            if(i<=size()) {
+                pos += i;
+                return;
+            }
+            pos = limit;
+            i -= size();
+        } while(static_cast<Subclass*>(this)->refill(i));
     }
 
-    // partition owned sequence [0, size) at offset n
-    // return [0, n), retain [n, size)
-    sbuf split(size_t n) {
-        if(size()<n) {
-            err = true;
-        }
-        auto ret = sbuf(pos, n);
-        ret.err = err;
-        pos += n;
-        return ret;
-    }
+    EPICS_ALWAYS_INLINE bool empty() const { return limit==pos; }
+    EPICS_ALWAYS_INLINE size_t size() const { return limit-pos; }
+
+    // the following assume good()==true && !empty()
+    EPICS_ALWAYS_INLINE E& operator[](size_t i) const { return pos[i]; }
+    EPICS_ALWAYS_INLINE void push(E v) { *pos++ = v; }
+    EPICS_ALWAYS_INLINE E pop() { return *pos++; }
+    // further assumes size()>=i
+    EPICS_ALWAYS_INLINE void _skip(size_t i) { pos+=i; }
+
+    E* save() const { return this->pos; }
 };
 
-template <unsigned N, typename B>
-inline void _from_wire(sbuf<B>& buf, uint8_t *mem, bool reverse)
+//! (de)serialization to/from buffers which are fixed size and contigious
+template<typename E>
+struct FixedBuf : public BufCommon<E, FixedBuf<E> >
 {
-    if(buf.err || buf.size()<N) {
-        buf.err = true;
+    typedef BufCommon<E, FixedBuf> base_type;
+    EPICS_ALWAYS_INLINE bool refill(size_t more) { return false; }
+
+    template<size_t N>
+    constexpr FixedBuf(bool be, E(&buf)[N]) :base_type(be, buf, N) {}
+    constexpr FixedBuf(bool be, E* buf, size_t n) :base_type(be, buf, n) {}
+    FixedBuf(bool be, std::vector<E>& buf) :base_type(be, buf.data(), buf.size()) {}
+};
+
+//! serialize into a vector, resizing as necessary
+class VectorOutBuf : public BufCommon<uint8_t, VectorOutBuf>
+{
+    typedef BufCommon<uint8_t, VectorOutBuf> base_type;
+    std::vector<uint8_t>& backing;
+public:
+    // note: vector::data() is not constexpr in c++11
+    VectorOutBuf(bool be, std::vector<uint8_t>& b)
+        :base_type(be, b.data(), b.size())
+        ,backing(b)
+    {}
+    PVXS_API bool refill(size_t more);
+};
+
+//! serialize into an evbuffer, resizing as necessary
+class EvOutBuf : public BufCommon<uint8_t, EvOutBuf>
+{
+    typedef BufCommon<uint8_t, EvOutBuf> base_type;
+    evbuffer * const backing;
+    uint8_t* base; // original pos
+public:
+
+    EvOutBuf(bool be, evbuffer *b, size_t isize=0)
+        :base_type(be, nullptr, 0)
+        ,backing(b)
+        ,base(nullptr)
+    {refill(isize);}
+    ~EvOutBuf()
+    {refill(0);}
+    PVXS_API bool refill(size_t more);
+};
+
+//! deserialize from an evbuffer, possibly segmented
+class EvInBuf : public BufCommon<uint8_t, EvInBuf>
+{
+    typedef BufCommon<uint8_t, EvInBuf> base_type;
+    evbuffer * const backing;
+    uint8_t* base; // original pos after ctor or refill()
+public:
+
+    EvInBuf(bool be, evbuffer *b, size_t ifill=0)
+        :base_type(be, nullptr, 0)
+        ,backing(b)
+        ,base(nullptr)
+    {refill(ifill);}
+    ~EvInBuf()
+    {refill(0);}
+
+    PVXS_API bool refill(size_t more);
+};
+
+template <unsigned N, typename Buf>
+inline void _from_wire(Buf& buf, uint8_t *mem, bool reverse)
+{
+    if(!buf.ensure(N)) {
+        buf.fault();
         return;
 
     } else if(reverse) {
@@ -84,7 +155,7 @@ inline void _from_wire(sbuf<B>& buf, uint8_t *mem, bool reverse)
             mem[i] = buf[i];
         }
     }
-    buf += N;
+    buf._skip(N);
 }
 
 /** Read sizeof(T) bytes from buf and store in val
@@ -93,15 +164,15 @@ inline void _from_wire(sbuf<B>& buf, uint8_t *mem, bool reverse)
  * @param val output variable
  * @param be  true if value encoded in buf is in MSBF order, false if in LSBF order
  */
-template<typename T, typename B, typename std::enable_if<std::is_scalar<T>::value, int>::type =0>
-inline void from_wire(sbuf<B>& buf, T& val, bool be)
+template<typename T, typename Buf, typename std::enable_if<std::is_scalar<T>::value, int>::type =0>
+inline void from_wire(Buf& buf, T& val)
 {
     union {
         T v;
         uint8_t b[sizeof(T)];
     } pun;
-    _from_wire<sizeof(T)>(buf, pun.b, be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG));
-    if(!buf.err)
+    _from_wire<sizeof(T)>(buf, pun.b, buf.be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG));
+    if(buf.good())
         val = pun.v;
 }
 
@@ -118,15 +189,14 @@ struct Size {
     size_t size;
 };
 
-template<typename B>
-void from_wire(sbuf<B>& buf, Size& size, bool be)
+template<typename Buf>
+void from_wire(Buf& buf, Size& size)
 {
-    if(buf.err || buf.empty()) {
-        buf.err = true;
+    if(!buf.ensure(1)) {
+        buf.fault();
         return;
     }
-    uint8_t s=buf[0];
-    buf+=1;
+    uint8_t s=buf.pop();
     if(s<254) {
         size.size = s;
 
@@ -138,12 +208,12 @@ void from_wire(sbuf<B>& buf, Size& size, bool be)
 
     } else if(s==254) {
         uint32_t ls = 0;
-        from_wire(buf, ls, be);
+        from_wire(buf, ls);
         size.size = ls;
 
     } else {
         // unreachable (64-bit size so far not used)
-        buf.err = true;
+        buf.fault();
     }
 }
 
@@ -157,8 +227,8 @@ struct Status {
     std::string msg;
 };
 
-template<typename B>
-void to_wire(sbuf<B>& buf, const Status& sts, bool be)
+template<typename Buf>
+void to_wire(Buf& buf, const Status& sts)
 {
     if(buf.err || buf.empty()) {
         buf.err = true;
@@ -168,12 +238,12 @@ void to_wire(sbuf<B>& buf, const Status& sts, bool be)
 
     } else {
         *buf.pos++ = sts.code;
-        to_wire(buf, sts.msg.c_str(), be);
+        to_wire(buf, sts.msg.c_str());
     }
 }
 
-template<typename B>
-void from_wire(sbuf<B>& buf, Status& sts, bool be)
+template<typename Buf>
+void from_wire(Buf& buf, Status& sts)
 {
     if(buf.err || buf.empty()) {
         buf.err = true;
@@ -185,28 +255,30 @@ void from_wire(sbuf<B>& buf, Status& sts, bool be)
 
     } else {
         sts.code = *buf.pos++;
-        from_wire(buf, sts.msg, be);
+        from_wire(buf, sts.msg);
     }
 }
 
-template<typename B>
-void from_wire(sbuf<B>& buf, std::string& s, bool be)
+template<typename Buf>
+void from_wire(Buf& buf, std::string& s)
 {
     Size len{0};
-    from_wire(buf, len, be);
-    if(buf.err || buf.size()<len.size) {
-        buf.err = true;
+    from_wire(buf, len);
+    if(!buf.ensure(len.size)) {
+        buf.fault();
 
     } else {
-        s = std::string((char*)buf.pos, len.size);
+        s = std::string((char*)buf.save(), len.size);
+        buf._skip(len.size);
     }
 }
 
-template<unsigned N>
-inline void _to_wire(sbuf<uint8_t>& buf, const uint8_t *mem, bool reverse)
+// assumes prior buf.ensure(M) where M>=N
+template<unsigned N, typename Buf>
+inline void _to_wire(Buf& buf, const uint8_t *mem, bool reverse)
 {
-    if(buf.err || buf.size()<N) {
-        buf.err = true;
+    if(!buf.ensure(N)) {
+        buf.fault();
         return;
 
     } else if(reverse) {
@@ -219,68 +291,67 @@ inline void _to_wire(sbuf<uint8_t>& buf, const uint8_t *mem, bool reverse)
             buf[i] = mem[i];
         }
     }
-    buf += N;
+    buf._skip(N);
 }
 
 /** Write sizeof(T) bytes from buf from val
  *
  * @param buf output buffer.  buf[0] through buf[sizeof(T)-1] must be valid.
  * @param val input variable
- * @param be  true to encode buf in MSBF order, false in LSBF order
  */
-template<typename T, typename B, typename std::enable_if<std::is_scalar<T>::value, int>::type =0>
-inline void to_wire(sbuf<B>& buf, const T& val, bool be)
+template<typename T, typename Buf, typename std::enable_if<std::is_scalar<T>::value, int>::type =0>
+inline void to_wire(Buf& buf, const T& val)
 {
     union {
         T v;
         uint8_t b[sizeof(T)];
     } pun;
     pun.v = val;
-    _to_wire<sizeof(T)>(buf, pun.b, be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG));
+    _to_wire<sizeof(T)>(buf, pun.b, buf.be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG));
 }
 
-template<typename B>
-void to_wire(sbuf<B>& buf, const Size& size, bool be)
+template<typename Buf>
+void to_wire(Buf& buf, const Size& size)
 {
-    if(buf.err || buf.empty()) {
-        buf.err = true;
+    if(!buf.ensure(1)) {
+        buf.fault();
 
     } else if(size.size<254) {
-        *buf.pos++ = size.size;
+        buf.push(size.size);
 
     } else if(size.size<=0xffffffff) {
-        *buf.pos++ = 254;
-        to_wire(buf, uint32_t(size.size), be);
+        buf.push(254);
+        to_wire(buf, uint32_t(size.size));
 
     } else {
-        buf.err = true;
+        buf.fault();
     }
 }
 
-template<typename B>
-void to_wire(sbuf<B>& buf, const char *s, bool be)
+template<typename Buf>
+void to_wire(Buf& buf, const char *s)
 {
     Size len{s ? strlen(s) : 0};
-    to_wire(buf, len, be);
-    if(buf.err || buf.size()<len.size) {
-        buf.err = true;
+    to_wire(buf, len);
+    if(!buf.ensure(len.size)) {
+        buf.fault();
 
     } else {
         for(size_t i=0; i<len.size; i++)
-            *buf.pos++ = s[i];
+            buf.push(s[i]);
     }
 
 }
 
-template<typename B>
-void to_wire(sbuf<B>& buf, std::initializer_list<uint8_t> bytes, bool be)
+template<typename Buf>
+void to_wire(Buf& buf, std::initializer_list<uint8_t> bytes)
 {
-    if(buf.err || buf.size()<bytes.size()) {
-        buf.err = true;
+    if(!buf.ensure(bytes.size())) {
+        buf.fault();
 
     } else {
         for (auto byte : bytes) {
-            *buf.pos++ = byte;
+            buf.push(byte);
         }
     }
 
@@ -367,21 +438,21 @@ struct Header {
     uint32_t len;
 };
 
-template<typename B>
-void to_wire(sbuf<B>& buf, const Header& H, bool be)
+template<typename Buf>
+void to_wire(Buf& buf, const Header& H)
 {
-    if(buf.err || buf.size()<8) {
-        buf.err = true;
+    if(!buf.ensure(8)) {
+        buf.fault();
 
     } else {
         buf[0] = 0xca;
         buf[1] = (H.flags&pva_flags::Server) ? pva_version::server : pva_version::client;
         buf[2] = H.flags;
-        if(be)
+        if(buf.be)
             buf[2] |= pva_flags::MSB;
         buf[3] = H.cmd;
-        buf += 4;
-        to_wire(buf, H.len, be);
+        buf.skip(4);
+        to_wire(buf, H.len);
     }
 }
 

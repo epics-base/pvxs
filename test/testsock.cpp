@@ -104,44 +104,44 @@ void test_from_wire()
 
     {
         uint32_t val;
-        const uint8_t buf[] = {0x12, 0x34, 0x56, 0x78, 0xff, 0xff, 0xff, 0xff};
-        sbuf<const uint8_t> pkt(buf, 4);
+        const uint8_t buf[] = {0x12, 0x34, 0x56, 0x78, 0xff, 0xff};
+        FixedBuf<const uint8_t> pkt(true, buf);
 
-        from_wire(pkt, val, true);
-        testOk1(pkt.empty());
-        testOk1(!pkt.err);
+        from_wire(pkt, val);
+        testEq(pkt.size(), 2u);
+        testOk1(pkt.good());
         testOk(val==0x12345678, "0x%08x == 0x12345678", (unsigned)val);
     }
 
     {
         uint32_t val;
-        const uint8_t buf[] = {0x78, 0x56, 0x34, 0x12, 0xff, 0xff, 0xff, 0xff};
-        sbuf<const uint8_t> pkt(buf, 4);
+        const uint8_t buf[] = {0x78, 0x56, 0x34, 0x12, 0xff, 0xff};
+        FixedBuf<const uint8_t> pkt(false, buf);
 
-        from_wire(pkt, val, false);
-        testOk1(pkt.empty());
-        testOk1(!pkt.err);
+        from_wire(pkt, val);
+        testEq(pkt.size(), 2u);
+        testOk1(pkt.good());
         testOk(val==0x12345678, "0x%08x == 0x12345678", (unsigned)val);
     }
 
     {
         uint32_t val = 0;
         const uint8_t buf[] = {0x12, 0x34, 0x56, 0x78, 0xff, 0xff, 0xff, 0xff};
-        sbuf<const uint8_t> pkt(buf, 2);
+        FixedBuf<const uint8_t> pkt(true, buf, 2);
 
-        from_wire(pkt, val, true);
-        testOk1(pkt.size()==2);
-        testOk1(pkt.err);
+        from_wire(pkt, val);
+        testEq(pkt.size(), 2u);
+        testOk1(!pkt.good());
         testOk(val==0, "0x%08x == 0", (unsigned)val);
     }
 
     {
         SockAddr val;
         const uint8_t buf[] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff, 0x7f,0,0,1, 0xde, 0xad, 0xbe, 0xef};
-        sbuf<const uint8_t> pkt(buf, 16);
+        FixedBuf<const uint8_t> pkt(true, buf);
 
-        from_wire(pkt, val, true);
-        testOk1(pkt.empty());
+        from_wire(pkt, val);
+        testEq(pkt.size(), 4u);
         testOk1(val.family()==AF_INET);
         testOk(val->in.sin_addr.s_addr==htonl(INADDR_LOOPBACK),
                "%08x == 0x7f000001", (unsigned)ntohl(val->in.sin_addr.s_addr));
@@ -150,14 +150,16 @@ void test_from_wire()
 
 void test_to_wire()
 {
+    testDiag("Enter %s", __func__);
+
     {
         const uint32_t val = 0xdeadbeef;
         uint8_t buf[8];
-        sbuf<uint8_t> pkt(buf, 4);
+        FixedBuf<uint8_t> pkt(true, buf);
 
-        to_wire(pkt, val, true);
-        testOk1(pkt.empty());
-        testOk1(!pkt.err);
+        to_wire(pkt, val);
+        testEq(pkt.size(), 4u);
+        testOk1(pkt.good());
         testOk(buf[0]==0xde && buf[1]==0xad && buf[2]==0xbe && buf[3]==0xef,
                 "0x%02x%02x%02x%02x == 0xdeadbeef", buf[0], buf[1], buf[2], buf[3]);
     }
@@ -165,23 +167,23 @@ void test_to_wire()
     {
         const uint32_t val = 0xdeadbeef;
         uint8_t buf[8];
-        sbuf<uint8_t> pkt(buf, 4);
+        FixedBuf<uint8_t> pkt(false, buf);
 
-        to_wire(pkt, val, false);
-        testOk1(pkt.empty());
-        testOk1(!pkt.err);
+        to_wire(pkt, val);
+        testEq(pkt.size(), 4u);
+        testOk1(pkt.good());
         testOk(buf[0]==0xef && buf[1]==0xbe && buf[2]==0xad && buf[3]==0xde,
-                "0x%02x%02x%02x%02x == 0xdeadbeef", buf[0], buf[1], buf[2], buf[3]);
+                "0x%02x%02x%02x%02x == 0xefbeadde", buf[0], buf[1], buf[2], buf[3]);
     }
 
     {
         const SockAddr val(SockAddr::loopback(AF_INET));
         uint8_t buf[16+4];
-        sbuf<uint8_t> pkt(buf, 16);
+        FixedBuf<uint8_t> pkt(true, buf);
 
-        to_wire(pkt, val, true);
-        testOk1(pkt.empty());
-        testOk1(!pkt.err);
+        to_wire(pkt, val);
+        testEq(pkt.size(), 4u);
+        testOk1(pkt.good());
 
         const uint8_t expect[16] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff, 0x7f,0,0,1};
         testOk1(std::memcmp(buf, expect, 16)==0);
@@ -190,11 +192,11 @@ void test_to_wire()
     {
         const uint32_t val = 0xdeadbeef;
         uint8_t buf[8] = {0,0,0,0,0,0,0,0};
-        sbuf<uint8_t> pkt(buf, 2);
+        FixedBuf<uint8_t> pkt(true, buf, 2);
 
-        to_wire(pkt, val, true);
-        testOk1(pkt.size()==2);
-        testOk1(pkt.err);
+        to_wire(pkt, val);
+        testEq(pkt.size(), 2u);
+        testOk1(!pkt.good());
         testOk(buf[0]==0 && buf[1]==0 && buf[2]==0 && buf[3]==0,
                 "0x%02x%02x%02x%02x == 0", buf[0], buf[1], buf[2], buf[3]);
     }
@@ -210,5 +212,7 @@ MAIN(testsock)
     test_from_wire();
     test_to_wire();
     testDiag("Done");
+    libevent_global_shutdown();
+    cleanup_for_valgrind();
     return testDone();
 }

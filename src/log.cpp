@@ -23,6 +23,7 @@
 #include <epicsGuard.h>
 
 #include "evhelper.h"
+#include "utilpvt.h"
 
 typedef epicsGuard<epicsMutex> Guard;
 
@@ -226,3 +227,18 @@ void logger_config_env()
 }
 
 } // namespace pvxs
+
+namespace pvxsimpl {
+
+void logger_shutdown()
+{
+    epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
+
+    errlogFlush();
+
+    delete logger_gbl;
+    logger_gbl = nullptr;
+    // no resetting logger_once
+}
+
+} // namespace pvxsimpl

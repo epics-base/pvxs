@@ -90,16 +90,17 @@ struct UDPCollector : public UDPManager::Search,
 
         names.clear();
 
-        sbuf<uint8_t> M(&buf[0], size_t(nrx));
+        bool be = buf[2]&pva_flags::MSB;
+
+        FixedBuf<uint8_t> M(be, buf.data(), nrx);
 
         uint8_t cmd = M[3];
 
-        bool be = M[2]&pva_flags::MSB;
-        M += 4;
+        M.skip(4);
         uint32_t len=0;
-        from_wire(M, len, be);
+        from_wire(M, len);
 
-        if(len > M.size() && !M.err) {
+        if(len > M.size() && M.good()) {
             log_printf(logio, PLVL_INFO, "UDP ignore header%u %02x%02x%02x%02x on %s\n",
                        unsigned(M.size()), M[0], M[1], M[2], M[3],
                     name.c_str());
@@ -113,13 +114,13 @@ struct UDPCollector : public UDPManager::Search,
             SockAddr replyAddr;
             uint16_t port = 0;
 
-            from_wire(M, searchID, be);
-            from_wire(M, flags, be);
+            from_wire(M, searchID);
+            from_wire(M, flags);
             mustReply = flags&pva_search_flags::MustReply;
-            M += 3; // unused/reserved
+            M.skip(3); // unused/reserved
 
-            from_wire(M, replyAddr, be);
-            from_wire(M, port, be);
+            from_wire(M, replyAddr);
+            from_wire(M, port);
             if(replyAddr.isAny()) {
                 replyAddr = src;
             }
@@ -129,42 +130,42 @@ struct UDPCollector : public UDPManager::Search,
             // however, we will consider and ignore any others which might appear
             bool foundtcp = false;
             Size nproto{0};
-            from_wire(M, nproto, be);
-            for(size_t i=0; i<nproto.size && !M.err; i++) {
+            from_wire(M, nproto);
+            for(size_t i=0; i<nproto.size && M.good(); i++) {
                 Size nchar{0};
-                from_wire(M, nchar, be);
+                from_wire(M, nchar);
 
                 // shortcut to avoid allocating a std::string
                 // "tcp" is the only value we expect to see
                 foundtcp |= M.size()>=3 && nchar.size==3 && M[0]=='t' && M[1]=='c' && M[2]=='p';
-                M += nchar.size;
+                M.skip(nchar.size);
             }
 
             // one Search message can include many PV names.
             uint16_t nchan=0;
-            from_wire(M, nchan, be);
+            from_wire(M, nchan);
 
             names.clear();
             names.reserve(nchan);
 
-            for(size_t i=0; i<nchan && !M.err; i++) {
+            for(size_t i=0; i<nchan && M.good(); i++) {
                 uint32_t id=0xffffffff; // poison
                 Size chlen{0};
 
-                auto mundge = M.pos;
-                from_wire(M, id, be);
-                from_wire(M, chlen, be);
+                auto mundge = M.save();
+                from_wire(M, id);
+                from_wire(M, chlen);
                 // inject nil for previous PV name
                 *mundge = '\0';
-                if(foundtcp && chlen.size<=M.size() && !M.err) {
-                    names.push_back(UDPManager::Search::Name{reinterpret_cast<const char*>(M.pos), id});
+                if(foundtcp && chlen.size<=M.size() && M.good()) {
+                    names.push_back(UDPManager::Search::Name{reinterpret_cast<const char*>(M.save()), id});
                 }
-                M += chlen.size;
+                M.skip(chlen.size);
             }
 
-            if(!M.err) {
+            if(M.good()) {
                 // ensure nil for final PV name
-                *M.pos = '\0';
+                *M.save() = '\0';
 
                 for(auto L : listeners) {
                     if(L->searchCB) {
@@ -180,21 +181,21 @@ struct UDPCollector : public UDPManager::Search,
             uint16_t port = 0;
 
             _from_wire<12>(M, &beaconMsg.guid[0], false);
-            M += 4; // skip flags, seq, and change count.  unused
-            from_wire(M, beaconMsg.server, be);
-            from_wire(M, port, be);
+            M.skip(4); // skip flags, seq, and change count.  unused
+            from_wire(M, beaconMsg.server);
+            from_wire(M, port);
             if(beaconMsg.server.isAny()) {
                 beaconMsg.server = src;
             }
             beaconMsg.server.setPort(port);
 
             Size protolen{0};
-            from_wire(M, protolen, be);
-            M += protolen.size; // ignore string
+            from_wire(M, protolen);
+            M.skip(protolen.size); // ignore string
 
             // ignore remaining "server status" blob
 
-            if(!M.err) {
+            if(M.good()) {
                 for(auto L : listeners) {
                     if(L->beaconCB) {
                         (L->beaconCB)(beaconMsg);
@@ -309,6 +310,12 @@ UDPManager UDPManager::instance()
     }
 
     return UDPManager(ret);
+}
+
+void UDPManager::cleanup()
+{
+    delete udp_gbl;
+    udp_gbl = nullptr;
 }
 
 std::unique_ptr<UDPListener> UDPManager::onBeacon(SockAddr& dest,
