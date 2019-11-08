@@ -32,6 +32,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     ,expectSeg(false)
     ,segCmd(0xff)
     ,segBuf(evbuffer_new())
+    ,txBody(evbuffer_new())
 {
     bufferevent_setcb(bev.get(), &bevReadS, &bevWriteS, &bevEventS, this);
     // initially wait for at least a header
@@ -55,6 +56,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 
         auto save = M.save();
         M.skip(8); // placeholder for header
+        auto bstart = M.save();
 
         // serverReceiveBufferSize, not used
         to_wire(M, uint32_t(0x10000));
@@ -63,13 +65,14 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         to_wire(M, Size{2});
         to_wire(M, "anonymous");
         to_wire(M, "ca");
+        auto bend = M.save();
 
         FixedBuf<uint8_t> H(be, save, 8);
-        to_wire(H, Header{pva_app_msg::ConnValid, pva_flags::Server, uint32_t(M.size()-8)});
+        to_wire(H, Header{pva_app_msg::ConnValid, pva_flags::Server, uint32_t(bend-bstart)});
 
         assert(M.good() && H.good());
 
-        if(evbuffer_add(tx, buf.data(), M.size()))
+        if(evbuffer_add(tx, buf.data(), M.save()-buf.data()))
             throw std::bad_alloc();
     }
 
@@ -89,13 +92,9 @@ void ServerConn::handle_Echo()
     uint32_t len = evbuffer_get_length(segBuf.get());
 
     const bool be = EPICS_BYTE_ORDER == EPICS_ENDIAN_BIG;
-    uint8_t header[8];
-    FixedBuf<uint8_t> M(be, header);
-    to_wire(M, Header{pva_app_msg::Echo, pva_flags::Server, len});
-    assert(M.good());
+    to_evbuf(tx, Header{pva_app_msg::Echo, pva_flags::Server, len}, be);
 
-    auto err = evbuffer_add(tx, header, sizeof(header));
-    err |= evbuffer_add_buffer(tx, segBuf.get());
+    auto err = evbuffer_add_buffer(tx, segBuf.get());
     assert(!err);
 
     // maybe help reduce latency
@@ -105,14 +104,28 @@ void ServerConn::handle_Echo()
 static
 void auth_complete(ServerConn *self, const Status& sts)
 {
-    std::vector<uint8_t> buf(8+5+sts.msg.size());
-    //sbuf<uint8_t> M(buf);
-    //M[0] = pva_app_msg::ConnValidated
+    const bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
+    (void)evbuffer_drain(self->txBody.get(), evbuffer_get_length(self->txBody.get()));
+
+    {
+        EvOutBuf M(be, self->txBody.get());
+        to_wire(M, sts);
+    }
+
+    auto tx = bufferevent_get_output(self->bev.get());
+    to_evbuf(tx, Header{pva_app_msg::ConnValidated,
+                        pva_flags::Server,
+                        uint32_t(evbuffer_get_length(self->txBody.get()))},
+             be);
+    auto err = evbuffer_add_buffer(tx, self->txBody.get());
+    assert(!err);
+
+    log_printf(connsetup, PLVL_DEBUG, "Auth complete with %d\n", sts.code);
 }
 
 void ServerConn::handle_ConnValid()
 {
-    // Client begins/restarts Auth handshake
+    // Client begins (restarts?) Auth handshake
 
     EvInBuf M(peerBE, segBuf.get(), 16);
 
@@ -138,11 +151,14 @@ void ServerConn::handle_ConnValid()
 
     // remainder of segBuf is payload w/ credentials
 
+    // TODO actually check credentials
     auth_complete(this, Status{Status::Ok});
 }
 
 void ServerConn::handle_AuthZ()
-{}
+{
+    // ignored (so far no auth plugin actually uses)
+}
 
 void ServerConn::handle_Search()
 {}
@@ -180,15 +196,18 @@ void ServerConn::handle_Message()
 
 void ServerConn::cleanup()
 {
+    log_printf(connsetup, PLVL_DEBUG, "Cleanup TCP Connection\n");
+
     // remove myself from connections list
     decltype (iface->connections) trash;
     for (auto it = iface->connections.begin(), end = iface->connections.end(); it!=end; ++it) {
         if((&*it)==this) {
-            trash.splice(it, iface->connections);
+            trash.splice(trash.end(), iface->connections, it);
             break;
         }
     }
     assert(!trash.empty());
+    // delete this
 }
 
 void ServerConn::bevEvent(short events)
@@ -222,38 +241,24 @@ void ServerConn::bevRead()
         auto ret = evbuffer_copyout(rx, header, sizeof(header));
         assert(ret==sizeof(header)); // previously verified
 
-        if(header[0]!=0xca || header[1]==0 || !(header[2]&pva_flags::Server)) {
+        if(header[0]!=0xca || header[1]==0 || (header[2]&pva_flags::Server)) {
             log_hex_printf(connio, PLVL_ERR, header, sizeof(header), "Protocol decode fault.  Force disconnect.\n");
             bev.reset();
             break;
         }
+        log_hex_printf(connio, PLVL_DEBUG, header, sizeof(header), "Receive header\n");
 
         if(header[2]&pva_flags::Control) {
-            switch (header[3]) {
-            case pva_ctrl_msg::SetEndian:
-                // while we don't enforce.  This should be the very first message sent.
-                peerBE = header[2]&pva_flags::MSB;
-                break;
-            default:
-                // Set/AckMarker never used
-                break;
-            }
+            // Control messages are not actually useful
             evbuffer_drain(rx, 8);
             continue;
-
         }
         // application message
 
-        const bool be = header[2]&pva_flags::MSB;
-        if(be!=peerBE) {
-            // wonderful PVA is redundant in communicating peer byte order.
-            // Which is included in every header _and_ the special SetEndian control message.
-            // While they really should be consistent, the original impl. only uses SetEndian
-            log_printf(connio, PLVL_CRIT, "Peer messages with inconsistent endian\n");
-        }
+        peerBE = header[2]&pva_flags::MSB;
 
         // a bit verbose :P
-        FixedBuf<uint8_t> L(peerBE, header);
+        FixedBuf<uint8_t> L(peerBE, header+4, 4);
         uint32_t len = 0;
         from_wire(L, len);
         assert(L.good());
@@ -420,6 +425,7 @@ void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, s
         }
         auto self = static_cast<ServIface*>(raw);
         self->connections.emplace_back(self, sock, peer, socklen);
+        log_printf(connsetup, PLVL_DEBUG, "Setup TCP Connection\n");
     }catch(std::exception& e){
         log_printf(connio, PLVL_CRIT, "Unhandled error in accept callback: %s\n", e.what());
         evutil_closesocket(sock);

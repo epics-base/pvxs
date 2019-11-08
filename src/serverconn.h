@@ -10,6 +10,8 @@
 #include <list>
 #include <map>
 
+#include <epicsEvent.h>
+
 #include <pvxs/server.h>
 #include "evhelper.h"
 #include "utilpvt.h"
@@ -43,7 +45,7 @@ struct ServerConn
     bool expectSeg;
 
     uint8_t segCmd;
-    evbuf segBuf;
+    evbuf segBuf, txBody;
 
     ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen);
     ~ServerConn();
@@ -105,6 +107,8 @@ struct Server::Pvt
 {
     // "const" after ctor
     Config effective;
+
+    epicsEvent done;
 
     std::vector<uint8_t> beaconMsg;
 

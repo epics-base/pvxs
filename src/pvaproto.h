@@ -225,37 +225,41 @@ struct Status {
         Fatal=3,
     } code;
     std::string msg;
+    std::string trace;
 };
 
 template<typename Buf>
 void to_wire(Buf& buf, const Status& sts)
 {
-    if(buf.err || buf.empty()) {
-        buf.err = true;
+    if(!buf.ensure(1)) {
+        buf.fault();
 
-    } else if(sts.code==Status::Ok && sts.msg.empty()) {
-        *buf.pos++ = 255;
+    } else if(sts.code==Status::Ok && sts.msg.empty() && sts.trace.empty()) {
+        buf.push(255);
 
     } else {
-        *buf.pos++ = sts.code;
+        buf.push(sts.code);
         to_wire(buf, sts.msg.c_str());
+        to_wire(buf, sts.trace.c_str());
     }
 }
 
 template<typename Buf>
 void from_wire(Buf& buf, Status& sts)
 {
-    if(buf.err || buf.empty()) {
-        buf.err = true;
+    if(!buf.ensure(1)) {
+        buf.fault();
 
-    } else if(255==*buf.pos) {
-        buf.pos++;
+    } else if(255==buf[0]) {
+        buf._skip(1);
         sts.code = Status::Ok;
         sts.msg.clear();
+        sts.trace.clear();
 
     } else {
-        sts.code = *buf.pos++;
+        sts.code = buf.pop();
         from_wire(buf, sts.msg);
+        from_wire(buf, sts.trace);
     }
 }
 
@@ -451,10 +455,12 @@ void to_wire(Buf& buf, const Header& H)
         if(buf.be)
             buf[2] |= pva_flags::MSB;
         buf[3] = H.cmd;
-        buf.skip(4);
+        buf._skip(4);
         to_wire(buf, H.len);
     }
 }
+
+void to_evbuf(evbuffer *buf, const Header& H, bool be);
 
 } // namespace pvxsimpl
 

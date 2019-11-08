@@ -354,4 +354,12 @@ bool EvInBuf::refill(size_t more)
     return true;
 }
 
+void to_evbuf(evbuffer *buf, const Header& H, bool be)
+{
+    EvOutBuf M(be, buf, 8);
+    to_wire(M, H);
+    if(!M.good())
+        throw std::bad_alloc();
+}
+
 } // namespace pvxsimpl

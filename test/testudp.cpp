@@ -132,14 +132,16 @@ void testSearch(bool be, std::initializer_list<const char*> names)
         to_wire(M, name);
     }
 
+    auto pktlen = M.save()-msg.data();
+
     FixedBuf<uint8_t> H(be, msg.data(), 8);
-    to_wire(H, Header{pva_app_msg::Search, 0, uint32_t(M.size()-8)});
+    to_wire(H, Header{pva_app_msg::Search, 0, uint32_t(pktlen-8)});
 
     testOk1(M.good() && H.good());
     testOk1(M.save()>=msg.data());
     testOk1(M.save()<=msg.data()+msg.size());
 
-    testOk1(sendto(sock.sock, (char*)msg.data(), M.size(), 0, &listener->sa, listener.size())==int(M.size()));
+    testOk1(sendto(sock.sock, (char*)msg.data(), pktlen, 0, &listener->sa, listener.size())==int(pktlen));
     manager.sync();
     testOk1(!!rx.wait(30.0));
 }

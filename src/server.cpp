@@ -9,7 +9,10 @@
 #include <regex>
 #include <system_error>
 #include <functional>
+#include <atomic>
 #include <cstdlib>
+
+#include <signal.h>
 
 #include <dbDefs.h>
 #include <envDefs.h>
@@ -79,6 +82,11 @@ Server::Config Server::Config::from_env()
 }
 
 
+Server Server::Config::build()
+{
+    Server ret(std::move(*this));
+    return ret;
+}
 
 Server::Server() {}
 
@@ -86,7 +94,87 @@ Server::Server(Config&& conf)
     :pvt(new Pvt(std::move(conf)))
 {}
 
+Server::Server(Server&& other) noexcept
+    :pvt(std::move(other.pvt))
+{}
+
+Server& Server::operator=(Server&& other) noexcept
+{
+    if(this!=&other) {
+        pvt = std::move(other.pvt);
+    }
+    return *this;
+}
+
 Server::~Server() {}
+
+Server& Server::addSource(const std::string& name,
+                  const std::shared_ptr<Source>& src,
+                  int order)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    if(!src)
+        throw std::logic_error(SB()<<"Attempt to add NULL Source "<<name<<" at "<<order);
+    {
+        epicsGuard<RWLock::Writer> G(pvt->sourcesLock.writer());
+
+        auto& ent = pvt->sources[std::make_pair(order, name)];
+        if(ent)
+            throw std::runtime_error(SB()<<"Source already registered : ("<<name<<", "<<order<<")");
+        ent = src;
+    }
+    return *this;
+}
+
+std::shared_ptr<Source> Server::removeSource(const std::string& name,  int order)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+
+    epicsGuard<RWLock::Writer> G(pvt->sourcesLock.writer());
+
+    std::shared_ptr<Source> ret;
+    auto it = pvt->sources.find(std::make_pair(order, name));
+    if(it!=pvt->sources.end()) {
+        ret = it->second;
+        pvt->sources.erase(it);
+    }
+
+    return ret;
+}
+
+std::shared_ptr<Source> Server::getSource(const std::string& name, int order)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+
+    epicsGuard<RWLock::Reader> G(pvt->sourcesLock.reader());
+
+    std::shared_ptr<Source> ret;
+    auto it = pvt->sources.find(std::make_pair(order, name));
+    if(it!=pvt->sources.end()) {
+        ret = it->second;
+    }
+
+    return ret;
+}
+
+void Server::listSource(std::vector<std::pair<std::string, int> > &names)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+
+    names.clear();
+
+    epicsGuard<RWLock::Reader> G(pvt->sourcesLock.reader());
+
+    names.reserve(pvt->sources.size());
+
+    for(auto& pair : pvt->sources) {
+        names.emplace_back(pair.first.second, pair.first.first);
+    }
+}
 
 const Server::Config& Server::config() const
 {
@@ -104,10 +192,75 @@ Server& Server::start()
     return *this;
 }
 
+Server& Server::stop()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    pvt->stop();
+    return *this;
+}
+
+static std::atomic<Server::Pvt*> sig_target{nullptr};
+
+static void sig_handle(int sig)
+{
+    auto serv = sig_target.load();
+
+    if(serv)
+        serv->done.signal();
+}
+
+Server& Server::run()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+
+    Server::Pvt* expect = nullptr;
+
+
+    std::function<void()> cleanup;
+    if(sig_target.compare_exchange_weak(expect, pvt.get())) {
+        auto prevINT  = signal(SIGINT , &sig_handle);
+        auto prevTERM = signal(SIGTERM, &sig_handle);
+
+        cleanup = [this, prevINT, prevTERM]() {
+            Server::Pvt* expect = pvt.get();
+            if(sig_target.compare_exchange_weak(expect, nullptr)) {
+                signal(SIGINT , prevINT);
+                signal(SIGTERM, prevTERM);
+            }
+        };
+    }
+
+    try {
+        pvt->start();
+
+        pvt->done.wait();
+
+        pvt->stop();
+    } catch(...) {
+        if(cleanup)
+            cleanup();
+        throw;
+    }
+    if(cleanup)
+        cleanup();
+
+    return *this;
+}
+
+Server& Server::interrupt()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    pvt->done.signal();
+    return *this;
+}
+
 Server::Pvt::Pvt(Config&& conf)
     :effective(std::move(conf))
     ,beaconMsg(128)
-    ,acceptor_loop("PVXS Acceptor", epicsThreadPriorityCAServerLow-2)
+    ,acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow-2)
     ,beaconSender(AF_INET, SOCK_DGRAM, 0)
     ,beaconTimer(event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this))
     ,searchReply(0x10000)
@@ -151,7 +304,11 @@ Server::Pvt::Pvt(Config&& conf)
         pun.i[1] = 0xdeadbeef; // because... why not
         {
             ELLLIST bcasts = ELLLIST_INIT;
-            osiSockDiscoverBroadcastAddresses(&bcasts, dummy.sock, nullptr);
+            osiSockAddr match;
+            match.ia.sin_family = AF_INET;
+            match.ia.sin_addr.s_addr = htonl(INADDR_ANY);
+            match.ia.sin_port = 0;
+            osiSockDiscoverBroadcastAddresses(&bcasts, dummy.sock, &match);
 
             while(ELLNODE *cur = ellGet(&bcasts)) {
                 osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
@@ -345,7 +502,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     _to_wire<12>(M, effective.guid.data(), false);
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
-    to_wire(M, uint16_t(effective.udp_port));
+    to_wire(M, uint16_t(effective.tcp_port));
     to_wire(M, "tcp");
     // "found" flag
     to_wire(M, {uint8_t(nreply!=0 ? 1 : 0)});
@@ -355,15 +512,16 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
         if(searchOp._names[i]._claim)
             to_wire(M, uint32_t(msg.names[i].id));
     }
+    auto pktlen = M.save()-searchReply.data();
 
     // now going back to fill in header
     FixedBuf<uint8_t> H(true, searchReply.data(), 8);
-    to_wire(H, Header{pva_app_msg::SearchReply, pva_flags::Server, uint32_t(M.size()-8)});
+    to_wire(H, Header{pva_app_msg::SearchReply, pva_flags::Server, uint32_t(pktlen-8)});
 
     if(!M.good() || !H.good()) {
         log_printf(serverio, PLVL_CRIT, "Logic error in Search buffer fill\n");
     } else {
-        (void)msg.reply(searchReply.data(), M.size());
+        (void)msg.reply(searchReply.data(), pktlen);
     }
 }
 
@@ -383,14 +541,16 @@ void Server::Pvt::doBeacons(short evt)
     // "NULL" serverStatus
     to_wire(M, {0xff});
 
+    auto pktlen = M.save()-searchReply.data();
+
     // now going back to fill in header
     FixedBuf<uint8_t> H(true, searchReply.data(), 8);
-    to_wire(H, Header{pva_app_msg::Beacon, pva_flags::Server, uint32_t(M.size()-8)});
+    to_wire(H, Header{pva_app_msg::Beacon, pva_flags::Server, uint32_t(pktlen-8)});
 
     assert(M.good() && H.good());
 
     for(const auto& dest : beaconDest) {
-        int ntx = sendto(beaconSender.sock, (char*)beaconMsg.data(), beaconMsg.size(), 0, &dest->sa, dest.size());
+        int ntx = sendto(beaconSender.sock, (char*)beaconMsg.data(), pktlen, 0, &dest->sa, dest.size());
 
         if(ntx<0) {
             int err = evutil_socket_geterror(beaconSender.sock);
@@ -415,5 +575,7 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
         log_printf(serverio, PLVL_CRIT, "Unhandled error in beacon timer callback: %s\n", e.what());
     }
 }
+
+Source::~Source() {}
 
 }} // namespace pvxs::server

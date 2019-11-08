@@ -22,6 +22,10 @@ TESTPROD += testudp
 testudp_SRCS += testudp.cpp
 TESTS += testudp
 
+TESTPROD += dummyserv
+dummyserv_SRCS += dummyserv.cpp
+# not a unittest
+
 PROD_SYS_LIBS += event_core
 
 PROD_SYS_LIBS_DEFAULT += event_pthreads

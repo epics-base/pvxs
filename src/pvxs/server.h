@@ -105,16 +105,33 @@ public:
 
         PVXS_API static Config from_env();
         Config() :tcp_port(5075), udp_port(5076), auto_beacon(true), guid{} {}
+
+        PVXS_API Server build();
     };
 
     //! An empty/dummy Server
     Server();
     //! Create/allocate, but do not start, a new server with the provided config.
     explicit Server(Config&&);
+    Server(Server&&) noexcept;
+    Server(const Server&) = delete;
+    Server& operator=(Server&&) noexcept;
+    Server& operator=(const Server&) = delete;
     ~Server();
 
+    //! Begin serving.  Does not block.
     Server& start();
+    //! Stop server
     Server& stop();
+
+    /** start() and then (maybe) stop()
+     *
+     * run() may be interupted by calling interrupt(),
+     * or by SIGINT SIGTERM (only one Server per process)
+     */
+    Server& run();
+    //! Queue a request to break run()
+    Server& interrupt();
 
     //! effective config
     const Config& config() const;
@@ -123,11 +140,13 @@ public:
                       const std::shared_ptr<Source>& src,
                       int order =0);
 
-    std::unique_ptr<Source> removeSource(const std::string& name);
+    std::shared_ptr<Source> removeSource(const std::string& name,
+                                         int order =0);
 
-    std::unique_ptr<Source> getSource(const std::string& name);
+    std::shared_ptr<Source> getSource(const std::string& name,
+                                      int order =0);
 
-    void listSource(std::vector<std::string>& names);
+    void listSource(std::vector<std::pair<std::string, int> >& names);
 
     explicit operator bool() const { return !!pvt; }
 
@@ -135,6 +154,7 @@ public:
 private:
     std::unique_ptr<Pvt> pvt;
 };
+
 
 struct PVXS_API Source {
     virtual ~Source();
@@ -168,6 +188,8 @@ struct PVXS_API Source {
     };
     virtual std::unique_ptr<Handler> onCreate(const Create& op) =0;
 };
+
+struct Handler {};
 
 }} // namespace pvxs::server
 
