@@ -20,6 +20,11 @@ using namespace pvxs::server;
 
 DEFINE_LOGGER(dummy,"dummyserv");
 
+struct DummyHandler : public Handler
+{
+
+};
+
 struct DummySource : public Source
 {
     std::set<std::string> names;
@@ -27,7 +32,7 @@ struct DummySource : public Source
 
     // Source interface
 public:
-    virtual void onSearch(Search &op) override
+    virtual void onSearch(Search &op) override final
     {
         for(auto& name : op) {
             if(names.find(name.name())!=names.end()) {
@@ -38,9 +43,10 @@ public:
             }
         }
     }
-    virtual std::unique_ptr<Handler> onCreate(const Create &op) override
+    virtual std::unique_ptr<Handler> onCreate(const Create &op) override final
     {
-        return nullptr;
+        log_printf(dummy, PLVL_INFO, "Create '%s'\n", op.name.c_str());
+        return std::unique_ptr<Handler>{new DummyHandler};
     }
 };
 

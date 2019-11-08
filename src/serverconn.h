@@ -21,14 +21,21 @@ namespace pvxsimpl {
 
 struct ServIface;
 struct ServerConn;
+struct ServerChan;
 
-struct ServerOp
+struct ServerChan
 {
     ServerConn* const conn;
 
-    evbuf rx;
+    const uint32_t sid, cid;
+    const std::string name;
 
-    ServerOp();
+    std::unique_ptr<server::Handler> handler;
+
+    ServerChan(ServerConn* conn, uint32_t sid, uint32_t cid, const std::string& name, std::unique_ptr<server::Handler>&& handler);
+    ServerChan(const ServerChan&) = delete;
+    ServerChan& operator=(const ServerChan&) = delete;
+    ~ServerChan();
 };
 
 struct ServerConn
@@ -47,7 +54,13 @@ struct ServerConn
     uint8_t segCmd;
     evbuf segBuf, txBody;
 
+    uint32_t nextSID;
+    std::map<uint32_t, ServerChan> chanBySID;
+    std::map<uint32_t, ServerChan*> chanByCID;
+
     ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen);
+    ServerConn(const ServerConn&) = delete;
+    ServerConn& operator=(const ServerConn&) = delete;
     ~ServerConn();
 
 private:

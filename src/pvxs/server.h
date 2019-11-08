@@ -182,14 +182,16 @@ struct PVXS_API Source {
     virtual void onSearch(Search& op) =0;
 
     struct Create {
+        std::string& src;
         std::string name;
-        std::string src;
         // credentials
     };
     virtual std::unique_ptr<Handler> onCreate(const Create& op) =0;
 };
 
-struct Handler {};
+struct PVXS_API Handler {
+    virtual ~Handler();
+};
 
 }} // namespace pvxs::server
 

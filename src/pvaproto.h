@@ -226,6 +226,8 @@ struct Status {
     } code;
     std::string msg;
     std::string trace;
+
+    inline bool isSuccess() const { return code==Ok || code==Warn; }
 };
 
 template<typename Buf>

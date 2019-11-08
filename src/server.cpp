@@ -217,9 +217,10 @@ Server& Server::run()
 
     Server::Pvt* expect = nullptr;
 
-
     std::function<void()> cleanup;
     if(sig_target.compare_exchange_weak(expect, pvt.get())) {
+        // we claimed the signal handler slot.
+        // save previous handlers
         auto prevINT  = signal(SIGINT , &sig_handle);
         auto prevTERM = signal(SIGTERM, &sig_handle);
 
@@ -577,5 +578,7 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 }
 
 Source::~Source() {}
+
+Handler::~Handler() {}
 
 }} // namespace pvxs::server
