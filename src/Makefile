@@ -7,9 +7,23 @@ include $(TOP)/configure/CONFIG
 
 USR_CPPFLAGS += -DPVXS_API_BUILDING
 
+ifneq (,$(filter gcc clang,$(CMPLR_CLASS)))
+
+# we explicitly mark dllimport/export anyway.
+# So hide our internal symbols to speed up linking/loading on all targets.
+USR_CFLAGS += -fvisibility=hidden
+USR_CXXFLAGS += -fvisibility=hidden -fvisibility-inlines-hidden
+
+# Compress debug information on ELF targets for ~25%-50% reduction in .so and .a file size
+# (C++ debug info is Huuuge!)
+#USR_CFLAGS_Linux += -gz=zlib
+#USR_CXXFLAGS_Linux += -gz=zlib
+#USR_LDFLAGS_Linux += -Wl,--compress-debug-sections=zlib
+
 # fault on any undefined symbols (eg. from missing LIB_SYS_LIBS)
-USR_LDFLAGS_Linux += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
-USR_LDFLAGS_DEFAULT +=
+USR_LDFLAGS += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
+
+endif
 
 EXPANDVARS += PVXS_MAJOR_VERSION
 EXPANDVARS += PVXS_MINOR_VERSION
