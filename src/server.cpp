@@ -117,7 +117,7 @@ Server& Server::addSource(const std::string& name,
     if(!src)
         throw std::logic_error(SB()<<"Attempt to add NULL Source "<<name<<" at "<<order);
     {
-        epicsGuard<RWLock::Writer> G(pvt->sourcesLock.writer());
+        auto G(pvt->sourcesLock.lockWriter());
 
         auto& ent = pvt->sources[std::make_pair(order, name)];
         if(ent)
@@ -132,7 +132,7 @@ std::shared_ptr<Source> Server::removeSource(const std::string& name,  int order
     if(!pvt)
         throw std::logic_error("NULL Server");
 
-    epicsGuard<RWLock::Writer> G(pvt->sourcesLock.writer());
+    auto G(pvt->sourcesLock.lockWriter());
 
     std::shared_ptr<Source> ret;
     auto it = pvt->sources.find(std::make_pair(order, name));
@@ -149,7 +149,7 @@ std::shared_ptr<Source> Server::getSource(const std::string& name, int order)
     if(!pvt)
         throw std::logic_error("NULL Server");
 
-    epicsGuard<RWLock::Reader> G(pvt->sourcesLock.reader());
+    auto G(pvt->sourcesLock.lockReader());
 
     std::shared_ptr<Source> ret;
     auto it = pvt->sources.find(std::make_pair(order, name));
@@ -167,7 +167,7 @@ void Server::listSource(std::vector<std::pair<std::string, int> > &names)
 
     names.clear();
 
-    epicsGuard<RWLock::Reader> G(pvt->sourcesLock.reader());
+    auto G(pvt->sourcesLock.lockReader());
 
     names.reserve(pvt->sources.size());
 
@@ -475,7 +475,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     }
 
     {
-        epicsGuard<RWLock::Reader> G(sourcesLock.reader());
+        auto G(sourcesLock.lockReader());
         for(const auto& pair : sources) {
             try {
                 pair.second->onSearch(searchOp);

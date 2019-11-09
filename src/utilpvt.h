@@ -13,6 +13,7 @@
 #  include <pthread.h>
 #endif
 
+#include <memory>
 #include <string>
 #include <sstream>
 
@@ -58,7 +59,12 @@ template <typename I>
 struct Range {
     I a, b;
 
-    struct iterator : std::iterator_traits<std::forward_iterator_tag> {
+    struct iterator {
+        typedef std::forward_iterator_tag iterator_category;
+        typedef I         value_type;
+        typedef ptrdiff_t difference_type;
+        typedef I*        pointer;
+        typedef I&        reference;
         I val;
         explicit constexpr iterator(I val) :val(val) {}
         EPICS_ALWAYS_INLINE I operator*() const { return val; }
@@ -81,53 +87,60 @@ constexpr detail::Range<I> range(I end) { return detail::Range<I>{I(0), end}; }
 template<typename I>
 constexpr detail::Range<I> range(I begin, I end) { return detail::Range<I>{begin, end}; }
 
+#ifdef _WIN32
+#  define RWLOCK_TYPE SRWLOCK
+#  define RWLOCK_INIT(PLOCK)    InitializeSRWLock(PLOCK)
+#  define RWLOCK_DTOR(PLOCK)    do{(void)(PLOCK);}while(0)
+#  define RWLOCK_WLOCK(PLOCK)   AcquireSRWLockExclusive(PLOCK)
+#  define RWLOCK_WUNLOCK(PLOCK) ReleaseSRWLockExclusive(PLOCK)
+#  define RWLOCK_RLOCK(PLOCK)   AcquireSRWLockShared(PLOCK)
+#  define RWLOCK_RUNLOCK(PLOCK) ReleaseSRWLockShared(PLOCK)
+#else
+#  define RWLOCK_TYPE pthread_rwlock_t
+#  define RWLOCK_INIT(PLOCK)    pthread_rwlock_init(PLOCK, nullptr)
+#  define RWLOCK_DTOR(PLOCK)    pthread_rwlock_destroy(PLOCK)
+#  define RWLOCK_WLOCK(PLOCK)   pthread_rwlock_wrlock(PLOCK)
+#  define RWLOCK_WUNLOCK(PLOCK) pthread_rwlock_unlock(PLOCK)
+#  define RWLOCK_RLOCK(PLOCK)   pthread_rwlock_rdlock(PLOCK)
+#  define RWLOCK_RUNLOCK(PLOCK) pthread_rwlock_unlock(PLOCK)
+#endif
+
 class RWLock
 {
-#ifdef _WIN32
-    SRWLOCK lock;
+    RWLOCK_TYPE lock;
 public:
-    inline RWLock() :_reader(*this), _writer(*this) { InitializeSRWLock(&lock); }
-#else
-    pthread_rwlock_t lock;
-public:
-    inline RWLock() :_reader(*this), _writer(*this) { pthread_rwlock_init(&lock, nullptr); }
-    inline ~RWLock() { pthread_rwlock_destroy(&lock); }
-#endif
+    inline RWLock() { RWLOCK_INIT(&lock); }
+    inline ~RWLock() { RWLOCK_DTOR(&lock); }
 
     RWLock(const RWLock&) = delete;
     RWLock(RWLock&&) = delete;
     RWLock& operator=(const RWLock&) = delete;
     RWLock& operator=(RWLock&&) = delete;
 
-    class Reader {
-        RWLock& rw;
-    public:
-        Reader(RWLock& rw) : rw(rw) {}
-#ifdef _WIN32
-        inline void lock() { AcquireSRWLockShared(&rw.lock); }
-        inline void unlock() { ReleaseSRWLockShared(&rw.lock); }
-#else
-        inline void lock() { pthread_rwlock_rdlock(&rw.lock); }
-        inline void unlock() { pthread_rwlock_unlock(&rw.lock); }
-#endif
-    } _reader;
-    inline Reader& reader() { return _reader; }
+    struct UnlockReader {
+        inline void operator()(RWLock *plock) { RWLOCK_RUNLOCK(&plock->lock); }
+    };
+    inline std::unique_ptr<RWLock, UnlockReader> lockReader() {
+        RWLOCK_RLOCK(&lock);
+        return std::unique_ptr<RWLock, UnlockReader>{this};
+    }
 
-    class Writer {
-        RWLock& rw;
-    public:
-        Writer(RWLock& rw) : rw(rw) {}
-#ifdef _WIN32
-        inline void lock() { AcquireSRWLockExclusive(&rw.lock); }
-        inline void unlock() { ReleaseSRWLockExclusive(&rw.lock); }
-#else
-        inline void lock() { pthread_rwlock_wrlock(&rw.lock); }
-        inline void unlock() { pthread_rwlock_unlock(&rw.lock); }
-#endif
-    } _writer;
-    inline Writer& writer() { return _writer; }
+    struct UnlockWriter {
+        inline void operator()(RWLock *plock) { RWLOCK_WUNLOCK(&plock->lock); }
+    };
+    inline std::unique_ptr<RWLock, UnlockWriter> lockWriter() {
+        RWLOCK_WLOCK(&lock);
+        return std::unique_ptr<RWLock, UnlockWriter>{this};
+    }
 };
 
+#undef RWLOCK_TYPE
+#undef RWLOCK_INIT
+#undef RWLOCK_DTOR
+#undef RWLOCK_WLOCK
+#undef RWLOCK_WUNLOCK
+#undef RWLOCK_RLOCK
+#undef RWLOCK_RUNLOCK
 
 void logger_shutdown();
 

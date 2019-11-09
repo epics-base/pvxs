@@ -177,11 +177,10 @@ void ServerConn::handle_Search()
 void ServerConn::handle_CreateChan()
 {
     const bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
-    (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
     EvInBuf M(peerBE, segBuf.get(), 16);
 
-    epicsGuard<RWLock::Reader> G(iface->server->sourcesLock.reader()); // could move this into loop, only guards server->sources
+    auto G(iface->server->sourcesLock.lockReader());
 
     uint16_t count = 0;
     from_wire(M, count);
@@ -253,6 +252,8 @@ void ServerConn::handle_CreateChan()
                 sts.trace = "pvx:serv:nosource:";
             }
 
+            (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
+
             EvOutBuf R(be, txBody.get());
             to_wire(R, cid);
             to_wire(R, sid);
@@ -304,10 +305,23 @@ void ServerConn::handle_DestroyChan()
         chanBySID.erase(it);
         // ServerChannel is delete'd
 
+        {
+            auto tx = bufferevent_get_output(bev.get());
+            constexpr bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
+            EvOutBuf R(be, tx);
+            to_wire(R, Header{pva_app_msg::DestroyChan, pva_flags::Server, 8});
+            // yes, CID and SID really are reversed from from the Request
+            to_wire(R, cid);
+            to_wire(R, sid);
+        }
+
     } else {
         log_printf(connsetup, PLVL_DEBUG, "Client %s DestroyChan non-existant sid=%d cid=%d\n", peerName.c_str(),
                    unsigned(sid), unsigned(cid));
     }
+
+    if(!M.good())
+        bev.reset();
 }
 
 void ServerConn::handle_GetOp()
