@@ -48,6 +48,7 @@ LIB_SRCS += udp_collector.cpp
 LIB_SRCS += server.cpp
 LIB_SRCS += serverconn.cpp
 LIB_SRCS += serverchan.cpp
+LIB_SRCS += serverintrospect.cpp
 
 LIB_LIBS += Com
 

@@ -22,7 +22,12 @@ DEFINE_LOGGER(dummy,"dummyserv");
 
 struct DummyHandler : public Handler
 {
+    virtual ~DummyHandler() {}
 
+    virtual void onIntrospect(std::unique_ptr<Introspect> &&op) override final
+    {
+        op->error("Got nothing");
+    }
 };
 
 struct DummySource : public Source

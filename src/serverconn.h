@@ -27,23 +27,26 @@ struct ServerChan;
 
 struct ServerOp
 {
-    ServerChan* const chan;
+    const std::weak_ptr<ServerChan> chan;
 
     const uint32_t ioid;
 
     enum state_t {
+        Creating,
         Idle,
-        Active,
+        Executing,
         Dead,
     } state;
 
-    constexpr ServerOp(ServerChan *chan, uint32_t ioid) :chan(chan), ioid(ioid), state(Idle) {}
+    ServerOp(const std::weak_ptr<ServerChan>& chan, uint32_t ioid) :chan(chan), ioid(ioid), state(Idle) {}
     virtual ~ServerOp() =0;
+
+    virtual void cancel();
 };
 
 struct ServerChannelControl : public server::ChannelControl
 {
-    explicit ServerChannelControl(const std::shared_ptr<ServerConn>& conn, const std::shared_ptr<ServerChan>& chan);
+    ServerChannelControl(const std::shared_ptr<ServerConn>& conn, const std::shared_ptr<ServerChan>& chan);
     virtual ~ServerChannelControl();
 
     virtual std::shared_ptr<server::Handler> setHandler(const std::shared_ptr<server::Handler> &h) override final;
@@ -67,6 +70,8 @@ struct ServerChan
     } state;
 
     std::shared_ptr<server::Handler> handler;
+
+    std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID; // our subset of ServerConn::opByIOID
 
     ServerChan(const std::shared_ptr<ServerConn>& conn, uint32_t sid, uint32_t cid, const std::string& name);
     ServerChan(const ServerChan&) = delete;
@@ -93,12 +98,14 @@ struct ServerConn : public std::enable_shared_from_this<ServerConn>
     uint32_t nextSID;
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanBySID;
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanByCID;
-    std::map<uint32_t, std::unique_ptr<ServerOp> > opByIOID;
+    std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID;
 
     ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen);
     ServerConn(const ServerConn&) = delete;
     ServerConn& operator=(const ServerConn&) = delete;
     ~ServerConn();
+
+    const std::shared_ptr<ServerChan>& lookupSID(uint32_t sid);
 
 private:
 #define CASE(Op) void handle_##Op();

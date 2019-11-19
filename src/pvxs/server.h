@@ -261,6 +261,11 @@ struct PVXS_API Introspect : public OpBase
     virtual void error(const std::string& msg) =0;
     // void success(Data);
 
+    Introspect(const std::string& peerName,
+                   const std::string& iface,
+                   const std::string& name)
+        :OpBase (peerName, iface, name)
+    {}
     virtual ~Introspect() =0;
 };
 

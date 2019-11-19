@@ -287,36 +287,47 @@ void ServerConn::handle_DestroyChan()
 
     from_wire(M, sid);
     from_wire(M, cid);
+    if(!M.good())
+        throw std::runtime_error("Decode error in DestroyChan");
 
     auto it = chanBySID.find(sid);
-    if(M.good() && it!=chanBySID.end()) {
-        {
-            auto& chan = it->second;
-            if(chan->cid!=cid) {
-                log_printf(connsetup, PLVL_DEBUG, "Client %s provides incorrect CID with DestroyChan sid=%d cid=%d!=%d '%s'\n", peerName.c_str(),
-                           unsigned(sid), unsigned(chan->cid), unsigned(cid), chan->name.c_str());
-            }
-        }
-
-        auto n = chanByCID.erase(cid);
-        assert(n==1);
-
-        chanBySID.erase(it);
-        assert(it->second.use_count()==1); // we only take transient refs on this thread
-        // ServerChannel is delete'd
-
-        {
-            auto tx = bufferevent_get_output(bev.get());
-            constexpr bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
-            EvOutBuf R(be, tx);
-            to_wire(R, Header{pva_app_msg::DestroyChan, pva_flags::Server, 8});
-            to_wire(R, sid);
-            to_wire(R, cid);
-        }
-
-    } else {
+    if(it==chanBySID.end()) {
         log_printf(connsetup, PLVL_DEBUG, "Client %s DestroyChan non-existant sid=%d cid=%d\n", peerName.c_str(),
                    unsigned(sid), unsigned(cid));
+        return;
+    }
+
+
+    auto chan = it->second;
+    if(chan->cid!=cid) {
+        log_printf(connsetup, PLVL_DEBUG, "Client %s provides incorrect CID with DestroyChan sid=%d cid=%d!=%d '%s'\n", peerName.c_str(),
+                   unsigned(sid), unsigned(chan->cid), unsigned(cid), chan->name.c_str());
+    }
+
+    {
+        auto n = chanByCID.erase(cid);
+        assert(n==1);
+    }
+
+    chanBySID.erase(it);
+
+    // cleanup operations
+
+    for(auto& pair : chan->opByIOID) {
+        auto n = opByIOID.erase(pair.second->ioid);
+        assert(n==1);
+    }
+
+    assert(chan.use_count()==1); // we only take transient refs on this thread
+    // ServerChannel is delete'd
+
+    {
+        auto tx = bufferevent_get_output(bev.get());
+        constexpr bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
+        EvOutBuf R(be, tx);
+        to_wire(R, Header{pva_app_msg::DestroyChan, pva_flags::Server, 8});
+        to_wire(R, sid);
+        to_wire(R, cid);
     }
 
     if(!M.good())

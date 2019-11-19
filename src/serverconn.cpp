@@ -27,6 +27,8 @@ DEFINE_LOGGER(connsetup, "tcp.setup");
 // related to low level send/recv
 DEFINE_LOGGER(connio, "tcp.io");
 
+DEFINE_LOGGER(remote, "tcp.log");
+
 ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen)
     :iface(iface)
     ,peerAddr(peer, socklen)
@@ -90,6 +92,13 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 ServerConn::~ServerConn()
 {}
 
+const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
+{
+    auto it = chanBySID.find(sid);
+    if(it==chanBySID.end())
+        throw std::runtime_error(SB()<<"Client "<<peerName<<" non-existant SID "<<sid);
+    return it->second;
+}
 
 void ServerConn::handle_Echo()
 {
@@ -184,39 +193,89 @@ void ServerConn::handle_PutGetOp()
 {}
 
 void ServerConn::handle_CancelOp()
-{}
-
-void ServerConn::handle_DestroyOp()
-{}
-
-void ServerConn::handle_Introspect()
 {
-    // aka. GetField
-
     EvInBuf M(peerBE, segBuf.get(), 16);
 
-    uint32_t sid = -1, ioid = -1;
-    std::string subfield;
-
+    uint32_t sid=0, ioid=0;
     from_wire(M, sid);
     from_wire(M, ioid);
-    from_wire(M, subfield);
-    Status sts{Status::Ok};
+    if(!M.good())
+        throw std::runtime_error("Error decoding DestroyOp");
 
-    auto it = chanBySID.find(sid);
-
-    if(M.good() && it!=chanBySID.end() && opByIOID.find(ioid)==opByIOID.end()) {
-
-    } else {
-        log_printf(connio, PLVL_DEBUG, "Client %s invalid GetField\n", peerName.c_str());
+    auto it = opByIOID.find(ioid);
+    if(it==opByIOID.end()) {
+        log_printf(connsetup, PLVL_WARN, "Client %s Cancel of non-existant Op\n", peerName.c_str());
+        return;
     }
 
+    const auto& op = it->second;
+    auto chan = op->chan.lock();
+    if(!chan || chan->sid!=sid) {
+        log_printf(connsetup, PLVL_ERR, "Client %s Cancel inconsistent Op\n", peerName.c_str());
+        return;
+    }
+
+    if(op->state==ServerOp::Executing) {
+        op->state = ServerOp::Idle;
+
+    } else {
+        log_printf(connsetup, PLVL_WARN, "Client %s Cancel of non-executing Op\n", peerName.c_str());
+    }
+}
+
+void ServerConn::handle_DestroyOp()
+{
+    EvInBuf M(peerBE, segBuf.get(), 16);
+
+    uint32_t sid=0, ioid=0;
+    from_wire(M, sid);
+    from_wire(M, ioid);
     if(!M.good())
-        bev.reset();
+        throw std::runtime_error("Error decoding DestroyOp");
+
+    auto& chan = lookupSID(sid);
+
+    auto n = opByIOID.erase(ioid);
+    n += chan->opByIOID.erase(ioid);
+    if(n!=2) {
+        log_printf(connsetup, PLVL_WARN, "Client %s can't destroy non-existant op %u:%u\n",
+                   peerName.c_str(), unsigned(sid), unsigned(ioid));
+    }
 }
 
 void ServerConn::handle_Message()
-{}
+{
+    EvInBuf M(peerBE, segBuf.get(), 16);
+
+    uint32_t ioid = 0;
+    uint8_t mtype = 0;
+    std::string msg;
+
+    from_wire(M, ioid);
+    from_wire(M, mtype);
+    from_wire(M, msg);
+
+    if(!M.good())
+        throw std::runtime_error("Decode error for Message");
+
+    auto it = opByIOID.find(ioid);
+    if(it==opByIOID.end()) {
+        log_printf(connsetup, PLVL_DEBUG, "Client %s Message on non-existant ioid\n", peerName.c_str());
+        return;
+    }
+    auto chan = it->second->chan.lock();
+
+    switch(mtype) {
+    case 0: mtype = PLVL_INFO;
+    case 1: mtype = PLVL_WARN;
+    case 2: mtype = PLVL_ERR;
+    default:mtype = PLVL_CRIT;
+    }
+
+    log_printf(remote, mtype, "Client %s Channel %s Remote message: %s\n",
+               peerName.c_str(), chan ? "<dead>" : chan->name.c_str(),
+               msg.c_str());
+}
 
 
 void ServerConn::cleanup()
@@ -458,5 +517,7 @@ void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, s
 }
 
 ServerOp::~ServerOp() {}
+
+void ServerOp::cancel() {}
 
 }} // namespace pvxs::impl
