@@ -91,19 +91,28 @@ Server Server::Config::build()
 Server::Server() {}
 
 Server::Server(Config&& conf)
-    :pvt(new Pvt(std::move(conf)))
-{}
-
-Server::Server(Server&& other) noexcept
-    :pvt(std::move(other.pvt))
-{}
-
-Server& Server::operator=(Server&& other) noexcept
 {
-    if(this!=&other) {
-        pvt = std::move(other.pvt);
-    }
-    return *this;
+    /* Here be dragons.
+     *
+     * We keep two different ref. counters.
+     * - "externel" counter which keeps a server running.
+     * - "internal" which only keeps server storage from being destroyed.
+     *
+     * External refs are held as Server::pvt.  Internal refs are
+     * held by various in-progress operations (OpBase sub-classes)
+     * Which need to safely access server storage, but should not
+     * prevent a server from stopping.
+     */
+    std::shared_ptr<Pvt> internal(new Pvt(std::move(conf)));
+    internal->internal_self = internal;
+
+    // external
+    pvt.reset(internal.get(), [internal](Pvt*) mutable {
+        internal->stop();
+        internal.reset();
+    });
+    // we don't keep a weak_ptr to the external reference.
+    // Caller is entirely responsible for keeping this server running
 }
 
 Server::~Server() {}
@@ -118,6 +127,7 @@ Server& Server::addSource(const std::string& name,
         throw std::logic_error(SB()<<"Attempt to add NULL Source "<<name<<" at "<<order);
     {
         auto G(pvt->sourcesLock.lockWriter());
+        //epicsGuard<RWLock::Writer> G(pvt->sourcesLock.writer());
 
         auto& ent = pvt->sources[std::make_pair(order, name)];
         if(ent)
@@ -392,8 +402,10 @@ void Server::Pvt::start()
     log_printf(serversetup, PLVL_DEBUG, "Server Starting\n");
 
     // begin accepting connections
-    acceptor_loop.call([this]()
+    state_t prev_state;
+    acceptor_loop.call([this, &prev_state]()
     {
+        prev_state = state;
         if(state!=Stopped) {
             // already running
             log_printf(serversetup, PLVL_DEBUG, "Server not stopped %d\n", state);
@@ -409,6 +421,8 @@ void Server::Pvt::start()
             log_printf(serversetup, PLVL_DEBUG, "Server enabled listener on %s\n", iface.name.c_str());
         }
     });
+    if(prev_state!=Stopped)
+        return;
 
     // being processing Searches
     for(auto& L : listeners) {
@@ -433,8 +447,10 @@ void Server::Pvt::stop()
     log_printf(serversetup, PLVL_DEBUG, "Server Stopping\n");
 
     // Stop sending Beacons
-    acceptor_loop.call([this]()
+    state_t prev_state;
+    acceptor_loop.call([this, &prev_state]()
     {
+        prev_state = state;
         if(state!=Running) {
             log_printf(serversetup, PLVL_DEBUG, "Server not running %d\n", state);
             return;
@@ -444,6 +460,8 @@ void Server::Pvt::stop()
         if(event_del(beaconTimer.get()))
             log_printf(serversetup, PLVL_ERR, "Error disabling beacon timer on\n");
     });
+    if(prev_state!=Running)
+        return;
 
     // stop processing Search requests
     for(auto& L : listeners) {
@@ -579,6 +597,23 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 
 Source::~Source() {}
 
+OpBase::OpBase(const std::string& peerName,
+               const std::string& iface,
+               const std::string& name)
+    :peerName(peerName)
+    ,ifaceName(iface)
+    ,name(name)
+{}
+
+OpBase::~OpBase() {}
+
+ChannelControl::~ChannelControl() {}
+
+Introspect::~Introspect() {}
+
 Handler::~Handler() {}
+
+void Handler::onIntrospect(std::unique_ptr<Introspect>&& op)
+{}
 
 }} // namespace pvxs::server

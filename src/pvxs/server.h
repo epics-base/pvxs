@@ -85,6 +85,9 @@ struct Source;
  *
  * Use a Server::Config to determine how this server will bind, listen,
  * and announce itself.
+ *
+ * In order to be useful, a Server will have one or more Source instances added
+ * to it with addSource().
  */
 class PVXS_API Server
 {
@@ -113,10 +116,6 @@ public:
     Server();
     //! Create/allocate, but do not start, a new server with the provided config.
     explicit Server(Config&&);
-    Server(Server&&) noexcept;
-    Server(const Server&) = delete;
-    Server& operator=(Server&&) noexcept;
-    Server& operator=(const Server&) = delete;
     ~Server();
 
     //! Begin serving.  Does not block.
@@ -136,13 +135,21 @@ public:
     //! effective config
     const Config& config() const;
 
+    //! Add a Source to this server with an arbitrary source name.
+    //!
+    //! @param name Source name
+    //! @param src The Source.  A strong reference to this Source which will be released by removeSource() or ~Server()
+    //! @param order Determines the order in which this Source::onCreate() will be called.
+    //!        Lowest first.
     Server& addSource(const std::string& name,
                       const std::shared_ptr<Source>& src,
                       int order =0);
 
+    //! Disociate a Source using the name _and_ priority given to addSource()
     std::shared_ptr<Source> removeSource(const std::string& name,
                                          int order =0);
 
+    //! Fetch an
     std::shared_ptr<Source> getSource(const std::string& name,
                                       int order =0);
 
@@ -152,20 +159,64 @@ public:
 
     struct Pvt;
 private:
-    std::unique_ptr<Pvt> pvt;
+    std::shared_ptr<Pvt> pvt;
 };
 
+struct OpBase {
+    //! The Client endpoint address in "X.X.X.X:Y" format.
+    const std::string peerName;
+    //! The local endpoint address in "X.X.X.X:Y" format.
+    const std::string ifaceName;
+    //! The Channel name
+    const std::string name;
+    // TODO credentials
 
+    OpBase(const std::string& peerName,
+           const std::string& iface,
+           const std::string& name);
+    virtual ~OpBase() =0;
+};
+/** Manipulate an active Channel, and any in-progress Operations through it.
+ *
+ */
+struct PVXS_API ChannelControl : public OpBase {
+    ChannelControl(const std::string& peerName,
+                   const std::string& iface,
+                   const std::string& name)
+        :OpBase (peerName, iface, name)
+    {}
+    virtual ~ChannelControl() =0;
+
+    //! Set/replace Handler associated with this Channel
+    //! If called from outside a Handler method, blocks until in-progress Handler methods have returned.
+    virtual std::shared_ptr<Handler> setHandler(const std::shared_ptr<Handler>& h) =0;
+
+    //! Force disconnection
+    //! If called from outside a Handler method, blocks until in-progress Handler methods have returned.
+    //! Reference to currently attached Handler is released.
+    virtual void close() =0;
+
+    // TODO: signal Rights?
+};
+
+/** Interface through which a Server discovers Channel names and
+ *  associates with Handler instances.
+ *
+ *  User code will sub-class.
+ */
 struct PVXS_API Source {
-    virtual ~Source();
+    virtual ~Source() =0;
 
+    //! An iteratable of names being sought
     struct Search {
         class Name {
             const char* _name;
             bool _claim;
             friend struct Server::Pvt;
         public:
+            //! The Channel name
             inline const char* name() const { return _name; }
+            //! The caller claims to be able to respond to an onCreate()
             inline void claim() { _claim = true; }
         };
     private:
@@ -177,20 +228,50 @@ struct PVXS_API Source {
 
         _names_t::iterator begin() { return _names.begin(); }
         _names_t::iterator end() { return _names.end(); }
+        //! The Client endpoint address in "X.X.X.X:Y" format.
         const SockAddr& source() const { return _src; }
     };
+    /** Called each time a client polls for the existance of some Channel names.
+     *
+     * A Source may only Search::claim() a Channel name if it is prepared to
+     * immediately accept an onCreate() call for that Channel name.
+     * In other situations it should wait for the client to retry.
+     */
     virtual void onSearch(Search& op) =0;
 
-    struct Create {
-        std::string& src;
-        std::string name;
-        // credentials
-    };
-    virtual std::unique_ptr<Handler> onCreate(const Create& op) =0;
+    /** A Client is attempting to open a connection to a certain Channel.
+     *
+     *  This Channel name may not be one which seen or claimed by onSearch().
+     *
+     *  Callee with either do nothing, or std::move() the ChannelControl and call ChannelControl::setHandler()
+     */
+    virtual void onCreate(std::unique_ptr<ChannelControl>&& op) =0;
 };
 
+//! Token for an in-progress request for Channel data type information.
+struct PVXS_API Introspect : public OpBase
+{
+    //! Negative reply w/ error message
+    virtual void error(const std::string& msg) =0;
+    // void success(Data);
+
+    virtual ~Introspect() =0;
+};
+
+/** Requests for a particular Channel are dispatched through me.
+ *
+ *  User code will sub-class.
+ */
 struct PVXS_API Handler {
     virtual ~Handler();
+
+    /** Request for Channel data type information
+     *
+     * Ownership of the Introspect instance is passed to the callee.
+     * The request will be implicitly errored if the callee allows
+     * the Introspect to be deleted prior to replying.
+     */
+    virtual void onIntrospect(std::unique_ptr<Introspect>&& op);
 };
 
 }} // namespace pvxs::server

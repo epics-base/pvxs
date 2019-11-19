@@ -9,6 +9,7 @@
 
 #include <list>
 #include <map>
+#include <memory>
 
 #include <epicsEvent.h>
 
@@ -22,23 +23,58 @@ namespace pvxsimpl {
 struct ServIface;
 struct ServerConn;
 struct ServerChan;
+struct ServerChan;
+
+struct ServerOp
+{
+    ServerChan* const chan;
+
+    const uint32_t ioid;
+
+    enum state_t {
+        Idle,
+        Active,
+        Dead,
+    } state;
+
+    constexpr ServerOp(ServerChan *chan, uint32_t ioid) :chan(chan), ioid(ioid), state(Idle) {}
+    virtual ~ServerOp() =0;
+};
+
+struct ServerChannelControl : public server::ChannelControl
+{
+    explicit ServerChannelControl(const std::shared_ptr<ServerConn>& conn, const std::shared_ptr<ServerChan>& chan);
+    virtual ~ServerChannelControl();
+
+    virtual std::shared_ptr<server::Handler> setHandler(const std::shared_ptr<server::Handler> &h) override final;
+    virtual void close() override final;
+
+    const std::weak_ptr<server::Server::Pvt> server;
+    const std::weak_ptr<ServerChan> chan;
+};
 
 struct ServerChan
 {
-    ServerConn* const conn;
+    const std::weak_ptr<ServerConn> conn;
 
     const uint32_t sid, cid;
     const std::string name;
 
-    std::unique_ptr<server::Handler> handler;
+    enum {
+        Creating,
+        Active,
+        Destroy,
+    } state;
 
-    ServerChan(ServerConn* conn, uint32_t sid, uint32_t cid, const std::string& name, std::unique_ptr<server::Handler>&& handler);
+    std::shared_ptr<server::Handler> handler;
+
+    ServerChan(const std::shared_ptr<ServerConn>& conn, uint32_t sid, uint32_t cid, const std::string& name);
     ServerChan(const ServerChan&) = delete;
     ServerChan& operator=(const ServerChan&) = delete;
     ~ServerChan();
 };
 
-struct ServerConn
+struct ServerConn : public std::enable_shared_from_this<ServerConn>
 {
     ServIface* const iface;
 
@@ -55,8 +91,9 @@ struct ServerConn
     evbuf segBuf, txBody;
 
     uint32_t nextSID;
-    std::map<uint32_t, ServerChan> chanBySID;
-    std::map<uint32_t, ServerChan*> chanByCID;
+    std::map<uint32_t, std::shared_ptr<ServerChan> > chanBySID;
+    std::map<uint32_t, std::shared_ptr<ServerChan> > chanByCID;
+    std::map<uint32_t, std::unique_ptr<ServerOp> > opByIOID;
 
     ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen);
     ServerConn(const ServerConn&) = delete;
@@ -65,23 +102,23 @@ struct ServerConn
 
 private:
 #define CASE(Op) void handle_##Op();
-                CASE(Echo);
-                CASE(ConnValid);
-                CASE(Search);
-                CASE(AuthZ);
+    CASE(Echo);
+    CASE(ConnValid);
+    CASE(Search);
+    CASE(AuthZ);
 
-                CASE(CreateChan);
-                CASE(DestroyChan);
+    CASE(CreateChan);
+    CASE(DestroyChan);
 
-                CASE(GetOp);
-                CASE(PutOp);
-                CASE(PutGetOp);
-                CASE(RPCOp);
-                CASE(CancelOp);
-                CASE(DestroyOp);
-                CASE(Introspect);
+    CASE(GetOp);
+    CASE(PutOp);
+    CASE(PutGetOp);
+    CASE(RPCOp);
+    CASE(CancelOp);
+    CASE(DestroyOp);
+    CASE(Introspect);
 
-                CASE(Message);
+    CASE(Message);
 #undef CASE
 
     void cleanup();
@@ -103,8 +140,6 @@ struct ServIface
     evsocket sock;
     evlisten listener;
 
-    std::list<ServerConn> connections;
-
     ServIface(const std::string& addr, unsigned short port, server::Server::Pvt *server);
 
     static void onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw);
@@ -118,6 +153,8 @@ using namespace pvxsimpl;
 
 struct Server::Pvt
 {
+    std::weak_ptr<Server::Pvt> internal_self;
+
     // "const" after ctor
     Config effective;
 
@@ -126,13 +163,10 @@ struct Server::Pvt
     std::vector<uint8_t> beaconMsg;
 
     std::list<std::unique_ptr<UDPListener> > listeners;
-    std::list<ServIface> interfaces;
-
     std::vector<SockAddr> beaconDest;
 
-    // handlers for active TCP connections, by priority.
-    // once added, these remain stable for the lifetime of the Server
-    std::map<unsigned, evbase> prio_loops;
+    std::list<ServIface> interfaces;
+    std::map<ServerConn*, std::shared_ptr<ServerConn> > connections;
 
     // handle server "background" tasks.
     // accept new connections and send beacons
@@ -148,7 +182,7 @@ struct Server::Pvt
     RWLock sourcesLock;
     std::map<std::pair<int, std::string>, std::shared_ptr<Source> > sources;
 
-    enum {
+    enum state_t {
         Stopped,
         Starting,
         Running,

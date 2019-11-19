@@ -43,10 +43,10 @@ public:
             }
         }
     }
-    virtual std::unique_ptr<Handler> onCreate(const Create &op) override final
+    virtual void onCreate(std::unique_ptr<ChannelControl>&& op) override final
     {
-        log_printf(dummy, PLVL_INFO, "Create '%s'\n", op.name.c_str());
-        return std::unique_ptr<Handler>{new DummyHandler};
+        log_printf(dummy, PLVL_INFO, "Create '%s'\n", op->name.c_str());
+        op->setHandler(std::unique_ptr<Handler>{new DummyHandler});
     }
 };
 

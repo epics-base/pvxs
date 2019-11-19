@@ -158,7 +158,10 @@ void call_action(evutil_socket_t _fd, short _ev, void *raw)
 
 void evbase::call(std::function<void()>&& fn)
 {
-    assert(!pvt->worker.isCurrentThread());
+    if(pvt->worker.isCurrentThread()) {
+        fn();
+        return;
+    }
 
     action_args args(std::move(fn));
 

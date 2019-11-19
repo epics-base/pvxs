@@ -39,7 +39,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     ,txBody(evbuffer_new())
     ,nextSID(0)
 {
-    log_printf(connsetup, PLVL_DEBUG, "Client %s connects\n", peerName.c_str());
+    log_printf(connio, PLVL_DEBUG, "Client %s connects\n", peerName.c_str());
 
     bufferevent_setcb(bev.get(), &bevReadS, &bevWriteS, &bevEventS, this);
     // initially wait for at least a header
@@ -174,156 +174,6 @@ void ServerConn::handle_AuthZ()
 void ServerConn::handle_Search()
 {}
 
-void ServerConn::handle_CreateChan()
-{
-    const bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
-
-    EvInBuf M(peerBE, segBuf.get(), 16);
-
-    auto G(iface->server->sourcesLock.lockReader());
-
-    uint16_t count = 0;
-    from_wire(M, count);
-    for(auto i : range(count)) {
-        (void)i;
-        uint32_t cid = -1, sid = -1;
-        server::Source::Create op{peerName};
-        from_wire(M, cid);
-        from_wire(M, op.name);
-
-        if(!M.good())
-            break;
-
-        Status sts{Status::Ok};
-
-        bool claimed = false;
-        try {
-            if(chanByCID.size()==0xffffffff || chanBySID.size()==0xffffffff) {
-                sts.code = Status::Error;
-                sts.msg = "Too many Server channels";
-                sts.trace = "pvx:serv:chanidoverflow:";
-            }
-
-            if(sts.isSuccess() && chanByCID.find(cid)!=chanByCID.end()) {
-                sts.code = Status::Fatal;
-                sts.msg = "Client reuses existing CID";
-                sts.trace = "pvx:serv:dupcid:";
-            }
-
-            std::unique_ptr<server::Handler> handler;
-            if(sts.isSuccess() && !op.name.empty()) {
-                for(auto& pair : iface->server->sources) {
-                    try {
-                        handler = pair.second->onCreate(op);
-                        if(handler)
-                            break;
-                    }catch(std::exception& e){
-                        log_printf(connsetup, PLVL_ERR, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
-                                   pair.first.second.c_str(), pair.first.first,
-                                   typeid(&e).name(), e.what());
-                    }
-                }
-            }
-
-            if(sts.isSuccess() && handler) {
-                do {
-                    sid = nextSID++;
-                } while(chanBySID.find(sid)!=chanBySID.end());
-
-                auto pair = chanBySID.emplace(std::piecewise_construct,
-                                              std::make_tuple(sid),
-                                              std::make_tuple(this, sid, cid, op.name, std::move(handler)));
-                auto pair2 = chanByCID.emplace(cid, &pair.first->second);
-                assert(!!pair.second && !!pair2.second); // we've already checked for a duplicate
-                claimed = true;
-            }
-        }catch(std::exception& e){
-            log_printf(connsetup, PLVL_ERR, "Client %s Unhandled error in onCreate %s : %s\n", peerName.c_str(),
-                       typeid(&e).name(), e.what());
-            sts.code = Status::Fatal;
-            sts.msg = e.what();
-            sts.trace = "pvx:serv:internal:";
-        }
-
-        {
-            if(sts.isSuccess() && !claimed) {
-                sts.code = Status::Fatal;
-                sts.msg = "Unable to create Channel";
-                sts.trace = "pvx:serv:nosource:";
-            }
-
-            (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
-
-            EvOutBuf R(be, txBody.get());
-            to_wire(R, cid);
-            to_wire(R, sid);
-            to_wire(R, sts);
-            // "spec" calls for uint16_t Access Rights here, but pvAccessCPP don't include this (it's useless anyway)
-            if(!R.good()) {
-                M.fault();
-                log_printf(connio, PLVL_ERR, "Client %s Encode error in CreateChan\n", peerName.c_str());
-                break;
-            }
-        }
-
-        auto tx = bufferevent_get_output(bev.get());
-        to_evbuf(tx, Header{pva_app_msg::CreateChan,
-                            pva_flags::Server,
-                            uint32_t(evbuffer_get_length(txBody.get()))},
-                 be);
-        auto err = evbuffer_add_buffer(tx, txBody.get());
-        assert(!err);
-    }
-
-    if(!M.good()) {
-        log_printf(connio, PLVL_ERR, "Client %s Decode error in CreateChan\n", peerName.c_str());
-        bev.reset();
-    }
-}
-
-void ServerConn::handle_DestroyChan()
-{
-    EvInBuf M(peerBE, segBuf.get(), 16);
-
-    uint32_t sid=-1, cid=-1;
-
-    from_wire(M, sid);
-    from_wire(M, cid);
-
-    auto it = chanBySID.find(sid);
-    if(M.good() && it!=chanBySID.end()) {
-        auto& chan = it->second;
-
-        if(chan.cid!=cid) {
-            log_printf(connsetup, PLVL_DEBUG, "Client %s provides incorrect CID with DestroyChan sid=%d cid=%d!=%d '%s'\n", peerName.c_str(),
-                       unsigned(sid), unsigned(chan.cid), unsigned(cid), chan.name.c_str());
-        }
-
-        auto n = chanByCID.erase(chan.cid);
-        assert(n==1);
-
-        chanBySID.erase(it);
-        // ServerChannel is delete'd
-
-        {
-            auto tx = bufferevent_get_output(bev.get());
-            constexpr bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
-            EvOutBuf R(be, tx);
-            to_wire(R, Header{pva_app_msg::DestroyChan, pva_flags::Server, 8});
-            // yes, CID and SID really are reversed from from the Request
-            to_wire(R, cid);
-            to_wire(R, sid);
-        }
-
-    } else {
-        log_printf(connsetup, PLVL_DEBUG, "Client %s DestroyChan non-existant sid=%d cid=%d\n", peerName.c_str(),
-                   unsigned(sid), unsigned(cid));
-    }
-
-    if(!M.good())
-        bev.reset();
-}
-
 void ServerConn::handle_GetOp()
 {}
 
@@ -343,7 +193,30 @@ void ServerConn::handle_DestroyOp()
 {}
 
 void ServerConn::handle_Introspect()
-{}
+{
+    // aka. GetField
+
+    EvInBuf M(peerBE, segBuf.get(), 16);
+
+    uint32_t sid = -1, ioid = -1;
+    std::string subfield;
+
+    from_wire(M, sid);
+    from_wire(M, ioid);
+    from_wire(M, subfield);
+    Status sts{Status::Ok};
+
+    auto it = chanBySID.find(sid);
+
+    if(M.good() && it!=chanBySID.end() && opByIOID.find(ioid)==opByIOID.end()) {
+
+    } else {
+        log_printf(connio, PLVL_DEBUG, "Client %s invalid GetField\n", peerName.c_str());
+    }
+
+    if(!M.good())
+        bev.reset();
+}
 
 void ServerConn::handle_Message()
 {}
@@ -353,16 +226,13 @@ void ServerConn::cleanup()
 {
     log_printf(connsetup, PLVL_DEBUG, "Client %s Cleanup TCP Connection\n", peerName.c_str());
 
-    // remove myself from connections list
-    decltype (iface->connections) trash;
-    for (auto it = iface->connections.begin(), end = iface->connections.end(); it!=end; ++it) {
-        if((&*it)==this) {
-            trash.splice(trash.end(), iface->connections, it);
-            break;
-        }
+    auto it = iface->server->connections.find(this);
+    if(it!=iface->server->connections.end()) {
+        auto self = std::move(it->second);
+        iface->server->connections.erase(it);
+
+        // delete this
     }
-    assert(!trash.empty());
-    // delete this
 }
 
 void ServerConn::bevEvent(short events)
@@ -582,11 +452,14 @@ void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, s
             evutil_closesocket(sock);
             return;
         }
-        self->connections.emplace_back(self, sock, peer, socklen);
+        std::shared_ptr<ServerConn> conn(new ServerConn(self, sock, peer, socklen));
+        self->server->connections[conn.get()] = std::move(conn);
     }catch(std::exception& e){
         log_printf(connsetup, PLVL_CRIT, "Interface %s Unhandled error in accept callback: %s\n", self->name.c_str(), e.what());
         evutil_closesocket(sock);
     }
 }
+
+ServerOp::~ServerOp() {}
 
 } // namespace pvxsimpl
