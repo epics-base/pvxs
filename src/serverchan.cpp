@@ -10,7 +10,7 @@
 #include "pvxs/log.h"
 #include "serverconn.h"
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 
 // message related to client state and errors
 DEFINE_LOGGER(connsetup, "tcp.setup");
@@ -233,4 +233,4 @@ void ServerConn::handle_DestroyChan()
         bev.reset();
 }
 
-} // namespace pvxsimpl
+}} // namespace pvxs::impl

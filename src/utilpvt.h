@@ -22,7 +22,7 @@
 #include <pvxs/version.h>
 #include <pvxs/util.h>
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 using namespace  pvxs;
 
 //! in-line string builder (eg. for exception messages)
@@ -144,6 +144,6 @@ public:
 
 void logger_shutdown();
 
-} // namespace pvxsimpl
+}} // namespace pvxs::impl
 
 #endif // UTILPVT_H

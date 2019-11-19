@@ -228,7 +228,7 @@ void logger_config_env()
 
 } // namespace pvxs
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 
 void logger_shutdown()
 {
@@ -241,4 +241,4 @@ void logger_shutdown()
     // no resetting logger_once
 }
 
-} // namespace pvxsimpl
+}} // namespace pvxs::impl

@@ -18,7 +18,7 @@
 #include "utilpvt.h"
 #include "udp_collector.h"
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 
 struct ServIface;
 struct ServerConn;
@@ -145,11 +145,10 @@ struct ServIface
     static void onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw);
 };
 
-} // namespace pvxsimpl
+} // namespace impl
 
-namespace pvxs {
 namespace server {
-using namespace pvxsimpl;
+using namespace impl;
 
 struct Server::Pvt
 {

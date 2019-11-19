@@ -24,7 +24,7 @@
 #include "utilpvt.h"
 #include <pvxs/log.h>
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 
 DEFINE_LOGGER(logerr, "evloop");
 
@@ -365,4 +365,4 @@ void to_evbuf(evbuffer *buf, const Header& H, bool be)
         throw std::bad_alloc();
 }
 
-} // namespace pvxsimpl
+}} // namespace pvxs::impl

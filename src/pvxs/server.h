@@ -19,6 +19,9 @@
 #include <pvxs/util.h>
 
 namespace pvxs {
+namespace impl {
+struct ServerConn;
+}
 namespace server {
 /*
 struct Search
@@ -218,12 +221,14 @@ struct PVXS_API Source {
             inline const char* name() const { return _name; }
             //! The caller claims to be able to respond to an onCreate()
             inline void claim() { _claim = true; }
+            // TODO claim w/ redirect
         };
     private:
         typedef std::vector<Name> _names_t;
         _names_t _names;
         SockAddr _src;
         friend struct Server::Pvt;
+        friend struct impl::ServerConn;
     public:
 
         _names_t::iterator begin() { return _names.begin(); }

@@ -33,8 +33,8 @@ unsigned long version_int()
 
 void cleanup_for_valgrind()
 {
-    pvxsimpl::logger_shutdown();
-    pvxsimpl::UDPManager::cleanup();
+    impl::logger_shutdown();
+    impl::UDPManager::cleanup();
 }
 
 namespace detail {
@@ -251,7 +251,7 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
 
 }
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 namespace detail {
 
 template<>
@@ -264,5 +264,5 @@ unsigned short as_str<unsigned short>::op(const char *s)
     }
     return ret;
 }
-
+}
 }}

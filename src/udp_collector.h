@@ -16,7 +16,7 @@
 #include <pvxs/version.h>
 #include "evhelper.h"
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 struct UDPListener;
 struct UDPCollector;
 struct UDPManager;
@@ -95,6 +95,6 @@ public:
     inline void stop() { start(false); }
 };
 
-} // namespace pvxsimpl
+}} // namespace pvxs::impl
 
 #endif // UDP_COLLECTOR_H

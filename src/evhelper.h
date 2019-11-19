@@ -42,7 +42,7 @@ struct default_delete<evbuffer> {
 };
 }
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 using namespace  pvxs;
 
 //! unique_ptr which is never constructed with NULL
@@ -175,6 +175,6 @@ struct PVXS_API evsocket
     void mcast_iface(const SockAddr& iface) const;
 };
 
-} // namespace pvxsimpl
+}} // namespace pvxs::impl
 
 #endif /* EVHELPER_H */

@@ -22,7 +22,7 @@
 #include <event2/buffer.h>
 #include <pvxs/version.h>
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 
 //! view of a slice of a buffer.
 //! Don't use directly.  cf. FixedBuf<E>
@@ -464,6 +464,6 @@ void to_wire(Buf& buf, const Header& H)
 
 void to_evbuf(evbuffer *buf, const Header& H, bool be);
 
-} // namespace pvxsimpl
+}} // namespace pvxs::impl
 
 #endif // PVAPROTO_H

@@ -26,7 +26,7 @@
 typedef epicsGuard<epicsMutex> Guard;
 
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 
 DEFINE_LOGGER(logio, "udp.io");
 DEFINE_LOGGER(logsetup, "udp.setup");
@@ -433,4 +433,4 @@ bool UDPCollector::reply(const void *msg, size_t msglen) const
 
 UDPManager::Search::~Search() {}
 
-} // namespace pvxsimpl
+}} // namespace pvxs::impl

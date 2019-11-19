@@ -16,7 +16,7 @@
 #include <pvxs/log.h>
 
 namespace {
-using namespace pvxsimpl;
+using namespace pvxs::impl;
 
 void test_udp()
 {

@@ -20,7 +20,7 @@
 // at the price of maybe extra copying.
 static const size_t tcp_readahead = 0x1000;
 
-namespace pvxsimpl {
+namespace pvxs {namespace impl {
 
 // message related to client state and errors
 DEFINE_LOGGER(connsetup, "tcp.setup");
@@ -462,4 +462,4 @@ void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, s
 
 ServerOp::~ServerOp() {}
 
-} // namespace pvxsimpl
+}} // namespace pvxs::impl

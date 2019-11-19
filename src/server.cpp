@@ -29,7 +29,7 @@
 
 namespace pvxs {
 namespace server {
-using namespace pvxsimpl;
+using namespace impl;
 
 DEFINE_LOGGER(serversetup, "server.setup");
 DEFINE_LOGGER(serverio, "server.io");

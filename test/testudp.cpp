@@ -20,7 +20,7 @@
 #include <udp_collector.h>
 
 namespace {
-using namespace pvxsimpl;
+using namespace pvxs::impl;
 
 void testBeacon(bool be)
 {

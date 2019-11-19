@@ -30,7 +30,7 @@
 #include <utilpvt.h>
 #include <pvaproto.h>
 
-namespace pva = pvxsimpl;
+namespace pva = pvxs::impl;
 namespace {
 
 DEFINE_LOGGER(out, "pvxvct");

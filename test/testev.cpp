@@ -12,7 +12,7 @@
 #include <pvxs/log.h>
 #include <evhelper.h>
 
-using namespace pvxsimpl;
+using namespace pvxs::impl;
 namespace  {
 
 struct my_special_error : public std::runtime_error
