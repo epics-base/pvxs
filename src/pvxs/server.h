@@ -213,9 +213,10 @@ struct PVXS_API Source {
     //! An iteratable of names being sought
     struct Search {
         class Name {
-            const char* _name;
-            bool _claim;
+            const char* _name = nullptr;
+            bool _claim = false;
             friend struct Server::Pvt;
+            friend struct impl::ServerConn;
         public:
             //! The Channel name
             inline const char* name() const { return _name; }

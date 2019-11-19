@@ -17,6 +17,8 @@ DEFINE_LOGGER(connsetup, "tcp.setup");
 // related to low level send/recv
 DEFINE_LOGGER(connio, "tcp.io");
 
+DEFINE_LOGGER(serversetup, "server.setup");
+
 ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
                        uint32_t sid,
                        uint32_t cid,
@@ -78,6 +80,94 @@ void ServerChannelControl::close()
             ch->state = ServerChan::Destroy;
         }
     });
+}
+
+void ServerConn::handle_Search()
+{
+    const bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
+    EvInBuf M(peerBE, segBuf.get(), 16);
+
+    uint32_t searchID=0;
+    uint8_t flags=0;
+
+    from_wire(M, searchID);
+    from_wire(M, flags);
+    bool mustReply = flags&pva_search_flags::MustReply;
+    M.skip(3 + 16 + 2); // unused and replyAddr (we always and only reply to TCP peer)
+
+    bool foundtcp = false;
+    Size nproto{0};
+    from_wire(M, nproto);
+    for(size_t i=0; i<nproto.size && !foundtcp && M.good(); i++) {
+        std::string proto;
+        from_wire(M, proto);
+        foundtcp |= proto=="tcp";
+    }
+
+    uint16_t nchan=0;
+    from_wire(M, nchan);
+
+    server::Source::Search op;
+    op._src = peerAddr;
+    std::vector<std::pair<uint32_t, std::string>> nameStorage(nchan);
+    op._names.resize(nchan);
+
+    for(auto n : range(nchan)) {
+        from_wire(M, nameStorage[n].first);
+        from_wire(M, nameStorage[n].second);
+        op._names[n]._name = nameStorage[n].second.c_str();
+    }
+
+    if(!M.good())
+        throw std::runtime_error("TCP Search decode error");
+
+    {
+        auto G(iface->server->sourcesLock.lockReader());
+        for(const auto& pair : iface->server->sources) {
+            try {
+                pair.second->onSearch(op);
+            }catch(std::exception& e){
+                log_printf(serversetup, PLVL_ERR, "Unhandled error in Source::onSearch for '%s' : %s\n",
+                           pair.first.second.c_str(), e.what());
+            }
+        }
+    }
+
+    uint16_t nreply = 0;
+    for(const auto& name : op._names) {
+        if(name._claim)
+            nreply++;
+    }
+
+    if(nreply==0 && !mustReply)
+        return;
+
+    {
+        (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
+
+        EvOutBuf R(be, txBody.get());
+
+        to_wire(M, searchID);
+        to_wire(M, iface->bind_addr);
+        to_wire(M, iface->bind_addr.port());
+        to_wire(M, "tcp");
+        // "found" flag
+        to_wire(M, {uint8_t(nreply!=0 ? 1 : 0)});
+
+        to_wire(M, uint16_t(nreply));
+        for(auto i : range(op._names.size())) {
+            if(op._names[i]._claim)
+                to_wire(M, uint32_t(nameStorage[i].first));
+        }
+    }
+
+    auto tx = bufferevent_get_output(bev.get());
+    to_evbuf(tx, Header{pva_app_msg::SearchReply,
+                        pva_flags::Server,
+                        uint32_t(evbuffer_get_length(txBody.get()))},
+             be);
+    auto err = evbuffer_add_buffer(tx, txBody.get());
+    assert(!err);
 }
 
 void ServerConn::handle_CreateChan()

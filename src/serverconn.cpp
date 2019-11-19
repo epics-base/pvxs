@@ -171,9 +171,6 @@ void ServerConn::handle_AuthZ()
     // ignored (so far no auth plugin actually uses)
 }
 
-void ServerConn::handle_Search()
-{}
-
 void ServerConn::handle_GetOp()
 {}
 
