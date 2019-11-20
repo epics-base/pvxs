@@ -17,12 +17,11 @@ addons:
     - cmake
 
 install:
-  - ./.ci-local/withenv.sh ./.ci/travis-prepare.sh
+  - ./.ci/travis-prepare.sh
   - ./.ci-local/travis-libevent.sh
 
 script:
-  - ./.ci-local/travis-inspect.sh
-  - ./.ci-local/withenv.sh ./.ci/travis-build.sh
+  - ./.ci/travis-build.sh
 
 # If you need to do more during install and build,
 # add a local directory to your module and do e.g.
