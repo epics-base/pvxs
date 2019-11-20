@@ -535,7 +535,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
     // now going back to fill in header
     FixedBuf<uint8_t> H(true, searchReply.data(), 8);
-    to_wire(H, Header{pva_app_msg::SearchReply, pva_flags::Server, uint32_t(pktlen-8)});
+    to_wire(H, Header{CMD_SEARCH_RESPONSE, pva_flags::Server, uint32_t(pktlen-8)});
 
     if(!M.good() || !H.good()) {
         log_printf(serverio, PLVL_CRIT, "Logic error in Search buffer fill\n");
@@ -564,7 +564,7 @@ void Server::Pvt::doBeacons(short evt)
 
     // now going back to fill in header
     FixedBuf<uint8_t> H(true, searchReply.data(), 8);
-    to_wire(H, Header{pva_app_msg::Beacon, pva_flags::Server, uint32_t(pktlen-8)});
+    to_wire(H, Header{CMD_BEACON, pva_flags::Server, uint32_t(pktlen-8)});
 
     assert(M.good() && H.good());
 

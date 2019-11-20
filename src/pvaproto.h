@@ -404,32 +404,30 @@ struct pva_ctrl_msg {
     };
 };
 
-struct pva_app_msg {
-    enum type_t : uint8_t {
-        Beacon       = 0x00,
-        ConnValid    = 0x01,
-        Echo         = 0x02,
-        Search       = 0x03,
-        SearchReply  = 0x04,
-        AuthZ        = 0x05,
-        AclChange    = 0x06, // unused so far
-        CreateChan   = 0x07,
-        DestroyChan  = 0x08,
-        ConnValidated= 0x09,
-        GetOp        = 0x0A,
-        PutOp        = 0x0B,
-        PutGetOp     = 0x0C,
-        MonitorOp    = 0x0D,
-        ArrayOp      = 0x0E, // deprecating
-        DestroyOp    = 0x0F,
-        ProcessOp    = 0x10,
-        Introspect   = 0x11,
-        Message      = 0x12,
-        MultipleData = 0x13, // premature optimization...
-        RPCOp        = 0x14,
-        CancelOp     = 0x15,
-        OriginTag    = 0x16
-    };
+enum pva_app_msg_t : uint8_t {
+    CMD_BEACON = 0,
+    CMD_CONNECTION_VALIDATION = 1,
+    CMD_ECHO = 2,
+    CMD_SEARCH = 3,
+    CMD_SEARCH_RESPONSE = 4,
+    CMD_AUTHNZ = 5,
+    CMD_ACL_CHANGE = 6,
+    CMD_CREATE_CHANNEL = 7,
+    CMD_DESTROY_CHANNEL = 8,
+    CMD_CONNECTION_VALIDATED = 9,
+    CMD_GET = 10,
+    CMD_PUT = 11,
+    CMD_PUT_GET = 12,
+    CMD_MONITOR = 13,
+    CMD_ARRAY = 14,
+    CMD_DESTROY_REQUEST = 15,
+    CMD_PROCESS = 16,
+    CMD_GET_FIELD = 17,
+    CMD_MESSAGE = 18,
+    CMD_MULTIPLE_DATA = 19,
+    CMD_RPC = 20,
+    CMD_CANCEL_REQUEST = 21,
+    CMD_ORIGIN_TAG = 22
 };
 
 struct pva_search_flags {

@@ -64,7 +64,7 @@ struct ServerIntrospectControl : public server::Introspect
             }
 
             auto tx = bufferevent_get_output(conn->bev.get());
-            to_evbuf(tx, Header{pva_app_msg::Introspect,
+            to_evbuf(tx, Header{CMD_GET_FIELD,
                                 pva_flags::Server,
                                 uint32_t(evbuffer_get_length(conn->txBody.get()))},
                      be);
@@ -82,7 +82,7 @@ struct ServerIntrospectControl : public server::Introspect
 };
 } // namespace
 
-void ServerConn::handle_Introspect()
+void ServerConn::handle_GET_FIELD()
 {
     // aka. GetField
 

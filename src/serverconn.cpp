@@ -77,7 +77,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         auto bend = M.save();
 
         FixedBuf<uint8_t> H(be, save, 8);
-        to_wire(H, Header{pva_app_msg::ConnValid, pva_flags::Server, uint32_t(bend-bstart)});
+        to_wire(H, Header{CMD_CONNECTION_VALIDATION, pva_flags::Server, uint32_t(bend-bstart)});
 
         assert(M.good() && H.good());
 
@@ -100,7 +100,7 @@ const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
     return it->second;
 }
 
-void ServerConn::handle_Echo()
+void ServerConn::handle_ECHO()
 {
     // Client requests echo as a keep-alive check
 
@@ -108,7 +108,7 @@ void ServerConn::handle_Echo()
     uint32_t len = evbuffer_get_length(segBuf.get());
 
     const bool be = EPICS_BYTE_ORDER == EPICS_ENDIAN_BIG;
-    to_evbuf(tx, Header{pva_app_msg::Echo, pva_flags::Server, len}, be);
+    to_evbuf(tx, Header{CMD_ECHO, pva_flags::Server, len}, be);
 
     auto err = evbuffer_add_buffer(tx, segBuf.get());
     assert(!err);
@@ -129,7 +129,7 @@ void auth_complete(ServerConn *self, const Status& sts)
     }
 
     auto tx = bufferevent_get_output(self->bev.get());
-    to_evbuf(tx, Header{pva_app_msg::ConnValidated,
+    to_evbuf(tx, Header{CMD_CONNECTION_VALIDATED,
                         pva_flags::Server,
                         uint32_t(evbuffer_get_length(self->txBody.get()))},
              be);
@@ -139,7 +139,7 @@ void auth_complete(ServerConn *self, const Status& sts)
     log_printf(connsetup, PLVL_DEBUG, "%s Auth complete with %d\n", self->peerName.c_str(), sts.code);
 }
 
-void ServerConn::handle_ConnValid()
+void ServerConn::handle_CONNECTION_VALIDATION()
 {
     // Client begins (restarts?) Auth handshake
 
@@ -175,24 +175,24 @@ void ServerConn::handle_ConnValid()
     auth_complete(this, Status{Status::Ok});
 }
 
-void ServerConn::handle_AuthZ()
+void ServerConn::handle_AUTHNZ()
 {
     // ignored (so far no auth plugin actually uses)
 }
 
-void ServerConn::handle_GetOp()
+void ServerConn::handle_GET()
 {}
 
-void ServerConn::handle_PutOp()
+void ServerConn::handle_PUT()
 {}
 
-void ServerConn::handle_RPCOp()
+void ServerConn::handle_RPC()
 {}
 
-void ServerConn::handle_PutGetOp()
+void ServerConn::handle_PUT_GET()
 {}
 
-void ServerConn::handle_CancelOp()
+void ServerConn::handle_CANCEL_REQUEST()
 {
     EvInBuf M(peerBE, segBuf.get(), 16);
 
@@ -223,7 +223,7 @@ void ServerConn::handle_CancelOp()
     }
 }
 
-void ServerConn::handle_DestroyOp()
+void ServerConn::handle_DESTROY_REQUEST()
 {
     EvInBuf M(peerBE, segBuf.get(), 16);
 
@@ -243,7 +243,7 @@ void ServerConn::handle_DestroyOp()
     }
 }
 
-void ServerConn::handle_Message()
+void ServerConn::handle_MESSAGE()
 {
     EvInBuf M(peerBE, segBuf.get(), 16);
 
@@ -389,24 +389,24 @@ void ServerConn::bevRead()
                 log_printf(connio, PLVL_DEBUG, "Client %s Ignore unexpected command 0x%02x\n", peerName.c_str(), segCmd);
                 evbuffer_drain(segBuf.get(), evbuffer_get_length(segBuf.get()));
                 break;
-#define CASE(Op) case pva_app_msg::Op: handle_##Op(); break
-                CASE(Echo);
-                CASE(ConnValid);
-                CASE(Search);
-                CASE(AuthZ);
+#define CASE(OP) case CMD_##OP: handle_##OP(); break
+                CASE(ECHO);
+                CASE(CONNECTION_VALIDATION);
+                CASE(SEARCH);
+                CASE(AUTHNZ);
 
-                CASE(CreateChan);
-                CASE(DestroyChan);
+                CASE(CREATE_CHANNEL);
+                CASE(DESTROY_CHANNEL);
 
-                CASE(GetOp);
-                CASE(PutOp);
-                CASE(PutGetOp);
-                CASE(RPCOp);
-                CASE(CancelOp);
-                CASE(DestroyOp);
-                CASE(Introspect);
+                CASE(GET);
+                CASE(PUT);
+                CASE(PUT_GET);
+                CASE(RPC);
+                CASE(CANCEL_REQUEST);
+                CASE(DESTROY_REQUEST);
+                CASE(GET_FIELD);
 
-                CASE(Message);
+                CASE(MESSAGE);
 #undef CASE
             }
             // handlers may be cleared bev to force disconnect

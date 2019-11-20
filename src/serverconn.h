@@ -109,23 +109,23 @@ struct ServerConn : public std::enable_shared_from_this<ServerConn>
 
 private:
 #define CASE(Op) void handle_##Op();
-    CASE(Echo);
-    CASE(ConnValid);
-    CASE(Search);
-    CASE(AuthZ);
+    CASE(ECHO);
+    CASE(CONNECTION_VALIDATION);
+    CASE(SEARCH);
+    CASE(AUTHNZ);
 
-    CASE(CreateChan);
-    CASE(DestroyChan);
+    CASE(CREATE_CHANNEL);
+    CASE(DESTROY_CHANNEL);
 
-    CASE(GetOp);
-    CASE(PutOp);
-    CASE(PutGetOp);
-    CASE(RPCOp);
-    CASE(CancelOp);
-    CASE(DestroyOp);
-    CASE(Introspect);
+    CASE(GET);
+    CASE(PUT);
+    CASE(PUT_GET);
+    CASE(RPC);
+    CASE(CANCEL_REQUEST);
+    CASE(DESTROY_REQUEST);
+    CASE(GET_FIELD);
 
-    CASE(Message);
+    CASE(MESSAGE);
 #undef CASE
 
     void cleanup();

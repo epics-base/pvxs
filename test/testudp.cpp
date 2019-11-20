@@ -53,7 +53,7 @@ void testBeacon(bool be)
 
     uint8_t msg[46] = {
         // header
-        0xca, pva_version::server, 0, pva_app_msg::Beacon,
+        0xca, pva_version::server, 0, CMD_BEACON,
         0, 0, 0, 0, // length filled in later
         // GUID
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
@@ -135,7 +135,7 @@ void testSearch(bool be, std::initializer_list<const char*> names)
     auto pktlen = M.save()-msg.data();
 
     FixedBuf<uint8_t> H(be, msg.data(), 8);
-    to_wire(H, Header{pva_app_msg::Search, 0, uint32_t(pktlen-8)});
+    to_wire(H, Header{CMD_SEARCH, 0, uint32_t(pktlen-8)});
 
     testOk1(M.good() && H.good());
     testOk1(M.save()>=msg.data());

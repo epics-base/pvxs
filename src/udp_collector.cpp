@@ -109,7 +109,7 @@ struct UDPCollector : public UDPManager::Search,
 
         switch(cmd) {
 
-        case pva_app_msg::Search: {
+        case CMD_SEARCH: {
             uint8_t flags = 0;
             SockAddr replyAddr;
             uint16_t port = 0;
@@ -177,7 +177,7 @@ struct UDPCollector : public UDPManager::Search,
             break;
         }
 
-        case pva_app_msg::Beacon: {
+        case CMD_BEACON: {
             uint16_t port = 0;
 
             _from_wire<12>(M, &beaconMsg.guid[0], false);

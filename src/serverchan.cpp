@@ -73,7 +73,7 @@ void ServerChannelControl::close()
                 auto tx = bufferevent_get_output(conn->bev.get());
                 constexpr bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
                 EvOutBuf R(be, tx);
-                to_wire(R, Header{pva_app_msg::DestroyChan, pva_flags::Server, 8});
+                to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
                 to_wire(R, ch->sid);
                 to_wire(R, ch->cid);
             }
@@ -82,7 +82,7 @@ void ServerChannelControl::close()
     });
 }
 
-void ServerConn::handle_Search()
+void ServerConn::handle_SEARCH()
 {
     const bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
     EvInBuf M(peerBE, segBuf.get(), 16);
@@ -162,7 +162,7 @@ void ServerConn::handle_Search()
     }
 
     auto tx = bufferevent_get_output(bev.get());
-    to_evbuf(tx, Header{pva_app_msg::SearchReply,
+    to_evbuf(tx, Header{CMD_SEARCH_RESPONSE,
                         pva_flags::Server,
                         uint32_t(evbuffer_get_length(txBody.get()))},
              be);
@@ -170,7 +170,7 @@ void ServerConn::handle_Search()
     assert(!err);
 }
 
-void ServerConn::handle_CreateChan()
+void ServerConn::handle_CREATE_CHANNEL()
 {
     const bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
     const auto self = shared_from_this();
@@ -265,7 +265,7 @@ void ServerConn::handle_CreateChan()
         }
 
         auto tx = bufferevent_get_output(bev.get());
-        to_evbuf(tx, Header{pva_app_msg::CreateChan,
+        to_evbuf(tx, Header{CMD_CREATE_CHANNEL,
                             pva_flags::Server,
                             uint32_t(evbuffer_get_length(txBody.get()))},
                  be);
@@ -279,7 +279,7 @@ void ServerConn::handle_CreateChan()
     }
 }
 
-void ServerConn::handle_DestroyChan()
+void ServerConn::handle_DESTROY_CHANNEL()
 {
     EvInBuf M(peerBE, segBuf.get(), 16);
 
@@ -325,7 +325,7 @@ void ServerConn::handle_DestroyChan()
         auto tx = bufferevent_get_output(bev.get());
         constexpr bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
         EvOutBuf R(be, tx);
-        to_wire(R, Header{pva_app_msg::DestroyChan, pva_flags::Server, 8});
+        to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
         to_wire(R, sid);
         to_wire(R, cid);
     }
