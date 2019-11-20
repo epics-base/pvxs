@@ -14,6 +14,8 @@
 #include <epicsStdlib.h>
 
 #include <pvxs/util.h>
+#include <pvxs/sharedArray.h>
+#include <pvxs/data.h>
 #include "utilpvt.h"
 #include "udp_collector.h"
 
@@ -35,6 +37,76 @@ void cleanup_for_valgrind()
 {
     impl::logger_shutdown();
     impl::UDPManager::cleanup();
+}
+
+std::ostream& operator<<(std::ostream& strm, ArrayType code)
+{
+    switch(code) {
+#define CASE(CODE) case ArrayType::CODE : strm<<#CODE; break
+    CASE(Null);
+    CASE(Bool);
+    CASE(UInt8);
+    CASE(UInt16);
+    CASE(UInt32);
+    CASE(UInt64);
+    CASE(Int8);
+    CASE(Int16);
+    CASE(Int32);
+    CASE(Int64);
+    CASE(Float);
+    CASE(Double);
+    CASE(Value);
+#undef CASE
+    default:
+        strm<<"<\?\?\?>";
+    }
+    return strm;
+}
+
+std::ostream& operator<<(std::ostream& strm, const shared_array<const void>& arr)
+{
+    switch(arr.original_type()) {
+    case ArrayType::Null: strm<<"[null]"; break;
+#define CASE(CODE, Type) case ArrayType::CODE: strm<<shared_array_static_cast<const Type>(arr); break
+    CASE(Bool, bool);
+    CASE(UInt8, uint8_t);
+    CASE(UInt16, uint16_t);
+    CASE(UInt32, uint32_t);
+    CASE(UInt64, uint64_t);
+    CASE(Int8, int8_t);
+    CASE(Int16, int16_t);
+    CASE(Int32, int32_t);
+    CASE(Int64, int64_t);
+    CASE(Float, float);
+    CASE(Double, double);
+    CASE(String, std::string);
+    CASE(Value, Value);
+#undef CASE
+    }
+    return strm;
+}
+
+std::ostream& operator<<(std::ostream& strm, const shared_array<void>& arr)
+{
+    switch(arr.original_type()) {
+    case ArrayType::Null: strm<<"[null]"; break;
+#define CASE(CODE, Type) case ArrayType::CODE: strm<<shared_array_static_cast<Type>(arr); break
+    CASE(Bool, bool);
+    CASE(UInt8, uint8_t);
+    CASE(UInt16, uint16_t);
+    CASE(UInt32, uint32_t);
+    CASE(UInt64, uint64_t);
+    CASE(Int8, int8_t);
+    CASE(Int16, int16_t);
+    CASE(Int32, int32_t);
+    CASE(Int64, int64_t);
+    CASE(Float, float);
+    CASE(Double, double);
+    CASE(String, std::string);
+    CASE(Value, Value);
+#undef CASE
+    }
+    return strm;
 }
 
 namespace detail {

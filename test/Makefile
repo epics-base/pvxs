@@ -26,6 +26,14 @@ TESTPROD += testshared
 testshared_SRCS += testshared.cpp
 TESTS += testshared
 
+TESTPROD += testxcode
+testxcode_SRCS += testxcode.cpp
+TESTS += testxcode
+
+TESTPROD += testdata
+testdata_SRCS += testdata.cpp
+TESTS += testdata
+
 TESTPROD += dummyserv
 dummyserv_SRCS += dummyserv.cpp
 # not a unittest

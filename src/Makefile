@@ -37,12 +37,17 @@ INC += pvxs/version.h
 INC += pvxs/versionNum.h
 INC += pvxs/log.h
 INC += pvxs/unittest.h
+INC += pvxs/util.h
+INC += pvxs/sharedArray.h
+INC += pvxs/data.h
+INC += pvxs/server.h
 
 LIBRARY = pvxs
 
 LIB_SRCS += log.cpp
 LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
+LIB_SRCS += data.cpp
 LIB_SRCS += evhelper.cpp
 LIB_SRCS += udp_collector.cpp
 LIB_SRCS += server.cpp

@@ -97,7 +97,7 @@ testCase testEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS& r
     ret<<") == "<<sRHS<<" (";
     test_print<RHS>::op(ret, rhs);
     ret<<") ";
-    return std::move(ret);
+    return ret;
 }
 
 template<typename LHS, typename RHS>
@@ -109,7 +109,7 @@ testCase testNotEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS
     ret<<") != "<<sRHS<<" (";
     test_print<RHS>::op(ret, rhs);
     ret<<") ";
-    return std::move(ret);
+    return ret;
 }
 
 } // namespace detail
@@ -133,5 +133,6 @@ testCase testThrows(FN fn)
 
 #define testEq(LHS, RHS) ::pvxs::detail::testEq(#LHS, LHS, #RHS, RHS)
 #define testNotEq(LHS, RHS) ::pvxs::detail::testNotEq(#LHS, LHS, #RHS, RHS)
+#define testShow() ::pvxs::testCase()
 
 #endif // PVXS_UNITTEST_H

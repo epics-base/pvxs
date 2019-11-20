@@ -43,7 +43,6 @@ struct default_delete<evbuffer> {
 }
 
 namespace pvxs {namespace impl {
-using namespace  pvxs;
 
 //! unique_ptr which is never constructed with NULL
 template<typename T>

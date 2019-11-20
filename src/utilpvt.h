@@ -23,7 +23,6 @@
 #include <pvxs/util.h>
 
 namespace pvxs {namespace impl {
-using namespace  pvxs;
 
 //! in-line string builder (eg. for exception messages)
 //! eg. @code throw std::runtime_error(SB()<<"Some message"<<42); @endcode
@@ -32,7 +31,7 @@ struct SB {
     SB() {}
     operator std::string() const { return strm.str(); }
     template<typename T>
-    SB& operator<<(T i) { strm<<i; return *this; }
+    SB& operator<<(const T& i) { strm<<i; return *this; }
 };
 
 namespace detail {
@@ -144,6 +143,8 @@ public:
 
 void logger_shutdown();
 
-}} // namespace pvxs::impl
+} // namespace impl
+using namespace impl;
+} // namespace pvxs
 
 #endif // UTILPVT_H
