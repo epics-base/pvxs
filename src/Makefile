@@ -21,7 +21,7 @@ USR_CXXFLAGS += -fvisibility=hidden -fvisibility-inlines-hidden
 #USR_LDFLAGS_Linux += -Wl,--compress-debug-sections=zlib
 
 # fault on any undefined symbols (eg. from missing LIB_SYS_LIBS)
-USR_LDFLAGS += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
+USR_LDFLAGS_Linux += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
 
 endif
 
