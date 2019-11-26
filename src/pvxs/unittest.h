@@ -13,6 +13,7 @@
  */
 
 #include <sstream>
+#include <functional>
 
 #include <pvxs/version.h>
 #include <pvxs/util.h>
@@ -40,6 +41,11 @@ public:
     ~testCase();
 
     explicit operator bool() const { return result==Pass; }
+
+    testCase& setPass(bool v) {
+        result = v ? Pass : Fail;
+        return *this;
+    }
 
     template<typename T>
     inline testCase& operator<<(const T& v) {
@@ -98,6 +104,21 @@ testCase testNotEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS
 }
 
 } // namespace detail
+
+template<class Exception, typename FN>
+testCase testThrows(FN fn)
+{
+    testCase ret(false);
+    try {
+        fn();
+        ret<<"Unexpected success - ";
+    }catch(Exception& e){
+        ret.setPass(true)<<"Expected exception \""<<e.what()<<"\" - ";
+    }catch(std::exception& e){
+        ret<<"Unexpected exception "<<typeid(e).name()<<" \""<<e.what()<<"\" - ";
+    }
+    return ret;
+}
 
 } // namespace pvxs
 
