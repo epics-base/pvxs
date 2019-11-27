@@ -47,12 +47,19 @@ testCase& testCase::operator=(testCase&& o) noexcept
 
 testCase::~testCase()
 {
-    if(result==Nothing) {
-        // do nothing!
-    } else if(result==Diag) {
-        testDiag("%s", msg.str().c_str());
-    } else {
-        testOk(result==Pass, "%s", msg.str().c_str());
+    if(result==Nothing)
+        return;
+
+    std::istringstream strm(msg.str());
+
+    for(std::string line; std::getline(strm, line);) {
+        if(result==Diag) {
+            testDiag("%s", line.c_str());
+
+        } else {
+            testOk(result==Pass, "%s", line.c_str());
+            result=Diag;
+        }
     }
 }
 
