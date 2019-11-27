@@ -337,6 +337,7 @@ bool EvOutBuf::refill(size_t more)
 bool EvInBuf::refill(size_t more)
 {
     if(err) return false;
+    size_t len = size(); // unconsumed before request
 
     if(base && evbuffer_drain(backing, pos-base))
         throw std::bad_alloc();
@@ -344,8 +345,13 @@ bool EvInBuf::refill(size_t more)
     limit = base = pos = nullptr;
 
     if(more) {
+        // ensure new segment contains at least the requested size (one element)
+        // (we hope this is mostly a no-op)
+        (void)evbuffer_pullup(backing, len+more);
+
         evbuffer_iovec vec;
 
+        // peek at the next segment
         auto n = evbuffer_peek(backing, -1, nullptr, &vec, 1);
         if(n<=0) { // current (2.1) impl never returns negative
             return false;
@@ -353,6 +359,10 @@ bool EvInBuf::refill(size_t more)
 
         base = pos = (uint8_t*)vec.iov_base;
         limit = base+vec.iov_len;
+
+        if(size() < len+more) {
+            return false; // pullup didn't work.
+        }
     }
     return true;
 }

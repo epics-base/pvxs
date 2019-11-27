@@ -59,6 +59,7 @@ public:
             pos = limit;
             i -= size();
         } while(static_cast<Subclass*>(this)->refill(i));
+        fault();
     }
 
     EPICS_ALWAYS_INLINE bool empty() const { return limit==pos; }
@@ -305,7 +306,7 @@ inline void _to_wire(Buf& buf, const uint8_t *mem, bool reverse)
  * @param buf output buffer.  buf[0] through buf[sizeof(T)-1] must be valid.
  * @param val input variable
  */
-template<typename T, typename Buf, typename std::enable_if<std::is_scalar<T>::value, int>::type =0>
+template<typename T, typename Buf, typename std::enable_if<sizeof(T)>=2 && std::is_scalar<T>{} && !std::is_pointer<T>{}, int>::type =0>
 inline void to_wire(Buf& buf, const T& val)
 {
     union {
@@ -314,6 +315,16 @@ inline void to_wire(Buf& buf, const T& val)
     } pun;
     pun.v = val;
     _to_wire<sizeof(T)>(buf, pun.b, buf.be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG));
+}
+
+template<typename T, typename Buf, typename std::enable_if<sizeof(T)==1 && std::is_scalar<T>{}, int>::type =0>
+inline void to_wire(Buf& buf, const T& val)
+{
+    if(!buf.ensure(1)) {
+        buf.fault();
+    } else {
+        buf.push(val);
+    }
 }
 
 template<typename Buf>
@@ -347,6 +358,12 @@ void to_wire(Buf& buf, const char *s)
             buf.push(s[i]);
     }
 
+}
+
+template<typename Buf>
+inline void to_wire(Buf& buf, const std::string& s)
+{
+    to_wire(buf, s.c_str());
 }
 
 template<typename Buf>

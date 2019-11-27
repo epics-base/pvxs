@@ -13,7 +13,9 @@
  */
 
 #include <sstream>
+#include <vector>
 #include <functional>
+#include <type_traits>
 
 #include <pvxs/version.h>
 #include <pvxs/util.h>
@@ -57,7 +59,7 @@ public:
 namespace detail {
 
 // control how testEq() and testNotEq() print things
-template<typename T>
+template<typename T, typename Enable=void>
 struct test_print {
     template<class C>
     static inline void op(C& strm, const T& v) {
@@ -76,6 +78,13 @@ struct test_print<const char*> {
     template<class C>
     static inline void op(C& strm, const char* v) {
         strm<<'"'<<escape(v)<<'"';
+    }
+};
+template<typename E>
+struct test_print<std::vector<E>, typename std::enable_if<sizeof(E)==1>::type> {
+    template<class C>
+    static inline void op(C& strm, const std::vector<E>& v) {
+        strm<<'"'<<escape((const char*)v.data(), v.size())<<'"';
     }
 };
 

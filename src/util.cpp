@@ -39,13 +39,18 @@ void cleanup_for_valgrind()
 
 namespace detail {
 
+Escaper::Escaper(const char* v)
+    :val(v)
+    ,count(v ? strlen(v) : 0)
+{}
+
 std::ostream& operator<<(std::ostream& strm, const Escaper& esc)
 {
     const char *s = esc.val;
     if(!s) {
         strm<<"<NULL>";
     } else {
-        for(; *s; s++) {
+        for(size_t n=0; n<esc.count; n++,s++) {
             char c = *s, next;
             switch(c) {
             case '\a': next = 'a'; break;

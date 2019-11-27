@@ -26,9 +26,11 @@ namespace detail {
 class Escaper
 {
     const char* val;
+    size_t count;
     friend std::ostream& operator<<(std::ostream& strm, const Escaper& esc);
 public:
-    constexpr explicit Escaper(const char* v) :val(v) {}
+    PVXS_API explicit Escaper(const char* v);
+    constexpr explicit Escaper(const char* v, size_t l) :val(v),count(l) {}
 };
 
 PVXS_API
@@ -42,7 +44,7 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc);
 //!   std::cout<<pvxs::escape(blah);
 //! @endcode
 inline detail::Escaper escape(const std::string& s) {
-    return detail::Escaper(s.c_str());
+    return detail::Escaper(s.c_str(), s.size());
 }
 //! Print string to output string with non-printable charactors escaped.
 //! @code
@@ -50,6 +52,13 @@ inline detail::Escaper escape(const std::string& s) {
 //! @endcode
 inline detail::Escaper escape(const char* s) {
     return detail::Escaper(s);
+}
+//! Print string to output string with non-printable charactors escaped.
+//! @code
+//!   std::cout<<pvxs::escape("this \"is a test\"", 6); // prints 'this \"'
+//! @endcode
+inline detail::Escaper escape(const char* s,size_t n) {
+    return detail::Escaper(s,n);
 }
 
 //! representation of a network address
