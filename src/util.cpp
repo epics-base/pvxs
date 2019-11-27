@@ -66,7 +66,7 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc)
                 if(isprint(c)) {
                     strm.put(c);
                 } else {
-                    strm<<"\\x"<<std::hex<<std::setw(2)<<std::setfill('0')<<unsigned(c);
+                    strm<<"\\x"<<std::hex<<std::setw(2)<<std::setfill('0')<<unsigned(c&0xff);
                 }
                 continue;
             }
