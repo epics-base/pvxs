@@ -26,6 +26,10 @@ TESTPROD += testshared
 testshared_SRCS += testshared.cpp
 TESTS += testshared
 
+TESTPROD += testbitmask
+testbitmask_SRCS += testbitmask.cpp
+TESTS += testbitmask
+
 TESTPROD += testxcode
 testxcode_SRCS += testxcode.cpp
 TESTS += testxcode
