@@ -11,6 +11,7 @@
 
 #include <pvxs/data.h>
 #include <pvxs/sharedArray.h>
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace impl {
@@ -71,7 +72,7 @@ struct FieldStorage {
      * String stored as std::string
      * Compound (Struct, Union, Any) stored as shared_ptr<FieldStorage>
      */
-    std::aligned_union<8,
+    aligned_union<8,
                        double, // Real
                        uint64_t, // Bool, Integer
                        std::string, // String

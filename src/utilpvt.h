@@ -16,6 +16,7 @@
 #include <memory>
 #include <string>
 #include <sstream>
+#include <type_traits>
 
 #include <compilerDependencies.h>
 
@@ -142,6 +143,40 @@ public:
 #undef RWLOCK_RUNLOCK
 
 void logger_shutdown();
+
+// std::max() isn't constexpr until c++14 :(
+constexpr size_t cmax(size_t A, size_t B) {
+    return A>B ? A : B;
+}
+
+// gcc 4.8 has aligned_storage but not aligned_union
+#if GCC_VERSION && GCC_VERSION<VERSION_INT(4,9,0,0)
+
+template<typename... Types>
+struct max_sizeof {
+    static const size_t align = 0;
+    static const size_t size = 0;
+};
+
+template<typename Head, typename... Types>
+struct max_sizeof<Head, Types...> {
+    static const size_t align = cmax(alignof(Head), max_sizeof<Types...>::align);
+    static const size_t size = cmax(sizeof(Head), max_sizeof<Types...>::size);
+};
+
+template <size_t Len, typename... Types>
+struct aligned_union
+{
+    using _info = max_sizeof<Types...>;
+
+    typedef typename std::aligned_storage<cmax(Len, _info::size), _info::align>::type type;
+};
+
+#else
+
+template <size_t Len, typename... Types>
+using aligned_union = std::aligned_union<Len, Types...>;
+#endif
 
 } // namespace impl
 using namespace impl;
