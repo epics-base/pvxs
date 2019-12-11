@@ -53,6 +53,7 @@ inline T lexical_cast(const std::string& s)
     return idetail::as_str<T>::op(s.c_str());
 }
 
+void indent(std::ostream& strm, unsigned level);
 
 namespace idetail {
 template <typename I>

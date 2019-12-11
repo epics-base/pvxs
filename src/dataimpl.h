@@ -48,16 +48,6 @@ struct FieldDesc {
     uint16_t num_index=0;
     TypeCode code{TypeCode::Null};
 
-    template<typename T>
-    FieldDesc* operator[](T key) {
-        auto it = mlookup.find(key);
-        if(it!=mlookup.end()) {
-            return this+it.second;
-        } else {
-            return nullptr;
-        }
-    }
-
     // number of FieldDesc nodes which describe this node.  Inclusive.  always size()>=1
     inline size_t size() const { return num_index; }
 };

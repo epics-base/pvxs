@@ -342,4 +342,12 @@ unsigned short as_str<unsigned short>::op(const char *s)
     return ret;
 }
 }
+
+void indent(std::ostream& strm, unsigned level) {
+    for(auto i : range(level)) {
+        (void)i;
+        strm<<"    ";
+    }
+}
+
 }}

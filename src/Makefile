@@ -49,6 +49,7 @@ LIB_SRCS += log.cpp
 LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
 LIB_SRCS += bitmask.cpp
+LIB_SRCS += type.cpp
 LIB_SRCS += data.cpp
 LIB_SRCS += dataencode.cpp
 LIB_SRCS += evhelper.cpp
