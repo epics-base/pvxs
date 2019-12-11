@@ -45,14 +45,14 @@ struct DummySource : public Source
 
     // Source interface
 public:
-    virtual void onSearch(Search &op) override final
+    virtual void onSearch(Search &search) override final
     {
-        for(auto& name : op) {
-            if(names.find(name.name())!=names.end()) {
-                log_printf(dummy, PLVL_INFO, "Claiming '%s'\n", name.name());
-                name.claim();
+        for(auto& op : search) {
+            if(names.find(op.name())!=names.end()) {
+                log_printf(dummy, PLVL_INFO, "Claiming '%s'\n", op.name());
+                op.claim();
             } else {
-                log_printf(dummy, PLVL_DEBUG, "Ignoring '%s'\n", name.name());
+                log_printf(dummy, PLVL_DEBUG, "Ignoring '%s'\n", op.name());
             }
         }
     }
