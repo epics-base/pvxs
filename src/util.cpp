@@ -329,7 +329,7 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
 }
 
 namespace pvxs {namespace impl {
-namespace detail {
+namespace idetail {
 
 template<>
 unsigned short as_str<unsigned short>::op(const char *s)

@@ -35,26 +35,26 @@ struct SB {
     SB& operator<<(const T& i) { strm<<i; return *this; }
 };
 
-namespace detail {
+namespace idetail {
 // specific specializations in util.cpp
 template <typename T>
 struct as_str {PVXS_API static T op(const char *s);};
-} // namespace detail
+} // namespace idetail
 
 template <typename T>
 inline T lexical_cast(const char *s)
 {
-    return detail::as_str<T>::op(s);
+    return idetail::as_str<T>::op(s);
 }
 
 template <typename T>
 inline T lexical_cast(const std::string& s)
 {
-    return detail::as_str<T>::op(s.c_str());
+    return idetail::as_str<T>::op(s.c_str());
 }
 
 
-namespace detail {
+namespace idetail {
 template <typename I>
 struct Range {
     I a, b;
@@ -79,13 +79,13 @@ struct Range {
     EPICS_ALWAYS_INLINE iterator end() const { return iterator{b}; }
     EPICS_ALWAYS_INLINE iterator cend() const { return end(); }
 };
-} // namespace detail
+} // namespace idetail
 
 template<typename I>
-constexpr detail::Range<I> range(I end) { return detail::Range<I>{I(0), end}; }
+constexpr idetail::Range<I> range(I end) { return idetail::Range<I>{I(0), end}; }
 
 template<typename I>
-constexpr detail::Range<I> range(I begin, I end) { return detail::Range<I>{begin, end}; }
+constexpr idetail::Range<I> range(I begin, I end) { return idetail::Range<I>{begin, end}; }
 
 #ifdef _WIN32
 #  define RWLOCK_TYPE SRWLOCK
