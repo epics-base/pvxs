@@ -11,6 +11,7 @@
 
 #include <pvxs/data.h>
 #include <pvxs/sharedArray.h>
+#include <pvxs/bitmask.h>
 #include "utilpvt.h"
 
 namespace pvxs {
@@ -96,7 +97,7 @@ struct FieldStorage {
 };
 
 struct StructTop {
-    std::vector<bool> valid;
+    BitMask valid;
     std::shared_ptr<const FieldDesc> desc;
     std::vector<FieldStorage> members;
 };

@@ -413,7 +413,7 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
     auto top = std::make_shared<StructTop>();
 
     top->desc = desc;
-    top->valid.resize(desc->next_offset-desc->offset, false);
+    top->valid.resize(desc->next_offset-desc->offset);
     top->members.resize(desc->next_offset-desc->offset);
     {
         auto& root = top->members[0];
