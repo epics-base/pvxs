@@ -25,8 +25,7 @@
 namespace pvxs {
 namespace impl {
 
-template<typename Buf>
-void to_wire(Buf& buf, const FieldDesc* cur)
+void to_wire(Buffer& buf, const FieldDesc* cur)
 {
     // we assume FieldDesc* is valid (checked on creation)
     to_wire(buf, cur->code.code);
@@ -52,15 +51,7 @@ void to_wire(Buf& buf, const FieldDesc* cur)
     }
 }
 
-typedef std::map<uint16_t, std::vector<FieldDesc>> TypeStore;
-
-struct TypeDeserContext {
-    std::vector<FieldDesc>& descs;
-    TypeStore& cache;
-};
-
-template<typename Buf>
-void from_wire(Buf& buf, TypeDeserContext& ctxt, unsigned depth=0)
+void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth)
 {
     if(!buf.good() || depth>20) {
         buf.fault();

@@ -9,7 +9,8 @@
 
 #include <pvxs/util.h>
 #include <pvxs/unittest.h>
-#include "dataencode.h"
+#include "dataimpl.h"
+#include "pvaproto.h"
 
 namespace {
 using namespace pvxs;
@@ -52,7 +53,7 @@ void testDecode1()
     TypeStore cache;
 
     {
-        FixedBuf<uint8_t> buf(true, msg);
+        FixedBuf buf(true, msg);
         TypeDeserContext ctxt{descs, cache};
         from_wire(buf, ctxt);
         if(testOk1(buf.good()))
@@ -118,7 +119,7 @@ void testXCodeNTScalar()
     std::vector<FieldDesc> descs;
     TypeStore cache;
     {
-        FixedBuf<uint8_t> buf(true, msg);
+        FixedBuf buf(true, msg);
         TypeDeserContext ctxt{descs, cache};
         from_wire(buf, ctxt);
         if(testOk1(buf.good()))
@@ -244,7 +245,7 @@ void testXCodeNTNDArray()
     std::vector<FieldDesc> descs;
     TypeStore cache;
     {
-        FixedBuf<uint8_t> buf(true, msg);
+        FixedBuf buf(true, msg);
         TypeDeserContext ctxt{descs, cache};
         from_wire(buf, ctxt);
         if(testOk1(buf.good()))

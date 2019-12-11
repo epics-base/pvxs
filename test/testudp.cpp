@@ -134,7 +134,7 @@ void testSearch(bool be, std::initializer_list<const char*> names)
 
     auto pktlen = M.save()-msg.data();
 
-    FixedBuf<uint8_t> H(be, msg.data(), 8);
+    FixedBuf H(be, msg.data(), 8);
     to_wire(H, Header{CMD_SEARCH, 0, uint32_t(pktlen-8)});
 
     testOk1(M.good() && H.good());

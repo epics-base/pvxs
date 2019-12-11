@@ -92,7 +92,7 @@ struct UDPCollector : public UDPManager::Search,
 
         bool be = buf[2]&pva_flags::MSB;
 
-        FixedBuf<uint8_t> M(be, buf.data(), nrx);
+        FixedBuf M(be, buf.data(), nrx);
 
         uint8_t cmd = M[3];
 

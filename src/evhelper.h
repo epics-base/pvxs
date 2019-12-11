@@ -82,56 +82,11 @@ typedef owned_ptr<evconnlistener> evlisten;
 typedef owned_ptr<bufferevent> evbufferevent;
 typedef owned_ptr<evbuffer> evbuf;
 
-template <typename Buf>
-void to_wire(Buf& buf, const SockAddr& val)
-{
-    if(!buf.ensure(16)) {
-        buf.fault();
-        return;
+PVXS_API
+void to_wire(Buffer& buf, const SockAddr& val);
 
-    } else if(val.family()==AF_INET) {
-        for(unsigned i=0; i<10; i++)
-            buf[i]=0;
-        buf[10] = buf[11] = 0xff;
-
-        memcpy(buf.save()+12, &val->in.sin_addr.s_addr, 4);
-
-    } else if(val.family()==AF_INET6) {
-        static_assert (sizeof(val->in6.sin6_addr)==16, "");
-        memcpy(buf.save(), &val->in6.sin6_addr, 16);
-    }
-    buf._skip(16);
-}
-
-template <typename Buf>
-void from_wire(Buf &buf, SockAddr& val)
-{
-    if(!buf.ensure(16)) {
-        buf.fault();
-        return;
-    }
-
-    // win32 lacks IN6_IS_ADDR_V4MAPPED()
-    bool ismapped = true;
-    for(unsigned i=0u; i<10; i++)
-        ismapped &= buf[i]==0;
-    ismapped &= buf[10]==0xff;
-    ismapped &= buf[11]==0xff;
-
-    if(ismapped) {
-        val->in = {};
-        val->in.sin_family = AF_INET;
-        memcpy(&val->in.sin_addr.s_addr, buf.save()+12, 4);
-
-    } else {
-        val->in6 = {};
-        val->in6.sin6_family = AF_INET6;
-
-        static_assert (sizeof(val->in6.sin6_addr)==16, "");
-        memcpy(&val->in6.sin6_addr, buf.save(), 16);
-    }
-    buf._skip(16);
-}
+PVXS_API
+void from_wire(Buffer &buf, SockAddr& val);
 
 struct PVXS_API evsocket
 {

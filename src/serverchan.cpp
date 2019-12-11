@@ -152,7 +152,7 @@ void ServerConn::handle_SEARCH()
         to_wire(M, iface->bind_addr.port());
         to_wire(M, "tcp");
         // "found" flag
-        to_wire(M, {uint8_t(nreply!=0 ? 1 : 0)});
+        to_wire(M, uint8_t(nreply!=0 ? 1 : 0));
 
         to_wire(M, uint16_t(nreply));
         for(auto i : range(op._names.size())) {

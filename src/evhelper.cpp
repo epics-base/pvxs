@@ -290,6 +290,61 @@ void evsocket::mcast_iface(const SockAddr& iface) const
 
     // IPV6_MULTICAST_IF
 }
+void to_wire(Buffer& buf, const SockAddr& val)
+{
+    if(!buf.ensure(16)) {
+        buf.fault();
+        return;
+
+    } else if(val.family()==AF_INET) {
+        for(unsigned i=0; i<10; i++)
+            buf[i]=0;
+        buf[10] = buf[11] = 0xff;
+
+        memcpy(buf.save()+12, &val->in.sin_addr.s_addr, 4);
+
+    } else if(val.family()==AF_INET6) {
+        static_assert (sizeof(val->in6.sin6_addr)==16, "");
+        memcpy(buf.save(), &val->in6.sin6_addr, 16);
+    }
+    buf._skip(16);
+}
+
+void from_wire(Buffer &buf, SockAddr& val)
+{
+    if(!buf.ensure(16)) {
+        buf.fault();
+        return;
+    }
+
+    // win32 lacks IN6_IS_ADDR_V4MAPPED()
+    bool ismapped = true;
+    for(unsigned i=0u; i<10; i++)
+        ismapped &= buf[i]==0;
+    ismapped &= buf[10]==0xff;
+    ismapped &= buf[11]==0xff;
+
+    if(ismapped) {
+        val->in = {};
+        val->in.sin_family = AF_INET;
+        memcpy(&val->in.sin_addr.s_addr, buf.save()+12, 4);
+
+    } else {
+        val->in6 = {};
+        val->in6.sin6_family = AF_INET6;
+
+        static_assert (sizeof(val->in6.sin6_addr)==16, "");
+        memcpy(&val->in6.sin6_addr, buf.save(), 16);
+    }
+    buf._skip(16);
+}
+
+
+bool Buffer::refill(size_t more) { return false; }
+
+FixedBuf::~FixedBuf() {}
+
+VectorOutBuf::~VectorOutBuf() {}
 
 bool VectorOutBuf::refill(size_t more) {
     assert(pos <= limit);
@@ -308,6 +363,8 @@ bool VectorOutBuf::refill(size_t more) {
     limit = backing.data()+backing.size();
     return true;
 }
+
+EvOutBuf::~EvOutBuf() { refill(0); }
 
 bool EvOutBuf::refill(size_t more)
 {
@@ -333,6 +390,8 @@ bool EvOutBuf::refill(size_t more)
     }
     return true;
 }
+
+EvInBuf::~EvInBuf() { refill(0); }
 
 bool EvInBuf::refill(size_t more)
 {

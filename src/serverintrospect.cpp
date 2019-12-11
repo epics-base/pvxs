@@ -8,7 +8,6 @@
 
 #include <pvxs/log.h>
 #include "dataimpl.h"
-#include "dataencode.h"
 #include "serverconn.h"
 
 namespace pvxs { namespace impl {

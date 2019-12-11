@@ -76,7 +76,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         to_wire(M, "ca");
         auto bend = M.save();
 
-        FixedBuf<uint8_t> H(be, save, 8);
+        FixedBuf H(be, save, 8);
         to_wire(H, Header{CMD_CONNECTION_VALIDATION, pva_flags::Server, uint32_t(bend-bstart)});
 
         assert(M.good() && H.good());
@@ -339,7 +339,7 @@ void ServerConn::bevRead()
         peerBE = header[2]&pva_flags::MSB;
 
         // a bit verbose :P
-        FixedBuf<uint8_t> L(peerBE, header+4, 4);
+        FixedBuf L(peerBE, header+4, 4);
         uint32_t len = 0;
         from_wire(L, len);
         assert(L.good());

@@ -16,6 +16,7 @@
 
 namespace pvxs {
 namespace impl {
+struct Buffer;
 
 /** Describes a single field, leaf or otherwise, in a nested structure.
  *
@@ -60,6 +61,19 @@ struct FieldDesc {
     // number of FieldDesc nodes which describe this node.  Inclusive.  always size()>=1
     inline size_t size() const { return num_index; }
 };
+
+PVXS_API
+void to_wire(Buffer& buf, const FieldDesc* cur);
+
+typedef std::map<uint16_t, std::vector<FieldDesc>> TypeStore;
+
+struct TypeDeserContext {
+    std::vector<FieldDesc>& descs;
+    TypeStore& cache;
+};
+
+PVXS_API
+void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth=0);
 
 struct StructTop;
 

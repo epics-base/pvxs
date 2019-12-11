@@ -103,9 +103,9 @@ void test_from_wire()
     testDiag("Enter %s", __func__);
 
     {
-        uint32_t val;
-        const uint8_t buf[] = {0x12, 0x34, 0x56, 0x78, 0xff, 0xff};
-        FixedBuf<const uint8_t> pkt(true, buf);
+        uint32_t val=0;
+        uint8_t buf[] = {0x12, 0x34, 0x56, 0x78, 0xff, 0xff};
+        FixedBuf pkt(true, buf);
 
         from_wire(pkt, val);
         testEq(pkt.size(), 2u);
@@ -114,9 +114,9 @@ void test_from_wire()
     }
 
     {
-        uint32_t val;
-        const uint8_t buf[] = {0x78, 0x56, 0x34, 0x12, 0xff, 0xff};
-        FixedBuf<const uint8_t> pkt(false, buf);
+        uint32_t val=0;
+        uint8_t buf[] = {0x78, 0x56, 0x34, 0x12, 0xff, 0xff};
+        FixedBuf pkt(false, buf);
 
         from_wire(pkt, val);
         testEq(pkt.size(), 2u);
@@ -126,8 +126,8 @@ void test_from_wire()
 
     {
         uint32_t val = 0;
-        const uint8_t buf[] = {0x12, 0x34, 0x56, 0x78, 0xff, 0xff, 0xff, 0xff};
-        FixedBuf<const uint8_t> pkt(true, buf, 2);
+        uint8_t buf[] = {0x12, 0x34, 0x56, 0x78, 0xff, 0xff, 0xff, 0xff};
+        FixedBuf pkt(true, buf, 2);
 
         from_wire(pkt, val);
         testEq(pkt.size(), 2u);
@@ -137,8 +137,8 @@ void test_from_wire()
 
     {
         SockAddr val;
-        const uint8_t buf[] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff, 0x7f,0,0,1, 0xde, 0xad, 0xbe, 0xef};
-        FixedBuf<const uint8_t> pkt(true, buf);
+        uint8_t buf[] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff, 0x7f,0,0,1, 0xde, 0xad, 0xbe, 0xef};
+        FixedBuf pkt(true, buf);
 
         from_wire(pkt, val);
         testEq(pkt.size(), 4u);
@@ -155,7 +155,7 @@ void test_to_wire()
     {
         const uint32_t val = 0xdeadbeef;
         uint8_t buf[8];
-        FixedBuf<uint8_t> pkt(true, buf);
+        FixedBuf pkt(true, buf);
 
         to_wire(pkt, val);
         testEq(pkt.size(), 4u);
@@ -167,7 +167,7 @@ void test_to_wire()
     {
         const uint32_t val = 0xdeadbeef;
         uint8_t buf[8];
-        FixedBuf<uint8_t> pkt(false, buf);
+        FixedBuf pkt(false, buf);
 
         to_wire(pkt, val);
         testEq(pkt.size(), 4u);
@@ -179,7 +179,7 @@ void test_to_wire()
     {
         const SockAddr val(SockAddr::loopback(AF_INET));
         uint8_t buf[16+4];
-        FixedBuf<uint8_t> pkt(true, buf);
+        FixedBuf pkt(true, buf);
 
         to_wire(pkt, val);
         testEq(pkt.size(), 4u);
@@ -192,7 +192,7 @@ void test_to_wire()
     {
         const uint32_t val = 0xdeadbeef;
         uint8_t buf[8] = {0,0,0,0,0,0,0,0};
-        FixedBuf<uint8_t> pkt(true, buf, 2);
+        FixedBuf pkt(true, buf, 2);
 
         to_wire(pkt, val);
         testEq(pkt.size(), 2u);

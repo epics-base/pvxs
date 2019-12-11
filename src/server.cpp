@@ -524,7 +524,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     to_wire(M, uint16_t(effective.tcp_port));
     to_wire(M, "tcp");
     // "found" flag
-    to_wire(M, {uint8_t(nreply!=0 ? 1 : 0)});
+    to_wire(M, uint8_t(nreply!=0 ? 1 : 0));
 
     to_wire(M, uint16_t(nreply));
     for(auto i : range(msg.names.size())) {
@@ -534,7 +534,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     auto pktlen = M.save()-searchReply.data();
 
     // now going back to fill in header
-    FixedBuf<uint8_t> H(true, searchReply.data(), 8);
+    FixedBuf H(true, searchReply.data(), 8);
     to_wire(H, Header{CMD_SEARCH_RESPONSE, pva_flags::Server, uint32_t(pktlen-8)});
 
     if(!M.good() || !H.good()) {
@@ -558,12 +558,12 @@ void Server::Pvt::doBeacons(short evt)
     to_wire(M, uint16_t(effective.tcp_port));
     to_wire(M, "tcp");
     // "NULL" serverStatus
-    to_wire(M, {0xff});
+    to_wire(M, uint8_t(0xff));
 
     auto pktlen = M.save()-searchReply.data();
 
     // now going back to fill in header
-    FixedBuf<uint8_t> H(true, searchReply.data(), 8);
+    FixedBuf H(true, searchReply.data(), 8);
     to_wire(H, Header{CMD_BEACON, pva_flags::Server, uint32_t(pktlen-8)});
 
     assert(M.good() && H.good());

@@ -50,6 +50,7 @@ LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
 LIB_SRCS += bitmask.cpp
 LIB_SRCS += data.cpp
+LIB_SRCS += dataencode.cpp
 LIB_SRCS += evhelper.cpp
 LIB_SRCS += udp_collector.cpp
 LIB_SRCS += server.cpp
