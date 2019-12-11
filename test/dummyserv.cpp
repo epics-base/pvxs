@@ -13,6 +13,7 @@
 
 #include <pvxs/server.h>
 #include <pvxs/data.h>
+#include <pvxs/nt.h>
 #include <pvxs/log.h>
 
 
@@ -22,10 +23,7 @@ using namespace pvxs::server;
 
 DEFINE_LOGGER(dummy,"dummyserv");
 
-const Value mytype = TypeDef(TypeCode::Struct)
-        .begin()
-        .insert("value", TypeCode::Float64)
-        .create();
+const Value mytype = nt::NTScalar{TypeCode::Int32}.build().create();
 
 struct DummyHandler : public Handler
 {

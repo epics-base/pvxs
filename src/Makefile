@@ -41,6 +41,7 @@ INC += pvxs/util.h
 INC += pvxs/bitmask.h
 INC += pvxs/sharedArray.h
 INC += pvxs/data.h
+INC += pvxs/nt.h
 INC += pvxs/server.h
 
 LIBRARY = pvxs
@@ -52,6 +53,7 @@ LIB_SRCS += bitmask.cpp
 LIB_SRCS += type.cpp
 LIB_SRCS += data.cpp
 LIB_SRCS += dataencode.cpp
+LIB_SRCS += nt.cpp
 LIB_SRCS += evhelper.cpp
 LIB_SRCS += udp_collector.cpp
 LIB_SRCS += server.cpp
