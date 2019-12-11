@@ -24,63 +24,6 @@ namespace impl {
 struct ServerConn;
 }
 namespace server {
-/*
-struct Search
-{
-    struct Op {
-        const char *name;
-        uint32_t id;
-
-        void claim() const;
-    };
-
-    osiSockAddr peer, reply;
-
-    const Op* begin();
-    const Op* end();
-};
-
-struct Create {};
-
-struct Handler
-{
-    struct Op {
-        osiSockAddr peer;
-        // credentials
-        void onCancel(std::function<void()>&&);
-    };
-    template<typename Req, typename Resp>
-    struct DataOp : public Op {
-        Req req;
-        void ok(Resp resp);
-        void error(const std::string& msg);
-    };
-    struct Subscription : public Op {
-        void post(data);
-        void tryPost(data);
-        void close();
-        long window() const;
-        void onAck(std::function<void(size_t)>&&);
-    };
-
-    void onGet(std::function<void(DataOp<void, char>)>&&);
-
-    virtual void handleGet(DataOp<void, char> op);
-    virtual void handlePut(DataOp<char, void> op);
-    virtual void handleRPC(DataOp<char, char> op);
-    virtual void handlePutGet(DataOp<char, char> op);
-    virtual void handleMonitor(Subscription op);
-};
-
-struct FallbackHandler
-{
-    virtual void handleSearch(const Search& op) =0;
-    virtual std::unique_ptr<Handler> handleCreate(const Create& op) =0;
-};
-
-class Attachment {
-};
-*/
 
 struct Handler;
 struct Source;
