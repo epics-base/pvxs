@@ -19,6 +19,7 @@
 #include <pvxs/util.h>
 
 namespace pvxs {
+class Value;
 namespace impl {
 struct ServerConn;
 }
@@ -257,6 +258,7 @@ struct PVXS_API Source {
 //! Token for an in-progress request for Channel data type information.
 struct PVXS_API Introspect : public OpBase
 {
+    virtual void reply(const Value& prototype) =0;
     //! Negative reply w/ error message
     virtual void error(const std::string& msg) =0;
     // void success(Data);

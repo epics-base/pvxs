@@ -12,13 +12,20 @@
 #include <epicsEvent.h>
 
 #include <pvxs/server.h>
+#include <pvxs/data.h>
 #include <pvxs/log.h>
 
 
 namespace {
+using namespace pvxs;
 using namespace pvxs::server;
 
 DEFINE_LOGGER(dummy,"dummyserv");
+
+const Value mytype = TypeDef(TypeCode::Struct)
+        .begin()
+        .insert("value", TypeCode::Float64)
+        .create();
 
 struct DummyHandler : public Handler
 {
@@ -26,7 +33,8 @@ struct DummyHandler : public Handler
 
     virtual void onIntrospect(std::unique_ptr<Introspect> &&op) override final
     {
-        op->error("Got nothing");
+        op->reply(mytype);
+        //op->error("Got nothing");
     }
 };
 

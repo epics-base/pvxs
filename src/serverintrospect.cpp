@@ -7,6 +7,8 @@
 #include <cassert>
 
 #include <pvxs/log.h>
+#include "dataimpl.h"
+#include "dataencode.h"
 #include "serverconn.h"
 
 namespace pvxs { namespace impl {
@@ -35,14 +37,28 @@ struct ServerIntrospectControl : public server::Introspect
         error("Implict Cancel");
     }
 
+    virtual void reply(const Value& prototype) override final
+    {
+        auto desc = prototype._desc();
+        if(!desc)
+            throw std::logic_error("Can't reply to GET_FIELD with Null prototype");
+        Status sts{Status::Ok};
+        doReply(desc, sts);
+    }
+
     virtual void error(const std::string &msg) override final
     {
         Status sts{Status::Error, msg};
+        doReply(nullptr, sts);
+    }
+
+    void doReply(const FieldDesc* type, const Status& sts)
+    {
         auto serv = server.lock();
         if(!serv)
             return; // soft fail if already completed, cancelled, disconnected, ....
 
-        serv->acceptor_loop.call([this, &sts](){
+        serv->acceptor_loop.call([this, type, &sts](){
             auto oper = op.lock();
             if(!oper || oper->state != ServerOp::Executing)
                 return;
@@ -60,6 +76,8 @@ struct ServerIntrospectControl : public server::Introspect
                 EvOutBuf R(be, conn->txBody.get());
                 to_wire(R, uint32_t(oper->ioid));
                 to_wire(R, sts);
+                if(type)
+                    to_wire(R, type);
                 // would be FieldDesc payload if Ok or Warn
             }
 
