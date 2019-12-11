@@ -75,9 +75,9 @@ int main(int argc, char *argv[])
         std::shared_ptr<DummySource> src(new DummySource);
         src->names.emplace("blah");
 
-        auto serv = std::move(Server::Config::from_env()
+        auto serv = Server::Config::from_env()
                 .build()
-                .addSource("dummy", src));
+                .addSource("dummy", src);
 
         auto& conf = serv.config();
 
