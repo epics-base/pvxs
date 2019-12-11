@@ -610,10 +610,28 @@ OpBase::~OpBase() {}
 ChannelControl::~ChannelControl() {}
 
 Introspect::~Introspect() {}
+Get::~Get() {}
+Put::~Put() {}
+RPC::~RPC() {}
 
 Handler::~Handler() {}
 
 void Handler::onIntrospect(std::unique_ptr<Introspect>&& op)
-{}
+{
+    op->error("Not Implemented");
+}
+void Handler::onGet(std::unique_ptr<Get>&& op)
+{
+    op->error("Not Implemented");
+}
+void Handler::onPut(std::unique_ptr<Put>&& op)
+{
+    op->error("Not Implemented");
+}
+void Handler::onRPC(std::unique_ptr<RPC> &&op)
+{
+    op->error("Not Implemented");}
 
-}} // namespace pvxs::server
+}
+
+} // namespace pvxs::server

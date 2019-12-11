@@ -17,9 +17,9 @@
 
 #include <pvxs/version.h>
 #include <pvxs/util.h>
+#include <pvxs/data.h>
 
 namespace pvxs {
-class Value;
 namespace impl {
 struct ServerConn;
 }
@@ -180,6 +180,7 @@ struct OpBase {
            const std::string& name);
     virtual ~OpBase() =0;
 };
+
 /** Manipulate an active Channel, and any in-progress Operations through it.
  *
  */
@@ -258,10 +259,10 @@ struct PVXS_API Source {
 //! Token for an in-progress request for Channel data type information.
 struct PVXS_API Introspect : public OpBase
 {
+    //! Positive reply.  Only the type of the provided Value is used.  Any field values are ignored.
     virtual void reply(const Value& prototype) =0;
     //! Negative reply w/ error message
     virtual void error(const std::string& msg) =0;
-    // void success(Data);
 
     Introspect(const std::string& peerName,
                    const std::string& iface,
@@ -269,6 +270,69 @@ struct PVXS_API Introspect : public OpBase
         :OpBase (peerName, iface, name)
     {}
     virtual ~Introspect() =0;
+};
+
+struct PVXS_API Get : public OpBase
+{
+    const Value request;
+
+    //! Positive reply w/ data
+    virtual void reply(const Value& prototype) =0;
+    //! Negative reply w/ error message
+    virtual void error(const std::string& msg) =0;
+
+    Get(const std::string& peerName,
+        const std::string& iface,
+        const std::string& name,
+        const Value& request)
+        :OpBase (peerName, iface, name)
+        ,request(request)
+    {}
+    virtual ~Get() =0;
+};
+
+struct PVXS_API Put : public OpBase
+{
+    const Value request;
+    const Value value;
+
+    //! Positive reply
+    virtual void complete() =0;
+    //! Negative reply w/ error message
+    virtual void error(const std::string& msg) =0;
+
+    Put(const std::string& peerName,
+        const std::string& iface,
+        const std::string& name,
+        const Value& request,
+        const Value& value)
+        :OpBase (peerName, iface, name)
+        ,request(request)
+        ,value(value)
+    {}
+    virtual ~Put() =0;
+};
+
+struct PVXS_API RPC : public OpBase
+{
+    const Value request;
+    const Value value;
+
+    //! Positive reply w/ data
+    virtual void reply(const Value& prototype) =0;
+    //! Negative reply w/ error message
+    virtual void error(const std::string& msg) =0;
+
+    RPC(const std::string& peerName,
+        const std::string& iface,
+        const std::string& name,
+        const Value& request,
+        const Value& value)
+        :OpBase (peerName, iface, name)
+        ,request(request)
+        ,value(value)
+    {}
+    virtual ~RPC() =0;
 };
 
 /** Requests for a particular Channel are dispatched through me.
@@ -285,6 +349,10 @@ struct PVXS_API Handler {
      * the Introspect to be deleted prior to replying.
      */
     virtual void onIntrospect(std::unique_ptr<Introspect>&& op);
+
+    virtual void onGet(std::unique_ptr<Get>&& op);
+    virtual void onPut(std::unique_ptr<Put>&& op);
+    virtual void onRPC(std::unique_ptr<RPC>&& op);
 };
 
 }} // namespace pvxs::server
