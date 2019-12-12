@@ -9,6 +9,7 @@
 
 #include <pvxs/unittest.h>
 #include <pvxs/bitmask.h>
+#include "pvaproto.h"
 #include "utilpvt.h"
 
 using namespace pvxs;
@@ -119,17 +120,93 @@ void testExpr()
     testEq(std::string(SB()<<Complex), "{2, 4, 5}");
 }
 
+template<size_t N>
+void testSerCase(bool be, uint8_t(&actual)[N], const char *expect)
+{
+    std::string sactual((char*)actual, N-1u);
+    testShow()<<__func__<<"("<<(be?"BE":"LE")<<", \""<<escape(sactual)<<"\", \""<<expect<<"\")";
+
+    BitMask mask;
+    FixedBuf inbuf(be, actual);
+    from_wire(inbuf, mask);
+
+    testEq(std::string(SB()<<mask), expect);
+
+    std::vector<uint8_t> O;
+    VectorOutBuf outbuf(be, O);
+    to_wire(outbuf, mask);
+
+    testEq(sactual,
+           std::string((char*)O.data(), O.size()-outbuf.size()));
+}
+
+void testSer()
+{
+    testDiag("%s", __func__);
+
+    {
+        uint8_t actual[] = "\x00";
+        testSerCase(true, actual, "{}");
+        testSerCase(false, actual, "{}");
+    }
+    {
+        uint8_t actual[] = "\x01\x01";
+        testSerCase(true, actual, "{0}");
+        testSerCase(false, actual, "{0}");
+    }
+    {
+        uint8_t actual[] = "\x01\x02";
+        testSerCase(true, actual, "{1}");
+        testSerCase(false, actual, "{1}");
+    }
+    {
+        uint8_t actual[] = "\x02\x00\x01";
+        testSerCase(true, actual, "{8}");
+        testSerCase(false, actual, "{8}");
+    }
+    {
+        uint8_t actual[] = "\x07\x02\x00\x00\x00\x00\x00\x80";
+        testSerCase(true, actual, "{1, 55}");
+        testSerCase(false, actual, "{1, 55}");
+    }
+    {
+        uint8_t actual[] = "\x08\x80\x00\x00\x00\x00\x00\x00\x02";
+        testSerCase(true, actual, "{1, 63}");
+    }
+    {
+        uint8_t actual[] = "\x08\x02\x00\x00\x00\x00\x00\x00\x80";
+        testSerCase(false, actual, "{1, 63}");
+    }
+    {
+        uint8_t actual[] = "\x09\x80\x00\x00\x00\x00\x00\x01\x02\x01";
+        testSerCase(true, actual, "{1, 8, 63, 64}");
+    }
+    {
+        uint8_t actual[] = "\x09\x02\x01\x00\x00\x00\x00\x00\x80\x01";
+        testSerCase(false, actual, "{1, 8, 63, 64}");
+    }
+    {
+        uint8_t actual[] = "\x10\x80\x00\x00\x00\x00\x00\x00\x02\x40\x00\x00\x00\x00\x00\x00\x01";
+        testSerCase(true, actual, "{1, 63, 64, 126}");
+    }
+    {
+        uint8_t actual[] = "\x10\x02\x00\x00\x00\x00\x00\x00\x80\x01\x00\x00\x00\x00\x00\x00\x40";
+        testSerCase(false, actual, "{1, 63, 64, 126}");
+    }
+}
+
 } // namespace
 
 MAIN(testbitmask)
 {
-    testPlan(44);
+    testPlan(76);
     testEmpty();
     testBasic1();
     testBasic2();
     testBasic3();
     testOp();
     testExpr();
+    testSer();
     cleanup_for_valgrind();
     return testDone();
 }

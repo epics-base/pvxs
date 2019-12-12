@@ -7,6 +7,8 @@
 #include <algorithm>
 
 #include <pvxs/bitmask.h>
+#include "pvaproto.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 
@@ -85,10 +87,6 @@ size_t BitMask::findSet(size_t start) const
     return _size;
 }
 
-//BitMask& BitMask::operator&=(const BitMask& o) {}
-//BitMask& BitMask::operator|=(const BitMask& o) {}
-//BitMask& BitMask::operator^=(const BitMask& o) {}
-
 std::ostream& operator<<(std::ostream& strm, const BitMask& mask)
 {
     strm.put('{');
@@ -102,4 +100,50 @@ std::ostream& operator<<(std::ostream& strm, const BitMask& mask)
     return strm;
 }
 
+namespace impl {
+
+PVXS_API
+void to_wire(Buffer& buf, const BitMask& mask)
+{
+    size_t nbytes = (mask.size() + 7u)/8u; // round up #bits to bytes
+    size_t nwords = nbytes / 8u;
+    size_t extra = nbytes % 8u; // trailing single bytes
+
+    to_wire(buf, Size{nbytes});
+    for(auto i : range(nwords)) {
+        to_wire(buf, mask.word(i));
+    }
+    if(extra) {
+        uint64_t last = mask.word(nwords);
+        for(auto i : range(extra)) {
+            to_wire(buf, uint8_t(last>>(8u*i)));
+        }
+    }
+}
+
+PVXS_API
+void from_wire(Buffer& buf, BitMask& mask)
+{
+    Size nbytes{0u};
+
+    from_wire(buf, nbytes);
+    mask.resize(8u*nbytes.size);
+
+    size_t nwords = nbytes.size / 8u;
+    size_t extra = nbytes.size % 8u; // trailing single bytes
+
+    for(auto i : range(nwords)) {
+        from_wire(buf, mask.word(i));
+    }
+    if(extra) {
+        uint64_t& last = mask.word(nwords);
+        for(auto i : range(extra)) {
+            uint8_t b=0;
+            from_wire(buf, b);
+            last |= uint64_t(b)<<(8u*i);
+        }
+    }
+}
+
+} // namespace impl
 } // namespace pvxs

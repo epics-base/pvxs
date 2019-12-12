@@ -236,6 +236,16 @@ public:
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const BitMask& mask);
 
+namespace impl {
+struct Buffer;
+
+PVXS_API
+void to_wire(Buffer& buf, const BitMask& mask);
+
+PVXS_API
+void from_wire(Buffer& buf, BitMask& mask);
+}
+
 } // namespace pvxs
 
 #endif // PVXS_BITMASK_H
