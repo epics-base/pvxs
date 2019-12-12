@@ -34,18 +34,19 @@ struct FieldDesc {
     // type ID string (struct/union)
     std::string id;
     // Lookup of all decendent fields of this Structure or Union.
-    // "fld.sub.leaf" -> rel index
+    // "fld.sub.leaf" -> rel index in enclosing vector<FieldDesc>
     std::map<std::string, size_t> mlookup;
-    // child iteration.  child# -> ("sub", rel index)
+    // child iteration.  child# -> ("sub", rel index in enclosing vector<FieldDesc>)
     std::vector<std::pair<std::string, size_t>> miter;
     // hash of this type (aggragating from children)
     // created using the code ^ id ^ (child_name ^ child_hash)*N
     size_t hash;
-    // abs. offset in enclosing top Structure/Union.  (not abs. offset of FieldDesc array)
-    // used to navigate FieldStorage array
+    // abs. offset in enclosing StructTop::members.  (not abs. offset of FieldDesc array)
+    // used to navigate vector<FieldStorage>
     size_t offset=0, next_offset=0;
     // number of FieldDesc nodes which describe this node and decendents.  Inclusive.  always >=1
     uint16_t num_index=0;
+    // eg. num_index+(FieldDesc*)this jumps to next sibling
     TypeCode code{TypeCode::Null};
 
     // number of FieldDesc nodes which describe this node.  Inclusive.  always size()>=1
@@ -68,14 +69,14 @@ void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth=0);
 struct StructTop;
 
 struct FieldStorage {
-    /* Storage for field value.  depends on type code.
+    /* Storage for field value.  depends on StoreType.
      *
      * All array types stored as shared_array<const void> which includes full type info
      * Integers promoted to either int64_t or uint64_t.
      * Bool promoted to uint64_t
      * Reals promoted to double.
      * String stored as std::string
-     * Compound (Struct, Union, Any) stored as shared_ptr<FieldStorage>
+     * Compound (Struct, Union, Any) stored as Value
      */
     aligned_union<8,
                        double, // Real
@@ -100,9 +101,14 @@ struct FieldStorage {
     const T& as() const { return *reinterpret_cast<const T*>(&store); }
 };
 
+// hidden (publically) management of an allocated Struct
 struct StructTop {
+    // which members have been assigned/updated (use to track "changes")
     BitMask valid;
+    // type of first top level struct.  always !NULL.
+    // Actually the first element of a vector<const FieldDesc>
     std::shared_ptr<const FieldDesc> desc;
+    // our members (inclusive).  always size()>=1
     std::vector<FieldStorage> members;
 };
 static_assert (std::is_standard_layout<StructTop>{}, "Needed for offsetof()");
