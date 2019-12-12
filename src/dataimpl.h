@@ -108,6 +108,8 @@ struct StructTop {
     // type of first top level struct.  always !NULL.
     // Actually the first element of a vector<const FieldDesc>
     std::shared_ptr<const FieldDesc> desc;
+    // map from FieldStorage offsets to FieldDesc offsets.  inverse of FieldDesc::offset
+    std::vector<size_t> member_indicies;
     // our members (inclusive).  always size()>=1
     std::vector<FieldStorage> members;
 };

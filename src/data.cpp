@@ -30,11 +30,13 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
 
     top->desc = desc;
     top->valid.resize(desc->next_offset-desc->offset);
-    top->members.resize(desc->next_offset-desc->offset);
+    top->member_indicies.resize(top->valid.size());
+    top->members.resize(top->valid.size());
     {
         auto& root = top->members[0];
         root.init(desc.get());
         root.top = top.get();
+        top->member_indicies[0u] = 0u;
     }
 
     for(auto& pair : desc->mlookup) {
@@ -42,6 +44,7 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
         auto& mem = top->members.at(cfld->offset-desc->offset);
         mem.top = top.get();
         mem.init(cfld);
+        top->member_indicies[cfld->offset] = pair.second;
     }
 
     this->desc = desc.get();
