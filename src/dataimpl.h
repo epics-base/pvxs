@@ -45,8 +45,8 @@ struct FieldDesc {
     // used to navigate vector<FieldStorage>
     size_t offset=0, next_offset=0;
     // number of FieldDesc nodes which describe this node and decendents.  Inclusive.  always >=1
-    uint16_t num_index=0;
     // eg. num_index+(FieldDesc*)this jumps to next sibling
+    size_t num_index=0;
     TypeCode code{TypeCode::Null};
 
     // number of FieldDesc nodes which describe this node.  Inclusive.  always size()>=1
