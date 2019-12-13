@@ -99,6 +99,9 @@ struct FieldStorage {
     T& as() { return *reinterpret_cast<T*>(&store); }
     template<typename T>
     const T& as() const { return *reinterpret_cast<const T*>(&store); }
+
+    inline uint8_t* buffer() { return reinterpret_cast<uint8_t*>(&store); }
+    inline const uint8_t* buffer() const { return reinterpret_cast<const uint8_t*>(&store); }
 };
 
 // hidden (publically) management of an allocated Struct
@@ -116,6 +119,20 @@ struct StructTop {
 static_assert (std::is_standard_layout<StructTop>{}, "Needed for offsetof()");
 
 using Type = std::shared_ptr<const FieldDesc>;
+
+
+PVXS_API
+void to_wire_full(Buffer& buf, const Value& val);
+
+PVXS_API
+void to_wire_valid(Buffer& buf, const Value& val);
+
+PVXS_API
+void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val);
+
+PVXS_API
+void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val);
+
 
 PVXS_API
 void FieldDesc_calculate_offset(FieldDesc* top);

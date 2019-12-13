@@ -251,6 +251,10 @@ void to_wire(Buffer& buf, const Size& size)
         buf.push(254);
         to_wire(buf, uint32_t(size.size));
 
+    } else if(size.size==size_t(-1)) {
+        // special "null"  used to encode empty Union
+        buf.push(255);
+
     } else {
         buf.fault();
     }
@@ -268,10 +272,8 @@ void from_wire(Buffer& buf, Size& size)
         size.size = s;
 
     } else if(s==255) {
-        // "null" size.  not sure it is used.
-        // Replicate weirdness of pvDataCPP
-        // FIXME this is almost certainly a bug
-        size.size = -1;
+        // special "null"  used to encode empty Union
+        size.size = size_t(-1);
 
     } else if(s==254) {
         uint32_t ls = 0;

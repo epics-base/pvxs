@@ -38,6 +38,10 @@ TESTPROD += testtype
 testtype_SRCS += testtype.cpp
 TESTS += testtype
 
+TESTPROD += testdata
+testdata_SRCS += testdata.cpp
+TESTS += testdata
+
 TESTPROD += dummyserv
 dummyserv_SRCS += dummyserv.cpp
 # not a unittest
