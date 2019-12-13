@@ -34,9 +34,9 @@ TESTPROD += testxcode
 testxcode_SRCS += testxcode.cpp
 TESTS += testxcode
 
-TESTPROD += testdata
-testdata_SRCS += testdata.cpp
-TESTS += testdata
+TESTPROD += testtype
+testtype_SRCS += testtype.cpp
+TESTS += testtype
 
 TESTPROD += dummyserv
 dummyserv_SRCS += dummyserv.cpp

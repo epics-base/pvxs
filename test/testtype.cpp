@@ -302,7 +302,7 @@ void testTypeDef()
 
 } // namespace
 
-MAIN(testdata)
+MAIN(testtype)
 {
     testPlan(23);
     showSize();
