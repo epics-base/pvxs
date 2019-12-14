@@ -224,11 +224,22 @@ struct PVXS_API NoConvert : public std::runtime_error
 //! pointer-like reference to a single data field
 class PVXS_API Value {
     friend class TypeDef;
+    // (maybe) storage for this field.  alias of StructTop::members[]
     std::shared_ptr<impl::FieldStorage> store;
-    const impl::FieldDesc* desc; // owned thourgh StructTop (aliased as FieldStorage)
+    // (maybe) owned thourgh StructTop (aliased as FieldStorage)
+    const impl::FieldDesc* desc;
 public:
+    struct Helper;
+    friend struct Helper;
+
+    //! default empty Value
     constexpr Value() :desc(nullptr) {}
+private:
+    // Build new Value with the given type.  Used by TypeDef
     explicit Value(const std::shared_ptr<const impl::FieldDesc>& desc);
+    Value(const std::shared_ptr<const impl::FieldDesc>& desc, Value& parent);
+public:
+    // movable and copyable
     Value(const Value&) = default;
     Value(Value&&) = default;
     Value& operator=(const Value&) = default;
@@ -242,7 +253,7 @@ public:
     //! copy values from other.  Must have matching types.
 //    Value& assign(const Value&);
 
-    Value allocMember() const;
+    Value allocMember();
 
     inline bool valid() const { return desc; }
     inline explicit operator bool() const { return desc; }
@@ -359,10 +370,6 @@ public:
     inline iterator end() { iterator ret(this); return ret;}
     inline const_iterator cend() const { const_iterator ret(this); return ret;}
     inline const_iterator end() const { return cend(); }
-
-    // impl cheating
-    const impl::FieldDesc* _desc() const { return desc; }
-    impl::FieldStorage* _store() const { return store.get(); }
 };
 
 PVXS_API

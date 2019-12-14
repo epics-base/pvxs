@@ -15,6 +15,26 @@
 #include "utilpvt.h"
 
 namespace pvxs {
+
+struct Value::Helper {
+    // internal access to private operations
+    static inline Value build(const std::shared_ptr<const impl::FieldDesc>& desc) {
+        return Value(desc);
+    }
+    static inline Value build(const std::shared_ptr<const impl::FieldDesc>& desc, Value& parent) {
+        return Value(desc, parent);
+    }
+    static inline Value build(const std::shared_ptr<const impl::FieldDesc>& desc,
+                              const std::shared_ptr<impl::FieldStorage>& pstore, const impl::FieldDesc* pdesc);
+
+    static inline       std::shared_ptr<impl::FieldStorage>& store(      Value& v) { return v.store; }
+    static inline std::shared_ptr<const impl::FieldStorage>  store(const Value& v) { return v.store; }
+    static inline const FieldDesc*                           desc(const Value& v) { return v.desc; }
+
+    static inline                       impl::FieldStorage*  store_ptr(      Value& v) { return v.store.get(); }
+    static inline                 const impl::FieldStorage*  store_ptr(const Value& v) { return v.store.get(); }
+};
+
 namespace impl {
 struct Buffer;
 
@@ -104,7 +124,7 @@ struct FieldStorage {
     inline const uint8_t* buffer() const { return reinterpret_cast<const uint8_t*>(&store); }
 };
 
-// hidden (publically) management of an allocated Struct
+// hidden (publicly) management of an allocated Struct
 struct StructTop {
     // which members have been assigned/updated (use to track "changes")
     BitMask valid;
@@ -115,6 +135,9 @@ struct StructTop {
     std::vector<size_t> member_indicies;
     // our members (inclusive).  always size()>=1
     std::vector<FieldStorage> members;
+
+    // empty, or the field of a structure which encloses this.
+    Value enclosing;
 };
 static_assert (std::is_standard_layout<StructTop>{}, "Needed for offsetof()");
 
@@ -140,6 +163,19 @@ void FieldDesc_calculate_offset(FieldDesc* top);
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const FieldDesc* desc);
 
-}} // namespace pvxs::impl
+} // namespace impl
+
+
+Value Value::Helper::build(const std::shared_ptr<const impl::FieldDesc>& desc,
+                           const std::shared_ptr<impl::FieldStorage>& pstore, const impl::FieldDesc* pdesc)
+{
+    Value ret(desc);
+    auto& enc = ret.store->top->enclosing;
+    enc.store = pstore;
+    enc.desc = pdesc;
+    return ret;
+}
+
+} // namespace pvxs
 
 #endif // DATAIMPL_H

@@ -38,7 +38,7 @@ struct ServerIntrospectControl : public server::Introspect
 
     virtual void reply(const Value& prototype) override final
     {
-        auto desc = prototype._desc();
+        auto desc = Value::Helper::desc(prototype);
         if(!desc)
             throw std::logic_error("Can't reply to GET_FIELD with Null prototype");
         Status sts{Status::Ok};

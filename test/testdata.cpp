@@ -125,7 +125,7 @@ void testSerialize2()
         auto val = def.create();
 
         val["choice->b"] = "test";
-        val["choice"].mark(); // TODO: auto mark back through union
+        testOk1(!!val["choice"].isMarked());
 
         testToBytes(true, [&val](Buffer& buf) {
             to_wire_valid(buf, val);
@@ -199,7 +199,7 @@ void testSerialize2()
 
 MAIN(testdata)
 {
-    testPlan(11);
+    testPlan(12);
     testSerialize1();
     testSerialize2();
     cleanup_for_valgrind();

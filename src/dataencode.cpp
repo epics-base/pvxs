@@ -232,7 +232,7 @@ void from_wire(Buffer& buf, shared_array<const void>& varr)
 
 // serialize a field and all children (if Compound)
 static
-void to_wire_field(Buffer& buf, const FieldDesc* desc, const FieldStorage* store)
+void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<const FieldStorage>& store)
 {
     switch(store->code) {
     case StoreType::Null:
@@ -242,7 +242,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const FieldStorage* store
             // serialize entire sub-structure
             for(auto off : range(desc->offset+1u, desc->next_offset)) {
                 auto cdesc = desc + top.member_indicies[off];
-                auto cstore = store + off;
+                std::shared_ptr<const FieldStorage> cstore(store, store.get()+off);
                 if(cdesc->code!=TypeCode::Struct)
                     to_wire_field(buf, cdesc, cstore);
             }
@@ -302,14 +302,14 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const FieldStorage* store
             } else {
                 size_t index = 0u;
                 for(auto& pair : desc->miter) {
-                    if(fld._desc()== desc+pair.second)
+                    if(Value::Helper::desc(fld)== desc+pair.second)
                         break;
                     index++;
                 }
                 if(index>=desc->miter.size())
                     throw std::logic_error("Union contains non-member type");
                 to_wire(buf, Size{index});
-                to_wire_field(buf, fld._desc(), fld._store());
+                to_wire_full(buf, fld);
             }
             return;
 
@@ -318,8 +318,8 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const FieldStorage* store
                 to_wire(buf, uint8_t(0xff));
 
             } else {
-                to_wire(buf, fld._desc());
-                to_wire_field(buf, fld._desc(), fld._store());
+                to_wire(buf, Value::Helper::desc(fld));
+                to_wire_full(buf, fld);
             }
             return;
         default: break;
@@ -361,8 +361,8 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const FieldStorage* store
                     to_wire(buf, uint8_t(0u));
                 } else {
                     to_wire(buf, uint8_t(1u));
-                    assert(elem._desc()==desc+1);
-                    to_wire_field(buf, elem._desc(), elem._store());
+                    assert(Value::Helper::desc(elem)==desc+1);
+                    to_wire_full(buf, elem);
                 }
             }
         }
@@ -376,7 +376,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const FieldStorage* store
                 } else {
                     to_wire(buf, uint8_t(1u));
 
-                    to_wire_field(buf, elem._desc(), elem._store());
+                    to_wire_full(buf, elem);
                 }
             }
         }
@@ -390,8 +390,8 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const FieldStorage* store
                 } else {
                     to_wire(buf, uint8_t(1u));
 
-                    to_wire(buf, elem._desc());
-                    to_wire_field(buf, elem._desc(), elem._store());
+                    to_wire(buf, Value::Helper::desc(elem));
+                    to_wire_full(buf, elem);
                 }
             }
         }
@@ -410,14 +410,15 @@ void to_wire_full(Buffer& buf, const Value& val)
 {
     assert(!!val);
 
-    to_wire_field(buf, val._desc(), val._store());
+    to_wire_field(buf, Value::Helper::desc(val), Value::Helper::store(val));
 }
 
 void to_wire_valid(Buffer& buf, const Value& val)
 {
-    auto desc = val._desc();
+    auto desc = Value::Helper::desc(val);
+    auto store = Value::Helper::store(val);
     assert(!!desc);
-    auto top = val._store()->top;
+    auto top = store->top;
 
     to_wire(buf, top->valid);
     top->valid.resize(top->members.size());
@@ -427,7 +428,8 @@ void to_wire_valid(Buffer& buf, const Value& val)
         bit<desc->next_offset;
         bit = top->valid.findSet(bit+1))
     {
-        to_wire_field(buf, desc + top->member_indicies[bit], val._store()+bit);
+        std::shared_ptr<const FieldStorage> cstore(store, store.get()+bit);
+        to_wire_field(buf, desc + top->member_indicies[bit], cstore);
     }
 }
 
@@ -442,7 +444,7 @@ T from_wire_as(Buffer& buf)
 }
 
 static
-void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, FieldStorage* store)
+void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const std::shared_ptr<FieldStorage>& store)
 {
     switch(store->code) {
     case StoreType::Null:
@@ -452,7 +454,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, Field
             // serialize entire sub-structure
             for(auto off : range(desc->offset+1u, desc->next_offset)) {
                 auto cdesc = desc + top.member_indicies[off];
-                auto cstore = store + off;
+                std::shared_ptr<FieldStorage> cstore(store, store.get()+off);
                 if(cdesc->code!=TypeCode::Struct)
                     from_wire_field(buf, ctxt, cdesc, cstore);
             }
@@ -514,9 +516,9 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, Field
             } else if(select.size < desc->miter.size()) {
                 std::shared_ptr<const FieldDesc> stype(store->top->desc,
                                                        desc + desc->miter[select.size].second); // alias
-                fld = Value(stype);
+                fld = Value::Helper::build(stype, store, desc);
 
-                from_wire_field(buf, ctxt, fld._desc(), fld._store());
+                from_wire_full(buf, ctxt, fld);
                 return;
             }
         }
@@ -534,9 +536,9 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, Field
 
             } else {
                 std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
-                fld = Value(stype);
+                fld = Value::Helper::build(stype);
 
-                from_wire_field(buf, ctxt, fld._desc(), fld._store());
+                from_wire_full(buf, ctxt, fld);
                 return;
 
             }
@@ -582,9 +584,9 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, Field
                                                    desc + 1); // alias
             for(auto& elem : arr) {
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
-                    elem = Value(etype);
+                    elem = Value::Helper::build(etype, store, desc);
 
-                    from_wire_field(buf, ctxt, elem._desc(), elem._store());
+                    from_wire_full(buf, ctxt, elem);
                 }
             }
 
@@ -608,9 +610,9 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, Field
                     } else if(select.size < cdesc->miter.size()) {
                         std::shared_ptr<const FieldDesc> stype(store->top->desc,
                                                                cdesc + cdesc->miter[select.size].second); // alias
-                        elem = Value(stype);
+                        elem = Value::Helper::build(stype, store, desc);
 
-                        from_wire_field(buf, ctxt, elem._desc(), elem._store());
+                        from_wire_full(buf, ctxt, elem);
                         return;
 
                     } else {
@@ -637,9 +639,9 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, Field
                     from_wire(buf, dc);
                     if(!descs->empty()) {
                         std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
-                        elem = Value(stype);
+                        elem = Value::Helper::build(stype, store, desc);
 
-                        from_wire_field(buf, ctxt, elem._desc(), elem._store());
+                        from_wire_full(buf, ctxt, elem);
                     }
                 }
             }
@@ -662,14 +664,15 @@ void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val)
 {
     assert(!!val);
 
-    from_wire_field(buf, ctxt, val._desc(), val._store());
+    from_wire_field(buf, ctxt, Value::Helper::desc(val), Value::Helper::store(val));
 }
 
 void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
 {
-    auto desc = val._desc();
+    auto desc = Value::Helper::desc(val);
+    auto store = Value::Helper::store(val);
     assert(!!desc);
-    auto top = val._store()->top;
+    auto top = store->top;
 
     from_wire(buf, top->valid);
     // encoding rounds # of bits to whole bytes, so we may trim
@@ -681,7 +684,8 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
         bit<desc->next_offset;
         bit = top->valid.findSet(bit+1))
     {
-        from_wire_field(buf, ctxt, desc + top->member_indicies[bit], val._store()+bit);
+        std::shared_ptr<FieldStorage> cstore(store, store.get()+bit);
+        from_wire_field(buf, ctxt, desc + top->member_indicies[bit], cstore);
     }
 }
 

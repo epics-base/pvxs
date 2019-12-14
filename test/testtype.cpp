@@ -127,8 +127,8 @@ void testTypeDef()
     auto val = def.create();
 
     testOk1(!!val.valid());
-    testShow()<<val._desc();
-    testEq(std::string(SB()<<val._desc()),
+    testShow()<<Value::Helper::desc(val);
+    testEq(std::string(SB()<<Value::Helper::desc(val)),
            "[0] struct simple_t <0:11>  [0:18)\n"
            "  achoice -> 14 [14]\n"
            "  any -> 9 [9]\n"

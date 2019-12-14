@@ -52,6 +52,13 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
     this->store = std::move(val);
 }
 
+Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc, Value& parent)
+    :Value(desc)
+{
+    // TODO ref. loop detection
+    store->top->enclosing = parent;
+}
+
 Value::~Value() {}
 
 Value Value::cloneEmpty() const
@@ -83,14 +90,14 @@ Value Value::clone() const
 //    return *this;
 //}
 
-Value Value::allocMember() const
+Value Value::allocMember()
 {
     // allocate member type for Struct[] or Union[]
     if(!desc || (desc->code!=TypeCode::UnionA && desc->code!=TypeCode::StructA))
         throw std::runtime_error("allocMember() only meaningful for Struct[] or Union[]");
 
     decltype (store->top->desc) fld(store->top->desc, desc+1);
-    return Value(fld);
+    return Value::Helper::build(fld, *this);
 }
 
 bool Value::isMarked(bool parents, bool children) const
@@ -103,6 +110,14 @@ void Value::mark(bool v)
 {
     if(desc)
         store->top->valid[store->index()] = v;
+    if(!v)
+        return;
+
+    auto top = store->top;
+    while(top && top->enclosing) {
+        top->enclosing.mark();
+        top = top->enclosing.store->top;
+    }
 }
 
 void Value::unmark(bool parents, bool children)
@@ -296,7 +311,7 @@ void Value::copyIn(const void *ptr, StoreType type)
         throw NoConvert();
     }
 
-    store->top->valid[store->index()] = true;
+    mark();
 }
 
 void Value::traverse(const std::string &expr, bool modify)
@@ -352,7 +367,7 @@ void Value::traverse(const std::string &expr, bool modify)
                             if(fld.desc!=desc+it->second) {
                                 // select
                                 std::shared_ptr<const FieldDesc> mtype(store->top->desc, desc+it->second);
-                                fld = Value(mtype);
+                                fld = Value(mtype, *this);
                             }
                             pos = sep;
                             *this = fld;
@@ -425,6 +440,12 @@ const Value Value::operator[](const char *name) const
 static
 void show_Value(std::ostream& strm,
                 const std::string& member,
+                const Value& val,
+                unsigned level=0);
+
+static
+void show_Value(std::ostream& strm,
+                const std::string& member,
                 const FieldDesc *desc,
                 const FieldStorage* store,
                 unsigned level=0)
@@ -466,13 +487,13 @@ void show_Value(std::ostream& strm,
         auto& fld = store->as<Value>();
         if(fld.valid() && desc->code==TypeCode::Union) {
             for(auto& pair : desc->miter) {
-                if(desc + pair.second == fld._desc()) {
+                if(desc + pair.second == Value::Helper::desc(fld)) {
                     strm<<"."<<pair.first;
                     break;
                 }
             }
         }
-        show_Value(strm, std::string(), fld._desc(), fld._store(), level+1);
+        show_Value(strm, std::string(), fld, level+1);
     }
         break;
     case StoreType::Array: {
@@ -483,7 +504,7 @@ void show_Value(std::ostream& strm,
             auto arr = varr.castTo<const Value>();
             strm<<" [\n";
             for(auto& val : arr) {
-                show_Value(strm, std::string(), val._desc(), val._store(), level+1);
+                show_Value(strm, std::string(), val, level+1);
             }
             indent(strm, level);
             strm<<"]\n";
@@ -496,9 +517,21 @@ void show_Value(std::ostream& strm,
     }
 }
 
+static
+void show_Value(std::ostream& strm,
+                const std::string& member,
+                const Value& val,
+                unsigned level)
+{
+    show_Value(strm, member,
+               Value::Helper::desc(val),
+               Value::Helper::store_ptr(val),
+               level);
+}
+
 std::ostream& operator<<(std::ostream& strm, const Value& val)
 {
-    show_Value(strm, std::string(), val._desc(), val._store());
+    show_Value(strm, std::string(), val);
     return strm;
 }
 
