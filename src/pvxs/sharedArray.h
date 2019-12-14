@@ -21,7 +21,46 @@ class Value;
 
 template<typename E, class Enable = void> class shared_array;
 
+enum class ArrayType : uint8_t {
+    Null  = 0xff,
+    Bool  = 0x08,
+    Int8  = 0x28,
+    Int16 = 0x29,
+    Int32 = 0x2a,
+    Int64 = 0x2b,
+    UInt8 = 0x2c,
+    UInt16= 0x2d,
+    UInt32= 0x2e,
+    UInt64= 0x2f,
+    Float = 0x4a,
+    Double= 0x4b,
+    String= 0x68,
+    Value = 0x88, // also used for 0x89 and 0x8a
+};
+
+PVXS_API
+std::ostream& operator<<(std::ostream& strm, ArrayType code);
+
 namespace detail {
+template<typename T>
+struct CaptureCode;
+
+#define CASE(TYPE, CODE) \
+template<> struct CaptureCode<TYPE> { static constexpr ArrayType code{ArrayType::CODE}; }
+CASE(bool, Bool);
+CASE(int8_t,  Int8);
+CASE(int16_t, Int16);
+CASE(int32_t, Int32);
+CASE(int64_t, Int64);
+CASE(uint8_t,  UInt8);
+CASE(uint16_t, UInt16);
+CASE(uint32_t, UInt32);
+CASE(uint64_t, UInt64);
+CASE(float, Float);
+CASE(double, Double);
+CASE(std::string, String);
+CASE(Value, Value);
+#undef CASE
 
 template<typename T, typename Enable=void>
 struct sizeofx {
@@ -249,50 +288,41 @@ public:
             throw std::out_of_range("Index out of bounds");
         return (*this)[i];
     }
+
+    //! Cast to const, consuming this
+    //! @pre unique()==true
+    //! @post empty()==true
+    shared_array<typename std::add_const<E>::type>
+    freeze() {
+        if(!this->unique())
+            throw std::logic_error("Can't freeze non-unique shared_array");
+
+        // alias w/ implied cast to const.
+        shared_array<typename std::add_const<E>::type> ret(this->_data, this->_data.get(), this->_size);
+
+        // c++20 provides a move()-able alternative to the aliasing constructor.
+        // until this stops being the future, we consume the src ref. and
+        // inc. + dec. the ref counter...
+        this->clear();
+        return ret;
+    }
+
+    // static_cast<TO>() to non-void, preserving const-ness
+    template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    shared_array<TO>
+    castTo() const {
+        auto alen = this->_size*sizeof(E)/sizeof(TO);
+        return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), alen);
+    }
+
+    // static_cast<TO>() to void, preserving const-ness
+    template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    shared_array<TO>
+    castTo() const {
+        auto alen = this->_size*sizeof(E);
+        return shared_array<TO>(this->_data, this->_data.get(), alen); // implied cast to void*
+    }
 };
-
-enum class ArrayType : uint8_t {
-    Null  = 0xff,
-    Bool  = 0x08,
-    Int8  = 0x28,
-    Int16 = 0x29,
-    Int32 = 0x2a,
-    Int64 = 0x2b,
-    UInt8 = 0x2c,
-    UInt16= 0x2d,
-    UInt32= 0x2e,
-    UInt64= 0x2f,
-    Float = 0x4a,
-    Double= 0x4b,
-    String= 0x68,
-    Value = 0x88, // also used for 0x89 and 0x8a
-};
-
-PVXS_API
-std::ostream& operator<<(std::ostream& strm, ArrayType code);
-
-namespace detail {
-template<typename T>
-struct CaptureCode;
-
-#define CASE(TYPE, CODE) \
-template<> struct CaptureCode<TYPE> { static constexpr ArrayType code{ArrayType::CODE}; }
-CASE(bool, Bool);
-CASE(int8_t,  Int8);
-CASE(int16_t, Int16);
-CASE(int32_t, Int32);
-CASE(int64_t, Int64);
-CASE(uint8_t,  UInt8);
-CASE(uint16_t, UInt16);
-CASE(uint32_t, UInt32);
-CASE(uint64_t, UInt64);
-CASE(float, Float);
-CASE(double, Double);
-CASE(std::string, String);
-CASE(Value, Value);
-#undef CASE
-
-} // namespace detail
 
 
 template<typename E>
@@ -363,6 +393,14 @@ public:
         ,_type(detail::CaptureCode<typename std::remove_cv<A>::type>::code)
     {}
 
+private:
+    template<typename A>
+    shared_array(const std::shared_ptr<A>& a, E* b, size_t len, ArrayType code)
+        :base_t(a, b, len)
+        ,_type(code)
+    {}
+public:
+
     //! clear data and become untyped
     void clear() noexcept {
         base_t::clear();
@@ -378,6 +416,38 @@ public:
     size_t max_size() const noexcept{return (size_t)-1;}
 
     inline ArrayType original_type() const { return _type; }
+
+    shared_array<typename std::add_const<E>::type>
+    freeze() {
+        if(!this->unique())
+            throw std::logic_error("Can't freeze non-unique shared_array");
+
+        // alias w/ implied cast to const.
+        shared_array<typename std::add_const<E>::type> ret(this->_data, this->_data.get(), this->_size, this->_type);
+
+        // c++20 provides a move()-able alternative to the aliasing constructor.
+        // until this stops being the future, we consume the src ref. and
+        // inc. + dec. the ref counter...
+        this->clear();
+        return ret;
+    }
+
+    // static_cast<TO>() to non-void, preserving const-ness
+    template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    shared_array<TO>
+    castTo() const {
+        auto alen = this->_size/sizeof(TO);
+        return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), alen);
+    }
+
+    // static_cast<TO>() to void, preserving const-ness
+    template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    shared_array<TO>
+    castTo() const {
+        // in reality this is either void -> void, or const void -> const void
+        // aka. simple copy
+        return *this;
+    }
 };
 
 // non-const -> const
@@ -386,33 +456,16 @@ static inline
 shared_array<typename std::add_const<typename SRC::value_type>::type>
 freeze(SRC&& src)
 {
-    typedef typename SRC::value_type FROM;
-    typedef typename std::add_const<FROM>::type TO;
-
-    if(!src.unique())
-        throw std::logic_error("Can't freeze non-unique shared_array");
-
-    // cast data pointer to const
-    TO* data = src.data();
-
-    shared_array<TO> ret(src.dataPtr(), data, src.size());
-
-    // c++20 provides a move()-able alternative to the aliasing constructor.
-    // until this stops being the future, we consume the src ref. and
-    // inc. + dec. the ref counter...
-    auto temp(std::move(src));
-    return ret;
+    return src.freeze();
 }
 
 // change type, while keeping same const
-template<typename TO, typename FROM,
-         typename std::enable_if< std::is_const<TO>{} == std::is_const<FROM>{}, int >::type=0>
+template<typename TO, typename FROM>
 static inline
 shared_array<TO>
 shared_array_static_cast(const shared_array<FROM>& src)
 {
-    size_t newsize = src.size()*detail::sizeofx<FROM>::op()/detail::sizeofx<TO>::op();
-    return shared_array<TO>(src.dataPtr(), static_cast<TO*>(src.data()), newsize);
+    return src.template castTo<TO>();
 }
 
 template<typename E, typename std::enable_if<!std::is_void<E>{}, int>::type =0>

@@ -81,12 +81,25 @@ void testVoid()
 
     shared_array<I> X(2);
 
-    shared_array<Void> Y(shared_array_static_cast<Void>(X));
+    shared_array<Void> Y(X.template castTo<Void>());
     testOk1(!X.unique());
     testOk1(!Y.unique());
     testEq(X.size(), 2u);
     testEq(Y.size(), 8u);
     testEq(Y.original_type(), ArrayType::UInt32); // never const uint32_t
+
+    testThrows<std::logic_error>([&Y]() {
+        auto Z = Y.freeze();
+    });
+
+    X.clear();
+    testOk1(Y.unique());
+
+    auto Z = Y.freeze();
+    testOk1(Y.unique());
+    testOk1(Z.unique());
+    testEq(Y.size(), 0u);
+    testEq(Z.size(), 8u);
 }
 
 void testFreeze()
@@ -94,7 +107,7 @@ void testFreeze()
     testDiag("%s", __func__);
 
     shared_array<uint32_t> X(2, 5);
-    shared_array<const uint32_t> Y(freeze(std::move(X)));
+    shared_array<const uint32_t> Y(X.freeze());
     testOk1(X.unique());
     testOk1(Y.unique());
     testEq(X.size(), 0u);
@@ -108,7 +121,7 @@ void testFreezeError()
     shared_array<uint32_t> X(2, 5), Z(X);
     testOk1(!X.unique());
     testThrows<std::logic_error>([&X]() {
-        shared_array<const uint32_t> Y(freeze(std::move(X)));
+        shared_array<const uint32_t> Y(X.freeze());
     })<<"Attempt to freeze() non-unique";
 }
 
@@ -126,7 +139,7 @@ void testComplex()
 
 MAIN(testshared)
 {
-    testPlan(81);
+    testPlan(93);
     testEmpty<void>();
     testEmpty<const void>();
     testEmpty<int32_t>();
