@@ -114,7 +114,7 @@ void testSerialize2()
         arr[0]["value"] = 0xdeadbeef;
         arr[1]["value"] = 0x1badface;
 
-        fld.from(shared_array_static_cast<const void>(freeze(std::move(arr))));
+        fld = arr.freeze().castTo<const void>();
 
         testToBytes(true, [&val](Buffer& buf) {
             to_wire_valid(buf, val);
@@ -143,7 +143,7 @@ void testSerialize2()
         arr[0]["->x"] = "theX";
         arr[1]["->y"] = "theY";
 
-        fld.from(shared_array_static_cast<const void>(freeze(std::move(arr))));
+        fld = arr.freeze().castTo<const void>();
 
         testToBytes(true, [&val](Buffer& buf) {
             to_wire_valid(buf, val);
@@ -187,7 +187,7 @@ void testSerialize2()
         arr[0] = 0x7b;
         arr[1]["q"] = "theq";
 
-        fld.from(shared_array_static_cast<const void>(freeze(std::move(arr))));
+        fld = arr.freeze().castTo<const void>();
 
         testToBytes(true, [&val](Buffer& buf) {
             to_wire_valid(buf, val);

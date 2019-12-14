@@ -209,7 +209,7 @@ namespace {
 template<typename E, typename C = E>
 void to_wire(Buffer& buf, const shared_array<const void>& varr)
 {
-    auto arr = shared_array_static_cast<const E>(varr);
+    auto arr = varr.castTo<const E>();
     to_wire(buf, Size{arr.size()});
     for(auto i : range(arr.size())) {
         to_wire(buf, C(arr[i]));
@@ -354,7 +354,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const FieldStorage* store
             to_wire<std::string, const std::string&>(buf, fld);
             return;
         case TypeCode::StructA:{
-            auto arr = shared_array_static_cast<const Value>(fld);
+            auto arr = fld.castTo<const Value>();
             to_wire(buf, Size{arr.size()});
             for(auto& elem : arr) {
                 if(!elem) {
@@ -368,7 +368,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const FieldStorage* store
         }
             return;
         case TypeCode::UnionA: {
-            auto arr = shared_array_static_cast<const Value>(fld);
+            auto arr = fld.castTo<const Value>();
             to_wire(buf, Size{arr.size()});
             for(auto& elem : arr) {
                 if(!elem) {
@@ -382,7 +382,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const FieldStorage* store
         }
             return;
         case TypeCode::AnyA:{
-            auto arr = shared_array_static_cast<const Value>(fld);
+            auto arr = fld.castTo<const Value>();
             to_wire(buf, Size{arr.size()});
             for(auto& elem : arr) {
                 if(!elem) {
@@ -588,7 +588,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, Field
                 }
             }
 
-            fld = shared_array_static_cast<const void>(freeze(std::move(arr)));
+            fld = arr.freeze().castTo<const void>();
         }
             return;
         case TypeCode::UnionA: {
@@ -621,7 +621,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, Field
                 }
             }
 
-            fld = shared_array_static_cast<const void>(freeze(std::move(arr)));
+            fld = arr.freeze().castTo<const void>();
         }
             return;
         case TypeCode::AnyA:{
@@ -644,7 +644,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, Field
                 }
             }
 
-            fld = shared_array_static_cast<const void>(freeze(std::move(arr)));
+            fld = arr.freeze().castTo<const void>();
         }
             return;
         default: break;

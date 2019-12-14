@@ -67,7 +67,7 @@ std::ostream& operator<<(std::ostream& strm, const shared_array<const void>& arr
 {
     switch(arr.original_type()) {
     case ArrayType::Null: strm<<"[null]"; break;
-#define CASE(CODE, Type) case ArrayType::CODE: strm<<shared_array_static_cast<const Type>(arr); break
+#define CASE(CODE, Type) case ArrayType::CODE: strm<<arr.castTo<const Type>(); break
     CASE(Bool, bool);
     CASE(UInt8, uint8_t);
     CASE(UInt16, uint16_t);
@@ -90,7 +90,7 @@ std::ostream& operator<<(std::ostream& strm, const shared_array<void>& arr)
 {
     switch(arr.original_type()) {
     case ArrayType::Null: strm<<"[null]"; break;
-#define CASE(CODE, Type) case ArrayType::CODE: strm<<shared_array_static_cast<Type>(arr); break
+#define CASE(CODE, Type) case ArrayType::CODE: strm<<arr.castTo<Type>(); break
     CASE(Bool, bool);
     CASE(UInt8, uint8_t);
     CASE(UInt16, uint16_t);

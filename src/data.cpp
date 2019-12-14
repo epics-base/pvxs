@@ -256,7 +256,7 @@ void Value::copyIn(const void *ptr, StoreType type)
 
             } else if(src.original_type()==ArrayType::Value && desc->code.kind()==Kind::Compound) {
                 // assign array of Struct/Union/Any
-                auto tsrc  = shared_array_static_cast<const Value>(src);
+                auto tsrc  = src.castTo<const Value>();
 
                 if(desc->code!=TypeCode::AnyA) {
                     // enforce member type for Struct[] and Union[]
@@ -384,7 +384,7 @@ void Value::traverse(const std::string &expr, bool modify)
                 auto& varr = store->as<shared_array<const void>>();
                 shared_array<const Value> arr;
                 if((varr.original_type()==ArrayType::Value)
-                        && index < (arr = shared_array_static_cast<const Value>(varr)).size())
+                        && index < (arr = varr.castTo<const Value>()).size())
                 {
                     *this = arr[index];
                     pos = sep+1;
@@ -480,7 +480,7 @@ void show_Value(std::ostream& strm,
         if(varr.original_type()!=ArrayType::Value) {
             strm<<" = "<<varr<<"\n";
         } else {
-            auto arr = shared_array_static_cast<const Value>(varr);
+            auto arr = varr.castTo<const Value>();
             strm<<" [\n";
             for(auto& val : arr) {
                 show_Value(strm, std::string(), val._desc(), val._store(), level+1);

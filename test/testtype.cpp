@@ -190,7 +190,7 @@ void testTypeDef()
     {
         shared_array<double> arr({1.0, 2.0});
 
-        val["value"].from(shared_array_static_cast<const void>(freeze(std::move(arr))));
+        val["value"] = arr.freeze().castTo<const void>();
     }
     // Struct[]
     {
@@ -202,10 +202,7 @@ void testTypeDef()
         arr[0]["value"] = 1.0;
         arr[1]["value"] = 2.0;
 
-//        auto frozen = freeze(std::move(arr));
-//        auto varr = shared_array_static_cast<const void>(frozen);
-//        fld.from(varr);
-        fld.from(shared_array_static_cast<const void>(freeze(std::move(arr))));
+        fld = arr.freeze().castTo<const void>();
 
         testEq(val["arbitrary.sarr[1]value"].as<double>(), 2.0);
     }
@@ -222,7 +219,7 @@ void testTypeDef()
         arr[0]["->x"] = 4.0;
         arr[1]["->y"] = 5.0;
 
-        fld.from(shared_array_static_cast<const void>(freeze(std::move(arr))));
+        fld = arr.freeze().castTo<const void>();
 
         testEq(fld["[1]"].as<double>(), 5.0);
         testEq(val["achoice[1]"].as<double>(), 5.0);
@@ -250,7 +247,7 @@ void testTypeDef()
         arr[0] = 123;
         arr[1]["q"] = "theq";
 
-        fld.from(shared_array_static_cast<const void>(freeze(std::move(arr))));
+        fld = arr.freeze().castTo<const void>();
 
         testEq(fld["[0]"].as<uint64_t>(), 123u);
         testEq(fld["[1]q"].as<std::string>(), "theq");
