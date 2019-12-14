@@ -105,9 +105,24 @@ namespace impl {
 PVXS_API
 void to_wire(Buffer& buf, const BitMask& mask)
 {
-    size_t nbytes = (mask.size() + 7u)/8u; // round up #bits to bytes
-    size_t nwords = nbytes / 8u;
-    size_t extra = nbytes % 8u; // trailing single bytes
+    // ignore trailing zeros
+    size_t nwords=mask.wsize();
+    size_t extra = 0u;
+    while(nwords) {
+        auto last = mask.word(nwords-1u);
+        if(last&0xff00000000000000ull) break;
+        nwords--;
+        if(last==0) continue;
+        else if(last&0x00ff000000000000ull) extra=7u;
+        else if(last&0x0000ff0000000000ull) extra=6u;
+        else if(last&0x000000ff00000000ull) extra=5u;
+        else if(last&0x00000000ff000000ull) extra=4u;
+        else if(last&0x0000000000ff0000ull) extra=3u;
+        else if(last&0x000000000000ff00ull) extra=2u;
+        else if(last&0x00000000000000ffull) extra=1u;
+        break;
+    }
+    size_t nbytes = nwords*8u + extra;
 
     to_wire(buf, Size{nbytes});
     for(auto i : range(nwords)) {

@@ -120,7 +120,7 @@ public:
     //! number of bits
     inline size_t size() const { return _size; }
     //! size()==0
-    inline bool empty() const { return _words.empty(); }
+    inline bool empty() const { return _size==0u; }
 
     //! number of storage words
     inline size_t wsize() const { return _words.size(); }

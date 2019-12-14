@@ -121,13 +121,13 @@ void testExpr()
 }
 
 template<size_t N>
-void testSerCase(bool be, uint8_t(&actual)[N], const char *expect)
+void testSerCase(bool be, uint8_t(&input)[N], const char *expect)
 {
-    std::string sactual((char*)actual, N-1u);
-    testShow()<<__func__<<"("<<(be?"BE":"LE")<<", \""<<escape(sactual)<<"\", \""<<expect<<"\")";
+    std::string sinput((char*)input, N-1u);
+    testShow()<<__func__<<"("<<(be?"BE":"LE")<<", \""<<escape(sinput)<<"\", \""<<expect<<"\")";
 
     BitMask mask;
-    FixedBuf inbuf(be, actual);
+    FixedBuf inbuf(be, input);
     from_wire(inbuf, mask);
 
     testEq(std::string(SB()<<mask), expect);
@@ -136,8 +136,8 @@ void testSerCase(bool be, uint8_t(&actual)[N], const char *expect)
     VectorOutBuf outbuf(be, O);
     to_wire(outbuf, mask);
 
-    testEq(sactual,
-           std::string((char*)O.data(), O.size()-outbuf.size()));
+    std::string actual((char*)O.data(), O.size()-outbuf.size());
+    testEq(sinput, actual);
 }
 
 void testSer()
