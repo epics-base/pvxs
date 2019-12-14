@@ -6,6 +6,7 @@
 #ifndef PVXS_DATA_H
 #define PVXS_DATA_H
 
+#include <initializer_list>
 #include <stdexcept>
 #include <vector>
 #include <ostream>
@@ -162,53 +163,48 @@ inline std::ostream& operator<<(std::ostream& strm, TypeCode c) {
     return strm;
 }
 
+struct Member {
+    TypeCode code;
+    std::string name;
+    std::string id;
+    std::vector<Member> children;
+
+    Member(TypeCode code, const std::string& name, const std::string& id = std::string())
+        :Member(code, name, id, {})
+    {}
+    PVXS_API
+    Member(TypeCode code, const std::string& name, const std::string& id, std::initializer_list<Member> children);
+    Member(TypeCode code, const std::string& name, std::initializer_list<Member> children)
+        :Member(code, name , std::string(), children)
+    {}
+};
+
 class PVXS_API TypeDef
 {
 public:
     struct Node;
 private:
-    struct NodeDeletor {
-        PVXS_API void operator()(Node *p);
-    };
-    std::unique_ptr<Node, NodeDeletor> root;
+    std::shared_ptr<const Member> top;
 public:
     TypeDef() = default;
-    TypeDef(TypeCode code, const char *id=nullptr);
-    // moveable, not copyable
-    TypeDef(const TypeDef&) = delete;
+    // moveable, copyable
+    TypeDef(const TypeDef&) = default;
     TypeDef(TypeDef&&) = default;
-    TypeDef& operator=(const TypeDef&) = delete;
+    TypeDef& operator=(const TypeDef&) = default;
     TypeDef& operator=(TypeDef&&) = default;
     explicit TypeDef(const Value&);
     ~TypeDef();
 
-    TypeDef clone() const;
+    TypeDef(TypeCode code, const std::string& id, std::initializer_list<Member> children);
+    TypeDef(TypeCode code, const std::string& id=std::string())
+        :TypeDef(code, id, {})
+    {}
+    TypeDef(TypeCode code, std::initializer_list<Member> children)
+        :TypeDef(code, std::string(), children)
+    {}
 
-    class PVXS_API Cursor {
-        friend class TypeDef;
-        TypeDef* owner;
-        Node* parent;
-        size_t index; // [0, parent->children.size()] (index==size() appends)
-    public:
+    //TypeDef& operator+=(const Member& )
 
-        Cursor& seek(const char *name);
-        Cursor& change(const char *id, TypeCode code);
-
-        Cursor& insert(const char *name, const char *id, TypeCode code);
-        inline Cursor& insert(const char *name, TypeCode code) {
-            return insert(name, nullptr, code);
-        }
-
-        Cursor& add(const char *name, const TypeDef& def);
-        Cursor& up();
-        Cursor& reset();
-        TypeDef& end() { return *owner; }
-        //! shorthand for .end().create()
-        inline Value create();
-    };
-    friend class Cursor;
-
-    Cursor begin();
     Value create() const;
 
     friend
@@ -371,10 +367,6 @@ public:
 
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const Value& val);
-
-Value TypeDef::Cursor::create() {
-    return end().create();
-}
 
 } // namespace pvxs
 

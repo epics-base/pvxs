@@ -85,33 +85,10 @@ const char* TypeCode::name() const
     return "\?\?\?_t";
 }
 
-struct TypeDef::Node {
-    Node * const parent;
-    std::string id;
-    TypeCode code;
-    std::vector<std::pair<std::string, decltype (TypeDef::root)>> children;
-    explicit Node(Node *parent) :parent(parent) {}
-    Node(Node* parent, const char *id, TypeCode code) :parent(parent), id(id?id:""), code(code) {}
-
-    decltype (TypeDef::root) clone(Node *new_parent) const {
-        decltype (TypeDef::root) ret{new Node(new_parent, id.c_str(), code)};
-        ret->children.reserve(children.size());
-        for(auto& pair : children) {
-            ret->children.emplace_back(pair.first, pair.second->clone(ret.get()));
-        }
-        return ret;
-    }
-};
-
-void TypeDef::NodeDeletor::operator()(Node *p)
-{
-    delete p;
-}
-
 static
-void node_validate(const TypeDef::Node* parent, const char  *id, TypeCode code)
+void node_validate(const Member* parent, const std::string& id, TypeCode code)
 {
-    if(id && code!=TypeCode::Struct && code!=TypeCode::Union)
+    if(!id.empty() && code!=TypeCode::Struct && code!=TypeCode::Union)
         throw std::runtime_error("Only Struct or Union may have an ID");
     if(parent) {
         auto c = parent->code.scalarOf();
@@ -144,56 +121,50 @@ void name_validate(const char *name)
     }
 }
 
-TypeDef::TypeDef(TypeCode code, const char *id)
-    :root{new Node(nullptr, id, code)}
+Member::Member(TypeCode code, const std::string& name, const std::string& id, std::initializer_list<Member> children)
+    :code(code), name(name), id(id)
 {
-    node_validate(nullptr, id, code);
+    if(!name.empty())
+        name_validate(name.c_str());
+    for(auto& child : children) {
+        node_validate(this, child.id, child.code);
+        this->children.push_back(child);
+    }
+}
+
+TypeDef::TypeDef(TypeCode code, const std::string& id, std::initializer_list<Member> children)
+{
+    decltype (top) temp(new Member(code, "", id, children));
+    top = std::move(temp);
 }
 
 static
-void copy_tree(const FieldDesc* desc, TypeDef::Node& node)
+void copy_tree(const FieldDesc* desc, Member& node)
 {
     node.code = desc->code;
     node.id = desc->id;
     node.children.reserve(desc->miter.size());
     for(auto& pair : desc->miter) {
-        node.children.emplace_back(pair.first,
-                                   decltype (node.children)::value_type::second_type{new TypeDef::Node(&node)});
-        copy_tree(desc+pair.second, *node.children.back().second);
+        auto cdesc = desc+pair.second;
+        node.children.emplace_back(cdesc->code, cdesc->id, pair.first);
+        copy_tree(cdesc, node.children.back());
     }
 }
 
 TypeDef::TypeDef(const Value& o)
 {
     if(o.desc) {
-        root.reset(new Node(nullptr));
+        std::shared_ptr<Member> root(new Member(o.desc->code, o.desc->id));
+
         copy_tree(o.desc, *root);
+        top = std::move(root);
     }
 }
 
 TypeDef::~TypeDef() {}
 
-TypeDef TypeDef::clone() const
-{
-    TypeDef ret;
-    if(root) {
-        ret.root = root->clone(nullptr);
-    }
-    return ret;
-}
-
-TypeDef::Cursor TypeDef::begin()
-{
-    if(!root)
-        throw std::runtime_error("Can't edit empty TypeDef");
-    Cursor ret;
-    ret.owner = this;
-    ret.reset();
-    return ret;
-}
-
 static
-void build_tree(std::vector<FieldDesc>& desc, const TypeDef::Node& node)
+void build_tree(std::vector<FieldDesc>& desc, const Member& node)
 {
     auto code = node.code;
     if(node.code==TypeCode::StructA || node.code==TypeCode::UnionA) {
@@ -217,20 +188,20 @@ void build_tree(std::vector<FieldDesc>& desc, const TypeDef::Node& node)
     }
 
 
-    for(auto& pair : node.children) {
+    for(auto& cnode : node.children) {
         const auto cindex = desc.size();
 
-        build_tree(desc, *pair.second); // recurse.  may realloc desc
+        build_tree(desc, cnode); // recurse.  may realloc desc
 
         auto& fld = desc[index];
         auto& child = desc[cindex];
 
-        fld.hash ^= std::hash<std::string>{}(pair.first) ^ child.hash;
+        fld.hash ^= std::hash<std::string>{}(cnode.name) ^ child.hash;
 
-        fld.mlookup[pair.first] = cindex-index;
-        fld.miter.emplace_back(pair.first, cindex-index);
+        fld.mlookup[cnode.name] = cindex-index;
+        fld.miter.emplace_back(cnode.name, cindex-index);
 
-        std::string cname = pair.first+".";
+        std::string cname = cnode.name+".";
         if(fld.code.code==TypeCode::Struct && fld.code==child.code) {
             // propagate names from sub-struct
             for(auto& cpair : child.mlookup) {
@@ -249,124 +220,28 @@ void build_tree(std::vector<FieldDesc>& desc, const TypeDef::Node& node)
 
 Value TypeDef::create() const
 {
-    if(!root)
+    if(!top)
         throw std::logic_error("Empty TypeDef");
 
     auto desc = std::make_shared<std::vector<FieldDesc>>();
-    build_tree(*desc, *root);
+    build_tree(*desc, *top);
     FieldDesc_calculate_offset(desc->data());
 
     std::shared_ptr<const FieldDesc> type(desc, desc->data()); // alias
     return Value(type);
 }
 
-TypeDef::Cursor& TypeDef::Cursor::seek(const char *name)
-{
-    while(name && name[0]) {
-        auto sep = strchr(name, '.');
-        std::string fname;
-        if(sep) {
-            fname = std::string(name, sep-name);
-            name = sep+1;
-        } else {
-            fname = name;
-            name = nullptr;
-        }
-
-        for(auto i : range(parent->children.size())) {
-            auto& pair = parent->children[i];
-            if(pair.first==fname) {
-                auto code = pair.second->code.scalarOf();
-                if(code==TypeCode::Union || code==TypeCode::Struct) {
-                    parent = pair.second.get();
-                    index = parent->children.size();
-
-                } else if(sep) {
-                    throw std::runtime_error("Can only seek through Struct/Union");
-
-                } else {
-                    index = i;
-                }
-            }
-        }
-    }
-
-    return *this;
-}
-
-TypeDef::Cursor& TypeDef::Cursor::change(const char *id, TypeCode code)
-{
-    node_validate(parent, id, code);
-
-    if(index>=parent->children.size()) {
-        throw std::runtime_error("Cursor does not select a field");
-    } else {
-        auto& fld = parent->children[index];
-        if(code.kind()!=Kind::Compound && !fld.second->children.empty())
-            throw std::runtime_error("May not change type of Compound field w/ sub-fields");
-        fld.second->id = id;
-        fld.second->code = code;
-    }
-    return *this;
-}
-
-TypeDef::Cursor& TypeDef::Cursor::insert(const char *name, const char *id, TypeCode code)
-{
-    node_validate(parent, id, code);
-    name_validate(name);
-
-    decltype (owner->root) node{new Node(parent, id, code)};
-
-    parent->children.emplace(parent->children.begin()+index,
-                             name, std::move(node));
-    index++;
-    return *this;
-}
-
-TypeDef::Cursor& TypeDef::Cursor::add(const char *name, const TypeDef& def)
-{
-    name_validate(name);
-
-    if(!def.root)
-        throw std::runtime_error("Empty TypeDef");
-
-    node_validate(parent, def.root->id.c_str(), def.root->code);
-
-    parent->children.emplace(parent->children.begin()+index,
-                            name, std::move(def.root->clone(parent)));
-
-    return *this;
-}
-
-TypeDef::Cursor& TypeDef::Cursor::up()
-{
-    if(parent!=owner->root.get()) {
-        parent = parent->parent;
-        index = parent->children.size();
-    } else {
-        throw std::logic_error("Can't go up() from root");
-    }
-    return *this;
-}
-
-TypeDef::Cursor& TypeDef::Cursor::reset()
-{
-    parent = owner->root.get();
-    index = parent->children.size();
-    return *this;
-}
-
 static
-void show_Node(std::ostream& strm, const std::string& name, const TypeDef::Node* node, unsigned level=0)
+void show_Node(std::ostream& strm, const std::string& name, const Member* node, unsigned level=0)
 {
     strm<<node->code;
     if(!node->id.empty())
         strm<<" \""<<node->id<<"\"";
     if(!node->children.empty()) {
         strm<<" {\n";
-        for(auto& pair : node->children) {
+        for(auto& cnode : node->children) {
             indent(strm, level+1);
-            show_Node(strm, pair.first, pair.second.get(), level+1);
+            show_Node(strm, cnode.name, &cnode, level+1);
         }
         indent(strm, level);
         strm.put('}');
@@ -382,10 +257,10 @@ void show_Node(std::ostream& strm, const std::string& name, const TypeDef::Node*
 
 std::ostream& operator<<(std::ostream& strm, const TypeDef& def)
 {
-    if(!def.root) {
+    if(!def.top) {
         strm<<"<Empty>\n";
     } else {
-        show_Node(strm, std::string(), def.root.get());
+        show_Node(strm, std::string(), def.top.get());
     }
     return strm;
 }

@@ -31,10 +31,9 @@ void testBasic()
 {
     testDiag("%s()", __func__);
 
-    auto top = TypeDef(TypeCode::Struct, "simple_t")
-            .begin()
-            .insert("value", nullptr, TypeCode::Float64)
-            .create();
+    auto top = TypeDef(TypeCode::Struct, "simple_t", {
+                           Member(TypeCode::Float64, "value"),
+                       }).create();
 
     testOk1(top.valid());
     testEq(top.type(), TypeCode::Struct);
@@ -74,33 +73,29 @@ void testTypeDef()
     testEq(std::string(SB()<<TypeDef(TypeCode::Struct, "simple_t")),
            "struct \"simple_t\"\n");
 
-    TypeDef def(TypeCode::Struct, "simple_t");
+    TypeDef def(TypeCode::Struct, "simple_t", {
+                    Member(TypeCode::Float64A, "value"),
+                    Member(TypeCode::Struct, "timeStamp", "time_t", {
+                        Member(TypeCode::UInt64, "secondsPastEpoch"),
+                        Member(TypeCode::UInt32, "nanoseconds"),
+                    }),
+                    Member(TypeCode::Struct, "arbitrary", {
+                        Member(TypeCode::StructA, "sarr", {
+                            Member(TypeCode::Float64, "value"),
+                        }),
+                    }),
+                    Member(TypeCode::Any, "any"),
+                    Member(TypeCode::AnyA, "anya"),
+                    Member(TypeCode::Union, "choice", {
+                        Member(TypeCode::Float32, "a"),
+                        Member(TypeCode::String, "b"),
+                    }),
+                    Member(TypeCode::UnionA, "achoice", {
+                        Member(TypeCode::Float32, "x"),
+                        Member(TypeCode::Float32, "y"),
+                    }),
+                });
 
-    def.begin()
-    .insert("value", nullptr, TypeCode::Float64A)
-    .insert("timeStamp", "time_t", TypeCode::Struct)
-    .seek("timeStamp")
-        .insert("secondsPastEpoch", TypeCode::UInt64)
-        .insert("nanoseconds", TypeCode::UInt32)
-    .up() // up one level
-    .insert("arbitrary", TypeCode::Struct)
-    .seek("arbitrary")
-        .insert("sarr", TypeCode::StructA)
-        .seek("sarr")
-            .insert("value", TypeCode::Float64)
-    .reset() // back to top
-    .insert("any", TypeCode::Any)
-    .insert("anya", TypeCode::AnyA)
-    .insert("choice", TypeCode::Union)
-    .seek("choice")
-        .insert("a", TypeCode::Float32)
-        .insert("b", TypeCode::String)
-    .reset()
-    .insert("achoice", TypeCode::UnionA)
-    .seek("achoice")
-        .insert("x", TypeCode::Float32)
-        .insert("y", TypeCode::Float32)
-    ;
 
     testShow()<<def;
 
@@ -249,10 +244,7 @@ void testTypeDef()
         auto fld = val["anya"];
         shared_array<Value> arr(3);
         arr[0] = TypeDef(TypeCode::UInt32).create();
-        arr[1] = TypeDef(TypeCode::Struct)
-                .begin()
-                .insert("q", TypeCode::String)
-                .create();
+        arr[1] = TypeDef(TypeCode::Struct, {Member(TypeCode::String, "q")}).create();
         // leave [2] as null
 
         arr[0] = 123;

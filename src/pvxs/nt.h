@@ -22,6 +22,11 @@ struct NTScalar {
     TypeDef build();
 };
 
+struct NTNDArray {
+    PVXS_API
+    TypeDef build();
+};
+
 }} // namespace pvxs::nt
 
 #endif // PVXS_NT_H
