@@ -664,7 +664,6 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
     }
     } // end case
 
-    assert(false);
     buf.fault();
 }
 
