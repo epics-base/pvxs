@@ -20,6 +20,16 @@ NoConvert::NoConvert()
 
 NoConvert::~NoConvert() {}
 
+std::shared_ptr<const impl::FieldDesc>
+Value::Helper::type(const Value& v)
+{
+    if(v) {
+        return std::shared_ptr<const impl::FieldDesc>(v.store->top->desc, v.desc);
+    } else {
+        return nullptr;
+    }
+}
+
 Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
     :desc(nullptr)
 {

@@ -456,6 +456,12 @@ struct pva_search_flags {
     };
 };
 
+enum class pva_subcmd {
+    Init = 0x08,
+    Destroy = 0x10,
+    Get  = 0x40,
+};
+
 struct Header {
     uint8_t cmd, flags;
     uint32_t len;

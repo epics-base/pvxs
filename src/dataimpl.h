@@ -33,6 +33,8 @@ struct Value::Helper {
 
     static inline                       impl::FieldStorage*  store_ptr(      Value& v) { return v.store.get(); }
     static inline                 const impl::FieldStorage*  store_ptr(const Value& v) { return v.store.get(); }
+
+    static std::shared_ptr<const impl::FieldDesc> type(const Value& v);
 };
 
 namespace impl {

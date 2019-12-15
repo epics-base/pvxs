@@ -219,8 +219,11 @@ struct PVXS_API Get : public OpBase
 {
     const Value request;
 
+    //! Define (and communicate) the type of this Get operation.
+    virtual void connect(const Value& prototype,
+                         std::function<void()>&& onExec) =0;
     //! Positive reply w/ data
-    virtual void reply(const Value& prototype) =0;
+    virtual void reply(const Value& data) =0;
     //! Negative reply w/ error message
     virtual void error(const std::string& msg) =0;
 

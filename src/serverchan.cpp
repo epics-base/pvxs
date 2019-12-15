@@ -316,6 +316,7 @@ void ServerConn::handle_DESTROY_CHANNEL()
     for(auto& pair : chan->opByIOID) {
         auto n = opByIOID.erase(pair.second->ioid);
         assert(n==1);
+        pair.second->state = ServerOp::Dead;
     }
 
     assert(chan.use_count()==1); // we only take transient refs on this thread

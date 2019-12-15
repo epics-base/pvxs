@@ -77,7 +77,6 @@ struct ServerIntrospectControl : public server::Introspect
                 to_wire(R, sts);
                 if(type)
                     to_wire(R, type);
-                // would be FieldDesc payload if Ok or Warn
             }
 
             auto tx = bufferevent_get_output(conn->bev.get());

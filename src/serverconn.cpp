@@ -188,9 +188,6 @@ void ServerConn::handle_AUTHNZ()
     // ignored (so far no auth plugin actually uses)
 }
 
-void ServerConn::handle_GET()
-{}
-
 void ServerConn::handle_PUT()
 {}
 
@@ -212,7 +209,7 @@ void ServerConn::handle_CANCEL_REQUEST()
 
     auto it = opByIOID.find(ioid);
     if(it==opByIOID.end()) {
-        log_printf(connsetup, PLVL_WARN, "Client %s Cancel of non-existant Op\n", peerName.c_str());
+        log_printf(connsetup, PLVL_WARN, "Client %s Cancel of non-existant Op %u\n", peerName.c_str(), unsigned(ioid));
         return;
     }
 
@@ -227,7 +224,8 @@ void ServerConn::handle_CANCEL_REQUEST()
         op->state = ServerOp::Idle;
 
     } else {
-        log_printf(connsetup, PLVL_WARN, "Client %s Cancel of non-executing Op\n", peerName.c_str());
+        // an allowed race
+        log_printf(connsetup, PLVL_DEBUG, "Client %s Cancel of non-executing Op\n", peerName.c_str());
     }
 }
 
@@ -243,11 +241,17 @@ void ServerConn::handle_DESTROY_REQUEST()
 
     auto& chan = lookupSID(sid);
 
-    auto n = opByIOID.erase(ioid);
-    n += chan->opByIOID.erase(ioid);
-    if(n!=2) {
+    auto it = opByIOID.find(ioid);
+    auto n = chan->opByIOID.erase(ioid);
+
+    if(it==opByIOID.end() || n!=1) {
         log_printf(connsetup, PLVL_WARN, "Client %s can't destroy non-existant op %u:%u\n",
                    peerName.c_str(), unsigned(sid), unsigned(ioid));
+
+    } else {
+        it->second->state = ServerOp::Dead;
+        // TODO interface to notify Op of cancel/destroy
+        chan->opByIOID.erase(it);
     }
 }
 
