@@ -253,7 +253,7 @@ void ServerConn::handle_DESTROY_REQUEST()
     } else {
         it->second->state = ServerOp::Dead;
         // TODO interface to notify Op of cancel/destroy
-        chan->opByIOID.erase(it);
+        opByIOID.erase(it);
     }
 }
 
