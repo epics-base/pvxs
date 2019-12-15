@@ -33,6 +33,9 @@ struct ServerOp
 
     const uint32_t ioid;
 
+    std::function<void(const std::string&)> onClose;
+    std::function<void()> onCancel;
+
     enum state_t {
         Creating,
         Idle,
@@ -41,9 +44,9 @@ struct ServerOp
     } state;
 
     ServerOp(const std::weak_ptr<ServerChan>& chan, uint32_t ioid) :chan(chan), ioid(ioid), state(Idle) {}
+    ServerOp(const ServerOp&) = delete;
+    ServerOp& operator=(const ServerOp&) = delete;
     virtual ~ServerOp() =0;
-
-    virtual void cancel();
 };
 
 struct ServerChannelControl : public server::ChannelControl
@@ -51,7 +54,10 @@ struct ServerChannelControl : public server::ChannelControl
     ServerChannelControl(const std::shared_ptr<ServerConn>& conn, const std::shared_ptr<ServerChan>& chan);
     virtual ~ServerChannelControl();
 
-    virtual std::shared_ptr<server::Handler> setHandler(const std::shared_ptr<server::Handler> &h) override final;
+    virtual void onOp(std::function<void(std::unique_ptr<server::ConnectOp>&&)>&& fn) override final;
+    virtual void onRPC(std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)>&& fn) override final;
+
+    virtual void onClose(std::function<void(const std::string&)>&& fn) override final;
     virtual void close() override final;
 
     const std::weak_ptr<server::Server::Pvt> server;
@@ -66,12 +72,14 @@ struct ServerChan
     const std::string name;
 
     enum {
-        Creating,
-        Active,
-        Destroy,
+        Creating, // CREATE_CHANNEL request received, reply not sent
+        Active,   // reply sent
+        Destroy,  // DESTROY_CHANNEL request received and/or reply sent
     } state;
 
-    std::shared_ptr<server::Handler> handler;
+    std::function<void(std::unique_ptr<server::ConnectOp>&&)> onOp;
+    std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onRPC;
+    std::function<void(const std::string&)> onClose;
 
     std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID; // our subset of ServerConn::opByIOID
 
@@ -132,6 +140,8 @@ private:
 
     CASE(MESSAGE);
 #undef CASE
+
+    void handle_GPR(pva_app_msg_t cmd);
 
     void cleanup();
     void bevEvent(short events);

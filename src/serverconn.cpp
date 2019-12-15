@@ -190,12 +190,6 @@ void ServerConn::handle_AUTHNZ()
     // ignored (so far no auth plugin actually uses)
 }
 
-void ServerConn::handle_PUT()
-{}
-
-void ServerConn::handle_RPC()
-{}
-
 void ServerConn::handle_PUT_GET()
 {}
 
@@ -225,6 +219,9 @@ void ServerConn::handle_CANCEL_REQUEST()
     if(op->state==ServerOp::Executing) {
         op->state = ServerOp::Idle;
 
+        if(op->onCancel)
+            op->onCancel();
+
     } else {
         // an allowed race
         log_printf(connsetup, PLVL_DEBUG, "Client %s Cancel of non-executing Op\n", peerName.c_str());
@@ -251,9 +248,12 @@ void ServerConn::handle_DESTROY_REQUEST()
                    peerName.c_str(), unsigned(sid), unsigned(ioid));
 
     } else {
-        it->second->state = ServerOp::Dead;
-        // TODO interface to notify Op of cancel/destroy
+        auto op = it->second;
         opByIOID.erase(it);
+        op->state = ServerOp::Dead;
+
+        if(op->onClose)
+            op->onClose("");
     }
 }
 
@@ -424,6 +424,8 @@ void ServerConn::bevRead()
 #undef CASE
             }
             // handlers may be cleared bev to force disconnect
+            if(!bev)
+                break;
 
             // silently drain any unprocessed body (forward compatibility)
             if(auto n = evbuffer_get_length(segBuf.get()))
@@ -531,7 +533,5 @@ void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, s
 }
 
 ServerOp::~ServerOp() {}
-
-void ServerOp::cancel() {}
 
 }} // namespace pvxs::impl

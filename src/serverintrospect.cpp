@@ -20,23 +20,54 @@ struct ServerIntrospect : public ServerOp
         :ServerOp(chan, ioid)
     {}
     virtual ~ServerIntrospect() {}
+
+    void doReply(const FieldDesc* type, const Status& sts)
+    {
+        if(state != ServerOp::Executing)
+            return;
+        auto ch = chan.lock();
+        if(!ch)
+            return;
+        auto conn = ch->conn.lock();
+        if(!conn || !conn->bev)
+            return;
+
+        {
+            (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
+
+            EvOutBuf R(hostBE, conn->txBody.get());
+            to_wire(R, uint32_t(ioid));
+            to_wire(R, sts);
+            if(type)
+                to_wire(R, type);
+        }
+
+        conn->enqueueTxBody(CMD_GET_FIELD);
+
+        state = ServerOp::Dead;
+        conn->opByIOID.erase(ioid);
+        ch->opByIOID.erase(ioid);
+    }
 };
 
-struct ServerIntrospectControl : public server::Introspect
+struct ServerIntrospectControl : public server::ConnectOp
 {
-    ServerIntrospectControl(ServerConn* conn,
+    ServerIntrospectControl(ServerConn *conn, ServerChan *chan,
                             const std::weak_ptr<server::Server::Pvt>& server,
-                            const std::string& name,
                             const std::weak_ptr<ServerIntrospect>& op)
-        :server::Introspect(conn->peerName, conn->iface->name, name)
-        ,server(server)
+        :server(server)
         ,op(op)
-    {}
+    {
+        _op = Info;
+        _name = chan->name;
+        _peerName = conn->peerName;
+        _ifaceName = conn->iface->name;
+    }
     virtual ~ServerIntrospectControl() {
         error("Implict Cancel");
     }
 
-    virtual void reply(const Value& prototype) override final
+    virtual void connect(const Value& prototype) override final
     {
         auto desc = Value::Helper::desc(prototype);
         if(!desc)
@@ -58,33 +89,26 @@ struct ServerIntrospectControl : public server::Introspect
             return; // soft fail if already completed, cancelled, disconnected, ....
 
         serv->acceptor_loop.call([this, type, &sts](){
-            auto oper = op.lock();
-            if(!oper || oper->state != ServerOp::Executing)
-                return;
-            auto chan = oper->chan.lock();
-            if(!chan)
-                return;
-            auto conn = chan->conn.lock();
-            if(!conn || !conn->bev)
-                return;
-
-            {
-                (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
-
-                EvOutBuf R(hostBE, conn->txBody.get());
-                to_wire(R, uint32_t(oper->ioid));
-                to_wire(R, sts);
-                if(type)
-                    to_wire(R, type);
-            }
-
-            conn->enqueueTxBody(CMD_GET_FIELD);
-
-            oper->state = ServerOp::Dead;
-            conn->opByIOID.erase(oper->ioid);
-            chan->opByIOID.erase(oper->ioid);
+            if(auto oper = op.lock())
+                oper->doReply(type, sts);
         });
     }
+
+    virtual void onClose(std::function<void(const std::string&)>&& fn) override final
+    {
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, &fn](){
+            if(auto oper = op.lock())
+                if(auto chan = oper->chan.lock())
+                    chan->onClose = std::move(fn);
+        });
+    }
+
+    // we'll never use these, so no reason to store
+    virtual void onGet(std::function<void(std::unique_ptr<server::ExecOp>&& fn)>&& fn) override final {}
+    virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&& fn, Value&&)>&& fn) override final {}
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerIntrospect> op;
@@ -114,15 +138,15 @@ void ServerConn::handle_GET_FIELD()
     }
 
     std::shared_ptr<ServerIntrospect> op(new ServerIntrospect(chan, ioid));
-    std::unique_ptr<ServerIntrospectControl> ctrl(new ServerIntrospectControl(this, iface->server->internal_self, chan->name, op));
+    std::unique_ptr<ServerIntrospectControl> ctrl(new ServerIntrospectControl(this, chan.get(), iface->server->internal_self, op));
 
     op->state = ServerOp::Executing; // this is a one-shot operation
 
     opByIOID[ioid] = op;
     chan->opByIOID[ioid] = op;
 
-    if(chan->handler)
-        chan->handler->onIntrospect(std::move(ctrl));
+    if(chan->onOp)
+        chan->onOp(std::move(ctrl));
 }
 
 }} // namespace pvxs::impl

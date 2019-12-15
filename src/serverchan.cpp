@@ -33,25 +33,60 @@ ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
 ServerChan::~ServerChan() {}
 
 ServerChannelControl::ServerChannelControl(const std::shared_ptr<ServerConn> &conn, const std::shared_ptr<ServerChan>& channel)
-    :server::ChannelControl(conn->peerName, conn->iface->name, channel->name)
-    ,server(conn->iface->server->internal_self)
+    :server(conn->iface->server->internal_self)
     ,chan(channel)
-{}
+{
+    _op = None;
+    _name = channel->name;
+    _peerName = conn->peerName;
+    _ifaceName = conn->iface->name;
+}
 
 ServerChannelControl::~ServerChannelControl() {}
 
-std::shared_ptr<server::Handler> ServerChannelControl::setHandler(const std::shared_ptr<server::Handler> &h)
+void ServerChannelControl::onOp(std::function<void(std::unique_ptr<server::ConnectOp>&&)>&& fn)
 {
-    std::shared_ptr<server::Handler> ret(h);
-    std::shared_ptr<server::Server::Pvt> serv(server);
+    auto serv = server.lock();
+    if(!serv)
+        return;
 
-    serv->acceptor_loop.call([this, &ret](){
-        std::shared_ptr<ServerChan> ch(chan);
+    serv->acceptor_loop.call([this, &fn](){
+        auto ch = chan.lock();
+        if(!ch)
+            return;
 
-        ch->handler.swap(ret);
+        ch->onOp = std::move(fn);
     });
+}
 
-    return ret;
+void ServerChannelControl::onRPC(std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)>&& fn)
+{
+    auto serv = server.lock();
+    if(!serv)
+        return;
+
+    serv->acceptor_loop.call([this, &fn](){
+        auto ch = chan.lock();
+        if(!ch)
+            return;
+
+        ch->onRPC = std::move(fn);
+    });
+}
+
+void ServerChannelControl::onClose(std::function<void(const std::string&)>&& fn)
+{
+    auto serv = server.lock();
+    if(!serv)
+        return;
+
+    serv->acceptor_loop.call([this, &fn](){
+        auto ch = chan.lock();
+        if(!ch)
+            return;
+
+        ch->onClose = std::move(fn);
+    });
 }
 
 static
@@ -246,7 +281,7 @@ void ServerConn::handle_CREATE_CHANNEL()
             for(auto& pair : iface->server->sources) {
                 try {
                     pair.second->onCreate(std::move(op));
-                    if(!op || chan->handler || chan->state!=ServerChan::Creating) {
+                    if(!op || chan->onOp || chan->onClose || chan->state!=ServerChan::Creating) {
                         claimed = chan->state==ServerChan::Creating;
                         log_printf(connsetup, PLVL_DEBUG, "Client %s %s channel to %s through %s\n", peerName.c_str(),
                                    claimed?"accepted":"rejected", name.c_str(), pair.first.second.c_str());

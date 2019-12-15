@@ -25,7 +25,6 @@ struct ServerConn;
 }
 namespace server {
 
-struct Handler;
 struct Source;
 
 /** PV Access protocol server instance
@@ -109,38 +108,70 @@ private:
     std::shared_ptr<Pvt> pvt;
 };
 
-struct OpBase {
+struct PVXS_API OpBase {
+    enum op_t {
+        None,
+        Info,
+        Get,
+        Put,
+        RPC,
+    };
+protected:
+    std::string _peerName;
+    std::string _ifaceName;
+    std::string _name;
+    op_t _op;
+public:
     //! The Client endpoint address in "X.X.X.X:Y" format.
-    const std::string peerName;
+    const std::string& peerName() const { return _peerName; }
     //! The local endpoint address in "X.X.X.X:Y" format.
-    const std::string ifaceName;
+    const std::string& ifaceName() const { return _ifaceName; }
     //! The Channel name
-    const std::string name;
+    const std::string& name() const { return _name; }
+    op_t op() const { return _op; }
     // TODO credentials
 
-    OpBase(const std::string& peerName,
-           const std::string& iface,
-           const std::string& name);
     virtual ~OpBase() =0;
+};
+
+struct PVXS_API ExecOp : public OpBase {
+
+    virtual void reply() =0;
+    virtual void reply(const Value& val) =0;
+    virtual void error(const std::string& msg) =0;
+
+    virtual void onCancel(std::function<void()>&&) =0;
+
+    virtual ~ExecOp();
+};
+
+struct PVXS_API ConnectOp : public OpBase {
+    Value pvRequest;
+
+    virtual void connect(const Value& prototype) =0;
+    virtual void error(const std::string& msg) =0;
+
+    virtual ~ConnectOp();
+
+    virtual void onGet(std::function<void(std::unique_ptr<ExecOp>&&)>&& fn) =0;
+    virtual void onPut(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn) =0;
+    virtual void onClose(std::function<void(const std::string&)>&&) =0;
 };
 
 /** Manipulate an active Channel, and any in-progress Operations through it.
  *
  */
 struct PVXS_API ChannelControl : public OpBase {
-    ChannelControl(const std::string& peerName,
-                   const std::string& iface,
-                   const std::string& name)
-        :OpBase (peerName, iface, name)
-    {}
     virtual ~ChannelControl() =0;
 
-    //! Set/replace Handler associated with this Channel
-    //! If called from outside a Handler method, blocks until in-progress Handler methods have returned.
-    virtual std::shared_ptr<Handler> setHandler(const std::shared_ptr<Handler>& h) =0;
+    //! invoked when a new GET, PUT, or RPC Operation is requested through this Channel
+    virtual void onOp(std::function<void(std::unique_ptr<ConnectOp>&&)>&& ) =0;
+    virtual void onRPC(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn)=0;
+
+    virtual void onClose(std::function<void(const std::string&)>&&) =0;
 
     //! Force disconnection
-    //! If called from outside a Handler method, blocks until in-progress Handler methods have returned.
+    //! If called from outside a handler method, blocks until in-progress Handler methods have returned.
     //! Reference to currently attached Handler is released.
     virtual void close() =0;
 
@@ -197,108 +228,6 @@ struct PVXS_API Source {
      *  Callee with either do nothing, or std::move() the ChannelControl and call ChannelControl::setHandler()
      */
     virtual void onCreate(std::unique_ptr<ChannelControl>&& op) =0;
-};
-
-//! Token for an in-progress request for Channel data type information.
-struct PVXS_API Introspect : public OpBase
-{
-    //! Positive reply.  Only the type of the provided Value is used.  Any field values are ignored.
-    virtual void reply(const Value& prototype) =0;
-    //! Negative reply w/ error message
-    virtual void error(const std::string& msg) =0;
-
-    Introspect(const std::string& peerName,
-                   const std::string& iface,
-                   const std::string& name)
-        :OpBase (peerName, iface, name)
-    {}
-    virtual ~Introspect() =0;
-};
-
-struct PVXS_API Get : public OpBase
-{
-    const Value request;
-
-    //! Define (and communicate) the type of this Get operation.
-    virtual void connect(const Value& prototype,
-                         std::function<void()>&& onExec) =0;
-    //! Positive reply w/ data
-    virtual void reply(const Value& data) =0;
-    //! Negative reply w/ error message
-    virtual void error(const std::string& msg) =0;
-
-    Get(const std::string& peerName,
-        const std::string& iface,
-        const std::string& name,
-        const Value& request)
-        :OpBase (peerName, iface, name)
-        ,request(request)
-    {}
-    virtual ~Get() =0;
-};
-
-struct PVXS_API Put : public OpBase
-{
-    const Value request;
-    const Value value;
-
-    //! Positive reply
-    virtual void complete() =0;
-    //! Negative reply w/ error message
-    virtual void error(const std::string& msg) =0;
-
-    Put(const std::string& peerName,
-        const std::string& iface,
-        const std::string& name,
-        const Value& request,
-        const Value& value)
-        :OpBase (peerName, iface, name)
-        ,request(request)
-        ,value(value)
-    {}
-    virtual ~Put() =0;
-};
-
-struct PVXS_API RPC : public OpBase
-{
-    const Value request;
-    const Value value;
-
-    //! Positive reply w/ data
-    virtual void reply(const Value& prototype) =0;
-    //! Negative reply w/ error message
-    virtual void error(const std::string& msg) =0;
-
-    RPC(const std::string& peerName,
-        const std::string& iface,
-        const std::string& name,
-        const Value& request,
-        const Value& value)
-        :OpBase (peerName, iface, name)
-        ,request(request)
-        ,value(value)
-    {}
-    virtual ~RPC() =0;
-};
-
-/** Requests for a particular Channel are dispatched through me.
- *
- *  User code will sub-class.
- */
-struct PVXS_API Handler {
-    virtual ~Handler();
-
-    /** Request for Channel data type information
-     *
-     * Ownership of the Introspect instance is passed to the callee.
-     * The request will be implicitly errored if the callee allows
-     * the Introspect to be deleted prior to replying.
-     */
-    virtual void onIntrospect(std::unique_ptr<Introspect>&& op);
-
-    virtual void onGet(std::unique_ptr<Get>&& op);
-    virtual void onPut(std::unique_ptr<Put>&& op);
-    virtual void onRPC(std::unique_ptr<RPC>&& op);
 };
 
 }} // namespace pvxs::server

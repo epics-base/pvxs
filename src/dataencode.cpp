@@ -29,6 +29,11 @@ namespace impl {
 
 void to_wire(Buffer& buf, const FieldDesc* cur)
 {
+    if(!cur) {
+        to_wire(buf, uint8_t(0xff));
+        return;
+    }
+
     // we assume FieldDesc* is valid (checked on creation)
     to_wire(buf, cur->code.code);
 

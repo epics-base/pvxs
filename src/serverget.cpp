@@ -15,147 +15,271 @@ DEFINE_LOGGER(connsetup, "tcp.setup");
 DEFINE_LOGGER(connio, "tcp.io");
 
 namespace {
-struct ServerGet : public ServerOp
+
+// generalized Get/Put/RPC
+struct ServerGPR : public ServerOp
 {
-    ServerGet(const std::shared_ptr<ServerChan>& chan, uint32_t ioid)
+    ServerGPR(const std::shared_ptr<ServerChan>& chan, uint32_t ioid)
         :ServerOp(chan, ioid)
     {}
-    virtual ~ServerGet() {}
+    virtual ~ServerGPR() {}
 
+    void doReply(const std::shared_ptr<const FieldDesc>& type,
+                 const Value& value,
+                 const std::string& msg)
+    {
+        auto ch = chan.lock();
+        if(!ch)
+            return;
+        auto conn = ch->conn.lock();
+        if(!conn || !conn->bev)
+            return;
+
+        if(state==Dead || state==Idle) {
+            // no warn if Idle as this may result from a remote Cancel
+            return;
+        }
+
+        if(type && this->type)
+            throw std::logic_error("Operation already connected (has a type)");
+        if(cmd!=CMD_PUT && this->type && (!value || Value::Helper::desc(value)!=this->type.get()))
+            throw std::logic_error("PUT Must reply with exact type previously passed to connect()");
+
+        Status sts{};
+        if(!msg.empty())
+            sts = Status::error(msg);
+
+        {
+            (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
+
+            EvOutBuf R(hostBE, conn->txBody.get());
+            to_wire(R, uint32_t(ioid));
+            to_wire(R, subcmd);
+            to_wire(R, sts);
+
+            if(!sts.isSuccess()) {
+                // error()
+
+                if(state==Executing)
+                    state = Idle;
+                else // Creating
+                    state = Dead;
+
+            } else if(state==Creating) {
+                // connect()
+                if(cmd!=CMD_RPC) {
+                    this->type = type;
+                    to_wire(R, type.get());
+                }
+                state = Idle;
+
+            } else if(state==Executing) {
+                if(cmd==CMD_GET || (cmd==CMD_PUT && (subcmd&0x40))) {
+                    to_wire_valid(R, value); // GET and PUT/Get reply with bitmask and partial value
+
+                } else if(cmd==CMD_RPC) {
+                    auto type = Value::Helper::desc(value);
+                    to_wire(R, type);
+                    if(value)
+                        to_wire_full(R, value);
+                }
+                state = lastRequest ? Dead : Idle;
+
+            } else {
+                assert(false);
+            }
+            assert(R.good());
+        }
+
+        conn->enqueueTxBody(cmd);
+
+        if(state == ServerOp::Dead) {
+            ch->opByIOID.erase(ioid);
+            auto it = conn->opByIOID.find(ioid);
+            if(it!=conn->opByIOID.end()) {
+                auto self(it->second);
+                conn->opByIOID.erase(it);
+
+                conn->iface->server->acceptor_loop.dispatch([self](){
+                    self->onClose("");
+                });
+
+            } else {
+                assert(false); // really shouldn't happen
+            }
+            conn->opByIOID.erase(ioid);
+        }
+    }
+
+    pva_app_msg_t cmd;
+    uint8_t subcmd; // valid when state==Executing or Creating
     bool lastRequest=false;
-    std::function<void()> onExec;
+
+    std::shared_ptr<const FieldDesc> type;
+
+    std::function<void(const std::string&)> onClose;
+    std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onPut;
+
+    std::function<void(std::unique_ptr<server::ExecOp>&&)> onGet;
 };
 
-struct ServerGetControl : public server::Get
+
+struct ServerGPRConnect : public server::ConnectOp
 {
-    ServerGetControl(ServerConn* conn,
+    ServerGPRConnect(ServerConn* conn,
                      const std::weak_ptr<server::Server::Pvt>& server,
                      const std::string& name,
                      const Value& request,
-                     const std::weak_ptr<ServerGet>& op)
-        :server::Get(conn->peerName, conn->iface->name, name, request)
-        ,server(server)
+                     const std::weak_ptr<ServerGPR>& op)
+        :server(server)
         ,op(op)
-    {}
-    virtual ~ServerGetControl() {
-        error("Implict Cancel");
+    {
+        _op = Info;
+        _name = name;
+        _peerName = conn->peerName;
+        _ifaceName = conn->iface->name;
+    }
+    virtual ~ServerGPRConnect() {
+        error("Op Create implied error");
     }
 
-    virtual void connect(const Value& prototype,
-                         std::function<void()>&& onExec) override final
+    virtual void connect(const Value& prototype) override final
     {
-        if(!onExec || !prototype)
-            throw std::logic_error("connect() requires prototype and onExec()");
-        action(ServerOp::Creating, prototype, std::string(), std::move(onExec));
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, &prototype](){
+            if(auto oper = op.lock()) {
+                if(oper->state!=ServerOp::Creating)
+                    return;
+
+                if(!prototype && oper->cmd!=CMD_RPC)
+                    throw std::invalid_argument("Must provide prototype");
+
+                std::shared_ptr<const FieldDesc> type;
+                if(prototype)
+                    type = Value::Helper::type(prototype);
+
+                oper->doReply(type, Value(), std::string());
+            }
+        });
+    }
+    virtual void error(const std::string& msg) override final
+    {
+        if(msg.empty())
+            throw std::invalid_argument("Must provide error message");
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, &msg](){
+            if(auto oper = op.lock()) {
+                if(oper->state==ServerOp::Creating)
+                    oper->doReply(nullptr, Value(), msg);
+            }
+        });
     }
 
-    virtual void reply(const Value& value) override final
+    virtual void onGet(std::function<void(std::unique_ptr<server::ExecOp>&&)>&& fn) override final
     {
-        if(!value)
-            throw std::logic_error("reply() requires Value");
-        action(ServerOp::Executing, value, std::string(), nullptr);
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, &fn](){
+            if(auto oper = op.lock())
+                oper->onGet = std::move(fn);
+        });
+    }
+    virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)>&& fn) override final
+    {
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, &fn](){
+            if(auto oper = op.lock())
+                oper->onPut = std::move(fn);
+        });
+    }
+    virtual void onClose(std::function<void(const std::string&)>&& fn) override final
+    {
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, &fn](){
+            if(auto oper = op.lock())
+                oper->onClose = std::move(fn);
+        });
+    }
+
+    const std::weak_ptr<server::Server::Pvt> server;
+    const std::weak_ptr<ServerGPR> op;
+};
+
+struct ServerGPRExec : public server::ExecOp
+{
+    ServerGPRExec(ServerConn* conn,
+                     const std::weak_ptr<server::Server::Pvt>& server,
+                     const std::string& name,
+                     const Value& request,
+                     const std::weak_ptr<ServerGPR>& op)
+        :server(server)
+        ,op(op)
+    {
+        _op = Info;
+        _name = name;
+        _peerName = conn->peerName;
+        _ifaceName = conn->iface->name;
+    }
+    virtual ~ServerGPRExec() {}
+
+    virtual void reply() override final
+    {
+        reply(Value());
+    }
+
+    virtual void reply(const Value& val) override final
+    {
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, &val](){
+            if(auto oper = op.lock()) {
+                oper->doReply(nullptr, val, std::string());
+            }
+        });
     }
 
     virtual void error(const std::string& msg) override final
     {
-        action(ServerOp::Dead, Value(), msg, nullptr);
-    }
-
-    void action(ServerOp::state_t action,
-                const Value& value,
-                const std::string& msg,
-                std::function<void()>&& onExec)
-    {
-
+        if(msg.empty())
+            throw std::invalid_argument("Must provide error message");
         auto serv = server.lock();
         if(!serv)
             return;
-
-        serv->acceptor_loop.call([this, action, &value, &msg, &onExec](){
-            auto oper = op.lock();
-            if(!oper || oper->state == ServerOp::Dead)
-                return;
-            auto chan = oper->chan.lock();
-            if(!chan)
-                return;
-            auto conn = chan->conn.lock();
-            if(!conn || !conn->bev)
-                return;
-
-            Status sts{};
-            uint8_t cmd = oper->state==ServerOp::Creating ? 0x08 : oper->lastRequest ? 0x50 : 0x40;
-
-            if(action==ServerOp::Dead) {
-                // error()
-                sts.code = Status::Error;
-                sts.msg = msg;
-                sts.trace = ""; // TODO
-
-                if(oper->state == ServerOp::Executing)
-                    oper->state = ServerOp::Idle;
-                else
-                    oper->state = ServerOp::Dead;
-                log_printf(connsetup, PLVL_DEBUG, "CLient %s Get error\n", peerName.c_str());
-
-            } else if(oper->state == ServerOp::Creating && action==ServerOp::Creating) {
-                // connect()
-                type = Value::Helper::type(value);
-                oper->onExec = std::move(onExec);
-                oper->state = ServerOp::Idle;
-                log_printf(connsetup, PLVL_DEBUG, "CLient %s Get connected\n", peerName.c_str());
-
-            } else if(oper->state == ServerOp::Executing && action==ServerOp::Executing) {
-                // reply()
-                if(type.get()!=Value::Helper::desc(value))
-                    throw std::logic_error("Can't reply() w/ type change");
-                log_printf(connsetup, PLVL_DEBUG, "CLient %s Get complete\n", peerName.c_str());
-
-                oper->state = oper->lastRequest ? ServerOp::Dead : ServerOp::Idle;
-
-            } else {
-                log_printf(connsetup, PLVL_DEBUG, "Client %s Get operation not possible %d %d\n",
-                           peerName.c_str(), action, oper->state);
-                return;
-            }
-
-            {
-                (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
-
-                EvOutBuf R(hostBE, conn->txBody.get());
-                to_wire(R, uint32_t(oper->ioid));
-                to_wire(R, cmd);
-                to_wire(R, sts);
-                if(sts.code!=Status::Ok) {
-                    // error()
-
-                } else if(action==ServerOp::Creating) {
-                    // connect()
-                    to_wire(R, type.get()); // type
-
-                } else {
-                    // reply()
-                    to_wire_valid(R, value);
-
-                }
-            }
-
-            conn->enqueueTxBody(CMD_GET);
-
-            if(oper->state == ServerOp::Dead) {
-                conn->opByIOID.erase(oper->ioid);
-                chan->opByIOID.erase(oper->ioid);
+        serv->acceptor_loop.call([this, &msg](){
+            if(auto oper = op.lock()) {
+                oper->doReply(nullptr, Value(), msg);
             }
         });
+    }
 
+    virtual void onCancel(std::function<void()>&& fn) override final
+    {
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, &fn](){
+            if(auto oper = op.lock())
+                oper->onCancel = std::move(fn);
+        });
     }
 
     const std::weak_ptr<server::Server::Pvt> server;
-    const std::weak_ptr<ServerGet> op;
-    std::shared_ptr<const FieldDesc> type;
+    const std::weak_ptr<ServerGPR> op;
 };
+
 } // namespace
 
-void ServerConn::handle_GET()
+void ServerConn::handle_GPR(pva_app_msg_t cmd)
 {
     EvInBuf M(peerBE, segBuf.get(), 16);
 
@@ -168,13 +292,21 @@ void ServerConn::handle_GET()
 
     Status reply{};
 
-    if(subcmd&0x08) { // INIT
-        Value pvRequest;
+    // subcmd bitmask
+    // 0x08 - Init
+    // 0x10 - Destroy
+    // 0x40 - Get
+    // 0x00 - context dependent.  for CMD_GET the same as 0x40, for CMD_PUT and CMD_RPC the opposite of Get
+    bool isput = cmd!=CMD_GET && !(subcmd&0x40);
 
+    if(subcmd&0x08) { // INIT
+        // type and full value
+        Value pvRequest;
         from_wire_type_value(M, rxRegistry, pvRequest);
 
         if(!M.good()) {
-            log_printf(connio, PLVL_DEBUG, "Client %s\n Invalid Get INIT\n", peerName.c_str());
+            log_printf(connio, PLVL_DEBUG, "Client %s\n Invalid op=%x/%x INIT\n",
+                       peerName.c_str(), cmd, subcmd);
             bev.reset();
             return;
         }
@@ -187,9 +319,11 @@ void ServerConn::handle_GET()
             return;
         }
 
-        std::shared_ptr<ServerGet> op(new ServerGet(chan, ioid));
-        std::unique_ptr<ServerGetControl> ctrl(new ServerGetControl(this, iface->server->internal_self, chan->name, pvRequest, op));
+        std::shared_ptr<ServerGPR> op(new ServerGPR(chan, ioid));
+        op->cmd = cmd;
+        std::unique_ptr<ServerGPRConnect> ctrl(new ServerGPRConnect(this, iface->server->internal_self, chan->name, pvRequest, op));
 
+        op->subcmd = subcmd;
         op->state = ServerOp::Creating;
 
         opByIOID[ioid] = op;
@@ -199,35 +333,94 @@ void ServerConn::handle_GET()
                    peerName.c_str(), unsigned(ioid),
                    std::string(SB()<<pvRequest).c_str());
 
-        if(chan->handler)
-            chan->handler->onGet(std::move(ctrl));
+        if(cmd==CMD_RPC) {
+            ctrl->connect(Value());
 
-    } else { // EXEC  should be 0x40 however, some clients are lax
-        // no additional message fields
-        if(!M.good()) {
-            log_printf(connio, PLVL_DEBUG, "Client %s\n Invalid Get EXEC\n", peerName.c_str());
-            bev.reset();
-            return;
+        } else if(chan->onOp) { // GET, PUT
+            chan->onOp(std::move(ctrl));
         }
 
-        std::shared_ptr<ServerGet> op;
+    } else { // EXEC, maybe Get or Put
+
+        std::shared_ptr<ServerGPR> op;
         auto it = opByIOID.find(ioid);
-        if(it==opByIOID.end() || !(op=std::dynamic_pointer_cast<ServerGet>(it->second))) {
+        if(it==opByIOID.end() || !(op=std::dynamic_pointer_cast<ServerGPR>(it->second))) {
             log_printf(connio, PLVL_ERR, "Client %s Gets %s IOID %u\n", peerName.c_str(),
                        it==opByIOID.end() ? "non-existant" : "invalid", unsigned(ioid));
             bev.reset();
             return;
         }
 
-        op->lastRequest = subcmd&0x10;
+        if(cmd!=CMD_RPC && !op->type) {
+            log_printf(connsetup, PLVL_ERR, "Client %s tries to Exec to early\n", peerName.c_str());
+            bev.reset();
+            return;
+        }
+
+        Value val;
+        if(cmd==CMD_RPC) {
+            // type and full value
+            from_wire_type_value(M, rxRegistry, val);
+
+        } else if(isput) {
+            // bitmask and partial value
+            val = Value::Helper::build(op->type);
+            from_wire_valid(M, rxRegistry, val);
+        }
+
+        if(!M.good()) {
+            log_printf(connio, PLVL_DEBUG, "Client %s\n Invalid op=%x/%x Get\n",
+                       peerName.c_str(), cmd, subcmd);
+            bev.reset();
+            return;
+        }
+
+        auto chan = op->chan.lock();
+        if(!chan)
+            throw std::logic_error("live op on dead channel");
 
         if(op->state==ServerOp::Idle) {
             // all set
 
+            if(!op->lastRequest)
+                op->lastRequest = subcmd&0x10;
+
+            std::unique_ptr<ServerGPRExec> ctrl{new ServerGPRExec(this, iface->server->internal_self, chan->name, val, op)};
+
+            op->subcmd = subcmd;
             op->state = ServerOp::Executing;
 
             log_printf(connsetup, PLVL_DEBUG, "CLient %s Get executing\n", peerName.c_str());
-            op->onExec(); // notify
+
+            try {
+                if(cmd==CMD_RPC && isput) {
+                    if(chan->onRPC)
+                        chan->onRPC(std::move(ctrl), std::move(val));
+                    else
+                        ctrl->error("RPC Not Implemented");
+
+                } else if(cmd==CMD_PUT && isput) {
+                    if(op->onPut)
+                        op->onPut(std::move(ctrl), std::move(val));
+                    else
+                        ctrl->error("PUT Not Implemented");
+
+                } else if(cmd!=CMD_RPC && !isput) {
+                    if(op->onGet)
+                        op->onGet(std::move(ctrl));
+                    else
+                        ctrl->error("GET Not Implemented");
+
+                } else {
+                    log_printf(connsetup, PLVL_ERR, "Client %s Get exec in incorrect command %d\n",
+                               peerName.c_str(), subcmd);
+                }
+            } catch(std::exception& e) {
+                log_printf(connsetup, PLVL_ERR, "Client %s Unhandled exception in onGet/Put/RPC %s : %s\n",
+                           peerName.c_str(), typeid(e).name(), e.what());
+                if(ctrl)
+                    ctrl->error(e.what());
+            }
 
         } else {
             log_printf(connsetup, PLVL_ERR, "CLient %s Get exec in incorrect state %d\n",
@@ -235,6 +428,21 @@ void ServerConn::handle_GET()
         }
     }
 
+}
+
+void ServerConn::handle_GET()
+{
+    handle_GPR(CMD_GET);
+}
+
+void ServerConn::handle_PUT()
+{
+    handle_GPR(CMD_PUT);
+}
+
+void ServerConn::handle_RPC()
+{
+    handle_GPR(CMD_RPC);
 }
 
 }} // namespace pvxs::impl

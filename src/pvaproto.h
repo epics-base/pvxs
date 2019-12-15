@@ -348,6 +348,11 @@ struct Status {
     std::string trace;
 
     inline bool isSuccess() const { return code==Ok || code==Warn; }
+
+    static inline Status error(const std::string& msg, const std::string& trace = std::string())
+    {
+        return Status{Error, msg, trace};
+    }
 };
 
 inline

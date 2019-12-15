@@ -597,41 +597,11 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 
 Source::~Source() {}
 
-OpBase::OpBase(const std::string& peerName,
-               const std::string& iface,
-               const std::string& name)
-    :peerName(peerName)
-    ,ifaceName(iface)
-    ,name(name)
-{}
-
 OpBase::~OpBase() {}
 
 ChannelControl::~ChannelControl() {}
 
-Introspect::~Introspect() {}
-Get::~Get() {}
-Put::~Put() {}
-RPC::~RPC() {}
+ConnectOp::~ConnectOp() {}
+ExecOp::~ExecOp() {}
 
-Handler::~Handler() {}
-
-void Handler::onIntrospect(std::unique_ptr<Introspect>&& op)
-{
-    op->error("Not Implemented");
-}
-void Handler::onGet(std::unique_ptr<Get>&& op)
-{
-    op->error("Not Implemented");
-}
-void Handler::onPut(std::unique_ptr<Put>&& op)
-{
-    op->error("Not Implemented");
-}
-void Handler::onRPC(std::unique_ptr<RPC> &&op)
-{
-    op->error("Not Implemented");}
-
-}
-
-} // namespace pvxs::server
+}} // namespace pvxs::server
