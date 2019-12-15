@@ -156,6 +156,8 @@ void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val);
 PVXS_API
 void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val);
 
+PVXS_API
+void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val);
 
 PVXS_API
 void FieldDesc_calculate_offset(FieldDesc* top);

@@ -697,6 +697,28 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
     }
 }
 
+void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val)
+{
+    std::shared_ptr<std::vector<FieldDesc>> descs(new std::vector<FieldDesc>);
+    TypeDeserContext dc{*descs, ctxt};
+
+    from_wire(buf, dc);
+    if(!buf.good())
+        return;
+
+    if(!descs->empty()) {
+        FieldDesc_calculate_offset(descs->data());
+
+        std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
+        val = Value::Helper::build(stype);
+
+        from_wire_full(buf, ctxt, val);
+
+    } else {
+        val = Value();
+    }
+}
+
 }} // namespace pvxs::impl
 
 #endif // DATAENCODE_H
