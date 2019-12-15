@@ -131,7 +131,7 @@ void testDeserialize1()
         testOk1(!!val["timeStamp.nanoseconds"].isMarked());
         testOk1(!!val["alarm.message"].isMarked());
         testEq(val["value"].as<uint32_t>(), 0u);
-        testEq(val["timeStamp.nanoseconds"].as<uint32_t>(), 0xab);
+        testEq(val["timeStamp.nanoseconds"].as<uint32_t>(), 0xabu);
         testEq(val["alarm.message"].as<std::string>(), "hello world");
     }
 
@@ -271,7 +271,7 @@ void testDeserialize2()
         testOk1(!!val["arbitrary.sarr"].isMarked());
         testEq(val["arbitrary.sarr"].as<shared_array<const void>>().size(), 3u*sizeof(Value));
         testEq(val["arbitrary.sarr[0]value"].as<uint32_t>(), 0xdeadbeef);
-        testEq(val["arbitrary.sarr[1]value"].as<uint32_t>(), 0x1badface);
+        testEq(val["arbitrary.sarr[1]value"].as<uint32_t>(), 0x1badfaceu);
         testEq(val["arbitrary.sarr[2]value"].type(), TypeCode::Null);
     }
 
@@ -311,7 +311,7 @@ void testDeserialize2()
         });
         testOk1(!val["value"].isMarked());
         testOk1(!!val["any"].isMarked());
-        testEq(val["any"].as<uint32_t>(), 0x600df00d);
+        testEq(val["any"].as<uint32_t>(), 0x600df00du);
     }
 
     {
@@ -336,7 +336,7 @@ void testDeserialize2()
         testOk1(!val["value"].isMarked());
         testOk1(!!val["anya"].isMarked());
         testEq(val["anya"].as<shared_array<const void>>().size(), 3u*sizeof(Value));
-        testEq(val["anya[0]"].as<uint32_t>(), 0x7b);
+        testEq(val["anya[0]"].as<uint32_t>(), 0x7bu);
         testEq(val["anya[1]q"].as<std::string>(), "theq");
         testEq(val["anya[2]"].type(), TypeCode::Null);
     }

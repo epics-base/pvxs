@@ -83,7 +83,7 @@ public:
 struct PVXS_API FixedBuf : public Buffer
 {
     typedef Buffer base_type;
-    EPICS_ALWAYS_INLINE bool refill(size_t more) override final { return false; }
+    virtual bool refill(size_t more) override final { return false; }
 
     template<size_t N>
     constexpr FixedBuf(bool be, uint8_t(&buf)[N]) :base_type(be, buf, N) {}
