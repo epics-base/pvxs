@@ -16,6 +16,7 @@
 #include <pvxs/server.h>
 #include "evhelper.h"
 #include "utilpvt.h"
+#include "dataimpl.h"
 #include "udp_collector.h"
 
 namespace pvxs {namespace impl {
@@ -86,6 +87,7 @@ struct ServerConn : public std::enable_shared_from_this<ServerConn>
     SockAddr peerAddr;
     std::string peerName;
     evbufferevent bev;
+    TypeStore rxRegistry;
 
     // credentials
 

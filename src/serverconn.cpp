@@ -152,11 +152,19 @@ void ServerConn::handle_CONNECTION_VALIDATION()
         from_wire(M, qos);
         from_wire(M, selected);
 
+        Value auth;
+        from_wire_type_value(M, rxRegistry, auth);
+        // TODO store credentials
+
         if(!M.good()) {
-            log_printf(connio, PLVL_ERR, "Client %s Truncated/Invalid ConnValid from client", peerName.c_str());
+            log_printf(connio, PLVL_ERR, "Client %s Truncated/Invalid ConnValid from client\n", peerName.c_str());
             bev.reset();
             return;
 
+        } else {
+            log_printf(connsetup, PLVL_DEBUG, "Client %s authenticates using %s and %s\n",
+                       peerName.c_str(), selected.c_str(),
+                       std::string(SB()<<auth).c_str());
         }
     }
 
