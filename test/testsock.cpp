@@ -104,7 +104,7 @@ void test_from_wire()
 
     {
         uint32_t val=0;
-        uint8_t buf[] = {0x12, 0x34, 0x56, 0x78, 0xff, 0xff};
+        uint8_t buf[] = "\x12\x34\x56\x78\xff\xff";
         FixedBuf pkt(true, buf);
 
         from_wire(pkt, val);
@@ -115,7 +115,7 @@ void test_from_wire()
 
     {
         uint32_t val=0;
-        uint8_t buf[] = {0x78, 0x56, 0x34, 0x12, 0xff, 0xff};
+        uint8_t buf[] = "\x78\x56\x34\x12\xff\xff";
         FixedBuf pkt(false, buf);
 
         from_wire(pkt, val);
@@ -126,8 +126,8 @@ void test_from_wire()
 
     {
         uint32_t val = 0;
-        uint8_t buf[] = {0x12, 0x34, 0x56, 0x78, 0xff, 0xff, 0xff, 0xff};
-        FixedBuf pkt(true, buf, 2);
+        uint8_t buf[] = "\x12\x34";
+        FixedBuf pkt(true, buf);
 
         from_wire(pkt, val);
         testEq(pkt.size(), 2u);
@@ -137,7 +137,7 @@ void test_from_wire()
 
     {
         SockAddr val;
-        uint8_t buf[] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff, 0x7f,0,0,1, 0xde, 0xad, 0xbe, 0xef};
+        uint8_t buf[] = "\0\0\0\0\0\0\0\0\0\0\xff\xff\x7f\0\0\x01\xde\xad\xbe\xef";
         FixedBuf pkt(true, buf);
 
         from_wire(pkt, val);
@@ -154,7 +154,7 @@ void test_to_wire()
 
     {
         const uint32_t val = 0xdeadbeef;
-        uint8_t buf[8];
+        uint8_t buf[8+1];
         FixedBuf pkt(true, buf);
 
         to_wire(pkt, val);
@@ -166,7 +166,7 @@ void test_to_wire()
 
     {
         const uint32_t val = 0xdeadbeef;
-        uint8_t buf[8];
+        uint8_t buf[8+1];
         FixedBuf pkt(false, buf);
 
         to_wire(pkt, val);
@@ -178,7 +178,7 @@ void test_to_wire()
 
     {
         const SockAddr val(SockAddr::loopback(AF_INET));
-        uint8_t buf[16+4];
+        uint8_t buf[16+4+1];
         FixedBuf pkt(true, buf);
 
         to_wire(pkt, val);
@@ -191,7 +191,7 @@ void test_to_wire()
 
     {
         const uint32_t val = 0xdeadbeef;
-        uint8_t buf[8] = {0,0,0,0,0,0,0,0};
+        uint8_t buf[] = "\0\0\0\0\0\0\0\0";
         FixedBuf pkt(true, buf, 2);
 
         to_wire(pkt, val);

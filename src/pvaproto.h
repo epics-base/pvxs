@@ -85,8 +85,9 @@ struct PVXS_API FixedBuf : public Buffer
     typedef Buffer base_type;
     virtual bool refill(size_t more) override final { return false; }
 
+    // for "uint8_t msg[] = "..."; // assumes extraneous trailing nil
     template<size_t N>
-    constexpr FixedBuf(bool be, uint8_t(&buf)[N]) :base_type(be, buf, N) {}
+    constexpr FixedBuf(bool be, uint8_t(&buf)[N]) :base_type(be, buf, N-1) {}
     constexpr FixedBuf(bool be, uint8_t* buf, size_t n) :base_type(be, buf, n) {}
     FixedBuf(bool be, std::vector<uint8_t>& buf) :base_type(be, buf.data(), buf.size()) {}
     virtual ~FixedBuf();
