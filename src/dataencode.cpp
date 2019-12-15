@@ -242,7 +242,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
             // serialize entire sub-structure
             for(auto off : range(desc->offset+1u, desc->next_offset)) {
                 auto cdesc = desc + top.member_indicies[off];
-                std::shared_ptr<const FieldStorage> cstore(store, store.get()+off);
+                std::shared_ptr<const FieldStorage> cstore(store, store.get()+off); // TODO avoid shared_ptr/aliasing here
                 if(cdesc->code!=TypeCode::Struct)
                     to_wire_field(buf, cdesc, cstore);
             }
@@ -454,7 +454,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
             // serialize entire sub-structure
             for(auto off : range(desc->offset+1u, desc->next_offset)) {
                 auto cdesc = desc + top.member_indicies[off];
-                std::shared_ptr<FieldStorage> cstore(store, store.get()+off);
+                std::shared_ptr<FieldStorage> cstore(store, store.get()+off); // TODO avoid shared_ptr/aliasing here
                 if(cdesc->code!=TypeCode::Struct)
                     from_wire_field(buf, ctxt, cdesc, cstore);
             }
@@ -529,12 +529,16 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
             TypeDeserContext dc{*descs, ctxt};
 
             from_wire(buf, dc);
+            if(!buf.good())
+                return;
 
             if(descs->empty()) {
                 fld = Value();
                 return;
 
             } else {
+                FieldDesc_calculate_offset(descs->data());
+
                 std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
                 fld = Value::Helper::build(stype);
 
@@ -613,12 +617,11 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                         elem = Value::Helper::build(stype, store, desc);
 
                         from_wire_full(buf, ctxt, elem);
-                        return;
 
                     } else {
                         // invalid selector
                         buf.fault();
-                        break;
+                        return;
                     }
                 }
             }
@@ -637,7 +640,12 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                     TypeDeserContext dc{*descs, ctxt};
 
                     from_wire(buf, dc);
+                    if(!buf.good())
+                        return;
+
                     if(!descs->empty()) {
+                        FieldDesc_calculate_offset(descs->data());
+
                         std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
                         elem = Value::Helper::build(stype, store, desc);
 
