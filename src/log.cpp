@@ -80,7 +80,7 @@ struct logger_gbl_t {
 
         auto it = config.find(name);
         if(it!=config.end()) {
-            epics::atomic::set(logger->lvl, it->second);
+            logger->lvl.store(it->second, std::memory_order_relaxed);
             return it->second;
         }
 
@@ -98,7 +98,7 @@ struct logger_gbl_t {
         // apply to existing loggers
         auto iters = loggers.equal_range(name);
         for(; iters.first!=iters.second; ++iters.first) {
-            epics::atomic::set(iters.first->second->lvl, lvl);
+            iters.first->second->lvl.store(lvl, std::memory_order_relaxed);
         }
     }
 } *logger_gbl;
@@ -116,17 +116,20 @@ int logger_init(logger *logger)
 {
     assert(logger->name);
 
-    if(epics::atomic::compareAndSwap(logger->lvl, -1, PLVL_ERR)!=-1) {
-        // raced concurrent init and lost
-        return epics::atomic::get(logger->lvl);
+    int lvl = logger->lvl.load();
+    if(lvl==-1) {
+        // maybe we initialize
+        if(logger->lvl.compare_exchange_strong(lvl, PLVL_ERR)) {
+            // logger now has default config of PLVL_ERR
+            // we will fully initialize
+            epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
+            assert(logger_gbl);
+
+            Guard G(logger_gbl->lock);
+            lvl = logger_gbl->init(logger);
+        }
     }
-    // logger now has default config of PLVL_ERR
-
-    epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
-    assert(logger_gbl);
-
-    Guard G(logger_gbl->lock);
-    return logger_gbl->init(logger);
+    return lvl;
 }
 
 void xerrlogHexPrintf(const void *buf, size_t buflen,

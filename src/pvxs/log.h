@@ -6,10 +6,11 @@
 #ifndef PVXS_LOG_H
 #define PVXS_LOG_H
 
+#include <atomic>
+
 #include <stdarg.h>
 
 #include <compilerDependencies.h>
-#include <epicsAtomic.h>
 #include <errlog.h>
 
 #include <pvxs/version.h>
@@ -25,10 +26,10 @@ namespace pvxs {
 struct logger {
     const char *name;
     // atomic using epicsAtomic (std::atomic<> may not be statically initializable)
-    int lvl;
+    std::atomic<int> lvl;
 };
 
-#define LOGGER_INIT(NAME) {NAME, -1}
+#define LOGGER_INIT(NAME) {NAME, {-1}}
 
 #define DEFINE_LOGGER(VAR, NAME) static ::pvxs::logger VAR = LOGGER_INIT(NAME)
 
@@ -37,7 +38,7 @@ PVXS_API int logger_init(logger *logger);
 static inline
 bool _log_test(logger& logger, int lvl)
 {
-    int cur = ::epics::atomic::get(logger.lvl);
+    int cur = logger.lvl.load(std::memory_order_relaxed);
     if(cur==-1) cur = logger_init(&logger);
     return cur>=lvl;
 }
