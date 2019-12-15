@@ -448,13 +448,57 @@ void testXCodeNTNDArray()
     testEq(msg, out);
 }
 
+// test the common case for a pvRequest of caching an empty Struct
+void testEmptyRequest()
+{
+    testDiag("%s", __func__);
+
+    TypeStore registry;
+
+    std::vector<FieldDesc> descs1;
+    {
+        uint8_t msg[] = "\xfd\x02\x00\x80\x00\x00";
+        FixedBuf buf(false, msg);
+        TypeDeserContext ctxt{descs1, registry};
+        from_wire(buf, ctxt);
+        if(testOk1(buf.good()))
+            FieldDesc_calculate_offset(descs1.data());
+        testEq(buf.size(), 0u)<<"remaining of "<<sizeof(msg-1);
+    }
+
+    if(testEq(registry.size(), 1u)) {
+        testEq(registry[2].size(), 1u);
+    }
+
+    std::vector<FieldDesc> descs2;
+    {
+        uint8_t msg[] = "\xfe\x02\x00";
+        FixedBuf buf(false, msg);
+        TypeDeserContext ctxt{descs2, registry};
+        from_wire(buf, ctxt);
+        if(testOk1(buf.good()))
+            FieldDesc_calculate_offset(descs2.data());
+        testEq(buf.size(), 0u)<<"remaining of "<<sizeof(msg-1);
+    }
+
+    testEq(descs1.size(), 1u);
+    testEq(descs2.size(), 1u);
+
+    testEq(std::string(SB()<<descs1.data()),
+           "[0] struct  <0:1>  [0:1)\n")<<"\nActual descs1\n"<<descs1.data();
+
+    testEq(std::string(SB()<<descs2.data()),
+           "[0] struct  <0:1>  [0:1)\n")<<"\nActual descs2\n"<<descs2.data();
+}
+
 } // namespace
 
 MAIN(testxcode)
 {
-    testPlan(0);
+    testPlan(34);
     testDecode1();
     testXCodeNTScalar();
     testXCodeNTNDArray();
+    testEmptyRequest();
     return testDone();
 }
