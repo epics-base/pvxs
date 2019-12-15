@@ -24,6 +24,8 @@
 
 namespace pvxs {namespace impl {
 
+constexpr bool hostBE{EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG};
+
 //! view of a slice of a buffer.
 //! Don't use directly.  cf. FixedBuf
 struct PVXS_API Buffer {
@@ -194,7 +196,7 @@ inline void to_wire(Buffer& buf, const T& val)
         uint8_t b[sizeof(T)];
     } pun;
     pun.v = val;
-    _to_wire<sizeof(T)>(buf, pun.b, buf.be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG));
+    _to_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE);
 }
 
 template<typename T, typename std::enable_if<sizeof(T)==1 && std::is_scalar<T>{}, int>::type =0>
@@ -220,7 +222,7 @@ inline void from_wire(Buffer& buf, T& val)
         T v;
         uint8_t b[sizeof(T)];
     } pun;
-    _from_wire<sizeof(T)>(buf, pun.b, buf.be ^ (EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG));
+    _from_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE);
     if(buf.good())
         val = pun.v;
 }

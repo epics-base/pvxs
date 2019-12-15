@@ -68,24 +68,17 @@ struct ServerIntrospectControl : public server::Introspect
             if(!conn || !conn->bev)
                 return;
 
-            const bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
             {
                 (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
 
-                EvOutBuf R(be, conn->txBody.get());
+                EvOutBuf R(hostBE, conn->txBody.get());
                 to_wire(R, uint32_t(oper->ioid));
                 to_wire(R, sts);
                 if(type)
                     to_wire(R, type);
             }
 
-            auto tx = bufferevent_get_output(conn->bev.get());
-            to_evbuf(tx, Header{CMD_GET_FIELD,
-                                pva_flags::Server,
-                                uint32_t(evbuffer_get_length(conn->txBody.get()))},
-                     be);
-            auto err = evbuffer_add_buffer(tx, conn->txBody.get());
-            assert(!err);
+            conn->enqueueTxBody(CMD_GET_FIELD);
 
             oper->state = ServerOp::Dead;
             conn->opByIOID.erase(oper->ioid);

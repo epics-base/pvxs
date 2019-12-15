@@ -53,14 +53,13 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     auto tx = bufferevent_get_output(bev.get());
 
     std::vector<uint8_t> buf(128);
-    const bool be = EPICS_BYTE_ORDER == EPICS_ENDIAN_BIG;
 
     // queue connection validation message
     {
-        uint8_t flags = be ? pva_flags::MSB : 0;
+        uint8_t flags = hostBE ? pva_flags::MSB : 0;
         flags |= pva_flags::Server;
 
-        VectorOutBuf M(be, buf);
+        VectorOutBuf M(hostBE, buf);
         to_wire(M, Header{pva_ctrl_msg::SetEndian, pva_flags::Control|pva_flags::Server, 0});
 
         auto save = M.save();
@@ -76,7 +75,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         to_wire(M, "ca");
         auto bend = M.save();
 
-        FixedBuf H(be, save, 8);
+        FixedBuf H(hostBE, save, 8);
         to_wire(H, Header{CMD_CONNECTION_VALIDATION, pva_flags::Server, uint32_t(bend-bstart)});
 
         assert(M.good() && H.good());
@@ -100,6 +99,17 @@ const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
     return it->second;
 }
 
+void ServerConn::enqueueTxBody(pva_app_msg_t cmd)
+{
+    auto tx = bufferevent_get_output(bev.get());
+    to_evbuf(tx, Header{cmd,
+                        pva_flags::Server,
+                        uint32_t(evbuffer_get_length(txBody.get()))},
+             hostBE);
+    auto err = evbuffer_add_buffer(tx, txBody.get());
+    assert(!err);
+}
+
 void ServerConn::handle_ECHO()
 {
     // Client requests echo as a keep-alive check
@@ -107,8 +117,7 @@ void ServerConn::handle_ECHO()
     auto tx = bufferevent_get_output(bev.get());
     uint32_t len = evbuffer_get_length(segBuf.get());
 
-    const bool be = EPICS_BYTE_ORDER == EPICS_ENDIAN_BIG;
-    to_evbuf(tx, Header{CMD_ECHO, pva_flags::Server, len}, be);
+    to_evbuf(tx, Header{CMD_ECHO, pva_flags::Server, len}, hostBE);
 
     auto err = evbuffer_add_buffer(tx, segBuf.get());
     assert(!err);
@@ -120,21 +129,14 @@ void ServerConn::handle_ECHO()
 static
 void auth_complete(ServerConn *self, const Status& sts)
 {
-    const bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
     (void)evbuffer_drain(self->txBody.get(), evbuffer_get_length(self->txBody.get()));
 
     {
-        EvOutBuf M(be, self->txBody.get());
+        EvOutBuf M(hostBE, self->txBody.get());
         to_wire(M, sts);
     }
 
-    auto tx = bufferevent_get_output(self->bev.get());
-    to_evbuf(tx, Header{CMD_CONNECTION_VALIDATED,
-                        pva_flags::Server,
-                        uint32_t(evbuffer_get_length(self->txBody.get()))},
-             be);
-    auto err = evbuffer_add_buffer(tx, self->txBody.get());
-    assert(!err);
+    self->enqueueTxBody(CMD_CONNECTION_VALIDATED);
 
     log_printf(connsetup, PLVL_DEBUG, "%s Auth complete with %d\n", self->peerName.c_str(), sts.code);
 }

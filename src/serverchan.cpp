@@ -71,8 +71,7 @@ void ServerChannelControl::close()
                 // Send unsolicited Channel Destroy
 
                 auto tx = bufferevent_get_output(conn->bev.get());
-                constexpr bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
-                EvOutBuf R(be, tx);
+                EvOutBuf R(hostBE, tx);
                 to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
                 to_wire(R, ch->sid);
                 to_wire(R, ch->cid);
@@ -84,7 +83,6 @@ void ServerChannelControl::close()
 
 void ServerConn::handle_SEARCH()
 {
-    const bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t searchID=0;
@@ -145,7 +143,7 @@ void ServerConn::handle_SEARCH()
     {
         (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
-        EvOutBuf R(be, txBody.get());
+        EvOutBuf R(hostBE, txBody.get());
 
         to_wire(M, searchID);
         to_wire(M, iface->bind_addr);
@@ -161,18 +159,11 @@ void ServerConn::handle_SEARCH()
         }
     }
 
-    auto tx = bufferevent_get_output(bev.get());
-    to_evbuf(tx, Header{CMD_SEARCH_RESPONSE,
-                        pva_flags::Server,
-                        uint32_t(evbuffer_get_length(txBody.get()))},
-             be);
-    auto err = evbuffer_add_buffer(tx, txBody.get());
-    assert(!err);
+    enqueueTxBody(CMD_SEARCH_RESPONSE);
 }
 
 void ServerConn::handle_CREATE_CHANNEL()
 {
-    const bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
     const auto self = shared_from_this();
 
     EvInBuf M(peerBE, segBuf.get(), 16);
@@ -252,7 +243,7 @@ void ServerConn::handle_CREATE_CHANNEL()
         {
             (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
-            EvOutBuf R(be, txBody.get());
+            EvOutBuf R(hostBE, txBody.get());
             to_wire(R, cid);
             to_wire(R, sid);
             to_wire(R, sts);
@@ -264,13 +255,7 @@ void ServerConn::handle_CREATE_CHANNEL()
             }
         }
 
-        auto tx = bufferevent_get_output(bev.get());
-        to_evbuf(tx, Header{CMD_CREATE_CHANNEL,
-                            pva_flags::Server,
-                            uint32_t(evbuffer_get_length(txBody.get()))},
-                 be);
-        auto err = evbuffer_add_buffer(tx, txBody.get());
-        assert(!err);
+        enqueueTxBody(CMD_CREATE_CHANNEL);
     }
 
     if(!M.good()) {
@@ -324,8 +309,7 @@ void ServerConn::handle_DESTROY_CHANNEL()
 
     {
         auto tx = bufferevent_get_output(bev.get());
-        constexpr bool be = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
-        EvOutBuf R(be, tx);
+        EvOutBuf R(hostBE, tx);
         to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
         to_wire(R, sid);
         to_wire(R, cid);

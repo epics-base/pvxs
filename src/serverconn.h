@@ -26,6 +26,7 @@ struct ServerConn;
 struct ServerChan;
 struct ServerChan;
 
+// base for tracking in-progress operations.  cf. ServerConn::opByIOID and ServerChan::opByIOID
 struct ServerOp
 {
     const std::weak_ptr<ServerChan> chan;
@@ -108,6 +109,8 @@ struct ServerConn : public std::enable_shared_from_this<ServerConn>
     ~ServerConn();
 
     const std::shared_ptr<ServerChan>& lookupSID(uint32_t sid);
+
+    void enqueueTxBody(pva_app_msg_t cmd);
 
 private:
 #define CASE(Op) void handle_##Op();
