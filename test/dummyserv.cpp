@@ -25,10 +25,9 @@ using namespace pvxs::server;
 
 DEFINE_LOGGER(dummy,"dummyserv");
 
-const Value mytype = nt::NTScalar{TypeCode::Int32}.build().create();
-
 struct DummyHandler : public Handler
 {
+    static const Value mytype;
     static std::atomic<unsigned> count;
 
     Value current;
@@ -63,6 +62,8 @@ struct DummyHandler : public Handler
     }
 };
 
+
+const Value DummyHandler::mytype = nt::NTScalar{TypeCode::Int32}.build().create();
 std::atomic<unsigned> DummyHandler::count{};
 
 struct DummySource : public Source
