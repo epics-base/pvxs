@@ -61,6 +61,7 @@ LIB_SRCS += serverconn.cpp
 LIB_SRCS += serverchan.cpp
 LIB_SRCS += serverintrospect.cpp
 LIB_SRCS += serverget.cpp
+LIB_SRCS += serversource.cpp
 
 LIB_LIBS += Com
 

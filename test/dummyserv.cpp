@@ -59,6 +59,14 @@ public:
             }
         }
     }
+
+    virtual List onList() override final
+    {
+        auto names(std::make_shared<std::set<std::string>>());
+        names->insert(name);
+        return List{names};
+    }
+
     virtual void onCreate(std::unique_ptr<ChannelControl>&& raw) override final
     {
         if(raw->name()!=name)

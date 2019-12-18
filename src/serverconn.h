@@ -167,6 +167,22 @@ struct ServIface
     static void onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw);
 };
 
+
+//! Home of the magic "server" PV used by "pvinfo"
+struct ServerSource : public server::Source
+{
+    const std::string name;
+    server::Server::Pvt* const serv;
+
+    const Value info;
+
+    ServerSource(server::Server::Pvt* serv);
+
+    virtual void onSearch(Search &op) override final;
+
+    virtual void onCreate(std::unique_ptr<server::ChannelControl> &&op) override final;
+};
+
 } // namespace impl
 
 namespace server {

@@ -390,6 +390,12 @@ Server::Pvt::Pvt(Config&& conf)
 
         effective.auto_beacon = false;
     });
+
+    // Add magic "server" PV
+    {
+        auto L = sourcesLock.lockWriter();
+        sources[std::make_pair(-1, "server")] = std::make_shared<ServerSource>(this);
+    }
 }
 
 Server::Pvt::~Pvt()
@@ -596,6 +602,10 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 }
 
 Source::~Source() {}
+
+Source::List Source::onList() {
+    return Source::List{};
+}
 
 OpBase::~OpBase() {}
 

@@ -11,6 +11,7 @@
 #include <functional>
 #include <string>
 #include <tuple>
+#include <set>
 #include <vector>
 #include <memory>
 #include <array>
@@ -228,6 +229,13 @@ struct PVXS_API Source {
      *  Callee with either do nothing, or std::move() the ChannelControl and call ChannelControl::setHandler()
      */
     virtual void onCreate(std::unique_ptr<ChannelControl>&& op) =0;
+
+    struct List {
+        std::shared_ptr<const std::set<std::string>> names;
+        bool dynamic;
+    };
+
+    virtual List onList();
 };
 
 }} // namespace pvxs::server
