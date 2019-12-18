@@ -54,6 +54,40 @@ std::shared_ptr<server::Handler> ServerChannelControl::setHandler(const std::sha
     return ret;
 }
 
+static
+void ServerChannel_shutdown(const std::shared_ptr<ServerChan>& chan)
+{
+    if(chan->state==ServerChan::Destroy)
+        return;
+
+    auto conn = chan->conn.lock();
+    if(!conn)
+        return;
+
+    chan->state = ServerChan::Destroy;
+
+    conn->chanByCID.erase(chan->cid);
+    conn->chanBySID.erase(chan->sid);
+
+    for(auto& pair : chan->opByIOID) {
+        auto op = pair.second;
+        if(op->state==ServerOp::Dead)
+            continue;
+
+        if(op->state==ServerOp::Executing && op->onCancel)
+            op->onCancel();
+
+        op->state = ServerOp::Dead;
+
+        if(op->onClose)
+            op->onClose("");
+
+        conn->opByIOID.erase(op->ioid);
+    }
+
+    chan->opByIOID.clear();
+}
+
 void ServerChannelControl::close()
 {
     // fail soft if server stopped, or channel/connection already closed
@@ -75,6 +109,8 @@ void ServerChannelControl::close()
                 to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
                 to_wire(R, ch->sid);
                 to_wire(R, ch->cid);
+
+                ServerChannel_shutdown(ch);
             }
             ch->state = ServerChan::Destroy;
         }
@@ -282,27 +318,13 @@ void ServerConn::handle_DESTROY_CHANNEL()
         return;
     }
 
-
     auto chan = it->second;
     if(chan->cid!=cid) {
         log_printf(connsetup, PLVL_DEBUG, "Client %s provides incorrect CID with DestroyChan sid=%d cid=%d!=%d '%s'\n", peerName.c_str(),
                    unsigned(sid), unsigned(chan->cid), unsigned(cid), chan->name.c_str());
     }
 
-    {
-        auto n = chanByCID.erase(cid);
-        assert(n==1);
-    }
-
-    chanBySID.erase(it);
-
-    // cleanup operations
-
-    for(auto& pair : chan->opByIOID) {
-        auto n = opByIOID.erase(pair.second->ioid);
-        assert(n==1);
-        pair.second->state = ServerOp::Dead;
-    }
+    ServerChannel_shutdown(chan);
 
     assert(chan.use_count()==1); // we only take transient refs on this thread
     // ServerChannel is delete'd
@@ -313,10 +335,10 @@ void ServerConn::handle_DESTROY_CHANNEL()
         to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
         to_wire(R, sid);
         to_wire(R, cid);
-    }
 
-    if(!M.good())
-        bev.reset();
+        if(!R.good())
+            bev.reset();
+    }
 }
 
 }} // namespace pvxs::impl
