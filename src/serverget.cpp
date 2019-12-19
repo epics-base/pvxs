@@ -319,7 +319,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             return;
         }
 
-        std::shared_ptr<ServerGPR> op(new ServerGPR(chan, ioid));
+        auto op(std::make_shared<ServerGPR>(chan, ioid));
         op->cmd = cmd;
         std::unique_ptr<ServerGPRConnect> ctrl(new ServerGPRConnect(this, iface->server->internal_self, chan->name, pvRequest, op));
 

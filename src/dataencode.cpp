@@ -530,7 +530,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
             break;
 
         case TypeCode::Any: {
-            std::shared_ptr<std::vector<FieldDesc>> descs(new std::vector<FieldDesc>);
+            auto descs(std::make_shared<std::vector<FieldDesc>>());
             TypeDeserContext dc{*descs, ctxt};
 
             from_wire(buf, dc);
@@ -641,7 +641,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
 
             for(auto& elem : arr) {
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
-                    std::shared_ptr<std::vector<FieldDesc>> descs(new std::vector<FieldDesc>);
+                    auto descs(std::make_shared<std::vector<FieldDesc>>());
                     TypeDeserContext dc{*descs, ctxt};
 
                     from_wire(buf, dc);
@@ -703,7 +703,7 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
 
 void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val)
 {
-    std::shared_ptr<std::vector<FieldDesc>> descs(new std::vector<FieldDesc>);
+    auto descs(std::make_shared<std::vector<FieldDesc>>());
     TypeDeserContext dc{*descs, ctxt};
 
     from_wire(buf, dc);

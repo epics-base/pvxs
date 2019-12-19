@@ -137,7 +137,7 @@ void ServerConn::handle_GET_FIELD()
         return;
     }
 
-    std::shared_ptr<ServerIntrospect> op(new ServerIntrospect(chan, ioid));
+    auto op(std::make_shared<ServerIntrospect>(chan, ioid));
     std::unique_ptr<ServerIntrospectControl> ctrl(new ServerIntrospectControl(this, chan.get(), iface->server->internal_self, op));
 
     op->state = ServerOp::Executing; // this is a one-shot operation

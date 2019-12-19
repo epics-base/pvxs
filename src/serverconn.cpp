@@ -524,7 +524,7 @@ void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, s
             evutil_closesocket(sock);
             return;
         }
-        std::shared_ptr<ServerConn> conn(new ServerConn(self, sock, peer, socklen));
+        auto conn(std::make_shared<ServerConn>(self, sock, peer, socklen));
         self->server->connections[conn.get()] = std::move(conn);
     }catch(std::exception& e){
         log_printf(connsetup, PLVL_CRIT, "Interface %s Unhandled error in accept callback: %s\n", self->name.c_str(), e.what());

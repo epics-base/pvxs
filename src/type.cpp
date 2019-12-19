@@ -134,7 +134,7 @@ Member::Member(TypeCode code, const std::string& name, const std::string& id, st
 
 TypeDef::TypeDef(TypeCode code, const std::string& id, std::initializer_list<Member> children)
 {
-    decltype (top) temp(new Member(code, "", id, children));
+    auto temp(std::make_shared<Member>(code, "", id, children));
     top = std::move(temp);
 }
 
@@ -154,7 +154,7 @@ void copy_tree(const FieldDesc* desc, Member& node)
 TypeDef::TypeDef(const Value& o)
 {
     if(o.desc) {
-        std::shared_ptr<Member> root(new Member(o.desc->code, o.desc->id));
+        auto root(std::make_shared<Member>(o.desc->code, o.desc->id));
 
         copy_tree(o.desc, *root);
         top = std::move(root);

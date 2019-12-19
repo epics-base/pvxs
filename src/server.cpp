@@ -110,7 +110,7 @@ Server::Server(Config&& conf)
      * Which need to safely access server storage, but should not
      * prevent a server from stopping.
      */
-    std::shared_ptr<Pvt> internal(new Pvt(std::move(conf)));
+    auto internal(std::make_shared<Pvt>(std::move(conf)));
     internal->internal_self = internal;
 
     // external

@@ -275,7 +275,7 @@ void ServerConn::handle_CREATE_CHANNEL()
                 sid = nextSID++;
             } while(chanBySID.find(sid)!=chanBySID.end());
 
-            std::shared_ptr<ServerChan> chan(new ServerChan(self, sid, cid, name));
+            auto chan(std::make_shared<ServerChan>(self, sid, cid, name));
             std::unique_ptr<server::ChannelControl> op(new ServerChannelControl(self, chan));
 
             for(auto& pair : iface->server->sources) {
