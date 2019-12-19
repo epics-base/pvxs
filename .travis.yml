@@ -81,6 +81,9 @@ jobs:
   - env: BASE=7.0 EXTRA="CMD_CXXFLAGS=-std=c++11"
     dist: trusty
 
+  - env: BASE=3.15 EXTRA="CMD_CXXFLAGS=-std=c++11"
+    dist: trusty
+
 # Cross-compilations to Windows using MinGW and WINE
     
   - env: BASE=7.0 WINE=32 TEST=NO STATIC=YES
