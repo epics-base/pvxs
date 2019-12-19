@@ -71,7 +71,7 @@ void testTypeDef()
     testEq(std::string(SB()<<TypeDef()),
            "<Empty>\n");
 
-    testEq(std::string(SB()<<TypeDef(TypeCode::Struct, "simple_t")),
+    testEq(std::string(SB()<<TypeDef(TypeCode::Struct, "simple_t", {})),
            "struct \"simple_t\"\n");
 
     TypeDef def(TypeCode::Struct, "simple_t", {

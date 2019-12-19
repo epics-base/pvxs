@@ -11,18 +11,20 @@ namespace nt {
 
 TypeDef NTScalar::build() const
 {
+    using namespace pvxs::members;
+
     return TypeDef(TypeCode::Struct,
                    value.isarray() ? "epics:nt/NTScalarArray:1.0" : "epics:nt/NTScalar:1.0", {
                        Member(value, "value"),
-                       Member(TypeCode::Struct, "alarm", "alarm_t", {
-                           Member(TypeCode::Int32, "severity"),
-                           Member(TypeCode::Int32, "status"),
-                           Member(TypeCode::String, "message"),
+                       Struct("alarm", "alarm_t", {
+                           Int32("severity"),
+                           Int32("status"),
+                           String("message"),
                        }),
-                       Member(TypeCode::Struct, "timeStamp", "time_t", {
-                           Member(TypeCode::Int64, "secondsPastEpoch"),
-                           Member(TypeCode::Int32, "nanoseconds"),
-                           Member(TypeCode::Int32, "userTag"),
+                       Struct("timeStamp", "time_t", {
+                           Int64("secondsPastEpoch"),
+                           Int32("nanoseconds"),
+                           Int32("userTag"),
                        }),
                    });
 
@@ -73,7 +75,7 @@ TypeDef NTScalar::build() const
 
 TypeDef NTNDArray::build() const
 {
-    TypeDef def(TypeCode::Struct, "epics:nt/NTNDArray:1.0");
+    TypeDef def(TypeCode::Struct, "epics:nt/NTNDArray:1.0", {});
 
 
     return def;

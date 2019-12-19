@@ -167,22 +167,89 @@ inline std::ostream& operator<<(std::ostream& strm, TypeCode c) {
     return strm;
 }
 
+//! Definition of a member of a Struct/Union for use with TypeDef
 struct Member {
     TypeCode code;
     std::string name;
     std::string id;
     std::vector<Member> children;
 
+    inline
     Member(TypeCode code, const std::string& name, const std::string& id = std::string())
         :Member(code, name, id, {})
     {}
     PVXS_API
     Member(TypeCode code, const std::string& name, const std::string& id, std::initializer_list<Member> children);
+    inline
     Member(TypeCode code, const std::string& name, std::initializer_list<Member> children)
         :Member(code, name , std::string(), children)
     {}
 };
 
+/** Helper functions for building TypeDef.
+ *
+ * Each of the TypeCode::code_t enums has an associated helper function of the same name
+ * which is a shorthand notation for a Member().
+ *
+ * eg. @code members::UInt32("blah") @endcode is equivalent to @code Member(TypeCode::UInt32, "blah") @endcode
+ */
+namespace members {
+#define CASE(TYPE) \
+inline Member TYPE(const std::string& name) { return Member(TypeCode::TYPE, name); }
+CASE(Bool)
+CASE(UInt8)
+CASE(UInt16)
+CASE(UInt32)
+CASE(UInt64)
+CASE(Int8)
+CASE(Int16)
+CASE(Int32)
+CASE(Int64)
+CASE(Float32)
+CASE(Float64)
+CASE(String)
+CASE(Any)
+CASE(BoolA)
+CASE(UInt8A)
+CASE(UInt16A)
+CASE(UInt32A)
+CASE(UInt64A)
+CASE(Int8A)
+CASE(Int16A)
+CASE(Int32A)
+CASE(Int64A)
+CASE(Float32A)
+CASE(Float64A)
+CASE(StringA)
+CASE(AnyA)
+#undef CASE
+
+#define CASE(TYPE) \
+inline Member TYPE(const std::string& name, std::initializer_list<Member> children) { return Member(TypeCode::TYPE, name, children); } \
+inline Member TYPE(const std::string& name, const std::string& id, std::initializer_list<Member> children) { return Member(TypeCode::TYPE, name, id, children); }
+
+CASE(Struct)
+CASE(Union)
+CASE(StructA)
+CASE(UnionA)
+#undef CASE
+} // namespace members
+
+/** Define a new type, either from scratch, or based on an existing Value
+ *
+ * @code
+ * namespace M = pvxs::members;
+ * auto def1 = TypeDef(TypeCode::Int32); // a single scalar field
+ * auto def2 = TypeDef(TypeCode::Struct, {
+ *     M::Int32("value"),
+ *     M::Struct("alarm", "alarm_t", {
+ *         M::Int32("severity"),
+ *     }),
+ *
+ * auto val = def2.create(); // instanciate a Value
+ * });
+ * @endcode
+ */
 class PVXS_API TypeDef
 {
 public:
@@ -190,25 +257,31 @@ public:
 private:
     std::shared_ptr<const Member> top;
 public:
+    //! new, empty, definition
     TypeDef() = default;
     // moveable, copyable
     TypeDef(const TypeDef&) = default;
     TypeDef(TypeDef&&) = default;
     TypeDef& operator=(const TypeDef&) = default;
     TypeDef& operator=(TypeDef&&) = default;
+    //! pre-populate definition based on provided Value
     explicit TypeDef(const Value&);
     ~TypeDef();
 
+    //! new definition with id and children.  code must be TypeCode::Struct or TypeCode::Union
     TypeDef(TypeCode code, const std::string& id, std::initializer_list<Member> children);
-    TypeDef(TypeCode code, const std::string& id=std::string())
-        :TypeDef(code, id, {})
+    //! new definition for a single scalar field.  code must __not__ be TypeCode::Struct or TypeCode::Union
+    TypeDef(TypeCode code)
+        :TypeDef(code, std::string(), {})
     {}
+    //! new definition without id.  code must be TypeCode::Struct or TypeCode::Union
     TypeDef(TypeCode code, std::initializer_list<Member> children)
         :TypeDef(code, std::string(), children)
     {}
 
     //TypeDef& operator+=(const Member& )
 
+    //! Instanciate this definition
     Value create() const;
 
     friend
