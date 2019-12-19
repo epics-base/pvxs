@@ -24,6 +24,7 @@ void showSize()
     CASE(impl::FieldDesc);
     CASE(impl::FieldStorage);
     CASE(impl::StructTop);
+    CASE(BitMask);
 #undef CASE
 }
 
