@@ -4,6 +4,13 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#if defined(_WIN32)
+#  include <windows.h>
+#elif !defined(__rtems__) && !defined(vxWorks)
+#  include <sys/types.h>
+#  include <unistd.h>
+#endif
+
 #include <list>
 #include <map>
 #include <regex>
@@ -296,45 +303,6 @@ Server::Pvt::Pvt(Config&& conf)
 
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
 
-    {
-        // choose new GUID.
-        // treat as 3x 32-bit unsigned.
-        union {
-            std::array<uint32_t, 3> i;
-            std::array<uint8_t, 3*4> b;
-        } pun;
-        static_assert (sizeof(pun)==12, "");
-
-        // i[0] time
-        epicsTimeStamp now;
-        epicsTimeGetCurrent(&now);
-        pun.i[0] = now.secPastEpoch ^ now.nsec;
-
-        // i[1] host
-        // mix together all local bcast addresses
-        pun.i[1] = 0xdeadbeef; // because... why not
-        {
-            ELLLIST bcasts = ELLLIST_INIT;
-            osiSockAddr match;
-            match.ia.sin_family = AF_INET;
-            match.ia.sin_addr.s_addr = htonl(INADDR_ANY);
-            match.ia.sin_port = 0;
-            osiSockDiscoverBroadcastAddresses(&bcasts, dummy.sock, &match);
-
-            while(ELLNODE *cur = ellGet(&bcasts)) {
-                osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
-                if(node->addr.sa.sa_family==AF_INET)
-                    pun.i[1] ^= ntohl(node->addr.ia.sin_addr.s_addr);
-                free(cur);
-            }
-        }
-
-        // i[2] random
-        pun.i[2] = (rand()/double(RAND_MAX))*0xffffffff;
-
-        std::copy(pun.b.begin(), pun.b.end(), effective.guid.begin());
-    }
-
     acceptor_loop.call([this, &dummy](){
         // from acceptor worker
 
@@ -390,6 +358,57 @@ Server::Pvt::Pvt(Config&& conf)
 
         effective.auto_beacon = false;
     });
+
+    {
+        // choose new GUID.
+        // treat as 3x 32-bit unsigned.
+        union {
+            std::array<uint32_t, 3> i;
+            std::array<uint8_t, 3*4> b;
+        } pun;
+        static_assert (sizeof(pun)==12, "");
+
+        // i[0] (start) time
+        epicsTimeStamp now;
+        epicsTimeGetCurrent(&now);
+        pun.i[0] = now.secPastEpoch ^ now.nsec;
+
+        // i[1] host
+        // mix together all local bcast addresses
+        pun.i[1] = 0xdeadbeef; // because... why not
+        {
+            ELLLIST bcasts = ELLLIST_INIT;
+            osiSockAddr match;
+            match.ia.sin_family = AF_INET;
+            match.ia.sin_addr.s_addr = htonl(INADDR_ANY);
+            match.ia.sin_port = 0;
+            osiSockDiscoverBroadcastAddresses(&bcasts, dummy.sock, &match);
+
+            while(ELLNODE *cur = ellGet(&bcasts)) {
+                osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
+                if(node->addr.sa.sa_family==AF_INET)
+                    pun.i[1] ^= ntohl(node->addr.ia.sin_addr.s_addr);
+                free(cur);
+            }
+        }
+
+        // i[2] process on host
+#if defined(_WIN32)
+        pun.i[2] = GetCurrentProcessId();
+#elif !defined(__rtems__) && !defined(vxWorks)
+        pun.i[2] = getpid();
+#else
+        pun.i[2] = 0xdeadbeef;
+#endif
+        // and a bit of server instance within this process
+        pun.i[2] ^= uint32_t(effective.tcp_port)<<16u;
+        // maybe a little bit of randomness (eg. ASLR on Linux)
+        pun.i[2] ^= size_t(this);
+        if(sizeof(size_t)>4)
+            pun.i[2] ^= size_t(this)>>32u;
+
+        std::copy(pun.b.begin(), pun.b.end(), effective.guid.begin());
+    }
 
     // Add magic "server" PV
     {
