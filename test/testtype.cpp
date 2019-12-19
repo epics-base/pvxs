@@ -43,7 +43,7 @@ void testBasic()
         testOk1(!val.valid());
         testOk1(!val.isMarked());
 
-        testThrows<NoConvert>([&val]() {
+        testThrows<NoField>([&val]() {
             val.from(4.2);
         });
     }

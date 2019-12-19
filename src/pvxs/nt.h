@@ -9,6 +9,8 @@
 #include <pvxs/version.h>
 #include <pvxs/data.h>
 
+struct epicsTimeStamp; // epicsTime.h
+
 namespace pvxs {
 namespace nt {
 
@@ -19,12 +21,18 @@ struct NTScalar {
     bool valueAlarm;
 
     PVXS_API
-    TypeDef build();
+    TypeDef build() const;
+    inline Value create() const {
+        return build().create();
+    }
 };
 
 struct NTNDArray {
     PVXS_API
-    TypeDef build();
+    TypeDef build() const;
+    inline Value create() const {
+        return build().create();
+    }
 };
 
 }} // namespace pvxs::nt

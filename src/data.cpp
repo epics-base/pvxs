@@ -14,6 +14,12 @@
 
 namespace pvxs {
 
+NoField::NoField()
+    :std::runtime_error ("No such field")
+{}
+
+NoField::~NoField() {}
+
 NoConvert::NoConvert()
     :std::runtime_error ("No conversion defined")
 {}
@@ -154,6 +160,12 @@ const std::string& Value::id() const
     return desc->id;
 }
 
+bool Value::idStartsWith(const std::string& prefix) const
+{
+    auto ID = this->id();
+    return ID.size()>=prefix.size() && prefix==ID.substr(0u, prefix.size());
+}
+
 namespace {
 // C-style cast between scalar storage types, and print to string (base 10)
 template<typename Src>
@@ -176,7 +188,7 @@ bool copyOutScalar(const Src& src, void *ptr, StoreType type)
 void Value::copyOut(void *ptr, StoreType type) const
 {
     if(!desc)
-        throw NoConvert();
+        throw NoField();
 
     switch(store->code) {
     case StoreType::Real:     if(copyOutScalar(store->as<double>(), ptr, type)) return; else break;
@@ -251,7 +263,7 @@ bool copyInScalar(Dest& dest, const void *ptr, StoreType type)
 void Value::copyIn(const void *ptr, StoreType type)
 {
     if(!desc)
-        throw NoConvert();
+        throw NoField();
 
     switch(store->code) {
     case StoreType::Real:     if(!copyInScalar(store->as<double>(), ptr, type)) throw NoConvert(); break;
@@ -316,8 +328,14 @@ void Value::copyIn(const void *ptr, StoreType type)
                 break;
             }
         }
-        // fall through
+        throw NoConvert();
     case StoreType::Null:
+        if(desc->code==TypeCode::Struct && type==StoreType::Compound) {
+            auto& val = *reinterpret_cast<const Value*>(ptr);
+            if(val.desc && val.desc->code==TypeCode::Struct) {
+                // Struct to Struct assignment.
+            }
+        }
         throw NoConvert();
     }
 

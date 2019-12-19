@@ -9,8 +9,7 @@
 namespace pvxs {
 namespace nt {
 
-
-TypeDef NTScalar::build()
+TypeDef NTScalar::build() const
 {
     return TypeDef(TypeCode::Struct,
                    value.isarray() ? "epics:nt/NTScalarArray:1.0" : "epics:nt/NTScalar:1.0", {
@@ -72,7 +71,7 @@ TypeDef NTScalar::build()
 //    return def;
 }
 
-TypeDef NTNDArray::build()
+TypeDef NTNDArray::build() const
 {
     TypeDef def(TypeCode::Struct, "epics:nt/NTNDArray:1.0");
 

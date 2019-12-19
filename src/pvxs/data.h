@@ -37,7 +37,7 @@ struct FieldDesc;
 
 //! maps T to one of the types which can be stored in the FieldStorage::store union
 //! typename StorageMap<T>::store_t is, if existant, is one such type.
-//! Can store_t shall be cast-able to/from T.
+//! store_t shall be cast-able to/from T.
 //! StorageMap<T>::code is the associated StoreType.
 template<typename T, typename Enable=void>
 struct StorageMap;
@@ -63,6 +63,10 @@ struct StorageMap<std::string>
 
 template<>
 struct StorageMap<char*>
+{ typedef std::string store_t;   static constexpr StoreType code{StoreType::String}; };
+
+template<>
+struct StorageMap<const char*>
 { typedef std::string store_t;   static constexpr StoreType code{StoreType::String}; };
 
 template<>
@@ -214,11 +218,16 @@ public:
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const TypeDef&);
 
+struct PVXS_API NoField : public std::runtime_error
+{
+    explicit NoField();
+    virtual ~NoField();
+};
+
 struct PVXS_API NoConvert : public std::runtime_error
 {
     explicit NoConvert();
     virtual ~NoConvert();
-    TypeCode source;
 };
 
 //! pointer-like reference to a single data field
@@ -265,6 +274,7 @@ public:
     TypeCode type() const;
     StoreType storageType() const;
     const std::string& id() const;
+    bool idStartsWith(const std::string& prefix) const;
 
     //! test for instance equality.
     inline bool compareInst(const Value& o) { return store==o.store; }
