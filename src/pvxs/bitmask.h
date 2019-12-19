@@ -184,16 +184,19 @@ private:
     class _OnlySet {
         friend BitMask;
         const BitMask* _mask;
-        constexpr explicit _OnlySet(const BitMask* mask) :_mask(mask) {}
+        size_t a, b;
+        constexpr explicit _OnlySet(const BitMask* mask, size_t a, size_t b) :_mask(mask), a(a), b(b) {}
     public:
         typedef _SetIter iterator;
-        iterator begin() const { return iterator{_mask, _mask->findSet(0u)}; }
-        iterator end() const { return iterator{_mask, _mask->size()}; }
+        iterator begin() const { return iterator{_mask, _mask->findSet(a)}; }
+        iterator end() const { return iterator{_mask, b}; }
     };
 
 public:
     //! return object which can be iterated to find all set bits
-    _OnlySet onlySet() const { return _OnlySet{this}; }
+    _OnlySet onlySet() const { return _OnlySet{this, 0u, size()}; }
+    //! return object which can be iterated to find all set bits in range [a, b)
+    _OnlySet onlySet(size_t a, size_t b) const { return _OnlySet{this, a, b}; }
     // all()
 
     // evaulate expression
