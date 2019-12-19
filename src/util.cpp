@@ -21,11 +21,17 @@
 
 namespace pvxs {
 
-#define stringify(X) #X
+#define stringifyX(X) #X
+#define stringify(X) stringifyX(X)
 
 const char *version_str()
 {
-    return "PVXS " stringify(PVXS_MAJOR_VERSION);
+    return "PVXS "
+            stringify(PVXS_MAJOR_VERSION)
+            "."
+            stringify(PVXS_MINOR_VERSION)
+            "."
+            stringify(PVXS_MAINTENANCE_VERSION);
 }
 
 unsigned long version_int()
