@@ -279,7 +279,8 @@ public:
         :TypeDef(code, std::string(), children)
     {}
 
-    //TypeDef& operator+=(const Member& )
+    //! append additional children.  Only for TypeCode::Struct or TypeCode::Union
+    TypeDef& operator+=(std::initializer_list<Member> children);
 
     //! Instanciate this definition
     Value create() const;

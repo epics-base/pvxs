@@ -89,11 +89,11 @@ static
 void node_validate(const Member* parent, const std::string& id, TypeCode code)
 {
     if(!id.empty() && code!=TypeCode::Struct && code!=TypeCode::Union)
-        throw std::runtime_error("Only Struct or Union may have an ID");
+        throw std::logic_error("Only Struct or Union may have an ID");
     if(parent) {
         auto c = parent->code.scalarOf();
         if(c!=TypeCode::Struct && c!=TypeCode::Union)
-            throw std::runtime_error("Only (array of) Struct or Union may have members");
+            throw std::logic_error("Only (array of) Struct or Union may have members");
     }
 }
 
@@ -216,6 +216,52 @@ void build_tree(std::vector<FieldDesc>& desc, const Member& node)
     {
         desc[index-1].num_index = desc.size()-index+1;
     }
+}
+
+static
+void append_tree(Member& node, const Member& adopt)
+{
+    for(auto& child : node.children) {
+        if(child.name==adopt.name) {
+            // update of existing.
+
+            if((child.code.kind()==Kind::Compound) != (adopt.code.kind()==Kind::Compound)) {
+                throw std::logic_error(SB()<<"May not change member '"<<adopt.name<<"' kind to/from Compound");
+            }
+
+            child.code = adopt.code;
+            if(!adopt.id.empty())
+                child.id = adopt.id;
+
+            for(auto& grandchild : adopt.children) {
+                append_tree(child, grandchild);
+            }
+            return;
+        }
+    }
+
+    // new node, just append
+    node.children.push_back(adopt);
+}
+
+TypeDef& TypeDef::operator+=(std::initializer_list<Member> children)
+{
+    if(!top || (top->code!=TypeCode::Struct && top->code!=TypeCode::Union))
+        throw std::logic_error("May only append to Struct or Union");
+
+    std::shared_ptr<Member> edit;
+    if(top.use_count()==1u)
+        edit = std::const_pointer_cast<Member>(top);
+    else
+        edit = std::make_shared<Member>(*top); // copy
+
+    for(auto& child : children) {
+        append_tree(*edit, child);
+    }
+
+    top = std::move(edit);
+
+    return *this;
 }
 
 Value TypeDef::create() const

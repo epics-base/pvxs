@@ -14,6 +14,11 @@ struct epicsTimeStamp; // epicsTime.h
 namespace pvxs {
 namespace nt {
 
+struct TimeStamp {
+    PVXS_API
+    TypeDef build();
+};
+
 struct NTScalar {
     TypeCode value;
     bool display;
