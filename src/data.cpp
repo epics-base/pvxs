@@ -241,6 +241,18 @@ void Value::copyOut(void *ptr, StoreType type) const
     throw NoConvert();
 }
 
+bool Value::tryCopyOut(void *ptr, StoreType type) const
+{
+    try {
+        copyOut(ptr, type);
+        return true;
+    }catch(NoField&){
+        return false;
+    }catch(NoConvert&){
+        return false;
+    }
+}
+
 namespace {
 // C-style cast between scalar storage types, and print to string (base 10)
 template<typename Dest>
@@ -340,6 +352,18 @@ void Value::copyIn(const void *ptr, StoreType type)
     }
 
     mark();
+}
+
+bool Value::tryCopyIn(const void *ptr, StoreType type)
+{
+    try {
+        copyIn(ptr, type);
+        return true;
+    }catch(NoField&){
+        return false;
+    }catch(NoConvert&){
+        return false;
+    }
 }
 
 void Value::traverse(const std::string &expr, bool modify)

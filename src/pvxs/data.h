@@ -286,14 +286,16 @@ public:
 
     // use with caution
     void copyOut(void *ptr, StoreType type) const;
-    //bool tryCopyOut(void *ptr, impl::StoreType type) const;
+    bool tryCopyOut(void *ptr, StoreType type) const;
     void copyIn(const void *ptr, StoreType type);
-    //bool tryCopyIn(const void *ptr, impl::StoreType type);
+    bool tryCopyIn(const void *ptr, StoreType type);
 
-//    template<typename T>
-//    inline bool tryAs(T& val) const {
-//        return tryCopyOut(&val, std::type_index(typeid(std::decay<T>::type)));
-//    }
+    template<typename T>
+    inline bool tryAs(T& val) const {
+        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
+        typename map_t::store_t ret;
+        return tryCopyOut(&ret, map_t::code);
+    }
 
     /** Extract value from field.
      */
@@ -304,15 +306,18 @@ public:
         copyOut(&ret, map_t::code);
         return ret;
     }
-//    template<typename T>
-//    void as(T& val) const {
-//        copyOut(&val, std::type_index(typeid(typename std::decay<T>::type)));
-//    }
 
-//    template<typename T>
-//    inline bool tryFrom(const T& val) {
-//        return tryCopyIn(&val, std::type_index(typeid(std::decay<T>::type)));
-//    }
+    template<typename T>
+    inline void as(T& val) const {
+        val = this->as<T>();
+    }
+
+    template<typename T>
+    inline bool tryFrom(const T& val) {
+        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
+        typename map_t::store_t norm(val);
+        return copyIn(&norm, map_t::code);
+    }
 
     template<typename T>
     void from(const T& val) {
