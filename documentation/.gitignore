@@ -2,3 +2,4 @@ pvxs.tag
 /xml/
 /html/
 /_build
+*.tmp

@@ -174,12 +174,16 @@ struct Member {
     std::string id;
     std::vector<Member> children;
 
+    //! Member for non-Compund
+    //! @pre code.kind()!=Kind::Compound
     inline
     Member(TypeCode code, const std::string& name, const std::string& id = std::string())
         :Member(code, name, id, {})
     {}
+    //! Compound member with type ID
     PVXS_API
     Member(TypeCode code, const std::string& name, const std::string& id, std::initializer_list<Member> children);
+    //! Compound member without type ID
     inline
     Member(TypeCode code, const std::string& name, std::initializer_list<Member> children)
         :Member(code, name , std::string(), children)
@@ -292,19 +296,35 @@ public:
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const TypeDef&);
 
+//! Thrown when accessing a Null Value
 struct PVXS_API NoField : public std::runtime_error
 {
     explicit NoField();
     virtual ~NoField();
 };
 
+//! Thrown when a Value can not be converted to the requested type
 struct PVXS_API NoConvert : public std::runtime_error
 {
     explicit NoConvert();
     virtual ~NoConvert();
 };
 
-//! pointer-like reference to a single data field
+/** Generic data container
+ *
+ * References a single data field, which may be free-standing (eg. "int x = 5;")
+ * or a member of an enclosing Struct, or an element in an array of Struct.
+ *
+ * - Use valid() (or operator bool() ) to determine if pointed to a valid field.
+ * - Use operator[] to traverse within a Kind::Compound field.
+ *
+ * @code
+ * Value val = nt::NTScalar{TypeCode::Int32}.create();
+ * val["value"] = 42;
+ * Value alias = val;
+ * assert(alias["value"].as<int32_t>()==42); // 'alias' is a second reference to the same Struct
+ * @endcode
+ */
 class PVXS_API Value {
     friend class TypeDef;
     // (maybe) storage for this field.  alias of StructTop::members[]
@@ -338,16 +358,24 @@ public:
 
     Value allocMember();
 
+    //! Does this Value actual reference some underlying storage
     inline bool valid() const { return desc; }
     inline explicit operator bool() const { return desc; }
 
+    //! Test if this field is marked as valid/changed
     bool isMarked(bool parents=true, bool children=false) const;
+    //! Mark this field as valid/changed
     void mark(bool v=true);
+    //! Remove mark from this field
     void unmark(bool parents=false, bool children=true);
 
+    //! Type of the referenced field (or Null)
     TypeCode type() const;
+    //! Type of value stored in referenced field
     StoreType storageType() const;
+    //! Type ID string (Struct or Union only)
     const std::string& id() const;
+    //! Test prefix of Type ID string (Struct or Union only)
     bool idStartsWith(const std::string& prefix) const;
 
     //! test for instance equality.
@@ -364,14 +392,16 @@ public:
     void copyIn(const void *ptr, StoreType type);
     bool tryCopyIn(const void *ptr, StoreType type);
 
-    template<typename T>
-    inline bool tryAs(T& val) const {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t ret;
-        return tryCopyOut(&ret, map_t::code);
-    }
-
-    /** Extract value from field.
+    /** Extract from field.
+     *
+     * Type 'T' may be one of:
+     * - bool
+     * - uint8_t, uint16_t, uint32_t, uint64_t
+     * - int8_t, int16_t, int32_t, int64_t
+     * - float, double
+     * - std::string
+     * - Value
+     * - shared_array<const void>
      */
     template<typename T>
     inline T as() const {
@@ -381,11 +411,17 @@ public:
         return ret;
     }
 
+    //! Attempt to extract value from field.
+    //! @returns false if as<T>() would throw NoField or NoConvert
     template<typename T>
-    inline void as(T& val) const {
-        val = this->as<T>();
+    inline bool as(T& val) const {
+        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
+        typename map_t::store_t ret;
+        return tryCopyOut(&ret, map_t::code);
     }
 
+    //! Attempt to assign to field.
+    //! @returns false if from<T>() would throw NoField or NoConvert
     template<typename T>
     inline bool tryFrom(const T& val) {
         typedef impl::StorageMap<typename std::decay<T>::type> map_t;
@@ -393,6 +429,17 @@ public:
         return copyIn(&norm, map_t::code);
     }
 
+    /** Assign from field.
+     *
+     * Type 'T' may be one of:
+     * - bool
+     * - uint8_t, uint16_t, uint32_t, uint64_t
+     * - int8_t, int16_t, int32_t, int64_t
+     * - float, double
+     * - std::string
+     * - Value
+     * - shared_array<const void>
+     */
     template<typename T>
     void from(const T& val) {
         typedef impl::StorageMap<typename std::decay<T>::type> map_t;
@@ -401,6 +448,7 @@ public:
     }
 
     // TODO T=Value is ambigious with previous assignment operator
+    //! shorthand for from<T>(const T&)
     template<typename T>
     Value& operator=(const T& val) {
         from<T>(val);

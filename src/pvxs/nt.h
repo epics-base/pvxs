@@ -19,22 +19,47 @@ struct TimeStamp {
     TypeDef build();
 };
 
+/** A scalar, or array of scalars, and meta-data
+ *
+ * @code
+ * auto def = pvxs::nt::NTScalar{TypeCode::Float64}.build();
+ * def += {
+ *      Member(TypeCode::String, "myspecial"),
+ * };
+ * auto value = def.create(); // instanciate a Value
+ * @endcode
+ */
 struct NTScalar {
+    //! Type of the ".value" field.
     TypeCode value;
+    //! Include display (range) meta-data
     bool display;
+    //! Include control (range) meta-data
     bool control;
+    //! Include alarm (range) meta-data
     bool valueAlarm;
 
+    //! A TypeDef which can be appended
     PVXS_API
     TypeDef build() const;
+    //! Instanciate
     inline Value create() const {
         return build().create();
     }
 };
 
+/** The areaDetector inspired N-dimension array/image container.
+ *
+ * @code
+ * auto def = pvxs::nt::NTNDArray{}.build();
+ * auto value = def.create(); // instanciate a Value
+ * @endcode
+ */
 struct NTNDArray {
+    //! A TypeDef which can be appended
     PVXS_API
     TypeDef build() const;
+    //! Instanciate
     inline Value create() const {
         return build().create();
     }

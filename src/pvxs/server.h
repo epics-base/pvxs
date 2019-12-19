@@ -39,6 +39,7 @@ struct Source;
 class PVXS_API Server
 {
 public:
+    //! Configuration for a Server
     struct Config {
         //! List of network interface addresses to which this server will bind.
         //! interfaces.empty() treated as an alias for "0.0.0.0", which may also be given explicitly.
@@ -47,15 +48,21 @@ public:
         //! Addresses to which (UDP) beacons message will be sent.
         //! May include broadcast and/or unicast addresses.
         std::vector<std::string> beaconDestinations;
+        //! TCP port to bind.  May be zero.
         unsigned short tcp_port;
+        //! UDP port to bind.  May not be zero
         unsigned short udp_port;
+        //! Whether to populate the beacon address list automatically.  (recommended)
         bool auto_beacon;
 
+        //! Server unique ID.  Only meaningful in readback via Server::config()
         std::array<uint8_t, 12> guid;
 
+        //! Default configuration using process environment
         PVXS_API static Config from_env();
         Config() :tcp_port(5075), udp_port(5076), auto_beacon(true), guid{} {}
 
+        //! Short-hand for @code Server(std::move(*this)) @endcode.
         PVXS_API Server build();
     };
 
@@ -73,7 +80,7 @@ public:
     /** start() and then (maybe) stop()
      *
      * run() may be interupted by calling interrupt(),
-     * or by SIGINT SIGTERM (only one Server per process)
+     * or by SIGINT or SIGTERM (only one Server per process)
      */
     Server& run();
     //! Queue a request to break run()
@@ -109,13 +116,14 @@ private:
     std::shared_ptr<Pvt> pvt;
 };
 
+//! Base for all operation classes
 struct PVXS_API OpBase {
     enum op_t {
-        None,
-        Info,
-        Get,
-        Put,
-        RPC,
+        None, //!< invalid
+        Info, //!< A GET_FIELD operation
+        Get,  //!< A GET operation
+        Put,  //!< A PUT operation
+        RPC,  //!< A RPC operaton
     };
 protected:
     std::string _peerName;
@@ -135,27 +143,38 @@ public:
     virtual ~OpBase() =0;
 };
 
+//! Handle when an operation is being executed
 struct PVXS_API ExecOp : public OpBase {
 
+    //! Issue a reply without data.  (eg. to complete a PUT)
     virtual void reply() =0;
+    //! Issue a reply with data.  For a GET or RPC  (or PUT/Get)
     virtual void reply(const Value& val) =0;
+    //! Indicate the request has resulted in an error.
     virtual void error(const std::string& msg) =0;
 
+    //! Callback invoked if the peer cancels the operation before reply() or error() is called.
     virtual void onCancel(std::function<void()>&&) =0;
 
     virtual ~ExecOp();
 };
 
+//! Handle when an operation is being setup
 struct PVXS_API ConnectOp : public OpBase {
     Value pvRequest;
 
+    //! For GET_FIELD, GET, or PUT.  Inform peer of our data-type
     virtual void connect(const Value& prototype) =0;
+    //! Indicate that this operation can not be setup
     virtual void error(const std::string& msg) =0;
 
     virtual ~ConnectOp();
 
+    //! Handler invoked when a peer executes a request for data on a GET o PUT
     virtual void onGet(std::function<void(std::unique_ptr<ExecOp>&&)>&& fn) =0;
+    //! Handler invoked when a peer executes a send data on a PUT
     virtual void onPut(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn) =0;
+    //! Callback when the underlying channel closes
     virtual void onClose(std::function<void(const std::string&)>&&) =0;
 };
 
@@ -165,10 +184,12 @@ struct PVXS_API ConnectOp : public OpBase {
 struct PVXS_API ChannelControl : public OpBase {
     virtual ~ChannelControl() =0;
 
-    //! invoked when a new GET, PUT, or RPC Operation is requested through this Channel
+    //! Invoked when a new GET, PUT, or RPC Operation is requested through this Channel
     virtual void onOp(std::function<void(std::unique_ptr<ConnectOp>&&)>&& ) =0;
+    //! Invoked when the a peer executes an RPC
     virtual void onRPC(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn)=0;
 
+    //! Callback when the channel closes (eg. peer disconnect)
     virtual void onClose(std::function<void(const std::string&)>&&) =0;
 
     //! Force disconnection
@@ -189,6 +210,7 @@ struct PVXS_API Source {
 
     //! An iteratable of names being sought
     struct Search {
+        //! A single name being searched
         class Name {
             const char* _name = nullptr;
             bool _claim = false;
@@ -230,11 +252,16 @@ struct PVXS_API Source {
      */
     virtual void onCreate(std::unique_ptr<ChannelControl>&& op) =0;
 
+    //! List of channel names
     struct List {
+        //! The list
         std::shared_ptr<const std::set<std::string>> names;
+        //! True if the list may change at some future time.
         bool dynamic;
     };
 
+    /** A Client is requesting a list of Channel names which we may claim.
+     */
     virtual List onList();
 };
 
