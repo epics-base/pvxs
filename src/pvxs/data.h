@@ -356,6 +356,7 @@ public:
     //! copy values from other.  Must have matching types.
 //    Value& assign(const Value&);
 
+    //! Use to allocate members for an array of Struct and array of Union
     Value allocMember();
 
     //! Does this Value actual reference some underlying storage
@@ -381,7 +382,7 @@ public:
     //! test for instance equality.
     inline bool compareInst(const Value& o) { return store==o.store; }
 //    int compareValue(const Value&);
-//    int compareType(const Value&);
+    inline int compareType(const Value& o) { return desc==o.desc; }
 
     // access to Value's ... value
     // not for Struct

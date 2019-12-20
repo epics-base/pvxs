@@ -141,7 +141,6 @@ struct StructTop {
     // empty, or the field of a structure which encloses this.
     Value enclosing;
 };
-static_assert (std::is_standard_layout<StructTop>{}, "Needed for offsetof()");
 
 using Type = std::shared_ptr<const FieldDesc>;
 

@@ -20,6 +20,10 @@ USR_CXXFLAGS += -fvisibility=hidden -fvisibility-inlines-hidden
 #USR_CXXFLAGS_Linux += -gz=zlib
 #USR_LDFLAGS_Linux += -Wl,--compress-debug-sections=zlib
 
+# LTO takes a nice chunk out of the .so text size, but blows up the .a
+#USR_CXXFLAGS += -flto
+#USR_LDFLAGS += -flto
+
 # fault on any undefined symbols (eg. from missing LIB_SYS_LIBS)
 USR_LDFLAGS_Linux += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
 
