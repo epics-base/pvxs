@@ -27,7 +27,6 @@ enum struct Level {
 
 struct logger {
     const char *name;
-    // atomic using epicsAtomic (std::atomic<> may not be statically initializable)
     std::atomic<int> lvl;
     constexpr logger(const char *name) :name(name), lvl{-1} {}
 
