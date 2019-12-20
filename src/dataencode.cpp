@@ -224,7 +224,7 @@ void to_wire(Buffer& buf, const shared_array<const void>& varr)
 template<typename E, typename C = E>
 void from_wire(Buffer& buf, shared_array<const void>& varr)
 {
-    Size slen;
+    Size slen{};
     from_wire(buf, slen);
     shared_array<E> arr(slen.size);
     for(auto i : range(arr.size())) {
@@ -232,6 +232,7 @@ void from_wire(Buffer& buf, shared_array<const void>& varr)
         from_wire(buf, temp);
         arr[i] = temp;
     }
+    varr = arr.freeze().template castTo<const void>();
 }
 }
 
