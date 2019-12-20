@@ -246,7 +246,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
         case TypeCode::Struct: {
             auto& top = *store->top;
             // serialize entire sub-structure
-            for(auto off : range(desc->offset+1u, desc->next_offset)) {
+            for(auto off : range(desc->offset-top.desc->offset+1u, desc->next_offset-top.desc->offset)) {
                 auto cdesc = desc + top.member_indicies[off];
                 std::shared_ptr<const FieldStorage> cstore(store, store.get()+off); // TODO avoid shared_ptr/aliasing here
                 if(cdesc->code!=TypeCode::Struct)
@@ -430,8 +430,8 @@ void to_wire_valid(Buffer& buf, const Value& val)
     top->valid.resize(top->members.size());
 
     // iterate marked fields
-    for(auto bit = top->valid.findSet(desc->offset);
-        bit<desc->next_offset;
+    for(auto bit = top->valid.findSet(desc->offset-top->desc->offset);
+        bit<desc->next_offset-top->desc->offset;
         bit = top->valid.findSet(bit+1))
     {
         std::shared_ptr<const FieldStorage> cstore(store, store.get()+bit);
@@ -458,11 +458,13 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::Struct: {
             auto& top = *store->top;
             // serialize entire sub-structure
-            for(auto off : range(desc->offset+1u, desc->next_offset)) {
+            for(auto off : range(desc->offset-top.desc->offset+1u, desc->next_offset-top.desc->offset)) {
                 auto cdesc = desc + top.member_indicies[off];
                 std::shared_ptr<FieldStorage> cstore(store, store.get()+off); // TODO avoid shared_ptr/aliasing here
-                if(cdesc->code!=TypeCode::Struct)
+                if(cdesc->code!=TypeCode::Struct) {
                     from_wire_field(buf, ctxt, cdesc, cstore);
+                    top.valid[cstore->index()] = true;
+                }
             }
         }
             return;
@@ -693,12 +695,13 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
     if(!buf.good())
         return;
 
-    for(auto bit = top->valid.findSet(desc->offset);
-        bit<desc->next_offset;
+    for(auto bit = top->valid.findSet(desc->offset-top->desc->offset);
+        bit<desc->next_offset-top->desc->offset;
         bit = top->valid.findSet(bit+1))
     {
-        std::shared_ptr<FieldStorage> cstore(store, store.get()+bit);
+        std::shared_ptr<FieldStorage> cstore(store, store.get()+bit-desc->offset);
         from_wire_field(buf, ctxt, desc + top->member_indicies[bit], cstore);
+        top->valid[bit] = true;
     }
 }
 
