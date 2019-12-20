@@ -177,8 +177,8 @@ struct Member {
     //! Member for non-Compund
     //! @pre code.kind()!=Kind::Compound
     inline
-    Member(TypeCode code, const std::string& name, const std::string& id = std::string())
-        :Member(code, name, id, {})
+    Member(TypeCode code, const std::string& name)
+        :Member(code, name, {})
     {}
     //! Compound member with type ID
     PVXS_API

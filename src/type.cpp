@@ -146,7 +146,8 @@ void copy_tree(const FieldDesc* desc, Member& node)
     node.children.reserve(desc->miter.size());
     for(auto& pair : desc->miter) {
         auto cdesc = desc+pair.second;
-        node.children.emplace_back(cdesc->code, cdesc->id, pair.first);
+        node.children.emplace_back(cdesc->code, pair.first);
+        node.children.back().id = cdesc->id;
         copy_tree(cdesc, node.children.back());
     }
 }
