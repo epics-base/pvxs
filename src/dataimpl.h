@@ -69,6 +69,10 @@ struct FieldDesc {
     // number of FieldDesc nodes which describe this node and decendents.  Inclusive.  always >=1
     // eg. num_index+(FieldDesc*)this jumps to next sibling
     size_t num_index=0;
+    // number of FieldDesc nodes between this node and it's a parent node (if any).
+    // This value also appears in the parent's miter and mlookup mappings.
+    // Only usable when a StructTop is accessible and this!=StructTop::desc
+    size_t parent_index=0;
     TypeCode code{TypeCode::Null};
 
     // number of FieldDesc nodes which describe this node.  Inclusive.  always size()>=1

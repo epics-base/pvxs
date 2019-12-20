@@ -163,6 +163,7 @@ void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth)
                 // descs may be re-allocated (invalidating previous refs.)
                 auto& fld = ctxt.descs[index];
                 auto& cfld = ctxt.descs[cindex];
+                cfld.parent_index = cindex-index;
 
                 // update hash
                 // TODO investigate better ways to combine hashes

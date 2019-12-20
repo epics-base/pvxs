@@ -373,11 +373,29 @@ void Value::traverse(const std::string &expr, bool modify)
 {
     size_t pos=0;
     while(desc && pos<expr.size()) {
+        if(expr[pos]=='<') {
+            // attempt traverse to parent
+            if(desc!=store->top->desc.get())
+            {
+                auto pdesc = desc - desc->parent_index;
+                std::shared_ptr<FieldStorage> pstore(store, store.get() - desc->offset + pdesc->offset);
+                store = std::move(pstore);
+                desc = pdesc;
+                pos++;
+                continue;
+            } else {
+                // at top
+                store.reset();
+                desc = nullptr;
+                break;
+            }
+
+        }
 
         if(desc->code.code==TypeCode::Struct) {
             // attempt traverse to member.
             // expect: [0-9a-zA-Z_.]+[\[-$]
-            size_t sep = expr.find_first_of("[-", pos);
+            size_t sep = expr.find_first_of("<[-", pos);
 
             decltype (desc->mlookup)::const_iterator it;
 
@@ -409,7 +427,7 @@ void Value::traverse(const std::string &expr, bool modify)
 
                 } else {
                     // select member of Union
-                    size_t sep = expr.find_first_of("[-.", pos);
+                    size_t sep = expr.find_first_of("<[-.", pos);
 
                     decltype (desc->mlookup)::const_iterator it;
 

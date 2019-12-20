@@ -342,15 +342,35 @@ void testDeserialize2()
     }
 }
 
+void testTraverse()
+{
+    auto top = nt::NTScalar{TypeCode::Int32, true}.create();
+
+    testOk1(!top["<"].valid());
+
+    {
+        auto top2 = top["value<"];
+        testOk1(top.compareType(top2));
+        testOk1(top.compareInst(top2));
+    }
+    {
+        auto sevr1 = top["alarm.severity"];
+        auto sevr2 = top["value<alarm.status<severity"];
+        testOk1(sevr1.compareType(sevr2));
+        testOk1(sevr1.compareInst(sevr2));
+    }
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(58);
+    testPlan(63);
     testSerialize1();
     testDeserialize1();
     testSerialize2();
     testDeserialize2();
+    testTraverse();
     cleanup_for_valgrind();
     return testDone();
 }

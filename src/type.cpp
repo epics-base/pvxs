@@ -196,6 +196,7 @@ void build_tree(std::vector<FieldDesc>& desc, const Member& node)
 
         auto& fld = desc[index];
         auto& child = desc[cindex];
+        child.parent_index = cindex-index;
 
         fld.hash ^= std::hash<std::string>{}(cnode.name) ^ child.hash;
 
@@ -319,8 +320,7 @@ void FieldDesc_calculate_offset(FieldDesc* const top)
 {
     top->offset = 0;
     uint16_t offset = 1;
-    size_t index = 1;
-    while(index < top->size()) {
+    for(size_t index = 1; index < top->size(); ) {
         auto& fld = top[index];
 
         switch (fld.code.code) {
