@@ -11,7 +11,7 @@
 #include "serverconn.h"
 
 namespace pvxs { namespace impl {
-DEFINE_LOGGER(connsetup, "tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 
 namespace {
 struct ServerIntrospect : public ServerOp
@@ -133,7 +133,7 @@ void ServerConn::handle_GET_FIELD()
     auto& chan = lookupSID(sid);
 
     if(opByIOID.find(ioid)!=opByIOID.end()) {
-        log_printf(connsetup, PLVL_ERR, "Client %s reuses existing ioid %d\n", peerName.c_str(), unsigned(ioid));
+        log_printf(connsetup, Err, "Client %s reuses existing ioid %d\n", peerName.c_str(), unsigned(ioid));
         return;
     }
 

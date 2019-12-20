@@ -13,11 +13,11 @@
 namespace pvxs {namespace impl {
 
 // message related to client state and errors
-DEFINE_LOGGER(connsetup, "tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 // related to low level send/recv
-DEFINE_LOGGER(connio, "tcp.io");
+DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
-DEFINE_LOGGER(serversetup, "server.setup");
+DEFINE_LOGGER(serversetup, "pvxs.server.setup");
 
 ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
                        uint32_t sid,
@@ -196,7 +196,7 @@ void ServerConn::handle_SEARCH()
             try {
                 pair.second->onSearch(op);
             }catch(std::exception& e){
-                log_printf(serversetup, PLVL_ERR, "Unhandled error in Source::onSearch for '%s' : %s\n",
+                log_printf(serversetup, Err, "Unhandled error in Source::onSearch for '%s' : %s\n",
                            pair.first.second.c_str(), e.what());
             }
         }
@@ -283,12 +283,12 @@ void ServerConn::handle_CREATE_CHANNEL()
                     pair.second->onCreate(std::move(op));
                     if(!op || chan->onOp || chan->onClose || chan->state!=ServerChan::Creating) {
                         claimed = chan->state==ServerChan::Creating;
-                        log_printf(connsetup, PLVL_DEBUG, "Client %s %s channel to %s through %s\n", peerName.c_str(),
+                        log_printf(connsetup, Debug, "Client %s %s channel to %s through %s\n", peerName.c_str(),
                                    claimed?"accepted":"rejected", name.c_str(), pair.first.second.c_str());
                         break;
                     }
                 }catch(std::exception& e){
-                    log_printf(connsetup, PLVL_ERR, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
+                    log_printf(connsetup, Err, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
                                pair.first.second.c_str(), pair.first.first,
                                typeid(&e).name(), e.what());
                 }
@@ -321,7 +321,7 @@ void ServerConn::handle_CREATE_CHANNEL()
             // "spec" calls for uint16_t Access Rights here, but pvAccessCPP don't include this (it's useless anyway)
             if(!R.good()) {
                 M.fault();
-                log_printf(connio, PLVL_ERR, "Client %s Encode error in CreateChan\n", peerName.c_str());
+                log_printf(connio, Err, "Client %s Encode error in CreateChan\n", peerName.c_str());
                 break;
             }
         }
@@ -330,7 +330,7 @@ void ServerConn::handle_CREATE_CHANNEL()
     }
 
     if(!M.good()) {
-        log_printf(connio, PLVL_ERR, "Client %s Decode error in CreateChan\n", peerName.c_str());
+        log_printf(connio, Err, "Client %s Decode error in CreateChan\n", peerName.c_str());
         bev.reset();
     }
 }
@@ -348,14 +348,14 @@ void ServerConn::handle_DESTROY_CHANNEL()
 
     auto it = chanBySID.find(sid);
     if(it==chanBySID.end()) {
-        log_printf(connsetup, PLVL_DEBUG, "Client %s DestroyChan non-existant sid=%d cid=%d\n", peerName.c_str(),
+        log_printf(connsetup, Debug, "Client %s DestroyChan non-existant sid=%d cid=%d\n", peerName.c_str(),
                    unsigned(sid), unsigned(cid));
         return;
     }
 
     auto chan = it->second;
     if(chan->cid!=cid) {
-        log_printf(connsetup, PLVL_DEBUG, "Client %s provides incorrect CID with DestroyChan sid=%d cid=%d!=%d '%s'\n", peerName.c_str(),
+        log_printf(connsetup, Debug, "Client %s provides incorrect CID with DestroyChan sid=%d cid=%d!=%d '%s'\n", peerName.c_str(),
                    unsigned(sid), unsigned(chan->cid), unsigned(cid), chan->name.c_str());
     }
 

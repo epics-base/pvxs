@@ -28,8 +28,8 @@ typedef epicsGuard<epicsMutex> Guard;
 
 namespace pvxs {namespace impl {
 
-DEFINE_LOGGER(logio, "udp.io");
-DEFINE_LOGGER(logsetup, "udp.setup");
+DEFINE_LOGGER(logio, "pvxs.udp.io");
+DEFINE_LOGGER(logsetup, "pvxs.udp.setup");
 
 struct UDPCollector : public UDPManager::Search,
                       public std::enable_shared_from_this<UDPCollector>
@@ -62,7 +62,7 @@ struct UDPCollector : public UDPManager::Search,
             if(err==SOCK_EWOULDBLOCK || err==EAGAIN || err==SOCK_EINTR) {
                 // nothing to do here
             } else {
-                log_printf(logio, PLVL_WARN, "UDP RX Error on %s : %s\n", name.c_str(),
+                log_printf(logio, Warn, "UDP RX Error on %s : %s\n", name.c_str(),
                            evutil_socket_error_to_string(err));
             }
             return false; // wait for more I/O
@@ -71,7 +71,7 @@ struct UDPCollector : public UDPManager::Search,
             // maybe a zero (body) length packet?
             // maybe an OS error?
 
-            log_printf(logio, PLVL_INFO, "UDP ignore runt on %s\n", name.c_str());
+            log_printf(logio, Info, "UDP ignore runt on %s\n", name.c_str());
             return true;
 
         } else if(buf[0]!=0xca || buf[1]==0 || (buf[2]&(pva_flags::Control|pva_flags::SegMask))) {
@@ -80,13 +80,13 @@ struct UDPCollector : public UDPManager::Search,
             // ignore incompatible version 0
             // UDP packets can't contain control messages, or use segmentation
 
-            log_printf(logio, PLVL_INFO, "UDP ignore header%u %02x%02x%02x%02x on %s\n",
+            log_printf(logio, Info, "UDP ignore header%u %02x%02x%02x%02x on %s\n",
                        unsigned(nrx), buf[0], buf[1], buf[2], buf[3],
                     name.c_str());
             return true;
         }
 
-        log_hex_printf(logio, PLVL_DEBUG, &buf[0], nrx, "UDP Rx %d from %s\n", nrx, src.tostring().c_str());
+        log_hex_printf(logio, Debug, &buf[0], nrx, "UDP Rx %d from %s\n", nrx, src.tostring().c_str());
 
         names.clear();
 
@@ -101,7 +101,7 @@ struct UDPCollector : public UDPManager::Search,
         from_wire(M, len);
 
         if(len > M.size() && M.good()) {
-            log_printf(logio, PLVL_INFO, "UDP ignore header%u %02x%02x%02x%02x on %s\n",
+            log_printf(logio, Info, "UDP ignore header%u %02x%02x%02x%02x on %s\n",
                        unsigned(M.size()), M[0], M[1], M[2], M[3],
                     name.c_str());
             return true;
@@ -210,7 +210,7 @@ struct UDPCollector : public UDPManager::Search,
     }
     void handle(short ev)
     {
-        log_printf(logio, PLVL_DEBUG, "UDP %p event %x\n", rx.get(), ev);
+        log_printf(logio, Debug, "UDP %p event %x\n", rx.get(), ev);
         if(!(ev&EV_READ))
             return;
 
@@ -223,7 +223,7 @@ struct UDPCollector : public UDPManager::Search,
         try {
             static_cast<UDPCollector*>(raw)->handle(ev);
         }catch(std::exception& e) {
-            log_printf(logio, PLVL_CRIT, "Ignoring unhandled exception in UDPManager::handle(): %s\n", e.what());
+            log_printf(logio, Crit, "Ignoring unhandled exception in UDPManager::handle(): %s\n", e.what());
         }
     }
 
@@ -264,7 +264,7 @@ UDPCollector::UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, cons
     sock.bind(this->bind_addr);
     name = "UDP "+this->bind_addr.tostring();
 
-    log_printf(logsetup, PLVL_INFO, "Bound to %s\n", name.c_str());
+    log_printf(logsetup, Info, "Bound to %s\n", name.c_str());
 
     if(event_add(rx.get(), nullptr))
         throw std::runtime_error("Unable to create collector Rx event");
@@ -423,7 +423,7 @@ bool UDPCollector::reply(const void *msg, size_t msglen) const
         if(err==SOCK_EWOULDBLOCK || err==EAGAIN || err==SOCK_EINTR) {
             // nothing to do here
         } else {
-            log_printf(logio, PLVL_WARN, "UDP TX Error on %s : %s\n", name.c_str(),
+            log_printf(logio, Warn, "UDP TX Error on %s : %s\n", name.c_str(),
                        evutil_socket_error_to_string(err));
         }
         return false; // wait for more I/O

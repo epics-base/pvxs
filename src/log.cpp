@@ -5,8 +5,10 @@
  */
 
 #include <map>
-#include <set>
+#include <tuple>
 #include <string>
+#include <list>
+#include <regex>
 
 // must include before epicsStdio.h to avoid clash with printf macro
 #include <event2/util.h>
@@ -30,41 +32,42 @@ typedef epicsGuard<epicsMutex> Guard;
 namespace {
 using namespace pvxs;
 
-DEFINE_LOGGER(logerr, "evlog");
+DEFINE_LOGGER(logerr, "pvxs.ev");
 
 epicsThreadOnceId logger_once = EPICS_THREAD_ONCE_INIT;
 
 void evlog_handler(int severity, const char *msg)
 {
     const char *sevr = "<\?\?\?>";
-    int lvl = PLVL_CRIT;
+    Level lvl = Level::Crit;
     switch(severity) {
-#define CASE(EVLVL, PLVL) case EVENT_LOG_##EVLVL : lvl = PLVL_##PLVL; sevr = #PLVL; break
-    CASE(DEBUG, DEBUG);
-    CASE(MSG, INFO);
-    CASE(WARN, WARN);
-    CASE(ERR, ERR);
+#define CASE(EVLVL, PLVL) case EVENT_LOG_##EVLVL : lvl = Level::PLVL; sevr = #PLVL; break
+    CASE(DEBUG, Debug);
+    CASE(MSG, Info);
+    CASE(WARN, Warn);
+    CASE(ERR, Err);
 #undef CASE
     }
-    log_printf(logerr, lvl, "libevent %s: %s\n", sevr, msg);
+    if(logerr.test(lvl))
+        errlogPrintf("libevent %s: %s\n", sevr, msg);
 }
 
 
 int name2lvl(const std::string& name)
 {
-#define CASE(LVL) if(name==#LVL) return PLVL_##LVL
-    CASE(DEBUG);
-    CASE(INFO);
-    CASE(WARN);
-    CASE(ERR);
-    CASE(CRIT);
+#define CASE(LVL, Lvl) if(name==#LVL) return int(Level::Lvl)
+    CASE(DEBUG, Debug);
+    CASE(INFO, Info);
+    CASE(WARN, Warn);
+    CASE(ERR, Err);
+    CASE(CRIT, Crit);
 #undef CASE
     return 0;
 }
 
 struct logger_gbl_t {
     epicsMutex lock;
-    std::map<std::string, int> config;
+    std::list<std::tuple<std::regex, std::string, int>> config;
     std::multimap<std::string, logger*> loggers;
 
     logger_gbl_t()
@@ -76,15 +79,30 @@ struct logger_gbl_t {
     {
         std::string name(logger->name);
 
-        loggers.emplace(name, logger);
+        int lvl = int(Level::Err);
 
-        auto it = config.find(name);
-        if(it!=config.end()) {
-            logger->lvl.store(it->second, std::memory_order_relaxed);
-            return it->second;
+        // see if this logger name has already been configured.
+        auto it = loggers.find(logger->name);
+        if(it!=loggers.end()) {
+            lvl = it->second->lvl.load(std::memory_order_relaxed);
+
+        } else {
+            // nope
+
+            for(auto& tup : config) {
+                if(std::regex_match(name, std::get<0>(tup))) {
+                    lvl = std::get<2>(tup);
+                    break;
+                }
+            }
         }
 
-        return PLVL_ERR;
+
+        loggers.emplace(name, logger);
+
+        logger->lvl.store(lvl, std::memory_order_relaxed);
+
+        return lvl;
     }
 
     void set(const char *name, int lvl)
@@ -92,14 +110,38 @@ struct logger_gbl_t {
         if(lvl<=0)
             lvl = 1;
 
-        // update config for loggers added later
-        config[name] = lvl;
-
-        // apply to existing loggers
-        auto iters = loggers.equal_range(name);
-        for(; iters.first!=iters.second; ++iters.first) {
-            iters.first->second->lvl.store(lvl, std::memory_order_relaxed);
+        // convert name, with wildcards to a regexp
+        std::string exp("^");
+        for(char c = *name; c!='\0'; c=*++name) {
+            if((c>='a' && c<='z') || (c>='A' && c<='Z') || (c>='0' && c<='9') || c=='_')
+                exp += c;
+            else if(c=='.')
+                exp += "\\.";
+            else if(c=='?')
+                exp += '.';
+            else if(c=='*')
+                exp += ".*";
         }
+        exp+='$';
+
+        for(auto& tup : config) {
+            if(std::get<1>(tup)==exp) {
+                // update of existing config
+                if(std::get<2>(tup)!=lvl) {
+                    for(auto& pair : loggers) {
+                        if(std::regex_match(pair.first, std::get<0>(tup))) {
+                            pair.second->lvl.store(lvl, std::memory_order_relaxed);
+                        }
+                    }
+                }
+                return;
+            }
+        }
+        // new config
+
+        std::regex re(exp);
+
+        config.emplace_back(std::move(re), exp, lvl);
     }
 } *logger_gbl;
 
@@ -112,21 +154,21 @@ void logger_prepare(void *unused)
 
 namespace pvxs {
 
-int logger_init(logger *logger)
+int logger::init()
 {
-    assert(logger->name);
+    assert(name);
 
-    int lvl = logger->lvl.load();
+    int lvl = this->lvl.load();
     if(lvl==-1) {
         // maybe we initialize
-        if(logger->lvl.compare_exchange_strong(lvl, PLVL_ERR)) {
-            // logger now has default config of PLVL_ERR
+        if(this->lvl.compare_exchange_strong(lvl, int(Level::Err))) {
+            // logger now has default config of Level::Err
             // we will fully initialize
             epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
             assert(logger_gbl);
 
             Guard G(logger_gbl->lock);
-            lvl = logger_gbl->init(logger);
+            lvl = logger_gbl->init(this);
         }
     }
     return lvl;

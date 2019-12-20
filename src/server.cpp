@@ -38,8 +38,8 @@ namespace pvxs {
 namespace server {
 using namespace impl;
 
-DEFINE_LOGGER(serversetup, "server.setup");
-DEFINE_LOGGER(serverio, "server.io");
+DEFINE_LOGGER(serversetup, "pvxs.server.setup");
+DEFINE_LOGGER(serverio, "pvxs.server.io");
 
 namespace {
 void split_into(std::vector<std::string>& out, const char *inp)
@@ -424,7 +424,7 @@ Server::Pvt::~Pvt()
 
 void Server::Pvt::start()
 {
-    log_printf(serversetup, PLVL_DEBUG, "Server Starting\n");
+    log_printf(serversetup, Debug, "Server Starting\n");
 
     // begin accepting connections
     state_t prev_state;
@@ -433,17 +433,17 @@ void Server::Pvt::start()
         prev_state = state;
         if(state!=Stopped) {
             // already running
-            log_printf(serversetup, PLVL_DEBUG, "Server not stopped %d\n", state);
+            log_printf(serversetup, Debug, "Server not stopped %d\n", state);
             return;
         }
         state = Starting;
-        log_printf(serversetup, PLVL_DEBUG, "Server starting\n");
+        log_printf(serversetup, Debug, "Server starting\n");
 
         for(auto& iface : interfaces) {
             if(evconnlistener_enable(iface.listener.get())) {
-                log_printf(serversetup, PLVL_ERR, "Error enabling listener on %s\n", iface.name.c_str());
+                log_printf(serversetup, Err, "Error enabling listener on %s\n", iface.name.c_str());
             }
-            log_printf(serversetup, PLVL_DEBUG, "Server enabled listener on %s\n", iface.name.c_str());
+            log_printf(serversetup, Debug, "Server enabled listener on %s\n", iface.name.c_str());
         }
     });
     if(prev_state!=Stopped)
@@ -459,7 +459,7 @@ void Server::Pvt::start()
     {
         // send first beacon immediately
         if(event_add(beaconTimer.get(), nullptr))
-            log_printf(serversetup, PLVL_ERR, "Error enabling beacon timer on\n");
+            log_printf(serversetup, Err, "Error enabling beacon timer on\n");
 
         state = Running;
     });
@@ -469,7 +469,7 @@ void Server::Pvt::start()
 
 void Server::Pvt::stop()
 {
-    log_printf(serversetup, PLVL_DEBUG, "Server Stopping\n");
+    log_printf(serversetup, Debug, "Server Stopping\n");
 
     // Stop sending Beacons
     state_t prev_state;
@@ -477,13 +477,13 @@ void Server::Pvt::stop()
     {
         prev_state = state;
         if(state!=Running) {
-            log_printf(serversetup, PLVL_DEBUG, "Server not running %d\n", state);
+            log_printf(serversetup, Debug, "Server not running %d\n", state);
             return;
         }
         state = Stopping;
 
         if(event_del(beaconTimer.get()))
-            log_printf(serversetup, PLVL_ERR, "Error disabling beacon timer on\n");
+            log_printf(serversetup, Err, "Error disabling beacon timer on\n");
     });
     if(prev_state!=Running)
         return;
@@ -498,9 +498,9 @@ void Server::Pvt::stop()
     {
         for(auto& iface : interfaces) {
             if(evconnlistener_disable(iface.listener.get())) {
-                log_printf(serversetup, PLVL_ERR, "Error disabling listener on %s\n", iface.name.c_str());
+                log_printf(serversetup, Err, "Error disabling listener on %s\n", iface.name.c_str());
             }
-            log_printf(serversetup, PLVL_DEBUG, "Server disabled listener on %s\n", iface.name.c_str());
+            log_printf(serversetup, Debug, "Server disabled listener on %s\n", iface.name.c_str());
         }
 
         state = Stopped;
@@ -523,7 +523,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
             try {
                 pair.second->onSearch(searchOp);
             }catch(std::exception& e){
-                log_printf(serversetup, PLVL_ERR, "Unhandled error in Source::onSearch for '%s' : %s\n",
+                log_printf(serversetup, Err, "Unhandled error in Source::onSearch for '%s' : %s\n",
                            pair.first.second.c_str(), e.what());
             }
         }
@@ -563,7 +563,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     to_wire(H, Header{CMD_SEARCH_RESPONSE, pva_flags::Server, uint32_t(pktlen-8)});
 
     if(!M.good() || !H.good()) {
-        log_printf(serverio, PLVL_CRIT, "Logic error in Search buffer fill\n");
+        log_printf(serverio, Crit, "Logic error in Search buffer fill\n");
     } else {
         (void)msg.reply(searchReply.data(), pktlen);
     }
@@ -571,7 +571,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
 void Server::Pvt::doBeacons(short evt)
 {
-    log_printf(serversetup, PLVL_DEBUG, "Server beacon timer expires\n");
+    log_printf(serversetup, Debug, "Server beacon timer expires\n");
 
     VectorOutBuf M(true, beaconMsg);
     M.skip(8); // fill in header after body length known
@@ -598,17 +598,17 @@ void Server::Pvt::doBeacons(short evt)
 
         if(ntx<0) {
             int err = evutil_socket_geterror(beaconSender.sock);
-            log_printf(serverio, PLVL_WARN, "Beacon tx error (%d) %s\n",
+            log_printf(serverio, Warn, "Beacon tx error (%d) %s\n",
                        err, evutil_socket_error_to_string(err));
 
         } else if(unsigned(ntx)<beaconMsg.size()) {
-            log_printf(serverio, PLVL_WARN, "Beacon truncated %u", unsigned(dest.size()));
+            log_printf(serverio, Warn, "Beacon truncated %u", unsigned(dest.size()));
         }
     }
 
     timeval interval = {15, 0};
     if(event_add(beaconTimer.get(), &interval))
-        log_printf(serversetup, PLVL_ERR, "Error re-enabling beacon timer on\n");
+        log_printf(serversetup, Err, "Error re-enabling beacon timer on\n");
 }
 
 void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
@@ -616,7 +616,7 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
     try {
         static_cast<Pvt*>(raw)->doBeacons(evt);
     }catch(std::exception& e){
-        log_printf(serverio, PLVL_CRIT, "Unhandled error in beacon timer callback: %s\n", e.what());
+        log_printf(serverio, Crit, "Unhandled error in beacon timer callback: %s\n", e.what());
     }
 }
 

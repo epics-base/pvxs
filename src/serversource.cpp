@@ -11,7 +11,7 @@
 namespace pvxs {
 namespace impl {
 
-DEFINE_LOGGER(srvsrc, "server.src");
+DEFINE_LOGGER(srvsrc, "pvxs.server.src");
 
 ServerSource::ServerSource(server::Server::Pvt* serv)
     :name("server")
@@ -35,7 +35,7 @@ void ServerSource::onCreate(std::unique_ptr<server::ChannelControl> &&op)
     auto handle = std::move(op); // claim
 
     handle->onRPC([this](std::unique_ptr<server::ExecOp>&& eop, Value&& raw) {
-        log_printf(srvsrc, PLVL_DEBUG, "Client %s calls %s\n", eop->peerName().c_str(),
+        log_printf(srvsrc, Debug, "Client %s calls %s\n", eop->peerName().c_str(),
                    std::string(SB()<<raw).c_str());
 
         auto args = std::move(raw);

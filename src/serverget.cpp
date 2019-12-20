@@ -11,8 +11,8 @@
 #include "serverconn.h"
 
 namespace pvxs { namespace impl {
-DEFINE_LOGGER(connsetup, "tcp.setup");
-DEFINE_LOGGER(connio, "tcp.io");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
 namespace {
 
@@ -305,7 +305,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         from_wire_type_value(M, rxRegistry, pvRequest);
 
         if(!M.good()) {
-            log_printf(connio, PLVL_DEBUG, "Client %s\n Invalid op=%x/%x INIT\n",
+            log_printf(connio, Debug, "Client %s\n Invalid op=%x/%x INIT\n",
                        peerName.c_str(), cmd, subcmd);
             bev.reset();
             return;
@@ -314,7 +314,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         auto& chan = lookupSID(sid);
 
         if(opByIOID.find(ioid)!=opByIOID.end()) {
-            log_printf(connsetup, PLVL_ERR, "Client %s reuses existing ioid %u\n", peerName.c_str(), unsigned(ioid));
+            log_printf(connsetup, Err, "Client %s reuses existing ioid %u\n", peerName.c_str(), unsigned(ioid));
             bev.reset();
             return;
         }
@@ -329,7 +329,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         opByIOID[ioid] = op;
         chan->opByIOID[ioid] = op;
 
-        log_printf(connsetup, PLVL_DEBUG, "Client %s Get INIT ioid=%u pvRequest=%s\n",
+        log_printf(connsetup, Debug, "Client %s Get INIT ioid=%u pvRequest=%s\n",
                    peerName.c_str(), unsigned(ioid),
                    std::string(SB()<<pvRequest).c_str());
 
@@ -345,14 +345,14 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         std::shared_ptr<ServerGPR> op;
         auto it = opByIOID.find(ioid);
         if(it==opByIOID.end() || !(op=std::dynamic_pointer_cast<ServerGPR>(it->second))) {
-            log_printf(connio, PLVL_ERR, "Client %s Gets %s IOID %u\n", peerName.c_str(),
+            log_printf(connio, Err, "Client %s Gets %s IOID %u\n", peerName.c_str(),
                        it==opByIOID.end() ? "non-existant" : "invalid", unsigned(ioid));
             bev.reset();
             return;
         }
 
         if(cmd!=CMD_RPC && !op->type) {
-            log_printf(connsetup, PLVL_ERR, "Client %s tries to Exec to early\n", peerName.c_str());
+            log_printf(connsetup, Err, "Client %s tries to Exec to early\n", peerName.c_str());
             bev.reset();
             return;
         }
@@ -369,7 +369,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         }
 
         if(!M.good()) {
-            log_printf(connio, PLVL_DEBUG, "Client %s\n Invalid op=%x/%x Get\n",
+            log_printf(connio, Debug, "Client %s\n Invalid op=%x/%x Get\n",
                        peerName.c_str(), cmd, subcmd);
             bev.reset();
             return;
@@ -390,7 +390,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             op->subcmd = subcmd;
             op->state = ServerOp::Executing;
 
-            log_printf(connsetup, PLVL_DEBUG, "CLient %s Get executing\n", peerName.c_str());
+            log_printf(connsetup, Debug, "CLient %s Get executing\n", peerName.c_str());
 
             try {
                 if(cmd==CMD_RPC && isput) {
@@ -412,18 +412,18 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
                         ctrl->error("GET Not Implemented");
 
                 } else {
-                    log_printf(connsetup, PLVL_ERR, "Client %s Get exec in incorrect command %d\n",
+                    log_printf(connsetup, Err, "Client %s Get exec in incorrect command %d\n",
                                peerName.c_str(), subcmd);
                 }
             } catch(std::exception& e) {
-                log_printf(connsetup, PLVL_ERR, "Client %s Unhandled exception in onGet/Put/RPC %s : %s\n",
+                log_printf(connsetup, Err, "Client %s Unhandled exception in onGet/Put/RPC %s : %s\n",
                            peerName.c_str(), typeid(e).name(), e.what());
                 if(ctrl)
                     ctrl->error(e.what());
             }
 
         } else {
-            log_printf(connsetup, PLVL_ERR, "CLient %s Get exec in incorrect state %d\n",
+            log_printf(connsetup, Err, "CLient %s Get exec in incorrect state %d\n",
                        peerName.c_str(), op->state);
         }
     }

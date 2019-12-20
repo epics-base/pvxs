@@ -170,20 +170,20 @@ int main(int argc, char *argv[])
             bindaddrs.emplace_back(pva::SockAddr::any(AF_INET, 5076));
         }
 
-        pva::logger_level_set("pvxvct", PLVL_INFO);
+        pva::logger_level_set("pvxvct", pvxs::Level::Info);
         pva::logger_config_env(); // from $PVXS_LOG
 
-        log_printf(out, PLVL_DEBUG, "Show Search: %s\nShow Beacon: %s\n", opts.client?"yes":"no", opts.server?"yes":"no");
+        log_printf(out, Debug, "Show Search: %s\nShow Beacon: %s\n", opts.client?"yes":"no", opts.server?"yes":"no");
         if(opts.client && opts.pvnames.empty()) {
-            log_printf(out, PLVL_DEBUG, "Show all PV names\n");
+            log_printf(out, Debug, "Show all PV names\n");
         } else {
             for(const auto& name : opts.pvnames) {
-                log_printf(out, PLVL_DEBUG, "Show PV: %s\n", name.c_str());
+                log_printf(out, Debug, "Show PV: %s\n", name.c_str());
             }
         }
         if(opts.peers.empty()) {
-            log_printf(out, PLVL_DEBUG, "No peer filter\n");
-        } else if(log_test(out, PLVL_DEBUG)) {
+            log_printf(out, Debug, "No peer filter\n");
+        } else if(log_test(out, Debug)) {
             for(const auto& tup : opts.peers) {
                 in_addr addr, netmask;
                 std::tie(addr.s_addr, netmask.s_addr) = tup;
@@ -191,22 +191,22 @@ int main(int argc, char *argv[])
                 char nbuf[16];
                 evutil_inet_ntop(AF_INET, &addr, abuf, sizeof(abuf));
                 evutil_inet_ntop(AF_INET, &netmask, nbuf, sizeof(nbuf));
-                log_printf(out, PLVL_DEBUG, "Show from %s/%s\n", abuf, nbuf);
+                log_printf(out, Debug, "Show from %s/%s\n", abuf, nbuf);
             }
         }
 
         auto searchCB = [&opts](const pva::UDPManager::Search& msg)
         {
-            log_printf(out, PLVL_INFO, "%s Searching for:\n", msg.src.tostring().c_str());
+            log_printf(out, Info, "%s Searching for:\n", msg.src.tostring().c_str());
             for(const auto pv : msg.names) {
-                log_printf(out, PLVL_INFO, "  \"%s\"\n", pv.name);
+                log_printf(out, Info, "  \"%s\"\n", pv.name);
             }
         };
 
         auto beaconCB = [&opts](const pva::UDPManager::Beacon& msg)
         {
             const auto& guid = msg.guid;
-            log_printf(out, PLVL_INFO, "%s Beacon %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
+            log_printf(out, Info, "%s Beacon %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
                        msg.src.tostring().c_str(),
                        guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11],
                        msg.server.tostring().c_str());
@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
                                    manager.onBeacon(baddr, beaconCB));
             listeners.back().first->start();
             listeners.back().second->start();
-            log_printf(out, PLVL_DEBUG, "Bind: %s\n", baddr.tostring().c_str());
+            log_printf(out, Debug, "Bind: %s\n", baddr.tostring().c_str());
         }
 
 
@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
 #endif
 
         done.wait();
-        log_printf(out, PLVL_INFO, "Done\n");
+        log_printf(out, Info, "Done\n");
 
         errlogFlush();
         return 0;

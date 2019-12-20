@@ -23,11 +23,11 @@ static const size_t tcp_readahead = 0x1000;
 namespace pvxs {namespace impl {
 
 // message related to client state and errors
-DEFINE_LOGGER(connsetup, "tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 // related to low level send/recv
-DEFINE_LOGGER(connio, "tcp.io");
+DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
-DEFINE_LOGGER(remote, "tcp.log");
+DEFINE_LOGGER(remote, "pvxs.remote.log");
 
 ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen)
     :iface(iface)
@@ -41,7 +41,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     ,txBody(evbuffer_new())
     ,nextSID(0)
 {
-    log_printf(connio, PLVL_DEBUG, "Client %s connects\n", peerName.c_str());
+    log_printf(connio, Debug, "Client %s connects\n", peerName.c_str());
 
     bufferevent_setcb(bev.get(), &bevReadS, &bevWriteS, &bevEventS, this);
     // initially wait for at least a header
@@ -138,7 +138,7 @@ void auth_complete(ServerConn *self, const Status& sts)
 
     self->enqueueTxBody(CMD_CONNECTION_VALIDATED);
 
-    log_printf(connsetup, PLVL_DEBUG, "%s Auth complete with %d\n", self->peerName.c_str(), sts.code);
+    log_printf(connsetup, Debug, "%s Auth complete with %d\n", self->peerName.c_str(), sts.code);
 }
 
 void ServerConn::handle_CONNECTION_VALIDATION()
@@ -159,24 +159,24 @@ void ServerConn::handle_CONNECTION_VALIDATION()
         // TODO store credentials
 
         if(!M.good()) {
-            log_printf(connio, PLVL_ERR, "Client %s Truncated/Invalid ConnValid from client\n", peerName.c_str());
+            log_printf(connio, Err, "Client %s Truncated/Invalid ConnValid from client\n", peerName.c_str());
             bev.reset();
             return;
 
         } else {
-            log_printf(connsetup, PLVL_DEBUG, "Client %s authenticates using %s and %s\n",
+            log_printf(connsetup, Debug, "Client %s authenticates using %s and %s\n",
                        peerName.c_str(), selected.c_str(),
                        std::string(SB()<<auth).c_str());
         }
     }
 
     if(selected!="ca" && selected!="anonymous") {
-        log_printf(connsetup, PLVL_DEBUG, "Client %s selects unadvertised auth \"%s\"", peerName.c_str(), selected.c_str());
+        log_printf(connsetup, Debug, "Client %s selects unadvertised auth \"%s\"", peerName.c_str(), selected.c_str());
         auth_complete(this, Status{Status::Error, "Client selects unadvertised auth"});
         return;
 
     } else {
-        log_printf(connsetup, PLVL_DEBUG, "Client %s selects auth \"%s\"", peerName.c_str(), selected.c_str());
+        log_printf(connsetup, Debug, "Client %s selects auth \"%s\"", peerName.c_str(), selected.c_str());
     }
 
     // remainder of segBuf is payload w/ credentials
@@ -205,14 +205,14 @@ void ServerConn::handle_CANCEL_REQUEST()
 
     auto it = opByIOID.find(ioid);
     if(it==opByIOID.end()) {
-        log_printf(connsetup, PLVL_WARN, "Client %s Cancel of non-existant Op %u\n", peerName.c_str(), unsigned(ioid));
+        log_printf(connsetup, Warn, "Client %s Cancel of non-existant Op %u\n", peerName.c_str(), unsigned(ioid));
         return;
     }
 
     const auto& op = it->second;
     auto chan = op->chan.lock();
     if(!chan || chan->sid!=sid) {
-        log_printf(connsetup, PLVL_ERR, "Client %s Cancel inconsistent Op\n", peerName.c_str());
+        log_printf(connsetup, Err, "Client %s Cancel inconsistent Op\n", peerName.c_str());
         return;
     }
 
@@ -224,7 +224,7 @@ void ServerConn::handle_CANCEL_REQUEST()
 
     } else {
         // an allowed race
-        log_printf(connsetup, PLVL_DEBUG, "Client %s Cancel of non-executing Op\n", peerName.c_str());
+        log_printf(connsetup, Debug, "Client %s Cancel of non-executing Op\n", peerName.c_str());
     }
 }
 
@@ -244,7 +244,7 @@ void ServerConn::handle_DESTROY_REQUEST()
     auto n = chan->opByIOID.erase(ioid);
 
     if(it==opByIOID.end() || n!=1) {
-        log_printf(connsetup, PLVL_WARN, "Client %s can't destroy non-existant op %u:%u\n",
+        log_printf(connsetup, Warn, "Client %s can't destroy non-existant op %u:%u\n",
                    peerName.c_str(), unsigned(sid), unsigned(ioid));
 
     } else {
@@ -274,27 +274,29 @@ void ServerConn::handle_MESSAGE()
 
     auto it = opByIOID.find(ioid);
     if(it==opByIOID.end()) {
-        log_printf(connsetup, PLVL_DEBUG, "Client %s Message on non-existant ioid\n", peerName.c_str());
+        log_printf(connsetup, Debug, "Client %s Message on non-existant ioid\n", peerName.c_str());
         return;
     }
     auto chan = it->second->chan.lock();
 
+    Level lvl;
     switch(mtype) {
-    case 0: mtype = PLVL_INFO;
-    case 1: mtype = PLVL_WARN;
-    case 2: mtype = PLVL_ERR;
-    default:mtype = PLVL_CRIT;
+    case 0: lvl = Level::Info;
+    case 1: lvl = Level::Warn;
+    case 2: lvl = Level::Err;
+    default:lvl = Level::Crit;
     }
 
-    log_printf(remote, mtype, "Client %s Channel %s Remote message: %s\n",
-               peerName.c_str(), chan ? "<dead>" : chan->name.c_str(),
-               msg.c_str());
+    if(remote.test(lvl))
+        errlogPrintf("Client %s Channel %s Remote message: %s\n",
+                     peerName.c_str(), chan ? "<dead>" : chan->name.c_str(),
+                     msg.c_str());
 }
 
 
 void ServerConn::cleanup()
 {
-    log_printf(connsetup, PLVL_DEBUG, "Client %s Cleanup TCP Connection\n", peerName.c_str());
+    log_printf(connsetup, Debug, "Client %s Cleanup TCP Connection\n", peerName.c_str());
 
     auto it = iface->server->connections.find(this);
     if(it!=iface->server->connections.end()) {
@@ -311,13 +313,13 @@ void ServerConn::bevEvent(short events)
         if(events&BEV_EVENT_ERROR) {
             int err = EVUTIL_SOCKET_ERROR();
             const char *msg = evutil_socket_error_to_string(err);
-            log_printf(connio, PLVL_ERR, "Client %s connection closed with socket error %d : %s\n", peerName.c_str(), err, msg);
+            log_printf(connio, Err, "Client %s connection closed with socket error %d : %s\n", peerName.c_str(), err, msg);
         }
         if(events&BEV_EVENT_EOF) {
-            log_printf(connio, PLVL_DEBUG, "Client %s connection closed by peer\n", peerName.c_str());
+            log_printf(connio, Debug, "Client %s connection closed by peer\n", peerName.c_str());
         }
         if(events&BEV_EVENT_TIMEOUT) {
-            log_printf(connio, PLVL_WARN, "Client %s connection timeout\n", peerName.c_str());
+            log_printf(connio, Warn, "Client %s connection timeout\n", peerName.c_str());
         }
         bev.reset();
     }
@@ -337,11 +339,11 @@ void ServerConn::bevRead()
         assert(ret==sizeof(header)); // previously verified
 
         if(header[0]!=0xca || header[1]==0 || (header[2]&pva_flags::Server)) {
-            log_hex_printf(connio, PLVL_ERR, header, sizeof(header), "Client %s Protocol decode fault.  Force disconnect.\n", peerName.c_str());
+            log_hex_printf(connio, Err, header, sizeof(header), "Client %s Protocol decode fault.  Force disconnect.\n", peerName.c_str());
             bev.reset();
             break;
         }
-        log_hex_printf(connio, PLVL_DEBUG, header, sizeof(header), "Client %s Receive header\n", peerName.c_str());
+        log_hex_printf(connio, Debug, header, sizeof(header), "Client %s Receive header\n", peerName.c_str());
 
         if(header[2]&pva_flags::Control) {
             // Control messages are not actually useful
@@ -382,7 +384,7 @@ void ServerConn::bevRead()
 
         bool continuation = seg&pva_flags::SegLast; // true for mid or last.  false for none for first
         if((continuation ^ expectSeg) || (continuation && header[3]!=segCmd)) {
-            log_printf(connio, PLVL_CRIT, "Client %s Peer segmentation violation %c%c 0x%02x==0x%02x\n", peerName.c_str(),
+            log_printf(connio, Crit, "Client %s Peer segmentation violation %c%c 0x%02x==0x%02x\n", peerName.c_str(),
                        expectSeg?'Y':'N', continuation?'Y':'N',
                        segCmd, header[3]);
             bev.reset();
@@ -400,7 +402,7 @@ void ServerConn::bevRead()
             // ready to process segBuf
             switch(segCmd) {
             default:
-                log_printf(connio, PLVL_DEBUG, "Client %s Ignore unexpected command 0x%02x\n", peerName.c_str(), segCmd);
+                log_printf(connio, Debug, "Client %s Ignore unexpected command 0x%02x\n", peerName.c_str(), segCmd);
                 evbuffer_drain(segBuf.get(), evbuffer_get_length(segBuf.get()));
                 break;
 #define CASE(OP) case CMD_##OP: handle_##OP(); break
@@ -461,7 +463,7 @@ void ServerConn::bevEventS(struct bufferevent *bev, short events, void *ptr)
     try {
         conn->bevEvent(events);
     }catch(std::exception& e){
-        log_printf(connsetup, PLVL_CRIT, "Client %s Unhandled error in bev event callback: %s\n", conn->peerName.c_str(), e.what());
+        log_printf(connsetup, Crit, "Client %s Unhandled error in bev event callback: %s\n", conn->peerName.c_str(), e.what());
         static_cast<ServerConn*>(ptr)->cleanup();
     }
 }
@@ -472,7 +474,7 @@ void ServerConn::bevReadS(struct bufferevent *bev, void *ptr)
     try {
         conn->bevRead();
     }catch(std::exception& e){
-        log_printf(connsetup, PLVL_CRIT, "Client %s Unhandled error in bev read callback: %s\n", conn->peerName.c_str(), e.what());
+        log_printf(connsetup, Crit, "Client %s Unhandled error in bev read callback: %s\n", conn->peerName.c_str(), e.what());
         static_cast<ServerConn*>(ptr)->cleanup();
     }
 }
@@ -483,7 +485,7 @@ void ServerConn::bevWriteS(struct bufferevent *bev, void *ptr)
     try {
         conn->bevWrite();
     }catch(std::exception& e){
-        log_printf(connsetup, PLVL_CRIT, "Client %s Unhandled error in bev write callback: %s\n", conn->peerName.c_str(), e.what());
+        log_printf(connsetup, Crit, "Client %s Unhandled error in bev write callback: %s\n", conn->peerName.c_str(), e.what());
         static_cast<ServerConn*>(ptr)->cleanup();
     }
 }
@@ -520,14 +522,14 @@ void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, s
     auto self = static_cast<ServIface*>(raw);
     try {
         if(peer->sa_family!=AF_INET) {
-            log_printf(connsetup, PLVL_CRIT, "Interface %s Rejecting !ipv4 client\n", self->name.c_str());
+            log_printf(connsetup, Crit, "Interface %s Rejecting !ipv4 client\n", self->name.c_str());
             evutil_closesocket(sock);
             return;
         }
         auto conn(std::make_shared<ServerConn>(self, sock, peer, socklen));
         self->server->connections[conn.get()] = std::move(conn);
     }catch(std::exception& e){
-        log_printf(connsetup, PLVL_CRIT, "Interface %s Unhandled error in accept callback: %s\n", self->name.c_str(), e.what());
+        log_printf(connsetup, Crit, "Interface %s Unhandled error in accept callback: %s\n", self->name.c_str(), e.what());
         evutil_closesocket(sock);
     }
 }
