@@ -45,22 +45,20 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
     auto top = std::make_shared<StructTop>();
 
     top->desc = desc;
-    top->valid.resize(desc->next_offset-desc->offset);
-    top->member_indicies.resize(top->valid.size());
-    top->members.resize(top->valid.size());
+    top->members.resize(desc->size());
     {
         auto& root = top->members[0];
         root.init(desc.get());
         root.top = top.get();
-        top->member_indicies[0u] = 0u;
     }
 
-    for(auto& pair : desc->mlookup) {
-        auto cfld = desc.get() + pair.second;
-        auto& mem = top->members.at(cfld->offset-desc->offset);
-        mem.top = top.get();
-        mem.init(cfld);
-        top->member_indicies[cfld->offset-desc->offset] = pair.second;
+    if(desc->code==TypeCode::Struct) {
+        for(auto& pair : desc->mlookup) {
+            auto cfld = desc.get() + pair.second;
+            auto& mem = top->members.at(pair.second);
+            mem.top = top.get();
+            mem.init(cfld);
+        }
     }
 
     this->desc = desc.get();
@@ -93,18 +91,89 @@ Value Value::clone() const
     if(desc) {
         decltype (store->top->desc) fld(store->top->desc, desc);
         ret = Value(fld);
-        //ret.assign(*this);
+        ret.assign(*this);
     }
     return ret;
 }
 
-//Value& Value::assign(const Value& o)
-//{
-//    if(desc!=o.desc)
-//        throw std::runtime_error("Can only assign same TypeDef"); // TODO relax
+Value& Value::assign(const Value& o)
+{
+    if(desc!=o.desc)
+        throw std::runtime_error("Can only assign same TypeDef"); // TODO relax
 
-//    return *this;
-//}
+    if(desc) {
+        for(size_t bit=0, end=desc->size(); bit<end;) {
+            auto sstore = o.store.get() + bit;
+            auto dstore = store.get() + bit;
+
+            if(!sstore->valid) {
+                bit++;
+                continue;
+            }
+
+            dstore->valid = true;
+
+            switch(dstore->code) {
+            case StoreType::Real:
+            case StoreType::Integer:
+            case StoreType::UInteger:
+                dstore->as<uint64_t>() = sstore->as<uint64_t>();
+                bit++;
+                break;
+            case StoreType::String:
+                dstore->as<std::string>() = sstore->as<std::string>();
+                bit++;
+                break;
+            case StoreType::Array:
+                dstore->as<shared_array<const void>>() = sstore->as<shared_array<const void>>();
+                bit++;
+                break;
+            case StoreType::Compound:
+                dstore->as<Value>() = sstore->as<Value>();
+                bit++;
+                break;
+            case StoreType::Null: {
+                // copy entire sub-structure
+                auto sdesc = desc + bit;
+
+                for(auto end2 = bit + sdesc->size(); bit<end2; bit++)
+                {
+                    auto sstore = o.store.get() + bit;
+                    auto dstore = store.get() + bit;
+
+                    dstore->valid = true;
+
+                    switch(dstore->code) {
+                    case StoreType::Real:
+                    case StoreType::Integer:
+                    case StoreType::UInteger:
+                        dstore->as<uint64_t>() = sstore->as<uint64_t>();
+                        bit++;
+                        break;
+                    case StoreType::String:
+                        dstore->as<std::string>() = sstore->as<std::string>();
+                        bit++;
+                        break;
+                    case StoreType::Array:
+                        dstore->as<shared_array<const void>>() = sstore->as<shared_array<const void>>();
+                        bit++;
+                        break;
+                    case StoreType::Compound:
+                        dstore->as<Value>() = sstore->as<Value>();
+                        bit++;
+                        break;
+                    case StoreType::Null: // skip sub-struct nodes, we will copy all leaf nodes
+                        break;
+                    }
+
+                }
+            }
+                break;
+            }
+        }
+    }
+    return *this;
+}
 
 Value Value::allocMember()
 {
@@ -112,7 +181,7 @@ Value Value::allocMember()
     if(!desc || (desc->code!=TypeCode::UnionA && desc->code!=TypeCode::StructA))
         throw std::runtime_error("allocMember() only meaningful for Struct[] or Union[]");
 
-    decltype (store->top->desc) fld(store->top->desc, desc+1);
+    decltype (store->top->desc) fld(store->top->desc, desc->members.data());
     return Value::Helper::build(fld, *this);
 }
 
@@ -121,28 +190,29 @@ bool Value::isMarked(bool parents, bool children) const
     if(!desc)
         return false;
 
-    if(store->top->valid[store->index()])
+    if(store->valid)
         return true;
 
     auto top = store->top;
 
     if(children && desc->size()>1u) {
         // TODO more efficient
-        for(auto bit : range(desc->offset-top->desc->offset,
-                             desc->next_offset-top->desc->offset))
+        for(auto bit : range(desc->size()))
         {
-            if(top->valid[bit])
+            auto cstore = store.get() + bit;
+            if(cstore->valid)
                 return true;
         }
     }
 
     if(parents) {
-        auto P = desc;
-        while(P!=top->desc.get()) {
-            P -= P->parent_index;
+        auto pdesc = desc;
+        auto pstore = store.get();
+        while(pdesc!=top->desc.get()) {
+            pdesc -= pdesc->parent_index;
+            pstore -= pdesc->parent_index;
 
-            auto bit = P->offset - top->desc->offset;
-            if(top->valid[bit])
+            if(pstore->valid)
                 return true;
         }
     }
@@ -155,7 +225,7 @@ void Value::mark(bool v)
     if(!desc)
         return;
 
-    store->top->valid[store->index()] = v;
+    store->valid = v;
     if(!v)
         return;
 
@@ -171,26 +241,26 @@ void Value::unmark(bool parents, bool children)
     if(!desc)
         return;
 
-    store->top->valid[store->index()] = false;
+    store->valid = false;
 
     auto top = store->top;
 
     if(children && desc->size()>1u) {
         // TODO more efficient
-        for(auto bit : range(desc->offset-top->desc->offset,
-                             desc->next_offset-top->desc->offset))
+        for(auto bit : range(desc->size()))
         {
-            top->valid[bit] = false;
+            (store.get() + bit)->valid = false;
         }
     }
 
     if(parents) {
-        auto P = desc;
-        while(P!=top->desc.get()) {
-            P -= P->parent_index;
+        auto pdesc = desc;
+        auto pstore = store.get();
+        while(pdesc!=top->desc.get()) {
+            pdesc -= pdesc->parent_index;
+            pstore -= pdesc->parent_index;
 
-            auto bit = P->offset - top->desc->offset;
-            top->valid[bit] = false;
+            pstore->valid = false;
         }
     }
 }
@@ -365,7 +435,7 @@ void Value::copyIn(const void *ptr, StoreType type)
                 if(desc->code!=TypeCode::AnyA) {
                     // enforce member type for Struct[] and Union[]
                     for(auto& val : tsrc) {
-                        if(val.desc && val.desc!=desc+1) {
+                        if(val.desc && val.desc!=desc->members.data()) {
                             throw NoConvert();
                         }
                     }
@@ -397,12 +467,6 @@ void Value::copyIn(const void *ptr, StoreType type)
         }
         throw NoConvert();
     case StoreType::Null:
-        if(desc->code==TypeCode::Struct && type==StoreType::Compound) {
-            auto& val = *reinterpret_cast<const Value*>(ptr);
-            if(val.desc && val.desc->code==TypeCode::Struct) {
-                // Struct to Struct assignment.
-            }
-        }
         throw NoConvert();
     }
 
@@ -430,7 +494,7 @@ void Value::traverse(const std::string &expr, bool modify)
             if(desc!=store->top->desc.get())
             {
                 auto pdesc = desc - desc->parent_index;
-                std::shared_ptr<FieldStorage> pstore(store, store.get() - desc->offset + pdesc->offset);
+                std::shared_ptr<FieldStorage> pstore(store, store.get() - desc->parent_index);
                 store = std::move(pstore);
                 desc = pdesc;
                 pos++;
@@ -454,8 +518,7 @@ void Value::traverse(const std::string &expr, bool modify)
             if(sep>0 && (it=desc->mlookup.find(expr.substr(pos, sep-pos)))!=desc->mlookup.end()) {
                 // found it
                 auto next = desc+it->second;
-                auto offset = next->offset - desc->offset;
-                decltype(store) value(store, store.get()+offset);
+                decltype(store) value(store, store.get()+it->second);
                 store = std::move(value);
                 desc = next;
                 pos = sep;
@@ -487,11 +550,11 @@ void Value::traverse(const std::string &expr, bool modify)
                         // found it.
                         auto& fld = store->as<Value>();
 
-                        if(modify || fld.desc==desc+it->second) {
+                        if(modify || fld.desc==&desc->members[it->second]) {
                             // will select, or already selected
-                            if(fld.desc!=desc+it->second) {
+                            if(fld.desc!=&desc->members[it->second]) {
                                 // select
-                                std::shared_ptr<const FieldDesc> mtype(store->top->desc, desc+it->second);
+                                std::shared_ptr<const FieldDesc> mtype(store->top->desc, &desc->members[it->second]);
                                 fld = Value(mtype, *this);
                             }
                             pos = sep;
@@ -593,7 +656,7 @@ void show_Value(std::ostream& strm,
             strm<<" {\n";
             for(auto& pair : desc->miter) {
                 auto cdesc = desc + pair.second;
-                show_Value(strm, pair.first, cdesc, store - desc->offset + cdesc->offset, level+1);
+                show_Value(strm, pair.first, cdesc, store + pair.second, level+1);
             }
             indent(strm, level);
             strm<<"}";
@@ -612,7 +675,7 @@ void show_Value(std::ostream& strm,
         auto& fld = store->as<Value>();
         if(fld.valid() && desc->code==TypeCode::Union) {
             for(auto& pair : desc->miter) {
-                if(desc + pair.second == Value::Helper::desc(fld)) {
+                if(&desc->members[pair.second] == Value::Helper::desc(fld)) {
                     strm<<"."<<pair.first;
                     break;
                 }

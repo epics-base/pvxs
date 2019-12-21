@@ -165,62 +165,6 @@ TypeDef::TypeDef(const Value& o)
 TypeDef::~TypeDef() {}
 
 static
-void build_tree(std::vector<FieldDesc>& desc, const Member& node)
-{
-    auto code = node.code;
-    if(node.code==TypeCode::StructA || node.code==TypeCode::UnionA) {
-
-        desc.emplace_back();
-        auto& fld = desc.back();
-        fld.code = node.code;
-        // struct/union array have no ID
-        fld.hash = node.code.code;
-        code = code.scalarOf();
-    }
-
-    const auto index = desc.size();
-    desc.emplace_back();
-
-    {
-        auto& fld = desc.back();
-        fld.code = code;
-        fld.id = node.id;
-        fld.hash = code.code ^ std::hash<std::string>{}(fld.id);
-    }
-
-
-    for(auto& cnode : node.children) {
-        const auto cindex = desc.size();
-
-        build_tree(desc, cnode); // recurse.  may realloc desc
-
-        auto& fld = desc[index];
-        auto& child = desc[cindex];
-        child.parent_index = cindex-index;
-
-        fld.hash ^= std::hash<std::string>{}(cnode.name) ^ child.hash;
-
-        fld.mlookup[cnode.name] = cindex-index;
-        fld.miter.emplace_back(cnode.name, cindex-index);
-
-        std::string cname = cnode.name+".";
-        if(fld.code.code==TypeCode::Struct && fld.code==child.code) {
-            // propagate names from sub-struct
-            for(auto& cpair : child.mlookup) {
-                fld.mlookup[cname+cpair.first] = cindex-index+cpair.second;
-            }
-        }
-    }
-
-    desc[index].num_index = desc.size()-index;
-
-    if(node.code==TypeCode::StructA || node.code==TypeCode::UnionA)
-    {
-        desc[index-1].num_index = desc.size()-index+1;
-    }
-}
-
-static
 void append_tree(Member& node, const Member& adopt)
 {
     for(auto& child : node.children) {
@@ -266,6 +210,66 @@ TypeDef& TypeDef::operator+=(std::initializer_list<Member> children)
     return *this;
 }
 
+static
+void build_tree(std::vector<FieldDesc>& desc, const Member& node)
+{
+    auto code = node.code;
+    if(node.code==TypeCode::StructA || node.code==TypeCode::UnionA) {
+
+        desc.emplace_back();
+        auto& fld = desc.back();
+        fld.code = node.code;
+        // struct/union array have no ID
+        fld.hash = node.code.code;
+
+        Member next{code.scalarOf(), node.name};
+        next.id = node.id;
+        next.children = node.children; // TODO ick copy
+
+        build_tree(desc.back().members, next);
+        return;
+    }
+
+    const auto index = desc.size();
+    desc.emplace_back();
+
+    {
+        auto& fld = desc.back();
+        fld.code = code;
+        fld.id = node.id;
+        fld.hash = code.code ^ std::hash<std::string>{}(fld.id);
+    }
+
+    auto& cdescs = code.code==TypeCode::Struct ? desc : desc.back().members;
+    auto cref = code.code==TypeCode::Struct ? index : 0u;
+
+    for(auto& cnode : node.children) {
+        const auto cindex = cdescs.size();
+
+        build_tree(cdescs, cnode); // recurse.  may realloc desc
+
+        auto& fld = desc[index];
+        auto& child = cdescs[cindex];
+        if(code.code==TypeCode::Struct)
+            child.parent_index = cindex-cref;
+
+        fld.hash ^= std::hash<std::string>{}(cnode.name) ^ child.hash;
+
+        fld.mlookup[cnode.name] = cindex-cref;
+        fld.miter.emplace_back(cnode.name, cindex-cref);
+
+        std::string cname = cnode.name+".";
+        if(fld.code.code==TypeCode::Struct && fld.code==child.code) {
+            // propagate names from sub-struct
+            for(auto& cpair : child.mlookup) {
+                fld.mlookup[cname+cpair.first] = cindex-cref+cpair.second;
+            }
+        }
+    }
+
+    assert(desc.size()==index+desc[index].size());
+}
+
 Value TypeDef::create() const
 {
     if(!top)
@@ -273,7 +277,6 @@ Value TypeDef::create() const
 
     auto desc = std::make_shared<std::vector<FieldDesc>>();
     build_tree(*desc, *top);
-    FieldDesc_calculate_offset(desc->data());
 
     std::shared_ptr<const FieldDesc> type(desc, desc->data()); // alias
     return Value(type);
@@ -315,79 +318,53 @@ std::ostream& operator<<(std::ostream& strm, const TypeDef& def)
 
 namespace impl {
 
-
-void FieldDesc_calculate_offset(FieldDesc* const top)
+void show_FieldDesc(std::ostream& strm, const FieldDesc* desc, unsigned level)
 {
-    top->offset = 0;
-    uint16_t offset = 1;
-    for(size_t index = 1; index < top->size(); ) {
-        auto& fld = top[index];
+    for(auto idx : range(desc->size())) {
+        auto& fld = desc[idx];
+        indent(strm, level);
+        strm<<"["<<idx<<"] "<<fld.code<<' '<<fld.id
+            <<" parent=["<<(idx-fld.parent_index)   <<"]"
+              "  ["<<idx<<":"<<idx+fld.size()<<")\n";
 
-        switch (fld.code.code) {
+        switch(fld.code.code) {
         case TypeCode::Struct:
-            if(top->code==fld.code) {
-                // sub-structure
-                fld.offset = offset++;
-                index++;
-            } else {
-                // structure inside union or array of struct
-                // new offset zero
-                FieldDesc_calculate_offset(top);
-                index+=top->size();
+            // note: need to ensure stable lexical iteration order if fld.mlookup ever becomes unordered_map
+            for(auto& pair : fld.mlookup) {
+                indent(strm, level);
+                strm<<"    "<<pair.first<<" -> "<<pair.second<<" ["<<(idx+pair.second)<<"]\n";
             }
-            break;
-        case TypeCode::Union:
-            // number in parent structure/union
-            fld.offset = offset++;
-            // new offset zero for each child
             for(auto& pair : fld.miter) {
-                FieldDesc_calculate_offset(top+index+pair.second);
+                indent(strm, level);
+                strm<<"    "<<pair.first<<" :  "<<pair.second<<" ["<<(idx+pair.second)<<"]\n";
             }
-            index += fld.size();
             break;
+
+        case TypeCode::Union:
+            for(auto& pair : fld.mlookup) {
+                indent(strm, level);
+                strm<<"    "<<pair.first<<" -> "<<pair.second<<" ["<<(pair.second)<<"]\n";
+            }
+            for(auto& pair : fld.miter) {
+                indent(strm, level);
+                strm<<"    "<<pair.first<<" :  "<<pair.second<<" ["<<(pair.second)<<"]\n";
+                show_FieldDesc(strm, fld.members.data()+pair.second, level+1u);
+            }
+            break;
+
         case TypeCode::StructA:
         case TypeCode::UnionA:
-            // number in parent structure/union
-            fld.offset = offset++;
-            index++;
-            // new offset zero for child
-            FieldDesc_calculate_offset(top+index);
-            index += top[index].size();
+            show_FieldDesc(strm, fld.members.data(), level+1u);
             break;
         default:
-            fld.offset = offset++;
-            index++;
             break;
         }
-        fld.next_offset = offset;
     }
-    top->next_offset = offset;
 }
 
 std::ostream& operator<<(std::ostream& strm, const FieldDesc* desc)
 {
-    for(auto idx : range(desc->size())) {
-        auto& fld = desc[idx];
-        strm<<"["<<idx<<"] "<<fld.code<<' '<<fld.id
-            <<" <"<<fld.offset<<":"<<fld.next_offset<<">"
-              "  ["<<idx<<":"<<idx+fld.num_index<<")\n";
-
-        switch(fld.code.code) {
-        case TypeCode::Struct:
-        case TypeCode::Union: {
-            // note: need to ensure stable lexical iteration order if fld.mlookup ever becomes unordered_map
-            for(auto& pair : fld.mlookup) {
-                strm<<"  "<<pair.first<<" -> "<<pair.second<<" ["<<(idx+pair.second)<<"]\n";
-            }
-            for(auto& pair : fld.miter) {
-                strm<<"  "<<pair.first<<" :  "<<pair.second<<" ["<<(idx+pair.second)<<"]\n";
-            }
-            break;
-        }
-        default:
-            break;
-        }
-    }
+    show_FieldDesc(strm, desc, 0u);
     return strm;
 }
 

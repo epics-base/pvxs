@@ -53,30 +53,36 @@ struct Buffer;
  *    Relative to current FieldDesc*.
  */
 struct FieldDesc {
-    // type ID string (struct/union)
+    // type ID string (Struct/Union)
     std::string id;
+
     // Lookup of all decendent fields of this Structure or Union.
-    // "fld.sub.leaf" -> rel index in enclosing vector<FieldDesc>
+    // "fld.sub.leaf" -> rel index
+    // For Struct, relative to this
+    // For Union, offset in members array
     std::map<std::string, size_t> mlookup;
+
     // child iteration.  child# -> ("sub", rel index in enclosing vector<FieldDesc>)
     std::vector<std::pair<std::string, size_t>> miter;
+
     // hash of this type (aggragating from children)
     // created using the code ^ id ^ (child_name ^ child_hash)*N
     size_t hash;
-    // abs. offset in enclosing StructTop::members.  (not abs. offset of FieldDesc array)
-    // used to navigate vector<FieldStorage>
-    size_t offset=0, next_offset=0;
-    // number of FieldDesc nodes which describe this node and decendents.  Inclusive.  always >=1
-    // eg. num_index+(FieldDesc*)this jumps to next sibling
-    size_t num_index=0;
-    // number of FieldDesc nodes between this node and it's a parent node (if any).
+
+    // number of FieldDesc nodes between this node and it's a parent Struct (or 0 if no parent).
     // This value also appears in the parent's miter and mlookup mappings.
     // Only usable when a StructTop is accessible and this!=StructTop::desc
     size_t parent_index=0;
+
+    // For Union, UnionA, StructA
+    // For Union, the choices
+    // For UnionA/StructA, size()==1 containing a Union/Struct
+    std::vector<FieldDesc> members;
+
     TypeCode code{TypeCode::Null};
 
     // number of FieldDesc nodes which describe this node.  Inclusive.  always size()>=1
-    inline size_t size() const { return num_index; }
+    inline size_t size() const { return 1u + (members.empty() ? mlookup.size() : 0u); }
 };
 
 PVXS_API
@@ -84,13 +90,8 @@ void to_wire(Buffer& buf, const FieldDesc* cur);
 
 typedef std::map<uint16_t, std::vector<FieldDesc>> TypeStore;
 
-struct TypeDeserContext {
-    std::vector<FieldDesc>& descs;
-    TypeStore& cache;
-};
-
 PVXS_API
-void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth=0);
+void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, unsigned depth=0);
 
 struct StructTop;
 
@@ -113,6 +114,7 @@ struct FieldStorage {
     >::type store;
     // index of this field in StructTop::members
     StructTop *top;
+    bool valid=false;
     StoreType code=StoreType::Null; // duplicates associated FieldDesc::code
 
     void init(const FieldDesc* desc);
@@ -132,13 +134,9 @@ struct FieldStorage {
 
 // hidden (publicly) management of an allocated Struct
 struct StructTop {
-    // which members have been assigned/updated (use to track "changes")
-    BitMask valid;
     // type of first top level struct.  always !NULL.
     // Actually the first element of a vector<const FieldDesc>
     std::shared_ptr<const FieldDesc> desc;
-    // map from FieldStorage offsets to FieldDesc offsets.  inverse of FieldDesc::offset
-    std::vector<size_t> member_indicies;
     // our members (inclusive).  always size()>=1
     std::vector<FieldStorage> members;
 
@@ -163,9 +161,6 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val);
 
 PVXS_API
 void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val);
-
-PVXS_API
-void FieldDesc_calculate_offset(FieldDesc* top);
 
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const FieldDesc* desc);

@@ -354,7 +354,7 @@ public:
     //! allocate new storage and copy in our values
     Value clone() const;
     //! copy values from other.  Must have matching types.
-//    Value& assign(const Value&);
+    Value& assign(const Value&);
 
     //! Use to allocate members for an array of Struct and array of Union
     Value allocMember();

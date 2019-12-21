@@ -160,6 +160,68 @@ TypeDef simpledef(TypeCode::Struct, "simple_t", {
                 }),
             });
 
+void testSimpleDef()
+{
+    testDiag("%s", __func__);
+
+    auto val = simpledef.create();
+
+    testEq(std::string(SB()<<"\n"<<Value::Helper::desc(val)),
+R"out(
+[0] struct simple_t parent=[0]  [0:11)
+    achoice -> 10 [10]
+    any -> 7 [7]
+    anya -> 8 [8]
+    arbitrary -> 5 [5]
+    arbitrary.sarr -> 6 [6]
+    choice -> 9 [9]
+    timeStamp -> 2 [2]
+    timeStamp.nanoseconds -> 4 [4]
+    timeStamp.secondsPastEpoch -> 3 [3]
+    value -> 1 [1]
+    value :  1 [1]
+    timeStamp :  2 [2]
+    arbitrary :  5 [5]
+    any :  7 [7]
+    anya :  8 [8]
+    choice :  9 [9]
+    achoice :  10 [10]
+[1] double[]  parent=[0]  [1:2)
+[2] struct time_t parent=[0]  [2:5)
+    nanoseconds -> 2 [4]
+    secondsPastEpoch -> 1 [3]
+    secondsPastEpoch :  1 [3]
+    nanoseconds :  2 [4]
+[3] uint64_t  parent=[2]  [3:4)
+[4] uint32_t  parent=[2]  [4:5)
+[5] struct  parent=[0]  [5:7)
+    sarr -> 1 [6]
+    sarr :  1 [6]
+[6] struct[]  parent=[5]  [6:7)
+    [0] struct  parent=[0]  [0:2)
+        value -> 1 [1]
+        value :  1 [1]
+    [1] uint32_t  parent=[0]  [1:2)
+[7] any  parent=[0]  [7:8)
+[8] any[]  parent=[0]  [8:9)
+[9] union  parent=[0]  [9:10)
+    a -> 0 [0]
+    b -> 1 [1]
+    a :  0 [0]
+    [0] float  parent=[0]  [0:1)
+    b :  1 [1]
+    [0] string  parent=[0]  [0:1)
+[10] union[]  parent=[0]  [10:11)
+    [0] union  parent=[0]  [0:1)
+        x -> 0 [0]
+        y -> 1 [1]
+        x :  0 [0]
+        [0] string  parent=[0]  [0:1)
+        y :  1 [1]
+        [0] string  parent=[0]  [0:1)
+)out")<<"Actual:\n"<<Value::Helper::desc(val);
+}
+
 void testSerialize2()
 {
     testDiag("%s", __func__);
@@ -344,6 +406,8 @@ void testDeserialize2()
 
 void testTraverse()
 {
+    testDiag("%s", __func__);
+
     auto top = nt::NTScalar{TypeCode::Int32, true}.create();
 
     testOk1(!top["<"].valid());
@@ -361,16 +425,38 @@ void testTraverse()
     }
 }
 
+void testAssign()
+{
+    testDiag("%s", __func__);
+
+    auto def = nt::NTScalar{TypeCode::String}.build();
+    auto val = def.create();
+
+    val["value"] = "Testing";
+    val["timeStamp"].mark();
+    val["alarm.severity"] = 3u;
+
+    auto val2 = val.cloneEmpty();
+
+    val2.assign(val);
+
+    testOk1(!val["alarm.status"].isMarked(true, true));
+    testOk1(!!val["alarm"].isMarked(true, true));
+    testOk1(!val["alarm"].isMarked(true, false));
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(63);
+    testPlan(67);
     testSerialize1();
     testDeserialize1();
+    testSimpleDef();
     testSerialize2();
     testDeserialize2();
     testTraverse();
+    testAssign();
     cleanup_for_valgrind();
     return testDone();
 }

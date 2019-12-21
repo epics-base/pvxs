@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
@@ -54,10 +54,8 @@ void testDecode1()
 
     {
         FixedBuf buf(true, msg);
-        TypeDeserContext ctxt{descs, cache};
-        from_wire(buf, ctxt);
-        if(testOk1(buf.good()))
-            FieldDesc_calculate_offset(descs.data());
+        from_wire(buf, descs, cache);
+        testOk1(buf.good());
         testEq(buf.size(), 0u)<<"Of "<<msg.size();
     }
 
@@ -75,17 +73,19 @@ void testDecode1()
 
     //   cat <<EOF | sed -e 's|"|\\"|g' -e 's|^# |    "|' -e 's|$|\\n"|g'
     // paste in Actual
-    testEq(std::string(SB()<<descs.data()),
-           "[0] struct timeStamp_t <0:4>  [0:4)\n"
-           "  nanoSeconds -> 2 [2]\n"
-           "  secondsPastEpoch -> 1 [1]\n"
-           "  userTag -> 3 [3]\n"
-           "  secondsPastEpoch :  1 [1]\n"
-           "  nanoSeconds :  2 [2]\n"
-           "  userTag :  3 [3]\n"
-           "[1] int64_t  <1:2>  [1:2)\n"
-           "[2] int32_t  <2:3>  [2:3)\n"
-           "[3] int32_t  <3:4>  [3:4)\n"
+    testEq(std::string(SB()<<"\n"<<descs.data()),
+           R"out(
+[0] struct timeStamp_t parent=[0]  [0:4)
+    nanoSeconds -> 2 [2]
+    secondsPastEpoch -> 1 [1]
+    userTag -> 3 [3]
+    secondsPastEpoch :  1 [1]
+    nanoSeconds :  2 [2]
+    userTag :  3 [3]
+[1] int64_t  parent=[0]  [1:2)
+[2] int32_t  parent=[0]  [2:3)
+[3] int32_t  parent=[0]  [3:4)
+)out"
      )<<"Actual:\n"<<descs.data();
 }
 
@@ -120,10 +120,8 @@ void testXCodeNTScalar()
     TypeStore cache;
     {
         FixedBuf buf(true, msg);
-        TypeDeserContext ctxt{descs, cache};
-        from_wire(buf, ctxt);
-        if(testOk1(buf.good()))
-            FieldDesc_calculate_offset(descs.data());
+        from_wire(buf, descs, cache);
+        testOk1(buf.good());
         testEq(buf.size(), 0u)<<"remaining of "<<msg.size();
     }
 
@@ -131,41 +129,43 @@ void testXCodeNTScalar()
         testEq(descs.size(), descs.front().size());
     }
 
-    testEq(std::string(SB()<<descs.data()),
-           "[0] struct epics:nt/NTScalarArray:1.0 <0:10>  [0:10)\n"
-           "  alarm -> 2 [2]\n"
-           "  alarm.message -> 5 [5]\n"
-           "  alarm.severity -> 3 [3]\n"
-           "  alarm.status -> 4 [4]\n"
-           "  timeStamp -> 6 [6]\n"
-           "  timeStamp.nanoseconds -> 8 [8]\n"
-           "  timeStamp.secondsPastEpoch -> 7 [7]\n"
-           "  timeStamp.userTag -> 9 [9]\n"
-           "  value -> 1 [1]\n"
-           "  value :  1 [1]\n"
-           "  alarm :  2 [2]\n"
-           "  timeStamp :  6 [6]\n"
-           "[1] double[]  <1:2>  [1:2)\n"
-           "[2] struct alarm_t <2:3>  [2:6)\n"
-           "  message -> 3 [5]\n"
-           "  severity -> 1 [3]\n"
-           "  status -> 2 [4]\n"
-           "  severity :  1 [3]\n"
-           "  status :  2 [4]\n"
-           "  message :  3 [5]\n"
-           "[3] int32_t  <3:4>  [3:4)\n"
-           "[4] int32_t  <4:5>  [4:5)\n"
-           "[5] string  <5:6>  [5:6)\n"
-           "[6] struct time_t <6:7>  [6:10)\n"
-           "  nanoseconds -> 2 [8]\n"
-           "  secondsPastEpoch -> 1 [7]\n"
-           "  userTag -> 3 [9]\n"
-           "  secondsPastEpoch :  1 [7]\n"
-           "  nanoseconds :  2 [8]\n"
-           "  userTag :  3 [9]\n"
-           "[7] int64_t  <7:8>  [7:8)\n"
-           "[8] int32_t  <8:9>  [8:9)\n"
-           "[9] int32_t  <9:10>  [9:10)\n"
+    testEq(std::string(SB()<<"\n"<<descs.data()),
+           R"out(
+[0] struct epics:nt/NTScalarArray:1.0 parent=[0]  [0:10)
+    alarm -> 2 [2]
+    alarm.message -> 5 [5]
+    alarm.severity -> 3 [3]
+    alarm.status -> 4 [4]
+    timeStamp -> 6 [6]
+    timeStamp.nanoseconds -> 8 [8]
+    timeStamp.secondsPastEpoch -> 7 [7]
+    timeStamp.userTag -> 9 [9]
+    value -> 1 [1]
+    value :  1 [1]
+    alarm :  2 [2]
+    timeStamp :  6 [6]
+[1] double[]  parent=[0]  [1:2)
+[2] struct alarm_t parent=[0]  [2:6)
+    message -> 3 [5]
+    severity -> 1 [3]
+    status -> 2 [4]
+    severity :  1 [3]
+    status :  2 [4]
+    message :  3 [5]
+[3] int32_t  parent=[2]  [3:4)
+[4] int32_t  parent=[2]  [4:5)
+[5] string  parent=[2]  [5:6)
+[6] struct time_t parent=[0]  [6:10)
+    nanoseconds -> 2 [8]
+    secondsPastEpoch -> 1 [7]
+    userTag -> 3 [9]
+    secondsPastEpoch :  1 [7]
+    nanoseconds :  2 [8]
+    userTag :  3 [9]
+[7] int64_t  parent=[6]  [7:8)
+[8] int32_t  parent=[6]  [8:9)
+[9] int32_t  parent=[6]  [9:10)
+)out"
     )<<"Actual:\n"<<descs.data();
 
     testDiag("Round trip back to bytes");
@@ -246,10 +246,8 @@ void testXCodeNTNDArray()
     TypeStore cache;
     {
         FixedBuf buf(true, msg);
-        TypeDeserContext ctxt{descs, cache};
-        from_wire(buf, ctxt);
-        if(testOk1(buf.good()))
-            FieldDesc_calculate_offset(descs.data());
+        from_wire(buf, descs, cache);
+        testOk1(buf.good());
         testEq(buf.size(), 0u)<<"remaining of "<<msg.size();
     }
 
@@ -257,180 +255,182 @@ void testXCodeNTNDArray()
         testEq(descs.size(), descs.front().size());
     }
 
-    testEq(std::string(SB()<<descs.data()),
-           "[0] struct epics:nt/NTNDArray:1.0 <0:22>  [0:54)\n"
-           "  alarm -> 23 [23]\n"
-           "  alarm.message -> 26 [26]\n"
-           "  alarm.severity -> 24 [24]\n"
-           "  alarm.status -> 25 [25]\n"
-           "  attribute -> 38 [38]\n"
-           "  codec -> 13 [13]\n"
-           "  codec.name -> 14 [14]\n"
-           "  codec.parameters -> 15 [15]\n"
-           "  compressedSize -> 16 [16]\n"
-           "  dataTimeStamp -> 19 [19]\n"
-           "  dataTimeStamp.nanoseconds -> 21 [21]\n"
-           "  dataTimeStamp.secondsPastEpoch -> 20 [20]\n"
-           "  dataTimeStamp.userTag -> 22 [22]\n"
-           "  dimension -> 31 [31]\n"
-           "  timeStamp -> 27 [27]\n"
-           "  timeStamp.nanoseconds -> 29 [29]\n"
-           "  timeStamp.secondsPastEpoch -> 28 [28]\n"
-           "  timeStamp.userTag -> 30 [30]\n"
-           "  uncompressedSize -> 17 [17]\n"
-           "  uniqueId -> 18 [18]\n"
-           "  value -> 1 [1]\n"
-           "  value :  1 [1]\n"
-           "  codec :  13 [13]\n"
-           "  compressedSize :  16 [16]\n"
-           "  uncompressedSize :  17 [17]\n"
-           "  uniqueId :  18 [18]\n"
-           "  dataTimeStamp :  19 [19]\n"
-           "  alarm :  23 [23]\n"
-           "  timeStamp :  27 [27]\n"
-           "  dimension :  31 [31]\n"
-           "  attribute :  38 [38]\n"
-           "[1] union  <1:2>  [1:13)\n"
-           "  booleanValue -> 1 [2]\n"
-           "  byteValue -> 2 [3]\n"
-           "  doubleValue -> 11 [12]\n"
-           "  floatValue -> 10 [11]\n"
-           "  intValue -> 4 [5]\n"
-           "  longValue -> 5 [6]\n"
-           "  shortValue -> 3 [4]\n"
-           "  ubyteValue -> 6 [7]\n"
-           "  uintValue -> 8 [9]\n"
-           "  ulongValue -> 9 [10]\n"
-           "  ushortValue -> 7 [8]\n"
-           "  booleanValue :  1 [2]\n"
-           "  byteValue :  2 [3]\n"
-           "  shortValue :  3 [4]\n"
-           "  intValue :  4 [5]\n"
-           "  longValue :  5 [6]\n"
-           "  ubyteValue :  6 [7]\n"
-           "  ushortValue :  7 [8]\n"
-           "  uintValue :  8 [9]\n"
-           "  ulongValue :  9 [10]\n"
-           "  floatValue :  10 [11]\n"
-           "  doubleValue :  11 [12]\n"
-           "[2] bool[]  <0:1>  [2:3)\n"
-           "[3] int8_t[]  <0:1>  [3:4)\n"
-           "[4] int16_t[]  <0:1>  [4:5)\n"
-           "[5] int32_t[]  <0:1>  [5:6)\n"
-           "[6] int64_t[]  <0:1>  [6:7)\n"
-           "[7] uint8_t[]  <0:1>  [7:8)\n"
-           "[8] uint16_t[]  <0:1>  [8:9)\n"
-           "[9] uint32_t[]  <0:1>  [9:10)\n"
-           "[10] uint64_t[]  <0:1>  [10:11)\n"
-           "[11] float[]  <0:1>  [11:12)\n"
-           "[12] double[]  <0:1>  [12:13)\n"
-           "[13] struct codec_t <2:3>  [13:16)\n"
-           "  name -> 1 [14]\n"
-           "  parameters -> 2 [15]\n"
-           "  name :  1 [14]\n"
-           "  parameters :  2 [15]\n"
-           "[14] string  <3:4>  [14:15)\n"
-           "[15] any  <4:5>  [15:16)\n"
-           "[16] int64_t  <5:6>  [16:17)\n"
-           "[17] int64_t  <6:7>  [17:18)\n"
-           "[18] int32_t  <7:8>  [18:19)\n"
-           "[19] struct time_t <8:9>  [19:23)\n"
-           "  nanoseconds -> 2 [21]\n"
-           "  secondsPastEpoch -> 1 [20]\n"
-           "  userTag -> 3 [22]\n"
-           "  secondsPastEpoch :  1 [20]\n"
-           "  nanoseconds :  2 [21]\n"
-           "  userTag :  3 [22]\n"
-           "[20] int64_t  <9:10>  [20:21)\n"
-           "[21] int32_t  <10:11>  [21:22)\n"
-           "[22] int32_t  <11:12>  [22:23)\n"
-           "[23] struct alarm_t <12:13>  [23:27)\n"
-           "  message -> 3 [26]\n"
-           "  severity -> 1 [24]\n"
-           "  status -> 2 [25]\n"
-           "  severity :  1 [24]\n"
-           "  status :  2 [25]\n"
-           "  message :  3 [26]\n"
-           "[24] int32_t  <13:14>  [24:25)\n"
-           "[25] int32_t  <14:15>  [25:26)\n"
-           "[26] string  <15:16>  [26:27)\n"
-           "[27] struct time_t <16:17>  [27:31)\n"
-           "  nanoseconds -> 2 [29]\n"
-           "  secondsPastEpoch -> 1 [28]\n"
-           "  userTag -> 3 [30]\n"
-           "  secondsPastEpoch :  1 [28]\n"
-           "  nanoseconds :  2 [29]\n"
-           "  userTag :  3 [30]\n"
-           "[28] int64_t  <17:18>  [28:29)\n"
-           "[29] int32_t  <18:19>  [29:30)\n"
-           "[30] int32_t  <19:20>  [30:31)\n"
-           "[31] struct[]  <20:21>  [31:38)\n"
-           "[32] struct dimension_t <0:6>  [32:38)\n"
-           "  binning -> 4 [36]\n"
-           "  fullSize -> 3 [35]\n"
-           "  offset -> 2 [34]\n"
-           "  reverse -> 5 [37]\n"
-           "  size -> 1 [33]\n"
-           "  size :  1 [33]\n"
-           "  offset :  2 [34]\n"
-           "  fullSize :  3 [35]\n"
-           "  binning :  4 [36]\n"
-           "  reverse :  5 [37]\n"
-           "[33] int32_t  <1:2>  [33:34)\n"
-           "[34] int32_t  <2:3>  [34:35)\n"
-           "[35] int32_t  <3:4>  [35:36)\n"
-           "[36] int32_t  <4:5>  [36:37)\n"
-           "[37] bool  <5:6>  [37:38)\n"
-           "[38] struct[]  <21:22>  [38:54)\n"
-           "[39] struct epics:nt/NTAttribute:1.0 <0:15>  [39:54)\n"
-           "  alarm -> 5 [44]\n"
-           "  alarm.message -> 47 [86]\n"
-           "  alarm.severity -> 45 [84]\n"
-           "  alarm.status -> 46 [85]\n"
-           "  descriptor -> 4 [43]\n"
-           "  name -> 1 [40]\n"
-           "  source -> 14 [53]\n"
-           "  sourceType -> 13 [52]\n"
-           "  tags -> 3 [42]\n"
-           "  timestamp -> 9 [48]\n"
-           "  timestamp.nanoseconds -> 50 [89]\n"
-           "  timestamp.secondsPastEpoch -> 49 [88]\n"
-           "  timestamp.userTag -> 51 [90]\n"
-           "  value -> 2 [41]\n"
-           "  name :  1 [40]\n"
-           "  value :  2 [41]\n"
-           "  tags :  3 [42]\n"
-           "  descriptor :  4 [43]\n"
-           "  alarm :  5 [44]\n"
-           "  timestamp :  9 [48]\n"
-           "  sourceType :  13 [52]\n"
-           "  source :  14 [53]\n"
-           "[40] string  <1:2>  [40:41)\n"
-           "[41] any  <2:3>  [41:42)\n"
-           "[42] string[]  <3:4>  [42:43)\n"
-           "[43] string  <4:5>  [43:44)\n"
-           "[44] struct alarm_t <5:6>  [44:48)\n"
-           "  message -> 3 [47]\n"
-           "  severity -> 1 [45]\n"
-           "  status -> 2 [46]\n"
-           "  severity :  1 [45]\n"
-           "  status :  2 [46]\n"
-           "  message :  3 [47]\n"
-           "[45] int32_t  <6:7>  [45:46)\n"
-           "[46] int32_t  <7:8>  [46:47)\n"
-           "[47] string  <8:9>  [47:48)\n"
-           "[48] struct time_t <9:10>  [48:52)\n"
-           "  nanoseconds -> 2 [50]\n"
-           "  secondsPastEpoch -> 1 [49]\n"
-           "  userTag -> 3 [51]\n"
-           "  secondsPastEpoch :  1 [49]\n"
-           "  nanoseconds :  2 [50]\n"
-           "  userTag :  3 [51]\n"
-           "[49] int64_t  <10:11>  [49:50)\n"
-           "[50] int32_t  <11:12>  [50:51)\n"
-           "[51] int32_t  <12:13>  [51:52)\n"
-           "[52] int32_t  <13:14>  [52:53)\n"
-           "[53] string  <14:15>  [53:54)\n"
+    testEq(std::string(SB()<<"\n"<<descs.data()),
+R"out(
+[0] struct epics:nt/NTNDArray:1.0 parent=[0]  [0:22)
+    alarm -> 12 [12]
+    alarm.message -> 15 [15]
+    alarm.severity -> 13 [13]
+    alarm.status -> 14 [14]
+    attribute -> 21 [21]
+    codec -> 2 [2]
+    codec.name -> 3 [3]
+    codec.parameters -> 4 [4]
+    compressedSize -> 5 [5]
+    dataTimeStamp -> 8 [8]
+    dataTimeStamp.nanoseconds -> 10 [10]
+    dataTimeStamp.secondsPastEpoch -> 9 [9]
+    dataTimeStamp.userTag -> 11 [11]
+    dimension -> 20 [20]
+    timeStamp -> 16 [16]
+    timeStamp.nanoseconds -> 18 [18]
+    timeStamp.secondsPastEpoch -> 17 [17]
+    timeStamp.userTag -> 19 [19]
+    uncompressedSize -> 6 [6]
+    uniqueId -> 7 [7]
+    value -> 1 [1]
+    value :  1 [1]
+    codec :  2 [2]
+    compressedSize :  5 [5]
+    uncompressedSize :  6 [6]
+    uniqueId :  7 [7]
+    dataTimeStamp :  8 [8]
+    alarm :  12 [12]
+    timeStamp :  16 [16]
+    dimension :  20 [20]
+    attribute :  21 [21]
+[1] union  parent=[0]  [1:2)
+    booleanValue -> 0 [0]
+    byteValue -> 1 [1]
+    doubleValue -> 10 [10]
+    floatValue -> 9 [9]
+    intValue -> 3 [3]
+    longValue -> 4 [4]
+    shortValue -> 2 [2]
+    ubyteValue -> 5 [5]
+    uintValue -> 7 [7]
+    ulongValue -> 8 [8]
+    ushortValue -> 6 [6]
+    booleanValue :  0 [0]
+    [0] bool[]  parent=[0]  [0:1)
+    byteValue :  1 [1]
+    [0] int8_t[]  parent=[0]  [0:1)
+    shortValue :  2 [2]
+    [0] int16_t[]  parent=[0]  [0:1)
+    intValue :  3 [3]
+    [0] int32_t[]  parent=[0]  [0:1)
+    longValue :  4 [4]
+    [0] int64_t[]  parent=[0]  [0:1)
+    ubyteValue :  5 [5]
+    [0] uint8_t[]  parent=[0]  [0:1)
+    ushortValue :  6 [6]
+    [0] uint16_t[]  parent=[0]  [0:1)
+    uintValue :  7 [7]
+    [0] uint32_t[]  parent=[0]  [0:1)
+    ulongValue :  8 [8]
+    [0] uint64_t[]  parent=[0]  [0:1)
+    floatValue :  9 [9]
+    [0] float[]  parent=[0]  [0:1)
+    doubleValue :  10 [10]
+    [0] double[]  parent=[0]  [0:1)
+[2] struct codec_t parent=[0]  [2:5)
+    name -> 1 [3]
+    parameters -> 2 [4]
+    name :  1 [3]
+    parameters :  2 [4]
+[3] string  parent=[2]  [3:4)
+[4] any  parent=[2]  [4:5)
+[5] int64_t  parent=[0]  [5:6)
+[6] int64_t  parent=[0]  [6:7)
+[7] int32_t  parent=[0]  [7:8)
+[8] struct time_t parent=[0]  [8:12)
+    nanoseconds -> 2 [10]
+    secondsPastEpoch -> 1 [9]
+    userTag -> 3 [11]
+    secondsPastEpoch :  1 [9]
+    nanoseconds :  2 [10]
+    userTag :  3 [11]
+[9] int64_t  parent=[8]  [9:10)
+[10] int32_t  parent=[8]  [10:11)
+[11] int32_t  parent=[8]  [11:12)
+[12] struct alarm_t parent=[0]  [12:16)
+    message -> 3 [15]
+    severity -> 1 [13]
+    status -> 2 [14]
+    severity :  1 [13]
+    status :  2 [14]
+    message :  3 [15]
+[13] int32_t  parent=[12]  [13:14)
+[14] int32_t  parent=[12]  [14:15)
+[15] string  parent=[12]  [15:16)
+[16] struct time_t parent=[0]  [16:20)
+    nanoseconds -> 2 [18]
+    secondsPastEpoch -> 1 [17]
+    userTag -> 3 [19]
+    secondsPastEpoch :  1 [17]
+    nanoseconds :  2 [18]
+    userTag :  3 [19]
+[17] int64_t  parent=[16]  [17:18)
+[18] int32_t  parent=[16]  [18:19)
+[19] int32_t  parent=[16]  [19:20)
+[20] struct[]  parent=[0]  [20:21)
+    [0] struct dimension_t parent=[0]  [0:6)
+        binning -> 4 [4]
+        fullSize -> 3 [3]
+        offset -> 2 [2]
+        reverse -> 5 [5]
+        size -> 1 [1]
+        size :  1 [1]
+        offset :  2 [2]
+        fullSize :  3 [3]
+        binning :  4 [4]
+        reverse :  5 [5]
+    [1] int32_t  parent=[0]  [1:2)
+    [2] int32_t  parent=[0]  [2:3)
+    [3] int32_t  parent=[0]  [3:4)
+    [4] int32_t  parent=[0]  [4:5)
+    [5] bool  parent=[0]  [5:6)
+[21] struct[]  parent=[0]  [21:22)
+    [0] struct epics:nt/NTAttribute:1.0 parent=[0]  [0:15)
+        alarm -> 5 [5]
+        alarm.message -> 8 [8]
+        alarm.severity -> 6 [6]
+        alarm.status -> 7 [7]
+        descriptor -> 4 [4]
+        name -> 1 [1]
+        source -> 14 [14]
+        sourceType -> 13 [13]
+        tags -> 3 [3]
+        timestamp -> 9 [9]
+        timestamp.nanoseconds -> 11 [11]
+        timestamp.secondsPastEpoch -> 10 [10]
+        timestamp.userTag -> 12 [12]
+        value -> 2 [2]
+        name :  1 [1]
+        value :  2 [2]
+        tags :  3 [3]
+        descriptor :  4 [4]
+        alarm :  5 [5]
+        timestamp :  9 [9]
+        sourceType :  13 [13]
+        source :  14 [14]
+    [1] string  parent=[0]  [1:2)
+    [2] any  parent=[0]  [2:3)
+    [3] string[]  parent=[0]  [3:4)
+    [4] string  parent=[0]  [4:5)
+    [5] struct alarm_t parent=[0]  [5:9)
+        message -> 3 [8]
+        severity -> 1 [6]
+        status -> 2 [7]
+        severity :  1 [6]
+        status :  2 [7]
+        message :  3 [8]
+    [6] int32_t  parent=[5]  [6:7)
+    [7] int32_t  parent=[5]  [7:8)
+    [8] string  parent=[5]  [8:9)
+    [9] struct time_t parent=[0]  [9:13)
+        nanoseconds -> 2 [11]
+        secondsPastEpoch -> 1 [10]
+        userTag -> 3 [12]
+        secondsPastEpoch :  1 [10]
+        nanoseconds :  2 [11]
+        userTag :  3 [12]
+    [10] int64_t  parent=[9]  [10:11)
+    [11] int32_t  parent=[9]  [11:12)
+    [12] int32_t  parent=[9]  [12:13)
+    [13] int32_t  parent=[0]  [13:14)
+    [14] string  parent=[0]  [14:15)
+)out"
     )<<"Actual:\n"<<descs.data();
 
     testDiag("Round trip back to bytes");
@@ -459,10 +459,8 @@ void testEmptyRequest()
     {
         uint8_t msg[] = "\xfd\x02\x00\x80\x00\x00";
         FixedBuf buf(false, msg);
-        TypeDeserContext ctxt{descs1, registry};
-        from_wire(buf, ctxt);
-        if(testOk1(buf.good()))
-            FieldDesc_calculate_offset(descs1.data());
+        from_wire(buf, descs1, registry);
+        testOk1(buf.good());
         testEq(buf.size(), 0u)<<"remaining of "<<sizeof(msg-1);
     }
 
@@ -474,10 +472,8 @@ void testEmptyRequest()
     {
         uint8_t msg[] = "\xfe\x02\x00";
         FixedBuf buf(false, msg);
-        TypeDeserContext ctxt{descs2, registry};
-        from_wire(buf, ctxt);
-        if(testOk1(buf.good()))
-            FieldDesc_calculate_offset(descs2.data());
+        from_wire(buf, descs2, registry);
+        testOk1(buf.good());
         testEq(buf.size(), 0u)<<"remaining of "<<sizeof(msg-1);
     }
 
@@ -485,10 +481,10 @@ void testEmptyRequest()
     testEq(descs2.size(), 1u);
 
     testEq(std::string(SB()<<descs1.data()),
-           "[0] struct  <0:1>  [0:1)\n")<<"\nActual descs1\n"<<descs1.data();
+           "[0] struct  parent=[0]  [0:1)\n")<<"\nActual descs1\n"<<descs1.data();
 
     testEq(std::string(SB()<<descs2.data()),
-           "[0] struct  <0:1>  [0:1)\n")<<"\nActual descs2\n"<<descs2.data();
+           "[0] struct  parent=[0]  [0:1)\n")<<"\nActual descs2\n"<<descs2.data();
 }
 
 } // namespace

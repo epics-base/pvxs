@@ -41,11 +41,10 @@ void to_wire(Buffer& buf, const FieldDesc* cur)
     switch(cur->code.code) {
     case TypeCode::StructA:
     case TypeCode::UnionA:
-        to_wire(buf, cur+1);
+        to_wire(buf, &cur->members[0]);
         break;
 
     case TypeCode::Struct:
-    case TypeCode::Union:
         to_wire(buf, cur->id);
         to_wire(buf, Size{cur->miter.size()});
         for(auto& pair : cur->miter) {
@@ -53,12 +52,21 @@ void to_wire(Buffer& buf, const FieldDesc* cur)
             to_wire(buf, cur+pair.second); // jump forward in FieldDesc array and recurse!
         }
         break;
+
+    case TypeCode::Union:
+        to_wire(buf, cur->id);
+        to_wire(buf, Size{cur->miter.size()});
+        for(auto& pair : cur->miter) {
+            to_wire(buf, pair.first);
+            to_wire(buf, &cur->members[pair.second]); // jump forward in FieldDesc array and recurse!
+        }
+        break;
     default:
         break;
     }
 }
 
-void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth)
+void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, unsigned depth)
 {
     if(!buf.good() || depth>20) {
         buf.fault();
@@ -67,7 +75,7 @@ void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth)
 
     TypeCode code;
     from_wire(buf, code.code);
-    const size_t index = ctxt.descs.size(); // index of first node we add to ctxt.descs[]
+    const size_t index = descs.size(); // index of first node we add to descs[]
 
     if(code == TypeCode::Null) {
         return;
@@ -76,26 +84,28 @@ void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth)
         // update cache
         uint16_t key=0;
         from_wire(buf, key);
-        from_wire(buf, ctxt, depth+1u);
-        if(!buf.good() || index==ctxt.descs.size()) {
+        from_wire(buf, descs, cache, depth+1u);
+        if(!buf.good() || index==descs.size()) {
             buf.fault();
             return;
 
         } else {
-            auto& entry = ctxt.cache[key];
+            auto& entry = cache[key];
             // copy new node, and any decendents into cache
-            entry.resize(ctxt.descs.size()-index);
-            std::copy(ctxt.descs.begin()+index,
-                      ctxt.descs.end(),
+            entry.resize(descs.size()-index);
+            std::copy(descs.begin()+index,
+                      descs.end(),
                       entry.begin());
+
+            descs[index].parent_index = 0u; // our caller will set if actually is a parent.
         }
 
     } else if(code.code==0xfe) {
         // fetch cache
         uint16_t key=0;
         from_wire(buf, key);
-        auto it = ctxt.cache.find(key);
-        if(it==ctxt.cache.end()) {
+        auto it = cache.find(key);
+        if(it==cache.end()) {
             buf.fault();
         }
 
@@ -105,10 +115,10 @@ void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth)
 
         } else {
             // copy from cache
-            ctxt.descs.resize(index+it->second.size());
+            descs.resize(index+it->second.size());
             std::copy(it->second.begin(),
                       it->second.end(),
-                      ctxt.descs.begin()+index);
+                      descs.begin()+index);
         }
 
     } else if(code.code!=0xff && code.code&0x10) {
@@ -118,9 +128,9 @@ void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth)
     } else {
         // actual field
 
-        ctxt.descs.emplace_back();
+        descs.emplace_back();
         {
-            auto& fld = ctxt.descs.back();
+            auto& fld = descs.back();
 
             fld.code = code;
             fld.hash = code.code;
@@ -129,8 +139,8 @@ void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth)
         switch(code.code) {
         case TypeCode::StructA:
         case TypeCode::UnionA:
-            from_wire(buf, ctxt, depth+1);
-            if(!buf.good() || ctxt.descs.size()==index || ctxt.descs[index+1].code!=code.scalarOf()) {
+            from_wire(buf, descs.back().members, cache, depth+1);
+            if(!buf.good() || descs.back().members.empty() || descs.back().members[0].code!=code.scalarOf()) {
                 buf.fault();
                 return;
             }
@@ -138,40 +148,45 @@ void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth)
 
         case TypeCode::Struct:
         case TypeCode::Union: {
-            from_wire(buf, ctxt.descs.back().id);
+            from_wire(buf, descs.back().id);
 
             Size nfld{0};
             std::string name;
             from_wire(buf, nfld); // number of children
             {
-                auto& fld = ctxt.descs.back();
+                auto& fld = descs.back();
 
                 fld.miter.reserve(nfld.size);
                 fld.hash ^= std::hash<std::string>{}(fld.id);
             }
 
+            auto& cdescs = code.code==TypeCode::Struct ? descs : descs.back().members;
+            auto cref = code.code==TypeCode::Struct ? index : 0u;
+
             for(auto i: range(nfld.size)) {
                 (void)i;
-                const size_t cindex = ctxt.descs.size(); // index of this child
+                const size_t cindex = cdescs.size(); // index of this child
+
                 from_wire(buf, name);
-                from_wire(buf, ctxt, depth+1);
-                if(!buf.good() || cindex>=ctxt.descs.size()) {
+                from_wire(buf, cdescs, cache, depth+1);
+                if(!buf.good() || cindex>=cdescs.size()) {
                     buf.fault();
                     return;
                 }
 
                 // descs may be re-allocated (invalidating previous refs.)
-                auto& fld = ctxt.descs[index];
-                auto& cfld = ctxt.descs[cindex];
-                cfld.parent_index = cindex-index;
+                auto& fld = descs[index];
+                auto& cfld = cdescs[cindex];
+                if(code.code==TypeCode::Struct)
+                    cfld.parent_index = cindex-cref;
 
                 // update hash
                 // TODO investigate better ways to combine hashes
                 fld.hash ^= std::hash<std::string>{}(name) ^ cfld.hash;
 
                 // update field refs.
-                fld.miter.emplace_back(name, cindex-index);
-                fld.mlookup[name] = cindex-index;
+                fld.miter.emplace_back(name, cindex-cref);
+                fld.mlookup[name] = cindex-cref;
                 name+='.';
 
                 if(code.code==TypeCode::Struct && code==cfld.code) {
@@ -206,8 +221,6 @@ void from_wire(Buffer& buf, TypeDeserContext& ctxt, unsigned depth)
                 break;
             }
         }
-
-        ctxt.descs[index].num_index = ctxt.descs.size()-index;
     }
 }
 
@@ -245,10 +258,9 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
     case StoreType::Null:
         switch(desc->code.code) {
         case TypeCode::Struct: {
-            auto& top = *store->top;
             // serialize entire sub-structure
-            for(auto off : range(desc->offset-top.desc->offset+1u, desc->next_offset-top.desc->offset)) {
-                auto cdesc = desc + top.member_indicies[off];
+            for(auto off : range(desc->size())) {
+                auto cdesc = desc + off;
                 std::shared_ptr<const FieldStorage> cstore(store, store.get()+off); // TODO avoid shared_ptr/aliasing here
                 if(cdesc->code!=TypeCode::Struct)
                     to_wire_field(buf, cdesc, cstore);
@@ -309,7 +321,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
             } else {
                 size_t index = 0u;
                 for(auto& pair : desc->miter) {
-                    if(Value::Helper::desc(fld)== desc+pair.second)
+                    if(Value::Helper::desc(fld)== &desc->members[pair.second])
                         break;
                     index++;
                 }
@@ -368,7 +380,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
                     to_wire(buf, uint8_t(0u));
                 } else {
                     to_wire(buf, uint8_t(1u));
-                    assert(Value::Helper::desc(elem)==desc+1);
+                    assert(Value::Helper::desc(elem)==&desc->members[0]);
                     to_wire_full(buf, elem);
                 }
             }
@@ -424,19 +436,23 @@ void to_wire_valid(Buffer& buf, const Value& val)
 {
     auto desc = Value::Helper::desc(val);
     auto store = Value::Helper::store(val);
-    assert(!!desc);
-    auto top = store->top;
+    assert(desc && desc->code==TypeCode::Struct);
 
-    to_wire(buf, top->valid);
-    top->valid.resize(top->members.size());
+    BitMask valid(desc->size());
 
-    // iterate marked fields
-    for(auto bit = top->valid.findSet(desc->offset-top->desc->offset);
-        bit<desc->next_offset-top->desc->offset;
-        bit = top->valid.findSet(bit+1))
-    {
+    for(auto bit : range(desc->size())) {
+        if((store.get()+bit)->valid)
+            valid[bit] = true;
+    }
+
+    to_wire(buf, valid);
+
+    for(auto bit : range(desc->size())) {
+        if(!(store.get()+bit)->valid)
+            continue;
+
         std::shared_ptr<const FieldStorage> cstore(store, store.get()+bit);
-        to_wire_field(buf, desc + top->member_indicies[bit], cstore);
+        to_wire_field(buf, desc+bit, cstore);
     }
 }
 
@@ -457,14 +473,13 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
     case StoreType::Null:
         switch(desc->code.code) {
         case TypeCode::Struct: {
-            auto& top = *store->top;
             // serialize entire sub-structure
-            for(auto off : range(desc->offset-top.desc->offset+1u, desc->next_offset-top.desc->offset)) {
-                auto cdesc = desc + top.member_indicies[off];
+            for(auto off : range(desc->size())) {
+                auto cdesc = desc + off;
                 std::shared_ptr<FieldStorage> cstore(store, store.get()+off); // TODO avoid shared_ptr/aliasing here
                 if(cdesc->code!=TypeCode::Struct) {
                     from_wire_field(buf, ctxt, cdesc, cstore);
-                    top.valid[cstore->index()] = true;
+                    cstore->valid = true;
                 }
             }
         }
@@ -524,7 +539,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
 
             } else if(select.size < desc->miter.size()) {
                 std::shared_ptr<const FieldDesc> stype(store->top->desc,
-                                                       desc + desc->miter[select.size].second); // alias
+                                                       &desc->members[desc->miter[select.size].second]); // alias
                 fld = Value::Helper::build(stype, store, desc);
 
                 from_wire_full(buf, ctxt, fld);
@@ -535,9 +550,8 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
 
         case TypeCode::Any: {
             auto descs(std::make_shared<std::vector<FieldDesc>>());
-            TypeDeserContext dc{*descs, ctxt};
 
-            from_wire(buf, dc);
+            from_wire(buf, *descs, ctxt);
             if(!buf.good())
                 return;
 
@@ -546,8 +560,6 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                 return;
 
             } else {
-                FieldDesc_calculate_offset(descs->data());
-
                 std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
                 fld = Value::Helper::build(stype);
 
@@ -594,7 +606,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
             from_wire(buf, alen);
             shared_array<Value> arr(alen.size);
             std::shared_ptr<const FieldDesc> etype(store->top->desc,
-                                                   desc + 1); // alias
+                                                   &desc->members[0]); // alias
             for(auto& elem : arr) {
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
                     elem = Value::Helper::build(etype, store, desc);
@@ -610,7 +622,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
             Size alen{};
             from_wire(buf, alen);
             shared_array<Value> arr(alen.size);
-            auto cdesc = desc+1;
+            auto cdesc = &desc->members[0];
 
             for(auto& elem : arr) {
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
@@ -622,7 +634,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
 
                     } else if(select.size < cdesc->miter.size()) {
                         std::shared_ptr<const FieldDesc> stype(store->top->desc,
-                                                               cdesc + cdesc->miter[select.size].second); // alias
+                                                               &cdesc->members[cdesc->miter[select.size].second]); // alias
                         elem = Value::Helper::build(stype, store, desc);
 
                         from_wire_full(buf, ctxt, elem);
@@ -646,14 +658,12 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
             for(auto& elem : arr) {
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
                     auto descs(std::make_shared<std::vector<FieldDesc>>());
-                    TypeDeserContext dc{*descs, ctxt};
 
-                    from_wire(buf, dc);
+                    from_wire(buf, *descs, ctxt);
                     if(!buf.good())
                         return;
 
                     if(!descs->empty()) {
-                        FieldDesc_calculate_offset(descs->data());
 
                         std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
                         elem = Value::Helper::build(stype, store, desc);
@@ -690,33 +700,33 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
     assert(!!desc);
     auto top = store->top;
 
-    from_wire(buf, top->valid);
+    BitMask valid;
+    from_wire(buf, valid);
     // encoding rounds # of bits to whole bytes, so we may trim
-    top->valid.resize(top->members.size());
+    valid.resize(top->members.size());
     if(!buf.good())
         return;
 
-    for(auto bit = top->valid.findSet(desc->offset-top->desc->offset);
-        bit<(desc->next_offset-top->desc->offset);
-        bit = top->valid.findSet(bit+1))
+    for(auto bit = valid.findSet(0u);
+        bit<desc->size();)
     {
-        std::shared_ptr<FieldStorage> cstore(store, store.get()+bit-desc->offset);
-        from_wire_field(buf, ctxt, desc + top->member_indicies[bit], cstore);
-        top->valid[bit] = true;
+        std::shared_ptr<FieldStorage> cstore(store, store.get()+bit);
+        auto cdesc = desc + bit;
+        from_wire_field(buf, ctxt, cdesc, cstore);
+        cstore->valid = true;
+        bit = valid.findSet(bit + cdesc->size());
     }
 }
 
 void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val)
 {
     auto descs(std::make_shared<std::vector<FieldDesc>>());
-    TypeDeserContext dc{*descs, ctxt};
 
-    from_wire(buf, dc);
+    from_wire(buf, *descs, ctxt);
     if(!buf.good())
         return;
 
     if(!descs->empty()) {
-        FieldDesc_calculate_offset(descs->data());
 
         std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
         val = Value::Helper::build(stype);

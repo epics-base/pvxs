@@ -128,60 +128,60 @@ void testTypeDef()
     auto val = def.create();
 
     testOk1(!!val.valid());
-    testShow()<<Value::Helper::desc(val);
-    testEq(std::string(SB()<<Value::Helper::desc(val)),
-           "[0] struct simple_t <0:11>  [0:18)\n"
-           "  achoice -> 14 [14]\n"
-           "  any -> 9 [9]\n"
-           "  anya -> 10 [10]\n"
-           "  arbitrary -> 5 [5]\n"
-           "  arbitrary.sarr -> 6 [6]\n"
-           "  choice -> 11 [11]\n"
-           "  timeStamp -> 2 [2]\n"
-           "  timeStamp.nanoseconds -> 4 [4]\n"
-           "  timeStamp.secondsPastEpoch -> 3 [3]\n"
-           "  value -> 1 [1]\n"
-           "  value :  1 [1]\n"
-           "  timeStamp :  2 [2]\n"
-           "  arbitrary :  5 [5]\n"
-           "  any :  9 [9]\n"
-           "  anya :  10 [10]\n"
-           "  choice :  11 [11]\n"
-           "  achoice :  14 [14]\n"
-           "[1] double[]  <1:2>  [1:2)\n"
-           "[2] struct time_t <2:3>  [2:5)\n"
-           "  nanoseconds -> 2 [4]\n"
-           "  secondsPastEpoch -> 1 [3]\n"
-           "  secondsPastEpoch :  1 [3]\n"
-           "  nanoseconds :  2 [4]\n"
-           "[3] uint64_t  <3:4>  [3:4)\n"
-           "[4] uint32_t  <4:5>  [4:5)\n"
-           "[5] struct  <5:6>  [5:9)\n"
-           "  sarr -> 1 [6]\n"
-           "  sarr :  1 [6]\n"
-           "[6] struct[]  <6:7>  [6:9)\n"
-           "[7] struct  <0:2>  [7:9)\n"
-           "  value -> 1 [8]\n"
-           "  value :  1 [8]\n"
-           "[8] double  <1:2>  [8:9)\n"
-           "[9] any  <7:8>  [9:10)\n"
-           "[10] any[]  <8:9>  [10:11)\n"
-           "[11] union  <9:10>  [11:14)\n"
-           "  a -> 1 [12]\n"
-           "  b -> 2 [13]\n"
-           "  a :  1 [12]\n"
-           "  b :  2 [13]\n"
-           "[12] float  <0:1>  [12:13)\n"
-           "[13] string  <0:1>  [13:14)\n"
-           "[14] union[]  <10:11>  [14:18)\n"
-           "[15] union  <0:3>  [15:18)\n"
-           "  x -> 1 [16]\n"
-           "  y -> 2 [17]\n"
-           "  x :  1 [16]\n"
-           "  y :  2 [17]\n"
-           "[16] float  <1:2>  [16:17)\n"
-           "[17] float  <2:3>  [17:18)\n"
-           "");
+    testEq(std::string(SB()<<"\n"<<Value::Helper::desc(val)),
+R"out(
+[0] struct simple_t parent=[0]  [0:11)
+    achoice -> 10 [10]
+    any -> 7 [7]
+    anya -> 8 [8]
+    arbitrary -> 5 [5]
+    arbitrary.sarr -> 6 [6]
+    choice -> 9 [9]
+    timeStamp -> 2 [2]
+    timeStamp.nanoseconds -> 4 [4]
+    timeStamp.secondsPastEpoch -> 3 [3]
+    value -> 1 [1]
+    value :  1 [1]
+    timeStamp :  2 [2]
+    arbitrary :  5 [5]
+    any :  7 [7]
+    anya :  8 [8]
+    choice :  9 [9]
+    achoice :  10 [10]
+[1] double[]  parent=[0]  [1:2)
+[2] struct time_t parent=[0]  [2:5)
+    nanoseconds -> 2 [4]
+    secondsPastEpoch -> 1 [3]
+    secondsPastEpoch :  1 [3]
+    nanoseconds :  2 [4]
+[3] uint64_t  parent=[2]  [3:4)
+[4] uint32_t  parent=[2]  [4:5)
+[5] struct  parent=[0]  [5:7)
+    sarr -> 1 [6]
+    sarr :  1 [6]
+[6] struct[]  parent=[5]  [6:7)
+    [0] struct  parent=[0]  [0:2)
+        value -> 1 [1]
+        value :  1 [1]
+    [1] double  parent=[0]  [1:2)
+[7] any  parent=[0]  [7:8)
+[8] any[]  parent=[0]  [8:9)
+[9] union  parent=[0]  [9:10)
+    a -> 0 [0]
+    b -> 1 [1]
+    a :  0 [0]
+    [0] float  parent=[0]  [0:1)
+    b :  1 [1]
+    [0] string  parent=[0]  [0:1)
+[10] union[]  parent=[0]  [10:11)
+    [0] union  parent=[0]  [0:1)
+        x -> 0 [0]
+        y -> 1 [1]
+        x :  0 [0]
+        [0] float  parent=[0]  [0:1)
+        y :  1 [1]
+        [0] float  parent=[0]  [0:1)
+)out")<<"Actual:\n"<<Value::Helper::desc(val);
 
     // try to access all field Kinds
 
@@ -254,7 +254,6 @@ void testTypeDef()
         testEq(fld["[1]q"].as<std::string>(), "theq");
     }
 
-    testShow()<<val;
     testEq(std::string(SB()<<val),
            "struct \"simple_t\" {\n"
            "    double[] value = {2}[1, 2]\n"
@@ -287,7 +286,7 @@ void testTypeDef()
            "        union.y            float = 5\n"
            "        null\n"
            "    ]\n"
-           "}\n");
+           "}\n")<<"Actual:\n"<<val;
 }
 
 } // namespace
