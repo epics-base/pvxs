@@ -118,14 +118,44 @@ Value Value::allocMember()
 
 bool Value::isMarked(bool parents, bool children) const
 {
-    // TODO test parent and child mask
-    return desc ? store->top->valid[store->index()] : false;
+    if(!desc)
+        return false;
+
+    if(store->top->valid[store->index()])
+        return true;
+
+    auto top = store->top;
+
+    if(children && desc->size()>1u) {
+        // TODO more efficient
+        for(auto bit : range(desc->offset-top->desc->offset,
+                             desc->next_offset-top->desc->offset))
+        {
+            if(top->valid[bit])
+                return true;
+        }
+    }
+
+    if(parents) {
+        auto P = desc;
+        while(P!=top->desc.get()) {
+            P -= P->parent_index;
+
+            auto bit = P->offset - top->desc->offset;
+            if(top->valid[bit])
+                return true;
+        }
+    }
+
+    return false;
 }
 
 void Value::mark(bool v)
 {
-    if(desc)
-        store->top->valid[store->index()] = v;
+    if(!desc)
+        return;
+
+    store->top->valid[store->index()] = v;
     if(!v)
         return;
 
@@ -138,9 +168,31 @@ void Value::mark(bool v)
 
 void Value::unmark(bool parents, bool children)
 {
-    // TODO clear parent and/or child mask
-    if(desc)
-        store->top->valid[store->index()] = false;
+    if(!desc)
+        return;
+
+    store->top->valid[store->index()] = false;
+
+    auto top = store->top;
+
+    if(children && desc->size()>1u) {
+        // TODO more efficient
+        for(auto bit : range(desc->offset-top->desc->offset,
+                             desc->next_offset-top->desc->offset))
+        {
+            top->valid[bit] = false;
+        }
+    }
+
+    if(parents) {
+        auto P = desc;
+        while(P!=top->desc.get()) {
+            P -= P->parent_index;
+
+            auto bit = P->offset - top->desc->offset;
+            top->valid[bit] = false;
+        }
+    }
 }
 
 TypeCode Value::type() const
