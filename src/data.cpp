@@ -60,7 +60,7 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
         auto& mem = top->members.at(cfld->offset-desc->offset);
         mem.top = top.get();
         mem.init(cfld);
-        top->member_indicies[cfld->offset] = pair.second;
+        top->member_indicies[cfld->offset-desc->offset] = pair.second;
     }
 
     this->desc = desc.get();
@@ -274,6 +274,9 @@ bool copyInScalar(Dest& dest, const void *ptr, StoreType type)
 
 void Value::copyIn(const void *ptr, StoreType type)
 {
+    // control flow should either throw NoField or NoConvert, or update 'store' and
+    // reach the mark() at the end.
+
     if(!desc)
         throw NoField();
 

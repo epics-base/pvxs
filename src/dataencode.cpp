@@ -696,7 +696,7 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
         return;
 
     for(auto bit = top->valid.findSet(desc->offset-top->desc->offset);
-        bit<desc->next_offset-top->desc->offset;
+        bit<(desc->next_offset-top->desc->offset);
         bit = top->valid.findSet(bit+1))
     {
         std::shared_ptr<FieldStorage> cstore(store, store.get()+bit-desc->offset);
