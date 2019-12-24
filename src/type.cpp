@@ -132,84 +132,6 @@ Member::Member(TypeCode code, const std::string& name, const std::string& id, st
     }
 }
 
-TypeDef::TypeDef(TypeCode code, const std::string& id, std::initializer_list<Member> children)
-{
-    auto temp(std::make_shared<Member>(code, "", id, children));
-    top = std::move(temp);
-}
-
-static
-void copy_tree(const FieldDesc* desc, Member& node)
-{
-    node.code = desc->code;
-    node.id = desc->id;
-    node.children.reserve(desc->miter.size());
-    for(auto& pair : desc->miter) {
-        auto cdesc = desc+pair.second;
-        node.children.emplace_back(cdesc->code, pair.first);
-        node.children.back().id = cdesc->id;
-        copy_tree(cdesc, node.children.back());
-    }
-}
-
-TypeDef::TypeDef(const Value& o)
-{
-    if(o.desc) {
-        auto root(std::make_shared<Member>(o.desc->code, o.desc->id));
-
-        copy_tree(o.desc, *root);
-        top = std::move(root);
-    }
-}
-
-TypeDef::~TypeDef() {}
-
-static
-void append_tree(Member& node, const Member& adopt)
-{
-    for(auto& child : node.children) {
-        if(child.name==adopt.name) {
-            // update of existing.
-
-            if((child.code.kind()==Kind::Compound) != (adopt.code.kind()==Kind::Compound)) {
-                throw std::logic_error(SB()<<"May not change member '"<<adopt.name<<"' kind to/from Compound");
-            }
-
-            child.code = adopt.code;
-            if(!adopt.id.empty())
-                child.id = adopt.id;
-
-            for(auto& grandchild : adopt.children) {
-                append_tree(child, grandchild);
-            }
-            return;
-        }
-    }
-
-    // new node, just append
-    node.children.push_back(adopt);
-}
-
-TypeDef& TypeDef::operator+=(std::initializer_list<Member> children)
-{
-    if(!top || (top->code!=TypeCode::Struct && top->code!=TypeCode::Union))
-        throw std::logic_error("May only append to Struct or Union");
-
-    std::shared_ptr<Member> edit;
-    if(top.use_count()==1u)
-        edit = std::const_pointer_cast<Member>(top);
-    else
-        edit = std::make_shared<Member>(*top); // copy
-
-    for(auto& child : children) {
-        append_tree(*edit, child);
-    }
-
-    top = std::move(edit);
-
-    return *this;
-}
-
 static
 void build_tree(std::vector<FieldDesc>& desc, const Member& node)
 {
@@ -270,16 +192,112 @@ void build_tree(std::vector<FieldDesc>& desc, const Member& node)
     assert(desc.size()==index+desc[index].size());
 }
 
+TypeDef::TypeDef(TypeCode code, const std::string& id, std::initializer_list<Member> children)
+{
+    auto temp(std::make_shared<Member>(code, "", id, children));
+
+    auto tempdesc = std::make_shared<std::vector<FieldDesc>>();
+    build_tree(*tempdesc, *temp);
+
+    std::shared_ptr<const FieldDesc> type(tempdesc, tempdesc->data()); // alias
+
+    top = std::move(temp);
+    desc = std::move(type);
+}
+
+static
+void copy_tree(const FieldDesc* desc, Member& node)
+{
+    node.code = desc->code;
+    node.id = desc->id;
+    node.children.reserve(desc->miter.size());
+    for(auto& pair : desc->miter) {
+        auto cdesc = desc+pair.second;
+        node.children.emplace_back(cdesc->code, pair.first);
+        node.children.back().id = cdesc->id;
+        copy_tree(cdesc, node.children.back());
+    }
+}
+
+TypeDef::TypeDef(const Value& val)
+{
+    if(val.desc) {
+        auto root(std::make_shared<Member>(val.desc->code, val.desc->id));
+
+        copy_tree(val.desc, *root);
+
+        auto temp = std::make_shared<std::vector<FieldDesc>>();
+        build_tree(*temp, *root);
+
+        std::shared_ptr<const FieldDesc> type(temp, temp->data()); // alias
+
+        top = std::move(root);
+        desc = std::move(type);
+    }
+}
+
+TypeDef::~TypeDef() {}
+
+static
+void append_tree(Member& node, const Member& adopt)
+{
+    for(auto& child : node.children) {
+        if(child.name==adopt.name) {
+            // update of existing.
+
+            if((child.code.kind()==Kind::Compound) != (adopt.code.kind()==Kind::Compound)) {
+                throw std::logic_error(SB()<<"May not change member '"<<adopt.name<<"' kind to/from Compound");
+            }
+
+            child.code = adopt.code;
+            if(!adopt.id.empty())
+                child.id = adopt.id;
+
+            for(auto& grandchild : adopt.children) {
+                append_tree(child, grandchild);
+            }
+            return;
+        }
+    }
+
+    // new node, just append
+    node.children.push_back(adopt);
+}
+
+TypeDef& TypeDef::operator+=(std::initializer_list<Member> children)
+{
+    if(!top || (top->code!=TypeCode::Struct && top->code!=TypeCode::Union))
+        throw std::logic_error("May only append to Struct or Union");
+
+    std::shared_ptr<Member> edit;
+    if(top.use_count()==1u) {
+        edit = std::const_pointer_cast<Member>(top);
+        top.reset(); // so we don't leave partial tree on error.
+    } else {
+        edit = std::make_shared<Member>(*top); // copy
+    }
+
+    for(auto& child : children) {
+        append_tree(*edit, child);
+    }
+
+    auto temp = std::make_shared<std::vector<FieldDesc>>();
+    build_tree(*temp, *edit);
+
+    std::shared_ptr<const FieldDesc> type(temp, temp->data()); // alias
+
+    top = std::move(edit);
+    desc = std::move(type);
+
+    return *this;
+}
+
 Value TypeDef::create() const
 {
-    if(!top)
+    if(!desc)
         throw std::logic_error("Empty TypeDef");
 
-    auto desc = std::make_shared<std::vector<FieldDesc>>();
-    build_tree(*desc, *top);
-
-    std::shared_ptr<const FieldDesc> type(desc, desc->data()); // alias
-    return Value(type);
+    return Value(desc);
 }
 
 static

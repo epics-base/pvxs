@@ -260,6 +260,7 @@ public:
     struct Node;
 private:
     std::shared_ptr<const Member> top;
+    std::shared_ptr<const impl::FieldDesc> desc;
 public:
     //! new, empty, definition
     TypeDef() = default;

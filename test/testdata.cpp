@@ -436,7 +436,7 @@ void testAssign()
     val["timeStamp"].mark();
     val["alarm.severity"] = 3u;
 
-    auto val2 = val.cloneEmpty();
+    auto val2 = def.create();
 
     val2.assign(val);
 
