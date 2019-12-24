@@ -467,48 +467,6 @@ public:
     inline Value operator[](const std::string& name) { return (*this)[name.c_str()]; }
     const Value operator[](const char *name) const;
     inline const Value operator[](const std::string& name) const { return (*this)[name.c_str()]; }
-
-private:
-    template<typename V> friend class _iterator;
-    // these cheat on const-ness
-    void _step(const Value& child, bool next) const;
-    void _first_child(const Value& child) const;
-
-    template<typename V>
-    class _iterator {
-        V *parent;
-        V child;
-        friend class Value;
-    public:
-        _iterator() :parent(nullptr) {}
-        explicit _iterator(V* parent) :parent(parent) {}
-
-        V& operator*() { return child; }
-        V* operator->() { return &child; }
-
-        // ++(*this)
-        inline _iterator& operator++() { parent->_step(child, true); return *this; }
-        // (*this)++
-        inline _iterator operator++(int) { _iterator ret(*this); parent->_step(child, true); return ret;}
-        // --(*this)
-        inline _iterator& operator--() { parent->_step(child, false); return *this; }
-        // (*this)--
-        inline _iterator operator--(int) { _iterator ret(*this); parent->_step(child, false); return ret;}
-
-        inline bool operator==(const _iterator& o) const { return child.compareInst(o.child)==0; }
-        inline bool operator!=(const _iterator& o) const { return !((*this)==o); }
-    };
-public:
-    typedef _iterator<Value> iterator;
-    typedef _iterator<const Value> const_iterator;
-
-    inline iterator begin() { iterator ret(this); _first_child(ret.child); return ret;}
-    inline const_iterator cbegin() const { const_iterator ret(this); _first_child(ret.child); return ret;}
-    inline const_iterator begin() const { return cbegin(); }
-
-    inline iterator end() { iterator ret(this); return ret;}
-    inline const_iterator cend() const { const_iterator ret(this); return ret;}
-    inline const_iterator end() const { return cend(); }
 };
 
 PVXS_API
