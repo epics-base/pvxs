@@ -150,8 +150,8 @@ constexpr size_t cmax(size_t A, size_t B) {
     return A>B ? A : B;
 }
 
-// gcc 4.8 has aligned_storage but not aligned_union
-#if GCC_VERSION && GCC_VERSION<VERSION_INT(4,9,0,0)
+// gcc 4.9 has aligned_storage but not aligned_union
+#if GCC_VERSION && GCC_VERSION<VERSION_INT(4,10,0,0)
 
 template<typename... Types>
 struct max_sizeof {

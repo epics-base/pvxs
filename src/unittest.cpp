@@ -20,7 +20,7 @@ testCase::testCase(bool result)
 
 testCase::testCase(testCase&& o) noexcept
     :result(o.result)
-#if !GCC_VERSION || GCC_VERSION>=VERSION_INT(4,9,0,0)
+#if !GCC_VERSION || GCC_VERSION>=VERSION_INT(4,10,0,0)
     ,msg(std::move(o.msg))
 #else
     // gcc 4.8 (at least) doesn't provide a move ctor yet
@@ -35,7 +35,7 @@ testCase& testCase::operator=(testCase&& o) noexcept
     if(this!=&o) {
         result = o.result;
         o.result = Nothing;
-#if !GCC_VERSION || GCC_VERSION>=VERSION_INT(4,9,0,0)
+#if !GCC_VERSION || GCC_VERSION>=VERSION_INT(4,10,0,0)
         msg = std::move(o.msg);
 #else
         msg.seekp(0);
