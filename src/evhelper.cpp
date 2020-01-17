@@ -64,7 +64,9 @@ struct evbase::Pvt : public epicsThreadRunable
 
         int ret = event_base_loop(base, EVLOOP_NO_EXIT_ON_EMPTY);
 
-        if(logerr.test(int(ret ? Level::Crit : Level::Info)))
+        // TODO: cleanup after pending event_base_once()
+
+        if(logerr.test(ret ? Level::Crit : Level::Info))
             errlogPrintf("Exit loop worker: %d for %p\n", ret, base);
     }
 };
@@ -125,6 +127,25 @@ void evbase::dispatch(std::function<void()>&& fn)
     std::unique_ptr<std::function<void()> > action(new std::function<void()>(std::move(fn)));
 
     if(event_base_once(base, -1, EV_TIMEOUT, &dispatch_action, action.get(), NULL)==0) {
+        // successfully queued.  No longer my responsibility
+        action.release();
+    } else {
+        throw std::runtime_error("Unable to queue dispatch()");
+    }
+}
+
+
+// queue request to execute in event loop after at least delay seconds have passed
+// @param delay second in future.  must be finite and >=0
+void evbase::later(double delay, std::function<void()>&& fn)
+{
+    timeval tv;
+    tv.tv_sec = unsigned(delay);
+    tv.tv_usec = unsigned(delay*1e6)%1000000;
+
+    std::unique_ptr<std::function<void()> > action(new std::function<void()>(std::move(fn)));
+
+    if(event_base_once(base, -1, EV_TIMEOUT, &dispatch_action, action.get(), &tv)==0) {
         // successfully queued.  No longer my responsibility
         action.release();
     } else {

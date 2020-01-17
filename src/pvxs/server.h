@@ -178,6 +178,76 @@ struct PVXS_API ConnectOp : public OpBase {
     virtual void onClose(std::function<void(const std::string&)>&&) =0;
 };
 
+//! Handle for active subscription
+struct PVXS_API MonitorControlOp : public OpBase {
+    virtual ~MonitorControlOp();
+
+protected:
+    virtual bool doPost(Value&& val, bool maybe, bool force) =0;
+public:
+
+    //! Add a new entry to the monitor queue.
+    //! If nFree()<=0 the output queue will be over-filled with this element.
+    //! Returns @code nFree()>0u @endcode
+    bool forcePost(Value&& val) {
+        return doPost(std::move(val), false, true);
+    }
+
+    //! Add a new entry to the monitor queue.
+    //! If nFree()<=0 this element will be "squshed" to the last element in the queue
+    //! Returns @code nFree()>0u @endcode
+    bool post(Value&& val) {
+        return doPost(std::move(val), false, false);
+    }
+
+    //! Add a new entry to the monitor queue.
+    //! If nFree()<=0 return false and take no other action
+    //! Returns @code nFree()>0u @endcode
+    bool tryPost(Value&& val) {
+        return doPost(std::move(val), true, false);
+    }
+
+    //! Signal to subscriber that this subscription will not yield any further events.
+    //! This is not an error.  Client should not retry.
+    void finish() {
+        doPost(Value(), false, false);
+    }
+
+    //! Number of "free" elements in the output flow window.
+    //! May be negative if local queue is over-filled
+    //! Returns @code numeric_limits<int32_t>::max() @endcode if flow control not enabled by client.
+    virtual int32_t nFree() const =0;
+
+    //! Maximum which may be returned by nFree()
+    //! Returns @code numeric_limits<int32_t>::max() @endcode if flow control not enabled by client.
+    virtual unsigned long long maxFree() const =0;
+
+    //! Set flow control levels.
+    //! onLowMark callback will be invoked when nFree()<=low becomes true, and not again until it has been false.
+    //! onHighMark callback will be invoked when nFree()>high becomes true, and not again until it has been false.
+    virtual void setWatermarks(size_t low, size_t high) =0;
+
+    //! Callback when client resumes/pauses updates
+    virtual void onStart(std::function<void(bool)>&&) =0;
+    virtual void onHighMark(std::function<void()>&&) =0;
+    virtual void onLowMark(std::function<void()>&&) =0;
+};
+
+//! Handle for subscription which is being setup
+struct PVXS_API MonitorSetupOp : public OpBase {
+    Value pvRequest;
+
+    //! Inform peer of our data-type and acquire control of subscription queue.
+    //! The queue is initially stopped.
+    virtual std::unique_ptr<MonitorControlOp> connect(const Value& prototype) =0;
+    //! Indicate that this operation can not be setup
+    virtual void error(const std::string& msg) =0;
+
+    virtual ~MonitorSetupOp();
+
+    virtual void onClose(std::function<void(const std::string&)>&&) =0;
+};
+
 /** Manipulate an active Channel, and any in-progress Operations through it.
  *
  */
@@ -186,8 +256,10 @@ struct PVXS_API ChannelControl : public OpBase {
 
     //! Invoked when a new GET, PUT, or RPC Operation is requested through this Channel
     virtual void onOp(std::function<void(std::unique_ptr<ConnectOp>&&)>&& ) =0;
-    //! Invoked when the a peer executes an RPC
+    //! Invoked when the peer executes an RPC
     virtual void onRPC(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn)=0;
+    //! Invoked when the peer create a new subscription
+    virtual void onSubscribe(std::function<void(std::unique_ptr<MonitorSetupOp>&&)>&&)=0;
 
     //! Callback when the channel closes (eg. peer disconnect)
     virtual void onClose(std::function<void(const std::string&)>&&) =0;

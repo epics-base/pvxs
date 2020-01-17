@@ -417,6 +417,7 @@ void ServerConn::bevRead()
                 CASE(GET);
                 CASE(PUT);
                 CASE(PUT_GET);
+                CASE(MONITOR);
                 CASE(RPC);
                 CASE(CANCEL_REQUEST);
                 CASE(DESTROY_REQUEST);

@@ -56,6 +56,7 @@ struct ServerChannelControl : public server::ChannelControl
 
     virtual void onOp(std::function<void(std::unique_ptr<server::ConnectOp>&&)>&& fn) override final;
     virtual void onRPC(std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)>&& fn) override final;
+    virtual void onSubscribe(std::function<void(std::unique_ptr<server::MonitorSetupOp>&&)>&& fn) override final;
 
     virtual void onClose(std::function<void(const std::string&)>&& fn) override final;
     virtual void close() override final;
@@ -79,6 +80,7 @@ struct ServerChan
 
     std::function<void(std::unique_ptr<server::ConnectOp>&&)> onOp;
     std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onRPC;
+    std::function<void(std::unique_ptr<server::MonitorSetupOp>&&)> onSubscribe;
     std::function<void(const std::string&)> onClose;
 
     std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID; // our subset of ServerConn::opByIOID
@@ -133,6 +135,7 @@ private:
     CASE(GET);
     CASE(PUT);
     CASE(PUT_GET);
+    CASE(MONITOR);
     CASE(RPC);
     CASE(CANCEL_REQUEST);
     CASE(DESTROY_REQUEST);
@@ -197,6 +200,10 @@ struct Server::Pvt
 
     epicsEvent done;
 
+    // handle server "background" tasks.
+    // accept new connections and send beacons
+    evbase acceptor_loop;
+
     std::vector<uint8_t> beaconMsg;
 
     std::list<std::unique_ptr<UDPListener> > listeners;
@@ -204,10 +211,6 @@ struct Server::Pvt
 
     std::list<ServIface> interfaces;
     std::map<ServerConn*, std::shared_ptr<ServerConn> > connections;
-
-    // handle server "background" tasks.
-    // accept new connections and send beacons
-    evbase acceptor_loop;
 
     evsocket beaconSender;
     evevent beaconTimer;

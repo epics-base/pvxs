@@ -74,6 +74,21 @@ void ServerChannelControl::onRPC(std::function<void(std::unique_ptr<server::Exec
     });
 }
 
+void ServerChannelControl::onSubscribe(std::function<void(std::unique_ptr<server::MonitorSetupOp>&&)>&& fn)
+{
+    auto serv = server.lock();
+    if(!serv)
+        return;
+
+    serv->acceptor_loop.call([this, &fn](){
+        auto ch = chan.lock();
+        if(!ch)
+            return;
+
+        ch->onSubscribe = std::move(fn);
+    });
+}
+
 void ServerChannelControl::onClose(std::function<void(const std::string&)>&& fn)
 {
     auto serv = server.lock();

@@ -46,6 +46,10 @@ TESTPROD += dummyserv
 dummyserv_SRCS += dummyserv.cpp
 # not a unittest
 
+TESTPROD += countdown
+countdown_SRCS += countdown.cpp
+# not a unittest
+
 PROD_SYS_LIBS += event_core
 
 PROD_SYS_LIBS_DEFAULT += event_pthreads

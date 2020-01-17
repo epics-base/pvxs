@@ -64,7 +64,12 @@ struct PVXS_API evbase {
 
     // queue request to execute in event loop.  return immediately.
     void dispatch(std::function<void()>&& fn);
-    // queue request to execute in event loop.  return after executed
+
+    // queue request to execute in event loop after at least delay seconds have passed
+    // @param delay second in future.  must be finite and >=0
+    void later(double delay, std::function<void()>&& fn);
+
+    // queue request to execute in event loop.  return after executed.
     void call(std::function<void()>&& fn);
 
     void assertInLoop();

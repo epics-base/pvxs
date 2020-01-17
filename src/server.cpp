@@ -511,6 +511,8 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 {
     // on UDPManager worker
 
+    log_printf(serverio, Debug, "%s searching\n", msg.src.tostring().c_str());
+
     searchOp._names.resize(msg.names.size());
     for(auto i : range(msg.names.size())) {
         searchOp._names[i]._name = msg.names[i].name;
@@ -632,5 +634,8 @@ ChannelControl::~ChannelControl() {}
 
 ConnectOp::~ConnectOp() {}
 ExecOp::~ExecOp() {}
+
+MonitorControlOp::~MonitorControlOp() {}
+MonitorSetupOp::~MonitorSetupOp() {}
 
 }} // namespace pvxs::server
