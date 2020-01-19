@@ -29,8 +29,9 @@
 
 typedef epicsGuard<epicsMutex> Guard;
 
+namespace pvxs {
+
 namespace {
-using namespace pvxs;
 
 DEFINE_LOGGER(logerr, "pvxs.ev");
 
@@ -150,9 +151,7 @@ void logger_prepare(void *unused)
     logger_gbl = new logger_gbl_t;
 }
 
-}
-
-namespace pvxs {
+} // namespace
 
 int logger::init()
 {
@@ -174,11 +173,9 @@ int logger::init()
     return lvl;
 }
 
-void xerrlogHexPrintf(const void *buf, size_t buflen,
-                      const char *fmt, ...)
+void xerrlogHexPrintf(const void *buf, size_t buflen)
 {
     const uint8_t* const cbuf = static_cast<const uint8_t*>(buf);
-    va_list args;
 
     // whole buffer
     for(size_t pos=0; pos<buflen;)
@@ -209,10 +206,6 @@ void xerrlogHexPrintf(const void *buf, size_t buflen,
 
         errlogPrintf("%04x : %s %s %s %s\n", addr, buf[0], buf[1], buf[2], buf[3]);
     }
-
-    va_start(args, fmt);
-    errlogVprintf(fmt, args);
-    va_end(args);
 }
 
 void logger_level_set(const char *name, int lvl)
@@ -222,6 +215,15 @@ void logger_level_set(const char *name, int lvl)
 
     Guard G(logger_gbl->lock);
     logger_gbl->set(name, lvl);
+}
+
+void logger_level_clear()
+{
+    epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
+    assert(logger_gbl);
+
+    Guard G(logger_gbl->lock);
+    logger_gbl->config.clear();
 }
 
 void logger_config_env()

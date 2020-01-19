@@ -26,7 +26,7 @@ enum struct Level {
 };
 
 struct logger {
-    const char *name;
+    const char * const name;
     std::atomic<int> lvl;
     constexpr logger(const char *name) :name(name), lvl{-1} {}
 
@@ -47,8 +47,7 @@ public:
 #define DEFINE_LOGGER(VAR, NAME) static ::pvxs::logger VAR{NAME}
 
 PVXS_API
-void xerrlogHexPrintf(const void *buf, size_t buflen,
-                      const char *fmt, ...) EPICS_PRINTF_STYLE(3,4);
+void xerrlogHexPrintf(const void *buf, size_t buflen);
 
 #define log_test(LOGGER, LVL) (LOGGER).test(::pvxs::Level::LVL)
 
@@ -56,13 +55,20 @@ void xerrlogHexPrintf(const void *buf, size_t buflen,
 
 #define log_vprintf(LOGGER, LVL, FMT, ARGS) do{ if(log_test(LOGGER, LVL)) errlogVprintf(FMT, ARGS); }while(0)
 
-#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, ...) do{ if(log_test(LOGGER, LVL)) xerrlogHexPrintf(BUF, BUFLEN, __VA_ARGS__); }while(0)
+#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, ...) do{ if(log_test(LOGGER, LVL)) { \
+        xerrlogHexPrintf(BUF, BUFLEN); \
+        errlogPrintf(__VA_ARGS__); } \
+    }while(0)
 
 //! Set level for a specific logger
 PVXS_API void logger_level_set(const char *name, int lvl);
 inline void logger_level_set(const char *name, Level lvl) {
     logger_level_set(name, int(lvl));
 }
+//! Remove any previously logger configurations.
+//! Does _not_ change any logger::lvl
+//! Use prior to re-applying new configuration.
+PVXS_API void logger_level_clear();
 
 /** Configure logging from environment variable $PVXS_LOG
  *

@@ -20,11 +20,12 @@ USR_CXXFLAGS += -fvisibility=hidden -fvisibility-inlines-hidden
 #USR_CXXFLAGS_Linux += -gz=zlib
 #USR_LDFLAGS_Linux += -Wl,--compress-debug-sections=zlib
 
-# LTO takes a nice chunk out of the .so text size, but blows up the .a
+# LTO takes a nice chunk out of the .so text size, but blows up the .a size
 #USR_CXXFLAGS += -flto
 #USR_LDFLAGS += -flto
 
 # fault on any undefined symbols (eg. from missing LIB_SYS_LIBS)
+# breaks on older ncurses (circa RHEL6) not using the INPUT() trick to pull in libtinfo.so
 USR_LDFLAGS_Linux += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
 
 endif

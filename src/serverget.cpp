@@ -290,8 +290,6 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
     from_wire(M, ioid);
     from_wire(M, subcmd);
 
-    Status reply{};
-
     // subcmd bitmask
     // 0x08 - Init
     // 0x10 - Destroy
