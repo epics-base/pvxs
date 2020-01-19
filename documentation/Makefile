@@ -16,6 +16,6 @@ gen: ../cfg/CONFIG_PVXS_VERSION
 	$(PYTHON) -m sphinx -b html . html
 
 commit: gen
-	./commit-gh.sh documentation/html/ html/*.* html/_*/*.*
+	./commit-gh.sh documentation/html/ html/.nojekyll html/*.* html/_*/*.*
 
 .PHONY: all clean gen commit
