@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
         }
         if(opts.peers.empty()) {
             log_printf(out, Debug, "No peer filter\n");
-        } else if(log_test(out, Debug)) {
+        } else if(out.test(pvxs::Level::Debug)) {
             for(const auto& tup : opts.peers) {
                 in_addr addr, netmask;
                 std::tie(addr.s_addr, netmask.s_addr) = tup;

@@ -57,21 +57,18 @@ public:
 PVXS_API
 void xerrlogHexPrintf(const void *buf, size_t buflen);
 
-//! evaluate as true if the logger currently allows a message at level LVL.
-#define log_test(LOGGER, LVL) (LOGGER).test(::pvxs::Level::LVL)
-
 //! Try to log a message at the defined level.
 //! @code
 //!     DEFINE_LOGGER(blah, "myapp.blah");
 //!     void blahfn(int x) {
 //!         log_printf(blah, Info, "blah happened with %d\n", x);
 //! @endcode
-#define log_printf(LOGGER, LVL, ...) do{ if(log_test(LOGGER, LVL)) errlogPrintf(__VA_ARGS__); }while(0)
+#define log_printf(LOGGER, LVL, ...) do{ if((LOGGER).test(::pvxs::Level::LVL)) errlogPrintf(__VA_ARGS__); }while(0)
 
 //! log_vprintf() is to log_printf() what vprintf() is to printf()
-#define log_vprintf(LOGGER, LVL, FMT, ARGS) do{ if(log_test(LOGGER, LVL)) errlogVprintf(FMT, ARGS); }while(0)
+#define log_vprintf(LOGGER, LVL, FMT, ARGS) do{ if((LOGGER).test(::pvxs::Level::LVL)) errlogVprintf(FMT, ARGS); }while(0)
 
-#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, ...) do{ if(log_test(LOGGER, LVL)) { \
+#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, ...) do{ if((LOGGER).test(::pvxs::Level::LVL)) { \
         xerrlogHexPrintf(BUF, BUFLEN); \
         errlogPrintf(__VA_ARGS__); } \
     }while(0)

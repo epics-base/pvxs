@@ -129,6 +129,8 @@ struct logger_gbl_t {
             if(std::get<1>(tup)==exp) {
                 // update of existing config
                 if(std::get<2>(tup)!=lvl) {
+                    std::get<2>(tup) = lvl;
+
                     for(auto& pair : loggers) {
                         if(std::regex_match(pair.first, std::get<0>(tup))) {
                             pair.second->lvl.store(lvl, std::memory_order_relaxed);

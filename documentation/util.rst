@@ -51,8 +51,6 @@ and must not be present in user code.
 
 .. doxygendefine:: log_vprintf
 
-.. doxygendefine:: log_test
-
 .. doxygenstruct:: pvxs::logger
     :members:
 
