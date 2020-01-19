@@ -13,7 +13,7 @@ clean:
 # conf.py reads CONFIG_PVXS_VERSION to extract version number
 gen: ../cfg/CONFIG_PVXS_VERSION
 	doxygen
-	$(PYTHON) -m sphinx -b html . html
+	$(PYTHON) -m sphinx -j auto -b html . html
 
 commit: gen
 	./commit-gh.sh documentation/html/ html/.nojekyll html/*.* html/_*/*.*
