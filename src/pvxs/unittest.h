@@ -22,6 +22,13 @@
 
 namespace pvxs {
 
+/** A single test case (or diagnostic line).
+ *
+ * Acts as an output string to accumulate test comment.
+ * Multi-line output results in one test line, and subsequent diagnostic lines.
+ *
+ * Test line is printed when an active (non-moved) testCase is destroyed.
+ */
 class PVXS_API testCase
 {
     enum {
@@ -42,13 +49,16 @@ public:
     testCase& operator=(testCase&&) noexcept;
     ~testCase();
 
+    //! true when passing
     explicit operator bool() const { return result==Pass; }
 
+    //! Override current pass/fail result
     testCase& setPass(bool v) {
         result = v ? Pass : Fail;
         return *this;
     }
 
+    //! Append to message
     template<typename T>
     inline testCase& operator<<(const T& v) {
         msg<<v;
@@ -114,6 +124,22 @@ testCase testNotEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS
 
 } // namespace detail
 
+/** Assert that an exception is thrown.
+ *
+ * @tparam Exception The exception type which should be thrown
+ * @param fn A callable
+ *
+ * @returns A testCase which passes if an Exception instance was caught,
+ *          and false otherwise (wrong type, or no exception).
+ *
+ * @code
+ * testThrows<std::runtime_error>([]() {
+ *      testShow()<<"Now you see me";
+ *      throw std::runtime_error("I happened");
+ *      testShow()<<"Now you don't";
+ * })<<"some message";
+ * @endcode
+ */
 template<class Exception, typename FN>
 testCase testThrows(FN fn)
 {
@@ -131,8 +157,16 @@ testCase testThrows(FN fn)
 
 } // namespace pvxs
 
+//! Assert equality between LHS and RHS.
+//! Roughly equivalent to @code testOk((LHS)==(RHS), "..."); @endcode
 #define testEq(LHS, RHS) ::pvxs::detail::testEq(#LHS, LHS, #RHS, RHS)
+
+//! Assert in-equality between LHS and RHS
+//! Roughly equivalent to @code testOk((LHS)!=(RHS), "..."); @endcode
 #define testNotEq(LHS, RHS) ::pvxs::detail::testNotEq(#LHS, LHS, #RHS, RHS)
+
+//! Print diagnostic (non-test) line.
+//! Roughly equivalent to @code testDiag("..."); @endcode
 #define testShow() ::pvxs::testCase()
 
 #endif // PVXS_UNITTEST_H

@@ -27,9 +27,11 @@
 #include <pvxs/versionNum.h>
 
 #ifndef VERSION_INT
+//! Construct version number constant.
 #  define VERSION_INT(V,R,M,P) ( ((V)<<24) | ((R)<<16) | ((M)<<8) | (P))
 #endif
 
+//! Current library version
 #define PVXS_VERSION VERSION_INT(PVXS_MAJOR_VERSION, PVXS_MINOR_VERSION, PVXS_MAINTENANCE_VERSION, 0)
 
 #ifdef __GNUC__
@@ -38,20 +40,21 @@
 
 namespace pvxs {
 
-//! Library version as a string
+//! Library version as a string.  eg. "PVXS 1.2.3"
 PVXS_API
 const char *version_str();
 
-//! Value of PVXS_VERSION captured at library compile time
+//! @returns PVXS_VERSION captured at library compile time
 PVXS_API
 unsigned long version_int();
 
 /** Free some internal global allocations to avoid false positives in
  *  valgrind (or similar) tools looking for memory leaks.
  *
- * @warning Use with caution!
+ * @warning This function is optional.
+ *          If you don't understand the intended use case, then do not call it!
  *
- * @pre Release all resources explicitly allocated through PVXS.
+ * @pre Caller must release all resources explicitly allocated through PVXS (on all threads).
  * @post Invalidates internal state.
  *       Use of __any__ API functions afterwards is undefined!
  */

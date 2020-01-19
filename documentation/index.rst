@@ -12,6 +12,7 @@ This module is under active development and is only suitable for experimental us
    typedef
    server
    source
+   util
 
 
 Indices and tables

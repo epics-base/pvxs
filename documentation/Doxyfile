@@ -790,8 +790,7 @@ WARN_LOGFILE           =
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
 
-INPUT                  = ../src \
-                         ../src/pvxs
+INPUT                  = ../src/pvxs
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
@@ -816,9 +815,7 @@ INPUT_ENCODING         = UTF-8
 # *.m, *.markdown, *.md, *.mm, *.dox, *.py, *.pyw, *.f90, *.f95, *.f03, *.f08,
 # *.f, *.for, *.tcl, *.vhd, *.vhdl, *.ucf and *.qsf.
 
-FILE_PATTERNS          = *.c \
-                         *.cpp \
-                         *.h \
+FILE_PATTERNS          = *.h \
                          *.md
 
 # The RECURSIVE tag can be used to specify whether or not subdirectories should
@@ -2020,7 +2017,7 @@ ENABLE_PREPROCESSING   = YES
 # The default value is: NO.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
-MACRO_EXPANSION        = NO
+MACRO_EXPANSION        = YES
 
 # If the EXPAND_ONLY_PREDEF and MACRO_EXPANSION tags are both set to YES then
 # the macro expansion is limited to the macros specified with the PREDEFINED and
@@ -2028,7 +2025,7 @@ MACRO_EXPANSION        = NO
 # The default value is: NO.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
-EXPAND_ONLY_PREDEF     = NO
+EXPAND_ONLY_PREDEF     = YES
 
 # If the SEARCH_INCLUDES tag is set to YES, the include files in the
 # INCLUDE_PATH will be searched if a #include is found.
@@ -2050,7 +2047,7 @@ INCLUDE_PATH           = ../include
 # used.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
-INCLUDE_FILE_PATTERNS  = 
+INCLUDE_FILE_PATTERNS  = pvxs/versionNum.h
 
 # The PREDEFINED tag can be used to specify one or more macro names that are
 # defined before the preprocessor is started (similar to the -D option of e.g.
@@ -2069,7 +2066,7 @@ PREDEFINED             =
 # definition found in the source code.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
-EXPAND_AS_DEFINED      = 
+EXPAND_AS_DEFINED      = PVXS_API
 
 # If the SKIP_FUNCTION_MACROS tag is set to YES then doxygen's preprocessor will
 # remove all references to function-like macros that are alone on a line, have

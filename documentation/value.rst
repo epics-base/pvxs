@@ -11,3 +11,7 @@ or created locally.  See `ntapi` or `typedefapi`.
 
 .. doxygenclass:: pvxs::Value
     :members:
+
+.. doxygenstruct:: pvxs::NoField
+
+.. doxygenstruct:: pvxs::NoConvert

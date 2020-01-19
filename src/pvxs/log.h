@@ -17,6 +17,7 @@
 
 namespace pvxs {
 
+//! Importance of message
 enum struct Level {
     Debug = 50,
     Info  = 40,
@@ -25,8 +26,11 @@ enum struct Level {
     Crit  = 10,
 };
 
+//! A logger
 struct logger {
+    //! global name of this logger.  Need not be unique
     const char * const name;
+    //! Current logging level.  See logger_level_set().
     std::atomic<int> lvl;
     constexpr logger(const char *name) :name(name), lvl{-1} {}
 
@@ -39,20 +43,32 @@ public:
         if(cur==-1) cur = init();
         return cur>=lvl;
     }
+    //! @returns true if the logger currently allows a message at level LVL.
     inline bool test(Level lvl) {
         return test(int(lvl));
     }
 };
 
+//! Define a new logger global.
+//! @param VAR The (static) variable name passed to log_printf() and friends.
+//! @param NAME A name string in "A.B.C" form.
 #define DEFINE_LOGGER(VAR, NAME) static ::pvxs::logger VAR{NAME}
 
 PVXS_API
 void xerrlogHexPrintf(const void *buf, size_t buflen);
 
+//! evaluate as true if the logger currently allows a message at level LVL.
 #define log_test(LOGGER, LVL) (LOGGER).test(::pvxs::Level::LVL)
 
+//! Try to log a message at the defined level.
+//! @code
+//!     DEFINE_LOGGER(blah, "myapp.blah");
+//!     void blahfn(int x) {
+//!         log_printf(blah, Info, "blah happened with %d\n", x);
+//! @endcode
 #define log_printf(LOGGER, LVL, ...) do{ if(log_test(LOGGER, LVL)) errlogPrintf(__VA_ARGS__); }while(0)
 
+//! log_vprintf() is to log_printf() what vprintf() is to printf()
 #define log_vprintf(LOGGER, LVL, FMT, ARGS) do{ if(log_test(LOGGER, LVL)) errlogVprintf(FMT, ARGS); }while(0)
 
 #define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, ...) do{ if(log_test(LOGGER, LVL)) { \
@@ -70,9 +86,15 @@ inline void logger_level_set(const char *name, Level lvl) {
 //! Use prior to re-applying new configuration.
 PVXS_API void logger_level_clear();
 
-/** Configure logging from environment variable $PVXS_LOG
+/** Configure logging from environment variable **$PVXS_LOG**
  *
  * Value of the form "key=VAL,..."
+ *
+ * Keys may be literal logger names, or may include '*' wildcards
+ * to match multiple loggers.  eg. "pvxs.*=DEBUG" will enable
+ * all internal log messages.
+ *
+ * VAL may be one of "CRIT", "ERR", "WARN", "INFO", or "DEBUG"
  */
 PVXS_API void logger_config_env();
 

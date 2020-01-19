@@ -38,7 +38,15 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc);
 
 } // namespace detail
 
-//! Print string to output string with non-printable charactors escaped.
+//! Print string to output stream with non-printable charactors escaped.
+//!
+//! Outputs (almost) C-style escapes.
+//! Prefers short escapes for newline, tab, quote, etc ("\\n").
+//! Falls back to hex escape (eg. "\xab").
+//!
+//! Unlike C, hex escapes are always 2 chars.  eg. the output "\xabcase"
+//! would need to be manually changed to "\xab""case" to be used as C source.
+//!
 //! @code
 //!   std::string blah("this \"is a test\"");
 //!   std::cout<<pvxs::escape(blah);
@@ -46,16 +54,17 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc);
 inline detail::Escaper escape(const std::string& s) {
     return detail::Escaper(s.c_str(), s.size());
 }
-//! Print string to output string with non-printable charactors escaped.
+//! Print nil terminated char array to output stream with non-printable charactors escaped.
 //! @code
 //!   std::cout<<pvxs::escape("this \"is a test\"");
 //! @endcode
 inline detail::Escaper escape(const char* s) {
     return detail::Escaper(s);
 }
-//! Print string to output string with non-printable charactors escaped.
+//! Print fixed length char array to output stream with non-printable charactors escaped.
 //! @code
-//!   std::cout<<pvxs::escape("this \"is a test\"", 6); // prints 'this \"'
+//!   std::cout<<pvxs::escape("this \"is a test\"", 6);
+//!   // prints 'this \"'
 //! @endcode
 inline detail::Escaper escape(const char* s,size_t n) {
     return detail::Escaper(s,n);

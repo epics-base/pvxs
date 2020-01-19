@@ -19,7 +19,7 @@
 def read_version(fmt):
     import os, re
     parts = {}
-    with open(os.path.join('..','cfg','CONFIG_PVXS_VERSION'), 'r') as F:
+    with open(os.path.join('..','configure','CONFIG_PVXS_VERSION'), 'r') as F:
         for line in F:
             M = re.match(r'^\s*([A-Z_]+)\s*=\s*(\d+)\s*$', line)
             if M:
@@ -29,7 +29,7 @@ def read_version(fmt):
 # -- Project information -----------------------------------------------------
 
 project = 'PVXS'
-copyright = '2019, Michael Davidsaver'
+copyright = '2020 Osprey DCS LLC'
 author = 'Michael Davidsaver'
 
 # The short X.Y version
