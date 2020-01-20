@@ -418,8 +418,24 @@ public:
     template<typename T>
     inline bool as(T& val) const {
         typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t ret;
-        return tryCopyOut(&ret, map_t::code);
+        typename map_t::store_t temp;
+        auto ret = tryCopyOut(&temp, map_t::code);
+        if(ret) {
+            val = temp;
+        }
+        return ret;
+    }
+
+    //! Attempt to extract value from field.
+    //! If possible, this value is cast to T and passed as the only argument
+    //! of the provided function.
+    template<typename T, typename FN>
+    void as(FN&& fn) {
+        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
+        typename map_t::store_t val;
+        if(tryCopyOut(&val, map_t::code)) {
+            fn(val);
+        }
     }
 
     //! Attempt to assign to field.
