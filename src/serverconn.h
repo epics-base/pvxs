@@ -200,11 +200,11 @@ struct Server::Pvt
 
     epicsEvent done;
 
+    std::vector<uint8_t> beaconMsg;
+
     // handle server "background" tasks.
     // accept new connections and send beacons
     evbase acceptor_loop;
-
-    std::vector<uint8_t> beaconMsg;
 
     std::list<std::unique_ptr<UDPListener> > listeners;
     std::vector<SockAddr> beaconDest;

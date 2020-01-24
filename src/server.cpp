@@ -134,7 +134,6 @@ Server& Server::addSource(const std::string& name,
         throw std::logic_error(SB()<<"Attempt to add NULL Source "<<name<<" at "<<order);
     {
         auto G(pvt->sourcesLock.lockWriter());
-        //epicsGuard<RWLock::Writer> G(pvt->sourcesLock.writer());
 
         auto& ent = pvt->sources[std::make_pair(order, name)];
         if(ent)

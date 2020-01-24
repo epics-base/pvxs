@@ -426,7 +426,7 @@ void ServerConn::bevRead()
                 CASE(MESSAGE);
 #undef CASE
             }
-            // handlers may be cleared bev to force disconnect
+            // handlers may have cleared bev to force disconnect
             if(!bev)
                 break;
 
