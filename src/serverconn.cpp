@@ -448,14 +448,31 @@ void ServerConn::bevRead()
             // TODO configure
             (void)bufferevent_disable(bev.get(), EV_READ);
             bufferevent_setwatermark(bev.get(), EV_WRITE, 0x100000/2, 0);
+            log_printf(connio, Debug, "%s suspend READ\n", peerName.c_str());
         }
     }
 }
 
 void ServerConn::bevWrite()
 {
-    (void)bufferevent_enable(bev.get(), EV_READ);
-    bufferevent_setwatermark(bev.get(), EV_WRITE, 0, 0);
+    log_printf(connio, Debug, "%s process backlog\n", peerName.c_str());
+
+    auto tx = bufferevent_get_output(bev.get());
+    // handle pending monitors
+
+    while(!backlog.empty() && evbuffer_get_length(tx)<0x100000) {
+        auto fn = std::move(backlog.front());
+        backlog.pop_front();
+
+        fn();
+    }
+
+    // TODO configure
+    if(evbuffer_get_length(tx)<0x100000) {
+        (void)bufferevent_enable(bev.get(), EV_READ);
+        bufferevent_setwatermark(bev.get(), EV_WRITE, 0, 0);
+        log_printf(connio, Debug, "%s resume READ\n", peerName.c_str());
+    }
 }
 
 void ServerConn::bevEventS(struct bufferevent *bev, short events, void *ptr)

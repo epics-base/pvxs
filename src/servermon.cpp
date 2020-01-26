@@ -59,11 +59,26 @@ struct MonitorOp : public ServerOp,
     static
     void maybeReply(server::Server::Pvt* server, const std::shared_ptr<MonitorOp>& op)
     {
+        // can we send a reply?
         if(!op->scheduled && op->state==Executing && !op->queue.empty() && (!op->pipeline || op->window))
         {
+            // based on operation state, yes
             server->acceptor_loop.dispatch([op](){
-                op->doReply();
+                auto ch(op->chan.lock());
+                if(!ch)
+                    return;
+                auto conn(ch->conn.lock());
+                if(!conn)
+                    return;
+
+                if(conn->bev && (bufferevent_get_enabled(conn->bev.get())&EV_READ)) {
+                    op->doReply();
+                } else {
+                    // connection TX queue is too full
+                    conn->backlog.push_back(std::bind(&MonitorOp::doReply, op));
+                }
             });
+
             op->scheduled = true;
         }
     }

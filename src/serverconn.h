@@ -113,6 +113,8 @@ struct ServerConn : public std::enable_shared_from_this<ServerConn>
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanByCID;
     std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID;
 
+    std::list<std::function<void()>> backlog;
+
     ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen);
     ServerConn(const ServerConn&) = delete;
     ServerConn& operator=(const ServerConn&) = delete;
