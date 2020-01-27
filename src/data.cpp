@@ -288,6 +288,24 @@ bool Value::idStartsWith(const std::string& prefix) const
     return ID.size()>=prefix.size() && prefix==ID.substr(0u, prefix.size());
 }
 
+const std::string &Value::nameOf(const Value& decendent) const
+{
+    if(!store || !decendent.store)
+        throw NoField();
+    auto pidx = store->index();
+    auto didx = decendent.store->index();
+    if(pidx >= didx || didx >= store->top->members.size())
+        throw std::logic_error("not a decendent");
+
+    // inefficient, but we don't keep a reverse mapping
+    for(auto& it : desc->mlookup) {
+        if(it.second == didx-pidx)
+            return it.first;
+    }
+
+    throw std::logic_error("missing decendent");
+}
+
 namespace {
 // C-style cast between scalar storage types, and print to string (base 10)
 template<typename Src>
@@ -796,7 +814,6 @@ FieldStorage::~FieldStorage()
 size_t FieldStorage::index() const
 {
     const size_t ret = this-top->members.data();
-    assert(this==&top->members[ret]);
     return ret;
 }
 

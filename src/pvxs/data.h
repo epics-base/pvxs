@@ -385,6 +385,16 @@ public:
 //    int compareValue(const Value&);
     inline int compareType(const Value& o) { return desc==o.desc; }
 
+    /** Return our name for a decendent field.
+     * @code
+     *   Value v = ...;
+     *   assert(v.nameOf(v["some.field"])=="some.field");
+     * @endcode
+     * @throws NoField unless both this and decendent are valid()
+     * @throws std::logic_error if decendent is not actually a decendent
+     */
+    const std::string& nameOf(const Value& decendent) const;
+
     // access to Value's ... value
     // not for Struct
 

@@ -445,11 +445,26 @@ void testAssign()
     testOk1(!val["alarm"].isMarked(true, false));
 }
 
+void testName()
+{
+    testDiag("%s", __func__);
+
+    auto def = nt::NTScalar{TypeCode::String}.build();
+    auto val = def.create();
+
+    testEq(val.nameOf(val["value"]), "value");
+    testEq(val.nameOf(val["alarm.status"]), "alarm.status");
+
+    testThrows<std::logic_error>([&val]() {
+        val.nameOf(val);
+    });
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(67);
+    testPlan(70);
     testSerialize1();
     testDeserialize1();
     testSimpleDef();
@@ -457,6 +472,7 @@ MAIN(testdata)
     testDeserialize2();
     testTraverse();
     testAssign();
+    testName();
     cleanup_for_valgrind();
     return testDone();
 }
