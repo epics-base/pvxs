@@ -14,6 +14,7 @@
 #include <epicsEvent.h>
 
 #include <pvxs/server.h>
+#include <pvxs/source.h>
 #include "evhelper.h"
 #include "utilpvt.h"
 #include "dataimpl.h"

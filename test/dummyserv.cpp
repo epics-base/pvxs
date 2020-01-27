@@ -16,6 +16,7 @@
 #include <epicsTime.h>
 
 #include <pvxs/server.h>
+#include <pvxs/source.h>
 #include <pvxs/data.h>
 #include <pvxs/nt.h>
 #include <pvxs/log.h>
