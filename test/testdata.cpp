@@ -460,11 +460,60 @@ void testName()
     });
 }
 
+void testIter()
+{
+    testDiag("%s", __func__);
+
+    auto def = nt::NTScalar{TypeCode::String}.build();
+    auto val = def.create();
+
+    unsigned i=0;
+    for(auto fld : val.iall()) {
+        testDiag("field %s", val.nameOf(fld).c_str());
+        i++;
+    }
+    testEq(i, 9u)<<"# of decendent fields";
+
+    i=0;
+    for(auto fld : val.ichildren()) {
+        testDiag("field %s", val.nameOf(fld).c_str());
+        i++;
+    }
+    testEq(i, 3u)<<"# of child fields";
+
+    auto testMarked = [&val](unsigned expect) -> testCase {
+        unsigned i=0;
+        for(auto fld : val.imarked()) {
+            testDiag("field %s", val.nameOf(fld).c_str());
+            i++;
+        }
+        return testEq(i, expect);
+    };
+
+    testMarked(0u)<<"no decendent fields";
+
+    val["alarm.status"].mark();
+
+    testMarked(1u)<<"mark one field";
+
+    val.unmark();
+    val["alarm"].mark();
+
+    testMarked(4u)<<"mark sub-struct";
+
+    val.unmark();
+    val["value"].mark();
+    val["alarm.status"].mark();
+    val["timeStamp"].mark();
+
+    testMarked(6u)<<"mark sub-struct";
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(70);
+    testPlan(76);
     testSerialize1();
     testDeserialize1();
     testSimpleDef();
@@ -473,6 +522,7 @@ MAIN(testdata)
     testTraverse();
     testAssign();
     testName();
+    testIter();
     cleanup_for_valgrind();
     return testDone();
 }

@@ -643,6 +643,53 @@ const Value Value::operator[](const char *name) const
     return ret;
 }
 
+void Value::_iter_fl(Value::IterInfo &info, bool first) const
+{
+    if(!store)
+        throw NoField();
+
+    if(info.depth) {
+        info.pos = info.nextcheck = store->index() + (first ? 1u : desc->size());
+
+        if(info.marked)
+            _iter_advance(info);
+
+    } else {
+        info.pos = info.nextcheck = first ? 0u : desc->miter.size();
+    }
+}
+
+void Value::_iter_advance(IterInfo& info) const
+{
+    assert(info.depth);
+
+    // scan forward to find next non-marked
+    for(auto idx : range(info.pos, desc->size())) {
+        auto S = store.get() + idx;
+        if(S->valid) {
+            auto D = desc + idx;
+            info.pos = idx;
+            info.nextcheck = idx + D->size();
+            return;
+        }
+    }
+
+    info.pos = info.nextcheck = desc->size();
+}
+
+Value Value::_iter_deref(const IterInfo& info) const
+{
+    auto idx = info.pos;
+    if(!info.depth)
+        idx = desc->miter[idx].second;
+
+    decltype (store) store2(store, store.get()+idx);
+    Value ret;
+    ret.store = std::move(store2);
+    ret.desc = desc + idx;
+    return ret;
+}
+
 static
 void show_Value(std::ostream& strm,
                 const std::string& member,

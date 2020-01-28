@@ -381,9 +381,9 @@ public:
     bool idStartsWith(const std::string& prefix) const;
 
     //! test for instance equality.
-    inline bool compareInst(const Value& o) { return store==o.store; }
-//    int compareValue(const Value&);
-    inline int compareType(const Value& o) { return desc==o.desc; }
+    inline bool compareInst(const Value& o) const { return store==o.store; }
+//    int compareValue(const Value&) const;
+    inline int compareType(const Value& o) const { return desc==o.desc; }
 
     /** Return our name for a decendent field.
      * @code
@@ -493,6 +493,85 @@ public:
     inline Value operator[](const std::string& name) { return (*this)[name.c_str()]; }
     const Value operator[](const char *name) const;
     inline const Value operator[](const std::string& name) const { return (*this)[name.c_str()]; }
+
+    template<typename V>
+    class Iterable;
+private:
+    struct IterInfo {
+        // when Marked==true, index of next potentially unmarked field.
+        // all [pos, nextcheck) are marked
+        size_t pos;
+        size_t nextcheck;
+        bool marked;
+        bool depth;
+        constexpr IterInfo() :pos(0u), nextcheck(0u), marked(false), depth(false) {}
+        constexpr IterInfo(size_t pos, bool marked, bool depth)
+            :pos(pos), nextcheck(pos), marked(marked), depth(depth)
+        {}
+    };
+    template<typename V>
+    class Iter : private IterInfo {
+        V *ref;
+        constexpr Iter(V* ref, size_t pos, bool marked, bool depth)
+            :IterInfo(pos, marked, depth), ref(ref)
+        {}
+        friend class Value;
+        friend class Iterable<V>;
+    public:
+        Iter() {}
+
+        V operator*() const { return ref->_iter_deref(*this); }
+        Iter& operator++() {
+            pos++;
+            if(marked && pos >= nextcheck)
+                ref->_iter_advance(*this);
+            return *this;
+        }
+        Iter operator++(int) {
+            Iter ret(*this);
+            pos++;
+            if(marked && pos >= nextcheck)
+                ref->_iter_advance(*this);
+            return ret;
+        }
+        bool operator==(const Iter& o) const { return pos == o.pos; }
+        bool operator!=(const Iter& o) const { return !(o==*this); }
+    };
+    template<typename V>
+    friend class Iter;
+
+    void _iter_fl(IterInfo& info, bool first) const;
+    void _iter_advance(IterInfo& info) const; // cheats, actually mutates (but doesn't change container values)
+    Value _iter_deref(const IterInfo& info) const;
+public:
+
+    template<typename V>
+    class Iterable {
+        typedef Iter<V> iterator;
+        V* owner;
+        bool marked;
+        bool depth;
+    public:
+        constexpr Iterable(V* owner, bool marked, bool depth) :owner(owner), marked(marked), depth(depth) {}
+        iterator begin() const {
+            iterator ret{owner, 0u, marked, depth};
+            owner->_iter_fl(ret, true);
+            return ret;
+        }
+        iterator end() const {
+            iterator ret{owner, 0u, marked, depth};
+            owner->_iter_fl(ret, false);
+            return ret;
+        }
+    };
+
+    Iterable<Value> iall()      { return Iterable<Value>{this, false, true}; }
+    Iterable<Value> ichildren() { return Iterable<Value>{this, false, false}; }
+    Iterable<Value> imarked()   { return Iterable<Value>{this, true , true}; }
+
+    Iterable<const Value> iall() const      { return Iterable<const Value>{this, false, true}; }
+    Iterable<const Value> ichildren() const { return Iterable<const Value>{this, false, false}; }
+    Iterable<const Value> imarked() const   { return Iterable<const Value>{this, true , true}; }
 };
 
 PVXS_API
