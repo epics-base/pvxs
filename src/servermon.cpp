@@ -14,6 +14,7 @@
 #include <pvxs/log.h>
 #include "dataimpl.h"
 #include "serverconn.h"
+#include "pvrequest.h"
 
 namespace pvxs { namespace impl {
 DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
@@ -39,6 +40,7 @@ struct MonitorOp : public ServerOp,
 
     // const after setup phase
     std::shared_ptr<const FieldDesc> type;
+    BitMask pvMask;
     std::string msg;
 
     // Further members can only be changed from the accepter worker thread with this lock held.
@@ -104,7 +106,7 @@ struct MonitorOp : public ServerOp,
             state = type ? Idle : Dead;
 
         } else if(state==Executing) {
-            if(queue.empty()) {
+            if(queue.empty() || (pipeline && !window)) {
                 return; // nothing to do
 
             } else if(!queue.front()) {
@@ -132,7 +134,7 @@ struct MonitorOp : public ServerOp,
             } else if(!queue.empty()) {
                 auto& ent = queue.front();
                 if(ent) {
-                    to_wire_valid(R, ent);
+                    to_wire_valid(R, ent, &pvMask);
                     // TODO: placeholder for overrun mask
                     to_wire(R, uint8_t(0u));
 
@@ -165,15 +167,27 @@ struct MonitorOp : public ServerOp,
             return;
         }
 
-        if(state==Executing) {
-            // TODO: look at queue size change and maybe dispatch low water mark
+        auto self(shared_from_this());
+
+        if(state==Executing && pipeline) {
+            assert(window); // previously tested
+
+            bool before = window <= low;
+            window--;
+            bool after = window <= low;
+
+            if(before && after && onLowMark) {
+                conn->iface->server->acceptor_loop.dispatch([self]() {
+                    if(self->onLowMark)
+                        self->onLowMark();
+                });
+            }
         }
 
-        if(state==Executing && !queue.empty()) {
+        if(state==Executing && !queue.empty() && (!pipeline || window)) {
             // reshedule myself
             assert(!scheduled); // we've been holding the lock, so this should not have changed
 
-            auto self(shared_from_this());
             conn->iface->server->acceptor_loop.dispatch([self]() {
                 self->doReply();
             });
@@ -202,6 +216,9 @@ struct ServerMonitorControl : public server::MonitorControlOp
 
         Guard G(mon->lock);
 
+        if(val && mon->type && mon->type.get()!=Value::Helper::desc(val))
+            throw std::logic_error("Type change not allowed in post()");
+
         if((mon->queue.size() < mon->limit) || force || !val) {
             mon->queue.push_back(std::move(val));
 
@@ -222,16 +239,39 @@ struct ServerMonitorControl : public server::MonitorControlOp
         return mon->queue.size() < mon->limit;
     }
 
-    virtual int32_t nFree() const override final
+    virtual void stats(server::MonitorStat& stat) const override final
     {
-        return 0; // TODO
+        auto mon(op.lock());
+        if(!mon)
+            return;
+
+        Guard G(mon->lock);
+
+        stat.running = mon->state==MonitorOp::Executing;
+        stat.finished = mon->finished;
+        stat.pipeline = mon->pipeline;
+
+        stat.nQueue = mon->queue.size();
+        stat.limitQueue = mon->limit;
+        stat.window = mon->window;
     }
-    virtual unsigned long long maxFree() const override final
-    {
-        return 0; // TODO
-    }
+
     virtual void setWatermarks(size_t low, size_t high) override final
     {
+        if(low > high)
+            throw std::logic_error("low must be <= high");
+
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, low, high](){
+            if(auto oper = op.lock()) {
+                Guard G(oper->lock);
+                oper->low = low;
+                oper->high = high;
+                // TODO handle change of levels after start
+            }
+        });
     }
     virtual void onStart(std::function<void (bool)> &&fn) override final
     {
@@ -245,9 +285,23 @@ struct ServerMonitorControl : public server::MonitorControlOp
     }
     virtual void onHighMark(std::function<void ()> &&fn) override final
     {
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, &fn](){
+            if(auto oper = op.lock())
+                oper->onHighMark = std::move(fn);
+        });
     }
     virtual void onLowMark(std::function<void ()> &&fn) override final
     {
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        serv->acceptor_loop.call([this, &fn](){
+            if(auto oper = op.lock())
+                oper->onLowMark = std::move(fn);
+        });
     }
 
     const std::weak_ptr<server::Server::Pvt> server;
@@ -279,17 +333,19 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
         if(!prototype)
             throw std::invalid_argument("Must provide prototype");
         auto type = Value::Helper::type(prototype);
+        auto mask = request2mask(type.get(), _pvRequest);
 
         std::unique_ptr<server::MonitorControlOp> ret;
 
         auto serv = server.lock();
         if(!serv)
             return ret;
-        serv->acceptor_loop.call([this, &type, &ret](){
+        serv->acceptor_loop.call([this, &type, &ret, &mask](){
             if(auto oper = op.lock()) {
                 if(oper->state!=ServerOp::Creating)
                     return;
                 oper->type = type;
+                oper->pvMask = std::move(mask);
                 ret.reset(new ServerMonitorControl(this, server, _name, oper));
                 oper->doReply();
             }
@@ -443,9 +499,18 @@ void ServerConn::handle_MONITOR()
 
             Guard G(op->lock);
 
+            bool before = op->window > op->high;
+
             op->window += nack;
 
-            // TODO: notify high level
+            bool after = op->window > op->high;
+
+            if(!before && after && op->onHighMark) {
+                iface->server->acceptor_loop.dispatch([op](){
+                    if(op->onHighMark)
+                        op->onHighMark();
+                });
+            }
         }
 
         if(subcmd&0x04) {
@@ -474,10 +539,12 @@ void ServerConn::handle_MONITOR()
                 auto self(it->second);
                 opByIOID.erase(it);
 
-                if(self->onClose)
+                if(self->onClose) {
                     iface->server->acceptor_loop.dispatch([self](){
-                        self->onClose("");
+                        if(self->onClose)
+                            self->onClose("");
                     });
+                }
 
             } else {
                 assert(false); // really shouldn't happen

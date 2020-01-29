@@ -83,6 +83,20 @@ public:
     virtual void onClose(std::function<void(const std::string&)>&&) =0;
 };
 
+//! Information about a running monitor
+struct MonitorStat {
+    //! Number of available elements in the output flow window.
+    size_t window;
+
+    //! Number of un-sent updates in the local queue.  Doesn't count updates
+    //! serialized and in the TX buffer.
+    size_t nQueue, limitQueue;
+
+    bool running;
+    bool finished;
+    bool pipeline;
+};
+
 //! Handle for active subscription
 struct PVXS_API MonitorControlOp : public OpBase {
     virtual ~MonitorControlOp();
@@ -118,14 +132,7 @@ public:
         doPost(Value(), false, false);
     }
 
-    //! Number of "free" elements in the output flow window.
-    //! May be negative if local queue is over-filled
-    //! Returns @code numeric_limits<int32_t>::max() @endcode if flow control not enabled by client.
-    virtual int32_t nFree() const =0;
-
-    //! Maximum which may be returned by nFree()
-    //! Returns @code numeric_limits<int32_t>::max() @endcode if flow control not enabled by client.
-    virtual unsigned long long maxFree() const =0;
+    virtual void stats(MonitorStat&) const =0;
 
     //! Set flow control levels.
     //! onLowMark callback will be invoked when nFree()<=low becomes true, and not again until it has been false.
