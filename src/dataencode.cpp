@@ -447,10 +447,7 @@ void to_wire_valid(Buffer& buf, const Value& val)
 
     to_wire(buf, valid);
 
-    for(auto bit : range(desc->size())) {
-        if(!(store.get()+bit)->valid)
-            continue;
-
+    for(auto bit : valid.onlySet()) {
         std::shared_ptr<const FieldStorage> cstore(store, store.get()+bit);
         to_wire_field(buf, desc+bit, cstore);
     }

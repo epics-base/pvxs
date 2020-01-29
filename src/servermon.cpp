@@ -189,7 +189,6 @@ struct ServerMonitorControl : public server::MonitorControlOp
     ServerMonitorControl(ServerMonitorSetup* setup,
                      const std::weak_ptr<server::Server::Pvt>& server,
                      const std::string& name,
-                     const Value& request,
                      const std::weak_ptr<MonitorOp>& op);
     virtual ~ServerMonitorControl() {
         finish();
@@ -269,6 +268,7 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
         _name = name;
         _peerName = conn->peerName;
         _ifaceName = conn->iface->name;
+        _pvRequest = request;
     }
     virtual ~ServerMonitorSetup() {
         error("Monitor Create implied error");
@@ -290,7 +290,7 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
                 if(oper->state!=ServerOp::Creating)
                     return;
                 oper->type = type;
-                ret.reset(new ServerMonitorControl(this, server, _name, pvRequest, oper));
+                ret.reset(new ServerMonitorControl(this, server, _name, oper));
                 oper->doReply();
             }
         });
@@ -334,7 +334,6 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
 ServerMonitorControl::ServerMonitorControl(ServerMonitorSetup* setup,
                                            const std::weak_ptr<server::Server::Pvt>& server,
                                            const std::string& name,
-                                           const Value& request,
                                            const std::weak_ptr<MonitorOp>& op)
     :server(server)
     ,op(op)

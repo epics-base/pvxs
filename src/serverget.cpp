@@ -139,6 +139,7 @@ struct ServerGPRConnect : public server::ConnectOp
         _name = name;
         _peerName = conn->peerName;
         _ifaceName = conn->iface->name;
+        _pvRequest = request;
     }
     virtual ~ServerGPRConnect() {
         error("Op Create implied error");

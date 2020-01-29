@@ -63,7 +63,10 @@ struct PVXS_API ExecOp : public OpBase {
 
 //! Handle when an operation is being setup
 struct PVXS_API ConnectOp : public OpBase {
-    Value pvRequest;
+protected:
+    Value _pvRequest;
+public:
+    const Value& pvRequest() const { return _pvRequest; }
 
     //! For GET_FIELD, GET, or PUT.  Inform peer of our data-type
     virtual void connect(const Value& prototype) =0;
@@ -137,7 +140,10 @@ public:
 
 //! Handle for subscription which is being setup
 struct PVXS_API MonitorSetupOp : public OpBase {
-    Value pvRequest;
+protected:
+    Value _pvRequest;
+public:
+    const Value& pvRequest() const { return _pvRequest; }
 
     //! Inform peer of our data-type and acquire control of subscription queue.
     //! The queue is initially stopped.
