@@ -432,16 +432,17 @@ void to_wire_full(Buffer& buf, const Value& val)
     to_wire_field(buf, Value::Helper::desc(val), Value::Helper::store(val));
 }
 
-void to_wire_valid(Buffer& buf, const Value& val)
+void to_wire_valid(Buffer& buf, const Value& val, const BitMask* mask)
 {
     auto desc = Value::Helper::desc(val);
     auto store = Value::Helper::store(val);
     assert(desc && desc->code==TypeCode::Struct);
+    assert(!mask || mask->size()==desc->size());
 
     BitMask valid(desc->size());
 
     for(auto bit : range(desc->size())) {
-        if((store.get()+bit)->valid)
+        if((store.get()+bit)->valid && (!mask || (*mask)[bit]))
             valid[bit] = true;
     }
 
