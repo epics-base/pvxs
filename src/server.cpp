@@ -305,10 +305,12 @@ Server::Pvt::Pvt(Config&& conf)
     acceptor_loop.call([this, &dummy](){
         // from acceptor worker
 
+        bool firstiface = true;
         for(const auto& addr : effective.interfaces) {
-            interfaces.emplace_back(addr, effective.tcp_port, this);
-            if(effective.tcp_port==0)
+            interfaces.emplace_back(addr, effective.tcp_port, this, firstiface);
+            if(firstiface || effective.tcp_port==0)
                 effective.tcp_port = interfaces.back().bind_addr.port();
+            firstiface = false;
         }
 
         for(const auto& addr : effective.beaconDestinations) {

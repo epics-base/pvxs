@@ -508,7 +508,7 @@ void ServerConn::bevWriteS(struct bufferevent *bev, void *ptr)
     }
 }
 
-ServIface::ServIface(const std::string& addr, unsigned short port, server::Server::Pvt *server)
+ServIface::ServIface(const std::string& addr, unsigned short port, server::Server::Pvt *server, bool fallback)
     :server(server)
     ,bind_addr(AF_INET, addr.c_str(), port)
     ,sock(AF_INET, SOCK_STREAM, 0)
@@ -520,7 +520,7 @@ ServIface::ServIface(const std::string& addr, unsigned short port, server::Serve
         try {
             sock.bind(bind_addr);
         } catch(std::system_error& e) {
-            if(e.code().value()==SOCK_EADDRINUSE && bind_addr.port()!=0) {
+            if(fallback && e.code().value()==SOCK_EADDRINUSE) {
                 bind_addr.setPort(0);
                 continue;
             }

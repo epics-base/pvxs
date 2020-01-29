@@ -168,7 +168,7 @@ struct ServIface
     evsocket sock;
     evlisten listener;
 
-    ServIface(const std::string& addr, unsigned short port, server::Server::Pvt *server);
+    ServIface(const std::string& addr, unsigned short port, server::Server::Pvt *server, bool fallback);
 
     static void onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw);
 };
