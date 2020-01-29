@@ -100,6 +100,16 @@ std::ostream& operator<<(std::ostream& strm, const BitMask& mask)
     return strm;
 }
 
+bool operator==(const BitMask& lhs, const BitMask& rhs)
+{
+    if(lhs.size()!=rhs.size())
+        return false;
+
+    return std::equal(lhs._words.begin(),
+                      lhs._words.end(),
+                      rhs._words.begin());
+}
+
 namespace impl {
 
 PVXS_API

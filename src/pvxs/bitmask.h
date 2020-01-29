@@ -234,10 +234,19 @@ public:
         return *this;
     }
 
+    friend
+    bool operator==(const BitMask& lhs, const BitMask& rhs);
 };
 
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const BitMask& mask);
+
+PVXS_API
+bool operator==(const BitMask& lhs, const BitMask& rhs);
+
+inline bool operator!=(const BitMask& lhs, const BitMask& rhs) {
+    return !(lhs==rhs);
+}
 
 namespace impl {
 struct Buffer;
