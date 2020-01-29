@@ -14,6 +14,7 @@
 #include "utilpvt.h"
 #include "pvaproto.h"
 #include "dataimpl.h"
+#include "pvrequest.h"
 
 using namespace pvxs;
 namespace  {
@@ -509,11 +510,59 @@ void testIter()
     testMarked(6u)<<"mark sub-struct";
 }
 
+void testPvRequest()
+{
+    namespace M = members;
+
+    testDiag("%s", __func__);
+
+    auto def = nt::NTScalar{TypeCode::String}.build();
+    auto val = def.create();
+    testShow()<<val;
+
+    {
+        auto rdef = TypeDef(TypeCode::Struct, {
+                                M::Struct("field", {})
+                            });
+
+        auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+
+        testEq(mask, BitMask({0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 10u));
+    }
+
+    {
+        auto rdef = TypeDef(TypeCode::Struct, {
+                                M::Struct("field", {
+                                    M::Struct("value", {}),
+                                })
+                            });
+
+        auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+
+        testEq(mask, BitMask({0, 1}, 10u));
+    }
+
+    {
+        auto rdef = TypeDef(TypeCode::Struct, {
+                                M::Struct("field", {
+                                    M::Struct("timeStamp", {}),
+                                    M::Struct("alarm", {
+                                        M::Struct("status", {}),
+                                    }),
+                                })
+                            });
+
+        auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+
+        testEq(mask, BitMask({0, 2, 4, 6, 7, 8, 9}, 10u));
+    }
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(76);
+    testPlan(79);
     testSerialize1();
     testDeserialize1();
     testSimpleDef();
@@ -523,6 +572,7 @@ MAIN(testdata)
     testAssign();
     testName();
     testIter();
+    testPvRequest();
     cleanup_for_valgrind();
     return testDone();
 }
