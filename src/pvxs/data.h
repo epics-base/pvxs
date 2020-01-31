@@ -23,6 +23,7 @@ class Value;
 //! selector for union FieldStorage::store
 enum struct StoreType : uint8_t {
     Null,     //!< no associate storage
+    Bool,     //!< bool
     UInteger, //!< uint64_t
     Integer,  //!< int64_t
     Real,     //!< double
@@ -47,15 +48,19 @@ template<typename T>
 struct StorageMap<T, typename std::enable_if<std::is_integral<T>{} && std::is_signed<T>{}>::type>
 { typedef int64_t store_t;  static constexpr StoreType code{StoreType::Integer}; };
 
-// map unsigned integers, and bool, to uint64_t
+// map unsigned integers to uint64_t
 template<typename T>
-struct StorageMap<T, typename std::enable_if<std::is_integral<T>{} && !std::is_signed<T>{}>::type>
+struct StorageMap<T, typename std::enable_if<std::is_integral<T>{} && !std::is_signed<T>{} && !std::is_same<T,bool>{}>::type>
 { typedef uint64_t store_t; static constexpr StoreType code{StoreType::UInteger}; };
 
 // map floating point to double.  (truncates long double, but then PVA doesn't >8 byte primatives anyway support anyway)
 template<typename T>
 struct StorageMap<T, typename std::enable_if<std::is_floating_point<T>{}>::type>
 { typedef double store_t;   static constexpr StoreType code{StoreType::Real}; };
+
+template<>
+struct StorageMap<bool>
+{ typedef bool store_t;   static constexpr StoreType code{StoreType::Bool}; };
 
 template<>
 struct StorageMap<std::string>

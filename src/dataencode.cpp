@@ -293,11 +293,18 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
     case StoreType::UInteger: {
         auto& fld = store->as<uint64_t>();
         switch(desc->code.code) {
-        case TypeCode::Bool:   to_wire(buf, uint8_t (fld!=0)); return;
         case TypeCode::UInt8:  to_wire(buf, uint8_t (fld)); return;
         case TypeCode::UInt16: to_wire(buf, uint16_t(fld)); return;
         case TypeCode::UInt32: to_wire(buf, uint32_t(fld)); return;
         case TypeCode::UInt64: to_wire(buf, uint64_t(fld)); return;
+        default: break;
+        }
+    }
+        break;
+    case StoreType::Bool: {
+        auto& fld = store->as<bool>();
+        switch(desc->code.code) {
+        case TypeCode::Bool:   to_wire(buf, uint8_t (fld)); return;
         default: break;
         }
     }
@@ -508,11 +515,18 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
     case StoreType::UInteger: {
         auto& fld = store->as<uint64_t>();
         switch(desc->code.code) {
-        case TypeCode::Bool:   fld = 0!=from_wire_as<uint8_t>(buf); return;
         case TypeCode::UInt8:  fld = from_wire_as<int8_t>(buf); return;
         case TypeCode::UInt16: fld = from_wire_as<int16_t>(buf); return;
         case TypeCode::UInt32: fld = from_wire_as<int32_t>(buf); return;
         case TypeCode::UInt64: fld = from_wire_as<int64_t>(buf); return;
+        default: break;
+        }
+    }
+        break;
+    case StoreType::Bool: {
+        auto& fld = store->as<bool>();
+        switch(desc->code.code) {
+        case TypeCode::Bool:   fld = 0!=from_wire_as<uint8_t>(buf); return;
         default: break;
         }
     }

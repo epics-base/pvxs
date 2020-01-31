@@ -115,6 +115,7 @@ Value& Value::assign(const Value& o)
 
             switch(dstore->code) {
             case StoreType::Real:
+            case StoreType::Bool:
             case StoreType::Integer:
             case StoreType::UInteger:
                 dstore->as<uint64_t>() = sstore->as<uint64_t>();
@@ -145,6 +146,7 @@ Value& Value::assign(const Value& o)
 
                     switch(dstore->code) {
                     case StoreType::Real:
+                    case StoreType::Bool:
                     case StoreType::Integer:
                     case StoreType::UInteger:
                         dstore->as<uint64_t>() = sstore->as<uint64_t>();
@@ -315,6 +317,7 @@ bool copyOutScalar(const Src& src, void *ptr, StoreType type)
     case StoreType::Real:     *reinterpret_cast<double*>(ptr) = src; return true;
     case StoreType::Integer:  *reinterpret_cast<int64_t*>(ptr) = src; return true;
     case StoreType::UInteger: *reinterpret_cast<uint64_t*>(ptr) = src; return true;
+    case StoreType::Bool:     *reinterpret_cast<bool*>(ptr) = src; return true;
     case StoreType::String:   *reinterpret_cast<std::string*>(ptr) = SB()<<src; return true;
     case StoreType::Null:
     case StoreType::Compound:
@@ -334,12 +337,50 @@ void Value::copyOut(void *ptr, StoreType type) const
     case StoreType::Real:     if(copyOutScalar(store->as<double>(), ptr, type)) return; else break;
     case StoreType::Integer:  if(copyOutScalar(store->as<int64_t>(), ptr, type)) return; else break;
     case StoreType::UInteger: if(copyOutScalar(store->as<uint64_t>(), ptr, type)) return; else break;
+    case StoreType::Bool: {
+        auto& src = store->as<bool>();
+
+        switch(type) {
+        case StoreType::Bool:     *reinterpret_cast<bool*>(ptr) = src; return;
+        case StoreType::Integer:
+        case StoreType::UInteger: *reinterpret_cast<uint64_t*>(ptr) = src; return;
+        case StoreType::Real:     *reinterpret_cast<double*>(ptr) = src; return;
+        case StoreType::String:   *reinterpret_cast<std::string*>(ptr) = src ? "true" : "false"; return;
+        default:
+            break;
+        }
+        break;
+    }
     case StoreType::String: {
         auto& src = store->as<std::string>();
 
         switch(type) {
         case StoreType::String: *reinterpret_cast<std::string*>(ptr) = src; return;
-        // TODO: parse Integer/Real
+        case StoreType::Integer: {
+            epicsInt64 temp;
+            if(epicsParseInt64(src.c_str(), &temp, 0, nullptr)==0) {
+                *reinterpret_cast<int64_t*>(ptr) = temp;
+                return;
+            }
+        }
+        case StoreType::UInteger: {
+            epicsUInt64 temp;
+            if(epicsParseUInt64(src.c_str(), &temp, 0, nullptr)==0) {
+                *reinterpret_cast<uint64_t*>(ptr) = temp;
+                return;
+            }
+        }
+        case StoreType::Real: {
+            double temp;
+            if(epicsParseDouble(src.c_str(), &temp, nullptr)==0) {
+                *reinterpret_cast<double*>(ptr) = temp;
+                return;
+            }
+        }
+        case StoreType::Bool: {
+            if(src=="true") { *reinterpret_cast<bool*>(ptr) = true; return; }
+            else if(src=="flase") { *reinterpret_cast<bool*>(ptr) = false; return; }
+        }
         default:
             break;
         }
@@ -402,6 +443,7 @@ bool copyInScalar(Dest& dest, const void *ptr, StoreType type)
     case StoreType::Real:     dest = *reinterpret_cast<const double*>(ptr); return true;
     case StoreType::Integer:  dest = *reinterpret_cast<const int64_t*>(ptr); return true;
     case StoreType::UInteger: dest = *reinterpret_cast<const uint64_t*>(ptr); return true;
+    case StoreType::Bool:     dest = *reinterpret_cast<const bool*>(ptr); return true;
     case StoreType::String: // TODO: parse from string
     case StoreType::Null:
     case StoreType::Compound:
@@ -424,6 +466,22 @@ void Value::copyIn(const void *ptr, StoreType type)
     case StoreType::Real:     if(!copyInScalar(store->as<double>(), ptr, type)) throw NoConvert(); break;
     case StoreType::Integer:  if(!copyInScalar(store->as<int64_t>(), ptr, type)) throw NoConvert(); break;
     case StoreType::UInteger: if(!copyInScalar(store->as<uint64_t>(), ptr, type)) throw NoConvert(); break;
+    case StoreType::Bool: {
+        auto& dest = store->as<bool>();
+        switch(type) {
+        case StoreType::Bool:     dest = *reinterpret_cast<const bool*>(ptr); break;
+        case StoreType::Integer:
+        case StoreType::UInteger: dest = 0!=*reinterpret_cast<const uint64_t*>(ptr); break;
+        //case StoreType::Real:  // TODO pick condition.  strict non-zero?  fabs()<0.5 ?
+        case StoreType::String:
+            if("true"==*reinterpret_cast<const std::string*>(ptr)) { dest = true; break; }
+            else if("false"==*reinterpret_cast<const std::string*>(ptr)) { dest = false; break; }
+            // fall through
+        default:
+            throw NoConvert();
+        }
+        break;
+    }
     case StoreType::String: {
         auto& dest = store->as<std::string>();
 
@@ -432,6 +490,7 @@ void Value::copyIn(const void *ptr, StoreType type)
         case StoreType::Integer:  dest = SB()<<*reinterpret_cast<const int64_t*>(ptr); break;
         case StoreType::UInteger: dest = SB()<<*reinterpret_cast<const uint64_t*>(ptr); break;
         case StoreType::Real:     dest = SB()<<*reinterpret_cast<const double*>(ptr); break;
+        case StoreType::Bool:     dest = (*reinterpret_cast<const bool*>(ptr)) ? "true" : "false"; break;
         default:
             throw NoConvert();
         }
@@ -735,6 +794,7 @@ void show_Value(std::ostream& strm,
     case StoreType::Real:     strm<<" = "<<store->as<double>()<<"\n"; break;
     case StoreType::Integer:  strm<<" = "<<store->as<int64_t>()<<"\n"; break;
     case StoreType::UInteger: strm<<" = "<<store->as<uint64_t>()<<"\n"; break;
+    case StoreType::Bool: strm<<" = "<<(store->as<bool>() ? "true" : "false")<<"\n"; break;
     case StoreType::String:   strm<<" = \""<<escape(store->as<std::string>())<<"\"\n"; break;
     case StoreType::Compound: {
         auto& fld = store->as<Value>();
@@ -810,15 +870,12 @@ void FieldStorage::init(const FieldDesc *desc)
             this->code = StoreType::Compound;
             break;
         case Kind::Integer:
-            if(!desc->code.isunsigned()) {
-                as<int64_t>() = 0u;
-                this->code = StoreType::Integer;
-                break;
-            }
-            // fall trhough
-        case Kind::Bool:
             as<uint64_t>() = 0u;
-            this->code = StoreType::UInteger;
+            this->code = desc->code.isunsigned() ? StoreType::UInteger : StoreType::Integer;
+            break;
+        case Kind::Bool:
+            as<bool>() = false;
+            this->code = StoreType::Bool;
             break;
         case Kind::Real:
             as<double>() = 0.0;
@@ -837,6 +894,7 @@ void FieldStorage::deinit()
     case StoreType::Integer:
     case StoreType::UInteger:
     case StoreType::Real:
+    case StoreType::Bool:
              break;
     case StoreType::Array:
         as<shared_array<void>>().~shared_array();
