@@ -192,7 +192,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
                 if(code.code==TypeCode::Struct && code==cfld.code) {
                     // copy decendent indicies for sub-struct
                     for(auto& pair : cfld.mlookup) {
-                        fld.mlookup[name+pair.first] = cindex + pair.second;
+                        fld.mlookup[name+pair.first] = cindex - cref + pair.second;
                     }
                 }
             }
