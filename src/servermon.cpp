@@ -479,11 +479,20 @@ void ServerConn::handle_MONITOR()
 
         std::shared_ptr<MonitorOp> op;
         auto it = opByIOID.find(ioid);
-        if(it==opByIOID.end() || !(op=std::dynamic_pointer_cast<MonitorOp>(it->second))
-                || op->state==ServerOp::Dead || op->state==ServerOp::Creating) {
-            log_printf(connio, Err, "Client %s MONITORs %s IOID %u state=%d\n", peerName.c_str(),
-                       it==opByIOID.end() ? "non-existant" : "invalid", unsigned(ioid),
-                       op ? op->state : ServerOp::Dead);
+        if(it==opByIOID.end() || it->second->state==ServerOp::Dead) {
+            // since server destroy commands aren't acknowledged, we can race
+            // with traffic sent by the client before processing our destroy.
+            // so we can't fault hard, so just ignore and hope for the best.
+            log_printf(connio, Debug, "Client %s MONITORs non-existant IOID %u\n",
+                       peerName.c_str(), unsigned(ioid));
+            return;
+
+        } else if(!(op=std::dynamic_pointer_cast<MonitorOp>(it->second))
+                  || op->state==ServerOp::Creating) {
+            // mixing up operation types, or trying to exec before we complete creation,
+            // is a protocol error.
+            log_printf(connio, Err, "Client %s MONITORs invalid IOID %u state=%d\n",
+                       peerName.c_str(), unsigned(ioid), op ? op->state : ServerOp::Dead);
             bev.reset();
             return;
         }
@@ -515,6 +524,9 @@ void ServerConn::handle_MONITOR()
 
         if(subcmd&0x04) {
             bool start = subcmd&0x40;
+
+            log_printf(connio, Debug, "Client %s IOID %u MON %s\n",
+                       peerName.c_str(), unsigned(ioid), start ? "START" : "STOP");
 
             {
                 Guard G(op->lock);

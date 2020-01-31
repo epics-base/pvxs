@@ -352,10 +352,14 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
 
         std::shared_ptr<ServerGPR> op;
         auto it = opByIOID.find(ioid);
-        if(it==opByIOID.end() || !(op=std::dynamic_pointer_cast<ServerGPR>(it->second))
-                || op->state==ServerOp::Dead || op->state==ServerOp::Creating) {
-            log_printf(connio, Err, "Client %s Gets %s IOID %u state=%d\n", peerName.c_str(),
-                       it==opByIOID.end() ? "non-existant" : "invalid", unsigned(ioid),
+        if(it==opByIOID.end() || it->second->state==ServerOp::Dead) {
+            log_printf(connio, Debug, "Client %s Gets non-existant IOID %u\n",
+                       peerName.c_str(), unsigned(ioid));
+            return;
+
+        } else if(!(op=std::dynamic_pointer_cast<ServerGPR>(it->second)) || op->state==ServerOp::Creating) {
+            log_printf(connio, Err, "Client %s Gets invalid IOID %u state=%d\n", peerName.c_str(),
+                       unsigned(ioid),
                        op ? op->state : ServerOp::Dead);
             bev.reset();
             return;
