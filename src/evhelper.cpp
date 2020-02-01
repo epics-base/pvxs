@@ -258,7 +258,7 @@ void evsocket::bind(SockAddr& addr) const
     socklen_t slen = addr.size();
     ret = getsockname(sock, &addr->sa, &slen);
     if(ret)
-        log_printf(logerr, Err, "Unable to fetch address of newly bound socket\n");
+        log_printf(logerr, Err, "Unable to fetch address of newly bound socket\n%s", "");
 }
 
 void evsocket::mcast_join(const SockAddr& grp, const SockAddr& iface) const

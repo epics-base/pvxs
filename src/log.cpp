@@ -23,6 +23,7 @@
 #include <epicsThread.h>
 #include <epicsMutex.h>
 #include <epicsGuard.h>
+#include <epicsTime.h>
 
 #include "evhelper.h"
 #include "utilpvt.h"
@@ -31,11 +32,43 @@ typedef epicsGuard<epicsMutex> Guard;
 
 namespace pvxs {
 
-namespace {
-
 DEFINE_LOGGER(logerr, "pvxs.ev");
 
-epicsThreadOnceId logger_once = EPICS_THREAD_ONCE_INIT;
+namespace detail {
+
+const char* log_prefix(const char* name, Level lvl)
+{
+    static thread_local char prefix[64];
+    // YYYY-mm-ddTHH:MM:SS.FffFffFff
+
+    epicsTimeStamp now;
+    size_t N;
+    if(epicsTimeGetCurrent(&now)) {
+        strcpy(prefix, "<notime>");
+        N = strlen(prefix);
+
+    } else {
+        N = epicsTimeToStrftime(prefix, sizeof(prefix), "%Y-%m-%dT%H:%M:%S.%9f", &now);
+    }
+
+    const char *lname;
+    switch(lvl) {
+    case Level::Crit:  lname = "CRIT"; break;
+    case Level::Err:   lname = "ERR"; break;
+    case Level::Warn:  lname = "WARN"; break;
+    case Level::Info:  lname = "INFO"; break;
+    case Level::Debug: lname = "DEBUG"; break;
+    default:           lname = "<\?\?\?>"; break;
+    }
+
+    epicsSnprintf(prefix+N, sizeof(prefix)-N, " %s %s", lname, name);
+
+    return prefix;
+}
+
+} // namespace detail
+
+namespace {
 
 void evlog_handler(int severity, const char *msg)
 {
@@ -152,6 +185,8 @@ void logger_prepare(void *unused)
 {
     logger_gbl = new logger_gbl_t;
 }
+
+epicsThreadOnceId logger_once = EPICS_THREAD_ONCE_INIT;
 
 } // namespace
 

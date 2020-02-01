@@ -175,14 +175,14 @@ int main(int argc, char *argv[])
 
         log_printf(out, Debug, "Show Search: %s\nShow Beacon: %s\n", opts.client?"yes":"no", opts.server?"yes":"no");
         if(opts.client && opts.pvnames.empty()) {
-            log_printf(out, Debug, "Show all PV names\n");
+            log_printf(out, Debug, "Show all PV names\n%s", "");
         } else {
             for(const auto& name : opts.pvnames) {
                 log_printf(out, Debug, "Show PV: %s\n", name.c_str());
             }
         }
         if(opts.peers.empty()) {
-            log_printf(out, Debug, "No peer filter\n");
+            log_printf(out, Debug, "No peer filter\n%s", "");
         } else if(out.test(pvxs::Level::Debug)) {
             for(const auto& tup : opts.peers) {
                 in_addr addr, netmask;
@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
 #endif
 
         done.wait();
-        log_printf(out, Info, "Done\n");
+        log_printf(out, Info, "Done\n%s", "");
 
         errlogFlush();
         return 0;

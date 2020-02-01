@@ -425,7 +425,7 @@ Server::Pvt::~Pvt()
 
 void Server::Pvt::start()
 {
-    log_printf(serversetup, Debug, "Server Starting\n");
+    log_printf(serversetup, Debug, "Server Starting\n%s", "");
 
     // begin accepting connections
     state_t prev_state;
@@ -438,7 +438,7 @@ void Server::Pvt::start()
             return;
         }
         state = Starting;
-        log_printf(serversetup, Debug, "Server starting\n");
+        log_printf(serversetup, Debug, "Server starting\n%s", "");
 
         for(auto& iface : interfaces) {
             if(evconnlistener_enable(iface.listener.get())) {
@@ -460,7 +460,7 @@ void Server::Pvt::start()
     {
         // send first beacon immediately
         if(event_add(beaconTimer.get(), nullptr))
-            log_printf(serversetup, Err, "Error enabling beacon timer on\n");
+            log_printf(serversetup, Err, "Error enabling beacon timer on\n%s", "");
 
         state = Running;
     });
@@ -470,7 +470,7 @@ void Server::Pvt::start()
 
 void Server::Pvt::stop()
 {
-    log_printf(serversetup, Debug, "Server Stopping\n");
+    log_printf(serversetup, Debug, "Server Stopping\n%s", "");
 
     // Stop sending Beacons
     state_t prev_state;
@@ -484,7 +484,7 @@ void Server::Pvt::stop()
         state = Stopping;
 
         if(event_del(beaconTimer.get()))
-            log_printf(serversetup, Err, "Error disabling beacon timer on\n");
+            log_printf(serversetup, Err, "Error disabling beacon timer on\n%s", "");
     });
     if(prev_state!=Running)
         return;
@@ -566,7 +566,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     to_wire(H, Header{CMD_SEARCH_RESPONSE, pva_flags::Server, uint32_t(pktlen-8)});
 
     if(!M.good() || !H.good()) {
-        log_printf(serverio, Crit, "Logic error in Search buffer fill\n");
+        log_printf(serverio, Crit, "Logic error in Search buffer fill\n%s", "");
     } else {
         (void)msg.reply(searchReply.data(), pktlen);
     }
@@ -574,7 +574,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
 void Server::Pvt::doBeacons(short evt)
 {
-    log_printf(serversetup, Debug, "Server beacon timer expires\n");
+    log_printf(serversetup, Debug, "Server beacon timer expires\n%s", "");
 
     VectorOutBuf M(true, beaconMsg);
     M.skip(8); // fill in header after body length known
@@ -611,7 +611,7 @@ void Server::Pvt::doBeacons(short evt)
 
     timeval interval = {15, 0};
     if(event_add(beaconTimer.get(), &interval))
-        log_printf(serversetup, Err, "Error re-enabling beacon timer on\n");
+        log_printf(serversetup, Err, "Error re-enabling beacon timer on\n%s", "");
 }
 
 void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)

@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
             std::cout<<"  "<<iface<<"\n";
         }
 
-        log_printf(app, Info, "Running\n");
+        log_printf(app, Info, "Running\n%s", "");
         serv.run();
 
     }catch(std::exception& e){

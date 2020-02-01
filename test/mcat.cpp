@@ -163,7 +163,7 @@ int main(int argc, char* argv[])
         std::cout<<"  "<<iface<<"\n";
     }
 
-    log_printf(app, Info, "Running\n");
+    log_printf(app, Info, "Running\n%s", "");
     serv.run();
 
     return 0;

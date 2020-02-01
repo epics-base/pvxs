@@ -49,6 +49,13 @@ public:
     }
 };
 
+namespace detail {
+
+PVXS_API
+const char* log_prefix(const char* name, Level lvl);
+
+} // namespace detail
+
 //! Define a new logger global.
 //! @param VAR The (static) variable name passed to log_printf() and friends.
 //! @param NAME A name string in "A.B.C" form.
@@ -63,14 +70,20 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
 //!     void blahfn(int x) {
 //!         log_printf(blah, Info, "blah happened with %d\n", x);
 //! @endcode
-#define log_printf(LOGGER, LVL, ...) do{ if((LOGGER).test(::pvxs::Level::LVL)) errlogPrintf(__VA_ARGS__); }while(0)
+#define log_printf(LOGGER, LVL, FMT, ...) do{ \
+    if((LOGGER).test(::pvxs::Level::LVL)) \
+        errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::LVL), __VA_ARGS__); \
+}while(0)
 
-//! log_vprintf() is to log_printf() what vprintf() is to printf()
-#define log_vprintf(LOGGER, LVL, FMT, ARGS) do{ if((LOGGER).test(::pvxs::Level::LVL)) errlogVprintf(FMT, ARGS); }while(0)
+#define log_crit_printf(LOGGER, ...)  log_printf(LOGGER, Debug, __VA_ARGS__)
+#define log_err_printf(LOGGER, ...)   log_printf(LOGGER, Debug, __VA_ARGS__)
+#define log_warn_printf(LOGGER, ...)  log_printf(LOGGER, Debug, __VA_ARGS__)
+#define log_info_printf(LOGGER, ...)  log_printf(LOGGER, Debug, __VA_ARGS__)
+#define log_debug_printf(LOGGER, ...) log_printf(LOGGER, Debug, __VA_ARGS__)
 
-#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, ...) do{ if((LOGGER).test(::pvxs::Level::LVL)) { \
+#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, FMT, ...) do{ if((LOGGER).test(::pvxs::Level::LVL)) { \
         xerrlogHexPrintf(BUF, BUFLEN); \
-        errlogPrintf(__VA_ARGS__); } \
+        errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::LVL), __VA_ARGS__); } \
     }while(0)
 
 //! Set level for a specific logger
