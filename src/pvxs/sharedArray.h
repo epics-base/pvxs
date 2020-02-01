@@ -188,7 +188,7 @@ public:
     shared_array(std::initializer_list<A> L)
         :base_t(new _E_non_const[L.size()], L.size())
     {
-        _E_non_const *raw = const_cast<_E_non_const*>(this->data());
+        auto raw = const_cast<_E_non_const*>(this->data());
         std::copy(L.begin(), L.end(), raw);
     }
 

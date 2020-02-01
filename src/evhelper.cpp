@@ -87,13 +87,11 @@ evbase::evbase(const std::string &name, unsigned prio)
     pvt->worker.start();
 }
 
-evbase::~evbase()
-{
-}
+evbase::~evbase() {}
 
 static void evhelper_sync_done(evutil_socket_t _fd, short _ev, void *raw)
 {
-    epicsEvent *wait = static_cast<epicsEvent*>(raw);
+    auto wait = static_cast<epicsEvent*>(raw);
     wait->signal();
 }
 
@@ -126,7 +124,7 @@ void evbase::dispatch(std::function<void()>&& fn)
 {
     std::unique_ptr<std::function<void()> > action(new std::function<void()>(std::move(fn)));
 
-    if(event_base_once(base, -1, EV_TIMEOUT, &dispatch_action, action.get(), NULL)==0) {
+    if(event_base_once(base, -1, EV_TIMEOUT, &dispatch_action, action.get(), nullptr)==0) {
         // successfully queued.  No longer my responsibility
         action.release();
     } else {
@@ -163,7 +161,7 @@ struct action_args {
 
 void call_action(evutil_socket_t _fd, short _ev, void *raw)
 {
-    action_args* args(reinterpret_cast<action_args*>(raw));
+    auto args(reinterpret_cast<action_args*>(raw));
     try {
         try {
             args->fn();
@@ -187,7 +185,7 @@ void evbase::call(std::function<void()>&& fn)
 
     action_args args(std::move(fn));
 
-    if(event_base_once(base, -1, EV_TIMEOUT, &call_action, &args, NULL)==0) {
+    if(event_base_once(base, -1, EV_TIMEOUT, &call_action, &args, nullptr)==0) {
         // successfully queued.
         args.wait.wait();
         if(args.err) {
