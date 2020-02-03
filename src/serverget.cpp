@@ -130,7 +130,6 @@ struct ServerGPR : public ServerOp
     std::shared_ptr<const FieldDesc> type;
     BitMask pvMask; // mask computed from pvRequest .fields
 
-    std::function<void(const std::string&)> onClose;
     std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onPut;
 
     std::function<void(std::unique_ptr<server::ExecOp>&&)> onGet;

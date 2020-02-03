@@ -303,6 +303,15 @@ void ServerConn::cleanup()
         auto self = std::move(it->second);
         iface->server->connections.erase(it);
 
+        for(auto& pair : self->opByIOID) {
+            if(pair.second->onClose)
+                pair.second->onClose("");
+        }
+        for(auto& pair : self->chanBySID) {
+            if(pair.second->onClose)
+                pair.second->onClose("");
+        }
+
         // delete this
     }
 }

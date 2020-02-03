@@ -36,7 +36,6 @@ struct MonitorOp : public ServerOp,
     std::function<void(bool)> onStart;
     std::function<void()> onLowMark;
     std::function<void()> onHighMark;
-    std::function<void(const std::string&)> onClose;
 
     // const after setup phase
     std::shared_ptr<const FieldDesc> type;
@@ -233,6 +232,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
             // nope
         }
 
+        // TODO unnecessary wakeups?
         if(auto serv = server.lock())
             MonitorOp::maybeReply(serv.get(), mon);
 
