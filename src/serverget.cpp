@@ -40,10 +40,21 @@ struct ServerGPR : public ServerOp
             return;
 
         } else if(state==Executing) {
-            if(cmd==CMD_PUT && !value)
-                throw std::logic_error("PUT reply can't include Value");
-            else if(cmd==CMD_GET && this->type && (!value || Value::Helper::desc(value)!=this->type.get()))
-                throw std::logic_error("GET must reply with exact type previously passed to connect()");
+            /* valid combinations
+             * GET and !!value
+             * RPC
+             * PUT w/  subcmd&0x40 and !!value
+             * PUT w/o subcmd&0x40 and !value
+             */
+
+            if(cmd==CMD_GET || (cmd==CMD_PUT && (subcmd&0x40))) {
+                if(!value || Value::Helper::desc(value)!=this->type.get())
+                    throw std::logic_error("GET must reply with exact type previously passed to connect()");
+
+            } else if(cmd==CMD_PUT) {
+                if(value)
+                    throw std::logic_error("PUT reply can't include Value");
+            }
         }
 
         Status sts{};
