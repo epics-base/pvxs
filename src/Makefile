@@ -69,6 +69,7 @@ LIB_SRCS += serverintrospect.cpp
 LIB_SRCS += serverget.cpp
 LIB_SRCS += servermon.cpp
 LIB_SRCS += serversource.cpp
+LIB_SRCS += sharedpv.cpp
 
 LIB_LIBS += Com
 
