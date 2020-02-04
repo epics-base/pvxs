@@ -11,6 +11,7 @@ This module is under active development and is only suitable for experimental us
    nt
    typedef
    server
+   sharedpv
    source
    util
 
