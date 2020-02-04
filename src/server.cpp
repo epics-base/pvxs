@@ -375,8 +375,8 @@ Server::Pvt::Pvt(Config&& conf)
         pun.i[0] = now.secPastEpoch ^ now.nsec;
 
         // i[1] host
-        // mix together all local bcast addresses
-        pun.i[1] = 0xdeadbeef; // because... why not
+        // mix together first interface and all local bcast addresses
+        pun.i[1] = osiLocalAddr(dummy.sock).ia.sin_addr.s_addr;
         {
             ELLLIST bcasts = ELLLIST_INIT;
             osiSockAddr match;
