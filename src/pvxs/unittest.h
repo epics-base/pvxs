@@ -157,15 +157,18 @@ testCase testThrows(FN fn)
 
 } // namespace pvxs
 
-//! Assert equality between LHS and RHS.
+//! Macro which asserts equality between LHS and RHS.
+//! Evaluates to a pvxs::testCase
 //! Roughly equivalent to @code testOk((LHS)==(RHS), "..."); @endcode
 #define testEq(LHS, RHS) ::pvxs::detail::testEq(#LHS, LHS, #RHS, RHS)
 
-//! Assert in-equality between LHS and RHS
+//! Macro which asserts in-equality between LHS and RHS.
+//! Evaluates to a pvxs::testCase
 //! Roughly equivalent to @code testOk((LHS)!=(RHS), "..."); @endcode
 #define testNotEq(LHS, RHS) ::pvxs::detail::testNotEq(#LHS, LHS, #RHS, RHS)
 
-//! Print diagnostic (non-test) line.
+//! Macro which prints diagnostic (non-test) lines.
+//! Evaluates to a pvxs::testCase
 //! Roughly equivalent to @code testDiag("..."); @endcode
 #define testShow() ::pvxs::testCase()
 

@@ -44,10 +44,11 @@ public:
         std::vector<std::string> interfaces;
         //! Addresses to which (UDP) beacons message will be sent.
         //! May include broadcast and/or unicast addresses.
+        //! Supplimented iif auto_beacon==true
         std::vector<std::string> beaconDestinations;
-        //! TCP port to bind.  May be zero.
+        //! TCP port to bind.  Default is 5075.  May be zero.
         unsigned short tcp_port;
-        //! UDP port to bind.  May not be zero
+        //! UDP port to bind.  Default is 5076.  May not be zero, cf. Server::config() to find allocated port.
         unsigned short udp_port;
         //! Whether to populate the beacon address list automatically.  (recommended)
         bool auto_beacon;
@@ -90,20 +91,20 @@ public:
     //!
     //! @param name Source name
     //! @param src The Source.  A strong reference to this Source which will be released by removeSource() or ~Server()
-    //! @param order Determines the order in which this Source::onCreate() will be called.
-    //!        Lowest first.
+    //! @param order Determines the order in which this Source::onCreate() will be called.  Lowest first.
     Server& addSource(const std::string& name,
                       const std::shared_ptr<Source>& src,
                       int order =0);
 
-    //! Disociate a Source using the name _and_ priority given to addSource()
+    //! Disassociate a Source using the name and priority given to addSource()
     std::shared_ptr<Source> removeSource(const std::string& name,
                                          int order =0);
 
-    //! Fetch an
+    //! Fetch a previously added Source.
     std::shared_ptr<Source> getSource(const std::string& name,
                                       int order =0);
 
+    //! List all source names and priorities.
     void listSource(std::vector<std::pair<std::string, int> >& names);
 
     explicit operator bool() const { return !!pvt; }

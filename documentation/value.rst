@@ -1,7 +1,16 @@
-Working with Value Container
-============================
+Value Container
+===============
 
-The `pvxs::Value` container class provides the means to interact with PVA data values. ::
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   nt
+   typedef
+
+The `pvxs::Value` container class provides the means to interact with PVA data values.
+
+.. code-block:: c++
 
     #include <pvxs/data.h>
     namespace pvxs { ... }

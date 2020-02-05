@@ -1,12 +1,21 @@
-Server API
-==========
+Server
+======
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   sharedpv
+   source
 
 `pvxs::server::Server` represents a PVA protocol server. :: 
 
     #include <pvxs/server.h>
     namespace pvxs { namespace server { ... } }
 
-The basic recipe to run a server using configuration from the process environment is: ::
+The basic recipe to run a server using configuration from the process environment is:
+
+.. code-block:: c++
 
     auto serv = Server::Config::from_env()
                 .build()

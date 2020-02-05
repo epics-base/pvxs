@@ -17,6 +17,10 @@ In addition to a name, each logger has an associated integer logging level.
 A message will be logged if the level of the message is less than or
 equal to the level of the associated logger.
 
+To enable all logging at full detail. ::
+
+    export PVXS_LOG="*=DEBUG"
+
 .. doxygenenum:: pvxs::Level
 
 Controlling Logging
@@ -47,9 +51,17 @@ and must not be present in user code.
 
 .. doxygendefine:: DEFINE_LOGGER
 
-.. doxygendefine:: log_printf
+.. doxygendefine:: log_crit_printf
 
-.. doxygendefine:: log_vprintf
+.. doxygendefine:: log_err_printf
+
+.. doxygendefine:: log_warn_printf
+
+.. doxygendefine:: log_info_printf
+
+.. doxygendefine:: log_debug_printf
+
+.. doxygendefine:: log_printf
 
 .. doxygenstruct:: pvxs::logger
     :members:
@@ -91,7 +103,7 @@ Extensions to epicsUnitTest.h ::
 .. doxygendefine:: testShow
 
 The testEq() macro and friends expand to a function which returns a `testCase` instance
-which may be used as a std::ostream to append text describing the tests. eg. ::
+which may be used as a `std::ostream` to append text describing a test. eg. ::
 
     testEq(1, 1)<<"We really hope this is true.";
     if(testNotEq(1, 2)<<"shouldn't be true") {

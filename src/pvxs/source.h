@@ -195,7 +195,17 @@ struct PVXS_API ChannelControl : public OpBase {
 struct PVXS_API Source {
     virtual ~Source() =0;
 
-    //! An iteratable of names being sought
+    /** An iterable of names being sought.
+     *
+     * @code
+     *   virtual void onSearch(Search& search) {
+     *       for(auto& op : search) {
+     *           if(strcmp(op.name(), "magic")==0)
+     *               op.claim();
+     *       }
+     *   }
+     * @endcode
+     */
     struct Search {
         //! A single name being searched
         class Name {

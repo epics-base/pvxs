@@ -26,10 +26,10 @@ struct Source;
  * On creation a SharedPV has no associated data structure, or data type.
  * This is set by calling open() to provide a data type, and initial data values.
  * Subsequent calls to post() will update this data structure (and send notifications
- * so subscribing clients).
+ * to subscribing clients).
  *
- * A later call to close() will force disconnect all clients, and discard the data value and type
- * in preperation for a later call to open() to set a new data value, which may be of a different type.
+ * A later call to close() will force disconnect all clients, and discard the data value and type.
+ * A further call to open() sets a new data value, which may be of a different data type.
  *
  * The onPut() and onRPC() methods attach functors which will be called each time a Put or RPC
  * operation is executed by a client.
@@ -57,7 +57,7 @@ struct PVXS_API SharedPV
     //! Callback when a client executes a new Put operation.
     void onPut(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)>&& fn);
     //! Callback when a client executes an RPC operation.
-    //! @note RPC operations are allowed event when @code !isOpen() @endcode
+    //! @note RPC operations are allowed even when the SharedPV is not opened (isOpen()==false)
     void onRPC(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)>&& fn);
 
     /** Provide data type and initial value.  Allows clients to begin connecting.

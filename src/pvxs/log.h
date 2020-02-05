@@ -64,12 +64,16 @@ const char* log_prefix(const char* name, Level lvl);
 PVXS_API
 void xerrlogHexPrintf(const void *buf, size_t buflen);
 
-//! Try to log a message at the defined level.
-//! @code
-//!     DEFINE_LOGGER(blah, "myapp.blah");
-//!     void blahfn(int x) {
-//!         log_printf(blah, Info, "blah happened with %d\n", x);
-//! @endcode
+/** Try to log a message at the defined level.
+ *
+ * Due to portability issues with MSVC, log formats must have at least one argument.
+ *
+ *  @code
+ *      DEFINE_LOGGER(blah, "myapp.blah");
+ *      void blahfn(int x) {
+ *          log_printf(blah, Info, "blah happened with %d\n", x);
+ *  @endcode
+ */
 #define log_printf(LOGGER, LVL, FMT, ...) do{ \
     if((LOGGER).test(::pvxs::Level::LVL)) \
         errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::LVL), __VA_ARGS__); \
