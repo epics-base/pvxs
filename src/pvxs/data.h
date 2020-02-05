@@ -546,7 +546,7 @@ private:
     friend class Iter;
 
     void _iter_fl(IterInfo& info, bool first) const;
-    void _iter_advance(IterInfo& info) const; // cheats, actually mutates (but doesn't change container values)
+    void _iter_advance(IterInfo& info) const;
     Value _iter_deref(const IterInfo& info) const;
 public:
 
