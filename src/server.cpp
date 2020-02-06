@@ -320,6 +320,12 @@ Server::Pvt::Pvt(Config&& conf)
         effective.interfaces.emplace_back("0.0.0.0");
     }
 
+    {
+        int val = 1;
+        if(setsockopt(beaconSender.sock, SOL_SOCKET, SO_BROADCAST, (char *)&val, sizeof(val)))
+            log_err_printf(serversetup, "Unable to setup beacon sender SO_BROADCAST: %d\n", SOCKERRNO);
+    }
+
     auto manager = UDPManager::instance();
 
     for(const auto& iface : effective.interfaces) {
@@ -369,6 +375,7 @@ Server::Pvt::Pvt(Config&& conf)
                     osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
                     beaconDest.emplace_back(AF_INET);
                     beaconDest.back()->in = node->addr.ia;
+                    beaconDest.back()->in.sin_port = htons(effective.udp_port);
                     free(cur);
                 }
 
@@ -489,8 +496,9 @@ void Server::Pvt::start()
     // begin sending beacons
     acceptor_loop.call([this]()
     {
+        timeval immediate = {0,0};
         // send first beacon immediately
-        if(event_add(beaconTimer.get(), nullptr))
+        if(event_add(beaconTimer.get(), &immediate))
             log_printf(serversetup, Err, "Error enabling beacon timer on\n%s", "");
 
         state = Running;
@@ -619,10 +627,10 @@ void Server::Pvt::doBeacons(short evt)
     // "NULL" serverStatus
     to_wire(M, uint8_t(0xff));
 
-    auto pktlen = M.save()-searchReply.data();
+    auto pktlen = M.save()-beaconMsg.data();
 
     // now going back to fill in header
-    FixedBuf H(true, searchReply.data(), 8);
+    FixedBuf H(true, beaconMsg.data(), 8);
     to_wire(H, Header{CMD_BEACON, pva_flags::Server, uint32_t(pktlen-8)});
 
     assert(M.good() && H.good());
