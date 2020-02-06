@@ -28,17 +28,17 @@ class Server;
 
 //! Configuration for a Server
 struct Config {
-    //! List of network interface addresses to which this server will bind.
+    //! List of network interface addresses (**not** host names) to which this server will bind.
     //! interfaces.empty() treated as an alias for "0.0.0.0", which may also be given explicitly.
     //! Port numbers are optional and unused (parsed and ignored)
     std::vector<std::string> interfaces;
-    //! Addresses to which (UDP) beacons message will be sent.
+    //! Addresses (**not** host names) to which (UDP) beacons message will be sent.
     //! May include broadcast and/or unicast addresses.
     //! Supplimented iif auto_beacon==true
     std::vector<std::string> beaconDestinations;
     //! TCP port to bind.  Default is 5075.  May be zero.
     unsigned short tcp_port;
-    //! UDP port to bind.  Default is 5076.  May not be zero, cf. Server::config() to find allocated port.
+    //! UDP port to bind.  Default is 5076.  May be zero, cf. Server::config() to find allocated port.
     unsigned short udp_port;
     //! Whether to populate the beacon address list automatically.  (recommended)
     bool auto_beacon;

@@ -26,6 +26,7 @@
 #include <epicsThread.h>
 #include <epicsTime.h>
 #include <epicsGuard.h>
+#include <epicsString.h>
 
 #include <pvxs/server.h>
 #include <pvxs/log.h>
@@ -42,47 +43,77 @@ DEFINE_LOGGER(serversetup, "pvxs.server.setup");
 DEFINE_LOGGER(serverio, "pvxs.server.io");
 
 namespace {
-void split_into(std::vector<std::string>& out, const char *inp)
+void split_addr_into(const char* name, std::vector<std::string>& out, const char *inp)
 {
     std::regex word("\\s*(\\S+)(.*)");
     std::cmatch M;
 
     while(*inp && std::regex_match(inp, M, word)) {
-        out.push_back(M[1].str());
+        sockaddr_in addr = {};
+        if(aToIPAddr(M[1].str().c_str(), 0, &addr)) {
+            log_err_printf(serversetup, "%s ignoring invalid '%s'\n", name, M[1].str().c_str());
+            continue;
+        }
+        char buf[24];
+        ipAddrToDottedIP(&addr, buf, sizeof(buf));
+        out.emplace_back(buf);
         inp = M[2].first;
     }
 }
+
+const char* pickenv(const char** picked, std::initializer_list<const char*> names)
+{
+    for(auto name : names) {
+        if(auto val = getenv(name)) {
+            if(picked)
+                *picked = name;
+            return val;
+        }
+    }
+    return nullptr;
 }
+
+} // namespace
 
 Config Config::from_env()
 {
     Config ret;
     ret.udp_port = 5076;
 
-    if(const char *env = getenv("EPICS_PVAS_INTF_ADDR_LIST")) {
-        split_into(ret.interfaces, env);
+    const char* name;
+
+    if(const char *env = pickenv(&name, {"EPICS_PVAS_INTF_ADDR_LIST"})) {
+        split_addr_into(name, ret.interfaces, env);
     }
 
-    if(const char *env = getenv("EPICS_PVAS_BEACON_ADDR_LIST")) {
-        split_into(ret.beaconDestinations, env);
-    } else if(const char *env = getenv("EPICS_PVA_ADDR_LIST")) {
-        split_into(ret.beaconDestinations, env);
+    if(auto env = pickenv(&name, {"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
+        split_addr_into(name, ret.beaconDestinations, env);
     }
 
-    // TODO resolve host->IP in interfaces and beaconDestinations
-
-    ret.tcp_port = 5075;
-    if(const char *env = getenv("EPICS_PVAS_SERVER_PORT")) {
-        ret.tcp_port = lexical_cast<unsigned short>(env);
-    } else if(const char *env = getenv("EPICS_PVA_SERVER_PORT")) {
-        ret.tcp_port = lexical_cast<unsigned short>(env);
+    if(const char *env = pickenv(&name, {"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
+        if(epicsStrCaseCmp(env, "YES")==0) {
+            ret.auto_beacon = true;
+        } else if(epicsStrCaseCmp(env, "NO")==0) {
+            ret.auto_beacon = false;
+        } else {
+            log_err_printf(serversetup, "%s invalid bool value (YES/NO)", name);
+        }
     }
 
-    ret.udp_port = 5076;
-    if(const char *env = getenv("EPICS_PVAS_BROADCAST_PORT")) {
-        ret.udp_port = lexical_cast<unsigned short>(env);
-    } else if(const char *env = getenv("EPICS_PVA_BROADCAST_PORT")) {
-        ret.udp_port = lexical_cast<unsigned short>(env);
+    if(const char *env = pickenv(&name, {"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
+        try {
+            ret.tcp_port = lexical_cast<unsigned short>(env);
+        }catch(std::exception& e) {
+            log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
+        }
+    }
+
+    if(const char *env = pickenv(&name, {"EPICS_PVAS_BROADCAST_PORT", "EPICS_PVA_BROADCAST_PORT"})) {
+        try {
+            ret.udp_port = lexical_cast<unsigned short>(env);
+        }catch(std::exception& e) {
+            log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
+        }
     }
 
     return ret;
@@ -286,7 +317,7 @@ Server::Pvt::Pvt(Config&& conf)
     // empty interface address list implies the wildcard
     // (because no addresses isn't interesting...)
     if(effective.interfaces.empty()) {
-        effective.interfaces.push_back("0.0.0.0");
+        effective.interfaces.emplace_back("0.0.0.0");
     }
 
     auto manager = UDPManager::instance();
