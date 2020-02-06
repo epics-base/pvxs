@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 
         auto src = std::make_shared<CountdownSrc>("countdown");
 
-        auto serv = Server::Config::from_env()
+        auto serv = Config::from_env()
                 .build()
                 .addSource("countdown", src);
 

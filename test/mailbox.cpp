@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
 
     src.add(argv[1], pv);
 
-    auto serv = Server::Config::from_env()
+    auto serv = Config::from_env()
             .build()
             .addSource("box", src.source());
 

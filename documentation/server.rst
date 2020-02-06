@@ -17,7 +17,7 @@ The basic recipe to run a server using configuration from the process environmen
 
 .. code-block:: c++
 
-    auto serv = Server::Config::from_env()
+    auto serv = server::Config::from_env()
                 .build()
     // call serv.addSource() at least once
     serv.run(); // run intil SIGINT or serv.interrupt()
@@ -29,6 +29,9 @@ addSource() method.
 If more than one Source is added, then an order of precedence is established through
 the "order" argument of addSource().  In the event that more than one Source could
 provide/claim a given PV name, the Source with the lowest "order" will win.
+
+.. doxygenstruct:: pvxs::server::Config
+    :members:
 
 .. doxygenclass:: pvxs::server::Server
     :members:

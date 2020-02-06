@@ -54,9 +54,9 @@ void split_into(std::vector<std::string>& out, const char *inp)
 }
 }
 
-Server::Config Server::Config::from_env()
+Config Config::from_env()
 {
-    Server::Config ret;
+    Config ret;
     ret.udp_port = 5076;
 
     if(const char *env = getenv("EPICS_PVAS_INTF_ADDR_LIST")) {
@@ -89,7 +89,7 @@ Server::Config Server::Config::from_env()
 }
 
 
-Server Server::Config::build()
+Server Config::build()
 {
     Server ret(std::move(*this));
     return ret;
@@ -192,7 +192,7 @@ void Server::listSource(std::vector<std::pair<std::string, int> > &names)
     }
 }
 
-const Server::Config& Server::config() const
+const Config& Server::config() const
 {
     if(!pvt)
         throw std::logic_error("NULL Server");

@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
 
         auto src = std::make_shared<DummySource>("blah");
 
-        auto serv = Server::Config::from_env()
+        auto serv = Config::from_env()
                 .build()
                 .addSource("dummy", src);
 

@@ -24,10 +24,41 @@ namespace pvxs {
 namespace server {
 
 struct Source;
+class Server;
+
+//! Configuration for a Server
+struct Config {
+    //! List of network interface addresses to which this server will bind.
+    //! interfaces.empty() treated as an alias for "0.0.0.0", which may also be given explicitly.
+    //! Port numbers are optional and unused (parsed and ignored)
+    std::vector<std::string> interfaces;
+    //! Addresses to which (UDP) beacons message will be sent.
+    //! May include broadcast and/or unicast addresses.
+    //! Supplimented iif auto_beacon==true
+    std::vector<std::string> beaconDestinations;
+    //! TCP port to bind.  Default is 5075.  May be zero.
+    unsigned short tcp_port;
+    //! UDP port to bind.  Default is 5076.  May not be zero, cf. Server::config() to find allocated port.
+    unsigned short udp_port;
+    //! Whether to populate the beacon address list automatically.  (recommended)
+    bool auto_beacon;
+
+    //! Server unique ID.  Only meaningful in readback via Server::config()
+    std::array<uint8_t, 12> guid;
+
+    //! Default configuration using process environment
+    PVXS_API
+    static Config from_env();
+    Config() :tcp_port(5075), udp_port(5076), auto_beacon(true), guid{} {}
+
+    //! Short-hand for @code Server(std::move(*this)) @endcode.
+    PVXS_API
+    Server build();
+};
 
 /** PV Access protocol server instance
  *
- * Use a Server::Config to determine how this server will bind, listen,
+ * Use a Config to determine how this server will bind, listen,
  * and announce itself.
  *
  * In order to be useful, a Server will have one or more Source instances added
@@ -36,33 +67,6 @@ struct Source;
 class PVXS_API Server
 {
 public:
-    //! Configuration for a Server
-    struct Config {
-        //! List of network interface addresses to which this server will bind.
-        //! interfaces.empty() treated as an alias for "0.0.0.0", which may also be given explicitly.
-        //! Port numbers are optional and unused (parsed and ignored)
-        std::vector<std::string> interfaces;
-        //! Addresses to which (UDP) beacons message will be sent.
-        //! May include broadcast and/or unicast addresses.
-        //! Supplimented iif auto_beacon==true
-        std::vector<std::string> beaconDestinations;
-        //! TCP port to bind.  Default is 5075.  May be zero.
-        unsigned short tcp_port;
-        //! UDP port to bind.  Default is 5076.  May not be zero, cf. Server::config() to find allocated port.
-        unsigned short udp_port;
-        //! Whether to populate the beacon address list automatically.  (recommended)
-        bool auto_beacon;
-
-        //! Server unique ID.  Only meaningful in readback via Server::config()
-        std::array<uint8_t, 12> guid;
-
-        //! Default configuration using process environment
-        PVXS_API static Config from_env();
-        Config() :tcp_port(5075), udp_port(5076), auto_beacon(true), guid{} {}
-
-        //! Short-hand for @code Server(std::move(*this)) @endcode.
-        PVXS_API Server build();
-    };
 
     //! An empty/dummy Server
     Server();
