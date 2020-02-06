@@ -24,3 +24,18 @@ or created locally.  See `ntapi` or `typedefapi`.
 .. doxygenstruct:: pvxs::NoField
 
 .. doxygenstruct:: pvxs::NoConvert
+
+Array fields
+------------
+
+Array fields are represented using the `pvxs::shared_array` container.
+An example using `pvxs::nt::NTScalar`.
+
+.. code-block:: c++
+
+    shared_array<double> arr({1.0, 2.0});
+    auto top = nt::NTScalar{TypeCode::Float64A}.create();
+    top["value"] = arr.freeze().castTo<void void>();
+
+.. doxygenclass:: pvxs::shared_array
+    :members:

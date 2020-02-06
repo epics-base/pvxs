@@ -159,6 +159,32 @@ public:
 
 } // namespace detail
 
+/** std::vector-like contigious array of items passed by reference.
+ *
+ * shared_array comes in const and non-const, as well as void and non-void variants.
+ *
+ * A non-const array is allocated and filled, then last non-const reference is exchanged for new const reference.
+ * This const reference can then be safely shared between various threads.
+ *
+ * @code
+ *   shared_array<uint32_t> arr({1, 2, 3});
+ *   assert(arr.size()==3);
+ *   shared_ptr<const uint32_t> constarr(arr.freeze());
+ *   assert(arr.size()==0);
+ *   assert(constarr.size()==3);
+ * @endcode
+ *
+ * The void / non-void variants allow arrays to be moved without explicit typing.
+ * However, the void variant preserves the original TypeCode.
+ *
+ * @code
+ *   shared_array<uint32_t> arr({1, 2, 3});
+ *   assert(arr.size()==3);
+ *   shared_array<void> voidarr(arr.castTo<void>());
+ *   assert(arr.size()==0);
+ *   assert(voidarr.size()==3*sizeof(uint32_t)); // void size() bytes
+ * @endcode
+ */
 template<typename E, class Enable>
 class shared_array : public detail::sa_base<E> {
     static_assert (!std::is_void<E>::value, "non-void specialization");
@@ -184,6 +210,7 @@ public:
 
     constexpr shared_array() noexcept :base_t() {}
 
+    //! allocate new array and populate from initializer list
     template<typename A>
     shared_array(std::initializer_list<A> L)
         :base_t(new _E_non_const[L.size()], L.size())
@@ -205,23 +232,23 @@ public:
         std::fill_n((_E_non_const*)this->_data.get(), this->_size, e);
     }
 
-    // use existing alloc with delete[]
+    //! use existing alloc with delete[]
     shared_array(E* a, size_t len)
         :base_t(a, len)
     {}
 
-    // use existing alloc w/ custom deletor
+    //! use existing alloc w/ custom deletor
     template<typename B>
     shared_array(E* a, B b, size_t len)
         :base_t(a, b, len)
     {}
 
-    // build around existing shared_ptr
+    //! build around existing shared_ptr
     shared_array(const std::shared_ptr<E>& a, size_t len)
         :base_t(a, len)
     {}
 
-    // alias existing shared_array
+    //! alias existing shared_array
     template<typename A>
     shared_array(const std::shared_ptr<A>& a, E* b, size_t len)
         :base_t(a, b, len)
@@ -231,6 +258,7 @@ public:
 
     inline void reserve(size_t i) {}
 
+    //! Extend size.  Implies make_unique()
     void resize(size_t i) {
         if(!this->unique() || i!=this->_size) {
             shared_array o(i);
@@ -239,6 +267,7 @@ public:
         }
     }
 
+    //! Ensure exclusive ownership of array data
     inline void make_unique() {
         this->resize(this->size());
     }
@@ -260,9 +289,11 @@ private:
 public:
     // STL iterators
 
+    //! begin iteration
     inline iterator begin() const noexcept{return this->base_ptr();}
     inline const_iterator cbegin() const noexcept{return begin();}
 
+    //! end iteration
     inline iterator end() const noexcept{return this->base_ptr()+this->_size;}
     inline const_iterator cend() const noexcept{return end();}
 
@@ -292,6 +323,7 @@ public:
     //! Cast to const, consuming this
     //! @pre unique()==true
     //! @post empty()==true
+    //! @throws std::logic_error if !unique()
     shared_array<typename std::add_const<E>::type>
     freeze() {
         if(!this->unique())
@@ -307,7 +339,7 @@ public:
         return ret;
     }
 
-    // static_cast<TO>() to non-void, preserving const-ness
+    //! static_cast<TO>() to non-void, preserving const-ness
     template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
     castTo() const {
@@ -315,7 +347,7 @@ public:
         return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), alen);
     }
 
-    // static_cast<TO>() to void, preserving const-ness
+    //! static_cast<TO>() to void, preserving const-ness
     template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
     castTo() const {
