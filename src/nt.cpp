@@ -41,6 +41,14 @@ TypeDef NTScalar::build() const
                            String("units"),
                        }),
         };
+    } else if(display && !isnumeric) {
+            def += {
+                    Struct("display", {
+                               String("description"),
+                               //String("format"),
+                               String("units"),
+                           }),
+            };
     }
 
     if(control && isnumeric) {
