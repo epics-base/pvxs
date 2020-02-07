@@ -78,6 +78,11 @@ SharedPV SharedPV::buildReadonly()
 {
     SharedPV ret;
     ret.impl = std::make_shared<Impl>();
+
+    ret.onPut([](SharedPV& pv, std::unique_ptr<ExecOp>&& op, Value&& val) {
+        op->error("Read-only PV");
+    });
+
     return ret;
 }
 
