@@ -23,6 +23,7 @@
 namespace pvxs {
 namespace server {
 
+struct SharedPV;
 struct Source;
 class Server;
 
@@ -63,13 +64,18 @@ struct Config {
  *
  * In order to be useful, a Server will have one or more Source instances added
  * to it with addSource().
+ *
+ * As a convienence, each Server instance automatically contains a "builtin" StaticSource
+ * to which SharedPV instances can be directly added.
+ * The "builtin" has priority zero, and can be accessed or even removed like any Source
+ * explicitly added with addSource().
  */
 class PVXS_API Server
 {
 public:
 
     //! An empty/dummy Server
-    Server();
+    constexpr Server() = default;
     //! Create/allocate, but do not start, a new server with the provided config.
     explicit Server(Config&&);
     ~Server();
@@ -90,6 +96,11 @@ public:
 
     //! effective config
     const Config& config() const;
+
+    //! Add a SharedPV to the builtin StaticSource
+    Server& addPV(const std::string& name, const SharedPV& pv);
+    //! Remove a SharedPV from the builtin StaticSource
+    Server& removePV(const std::string& name);
 
     //! Add a Source to this server with an arbitrary source name.
     //!

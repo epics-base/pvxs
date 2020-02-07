@@ -15,6 +15,7 @@
 
 #include <pvxs/server.h>
 #include <pvxs/source.h>
+#include <pvxs/sharedpv.h>
 #include "evhelper.h"
 #include "utilpvt.h"
 #include "dataimpl.h"
@@ -221,6 +222,8 @@ struct Server::Pvt
     std::vector<uint8_t> searchReply;
 
     Source::Search searchOp;
+
+    StaticSource builtinsrc;
 
     RWLock sourcesLock;
     std::map<std::pair<int, std::string>, std::shared_ptr<Source> > sources;

@@ -36,17 +36,16 @@ int main(int argc, char* argv[])
 
     auto initial = nt::NTScalar{TypeCode::Float64}.create();
     initial["value"] = 42.0;
-
-    auto src(StaticSource::build());
+    initial["alarm.severity"] = 0;
+    initial["alarm.status"] = 0;
+    initial["alarm.message"] = "";
 
     auto pv(SharedPV::buildMailbox());
     pv.open(initial);
 
-    src.add(argv[1], pv);
-
     auto serv = Config::from_env()
             .build()
-            .addSource("box", src.source());
+            .addPV(argv[1], pv);
 
     auto& conf = serv.config();
 

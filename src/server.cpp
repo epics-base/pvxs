@@ -126,8 +126,6 @@ Server Config::build()
     return ret;
 }
 
-Server::Server() {}
-
 Server::Server(Config&& conf)
 {
     /* Here be dragons.
@@ -231,6 +229,22 @@ const Config& Server::config() const
     return pvt->effective;
 }
 
+Server& Server::addPV(const std::string& name, const SharedPV& pv)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    pvt->builtinsrc.add(name, pv);
+    return *this;
+}
+
+Server& Server::removePV(const std::string& name)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    pvt->builtinsrc.remove(name);
+    return *this;
+}
+
 Server& Server::start()
 {
     if(!pvt)
@@ -312,6 +326,7 @@ Server::Pvt::Pvt(Config&& conf)
     ,beaconSender(AF_INET, SOCK_DGRAM, 0)
     ,beaconTimer(event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this))
     ,searchReply(0x10000)
+    ,builtinsrc(StaticSource::build())
     ,state(Stopped)
 {
     // empty interface address list implies the wildcard
@@ -453,6 +468,7 @@ Server::Pvt::Pvt(Config&& conf)
     {
         auto L = sourcesLock.lockWriter();
         sources[std::make_pair(-1, "server")] = std::make_shared<ServerSource>(this);
+        sources[std::make_pair(-1, "builtin")] = builtinsrc.source();
     }
 }
 
