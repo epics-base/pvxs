@@ -57,7 +57,7 @@ SharedPV SharedPV::buildMailbox()
         log_debug_printf(logshared, "%s on %s mailbox put\n", op->peerName().c_str(), op->name().c_str());
 
         auto ts(val["timeStamp"]);
-        if(!ts.isMarked(true, true)) {
+        if(ts && !ts.isMarked(true, true)) {
             // use current time
             epicsTimeStamp now;
             if(!epicsTimeGetCurrent(&now)) {
