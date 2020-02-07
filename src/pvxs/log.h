@@ -71,7 +71,7 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
  *  @code
  *      DEFINE_LOGGER(blah, "myapp.blah");
  *      void blahfn(int x) {
- *          log_printf(blah, Info, "blah happened with %d\n", x);
+ *          log_info_printf(blah, "blah happened with %d\n", x);
  *  @endcode
  */
 #define log_printf(LOGGER, LVL, FMT, ...) do{ \
@@ -79,10 +79,10 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
         errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::LVL), __VA_ARGS__); \
 }while(0)
 
-#define log_crit_printf(LOGGER, ...)  log_printf(LOGGER, Debug, __VA_ARGS__)
-#define log_err_printf(LOGGER, ...)   log_printf(LOGGER, Debug, __VA_ARGS__)
-#define log_warn_printf(LOGGER, ...)  log_printf(LOGGER, Debug, __VA_ARGS__)
-#define log_info_printf(LOGGER, ...)  log_printf(LOGGER, Debug, __VA_ARGS__)
+#define log_crit_printf(LOGGER, ...)  log_printf(LOGGER, Crit, __VA_ARGS__)
+#define log_err_printf(LOGGER, ...)   log_printf(LOGGER, Err, __VA_ARGS__)
+#define log_warn_printf(LOGGER, ...)  log_printf(LOGGER, Warn, __VA_ARGS__)
+#define log_info_printf(LOGGER, ...)  log_printf(LOGGER, Info, __VA_ARGS__)
 #define log_debug_printf(LOGGER, ...) log_printf(LOGGER, Debug, __VA_ARGS__)
 
 #define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, FMT, ...) do{ if((LOGGER).test(::pvxs::Level::LVL)) { \
