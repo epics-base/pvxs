@@ -47,12 +47,7 @@ int main(int argc, char* argv[])
             .build()
             .addPV(argv[1], pv);
 
-    auto& conf = serv.config();
-
-    std::cout<<"Serving from :\n";
-    for(auto& iface : conf.interfaces) {
-        std::cout<<"  "<<iface<<"\n";
-    }
+    std::cout<<"Effective config\n"<<serv.config();
 
     log_printf(app, Info, "Running\n%s", "");
     serv.run();

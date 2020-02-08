@@ -143,12 +143,7 @@ int main(int argc, char *argv[])
                 .build()
                 .addSource("dummy", src);
 
-        auto& conf = serv.config();
-
-        std::cout<<"Serving from :\n";
-        for(auto& iface : conf.interfaces) {
-            std::cout<<"  "<<iface<<"\n";
-        }
+        std::cout<<"Effective config\n"<<serv.config();
 
         serv.run();
 

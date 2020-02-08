@@ -126,6 +126,41 @@ Server Config::build()
     return ret;
 }
 
+std::ostream& operator<<(std::ostream& strm, const Config& conf)
+{
+    bool first;
+
+    strm<<"EPICS_PVAS_INTF_ADDR_LIST=\"";
+    first = true;
+    for(auto& iface : conf.interfaces) {
+        if(first)
+            first = false;
+        else
+            strm<<' ';
+        strm<<iface;
+    }
+    strm<<"\"\n";
+
+    strm<<"EPICS_PVAS_BEACON_ADDR_LIST=\"";
+    first = true;
+    for(auto& iface : conf.beaconDestinations) {
+        if(first)
+            first = false;
+        else
+            strm<<' ';
+        strm<<iface;
+    }
+    strm<<"\"\n";
+
+    strm<<"EPICS_PVAS_AUTO_BEACON_ADDR_LIST="<<(conf.auto_beacon?"YES":"NO")<<'\n';
+
+    strm<<"EPICS_PVAS_SERVER_PORT="<<conf.tcp_port<<'\n';
+
+    strm<<"EPICS_PVAS_BROADCAST_PORT="<<conf.udp_port<<'\n';
+
+    return strm;
+}
+
 Server::Server(Config&& conf)
 {
     /* Here be dragons.

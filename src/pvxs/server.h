@@ -8,6 +8,7 @@
 
 #include <osiSock.h>
 
+#include <ostream>
 #include <functional>
 #include <string>
 #include <tuple>
@@ -56,6 +57,9 @@ struct Config {
     PVXS_API
     Server build();
 };
+
+PVXS_API
+std::ostream& operator<<(std::ostream& strm, const Config& conf);
 
 /** PV Access protocol server instance
  *
