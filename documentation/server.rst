@@ -36,7 +36,8 @@ Configuration
 The recommended starting point when configuring a Server is `pvxs::server::Config::from_env()`
 which will use the following environment variables when set.
 
-Entries naming multiple environment variables will use prefer the left most which is set.
+Entries naming multiple environment variables will prefer the left most which is set.
+eg. *EPICS_PVA_ADDR_LIST* is only checked if *EPICS_PVAS_BEACON_ADDR_LIST* is unset.
 
 EPICS_PVAS_INTF_ADDR_LIST
     Space seperated list of local interface addresses to which the server will bind.
