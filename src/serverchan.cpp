@@ -116,7 +116,6 @@ void ServerChannel_shutdown(const std::shared_ptr<ServerChan>& chan)
 
     chan->state = ServerChan::Destroy;
 
-    conn->chanByCID.erase(chan->cid);
     conn->chanBySID.erase(chan->sid);
 
     for(auto& pair : chan->opByIOID) {
@@ -275,15 +274,10 @@ void ServerConn::handle_CREATE_CHANNEL()
 
         bool claimed = false;
 
-        if(chanByCID.size()==0xffffffff || chanBySID.size()==0xffffffff) {
+        if(chanBySID.size()==0xffffffff) {
             sts.code = Status::Error;
             sts.msg = "Too many Server channels";
             sts.trace = "pvx:serv:chanidoverflow:";
-
-        } else if(chanByCID.find(cid)!=chanByCID.end()) {
-            sts.code = Status::Fatal;
-            sts.msg = "Client reuses existing CID";
-            sts.trace = "pvx:serv:dupcid:";
 
         } else {
             do {
@@ -310,7 +304,6 @@ void ServerConn::handle_CREATE_CHANNEL()
             }
 
             if(claimed && chan->state==ServerChan::Creating) {
-                chanByCID[cid] = chan;
                 chanBySID[sid] = chan;
                 chan->state = ServerChan::Active;
 

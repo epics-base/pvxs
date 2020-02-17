@@ -112,7 +112,6 @@ struct ServerConn : public std::enable_shared_from_this<ServerConn>
 
     uint32_t nextSID;
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanBySID;
-    std::map<uint32_t, std::shared_ptr<ServerChan> > chanByCID;
     std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID;
 
     std::list<std::function<void()>> backlog;
