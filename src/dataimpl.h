@@ -115,7 +115,7 @@ struct FieldStorage {
     // index of this field in StructTop::members
     StructTop *top;
     bool valid=false;
-    StoreType code=StoreType::Null; // duplicates associated FieldDesc::code
+    StoreType code=StoreType::Null;
 
     void init(const FieldDesc* desc);
     void deinit();
