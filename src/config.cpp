@@ -15,6 +15,7 @@
 
 #include <pvxs/log.h>
 #include "serverconn.h"
+#include "clientimpl.h"
 #include "evhelper.h"
 
 DEFINE_LOGGER(serversetup, "pvxs.server.setup");
@@ -215,5 +216,74 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
     return strm;
 }
 
+} // namespace server
+
+namespace client {
+
+Config Config::from_env()
+{
+    Config ret;
+
+    const char* name;
+
+    if(const char *env = pickenv(&name, {"EPICS_PVA_ADDR_LIST"})) {
+        split_addr_into(name, ret.addressList, env);
+    }
+
+    if(const char *env = pickenv(&name, {"EPICS_PVA_AUTO_ADDR_LIST"})) {
+        if(epicsStrCaseCmp(env, "YES")==0) {
+            ret.autoAddrList = true;
+        } else if(epicsStrCaseCmp(env, "NO")==0) {
+            ret.autoAddrList = false;
+        } else {
+            log_err_printf(serversetup, "%s invalid bool value (YES/NO)", name);
+        }
+    }
+
+    if(const char *env = pickenv(&name, {"EPICS_PVA_BROADCAST_PORT"})) {
+        try {
+            ret.udp_port = lexical_cast<unsigned short>(env);
+        }catch(std::exception& e) {
+            log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
+        }
+    }
+
+    return ret;
 }
+
+void Config::expand()
+{
+    if(autoAddrList) {
+        std::vector<std::string> all({"0.0.0.0"});
+        expandAddrList(all, addressList);
+        autoAddrList = false;
+    }
+
+    removeDups(addressList);
 }
+
+std::ostream& operator<<(std::ostream& strm, const Config& conf)
+{
+    bool first;
+
+    strm<<"EPICS_PVA_ADDR_LIST=\"";
+    first = true;
+    for(auto& iface : conf.addressList) {
+        if(first)
+            first = false;
+        else
+            strm<<' ';
+        strm<<iface;
+    }
+    strm<<"\"\n";
+
+    strm<<"EPICS_PVA_AUTO_ADDR_LIST="<<(conf.autoAddrList?"YES":"NO")<<'\n';
+
+    strm<<"EPICS_PVA_BROADCAST_PORT="<<conf.udp_port<<'\n';
+
+    return strm;
+}
+
+} // namespace client
+
+} // namespace pvxs

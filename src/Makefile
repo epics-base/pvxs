@@ -75,6 +75,10 @@ LIB_SRCS += servermon.cpp
 LIB_SRCS += serversource.cpp
 LIB_SRCS += sharedpv.cpp
 
+LIB_SRCS += client.cpp
+LIB_SRCS += clientconn.cpp
+LIB_SRCS += clientintrospect.cpp
+
 LIB_LIBS += Com
 
 LIB_SYS_LIBS += event_core
