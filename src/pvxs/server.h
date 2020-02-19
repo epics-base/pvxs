@@ -48,7 +48,7 @@ public:
     //! An empty/dummy Server
     constexpr Server() = default;
     //! Create/allocate, but do not start, a new server with the provided config.
-    explicit Server(Config&&);
+    explicit Server(const Config&);
     ~Server();
 
     //! Begin serving.  Does not block.
@@ -101,7 +101,7 @@ private:
 };
 
 //! Configuration for a Server
-struct Config {
+struct PVXS_API Config {
     //! List of network interface addresses (**not** host names) to which this server will bind.
     //! interfaces.empty() treated as an alias for "0.0.0.0", which may also be given explicitly.
     //! Port numbers are optional and unused (parsed and ignored)
@@ -121,13 +121,20 @@ struct Config {
     std::array<uint8_t, 12> guid;
 
     //! Default configuration using process environment
-    PVXS_API
     static Config from_env();
+
+    //! Empty config
     Config() :tcp_port(5075), udp_port(5076), auto_beacon(true), guid{} {}
 
+    //! Apply rules to translate current requested configuration
+    //! into one which can actually be loaded.
+    //! @post auto_beacon==false
+    //! @post !interfaces.empty()
+    void expand();
+
     //! Short-hand for @code Server(std::move(*this)) @endcode.
-    inline Server build() {
-        Server ret(std::move(*this));
+    inline Server build() const {
+        Server ret(*this);
         return ret;
     }
 };

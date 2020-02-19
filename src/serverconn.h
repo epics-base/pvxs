@@ -234,7 +234,7 @@ struct Server::Pvt
         Stopping,
     } state;
 
-    Pvt(Config&& conf);
+    Pvt(const Config& conf);
     ~Pvt();
 
     void start();

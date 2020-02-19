@@ -4,17 +4,23 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <algorithm>
 #include <vector>
 #include <string>
 #include <regex>
 
+#include <dbDefs.h>
 #include <osiSock.h>
 #include <epicsString.h>
 
 #include <pvxs/log.h>
 #include "serverconn.h"
+#include "evhelper.h"
 
 DEFINE_LOGGER(serversetup, "pvxs.server.setup");
+DEFINE_LOGGER(config, "pvxs.config");
+
+namespace pvxs {
 
 namespace {
 void split_addr_into(const char* name, std::vector<std::string>& out, const char *inp)
@@ -25,7 +31,7 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const char
     while(*inp && std::regex_match(inp, M, word)) {
         sockaddr_in addr = {};
         if(aToIPAddr(M[1].str().c_str(), 0, &addr)) {
-            log_err_printf(serversetup, "%s ignoring invalid '%s'\n", name, M[1].str().c_str());
+            log_err_printf(config, "%s ignoring invalid '%s'\n", name, M[1].str().c_str());
             continue;
         }
         char buf[24];
@@ -47,9 +53,70 @@ const char* pickenv(const char** picked, std::initializer_list<const char*> name
     return nullptr;
 }
 
+template<typename Fn>
+struct cleaner {
+    Fn fn;
+    ~cleaner() { fn(); }
+};
+
+template<typename Fn>
+cleaner<Fn> make_cleaner(Fn&& fn) {
+    return cleaner<Fn>{std::move(fn)};
+}
+
+// Fill out address list by appending broadcast addresses
+// of any and all local interface addresses already included
+void expandAddrList(const std::vector<std::string>& ifaces,
+                    std::vector<std::string>& addrs)
+{
+    evsocket dummy(AF_INET, SOCK_DGRAM, 0);
+
+    std::vector<std::string> bcasts;
+
+    for(auto& addr : ifaces) {
+
+        ELLLIST blist = ELLLIST_INIT;
+        auto bclean = make_cleaner([&blist] {
+            ellFree(&blist);
+        });
+
+        SockAddr saddr(AF_INET);
+        try {
+            saddr.setAddress(addr.c_str());
+        }catch(std::runtime_error& e){
+            log_warn_printf(config, "%s  Ignoring...\n", e.what());
+            continue;
+        }
+
+        osiSockAddr match = {};
+        match.ia = saddr->in;
+        osiSockDiscoverBroadcastAddresses(&blist, dummy.sock, &match);
+
+        while(ELLNODE *cur = ellGet(&blist)) {
+            osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
+
+            SockAddr temp(&node->addr.sa, sizeof(node->addr.ia));
+            free(node);
+            temp.setPort(0u);
+
+            bcasts.push_back(temp.tostring());
+        }
+    }
+
+    addrs.reserve(addrs.size()+bcasts.size());
+    for(auto& bcast : bcasts) {
+        addrs.push_back(std::move(bcast));
+    }
+}
+
+void removeDups(std::vector<std::string>& addrs)
+{
+    addrs.erase(std::unique(addrs.begin(), addrs.end()),
+                addrs.end());
+}
+
 } // namespace
 
-namespace pvxs {
 namespace server {
 
 Config Config::from_env()
@@ -94,6 +161,23 @@ Config Config::from_env()
     }
 
     return ret;
+}
+
+void Config::expand()
+{
+    // empty interface address list implies the wildcard
+    // (because no addresses isn't interesting...)
+    if(interfaces.empty()) {
+        interfaces.emplace_back("0.0.0.0");
+    }
+
+    if(auto_beacon) {
+        expandAddrList(interfaces, beaconDestinations);
+        auto_beacon = false;
+    }
+
+    removeDups(interfaces);
+    removeDups(beaconDestinations);
 }
 
 std::ostream& operator<<(std::ostream& strm, const Config& conf)

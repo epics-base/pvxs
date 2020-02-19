@@ -308,7 +308,9 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
         } else {
             strm<<"<\?\?\?>";
         }
-        strm<<buf<<':'<<ntohs(addr->in.sin_port);
+        strm<<buf;
+        if(ntohs(addr->in.sin_port))
+            strm<<':'<<ntohs(addr->in.sin_port);
         break;
     }
 #ifdef AF_INET6
@@ -319,7 +321,9 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
             } else {
                 strm<<"<\?\?\?>";
             }
-            strm<<buf<<':'<<ntohs(addr->in6.sin6_port);
+            strm<<buf;
+            if(ntohs(addr->in6.sin6_port))
+                strm<<':'<<ntohs(addr->in6.sin6_port);
             break;
     }
 #endif

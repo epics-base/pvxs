@@ -42,7 +42,7 @@ using namespace impl;
 DEFINE_LOGGER(serversetup, "pvxs.server.setup");
 DEFINE_LOGGER(serverio, "pvxs.server.io");
 
-Server::Server(Config&& conf)
+Server::Server(const Config& conf)
 {
     /* Here be dragons.
      *
@@ -55,7 +55,7 @@ Server::Server(Config&& conf)
      * Which need to safely access server storage, but should not
      * prevent a server from stopping.
      */
-    auto internal(std::make_shared<Pvt>(std::move(conf)));
+    auto internal(std::make_shared<Pvt>(conf));
     internal->internal_self = internal;
 
     // external
@@ -235,8 +235,8 @@ Server& Server::interrupt()
     return *this;
 }
 
-Server::Pvt::Pvt(Config&& conf)
-    :effective(std::move(conf))
+Server::Pvt::Pvt(const Config &conf)
+    :effective(conf)
     ,beaconMsg(128)
     ,acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow-2)
     ,beaconSender(AF_INET, SOCK_DGRAM, 0)
@@ -245,11 +245,7 @@ Server::Pvt::Pvt(Config&& conf)
     ,builtinsrc(StaticSource::build())
     ,state(Stopped)
 {
-    // empty interface address list implies the wildcard
-    // (because no addresses isn't interesting...)
-    if(effective.interfaces.empty()) {
-        effective.interfaces.emplace_back("0.0.0.0");
-    }
+    effective.expand();
 
     {
         int val = 1;
@@ -270,7 +266,7 @@ Server::Pvt::Pvt(Config&& conf)
 
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
 
-    acceptor_loop.call([this, &dummy](){
+    acceptor_loop.call([this](){
         // from acceptor worker
 
         bool firstiface = true;
@@ -284,49 +280,6 @@ Server::Pvt::Pvt(Config&& conf)
         for(const auto& addr : effective.beaconDestinations) {
             beaconDest.emplace_back(AF_INET, addr.c_str(), effective.udp_port);
         }
-
-        if(effective.auto_beacon) {
-            // append broadcast addresses associated with our bound interface(s)
-
-            ELLLIST bcasts = ELLLIST_INIT;
-
-            try {
-                for(const auto& iface : interfaces) {
-                    if(iface.bind_addr.family()!=AF_INET)
-                        continue;
-                    osiSockAddr match;
-                    match.ia = iface.bind_addr->in;
-                    osiSockDiscoverBroadcastAddresses(&bcasts, dummy.sock, &match);
-                }
-
-                // do our best to avoid a bad_alloc during iteration
-                beaconDest.reserve(beaconDest.size()+(size_t)ellCount(&bcasts));
-
-                while(ELLNODE *cur = ellGet(&bcasts)) {
-                    osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
-                    beaconDest.emplace_back(AF_INET);
-                    beaconDest.back()->in = node->addr.ia;
-                    beaconDest.back()->in.sin_port = htons(effective.udp_port);
-                    free(cur);
-                }
-
-            }catch(...){
-                ellFree(&bcasts);
-                throw;
-            }
-        }
-
-        effective.interfaces.clear();
-        for(const auto& iface : interfaces) {
-            effective.interfaces.emplace_back(iface.bind_addr.tostring());
-        }
-
-        effective.beaconDestinations.clear();
-        for(const auto& addr : beaconDest) {
-            effective.beaconDestinations.emplace_back(addr.tostring());
-        }
-
-        effective.auto_beacon = false;
     });
 
     {
