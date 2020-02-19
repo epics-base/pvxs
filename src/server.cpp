@@ -575,8 +575,9 @@ void Server::Pvt::doBeacons(short evt)
             log_printf(serverio, Warn, "Beacon tx error (%d) %s\n",
                        err, evutil_socket_error_to_string(err));
 
-        } else if(unsigned(ntx)<beaconMsg.size()) {
-            log_printf(serverio, Warn, "Beacon truncated %u", unsigned(dest.size()));
+        } else if(unsigned(ntx)<pktlen) {
+            log_printf(serverio, Warn, "Beacon truncated %u < %u",
+                       unsigned(ntx), unsigned(pktlen));
         }
     }
 
