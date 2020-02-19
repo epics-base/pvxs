@@ -106,6 +106,9 @@ public:
     {}
     virtual ~VectorOutBuf();
     virtual bool refill(size_t more) override final;
+
+    inline
+    size_t consumed() const { return pos - backing.data(); }
 };
 
 //! serialize into an evbuffer, resizing as necessary
