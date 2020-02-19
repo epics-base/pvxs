@@ -424,7 +424,7 @@ void ServerConn::handle_MONITOR()
         }
 
         if(!M.good()) {
-            log_printf(connio, Debug, "Client %s\n Invalid MONITOR/%x INIT\n",
+            log_debug_printf(connio, "Client %s\n Invalid MONITOR/%x INIT\n",
                        peerName.c_str(), subcmd);
             bev.reset();
             return;
@@ -433,7 +433,7 @@ void ServerConn::handle_MONITOR()
         auto& chan = lookupSID(sid);
 
         if(opByIOID.find(ioid)!=opByIOID.end()) {
-            log_printf(connsetup, Err, "Client %s reuses existing ioid %u\n", peerName.c_str(), unsigned(ioid));
+            log_err_printf(connsetup, "Client %s reuses existing ioid %u\n", peerName.c_str(), unsigned(ioid));
             bev.reset();
             return;
         }
@@ -454,7 +454,7 @@ void ServerConn::handle_MONITOR()
         opByIOID[ioid] = op;
         chan->opByIOID[ioid] = op;
 
-        log_printf(connsetup, Debug, "Client %s Monitor INIT ioid=%u pvRequest=%s\n",
+        log_debug_printf(connsetup, "Client %s Monitor INIT ioid=%u pvRequest=%s\n",
                    peerName.c_str(), unsigned(ioid),
                    std::string(SB()<<pvRequest).c_str());
 
@@ -471,7 +471,7 @@ void ServerConn::handle_MONITOR()
         }
 
         if(!M.good()) {
-            log_printf(connio, Debug, "Client %s\n Invalid MONITOR/%x CMD\n",
+            log_debug_printf(connio, "Client %s\n Invalid MONITOR/%x CMD\n",
                        peerName.c_str(), subcmd);
             bev.reset();
             return;
@@ -483,7 +483,7 @@ void ServerConn::handle_MONITOR()
             // since server destroy commands aren't acknowledged, we can race
             // with traffic sent by the client before processing our destroy.
             // so we can't fault hard, so just ignore and hope for the best.
-            log_printf(connio, Debug, "Client %s MONITORs non-existant IOID %u\n",
+            log_debug_printf(connio, "Client %s MONITORs non-existant IOID %u\n",
                        peerName.c_str(), unsigned(ioid));
             return;
 
@@ -491,7 +491,7 @@ void ServerConn::handle_MONITOR()
                   || op->state==ServerOp::Creating) {
             // mixing up operation types, or trying to exec before we complete creation,
             // is a protocol error.
-            log_printf(connio, Err, "Client %s MONITORs invalid IOID %u state=%d\n",
+            log_err_printf(connio, "Client %s MONITORs invalid IOID %u state=%d\n",
                        peerName.c_str(), unsigned(ioid), op ? op->state : ServerOp::Dead);
             bev.reset();
             return;
@@ -503,7 +503,7 @@ void ServerConn::handle_MONITOR()
         // although it will accept destroy in any !INIT message.
         // We do accept ack+start/stop as there is no reason not to.
         if(subcmd&0x80 && op->pipeline) { // ack
-            log_printf(connio, Debug, "Client %s IOID %u acks %u\n",
+            log_debug_printf(connio, "Client %s IOID %u acks %u\n",
                        peerName.c_str(), unsigned(ioid), unsigned(nack));
 
             Guard G(op->lock);
@@ -525,7 +525,7 @@ void ServerConn::handle_MONITOR()
         if(subcmd&0x04) {
             bool start = subcmd&0x40;
 
-            log_printf(connio, Debug, "Client %s IOID %u MON %s\n",
+            log_debug_printf(connio, "Client %s IOID %u MON %s\n",
                        peerName.c_str(), unsigned(ioid), start ? "START" : "STOP");
 
             {

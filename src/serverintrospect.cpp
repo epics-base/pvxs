@@ -133,7 +133,7 @@ void ServerConn::handle_GET_FIELD()
     auto& chan = lookupSID(sid);
 
     if(opByIOID.find(ioid)!=opByIOID.end()) {
-        log_printf(connsetup, Err, "Client %s reuses existing ioid %d\n", peerName.c_str(), unsigned(ioid));
+        log_err_printf(connsetup, "Client %s reuses existing ioid %d\n", peerName.c_str(), unsigned(ioid));
         return;
     }
 

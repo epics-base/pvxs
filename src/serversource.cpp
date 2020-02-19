@@ -35,7 +35,7 @@ void ServerSource::onCreate(std::unique_ptr<server::ChannelControl> &&op)
     auto handle = std::move(op); // claim
 
     handle->onRPC([this](std::unique_ptr<server::ExecOp>&& eop, Value&& raw) {
-        log_printf(srvsrc, Debug, "Client %s calls %s\n", eop->peerName().c_str(),
+        log_debug_printf(srvsrc, "Client %s calls %s\n", eop->peerName().c_str(),
                    std::string(SB()<<raw).c_str());
 
         auto args = std::move(raw);

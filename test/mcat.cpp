@@ -32,10 +32,10 @@ struct FileSource : public server::Source
     {
         for(auto& op : search) {
             if(op.name()==name) {
-                log_printf(app, Info, "Claiming '%s'\n", op.name());
+                log_info_printf(app, "Claiming '%s'\n", op.name());
                 op.claim();
             } else {
-                log_printf(app, Debug, "Ignoring '%s'\n", op.name());
+                log_debug_printf(app, "Ignoring '%s'\n", op.name());
             }
         }
     }
@@ -46,11 +46,11 @@ struct FileSource : public server::Source
 
         std::shared_ptr<server::ChannelControl> chan(std::move(op));
 
-        log_printf(app, Info, "Create chan '%s'\n", chan->name().c_str());
+        log_info_printf(app, "Create chan '%s'\n", chan->name().c_str());
 
         chan->onSubscribe([this, chan](std::unique_ptr<server::MonitorSetupOp>&& setup) {
 
-            log_printf(app, Info, "Create mon '%s'\n", chan->name().c_str());
+            log_info_printf(app, "Create mon '%s'\n", chan->name().c_str());
 
             auto fstrm = std::make_shared<std::ifstream>(fname);
             if(!fstrm->is_open()) {
@@ -62,12 +62,12 @@ struct FileSource : public server::Source
 
             server::MonitorStat stats;
             op->stats(stats);
-            log_printf(app, Info, "Queue size %u\n", unsigned(stats.limitQueue));
+            log_info_printf(app, "Queue size %u\n", unsigned(stats.limitQueue));
 
             op->setWatermarks(0, 0);
 
             auto refill = [op, fstrm](){
-                log_printf(app, Info, "fill mon '%s'\n", op->name().c_str());
+                log_info_printf(app, "fill mon '%s'\n", op->name().c_str());
 
                 std::string line;
                 while(std::getline(*fstrm, line)) {
@@ -75,12 +75,12 @@ struct FileSource : public server::Source
                     val["value"] = line;
                     val["alarm.severity"] = 0;
 
-                    log_printf(app, Info, "push line '%s'\n", line.c_str());
+                    log_info_printf(app, "push line '%s'\n", line.c_str());
                     if(!op->forcePost(std::move(val)))
                         return;
                 }
 
-                log_printf(app, Info, "finished %s\n", fstrm->eof() ? "EOF" : "");
+                log_info_printf(app, "finished %s\n", fstrm->eof() ? "EOF" : "");
                 if(!fstrm->eof()) {
                     auto val = def.create();
                     val["value"] = "";
@@ -92,7 +92,7 @@ struct FileSource : public server::Source
             };
 
             op->onHighMark([refill, op](){
-                log_printf(app, Info, "mon now '%s'\n", op->name().c_str());
+                log_info_printf(app, "mon now '%s'\n", op->name().c_str());
                 refill();
             });
 
@@ -158,7 +158,7 @@ int main(int argc, char* argv[])
 
     std::cout<<"Effective config\n"<<serv.config();
 
-    log_printf(app, Info, "Running\n%s", "");
+    log_info_printf(app, "Running\n%s", "");
     serv.run();
 
     return 0;

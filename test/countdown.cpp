@@ -39,10 +39,10 @@ struct CountdownSrc : public Source
     {
         for(auto& op : search) {
             if(op.name()==name) {
-                log_printf(app, Info, "Claiming '%s'\n", op.name());
+                log_info_printf(app, "Claiming '%s'\n", op.name());
                 op.claim();
             } else {
-                log_printf(app, Debug, "Ignoring '%s'\n", op.name());
+                log_debug_printf(app, "Ignoring '%s'\n", op.name());
             }
         }
     }
@@ -53,11 +53,11 @@ struct CountdownSrc : public Source
 
         std::shared_ptr<ChannelControl> chan(std::move(op));
 
-        log_printf(app, Info, "Create chan '%s'\n", chan->name().c_str());
+        log_info_printf(app, "Create chan '%s'\n", chan->name().c_str());
 
         chan->onSubscribe([this, chan](std::unique_ptr<MonitorSetupOp>&& setup) {
 
-            log_printf(app, Info, "Create mon '%s'\n", chan->name().c_str());
+            log_info_printf(app, "Create mon '%s'\n", chan->name().c_str());
 
             std::shared_ptr<MonitorControlOp> op(setup->connect(def.create())); // unique_ptr becomes shared_ptr
 
@@ -85,7 +85,7 @@ struct CountdownSrc : public Source
 
     void tick(const std::shared_ptr<MonitorControlOp>& op, uint32_t count)
     {
-        log_printf(app, Info, "tick %u\n", unsigned(count));
+        log_info_printf(app, "tick %u\n", unsigned(count));
 
         auto val = def.create();
         val["value"].from(count);
@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
 
         std::cout<<"Effective config\n"<<serv.config();
 
-        log_printf(app, Info, "Running\n%s", "");
+        log_info_printf(app, "Running\n%s", "");
         serv.run();
 
     }catch(std::exception& e){

@@ -75,19 +75,19 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
  *  @endcode
  */
 #define log_printf(LOGGER, LVL, FMT, ...) do{ \
-    if((LOGGER).test(::pvxs::Level::LVL)) \
-        errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::LVL), __VA_ARGS__); \
+    if((LOGGER).test(LVL)) \
+        errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), __VA_ARGS__); \
 }while(0)
 
-#define log_crit_printf(LOGGER, ...)  log_printf(LOGGER, Crit, __VA_ARGS__)
-#define log_err_printf(LOGGER, ...)   log_printf(LOGGER, Err, __VA_ARGS__)
-#define log_warn_printf(LOGGER, ...)  log_printf(LOGGER, Warn, __VA_ARGS__)
-#define log_info_printf(LOGGER, ...)  log_printf(LOGGER, Info, __VA_ARGS__)
-#define log_debug_printf(LOGGER, ...) log_printf(LOGGER, Debug, __VA_ARGS__)
+#define log_crit_printf(LOGGER, ...)  log_printf(LOGGER, ::pvxs::Level::Crit, __VA_ARGS__)
+#define log_err_printf(LOGGER, ...)   log_printf(LOGGER, ::pvxs::Level::Err, __VA_ARGS__)
+#define log_warn_printf(LOGGER, ...)  log_printf(LOGGER, ::pvxs::Level::Warn, __VA_ARGS__)
+#define log_info_printf(LOGGER, ...)  log_printf(LOGGER, ::pvxs::Level::Info, __VA_ARGS__)
+#define log_debug_printf(LOGGER, ...) log_printf(LOGGER, ::pvxs::Level::Debug, __VA_ARGS__)
 
-#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, FMT, ...) do{ if((LOGGER).test(::pvxs::Level::LVL)) { \
+#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, FMT, ...) do{ if((LOGGER).test(LVL)) { \
         xerrlogHexPrintf(BUF, BUFLEN); \
-        errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::LVL), __VA_ARGS__); } \
+        errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), __VA_ARGS__); } \
     }while(0)
 
 //! Set level for a specific logger

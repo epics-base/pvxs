@@ -53,10 +53,10 @@ public:
     {
         for(auto& op : search) {
             if(op.name()==name) {
-                log_printf(dummy, Info, "Claiming '%s'\n", op.name());
+                log_info_printf(dummy, "Claiming '%s'\n", op.name());
                 op.claim();
             } else {
-                log_printf(dummy, Debug, "Ignoring '%s'\n", op.name());
+                log_debug_printf(dummy, "Ignoring '%s'\n", op.name());
             }
         }
     }
@@ -75,17 +75,17 @@ public:
 
         std::shared_ptr<ChannelControl> chan(std::move(raw));
 
-        log_printf(dummy, Info, "Create '%s'\n", chan->name().c_str());
+        log_info_printf(dummy, "Create '%s'\n", chan->name().c_str());
 
         // callback when client creating Get/Put
         chan->onOp([this, chan](std::shared_ptr<ConnectOp>&& raw){
             std::shared_ptr<ConnectOp> conn(std::move(raw));
 
-            log_printf(dummy, Info, "Begin Operation on '%s'\n", chan->name().c_str());
+            log_info_printf(dummy, "Begin Operation on '%s'\n", chan->name().c_str());
 
             conn->onGet([this, chan](std::unique_ptr<ExecOp>&& raw) {
                 // client executing Get or Put
-                log_printf(dummy, Info, "Exec Get on '%s'\n", chan->name().c_str());
+                log_info_printf(dummy, "Exec Get on '%s'\n", chan->name().c_str());
 
                 {
                     epicsGuard<epicsMutex> G(lock);
@@ -94,7 +94,7 @@ public:
             });
 
             conn->onPut([this, chan](std::unique_ptr<ExecOp>&& raw, Value&& top) {
-                log_printf(dummy, Info, "Exec Put on '%s'\n", chan->name().c_str());
+                log_info_printf(dummy, "Exec Put on '%s'\n", chan->name().c_str());
 
                 {
                     epicsTimeStamp now;
@@ -116,7 +116,7 @@ public:
 
         // callback when client executing RPC
         chan->onRPC([this, chan](std::unique_ptr<ExecOp>&& raw, Value&& top) {
-            log_printf(dummy, Info, "Begin RPC on '%s' with %s\n", chan->name().c_str(),
+            log_info_printf(dummy, "Begin RPC on '%s' with %s\n", chan->name().c_str(),
                        std::string(SB()<<top).c_str());
 
             auto ret = nt::NTScalar{TypeCode::String}.build().create();

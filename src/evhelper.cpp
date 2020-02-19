@@ -53,14 +53,14 @@ struct evbase::Pvt : public epicsThreadRunable
 
     virtual ~Pvt() {
         if(event_base_loopexit(base, nullptr))
-            log_printf(logerr, Crit, "evbase error while interrupting loop for %p\n", base);
+            log_crit_printf(logerr, "evbase error while interrupting loop for %p\n", base);
         worker.exitWait();
         event_base_free(base);
     }
 
     virtual void run() override final
     {
-        log_printf(logerr, Info, "Enter loop worker for %p\n", base);
+        log_info_printf(logerr, "Enter loop worker for %p\n", base);
 
         int ret = event_base_loop(base, EVLOOP_NO_EXIT_ON_EMPTY);
 
@@ -83,7 +83,7 @@ evbase::evbase(const std::string &name, unsigned prio)
         throw std::runtime_error("evthread_make_base_notifiable() fails");
     }
     pvt->base = base;
-    log_printf(logerr, Info, "Starting loop worker for %p\n", base);
+    log_info_printf(logerr, "Starting loop worker for %p\n", base);
     pvt->worker.start();
 }
 
@@ -115,7 +115,7 @@ void dispatch_action(evutil_socket_t _fd, short _ev, void *raw)
         std::unique_ptr<std::function<void()> > action(reinterpret_cast<std::function<void()>*>(raw));
         (*action)();
     }catch(std::exception& e){
-        log_printf(logerr, Crit, "evhelper::call unhandled error %s : %s\n", typeid(&e).name(), e.what());
+        log_crit_printf(logerr, "evhelper::call unhandled error %s : %s\n", typeid(&e).name(), e.what());
     }
 }
 }
@@ -170,7 +170,7 @@ void call_action(evutil_socket_t _fd, short _ev, void *raw)
         }
         args->wait.signal();
     }catch(std::exception& e){
-        log_printf(logerr, Crit, "evhelper::call unhandled error: %s\n", e.what());
+        log_crit_printf(logerr, "evhelper::call unhandled error: %s\n", e.what());
         args->wait.signal();
     }
 }
@@ -256,7 +256,7 @@ void evsocket::bind(SockAddr& addr) const
     socklen_t slen = addr.size();
     ret = getsockname(sock, &addr->sa, &slen);
     if(ret)
-        log_printf(logerr, Err, "Unable to fetch address of newly bound socket\n%s", "");
+        log_err_printf(logerr, "Unable to fetch address of newly bound socket\n%s", "");
 }
 
 void evsocket::mcast_join(const SockAddr& grp, const SockAddr& iface) const
@@ -270,7 +270,7 @@ void evsocket::mcast_join(const SockAddr& grp, const SockAddr& iface) const
 
     int ret = setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&req, sizeof(req));
     if(ret)
-        log_printf(logerr, Err, "Unable to join mcast group %s on %s : %s\n",
+        log_err_printf(logerr, "Unable to join mcast group %s on %s : %s\n",
                    grp.tostring().c_str(), iface.tostring().c_str(),
                    evutil_socket_error_to_string(evutil_socket_geterror(sock)));
 
@@ -281,7 +281,7 @@ void evsocket::mcast_ttl(unsigned ttl) const
 {
     int ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (char*)&ttl, sizeof(ttl));
     if(ret)
-        log_printf(logerr, Err, "Unable to set mcast TTL : %s\n",
+        log_err_printf(logerr, "Unable to set mcast TTL : %s\n",
                    evutil_socket_error_to_string(evutil_socket_geterror(sock)));
 
     // ipv6 variant?
@@ -292,7 +292,7 @@ void evsocket::mcast_loop(bool loop) const
     unsigned char val = loop ? 1 : 0;
     int ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char*)&val, sizeof(val));
     if(ret)
-        log_printf(logerr, Err, "Unable to set mcast loopback : %s\n",
+        log_err_printf(logerr, "Unable to set mcast loopback : %s\n",
                    evutil_socket_error_to_string(evutil_socket_geterror(sock)));
 
     // IPV6_MULTICAST_LOOP
@@ -305,7 +305,7 @@ void evsocket::mcast_iface(const SockAddr& iface) const
 
     int ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_IF, (char*)&iface->in.sin_addr, sizeof(iface->in.sin_addr));
     if(ret)
-        log_printf(logerr, Err, "Unable to set mcast TTL : %s\n",
+        log_err_printf(logerr, "Unable to set mcast TTL : %s\n",
                    evutil_socket_error_to_string(evutil_socket_geterror(sock)));
 
     // IPV6_MULTICAST_IF

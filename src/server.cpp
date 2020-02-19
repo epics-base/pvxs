@@ -348,7 +348,7 @@ Server::Pvt::~Pvt()
 
 void Server::Pvt::start()
 {
-    log_printf(serversetup, Debug, "Server Starting\n%s", "");
+    log_debug_printf(serversetup, "Server Starting\n%s", "");
 
     // begin accepting connections
     state_t prev_state;
@@ -357,17 +357,17 @@ void Server::Pvt::start()
         prev_state = state;
         if(state!=Stopped) {
             // already running
-            log_printf(serversetup, Debug, "Server not stopped %d\n", state);
+            log_debug_printf(serversetup, "Server not stopped %d\n", state);
             return;
         }
         state = Starting;
-        log_printf(serversetup, Debug, "Server starting\n%s", "");
+        log_debug_printf(serversetup, "Server starting\n%s", "");
 
         for(auto& iface : interfaces) {
             if(evconnlistener_enable(iface.listener.get())) {
-                log_printf(serversetup, Err, "Error enabling listener on %s\n", iface.name.c_str());
+                log_err_printf(serversetup, "Error enabling listener on %s\n", iface.name.c_str());
             }
-            log_printf(serversetup, Debug, "Server enabled listener on %s\n", iface.name.c_str());
+            log_debug_printf(serversetup, "Server enabled listener on %s\n", iface.name.c_str());
         }
     });
     if(prev_state!=Stopped)
@@ -384,7 +384,7 @@ void Server::Pvt::start()
         timeval immediate = {0,0};
         // send first beacon immediately
         if(event_add(beaconTimer.get(), &immediate))
-            log_printf(serversetup, Err, "Error enabling beacon timer on\n%s", "");
+            log_err_printf(serversetup, "Error enabling beacon timer on\n%s", "");
 
         state = Running;
     });
@@ -394,7 +394,7 @@ void Server::Pvt::start()
 
 void Server::Pvt::stop()
 {
-    log_printf(serversetup, Debug, "Server Stopping\n%s", "");
+    log_debug_printf(serversetup, "Server Stopping\n%s", "");
 
     // Stop sending Beacons
     state_t prev_state;
@@ -402,13 +402,13 @@ void Server::Pvt::stop()
     {
         prev_state = state;
         if(state!=Running) {
-            log_printf(serversetup, Debug, "Server not running %d\n", state);
+            log_debug_printf(serversetup, "Server not running %d\n", state);
             return;
         }
         state = Stopping;
 
         if(event_del(beaconTimer.get()))
-            log_printf(serversetup, Err, "Error disabling beacon timer on\n%s", "");
+            log_err_printf(serversetup, "Error disabling beacon timer on\n%s", "");
     });
     if(prev_state!=Running)
         return;
@@ -423,9 +423,9 @@ void Server::Pvt::stop()
     {
         for(auto& iface : interfaces) {
             if(evconnlistener_disable(iface.listener.get())) {
-                log_printf(serversetup, Err, "Error disabling listener on %s\n", iface.name.c_str());
+                log_err_printf(serversetup, "Error disabling listener on %s\n", iface.name.c_str());
             }
-            log_printf(serversetup, Debug, "Server disabled listener on %s\n", iface.name.c_str());
+            log_debug_printf(serversetup, "Server disabled listener on %s\n", iface.name.c_str());
         }
 
         state = Stopped;
@@ -436,7 +436,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 {
     // on UDPManager worker
 
-    log_printf(serverio, Debug, "%s searching\n", msg.src.tostring().c_str());
+    log_debug_printf(serverio, "%s searching\n", msg.src.tostring().c_str());
 
     searchOp._names.resize(msg.names.size());
     for(auto i : range(msg.names.size())) {
@@ -450,7 +450,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
             try {
                 pair.second->onSearch(searchOp);
             }catch(std::exception& e){
-                log_printf(serversetup, Err, "Unhandled error in Source::onSearch for '%s' : %s\n",
+                log_err_printf(serversetup, "Unhandled error in Source::onSearch for '%s' : %s\n",
                            pair.first.second.c_str(), e.what());
             }
         }
@@ -490,7 +490,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     to_wire(H, Header{CMD_SEARCH_RESPONSE, pva_flags::Server, uint32_t(pktlen-8)});
 
     if(!M.good() || !H.good()) {
-        log_printf(serverio, Crit, "Logic error in Search buffer fill\n%s", "");
+        log_crit_printf(serverio, "Logic error in Search buffer fill\n%s", "");
     } else {
         (void)msg.reply(searchReply.data(), pktlen);
     }
@@ -498,7 +498,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
 void Server::Pvt::doBeacons(short evt)
 {
-    log_printf(serversetup, Debug, "Server beacon timer expires\n%s", "");
+    log_debug_printf(serversetup, "Server beacon timer expires\n%s", "");
 
     VectorOutBuf M(true, beaconMsg);
     M.skip(8); // fill in header after body length known
@@ -525,18 +525,18 @@ void Server::Pvt::doBeacons(short evt)
 
         if(ntx<0) {
             int err = evutil_socket_geterror(beaconSender.sock);
-            log_printf(serverio, Warn, "Beacon tx error (%d) %s\n",
+            log_warn_printf(serverio, "Beacon tx error (%d) %s\n",
                        err, evutil_socket_error_to_string(err));
 
         } else if(unsigned(ntx)<pktlen) {
-            log_printf(serverio, Warn, "Beacon truncated %u < %u",
+            log_warn_printf(serverio, "Beacon truncated %u < %u",
                        unsigned(ntx), unsigned(pktlen));
         }
     }
 
     timeval interval = {15, 0};
     if(event_add(beaconTimer.get(), &interval))
-        log_printf(serversetup, Err, "Error re-enabling beacon timer on\n%s", "");
+        log_err_printf(serversetup, "Error re-enabling beacon timer on\n%s", "");
 }
 
 void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
@@ -544,7 +544,7 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
     try {
         static_cast<Pvt*>(raw)->doBeacons(evt);
     }catch(std::exception& e){
-        log_printf(serverio, Crit, "Unhandled error in beacon timer callback: %s\n", e.what());
+        log_crit_printf(serverio, "Unhandled error in beacon timer callback: %s\n", e.what());
     }
 }
 

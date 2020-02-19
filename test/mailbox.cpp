@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
 
     std::cout<<"Effective config\n"<<serv.config();
 
-    log_printf(app, Info, "Running\n%s", "");
+    log_info_printf(app, "Running\n%s", "");
     serv.run();
 
     return 0;

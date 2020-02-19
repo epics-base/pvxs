@@ -115,7 +115,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
                 UnGuard U(G);
                 cb(pv, std::move(op), std::move(arg));
             }catch(std::exception& e){
-                log_printf(logshared, Err, "error in RPC cb: %s\n", e.what());
+                log_err_printf(logshared, "error in RPC cb: %s\n", e.what());
             }
         } else {
             op->error("RPC not implemented by this PV");
@@ -162,7 +162,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
                     UnGuard U(G);
                     cb(pv, std::move(op), std::move(val));
                 }catch(std::exception& e){
-                    log_printf(logshared, Err, "error in Put cb: %s\n", e.what());
+                    log_err_printf(logshared, "error in Put cb: %s\n", e.what());
                 }
             } else {
                 op->error("RPC not implemented by this PV");
