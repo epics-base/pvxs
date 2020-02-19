@@ -525,7 +525,10 @@ void Server::Pvt::doBeacons(short evt)
 
         if(ntx<0) {
             int err = evutil_socket_geterror(beaconSender.sock);
-            log_warn_printf(serverio, "Beacon tx error (%d) %s\n",
+            auto lvl = Level::Warn;
+            if(err==EINTR || err==EPERM)
+                lvl = Level::Debug;
+            log_printf(serverio, lvl, "Beacon tx error (%d) %s\n",
                        err, evutil_socket_error_to_string(err));
 
         } else if(unsigned(ntx)<pktlen) {
