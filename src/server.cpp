@@ -458,6 +458,9 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
     uint16_t nreply = 0;
     for(const auto& name : searchOp._names) {
+        log_debug_printf(serverio, "  %sclaim %s\n",
+                         name._claim ? "" : "dis",
+                         name._name);
         if(name._claim)
             nreply++;
     }

@@ -66,8 +66,8 @@ struct evbase::Pvt : public epicsThreadRunable
 
         // TODO: cleanup after pending event_base_once()
 
-        if(logerr.test(ret ? Level::Crit : Level::Info))
-            errlogPrintf("Exit loop worker: %d for %p\n", ret, base);
+        auto lvl = ret ? Level::Crit : Level::Info;
+        log_printf(logerr, lvl, "Exit loop worker: %d for %p\n", ret, base);
     }
 };
 
