@@ -64,6 +64,7 @@ LIB_SRCS += evhelper.cpp
 LIB_SRCS += udp_collector.cpp
 
 LIB_SRCS += config.cpp
+LIB_SRCS += conn.cpp
 
 LIB_SRCS += server.cpp
 LIB_SRCS += serverconn.cpp

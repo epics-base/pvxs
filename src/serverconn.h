@@ -20,6 +20,7 @@
 #include "utilpvt.h"
 #include "dataimpl.h"
 #include "udp_collector.h"
+#include "conn.h"
 
 namespace pvxs {namespace impl {
 
@@ -93,22 +94,11 @@ struct ServerChan
     ~ServerChan();
 };
 
-struct ServerConn : public std::enable_shared_from_this<ServerConn>
+struct ServerConn : public ConnBase, public std::enable_shared_from_this<ServerConn>
 {
     ServIface* const iface;
 
-    SockAddr peerAddr;
-    std::string peerName;
-    evbufferevent bev;
-    TypeStore rxRegistry;
-
     // credentials
-
-    bool peerBE;
-    bool expectSeg;
-
-    uint8_t segCmd;
-    evbuf segBuf, txBody;
 
     uint32_t nextSID;
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanBySID;
@@ -123,10 +113,8 @@ struct ServerConn : public std::enable_shared_from_this<ServerConn>
 
     const std::shared_ptr<ServerChan>& lookupSID(uint32_t sid);
 
-    void enqueueTxBody(pva_app_msg_t cmd);
-
 private:
-#define CASE(Op) void handle_##Op();
+#define CASE(Op) virtual void handle_##Op() override final;
     CASE(ECHO);
     CASE(CONNECTION_VALIDATION);
     CASE(SEARCH);
@@ -149,13 +137,10 @@ private:
 
     void handle_GPR(pva_app_msg_t cmd);
 
-    void cleanup();
-    void bevEvent(short events);
-    void bevRead();
-    void bevWrite();
-    static void bevEventS(struct bufferevent *bev, short events, void *ptr);
-    static void bevReadS(struct bufferevent *bev, void *ptr);
-    static void bevWriteS(struct bufferevent *bev, void *ptr);
+    virtual void cleanup() override final;
+    //void bevEvent(short events);
+    virtual void bevRead() override final;
+    virtual void bevWrite() override final;
 };
 
 struct ServIface
