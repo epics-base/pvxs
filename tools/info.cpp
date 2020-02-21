@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <list>
+#include <atomic>
 
 #include <epicsStdlib.h>
 #include <epicsGetopt.h>
@@ -66,16 +67,33 @@ int main(int argc, char *argv[])
 
     std::list<std::shared_ptr<client::Operation>> ops;
 
+    std::atomic<int> remaining{argc-optind};
+    epicsEvent done;
+
     for(auto n : range(optind, argc)) {
 
         ops.push_back(ctxt.info(argv[n])
-                      .result([&argv, n](Value&& prototype) {
+                      .result([&argv, n, &remaining, &done](Value&& prototype) {
                           std::cout<<argv[n]<<"\n"<<prototype;
+
+                          if(remaining.fetch_sub(1)==1)
+                              done.trigger();
                       })
                       .exec());
     }
 
-    epicsThreadSleep(timeout);
+    SigInt sig([&done]() {
+        done.signal();
+    });
 
-    return 0;
+    if(!done.wait(timeout)) {
+        std::cerr<<"Timeout\n";
+        return 1;
+    } else if(remaining.load()==0u) {
+        return 0;
+    } else {
+        if(verbose)
+            std::cerr<<"Interrupted\n";
+        return 2;
+    }
 }

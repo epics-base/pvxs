@@ -15,11 +15,6 @@
 #include <tuple>
 #include <regex>
 
-#if !defined(_WIN32)
-#include <signal.h>
-#define USE_SIGNAL
-#endif
-
 #include <epicsEvent.h>
 #include <epicsGetopt.h>
 #include <osiSock.h>
@@ -34,16 +29,6 @@ namespace pva = pvxs;
 namespace {
 
 DEFINE_LOGGER(out, "pvxvct");
-
-epicsEvent done;
-
-#ifdef USE_SIGNAL
-void alldone(int num)
-{
-    (void)num;
-    done.signal();
-}
-#endif
 
 // parse hostname, IP, or IP+netmask
 std::tuple<uint32_t, uint32_t>
@@ -195,7 +180,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        auto searchCB = [&opts](const pva::UDPManager::Search& msg)
+        auto searchCB = [](const pva::UDPManager::Search& msg)
         {
             log_info_printf(out, "%s Searching for:\n", msg.src.tostring().c_str());
             for(const auto pv : msg.names) {
@@ -203,7 +188,7 @@ int main(int argc, char *argv[])
             }
         };
 
-        auto beaconCB = [&opts](const pva::UDPManager::Beacon& msg)
+        auto beaconCB = [](const pva::UDPManager::Beacon& msg)
         {
             const auto& guid = msg.guid;
             log_info_printf(out, "%s Beacon %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
@@ -226,12 +211,10 @@ int main(int argc, char *argv[])
         }
 
 
-
-#ifdef USE_SIGNAL
-        signal(SIGINT, alldone);
-        signal(SIGTERM, alldone);
-        signal(SIGQUIT, alldone);
-#endif
+        epicsEvent done;
+        pva::SigInt handle([&done](){
+            done.trigger();
+        });
 
         done.wait();
         log_info_printf(out, "Done\n%s", "");

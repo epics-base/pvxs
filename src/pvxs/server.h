@@ -60,6 +60,10 @@ public:
      *
      * run() may be interupted by calling interrupt(),
      * or by SIGINT or SIGTERM (only one Server per process)
+     *
+     * Intended to simple CLI programs.
+     * Only one Server in a process may be in run() at any moment.
+     * Other use case should call start()/stop()
      */
     Server& run();
     //! Queue a request to break run()

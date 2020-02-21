@@ -4,12 +4,6 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#if defined(_WIN32)
-#  include <windows.h>
-#elif !defined(__rtems__) && !defined(vxWorks)
-#  include <sys/types.h>
-#  include <unistd.h>
-#endif
 
 #include <list>
 #include <map>
@@ -177,52 +171,22 @@ Server& Server::stop()
     return *this;
 }
 
-static std::atomic<Server::Pvt*> sig_target{nullptr};
-
-static void sig_handle(int sig)
-{
-    auto serv = sig_target.load();
-
-    if(serv)
-        serv->done.signal();
-}
-
 Server& Server::run()
 {
     if(!pvt)
         throw std::logic_error("NULL Server");
 
-    Server::Pvt* expect = nullptr;
+    pvt->start();
 
-    std::function<void()> cleanup;
-    if(sig_target.compare_exchange_weak(expect, pvt.get())) {
-        // we claimed the signal handler slot.
-        // save previous handlers
-        auto prevINT  = signal(SIGINT , &sig_handle);
-        auto prevTERM = signal(SIGTERM, &sig_handle);
-
-        cleanup = [this, prevINT, prevTERM]() {
-            Server::Pvt* expect = pvt.get();
-            if(sig_target.compare_exchange_weak(expect, nullptr)) {
-                signal(SIGINT , prevINT);
-                signal(SIGTERM, prevTERM);
-            }
-        };
-    }
-
-    try {
-        pvt->start();
+    {
+        SigInt handler([this](){
+            pvt->done.signal();
+        });
 
         pvt->done.wait();
-
-        pvt->stop();
-    } catch(...) {
-        if(cleanup)
-            cleanup();
-        throw;
     }
-    if(cleanup)
-        cleanup();
+
+    pvt->stop();
 
     return *this;
 }

@@ -4,10 +4,14 @@
  * in file LICENSE that is included with this distribution.
  */
 
+// for signal handling
+#include <signal.h>
+
 #include <iomanip>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
+#include <atomic>
 
 #include <ctype.h>
 
@@ -156,6 +160,44 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc)
 
 
 } // namespace detail
+
+#if !defined(__rtems__) && !defined(vxWorks)
+
+static
+std::atomic<SigInt*> thesig{nullptr};
+
+void SigInt::_handle(int num)
+{
+    auto sig = thesig.load();
+    if(!sig)
+        return;
+
+    sig->handler();
+}
+
+SigInt::SigInt(decltype (handler)&& handler)
+    :handler(std::move(handler))
+{
+    // we can't atomically replace multiple signal handler anyway
+
+    SigInt* expect = nullptr;
+
+    if(!thesig.compare_exchange_weak(expect, this))
+        throw std::logic_error("Only one SigInt allowed");
+
+    prevINT = signal(SIGINT, &_handle);
+    prevTERM = signal(SIGTERM, &_handle);
+}
+
+SigInt::~SigInt()
+{
+    signal(SIGINT, prevINT);
+    signal(SIGTERM, prevTERM);
+
+    thesig.store(nullptr);
+}
+
+#endif // !defined(__rtems__) && !defined(vxWorks)
 
 SockAddr::SockAddr(int af)
 {

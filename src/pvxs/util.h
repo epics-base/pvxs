@@ -7,6 +7,7 @@
 #ifndef PVXS_UTIL_H
 #define PVXS_UTIL_H
 
+#include <functional>
 #include <ostream>
 #include <type_traits>
 
@@ -69,6 +70,28 @@ inline detail::Escaper escape(const char* s) {
 inline detail::Escaper escape(const char* s,size_t n) {
     return detail::Escaper(s,n);
 }
+
+#if !defined(__rtems__) && !defined(vxWorks)
+
+//! minimal portable process signal handling in CLI tools
+class PVXS_API SigInt {
+    void (*prevINT)(int);
+    void (*prevTERM)(int);
+    std::function<void()> handler;
+    static void _handle(int);
+public:
+    SigInt(decltype (handler)&& handler);
+    ~SigInt();
+};
+
+#else // !defined(__rtems__) && !defined(vxWorks)
+
+class SigInt {
+public:
+    SigInt(std::function<void()>&& handler) {}
+}
+
+#endif // !defined(__rtems__) && !defined(vxWorks)
 
 //! representation of a network address
 struct PVXS_API SockAddr {
