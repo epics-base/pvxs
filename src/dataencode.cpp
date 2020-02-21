@@ -730,7 +730,7 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
     }
 }
 
-void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val)
+void from_wire_type(Buffer& buf, TypeStore& ctxt, Value& val)
 {
     auto descs(std::make_shared<std::vector<FieldDesc>>());
 
@@ -743,11 +743,17 @@ void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val)
         std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
         val = Value::Helper::build(stype);
 
-        from_wire_full(buf, ctxt, val);
-
     } else {
         val = Value();
     }
+}
+
+void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val)
+{
+    from_wire_type(buf, ctxt, val);
+
+    if(buf.good() && val)
+        from_wire_full(buf, ctxt, val);
 }
 
 }} // namespace pvxs::impl

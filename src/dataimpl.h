@@ -157,6 +157,10 @@ void to_wire_valid(Buffer& buf, const Value& val, const BitMask* mask=nullptr);
 
 //! deserialize type description
 PVXS_API
+void from_wire_type(Buffer& buf, TypeStore& ctxt, Value& val);
+
+//! deserialize full Value
+PVXS_API
 void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val);
 
 //! deserialize BitMask and partial Value
