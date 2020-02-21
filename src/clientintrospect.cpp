@@ -138,7 +138,7 @@ std::shared_ptr<Operation> Context::GetBuilder::exec()
         chan->pending.push_back(op);
         chan->createOperations();
 
-        ret = op;
+        ret = std::move(op);
     });
 
     return ret;
