@@ -134,11 +134,17 @@ Context::~Context() {}
 
 const Config& Context::config() const
 {
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+
     return pvt->effective;
 }
 
 void Context::hurryUp()
 {
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+
     pvt->tcp_loop.call([this](){
         pvt->poke();
     });
