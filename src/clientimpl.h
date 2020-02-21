@@ -8,6 +8,8 @@
 
 #include <list>
 
+#include <epicsTime.h>
+
 #include <pvxs/client.h>
 
 #include "evhelper.h"
@@ -133,6 +135,8 @@ struct Context::Pvt
     evsocket searchTx;
     uint16_t searchRxPort;
 
+    epicsTimeStamp lastPoke{};
+
     std::vector<uint8_t> searchMsg;
 
     // search destination address and whether to set the unicast flag
@@ -156,6 +160,8 @@ struct Context::Pvt
     ~Pvt();
 
     void close();
+
+    void poke();
 
     bool onSearch();
     static void onSearchS(evutil_socket_t fd, short evt, void *raw);

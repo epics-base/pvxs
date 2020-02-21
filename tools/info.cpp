@@ -82,6 +82,9 @@ int main(int argc, char *argv[])
                       .exec());
     }
 
+    // expedite search after starting all requests
+    ctxt.hurryUp();
+
     SigInt sig([&done]() {
         done.signal();
     });

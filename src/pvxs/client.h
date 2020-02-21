@@ -98,7 +98,7 @@ public:
     const Config& config() const;
 
     //! Request prompt search of any disconnected channels
-    void poke();
+    void hurryUp();
 
     Request request() const;
 

@@ -137,8 +137,12 @@ const Config& Context::config() const
     return pvt->effective;
 }
 
-void Context::poke()
-{}
+void Context::hurryUp()
+{
+    pvt->tcp_loop.call([this](){
+        pvt->poke();
+    });
+}
 
 static
 Value buildCAMethod()
@@ -249,6 +253,24 @@ void Context::Pvt::close()
             conn->cleanup();
         }
     });
+}
+
+void Context::Pvt::poke()
+{
+    epicsTimeStamp now{};
+
+    double age = -1.0;
+    if(epicsTimeGetCurrent(&now) || (age=epicsTimeDiffInSeconds(&now, &lastPoke))<30.0) {
+        log_debug_printf(setup, "Ignoring hurryUp() age=%.1f sec\n", age);
+        return;
+    }
+    lastPoke = now;
+
+    log_debug_printf(setup, "hurryUp()%s\n", "");
+
+    timeval immediate{0,0};
+    if(event_add(searchTimer.get(), &immediate))
+        throw std::runtime_error("Unable to schedule searchTimer");
 }
 
 bool Context::Pvt::onSearch()
