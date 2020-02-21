@@ -22,7 +22,13 @@ namespace {
 
 void usage(const char* argv0)
 {
-    std::cerr<<"Usage: "<<argv0<<" <opts> [pvname ...]\n";
+    std::cerr<<"Usage: "<<argv0<<" <opts> [pvname ...]\n"
+               "\n"
+               "  -h        Show this message.\n"
+               "  -v        Make more noise.\n"
+               "  -d        Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.\n"
+               "  -w <sec>  Operation timeout in seconds.  default 5 sec.\n"
+               ;
 }
 
 }
