@@ -23,6 +23,7 @@
 #include <epicsString.h>
 
 #include <pvxs/server.h>
+#include <pvxs/client.h>
 #include <pvxs/log.h>
 #include "evhelper.h"
 #include "serverconn.h"
@@ -137,6 +138,19 @@ const Config& Server::config() const
         throw std::logic_error("NULL Server");
 
     return pvt->effective;
+}
+
+client::Config Server::clientConfig() const
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+
+    client::Config ret;
+    ret.udp_port = pvt->effective.udp_port;
+    ret.addressList = pvt->effective.interfaces;
+    ret.autoAddrList = false;
+
+    return ret;
 }
 
 Server& Server::addPV(const std::string& name, const SharedPV& pv)

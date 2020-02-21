@@ -216,8 +216,7 @@ struct PVXS_API Config {
     //! Create a new client Context using the current configuration.
     inline
     Context build() const {
-        Context ret(*this);
-        return ret;
+        return Context(*this);
     }
 };
 

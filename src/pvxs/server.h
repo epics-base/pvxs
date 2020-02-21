@@ -22,6 +22,9 @@
 #include <pvxs/data.h>
 
 namespace pvxs {
+namespace client {
+struct Config;
+}
 namespace server {
 
 struct SharedPV;
@@ -72,6 +75,10 @@ public:
     //! effective config
     const Config& config() const;
 
+    //! Create a client configuration which can communicate with this Server.
+    //! Suitable for use in self-contained unit-tests.
+    client::Config clientConfig() const;
+
     //! Add a SharedPV to the builtin StaticSource
     Server& addPV(const std::string& name, const SharedPV& pv);
     //! Remove a SharedPV from the builtin StaticSource
@@ -115,31 +122,35 @@ struct PVXS_API Config {
     //! Supplimented iif auto_beacon==true
     std::vector<std::string> beaconDestinations;
     //! TCP port to bind.  Default is 5075.  May be zero.
-    unsigned short tcp_port;
+    unsigned short tcp_port = 5075;
     //! UDP port to bind.  Default is 5076.  May be zero, cf. Server::config() to find allocated port.
-    unsigned short udp_port;
+    unsigned short udp_port = 5076;
     //! Whether to populate the beacon address list automatically.  (recommended)
-    bool auto_beacon;
+    bool auto_beacon = true;
 
     //! Server unique ID.  Only meaningful in readback via Server::config()
-    std::array<uint8_t, 12> guid;
+    std::array<uint8_t, 12> guid{};
 
     //! Default configuration using process environment
     static Config from_env();
 
-    //! Empty config
-    Config() :tcp_port(5075), udp_port(5076), auto_beacon(true), guid{} {}
+    //! Configuration limited to the local loopback interface on a randomly choosen port.
+    //! Suitable for use in self-contained unit-tests.
+    static Config localhost();
 
-    //! Apply rules to translate current requested configuration
-    //! into one which can actually be loaded.
-    //! @post auto_beacon==false
-    //! @post !interfaces.empty()
+    /** Apply rules to translate current requested configuration
+     *  into one which can actually be loaded based on current host network configuration.
+     *
+     *  Explicit use of expand() is optional as the Context ctor expands any Config given.
+     *  expand() is provided as a aid to help understand how Context::effective() is arrived at.
+     *
+     *  @post autoAddrList==false
+     */
     void expand();
 
-    //! Short-hand for @code Server(std::move(*this)) @endcode.
+    //! Create a new Server using the current configuration.
     inline Server build() const {
-        Server ret(*this);
-        return ret;
+        return Server(*this);
     }
 };
 

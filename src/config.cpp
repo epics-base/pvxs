@@ -24,14 +24,14 @@ DEFINE_LOGGER(config, "pvxs.config");
 namespace pvxs {
 
 namespace {
-void split_addr_into(const char* name, std::vector<std::string>& out, const char *inp)
+void split_addr_into(const char* name, std::vector<std::string>& out, const char *inp, uint16_t defaultPort)
 {
     std::regex word("\\s*(\\S+)(.*)");
     std::cmatch M;
 
     while(*inp && std::regex_match(inp, M, word)) {
         sockaddr_in addr = {};
-        if(aToIPAddr(M[1].str().c_str(), 0, &addr)) {
+        if(aToIPAddr(M[1].str().c_str(), defaultPort, &addr)) {
             log_err_printf(config, "%s ignoring invalid '%s'\n", name, M[1].str().c_str());
             continue;
         }
@@ -123,27 +123,8 @@ namespace server {
 Config Config::from_env()
 {
     Config ret;
-    ret.udp_port = 5076;
 
     const char* name;
-
-    if(const char *env = pickenv(&name, {"EPICS_PVAS_INTF_ADDR_LIST"})) {
-        split_addr_into(name, ret.interfaces, env);
-    }
-
-    if(auto env = pickenv(&name, {"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(name, ret.beaconDestinations, env);
-    }
-
-    if(const char *env = pickenv(&name, {"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
-        if(epicsStrCaseCmp(env, "YES")==0) {
-            ret.auto_beacon = true;
-        } else if(epicsStrCaseCmp(env, "NO")==0) {
-            ret.auto_beacon = false;
-        } else {
-            log_err_printf(serversetup, "%s invalid bool value (YES/NO)", name);
-        }
-    }
 
     if(const char *env = pickenv(&name, {"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
         try {
@@ -160,6 +141,37 @@ Config Config::from_env()
             log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
         }
     }
+
+    if(const char *env = pickenv(&name, {"EPICS_PVAS_INTF_ADDR_LIST"})) {
+        split_addr_into(name, ret.interfaces, env, ret.tcp_port);
+    }
+
+    if(auto env = pickenv(&name, {"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
+        split_addr_into(name, ret.beaconDestinations, env, ret.udp_port);
+    }
+
+    if(const char *env = pickenv(&name, {"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
+        if(epicsStrCaseCmp(env, "YES")==0) {
+            ret.auto_beacon = true;
+        } else if(epicsStrCaseCmp(env, "NO")==0) {
+            ret.auto_beacon = false;
+        } else {
+            log_err_printf(serversetup, "%s invalid bool value (YES/NO)", name);
+        }
+    }
+
+    return ret;
+}
+
+Config Config::localhost()
+{
+    Config ret;
+
+    ret.udp_port = 0u;
+    ret.tcp_port = 0u;
+    ret.interfaces.emplace_back("127.0.0.1");
+    ret.auto_beacon = false;
+    ret.beaconDestinations.emplace_back("127.0.0.1");
 
     return ret;
 }
@@ -226,8 +238,20 @@ Config Config::from_env()
 
     const char* name;
 
+    if(const char *env = pickenv(&name, {"EPICS_PVA_BROADCAST_PORT"})) {
+        try {
+            ret.udp_port = lexical_cast<unsigned short>(env);
+        }catch(std::exception& e) {
+            log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
+        }
+    }
+    if(ret.udp_port==0u) {
+        log_err_printf(serversetup, "ignoring EPICS_PVA_BROADCAST_PORT=%d", 0);
+        ret.udp_port = 5076;
+    }
+
     if(const char *env = pickenv(&name, {"EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(name, ret.addressList, env);
+        split_addr_into(name, ret.addressList, env, ret.udp_port);
     }
 
     if(const char *env = pickenv(&name, {"EPICS_PVA_AUTO_ADDR_LIST"})) {
@@ -237,14 +261,6 @@ Config Config::from_env()
             ret.autoAddrList = false;
         } else {
             log_err_printf(serversetup, "%s invalid bool value (YES/NO)", name);
-        }
-    }
-
-    if(const char *env = pickenv(&name, {"EPICS_PVA_BROADCAST_PORT"})) {
-        try {
-            ret.udp_port = lexical_cast<unsigned short>(env);
-        }catch(std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
         }
     }
 
