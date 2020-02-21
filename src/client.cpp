@@ -26,6 +26,18 @@ constexpr size_t nBuckets = 30u;
 
 constexpr size_t maxSearchPayload = 0x4000;
 
+Disconnect::Disconnect()
+    :std::runtime_error("Disconnected")
+{}
+
+Disconnect::~Disconnect() {}
+
+RemoteError::RemoteError(const std::string& msg)
+    :std::runtime_error(msg)
+{}
+
+RemoteError::~RemoteError() {}
+
 Channel::Channel(const std::shared_ptr<Context::Pvt>& context, const std::string& name, uint32_t cid)
     :context(context)
     ,name(name)

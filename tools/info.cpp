@@ -79,8 +79,8 @@ int main(int argc, char *argv[])
     for(auto n : range(optind, argc)) {
 
         ops.push_back(ctxt.info(argv[n])
-                      .result([&argv, n, &remaining, &done](Value&& prototype) {
-                          std::cout<<argv[n]<<"\n"<<prototype;
+                      .result([&argv, n, &remaining, &done](client::Result&& result) {
+                          std::cout<<argv[n]<<"\n"<<result();
 
                           if(remaining.fetch_sub(1)==1)
                               done.trigger();

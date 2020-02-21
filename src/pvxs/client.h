@@ -6,6 +6,7 @@
 #ifndef PVXS_CLIENT_H
 #define PVXS_CLIENT_H
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <memory>
@@ -21,6 +22,38 @@ namespace client {
 
 class Context;
 struct Config;
+
+struct PVXS_API Disconnect : public std::runtime_error
+{
+    Disconnect();
+    virtual ~Disconnect();
+};
+
+struct PVXS_API RemoteError : public std::runtime_error
+{
+    RemoteError(const std::string& msg);
+    virtual ~RemoteError();
+};
+
+//! Holder for a Value or an exception
+class Result {
+    Value _result;
+    std::exception_ptr _error;
+public:
+    Result() = default;
+    Result(Value&& val) :_result(std::move(val)) {}
+    explicit Result(const std::exception_ptr& err) :_error(err) {}
+
+    //! Access to the Value, or rethrow the exception
+    Value& operator()() {
+        if(_error)
+            std::rethrow_exception(_error);
+        return _result;
+    }
+
+    bool error() const { return !!_error; }
+    explicit operator bool() const { return _result || _error; }
+};
 
 //! builder for pvRequest blob
 struct PVXS_API Request {
@@ -120,7 +153,7 @@ public:
     };
 
     class GetBuilder : protected CommonBuilder<GetBuilder> {
-        std::function<void(Value&&)> _result;
+        std::function<void(Result&&)> _result;
         bool _get;
     public:
         GetBuilder(const std::shared_ptr<Pvt>& pvt, const std::string& name, bool get) :CommonBuilder{pvt,name}, _get(get) {}

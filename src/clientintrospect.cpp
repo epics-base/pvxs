@@ -12,18 +12,19 @@
 namespace pvxs {
 namespace client {
 
+DEFINE_LOGGER(setup, "pvxs.client.setup");
 DEFINE_LOGGER(io, "pvxs.client.io");
 
 namespace {
 
 struct InfoOp : public OperationBase
 {
-    std::function<void(Value&&)> done;
+    std::function<void(Result&&)> done;
     Value result;
 
     enum state_t {
-        Connecting,
-        Waiting,
+        Connecting, // waiting for an active Channel
+        Waiting,    // waiting for reply to GET_INFO
         Done,
     } state = Connecting;
 
@@ -38,9 +39,11 @@ struct InfoOp : public OperationBase
 
     virtual void cancel() override final {
         auto context = chan->context;
-        context->tcp_loop.call([this](){
+        decltype (done) junk;
+        context->tcp_loop.call([this, &junk](){
             state = Done;
             chan.reset();
+            junk = std::move(done);
         });
     }
 
@@ -68,6 +71,17 @@ struct InfoOp : public OperationBase
 
         state = Waiting;
     }
+
+    virtual void disconnected(const std::shared_ptr<OperationBase>& self) override final
+    {
+        // Do nothing when Connecting or Done
+        if(state==Waiting) {
+            // return to pending
+
+            chan->pending.push_back(self);
+            state = Connecting;
+        }
+    }
 };
 
 } // namespace
@@ -77,12 +91,13 @@ void Connection::handle_GET_FIELD()
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t ioid=0u;
-    Status sts;
+    Status sts{Status::Fatal};
     Value prototype;
 
     from_wire(M, ioid);
     from_wire(M, sts);
-    from_wire_type(M, rxRegistry, prototype);
+    if(sts.isSuccess())
+        from_wire_type(M, rxRegistry, prototype);
 
     if(!M.good()) {
         log_crit_printf(io, "Server %s sends invalid GET_FIELD.  Disconnecting...\n", peerName.c_str());
@@ -115,7 +130,17 @@ void Connection::handle_GET_FIELD()
 
     if(info->done) {
         auto done = std::move(info->done);
-        done(std::move(prototype));
+        Result res;
+        if(sts.isSuccess()) {
+            res = Result(std::move(prototype));
+        } else {
+            res = Result(std::make_exception_ptr(RemoteError(sts.msg)));
+        }
+        try {
+            done(std::move(res));
+        }catch(std::exception& e){
+            log_err_printf(setup, "Unhandled exception %s in Info result() callback: %s\n", typeid (e).name(), e.what());
+        }
 
     } else {
         info->result = prototype;

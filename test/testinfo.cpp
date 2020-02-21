@@ -14,6 +14,7 @@
 #include <pvxs/client.h>
 #include <pvxs/server.h>
 #include <pvxs/sharedpv.h>
+#include <pvxs/source.h>
 #include <pvxs/nt.h>
 
 namespace {
@@ -39,12 +40,12 @@ struct Tester {
 
     void testWait()
     {
-        Value actual;
+        client::Result actual;
         epicsEvent done;
 
         auto op = cli.info("mailbox")
-                .result([&actual, &done](Value&& val) {
-                    actual = std::move(val);
+                .result([&actual, &done](client::Result&& result) {
+                    actual = std::move(result);
                     done.trigger();
                 })
                 .exec();
@@ -52,7 +53,7 @@ struct Tester {
         cli.hurryUp();
 
         if(testOk1(done.wait(5.0))) {
-            testEq(actual["value"].type(), TypeCode::Int32);
+            testEq(actual()["value"].type(), TypeCode::Int32);
         } else {
             testSkip(1, "timeout");
         }
@@ -91,14 +92,14 @@ struct Tester {
     {
         testShow()<<__func__;
 
-        Value actual;
+        client::Result actual;
         epicsEvent done;
 
         // server not started
 
         auto op = cli.info("mailbox")
-                .result([&actual, &done](Value&& val) {
-                    actual = std::move(val);
+                .result([&actual, &done](client::Result&& result) {
+                    actual = std::move(result);
                     done.trigger();
                 })
                 .exec();
@@ -112,15 +113,15 @@ struct Tester {
     {
         testShow()<<__func__;
 
-        Value actual;
+        client::Result actual;
         epicsEvent done;
 
         serv.start();
 
         // not storing Operation -> immediate cancel()
         cli.info("mailbox")
-                .result([&actual, &done](Value&& val) {
-                    actual = std::move(val);
+                .result([&actual, &done](client::Result&& result) {
+                    actual = std::move(result);
                     done.trigger();
                 })
                 .exec();
@@ -131,15 +132,67 @@ struct Tester {
     }
 };
 
+struct ErrorSource : public server::Source
+{
+    virtual void onSearch(Search &op) override final
+    {
+        for(auto& name : op) {
+            name.claim();
+        }
+    }
+    virtual void onCreate(std::unique_ptr<server::ChannelControl> &&op) override final
+    {
+        auto chan = std::move(op);
+
+        chan->onOp([](std::unique_ptr<server::ConnectOp>&& op) {
+            op->error("haha");
+        });
+    }
+};
+
+void testError()
+{
+    testShow()<<__func__;
+
+    auto serv = server::Config::localhost()
+            .build()
+            .addSource("err", std::make_shared<ErrorSource>())
+            .start();
+
+    auto cli = serv.clientConfig().build();
+
+    client::Result actual;
+    epicsEvent done;
+
+    auto op = cli.info("mailbox")
+            .result([&actual, &done](client::Result&& result) {
+                actual = std::move(result);
+                done.trigger();
+            })
+            .exec();
+
+    cli.hurryUp();
+
+    if(testOk1(done.wait(5.0))) {
+        testThrows<client::RemoteError>([&actual]() {
+            actual();
+        });
+
+    } else {
+        testSkip(1, "timeout");
+    }
+}
+
 } // namespace
 
 MAIN(testinfo)
 {
-    testPlan(6);
+    testPlan(8);
     logger_config_env();
     Tester().loopback();
     Tester().lazy();
     Tester().timeout();
     Tester().cancel();
+    testError();
     return testDone();
 }

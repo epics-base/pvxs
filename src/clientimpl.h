@@ -33,6 +33,7 @@ struct OperationBase : public Operation
     virtual ~OperationBase();
 
     virtual void createOp() =0;
+    virtual void disconnected(const std::shared_ptr<OperationBase>& self) =0;
 };
 
 struct RequestInfo {

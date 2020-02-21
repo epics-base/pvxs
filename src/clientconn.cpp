@@ -123,6 +123,14 @@ void Connection::cleanup()
         log_debug_printf(io, "Server %s detach channel '%s' to re-search\n", peerName.c_str(), chan->name.c_str());
     }
 
+    auto ops = std::move(opByIOID);
+    for (auto& pair : ops) {
+        auto op = pair.second.handle.lock();
+        if(!op)
+            continue;
+        op->disconnected(op);
+    }
+
     // paranoia
     pending.clear();
     chanBySID.clear();
