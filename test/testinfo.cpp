@@ -3,6 +3,9 @@
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
+
+#include <atomic>
+
 #include <testMain.h>
 
 #include <epicsUnitTest.h>
@@ -73,19 +76,29 @@ struct Tester {
     {
         testShow()<<__func__;
 
-        mbox.onFirstConnect([this](){
+        std::atomic<bool> onFC{false}, onLD{false};
+
+        mbox.onFirstConnect([this, &onFC](){
             testShow()<<__func__;
 
             mbox.open(initial);
+            onFC.store(true);
         });
-        mbox.onLastDisconnect([this](){
+        mbox.onLastDisconnect([this, &onLD](){
             testShow()<<__func__;
             mbox.close();
+            onLD.store(true);
         });
 
         serv.start();
 
         testWait();
+
+        serv.stop();
+
+        testOk1(!mbox.isOpen());
+        testOk1(!!onFC.load());
+        testOk1(!!onLD.load());
     }
 
     void timeout()
@@ -187,7 +200,7 @@ void testError()
 
 MAIN(testinfo)
 {
-    testPlan(8);
+    testPlan(11);
     logger_config_env();
     Tester().loopback();
     Tester().lazy();

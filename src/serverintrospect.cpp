@@ -101,8 +101,7 @@ struct ServerIntrospectControl : public server::ConnectOp
             return;
         serv->acceptor_loop.call([this, &fn](){
             if(auto oper = op.lock())
-                if(auto chan = oper->chan.lock())
-                    chan->onClose = std::move(fn);
+                oper->onClose = std::move(fn);
         });
     }
 
