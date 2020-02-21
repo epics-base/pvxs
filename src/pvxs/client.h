@@ -75,6 +75,14 @@ struct PVXS_API Subscription {
     virtual void cancel() =0;
 };
 
+/** An independent PVA protocol client instance
+ *
+ *  Typically created with Config::build()
+ *
+ *  @code
+ *  Context ctxt(Config::from_env().build());
+ *  @endcode
+ */
 class PVXS_API Context {
 public:
     struct Pvt;
@@ -82,6 +90,7 @@ public:
     //! An empty/dummy Server
     constexpr Context() = default;
     //! Create/allocate, but do not start, a new server with the provided config.
+    //! Config::build() is a convienent shorthand.
     explicit Context(const Config &);
     ~Context();
 
@@ -93,6 +102,7 @@ public:
 
     Request request() const;
 
+    //! Options common to all operations
     template<typename SubBuilder>
     class CommonBuilder {
     protected:
@@ -114,14 +124,28 @@ public:
         bool _get;
     public:
         GetBuilder(const std::shared_ptr<Pvt>& pvt, const std::string& name, bool get) :CommonBuilder{pvt,name}, _get(get) {}
+        //! Callback through which result Value will be delivered
         GetBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
+        //! Initiate network operation.
         PVXS_API
         std::shared_ptr<Operation> exec();
 
         friend struct Context::Pvt;
     };
     GetBuilder get(const std::string& name) { return GetBuilder{pvt, name, true}; }
+    /** Request type information from PV.
+     *  Results in a Value with no marked fields.
+     *
+     * @code
+     * Context ctxt(...);
+     * auto op = ctxt.info("pv:name")
+     *               .result([](Value&& prototype){
+     *                  std::cout<<prototype;
+     *               })
+     *               .exec();
+     * @endcode
+     */
     GetBuilder info(const std::string& name) { return GetBuilder{pvt, name, false}; }
 
     struct PutBuilder : protected CommonBuilder<GetBuilder> {
@@ -172,21 +196,24 @@ struct PVXS_API Config {
     std::vector<std::string> addressList;
 
     //! UDP port to bind.  Default is 5076.  May be zero, cf. Server::config() to find allocated port.
-    unsigned short udp_port;
+    unsigned short udp_port = 5076;
     //! Whether to populate the beacon address list automatically.  (recommended)
-    bool autoAddrList;
+    bool autoAddrList = true;
 
     //! Default configuration using process environment
     static Config from_env();
 
-    //! Empty config
-    Config() :udp_port(5076), autoAddrList(true) {}
-
-    //! Apply rules to translate current requested configuration
-    //! into one which can actually be loaded.
-    //! @post autoAddrList==false
+    /** Apply rules to translate current requested configuration
+     *  into one which can actually be loaded based on current host network configuration.
+     *
+     *  Explicit use of expand() is optional as the Context ctor expands any Config given.
+     *  expand() is provided as a aid to help understand how Context::effective() is arrived at.
+     *
+     *  @post autoAddrList==false
+     */
     void expand();
 
+    //! Create a new client Context using the current configuration.
     inline
     Context build() const {
         Context ret(*this);

@@ -10,6 +10,7 @@ The canonical source can be found at https://github.com/mdavidsaver/pvxs
    :caption: Contents:
 
    value
+   client
    server
    util
 
