@@ -26,7 +26,7 @@ struct Channel;
 // internal actions on an Operation
 struct OperationBase : public Operation
 {
-    const std::shared_ptr<Channel> chan;
+    std::shared_ptr<Channel> chan;
     uint32_t ioid;
 
     OperationBase(operation_t op, const std::shared_ptr<Channel>& chan);

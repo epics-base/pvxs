@@ -36,11 +36,19 @@ struct InfoOp : public OperationBase
         cancel();
     }
 
-    virtual void cancel() override final {}
+    virtual void cancel() override final {
+        auto context = chan->context;
+        context->tcp_loop.call([this](){
+            state = Done;
+            chan.reset();
+        });
+    }
 
     virtual void createOp() override final
     {
-        assert(state==Connecting);
+        if(state!=Connecting) {
+            return;
+        }
 
         auto& conn = chan->conn;
 
