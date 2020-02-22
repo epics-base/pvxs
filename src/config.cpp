@@ -269,9 +269,14 @@ Config Config::from_env()
 
 void Config::expand()
 {
+    if(udp_port==0)
+        throw std::runtime_error("Client can't use UDP random port");
+
+    if(interfaces.empty())
+        interfaces.emplace_back("0.0.0.0");
+
     if(autoAddrList) {
-        std::vector<std::string> all({"0.0.0.0"});
-        expandAddrList(all, addressList);
+        expandAddrList(interfaces, addressList);
         autoAddrList = false;
     }
 

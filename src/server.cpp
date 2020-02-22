@@ -147,6 +147,7 @@ client::Config Server::clientConfig() const
 
     client::Config ret;
     ret.udp_port = pvt->effective.udp_port;
+    ret.interfaces = pvt->effective.interfaces;
     ret.addressList = pvt->effective.interfaces;
     ret.autoAddrList = false;
 
@@ -515,6 +516,9 @@ void Server::Pvt::doBeacons(short evt)
         } else if(unsigned(ntx)<pktlen) {
             log_warn_printf(serverio, "Beacon truncated %u < %u",
                        unsigned(ntx), unsigned(pktlen));
+
+        } else {
+            log_debug_printf(serverio, "Beacon tx to %s\n", dest.tostring().c_str());
         }
     }
 

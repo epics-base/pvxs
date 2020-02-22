@@ -148,6 +148,12 @@ struct Context::Pvt
 
     std::list<std::unique_ptr<UDPListener> > beaconRx;
 
+    struct BTrack {
+        std::array<uint8_t, 12> guid;
+        epicsTimeStamp lastRx;
+    };
+    std::map<SockAddr, BTrack> beaconSenders;
+
     std::map<uint32_t, std::weak_ptr<Channel>> chanByCID;
     std::map<std::string, std::weak_ptr<Channel>> chanByName;
 
@@ -156,6 +162,7 @@ struct Context::Pvt
     evbase tcp_loop;
     const evevent searchRx;
     const evevent searchTimer;
+    const evevent beaconCleaner;
 
     Pvt(const Config& conf);
     ~Pvt();
@@ -164,10 +171,14 @@ struct Context::Pvt
 
     void poke();
 
+    void onBeacon(const UDPManager::Beacon& msg);
+
     bool onSearch();
     static void onSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickSearch();
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);
+    void tickBeaconClean();
+    static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);
 };
 
 } // namespace client

@@ -226,11 +226,17 @@ private:
 };
 
 struct PVXS_API Config {
+    //! List of unicast and broadcast addresses
     std::vector<std::string> addressList;
+
+    //! List of interface addresses on which beacons may be received.
+    //! Also constrains autoAddrList to only consider broadcast addresses of listed interfaces.
+    //! Empty implies wildcard 0.0.0.0
+    std::vector<std::string> interfaces;
 
     //! UDP port to bind.  Default is 5076.  May be zero, cf. Server::config() to find allocated port.
     unsigned short udp_port = 5076;
-    //! Whether to populate the beacon address list automatically.  (recommended)
+    //! Whether to extend the addressList with local interface broadcast addresses.  (recommended)
     bool autoAddrList = true;
 
     //! Default configuration using process environment
