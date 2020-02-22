@@ -79,6 +79,7 @@ Server& Server::addSource(const std::string& name,
         if(ent)
             throw std::runtime_error(SB()<<"Source already registered : ("<<name<<", "<<order<<")");
         ent = src;
+        pvt->beaconChange++;
     }
     return *this;
 }
@@ -96,6 +97,7 @@ std::shared_ptr<Source> Server::removeSource(const std::string& name,  int order
         ret = it->second;
         pvt->sources.erase(it);
     }
+    pvt->beaconChange++;
 
     return ret;
 }
@@ -159,6 +161,7 @@ Server& Server::addPV(const std::string& name, const SharedPV& pv)
     if(!pvt)
         throw std::logic_error("NULL Server");
     pvt->builtinsrc.add(name, pv);
+    pvt->beaconChange++;
     return *this;
 }
 
@@ -167,6 +170,7 @@ Server& Server::removePV(const std::string& name)
     if(!pvt)
         throw std::logic_error("NULL Server");
     pvt->builtinsrc.remove(name);
+    pvt->beaconChange++;
     return *this;
 }
 
@@ -486,7 +490,9 @@ void Server::Pvt::doBeacons(short evt)
     M.skip(8); // fill in header after body length known
 
     _to_wire<12>(M, effective.guid.data(), false);
-    M.skip(4); // ignored/unused
+    to_wire(M, uint8_t(0u)); // flags (aka. QoS, aka. undefined)
+    to_wire(M, uint8_t(beaconSeq++)); // sequence
+    to_wire(M, uint16_t(beaconChange));// change count
 
     to_wire(M, SockAddr::any(AF_INET));
     to_wire(M, uint16_t(effective.tcp_port));
@@ -522,7 +528,15 @@ void Server::Pvt::doBeacons(short evt)
         }
     }
 
-    timeval interval = {15, 0};
+    // mimic pvAccessCPP server (almost)
+    // send a "burst" of beacons, then fallback to a longer interval
+    timeval interval;
+    if(beaconCnt<10u) {
+        interval = {15, 0};
+        beaconCnt++;
+    } else {
+        interval = {180, 0};
+    }
     if(event_add(beaconTimer.get(), &interval))
         log_err_printf(serversetup, "Error re-enabling beacon timer on\n%s", "");
 }

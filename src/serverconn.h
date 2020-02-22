@@ -10,6 +10,7 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <atomic>
 
 #include <epicsEvent.h>
 
@@ -189,6 +190,9 @@ struct Server::Pvt
     epicsEvent done;
 
     std::vector<uint8_t> beaconMsg;
+    uint8_t beaconSeq = 0u;
+    uint8_t beaconCnt = 0u;
+    std::atomic<uint16_t> beaconChange{0u};
 
     // handle server "background" tasks.
     // accept new connections and send beacons
