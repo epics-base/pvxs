@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <set>
+#include <tuple>
 
 #include <osiSock.h>
 #include <dbDefs.h>
@@ -70,7 +71,10 @@ void Channel::createOperations()
             ioid = conn->nextIOID++;
         } while(conn->opByIOID.find(ioid)!=conn->opByIOID.end());
 
-        conn->opByIOID.insert(std::make_pair(ioid, RequestInfo(ioid, op)));
+        //conn->opByIOID.insert(std::make_pair(ioid, RequestInfo(sid, ioid, op)));
+        conn->opByIOID.emplace(std::piecewise_construct,
+                               std::forward_as_tuple(ioid),
+                               std::forward_as_tuple(sid, ioid, op));
         op->ioid = ioid;
 
         op->createOp();
@@ -85,8 +89,9 @@ OperationBase::OperationBase(operation_t op, const std::shared_ptr<Channel>& cha
 
 OperationBase::~OperationBase() {}
 
-RequestInfo::RequestInfo(uint32_t ioid, std::shared_ptr<OperationBase>& handle)
-    :ioid(ioid)
+RequestInfo::RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationBase>& handle)
+    :sid(sid)
+    ,ioid(ioid)
     ,op(handle->op)
     ,handle(handle)
 {}

@@ -73,6 +73,21 @@ void Connection::createChannels()
     }
 }
 
+void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
+{
+    {
+        (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
+
+        EvOutBuf R(hostBE, txBody.get());
+
+        to_wire(R, uint16_t(1u));
+        to_wire(R, sid);
+        to_wire(R, ioid);
+    }
+    enqueueTxBody(CMD_DESTROY_CHANNEL);
+
+}
+
 void Connection::bevEvent(short events)
 {
     ConnBase::bevEvent(events);
@@ -346,6 +361,8 @@ void Connection::handle_DESTROY_CHANNEL()
     chan->sid = 0xdeadbeef; // spoil
     self = std::move(chan->conn);
     context->searchBuckets[context->currentBucket].push_back(chan);
+
+    // TODO: disconnect Operations
 
     log_debug_printf(io, "Server %s destroys channel '%s' %u:%u\n",
                      peerName.c_str(), chan->name.c_str(), unsigned(cid), unsigned(sid));

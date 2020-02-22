@@ -37,13 +37,13 @@ struct OperationBase : public Operation
 };
 
 struct RequestInfo {
-    const uint32_t ioid;
+    const uint32_t sid, ioid;
     const Operation::operation_t op;
     const std::weak_ptr<OperationBase> handle;
 
     Value prototype;
 
-    RequestInfo(uint32_t ioid, std::shared_ptr<OperationBase>& handle);
+    RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationBase>& handle);
 };
 
 struct Connection : public ConnBase {
@@ -64,9 +64,11 @@ struct Connection : public ConnBase {
     uint32_t nextIOID = 0u;
 
     Connection(const std::shared_ptr<Context::Pvt>& context, const SockAddr &peerAddr);
-    ~Connection();
+    virtual ~Connection();
 
     void createChannels();
+
+    void sendDestroyRequest(uint32_t sid, uint32_t ioid);
 
     virtual void bevEvent(short events) override final;
 
@@ -79,9 +81,15 @@ struct Connection : public ConnBase {
     CASE(CREATE_CHANNEL);
     CASE(DESTROY_CHANNEL);
 
+    CASE(GET);
+    CASE(PUT);
+    //CASE(PUT_GET);
+    //CASE(MONITOR);
+    CASE(RPC);
     CASE(GET_FIELD);
 #undef CASE
 
+    void handle_GPR(pva_app_msg_t cmd);
 protected:
     void tickEcho();
     static void tickEchoS(evutil_socket_t fd, short evt, void *raw);

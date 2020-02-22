@@ -80,11 +80,11 @@ private:
 //! Handle for in-progress operation
 struct PVXS_API Operation {
     const enum operation_t {
-        Info,
-        Get,
-        Put,
-        RPC,
-        Monitor,
+        Info    = 17, // CMD_GET_FIELD
+        Get     = 10, // CMD_GET
+        Put     = 11, // CMD_PUT
+        RPC     = 20, // CMD_RPC
+        Monitor = 13, // CMD_MONITOR
     } op;
 
     explicit constexpr Operation(operation_t op) :op(op) {}
@@ -152,17 +152,22 @@ public:
         SubBuilder& server(const std::string& s) { _server = s; return _sb(); }
     };
 
-    class GetBuilder : protected CommonBuilder<GetBuilder> {
+    class GetBuilder : public CommonBuilder<GetBuilder> {
         std::function<void(Result&&)> _result;
         bool _get;
+        PVXS_API
+        std::shared_ptr<Operation> _exec_info();
+        PVXS_API
+        std::shared_ptr<Operation> _exec_get();
     public:
         GetBuilder(const std::shared_ptr<Pvt>& pvt, const std::string& name, bool get) :CommonBuilder{pvt,name}, _get(get) {}
         //! Callback through which result Value will be delivered
         GetBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
         //! Initiate network operation.
-        PVXS_API
-        std::shared_ptr<Operation> exec();
+        inline std::shared_ptr<Operation> exec() {
+            return _get ? _exec_get() : _exec_info();
+        }
 
         friend struct Context::Pvt;
     };
@@ -173,8 +178,8 @@ public:
      * @code
      * Context ctxt(...);
      * auto op = ctxt.info("pv:name")
-     *               .result([](Value&& prototype){
-     *                  std::cout<<prototype;
+     *               .result([](Result&& prototype){
+     *                  std::cout<<prototype();
      *               })
      *               .exec();
      * @endcode
@@ -184,9 +189,10 @@ public:
     struct PutBuilder : protected CommonBuilder<GetBuilder> {
         bool _doGet = true;
         std::function<Value(Value&&)> _builder;
-        std::function<void(Value&&)> _result;
+        std::function<void(Result&&)> _result;
     public:
         PutBuilder(const std::shared_ptr<Pvt>& pvt, const std::string& name) :CommonBuilder{pvt,name} {}
+        PutBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
         PVXS_API
         std::shared_ptr<Operation> exec();
@@ -197,9 +203,10 @@ public:
 
     struct RPCBuilder : protected CommonBuilder<GetBuilder> {
         Value _argument;
-        std::function<void(Value&&)> _result;
+        std::function<void(Result&&)> _result;
     public:
         RPCBuilder(const std::shared_ptr<Pvt>& pvt, const std::string& name, Value&& arg) :CommonBuilder{pvt,name}, _argument(std::move(arg)) {}
+        RPCBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
         PVXS_API
         std::shared_ptr<Operation> exec();

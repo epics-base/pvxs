@@ -41,9 +41,16 @@ struct InfoOp : public OperationBase
         auto context = chan->context;
         decltype (done) junk;
         context->tcp_loop.call([this, &junk](){
+            if(state==Waiting) {
+                chan->conn->sendDestroyRequest(chan->sid, ioid);
+
+                // This opens up a race with an in-flight reply.
+                chan->conn->opByIOID.erase(ioid);
+            }
             state = Done;
             chan.reset();
             junk = std::move(done);
+            // leave opByIOID for GC
         });
     }
 
@@ -147,12 +154,11 @@ void Connection::handle_GET_FIELD()
     }
 }
 
-std::shared_ptr<Operation> Context::GetBuilder::exec()
+std::shared_ptr<Operation> Context::GetBuilder::_exec_info()
 {
     std::shared_ptr<Operation> ret;
 
-    if(_get)
-        throw std::runtime_error("Get Not Implemented");
+    assert(!_get);
 
     pvt->tcp_loop.call([&ret, this]() {
         auto chan = Channel::build(pvt, _name);
