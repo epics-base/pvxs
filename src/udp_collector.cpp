@@ -268,11 +268,15 @@ UDPCollector::UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, cons
 
     if(event_add(rx.get(), nullptr))
         throw std::runtime_error("Unable to create collector Rx event");
+
+    manager->collectors[this->bind_addr] = this;
 }
 
 UDPCollector::~UDPCollector()
 {
     manager->loop.assertInLoop();
+
+    manager->collectors.erase(this->bind_addr);
 
     // we should only be destroyed after that last listener has removed itself
     assert(listeners.empty());
