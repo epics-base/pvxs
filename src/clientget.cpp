@@ -327,13 +327,13 @@ void Connection::handle_GET() { handle_GPR(CMD_GET); }
 void Connection::handle_PUT() { handle_GPR(CMD_PUT); }
 void Connection::handle_RPC() { handle_GPR(CMD_RPC); }
 
-std::shared_ptr<Operation> Context::GetBuilder::_exec_get()
+std::shared_ptr<Operation> GetBuilder::_exec_get()
 {
     std::shared_ptr<Operation> ret;
     assert(_get);
 
-    pvt->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(pvt, _name);
+    ctx->tcp_loop.call([&ret, this]() {
+        auto chan = Channel::build(ctx, _name);
 
         auto op = std::make_shared<GPROp>(Operation::Get, chan);
         op->done = std::move(_result);
@@ -348,15 +348,15 @@ std::shared_ptr<Operation> Context::GetBuilder::_exec_get()
     return  ret;
 }
 
-std::shared_ptr<Operation> Context::PutBuilder::exec()
+std::shared_ptr<Operation> PutBuilder::exec()
 {
     std::shared_ptr<Operation> ret;
 
     if(!_builder)
         throw std::logic_error("put() requires a builder()");
 
-    pvt->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(pvt, _name);
+    ctx->tcp_loop.call([&ret, this]() {
+        auto chan = Channel::build(ctx, _name);
 
         auto op = std::make_shared<GPROp>(Operation::Put, chan);
         op->done = std::move(_result);
@@ -373,12 +373,12 @@ std::shared_ptr<Operation> Context::PutBuilder::exec()
     return  ret;
 }
 
-std::shared_ptr<Operation> Context::RPCBuilder::exec()
+std::shared_ptr<Operation> RPCBuilder::exec()
 {
     std::shared_ptr<Operation> ret;
 
-    pvt->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(pvt, _name);
+    ctx->tcp_loop.call([&ret, this]() {
+        auto chan = Channel::build(ctx, _name);
 
         auto op = std::make_shared<GPROp>(Operation::Put, chan);
         op->done = std::move(_result);

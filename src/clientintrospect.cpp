@@ -154,14 +154,14 @@ void Connection::handle_GET_FIELD()
     }
 }
 
-std::shared_ptr<Operation> Context::GetBuilder::_exec_info()
+std::shared_ptr<Operation> GetBuilder::_exec_info()
 {
     std::shared_ptr<Operation> ret;
 
     assert(!_get);
 
-    pvt->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(pvt, _name);
+    ctx->tcp_loop.call([&ret, this]() {
+        auto chan = Channel::build(ctx, _name);
 
         auto op = std::make_shared<InfoOp>(chan);
         op->done = std::move(_result);

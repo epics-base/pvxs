@@ -108,6 +108,11 @@ struct PVXS_API Subscription {
     virtual void cancel() =0;
 };
 
+class GetBuilder;
+class PutBuilder;
+class RPCBuilder;
+class MonitorBuilder;
+
 /** An independent PVA protocol client instance
  *
  *  Typically created with Config::build()
@@ -135,43 +140,9 @@ public:
 
     Request request() const;
 
-    //! Options common to all operations
-    template<typename SubBuilder>
-    class CommonBuilder {
-    protected:
-        std::shared_ptr<Pvt> pvt;
-        std::string _name;
-        Request _pvRequest;
-        std::string _server;
-        int _prio;
-        CommonBuilder(const std::shared_ptr<Pvt>& pvt, const std::string& name) : pvt(pvt), _name(name), _prio(0) {}
-        inline SubBuilder& _sb() { return static_cast<SubBuilder&>(*this); }
-    public:
-        SubBuilder& priority(int p) { _prio = p; return _sb(); }
-        SubBuilder& request(const Request& r) { _pvRequest = r; return _sb(); }
-        SubBuilder& server(const std::string& s) { _server = s; return _sb(); }
-    };
+    inline
+    GetBuilder get(const std::string& name);
 
-    class GetBuilder : public CommonBuilder<GetBuilder> {
-        std::function<void(Result&&)> _result;
-        bool _get;
-        PVXS_API
-        std::shared_ptr<Operation> _exec_info();
-        PVXS_API
-        std::shared_ptr<Operation> _exec_get();
-    public:
-        GetBuilder(const std::shared_ptr<Pvt>& pvt, const std::string& name, bool get) :CommonBuilder{pvt,name}, _get(get) {}
-        //! Callback through which result Value will be delivered
-        GetBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
-
-        //! Initiate network operation.
-        inline std::shared_ptr<Operation> exec() {
-            return _get ? _exec_get() : _exec_info();
-        }
-
-        friend struct Context::Pvt;
-    };
-    GetBuilder get(const std::string& name) { return GetBuilder{pvt, name, true}; }
     /** Request type information from PV.
      *  Results in a Value with no marked fields.
      *
@@ -184,53 +155,102 @@ public:
      *               .exec();
      * @endcode
      */
-    GetBuilder info(const std::string& name) { return GetBuilder{pvt, name, false}; }
+    inline
+    GetBuilder info(const std::string& name);
 
-    struct PutBuilder : protected CommonBuilder<GetBuilder> {
-        bool _doGet = true;
-        std::function<Value(Value&&)> _builder;
-        std::function<void(Result&&)> _result;
-    public:
-        PutBuilder(const std::shared_ptr<Pvt>& pvt, const std::string& name) :CommonBuilder{pvt,name} {}
-        PutBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
+    inline
+    PutBuilder put(const std::string& name);
 
-        PVXS_API
-        std::shared_ptr<Operation> exec();
+    inline
+    RPCBuilder rpc(const std::string& name, Value&& arg);
 
-        friend struct Context::Pvt;
-    };
-    PutBuilder put(const std::string& name) { return PutBuilder{pvt, name}; }
-
-    struct RPCBuilder : protected CommonBuilder<GetBuilder> {
-        Value _argument;
-        std::function<void(Result&&)> _result;
-    public:
-        RPCBuilder(const std::shared_ptr<Pvt>& pvt, const std::string& name, Value&& arg) :CommonBuilder{pvt,name}, _argument(std::move(arg)) {}
-        RPCBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
-
-        PVXS_API
-        std::shared_ptr<Operation> exec();
-
-        friend struct Context::Pvt;
-    };
-    RPCBuilder rpc(const std::string& name, Value&& arg) { return RPCBuilder{pvt, name, std::move(arg)}; }
-
-    struct MonitorBuilder : protected CommonBuilder<GetBuilder> {
-        std::function<void(const std::shared_ptr<Subscription>&, Subscription::Event)> _event;
-    public:
-        MonitorBuilder(const std::shared_ptr<Pvt>& pvt, const std::string& name) :CommonBuilder{pvt,name} {}
-
-        PVXS_API
-        std::shared_ptr<Subscription> exec();
-
-        friend struct Context::Pvt;
-    };
-    MonitorBuilder monitor(const std::string& name) { return MonitorBuilder{pvt, name}; }
+    inline
+    MonitorBuilder monitor(const std::string& name);
 
     explicit operator bool() const { return pvt.operator bool(); }
 private:
     std::shared_ptr<Pvt> pvt;
 };
+
+//! Options common to all operations
+template<typename SubBuilder>
+class CommonBuilder {
+protected:
+    std::shared_ptr<Context::Pvt> ctx;
+    std::string _name;
+    Request _pvRequest;
+    std::string _server;
+    int _prio;
+    CommonBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : ctx(ctx), _name(name), _prio(0) {}
+    inline SubBuilder& _sb() { return static_cast<SubBuilder&>(*this); }
+public:
+    SubBuilder& priority(int p) { _prio = p; return _sb(); }
+    SubBuilder& request(const Request& r) { _pvRequest = r; return _sb(); }
+    SubBuilder& server(const std::string& s) { _server = s; return _sb(); }
+};
+
+class GetBuilder : public CommonBuilder<GetBuilder> {
+    std::function<void(Result&&)> _result;
+    bool _get;
+    PVXS_API
+    std::shared_ptr<Operation> _exec_info();
+    PVXS_API
+    std::shared_ptr<Operation> _exec_get();
+public:
+    GetBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, bool get) :CommonBuilder{ctx,name}, _get(get) {}
+    //! Callback through which result Value will be delivered
+    GetBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
+
+    //! Initiate network operation.
+    inline std::shared_ptr<Operation> exec() {
+        return _get ? _exec_get() : _exec_info();
+    }
+
+    friend struct Context::Pvt;
+};
+GetBuilder Context::info(const std::string& name) { return GetBuilder{pvt, name, false}; }
+GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, true}; }
+
+class PutBuilder : protected CommonBuilder<GetBuilder> {
+    bool _doGet = true;
+    std::function<Value(Value&&)> _builder;
+    std::function<void(Result&&)> _result;
+public:
+    PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
+    PutBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
+
+    PVXS_API
+    std::shared_ptr<Operation> exec();
+
+    friend struct Context::Pvt;
+};
+PutBuilder Context::put(const std::string& name) { return PutBuilder{pvt, name}; }
+
+class RPCBuilder : protected CommonBuilder<GetBuilder> {
+    Value _argument;
+    std::function<void(Result&&)> _result;
+public:
+    RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, Value&& arg) :CommonBuilder{ctx,name}, _argument(std::move(arg)) {}
+    RPCBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
+
+    PVXS_API
+    std::shared_ptr<Operation> exec();
+
+    friend struct Context::Pvt;
+};
+RPCBuilder Context::rpc(const std::string& name, Value&& arg) { return RPCBuilder{pvt, name, std::move(arg)}; }
+
+class MonitorBuilder : protected CommonBuilder<GetBuilder> {
+    std::function<void(const std::shared_ptr<Subscription>&, Subscription::Event)> _event;
+public:
+    MonitorBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
+
+    PVXS_API
+    std::shared_ptr<Subscription> exec();
+
+    friend struct Context::Pvt;
+};
+MonitorBuilder Context::monitor(const std::string& name) { return MonitorBuilder{pvt, name}; }
 
 struct PVXS_API Config {
     //! List of unicast and broadcast addresses
