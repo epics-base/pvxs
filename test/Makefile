@@ -46,6 +46,10 @@ TESTPROD += testinfo
 testinfo_SRCS += testinfo.cpp
 TESTS += testinfo
 
+TESTPROD += testget
+testget_SRCS += testget.cpp
+TESTS += testget
+
 TESTPROD += dummyserv
 dummyserv_SRCS += dummyserv.cpp
 # not a unittest
