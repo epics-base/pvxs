@@ -52,6 +52,17 @@ Channel::~Channel()
     context->chanByCID.erase(cid);
     context->chanByName.erase(name);
     // searchBuckets cleaned in tickSearch()
+    if(state==Creating || state==Active) {
+        {
+            (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
+
+            EvOutBuf R(hostBE, conn->txBody.get());
+
+            to_wire(R, sid);
+            to_wire(R, cid);
+        }
+        conn->enqueueTxBody(CMD_DESTROY_CHANNEL);
+    }
 }
 
 void Channel::createOperations()

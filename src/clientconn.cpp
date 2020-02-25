@@ -84,7 +84,7 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
         to_wire(R, sid);
         to_wire(R, ioid);
     }
-    enqueueTxBody(CMD_DESTROY_CHANNEL);
+    enqueueTxBody(CMD_DESTROY_REQUEST);
 
 }
 
