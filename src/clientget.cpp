@@ -302,11 +302,12 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
         to_wire(R, op->chan->sid);
         to_wire(R, ioid);
         if(gpr->state==GPROp::GetOPut) {
-            to_wire(R, 0x40);
+            to_wire(R, uint8_t(0x40));
 
         } else if(gpr->state==GPROp::Exec) {
-            to_wire(R, 0x00);
-            to_wire_valid(R, info->prototype);
+            to_wire(R, uint8_t(0x00));
+            if(cmd!=CMD_GET)
+                to_wire_valid(R, info->prototype);
 
         } else if(gpr->state==GPROp::Done) {
             // we're actually building CMD_DESTROY_REQUEST
