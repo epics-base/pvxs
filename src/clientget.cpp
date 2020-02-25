@@ -121,7 +121,10 @@ struct GPROp : public OperationBase
             notify();
 
         } else {
-            throw std::logic_error("GPR Disconnect unexpected state");
+            state = Done;
+            result = Result(std::make_exception_ptr(std::logic_error("GPR Disconnect in unexpected state")));
+
+            notify();
         }
     }
 };
@@ -188,7 +191,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
             // INIT of PUT or GET, store type description
             info->prototype = data;
 
-        } else if(M.good() && cmd==CMD_GET && !init &&  sts.isSuccess()) {
+        } else if(M.good() && !init && (cmd==CMD_GET || (cmd==CMD_PUT && get)) &&  sts.isSuccess()) {
             // GET reply
 
             data = info->prototype.cloneEmpty();
@@ -218,13 +221,13 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
             gpr = static_cast<GPROp*>(op.get());
 
             // check that subcmd is as expected based on operation state
-            if((gpr->state==GPROp::Creating) ^ init) {
-                M.fault();
+            if((gpr->state==GPROp::Creating) && init) {
 
-            } else if(gpr->state==GPROp::GetOPut && !get) {
-                M.fault();
+            } else if((gpr->state==GPROp::GetOPut) && !init && get) {
 
-            } else if(gpr->state!=GPROp::Exec && gpr->state!=GPROp::Creating) {
+            } else if((gpr->state==GPROp::Exec) && !init && !get) {
+
+            } else {
                 M.fault();
             }
         }
