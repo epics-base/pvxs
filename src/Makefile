@@ -76,6 +76,7 @@ LIB_SRCS += serversource.cpp
 LIB_SRCS += sharedpv.cpp
 
 LIB_SRCS += client.cpp
+LIB_SRCS += clientreq.cpp
 LIB_SRCS += clientconn.cpp
 LIB_SRCS += clientintrospect.cpp
 LIB_SRCS += clientget.cpp

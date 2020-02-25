@@ -55,28 +55,6 @@ public:
     explicit operator bool() const { return _result || _error; }
 };
 
-//! builder for pvRequest blob
-struct PVXS_API Request {
-
-    Request& parse(const std::string& expr);
-
-    Request& field(const std::string& name);
-
-private:
-    void _record(const std::string& name, const std::type_info& info, const void* val);
-public:
-    template<typename T>
-    Request& record(const std::string& name, const T& v) {
-        _record(name, typeid(T), static_cast<const void*>(&v));
-        return *this;
-    }
-
-    inline explicit operator bool() const { return pvt.operator bool(); }
-    struct Pvt;
-private:
-    std::shared_ptr<Pvt> pvt;
-};
-
 //! Handle for in-progress operation
 struct PVXS_API Operation {
     const enum operation_t {
@@ -138,8 +116,6 @@ public:
     //! Request prompt search of any disconnected channels
     void hurryUp();
 
-    Request request() const;
-
     inline
     GetBuilder get(const std::string& name);
 
@@ -172,24 +148,77 @@ private:
     std::shared_ptr<Pvt> pvt;
 };
 
-//! Options common to all operations
-template<typename SubBuilder>
-class CommonBuilder {
+namespace detail {
+
+class PVXS_API CommonBase {
 protected:
     std::shared_ptr<Context::Pvt> ctx;
     std::string _name;
-    Request _pvRequest;
     std::string _server;
-    int _prio;
-    CommonBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : ctx(ctx), _name(name), _prio(0) {}
+    struct Req;
+    std::shared_ptr<Req> req;
+    unsigned _prio = 0u;
+
+    CommonBase(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : ctx(ctx), _name(name) {}
+    ~CommonBase();
+
+    void _rawRequest(Value&&);
+    void _field(const std::string& s);
+    void _record(const std::string& key, const void* value, StoreType vtype);
+    void _parse(const std::string& req);
+    Value _build();
+};
+
+//! Options common to all operations
+template<typename SubBuilder>
+class CommonBuilder : public CommonBase {
+protected:
+    constexpr CommonBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : CommonBase(ctx, name) {}
     inline SubBuilder& _sb() { return static_cast<SubBuilder&>(*this); }
 public:
+    //! Add field to pvRequest blob.
+    //! A more efficient alternative to @code pvRequest("field(name)") @endcode
+    SubBuilder& field(const std::string& fld) { _field(fld); return _sb(); }
+
+    /** Add a key/value option to the request.
+     *
+     * Well known options include:
+     *
+     * - queueSize : positive integer
+     * - block     : bool
+     * - process   : bool or string "true", "false", or "passive"
+     * - pipeline  : bool
+     *
+     * A more efficient alternative to @code pvRequest("record[key=value]") @endcode
+     */
+    template<typename T>
+    SubBuilder& record(const std::string& name, const T& val) {
+        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
+        typename map_t::store_t norm(val);
+        _record(name, &norm, map_t::code);
+        return _sb();
+    }
+
+    /** Parse pvRequest string.
+     *
+     *  Supported syntax is a list of zero or more entities
+     *  seperated by zero or more spaces.
+     *
+     *  - field(<fld.name>)
+     *  - record(<key>=<value>)
+     */
+    SubBuilder& pvRequest(const std::string& expr) { _parse(expr); return _sb(); }
+
+    //! Store raw pvRequest blob.
+    SubBuilder& rawRequest(Value&& r) { _rawRequest(std::move(r)); return _sb(); }
+
     SubBuilder& priority(int p) { _prio = p; return _sb(); }
-    SubBuilder& request(const Request& r) { _pvRequest = r; return _sb(); }
     SubBuilder& server(const std::string& s) { _server = s; return _sb(); }
 };
 
-class GetBuilder : public CommonBuilder<GetBuilder> {
+} // namespace detail
+
+class GetBuilder : public detail::CommonBuilder<GetBuilder> {
     std::function<void(Result&&)> _result;
     bool _get;
     PVXS_API
@@ -211,7 +240,7 @@ public:
 GetBuilder Context::info(const std::string& name) { return GetBuilder{pvt, name, false}; }
 GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, true}; }
 
-class PutBuilder : protected CommonBuilder<GetBuilder> {
+class PutBuilder : protected detail::CommonBuilder<GetBuilder> {
     bool _doGet = true;
     std::function<Value(Value&&)> _builder;
     std::function<void(Result&&)> _result;
@@ -226,7 +255,7 @@ public:
 };
 PutBuilder Context::put(const std::string& name) { return PutBuilder{pvt, name}; }
 
-class RPCBuilder : protected CommonBuilder<GetBuilder> {
+class RPCBuilder : protected detail::CommonBuilder<GetBuilder> {
     Value _argument;
     std::function<void(Result&&)> _result;
 public:
@@ -240,7 +269,7 @@ public:
 };
 RPCBuilder Context::rpc(const std::string& name, Value&& arg) { return RPCBuilder{pvt, name, std::move(arg)}; }
 
-class MonitorBuilder : protected CommonBuilder<GetBuilder> {
+class MonitorBuilder : protected detail::CommonBuilder<GetBuilder> {
     std::function<void(const std::shared_ptr<Subscription>&, Subscription::Event)> _event;
 public:
     MonitorBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
