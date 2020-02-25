@@ -193,6 +193,9 @@ struct Member {
     Member(TypeCode code, const std::string& name, std::initializer_list<Member> children)
         :Member(code, name , std::string(), children)
     {}
+
+    PVXS_API
+    void addChild(const Member& mem);
 };
 
 /** Helper functions for building TypeDef.

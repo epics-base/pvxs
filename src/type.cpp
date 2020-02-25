@@ -132,6 +132,12 @@ Member::Member(TypeCode code, const std::string& name, const std::string& id, st
     }
 }
 
+void Member::addChild(const Member& mem)
+{
+    node_validate(this, mem.id, mem.code);
+    children.push_back(mem);
+}
+
 static
 void build_tree(std::vector<FieldDesc>& desc, const Member& node)
 {
