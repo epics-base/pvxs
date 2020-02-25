@@ -188,12 +188,12 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
             // INIT of PUT or GET, store type description
             info->prototype = data;
 
-        } else if(M.good() && cmd!=CMD_RPC && !init &&  sts.isSuccess()) {
-            // GET/PUT reply
+        } else if(M.good() && cmd==CMD_GET && !init &&  sts.isSuccess()) {
+            // GET reply
 
             data = info->prototype.cloneEmpty();
             if(data)
-                from_wire_full(M, rxRegistry, data);
+                from_wire_valid(M, rxRegistry, data);
         }
     }
 
@@ -224,7 +224,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
             } else if(gpr->state==GPROp::GetOPut && !get) {
                 M.fault();
 
-            } else if(gpr->state!=GPROp::Exec) {
+            } else if(gpr->state!=GPROp::Exec && gpr->state!=GPROp::Creating) {
                 M.fault();
             }
         }
@@ -337,7 +337,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
 
         auto op = std::make_shared<GPROp>(Operation::Get, chan);
         op->done = std::move(_result);
-        // TODO pvRequest
+        op->pvRequest = _build();
 
         chan->pending.push_back(op);
         chan->createOperations();
@@ -362,7 +362,7 @@ std::shared_ptr<Operation> PutBuilder::exec()
         op->done = std::move(_result);
         op->builder = std::move(_builder);
         op->getOput = _doGet;
-        // TODO pvRequest
+        op->pvRequest = _build();
 
         chan->pending.push_back(op);
         chan->createOperations();
@@ -383,7 +383,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
         auto op = std::make_shared<GPROp>(Operation::Put, chan);
         op->done = std::move(_result);
         op->rpcarg = std::move(_argument);
-        // TODO pvRequest
+        op->pvRequest = _build();
 
         chan->pending.push_back(op);
         chan->createOperations();

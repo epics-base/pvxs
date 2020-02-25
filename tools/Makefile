@@ -16,6 +16,9 @@ pvxvct_SRCS += pvxvct.cpp
 PROD += pvxinfo
 pvxinfo_SRCS += info.cpp
 
+PROD += pvxget
+pvxget_SRCS += get.cpp
+
 PROD_SYS_LIBS += event_core
 
 PROD_SYS_LIBS_DEFAULT += event_pthreads
