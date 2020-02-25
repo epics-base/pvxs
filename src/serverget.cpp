@@ -47,7 +47,10 @@ struct ServerGPR : public ServerOp
              * PUT w/o subcmd&0x40 and !value
              */
 
-            if(cmd==CMD_GET || (cmd==CMD_PUT && (subcmd&0x40))) {
+            if(!msg.empty()) {
+                // noop
+
+            } else if(cmd==CMD_GET || (cmd==CMD_PUT && (subcmd&0x40))) {
                 if(!value || Value::Helper::desc(value)!=this->type.get())
                     throw std::logic_error("GET must reply with exact type previously passed to connect()");
 
