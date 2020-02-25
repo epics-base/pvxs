@@ -435,6 +435,32 @@ bool Value::tryCopyOut(void *ptr, StoreType type) const
 }
 
 namespace {
+
+bool parseScalar(double& dest, const std::string& inp)
+{
+    return 0==epicsParseDouble(inp.c_str(), &dest, nullptr);
+}
+
+bool parseScalar(int64_t& dest, const std::string& inp)
+{
+    epicsInt64 t;
+    if(epicsParseInt64(inp.c_str(), &t, 0, nullptr)==0) {
+        dest = t;
+        return true;
+    }
+    return false;
+}
+
+bool parseScalar(uint64_t& dest, const std::string& inp)
+{
+    epicsUInt64 t;
+    if(epicsParseUInt64(inp.c_str(), &t, 0, nullptr)==0) {
+        dest = t;
+        return true;
+    }
+    return false;
+}
+
 // C-style cast between scalar storage types, and print to string (base 10)
 template<typename Dest>
 bool copyInScalar(Dest& dest, const void *ptr, StoreType type)
@@ -444,7 +470,7 @@ bool copyInScalar(Dest& dest, const void *ptr, StoreType type)
     case StoreType::Integer:  dest = *reinterpret_cast<const int64_t*>(ptr); return true;
     case StoreType::UInteger: dest = *reinterpret_cast<const uint64_t*>(ptr); return true;
     case StoreType::Bool:     dest = *reinterpret_cast<const bool*>(ptr); return true;
-    case StoreType::String: // TODO: parse from string
+    case StoreType::String:   return parseScalar(dest, *reinterpret_cast<const std::string*>(ptr));
     case StoreType::Null:
     case StoreType::Compound:
     case StoreType::Array:
