@@ -217,7 +217,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(0);
+    testPlan(13);
     logger_config_env();
     Tester().loopback();
     Tester().lazy();
