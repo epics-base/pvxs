@@ -246,6 +246,7 @@ class PutBuilder : protected detail::CommonBuilder<GetBuilder> {
     std::function<void(Result&&)> _result;
 public:
     PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
+    PutBuilder& fetchPresent(bool f) { _doGet = f; return *this; }
     PutBuilder& build(decltype (_builder)&& cb) { _builder = std::move(cb); return *this; }
     PutBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 

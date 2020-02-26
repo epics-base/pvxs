@@ -50,6 +50,10 @@ TESTPROD += testget
 testget_SRCS += testget.cpp
 TESTS += testget
 
+TESTPROD += testput
+testput_SRCS += testput.cpp
+TESTS += testput
+
 TESTPROD += dummyserv
 dummyserv_SRCS += dummyserv.cpp
 # not a unittest
