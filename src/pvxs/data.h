@@ -353,9 +353,19 @@ private:
 public:
     // movable and copyable
     Value(const Value&) = default;
-    Value(Value&&) = default;
+    Value(Value&& o) noexcept
+        :desc(o.desc)
+    {
+        store = std::move(o.store);
+        o.desc = nullptr;
+    }
     Value& operator=(const Value&) = default;
-    Value& operator=(Value&&) = default;
+    Value& operator=(Value&& o) noexcept {
+        store = std::move(o.store);
+        desc = o.desc;
+        o.desc = nullptr;
+        return *this;
+    }
     ~Value();
 
     //! allocate new storage, with default values
