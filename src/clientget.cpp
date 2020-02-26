@@ -306,8 +306,14 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
 
         } else if(gpr->state==GPROp::Exec) {
             to_wire(R, uint8_t(0x00));
-            if(cmd!=CMD_GET)
+            if(cmd==CMD_PUT) {
                 to_wire_valid(R, info->prototype);
+
+            } else if(cmd==CMD_RPC) {
+                to_wire(R, Value::Helper::desc(gpr->rpcarg));
+                if(gpr->rpcarg)
+                    to_wire_full(R, gpr->rpcarg);
+            }
 
         } else if(gpr->state==GPROp::Done) {
             // we're actually building CMD_DESTROY_REQUEST
@@ -384,7 +390,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
     ctx->tcp_loop.call([&ret, this]() {
         auto chan = Channel::build(ctx, _name);
 
-        auto op = std::make_shared<GPROp>(Operation::Put, chan);
+        auto op = std::make_shared<GPROp>(Operation::RPC, chan);
         op->done = std::move(_result);
         op->rpcarg = std::move(_argument);
         op->pvRequest = _build();

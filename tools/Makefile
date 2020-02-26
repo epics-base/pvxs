@@ -22,6 +22,9 @@ pvxget_SRCS += get.cpp
 PROD += pvxput
 pvxput_SRCS += put.cpp
 
+PROD += pvxcall
+pvxcall_SRCS += call.cpp
+
 PROD_SYS_LIBS += event_core
 
 PROD_SYS_LIBS_DEFAULT += event_pthreads
