@@ -145,4 +145,16 @@ TypeDef NTNDArray::build() const
     return def;
 }
 
+NTURI::NTURI(std::initializer_list<Member> args)
+{
+    using namespace pvxs::members;
+
+    _def = TypeDef(TypeCode::Struct, "epics:nt/NTURI:1.0", {
+                       String("scheme"),
+                       String("authority"),
+                       String("path"),
+                       Struct("query", args),
+    });
+}
+
 }} // namespace pvxs::nt

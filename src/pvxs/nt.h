@@ -65,6 +65,47 @@ struct NTNDArray {
     }
 };
 
+class PVXS_API NTURI {
+    TypeDef _def;
+public:
+    NTURI(std::initializer_list<Member> mem);
+
+    //! A TypeDef which can be appended
+    inline
+    TypeDef build() const { return _def; }
+
+    //! Instanciate
+    inline Value create() const {
+        return build().create();
+    }
+
+private:
+    template<typename Iter, typename T, typename ...Args>
+    static
+    void _assign(Iter& cur, const Iter& end, const T& v, Args... args)
+    {
+        if(cur==end)
+            throw std::logic_error("Too many arguments");
+        (*cur).template from<T>(v);
+        ++cur;
+        _assign(cur, end, args...);
+    }
+    template<typename Iter>
+    static
+    void _assign(Iter& cur, const Iter& end)
+    {}
+public:
+
+    template<typename ...Args>
+    Value call(Args... args) const {
+        auto val(create());
+        auto iterable = val["query"].ichildren();
+        auto it = iterable.begin();
+        _assign(it, iterable.end(), args...);
+        return val;
+    }
+};
+
 }} // namespace pvxs::nt
 
 #endif // PVXS_NT_H
