@@ -23,12 +23,14 @@ namespace client {
 class Context;
 struct Config;
 
+//! Operation failed because of connection to server was lost
 struct PVXS_API Disconnect : public std::runtime_error
 {
     Disconnect();
     virtual ~Disconnect();
 };
 
+//! Error condition signaled by server
 struct PVXS_API RemoteError : public std::runtime_error
 {
     RemoteError(const std::string& msg);
@@ -103,9 +105,9 @@ class PVXS_API Context {
 public:
     struct Pvt;
 
-    //! An empty/dummy Server
+    //! An empty/dummy Context
     constexpr Context() = default;
-    //! Create/allocate, but do not start, a new server with the provided config.
+    //! Create/allocate a new client with the provided config.
     //! Config::build() is a convienent shorthand.
     explicit Context(const Config &);
     ~Context();
@@ -113,11 +115,27 @@ public:
     //! effective config
     const Config& config() const;
 
-    //! Request prompt search of any disconnected channels
+    /** Request prompt search of any disconnected channels.
+     *
+     * Never required.  All disconnected channels will be searched eventually.
+     * Equivalent to detection of a Beacon anomoly (new server detected).
+     * This method has no effect if called more often than once per 30 seconds.
+     */
     void hurryUp();
 
+    /** Request the present value of a PV
+     *
+     * @code
+     * Context ctxt(...);
+     * auto op = ctxt.get("pv:name")
+     *               .result([](Result&& prototype){
+     *                  std::cout<<prototype();
+     *               })
+     *               .exec();
+     * @endcode
+     */
     inline
-    GetBuilder get(const std::string& name);
+    GetBuilder get(const std::string& pvname);
 
     /** Request type information from PV.
      *  Results in a Value with no marked fields.
@@ -132,11 +150,45 @@ public:
      * @endcode
      */
     inline
-    GetBuilder info(const std::string& name);
+    GetBuilder info(const std::string& pvname);
 
+    /** Request change/update of PV.
+     *
+     * @code
+     * Context ctxt(...);
+     * auto op = ctxt.put("pv:name")
+     *               .build([](Value&& prototype) -> Value {
+     *                   auto putval = prototype.cloneEmpty();
+     *                   putval["value"] = 42;
+     *                   return putval;
+     *               })
+     *               .result([](Result&& prototype){
+     *                  try {
+     *                      // always returns empty Value on success
+     *                      prototype();
+     *                      std::cout<<"Success";
+     *                  }catch(std::exception& e){
+     *                      std::cout<<"Error: "<<e.what();
+     *                  }
+     *               })
+     *               .exec();
+     * @endcode
+     */
     inline
     PutBuilder put(const std::string& name);
 
+    /** Execute "stateless" remote procedure call operation.
+     *
+     * @code
+     * Value arg = ...;
+     * Context ctxt(...);
+     * auto op = ctxt.rpc("pv:name", arg)
+     *               .result([](Result&& prototype){
+     *                  std::cout<<prototype();
+     *               })
+     *               .exec();
+     * @endcode
+     */
     inline
     RPCBuilder rpc(const std::string& name, Value&& arg);
 
@@ -205,7 +257,7 @@ public:
      *  seperated by zero or more spaces.
      *
      *  - field(<fld.name>)
-     *  - record(<key>=<value>)
+     *  - record(<key>=\<value>)
      */
     SubBuilder& pvRequest(const std::string& expr) { _parse(expr); return _sb(); }
 
@@ -218,6 +270,7 @@ public:
 
 } // namespace detail
 
+//! Prepare a remote GET or GET_FIELD (info) operation.
 class GetBuilder : public detail::CommonBuilder<GetBuilder> {
     std::function<void(Result&&)> _result;
     bool _get;
@@ -230,7 +283,9 @@ public:
     //! Callback through which result Value will be delivered
     GetBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
-    //! Initiate network operation.
+    //! Execute the network operation.
+    //! The caller must keep returned Operation pointer until completion
+    //! or the operation will be implicitly canceled.
     inline std::shared_ptr<Operation> exec() {
         return _get ? _exec_get() : _exec_info();
     }
@@ -240,16 +295,36 @@ public:
 GetBuilder Context::info(const std::string& name) { return GetBuilder{pvt, name, false}; }
 GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, true}; }
 
+//! Prepare a remote PUT operation
 class PutBuilder : protected detail::CommonBuilder<GetBuilder> {
     bool _doGet = true;
     std::function<Value(Value&&)> _builder;
     std::function<void(Result&&)> _result;
 public:
     PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
+    /** If fetchPresent is true (the default).  Then the Value passed to
+     *  the build() callback will be initialized with the previous values.
+     *  This will be necessary for situation like NTEnum to fetch the choices list.
+     *
+     *  It may be desirable to disable this when writing to array fields to avoid
+     *  the expense of fetching a copy of the array to be overwritten.
+     */
     PutBuilder& fetchPresent(bool f) { _doGet = f; return *this; }
+    /** Provide the builder callback.
+     *
+     *  Once the PV type information is received from the server,
+     *  this function will be responsible for populating a Value
+     *  which will actually be sent.
+     */
     PutBuilder& build(decltype (_builder)&& cb) { _builder = std::move(cb); return *this; }
+    //! Provide the operation result callback.
+    //! This callback will be passed a Result which is either an empty Value (success)
+    //! or an exception on error.
     PutBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
+    //! Execute the network operation.
+    //! The caller must keep returned Operation pointer until completion
+    //! or the operation will be implicitly canceled.
     PVXS_API
     std::shared_ptr<Operation> exec();
 
@@ -257,13 +332,18 @@ public:
 };
 PutBuilder Context::put(const std::string& name) { return PutBuilder{pvt, name}; }
 
+//! Prepare a remote RPC operation
 class RPCBuilder : protected detail::CommonBuilder<GetBuilder> {
     Value _argument;
     std::function<void(Result&&)> _result;
 public:
     RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, Value&& arg) :CommonBuilder{ctx,name}, _argument(std::move(arg)) {}
+    //! Callback through which result Value will be delivered
     RPCBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
+    //! Execute the network operation.
+    //! The caller must keep returned Operation pointer until completion
+    //! or the operation will be implicitly canceled.
     PVXS_API
     std::shared_ptr<Operation> exec();
 
