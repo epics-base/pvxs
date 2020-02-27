@@ -35,7 +35,7 @@ struct Tester {
     Tester()
         :initial(nt::NTScalar{TypeCode::Int32}.create())
         ,mbox(server::SharedPV::buildMailbox())
-        ,serv(server::Config::localhost()
+        ,serv(server::Config::isolated()
               .build()
               .addPV("mailbox", mbox))
         ,cli(serv.clientConfig().build())

@@ -136,7 +136,7 @@ struct PVXS_API Config {
 
     //! Configuration limited to the local loopback interface on a randomly choosen port.
     //! Suitable for use in self-contained unit-tests.
-    static Config localhost();
+    static Config isolated();
 
     /** Apply rules to translate current requested configuration
      *  into one which can actually be loaded based on current host network configuration.

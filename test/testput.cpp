@@ -32,7 +32,7 @@ struct Tester {
     Tester()
         :initial(nt::NTScalar{TypeCode::Int32}.create())
         ,mbox(server::SharedPV::buildMailbox())
-        ,serv(server::Config::localhost()
+        ,serv(server::Config::isolated()
               .build()
               .addPV("mailbox", mbox))
         ,cli(serv.clientConfig().build())
@@ -176,7 +176,7 @@ void testRO()
     initial["value"] = 1;
     mbox.open(initial);
 
-    auto serv = server::Config::localhost()
+    auto serv = server::Config::isolated()
             .build()
             .addPV("mailbox", mbox)
             .start();
@@ -234,7 +234,7 @@ void testError()
 {
     testShow()<<__func__;
 
-    auto serv = server::Config::localhost()
+    auto serv = server::Config::isolated()
             .build()
             .addSource("err", std::make_shared<ErrorSource>())
             .start();

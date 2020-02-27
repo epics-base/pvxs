@@ -163,7 +163,7 @@ Config Config::from_env()
     return ret;
 }
 
-Config Config::localhost()
+Config Config::isolated()
 {
     Config ret;
 
