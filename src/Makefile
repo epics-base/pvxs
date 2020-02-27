@@ -48,6 +48,7 @@ INC += pvxs/sharedArray.h
 INC += pvxs/data.h
 INC += pvxs/nt.h
 INC += pvxs/server.h
+INC += pvxs/srvcommon.h
 INC += pvxs/sharedpv.h
 INC += pvxs/source.h
 INC += pvxs/client.h

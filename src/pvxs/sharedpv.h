@@ -11,6 +11,7 @@
 #include <memory>
 
 #include <pvxs/version.h>
+#include "srvcommon.h"
 
 namespace pvxs {
 class Value;
@@ -18,7 +19,6 @@ class Value;
 namespace server {
 
 struct ChannelControl;
-struct ExecOp;
 struct Source;
 
 /** A SharedPV is a single data value which may be accessed by multiple clients through a Server.
