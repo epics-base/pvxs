@@ -116,6 +116,18 @@ struct Tester {
         }
     }
 
+    void null()
+    {
+        mbox.open(initial);
+        serv.start();
+
+        auto op = doCall(Value());
+        if(auto ret = testWaitOk()) {
+
+            testOk1(!ret.valid());
+        }
+    }
+
     void timeout()
     {
         // server not started
@@ -162,9 +174,10 @@ struct Tester {
 
 MAIN(testrpc)
 {
-    testPlan(12);
+    testPlan(14);
     Tester().echo();
     Tester().lazy();
+    Tester().null();
     Tester().timeout();
     Tester().cancel();
     Tester().error();
