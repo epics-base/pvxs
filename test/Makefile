@@ -58,6 +58,10 @@ TESTPROD += testget
 testget_SRCS += testget.cpp
 TESTS += testget
 
+TESTPROD += testmon
+testmon_SRCS += testmon.cpp
+TESTS += testmon
+
 TESTPROD += testput
 testput_SRCS += testput.cpp
 TESTS += testput

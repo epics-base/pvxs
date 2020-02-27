@@ -84,6 +84,7 @@ LIB_SRCS += clientreq.cpp
 LIB_SRCS += clientconn.cpp
 LIB_SRCS += clientintrospect.cpp
 LIB_SRCS += clientget.cpp
+LIB_SRCS += clientmon.cpp
 
 LIB_LIBS += Com
 

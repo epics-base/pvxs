@@ -86,7 +86,7 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
     CASE(GET);
     CASE(PUT);
     //CASE(PUT_GET);
-    //CASE(MONITOR);
+    CASE(MONITOR);
     CASE(RPC);
     CASE(GET_FIELD);
 #undef CASE

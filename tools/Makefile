@@ -19,6 +19,9 @@ pvxinfo_SRCS += info.cpp
 PROD += pvxget
 pvxget_SRCS += get.cpp
 
+PROD += pvxmonitor
+pvxmonitor_SRCS += monitor.cpp
+
 PROD += pvxput
 pvxput_SRCS += put.cpp
 

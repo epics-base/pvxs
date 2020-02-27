@@ -14,6 +14,8 @@
 #include <ostream>
 #include <typeinfo>
 
+#include <epicsTime.h>
+
 #include <pvxs/version.h>
 #include <pvxs/data.h>
 
@@ -28,6 +30,9 @@ struct PVXS_API Disconnect : public std::runtime_error
 {
     Disconnect();
     virtual ~Disconnect();
+
+    //! When loss of connection was noticed (when timeout expires).
+    const epicsTime time;
 };
 
 //! Error condition signaled by server
@@ -35,6 +40,24 @@ struct PVXS_API RemoteError : public std::runtime_error
 {
     RemoteError(const std::string& msg);
     virtual ~RemoteError();
+};
+
+//! For monitor only.  Subscription has completed normally
+//! and no more events will ever be received.
+struct PVXS_API Finished : public Disconnect
+{
+    Finished() = default;
+    virtual ~Finished();
+};
+
+//! For monitor only.  Subscription has (re)connected.
+struct PVXS_API Connected : public std::runtime_error
+{
+    Connected(const std::string& peerName);
+    virtual ~Connected();
+
+    const std::string peerName;
+    const epicsTime time;
 };
 
 //! Holder for a Value or an exception
@@ -80,15 +103,15 @@ struct PVXS_API Operation {
 
 //! Handle for monitor subscription
 struct PVXS_API Subscription {
-    enum Event {
-        Error,
-        Disconnect,
-        NotEmpty,
-    };
 
     virtual ~Subscription() =0;
 
     virtual void cancel() =0;
+
+    virtual void pause(bool p=true) =0;
+    inline void resume() { pause(false); }
+
+    virtual Value pop() =0;
 };
 
 class GetBuilder;
@@ -357,10 +380,18 @@ public:
 };
 RPCBuilder Context::rpc(const std::string& name, Value&& arg) { return RPCBuilder{pvt, name, std::move(arg)}; }
 
-class MonitorBuilder : protected detail::CommonBuilder<GetBuilder> {
-    std::function<void(const std::shared_ptr<Subscription>&, Subscription::Event)> _event;
+class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder> {
+    std::function<void(Subscription&)> _event;
+    bool _maskConn = true;
+    bool _maskDisconn = false;
 public:
     MonitorBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
+    //! Install event callback
+    MonitorBuilder& event(decltype (_event)&& cb) { _event = std::move(cb); return *this; }
+    //! Include Connected exceptions in queue (default false).
+    MonitorBuilder& maskConnected(bool m = true) { _maskConn = m; return *this; }
+    //! Include Disconnected exceptiosn in queue (default true).
+    MonitorBuilder& maskDisconnected(bool m = true) { _maskDisconn = m; return *this; }
 
     PVXS_API
     std::shared_ptr<Subscription> exec();

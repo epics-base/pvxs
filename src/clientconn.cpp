@@ -75,6 +75,8 @@ void Connection::createChannels()
 
 void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
 {
+    if(!bev)
+        return;
     {
         (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 

@@ -31,6 +31,7 @@ constexpr timeval beaconCleanInterval{2*180, 0};
 
 Disconnect::Disconnect()
     :std::runtime_error("Disconnected")
+    ,time(epicsTime::getCurrent())
 {}
 
 Disconnect::~Disconnect() {}
@@ -40,6 +41,16 @@ RemoteError::RemoteError(const std::string& msg)
 {}
 
 RemoteError::~RemoteError() {}
+
+Finished::~Finished() {}
+
+Connected::Connected(const std::string& peerName)
+    :std::runtime_error("Connected")
+    ,peerName(peerName)
+    ,time(epicsTime::getCurrent())
+{}
+
+Connected::~Connected() {}
 
 Channel::Channel(const std::shared_ptr<Context::Pvt>& context, const std::string& name, uint32_t cid)
     :context(context)
@@ -562,8 +573,16 @@ void Context::Pvt::tickSearch()
 
             auto ninc = chan->nSearch = std::min(searchBuckets.size(), chan->nSearch+1u);
             auto next = (idx + ninc)%searchBuckets.size();
+            auto nextnext = (next + 1u)%searchBuckets.size();
 
-            // TODO leveling with next+-1 buckets
+            // try to smooth out UDP bcast load by waiting one extra tick
+            {
+                auto nextN = searchBuckets[next].size();
+                auto nextnextN = searchBuckets[nextnext].size();
+
+                if(nextN > nextnextN && (nextN-nextnextN > 100u))
+                    next = nextnext;
+            }
 
             auto& nextBucket = searchBuckets[next];
 
