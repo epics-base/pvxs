@@ -358,22 +358,22 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
         case TypeCode::BoolA:
             to_wire<bool, uint8_t>(buf, fld);
             return;
-        case TypeCode::Int8:
-        case TypeCode::UInt8:
+        case TypeCode::Int8A:
+        case TypeCode::UInt8A:
             to_wire<uint8_t>(buf, fld);
             return;
-        case TypeCode::Int16:
-        case TypeCode::UInt16:
+        case TypeCode::Int16A:
+        case TypeCode::UInt16A:
             to_wire<uint16_t>(buf, fld);
             return;
-        case TypeCode::Int32:
-        case TypeCode::UInt32:
-        case TypeCode::Float32:
+        case TypeCode::Int32A:
+        case TypeCode::UInt32A:
+        case TypeCode::Float32A:
             to_wire<uint32_t>(buf, fld);
             return;
-        case TypeCode::Int64:
-        case TypeCode::UInt64:
-        case TypeCode::Float64:
+        case TypeCode::Int64A:
+        case TypeCode::UInt64A:
+        case TypeCode::Float64A:
             to_wire<uint64_t>(buf, fld);
             return;
         case TypeCode::StringA:
@@ -592,22 +592,22 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::BoolA:
             from_wire<bool, uint8_t>(buf, fld);
             return;
-        case TypeCode::Int8:
-        case TypeCode::UInt8:
+        case TypeCode::Int8A:
+        case TypeCode::UInt8A:
             from_wire<uint8_t>(buf, fld);
             return;
-        case TypeCode::Int16:
-        case TypeCode::UInt16:
+        case TypeCode::Int16A:
+        case TypeCode::UInt16A:
             from_wire<uint16_t>(buf, fld);
             return;
-        case TypeCode::Int32:
-        case TypeCode::UInt32:
-        case TypeCode::Float32:
+        case TypeCode::Int32A:
+        case TypeCode::UInt32A:
+        case TypeCode::Float32A:
             from_wire<uint32_t>(buf, fld);
             return;
-        case TypeCode::Int64:
-        case TypeCode::UInt64:
-        case TypeCode::Float64:
+        case TypeCode::Int64A:
+        case TypeCode::UInt64A:
+        case TypeCode::Float64A:
             from_wire<uint64_t>(buf, fld);
             return;
         case TypeCode::StringA:

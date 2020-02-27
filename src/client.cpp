@@ -52,7 +52,7 @@ Channel::~Channel()
     context->chanByCID.erase(cid);
     context->chanByName.erase(name);
     // searchBuckets cleaned in tickSearch()
-    if(state==Creating || state==Active) {
+    if((state==Creating || state==Active) && conn && conn->bev) {
         {
             (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
 
