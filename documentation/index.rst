@@ -13,6 +13,7 @@ The canonical source can be found at https://github.com/mdavidsaver/pvxs
    client
    server
    util
+   example
 
 
 Indices and tables

@@ -14,4 +14,7 @@ tools_DEPEND_DIRS = src
 DIRS += test
 test_DEPEND_DIRS = src
 
+DIRS += example
+example_DEPEND_DIRS = src
+
 include $(TOP)/configure/RULES_TOP
