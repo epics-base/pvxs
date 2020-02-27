@@ -4,9 +4,7 @@ Examples
 Mailbox Server
 --------------
 
-Serves a single PV name.
-Any updates written (PUT) to this PV will be stored verbatim
-and sent to any subscribers.
+Latest version https://github.com/mdavidsaver/pvxs/blob/master/example/mailbox.cpp
 
 .. literalinclude:: ../example/mailbox.cpp
     :language: c++
