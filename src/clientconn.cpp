@@ -95,12 +95,6 @@ void Connection::bevEvent(short events)
     if(bev && (events&BEV_EVENT_CONNECTED)) {
         log_debug_printf(io, "Connected to %s\n", peerName.c_str());
 
-        auto tx = bufferevent_get_output(bev.get());
-        to_evbuf(tx, Header{pva_ctrl_msg::SetEndian,
-                            pva_flags::Control,
-                            0u},
-                 hostBE);
-
         if(bufferevent_enable(bev.get(), EV_READ|EV_WRITE))
             throw std::logic_error("Unable to enable BEV");
 
