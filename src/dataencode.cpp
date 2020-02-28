@@ -709,7 +709,12 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
 {
     auto desc = Value::Helper::desc(val);
     auto store = Value::Helper::store(val);
-    assert(!!desc);
+
+    if(!desc || !store) {
+        buf.fault();
+        return;
+    }
+
     auto top = store->top;
 
     BitMask valid;
