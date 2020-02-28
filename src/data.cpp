@@ -98,8 +98,19 @@ Value Value::clone() const
 
 Value& Value::assign(const Value& o)
 {
-    if(desc!=o.desc)
-        throw std::runtime_error("Can only assign same TypeDef"); // TODO relax
+    if(desc!=o.desc &&
+            desc->code==o.desc->code &&
+            (desc->code.kind()==Kind::Integer
+             || desc->code.kind()==Kind::Real
+             || desc->code.kind()==Kind::String
+             || desc->code.kind()==Kind::Bool))
+    {
+        // allow simple fields
+
+    } else if(desc!=o.desc) {
+         // TODO relax
+        throw std::runtime_error("Can only assign same TypeDef");
+    }
 
     if(desc) {
         for(size_t bit=0, end=desc->size(); bit<end;) {
