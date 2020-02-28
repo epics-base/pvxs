@@ -201,6 +201,7 @@ private:
 };
 
 namespace detail {
+struct PVRParser;
 
 class PVXS_API CommonBase {
 protected:
@@ -218,7 +219,9 @@ protected:
     void _field(const std::string& s);
     void _record(const std::string& key, const void* value, StoreType vtype);
     void _parse(const std::string& req);
-    Value _build();
+    Value _build() const;
+
+    friend struct PVRParser;
 };
 
 //! Options common to all operations
@@ -296,7 +299,7 @@ GetBuilder Context::info(const std::string& name) { return GetBuilder{pvt, name,
 GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, true}; }
 
 //! Prepare a remote PUT operation
-class PutBuilder : protected detail::CommonBuilder<GetBuilder> {
+class PutBuilder : protected detail::CommonBuilder<PutBuilder> {
     bool _doGet = true;
     std::function<Value(Value&&)> _builder;
     std::function<void(Result&&)> _result;
