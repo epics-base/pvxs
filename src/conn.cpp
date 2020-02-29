@@ -220,7 +220,7 @@ void ConnBase::bevEventS(struct bufferevent *bev, short events, void *ptr)
         conn->bevEvent(events);
     }catch(std::exception& e){
         log_crit_printf(connsetup, "%s %s Unhandled error in bev event callback: %s\n", conn->peerLabel(), conn->peerName.c_str(), e.what());
-        static_cast<ConnBase*>(ptr)->cleanup();
+        conn->cleanup();
     }
 }
 
@@ -231,7 +231,7 @@ void ConnBase::bevReadS(struct bufferevent *bev, void *ptr)
         conn->bevRead();
     }catch(std::exception& e){
         log_crit_printf(connsetup, "%s %s Unhandled error in bev read callback: %s\n", conn->peerLabel(), conn->peerName.c_str(), e.what());
-        static_cast<ConnBase*>(ptr)->cleanup();
+        conn->cleanup();
     }
 }
 
@@ -242,7 +242,7 @@ void ConnBase::bevWriteS(struct bufferevent *bev, void *ptr)
         conn->bevWrite();
     }catch(std::exception& e){
         log_crit_printf(connsetup, "%s %s Unhandled error in bev write callback: %s\n", conn->peerLabel(), conn->peerName.c_str(), e.what());
-        static_cast<ConnBase*>(ptr)->cleanup();
+        conn->cleanup();
     }
 }
 
