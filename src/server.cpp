@@ -401,14 +401,21 @@ void Server::Pvt::stop()
         L->stop();
     }
 
-    // stop accepting new TCP connections
     acceptor_loop.call([this]()
     {
+        // stop accepting new TCP connections
         for(auto& iface : interfaces) {
             if(evconnlistener_disable(iface.listener.get())) {
                 log_err_printf(serversetup, "Error disabling listener on %s\n", iface.name.c_str());
             }
             log_debug_printf(serversetup, "Server disabled listener on %s\n", iface.name.c_str());
+        }
+
+        // close current TCP connections
+        auto conns = std::move(connections);
+        for(auto& pair : conns) {
+            pair.second->bev.reset();
+            pair.second->cleanup();
         }
 
         state = Stopped;
