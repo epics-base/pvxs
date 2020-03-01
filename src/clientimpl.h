@@ -46,7 +46,7 @@ struct RequestInfo {
     RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationBase>& handle);
 };
 
-struct Connection : public ConnBase {
+struct Connection : public ConnBase, public std::enable_shared_from_this<Connection> {
     const std::shared_ptr<Context::Pvt> context;
 
     const evevent echoTimer;
@@ -72,6 +72,7 @@ struct Connection : public ConnBase {
 
     virtual void bevEvent(short events) override final;
 
+    virtual std::shared_ptr<ConnBase> self_from_this() override final;
     virtual void cleanup() override final;
 
 #define CASE(Op) virtual void handle_##Op() override final;

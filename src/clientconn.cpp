@@ -105,6 +105,11 @@ void Connection::bevEvent(short events)
     }
 }
 
+std::shared_ptr<ConnBase> Connection::self_from_this()
+{
+    return shared_from_this();
+}
+
 void Connection::cleanup()
 {
     // (maybe) keep myself alive

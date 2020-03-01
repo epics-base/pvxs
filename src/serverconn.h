@@ -138,6 +138,7 @@ private:
 
     void handle_GPR(pva_app_msg_t cmd);
 
+    virtual std::shared_ptr<ConnBase> self_from_this() override final;
     virtual void cleanup() override final;
     //void bevEvent(short events);
     virtual void bevRead() override final;

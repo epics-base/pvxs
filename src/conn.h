@@ -64,6 +64,7 @@ protected:
     CASE(MESSAGE);
 #undef CASE
 
+    virtual std::shared_ptr<ConnBase> self_from_this() =0;
     virtual void cleanup() =0;
     virtual void bevEvent(short events);
     virtual void bevRead();

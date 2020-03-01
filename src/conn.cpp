@@ -215,7 +215,7 @@ void ConnBase::bevWrite() {}
 
 void ConnBase::bevEventS(struct bufferevent *bev, short events, void *ptr)
 {
-    auto conn = static_cast<ConnBase*>(ptr);
+    auto conn = static_cast<ConnBase*>(ptr)->self_from_this();
     try {
         conn->bevEvent(events);
     }catch(std::exception& e){
@@ -226,7 +226,7 @@ void ConnBase::bevEventS(struct bufferevent *bev, short events, void *ptr)
 
 void ConnBase::bevReadS(struct bufferevent *bev, void *ptr)
 {
-    auto conn = static_cast<ConnBase*>(ptr);
+    auto conn = static_cast<ConnBase*>(ptr)->self_from_this();
     try {
         conn->bevRead();
     }catch(std::exception& e){
@@ -237,7 +237,7 @@ void ConnBase::bevReadS(struct bufferevent *bev, void *ptr)
 
 void ConnBase::bevWriteS(struct bufferevent *bev, void *ptr)
 {
-    auto conn = static_cast<ConnBase*>(ptr);
+    auto conn = static_cast<ConnBase*>(ptr)->self_from_this();
     try {
         conn->bevWrite();
     }catch(std::exception& e){

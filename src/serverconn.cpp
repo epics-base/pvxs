@@ -271,6 +271,10 @@ void ServerConn::handle_MESSAGE()
                      msg.c_str());
 }
 
+std::shared_ptr<ConnBase> ServerConn::self_from_this()
+{
+    return shared_from_this();
+}
 
 void ServerConn::cleanup()
 {
