@@ -53,11 +53,11 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
 
     bool ready = false;
 
-    // channels to be created on this Connection
+    // channels to be created on this Connection (in state==Connecting
     std::list<std::weak_ptr<Channel>> pending;
 
-    std::map<uint32_t, std::weak_ptr<Channel>> creatingByCID,
-                                               chanBySID;
+    std::map<uint32_t, std::weak_ptr<Channel>> creatingByCID, // in state==Creating
+                                               chanBySID;     // in state==Active
 
     // entries always have matching entry in a Channel::opByIOID
     std::map<uint32_t, RequestInfo> opByIOID;
@@ -130,6 +130,7 @@ struct Channel {
     ~Channel();
 
     void createOperations();
+    void disconnect(const std::shared_ptr<Channel>& self);
 
     static
     std::shared_ptr<Channel> build(const std::shared_ptr<Context::Pvt>& context, const std::string &name);

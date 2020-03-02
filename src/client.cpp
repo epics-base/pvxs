@@ -94,6 +94,17 @@ void Channel::createOperations()
     }
 }
 
+void Channel::disconnect(const std::shared_ptr<Channel>& self)
+{
+    self->state = Channel::Searching;
+    self->sid = 0xdeadbeef; // spoil
+    context->searchBuckets[context->currentBucket].push_back(self);
+
+    log_debug_printf(io, "Server %s detach channel '%s' to re-search\n",
+                     conn ? conn->peerName.c_str() : "<disconnected>",
+                     self->name.c_str());
+
+}
 
 OperationBase::OperationBase(operation_t op, const std::shared_ptr<Channel>& chan)
     :Operation(op)

@@ -128,12 +128,21 @@ void Connection::cleanup()
         if(!chan)
             continue;
 
-        chan->state = Channel::Searching;
-        chan->sid = 0xdeadbeef; // spoil
-        self = std::move(chan->conn);
-        context->searchBuckets[context->currentBucket].push_back(chan);
+        chan->disconnect(chan);
+    }
+    for(auto& pair : chanBySID) {
+        auto chan = pair.second.lock();
+        if(!chan)
+            continue;
 
-        log_debug_printf(io, "Server %s detach channel '%s' to re-search\n", peerName.c_str(), chan->name.c_str());
+        chan->disconnect(chan);
+    }
+    for(auto& pair : creatingByCID) {
+        auto chan = pair.second.lock();
+        if(!chan)
+            continue;
+
+        chan->disconnect(chan);
     }
 
     auto ops = std::move(opByIOID);
