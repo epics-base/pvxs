@@ -42,6 +42,10 @@ TESTPROD += testdata
 testdata_SRCS += testdata.cpp
 TESTS += testdata
 
+TESTPROD += testconfig
+testconfig_SRCS += testconfig.cpp
+TESTS += testconfig
+
 TESTPROD += testpvreq
 testpvreq_SRCS += testpvreq.cpp
 TESTS += testpvreq
