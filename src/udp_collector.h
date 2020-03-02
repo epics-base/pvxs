@@ -29,6 +29,8 @@ struct PVXS_API UDPManager
     static void cleanup();
     ~UDPManager();
 
+    evbase& loop();
+
     struct Beacon {
         SockAddr& src;
         SockAddr server;

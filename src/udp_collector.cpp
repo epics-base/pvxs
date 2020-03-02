@@ -290,6 +290,14 @@ static struct udp_gbl_t {
 
 UDPManager::~UDPManager() {}
 
+evbase& UDPManager::loop()
+{
+    if(!pvt)
+        throw std::logic_error("NULL UDPManager");
+
+    return pvt->loop;
+}
+
 namespace {
 epicsThreadOnceId collector_once = EPICS_THREAD_ONCE_INIT;
 void collector_init(void *unused)

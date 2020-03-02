@@ -162,12 +162,6 @@ struct Context::Pvt
 
     std::list<std::unique_ptr<UDPListener> > beaconRx;
 
-    struct BTrack {
-        std::array<uint8_t, 12> guid;
-        epicsTimeStamp lastRx;
-    };
-    std::map<SockAddr, BTrack> beaconSenders;
-
     std::map<uint32_t, std::weak_ptr<Channel>> chanByCID;
     std::map<std::string, std::weak_ptr<Channel>> chanByName;
 
@@ -176,6 +170,17 @@ struct Context::Pvt
     evbase tcp_loop;
     const evevent searchRx;
     const evevent searchTimer;
+
+    struct BTrack {
+        std::array<uint8_t, 12> guid;
+        epicsTimeStamp lastRx;
+    };
+    std::map<SockAddr, BTrack> beaconSenders;
+
+    // beacon handling done on UDP worker.
+    // we keep a ref here as long as beaconCleaner is in use
+    UDPManager manager;
+
     const evevent beaconCleaner;
 
     Pvt(const Config& conf);

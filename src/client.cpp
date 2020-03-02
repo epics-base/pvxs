@@ -211,7 +211,8 @@ Context::Pvt::Pvt(const Config& conf)
     ,tcp_loop("PVXCTCP", epicsThreadPriorityCAServerLow)
     ,searchRx(event_new(tcp_loop.base, searchTx.sock, EV_READ|EV_PERSIST, &Pvt::onSearchS, this))
     ,searchTimer(event_new(tcp_loop.base, -1, EV_TIMEOUT, &Pvt::tickSearchS, this))
-    ,beaconCleaner(event_new(tcp_loop.base, -1, EV_TIMEOUT, &Pvt::tickBeaconCleanS, this))
+    ,manager(UDPManager::instance())
+    ,beaconCleaner(event_new(manager.loop().base, -1, EV_TIMEOUT, &Pvt::tickBeaconCleanS, this))
 {
     effective.expand();
 
@@ -271,8 +272,6 @@ Context::Pvt::Pvt(const Config& conf)
         searchDest.emplace_back(saddr, isucast);
     }
 
-    auto manager = UDPManager::instance();
-
     for(auto& iface : effective.interfaces) {
         SockAddr addr(AF_INET, iface.c_str(), effective.udp_port);
         log_info_printf(io, "Listening for beacons on %s\n", addr.tostring().c_str());
@@ -289,7 +288,7 @@ Context::Pvt::Pvt(const Config& conf)
         log_err_printf(setup, "Error enabling search timer\n%s", "");
     if(event_add(searchRx.get(), nullptr))
         log_err_printf(setup, "Error enabling search RX\n%s", "");
-    if(event_add(searchTimer.get(), &beaconCleanInterval))
+    if(event_add(beaconCleaner.get(), &beaconCleanInterval))
         log_err_printf(setup, "Error enabling beacon clean timer on\n%s", "");
 }
 
@@ -645,7 +644,7 @@ void Context::Pvt::tickBeaconClean()
         }
     }
 
-    if(event_add(searchTimer.get(), &beaconCleanInterval))
+    if(event_add(beaconCleaner.get(), &beaconCleanInterval))
         log_err_printf(setup, "Error re-enabling beacon clean timer on\n%s", "");
 }
 
