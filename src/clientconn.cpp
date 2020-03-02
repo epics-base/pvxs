@@ -141,6 +141,7 @@ void Connection::cleanup()
         auto op = pair.second.handle.lock();
         if(!op)
             continue;
+        op->chan->opByIOID.erase(op->ioid);
         op->disconnected(op);
     }
 
@@ -360,7 +361,11 @@ void Connection::handle_DESTROY_CHANNEL()
     self = std::move(chan->conn);
     context->searchBuckets[context->currentBucket].push_back(chan);
 
-    // TODO: disconnect Operations
+    for(auto& pair : chan->opByIOID) {
+        auto op = pair.second->handle.lock();
+        opByIOID.erase(pair.first); // invalidates pair.second
+        op->disconnected(op);
+    }
 
     log_debug_printf(io, "Server %s destroys channel '%s' %u:%u\n",
                      peerName.c_str(), chan->name.c_str(), unsigned(cid), unsigned(sid));

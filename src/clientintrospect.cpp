@@ -46,6 +46,7 @@ struct InfoOp : public OperationBase
 
                 // This opens up a race with an in-flight reply.
                 chan->conn->opByIOID.erase(ioid);
+                chan->opByIOID.erase(ioid);
             }
             state = Done;
             chan.reset();
@@ -113,6 +114,7 @@ void Connection::handle_GET_FIELD()
     }
 
     std::shared_ptr<Operation> op;
+    InfoOp* info;
     {
         auto it = opByIOID.find(ioid);
         if(it==opByIOID.end()
@@ -121,10 +123,10 @@ void Connection::handle_GET_FIELD()
             log_warn_printf(io, "Server %s sends stale GET_FIELD\n", peerName.c_str());
             return;
         }
+        info = static_cast<InfoOp*>(op.get());
         opByIOID.erase(it);
+        info->chan->opByIOID.erase(ioid);
     }
-
-    auto info = static_cast<InfoOp*>(op.get());
 
     if(info->state!=InfoOp::Waiting) {
         log_warn_printf(io, "Server %s ignore second reply to GET_FIELD\n", peerName.c_str());

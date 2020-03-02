@@ -83,9 +83,11 @@ void Channel::createOperations()
         } while(conn->opByIOID.find(ioid)!=conn->opByIOID.end());
 
         //conn->opByIOID.insert(std::make_pair(ioid, RequestInfo(sid, ioid, op)));
-        conn->opByIOID.emplace(std::piecewise_construct,
-                               std::forward_as_tuple(ioid),
-                               std::forward_as_tuple(sid, ioid, op));
+        auto pair = conn->opByIOID.emplace(std::piecewise_construct,
+                                           std::forward_as_tuple(ioid),
+                                           std::forward_as_tuple(sid, ioid, op));
+        opByIOID[ioid] = &pair.first->second;
+
         op->ioid = ioid;
 
         op->createOp();

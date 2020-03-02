@@ -59,6 +59,7 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
     std::map<uint32_t, std::weak_ptr<Channel>> creatingByCID,
                                                chanBySID;
 
+    // entries always have matching entry in a Channel::opByIOID
     std::map<uint32_t, RequestInfo> opByIOID;
 
     uint32_t nextIOID = 0u;
@@ -121,6 +122,9 @@ struct Channel {
     SockAddr replyAddr;
 
     std::list<std::weak_ptr<OperationBase>> pending;
+
+    // points to storage of Connection::opByIOID
+    std::map<uint32_t, RequestInfo*> opByIOID;
 
     Channel(const std::shared_ptr<Context::Pvt>& context, const std::string& name, uint32_t cid);
     ~Channel();

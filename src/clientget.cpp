@@ -67,6 +67,7 @@ struct GPROp : public OperationBase
 
                 // This opens up a race with an in-flight reply.
                 chan->conn->opByIOID.erase(ioid);
+                chan->opByIOID.erase(ioid);
             }
             state = Done;
             chan.reset();
@@ -328,6 +329,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
         // so we can ~safely forget about it.
         // we might get CMD_MESSAGE, but these could be ignored with no ill effects.
         opByIOID.erase(ioid);
+        gpr->chan->opByIOID.erase(ioid);
 
         gpr->notify();
     }
