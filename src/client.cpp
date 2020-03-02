@@ -188,7 +188,7 @@ void Context::hurryUp()
     if(!pvt)
         throw std::logic_error("NULL Context");
 
-    pvt->tcp_loop.call([this](){
+    pvt->manager.loop().call([this](){
         pvt->poke();
     });
 }
