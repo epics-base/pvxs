@@ -65,6 +65,8 @@ jobs:
 
   - env: BASE=7.0
 
+  - env: BASE=3.15
+
   - env: BASE=7.0
     compiler: clang
 
@@ -95,6 +97,10 @@ jobs:
   - env: BASE=7.0
     compiler: gcc-7
     addons: { apt: { packages: ["g++-7"], sources: ["ubuntu-toolchain-r-test"] } }
+
+  - env: BASE=7.0
+    compiler: gcc-8
+    addons: { apt: { packages: ["g++-8"], sources: ["ubuntu-toolchain-r-test"] } }
 
 # MacOS build
 
