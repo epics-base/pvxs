@@ -80,7 +80,6 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
 
         EvOutBuf R(hostBE, txBody.get());
 
-        to_wire(R, uint16_t(1u));
         to_wire(R, sid);
         to_wire(R, ioid);
     }
