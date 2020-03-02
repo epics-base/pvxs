@@ -62,10 +62,6 @@ TESTPROD += testrpc
 testrpc_SRCS += testrpc.cpp
 TESTS += testrpc
 
-TESTPROD += dummyserv
-dummyserv_SRCS += dummyserv.cpp
-# not a unittest
-
 TESTPROD += countdown
 countdown_SRCS += countdown.cpp
 # not a unittest
