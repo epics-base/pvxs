@@ -13,6 +13,9 @@ mailbox_SRCS += mailbox.cpp
 TESTPROD += spam
 spam_SRCS += spam.cpp
 
+TESTPROD += ticker
+ticker_SRCS += ticker.cpp
+
 PROD_SYS_LIBS += event_core
 
 PROD_SYS_LIBS_DEFAULT += event_pthreads
