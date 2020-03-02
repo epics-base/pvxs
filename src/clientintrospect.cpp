@@ -141,7 +141,7 @@ void Connection::handle_GET_FIELD()
         auto done = std::move(info->done);
         Result res;
         if(sts.isSuccess()) {
-            res = Result(std::move(prototype));
+            res = Result(std::move(prototype), peerName);
         } else {
             res = Result(std::make_exception_ptr(RemoteError(sts.msg)));
         }

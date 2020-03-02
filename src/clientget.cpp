@@ -268,8 +268,8 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
     } else if(gpr->state==GPROp::Exec) {
         gpr->state = GPROp::Done;
 
-        if(cmd!=CMD_PUT)
-            gpr->result = Result(std::move(data));
+        // data always empty for CMD_PUT
+        gpr->result = Result(std::move(data), peerName);
 
     } else {
         // should be avoided above

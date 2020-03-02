@@ -41,9 +41,10 @@ struct PVXS_API RemoteError : public std::runtime_error
 class Result {
     Value _result;
     std::exception_ptr _error;
+    std::string _peerName;
 public:
     Result() = default;
-    Result(Value&& val) :_result(std::move(val)) {}
+    Result(Value&& val, const std::string& peerName) :_result(std::move(val)), _peerName(peerName) {}
     explicit Result(const std::exception_ptr& err) :_error(err) {}
 
     //! Access to the Value, or rethrow the exception
@@ -52,6 +53,8 @@ public:
             std::rethrow_exception(_error);
         return _result;
     }
+
+    const std::string peerName() const { return  _peerName; }
 
     bool error() const { return !!_error; }
     explicit operator bool() const { return _result || _error; }

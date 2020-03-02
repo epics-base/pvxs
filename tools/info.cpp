@@ -80,7 +80,13 @@ int main(int argc, char *argv[])
 
         ops.push_back(ctxt.info(argv[n])
                       .result([&argv, n, &remaining, &done](client::Result&& result) {
-                          std::cout<<argv[n]<<"\n"<<result();
+                          std::cout<<argv[n];
+                          try {
+                              auto value = result();
+                              std::cout<<" from "<<result.peerName()<<"\n"<<result();
+                          }catch(std::exception& e){
+                              std::cout<<" Error: "<<e.what()<<"\n";
+                          }
 
                           if(remaining.fetch_sub(1)==1)
                               done.trigger();
