@@ -25,6 +25,10 @@
 // hooks for std::unique_ptr
 namespace std {
 template<>
+struct default_delete<event_base> {
+    inline void operator()(event_base* ev) { event_base_free(ev); }
+};
+template<>
 struct default_delete<event> {
     inline void operator()(event* ev) { event_free(ev); }
 };
@@ -64,10 +68,6 @@ struct PVXS_API evbase {
 
     // queue request to execute in event loop.  return immediately.
     void dispatch(std::function<void()>&& fn);
-
-    // queue request to execute in event loop after at least delay seconds have passed
-    // @param delay second in future.  must be finite and >=0
-    void later(double delay, std::function<void()>&& fn);
 
     // queue request to execute in event loop.  return after executed.
     void call(std::function<void()>&& fn);
