@@ -458,7 +458,7 @@ public:
     //! If possible, this value is cast to T and passed as the only argument
     //! of the provided function.
     template<typename T, typename FN>
-    void as(FN&& fn) {
+    void as(FN&& fn) const {
         typedef impl::StorageMap<typename std::decay<T>::type> map_t;
         typename map_t::store_t val;
         if(tryCopyOut(&val, map_t::code)) {
