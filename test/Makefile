@@ -66,10 +66,6 @@ TESTPROD += testrpc
 testrpc_SRCS += testrpc.cpp
 TESTS += testrpc
 
-TESTPROD += countdown
-countdown_SRCS += countdown.cpp
-# not a unittest
-
 TESTPROD += mcat
 mcat_SRCS += mcat.cpp
 # not a unittest
