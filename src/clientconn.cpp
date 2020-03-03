@@ -201,7 +201,7 @@ void Connection::handle_CONNECTION_VALIDATION()
         log_warn_printf(io, "Server %s no supported auth.  try to force '%s'\n", peerName.c_str(), selected.c_str());
     }
 
-    Value cred;
+    MValue cred;
     if(selected=="ca") {
         cred = context->caMethod.cloneEmpty();
 
@@ -240,9 +240,9 @@ void Connection::handle_CONNECTION_VALIDATION()
 
         to_wire(R, selected);
 
-        to_wire(R, Value::Helper::desc(cred));
+        to_wire(R, ValueBase::Helper::desc(cred));
         if(cred)
-            to_wire_full(R, cred);
+            to_wire_full(R, cred.freeze());
     }
     enqueueTxBody(CMD_CONNECTION_VALIDATION);
 }

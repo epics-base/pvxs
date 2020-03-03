@@ -20,7 +20,7 @@ void showSize()
 {
     testDiag("%s()", __func__);
 #define CASE(TYPE) testDiag("sizeof(" #TYPE ") = %u", unsigned(sizeof(TYPE)))
-    CASE(Value);
+    CASE(IValue);
     CASE(impl::FieldDesc);
     CASE(impl::FieldStorage);
     CASE(impl::StructTop);
@@ -128,7 +128,7 @@ void testTypeDef()
     auto val = def.create();
 
     testOk1(!!val.valid());
-    testEq(std::string(SB()<<"\n"<<Value::Helper::desc(val)),
+    testEq(std::string(SB()<<"\n"<<ValueBase::Helper::desc(val)),
 R"out(
 [0] struct simple_t parent=[0]  [0:11)
     achoice -> 10 [10]
@@ -181,7 +181,7 @@ R"out(
         [0] float  parent=[0]  [0:1)
         y :  1 [1]
         [0] float  parent=[0]  [0:1)
-)out")<<"Actual:\n"<<Value::Helper::desc(val);
+)out")<<"Actual:\n"<<ValueBase::Helper::desc(val);
 
     // try to access all field Kinds
 
@@ -196,16 +196,20 @@ R"out(
     // Struct[]
     {
         auto fld = val["arbitrary.sarr"];
-        shared_array<Value> arr(3);
-        arr[0] = fld.allocMember();
-        arr[1] = fld.allocMember();
+        shared_array<IValue> arr(3);
+        auto temp = fld.allocMember();
+        temp["value"] = 1.0;
+        arr[0] = temp.freeze();
+        temp = fld.allocMember();
+                temp["value"] = 2.0;
+        arr[1] = temp.freeze();
         // leave [2] as null
-        arr[0]["value"] = 1.0;
-        arr[1]["value"] = 2.0;
 
         fld = arr.freeze().castTo<const void>();
 
-        testEq(val["arbitrary.sarr[1]value"].as<double>(), 2.0);
+        auto snap = val.clone().freeze();
+
+        testEq(snap["arbitrary.sarr[1]value"].as<double>(), 2.0);
     }
 
     // Union
@@ -213,18 +217,22 @@ R"out(
     // Union[]
     {
         auto fld = val["achoice"];
-        shared_array<Value> arr(3);
-        arr[0] = fld.allocMember();
-        arr[1] = fld.allocMember();
+        shared_array<IValue> arr(3);
+        auto temp = fld.allocMember();
+        temp["->x"] = 4.0;
+        arr[0] = temp.freeze();
+        temp = fld.allocMember();
+        temp["->y"] = 5.0;
+        arr[1] = temp.freeze();
         // leave [2] as null
-        arr[0]["->x"] = 4.0;
-        arr[1]["->y"] = 5.0;
 
         fld = arr.freeze().castTo<const void>();
 
-        testEq(fld["[1]"].as<double>(), 5.0);
-        testEq(val["achoice[1]"].as<double>(), 5.0);
-        testEq(val["achoice[1]->y"].as<double>(), 5.0);
+        auto snap = val.clone().freeze();
+
+        testEq(snap["achoice"]["[1]"].as<double>(), 5.0);
+        testEq(snap["achoice[1]"].as<double>(), 5.0);
+        testEq(snap["achoice[1]->y"].as<double>(), 5.0);
     }
 
     // Any
@@ -232,26 +240,31 @@ R"out(
         auto v = TypeDef(TypeCode::UInt32).create();
         v = 42u;
 
-        val["any"].from(v);
+        val["any"].from(v.freeze());
 
-        testEq(v.as<uint64_t>(), 42u);
+        auto snap = val.clone().freeze();
+
+        testEq(snap["any"].as<uint64_t>(), 42u);
     }
 
     // Any[]
     {
         auto fld = val["anya"];
-        shared_array<Value> arr(3);
-        arr[0] = TypeDef(TypeCode::UInt32).create();
-        arr[1] = TypeDef(TypeCode::Struct, {Member(TypeCode::String, "q")}).create();
+        shared_array<IValue> arr(3);
+        auto temp = TypeDef(TypeCode::UInt32).create();
+        temp = 123;
+        arr[0] = temp.freeze();
+        temp = TypeDef(TypeCode::Struct, {Member(TypeCode::String, "q")}).create();
+        temp["q"] = "theq";
+        arr[1] = temp.freeze();
         // leave [2] as null
-
-        arr[0] = 123;
-        arr[1]["q"] = "theq";
 
         fld = arr.freeze().castTo<const void>();
 
-        testEq(fld["[0]"].as<uint64_t>(), 123u);
-        testEq(fld["[1]q"].as<std::string>(), "theq");
+        auto snap = val.clone().freeze();
+
+        testEq(snap["anya"]["[0]"].as<uint64_t>(), 123u);
+        testEq(snap["anya[1]q"].as<std::string>(), "theq");
     }
 
     testEq(std::string(SB()<<val),

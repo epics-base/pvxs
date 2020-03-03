@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
     epicsEvent done;
     int ret=2;
 
-    auto op =ctxt.rpc(pvname, std::move(arg))
+    auto op =ctxt.rpc(pvname, arg.freeze())
             .result([&ret, &done](client::Result&& result) {
                 try {
                     auto val = result();

@@ -19,7 +19,7 @@ ServerSource::ServerSource(server::Server::Pvt* serv)
     ,info(TypeDef(TypeCode::Struct, {
                       Member(TypeCode::String, "implLang"),
                       Member(TypeCode::String, "version"),
-                  }).create())
+                  }).create().freeze())
 {}
 
 void ServerSource::onSearch(Search &op)
@@ -34,11 +34,11 @@ void ServerSource::onCreate(std::unique_ptr<server::ChannelControl> &&op)
 
     auto handle = std::move(op); // claim
 
-    handle->onRPC([this](std::unique_ptr<server::ExecOp>&& eop, Value&& raw) {
+    handle->onRPC([this](std::unique_ptr<server::ExecOp>&& eop, const IValue& raw) {
         log_debug_printf(srvsrc, "Client %s calls %s\n", eop->peerName().c_str(),
                    std::string(SB()<<raw).c_str());
 
-        auto args = std::move(raw);
+        auto args = raw;
 
         if(auto Q = args["query"]) // NTURI
             args = Q;
@@ -47,7 +47,7 @@ void ServerSource::onCreate(std::unique_ptr<server::ChannelControl> &&op)
             auto ret = nt::NTScalar{TypeCode::String}.create();
             ret["value"] = "Help, I really should write some help";
 
-            eop->reply(ret);
+            eop->reply(ret.freeze());
         }
 
         auto op = args["op"].as<std::string>();
@@ -77,7 +77,7 @@ void ServerSource::onCreate(std::unique_ptr<server::ChannelControl> &&op)
             auto ret = nt::NTScalar{TypeCode::StringA}.create();
             ret["value"] = lnames.freeze().castTo<const void>();
 
-            eop->reply(ret);
+            eop->reply(ret.freeze());
             return;
 
         } else if(op=="info") {
@@ -86,7 +86,7 @@ void ServerSource::onCreate(std::unique_ptr<server::ChannelControl> &&op)
             ret["implLang"] = "cpp";
             ret["version"] = version_str();
 
-            eop->reply(ret);
+            eop->reply(ret.freeze());
             return;
         }
 

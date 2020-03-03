@@ -53,7 +53,7 @@ struct MonitorOp : public ServerOp,
     size_t window=0u, limit=1u;
     size_t low=0u, high=0u;
 
-    std::deque<Value> queue;
+    std::deque<IValue> queue;
 
     // caller must hold lock.
     // only used after State==Idle
@@ -207,7 +207,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
         finish();
     }
 
-    virtual bool doPost(Value&& val, bool maybe, bool force) override final
+    virtual bool doPost(const IValue& val, bool maybe, bool force) override final
     {
         auto mon(op.lock());
         if(!mon)
@@ -215,17 +215,19 @@ struct ServerMonitorControl : public server::MonitorControlOp
 
         Guard G(mon->lock);
 
-        if(val && mon->type && mon->type.get()!=Value::Helper::desc(val))
+        if(val && mon->type && mon->type.get()!=ValueBase::Helper::desc(val))
             throw std::logic_error("Type change not allowed in post()");
 
         if((mon->queue.size() < mon->limit) || force || !val) {
-            mon->queue.push_back(std::move(val));
+            mon->queue.push_back(val);
 
         } else if(!maybe) {
             // squash
             assert(mon->limit>0 && !mon->queue.empty());
 
-            mon->queue.back().assign(val);
+            auto temp = mon->queue.back().thaw();
+            temp.assign(val);
+            mon->queue.back() = temp.freeze();
             // TODO track overrun
 
         } else {
@@ -313,7 +315,7 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
     ServerMonitorSetup(ServerConn* conn,
                      const std::weak_ptr<server::Server::Pvt>& server,
                      const std::string& name,
-                     const Value& request,
+                     const IValue& request,
                      const std::weak_ptr<MonitorOp>& op)
         :server(server)
         ,op(op)
@@ -328,11 +330,11 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
         error("Monitor Create implied error");
     }
 
-    virtual std::unique_ptr<server::MonitorControlOp> connect(const Value &prototype) override final
+    virtual std::unique_ptr<server::MonitorControlOp> connect(const IValue &prototype) override final
     {
         if(!prototype)
             throw std::invalid_argument("Must provide prototype");
-        auto type = Value::Helper::type(prototype);
+        auto type = ValueBase::Helper::type(prototype);
         auto mask = request2mask(type.get(), _pvRequest);
 
         std::unique_ptr<server::MonitorControlOp> ret;
@@ -416,7 +418,7 @@ void ServerConn::handle_MONITOR()
 
     if(subcmd&0x08) { // INIT
         // type and full value
-        Value pvRequest;
+        MValue pvRequest;
         from_wire_type_value(M, rxRegistry, pvRequest);
 
         if(subcmd&0x80) {
@@ -447,16 +449,16 @@ void ServerConn::handle_MONITOR()
                 op->limit = qSize;
         });
 
-        std::unique_ptr<ServerMonitorSetup> ctrl(new ServerMonitorSetup(this, iface->server->internal_self, chan->name, pvRequest, op));
+        log_debug_printf(connsetup, "Client %s Monitor INIT ioid=%u pvRequest=%s\n",
+                   peerName.c_str(), unsigned(ioid),
+                   std::string(SB()<<pvRequest).c_str());
+
+        std::unique_ptr<ServerMonitorSetup> ctrl(new ServerMonitorSetup(this, iface->server->internal_self, chan->name, pvRequest.freeze(), op));
 
         op->state = ServerOp::Creating;
 
         opByIOID[ioid] = op;
         chan->opByIOID[ioid] = op;
-
-        log_debug_printf(connsetup, "Client %s Monitor INIT ioid=%u pvRequest=%s\n",
-                   peerName.c_str(), unsigned(ioid),
-                   std::string(SB()<<pvRequest).c_str());
 
         if(chan->onSubscribe) {
             chan->onSubscribe(std::move(ctrl));

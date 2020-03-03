@@ -18,11 +18,11 @@ namespace client {
 namespace detail {
 
 struct CommonBase::Req {
-    Value pvRequest;
+    IValue pvRequest;
 
     Member fields;
 
-    std::map<std::string, Value> options;
+    std::map<std::string, IValue> options;
     Member record;
 
     Req()
@@ -35,11 +35,11 @@ struct CommonBase::Req {
 
 CommonBase::~CommonBase() {}
 
-void CommonBase::_rawRequest(Value&& raw)
+void CommonBase::_rawRequest(const IValue& raw)
 {
     if(!req)
         req = std::make_shared<Req>();
-    req->pvRequest = std::move(raw);
+    req->pvRequest = raw;
 }
 void CommonBase::_field(const std::string& s)
 {
@@ -102,14 +102,14 @@ void CommonBase::_record(const std::string& key, const void* value, StoreType vt
         throw std::logic_error("record() only support scalar values");
     }
 
-    Value v = TypeDef(base).create();
+    MValue v = TypeDef(base).create();
     v.copyIn(value, vtype);
 
     if(req->options.find(key)==req->options.end()) {
         req->record.children[0].addChild(Member(base, key));
     }
 
-    req->options[key] = std::move(v);
+    req->options[key] = v.freeze();
 }
 
 struct PVRParser
@@ -303,13 +303,13 @@ void CommonBase::_parse(const std::string& req)
     PVRParser(*this, req.c_str()).parse();
 }
 
-Value CommonBase::_build() const
+IValue CommonBase::_build() const
 {
     if(!req) {
         using namespace pvxs::members;
         return TypeDef(TypeCode::Struct, {
                            Struct("field", {}),
-                       }).create();
+                       }).create().freeze();
 
     } else if(req->pvRequest) {
         return req->pvRequest;
@@ -320,12 +320,14 @@ Value CommonBase::_build() const
                                 req->record,
                             }).create();
 
-        auto opt = inst["record._options"];
-        for(auto& pair : req->options) {
-            opt[pair.first].assign(pair.second);
+        {
+            auto opt = inst["record._options"];
+            for(auto& pair : req->options) {
+                opt[pair.first].assign(pair.second);
+            }
         }
 
-        return inst;
+        return inst.freeze();
     }
 }
 

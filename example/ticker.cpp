@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
 
     // Must provide a data type for the mailbox.
     // Use pre-canned definition of scalar with meta-data
-    Value initial = nt::NTScalar{TypeCode::UInt32}.create();
+    MValue initial = nt::NTScalar{TypeCode::UInt32}.create();
 
     // (optional) Provide an initial value
     initial["value"] = 0u;
@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
     server::SharedPV pv(server::SharedPV::buildReadonly());
 
     // Associate a data type (and maybe initial value) with this PV
-    pv.open(initial);
+    pv.open(initial.clone().freeze());
 
     // Build server which will server this PV
     // Configure using process environment.
@@ -95,7 +95,7 @@ int main(int argc, char* argv[])
 
         val["value"] = count++;
 
-        pv.post(std::move(val));
+        pv.post(val.freeze());
 
         std::cout<<"Count "<<count<<"\n";
     }

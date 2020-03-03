@@ -17,7 +17,7 @@
 
 namespace pvxs {
 
-class Value;
+class IValue;
 
 template<typename E, class Enable = void> class shared_array;
 
@@ -59,7 +59,7 @@ CASE(uint64_t, UInt64);
 CASE(float, Float);
 CASE(double, Double);
 CASE(std::string, String);
-CASE(Value, Value);
+CASE(IValue, Value);
 #undef CASE
 
 template<typename T, typename Enable=void>

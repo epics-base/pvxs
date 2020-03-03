@@ -41,7 +41,7 @@ struct RequestInfo {
     const Operation::operation_t op;
     const std::weak_ptr<OperationBase> handle;
 
-    Value prototype;
+    IValue prototype;
 
     RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationBase>& handle);
 };
@@ -143,7 +143,7 @@ struct Context::Pvt
     // "const" after ctor
     Config effective;
 
-    const Value caMethod;
+    const IValue caMethod;
 
     uint32_t nextCID=0u;
 

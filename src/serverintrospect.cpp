@@ -67,9 +67,9 @@ struct ServerIntrospectControl : public server::ConnectOp
         error("Implict Cancel");
     }
 
-    virtual void connect(const Value& prototype) override final
+    virtual void connect(const IValue& prototype) override final
     {
-        auto desc = Value::Helper::desc(prototype);
+        auto desc = ValueBase::Helper::desc(prototype);
         if(!desc)
             throw std::logic_error("Can't reply to GET_FIELD with Null prototype");
         Status sts{Status::Ok};
@@ -107,7 +107,7 @@ struct ServerIntrospectControl : public server::ConnectOp
 
     // we'll never use these, so no reason to store
     virtual void onGet(std::function<void(std::unique_ptr<server::ExecOp>&& fn)>&& fn) override final {}
-    virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&& fn, Value&&)>&& fn) override final {}
+    virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&& fn, const IValue&)>&& fn) override final {}
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerIntrospect> op;

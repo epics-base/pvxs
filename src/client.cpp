@@ -205,14 +205,14 @@ void Context::hurryUp()
 }
 
 static
-Value buildCAMethod()
+IValue buildCAMethod()
 {
     using namespace pvxs::members;
 
     return TypeDef(TypeCode::Struct, {
                        String("user"),
                        String("host"),
-                   }).create();
+                   }).create().freeze();
 }
 
 Context::Pvt::Pvt(const Config& conf)

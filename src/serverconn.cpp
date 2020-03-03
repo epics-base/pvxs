@@ -132,7 +132,7 @@ void ServerConn::handle_CONNECTION_VALIDATION()
         M.skip(4+2+2); // ignore unused buffer, introspection size, and QoS
         from_wire(M, selected);
 
-        Value auth;
+        MValue auth;
         from_wire_type_value(M, rxRegistry, auth);
         // TODO store credentials
 

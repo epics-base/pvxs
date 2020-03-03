@@ -20,7 +20,7 @@ namespace {
 struct InfoOp : public OperationBase
 {
     std::function<void(Result&&)> done;
-    Value result;
+    IValue result;
 
     enum state_t {
         Connecting, // waiting for an active Channel
@@ -100,7 +100,7 @@ void Connection::handle_GET_FIELD()
 
     uint32_t ioid=0u;
     Status sts{Status::Fatal};
-    Value prototype;
+    MValue prototype;
 
     from_wire(M, ioid);
     from_wire(M, sts);
@@ -141,7 +141,7 @@ void Connection::handle_GET_FIELD()
         auto done = std::move(info->done);
         Result res;
         if(sts.isSuccess()) {
-            res = Result(std::move(prototype), peerName);
+            res = Result(prototype.freeze(), peerName);
         } else {
             res = Result(std::make_exception_ptr(RemoteError(sts.msg)));
         }
@@ -152,7 +152,7 @@ void Connection::handle_GET_FIELD()
         }
 
     } else {
-        info->result = prototype;
+        info->result = prototype.freeze();
     }
 }
 

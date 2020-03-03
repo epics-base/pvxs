@@ -90,7 +90,7 @@ std::ostream& operator<<(std::ostream& strm, const shared_array<const void>& arr
     CASE(Float, float);
     CASE(Double, double);
     CASE(String, std::string);
-    CASE(Value, Value);
+    CASE(Value, IValue);
 #undef CASE
     }
     return strm;
@@ -113,7 +113,7 @@ std::ostream& operator<<(std::ostream& strm, const shared_array<void>& arr)
     CASE(Float, float);
     CASE(Double, double);
     CASE(String, std::string);
-    CASE(Value, Value);
+    CASE(Value, IValue);
 #undef CASE
     }
     return strm;

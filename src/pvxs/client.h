@@ -62,16 +62,16 @@ struct PVXS_API Connected : public std::runtime_error
 
 //! Holder for a Value or an exception
 class Result {
-    Value _result;
+    IValue _result;
     std::exception_ptr _error;
     std::string _peerName;
 public:
     Result() = default;
-    Result(Value&& val, const std::string& peerName) :_result(std::move(val)), _peerName(peerName) {}
+    Result(const IValue& val, const std::string& peerName) :_result(std::move(val)), _peerName(peerName) {}
     explicit Result(const std::exception_ptr& err) :_error(err) {}
 
     //! Access to the Value, or rethrow the exception
-    Value& operator()() {
+    IValue& operator()() {
         if(_error)
             std::rethrow_exception(_error);
         return _result;
@@ -111,7 +111,7 @@ struct PVXS_API Subscription {
     virtual void pause(bool p=true) =0;
     inline void resume() { pause(false); }
 
-    virtual Value pop() =0;
+    virtual IValue pop() =0;
 };
 
 class GetBuilder;
@@ -183,7 +183,7 @@ public:
      * @code
      * Context ctxt(...);
      * auto op = ctxt.put("pv:name")
-     *               .build([](Value&& prototype) -> Value {
+     *               .build([](const IValue& prototype) -> Value {
      *                   auto putval = prototype.cloneEmpty();
      *                   putval["value"] = 42;
      *                   return putval;
@@ -216,7 +216,7 @@ public:
      * @endcode
      */
     inline
-    RPCBuilder rpc(const std::string& name, Value&& arg);
+    RPCBuilder rpc(const std::string& name, const IValue& arg);
 
     inline
     MonitorBuilder monitor(const std::string& name);
@@ -241,11 +241,11 @@ protected:
     CommonBase(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : ctx(ctx), _name(name) {}
     ~CommonBase();
 
-    void _rawRequest(Value&&);
+    void _rawRequest(const IValue&);
     void _field(const std::string& s);
     void _record(const std::string& key, const void* value, StoreType vtype);
     void _parse(const std::string& req);
-    Value _build() const;
+    IValue _build() const;
 
     friend struct PVRParser;
 };
@@ -291,7 +291,7 @@ public:
     SubBuilder& pvRequest(const std::string& expr) { _parse(expr); return _sb(); }
 
     //! Store raw pvRequest blob.
-    SubBuilder& rawRequest(Value&& r) { _rawRequest(std::move(r)); return _sb(); }
+    SubBuilder& rawRequest(const IValue& r) { _rawRequest(r); return _sb(); }
 
     SubBuilder& priority(int p) { _prio = p; return _sb(); }
     SubBuilder& server(const std::string& s) { _server = s; return _sb(); }
@@ -327,7 +327,7 @@ GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, 
 //! Prepare a remote PUT operation
 class PutBuilder : public detail::CommonBuilder<PutBuilder> {
     bool _doGet = true;
-    std::function<Value(Value&&)> _builder;
+    std::function<IValue(const IValue&)> _builder;
     std::function<void(Result&&)> _result;
 public:
     PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
@@ -363,10 +363,12 @@ PutBuilder Context::put(const std::string& name) { return PutBuilder{pvt, name};
 
 //! Prepare a remote RPC operation
 class RPCBuilder : public detail::CommonBuilder<GetBuilder> {
-    Value _argument;
+    IValue _argument;
     std::function<void(Result&&)> _result;
 public:
-    RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, Value&& arg) :CommonBuilder{ctx,name}, _argument(std::move(arg)) {}
+    RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, const IValue& arg)
+        :CommonBuilder{ctx,name}, _argument(arg)
+    {}
     //! Callback through which result Value will be delivered
     RPCBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
@@ -378,7 +380,7 @@ public:
 
     friend struct Context::Pvt;
 };
-RPCBuilder Context::rpc(const std::string& name, Value&& arg) { return RPCBuilder{pvt, name, std::move(arg)}; }
+RPCBuilder Context::rpc(const std::string& name, const IValue& arg) { return RPCBuilder{pvt, name, arg}; }
 
 class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder> {
     std::function<void(Subscription&)> _event;

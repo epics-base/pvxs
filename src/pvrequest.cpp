@@ -10,7 +10,7 @@
 namespace pvxs {
 namespace impl {
 
-BitMask request2mask(const FieldDesc* desc, const Value& pvRequest)
+BitMask request2mask(const FieldDesc* desc, const IValue &pvRequest)
 {
     auto fields = pvRequest["field"];
     // pre-select top wildcard bit, which will always be permitted
@@ -19,7 +19,7 @@ BitMask request2mask(const FieldDesc* desc, const Value& pvRequest)
     bool foundrequested = false;
 
     if(fields.type()==TypeCode::Struct) {
-        auto rdesc = Value::Helper::desc(fields);
+        auto rdesc = ValueBase::Helper::desc(fields);
 
         if(rdesc->mlookup.empty())
             foundrequested = true; // empty is wildcard

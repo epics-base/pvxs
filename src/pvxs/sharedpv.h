@@ -14,7 +14,7 @@
 #include "srvcommon.h"
 
 namespace pvxs {
-class Value;
+class IValue;
 
 namespace server {
 
@@ -55,25 +55,25 @@ struct PVXS_API SharedPV
     //! Callback when the number of attach()d clients becomes zero.
     void onLastDisconnect(std::function<void()>&& fn);
     //! Callback when a client executes a new Put operation.
-    void onPut(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)>&& fn);
+    void onPut(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, const IValue&)>&& fn);
     //! Callback when a client executes an RPC operation.
     //! @note RPC operations are allowed even when the SharedPV is not opened (isOpen()==false)
-    void onRPC(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)>&& fn);
+    void onRPC(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, const IValue&)>&& fn);
 
     /** Provide data type and initial value.  Allows clients to begin connecting.
      * @pre !isOpen()
      * @param initial Defines data type, and initial value
      */
-    void open(const Value& initial);
+    void open(const IValue& initial);
     //! Test whether open() has been called w/o matching close()
     bool isOpen() const;
     //! Reverse the effects of open() and force disconnect any remaining clients.
     void close();
 
     //! Update the internal data value, and dispatch subscription updates to any clients.
-    void post(Value&& val);
+    void post(const IValue& val);
     //! query the internal data value.
-    void fetch(Value& val);
+    IValue fetch();
 
     struct Impl;
 private:

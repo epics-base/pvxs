@@ -24,10 +24,10 @@ DEFINE_LOGGER(io, "pvxs.client.io");
 
 namespace {
 struct Entry {
-    Value val;
+    IValue val;
     std::exception_ptr exc;
     Entry() = default;
-    Entry(Value&& v) :val(std::move(v)) {}
+    Entry(const IValue& v) :val(v) {}
     Entry(const std::exception_ptr& e) :exc(e) {}
 };
 }
@@ -38,7 +38,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
     // const after exec()
     std::function<void(Subscription&)> event;
-    Value pvRequest;
+    IValue pvRequest;
     bool pipeline = false;
     bool autostart = true;
     bool maskConn = false, maskDiscon = true;
@@ -115,9 +115,9 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         });
     }
 
-    virtual Value pop() override final
+    virtual IValue pop() override final
     {
-        Value ret;
+        IValue ret;
         {
             Guard G(lock);
 
@@ -196,7 +196,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
             to_wire(R, chan->sid);
             to_wire(R, ioid);
             to_wire(R, subcmd);
-            to_wire(R, Value::Helper::desc(pvRequest));
+            to_wire(R, ValueBase::Helper::desc(pvRequest));
             to_wire_full(R, pvRequest);
             if(pipeline)
                 to_wire(R, queueSize);
@@ -303,7 +303,7 @@ void Connection::handle_MONITOR()
     uint32_t ioid=0;
     uint8_t subcmd=0;
     Status sts{};
-    Value data; // hold prototype (INIT) or reply data
+    MValue data; // hold prototype (INIT) or reply data
 
     from_wire(M, ioid);
     from_wire(M, subcmd);
@@ -342,7 +342,7 @@ void Connection::handle_MONITOR()
         if(!sts.isSuccess()) {
 
         } else if(init) {
-            info->prototype = std::move(data);
+            info->prototype = data.freeze();
 
         } else if(!final || !M.empty()) {
 
@@ -411,7 +411,7 @@ void Connection::handle_MONITOR()
             mon->resume();
 
     } else if(data) { // Idle or Running
-        update.val = std::move(data);
+        update.val = data.freeze();
 
     } else {
         // NULL update.  can this happen?
@@ -447,7 +447,10 @@ void Connection::handle_MONITOR()
                             peerName.c_str(),
                             mon->chan->name.c_str());
 
-            mon->queue.back().val.assign(update.val);
+            auto temp = mon->queue.back().val.thaw();
+            temp.assign(update.val);
+
+            mon->queue.back().val = temp.freeze();
         }
 
         if(final && !update.exc) {

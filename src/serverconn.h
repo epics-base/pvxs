@@ -59,7 +59,7 @@ struct ServerChannelControl : public server::ChannelControl
     virtual ~ServerChannelControl();
 
     virtual void onOp(std::function<void(std::unique_ptr<server::ConnectOp>&&)>&& fn) override final;
-    virtual void onRPC(std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)>&& fn) override final;
+    virtual void onRPC(std::function<void(std::unique_ptr<server::ExecOp>&&, const IValue&)>&& fn) override final;
     virtual void onSubscribe(std::function<void(std::unique_ptr<server::MonitorSetupOp>&&)>&& fn) override final;
 
     virtual void onClose(std::function<void(const std::string&)>&& fn) override final;
@@ -83,7 +83,7 @@ struct ServerChan
     } state;
 
     std::function<void(std::unique_ptr<server::ConnectOp>&&)> onOp;
-    std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onRPC;
+    std::function<void(std::unique_ptr<server::ExecOp>&&, const IValue&)> onRPC;
     std::function<void(std::unique_ptr<server::MonitorSetupOp>&&)> onSubscribe;
     std::function<void(const std::string&)> onClose;
 
@@ -169,7 +169,7 @@ struct ServerSource : public server::Source
     const std::string name;
     server::Server::Pvt* const serv;
 
-    const Value info;
+    const IValue info;
 
     ServerSource(server::Server::Pvt* serv);
 

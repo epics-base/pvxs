@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
 
     // Must provide a data type for the mailbox.
     // Use pre-canned definition of scalar with meta-data
-    Value initial = nt::NTScalar{TypeCode::Float64}.create();
+    MValue initial = nt::NTScalar{TypeCode::Float64}.create();
 
     // (optional) Provide an initial value
     initial["value"] = 42.0;
@@ -51,8 +51,9 @@ int main(int argc, char* argv[])
     // (optional) Replace the default PUT handler to do a range check
     pv.onPut([](server::SharedPV& pv,
                 std::unique_ptr<server::ExecOp>&& op,
-                Value&& top)
+                const IValue& arg)
     {
+        auto top = arg.clone();
 
         // (optional) arbitrarily clip value to [-100.0, 100.0]
         double val(top["value"].as<double>());
@@ -62,7 +63,7 @@ int main(int argc, char* argv[])
             top["value"] = 100.0;
 
         // (optional) Provide a timestamp if the client has not (common)
-        Value ts(top["timeStamp"]);
+        MValue ts(top["timeStamp"]);
         if(!ts.isMarked(true, true)) {
             // use current time
             epicsTimeStamp now;
@@ -74,14 +75,14 @@ int main(int argc, char* argv[])
 
         // (optional) update the SharedPV cache and send
         // a update to any subscribers
-        pv.post(std::move(top));
+        pv.post(top.freeze());
 
         // Required.  Inform client that PUT operation is complete.
         op->reply();
     });
 
     // Associate a data type (and maybe initial value) with this PV
-    pv.open(initial);
+    pv.open(initial.freeze());
 
     // Build server which will server this PV
     // Configure using process environment.

@@ -43,7 +43,7 @@ struct NTScalar {
     PVXS_API
     TypeDef build() const;
     //! Instanciate
-    inline Value create() const {
+    inline MValue create() const {
         return build().create();
     }
 };
@@ -60,7 +60,7 @@ struct NTNDArray {
     PVXS_API
     TypeDef build() const;
     //! Instanciate
-    inline Value create() const {
+    inline MValue create() const {
         return build().create();
     }
 };
@@ -75,7 +75,7 @@ public:
     TypeDef build() const { return _def; }
 
     //! Instanciate
-    inline Value create() const {
+    inline MValue create() const {
         return build().create();
     }
 
@@ -97,7 +97,7 @@ private:
 public:
 
     template<typename ...Args>
-    Value call(Args... args) const {
+    MValue call(Args... args) const {
         auto val(create());
         auto iterable = val["query"].ichildren();
         auto it = iterable.begin();

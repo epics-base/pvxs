@@ -25,7 +25,7 @@ struct ServerGPR : public ServerOp
     {}
     virtual ~ServerGPR() {}
 
-    void doReply(const Value& value,
+    void doReply(const IValue& value,
                  const std::string& msg)
     {
         auto ch = chan.lock();
@@ -51,7 +51,7 @@ struct ServerGPR : public ServerOp
                 // noop
 
             } else if(cmd==CMD_GET || (cmd==CMD_PUT && (subcmd&0x40))) {
-                if(!value || Value::Helper::desc(value)!=this->type.get())
+                if(!value || ValueBase::Helper::desc(value)!=this->type.get())
                     throw std::logic_error("GET must reply with exact type previously passed to connect()");
 
             } else if(cmd==CMD_PUT) {
@@ -92,7 +92,7 @@ struct ServerGPR : public ServerOp
                     to_wire_valid(R, value, &pvMask); // GET and PUT/Get reply with bitmask and partial value
 
                 } else if(cmd==CMD_RPC) {
-                    auto type = Value::Helper::desc(value);
+                    auto type = ValueBase::Helper::desc(value);
                     to_wire(R, type);
                     if(value)
                         to_wire_full(R, value);
@@ -133,7 +133,7 @@ struct ServerGPR : public ServerOp
     std::shared_ptr<const FieldDesc> type;
     BitMask pvMask; // mask computed from pvRequest .fields
 
-    std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onPut;
+    std::function<void(std::unique_ptr<server::ExecOp>&&, const IValue&)> onPut;
 
     std::function<void(std::unique_ptr<server::ExecOp>&&)> onGet;
 };
@@ -144,7 +144,7 @@ struct ServerGPRConnect : public server::ConnectOp
     ServerGPRConnect(ServerConn* conn,
                      const std::weak_ptr<server::Server::Pvt>& server,
                      const std::string& name,
-                     const Value& request,
+                     const IValue& request,
                      const std::weak_ptr<ServerGPR>& op)
         :server(server)
         ,op(op)
@@ -159,7 +159,7 @@ struct ServerGPRConnect : public server::ConnectOp
         error("Op Create implied error");
     }
 
-    virtual void connect(const Value& prototype) override final
+    virtual void connect(const IValue& prototype) override final
     {
         auto serv = server.lock();
         if(!serv)
@@ -176,11 +176,11 @@ struct ServerGPRConnect : public server::ConnectOp
                     throw std::logic_error("Operation already connected (has a type)");
 
                 if(prototype) {
-                    oper->type = Value::Helper::type(prototype);
+                    oper->type = ValueBase::Helper::type(prototype);
                     oper->pvMask = request2mask(oper->type.get(), _pvRequest);
                 }
 
-                oper->doReply(Value(), std::string());
+                oper->doReply(IValue(), std::string());
             }
         });
     }
@@ -194,7 +194,7 @@ struct ServerGPRConnect : public server::ConnectOp
         serv->acceptor_loop.call([this, &msg](){
             if(auto oper = op.lock()) {
                 if(oper->state==ServerOp::Creating)
-                    oper->doReply(Value(), msg);
+                    oper->doReply(IValue(), msg);
             }
         });
     }
@@ -209,7 +209,7 @@ struct ServerGPRConnect : public server::ConnectOp
                 oper->onGet = std::move(fn);
         });
     }
-    virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)>&& fn) override final
+    virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&&, const IValue&)>&& fn) override final
     {
         auto serv = server.lock();
         if(!serv)
@@ -239,7 +239,7 @@ struct ServerGPRExec : public server::ExecOp
     ServerGPRExec(ServerConn* conn,
                      const std::weak_ptr<server::Server::Pvt>& server,
                      const std::string& name,
-                     const Value& request,
+                     const IValue& request,
                      const std::weak_ptr<ServerGPR>& op)
         :server(server)
         ,op(op)
@@ -253,10 +253,10 @@ struct ServerGPRExec : public server::ExecOp
 
     virtual void reply() override final
     {
-        reply(Value());
+        reply(IValue());
     }
 
-    virtual void reply(const Value& val) override final
+    virtual void reply(const IValue& val) override final
     {
         auto serv = server.lock();
         if(!serv)
@@ -277,7 +277,7 @@ struct ServerGPRExec : public server::ExecOp
             return;
         serv->acceptor_loop.call([this, &msg](){
             if(auto oper = op.lock()) {
-                oper->doReply(Value(), msg);
+                oper->doReply(IValue(), msg);
             }
         });
     }
@@ -319,7 +319,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
 
     if(subcmd&0x08) { // INIT
         // type and full value
-        Value pvRequest;
+        MValue pvRequest;
         from_wire_type_value(M, rxRegistry, pvRequest);
 
         if(!M.good()) {
@@ -337,9 +337,13 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             return;
         }
 
+        log_debug_printf(connsetup, "Client %s Get INIT ioid=%u pvRequest=%s\n",
+                   peerName.c_str(), unsigned(ioid),
+                   std::string(SB()<<pvRequest).c_str());
+
         auto op(std::make_shared<ServerGPR>(chan, ioid));
         op->cmd = cmd;
-        std::unique_ptr<ServerGPRConnect> ctrl(new ServerGPRConnect(this, iface->server->internal_self, chan->name, pvRequest, op));
+        std::unique_ptr<ServerGPRConnect> ctrl(new ServerGPRConnect(this, iface->server->internal_self, chan->name, pvRequest.freeze(), op));
 
         op->subcmd = subcmd;
         op->state = ServerOp::Creating;
@@ -347,12 +351,8 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         opByIOID[ioid] = op;
         chan->opByIOID[ioid] = op;
 
-        log_debug_printf(connsetup, "Client %s Get INIT ioid=%u pvRequest=%s\n",
-                   peerName.c_str(), unsigned(ioid),
-                   std::string(SB()<<pvRequest).c_str());
-
         if(cmd==CMD_RPC) {
-            ctrl->connect(Value());
+            ctrl->connect(IValue());
 
         } else if(chan->onOp) { // GET, PUT
             chan->onOp(std::move(ctrl));
@@ -384,14 +384,14 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             return;
         }
 
-        Value val;
+        MValue val;
         if(cmd==CMD_RPC) {
             // type and full value
             from_wire_type_value(M, rxRegistry, val);
 
         } else if(isput) {
             // bitmask and partial value
-            val = Value::Helper::build(op->type);
+            val = ValueBase::Helper::build(op->type);
             from_wire_valid(M, rxRegistry, val);
         }
 
@@ -412,7 +412,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             if(!op->lastRequest)
                 op->lastRequest = subcmd&0x10;
 
-            std::unique_ptr<ServerGPRExec> ctrl{new ServerGPRExec(this, iface->server->internal_self, chan->name, val, op)};
+            std::unique_ptr<ServerGPRExec> ctrl{new ServerGPRExec(this, iface->server->internal_self, chan->name, IValue(), op)};
 
             op->subcmd = subcmd;
             op->state = ServerOp::Executing;
@@ -422,13 +422,13 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             try {
                 if(cmd==CMD_RPC && isput) {
                     if(chan->onRPC)
-                        chan->onRPC(std::move(ctrl), std::move(val));
+                        chan->onRPC(std::move(ctrl), val.freeze());
                     else
                         ctrl->error("RPC Not Implemented");
 
                 } else if(cmd==CMD_PUT && isput) {
                     if(op->onPut)
-                        op->onPut(std::move(ctrl), std::move(val));
+                        op->onPut(std::move(ctrl), val.freeze());
                     else
                         ctrl->error("PUT Not Implemented");
 

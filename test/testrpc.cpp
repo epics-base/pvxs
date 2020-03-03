@@ -26,14 +26,17 @@ using namespace pvxs;
 struct Tester {
     client::Result actual;
     epicsEvent done;
-    Value initial;
+    IValue initial;
     server::SharedPV mbox;
     server::Server serv;
     client::Context cli;
     bool fail = false;
 
     Tester()
-        :initial(nt::NTScalar{TypeCode::Int32}.create())
+        :initial(nt::NTScalar{TypeCode::Int32}
+                 .create()
+                 .update("value", 1)
+                 .freeze())
         ,mbox(server::SharedPV::buildMailbox())
         ,serv(server::Config::isolated()
               .build()
@@ -43,9 +46,7 @@ struct Tester {
         testShow()<<"Server:\n"<<serv.config()
                   <<"Client:\n"<<cli.config();
 
-        initial["value"] = 1;
-
-        mbox.onRPC([this](server::SharedPV& pv, std::unique_ptr<server::ExecOp>&& op, Value&& arg) {
+        mbox.onRPC([this](server::SharedPV& pv, std::unique_ptr<server::ExecOp>&& op, const IValue& arg) {
             if(fail)
                 op->error("oops");
             else
@@ -53,10 +54,10 @@ struct Tester {
         });
     }
 
-    std::shared_ptr<client::Operation> doCall(Value&& arg)
+    std::shared_ptr<client::Operation> doCall(const IValue& arg)
     {
 
-        auto op = cli.rpc("mailbox", std::move(arg))
+        auto op = cli.rpc("mailbox", arg)
                 .result([this](client::Result&& result) {
                     actual = std::move(result);
                     done.trigger();
@@ -68,7 +69,7 @@ struct Tester {
         return op;
     }
 
-    Value testWaitOk()
+    IValue testWaitOk()
     {
         if(testOk1(done.wait(5.0))) {
             try {
@@ -81,7 +82,7 @@ struct Tester {
         } else {
             testSkip(1, "timeout");
         }
-        return Value();
+        return IValue();
     }
 
     void echo()
@@ -91,7 +92,7 @@ struct Tester {
 
         auto arg = initial.cloneEmpty();
         arg["value"] = 42;
-        auto op = doCall(std::move(arg));
+        auto op = doCall(arg.freeze());
         if(auto ret = testWaitOk()) {
 
             int32_t v=0;
@@ -107,7 +108,7 @@ struct Tester {
 
         auto arg = initial.cloneEmpty();
         arg["value"] = 42;
-        auto op = doCall(std::move(arg));
+        auto op = doCall(arg.freeze());
         if(auto ret = testWaitOk()) {
 
             int32_t v=0;
@@ -121,7 +122,7 @@ struct Tester {
         mbox.open(initial);
         serv.start();
 
-        auto op = doCall(Value());
+        auto op = doCall(IValue());
         if(auto ret = testWaitOk()) {
 
             testOk1(!ret.valid());
@@ -134,7 +135,7 @@ struct Tester {
 
         auto arg = initial.cloneEmpty();
         arg["value"] = 42;
-        auto op = doCall(std::move(arg));
+        auto op = doCall(arg.freeze());
         testOk1(!done.wait(2.1));
     }
 
@@ -145,7 +146,7 @@ struct Tester {
 
         auto arg = initial.cloneEmpty();
         arg["value"] = 42;
-        (void)doCall(std::move(arg));
+        (void)doCall(arg.freeze());
         testOk1(!done.wait(2.1));
 
     }
@@ -158,7 +159,7 @@ struct Tester {
 
         auto arg = initial.cloneEmpty();
         arg["value"] = 42;
-        auto op = doCall(std::move(arg));
+        auto op = doCall(arg.freeze());
 
         if(testOk1(done.wait(5.0))) {
             testThrows<client::RemoteError>([this](){

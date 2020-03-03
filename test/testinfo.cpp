@@ -24,13 +24,13 @@ namespace {
 using namespace pvxs;
 
 struct Tester {
-    Value initial;
+    IValue initial;
     server::SharedPV mbox;
     server::Server serv;
     client::Context cli;
 
     Tester()
-        :initial(nt::NTScalar{TypeCode::Int32}.create())
+        :initial(nt::NTScalar{TypeCode::Int32}.create().freeze())
         ,mbox(server::SharedPV::buildReadonly())
         ,serv(server::Config::isolated()
               .build()

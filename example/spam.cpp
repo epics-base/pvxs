@@ -22,11 +22,11 @@ namespace {
 struct SpamSource : public server::Source
 {
     std::shared_ptr<std::set<std::string>> names;
-    Value initial;
+    IValue initial;
 
     SpamSource()
         :names(std::make_shared<decltype (names)::element_type>())
-        ,initial(nt::NTScalar{TypeCode::UInt32}.create())
+        ,initial(nt::NTScalar{TypeCode::UInt32}.create().freeze())
     {}
 
     // Source interface
@@ -54,7 +54,7 @@ public:
             auto counter = std::make_shared<uint32_t>(0u);
 
             auto fill = [this, sub, counter]() mutable {
-                Value update;
+                MValue update;
                 do {
                     auto cnt = (*counter)++;
                     update = initial.cloneEmpty();
@@ -62,7 +62,7 @@ public:
 
                     log_debug_printf(app, "%s count %u\n", sub->peerName().c_str(), unsigned(cnt));
 
-                }while(sub->tryPost(std::move(update)));
+                }while(sub->tryPost(update.freeze()));
             };
 
             sub->onHighMark(fill);

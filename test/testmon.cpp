@@ -24,7 +24,7 @@ namespace {
 using namespace pvxs;
 
 struct BasicTest {
-    Value initial;
+    IValue initial;
     server::SharedPV mbox;
     server::Server serv;
     client::Context cli;
@@ -33,8 +33,7 @@ struct BasicTest {
     std::shared_ptr<client::Subscription> sub;
 
     BasicTest()
-        :initial(nt::NTScalar{TypeCode::Int32}.create())
-        ,mbox(server::SharedPV::buildReadonly())
+        :mbox(server::SharedPV::buildReadonly())
         ,serv(server::Config::isolated()
               .build()
               .addPV("mailbox", mbox))
@@ -43,7 +42,9 @@ struct BasicTest {
         testShow()<<"Server:\n"<<serv.config()
                   <<"Client:\n"<<cli.config();
 
-        initial["value"] = 42;
+        auto ival = nt::NTScalar{TypeCode::Int32}.create();
+        ival["value"] = 42;
+        initial = ival.freeze();
     }
 
     void subscribe(const char *name)
@@ -62,7 +63,7 @@ struct BasicTest {
     {
         auto update(initial.cloneEmpty());
         update["value"] = v;
-        mbox.post(std::move(update));
+        mbox.post(update.freeze());
     }
 };
 
@@ -176,7 +177,7 @@ struct TestLifeCycle : public BasicTest
 
         auto update(initial.cloneEmpty());
         update["value"] = 39;
-        mbox2.post(std::move(update));
+        mbox2.post(update.freeze());
 
         testDiag("Wait for Data update event2 on mbox2");
         testOk1(!!evt2.wait(5.0));

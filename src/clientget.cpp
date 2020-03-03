@@ -19,10 +19,10 @@ namespace {
 
 struct GPROp : public OperationBase
 {
-    std::function<Value(Value&&)> builder;
+    std::function<IValue(const IValue&)> builder;
     std::function<void(Result&&)> done;
-    Value pvRequest;
-    Value rpcarg;
+    IValue pvRequest;
+    IValue rpcarg;
     Result result;
     bool getOput = false;
 
@@ -92,7 +92,7 @@ struct GPROp : public OperationBase
             to_wire(R, chan->sid);
             to_wire(R, ioid);
             to_wire(R, uint8_t(0x08)); // INIT
-            to_wire(R, Value::Helper::desc(pvRequest));
+            to_wire(R, ValueBase::Helper::desc(pvRequest));
             to_wire_full(R, pvRequest);
         }
         conn->enqueueTxBody(pva_app_msg_t(uint8_t(op)));
@@ -139,7 +139,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
     uint32_t ioid;
     uint8_t subcmd;
     Status sts;
-    Value data; // hold prototype (INIT) or reply data (GET)
+    MValue data; // hold prototype (INIT) or reply data (GET)
 
     from_wire(M, ioid);
     from_wire(M, subcmd);
@@ -190,7 +190,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
 
         if(cmd!=CMD_RPC && init && sts.isSuccess()) {
             // INIT of PUT or GET, store type description
-            info->prototype = data;
+            info->prototype = data.freeze();
 
         } else if(M.good() && !init && (cmd==CMD_GET || (cmd==CMD_PUT && get)) &&  sts.isSuccess()) {
             // GET reply
@@ -263,13 +263,13 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
     } else if(gpr->state==GPROp::GetOPut) {
         gpr->state = GPROp::BuildPut;
 
-        info->prototype.assign(data);
+        info->prototype = data.freeze();
 
     } else if(gpr->state==GPROp::Exec) {
         gpr->state = GPROp::Done;
 
         // data always empty for CMD_PUT
-        gpr->result = Result(std::move(data), peerName);
+        gpr->result = Result(data.freeze(), peerName);
 
     } else {
         // should be avoided above
@@ -278,10 +278,9 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
 
     // transient state (because builder callback is synchronous)
     if(gpr->state==GPROp::BuildPut) {
-        Value arg(info->prototype.clone());
 
         try {
-            info->prototype = gpr->builder(std::move(arg));
+            info->prototype = gpr->builder(info->prototype);
             gpr->state = GPROp::Exec;
 
         } catch(std::exception& e) {
@@ -311,7 +310,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
                 to_wire_valid(R, info->prototype);
 
             } else if(cmd==CMD_RPC) {
-                to_wire(R, Value::Helper::desc(gpr->rpcarg));
+                to_wire(R, ValueBase::Helper::desc(gpr->rpcarg));
                 if(gpr->rpcarg)
                     to_wire_full(R, gpr->rpcarg);
             }

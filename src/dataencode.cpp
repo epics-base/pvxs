@@ -318,7 +318,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
     }
         break;
     case StoreType::Compound: {
-        auto& fld = store->as<Value>();
+        auto& fld = store->as<IValue>();
         switch (desc->code.code) {
         case TypeCode::Union:
             if(!fld) {
@@ -328,7 +328,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
             } else {
                 size_t index = 0u;
                 for(auto& pair : desc->miter) {
-                    if(Value::Helper::desc(fld)== &desc->members[pair.second])
+                    if(ValueBase::Helper::desc(fld)== &desc->members[pair.second])
                         break;
                     index++;
                 }
@@ -344,7 +344,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
                 to_wire(buf, uint8_t(0xff));
 
             } else {
-                to_wire(buf, Value::Helper::desc(fld));
+                to_wire(buf, ValueBase::Helper::desc(fld));
                 to_wire_full(buf, fld);
             }
             return;
@@ -380,21 +380,21 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
             to_wire<std::string, const std::string&>(buf, fld);
             return;
         case TypeCode::StructA:{
-            auto arr = fld.castTo<const Value>();
+            auto arr = fld.castTo<const IValue>();
             to_wire(buf, Size{arr.size()});
             for(auto& elem : arr) {
                 if(!elem) {
                     to_wire(buf, uint8_t(0u));
                 } else {
                     to_wire(buf, uint8_t(1u));
-                    assert(Value::Helper::desc(elem)==&desc->members[0]);
+                    assert(ValueBase::Helper::desc(elem)==&desc->members[0]);
                     to_wire_full(buf, elem);
                 }
             }
         }
             return;
         case TypeCode::UnionA: {
-            auto arr = fld.castTo<const Value>();
+            auto arr = fld.castTo<const IValue>();
             to_wire(buf, Size{arr.size()});
             for(auto& elem : arr) {
                 if(!elem) {
@@ -408,7 +408,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
         }
             return;
         case TypeCode::AnyA:{
-            auto arr = fld.castTo<const Value>();
+            auto arr = fld.castTo<const IValue>();
             to_wire(buf, Size{arr.size()});
             for(auto& elem : arr) {
                 if(!elem) {
@@ -416,7 +416,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
                 } else {
                     to_wire(buf, uint8_t(1u));
 
-                    to_wire(buf, Value::Helper::desc(elem));
+                    to_wire(buf, ValueBase::Helper::desc(elem));
                     to_wire_full(buf, elem);
                 }
             }
@@ -432,17 +432,17 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
     buf.fault();
 }
 
-void to_wire_full(Buffer& buf, const Value& val)
+void to_wire_full(Buffer& buf, const ValueBase& val)
 {
     assert(!!val);
 
-    to_wire_field(buf, Value::Helper::desc(val), Value::Helper::store(val));
+    to_wire_field(buf, ValueBase::Helper::desc(val), ValueBase::Helper::store(val));
 }
 
-void to_wire_valid(Buffer& buf, const Value& val, const BitMask* mask)
+void to_wire_valid(Buffer& buf, const ValueBase& val, const BitMask* mask)
 {
-    auto desc = Value::Helper::desc(val);
-    auto store = Value::Helper::store(val);
+    auto desc = ValueBase::Helper::desc(val);
+    auto store = ValueBase::Helper::store(val);
     assert(desc && desc->code==TypeCode::Struct);
     assert(!mask || mask->size()==desc->size());
 
@@ -540,21 +540,22 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
     }
         break;
     case StoreType::Compound: {
-        auto& fld = store->as<Value>();
+        auto& fld = store->as<IValue>();
         switch (desc->code.code) {
         case TypeCode::Union: {
             Size select{};
             from_wire(buf, select);
             if(select.size==size_t(-1)) {
-                fld = Value();
+                fld = IValue();
                 return;
 
             } else if(select.size < desc->miter.size()) {
                 std::shared_ptr<const FieldDesc> stype(store->top->desc,
                                                        &desc->members[desc->miter[select.size].second]); // alias
-                fld = Value::Helper::build(stype, store, desc);
+                auto mfld = ValueBase::Helper::build(stype);
 
-                from_wire_full(buf, ctxt, fld);
+                from_wire_full(buf, ctxt, mfld);
+                fld = mfld.freeze();
                 return;
             }
         }
@@ -568,14 +569,15 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                 return;
 
             if(descs->empty()) {
-                fld = Value();
+                fld = IValue();
                 return;
 
             } else {
                 std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
-                fld = Value::Helper::build(stype);
+                auto mfld = ValueBase::Helper::build(stype);
 
-                from_wire_full(buf, ctxt, fld);
+                from_wire_full(buf, ctxt, mfld);
+                fld = mfld.freeze();
                 return;
 
             }
@@ -616,14 +618,15 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::StructA:{
             Size alen{};
             from_wire(buf, alen);
-            shared_array<Value> arr(alen.size);
+            shared_array<IValue> arr(alen.size);
             std::shared_ptr<const FieldDesc> etype(store->top->desc,
                                                    &desc->members[0]); // alias
             for(auto& elem : arr) {
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
-                    elem = Value::Helper::build(etype, store, desc);
+                    auto melem = ValueBase::Helper::build(etype);
 
-                    from_wire_full(buf, ctxt, elem);
+                    from_wire_full(buf, ctxt, melem);
+                    elem = melem.freeze();
                 }
             }
 
@@ -633,7 +636,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::UnionA: {
             Size alen{};
             from_wire(buf, alen);
-            shared_array<Value> arr(alen.size);
+            shared_array<IValue> arr(alen.size);
             auto cdesc = &desc->members[0];
 
             for(auto& elem : arr) {
@@ -647,9 +650,10 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                     } else if(select.size < cdesc->miter.size()) {
                         std::shared_ptr<const FieldDesc> stype(store->top->desc,
                                                                &cdesc->members[cdesc->miter[select.size].second]); // alias
-                        elem = Value::Helper::build(stype, store, desc);
+                        auto melem = ValueBase::Helper::build(stype);
 
-                        from_wire_full(buf, ctxt, elem);
+                        from_wire_full(buf, ctxt, melem);
+                        elem = melem.freeze();
 
                     } else {
                         // invalid selector
@@ -665,7 +669,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::AnyA:{
             Size alen{};
             from_wire(buf, alen);
-            shared_array<Value> arr(alen.size);
+            shared_array<IValue> arr(alen.size);
 
             for(auto& elem : arr) {
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
@@ -678,9 +682,10 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                     if(!descs->empty()) {
 
                         std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
-                        elem = Value::Helper::build(stype, store, desc);
+                        auto melem = ValueBase::Helper::build(stype);
 
-                        from_wire_full(buf, ctxt, elem);
+                        from_wire_full(buf, ctxt, melem);
+                        elem = melem.freeze();
                     }
                 }
             }
@@ -698,17 +703,17 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
     buf.fault();
 }
 
-void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val)
+void from_wire_full(Buffer& buf, TypeStore& ctxt, MValue& val)
 {
     assert(!!val);
 
-    from_wire_field(buf, ctxt, Value::Helper::desc(val), Value::Helper::store(val));
+    from_wire_field(buf, ctxt, ValueBase::Helper::desc(val), ValueBase::Helper::store(val));
 }
 
-void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
+void from_wire_valid(Buffer& buf, TypeStore& ctxt, MValue& val)
 {
-    auto desc = Value::Helper::desc(val);
-    auto store = Value::Helper::store(val);
+    auto desc = ValueBase::Helper::desc(val);
+    auto store = ValueBase::Helper::store(val);
 
     if(!desc || !store) {
         buf.fault();
@@ -735,7 +740,7 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
     }
 }
 
-void from_wire_type(Buffer& buf, TypeStore& ctxt, Value& val)
+void from_wire_type(Buffer& buf, TypeStore& ctxt, MValue& val)
 {
     auto descs(std::make_shared<std::vector<FieldDesc>>());
 
@@ -746,14 +751,14 @@ void from_wire_type(Buffer& buf, TypeStore& ctxt, Value& val)
     if(!descs->empty()) {
 
         std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
-        val = Value::Helper::build(stype);
+        val = ValueBase::Helper::build(stype);
 
     } else {
-        val = Value();
+        val = MValue();
     }
 }
 
-void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val)
+void from_wire_type_value(Buffer& buf, TypeStore& ctxt, MValue& val)
 {
     from_wire_type(buf, ctxt, val);
 

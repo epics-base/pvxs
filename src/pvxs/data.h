@@ -18,7 +18,11 @@
 #include <pvxs/sharedArray.h>
 
 namespace pvxs {
-class Value;
+namespace impl {
+class ValueBase;
+}
+class MValue;
+class IValue;
 
 //! selector for union FieldStorage::store
 enum struct StoreType : uint8_t {
@@ -28,7 +32,7 @@ enum struct StoreType : uint8_t {
     Integer,  //!< int64_t
     Real,     //!< double
     String,   //!< std::string
-    Compound, //!< Value
+    Compound, //!< IValue
     Array,    //!< shared_array<const void>
 };
 
@@ -79,8 +83,8 @@ struct StorageMap<shared_array<const void>>
 { typedef shared_array<const void> store_t;   static constexpr StoreType code{StoreType::Array}; };
 
 template<>
-struct StorageMap<Value>
-{ typedef Value store_t;   static constexpr StoreType code{StoreType::Compound}; };
+struct StorageMap<IValue>
+{ typedef IValue store_t;   static constexpr StoreType code{StoreType::Compound}; };
 
 } // namespace impl
 
@@ -278,7 +282,7 @@ public:
     TypeDef& operator=(const TypeDef&) = default;
     TypeDef& operator=(TypeDef&&) = default;
     //! pre-populate definition based on provided Value
-    explicit TypeDef(const Value&);
+    explicit TypeDef(const impl::ValueBase&);
     ~TypeDef();
 
     //! new definition with id and children.  code must be TypeCode::Struct or TypeCode::Union
@@ -296,7 +300,7 @@ public:
     TypeDef& operator+=(std::initializer_list<Member> children);
 
     //! Instanciate this definition
-    Value create() const;
+    MValue create() const;
 
     friend
     std::ostream& operator<<(std::ostream& strm, const TypeDef&);
@@ -319,64 +323,46 @@ struct PVXS_API NoConvert : public std::runtime_error
     virtual ~NoConvert();
 };
 
-/** Generic data container
- *
- * References a single data field, which may be free-standing (eg. "int x = 5;")
- * or a member of an enclosing Struct, or an element in an array of Struct.
- *
- * - Use valid() (or operator bool() ) to determine if pointed to a valid field.
- * - Use operator[] to traverse within a Kind::Compound field.
- *
- * @code
- * Value val = nt::NTScalar{TypeCode::Int32}.create();
- * val["value"] = 42;
- * Value alias = val;
- * assert(alias["value"].as<int32_t>()==42); // 'alias' is a second reference to the same Struct
- * @endcode
- */
-class PVXS_API Value {
-    friend class TypeDef;
+namespace impl {
+class PVXS_API ValueBase
+{
+public:
+    struct Helper;
+protected:
     // (maybe) storage for this field.  alias of StructTop::members[]
     std::shared_ptr<impl::FieldStorage> store;
     // (maybe) owned thourgh StructTop (aliased as FieldStorage)
     const impl::FieldDesc* desc;
-public:
-    struct Helper;
-    friend struct Helper;
 
-    //! default empty Value
-    constexpr Value() :desc(nullptr) {}
-private:
+    friend class ::pvxs::MValue;
+    friend class ::pvxs::IValue;
+    friend class ::pvxs::TypeDef;
+
+    constexpr ValueBase() :desc(nullptr) {}
     // Build new Value with the given type.  Used by TypeDef
-    explicit Value(const std::shared_ptr<const impl::FieldDesc>& desc);
-    Value(const std::shared_ptr<const impl::FieldDesc>& desc, Value& parent);
-public:
+    explicit ValueBase(const std::shared_ptr<const impl::FieldDesc>& desc);
     // movable and copyable
-    Value(const Value&) = default;
-    Value(Value&& o) noexcept
+    ValueBase(const ValueBase&) = default;
+    ValueBase(ValueBase&& o) noexcept
         :desc(o.desc)
     {
         store = std::move(o.store);
         o.desc = nullptr;
     }
-    Value& operator=(const Value&) = default;
-    Value& operator=(Value&& o) noexcept {
+    ValueBase& operator=(const ValueBase&) = default;
+    ValueBase& operator=(ValueBase&& o) noexcept {
         store = std::move(o.store);
         desc = o.desc;
         o.desc = nullptr;
         return *this;
     }
-    ~Value();
+    ~ValueBase();
+public:
 
     //! allocate new storage, with default values
-    Value cloneEmpty() const;
+    MValue cloneEmpty() const;
     //! allocate new storage and copy in our values
-    Value clone() const;
-    //! copy values from other.  Must have matching types.
-    Value& assign(const Value&);
-
-    //! Use to allocate members for an array of Struct and array of Union
-    Value allocMember();
+    MValue clone() const;
 
     //! Does this Value actual reference some underlying storage
     inline bool valid() const { return desc; }
@@ -384,10 +370,6 @@ public:
 
     //! Test if this field is marked as valid/changed
     bool isMarked(bool parents=true, bool children=false) const;
-    //! Mark this field as valid/changed
-    void mark(bool v=true);
-    //! Remove mark from this field
-    void unmark(bool parents=false, bool children=true);
 
     //! Type of the referenced field (or Null)
     TypeCode type() const;
@@ -399,9 +381,9 @@ public:
     bool idStartsWith(const std::string& prefix) const;
 
     //! test for instance equality.
-    inline bool compareInst(const Value& o) const { return store==o.store; }
+    inline bool compareInst(const ValueBase& o) const { return store==o.store; }
 //    int compareValue(const Value&) const;
-    inline int compareType(const Value& o) const { return desc==o.desc; }
+    inline int compareType(const ValueBase& o) const { return desc==o.desc; }
 
     /** Return our name for a decendent field.
      * @code
@@ -411,7 +393,7 @@ public:
      * @throws NoField unless both this and decendent are valid()
      * @throws std::logic_error if decendent is not actually a decendent
      */
-    const std::string& nameOf(const Value& decendent) const;
+    const std::string& nameOf(const ValueBase& decendent) const;
 
     // access to Value's ... value
     // not for Struct
@@ -419,8 +401,6 @@ public:
     // use with caution
     void copyOut(void *ptr, StoreType type) const;
     bool tryCopyOut(void *ptr, StoreType type) const;
-    void copyIn(const void *ptr, StoreType type);
-    bool tryCopyIn(const void *ptr, StoreType type);
 
     /** Extract from field.
      *
@@ -466,55 +446,14 @@ public:
         }
     }
 
-    //! Attempt to assign to field.
-    //! @returns false if from<T>() would throw NoField or NoConvert
-    template<typename T>
-    inline bool tryFrom(const T& val) {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t norm(val);
-        return copyIn(&norm, map_t::code);
-    }
-
-    /** Assign from field.
-     *
-     * Type 'T' may be one of:
-     * - bool
-     * - uint8_t, uint16_t, uint32_t, uint64_t
-     * - int8_t, int16_t, int32_t, int64_t
-     * - float, double
-     * - std::string
-     * - Value
-     * - shared_array<const void>
-     */
-    template<typename T>
-    void from(const T& val) {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t norm(val);
-        copyIn(&norm, map_t::code);
-    }
-
-    // TODO T=Value is ambigious with previous assignment operator
-    //! shorthand for from<T>(const T&)
-    template<typename T>
-    Value& operator=(const T& val) {
-        from<T>(val);
-        return *this;
-    }
-
     // Struct/Union access
-private:
+protected:
     void traverse(const std::string& expr, bool modify);
 public:
 
-    //! attempt to decend into sub-structure
-    Value operator[](const char *name);
-    inline Value operator[](const std::string& name) { return (*this)[name.c_str()]; }
-    const Value operator[](const char *name) const;
-    inline const Value operator[](const std::string& name) const { return (*this)[name.c_str()]; }
-
     template<typename V>
     class Iterable;
-private:
+protected:
     struct IterInfo {
         // when Marked==true, index of next potentially unmarked field.
         // all [pos, nextcheck) are marked
@@ -538,7 +477,7 @@ private:
     public:
         Iter() {}
 
-        V operator*() const { return ref->_iter_deref(*this); }
+        V operator*() const { V ret; ref->_iter_deref(*this, ret); return ret; }
         Iter& operator++() {
             pos++;
             if(marked && pos >= nextcheck)
@@ -560,7 +499,7 @@ private:
 
     void _iter_fl(IterInfo& info, bool first) const;
     void _iter_advance(IterInfo& info) const;
-    Value _iter_deref(const IterInfo& info) const;
+    void _iter_deref(const IterInfo& info, ValueBase& fld) const;
 public:
 
     template<typename V>
@@ -582,18 +521,159 @@ public:
             return ret;
         }
     };
+};
+} // namespace impl
 
-    Iterable<Value> iall()      { return Iterable<Value>{this, false, true}; }
-    Iterable<Value> ichildren() { return Iterable<Value>{this, false, false}; }
-    Iterable<Value> imarked()   { return Iterable<Value>{this, true , true}; }
+/** Mutable reference to a structure field
+ */
+class PVXS_API MValue : public impl::ValueBase{
+public:
+    constexpr MValue() = default;
+protected:
+    friend class impl::ValueBase;
+    friend class TypeDef;
+    friend struct impl::ValueBase::Helper;
+    // Build new Value with the given type.  Used by TypeDef
+    explicit MValue(const std::shared_ptr<const impl::FieldDesc>& desc) : impl::ValueBase(desc) {}
+public:
+    // movable and copyable
+    MValue(const MValue&) = default;
+    MValue(MValue&& o) = default;
+    MValue& operator=(const MValue&) = default;
+    MValue& operator=(MValue&& o) = default;
+public:
+    /** Exchange mutable MValue for an immutable IValue
+     *
+     * This MValue must be the only reference to the underlying structure.
+     * If not, then an exception is thrown.
+     * On success, this MValue is consumed and becomes invalid.
+     *
+     * @post !valid()
+     * @throws std::runtime_error If this MValue is not the only reference
+     */
+    IValue freeze();
 
-    Iterable<const Value> iall() const      { return Iterable<const Value>{this, false, true}; }
-    Iterable<const Value> ichildren() const { return Iterable<const Value>{this, false, false}; }
-    Iterable<const Value> imarked() const   { return Iterable<const Value>{this, true , true}; }
+    //! copy values from other.  Must have matching types.
+    MValue& assign(const impl::ValueBase&);
+
+    //! Use to allocate members for an array of Struct and array of Union
+    MValue allocMember() const;
+
+    //! Mark this field as valid/changed
+    void mark(bool v=true);
+    //! Remove mark from this field
+    void unmark(bool parents=false, bool children=true);
+
+    void copyIn(const void *ptr, StoreType type);
+    bool tryCopyIn(const void *ptr, StoreType type);
+
+    //! Attempt to assign to field.
+    //! @returns false if from<T>() would throw NoField or NoConvert
+    template<typename T>
+    inline bool tryFrom(const T& val) {
+        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
+        typename map_t::store_t norm(val);
+        return copyIn(&norm, map_t::code);
+    }
+
+    /** Assign from field.
+     *
+     * Type 'T' may be one of:
+     * - bool
+     * - uint8_t, uint16_t, uint32_t, uint64_t
+     * - int8_t, int16_t, int32_t, int64_t
+     * - float, double
+     * - std::string
+     * - Value
+     * - shared_array<const void>
+     */
+    template<typename T>
+    MValue& from(const T& val) {
+        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
+        typename map_t::store_t norm(val);
+        copyIn(&norm, map_t::code);
+        return *this;
+    }
+
+    //! shorthand for from<T>(const T&)
+    //! except for T=IValue to avoid ambiguity between this assignment of value and previous assignment of reference.
+    template<typename T>
+    typename std::enable_if<!std::is_same<T, IValue>{}, MValue&>::type
+    operator=(const T& val) {
+        return from<T>(val);
+    }
+
+    /** In-line assignment of sub-field value
+     *
+     *  Short-hand notation equivalent to
+     *  @code
+     *    (*this)[field].from(val);
+     *  @endcode
+     *
+     *  Example usage
+     *  @code
+     *     IValue result = nt::NTScalar{TypeCode::Int32}
+     *                  .create()
+     *                  .update("value", 42)
+     *                  .update("alarm.severity", 0);
+     *                  .freeze();
+     *  @endcode
+     */
+    template<typename T, typename K>
+    MValue& update(const K& field, const T& val) {
+        (*this)[field].from(val);
+        return *this;
+    }
+
+    //! attempt to decend into sub-structure
+    MValue operator[](const char *name) const {
+        MValue ret(*this);
+        ret.traverse(name, true);
+        return ret;
+    }
+    inline MValue operator[](const std::string& name) const { return (*this)[name.c_str()]; }
+
+    Iterable<MValue> iall()      { return Iterable<MValue>{this, false, true}; }
+    Iterable<MValue> ichildren() { return Iterable<MValue>{this, false, false}; }
+    Iterable<MValue> imarked()   { return Iterable<MValue>{this, true , true}; }
+
+    Iterable<const MValue> iall() const      { return Iterable<const MValue>{this, false, true}; }
+    Iterable<const MValue> ichildren() const { return Iterable<const MValue>{this, false, false}; }
+    Iterable<const MValue> imarked() const   { return Iterable<const MValue>{this, true , true}; }
 };
 
+class PVXS_API IValue : public impl::ValueBase
+{
+public:
+    constexpr IValue() = default;
+    // movable and copyable
+    IValue(const IValue&) = default;
+    IValue(IValue&& o) = default;
+    IValue& operator=(const IValue&) = default;
+    IValue& operator=(IValue&& o) = default;
+
+    MValue thaw();
+
+    //! attempt to decend into sub-structure
+    const IValue operator[](const char *name) const {
+        IValue ret(*this);
+        ret.traverse(name, false);
+        return ret;
+    }
+    inline const IValue operator[](const std::string& name) const { return (*this)[name.c_str()]; }
+
+    Iterable<IValue> iall()      { return Iterable<IValue>{this, false, true}; }
+    Iterable<IValue> ichildren() { return Iterable<IValue>{this, false, false}; }
+    Iterable<IValue> imarked()   { return Iterable<IValue>{this, true , true}; }
+
+    Iterable<const IValue> iall() const      { return Iterable<const IValue>{this, false, true}; }
+    Iterable<const IValue> ichildren() const { return Iterable<const IValue>{this, false, false}; }
+    Iterable<const IValue> imarked() const   { return Iterable<const IValue>{this, true , true}; }
+};
+
+
 PVXS_API
-std::ostream& operator<<(std::ostream& strm, const Value& val);
+std::ostream& operator<<(std::ostream& strm, const impl::ValueBase& val);
 
 } // namespace pvxs
 

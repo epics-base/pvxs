@@ -167,7 +167,7 @@ void testSimpleDef()
 
     auto val = simpledef.create();
 
-    testEq(std::string(SB()<<"\n"<<Value::Helper::desc(val)),
+    testEq(std::string(SB()<<"\n"<<ValueBase::Helper::desc(val)),
 R"out(
 [0] struct simple_t parent=[0]  [0:11)
     achoice -> 10 [10]
@@ -220,7 +220,7 @@ R"out(
         [0] string  parent=[0]  [0:1)
         y :  1 [1]
         [0] string  parent=[0]  [0:1)
-)out")<<"Actual:\n"<<Value::Helper::desc(val);
+)out")<<"Actual:\n"<<ValueBase::Helper::desc(val);
 }
 
 void testSerialize2()
@@ -231,12 +231,14 @@ void testSerialize2()
         auto val = simpledef.create();
 
         auto fld = val["arbitrary.sarr"];
-        shared_array<Value> arr(3);
-        arr[0] = fld.allocMember();
-        arr[1] = fld.allocMember();
+        shared_array<IValue> arr(3);
+        arr[0] = fld.allocMember()
+                .update("value", 0xdeadbeef)
+                .freeze();
+        arr[1] = fld.allocMember()
+                .update("value", 0x1badface)
+                .freeze();
         // leave [2] as null
-        arr[0]["value"] = 0xdeadbeef;
-        arr[1]["value"] = 0x1badface;
 
         fld = arr.freeze().castTo<const void>();
 
@@ -260,12 +262,14 @@ void testSerialize2()
         auto val = simpledef.create();
 
         auto fld = val["achoice"];
-        shared_array<Value> arr(3);
-        arr[0] = fld.allocMember();
-        arr[1] = fld.allocMember();
+        shared_array<IValue> arr(3);
+        arr[0] = fld.allocMember()
+                .update("->x", "theX")
+                .freeze();
+        arr[1] = fld.allocMember()
+                .update("->y", "theY")
+                .freeze();
         // leave [2] as null
-        arr[0]["->x"] = "theX";
-        arr[1]["->y"] = "theY";
 
         fld = arr.freeze().castTo<const void>();
 
@@ -281,7 +285,7 @@ void testSerialize2()
         auto v = TypeDef(TypeCode::UInt32).create();
         v = 0x600df00d;
 
-        val["any"].from(v);
+        val["any"].from(v.freeze());
 
         testToBytes(true, [&val](Buffer& buf) {
             to_wire_valid(buf, val);
@@ -303,13 +307,16 @@ void testSerialize2()
         auto val = simpledef.create();
 
         auto fld = val["anya"];
-        shared_array<Value> arr(3);
-        arr[0] = TypeDef(TypeCode::UInt32).create();
-        arr[1] = TypeDef(TypeCode::Struct, {Member(TypeCode::String, "q")}).create();
+        shared_array<IValue> arr(3);
+        arr[0] = TypeDef(TypeCode::UInt32)
+                .create()
+                .from(0x7b)
+                .freeze();
+        arr[1] = TypeDef(TypeCode::Struct, {Member(TypeCode::String, "q")})
+                .create()
+                .update("q", "theq")
+                .freeze();
         // leave [2] as null
-
-        arr[0] = 0x7b;
-        arr[1]["q"] = "theq";
 
         fld = arr.freeze().castTo<const void>();
 
@@ -332,7 +339,7 @@ void testDeserialize2()
         });
         testOk1(!val["value"].isMarked());
         testOk1(!!val["arbitrary.sarr"].isMarked());
-        testEq(val["arbitrary.sarr"].as<shared_array<const void>>().size(), 3u*sizeof(Value));
+        testEq(val["arbitrary.sarr"].as<shared_array<const void>>().size(), 3u*sizeof(IValue));
         testEq(val["arbitrary.sarr[0]value"].as<uint32_t>(), 0xdeadbeef);
         testEq(val["arbitrary.sarr[1]value"].as<uint32_t>(), 0x1badfaceu);
         testEq(val["arbitrary.sarr[2]value"].type(), TypeCode::Null);
@@ -359,7 +366,7 @@ void testDeserialize2()
         });
         testOk1(!val["value"].isMarked());
         testOk1(!!val["achoice"].isMarked());
-        testEq(val["achoice"].as<shared_array<const void>>().size(), 3u*sizeof(Value));
+        testEq(val["achoice"].as<shared_array<const void>>().size(), 3u*sizeof(IValue));
         testEq(val["achoice[0]"].as<std::string>(), "theX");
         testEq(val["achoice[1]"].as<std::string>(), "theY");
         testEq(val["achoice[2]"].type(), TypeCode::Null);
@@ -398,7 +405,7 @@ void testDeserialize2()
         });
         testOk1(!val["value"].isMarked());
         testOk1(!!val["anya"].isMarked());
-        testEq(val["anya"].as<shared_array<const void>>().size(), 3u*sizeof(Value));
+        testEq(val["anya"].as<shared_array<const void>>().size(), 3u*sizeof(IValue));
         testEq(val["anya[0]"].as<uint32_t>(), 0x7bu);
         testEq(val["anya[1]q"].as<std::string>(), "theq");
         testEq(val["anya[2]"].type(), TypeCode::Null);
@@ -411,7 +418,7 @@ void testDeserialize3()
 
     {
         TypeStore ctxt;
-        Value val;
+        MValue val;
         testFromBytes(false, "\xfd\x02\x00\x80\x00\x01\x06\x72\x65\x63\x6f\x72\x64\xfd\x03\x00\x80\x00"
                              "\x01\x08\x5f\x6f\x70\x74\x69\x6f\x6e\x73\xfd\x04\x00\x80\x00\x02\x09\x71"
                              "\x75\x65\x75\x65\x53\x69\x7a\x65\x60\x08\x70\x69\x70\x65\x6c\x69\x6e\x65"
@@ -546,7 +553,7 @@ void testPvRequest()
                                 M::Struct("field", {})
                             });
 
-        auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+        auto mask = request2mask(ValueBase::Helper::desc(val), rdef.create().freeze());
 
         testEq(mask, BitMask({0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 10u));
     }
@@ -558,7 +565,7 @@ void testPvRequest()
                                 })
                             });
 
-        auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+        auto mask = request2mask(ValueBase::Helper::desc(val), rdef.create().freeze());
 
         testEq(mask, BitMask({0, 1}, 10u));
     }
@@ -573,7 +580,7 @@ void testPvRequest()
                                 })
                             });
 
-        auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+        auto mask = request2mask(ValueBase::Helper::desc(val), rdef.create().freeze());
 
         testEq(mask, BitMask({0, 2, 4, 6, 7, 8, 9}, 10u));
     }

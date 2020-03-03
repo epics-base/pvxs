@@ -58,7 +58,7 @@ struct FileSource : public server::Source
                 return;
             }
 
-            std::shared_ptr<server::MonitorControlOp> op(setup->connect(def.create())); // unique_ptr becomes shared_ptr
+            std::shared_ptr<server::MonitorControlOp> op(setup->connect(def.create().freeze())); // unique_ptr becomes shared_ptr
 
             server::MonitorStat stats;
             op->stats(stats);
@@ -76,7 +76,7 @@ struct FileSource : public server::Source
                     val["alarm.severity"] = 0;
 
                     log_info_printf(app, "push line '%s'\n", line.c_str());
-                    if(!op->forcePost(std::move(val)))
+                    if(!op->forcePost(val.freeze()))
                         return;
                 }
 
@@ -85,7 +85,7 @@ struct FileSource : public server::Source
                     auto val = def.create();
                     val["value"] = "";
                     val["alarm.severity"] = 3;
-                    op->forcePost(std::move(val));
+                    op->forcePost(val.freeze());
                 }
 
                 op->finish();
@@ -102,13 +102,13 @@ struct FileSource : public server::Source
 
         // return a dummy value for info/get
         chan->onOp([](std::unique_ptr<server::ConnectOp>&& conn) {
-            conn->connect(def.create());
+            conn->connect(def.create().freeze());
 
             conn->onGet([](std::unique_ptr<server::ExecOp>&& op){
                 auto val = def.create();
                 val["value"] = "No current value to get";
                 val["alarm.severity"] = 3;
-                op->reply(val);
+                op->reply(val.freeze());
             });
         });
     }

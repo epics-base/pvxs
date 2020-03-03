@@ -111,8 +111,8 @@ int main(int argc, char *argv[])
 
     auto op =ctxt.put(pvname)
             .pvRequest(request)
-            .build([&values](Value&& prototype) -> Value {
-                auto val = std::move(prototype);
+            .build([&values](const IValue& prototype) -> IValue {
+                auto val = prototype.cloneEmpty();
                 for(auto& pair : values) {
                     try{
                         val[pair.first] = pair.second;
@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
                         throw std::runtime_error(SB()<<"Unable to assign "<<pair.first<<" from \""<<escape(pair.second)<<"\"");
                     }
                 }
-                return val;
+                return val.freeze();
             })
             .result([&ret, &done](client::Result&& result) {
                 try {

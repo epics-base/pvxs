@@ -24,13 +24,16 @@ namespace {
 using namespace pvxs;
 
 struct Tester {
-    Value initial;
+    IValue initial;
     server::SharedPV mbox;
     server::Server serv;
     client::Context cli;
 
     Tester()
-        :initial(nt::NTScalar{TypeCode::Int32}.create())
+        :initial(nt::NTScalar{TypeCode::Int32}
+                 .create()
+                 .update("value", 1)
+                 .freeze())
         ,mbox(server::SharedPV::buildMailbox())
         ,serv(server::Config::isolated()
               .build()
@@ -39,8 +42,6 @@ struct Tester {
     {
         testShow()<<"Server:\n"<<serv.config()
                   <<"Client:\n"<<cli.config();
-
-        initial["value"] = 1;
     }
 
     void testWait(bool get)
@@ -50,7 +51,7 @@ struct Tester {
 
         auto op = cli.put("mailbox")
                 .fetchPresent(get)
-                .build([get](Value&& prototype) -> Value {
+                .build([get](const IValue& prototype) -> IValue {
                     if(get)
                         testEq(prototype["value"].as<int32_t>(), 1);
                     else
@@ -58,7 +59,7 @@ struct Tester {
 
                     auto val = prototype.cloneEmpty();
                     val["value"] = 2;
-                    return val;
+                    return val.freeze();
                 })
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
@@ -76,8 +77,7 @@ struct Tester {
                 testFail("Put error %s : %s", typeid (e).name(), e.what());
             }
 
-            auto cur = initial.cloneEmpty();
-            mbox.fetch(cur);
+            auto cur = mbox.fetch();
             testEq(cur["value"].as<int32_t>(), 2);
         } else {
             testSkip(2, "timeout");
@@ -174,7 +174,7 @@ void testRO()
     auto mbox(server::SharedPV::buildReadonly());
     auto initial = nt::NTScalar{TypeCode::Int32}.create();
     initial["value"] = 1;
-    mbox.open(initial);
+    mbox.open(initial.freeze());
 
     auto serv = server::Config::isolated()
             .build()
@@ -188,10 +188,10 @@ void testRO()
 
     auto op = cli.put("mailbox")
             .fetchPresent(false)
-            .build([](Value&& prototype) -> Value {
+            .build([](const IValue& prototype) -> IValue {
                 auto v = prototype.cloneEmpty();
                 v["value"] = 2;
-                return v;
+                return v.freeze();
             })
             .result([&actual, &done](client::Result&& result) {
                 actual = std::move(result);

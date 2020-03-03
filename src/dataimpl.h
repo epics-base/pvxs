@@ -15,27 +15,24 @@
 #include "utilpvt.h"
 
 namespace pvxs {
+namespace impl {
 
-struct Value::Helper {
+struct ValueBase::Helper {
     // internal access to private operations
-    static inline Value build(const std::shared_ptr<const impl::FieldDesc>& desc) {
-        return Value(desc);
+    static inline MValue build(const std::shared_ptr<const impl::FieldDesc>& desc) {
+        return MValue(desc);
     }
-    static inline Value build(const std::shared_ptr<const impl::FieldDesc>& desc, Value& parent) {
-        return Value(desc, parent);
-    }
-    static inline Value build(const std::shared_ptr<const impl::FieldDesc>& desc,
-                              const std::shared_ptr<impl::FieldStorage>& pstore, const impl::FieldDesc* pdesc);
 
-    static inline       std::shared_ptr<impl::FieldStorage>& store(      Value& v) { return v.store; }
-    static inline std::shared_ptr<const impl::FieldStorage>  store(const Value& v) { return v.store; }
-    static inline const FieldDesc*                           desc(const Value& v) { return v.desc; }
+    static inline       std::shared_ptr<impl::FieldStorage>& store(      ValueBase& v) { return v.store; }
+    static inline std::shared_ptr<const impl::FieldStorage>  store(const ValueBase& v) { return v.store; }
+    static inline const FieldDesc*                           desc(const ValueBase& v) { return v.desc; }
 
-    static inline                       impl::FieldStorage*  store_ptr(      Value& v) { return v.store.get(); }
-    static inline                 const impl::FieldStorage*  store_ptr(const Value& v) { return v.store.get(); }
+    static inline                       impl::FieldStorage*  store_ptr(      ValueBase& v) { return v.store.get(); }
+    static inline                 const impl::FieldStorage*  store_ptr(const ValueBase& v) { return v.store.get(); }
 
-    static std::shared_ptr<const impl::FieldDesc> type(const Value& v);
+    static std::shared_ptr<const impl::FieldDesc> type(const ValueBase& v);
 };
+} // namespace impl
 
 namespace impl {
 struct Buffer;
@@ -109,7 +106,7 @@ struct FieldStorage {
                        double, // Real
                        uint64_t, // Bool, Integer
                        std::string, // String
-                       Value, // Union, Any
+                       IValue, // Union, Any
                        shared_array<const void> // array of POD, std::string, or std::shared_ptr<Value>
     >::type store;
     // index of this field in StructTop::members
@@ -139,9 +136,6 @@ struct StructTop {
     std::shared_ptr<const FieldDesc> desc;
     // our members (inclusive).  always size()>=1
     std::vector<FieldStorage> members;
-
-    // empty, or the field of a structure which encloses this.
-    Value enclosing;
 };
 
 using Type = std::shared_ptr<const FieldDesc>;
@@ -149,43 +143,33 @@ using Type = std::shared_ptr<const FieldDesc>;
 
 //! serialize all Value fields
 PVXS_API
-void to_wire_full(Buffer& buf, const Value& val);
+void to_wire_full(Buffer& buf, const ValueBase& val);
 
 //! serialize BitMask and marked valid Value fields
 PVXS_API
-void to_wire_valid(Buffer& buf, const Value& val, const BitMask* mask=nullptr);
+void to_wire_valid(Buffer& buf, const ValueBase& val, const BitMask* mask=nullptr);
 
 //! deserialize type description
 PVXS_API
-void from_wire_type(Buffer& buf, TypeStore& ctxt, Value& val);
+void from_wire_type(Buffer& buf, TypeStore& ctxt, MValue& val);
 
 //! deserialize full Value
 PVXS_API
-void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val);
+void from_wire_full(Buffer& buf, TypeStore& ctxt, MValue& val);
 
 //! deserialize BitMask and partial Value
 PVXS_API
-void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val);
+void from_wire_valid(Buffer& buf, TypeStore& ctxt, MValue& val);
 
 //! deserialize type description and full value (a la. pvRequest)
 PVXS_API
-void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val);
+void from_wire_type_value(Buffer& buf, TypeStore& ctxt, MValue& val);
 
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const FieldDesc* desc);
 
 } // namespace impl
 
-
-Value Value::Helper::build(const std::shared_ptr<const impl::FieldDesc>& desc,
-                           const std::shared_ptr<impl::FieldStorage>& pstore, const impl::FieldDesc* pdesc)
-{
-    Value ret(desc);
-    auto& enc = ret.store->top->enclosing;
-    enc.store = pstore;
-    enc.desc = pdesc;
-    return ret;
-}
 
 } // namespace pvxs
 

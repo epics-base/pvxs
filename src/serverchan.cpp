@@ -59,7 +59,7 @@ void ServerChannelControl::onOp(std::function<void(std::unique_ptr<server::Conne
     });
 }
 
-void ServerChannelControl::onRPC(std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)>&& fn)
+void ServerChannelControl::onRPC(std::function<void(std::unique_ptr<server::ExecOp>&&, const IValue&)>&& fn)
 {
     auto serv = server.lock();
     if(!serv)

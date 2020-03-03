@@ -24,14 +24,13 @@ namespace {
 using namespace pvxs;
 
 struct Tester {
-    Value initial;
+    IValue initial;
     server::SharedPV mbox;
     server::Server serv;
     client::Context cli;
 
     Tester()
-        :initial(nt::NTScalar{TypeCode::Int32}.create())
-        ,mbox(server::SharedPV::buildReadonly())
+        :mbox(server::SharedPV::buildReadonly())
         ,serv(server::Config::isolated()
               .build()
               .addPV("mailbox", mbox))
@@ -40,7 +39,9 @@ struct Tester {
         testShow()<<"Server:\n"<<serv.config()
                   <<"Client:\n"<<cli.config();
 
-        initial["value"] = 42;
+        auto ival = nt::NTScalar{TypeCode::Int32}.create();
+        ival["value"] = 42;
+        initial = ival.freeze();
     }
 
     void testWait()
@@ -150,10 +151,10 @@ struct Tester {
 struct ErrorSource : public server::Source
 {
     const bool phase = false;
-    const Value type;
+    const IValue type;
     explicit ErrorSource(bool phase)
         :phase(phase)
-        ,type(nt::NTScalar{TypeCode::Int32}.create())
+        ,type(nt::NTScalar{TypeCode::Int32}.create().freeze())
     {}
 
     virtual void onSearch(Search &op) override final

@@ -225,7 +225,7 @@ void copy_tree(const FieldDesc* desc, Member& node)
     }
 }
 
-TypeDef::TypeDef(const Value& val)
+TypeDef::TypeDef(const impl::ValueBase& val)
 {
     if(val.desc) {
         auto root(std::make_shared<Member>(val.desc->code, val.desc->id));
@@ -298,12 +298,12 @@ TypeDef& TypeDef::operator+=(std::initializer_list<Member> children)
     return *this;
 }
 
-Value TypeDef::create() const
+MValue TypeDef::create() const
 {
     if(!desc)
         throw std::logic_error("Empty TypeDef");
 
-    return Value(desc);
+    return MValue(desc);
 }
 
 static

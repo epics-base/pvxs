@@ -33,8 +33,8 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
 {
     mutable epicsMutex lock;
 
-    std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)> onPut;
-    std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)> onRPC;
+    std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, const IValue&)> onPut;
+    std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, const IValue&)> onRPC;
     std::function<void()> onFirstConnect;
     std::function<void()> onLastDisconnect;
 
@@ -44,7 +44,7 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
     std::set<std::shared_ptr<MonitorSetupOp>> mpending;
     std::set<std::shared_ptr<MonitorControlOp>> subscribers;
 
-    Value current;
+    MValue current;
 };
 
 SharedPV SharedPV::buildMailbox()
@@ -52,21 +52,26 @@ SharedPV SharedPV::buildMailbox()
     SharedPV ret;
     ret.impl = std::make_shared<Impl>();
 
-    ret.onPut([](SharedPV& pv, std::unique_ptr<ExecOp>&& op, Value&& val) {
+    ret.onPut([](SharedPV& pv, std::unique_ptr<ExecOp>&& op, const IValue& raw) {
+        auto val = raw;
 
         log_debug_printf(logshared, "%s on %s mailbox put\n", op->peerName().c_str(), op->name().c_str());
 
         auto ts(val["timeStamp"]);
         if(ts && !ts.isMarked(true, true)) {
-            // use current time
-            epicsTimeStamp now;
-            if(!epicsTimeGetCurrent(&now)) {
-                ts["secondsPastEpoch"] = now.secPastEpoch + POSIX_TIME_AT_EPICS_EPOCH;
-                ts["nanoseconds"] = now.nsec;
+            auto temp = val.clone();
+            if(auto tts = temp["timeStamp"]) {
+                // use current time
+                epicsTimeStamp now;
+                if(!epicsTimeGetCurrent(&now)) {
+                    tts["secondsPastEpoch"] = now.secPastEpoch + POSIX_TIME_AT_EPICS_EPOCH;
+                    tts["nanoseconds"] = now.nsec;
+                }
             }
+            val = temp.freeze();
         }
 
-        pv.post(std::move(val));
+        pv.post(val);
 
         op->reply();
     });
@@ -79,7 +84,7 @@ SharedPV SharedPV::buildReadonly()
     SharedPV ret;
     ret.impl = std::make_shared<Impl>();
 
-    ret.onPut([](SharedPV& pv, std::unique_ptr<ExecOp>&& op, Value&& val) {
+    ret.onPut([](SharedPV& pv, std::unique_ptr<ExecOp>&& op, const IValue& val) {
         op->error("Read-only PV");
     });
 
@@ -101,7 +106,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
 
     log_debug_printf(logshared, "%s on %s Chan setup\n", ctrl->peerName().c_str(), ctrl->name().c_str());
 
-    ctrl->onRPC([self](std::unique_ptr<ExecOp>&& op, Value&& arg) {
+    ctrl->onRPC([self](std::unique_ptr<ExecOp>&& op, const IValue& arg) {
         // on server worker
 
         log_debug_printf(logshared, "%s on %s RPC\n", op->peerName().c_str(), op->name().c_str());
@@ -113,7 +118,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
             pv.impl = self;
             try {
                 UnGuard U(G);
-                cb(pv, std::move(op), std::move(arg));
+                cb(pv, std::move(op), arg);
             }catch(std::exception& e){
                 log_err_printf(logshared, "error in RPC cb: %s\n", e.what());
             }
@@ -134,11 +139,11 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
 
             log_debug_printf(logshared, "%s on %s Get\n", op->peerName().c_str(), op->name().c_str());
 
-            Value got;
+            IValue got;
             {
                 Guard G(self->lock);
                 if(self->current)
-                    got = self->current.clone();
+                    got = self->current.clone().freeze();
             }
             if(got) {
                 op->reply(got);
@@ -148,7 +153,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
 
         });
 
-        conn->onPut([self](std::unique_ptr<ExecOp>&& op, Value&& val) {
+        conn->onPut([self](std::unique_ptr<ExecOp>&& op, const IValue& val) {
             // on server worker
 
             log_debug_printf(logshared, "%s on %s RPC\n", op->peerName().c_str(), op->name().c_str());
@@ -160,7 +165,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
                     SharedPV pv;
                     pv.impl = self;
                     UnGuard U(G);
-                    cb(pv, std::move(op), std::move(val));
+                    cb(pv, std::move(op), val);
                 }catch(std::exception& e){
                     log_err_printf(logshared, "error in Put cb: %s\n", e.what());
                 }
@@ -186,7 +191,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
 
         } else {
             UnGuard U(G);
-            conn->connect(self->current);
+            conn->connect(self->current.clone().freeze());
         }
     });
 
@@ -212,7 +217,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
             self->mpending.insert(std::move(conn));
 
         } else {
-            auto ctrl = conn->connect(self->current);
+            auto ctrl = conn->connect(self->current.clone().freeze());
             std::shared_ptr<MonitorControlOp> sub(std::move(ctrl));
 
             conn->onClose([self, sub](const std::string& msg) {
@@ -221,7 +226,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
                 self->subscribers.erase(sub);
             });
 
-            sub->post(self->current.clone());
+            sub->post(self->current.clone().freeze());
             self->subscribers.emplace(std::move(sub));
         }
     });
@@ -276,7 +281,7 @@ void SharedPV::onLastDisconnect(std::function<void()>&& fn)
     impl->onLastDisconnect = std::move(fn);
 }
 
-void SharedPV::onPut(std::function<void(SharedPV&, std::unique_ptr<ExecOp> &&, Value &&)> &&fn)
+void SharedPV::onPut(std::function<void(SharedPV&, std::unique_ptr<ExecOp> &&, const IValue&)> &&fn)
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
@@ -284,7 +289,7 @@ void SharedPV::onPut(std::function<void(SharedPV&, std::unique_ptr<ExecOp> &&, V
     impl->onPut = std::move(fn);
 }
 
-void SharedPV::onRPC(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)>&& fn)
+void SharedPV::onRPC(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, const IValue&)>&& fn)
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
@@ -292,7 +297,7 @@ void SharedPV::onRPC(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Va
     impl->onRPC = std::move(fn);
 }
 
-void SharedPV::open(const Value& initial)
+void SharedPV::open(const IValue& initial)
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
@@ -335,9 +340,11 @@ void SharedPV::open(const Value& initial)
     {
         Guard G(impl->lock);
 
+        auto cur = impl->current.clone().freeze();
+
         //c++17 adds std::set::merge()
         for(auto& sub : subscribers) {
-            sub->post(impl->current.clone());
+            sub->post(cur);
             impl->subscribers.insert(sub);
         }
     }
@@ -364,7 +371,7 @@ void SharedPV::close()
         if(!impl->current)
             return; // ignore double close()
 
-        impl->current = Value();
+        impl->current = MValue();
 
         impl->subscribers.clear();
         channels = std::move(impl->channels);
@@ -376,7 +383,7 @@ void SharedPV::close()
     }
 }
 
-void SharedPV::post(Value&& val)
+void SharedPV::post(const IValue& val)
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
@@ -386,11 +393,11 @@ void SharedPV::post(Value&& val)
     impl->current.assign(val);
 
     for(auto& sub : impl->subscribers) {
-        sub->post(val.clone());
+        sub->post(val);
     }
 }
 
-void SharedPV::fetch(Value& val)
+IValue SharedPV::fetch()
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
@@ -398,7 +405,7 @@ void SharedPV::fetch(Value& val)
     Guard G(impl->lock);
 
     if(impl->current) {
-        val.assign(impl->current);
+        return impl->current.clone().freeze();
     } else {
         throw std::logic_error("open() first");
     }

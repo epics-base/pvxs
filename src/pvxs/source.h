@@ -22,12 +22,12 @@ namespace server {
 //! Handle when an operation is being setup
 struct PVXS_API ConnectOp : public OpBase {
 protected:
-    Value _pvRequest;
+    IValue _pvRequest;
 public:
-    const Value& pvRequest() const { return _pvRequest; }
+    const IValue& pvRequest() const { return _pvRequest; }
 
     //! For GET_FIELD, GET, or PUT.  Inform peer of our data-type
-    virtual void connect(const Value& prototype) =0;
+    virtual void connect(const IValue& prototype) =0;
     //! Indicate that this operation can not be setup
     virtual void error(const std::string& msg) =0;
 
@@ -36,7 +36,7 @@ public:
     //! Handler invoked when a peer executes a request for data on a GET o PUT
     virtual void onGet(std::function<void(std::unique_ptr<ExecOp>&&)>&& fn) =0;
     //! Handler invoked when a peer executes a send data on a PUT
-    virtual void onPut(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn) =0;
+    virtual void onPut(std::function<void(std::unique_ptr<ExecOp>&&, const IValue&)>&& fn) =0;
     //! Callback when the underlying channel closes
     virtual void onClose(std::function<void(const std::string&)>&&) =0;
 };
@@ -60,34 +60,34 @@ struct PVXS_API MonitorControlOp : public OpBase {
     virtual ~MonitorControlOp();
 
 protected:
-    virtual bool doPost(Value&& val, bool maybe, bool force) =0;
+    virtual bool doPost(const IValue& val, bool maybe, bool force) =0;
 public:
 
     //! Add a new entry to the monitor queue.
     //! If nFree()<=0 the output queue will be over-filled with this element.
     //! Returns @code nFree()>0u @endcode
-    bool forcePost(Value&& val) {
-        return doPost(std::move(val), false, true);
+    bool forcePost(const IValue& val) {
+        return doPost(val, false, true);
     }
 
     //! Add a new entry to the monitor queue.
     //! If nFree()<=0 this element will be "squshed" to the last element in the queue
     //! Returns @code nFree()>0u @endcode
-    bool post(Value&& val) {
-        return doPost(std::move(val), false, false);
+    bool post(const IValue& val) {
+        return doPost(val, false, false);
     }
 
     //! Add a new entry to the monitor queue.
     //! If nFree()<=0 return false and take no other action
     //! Returns @code nFree()>0u @endcode
-    bool tryPost(Value&& val) {
-        return doPost(std::move(val), true, false);
+    bool tryPost(const IValue& val) {
+        return doPost(val, true, false);
     }
 
     //! Signal to subscriber that this subscription will not yield any further events.
     //! This is not an error.  Client should not retry.
     void finish() {
-        doPost(Value(), false, false);
+        doPost(IValue(), false, false);
     }
 
     virtual void stats(MonitorStat&) const =0;
@@ -106,13 +106,13 @@ public:
 //! Handle for subscription which is being setup
 struct PVXS_API MonitorSetupOp : public OpBase {
 protected:
-    Value _pvRequest;
+    IValue _pvRequest;
 public:
-    const Value& pvRequest() const { return _pvRequest; }
+    const IValue& pvRequest() const { return _pvRequest; }
 
     //! Inform peer of our data-type and acquire control of subscription queue.
     //! The queue is initially stopped.
-    virtual std::unique_ptr<MonitorControlOp> connect(const Value& prototype) =0;
+    virtual std::unique_ptr<MonitorControlOp> connect(const IValue& prototype) =0;
     //! Indicate that this operation can not be setup
     virtual void error(const std::string& msg) =0;
 
@@ -130,7 +130,7 @@ struct PVXS_API ChannelControl : public OpBase {
     //! Invoked when a new GET, PUT, or RPC Operation is requested through this Channel
     virtual void onOp(std::function<void(std::unique_ptr<ConnectOp>&&)>&& ) =0;
     //! Invoked when the peer executes an RPC
-    virtual void onRPC(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn)=0;
+    virtual void onRPC(std::function<void(std::unique_ptr<ExecOp>&&, const IValue&)>&& fn)=0;
     //! Invoked when the peer create a new subscription
     virtual void onSubscribe(std::function<void(std::unique_ptr<MonitorSetupOp>&&)>&&)=0;
 

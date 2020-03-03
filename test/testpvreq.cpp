@@ -26,7 +26,7 @@ struct TestBuilder : client::detail::CommonBuilder<TestBuilder>
         :client::detail::CommonBuilder<TestBuilder>(nullptr, "")
     {}
 
-    Value makeReq() const {
+    IValue makeReq() const {
         return _build();
     }
 };
