@@ -189,15 +189,78 @@ struct TestLifeCycle : public BasicTest
     }
 };
 
+struct TestReconn : public BasicTest
+{
+    void testReconn()
+    {
+        testShow()<<__func__;
+
+        serv.start();
+        mbox.open(initial);
+        subscribe("mailbox");
+
+        cli.hurryUp();
+
+        testDiag("Wait for Connected event");
+        testOk1(!!evt.wait(5.0));
+
+        testThrows<client::Connected>([this](){
+            sub->pop();
+        });
+
+        testDiag("Wait for Data update event");
+        testOk1(!!evt.wait(5.0));
+
+        if(auto val = sub->pop()) {
+            testEq(val["value"].as<int32_t>(), 42);
+        } else {
+            testFail("Missing data update");
+        }
+
+        testDiag("Stop server");
+        serv.stop();
+
+        testDiag("Wait for Disconnected event");
+        testOk1(!!evt.wait(5.0));
+
+        testThrows<client::Disconnect>([this](){
+            sub->pop();
+        });
+
+        mbox.post(std::move(initial
+                            .cloneEmpty()
+                            .update("value", 15)));
+
+        serv.start();
+
+        testDiag("Wait for re-Connected event");
+        testOk1(!!evt.wait(5.0));
+
+        testThrows<client::Connected>([this](){
+            sub->pop();
+        });
+
+        testDiag("Wait for second Data update event");
+        testOk1(!!evt.wait(5.0));
+
+        if(auto val = sub->pop()) {
+            testEq(val["value"].as<int32_t>(), 15);
+        } else {
+            testFail("Missing data update");
+        }
+    }
+};
+
 } // namespace
 
 MAIN(testmon)
 {
-    testPlan(0);
+    testPlan(38);
     logger_config_env();
     TestLifeCycle().testBasic(true);
     TestLifeCycle().testBasic(false);
     TestLifeCycle().testSecond();
+    TestReconn().testReconn();
     cleanup_for_valgrind();
     return testDone();
 }
