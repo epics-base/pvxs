@@ -35,6 +35,24 @@ DEFINE_LOGGER(logerr, "pvxs.loop");
 
 thread_local epicsEvent call_done;
 
+static
+epicsThreadOnceId evthread_once = EPICS_THREAD_ONCE_INIT;
+
+static
+void evthread_init(void* unused)
+{
+#if defined(EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED)
+    evthread_use_windows_threads();
+
+#elif defined(EVTHREAD_USE_PTHREADS_IMPLEMENTED)
+    evthread_use_pthreads();
+
+#else
+#  error No threading support for this target
+    // TODO fallback to libCom ?
+#endif
+}
+
 struct evbase::Pvt : public epicsThreadRunable
 {
     struct Work {
@@ -60,16 +78,7 @@ struct evbase::Pvt : public epicsThreadRunable
                 epicsThreadGetStackSize(epicsThreadStackBig),
                 prio)
     {
-#if defined(EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED)
-        evthread_use_windows_threads();
-
-#elif defined(EVTHREAD_USE_PTHREADS_IMPLEMENTED)
-        evthread_use_pthreads();
-
-#else
-#  error No threading support for this target
-        // TODO fallback to libCom ?
-#endif
+        epicsThreadOnce(&evthread_once, &evthread_init, nullptr);
 
         worker.start();
         start_sync.wait();
