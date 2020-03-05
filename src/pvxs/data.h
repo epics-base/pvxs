@@ -493,10 +493,18 @@ public:
         copyIn(&norm, map_t::code);
     }
 
-    // TODO T=Value is ambigious with previous assignment operator
-    //! shorthand for from<T>(const T&)
+    //! Inline assignment of sub-field.
+    //! Shorthand for @code (*this)[key].from(val) @endcode
+    template<typename T, typename K>
+    Value& update(K key, const T& val) {
+        (*this)[key].from(val);
+        return *this;
+    }
+
+    //! shorthand for from<T>(const T&) except for T=Value (would be ambigious with ref. assignment)
     template<typename T>
-    Value& operator=(const T& val) {
+    typename std::enable_if<!std::is_same<T,Value>{}, Value&>::type
+    operator=(const T& val) {
         from<T>(val);
         return *this;
     }
