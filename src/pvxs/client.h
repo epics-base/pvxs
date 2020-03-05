@@ -302,7 +302,7 @@ GetBuilder Context::info(const std::string& name) { return GetBuilder{pvt, name,
 GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, true}; }
 
 //! Prepare a remote PUT operation
-class PutBuilder : protected detail::CommonBuilder<PutBuilder> {
+class PutBuilder : public detail::CommonBuilder<PutBuilder> {
     bool _doGet = true;
     std::function<Value(Value&&)> _builder;
     std::function<void(Result&&)> _result;
@@ -339,7 +339,7 @@ public:
 PutBuilder Context::put(const std::string& name) { return PutBuilder{pvt, name}; }
 
 //! Prepare a remote RPC operation
-class RPCBuilder : protected detail::CommonBuilder<GetBuilder> {
+class RPCBuilder : public detail::CommonBuilder<GetBuilder> {
     Value _argument;
     std::function<void(Result&&)> _result;
 public:
