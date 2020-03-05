@@ -70,7 +70,7 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc, Value& parent)
     :Value(desc)
 {
     // TODO ref. loop detection
-    store->top->enclosing = parent;
+    store->top->enclosing = parent.store;
 }
 
 Value::~Value() {}
@@ -243,9 +243,10 @@ void Value::mark(bool v)
         return;
 
     auto top = store->top;
-    while(top && top->enclosing) {
-        top->enclosing.mark();
-        top = top->enclosing.store->top;
+    std::shared_ptr<FieldStorage> enc;
+    while(top && (enc=top->enclosing.lock())) {
+        enc->valid = true;
+        top = enc->top;
     }
 }
 

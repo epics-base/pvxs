@@ -141,7 +141,7 @@ struct StructTop {
     std::vector<FieldStorage> members;
 
     // empty, or the field of a structure which encloses this.
-    Value enclosing;
+    std::weak_ptr<FieldStorage> enclosing;
 };
 
 using Type = std::shared_ptr<const FieldDesc>;
@@ -182,8 +182,7 @@ Value Value::Helper::build(const std::shared_ptr<const impl::FieldDesc>& desc,
 {
     Value ret(desc);
     auto& enc = ret.store->top->enclosing;
-    enc.store = pstore;
-    enc.desc = pdesc;
+    enc = pstore;
     return ret;
 }
 
