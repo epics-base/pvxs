@@ -503,7 +503,11 @@ public:
 
     //! shorthand for from<T>(const T&) except for T=Value (would be ambigious with ref. assignment)
     template<typename T>
+#ifdef _DOXYGEN_
+    Value&
+#else
     typename std::enable_if<!std::is_same<T,Value>{}, Value&>::type
+#endif
     operator=(const T& val) {
         from<T>(val);
         return *this;
@@ -514,7 +518,21 @@ private:
     void traverse(const std::string& expr, bool modify);
 public:
 
-    //! attempt to decend into sub-structure
+    /** Attempt to access a decendant field.
+     *
+     * Argument may be:
+     * * name of a child field.  eg. "value"
+     * * name of a decendant field.  eg "alarm.severity"
+     * * element of an array of structures.  eg "dimension[0]"
+     * * name of a union field.  eg. "booleanValue"
+     *
+     * These may be composed.  eg.
+     *
+     * * "dimension[0]size"
+     * * "value->booleanValue"
+     *
+     * @returns A valid() Value if the decendant field exists, otherwise an invalid Value.
+     */
     Value operator[](const char *name);
     inline Value operator[](const std::string& name) { return (*this)[name.c_str()]; }
     const Value operator[](const char *name) const;

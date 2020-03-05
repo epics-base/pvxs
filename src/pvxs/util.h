@@ -73,7 +73,18 @@ inline detail::Escaper escape(const char* s,size_t n) {
 
 #if !defined(__rtems__) && !defined(vxWorks)
 
-//! minimal portable process signal handling in CLI tools
+/** minimal portable process signal handling in CLI tools.
+ *
+ * @code
+ *     epicsEvent evt;
+ *     SigInt handle([&evt]() {
+ *          evt.trigger();
+ *     });
+ *     ... setup network operations
+ *     evt.wait();
+ *     // completion, or SIGINT
+ * @endcode
+ */
 class PVXS_API SigInt {
     void (*prevINT)(int);
     void (*prevTERM)(int);

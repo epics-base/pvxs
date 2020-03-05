@@ -28,7 +28,7 @@ Controlling Logging
 
 By default, all loggers have level Err.
 It is recommended that user applications prefer configuration
-through the environment variable **$PVXS_LOG** by calling `logger_config_env()`.
+through the environment variable **$PVXS_LOG** by calling `pvxs::logger_config_env`.
 
 .. doxygenfunction:: pvxs::logger_config_env()
 
@@ -102,7 +102,7 @@ Extensions to epicsUnitTest.h ::
 
 .. doxygendefine:: testShow
 
-The testEq() macro and friends expand to a function which returns a `testCase` instance
+The testEq() macro and friends expand to a function which returns a `pvxs::testCase` instance
 which may be used as a `std::ostream` to append text describing a test. eg. ::
 
     testEq(1, 1)<<"We really hope this is true.";
@@ -130,3 +130,5 @@ Misc. utility code. ::
 .. doxygenfunction:: pvxs::escape(const char *, size_t)
 
 .. doxygenfunction:: pvxs::cleanup_for_valgrind
+
+.. doxygenclass:: pvxs::SigInt

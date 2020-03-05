@@ -98,6 +98,7 @@ struct PVXS_API Operation {
     Operation& operator=(const Operation&) = delete;
     virtual ~Operation() =0;
 
+    //! Explicitly cancel a pending operation.
     virtual void cancel() =0;
 };
 
@@ -106,11 +107,41 @@ struct PVXS_API Subscription {
 
     virtual ~Subscription() =0;
 
+    //! Explicitly cancel a active subscription.
     virtual void cancel() =0;
 
+    //! Ask a server to stop sending updates to this Subscription
     virtual void pause(bool p=true) =0;
+    //! Shorthand for @code pause(false) @endcode
     inline void resume() { pause(false); }
 
+    /** De-queue update from subscription event queue.
+     *
+     *  If the queue is empty, return an empty/invalid Value (Value::valid()==false).
+     *  A data update is returned as a Value.
+     *  An error or special event is thrown.
+     *
+     * @returns A valid Value until the queue is empty
+     * @throws Connected (depending on MonitorBuilder::maskConnected())
+     * @throws Disconnect (depending on MonitorBuilder::maskDisconnect())
+     * @throws Finished  (depending on MonitorBuilder::maskDisonnect())
+     * @throws RemoteError For server signaled errors
+     * @throws std::exception For client side failures.
+     *
+     * @code
+     * std::shared_ptr<Subscription> sub(...);
+     * try {
+     *     while(auto update = sub.pop()) {
+     *         ...
+     *     }
+     * } catch(Connected& con) {
+     * } catch(Finished& con) {
+     * } catch(Disconnect& con) {
+     * } catch(RemoteError& con) {
+     * } catch(std::exception& con) {
+     * }
+     * @endcode
+     */
     virtual Value pop() =0;
 };
 
@@ -138,16 +169,8 @@ public:
     explicit Context(const Config &);
     ~Context();
 
-    //! effective config
+    //! effective config of running client
     const Config& config() const;
-
-    /** Request prompt search of any disconnected channels.
-     *
-     * Never required.  All disconnected channels will be searched eventually.
-     * Equivalent to detection of a Beacon anomoly (new server detected).
-     * This method has no effect if called more often than once per 30 seconds.
-     */
-    void hurryUp();
 
     /** Request the present value of a PV
      *
@@ -201,7 +224,7 @@ public:
      * @endcode
      */
     inline
-    PutBuilder put(const std::string& name);
+    PutBuilder put(const std::string& pvname);
 
     /** Execute "stateless" remote procedure call operation.
      *
@@ -216,10 +239,33 @@ public:
      * @endcode
      */
     inline
-    RPCBuilder rpc(const std::string& name, Value&& arg);
+    RPCBuilder rpc(const std::string& pvname, Value&& arg);
 
+    /** Create a new subscription for changes to a PV.
+     *
+     * @code
+     * auto sub = ctxt.monitor("pv:name")
+     *                .event([](Subscription& sub) {
+     *                    try {
+     *                        while(Value update = sub.pop()) {
+     *                            std::cout<<update<<"\n";
+     *                        }
+     *                     } catch(std::exception& e) {
+     *                         std::cerr<<"Error "<<e.what()<<"\n";
+     *                     }
+     *                })
+     *                .exec();
+     * @endcode
+     */
     inline
-    MonitorBuilder monitor(const std::string& name);
+    MonitorBuilder monitor(const std::string& pvname);
+
+    /** Request prompt search of any disconnected channels.
+     *
+     * Optional.  Equivalent to detection of a new server.
+     * This method has no effect if called more often than once per 30 seconds.
+     */
+    void hurryUp();
 
     explicit operator bool() const { return pvt.operator bool(); }
 private:
@@ -309,12 +355,13 @@ class GetBuilder : public detail::CommonBuilder<GetBuilder> {
     std::shared_ptr<Operation> _exec_get();
 public:
     GetBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, bool get) :CommonBuilder{ctx,name}, _get(get) {}
-    //! Callback through which result Value will be delivered
+    //! Callback through which result Value or an error will be delivered
     GetBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
-    //! Execute the network operation.
-    //! The caller must keep returned Operation pointer until completion
-    //! or the operation will be implicitly canceled.
+    /** Execute the network operation.
+     *  The caller must keep returned Operation pointer until completion
+     *  or the operation will be implicitly canceled.
+     */
     inline std::shared_ptr<Operation> exec() {
         return _get ? _exec_get() : _exec_info();
     }
@@ -332,13 +379,14 @@ class PutBuilder : public detail::CommonBuilder<PutBuilder> {
 public:
     PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
     /** If fetchPresent is true (the default).  Then the Value passed to
-     *  the build() callback will be initialized with the previous values.
-     *  This will be necessary for situation like NTEnum to fetch the choices list.
+     *  the build() callback will be initialized with a previous value for this PV.
      *
-     *  It may be desirable to disable this when writing to array fields to avoid
+     *  This will be necessary for situation like NTEnum to fetch the choices list.
+     *  But may be undesirable when writing to array fields to avoid
      *  the expense of fetching a copy of the array to be overwritten.
      */
     PutBuilder& fetchPresent(bool f) { _doGet = f; return *this; }
+
     /** Provide the builder callback.
      *
      *  Once the PV type information is received from the server,
@@ -346,14 +394,17 @@ public:
      *  which will actually be sent.
      */
     PutBuilder& build(decltype (_builder)&& cb) { _builder = std::move(cb); return *this; }
-    //! Provide the operation result callback.
-    //! This callback will be passed a Result which is either an empty Value (success)
-    //! or an exception on error.
+
+    /** Provide the operation result callback.
+     *  This callback will be passed a Result which is either an empty Value (success)
+     *  or an exception on error.
+     */
     PutBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
-    //! Execute the network operation.
-    //! The caller must keep returned Operation pointer until completion
-    //! or the operation will be implicitly canceled.
+    /** Execute the network operation.
+     *  The caller must keep returned Operation pointer until completion
+     *  or the operation will be implicitly canceled.
+     */
     PVXS_API
     std::shared_ptr<Operation> exec();
 
@@ -367,12 +418,13 @@ class RPCBuilder : public detail::CommonBuilder<GetBuilder> {
     std::function<void(Result&&)> _result;
 public:
     RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, Value&& arg) :CommonBuilder{ctx,name}, _argument(std::move(arg)) {}
-    //! Callback through which result Value will be delivered
+    //! Callback through which result Value or an error will be delivered
     RPCBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
 
-    //! Execute the network operation.
-    //! The caller must keep returned Operation pointer until completion
-    //! or the operation will be implicitly canceled.
+    /** Execute the network operation.
+     *  The caller must keep returned Operation pointer until completion
+     *  or the operation will be implicitly canceled.
+     */
     PVXS_API
     std::shared_ptr<Operation> exec();
 
@@ -380,6 +432,7 @@ public:
 };
 RPCBuilder Context::rpc(const std::string& name, Value&& arg) { return RPCBuilder{pvt, name, std::move(arg)}; }
 
+//! Prepare a remote subscription
 class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder> {
     std::function<void(Subscription&)> _event;
     bool _maskConn = true;
