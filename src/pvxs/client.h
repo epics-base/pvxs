@@ -356,7 +356,7 @@ class GetBuilder : public detail::CommonBuilder<GetBuilder> {
 public:
     GetBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, bool get) :CommonBuilder{ctx,name}, _get(get) {}
     //! Callback through which result Value or an error will be delivered
-    GetBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
+    GetBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
 
     /** Execute the network operation.
      *  The caller must keep returned Operation pointer until completion
@@ -393,13 +393,13 @@ public:
      *  this function will be responsible for populating a Value
      *  which will actually be sent.
      */
-    PutBuilder& build(decltype (_builder)&& cb) { _builder = std::move(cb); return *this; }
+    PutBuilder& build(std::function<Value(Value&&)>&& cb) { _builder = std::move(cb); return *this; }
 
     /** Provide the operation result callback.
      *  This callback will be passed a Result which is either an empty Value (success)
      *  or an exception on error.
      */
-    PutBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
+    PutBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
 
     /** Execute the network operation.
      *  The caller must keep returned Operation pointer until completion
@@ -419,7 +419,7 @@ class RPCBuilder : public detail::CommonBuilder<GetBuilder> {
 public:
     RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, Value&& arg) :CommonBuilder{ctx,name}, _argument(std::move(arg)) {}
     //! Callback through which result Value or an error will be delivered
-    RPCBuilder& result(decltype (_result)&& cb) { _result = std::move(cb); return *this; }
+    RPCBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
 
     /** Execute the network operation.
      *  The caller must keep returned Operation pointer until completion
@@ -440,7 +440,7 @@ class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder> {
 public:
     MonitorBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
     //! Install event callback
-    MonitorBuilder& event(decltype (_event)&& cb) { _event = std::move(cb); return *this; }
+    MonitorBuilder& event(std::function<void(Subscription&)>&& cb) { _event = std::move(cb); return *this; }
     //! Include Connected exceptions in queue (default false).
     MonitorBuilder& maskConnected(bool m = true) { _maskConn = m; return *this; }
     //! Include Disconnected exceptiosn in queue (default true).
