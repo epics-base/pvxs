@@ -300,7 +300,8 @@ struct PVRParser
 
 void CommonBase::_parse(const std::string& req)
 {
-    PVRParser(*this, req.c_str()).parse();
+    if(!req.empty())
+        PVRParser(*this, req.c_str()).parse();
 }
 
 Value CommonBase::_build() const

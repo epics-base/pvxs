@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
     logger_config_env(); // from $PVXS_LOG
     double timeout = 5.0;
     bool verbose = false;
-    std::string request("field()");
+    std::string request;
 
     {
         int opt;
