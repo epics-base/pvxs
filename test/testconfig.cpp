@@ -21,7 +21,7 @@ namespace {
 
 void testParse()
 {
-    epicsEnvSet("EPICS_PVA_ADDR_LIST", "1.2.3.4");
+    epicsEnvSet("EPICS_PVA_ADDR_LIST", "  1.2.3.4  5.6.7.8:9876  ");
     epicsEnvSet("EPICS_PVA_AUTO_ADDR_LIST", "NO");
     epicsEnvSet("EPICS_PVA_BROADCAST_PORT", "1234");
 
@@ -34,8 +34,10 @@ void testParse()
         testFail("client::Config::from_env() %s : %s", typeid (e).name(), e.what());
     }
 
-    testOk(!conf.addressList.empty() && conf.addressList[0]=="1.2.3.4:1234",
-            "addressList[0] = \"%s\" == \"1.2.3.4:1234\"", conf.addressList[0].c_str());
+    if(testEq(conf.addressList.size(), 2u)) {
+        testEq(conf.addressList[0], "1.2.3.4:1234");
+        testEq(conf.addressList[1], "5.6.7.8:9876");
+    }
 
     epicsEnvUnset("EPICS_PVA_ADDR_LIST");
     epicsEnvUnset("EPICS_PVA_AUTO_ADDR_LIST");
@@ -46,7 +48,7 @@ void testParse()
 
 MAIN(testconfig)
 {
-    testPlan(2);
+    testPlan(4);
     logger_config_env();
     testParse();
     cleanup_for_valgrind();
