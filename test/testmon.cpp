@@ -241,7 +241,7 @@ struct TestReconn : public BasicTest
         });
 
         testDiag("Wait for second Data update event");
-        testOk1(!!evt.wait(5.0));
+        testOk1(!!evt.wait(35.0));
 
         if(auto val = sub->pop()) {
             testEq(val["value"].as<int32_t>(), 15);
