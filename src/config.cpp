@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <vector>
 #include <string>
-#include <regex>
+#include <sstream>
 
 #include <dbDefs.h>
 #include <osiSock.h>
@@ -24,21 +24,27 @@ DEFINE_LOGGER(config, "pvxs.config");
 namespace pvxs {
 
 namespace {
-void split_addr_into(const char* name, std::vector<std::string>& out, const char *inp, uint16_t defaultPort)
+void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp, uint16_t defaultPort)
 {
-    std::regex word("\\s*(\\S+)(.*)");
-    std::cmatch M;
+    size_t pos=0u;
 
-    while(*inp && std::regex_match(inp, M, word)) {
-        sockaddr_in addr = {};
-        if(aToIPAddr(M[1].str().c_str(), defaultPort, &addr)) {
-            log_err_printf(config, "%s ignoring invalid '%s'\n", name, M[1].str().c_str());
-            continue;
+    while(pos<inp.size()) {
+        auto start = inp.find_first_not_of(" \t\r\n", pos);
+        auto end = inp.find_first_of(" \t\r\n", start);
+        pos = end;
+
+        if(start<end) {
+            auto temp = inp.substr(start, end==std::string::npos ? end : end-start);
+
+            sockaddr_in addr = {};
+            if(aToIPAddr(temp.c_str(), defaultPort, &addr)) {
+                log_err_printf(config, "%s ignoring invalid '%s'\n", name, temp.c_str());
+                continue;
+            }
+            char buf[24];
+            ipAddrToDottedIP(&addr, buf, sizeof(buf));
+            out.emplace_back(buf);
         }
-        char buf[24];
-        ipAddrToDottedIP(&addr, buf, sizeof(buf));
-        out.emplace_back(buf);
-        inp = M[2].first;
     }
 }
 
