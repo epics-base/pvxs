@@ -63,7 +63,7 @@ jobs:
 
 # Different configurations of default gcc and clang
 
-  - env: BASE=7.0
+  - env: BASE=7.0 LIBEVENT=master
 
   - env: BASE=3.15
 

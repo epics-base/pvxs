@@ -11,7 +11,7 @@ perl --version
 cmake --version
 cmake --help
 
-git clone --branch patches-2.1 https://github.com/libevent/libevent.git
+git clone --branch ${LIBEVENT:-patches-2.1} https://github.com/libevent/libevent.git
 
 mkdir host-libevent
 cd host-libevent
