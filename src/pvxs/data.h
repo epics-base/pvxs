@@ -609,8 +609,19 @@ public:
         }
     };
 
+    /** Depth-first iteration of all decendent fields
+     *
+     * @code
+     * Value top(...);
+     * for(auto fld : top.iall()) {
+     *     std::cout<<top.nameOf(fld)<<" = "<<fld<<"\n";
+     * }
+     * @endcode
+     */
     Iterable<Value> iall()      { return Iterable<Value>{this, false, true}; }
+    //! iteration of all child fields
     Iterable<Value> ichildren() { return Iterable<Value>{this, false, false}; }
+    //! Depth-first iteration of all marked decendent fields
     Iterable<Value> imarked()   { return Iterable<Value>{this, true , true}; }
 
     Iterable<const Value> iall() const      { return Iterable<const Value>{this, false, true}; }

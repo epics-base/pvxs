@@ -146,6 +146,49 @@ the event queue
 .. doxygenstruct:: pvxs::client::Subscription
     :members:
 
+Threading
+^^^^^^^^^
+
+A client Context will invoke user callback functions from one or more internal worker threads.
+However, it is guaranteed that callbacks relating to a given Channel (PV name + priority) will never be executed concurrently.
+This implies that callbacks for a single operation will also never be executed concurrently.
+
+User code must avoid doing unnecessary work from within a callback function as this will
+prevent other callbacks from be executed.
+
+Ownership
+^^^^^^^^^
+
+User provided callbacks are in the form of std::function which may,
+directly or indirectly, store shared_ptr<> instances.
+The returned Operation and Subscription instances may be treated as
+storing the std::function instance(s) and thus any shared_ptr<> captured in them.
+
+Therefore, in order to avoid a resource leak,
+it is advisable to consider whether a returned Operation or Subscription
+may participate in a reference loop.
+
+For example, the following creates a reference loop between the Operation instance and the "mystruct" instance.
+
+.. code-block:: c++
+
+    struct mystruct {
+        std::shared_ptr<Operation> op; // <-- Danger!
+    };
+    auto myptr = std::make_shared<mystruct>();
+
+    Context ctxt(...);
+    myptr->op = ctxt.get("pv:name")
+                    .result([ctxt](Result&& result) {
+                    })
+                    .exec();
+
+While such loops can be explicitly broken (eg. by NULLing 'myptr->op') it is strongly
+recommended to avoid such situations as unexpected (exceptional) conditions can easily
+lead to resource leaks which are quite difficult to detect and isolate.
+
+Where possible it is recommended to capture weak_ptr<> instances.
+
 pvRequest
 ---------
 

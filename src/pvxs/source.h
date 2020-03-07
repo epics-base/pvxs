@@ -92,9 +92,14 @@ public:
 
     virtual void stats(MonitorStat&) const =0;
 
-    //! Set flow control levels.
-    //! onLowMark callback will be invoked when nFree()<=low becomes true, and not again until it has been false.
-    //! onHighMark callback will be invoked when nFree()>high becomes true, and not again until it has been false.
+    /** Set flow control levels.
+     *
+     *  Flow control operations against an outbound "window" size, which is the number of updates which may
+     *  be sent before a client ack. must be received.  By default both high and low levels are zero.
+     *
+     *  onLowMark callback is not currently implemented and the 'low' level is not used.
+     *  onHighMark callback will be invoked when a client ack. increases the window size above (>) 'high'.
+     */
     virtual void setWatermarks(size_t low, size_t high) =0;
 
     //! Callback when client resumes/pauses updates

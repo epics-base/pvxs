@@ -99,6 +99,7 @@ struct PVXS_API Operation {
     virtual ~Operation() =0;
 
     //! Explicitly cancel a pending operation.
+    //! Blocks until an in-progress callback has completed.
     virtual void cancel() =0;
 };
 
@@ -108,6 +109,7 @@ struct PVXS_API Subscription {
     virtual ~Subscription() =0;
 
     //! Explicitly cancel a active subscription.
+    //! Blocks until any in-progress callback has completed.
     virtual void cancel() =0;
 
     //! Ask a server to stop sending updates to this Subscription
@@ -355,7 +357,8 @@ class GetBuilder : public detail::CommonBuilder<GetBuilder> {
     std::shared_ptr<Operation> _exec_get();
 public:
     GetBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, bool get) :CommonBuilder{ctx,name}, _get(get) {}
-    //! Callback through which result Value or an error will be delivered
+    //! Callback through which result Value or an error will be delivered.
+    //! The functor is stored in the Operation returned by exec().
     GetBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
 
     /** Execute the network operation.
@@ -392,12 +395,16 @@ public:
      *  Once the PV type information is received from the server,
      *  this function will be responsible for populating a Value
      *  which will actually be sent.
+     *
+     *  The functor is stored in the Operation returned by exec().
      */
     PutBuilder& build(std::function<Value(Value&&)>&& cb) { _builder = std::move(cb); return *this; }
 
     /** Provide the operation result callback.
      *  This callback will be passed a Result which is either an empty Value (success)
      *  or an exception on error.
+     *
+     *  The functor is stored in the Operation returned by exec().
      */
     PutBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
 
@@ -418,7 +425,8 @@ class RPCBuilder : public detail::CommonBuilder<GetBuilder> {
     std::function<void(Result&&)> _result;
 public:
     RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, Value&& arg) :CommonBuilder{ctx,name}, _argument(std::move(arg)) {}
-    //! Callback through which result Value or an error will be delivered
+    //! Callback through which result Value or an error will be delivered.
+    //! The functor is stored in the Operation returned by exec().
     RPCBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
 
     /** Execute the network operation.
@@ -440,6 +448,7 @@ class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder> {
 public:
     MonitorBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
     //! Install event callback
+    //! The functor is stored in the Subscription returned by exec().
     MonitorBuilder& event(std::function<void(Subscription&)>&& cb) { _event = std::move(cb); return *this; }
     //! Include Connected exceptions in queue (default false).
     MonitorBuilder& maskConnected(bool m = true) { _maskConn = m; return *this; }
