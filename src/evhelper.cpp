@@ -66,6 +66,7 @@ struct evbase::Pvt : public epicsThreadRunable
     std::deque<Work> actions;
 
     std::unique_ptr<event_base> base;
+    evevent keepalive;
     evevent dowork;
     epicsEvent start_sync;
     epicsMutex lock;
@@ -102,14 +103,21 @@ struct evbase::Pvt : public epicsThreadRunable
             }
 
             evevent handle(event_new(tbase.get(), -1, EV_TIMEOUT, &doWorkS, this));
+            evevent ka(event_new(tbase.get(), -1, EV_TIMEOUT|EV_PERSIST, &evkeepalive, this));
 
             base = std::move(tbase);
             dowork = std::move(handle);
+            keepalive = std::move(ka);
+
+            timeval tick{1000,0};
+            if(event_add(keepalive.get(), &tick))
+                throw std::runtime_error("Can't start keepalive timer");
+
             start_sync.trigger();
 
             log_info_printf(logerr, "Enter loop worker for %p\n", base.get());
 
-            int ret = event_base_loop(base.get(), EVLOOP_NO_EXIT_ON_EMPTY);
+            int ret = event_base_loop(base.get(), 0);
 
             auto lvl = ret ? Level::Crit : Level::Info;
             log_printf(logerr, lvl, "Exit loop worker: %d for %p\n", ret, base.get());
@@ -154,6 +162,14 @@ struct evbase::Pvt : public epicsThreadRunable
             log_crit_printf(logerr, "Unhandled error in doWorkS callback: %s\n", e.what());
         }
     }
+
+    static
+    void evkeepalive(evutil_socket_t sock, short evt, void *raw)
+    {
+        auto self = static_cast<Pvt*>(raw);
+        log_debug_printf(logerr, "Look keepalive %p\n", self);
+    }
+
 };
 
 evbase::evbase(const std::string &name, unsigned prio)
