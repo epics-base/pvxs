@@ -223,7 +223,7 @@ Context::Pvt::Pvt(const Config& conf)
     ,searchRx(event_new(tcp_loop.base, searchTx.sock, EV_READ|EV_PERSIST, &Pvt::onSearchS, this))
     ,searchTimer(event_new(tcp_loop.base, -1, EV_TIMEOUT, &Pvt::tickSearchS, this))
     ,manager(UDPManager::instance())
-    ,beaconCleaner(event_new(manager.loop().base, -1, EV_TIMEOUT, &Pvt::tickBeaconCleanS, this))
+    ,beaconCleaner(event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &Pvt::tickBeaconCleanS, this))
 {
     effective.expand();
 
@@ -311,6 +311,7 @@ void Context::Pvt::close()
     tcp_loop.call([this]() {
         (void)event_del(searchTimer.get());
         (void)event_del(searchRx.get());
+        (void)event_del(beaconCleaner.get());
 
         decltype (connByAddr) conns(std::move(connByAddr));
 
@@ -662,9 +663,6 @@ void Context::Pvt::tickBeaconClean()
             beaconSenders.erase(cur);
         }
     }
-
-    if(event_add(beaconCleaner.get(), &beaconCleanInterval))
-        log_err_printf(setup, "Error re-enabling beacon clean timer on\n%s", "");
 }
 
 void Context::Pvt::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
