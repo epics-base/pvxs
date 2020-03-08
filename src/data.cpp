@@ -746,7 +746,7 @@ void Value::_iter_fl(Value::IterInfo &info, bool first) const
         throw NoField();
 
     if(info.depth) {
-        info.pos = info.nextcheck = store->index() + (first ? 1u : desc->size());
+        info.pos = info.nextcheck = first ? 1u : desc->size();
 
         if(info.marked)
             _iter_advance(info);
