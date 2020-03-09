@@ -65,10 +65,6 @@ struct FieldDesc {
     // child iteration.  child# -> ("sub", rel index in enclosing vector<FieldDesc>)
     std::vector<std::pair<std::string, size_t>> miter;
 
-    // hash of this type (aggragating from children)
-    // created using the code ^ id ^ (child_name ^ child_hash)*N
-    size_t hash;
-
     // number of FieldDesc nodes between this node and it's a parent Struct (or 0 if no parent).
     // This value also appears in the parent's miter and mlookup mappings.
     // Only usable when a StructTop is accessible and this!=StructTop::desc

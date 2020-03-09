@@ -133,7 +133,6 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
             auto& fld = descs.back();
 
             fld.code = code;
-            fld.hash = code.code;
         }
 
         switch(code.code) {
@@ -157,7 +156,6 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
                 auto& fld = descs.back();
 
                 fld.miter.reserve(nfld.size);
-                fld.hash ^= std::hash<std::string>{}(fld.id);
             }
 
             auto& cdescs = code.code==TypeCode::Struct ? descs : descs.back().members;
@@ -179,10 +177,6 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
                 auto& cfld = cdescs[cindex];
                 if(code.code==TypeCode::Struct)
                     cfld.parent_index = cindex-cref;
-
-                // update hash
-                // TODO investigate better ways to combine hashes
-                fld.hash ^= std::hash<std::string>{}(name) ^ cfld.hash;
 
                 // update field refs.
                 fld.miter.emplace_back(name, cindex-cref);

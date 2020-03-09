@@ -148,7 +148,6 @@ void build_tree(std::vector<FieldDesc>& desc, const Member& node)
         auto& fld = desc.back();
         fld.code = node.code;
         // struct/union array have no ID
-        fld.hash = node.code.code;
 
         Member next{code.scalarOf(), node.name};
         next.id = node.id;
@@ -165,7 +164,6 @@ void build_tree(std::vector<FieldDesc>& desc, const Member& node)
         auto& fld = desc.back();
         fld.code = code;
         fld.id = node.id;
-        fld.hash = code.code ^ std::hash<std::string>{}(fld.id);
     }
 
     auto& cdescs = code.code==TypeCode::Struct ? desc : desc.back().members;
@@ -180,8 +178,6 @@ void build_tree(std::vector<FieldDesc>& desc, const Member& node)
         auto& child = cdescs[cindex];
         if(code.code==TypeCode::Struct)
             child.parent_index = cindex-cref;
-
-        fld.hash ^= std::hash<std::string>{}(cnode.name) ^ child.hash;
 
         fld.mlookup[cnode.name] = cindex-cref;
         fld.miter.emplace_back(cnode.name, cindex-cref);
