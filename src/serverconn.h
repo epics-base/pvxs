@@ -65,6 +65,8 @@ struct ServerChannelControl : public server::ChannelControl
     virtual void onClose(std::function<void(const std::string&)>&& fn) override final;
     virtual void close() override final;
 
+    virtual std::pair<std::string, Value> rawCredentials() const override final;
+
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerChan> chan;
 };

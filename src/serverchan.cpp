@@ -166,6 +166,19 @@ void ServerChannelControl::close()
     });
 }
 
+std::pair<std::string, Value> ServerChannelControl::rawCredentials() const
+{
+    std::pair<std::string, Value> ret;
+    auto serv = server.lock();
+    if(serv)
+        serv->acceptor_loop.call([this, &ret](){
+            if(auto chan = this->chan.lock())
+                if(auto conn = chan->conn.lock())
+                    ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
+        });
+    return ret;
+}
+
 void ServerConn::handle_SEARCH()
 {
     EvInBuf M(peerBE, segBuf.get(), 16);

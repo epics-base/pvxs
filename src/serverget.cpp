@@ -230,6 +230,20 @@ struct ServerGPRConnect : public server::ConnectOp
         });
     }
 
+    virtual std::pair<std::string, Value> rawCredentials() const override final
+    {
+        std::pair<std::string, Value> ret;
+        auto serv = server.lock();
+        if(serv)
+            serv->acceptor_loop.call([this, &ret](){
+                if(auto oper = op.lock())
+                    if(auto chan = oper->chan.lock())
+                        if(auto conn = chan->conn.lock())
+                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
+            });
+        return ret;
+    }
+
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerGPR> op;
 };
@@ -291,6 +305,20 @@ struct ServerGPRExec : public server::ExecOp
             if(auto oper = op.lock())
                 oper->onCancel = std::move(fn);
         });
+    }
+
+    virtual std::pair<std::string, Value> rawCredentials() const override final
+    {
+        std::pair<std::string, Value> ret;
+        auto serv = server.lock();
+        if(serv)
+            serv->acceptor_loop.call([this, &ret](){
+                if(auto oper = op.lock())
+                    if(auto chan = oper->chan.lock())
+                        if(auto conn = chan->conn.lock())
+                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
+            });
+        return ret;
     }
 
     const std::weak_ptr<server::Server::Pvt> server;

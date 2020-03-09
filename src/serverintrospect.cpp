@@ -105,6 +105,20 @@ struct ServerIntrospectControl : public server::ConnectOp
         });
     }
 
+    virtual std::pair<std::string, Value> rawCredentials() const override final
+    {
+        std::pair<std::string, Value> ret;
+        auto serv = server.lock();
+        if(serv)
+            serv->acceptor_loop.call([this, &ret](){
+                if(auto oper = op.lock())
+                    if(auto chan = oper->chan.lock())
+                        if(auto conn = chan->conn.lock())
+                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
+            });
+        return ret;
+    }
+
     // we'll never use these, so no reason to store
     virtual void onGet(std::function<void(std::unique_ptr<server::ExecOp>&& fn)>&& fn) override final {}
     virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&& fn, Value&&)>&& fn) override final {}

@@ -36,9 +36,11 @@ public:
     //! The Channel name
     const std::string& name() const { return _name; }
     op_t op() const { return _op; }
-    // TODO credentials
 
     virtual ~OpBase() =0;
+
+    //! Return authentication method name (eg. "ca") and raw client credentials
+    virtual std::pair<std::string, Value> rawCredentials() const=0;
 };
 
 //! Handle when an operation is being executed
