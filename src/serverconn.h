@@ -99,7 +99,8 @@ struct ServerConn : public ConnBase, public std::enable_shared_from_this<ServerC
 {
     ServIface* const iface;
 
-    // credentials
+    std::string autoMethod;
+    Value credentials;
 
     uint32_t nextSID;
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanBySID;

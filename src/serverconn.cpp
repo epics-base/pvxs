@@ -134,7 +134,6 @@ void ServerConn::handle_CONNECTION_VALIDATION()
 
         Value auth;
         from_wire_type_value(M, rxRegistry, auth);
-        // TODO store credentials
 
         if(!M.good()) {
             log_err_printf(connio, "Client %s Truncated/Invalid ConnValid from client\n", peerName.c_str());
@@ -145,6 +144,9 @@ void ServerConn::handle_CONNECTION_VALIDATION()
             log_debug_printf(connsetup, "Client %s authenticates using %s and %s\n",
                        peerName.c_str(), selected.c_str(),
                        std::string(SB()<<auth).c_str());
+
+            autoMethod = selected;
+            credentials = auth;
         }
     }
 
@@ -159,7 +161,8 @@ void ServerConn::handle_CONNECTION_VALIDATION()
 
     // remainder of segBuf is payload w/ credentials
 
-    // TODO actually check credentials
+    // No practical way to handle auth failure.
+    // So we accept all credentials, but may not grant rights.
     auth_complete(this, Status{Status::Ok});
 }
 
