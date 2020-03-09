@@ -232,7 +232,6 @@ struct ServerMonitorControl : public server::MonitorControlOp
             // nope
         }
 
-        // TODO unnecessary wakeups?
         if(auto serv = server.lock())
             MonitorOp::maybeReply(serv.get(), mon);
 

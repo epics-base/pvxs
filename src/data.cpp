@@ -69,7 +69,6 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
 Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc, Value& parent)
     :Value(desc)
 {
-    // TODO ref. loop detection
     store->top->enclosing = parent.store;
 }
 

@@ -606,7 +606,6 @@ void Context::Pvt::tickSearch()
             to_wire(H, Header{CMD_SEARCH, pva_flags::Server, uint32_t(consumed-8u)});
         }
         for(auto& pair : searchDest) {
-            // TODO: unicast/bcast
             *pflags = pair.second ? 0x80 : 0x00;
 
             int ntx = sendto(searchTx.sock, (char*)searchMsg.data(), consumed, 0, &pair.first->sa, pair.first.size());
