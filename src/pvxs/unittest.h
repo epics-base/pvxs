@@ -157,6 +157,14 @@ testCase testThrows(FN fn)
 
 } // namespace pvxs
 
+//! Macro which assert that an expression evaluate to 'true'.
+//! Evaluates to a pvxs::testCase
+#define testTrue(EXPR) ::pvxs::testCase(EXPR)<<(" " #EXPR)
+
+//! Macro which assert that an expression evaluate to 'true'.
+//! Evaluates to a pvxs::testCase
+#define testFalse(EXPR) ::pvxs::testCase(!(EXPR))<<(" !" #EXPR)
+
 //! Macro which asserts equality between LHS and RHS.
 //! Evaluates to a pvxs::testCase
 //! Roughly equivalent to @code testOk((LHS)==(RHS), "..."); @endcode

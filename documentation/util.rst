@@ -96,6 +96,10 @@ Extensions to epicsUnitTest.h ::
     #include <pvxs/unittest.h>
     namespace pvxs { ... }
 
+.. doxygendefine:: testTrue
+
+.. doxygendefine:: testFalse
+
 .. doxygendefine:: testEq
 
 .. doxygendefine:: testNotEq
