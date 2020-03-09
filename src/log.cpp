@@ -5,10 +5,8 @@
  */
 
 #include <map>
-#include <tuple>
 #include <string>
 #include <list>
-#include <regex>
 
 // must include before epicsStdio.h to avoid clash with printf macro
 #include <event2/util.h>
@@ -18,6 +16,7 @@
 
 #include <envDefs.h>
 #include <osiSock.h>
+#include <epicsString.h>
 #include <epicsAssert.h>
 #include <epicsStdio.h>
 #include <epicsThread.h>
@@ -101,7 +100,8 @@ int name2lvl(const std::string& name)
 
 struct logger_gbl_t {
     epicsMutex lock;
-    std::list<std::tuple<std::regex, std::string, int>> config;
+    // [(pattern, level)]
+    std::list<std::pair<std::string, Level>> config;
     std::multimap<std::string, logger*> loggers;
 
     logger_gbl_t()
@@ -109,11 +109,11 @@ struct logger_gbl_t {
         event_set_log_callback(&evlog_handler);
     }
 
-    int init(logger *logger)
+    Level init(logger *logger)
     {
         std::string name(logger->name);
 
-        int lvl = int(Level::Err);
+        auto lvl = Level::Err;
 
         // see if this logger name has already been configured.
         auto it = loggers.find(logger->name);
@@ -124,8 +124,8 @@ struct logger_gbl_t {
             // nope
 
             for(auto& tup : config) {
-                if(std::regex_match(name, std::get<0>(tup))) {
-                    lvl = std::get<2>(tup);
+                if(epicsStrGlobMatch(name.c_str(), tup.first.c_str())) {
+                    lvl = tup.second;
                     break;
                 }
             }
@@ -139,33 +139,19 @@ struct logger_gbl_t {
         return lvl;
     }
 
-    void set(const char *name, int lvl)
+    void set(const char *exp, Level lvl)
     {
-        if(lvl<=0)
-            lvl = 1;
-
-        // convert name, with wildcards to a regexp
-        std::string exp("^");
-        for(char c = *name; c!='\0'; c=*++name) {
-            if((c>='a' && c<='z') || (c>='A' && c<='Z') || (c>='0' && c<='9') || c=='_')
-                exp += c;
-            else if(c=='.')
-                exp += "\\.";
-            else if(c=='?')
-                exp += '.';
-            else if(c=='*')
-                exp += ".*";
-        }
-        exp+='$';
+        if(lvl<=Level(0))
+            lvl = Level(1);
 
         for(auto& tup : config) {
-            if(std::get<1>(tup)==exp) {
+            if(tup.first==exp) {
                 // update of existing config
-                if(std::get<2>(tup)!=lvl) {
-                    std::get<2>(tup) = lvl;
+                if(tup.second!=lvl) {
+                    tup.second = lvl;
 
                     for(auto& pair : loggers) {
-                        if(std::regex_match(pair.first, std::get<0>(tup))) {
+                        if(epicsStrGlobMatch(pair.first.c_str(), tup.first.c_str())) {
                             pair.second->lvl.store(lvl, std::memory_order_relaxed);
                         }
                     }
@@ -175,9 +161,7 @@ struct logger_gbl_t {
         }
         // new config
 
-        std::regex re(exp);
-
-        config.emplace_back(std::move(re), exp, lvl);
+        config.emplace_back(exp, lvl);
     }
 } *logger_gbl;
 
@@ -190,14 +174,14 @@ epicsThreadOnceId logger_once = EPICS_THREAD_ONCE_INIT;
 
 } // namespace
 
-int logger::init()
+Level logger::init()
 {
     assert(name);
 
-    int lvl = this->lvl.load();
-    if(lvl==-1) {
+    auto lvl = this->lvl.load();
+    if(lvl==Level(-1)) {
         // maybe we initialize
-        if(this->lvl.compare_exchange_strong(lvl, int(Level::Err))) {
+        if(this->lvl.compare_exchange_strong(lvl, Level::Err)) {
             // logger now has default config of Level::Err
             // we will fully initialize
             epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
@@ -251,7 +235,7 @@ void logger_level_set(const char *name, int lvl)
     assert(logger_gbl);
 
     Guard G(logger_gbl->lock);
-    logger_gbl->set(name, lvl);
+    logger_gbl->set(name, Level(lvl));
 }
 
 void logger_level_clear()
@@ -296,7 +280,7 @@ void logger_config_env()
                 fprintf(stderr, "PVXS_LOG ignore invalid: '%s=%s'\n", key.c_str(), val.c_str());
 
             } else if(auto lvl = name2lvl(val)) {
-                logger_gbl->set(key.c_str(), lvl);
+                logger_gbl->set(key.c_str(), Level(lvl));
 
             } else {
                 fprintf(stderr, "PVXS_LOG ignore invalid level: '%s=%s'\n", key.c_str(), val.c_str());

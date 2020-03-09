@@ -31,21 +31,18 @@ struct logger {
     //! global name of this logger.  Need not be unique
     const char * const name;
     //! Current logging level.  See logger_level_set().
-    std::atomic<int> lvl;
-    constexpr logger(const char *name) :name(name), lvl{-1} {}
+    std::atomic<Level> lvl;
+    constexpr logger(const char *name) :name(name), lvl{Level(-1)} {}
 
 private:
-    PVXS_API int init();
+    PVXS_API Level init();
 public:
 
-    inline bool test(int lvl) {
-        int cur = this->lvl.load(std::memory_order_relaxed);
-        if(cur==-1) cur = init();
-        return cur>=lvl;
-    }
     //! @returns true if the logger currently allows a message at level LVL.
     inline bool test(Level lvl) {
-        return test(int(lvl));
+        Level cur = this->lvl.load(std::memory_order_relaxed);
+        if(cur==Level(-1)) cur = init();
+        return cur>=lvl;
     }
 };
 
