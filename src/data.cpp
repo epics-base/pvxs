@@ -745,7 +745,11 @@ void Value::_iter_fl(Value::IterInfo &info, bool first) const
     if(!store)
         throw NoField();
 
-    if(info.depth) {
+    if(desc->code!=TypeCode::Struct) {
+        // TODO implement iteration of Union, or Struct[]/Union[]
+        info.pos = info.nextcheck = 0;
+
+    } else if(info.depth) {
         info.pos = info.nextcheck = first ? 1u : desc->size();
 
         if(info.marked)
