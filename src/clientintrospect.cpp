@@ -34,13 +34,21 @@ struct InfoOp : public OperationBase
 
     virtual ~InfoOp()
     {
-        cancel();
+        _cancel(true);
     }
 
     virtual void cancel() override final {
+        _cancel(false);
+    }
+
+    void _cancel(bool implicit) {
         auto context = chan->context;
         decltype (done) junk;
-        context->tcp_loop.call([this, &junk](){
+        context->tcp_loop.call([this, &junk, implicit](){
+            if(implicit && state!=Done) {
+                log_warn_printf(setup, "implied cancel of INFO on channel '%s'\n",
+                                chan ? chan->name.c_str() : "");
+            }
             if(state==Waiting) {
                 chan->conn->sendDestroyRequest(chan->sid, ioid);
 

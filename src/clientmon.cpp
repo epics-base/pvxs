@@ -66,7 +66,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         ,ackTick(event_new(chan->context->tcp_loop.base, -1, EV_TIMEOUT, &tickAckS, this))
     {}
     virtual ~SubscriptionImpl() {
-        cancel();
+        _cancel(true);
     }
 
     void notify()
@@ -150,11 +150,19 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         return ret;
     }
 
-    virtual void cancel() override final
-    {
+    virtual void cancel() override final {
+        _cancel(false);
+    }
+
+    void _cancel(bool implicit) {
         auto context = chan->context;
         decltype (event) junk;
-        context->tcp_loop.call([this, &junk](){
+        context->tcp_loop.call([this, &junk, implicit](){
+            if(implicit && state!=Done) {
+                log_info_printf(io, "Server %s channel %s monitor implied cancel\n",
+                                chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
+                                chan->name.c_str());
+            }
             log_info_printf(io, "Server %s channel %s monitor cancel\n",
                             chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
                             chan->name.c_str());

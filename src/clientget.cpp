@@ -39,7 +39,7 @@ struct GPROp : public OperationBase
         :OperationBase (op, chan)
     {}
     ~GPROp() {
-        cancel();
+        _cancel(true);
     }
 
     void notify() {
@@ -57,11 +57,18 @@ struct GPROp : public OperationBase
         }
     }
 
-    virtual void cancel() override final
-    {
+    virtual void cancel() override final {
+        _cancel(false);
+    }
+
+    void _cancel(bool implicit) {
         auto context = chan->context;
         decltype (done) junk;
-        context->tcp_loop.call([this, &junk](){
+        context->tcp_loop.call([this, &junk, implicit](){
+            if(implicit && state!=Done) {
+                log_warn_printf(setup, "implied cancel of op%x on channel '%s'\n",
+                                op, chan ? chan->name.c_str() : "");
+            }
             if(state==GetOPut || state==Exec) {
                 chan->conn->sendDestroyRequest(chan->sid, ioid);
 
