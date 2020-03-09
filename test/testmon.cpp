@@ -52,7 +52,7 @@ struct BasicTest {
                 .maskConnected(false)
                 .maskDisconnected(false)
                 .event([this](client::Subscription& sub) {
-                    testDiag("Event %s", __func__);
+                    testDiag("Event evt");
                     evt.trigger();
                 })
                 .exec();
@@ -63,6 +63,20 @@ struct BasicTest {
         auto update(initial.cloneEmpty());
         update["value"] = v;
         mbox.post(std::move(update));
+    }
+
+    static
+    Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt)
+    {
+        Value ret(sub->pop());
+        while(!ret) {
+            if(!evt.wait(5.0)) {
+                testFail("timeout waiting for event");
+            } else {
+                ret = sub->pop();
+            }
+        }
+        return ret;
     }
 };
 
@@ -76,11 +90,8 @@ struct TestLifeCycle : public BasicTest
 
         cli.hurryUp();
 
-        testDiag("Wait for Connected event");
-        testOk1(!!evt.wait(5.0));
-
         testThrows<client::Connected>([this](){
-            sub->pop();
+            pop(sub, evt);
         });
     }
 
@@ -88,10 +99,7 @@ struct TestLifeCycle : public BasicTest
     {
         testShow()<<"begin "<<__func__;
 
-        testDiag("Wait for Data update event");
-        testOk1(!!evt.wait(5.0));
-
-        if(auto val = sub->pop()) {
+        if(auto val = pop(sub, evt)) {
             testEq(val["value"].as<int32_t>(), 42);
         } else {
             testFail("Missing data update");
@@ -99,10 +107,7 @@ struct TestLifeCycle : public BasicTest
 
         post(123);
 
-        testDiag("Wait for Data update event 2");
-        testOk1(!!evt.wait(5.0));
-
-        if(auto val = sub->pop()) {
+        if(auto val = pop(sub, evt)) {
             testEq(val["value"].as<int32_t>(), 123);
         } else {
             testFail("Missing data update 2");
@@ -123,10 +128,8 @@ struct TestLifeCycle : public BasicTest
             mbox.close();
         }
 
-        testDiag("Wait for Disconnected event");
-        testOk1(!!evt.wait(5.0));
-
         testThrows<client::Disconnect>([this](){
+            pop(sub, evt);
             sub->pop();
         });
 
@@ -138,6 +141,7 @@ struct TestLifeCycle : public BasicTest
         testShow()<<__func__<<" "<<howdisconn;
         phase1();
         phase2(howdisconn);
+        testFalse(sub->pop())<<"No events after Disconnect";
     }
 
     void testSecond()
@@ -154,17 +158,14 @@ struct TestLifeCycle : public BasicTest
                         .maskConnected(true)
                         .maskDisconnected(false)
                         .event([&evt2](client::Subscription& sub) {
-                            testDiag("Event %s", __func__);
+                            testDiag("Event evt2");
                             evt2.trigger();
                         })
                         .exec();
 
         phase1();
 
-        testDiag("Wait for Data update event on mbox2");
-        testOk1(!!evt2.wait(5.0));
-
-        if(auto val = sub2->pop()) {
+        if(auto val = pop(sub2, evt2)) {
             testEq(val["value"].as<int32_t>(), 42);
         } else {
             testFail("Missing data update");
@@ -178,10 +179,7 @@ struct TestLifeCycle : public BasicTest
         update["value"] = 39;
         mbox2.post(std::move(update));
 
-        testDiag("Wait for Data update event2 on mbox2");
-        testOk1(!!evt2.wait(5.0));
-
-        if(auto val = sub2->pop()) {
+        if(auto val = pop(sub2, evt2)) {
             testEq(val["value"].as<int32_t>(), 39);
         } else {
             testFail("Missing data update");
@@ -201,18 +199,12 @@ struct TestReconn : public BasicTest
 
         cli.hurryUp();
 
-        testDiag("Wait for Connected event");
-        testOk1(!!evt.wait(5.0));
-
         testThrows<client::Connected>([this](){
-            sub->pop();
+            pop(sub, evt);
         });
 
-        testDiag("Wait for Data update event");
-        testOk1(!!evt.wait(5.0));
-
-        if(auto val = sub->pop()) {
-            testEq(val["value"].as<int32_t>(), 42);
+        if(auto val = pop(sub, evt)) {
+            testEq(val["value"].as<int32_t>(), 42)<<"Initial data update";
         } else {
             testFail("Missing data update");
         }
@@ -220,30 +212,27 @@ struct TestReconn : public BasicTest
         testDiag("Stop server");
         serv.stop();
 
-        testDiag("Wait for Disconnected event");
-        testOk1(!!evt.wait(5.0));
-
         testThrows<client::Disconnect>([this](){
-            sub->pop();
-        });
+            pop(sub, evt);
+        })<<"Expecting Disconnect after stopping server";
+
+        testFalse(sub->pop())<<"No events after Disconnect";
 
         mbox.post(std::move(initial
                             .cloneEmpty()
                             .update("value", 15)));
 
+        errlogFlush();
+        testDiag("Starting server");
         serv.start();
 
-        testDiag("Wait for re-Connected event");
-        testOk1(!!evt.wait(5.0));
-
         testThrows<client::Connected>([this](){
-            sub->pop();
-        });
+            auto x = pop(sub, evt);
+            testTrue(false)<<"Unexpected event : "<<x;
+        })<<"Expecting Connected after restarting server";
+        errlogFlush();
 
-        testDiag("Wait for second Data update event");
-        testOk1(!!evt.wait(5.0));
-
-        if(auto val = sub->pop()) {
+        if(auto val = pop(sub, evt)) {
             testEq(val["value"].as<int32_t>(), 15);
         } else {
             testFail("Missing data update");
@@ -255,7 +244,7 @@ struct TestReconn : public BasicTest
 
 MAIN(testmon)
 {
-    testPlan(38);
+    testPlan(22);
     logger_config_env();
     TestLifeCycle().testBasic(true);
     TestLifeCycle().testBasic(false);
