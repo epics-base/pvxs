@@ -186,15 +186,15 @@ struct PVXS_API Source {
     private:
         typedef std::vector<Name> _names_t;
         _names_t _names;
-        SockAddr _src;
+        char _src[24];
         friend struct Server::Pvt;
         friend struct impl::ServerConn;
     public:
 
         _names_t::iterator begin() { return _names.begin(); }
         _names_t::iterator end() { return _names.end(); }
-        //! The Client endpoint address in "X.X.X.X:Y" format.
-        const SockAddr& source() const { return _src; }
+        //! The Client endpoint address
+        const char* source() const { return _src; }
     };
     /** Called each time a client polls for the existance of some Channel names.
      *

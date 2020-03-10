@@ -204,7 +204,8 @@ void ServerConn::handle_SEARCH()
     from_wire(M, nchan);
 
     server::Source::Search op;
-    op._src = peerAddr;
+    strncpy(op._src, peerName.c_str(), sizeof(op._src)-1);
+    op._src[sizeof(op._src)-1] = '\0';
     std::vector<std::pair<uint32_t, std::string>> nameStorage(nchan);
     op._names.resize(nchan);
 

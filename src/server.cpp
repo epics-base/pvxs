@@ -433,6 +433,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
         searchOp._names[i]._name = msg.names[i].name;
         searchOp._names[i]._claim = false;
     }
+    ipAddrToDottedIP(&msg.server->in, searchOp._src, sizeof(searchOp._src));
 
     {
         auto G(sourcesLock.lockReader());
