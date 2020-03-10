@@ -19,6 +19,11 @@
 
 namespace pvxs {
 class Value;
+class TypeDef;
+namespace client {
+namespace detail {
+class CommonBase;
+}} // namespace client::detail
 
 //! selector for union FieldStorage::store
 enum struct StoreType : uint8_t {
@@ -174,10 +179,15 @@ inline std::ostream& operator<<(std::ostream& strm, TypeCode c) {
 
 //! Definition of a member of a Struct/Union for use with TypeDef
 struct Member {
+private:
     TypeCode code;
     std::string name;
     std::string id;
     std::vector<Member> children;
+    friend class TypeDef;
+    friend class client::detail::CommonBase;
+public:
+    struct Helper;
 
     //! Member for non-Compund
     //! @pre code.kind()!=Kind::Compound

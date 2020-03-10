@@ -14,6 +14,19 @@
 
 namespace pvxs {
 
+struct Member::Helper {
+    static
+    void node_validate(const Member* parent, const std::string& id, TypeCode code);
+    static
+    void build_tree(std::vector<FieldDesc>& desc, const Member& node);
+    static
+    void copy_tree(const FieldDesc* desc, Member& node);
+    static
+    void append_tree(Member& node, const Member& adopt);
+    static
+    void show_Node(std::ostream& strm, const std::string& name, const Member* node, unsigned level=0);
+};
+
 bool TypeCode::valid() const
 {
     if((code&0x10) && code!=Null)
@@ -85,8 +98,7 @@ const char* TypeCode::name() const
     return "\?\?\?_t";
 }
 
-static
-void node_validate(const Member* parent, const std::string& id, TypeCode code)
+void Member::Helper::node_validate(const Member* parent, const std::string& id, TypeCode code)
 {
     if(!id.empty() && code!=TypeCode::Struct && code!=TypeCode::Union)
         throw std::logic_error("Only Struct or Union may have an ID");
@@ -127,19 +139,18 @@ Member::Member(TypeCode code, const std::string& name, const std::string& id, st
     if(!name.empty())
         name_validate(name.c_str());
     for(auto& child : children) {
-        node_validate(this, child.id, child.code);
+        Helper::node_validate(this, child.id, child.code);
         this->children.push_back(child);
     }
 }
 
 void Member::addChild(const Member& mem)
 {
-    node_validate(this, mem.id, mem.code);
+    Helper::node_validate(this, mem.id, mem.code);
     children.push_back(mem);
 }
 
-static
-void build_tree(std::vector<FieldDesc>& desc, const Member& node)
+void Member::Helper::build_tree(std::vector<FieldDesc>& desc, const Member& node)
 {
     auto code = node.code;
     if(node.code==TypeCode::StructA || node.code==TypeCode::UnionA) {
@@ -199,7 +210,7 @@ TypeDef::TypeDef(TypeCode code, const std::string& id, std::initializer_list<Mem
     auto temp(std::make_shared<Member>(code, "", id, children));
 
     auto tempdesc = std::make_shared<std::vector<FieldDesc>>();
-    build_tree(*tempdesc, *temp);
+    Member::Helper::build_tree(*tempdesc, *temp);
 
     std::shared_ptr<const FieldDesc> type(tempdesc, tempdesc->data()); // alias
 
@@ -207,8 +218,7 @@ TypeDef::TypeDef(TypeCode code, const std::string& id, std::initializer_list<Mem
     desc = std::move(type);
 }
 
-static
-void copy_tree(const FieldDesc* desc, Member& node)
+void Member::Helper::copy_tree(const FieldDesc* desc, Member& node)
 {
     node.code = desc->code;
     node.id = desc->id;
@@ -226,10 +236,10 @@ TypeDef::TypeDef(const Value& val)
     if(val.desc) {
         auto root(std::make_shared<Member>(val.desc->code, val.desc->id));
 
-        copy_tree(val.desc, *root);
+        Member::Helper::copy_tree(val.desc, *root);
 
         auto temp = std::make_shared<std::vector<FieldDesc>>();
-        build_tree(*temp, *root);
+        Member::Helper::build_tree(*temp, *root);
 
         std::shared_ptr<const FieldDesc> type(temp, temp->data()); // alias
 
@@ -240,8 +250,7 @@ TypeDef::TypeDef(const Value& val)
 
 TypeDef::~TypeDef() {}
 
-static
-void append_tree(Member& node, const Member& adopt)
+void Member::Helper::append_tree(Member& node, const Member& adopt)
 {
     for(auto& child : node.children) {
         if(child.name==adopt.name) {
@@ -280,11 +289,11 @@ TypeDef& TypeDef::operator+=(std::initializer_list<Member> children)
     }
 
     for(auto& child : children) {
-        append_tree(*edit, child);
+        Member::Helper::append_tree(*edit, child);
     }
 
     auto temp = std::make_shared<std::vector<FieldDesc>>();
-    build_tree(*temp, *edit);
+    Member::Helper::build_tree(*temp, *edit);
 
     std::shared_ptr<const FieldDesc> type(temp, temp->data()); // alias
 
@@ -302,8 +311,7 @@ Value TypeDef::create() const
     return Value(desc);
 }
 
-static
-void show_Node(std::ostream& strm, const std::string& name, const Member* node, unsigned level=0)
+void Member::Helper::show_Node(std::ostream& strm, const std::string& name, const Member* node, unsigned level)
 {
     strm<<node->code;
     if(!node->id.empty())
@@ -331,7 +339,7 @@ std::ostream& operator<<(std::ostream& strm, const TypeDef& def)
     if(!def.top) {
         strm<<"<Empty>\n";
     } else {
-        show_Node(strm, std::string(), def.top.get());
+        Member::Helper::show_Node(strm, std::string(), def.top.get());
     }
     return strm;
 }
