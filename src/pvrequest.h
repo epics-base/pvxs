@@ -7,7 +7,7 @@
 #define PVREQUEST_H
 
 #include "utilpvt.h"
-#include <pvxs/bitmask.h>
+#include "bitmask.h"
 #include <pvxs/data.h>
 
 namespace pvxs {

@@ -8,7 +8,7 @@
 #include <epicsUnitTest.h>
 
 #include <pvxs/unittest.h>
-#include <pvxs/bitmask.h>
+#include "bitmask.h"
 #include "pvaproto.h"
 #include "utilpvt.h"
 

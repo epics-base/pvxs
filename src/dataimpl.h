@@ -11,7 +11,7 @@
 
 #include <pvxs/data.h>
 #include <pvxs/sharedArray.h>
-#include <pvxs/bitmask.h>
+#include "bitmask.h"
 #include "utilpvt.h"
 
 namespace pvxs {

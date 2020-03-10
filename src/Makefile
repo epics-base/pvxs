@@ -43,7 +43,6 @@ INC += pvxs/versionNum.h
 INC += pvxs/log.h
 INC += pvxs/unittest.h
 INC += pvxs/util.h
-INC += pvxs/bitmask.h
 INC += pvxs/sharedArray.h
 INC += pvxs/data.h
 INC += pvxs/nt.h

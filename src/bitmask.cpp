@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-#include <pvxs/bitmask.h>
+#include "bitmask.h"
 #include "pvaproto.h"
 #include "utilpvt.h"
 
