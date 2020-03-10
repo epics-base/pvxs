@@ -378,7 +378,7 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
     return strm;
 }
 
-}
+} // namespace pvxs
 
 namespace pvxs {namespace impl {
 namespace idetail {
