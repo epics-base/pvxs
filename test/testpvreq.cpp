@@ -67,7 +67,7 @@ struct {
             struct {
             } baz
         } bar
-    } fields
+    } field
     struct {
         struct {
             string abc = "xyz"
@@ -96,7 +96,7 @@ struct {
             struct {
             } baz
         } bar
-    } fields
+    } field
     struct {
         struct {
             string abc = "xyz"
@@ -125,7 +125,7 @@ struct {
             struct {
             } baz
         } bar
-    } fields
+    } field
     struct {
         struct {
             string abc = "xyz"

@@ -25,7 +25,7 @@ struct CommonBase::Req {
     Member record;
 
     Req()
-        :fields(TypeCode::Struct, "fields")
+        :fields(TypeCode::Struct, "field")
         ,record(TypeCode::Struct, "record", {
                 Member(TypeCode::Struct, "_options")
         })
