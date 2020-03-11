@@ -7,28 +7,22 @@ include $(TOP)/configure/CONFIG
 
 USR_CPPFLAGS += -DPVXS_API_BUILDING
 
-ifneq (,$(filter gcc clang,$(CMPLR_CLASS)))
+ifdef T_A
+ifneq ($(CONFIG_LOADED),YES)
+$(error Toolchain inspection failed $(MAKEFILE_LIST))
+endif
+endif
 
+ifeq ($(GNUISH),YES)
 # we explicitly mark dllimport/export anyway.
 # So hide our internal symbols to speed up linking/loading on all targets.
 USR_CFLAGS += -fvisibility=hidden
 USR_CXXFLAGS += -fvisibility=hidden -fvisibility-inlines-hidden
-
-# Compress debug information on ELF targets for ~25%-50% reduction in .so and .a file size
-# (C++ debug info is Huuuge!)
-#USR_CFLAGS_Linux += -gz=zlib
-#USR_CXXFLAGS_Linux += -gz=zlib
-#USR_LDFLAGS_Linux += -Wl,--compress-debug-sections=zlib
-
-# LTO takes a nice chunk out of the .so text size, but blows up the .a size
-#USR_CXXFLAGS += -flto
-#USR_LDFLAGS += -flto
+endif
 
 # fault on any undefined symbols (eg. from missing LIB_SYS_LIBS)
 # breaks on older ncurses (circa RHEL6) not using the INPUT() trick to pull in libtinfo.so
-USR_LDFLAGS_Linux += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
-
-endif
+#USR_LDFLAGS_Linux += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
 
 EXPANDVARS += PVXS_MAJOR_VERSION
 EXPANDVARS += PVXS_MINOR_VERSION

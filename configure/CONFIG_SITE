@@ -43,7 +43,3 @@ CHECK_RELEASE = YES
 
 # MSVC - skip defining min()/max() macros and enable APIs
 USR_CPPFLAGS_WIN32 += -DNOMINMAX -D_WIN32_WINNT=_WIN32_WINNT_VISTA
-
-ifneq ($(filter-out msvc,$(CMPLR_CLASS)),)
-USR_CXXFLAGS += -std=c++11
-endif

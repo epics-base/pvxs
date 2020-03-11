@@ -8,3 +8,18 @@ CONFIGS += $(subst ../,,$(wildcard $(CONFIG_INSTALLS)))
 CFG += CONFIG_PVXS_VERSION
 
 include $(TOP)/configure/RULES
+
+ifdef T_A
+install: $(TOP)/configure/CONFIG_SITE.Common.$(T_A)
+
+$(TOP)/configure/CONFIG_SITE.Common.$(T_A): toolchain.c
+	$(PREPROCESS.cpp)
+
+else
+clean: cleanToolchain
+
+.PHONY: cleanToolchain
+cleanToolchain:
+	$(RM) $(wildcard CONFIG_SITE.Common.*)
+
+endif
