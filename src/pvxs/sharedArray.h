@@ -32,8 +32,8 @@ enum class ArrayType : uint8_t {
     UInt16= 0x2d,
     UInt32= 0x2e,
     UInt64= 0x2f,
-    Float = 0x4a,
-    Double= 0x4b,
+    Float32=0x4a,
+    Float64=0x4b,
     String= 0x68,
     Value = 0x88, // also used for 0x89 and 0x8a
 };
@@ -56,8 +56,8 @@ CASE(uint8_t,  UInt8);
 CASE(uint16_t, UInt16);
 CASE(uint32_t, UInt32);
 CASE(uint64_t, UInt64);
-CASE(float, Float);
-CASE(double, Double);
+CASE(float, Float32);
+CASE(double, Float64);
 CASE(std::string, String);
 CASE(Value, Value);
 #undef CASE

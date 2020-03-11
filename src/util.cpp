@@ -63,8 +63,8 @@ std::ostream& operator<<(std::ostream& strm, ArrayType code)
     CASE(Int16);
     CASE(Int32);
     CASE(Int64);
-    CASE(Float);
-    CASE(Double);
+    CASE(Float32);
+    CASE(Float64);
     CASE(Value);
 #undef CASE
     default:
@@ -87,8 +87,8 @@ std::ostream& operator<<(std::ostream& strm, const shared_array<const void>& arr
     CASE(Int16, int16_t);
     CASE(Int32, int32_t);
     CASE(Int64, int64_t);
-    CASE(Float, float);
-    CASE(Double, double);
+    CASE(Float32, float);
+    CASE(Float64, double);
     CASE(String, std::string);
     CASE(Value, Value);
 #undef CASE
@@ -110,8 +110,8 @@ std::ostream& operator<<(std::ostream& strm, const shared_array<void>& arr)
     CASE(Int16, int16_t);
     CASE(Int32, int32_t);
     CASE(Int64, int64_t);
-    CASE(Float, float);
-    CASE(Double, double);
+    CASE(Float32, float);
+    CASE(Float64, double);
     CASE(String, std::string);
     CASE(Value, Value);
 #undef CASE
