@@ -23,13 +23,13 @@
 namespace {
 using namespace pvxs;
 
-struct Tester {
+struct TesterBase {
     Value initial;
     server::SharedPV mbox;
     server::Server serv;
     client::Context cli;
 
-    Tester()
+    TesterBase()
         :initial(nt::NTScalar{TypeCode::Int32}.create())
         ,mbox(server::SharedPV::buildMailbox())
         ,serv(server::Config::isolated()
@@ -42,7 +42,10 @@ struct Tester {
 
         initial["value"] = 1;
     }
+};
 
+struct Tester : public TesterBase
+{
     void testWait(bool get)
     {
         client::Result actual;
@@ -167,6 +170,47 @@ struct Tester {
     }
 };
 
+struct TestPutBuilder : public TesterBase
+{
+    void testSet()
+    {
+        testShow()<<__func__;
+
+        mbox.open(initial);
+        serv.start();
+
+        client::Result actual;
+        epicsEvent done;
+
+        auto op = cli.put("mailbox")
+                .set("value", "5")
+                .set("alarm.severity", 3)
+                .set("alarm", "not going to happen", false)
+                .set("nonexistant", "nope", false)
+                .result([&actual, &done](client::Result&& result) {
+                    actual = std::move(result);
+                    done.trigger();
+                })
+                .exec();
+
+        cli.hurryUp();
+
+        testTrue(done.wait(2.1));
+        try {
+            actual(); // maybe throws
+            testPass("Put success");
+        }catch(std::exception& e){
+            testFail("Put error %s : %s", typeid(e).name(), e.what());
+        }
+
+        auto cur = initial.cloneEmpty();
+        mbox.fetch(cur);
+
+        testEq(cur["value"].as<int32_t>(), 5);
+        testEq(cur["alarm.severity"].as<uint32_t>(), 3u);
+    }
+};
+
 void testRO()
 {
     testShow()<<__func__;
@@ -268,13 +312,14 @@ void testError()
 
 MAIN(testput)
 {
-    testPlan(21);
+    testPlan(25);
     logger_config_env();
     Tester().loopback(false);
     Tester().loopback(true);
     Tester().lazy();
     Tester().timeout();
     Tester().cancel();
+    TestPutBuilder().testSet();
     testRO();
     testError();
     cleanup_for_valgrind();

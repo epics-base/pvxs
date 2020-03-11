@@ -148,7 +148,7 @@ struct PVXS_API Subscription {
 };
 
 class GetBuilder;
-class PutBuilder;
+struct PutBuilder;
 class RPCBuilder;
 class MonitorBuilder;
 
@@ -204,6 +204,26 @@ public:
     GetBuilder info(const std::string& pvname);
 
     /** Request change/update of PV.
+     *
+     * Assign certain values to certain fields.
+     *
+     * @code
+     * Context ctxt(...);
+     * auto op = ctxt.put("pv:name")
+     *               .set("value", 42)
+     *               .result([](Result&& prototype){
+     *                  try {
+     *                      // always returns empty Value on success
+     *                      prototype();
+     *                      std::cout<<"Success";
+     *                  }catch(std::exception& e){
+     *                      std::cout<<"Error: "<<e.what();
+     *                  }
+     *               })
+     *               .exec();
+     * @endcode
+     *
+     * Alternately, and more generally, using a .build() callback
      *
      * @code
      * Context ctxt(...);
@@ -375,12 +395,17 @@ GetBuilder Context::info(const std::string& name) { return GetBuilder{pvt, name,
 GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, true}; }
 
 //! Prepare a remote PUT operation
-class PutBuilder : public detail::CommonBuilder<PutBuilder> {
+struct PVXS_API PutBuilder : public detail::CommonBuilder<PutBuilder> {
+    struct Pvt;
+private:
     bool _doGet = true;
     std::function<Value(Value&&)> _builder;
     std::function<void(Result&&)> _result;
+    std::shared_ptr<Pvt> pvt;
 public:
     PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
+    ~PutBuilder();
+
     /** If fetchPresent is true (the default).  Then the Value passed to
      *  the build() callback will be initialized with a previous value for this PV.
      *
@@ -389,6 +414,22 @@ public:
      *  the expense of fetching a copy of the array to be overwritten.
      */
     PutBuilder& fetchPresent(bool f) { _doGet = f; return *this; }
+
+    PutBuilder& set(const std::string& name, const void *ptr, StoreType type, bool required);
+
+    /** Utilize default .build() to assign a value to the named field.
+     *
+     * @param name The field name to attempt to assign.
+     * @param val The value to assign.  cf. Value::from()
+     * @param required Whether to fail if this value can not be assigned to this field.
+     */
+    template<typename T>
+    PutBuilder& set(const std::string& name, const T& val, bool required=true)
+    {
+        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
+        typename map_t::store_t norm(val);
+        return set(name, &norm, map_t::code, required);
+    }
 
     /** Provide the builder callback.
      *
@@ -412,7 +453,6 @@ public:
      *  The caller must keep returned Operation pointer until completion
      *  or the operation will be implicitly canceled.
      */
-    PVXS_API
     std::shared_ptr<Operation> exec();
 
     friend struct Context::Pvt;

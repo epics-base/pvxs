@@ -15,6 +15,80 @@ namespace client {
 DEFINE_LOGGER(setup, "pvxs.client.setup");
 DEFINE_LOGGER(io, "pvxs.client.io");
 
+struct PutBuilder::Pvt
+{
+    struct FieldValue {
+        impl::FieldStorage value;
+        TypeCode code = TypeCode::Null;
+        bool required;
+    };
+
+    std::map<std::string, std::pair<impl::FieldStorage, bool>> values;
+
+    Value build(Value&& prototype)
+    {
+        Value ret(prototype.cloneEmpty());
+
+        for(auto& pair : values) {
+            if(auto fld = ret[pair.first]) {
+                try {
+                    fld.copyIn(static_cast<const void*>(&pair.second.first.store), pair.second.first.code);
+                }catch(NoConvert& e){
+                    if(pair.second.second)
+                        throw;
+                }
+
+            } else if(pair.second.second) {
+                throw std::runtime_error(SB()<<"PutBuilder server type missing required field '"<<pair.first<<"'");
+            }
+        }
+        return ret;
+    }
+};
+
+PutBuilder& PutBuilder::set(const std::string& name, const void *ptr, StoreType type, bool required)
+{
+    if(!pvt)
+        pvt = std::make_shared<Pvt>();
+
+    if(pvt->values.find(name)!=pvt->values.end())
+        throw std::logic_error(SB()<<"PutBuilder can't assign a second value to field '"<<name<<"'");
+
+    auto& pair = pvt->values[name];
+    pair.second = required;
+
+    pair.first.init(type);
+    switch(type) {
+    case StoreType::Bool:
+        pair.first.as<bool>() = *static_cast<const bool*>(ptr);
+        break;
+    case StoreType::Real:
+        pair.first.as<double>() = *static_cast<const double*>(ptr);
+        break;
+    case StoreType::Integer:
+        pair.first.as<int64_t>() = *static_cast<const int64_t*>(ptr);
+        break;
+    case StoreType::UInteger:
+        pair.first.as<uint64_t>() = *static_cast<const uint64_t*>(ptr);
+        break;
+    case StoreType::String:
+        pair.first.as<std::string>() = *static_cast<const std::string*>(ptr);
+        break;
+    case StoreType::Array:
+        pair.first.as<std::string>() = *static_cast<const std::string*>(ptr);
+        break;
+    case StoreType::Compound:
+        pair.first.as<Value>() = *static_cast<const Value*>(ptr);
+        break;
+    default:
+        throw std::logic_error("PutBuilder::set() currently only supports scalar types");
+    }
+
+    return *this;
+}
+
+PutBuilder::~PutBuilder() {}
+
 namespace {
 
 struct GPROp : public OperationBase
@@ -371,15 +445,24 @@ std::shared_ptr<Operation> PutBuilder::exec()
 {
     std::shared_ptr<Operation> ret;
 
-    if(!_builder)
-        throw std::logic_error("put() requires a builder()");
+    if(!_builder && !pvt)
+        throw std::logic_error("put() needs either a .build() or at least one .set()");
 
     ctx->tcp_loop.call([&ret, this]() {
         auto chan = Channel::build(ctx, _name);
 
         auto op = std::make_shared<GPROp>(Operation::Put, chan);
         op->done = std::move(_result);
-        op->builder = std::move(_builder);
+        if(_builder) {
+            op->builder = std::move(_builder);
+        } else if(pvt) {
+            auto build = std::move(pvt);
+            op->builder = [build](Value&& prototype) -> Value {
+                return build->build(std::move(prototype));
+            };
+        } else {
+            // handled above
+        }
         op->getOput = _doGet;
         op->pvRequest = _build();
 
