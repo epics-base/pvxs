@@ -174,7 +174,15 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
         auto chan = Channel::build(ctx, _name);
 
         auto op = std::make_shared<InfoOp>(chan);
-        op->done = std::move(_result);
+
+        if(_result) {
+            op->done = std::move(_result);
+        } else {
+            auto waiter = op->waiter = std::make_shared<ResultWaiter>();
+            op->done = [waiter](Result&& result) {
+                waiter->complete(std::move(result), false);
+            };
+        }
 
         chan->pending.push_back(op);
         chan->createOperations();

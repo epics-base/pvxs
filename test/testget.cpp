@@ -43,6 +43,22 @@ struct Tester {
         initial["value"] = 42;
     }
 
+    void testWaiter()
+    {
+        testShow()<<__func__;
+
+        mbox.open(initial);
+        serv.start();
+
+        auto op = cli.get("mailbox").exec();
+
+        cli.hurryUp();
+
+        auto result = op->wait(5.0);
+
+        testEq(result["value"].as<int32_t>(), 42);
+    }
+
     void testWait()
     {
         client::Result actual;
@@ -217,8 +233,9 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(13);
+    testPlan(14);
     logger_config_env();
+    Tester().testWaiter();
     Tester().loopback();
     Tester().lazy();
     Tester().timeout();

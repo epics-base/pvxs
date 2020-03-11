@@ -116,6 +116,18 @@ struct GPROp : public OperationBase
         _cancel(true);
     }
 
+    void setDone(decltype (done)&& cb)
+    {
+        if(cb) {
+            done = std::move(cb);
+        } else {
+            auto waiter = this->waiter = std::make_shared<ResultWaiter>();
+            done = [waiter](Result&& result) {
+                waiter->complete(std::move(result), false);
+            };
+        }
+    }
+
     void notify() {
         try {
             if(done)
@@ -429,7 +441,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
         auto chan = Channel::build(ctx, _name);
 
         auto op = std::make_shared<GPROp>(Operation::Get, chan);
-        op->done = std::move(_result);
+        op->setDone(std::move(_result));
         op->pvRequest = _build();
 
         chan->pending.push_back(op);
@@ -452,7 +464,8 @@ std::shared_ptr<Operation> PutBuilder::exec()
         auto chan = Channel::build(ctx, _name);
 
         auto op = std::make_shared<GPROp>(Operation::Put, chan);
-        op->done = std::move(_result);
+        op->setDone(std::move(_result));
+
         if(_builder) {
             op->builder = std::move(_builder);
         } else if(pvt) {
@@ -483,7 +496,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
         auto chan = Channel::build(ctx, _name);
 
         auto op = std::make_shared<GPROp>(Operation::RPC, chan);
-        op->done = std::move(_result);
+        op->setDone(std::move(_result));
         op->rpcarg = std::move(_argument);
         op->pvRequest = _build();
 

@@ -60,6 +60,18 @@ struct PVXS_API Connected : public std::runtime_error
     const epicsTime time;
 };
 
+struct PVXS_API Interrupted : public std::runtime_error
+{
+    Interrupted();
+    virtual ~Interrupted();
+};
+
+struct PVXS_API Timeout : public std::runtime_error
+{
+    Timeout();
+    virtual ~Timeout();
+};
+
 //! Holder for a Value or an exception
 class Result {
     Value _result;
@@ -101,6 +113,26 @@ struct PVXS_API Operation {
     //! Explicitly cancel a pending operation.
     //! Blocks until an in-progress callback has completed.
     virtual void cancel() =0;
+
+    /** @brief Block until Operation completion
+     *
+     * As an alternative to a .result() callback, wait for operation competion,
+     * timeout, or interruption (via. interrupt() ).
+     *
+     * @param timeout Time to wait prior to throwing TimeoutError.  cf. epicsEvent::wait(double)
+     * @return result Value.  Always empty/invalid for put()
+     * @throws Timeout Timeout exceeded
+     * @throws Interrupted interrupt() called
+     */
+    virtual Value wait(double timeout) =0;
+
+    //! wait(double) without a timeout
+    Value wait() {
+        return wait(99999999.0);
+    }
+
+    //! Queue an interruption of a wait() or wait(double) call.
+    virtual void interrupt() =0;
 };
 
 //! Handle for monitor subscription
@@ -178,11 +210,19 @@ public:
      *
      * @code
      * Context ctxt(...);
+     * auto result = ctxt.get("pv:name")
+     *                   .exec()
+     *                   .wait();
+     * @endcode
+     *
+     * @code
+     * Context ctxt(...);
      * auto op = ctxt.get("pv:name")
      *               .result([](Result&& prototype){
      *                  std::cout<<prototype();
      *               })
      *               .exec();
+     * // store op until completion
      * @endcode
      */
     inline
@@ -193,11 +233,19 @@ public:
      *
      * @code
      * Context ctxt(...);
+     * auto result = ctxt.info("pv:name")
+     *                   .exec()
+     *                   .wait();
+     * @endcode
+     *
+     * @code
+     * Context ctxt(...);
      * auto op = ctxt.info("pv:name")
      *               .result([](Result&& prototype){
      *                  std::cout<<prototype();
      *               })
      *               .exec();
+     * // store op until completion
      * @endcode
      */
     inline
@@ -209,18 +257,10 @@ public:
      *
      * @code
      * Context ctxt(...);
-     * auto op = ctxt.put("pv:name")
-     *               .set("value", 42)
-     *               .result([](Result&& prototype){
-     *                  try {
-     *                      // always returns empty Value on success
-     *                      prototype();
-     *                      std::cout<<"Success";
-     *                  }catch(std::exception& e){
-     *                      std::cout<<"Error: "<<e.what();
-     *                  }
-     *               })
-     *               .exec();
+     * auto result = ctxt.put("pv:name")
+     *                   .set("value", 42)
+     *                   .exec()
+     *                   .wait();
      * @endcode
      *
      * Alternately, and more generally, using a .build() callback
@@ -243,6 +283,7 @@ public:
      *                  }
      *               })
      *               .exec();
+     * // store op until completion
      * @endcode
      */
     inline
@@ -253,11 +294,20 @@ public:
      * @code
      * Value arg = ...;
      * Context ctxt(...);
+     * auto result = ctxt.rpc("pv:name", arg)
+     *                   .exec()
+     *                   .wait();
+     * @endcode
+     *
+     * @code
+     * Value arg = ...;
+     * Context ctxt(...);
      * auto op = ctxt.rpc("pv:name", arg)
      *               .result([](Result&& prototype){
      *                  std::cout<<prototype();
      *               })
      *               .exec();
+     * // store op until completion
      * @endcode
      */
     inline
@@ -277,6 +327,7 @@ public:
      *                     }
      *                })
      *                .exec();
+     * // store op until completion
      * @endcode
      */
     inline

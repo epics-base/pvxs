@@ -9,6 +9,8 @@
 #include <list>
 
 #include <epicsTime.h>
+#include <epicsEvent.h>
+#include <epicsMutex.h>
 
 #include <pvxs/client.h>
 
@@ -23,17 +25,37 @@ namespace client {
 
 struct Channel;
 
+struct ResultWaiter {
+    epicsMutex lock;
+    epicsEvent notify;
+    Result result;
+    enum {
+        Busy,
+        Done,
+        Abort,
+    } outcome = Busy;
+
+    Value wait(double timeout=-1.0);
+    void complete(Result&& result, bool interrupt);
+};
+
 // internal actions on an Operation
 struct OperationBase : public Operation
 {
     std::shared_ptr<Channel> chan;
     uint32_t ioid;
+    Value result;
+    bool done;
+    std::shared_ptr<ResultWaiter> waiter;
 
     OperationBase(operation_t op, const std::shared_ptr<Channel>& chan);
     virtual ~OperationBase();
 
     virtual void createOp() =0;
     virtual void disconnected(const std::shared_ptr<OperationBase>& self) =0;
+
+    virtual Value wait(double timeout=-1.0) override final;
+    virtual void interrupt() override final;
 };
 
 struct RequestInfo {

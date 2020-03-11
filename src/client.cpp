@@ -11,6 +11,7 @@
 #include <osiSock.h>
 #include <dbDefs.h>
 #include <epicsThread.h>
+#include <epicsGuard.h>
 
 #include <pvxs/log.h>
 #include <clientimpl.h>
@@ -18,6 +19,9 @@
 DEFINE_LOGGER(setup, "pvxs.client.setup");
 DEFINE_LOGGER(io, "pvxs.client.io");
 DEFINE_LOGGER(duppv, "pvxs.client.dup");
+
+typedef epicsGuard<epicsMutex> Guard;
+typedef epicsGuardRelease<epicsMutex> UnGuard;
 
 namespace pvxs {
 namespace client {
@@ -51,6 +55,16 @@ Connected::Connected(const std::string& peerName)
 {}
 
 Connected::~Connected() {}
+
+Interrupted::Interrupted()
+    :std::runtime_error ("Interrupted")
+{}
+Interrupted::~Interrupted() {}
+
+Timeout::Timeout()
+    :std::runtime_error ("Interrupted")
+{}
+Timeout::~Timeout() {}
 
 Channel::Channel(const std::shared_ptr<Context::Pvt>& context, const std::string& name, uint32_t cid)
     :context(context)
@@ -117,12 +131,54 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
 
 }
 
+Value ResultWaiter::wait(double timeout)
+{
+    Guard G(lock);
+    while(outcome==Busy) {
+        UnGuard U(G);
+        if(!notify.wait(timeout))
+            throw Timeout();
+    }
+    if(outcome==Done)
+        return result();
+    else
+        throw Interrupted();
+}
+
+void ResultWaiter::complete(Result&& result, bool interrupt)
+{
+    bool wakeup;
+    {
+        Guard G(lock);
+        wakeup = outcome==Busy;
+        if(wakeup) {
+            this->result = std::move(result);
+            outcome = interrupt ? Abort : Done;
+        }
+    }
+    if(wakeup)
+        notify.trigger();
+}
+
 OperationBase::OperationBase(operation_t op, const std::shared_ptr<Channel>& chan)
     :Operation(op)
     ,chan(chan)
 {}
 
 OperationBase::~OperationBase() {}
+
+Value OperationBase::wait(double timeout)
+{
+    if(!waiter)
+        throw std::logic_error("Operation has custom .result() callback");
+    return waiter->wait(timeout);
+}
+
+void OperationBase::interrupt()
+{
+    if(waiter)
+        waiter->complete(Result(), true);
+}
 
 RequestInfo::RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationBase>& handle)
     :sid(sid)
