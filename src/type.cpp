@@ -56,6 +56,34 @@ bool TypeCode::valid() const
     }
 }
 
+StoreType TypeCode::storedAs() const
+{
+    if(isarray()) {
+        return StoreType::Array;
+
+    } else if(code==Struct) {
+        return StoreType::Null;
+
+    } else if(code==String) {
+        return StoreType::String;
+
+    } else if(code==Bool) {
+        return StoreType::Bool;
+
+    } else if(kind()==Kind::Real) {
+        return StoreType::Real;
+
+    } else if(kind()==Kind::Integer) {
+        return isunsigned() ? StoreType::UInteger : StoreType::Integer;
+
+    } else if(kind()==Kind::Compound) {
+        return StoreType::Compound;
+
+    } else {
+        throw std::logic_error("TypeCode::storedAs() not map");
+    }
+}
+
 const char* TypeCode::name() const
 {
     switch(code) {

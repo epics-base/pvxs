@@ -48,7 +48,7 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
     top->members.resize(desc->size());
     {
         auto& root = top->members[0];
-        root.init(desc.get());
+        root.init(desc->code.storedAs());
         root.top = top.get();
     }
 
@@ -57,7 +57,7 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
             auto cfld = desc.get() + pair.second;
             auto& mem = top->members.at(pair.second);
             mem.top = top.get();
-            mem.init(cfld);
+            mem.init(cfld->code.storedAs());
         }
     }
 
@@ -792,41 +792,32 @@ Value Value::_iter_deref(const IterInfo& info) const
 
 namespace impl {
 
-void FieldStorage::init(const FieldDesc *desc)
+void FieldStorage::init(StoreType code)
 {
-    if(!desc || desc->code.kind()==Kind::Null || desc->code.code==TypeCode::Struct) {
-        this->code = StoreType::Null;
-
-    } else if(desc->code.isarray()) {
-        this->code = StoreType::Array;
+    this->code = code;
+    switch(code) {
+    case StoreType::Null:
+        return;
+    case StoreType::Bool:
+        as<bool>() = false;
+        return;
+    case StoreType::Integer:
+    case StoreType::UInteger:
+    case StoreType::Real:
+        // just zero 8 bytes
+        as<uint64_t>() = 0u;
+        return;
+    case StoreType::String:
+        new(&store) std::string();
+        return;
+    case StoreType::Compound:
+        new(&store) std::shared_ptr<FieldStorage>();
+        return;
+    case StoreType::Array:
         new(&store) shared_array<void>();
-
-    } else {
-        switch(desc->code.kind()) {
-        case Kind::String:
-            new(&store) std::string();
-            this->code = StoreType::String;
-            break;
-        case Kind::Compound:
-            new(&store) std::shared_ptr<FieldStorage>();
-            this->code = StoreType::Compound;
-            break;
-        case Kind::Integer:
-            as<uint64_t>() = 0u;
-            this->code = desc->code.isunsigned() ? StoreType::UInteger : StoreType::Integer;
-            break;
-        case Kind::Bool:
-            as<bool>() = false;
-            this->code = StoreType::Bool;
-            break;
-        case Kind::Real:
-            as<double>() = 0.0;
-            this->code = StoreType::Real;
-            break;
-        default:
-            throw std::logic_error("FieldStore::init()");
-        }
+        return;
     }
+    throw std::logic_error("FieldStore::init()");
 }
 
 void FieldStorage::deinit()

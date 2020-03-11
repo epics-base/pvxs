@@ -113,7 +113,7 @@ struct FieldStorage {
     bool valid=false;
     StoreType code=StoreType::Null;
 
-    void init(const FieldDesc* desc);
+    void init(StoreType code);
     void deinit();
     ~FieldStorage();
 

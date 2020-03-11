@@ -157,6 +157,8 @@ struct TypeCode {
     constexpr explicit TypeCode(uint8_t c) :code(code_t(c)) {}
     constexpr TypeCode(code_t c) :code(c) {}
 
+    PVXS_API StoreType storedAs() const;
+
     //! associated array of type
     constexpr TypeCode arrayOf() const {return TypeCode{uint8_t(code|0x08)};}
     //! associated not array of type
