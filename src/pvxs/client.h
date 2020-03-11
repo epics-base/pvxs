@@ -420,7 +420,7 @@ public:
 PutBuilder Context::put(const std::string& name) { return PutBuilder{pvt, name}; }
 
 //! Prepare a remote RPC operation
-class RPCBuilder : public detail::CommonBuilder<GetBuilder> {
+class RPCBuilder : public detail::CommonBuilder<RPCBuilder> {
     Value _argument;
     std::function<void(Result&&)> _result;
 public:
