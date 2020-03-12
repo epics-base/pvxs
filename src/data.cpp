@@ -36,6 +36,60 @@ Value::Helper::type(const Value& v)
     }
 }
 
+Value Value::Helper::build(const void* ptr, StoreType type)
+{
+    TypeCode base{TypeCode::Null};
+    switch (type) {
+    case StoreType::Bool:     base = TypeCode::Bool; break;
+    case StoreType::Integer:  base = TypeCode::Int64; break;
+    case StoreType::UInteger: base = TypeCode::UInt64; break;
+    case StoreType::Real:     base = TypeCode::Float64; break;
+    case StoreType::String:   base = TypeCode::String; break;
+    case StoreType::Array: {
+        auto& arr = *static_cast<const shared_array<const void>*>(ptr);
+        switch(arr.original_type()) {
+#define CASE(TYPE) case ArrayType::TYPE: base = TypeCode::TYPE ## A; break
+        CASE(Bool);
+        CASE(Int8);
+        CASE(Int16);
+        CASE(Int32);
+        CASE(Int64);
+        CASE(UInt8);
+        CASE(UInt16);
+        CASE(UInt32);
+        CASE(UInt64);
+        CASE(Float32);
+        CASE(Float64);
+        CASE(String);
+#undef CASE
+        case ArrayType::Value:
+            base = TypeCode::AnyA;
+            break;
+        case ArrayType::Null:
+            throw std::logic_error("Unable to infer ArrayType::Null");
+        }
+    }
+        break;
+    case StoreType::Compound: {
+        auto src = *reinterpret_cast<const Value*>(ptr);
+        if(src) {
+            auto dst = TypeDef(src).create();
+            dst.assign(src);
+            return dst;
+        }
+    }
+        base = TypeCode::Any;
+        break;
+    case StoreType::Null:
+        throw std::logic_error("Unable to infer ArrayType::Null");
+    }
+
+    Value ret(TypeDef(base).create());
+    ret.copyIn(ptr, type);
+
+    return ret;
+}
+
 Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
     :desc(nullptr)
 {

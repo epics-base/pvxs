@@ -27,6 +27,8 @@ struct Value::Helper {
     static inline Value build(const std::shared_ptr<const impl::FieldDesc>& desc,
                               const std::shared_ptr<impl::FieldStorage>& pstore, const impl::FieldDesc* pdesc);
 
+    static Value build(const void* ptr, StoreType type);
+
     static inline       std::shared_ptr<impl::FieldStorage>& store(      Value& v) { return v.store; }
     static inline std::shared_ptr<const impl::FieldStorage>  store(const Value& v) { return v.store; }
     static inline const FieldDesc*                           desc(const Value& v) { return v.desc; }
