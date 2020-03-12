@@ -151,7 +151,10 @@ Value Value::clone() const
 
 Value& Value::assign(const Value& o)
 {
-    if(desc!=o.desc &&
+    if(!desc || !o.desc) {
+        // handled below
+
+    } else if(desc!=o.desc &&
             desc->code==o.desc->code &&
             (desc->code.kind()==Kind::Integer
              || desc->code.kind()==Kind::Real
@@ -165,7 +168,7 @@ Value& Value::assign(const Value& o)
         throw std::runtime_error("Can only assign same TypeDef");
     }
 
-    if(desc) {
+    if(desc && o.desc) {
         for(size_t bit=0, end=desc->size(); bit<end;) {
             auto sstore = o.store.get() + bit;
             auto dstore = store.get() + bit;
