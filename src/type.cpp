@@ -22,8 +22,6 @@ struct Member::Helper {
     static
     void copy_tree(const FieldDesc* desc, Member& node);
     static
-    void append_tree(Member& node, const Member& adopt);
-    static
     void show_Node(std::ostream& strm, const std::string& name, const Member* node, unsigned level=0);
 };
 
@@ -161,14 +159,12 @@ void name_validate(const char *name)
     }
 }
 
-Member::Member(TypeCode code, const std::string& name, const std::string& id, std::initializer_list<Member> children)
-    :code(code), name(name), id(id)
+void Member::_validate() const
 {
     if(!name.empty())
         name_validate(name.c_str());
     for(auto& child : children) {
         Helper::node_validate(this, child.id, child.code);
-        this->children.push_back(child);
     }
 }
 
@@ -233,10 +229,8 @@ void Member::Helper::build_tree(std::vector<FieldDesc>& desc, const Member& node
     assert(desc.size()==index+desc[index].size());
 }
 
-TypeDef::TypeDef(TypeCode code, const std::string& id, std::initializer_list<Member> children)
+TypeDef::TypeDef(std::shared_ptr<const Member>&& temp)
 {
-    auto temp(std::make_shared<Member>(code, "", id, children));
-
     auto tempdesc = std::make_shared<std::vector<FieldDesc>>();
     Member::Helper::build_tree(*tempdesc, *temp);
 
@@ -278,7 +272,33 @@ TypeDef::TypeDef(const Value& val)
 
 TypeDef::~TypeDef() {}
 
-void Member::Helper::append_tree(Member& node, const Member& adopt)
+Member TypeDef::as(const std::string& name) const
+{
+    if(!top)
+        throw std::logic_error("Can't append empty TypeDef");
+
+    Member ret(*top);
+    ret.name = name;
+    return ret;
+}
+
+std::shared_ptr<Member> TypeDef::_append_start()
+{
+    if(!top || (top->code!=TypeCode::Struct && top->code!=TypeCode::Union))
+        throw std::logic_error("May only append to Struct or Union");
+
+    std::shared_ptr<Member> edit;
+    if(top.use_count()==1u) {
+        edit = std::const_pointer_cast<Member>(top);
+        top.reset(); // so we don't leave partial tree on error.
+    } else {
+        edit = std::make_shared<Member>(*top); // copy
+    }
+
+    return edit;
+}
+
+void TypeDef::_append(Member& node, const Member& adopt)
 {
     for(auto& child : node.children) {
         if(child.name==adopt.name) {
@@ -293,7 +313,7 @@ void Member::Helper::append_tree(Member& node, const Member& adopt)
                 child.id = adopt.id;
 
             for(auto& grandchild : adopt.children) {
-                append_tree(child, grandchild);
+                _append(child, grandchild);
             }
             return;
         }
@@ -303,23 +323,8 @@ void Member::Helper::append_tree(Member& node, const Member& adopt)
     node.children.push_back(adopt);
 }
 
-TypeDef& TypeDef::operator+=(std::initializer_list<Member> children)
+void TypeDef::_append_finish(std::shared_ptr<Member>&& edit)
 {
-    if(!top || (top->code!=TypeCode::Struct && top->code!=TypeCode::Union))
-        throw std::logic_error("May only append to Struct or Union");
-
-    std::shared_ptr<Member> edit;
-    if(top.use_count()==1u) {
-        edit = std::const_pointer_cast<Member>(top);
-        top.reset(); // so we don't leave partial tree on error.
-    } else {
-        edit = std::make_shared<Member>(*top); // copy
-    }
-
-    for(auto& child : children) {
-        Member::Helper::append_tree(*edit, child);
-    }
-
     auto temp = std::make_shared<std::vector<FieldDesc>>();
     Member::Helper::build_tree(*temp, *edit);
 
@@ -327,8 +332,6 @@ TypeDef& TypeDef::operator+=(std::initializer_list<Member> children)
 
     top = std::move(edit);
     desc = std::move(type);
-
-    return *this;
 }
 
 Value TypeDef::create() const

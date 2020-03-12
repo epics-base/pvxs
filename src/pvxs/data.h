@@ -188,6 +188,9 @@ private:
     std::vector<Member> children;
     friend class TypeDef;
     friend class client::detail::CommonBase;
+
+    PVXS_API
+    void _validate() const;
 public:
     struct Helper;
 
@@ -198,11 +201,27 @@ public:
         :Member(code, name, {})
     {}
     //! Compound member with type ID
-    PVXS_API
-    Member(TypeCode code, const std::string& name, const std::string& id, std::initializer_list<Member> children);
+    Member(TypeCode code, const std::string& name, const std::string& id, std::initializer_list<Member> children)
+        :code(code)
+        ,name(name)
+        ,id(id)
+        ,children(children.begin(), children.end())
+    {_validate();}
+    template<typename Iterable>
+    Member(TypeCode code, const std::string& name, const std::string& id, const Iterable& children)
+        :code(code)
+        ,name(name)
+        ,id(id)
+        ,children(children.begin(), children.end())
+    {_validate();}
     //! Compound member without type ID
     inline
     Member(TypeCode code, const std::string& name, std::initializer_list<Member> children)
+        :Member(code, name , std::string(), children)
+    {}
+    template<typename Iterable>
+    inline
+    Member(TypeCode code, const std::string& name, const Iterable& children)
         :Member(code, name , std::string(), children)
     {}
 
@@ -250,7 +269,11 @@ CASE(AnyA)
 
 #define CASE(TYPE) \
 inline Member TYPE(const std::string& name, std::initializer_list<Member> children) { return Member(TypeCode::TYPE, name, children); } \
-inline Member TYPE(const std::string& name, const std::string& id, std::initializer_list<Member> children) { return Member(TypeCode::TYPE, name, id, children); }
+template <typename Iterable> \
+inline Member TYPE(const std::string& name, const Iterable& children) { return Member(TypeCode::TYPE, name, children); } \
+inline Member TYPE(const std::string& name, const std::string& id, std::initializer_list<Member> children) { return Member(TypeCode::TYPE, name, id, children); } \
+template <typename Iterable> \
+inline Member TYPE(const std::string& name, const std::string& id, const Iterable& children) { return Member(TypeCode::TYPE, name, id, children); }
 
 CASE(Struct)
 CASE(Union)
@@ -294,7 +317,16 @@ public:
     ~TypeDef();
 
     //! new definition with id and children.  code must be TypeCode::Struct or TypeCode::Union
-    TypeDef(TypeCode code, const std::string& id, std::initializer_list<Member> children);
+    template<typename Iterable>
+    TypeDef(TypeCode code, const std::string& id, const Iterable& children)
+        :TypeDef(std::make_shared<Member>(code, "", id, children))
+    {}
+    TypeDef(TypeCode code, const std::string& id, std::initializer_list<Member> children)
+        :TypeDef(std::make_shared<Member>(code, "", id, children))
+    {}
+private:
+    TypeDef(std::shared_ptr<const Member>&&);
+public:
     //! new definition for a single scalar field.  code must __not__ be TypeCode::Struct or TypeCode::Union
     TypeDef(TypeCode code)
         :TypeDef(code, std::string(), {})
@@ -304,8 +336,33 @@ public:
         :TypeDef(code, std::string(), children)
     {}
 
+    Member as(const std::string& name) const;
+
+private:
+    std::shared_ptr<Member> _append_start();
+    static
+    void _append(Member& edit, const Member& mem);
+    void _append_finish(std::shared_ptr<Member>&& edit);
+public:
+
     //! append additional children.  Only for TypeCode::Struct or TypeCode::Union
-    TypeDef& operator+=(std::initializer_list<Member> children);
+    template<typename Iterable>
+    TypeDef& operator+=(const Iterable& children) {
+        auto edit = _append_start();
+        for(auto& child : children) {
+            _append(edit, child);
+        }
+        _append_finish(std::move(edit));
+        return *this;
+    }
+    TypeDef& operator+=(std::initializer_list<Member> children) {
+        auto edit = _append_start();
+        for(auto& child : children) {
+            _append(*edit, child);
+        }
+        _append_finish(std::move(edit));
+        return *this;
+    }
 
     //! Instanciate this definition
     Value create() const;
