@@ -31,7 +31,7 @@ namespace {
 DEFINE_LOGGER(out, "pvxvct");
 
 // parse hostname, IP, or IP+netmask
-std::tuple<uint32_t, uint32_t>
+std::pair<uint32_t, uint32_t>
 parsePeer(const char *optarg)
 {
     // nameorip
@@ -72,7 +72,7 @@ parsePeer(const char *optarg)
     // 1.2.3.4/24 === 1.2.3.0/24
     addr.s_addr &= mask.s_addr;
 
-    return std::make_tuple(addr.s_addr, mask.s_addr);
+    return std::make_pair(addr.s_addr, mask.s_addr);
 }
 
 void usage(const char *name)
@@ -100,18 +100,32 @@ int main(int argc, char *argv[])
     try {
         // group options used from callback
         struct {
+            bool verbose = false;
             bool client = false, server = false;
-            // IP, netmask, port
+            // IP, netmask
             // stored in network byte order
-            std::vector<std::tuple<uint32_t, uint32_t>> peers;
+            std::vector<std::pair<uint32_t, uint32_t>> peers;
             std::set<std::string> pvnames;
+
+            bool allowPeer(const pva::SockAddr& peer) {
+                if(peers.empty())
+                    return true;
+                if(peer.family()!=AF_INET)
+                    return false;
+                for(auto& pair : peers) {
+                    if((peer->in.sin_addr.s_addr & pair.second) == pair.first) {
+                        return true;
+                    }
+                }
+                return false;
+            }
         } opts;
 
         std::vector<pva::SockAddr> bindaddrs;
 
         {
             int opt;
-            while ((opt = getopt(argc, argv, "hCSH:B:P:")) != -1) {
+            while ((opt = getopt(argc, argv, "hvCSH:B:P:")) != -1) {
                 switch(opt) {
                 case 'h':
                     usage(argv[0]);
@@ -120,6 +134,9 @@ int main(int argc, char *argv[])
                     usage(argv[0]);
                     std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
                     return 1;
+                case 'v':
+                    opts.verbose = true;
+                    break;
                 case 'C':
                     opts.client = true;
                     break;
@@ -155,7 +172,7 @@ int main(int argc, char *argv[])
             bindaddrs.emplace_back(pva::SockAddr::any(AF_INET, 5076));
         }
 
-        pva::logger_level_set("pvxvct", pvxs::Level::Info);
+        pva::logger_level_set("pvxvct", opts.verbose ? pvxs::Level::Debug : pvxs::Level::Info);
         pva::logger_config_env(); // from $PVXS_LOG
 
         log_debug_printf(out, "Show Search: %s\nShow Beacon: %s\n", opts.client?"yes":"no", opts.server?"yes":"no");
@@ -168,6 +185,7 @@ int main(int argc, char *argv[])
         }
         if(opts.peers.empty()) {
             log_debug_printf(out, "No peer filter\n%s", "");
+
         } else if(out.test(pvxs::Level::Debug)) {
             for(const auto& tup : opts.peers) {
                 in_addr addr, netmask;
@@ -180,16 +198,32 @@ int main(int argc, char *argv[])
             }
         }
 
-        auto searchCB = [](const pva::UDPManager::Search& msg)
+        auto searchCB = [&opts](const pva::UDPManager::Search& msg)
         {
+            if(!opts.client || !opts.allowPeer(msg.src))
+                return;
+
+            if(!opts.pvnames.empty()) {
+                bool show = false;
+                for(const auto pv : msg.names) {
+                    show = opts.pvnames.find(pv.name)!=opts.pvnames.end();
+                    if((show = opts.pvnames.find(pv.name)!=opts.pvnames.end()))
+                        break;
+                }
+                if(!show)
+                    return;
+            }
             log_info_printf(out, "%s Searching for:\n", msg.src.tostring().c_str());
             for(const auto pv : msg.names) {
                 log_info_printf(out, "  \"%s\"\n", pv.name);
             }
         };
 
-        auto beaconCB = [](const pva::UDPManager::Beacon& msg)
+        auto beaconCB = [&opts](const pva::UDPManager::Beacon& msg)
         {
+            if(!opts.server || !opts.allowPeer(msg.src))
+                return;
+
             const auto& guid = msg.guid;
             log_info_printf(out, "%s Beacon %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
                        msg.src.tostring().c_str(),
