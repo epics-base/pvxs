@@ -22,7 +22,9 @@ time_t
 Commonly used sub-structure to represent a time
 
 **"secondsPastEpoch"**
-    Seconds since 1 Jan 1990 UTC.  This is 631152000 seconds after the POSIX epoch of 1970.
+    Seconds since POSIX epoch of 1 Jan 1970 UTC.
+    Note that the EPICS epoch is 631152000 seconds after the POSIX epoch.
+    (cf. POSIX_TIME_AT_EPICS_EPOCH in epicsTime.h from EPICS Base)
 
 **"nanoseconds"**
     Number of nanoseconds since the start of the second.

@@ -77,9 +77,16 @@ RPC
 
 `pvxs::client::Context::rpc` returns a
 `pvxs::client::RPCBuilder` to prepare an rpc() operation.
-rpc() differs from put() in that the call determines the type
-definition by providing a Value directly,
-so no builder callback is needed.
+There are two ways to prepare the arguments of an RPC operation.
+
+The recommended way is to use the one argument form of rpc()
+and zero or more calls to `pvxs::client::RPCBuilder::arg`
+to set argument names and values.
+These will be combined into a single argument structure
+conforming to the `pvxs::nt::NTURI` convention.
+
+Alternately, the two argument form of rpc() accepts are
+arbitrary Value which is passed to the server unaltered.
 
 .. doxygenclass:: pvxs::client::RPCBuilder
     :members:

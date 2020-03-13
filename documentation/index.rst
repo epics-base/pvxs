@@ -13,13 +13,14 @@ CLI utilities acting as PVAccess protocol client and/or server.
 Dependencies
 
 * A C++11 compliant compiler (eg. GCC >= 4.9)
-* EPICS Base >=3.15.1
-* libevent >=2.0.1
+* `EPICS Base <https://epics-controls.org/resources-and-support/base/>`_ >=3.15.1
+* `libevent <http://libevent.org/>`_ >=2.0.1
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
    :caption: Contents:
 
+   building
    value
    client
    server

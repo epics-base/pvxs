@@ -208,12 +208,16 @@ public:
 
     /** Request the present value of a PV
      *
+     * Simple blocking
+     *
      * @code
      * Context ctxt(...);
      * auto result = ctxt.get("pv:name")
      *                   .exec()
-     *                   .wait();
+     *                   ->wait();
      * @endcode
+     *
+     * With completion callback
      *
      * @code
      * Context ctxt(...);
@@ -231,12 +235,16 @@ public:
     /** Request type information from PV.
      *  Results in a Value with no marked fields.
      *
+     * Simple blocking
+     *
      * @code
      * Context ctxt(...);
      * auto result = ctxt.info("pv:name")
      *                   .exec()
-     *                   .wait();
+     *                   ->wait();
      * @endcode
+     *
+     * With completion callback
      *
      * @code
      * Context ctxt(...);
@@ -253,17 +261,18 @@ public:
 
     /** Request change/update of PV.
      *
-     * Assign certain values to certain fields.
+     * Assign certain values to certain fields and block for completion.
      *
      * @code
      * Context ctxt(...);
      * auto result = ctxt.put("pv:name")
      *                   .set("value", 42)
      *                   .exec()
-     *                   .wait();
+     *                   ->wait();
      * @endcode
      *
      * Alternately, and more generally, using a .build() callback
+     * and use .result() callback for completion notification.
      *
      * @code
      * Context ctxt(...);
@@ -294,13 +303,19 @@ public:
 
     /** Execute "stateless" remote procedure call operation.
      *
+     * Simple blocking
+     *
      * @code
      * Value arg = ...;
      * Context ctxt(...);
      * auto result = ctxt.rpc("pv:name", arg)
+     *                   .arg("blah", 5)
+     *                   .arg("other", "example")
      *                   .exec()
-     *                   .wait();
+     *                   ->wait();
      * @endcode
+     *
+     * With completion callback
      *
      * @code
      * Value arg = ...;
