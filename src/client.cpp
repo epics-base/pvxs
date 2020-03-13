@@ -328,14 +328,13 @@ Context::Pvt::Pvt(const Config& conf)
         auto isbcast = bcasts.find(addr)!=bcasts.end();
         SockAddr saddr(AF_INET);
         try {
-            saddr.setAddress(addr.c_str());
+            saddr.setAddress(addr.c_str(), effective.udp_port);
         }catch(std::runtime_error& e) {
             log_err_printf(setup, "%s  Ignoring...\n", e.what());
         }
         auto top = ntohl(saddr->in.sin_addr.s_addr)>>24u;
         auto isucast = !isbcast && top<239 && top>224;
 
-        saddr.setPort(effective.udp_port);
         searchDest.emplace_back(saddr, isucast);
     }
 
