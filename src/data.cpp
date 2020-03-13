@@ -149,24 +149,77 @@ Value Value::clone() const
     return ret;
 }
 
+static
+bool assignCompatible(const FieldDesc* tdesc,
+                      const FieldStorage* tstore,
+                      const FieldDesc* sdesc,
+                      const FieldStorage* sstore)
+{
+    if(tdesc==sdesc) {
+        // exact match
+        return true;
+
+    } else if(!sdesc) {
+        // assignment of NULL is always a noop
+        return true;
+
+        // from this point we know tdesc!=NULL
+
+    } else if(tdesc->code.storedAs()!=sdesc->code.storedAs()) {
+        // TODO kind conversion?
+        return false;
+    }
+
+    switch (tdesc->code.storedAs()) {
+    case StoreType::Bool:
+    case StoreType::Real:
+    case StoreType::String:
+    case StoreType::Integer:
+    case StoreType::UInteger:
+        // simple scalar field
+        return true;
+    case StoreType::Null:
+        // Structure assignment allowed if src has all target fields (extras ignored)
+        for(size_t idx : range(size_t(1u), tdesc->size())) {
+            auto it = sdesc->mlookup.find(tdesc->miter[idx-1u].first);
+            if(it==sdesc->mlookup.end()) {
+                return false;
+            }
+            auto schild = sdesc + it->second;
+            auto tchild = tdesc + idx;
+
+            if(!assignCompatible(tchild, tstore+idx, schild, sstore+it->second))
+                return false;
+        }
+        return true;
+    case StoreType::Array:
+        if(tdesc->code!=sdesc->code) {
+            // TODO array type conversion?
+            return false;
+        } else if((tdesc->code.kind()==Kind::Bool)
+                  || (tdesc->code.kind()==Kind::Real)
+                  || (tdesc->code.kind()==Kind::String)
+                  || (tdesc->code.kind()==Kind::Integer)
+                  || tdesc->code==TypeCode::AnyA) {
+            return true;
+        } else {
+            // TODO StructS, UnionS
+            return false;
+        }
+        break;
+    case StoreType::Compound:
+        // not implemented (yet?)
+        return false;
+    }
+
+    return false;
+}
+
 Value& Value::assign(const Value& o)
 {
-    if(!desc || !o.desc) {
-        // handled below
-
-    } else if(desc!=o.desc &&
-            desc->code==o.desc->code &&
-            (desc->code.kind()==Kind::Integer
-             || desc->code.kind()==Kind::Real
-             || desc->code.kind()==Kind::String
-             || desc->code.kind()==Kind::Bool))
-    {
-        // allow simple fields
-
-    } else if(desc!=o.desc) {
-         // TODO relax
-        throw std::runtime_error("Can only assign same TypeDef");
-    }
+    if(!assignCompatible(desc, store.get(),
+                         o.desc, o.store.get()))
+        throw std::runtime_error("assign() not supported for these types");
 
     if(desc && o.desc) {
         for(size_t bit=0, end=desc->size(); bit<end;) {
