@@ -512,7 +512,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 
         auto op = std::make_shared<SubscriptionImpl>(Operation::Monitor, chan);
         op->event = std::move(_event);
-        op->pvRequest = _build();
+        op->pvRequest = _buildReq();
         op->maskConn = _maskConn;
         op->maskDiscon = _maskDisconn;
 

@@ -10,6 +10,7 @@
 
 #include <pvxs/version.h>
 #include <pvxs/client.h>
+#include "dataimpl.h"
 #include "utilpvt.h"
 
 namespace pvxs {
@@ -22,13 +23,9 @@ struct CommonBase::Req {
     Member fields;
 
     std::map<std::string, Value> options;
-    Member record;
 
     Req()
         :fields(TypeCode::Struct, "field")
-        ,record(TypeCode::Struct, "record", {
-                Member(TypeCode::Struct, "_options")
-        })
     {}
 };
 
@@ -90,25 +87,7 @@ void CommonBase::_record(const std::string& key, const void* value, StoreType vt
     if(!req)
         req = std::make_shared<Req>();
 
-    TypeCode base;
-    switch (vtype) {
-    case StoreType::Bool:     base = TypeCode::Bool; break;
-    case StoreType::Integer:  base = TypeCode::Int64; break;
-    case StoreType::UInteger: base = TypeCode::UInt64; break;
-    case StoreType::Real:     base = TypeCode::Float64; break;
-    case StoreType::String:   base = TypeCode::String; break;
-    default:
-        throw std::logic_error("record() only support scalar values");
-    }
-
-    Value v = TypeDef(base).create();
-    v.copyIn(value, vtype);
-
-    if(req->options.find(key)==req->options.end()) {
-        req->record.children[0].addChild(Member(base, key));
-    }
-
-    req->options[key] = std::move(v);
+    req->options[key] = Value::Helper::build(value, vtype);
 }
 
 struct PVRParser
@@ -309,7 +288,7 @@ void CommonBase::_parse(const std::string& req)
         PVRParser(*this, req.c_str()).parse();
 }
 
-Value CommonBase::_build() const
+Value CommonBase::_buildReq() const
 {
     if(!req) {
         using namespace pvxs::members;
@@ -321,10 +300,21 @@ Value CommonBase::_build() const
         return req->pvRequest;
 
     } else {
-        auto inst = TypeDef(TypeCode::Struct, {
+        using namespace pvxs::members;
+
+        auto def = TypeDef(TypeCode::Struct, {
                                 req->fields,
-                                req->record,
-                            }).create();
+                            });
+
+        {
+            std::vector<Member> opts;
+            for(auto& pair : req->options) {
+                opts.push_back(TypeDef(pair.second).as(pair.first));
+            }
+            def += {Struct("record", {Struct("_options", opts)})};
+        }
+
+        auto inst = def.create();
 
         auto opt = inst["record._options"];
         for(auto& pair : req->options) {

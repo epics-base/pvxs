@@ -180,7 +180,7 @@ struct PVXS_API Subscription {
 };
 
 class GetBuilder;
-struct PutBuilder;
+class PutBuilder;
 class RPCBuilder;
 class MonitorBuilder;
 
@@ -289,6 +289,9 @@ public:
     inline
     PutBuilder put(const std::string& pvname);
 
+    inline
+    RPCBuilder rpc(const std::string& pvname);
+
     /** Execute "stateless" remote procedure call operation.
      *
      * @code
@@ -364,21 +367,34 @@ protected:
     void _field(const std::string& s);
     void _record(const std::string& key, const void* value, StoreType vtype);
     void _parse(const std::string& req);
-    Value _build() const;
+    Value _buildReq() const;
 
     friend struct PVRParser;
 };
 
-//! Options common to all operations
-template<typename SubBuilder>
-class CommonBuilder : public CommonBase {
+class PVXS_API PRBase : public CommonBase {
 protected:
-    constexpr CommonBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : CommonBase(ctx, name) {}
+    struct Args;
+    std::shared_ptr<Args> _args;
+
+    PRBase(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : CommonBase(ctx, name) {}
+    ~PRBase();
+
+    void _set(const std::string& name, const void *ptr, StoreType type, bool required);
+    Value _builder(Value&& prototype) const;
+    Value _uriArgs() const;
+};
+
+//! Options common to all operations
+template<typename SubBuilder, typename Base>
+class CommonBuilder : public Base {
+protected:
+    constexpr CommonBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : Base(ctx, name) {}
     inline SubBuilder& _sb() { return static_cast<SubBuilder&>(*this); }
 public:
     //! Add field to pvRequest blob.
     //! A more efficient alternative to @code pvRequest("field(name)") @endcode
-    SubBuilder& field(const std::string& fld) { _field(fld); return _sb(); }
+    SubBuilder& field(const std::string& fld) { this->_field(fld); return _sb(); }
 
     /** Add a key/value option to the request.
      *
@@ -395,7 +411,7 @@ public:
     SubBuilder& record(const std::string& name, const T& val) {
         typedef impl::StorageMap<typename std::decay<T>::type> map_t;
         typename map_t::store_t norm(val);
-        _record(name, &norm, map_t::code);
+        this->_record(name, &norm, map_t::code);
         return _sb();
     }
 
@@ -407,19 +423,19 @@ public:
      *  - field(<fld.name>)
      *  - record(<key>=\<value>)
      */
-    SubBuilder& pvRequest(const std::string& expr) { _parse(expr); return _sb(); }
+    SubBuilder& pvRequest(const std::string& expr) { this->_parse(expr); return _sb(); }
 
     //! Store raw pvRequest blob.
-    SubBuilder& rawRequest(Value&& r) { _rawRequest(std::move(r)); return _sb(); }
+    SubBuilder& rawRequest(Value&& r) { this->_rawRequest(std::move(r)); return _sb(); }
 
-    SubBuilder& priority(int p) { _prio = p; return _sb(); }
-    SubBuilder& server(const std::string& s) { _server = s; return _sb(); }
+    SubBuilder& priority(int p) { this->_prio = p; return _sb(); }
+    SubBuilder& server(const std::string& s) { this->_server = s; return _sb(); }
 };
 
 } // namespace detail
 
 //! Prepare a remote GET or GET_FIELD (info) operation.
-class GetBuilder : public detail::CommonBuilder<GetBuilder> {
+class GetBuilder : public detail::CommonBuilder<GetBuilder, detail::CommonBase> {
     std::function<void(Result&&)> _result;
     bool _get;
     PVXS_API
@@ -446,16 +462,12 @@ GetBuilder Context::info(const std::string& name) { return GetBuilder{pvt, name,
 GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, true}; }
 
 //! Prepare a remote PUT operation
-struct PVXS_API PutBuilder : public detail::CommonBuilder<PutBuilder> {
-    struct Pvt;
-private:
+class PutBuilder : public detail::CommonBuilder<PutBuilder, detail::PRBase> {
     bool _doGet = true;
     std::function<Value(Value&&)> _builder;
     std::function<void(Result&&)> _result;
-    std::shared_ptr<Pvt> pvt;
 public:
     PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
-    ~PutBuilder();
 
     /** If fetchPresent is true (the default).  Then the Value passed to
      *  the build() callback will be initialized with a previous value for this PV.
@@ -466,7 +478,10 @@ public:
      */
     PutBuilder& fetchPresent(bool f) { _doGet = f; return *this; }
 
-    PutBuilder& set(const std::string& name, const void *ptr, StoreType type, bool required);
+    PutBuilder& set(const std::string& name, const void *ptr, StoreType type, bool required) {
+        _set(name, ptr, type, required);
+        return *this;
+    }
 
     /** Utilize default .build() to assign a value to the named field.
      *
@@ -504,6 +519,7 @@ public:
      *  The caller must keep returned Operation pointer until completion
      *  or the operation will be implicitly canceled.
      */
+    PVXS_API
     std::shared_ptr<Operation> exec();
 
     friend struct Context::Pvt;
@@ -511,14 +527,34 @@ public:
 PutBuilder Context::put(const std::string& name) { return PutBuilder{pvt, name}; }
 
 //! Prepare a remote RPC operation
-class RPCBuilder : public detail::CommonBuilder<RPCBuilder> {
+class RPCBuilder : public detail::CommonBuilder<RPCBuilder, detail::PRBase> {
     Value _argument;
     std::function<void(Result&&)> _result;
+    friend class Context;
 public:
-    RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, Value&& arg) :CommonBuilder{ctx,name}, _argument(std::move(arg)) {}
+    RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
     //! Callback through which result Value or an error will be delivered.
     //! The functor is stored in the Operation returned by exec().
     RPCBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
+
+    RPCBuilder& arg(const std::string& name, const void *ptr, StoreType type) {
+        _set(name, ptr, type, true);
+        return *this;
+    }
+
+    /** Provide argument value.
+     *
+     * @param name Argument name
+     * @param val The value to assign.  cf. Value::from()
+     */
+    template<typename T>
+    RPCBuilder& arg(const std::string& name, const T& val)
+    {
+        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
+        typename map_t::store_t norm(val);
+        _set(name, &norm, map_t::code, true);
+        return *this;
+    }
 
     /** Execute the network operation.
      *  The caller must keep returned Operation pointer until completion
@@ -529,10 +565,15 @@ public:
 
     friend struct Context::Pvt;
 };
-RPCBuilder Context::rpc(const std::string& name, Value&& arg) { return RPCBuilder{pvt, name, std::move(arg)}; }
+RPCBuilder Context::rpc(const std::string& name) { return RPCBuilder{pvt, name}; }
+RPCBuilder Context::rpc(const std::string& name, Value&& arg) {
+    RPCBuilder ret{pvt, name};
+    ret._argument = std::move(arg);
+    return ret;
+}
 
 //! Prepare a remote subscription
-class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder> {
+class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder, detail::CommonBase> {
     std::function<void(Subscription&)> _event;
     bool _maskConn = true;
     bool _maskDisconn = false;

@@ -168,19 +168,39 @@ struct Tester {
             testSkip(1, "timeout");
         }
     }
+
+    void builder()
+    {
+        mbox.open(initial);
+        serv.start();
+
+
+        auto op = cli.rpc("mailbox")
+                .arg("a", 5)
+                .arg("b", "hello")
+                .exec();
+
+        cli.hurryUp();
+
+        auto result = op->wait();
+
+        testEq(result["query.a"].as<int32_t>(), 5);
+        testEq(result["query.b"].as<std::string>(), "hello");
+    }
 };
 
 } // namespace
 
 MAIN(testrpc)
 {
-    testPlan(14);
+    testPlan(16);
     Tester().echo();
     Tester().lazy();
     Tester().null();
     Tester().timeout();
     Tester().cancel();
     Tester().error();
+    Tester().builder();
     cleanup_for_valgrind();
     return testDone();
 }

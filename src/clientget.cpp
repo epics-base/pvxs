@@ -1,12 +1,12 @@
-/**
+﻿/**
  * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
-
 #include <epicsAssert.h>
 
 #include <pvxs/log.h>
+#include <pvxs/nt.h>
 #include "clientimpl.h"
 
 namespace pvxs {
@@ -15,24 +15,23 @@ namespace client {
 DEFINE_LOGGER(setup, "pvxs.client.setup");
 DEFINE_LOGGER(io, "pvxs.client.io");
 
-struct PutBuilder::Pvt
+namespace detail {
+
+struct PRBase::Args
 {
-    struct FieldValue {
-        impl::FieldStorage value;
-        TypeCode code = TypeCode::Null;
-        bool required;
-    };
+    std::map<std::string, std::pair<Value, bool>> values;
+    std::vector<std::string> names;
 
-    std::map<std::string, std::pair<impl::FieldStorage, bool>> values;
-
-    Value build(Value&& prototype)
+    // put() builder
+    Value build(Value&& prototype) const
     {
         Value ret(prototype.cloneEmpty());
 
         for(auto& pair : values) {
             if(auto fld = ret[pair.first]) {
                 try {
-                    fld.copyIn(static_cast<const void*>(&pair.second.first.store), pair.second.first.code);
+                    auto store = Value::Helper::store(pair.second.first);
+                    fld.copyIn(static_cast<const void*>(&store->store), store->code);
                 }catch(NoConvert& e){
                     if(pair.second.second)
                         throw;
@@ -44,50 +43,66 @@ struct PutBuilder::Pvt
         }
         return ret;
     }
+
+    Value uriArgs() const
+    {
+        TypeDef type(nt::NTURI{}.build());
+
+        std::list<Member> arguments;
+
+        for(auto& name : names) {
+            auto it = values.find(name);
+            if(it==values.end())
+                throw std::logic_error("uriArgs() names vs. values mis-match");
+
+            auto& value = it->second.first;
+
+            arguments.push_back(TypeDef(value).as(name));
+        }
+
+        type += {Member(TypeCode::Struct, "query", arguments)};
+
+        auto inst(type.create());
+
+        for(auto& pair : values) {
+            inst["query"][pair.first].assign(pair.second.first);
+        }
+
+        return inst;
+    }
 };
 
-PutBuilder& PutBuilder::set(const std::string& name, const void *ptr, StoreType type, bool required)
+PRBase::~PRBase() {}
+
+Value PRBase::_builder(Value&& prototype) const
 {
-    if(!pvt)
-        pvt = std::make_shared<Pvt>();
-
-    if(pvt->values.find(name)!=pvt->values.end())
-        throw std::logic_error(SB()<<"PutBuilder can't assign a second value to field '"<<name<<"'");
-
-    auto& pair = pvt->values[name];
-    pair.second = required;
-
-    pair.first.init(type);
-    switch(type) {
-    case StoreType::Bool:
-        pair.first.as<bool>() = *static_cast<const bool*>(ptr);
-        break;
-    case StoreType::Real:
-        pair.first.as<double>() = *static_cast<const double*>(ptr);
-        break;
-    case StoreType::Integer:
-        pair.first.as<int64_t>() = *static_cast<const int64_t*>(ptr);
-        break;
-    case StoreType::UInteger:
-        pair.first.as<uint64_t>() = *static_cast<const uint64_t*>(ptr);
-        break;
-    case StoreType::String:
-        pair.first.as<std::string>() = *static_cast<const std::string*>(ptr);
-        break;
-    case StoreType::Array:
-        pair.first.as<std::string>() = *static_cast<const std::string*>(ptr);
-        break;
-    case StoreType::Compound:
-        pair.first.as<Value>() = *static_cast<const Value*>(ptr);
-        break;
-    default:
-        throw std::logic_error("PutBuilder::set() currently only supports scalar types");
-    }
-
-    return *this;
+    assert(_args);
+    return _args->build(std::move(prototype));
 }
 
-PutBuilder::~PutBuilder() {}
+Value PRBase::_uriArgs() const
+{
+    assert(_args);
+    return _args->uriArgs();
+}
+
+void PRBase::_set(const std::string& name, const void *ptr, StoreType type, bool required)
+{
+    if(!_args)
+        _args = std::make_shared<Args>();
+
+    if(_args->values.find(name)!=_args->values.end())
+        throw std::logic_error(SB()<<"PutBuilder can't assign a second value to field '"<<name<<"'");
+
+    Value aval(Value::Helper::build(ptr, type));
+
+    _args->values.emplace(std::piecewise_construct,
+                         std::make_tuple(name),
+                         std::make_tuple(std::move(aval), required));
+    _args->names.push_back(name);
+}
+
+} // namespace detail
 
 namespace {
 
@@ -442,7 +457,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
 
         auto op = std::make_shared<GPROp>(Operation::Get, chan);
         op->setDone(std::move(_result));
-        op->pvRequest = _build();
+        op->pvRequest = _buildReq();
 
         chan->pending.push_back(op);
         chan->createOperations();
@@ -457,7 +472,7 @@ std::shared_ptr<Operation> PutBuilder::exec()
 {
     std::shared_ptr<Operation> ret;
 
-    if(!_builder && !pvt)
+    if(!_builder && !_args)
         throw std::logic_error("put() needs either a .build() or at least one .set()");
 
     ctx->tcp_loop.call([&ret, this]() {
@@ -468,8 +483,8 @@ std::shared_ptr<Operation> PutBuilder::exec()
 
         if(_builder) {
             op->builder = std::move(_builder);
-        } else if(pvt) {
-            auto build = std::move(pvt);
+        } else if(_args) {
+            auto build = std::move(_args);
             op->builder = [build](Value&& prototype) -> Value {
                 return build->build(std::move(prototype));
             };
@@ -477,7 +492,7 @@ std::shared_ptr<Operation> PutBuilder::exec()
             // handled above
         }
         op->getOput = _doGet;
-        op->pvRequest = _build();
+        op->pvRequest = _buildReq();
 
         chan->pending.push_back(op);
         chan->createOperations();
@@ -492,13 +507,21 @@ std::shared_ptr<Operation> RPCBuilder::exec()
 {
     std::shared_ptr<Operation> ret;
 
+    if(_args && _argument)
+        throw std::logic_error("Use of rpc() with argument and builder .arg() are mutually exclusive");
+
     ctx->tcp_loop.call([&ret, this]() {
         auto chan = Channel::build(ctx, _name);
 
         auto op = std::make_shared<GPROp>(Operation::RPC, chan);
         op->setDone(std::move(_result));
-        op->rpcarg = std::move(_argument);
-        op->pvRequest = _build();
+        if(_argument) {
+            op->rpcarg = std::move(_argument);
+        } else if(_args) {
+            op->rpcarg = _args->uriArgs();
+            op->rpcarg["path"] = _name;
+        }
+        op->pvRequest = _buildReq();
 
         chan->pending.push_back(op);
         chan->createOperations();
