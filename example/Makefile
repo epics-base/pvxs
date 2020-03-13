@@ -16,6 +16,9 @@ spam_SRCS += spam.cpp
 TESTPROD += ticker
 ticker_SRCS += ticker.cpp
 
+TESTPROD += client
+client_SRCS += client.cpp
+
 PROD_SYS_LIBS += event_core
 
 PROD_SYS_LIBS_DEFAULT += event_pthreads
