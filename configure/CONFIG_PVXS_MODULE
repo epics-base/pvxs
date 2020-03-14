@@ -24,7 +24,7 @@ SHRLIB_DEPLIB_DIRS += $(_PVXS_DEPLIB_DIRS)
 
 # automatically add necessary libraries
 LIBEVENT_SYS_LIBS_POSIX_YES = event_pthreads
-LIBEVENT_SYS_LIBS_WIN32 = netapi32 ws2_32
+LIBEVENT_SYS_LIBS_WIN32 = iphlpapi netapi32 ws2_32
 
 LIBEVENT_SYS_LIBS  = event_core
 LIBEVENT_SYS_LIBS += $(LIBEVENT_SYS_LIBS_POSIX_$(POSIX))
