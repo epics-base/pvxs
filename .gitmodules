@@ -1,3 +1,6 @@
 [submodule ".ci"]
 	path = .ci
 	url = https://github.com/mdavidsaver/ci-scripts
+[submodule "bundle/libevent"]
+	path = bundle/libevent
+	url = https://github.com/libevent/libevent

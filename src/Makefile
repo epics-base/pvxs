@@ -82,13 +82,6 @@ LIB_SRCS += clientmon.cpp
 
 LIB_LIBS += Com
 
-LIB_SYS_LIBS += event_core
-
-LIB_SYS_LIBS_DEFAULT += event_pthreads
-LIB_SYS_LIBS_WIN32 += netapi32 ws2_32
-LIB_SYS_LIBS_vxWorks =
-
-
 #===========================
 
 include $(TOP)/configure/RULES
