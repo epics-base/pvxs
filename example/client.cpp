@@ -67,7 +67,6 @@ int main(int argc, char* argv[])
         // uses simple builder form to assign .value
 
         ctxt.put(argv[1])
-                .fetchPresent(false) // not needed
                 .set("value", current+1)
                 .exec()
                 ->wait(5.0);

@@ -484,6 +484,9 @@ std::shared_ptr<Operation> PutBuilder::exec()
         if(_builder) {
             op->builder = std::move(_builder);
         } else if(_args) {
+            // PRBase builder doesn't use current value
+            _doGet = false;
+
             auto build = std::move(_args);
             op->builder = [build](Value&& prototype) -> Value {
                 return build->build(std::move(prototype));
