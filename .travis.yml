@@ -24,11 +24,9 @@ addons:
     - perl
     # for clang compiler
     - clang
-    # for mingw builds (32bit and 64bit)
-    - g++-mingw-w64-i686
+    # for mingw builds
     - g++-mingw-w64-x86-64
-    # for RTEMS cross builds
-    - qemu-system-x86
+    # for cross libevent
     - cmake
 
 install:
@@ -63,7 +61,7 @@ jobs:
 
 # Different configurations of default gcc and clang
 
-  - env: BASE=7.0 LIBEVENT=master
+  - env: BASE=7.0 LIBEVENT_TAG=release-2.1.11-stable
 
   - env: BASE=3.15
 
@@ -77,7 +75,7 @@ jobs:
 
 # Cross-compilations to Windows using MinGW and WINE
     
-  - env: BASE=7.0 WINE=32 TEST=NO STATIC=YES
+  - env: BASE=7.0 WINE=64 TEST=NO STATIC=YES
     compiler: mingw
 
   - env: BASE=7.0 WINE=64 TEST=NO STATIC=NO
