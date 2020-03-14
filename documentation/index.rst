@@ -26,6 +26,7 @@ Dependencies
    server
    util
    example
+   details
 
 
 Indices and tables
