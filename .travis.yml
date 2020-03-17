@@ -68,11 +68,6 @@ jobs:
   - env: BASE=7.0
     compiler: clang
 
-  - env: BASE=7.0 EXTRA="CMD_CXXFLAGS=-std=c++11"
-
-  - env: BASE=7.0 EXTRA="CMD_CXXFLAGS=-std=c++11"
-    compiler: clang
-
 # Cross-compilations to Windows using MinGW and WINE
     
   - env: BASE=7.0 WINE=64 TEST=NO STATIC=YES
