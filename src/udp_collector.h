@@ -17,7 +17,7 @@
 #include "evhelper.h"
 
 namespace pvxs {namespace impl {
-struct UDPListener;
+class UDPListener;
 struct UDPCollector;
 struct UDPManager;
 
@@ -75,7 +75,7 @@ struct PVXS_API UDPManager
 private:
     explicit inline UDPManager(const std::shared_ptr<Pvt>& pvt) :pvt(pvt) {}
     std::shared_ptr<Pvt> pvt;
-    friend struct UDPListener;
+    friend class UDPListener;
     friend struct UDPCollector;
 };
 
@@ -86,7 +86,7 @@ class PVXS_API UDPListener
     std::shared_ptr<UDPCollector> collector;
     const SockAddr dest;
     bool active;
-    friend class UDPCollector;
+    friend struct UDPCollector;
     friend struct UDPManager;
 
 public:
