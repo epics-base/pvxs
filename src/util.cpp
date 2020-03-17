@@ -144,6 +144,7 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc)
             case '\v': next = 'v'; break;
             case '\\': next = '\\'; break;
             case '\'': next = '\''; break;
+            case '\"': next = '\"'; break;
             default:
                 if(isprint(c)) {
                     strm.put(c);
