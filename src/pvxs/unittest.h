@@ -122,6 +122,9 @@ testCase testNotEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS
     return ret;
 }
 
+PVXS_API
+testCase _testStrEq(const char *sLHS, const std::string& lhs, const char *sRHS, const std::string& rhs);
+
 } // namespace detail
 
 /** Assert that an exception is thrown.
@@ -174,6 +177,12 @@ testCase testThrows(FN fn)
 //! Evaluates to a pvxs::testCase
 //! Roughly equivalent to @code testOk((LHS)!=(RHS), "..."); @endcode
 #define testNotEq(LHS, RHS) ::pvxs::detail::testNotEq(#LHS, LHS, #RHS, RHS)
+
+//! Macro which asserts equality between LHS and RHS.
+//! Evaluates to a pvxs::testCase
+//! Functionally equivalent to testEq() with two std::string instances.
+//! Prints diff-like output which is friendlier to multi-line strings.
+#define testStrEq(LHS, RHS) ::pvxs::detail::_testStrEq(#LHS, LHS, #RHS, RHS)
 
 //! Macro which prints diagnostic (non-test) lines.
 //! Evaluates to a pvxs::testCase
