@@ -205,7 +205,7 @@ R"out(
 
         fld = arr.freeze().castTo<const void>();
 
-        testEq(val["arbitrary.sarr[1]value"].as<double>(), 2.0);
+        testEq(val["arbitrary.sarr[1].value"].as<double>(), 2.0);
     }
 
     // Union
@@ -251,7 +251,7 @@ R"out(
         fld = arr.freeze().castTo<const void>();
 
         testEq(fld["[0]"].as<uint64_t>(), 123u);
-        testEq(fld["[1]q"].as<std::string>(), "theq");
+        testEq(fld["[1].q"].as<std::string>(), "theq");
     }
 
     testEq(std::string(SB()<<val),

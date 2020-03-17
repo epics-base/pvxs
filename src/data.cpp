@@ -716,6 +716,8 @@ bool Value::tryCopyIn(const void *ptr, StoreType type)
 void Value::traverse(const std::string &expr, bool modify)
 {
     size_t pos=0;
+    bool maybedot = false;
+
     while(desc && pos<expr.size()) {
         if(expr[pos]=='<') {
             // attempt traverse to parent
@@ -739,6 +741,18 @@ void Value::traverse(const std::string &expr, bool modify)
         if(desc->code.code==TypeCode::Struct) {
             // attempt traverse to member.
             // expect: [0-9a-zA-Z_.]+[\[-$]
+
+            // skip a leading dot
+            if(maybedot) {
+                if(expr[pos]!='.') {
+                    store.reset();
+                    desc = nullptr;
+                    break;
+                }
+                maybedot = false;
+                pos++;
+            }
+
             size_t sep = expr.find_first_of("<[-", pos);
 
             decltype (desc->mlookup)::const_iterator it;
@@ -760,6 +774,8 @@ void Value::traverse(const std::string &expr, bool modify)
         } else if(desc->code.code==TypeCode::Union || desc->code.code==TypeCode::Any) {
             // attempt to traverse to (and maybe select) member
             // expect: ->[0-9a-zA-Z_]+[.\[-$]
+
+            maybedot = false;
 
             if(expr.size()-pos >= 3 && expr[pos]=='-' && expr[pos+1]=='>') {
                 pos += 2; // skip past "->"
@@ -787,6 +803,7 @@ void Value::traverse(const std::string &expr, bool modify)
                             }
                             pos = sep;
                             *this = fld;
+                            maybedot = true;
 
                         } else {
                             // traversing const Value, can't select Union
@@ -805,6 +822,8 @@ void Value::traverse(const std::string &expr, bool modify)
             // attempt to traverse into array of Struct, Union, or Any
             // expect: \[[0-9]+\]
 
+            maybedot = false;
+
             size_t sep = expr.find_first_of(']', pos);
             unsigned long long index=0;
 
@@ -819,6 +838,8 @@ void Value::traverse(const std::string &expr, bool modify)
                 {
                     *this = arr[index];
                     pos = sep+1;
+                    maybedot = true;
+
                 } else {
                     // wrong element type or out of range
                     store.reset();
