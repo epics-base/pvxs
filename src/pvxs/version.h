@@ -26,6 +26,11 @@
 
 #include <pvxs/versionNum.h>
 
+// this will fail if PVXS_MAJOR_VERSION expands to an empty string
+#if PVXS_MAJOR_VERSION<0
+#  error Problem loading pvxs/versionNum.h
+#endif
+
 #ifndef VERSION_INT
 //! Construct version number constant.
 #  define VERSION_INT(V,R,M,P) ( ((V)<<24) | ((R)<<16) | ((M)<<8) | (P))
