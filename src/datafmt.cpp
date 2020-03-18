@@ -8,102 +8,220 @@
 
 namespace pvxs {
 
-static
-void show_Value(std::ostream& strm,
-                const std::string& member,
-                const Value& val,
-                unsigned level=0);
+namespace {
 
-static
-void show_Value(std::ostream& strm,
-                const std::string& member,
-                const FieldDesc *desc,
-                const FieldStorage* store,
-                unsigned level=0)
-{
-    indent(strm, level);
-    if(!desc) {
-        strm<<"null\n";
-        return;
-    }
+struct FmtDelta {
+    std::ostream& strm;
+    const Value::Fmt& fmt;
 
-    strm<<desc->code;
-    if(!desc->id.empty())
-        strm<<" \""<<desc->id<<"\"";
-    if(!member.empty() && desc->code!=TypeCode::Struct)
-        strm<<" "<<member;
+    void field(const std::string& prefix, const Value& val, bool verytop)
+    {
+        if(!val.isMarked(true,false))
+            return;
 
-    switch(store->code) {
-    case StoreType::Null:
-        if(desc->code==TypeCode::Struct) {
-            strm<<" {\n";
-            for(auto& pair : desc->miter) {
-                auto cdesc = desc + pair.second;
-                show_Value(strm, pair.first, cdesc, store + pair.second, level+1);
-            }
-            indent(strm, level);
-            strm<<"}";
-            if(!member.empty())
-                strm<<" "<<member;
-            strm<<"\n";
-        } else {
-            strm<<"\n";
+        strm<<prefix;
+        if(!verytop)
+            strm<<" ";
+        strm<<val.type().name();
+        if(val.type()==TypeCode::Struct && !val.id().empty()) {
+            strm<<" \""<<escape(val.id())<<'"';
         }
-        break;
-    case StoreType::Real:     strm<<" = "<<store->as<double>()<<"\n"; break;
-    case StoreType::Integer:  strm<<" = "<<store->as<int64_t>()<<"\n"; break;
-    case StoreType::UInteger: strm<<" = "<<store->as<uint64_t>()<<"\n"; break;
-    case StoreType::Bool: strm<<" = "<<(store->as<bool>() ? "true" : "false")<<"\n"; break;
-    case StoreType::String:   strm<<" = \""<<escape(store->as<std::string>())<<"\"\n"; break;
-    case StoreType::Compound: {
-        auto& fld = store->as<Value>();
-        if(fld.valid() && desc->code==TypeCode::Union) {
-            for(auto& pair : desc->miter) {
-                if(&desc->members[pair.second] == Value::Helper::desc(fld)) {
-                    strm<<"."<<pair.first;
-                    break;
+
+        if(fmt._showValue) {
+            auto store = Value::Helper::store_ptr(val);
+
+            switch(val.storageType()) {
+            case StoreType::Real:     strm<<" = "<<store->as<double>(); break;
+            case StoreType::Integer:  strm<<" = "<<store->as<int64_t>(); break;
+            case StoreType::UInteger: strm<<" = "<<store->as<uint64_t>(); break;
+            case StoreType::Bool:     strm<<" = "<<(store->as<bool>() ? "true" : "false"); break;
+            case StoreType::String:   strm<<" = \""<<escape(store->as<std::string>())<<"\""; break;
+            case StoreType::Array: {
+                auto& varr = store->as<shared_array<const void>>();
+                if(varr.original_type()!=ArrayType::Value) {
+                    strm<<" = "<<varr;
                 }
             }
-        }
-        show_Value(strm, std::string(), fld, level+1);
-    }
-        break;
-    case StoreType::Array: {
-        auto& varr = store->as<shared_array<const void>>();
-        if(varr.original_type()!=ArrayType::Value) {
-            strm<<" = "<<varr<<"\n";
-        } else {
-            auto arr = varr.castTo<const Value>();
-            strm<<" [\n";
-            for(auto& val : arr) {
-                show_Value(strm, std::string(), val, level+1);
+                break;
+            default:
+                break;
             }
-            indent(strm, level);
-            strm<<"]\n";
+        }
+
+        strm<<"\n";
+
+        switch(val.type().code) {
+        case TypeCode::Union:
+        case TypeCode::Any: {
+            auto uval = val.as<Value>();
+            std::string cprefix(prefix);
+            cprefix+="->";
+
+            if(val.type()==TypeCode::Union) {
+                auto desc = Value::Helper::desc(val);
+                auto udesc = Value::Helper::desc(uval);
+                for(auto idx : range(desc->members.size())) {
+                    if(udesc == &desc->members[idx]) {
+                        cprefix+=desc->miter[idx].first;
+                    }
+                }
+            }
+
+            top(cprefix, uval, false);
+        }
+            break;
+        case TypeCode::StructA:
+        case TypeCode::UnionA:
+        case TypeCode::AnyA: {
+            auto rawval = val.as<const shared_array<const void>>();
+            if(rawval.original_type()==ArrayType::Null) {
+
+            } else if(rawval.original_type()==ArrayType::Value) {
+                auto aval = rawval.castTo<const Value>();
+
+                for(auto idx : range(aval.size())) {
+                    std::ostringstream strm;
+                    strm<<prefix<<'['<<idx<<']';
+
+                    top(strm.str(), aval[idx], false);
+                }
+
+            } else {
+                throw std::logic_error("Value[] is not");
+            }
+        }
+            break;
+        default:
+            break;
         }
     }
+
+    void top(const std::string& prefix, const Value& val, bool verytop)
+    {
+        if(!val) {
+            strm<<prefix;
+            if(!verytop)
+                strm<<' ';
+            strm<<"null\n";
+            return;
+        }
+
+        field(prefix, val, verytop);
+
+        if(val.type()==TypeCode::Struct) {
+            for(auto fld : val.iall()) {
+                std::string cprefix(prefix);
+                if(!verytop)
+                    cprefix += '.';
+                cprefix += val.nameOf(fld);
+                field(cprefix, fld, false);
+            }
+        }
+    }
+};
+
+struct FmtTree {
+    std::ostream& strm;
+    const Value::Fmt& fmt;
+
+    void top(const std::string& member,
+             const FieldDesc *desc,
+             const FieldStorage* store,
+             unsigned level=0)
+    {
+        indent(strm, level);
+        if(!desc) {
+            strm<<"null\n";
+            return;
+        }
+
+        strm<<desc->code;
+        if(!desc->id.empty())
+            strm<<" \""<<desc->id<<"\"";
+        if(!member.empty() && desc->code!=TypeCode::Struct)
+            strm<<" "<<member;
+
+        switch(store->code) {
+        case StoreType::Null:
+            if(desc->code==TypeCode::Struct) {
+                strm<<" {\n";
+                for(auto& pair : desc->miter) {
+                    auto cdesc = desc + pair.second;
+                    top(pair.first, cdesc, store + pair.second, level+1);
+                }
+                indent(strm, level);
+                strm<<"}";
+                if(!member.empty())
+                    strm<<" "<<member;
+                strm<<"\n";
+            } else {
+                strm<<"\n";
+            }
+            break;
+        case StoreType::Real:     if(fmt._showValue) { strm<<" = "<<store->as<double>(); } strm<<"\n"; break;
+        case StoreType::Integer:  if(fmt._showValue) { strm<<" = "<<store->as<int64_t>(); } strm<<"\n"; break;
+        case StoreType::UInteger: if(fmt._showValue) { strm<<" = "<<store->as<uint64_t>(); } strm<<"\n"; break;
+        case StoreType::Bool:     if(fmt._showValue) { strm<<" = "<<(store->as<bool>() ? "true" : "false"); } strm<<"\n"; break;
+        case StoreType::String:   if(fmt._showValue) { strm<<" = \""<<escape(store->as<std::string>()); } strm<<"\"\n"; break;
+        case StoreType::Compound: {
+            auto& fld = store->as<Value>();
+            if(fld.valid() && desc->code==TypeCode::Union) {
+                for(auto& pair : desc->miter) {
+                    if(&desc->members[pair.second] == Value::Helper::desc(fld)) {
+                        strm<<"."<<pair.first;
+                        break;
+                    }
+                }
+            }
+            top(std::string(),
+                Value::Helper::desc(fld),
+                Value::Helper::store_ptr(fld),
+                level+1);
+        }
+            break;
+        case StoreType::Array: {
+            auto& varr = store->as<shared_array<const void>>();
+            if(!fmt._showValue) {
+                strm<<"\n";
+            } else if(varr.original_type()!=ArrayType::Value) {
+                strm<<" = "<<varr<<"\n";
+            } else {
+                auto arr = varr.castTo<const Value>();
+                strm<<" [\n";
+                for(auto& val : arr) {
+                    top(std::string(),
+                        Value::Helper::desc(val),
+                        Value::Helper::store_ptr(val),
+                        level+1);
+                }
+                indent(strm, level);
+                strm<<"]\n";
+            }
+        }
+            break;
+        default:
+            strm<<"!!Invalid StoreType!! "<<int(store->code)<<"\n";
+            break;
+        }
+    }
+};
+
+} // namespace
+
+std::ostream& operator<<(std::ostream& strm, const Value::Fmt& fmt)
+{
+    switch (fmt._format) {
+    case Value::Fmt::Tree:
+        FmtTree{strm, fmt}.top("",
+                                 Value::Helper::desc(*fmt.top),
+                                 Value::Helper::store_ptr(*fmt.top));
+        break;
+    case Value::Fmt::Delta:
+        FmtDelta{strm, fmt}.top("", *fmt.top, true);
         break;
     default:
-        strm<<"!!Invalid StoreType!! "<<int(store->code)<<"\n";
-        break;
+        strm<<"<Unknown Value format()>\n";
     }
-}
-
-static
-void show_Value(std::ostream& strm,
-                const std::string& member,
-                const Value& val,
-                unsigned level)
-{
-    show_Value(strm, member,
-               Value::Helper::desc(val),
-               Value::Helper::store_ptr(val),
-               level);
-}
-
-std::ostream& operator<<(std::ostream& strm, const Value& val)
-{
-    show_Value(strm, std::string(), val);
     return strm;
 }
 

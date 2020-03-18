@@ -86,7 +86,8 @@ int main(int argc, char *argv[])
             try {
                 while(auto update = mon.pop()) {
                     log_info_printf(app, "%s POP data\n", argv[n]);
-                    std::cout<<argv[n]<<"\n"<<update;
+                    std::cout<<argv[n]<<"\n"<<update.format()
+                               .delta();
                 }
                 log_info_printf(app, "%s POP empty\n", argv[n]);
 

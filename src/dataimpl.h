@@ -31,7 +31,7 @@ struct Value::Helper {
 
     static inline       std::shared_ptr<impl::FieldStorage>& store(      Value& v) { return v.store; }
     static inline std::shared_ptr<const impl::FieldStorage>  store(const Value& v) { return v.store; }
-    static inline const FieldDesc*                           desc(const Value& v) { return v.desc; }
+    static constexpr const FieldDesc*                        desc(const Value& v) { return v.desc; }
 
     static inline                       impl::FieldStorage*  store_ptr(      Value& v) { return v.store.get(); }
     static inline                 const impl::FieldStorage*  store_ptr(const Value& v) { return v.store.get(); }

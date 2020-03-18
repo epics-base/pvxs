@@ -86,7 +86,9 @@ int main(int argc, char *argv[])
         ops.push_back(ctxt.get(argv[n])
                       .pvRequest(request)
                       .result([&argv, n, &remaining, &done](client::Result&& result) {
-                          std::cout<<argv[n]<<"\n"<<result();
+                          std::cout<<argv[n]<<"\n"<<result()
+                                     .format()
+                                     .delta();
 
                           if(remaining.fetch_sub(1)==1)
                               done.trigger();

@@ -82,8 +82,9 @@ int main(int argc, char *argv[])
                       .result([&argv, n, &remaining, &done](client::Result&& result) {
                           std::cout<<argv[n];
                           try {
-                              auto value = result();
-                              std::cout<<" from "<<result.peerName()<<"\n"<<result();
+                              std::cout<<" from "<<result.peerName()<<"\n"<<result()
+                                         .format()
+                                         .showValue(false);
                           }catch(std::exception& e){
                               std::cout<<" Error: "<<e.what()<<"\n";
                           }

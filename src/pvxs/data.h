@@ -723,10 +723,34 @@ public:
     Iterable<const Value> iall() const      { return Iterable<const Value>{this, false, true}; }
     Iterable<const Value> ichildren() const { return Iterable<const Value>{this, false, false}; }
     Iterable<const Value> imarked() const   { return Iterable<const Value>{this, true , true}; }
+
+    struct Fmt {
+        const Value* top = nullptr;
+        size_t _limit=0u;
+        enum format_t {
+            Tree,
+            Delta,
+        } _format = Tree;
+        bool _showValue = true;
+
+        Fmt(const Value* top) :top(top) {}
+        Fmt& tree() { _format = Tree; return *this; }
+        Fmt& delta()  { _format = Delta ; return *this; }
+        Fmt& format(format_t f) { _format = f ; return *this; }
+        Fmt& showValue(bool v) { _showValue = v; return *this; }
+        Fmt& arrayLimit(size_t cnt) { _limit = cnt; return *this; }
+    };
+    inline Fmt format() const { return Fmt(this); }
 };
 
 PVXS_API
-std::ostream& operator<<(std::ostream& strm, const Value& val);
+std::ostream& operator<<(std::ostream& strm, const Value::Fmt& fmt);
+
+inline
+std::ostream& operator<<(std::ostream& strm, const Value& val)
+{
+    return strm<<val.format();
+}
 
 } // namespace pvxs
 
