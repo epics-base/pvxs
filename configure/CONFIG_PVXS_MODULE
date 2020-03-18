@@ -1,6 +1,10 @@
 # auto-compute.  avoid need to standardize configure/RELEASE name
 _PVXS := $(dir $(lastword $(MAKEFILE_LIST)))
 
+# as we're appending, must be idempotent
+ifeq (,$(_PVXS_INCLUDED))
+_PVXS_INCLUDED := YES
+
 ifdef T_A
 
 # use custom libevent2 install prefix by:
@@ -35,3 +39,5 @@ LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
 
 
 endif # T_A
+
+endif # _PVXS_INCLUDED
