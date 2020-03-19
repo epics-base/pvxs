@@ -85,7 +85,7 @@ void testVoid()
     testOk1(!X.unique());
     testOk1(!Y.unique());
     testEq(X.size(), 2u);
-    testEq(Y.size(), 8u);
+    testEq(Y.size(), 2u);
     testEq(Y.original_type(), ArrayType::UInt32); // never const uint32_t
 
     testThrows<std::logic_error>([&Y]() {
@@ -99,7 +99,7 @@ void testVoid()
     testOk1(Y.unique());
     testOk1(Z.unique());
     testEq(Y.size(), 0u);
-    testEq(Z.size(), 8u);
+    testEq(Z.size(), 2u);
 }
 
 void testFreeze()

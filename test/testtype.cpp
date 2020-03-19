@@ -386,7 +386,7 @@ void testFormat()
         "                    int32_t ahalf = 2468\n"
         "                }\n"
         "        ]\n"
-        "        struct[] more = [null]\n"
+        "        struct[] more = {\?}[]\n"
         "    } array\n"
         "}\n"
     );
@@ -417,7 +417,7 @@ void testFormat()
         "array.choice[1] null\n"
         "array.choice[2] union\n"
         "array.choice[2]->two.ahalf int32_t = 2468\n"
-        "array.more struct[] = [null]\n"
+        "array.more struct[] = {\?}[]\n"
     );
 }
 

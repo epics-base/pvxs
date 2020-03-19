@@ -184,7 +184,7 @@ struct FmtTree {
             if(!fmt._showValue) {
                 strm<<"\n";
             } else if(varr.original_type()!=ArrayType::Value) {
-                strm<<" = "<<varr<<"\n";
+                strm<<" = "<<varr.format().limit(fmt._limit)<<"\n";
             } else {
                 auto arr = varr.castTo<const Value>();
                 strm<<" [\n";

@@ -82,7 +82,7 @@ protected:
     template<typename E1> friend struct sa_base;
 
     std::shared_ptr<E> _data;
-    size_t             _size;
+    size_t             _count;
 public:
 
     // shared_array()
@@ -95,60 +95,61 @@ public:
     // shared_array(shared_ptr<T>, T*, size_t)
 
     //! empty
-    constexpr sa_base() :_size(0u) {}
+    constexpr sa_base() :_count(0u) {}
 
     // copyable
     sa_base(const sa_base&) = default;
     // movable
     inline sa_base(sa_base&& o) noexcept
-        :_data(std::move(o._data)), _size(o._size)
+        :_data(std::move(o._data)), _count(o._count)
     {
-        o._size = 0;
+        o._count = 0;
     }
     sa_base& operator=(const sa_base&) =default;
     inline sa_base& operator=(sa_base&& o) noexcept
     {
         _data = std::move(o._data);
-        _size = o._size;
-        o._size = 0;
+        _count = o._count;
+        o._count = 0;
         return *this;
     }
 
     // use existing alloc with delete[]
     template<typename A>
     sa_base(A* a, size_t len)
-        :_data(a, sa_default_delete<E>()),_size(len)
+        :_data(a, sa_default_delete<E>()),_count(len)
     {}
 
     // use existing alloc w/ custom deletor
     template<typename B>
     sa_base(E* a, B b, size_t len)
-        :_data(a, b),_size(len)
+        :_data(a, b),_count(len)
     {}
 
     // build around existing shared_ptr
     sa_base(const std::shared_ptr<E>& a, size_t len)
-        :_data(a),_size(len)
+        :_data(a),_count(len)
     {}
 
     // alias existing shared_ptr
     template<typename A>
     sa_base(const std::shared_ptr<A>& a, E* b, size_t len)
-        :_data(a, b),_size(len)
+        :_data(a, b),_count(len)
     {}
 
     void clear() noexcept {
         _data.reset();
-        _size = 0;
+        _count = 0;
     }
 
     void swap(sa_base& o) noexcept {
         std::swap(_data, o._data);
-        std::swap(_size, o._data);
+        std::swap(_count, o._data);
     }
 
-    inline size_t size() const { return _size; }
-    inline bool empty() const noexcept { return _size==0; }
+    //! Number of elements
+    inline size_t size() const { return _count; }
+    inline bool empty() const noexcept { return _count==0; }
 
     inline bool unique() const noexcept { return !_data || _data.use_count()<=1; }
 
@@ -156,6 +157,23 @@ public:
 
     const std::shared_ptr<E>& dataPtr() const { return _data; }
 };
+
+class Limiter {
+    const void* _base;
+    size_t _count;
+    size_t _limit=0u;
+    ArrayType _type;
+    friend
+    std::ostream& operator<<(std::ostream& strm, const Limiter& lim);
+public:
+    Limiter(const void* base, size_t count, ArrayType type)
+        :_base(base), _count(count), _type(type)
+    {}
+    Limiter& limit(size_t l) { _limit = l; return *this; }
+};
+
+PVXS_API
+std::ostream& operator<<(std::ostream& strm, const Limiter&);
 
 } // namespace detail
 
@@ -229,7 +247,7 @@ public:
     shared_array(size_t c, V e)
         :base_t(new _E_non_const[c], c)
     {
-        std::fill_n((_E_non_const*)this->_data.get(), this->_size, e);
+        std::fill_n((_E_non_const*)this->_data.get(), this->_count, e);
     }
 
     //! use existing alloc with delete[]
@@ -260,7 +278,7 @@ public:
 
     //! Extend size.  Implies make_unique()
     void resize(size_t i) {
-        if(!this->unique() || i!=this->_size) {
+        if(!this->unique() || i!=this->_count) {
             shared_array o(i);
             std::copy_n(this->begin(), std::min(this->size(), i), o.begin());
             this->swap(o);
@@ -281,7 +299,7 @@ private:
      */
     inline E* base_ptr() const {
 #if defined(_MSC_VER) && _MSC_VER<=1600
-        return this->_size ? this->_data.get() : (E*)(this-1);
+        return this->_count ? this->_data.get() : (E*)(this-1);
 #else
         return this->_data.get();
 #endif
@@ -294,7 +312,7 @@ public:
     inline const_iterator cbegin() const noexcept{return begin();}
 
     //! end iteration
-    inline iterator end() const noexcept{return this->base_ptr()+this->_size;}
+    inline iterator end() const noexcept{return this->base_ptr()+this->_count;}
     inline const_iterator cend() const noexcept{return end();}
 
     inline reverse_iterator rbegin() const noexcept{return reverse_iterator(end());}
@@ -315,7 +333,7 @@ public:
     //! @throws std::out_of_range if empty() || i>=size().
     reference at(size_t i) const
     {
-        if(i>this->_size)
+        if(i > this->_count)
             throw std::out_of_range("Index out of bounds");
         return (*this)[i];
     }
@@ -330,7 +348,7 @@ public:
             throw std::logic_error("Can't freeze non-unique shared_array");
 
         // alias w/ implied cast to const.
-        shared_array<typename std::add_const<E>::type> ret(this->_data, this->_data.get(), this->_size);
+        shared_array<typename std::add_const<E>::type> ret(this->_data, this->_data.get(), this->_count);
 
         // c++20 provides a move()-able alternative to the aliasing constructor.
         // until this stops being the future, we consume the src ref. and
@@ -343,16 +361,20 @@ public:
     template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
     castTo() const {
-        auto alen = this->_size*sizeof(E)/sizeof(TO);
-        return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), alen);
+        return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), this->_count);
     }
 
     //! static_cast<TO>() to void, preserving const-ness
     template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
     castTo() const {
-        auto alen = this->_size*sizeof(E);
-        return shared_array<TO>(this->_data, this->_data.get(), alen); // implied cast to void*
+        return shared_array<TO>(this->_data, this->_data.get(), this->_count); // implied cast to void*
+    }
+
+    detail::Limiter format() const {
+        return Limiter(this->_data.get(),
+                       this->_count,
+                       detail::CaptureCode<typename std::remove_cv<E>::type>::code);
     }
 };
 
@@ -455,7 +477,7 @@ public:
             throw std::logic_error("Can't freeze non-unique shared_array");
 
         // alias w/ implied cast to const.
-        shared_array<typename std::add_const<E>::type> ret(this->_data, this->_data.get(), this->_size, this->_type);
+        shared_array<typename std::add_const<E>::type> ret(this->_data, this->_data.get(), this->_count, this->_type);
 
         // c++20 provides a move()-able alternative to the aliasing constructor.
         // until this stops being the future, we consume the src ref. and
@@ -468,8 +490,7 @@ public:
     template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
     castTo() const {
-        auto alen = this->_size/sizeof(TO);
-        return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), alen);
+        return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), this->_count);
     }
 
     // static_cast<TO>() to void, preserving const-ness
@@ -479,6 +500,12 @@ public:
         // in reality this is either void -> void, or const void -> const void
         // aka. simple copy
         return *this;
+    }
+
+    detail::Limiter format() const {
+        return detail::Limiter(this->_data.get(),
+                               this->_count,
+                               this->_type);
     }
 };
 
@@ -500,28 +527,11 @@ shared_array_static_cast(const shared_array<FROM>& src)
     return src.template castTo<TO>();
 }
 
-template<typename E, typename std::enable_if<!std::is_void<E>{}, int>::type =0>
+template<typename E>
 std::ostream& operator<<(std::ostream& strm, const shared_array<E>& arr)
 {
-    strm<<'{'<<arr.size()<<"}[";
-    for(size_t i=0; i<arr.size(); i++) {
-        if(i>10) {
-            strm<<"...";
-            break;
-        }
-        strm<<arr[i];
-        if(i+1<arr.size())
-            strm<<", ";
-    }
-    strm<<']';
-    return strm;
+    return strm<<arr.format();
 }
-
-PVXS_API
-std::ostream& operator<<(std::ostream& strm, const shared_array<const void>& arr);
-
-PVXS_API
-std::ostream& operator<<(std::ostream& strm, const shared_array<void>& arr);
 
 } // namespace pvxs
 

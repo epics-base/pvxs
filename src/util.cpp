@@ -73,53 +73,56 @@ std::ostream& operator<<(std::ostream& strm, ArrayType code)
     return strm;
 }
 
-std::ostream& operator<<(std::ostream& strm, const shared_array<const void>& arr)
-{
-    switch(arr.original_type()) {
-    case ArrayType::Null: strm<<"[null]"; break;
-#define CASE(CODE, Type) case ArrayType::CODE: strm<<arr.castTo<const Type>(); break
-    CASE(Bool, bool);
-    CASE(UInt8, uint8_t);
-    CASE(UInt16, uint16_t);
-    CASE(UInt32, uint32_t);
-    CASE(UInt64, uint64_t);
-    CASE(Int8, int8_t);
-    CASE(Int16, int16_t);
-    CASE(Int32, int32_t);
-    CASE(Int64, int64_t);
-    CASE(Float32, float);
-    CASE(Float64, double);
-    CASE(String, std::string);
-    CASE(Value, Value);
-#undef CASE
-    }
-    return strm;
-}
-
-std::ostream& operator<<(std::ostream& strm, const shared_array<void>& arr)
-{
-    switch(arr.original_type()) {
-    case ArrayType::Null: strm<<"[null]"; break;
-#define CASE(CODE, Type) case ArrayType::CODE: strm<<arr.castTo<Type>(); break
-    CASE(Bool, bool);
-    CASE(UInt8, uint8_t);
-    CASE(UInt16, uint16_t);
-    CASE(UInt32, uint32_t);
-    CASE(UInt64, uint64_t);
-    CASE(Int8, int8_t);
-    CASE(Int16, int16_t);
-    CASE(Int32, int32_t);
-    CASE(Int64, int64_t);
-    CASE(Float32, float);
-    CASE(Float64, double);
-    CASE(String, std::string);
-    CASE(Value, Value);
-#undef CASE
-    }
-    return strm;
-}
-
 namespace detail {
+
+namespace {
+template<typename E>
+void showArr(std::ostream& strm, const void* raw, size_t count, size_t limit)
+{
+    auto base = reinterpret_cast<const E*>(raw);
+
+    if(limit==0)
+        limit=size_t(-1);
+
+    strm<<"{"<<count<<"}[";
+    for(auto i : range(count)) {
+        if(i!=0)
+            strm<<", ";
+        if(i>limit) {
+            strm<<"...";
+            break;
+        }
+        strm<<base[i];
+    }
+    strm<<']';
+}
+} // namespace
+
+std::ostream& operator<<(std::ostream& strm, const Limiter& lim)
+{
+    switch(lim._type) {
+#define CASE(CODE, Type) case ArrayType::CODE: showArr<Type>(strm, lim._base, lim._count, lim._limit); break
+    CASE(Bool, bool);
+    CASE(UInt8, uint8_t);
+    CASE(UInt16, uint16_t);
+    CASE(UInt32, uint32_t);
+    CASE(UInt64, uint64_t);
+    CASE(Int8, int8_t);
+    CASE(Int16, int16_t);
+    CASE(Int32, int32_t);
+    CASE(Int64, int64_t);
+    CASE(Float32, float);
+    CASE(Float64, double);
+    CASE(String, std::string);
+#undef CASE
+    case ArrayType::Null:
+        strm<<"{\?}[]";
+        break;
+    default:
+        strm<<"[\?\?\?]";
+    }
+    return strm;
+}
 
 Escaper::Escaper(const char* v)
     :val(v)

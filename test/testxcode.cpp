@@ -331,7 +331,7 @@ void testDeserialize2()
         });
         testOk1(!val["value"].isMarked());
         testOk1(!!val["arbitrary.sarr"].isMarked());
-        testEq(val["arbitrary.sarr"].as<shared_array<const void>>().size(), 3u*sizeof(Value));
+        testEq(val["arbitrary.sarr"].as<shared_array<const void>>().size(), 3u);
         testEq(val["arbitrary.sarr[0].value"].as<uint32_t>(), 0xdeadbeef);
         testEq(val["arbitrary.sarr[1]"]["value"].as<uint32_t>(), 0x1badfaceu);
         testEq(val["arbitrary.sarr[2].value"].type(), TypeCode::Null);
@@ -358,7 +358,7 @@ void testDeserialize2()
         });
         testOk1(!val["value"].isMarked());
         testOk1(!!val["achoice"].isMarked());
-        testEq(val["achoice"].as<shared_array<const void>>().size(), 3u*sizeof(Value));
+        testEq(val["achoice"].as<shared_array<const void>>().size(), 3u);
         testEq(val["achoice[0]"].as<std::string>(), "theX");
         testEq(val["achoice[1]"].as<std::string>(), "theY");
         testEq(val["achoice[2]"].type(), TypeCode::Null);
@@ -397,7 +397,7 @@ void testDeserialize2()
         });
         testOk1(!val["value"].isMarked());
         testOk1(!!val["anya"].isMarked());
-        testEq(val["anya"].as<shared_array<const void>>().size(), 3u*sizeof(Value));
+        testEq(val["anya"].as<shared_array<const void>>().size(), 3u);
         testEq(val["anya[0]"].as<uint32_t>(), 0x7bu);
         testEq(val["anya[1].q"].as<std::string>(), "theq");
         testEq(val["anya[2]"].type(), TypeCode::Null);
