@@ -331,8 +331,8 @@ bool Value::isMarked(bool parents, bool children) const
         auto pdesc = desc;
         auto pstore = store.get();
         while(pdesc!=top->desc.get()) {
-            pdesc -= pdesc->parent_index;
             pstore -= pdesc->parent_index;
+            pdesc -= pdesc->parent_index;
 
             if(pstore->valid)
                 return true;
