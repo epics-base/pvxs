@@ -8,6 +8,8 @@
 #include <list>
 #include <atomic>
 
+#include <cstring>
+
 #include <epicsStdlib.h>
 #include <epicsGetopt.h>
 #include <epicsThread.h>
@@ -29,6 +31,10 @@ void usage(const char* argv0)
                "  -v        Make more noise.\n"
                "  -d        Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.\n"
                "  -w <sec>  Operation timeout in seconds.  default 5 sec.\n"
+               "  -# <cnt>  Maximum number of elements to print for each array field.\n"
+               "            Set to zero 0 for unlimited.\n"
+               "            Default: 20\n"
+               "  -F <fmt>  Output format mode: delta, tree\n"
                ;
 }
 
@@ -40,10 +46,12 @@ int main(int argc, char *argv[])
     double timeout = 5.0;
     bool verbose = false;
     std::string request;
+    Value::Fmt::format_t format = Value::Fmt::Delta;
+    auto arrLimit = epicsUInt64(-1);
 
     {
         int opt;
-        while ((opt = getopt(argc, argv, "hvdw:r:")) != -1) {
+        while ((opt = getopt(argc, argv, "hvdw:r:#:F:")) != -1) {
             switch(opt) {
             case 'h':
                 usage(argv[0]);
@@ -62,6 +70,21 @@ int main(int argc, char *argv[])
                 break;
             case 'r':
                 request = optarg;
+                break;
+            case '#':
+                if(epicsParseUInt64(optarg, &arrLimit, 0, nullptr)) {
+                    std::cerr<<"Invalid array limit: "<<optarg<<"\n";
+                    return 1;
+                }
+                break;
+            case 'F':
+                if(std::strcmp(optarg, "tree")==0) {
+                    format = Value::Fmt::Tree;
+                } else if(std::strcmp(optarg, "delta")==0) {
+                    format = Value::Fmt::Delta;
+                } else {
+                    std::cerr<<"Warning: ignoring unknown format '"<<optarg<<"'\n";
+                }
                 break;
             default:
                 usage(argv[0]);
@@ -85,10 +108,11 @@ int main(int argc, char *argv[])
 
         ops.push_back(ctxt.get(argv[n])
                       .pvRequest(request)
-                      .result([&argv, n, &remaining, &done](client::Result&& result) {
+                      .result([&argv, n, &remaining, &done, format, arrLimit](client::Result&& result) {
                           std::cout<<argv[n]<<"\n"<<result()
                                      .format()
-                                     .delta();
+                                     .format(format)
+                                     .arrayLimit(arrLimit);
 
                           if(remaining.fetch_sub(1)==1)
                               done.trigger();

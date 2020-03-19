@@ -8,6 +8,8 @@
 #include <list>
 #include <atomic>
 
+#include <cstring>
+
 #include <epicsStdlib.h>
 #include <epicsGetopt.h>
 #include <epicsThread.h>
@@ -30,6 +32,10 @@ void usage(const char* argv0)
                "  -r <req>  pvRequest condition.\n"
                "  -v        Make more noise.\n"
                "  -d        Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.\n"
+               "  -# <cnt>  Maximum number of elements to print for each array field.\n"
+               "            Set to zero 0 for unlimited.\n"
+               "            Default: 20\n"
+               "  -F <fmt>  Output format mode: delta, tree\n"
                ;
 }
 
@@ -40,10 +46,12 @@ int main(int argc, char *argv[])
     logger_config_env(); // from $PVXS_LOG
     bool verbose = false;
     std::string request;
+    Value::Fmt::format_t format = Value::Fmt::Delta;
+    auto arrLimit = epicsUInt64(-1);
 
     {
         int opt;
-        while ((opt = getopt(argc, argv, "hvdr:")) != -1) {
+        while ((opt = getopt(argc, argv, "hvdr:#:F:")) != -1) {
             switch(opt) {
             case 'h':
                 usage(argv[0]);
@@ -57,6 +65,21 @@ int main(int argc, char *argv[])
                 break;
             case 'r':
                 request = optarg;
+                break;
+            case '#':
+                if(epicsParseUInt64(optarg, &arrLimit, 0, nullptr)) {
+                    std::cerr<<"Invalid array limit: "<<optarg<<"\n";
+                    return 1;
+                }
+                break;
+            case 'F':
+                if(std::strcmp(optarg, "tree")==0) {
+                    format = Value::Fmt::Tree;
+                } else if(std::strcmp(optarg, "delta")==0) {
+                    format = Value::Fmt::Delta;
+                } else {
+                    std::cerr<<"Warning: ignoring unknown format '"<<optarg<<"'\n";
+                }
                 break;
             default:
                 usage(argv[0]);
@@ -80,14 +103,15 @@ int main(int argc, char *argv[])
 
         ops.push_back(ctxt.monitor(argv[n])
                       .pvRequest(request)
-                      .event([&argv, n, verbose, &remaining, &done](client::Subscription& mon)
+                      .event([&argv, n, verbose, &remaining, &done, format, arrLimit](client::Subscription& mon)
         {
 
             try {
                 while(auto update = mon.pop()) {
                     log_info_printf(app, "%s POP data\n", argv[n]);
                     std::cout<<argv[n]<<"\n"<<update.format()
-                               .delta();
+                               .format(format)
+                               .arrayLimit(arrLimit);
                 }
                 log_info_printf(app, "%s POP empty\n", argv[n]);
 
