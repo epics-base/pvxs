@@ -99,7 +99,10 @@ enum struct Kind : uint8_t {
     Null     = 0xe0,
 };
 
-//! A particular type
+/** Possible Field types.
+ *
+ * eg. String is scalar string, StringA is array of strings.
+ */
 struct TypeCode {
     //! actual complete (scalar) type code.
     enum code_t : uint8_t {
