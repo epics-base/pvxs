@@ -182,6 +182,30 @@ inline std::ostream& operator<<(std::ostream& strm, TypeCode c) {
     return strm;
 }
 
+namespace impl {
+template<typename T>
+struct ScalarMap;
+
+#define CASE(TYPE, STORE, CODE) \
+template<> struct ScalarMap<TYPE> { typedef STORE store_t; static constexpr TypeCode::code_t code{TypeCode::CODE}; }
+
+CASE(bool    , uint64_t, Bool);
+CASE(uint8_t , uint64_t, UInt8);
+CASE(uint16_t, uint64_t, UInt16);
+CASE(uint32_t, uint64_t, UInt32);
+CASE(uint64_t, uint64_t, UInt64);
+CASE(int8_t  , int64_t , Int8);
+CASE(int16_t , int64_t , Int16);
+CASE(int32_t , int64_t , Int32);
+CASE(int64_t , int64_t , Int64);
+CASE(float   , double  , Float32);
+CASE(double  , double  , Float64);
+CASE(std::string, std::string, String);
+
+#undef CASE
+
+} // namespace
+
 //! Definition of a member of a Struct/Union for use with TypeDef
 struct Member {
 private:

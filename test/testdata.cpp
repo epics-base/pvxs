@@ -172,16 +172,57 @@ void testPvRequest()
     }
 }
 
+template<typename Store, typename Inout>
+void testConvertScalar(const Store& store, const Inout& inout)
+{
+    testShow()<<__func__<<"("<<store<<","<<inout<<")";
+
+    typedef impl::ScalarMap<Store> store_t;
+
+    auto cont = TypeDef(store_t::code).create();
+
+    try {
+        cont.from(inout);
+    }catch(std::exception& e){
+        testCase(false)<<"Error storing as "<<typeid (Store).name()<<" "<<inout<<" : "<<e.what();
+    }
+
+    testEq(store, cont.as<Store>())<<typeid(Store).name();
+
+    testEq(inout, cont.as<Inout>())<<typeid(Store).name()<<"->"<<typeid(Inout).name();
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(20);
+    testPlan(62);
     testTraverse();
     testAssign();
     testName();
     testIter();
     testPvRequest();
+    testConvertScalar<double, bool>(1.0, true);
+    testConvertScalar<double, bool>(0.0, false);
+    testConvertScalar<double, uint32_t>(5.0, 5);
+    testConvertScalar<double, int32_t>(5.0, 5);
+    testConvertScalar<double, int32_t>(-5.0, -5);
+    testConvertScalar<double, double>(-5.0, -5.0);
+    testConvertScalar<double, std::string>(-5.0, "-5");
+    testConvertScalar<int32_t, bool>(1, true);
+    testConvertScalar<int32_t, bool>(0, false);
+    testConvertScalar<int32_t, uint32_t>(5, 5);
+    testConvertScalar<int32_t, int32_t>(5, 5);
+    testConvertScalar<int32_t, int32_t>(-5, -5);
+    testConvertScalar<int32_t, double>(-5, -5.0);
+    testConvertScalar<int32_t, std::string>(-5, "-5");
+    testConvertScalar<std::string, bool>("true", true);
+    testConvertScalar<std::string, bool>("false", false);
+    testConvertScalar<std::string, uint32_t>("5", 5);
+    testConvertScalar<std::string, int32_t>("5", 5);
+    testConvertScalar<std::string, int32_t>("-5", -5);
+    testConvertScalar<std::string, double>("-5", -5.0);
+    testConvertScalar<std::string, std::string>("-5", "-5");
     cleanup_for_valgrind();
     return testDone();
 }
