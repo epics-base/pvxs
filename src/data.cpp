@@ -695,6 +695,35 @@ void Value::copyIn(const void *ptr, StoreType type)
         }
         throw NoConvert();
     case StoreType::Null:
+        if(type==StoreType::Compound) {
+            auto& src = *reinterpret_cast<const Value*>(ptr);
+            if(src.type()==TypeCode::Struct) {
+                // copy struct to struct
+                // all marked source field may be mapped to destination fields
+
+                for(auto& sfld : src.imarked()) {
+                    if(sfld.type()==TypeCode::Struct) {
+                        // entire sub-struct marked
+
+                        for(auto& sfld2 : sfld.iall()) {
+
+                            if(auto dfld = (*this)[src.nameOf(sfld2)]) {
+                                dfld.copyIn(&sfld2.store->store, sfld2.store->code);
+                            } else {
+                                throw NoField();
+                            }
+                        }
+
+                    } else {
+                        if(auto dfld = (*this)[src.nameOf(sfld)]) {
+                            dfld.copyIn(&sfld.store->store, sfld.store->code);
+                        } else {
+                            throw NoField();
+                        }
+                    }
+                }
+            }
+        }
         throw NoConvert();
     }
 
