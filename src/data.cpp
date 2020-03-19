@@ -500,7 +500,7 @@ void Value::copyOut(void *ptr, StoreType type) const
         }
         case StoreType::Bool: {
             if(src=="true") { *reinterpret_cast<bool*>(ptr) = true; return; }
-            else if(src=="flase") { *reinterpret_cast<bool*>(ptr) = false; return; }
+            else if(src=="false") { *reinterpret_cast<bool*>(ptr) = false; return; }
         }
         default:
             break;
