@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
         std::cout<<"Effective config\n"<<ctxt.config();
 
     epicsEvent done;
-    int ret=2;
+    int ret=0;
 
     auto op =ctxt.put(pvname)
             .pvRequest(request)
@@ -125,7 +125,6 @@ int main(int argc, char *argv[])
             .result([&ret, &done](client::Result&& result) {
                 try {
                     result();
-                    ret=0;
                 }catch(std::exception& e){
                     std::cerr<<"Error "<<typeid(e).name()<<" : "<<e.what()<<"\n";
                     ret=1;
