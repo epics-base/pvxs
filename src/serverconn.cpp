@@ -364,8 +364,16 @@ ServIface::ServIface(const std::string& addr, unsigned short port, server::Serve
 
     name = bind_addr.tostring();
 
+    // added in libevent 2.1.1
+#ifndef LEV_OPT_DISABLED
+#  define LEV_OPT_DISABLED 0
+#endif
+
     const int backlog = 4;
     listener = evlisten(evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED, backlog, sock.sock));
+
+    if(!LEV_OPT_DISABLED)
+        evconnlistener_disable(listener.get());
 }
 
 void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw)
