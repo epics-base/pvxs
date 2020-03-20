@@ -193,7 +193,7 @@ std::ostream& operator<<(std::ostream& strm, const Limiter&);
  * @endcode
  *
  * The void / non-void variants allow arrays to be moved without explicit typing.
- * However, the void variant preserves the original TypeCode.
+ * However, the void variant preserves the original ArrayType.
  *
  * @code
  *   shared_array<uint32_t> arr({1, 2, 3});
@@ -271,6 +271,24 @@ public:
     shared_array(const std::shared_ptr<A>& a, E* b, size_t len)
         :base_t(a, b, len)
     {}
+
+#ifdef _DOXYGEN_
+    // documentation for sa_base method since this is an implementation detail
+
+    //! Number of elements
+    size_t size() const;
+    //! size()==0
+    bool empty() const;
+    //! True if this instance is the only (strong) reference
+    bool unique() const;
+    //! Reset size()==0
+    void clear();
+    //! Exchange contents with other
+    void swap(shared_array& o);
+    //! Access to raw pointer.
+    //! May be nullptr if size()==0
+    E* data() const noexcept;
+#endif
 
     size_t max_size() const noexcept {return ((size_t)-1)/sizeof(E);}
 
@@ -357,14 +375,21 @@ public:
         return ret;
     }
 
-    //! static_cast<TO>() to non-void, preserving const-ness
+#if _DOXYGEN_
+    //! Cast to other type, preserving const-ness.
+    template<typename TO>
+    shared_array<TO>
+    castTo() const;
+#endif
+
+    // static_cast<TO>() to non-void, preserving const-ness
     template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
     castTo() const {
         return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), this->_count);
     }
 
-    //! static_cast<TO>() to void, preserving const-ness
+    // static_cast<TO>() to void, preserving const-ness
     template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
     castTo() const {

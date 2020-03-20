@@ -87,7 +87,7 @@ An example using `pvxs::nt::NTScalar`.
 
     shared_array<double> arr({1.0, 2.0});
     auto top = nt::NTScalar{TypeCode::Float64A}.create();
-    top["value"] = arr.freeze().castTo<void void>();
+    top["value"] = arr.freeze().castTo<const void>();
 
 .. doxygenclass:: pvxs::shared_array
     :members:
