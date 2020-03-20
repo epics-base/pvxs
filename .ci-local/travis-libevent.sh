@@ -18,6 +18,7 @@ fi
 if [ "$LIBEVENT_TAG" ]
 then
     cd bundle/libevent
+    git fetch origin "${LIBEVENT_TAG#origin/}"
     git reset --hard "$LIBEVENT_TAG"
     cd ../..
 fi

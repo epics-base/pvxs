@@ -78,7 +78,7 @@ jobs:
 
 # Other gcc versions (added as an extra package)
 
-  - env: BASE=7.0
+  - env: BASE=7.0 LIBEVENT_TAG=origin/patches-2.0
     dist: trusty
     compiler: gcc-4.8
     addons: { apt: { packages: ["g++-4.8"], sources: ["ubuntu-toolchain-r-test"] } }
