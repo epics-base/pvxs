@@ -115,7 +115,6 @@ MAIN(testev)
     testPlan(14);
     test_call();
     test_fill_evbuf();
-    libevent_global_shutdown();
     cleanup_for_valgrind();
     return testDone();
 }

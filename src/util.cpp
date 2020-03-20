@@ -45,6 +45,9 @@ unsigned long version_int()
 
 void cleanup_for_valgrind()
 {
+#if LIBEVENT_VERSION_NUMBER >= 0x02010000
+    libevent_global_shutdown();
+#endif
     impl::logger_shutdown();
     impl::UDPManager::cleanup();
 }

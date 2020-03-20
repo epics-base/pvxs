@@ -56,6 +56,8 @@ unsigned long version_int();
 /** Free some internal global allocations to avoid false positives in
  *  valgrind (or similar) tools looking for memory leaks.
  *
+ *  Calls libevent_global_shutdown() when available (libevent >=2.1).
+ *
  * @warning This function is optional.
  *          If you don't understand the intended use case, then do not call it!
  *

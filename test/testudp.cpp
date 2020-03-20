@@ -158,7 +158,6 @@ int main(int argc, char *argv[])
     testSearch(false, {"hello"});
     testSearch(true , {"one", "two"});
     testSearch(false, {"one", "two"});
-    libevent_global_shutdown();
     cleanup_for_valgrind();
     return testDone();
 }

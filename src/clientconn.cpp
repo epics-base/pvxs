@@ -27,7 +27,7 @@ Connection::Connection(const std::shared_ptr<Context::Pvt>& context, const SockA
     timeval timo = {30, 0};
     bufferevent_set_timeouts(bev.get(), &timo, &timo);
 
-    if(bufferevent_socket_connect(bev.get(), &peerAddr->sa, peerAddr.size()))
+    if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
         throw std::runtime_error("Unable to begin connecting");
 
     log_debug_printf(io, "Connecting to %s\n", peerName.c_str());

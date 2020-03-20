@@ -212,7 +212,6 @@ MAIN(testsock)
     test_from_wire();
     test_to_wire();
     testDiag("Done");
-    libevent_global_shutdown();
     cleanup_for_valgrind();
     return testDone();
 }
