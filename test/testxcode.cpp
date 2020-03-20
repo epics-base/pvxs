@@ -166,60 +166,59 @@ void testSimpleDef()
 
     auto val = simpledef.create();
 
-    testEq(std::string(SB()<<"\n"<<Value::Helper::desc(val)),
-R"out(
-[0] struct simple_t parent=[0]  [0:11)
-    achoice -> 10 [10]
-    any -> 7 [7]
-    anya -> 8 [8]
-    arbitrary -> 5 [5]
-    arbitrary.sarr -> 6 [6]
-    choice -> 9 [9]
-    timeStamp -> 2 [2]
-    timeStamp.nanoseconds -> 4 [4]
-    timeStamp.secondsPastEpoch -> 3 [3]
-    value -> 1 [1]
-    value :  1 [1]
-    timeStamp :  2 [2]
-    arbitrary :  5 [5]
-    any :  7 [7]
-    anya :  8 [8]
-    choice :  9 [9]
-    achoice :  10 [10]
-[1] double[]  parent=[0]  [1:2)
-[2] struct time_t parent=[0]  [2:5)
-    nanoseconds -> 2 [4]
-    secondsPastEpoch -> 1 [3]
-    secondsPastEpoch :  1 [3]
-    nanoseconds :  2 [4]
-[3] uint64_t  parent=[2]  [3:4)
-[4] uint32_t  parent=[2]  [4:5)
-[5] struct  parent=[0]  [5:7)
-    sarr -> 1 [6]
-    sarr :  1 [6]
-[6] struct[]  parent=[5]  [6:7)
-    [0] struct  parent=[0]  [0:2)
-        value -> 1 [1]
-        value :  1 [1]
-    [1] uint32_t  parent=[0]  [1:2)
-[7] any  parent=[0]  [7:8)
-[8] any[]  parent=[0]  [8:9)
-[9] union  parent=[0]  [9:10)
-    a -> 0 [0]
-    b -> 1 [1]
-    a :  0 [0]
-    [0] float  parent=[0]  [0:1)
-    b :  1 [1]
-    [0] string  parent=[0]  [0:1)
-[10] union[]  parent=[0]  [10:11)
-    [0] union  parent=[0]  [0:1)
-        x -> 0 [0]
-        y -> 1 [1]
-        x :  0 [0]
-        [0] string  parent=[0]  [0:1)
-        y :  1 [1]
-        [0] string  parent=[0]  [0:1)
-)out")<<"Actual:\n"<<Value::Helper::desc(val);
+    testStrEq(std::string(SB()<<Value::Helper::desc(val)),
+        "[0] struct simple_t parent=[0]  [0:11)\n"
+        "    achoice -> 10 [10]\n"
+        "    any -> 7 [7]\n"
+        "    anya -> 8 [8]\n"
+        "    arbitrary -> 5 [5]\n"
+        "    arbitrary.sarr -> 6 [6]\n"
+        "    choice -> 9 [9]\n"
+        "    timeStamp -> 2 [2]\n"
+        "    timeStamp.nanoseconds -> 4 [4]\n"
+        "    timeStamp.secondsPastEpoch -> 3 [3]\n"
+        "    value -> 1 [1]\n"
+        "    value :  1 [1]\n"
+        "    timeStamp :  2 [2]\n"
+        "    arbitrary :  5 [5]\n"
+        "    any :  7 [7]\n"
+        "    anya :  8 [8]\n"
+        "    choice :  9 [9]\n"
+        "    achoice :  10 [10]\n"
+        "[1] double[]  parent=[0]  [1:2)\n"
+        "[2] struct time_t parent=[0]  [2:5)\n"
+        "    nanoseconds -> 2 [4]\n"
+        "    secondsPastEpoch -> 1 [3]\n"
+        "    secondsPastEpoch :  1 [3]\n"
+        "    nanoseconds :  2 [4]\n"
+        "[3] uint64_t  parent=[2]  [3:4)\n"
+        "[4] uint32_t  parent=[2]  [4:5)\n"
+        "[5] struct  parent=[0]  [5:7)\n"
+        "    sarr -> 1 [6]\n"
+        "    sarr :  1 [6]\n"
+        "[6] struct[]  parent=[5]  [6:7)\n"
+        "    [0] struct  parent=[0]  [0:2)\n"
+        "        value -> 1 [1]\n"
+        "        value :  1 [1]\n"
+        "    [1] uint32_t  parent=[0]  [1:2)\n"
+        "[7] any  parent=[0]  [7:8)\n"
+        "[8] any[]  parent=[0]  [8:9)\n"
+        "[9] union  parent=[0]  [9:10)\n"
+        "    a -> 0 [0]\n"
+        "    b -> 1 [1]\n"
+        "    a :  0 [0]\n"
+        "    [0] float  parent=[0]  [0:1)\n"
+        "    b :  1 [1]\n"
+        "    [0] string  parent=[0]  [0:1)\n"
+        "[10] union[]  parent=[0]  [10:11)\n"
+        "    [0] union  parent=[0]  [0:1)\n"
+        "        x -> 0 [0]\n"
+        "        y -> 1 [1]\n"
+        "        x :  0 [0]\n"
+        "        [0] string  parent=[0]  [0:1)\n"
+        "        y :  1 [1]\n"
+        "        [0] string  parent=[0]  [0:1)\n"
+    );
 }
 
 void testSerialize2()
@@ -482,20 +481,18 @@ void testDecode1()
 
     //   cat <<EOF | sed -e 's|"|\\"|g' -e 's|^# |    "|' -e 's|$|\\n"|g'
     // paste in Actual
-    testEq(std::string(SB()<<"\n"<<descs.data()),
-           R"out(
-[0] struct timeStamp_t parent=[0]  [0:4)
-    nanoSeconds -> 2 [2]
-    secondsPastEpoch -> 1 [1]
-    userTag -> 3 [3]
-    secondsPastEpoch :  1 [1]
-    nanoSeconds :  2 [2]
-    userTag :  3 [3]
-[1] int64_t  parent=[0]  [1:2)
-[2] int32_t  parent=[0]  [2:3)
-[3] int32_t  parent=[0]  [3:4)
-)out"
-     )<<"Actual:\n"<<descs.data();
+    testStrEq(std::string(SB()<<descs.data()),
+           "[0] struct timeStamp_t parent=[0]  [0:4)\n"
+           "    nanoSeconds -> 2 [2]\n"
+           "    secondsPastEpoch -> 1 [1]\n"
+           "    userTag -> 3 [3]\n"
+           "    secondsPastEpoch :  1 [1]\n"
+           "    nanoSeconds :  2 [2]\n"
+           "    userTag :  3 [3]\n"
+           "[1] int64_t  parent=[0]  [1:2)\n"
+           "[2] int32_t  parent=[0]  [2:3)\n"
+           "[3] int32_t  parent=[0]  [3:4)\n"
+     );
 }
 
 /*  epics:nt/NTScalarArray:1.0
@@ -538,44 +535,42 @@ void testXCodeNTScalar()
         testEq(descs.size(), descs.front().size());
     }
 
-    testEq(std::string(SB()<<"\n"<<descs.data()),
-           R"out(
-[0] struct epics:nt/NTScalarArray:1.0 parent=[0]  [0:10)
-    alarm -> 2 [2]
-    alarm.message -> 5 [5]
-    alarm.severity -> 3 [3]
-    alarm.status -> 4 [4]
-    timeStamp -> 6 [6]
-    timeStamp.nanoseconds -> 8 [8]
-    timeStamp.secondsPastEpoch -> 7 [7]
-    timeStamp.userTag -> 9 [9]
-    value -> 1 [1]
-    value :  1 [1]
-    alarm :  2 [2]
-    timeStamp :  6 [6]
-[1] double[]  parent=[0]  [1:2)
-[2] struct alarm_t parent=[0]  [2:6)
-    message -> 3 [5]
-    severity -> 1 [3]
-    status -> 2 [4]
-    severity :  1 [3]
-    status :  2 [4]
-    message :  3 [5]
-[3] int32_t  parent=[2]  [3:4)
-[4] int32_t  parent=[2]  [4:5)
-[5] string  parent=[2]  [5:6)
-[6] struct time_t parent=[0]  [6:10)
-    nanoseconds -> 2 [8]
-    secondsPastEpoch -> 1 [7]
-    userTag -> 3 [9]
-    secondsPastEpoch :  1 [7]
-    nanoseconds :  2 [8]
-    userTag :  3 [9]
-[7] int64_t  parent=[6]  [7:8)
-[8] int32_t  parent=[6]  [8:9)
-[9] int32_t  parent=[6]  [9:10)
-)out"
-    )<<"Actual:\n"<<descs.data();
+    testStrEq(std::string(SB()<<descs.data()),
+           "[0] struct epics:nt/NTScalarArray:1.0 parent=[0]  [0:10)\n"
+           "    alarm -> 2 [2]\n"
+           "    alarm.message -> 5 [5]\n"
+           "    alarm.severity -> 3 [3]\n"
+           "    alarm.status -> 4 [4]\n"
+           "    timeStamp -> 6 [6]\n"
+           "    timeStamp.nanoseconds -> 8 [8]\n"
+           "    timeStamp.secondsPastEpoch -> 7 [7]\n"
+           "    timeStamp.userTag -> 9 [9]\n"
+           "    value -> 1 [1]\n"
+           "    value :  1 [1]\n"
+           "    alarm :  2 [2]\n"
+           "    timeStamp :  6 [6]\n"
+           "[1] double[]  parent=[0]  [1:2)\n"
+           "[2] struct alarm_t parent=[0]  [2:6)\n"
+           "    message -> 3 [5]\n"
+           "    severity -> 1 [3]\n"
+           "    status -> 2 [4]\n"
+           "    severity :  1 [3]\n"
+           "    status :  2 [4]\n"
+           "    message :  3 [5]\n"
+           "[3] int32_t  parent=[2]  [3:4)\n"
+           "[4] int32_t  parent=[2]  [4:5)\n"
+           "[5] string  parent=[2]  [5:6)\n"
+           "[6] struct time_t parent=[0]  [6:10)\n"
+           "    nanoseconds -> 2 [8]\n"
+           "    secondsPastEpoch -> 1 [7]\n"
+           "    userTag -> 3 [9]\n"
+           "    secondsPastEpoch :  1 [7]\n"
+           "    nanoseconds :  2 [8]\n"
+           "    userTag :  3 [9]\n"
+           "[7] int64_t  parent=[6]  [7:8)\n"
+           "[8] int32_t  parent=[6]  [8:9)\n"
+           "[9] int32_t  parent=[6]  [9:10)\n"
+    );
 
     testDiag("Round trip back to bytes");
     std::vector<uint8_t> out;
@@ -664,183 +659,181 @@ void testXCodeNTNDArray()
         testEq(descs.size(), descs.front().size());
     }
 
-    testEq(std::string(SB()<<"\n"<<descs.data()),
-R"out(
-[0] struct epics:nt/NTNDArray:1.0 parent=[0]  [0:22)
-    alarm -> 12 [12]
-    alarm.message -> 15 [15]
-    alarm.severity -> 13 [13]
-    alarm.status -> 14 [14]
-    attribute -> 21 [21]
-    codec -> 2 [2]
-    codec.name -> 3 [3]
-    codec.parameters -> 4 [4]
-    compressedSize -> 5 [5]
-    dataTimeStamp -> 8 [8]
-    dataTimeStamp.nanoseconds -> 10 [10]
-    dataTimeStamp.secondsPastEpoch -> 9 [9]
-    dataTimeStamp.userTag -> 11 [11]
-    dimension -> 20 [20]
-    timeStamp -> 16 [16]
-    timeStamp.nanoseconds -> 18 [18]
-    timeStamp.secondsPastEpoch -> 17 [17]
-    timeStamp.userTag -> 19 [19]
-    uncompressedSize -> 6 [6]
-    uniqueId -> 7 [7]
-    value -> 1 [1]
-    value :  1 [1]
-    codec :  2 [2]
-    compressedSize :  5 [5]
-    uncompressedSize :  6 [6]
-    uniqueId :  7 [7]
-    dataTimeStamp :  8 [8]
-    alarm :  12 [12]
-    timeStamp :  16 [16]
-    dimension :  20 [20]
-    attribute :  21 [21]
-[1] union  parent=[0]  [1:2)
-    booleanValue -> 0 [0]
-    byteValue -> 1 [1]
-    doubleValue -> 10 [10]
-    floatValue -> 9 [9]
-    intValue -> 3 [3]
-    longValue -> 4 [4]
-    shortValue -> 2 [2]
-    ubyteValue -> 5 [5]
-    uintValue -> 7 [7]
-    ulongValue -> 8 [8]
-    ushortValue -> 6 [6]
-    booleanValue :  0 [0]
-    [0] bool[]  parent=[0]  [0:1)
-    byteValue :  1 [1]
-    [0] int8_t[]  parent=[0]  [0:1)
-    shortValue :  2 [2]
-    [0] int16_t[]  parent=[0]  [0:1)
-    intValue :  3 [3]
-    [0] int32_t[]  parent=[0]  [0:1)
-    longValue :  4 [4]
-    [0] int64_t[]  parent=[0]  [0:1)
-    ubyteValue :  5 [5]
-    [0] uint8_t[]  parent=[0]  [0:1)
-    ushortValue :  6 [6]
-    [0] uint16_t[]  parent=[0]  [0:1)
-    uintValue :  7 [7]
-    [0] uint32_t[]  parent=[0]  [0:1)
-    ulongValue :  8 [8]
-    [0] uint64_t[]  parent=[0]  [0:1)
-    floatValue :  9 [9]
-    [0] float[]  parent=[0]  [0:1)
-    doubleValue :  10 [10]
-    [0] double[]  parent=[0]  [0:1)
-[2] struct codec_t parent=[0]  [2:5)
-    name -> 1 [3]
-    parameters -> 2 [4]
-    name :  1 [3]
-    parameters :  2 [4]
-[3] string  parent=[2]  [3:4)
-[4] any  parent=[2]  [4:5)
-[5] int64_t  parent=[0]  [5:6)
-[6] int64_t  parent=[0]  [6:7)
-[7] int32_t  parent=[0]  [7:8)
-[8] struct time_t parent=[0]  [8:12)
-    nanoseconds -> 2 [10]
-    secondsPastEpoch -> 1 [9]
-    userTag -> 3 [11]
-    secondsPastEpoch :  1 [9]
-    nanoseconds :  2 [10]
-    userTag :  3 [11]
-[9] int64_t  parent=[8]  [9:10)
-[10] int32_t  parent=[8]  [10:11)
-[11] int32_t  parent=[8]  [11:12)
-[12] struct alarm_t parent=[0]  [12:16)
-    message -> 3 [15]
-    severity -> 1 [13]
-    status -> 2 [14]
-    severity :  1 [13]
-    status :  2 [14]
-    message :  3 [15]
-[13] int32_t  parent=[12]  [13:14)
-[14] int32_t  parent=[12]  [14:15)
-[15] string  parent=[12]  [15:16)
-[16] struct time_t parent=[0]  [16:20)
-    nanoseconds -> 2 [18]
-    secondsPastEpoch -> 1 [17]
-    userTag -> 3 [19]
-    secondsPastEpoch :  1 [17]
-    nanoseconds :  2 [18]
-    userTag :  3 [19]
-[17] int64_t  parent=[16]  [17:18)
-[18] int32_t  parent=[16]  [18:19)
-[19] int32_t  parent=[16]  [19:20)
-[20] struct[]  parent=[0]  [20:21)
-    [0] struct dimension_t parent=[0]  [0:6)
-        binning -> 4 [4]
-        fullSize -> 3 [3]
-        offset -> 2 [2]
-        reverse -> 5 [5]
-        size -> 1 [1]
-        size :  1 [1]
-        offset :  2 [2]
-        fullSize :  3 [3]
-        binning :  4 [4]
-        reverse :  5 [5]
-    [1] int32_t  parent=[0]  [1:2)
-    [2] int32_t  parent=[0]  [2:3)
-    [3] int32_t  parent=[0]  [3:4)
-    [4] int32_t  parent=[0]  [4:5)
-    [5] bool  parent=[0]  [5:6)
-[21] struct[]  parent=[0]  [21:22)
-    [0] struct epics:nt/NTAttribute:1.0 parent=[0]  [0:15)
-        alarm -> 5 [5]
-        alarm.message -> 8 [8]
-        alarm.severity -> 6 [6]
-        alarm.status -> 7 [7]
-        descriptor -> 4 [4]
-        name -> 1 [1]
-        source -> 14 [14]
-        sourceType -> 13 [13]
-        tags -> 3 [3]
-        timestamp -> 9 [9]
-        timestamp.nanoseconds -> 11 [11]
-        timestamp.secondsPastEpoch -> 10 [10]
-        timestamp.userTag -> 12 [12]
-        value -> 2 [2]
-        name :  1 [1]
-        value :  2 [2]
-        tags :  3 [3]
-        descriptor :  4 [4]
-        alarm :  5 [5]
-        timestamp :  9 [9]
-        sourceType :  13 [13]
-        source :  14 [14]
-    [1] string  parent=[0]  [1:2)
-    [2] any  parent=[0]  [2:3)
-    [3] string[]  parent=[0]  [3:4)
-    [4] string  parent=[0]  [4:5)
-    [5] struct alarm_t parent=[0]  [5:9)
-        message -> 3 [8]
-        severity -> 1 [6]
-        status -> 2 [7]
-        severity :  1 [6]
-        status :  2 [7]
-        message :  3 [8]
-    [6] int32_t  parent=[5]  [6:7)
-    [7] int32_t  parent=[5]  [7:8)
-    [8] string  parent=[5]  [8:9)
-    [9] struct time_t parent=[0]  [9:13)
-        nanoseconds -> 2 [11]
-        secondsPastEpoch -> 1 [10]
-        userTag -> 3 [12]
-        secondsPastEpoch :  1 [10]
-        nanoseconds :  2 [11]
-        userTag :  3 [12]
-    [10] int64_t  parent=[9]  [10:11)
-    [11] int32_t  parent=[9]  [11:12)
-    [12] int32_t  parent=[9]  [12:13)
-    [13] int32_t  parent=[0]  [13:14)
-    [14] string  parent=[0]  [14:15)
-)out"
-    )<<"Actual:\n"<<descs.data();
+    testStrEq(std::string(SB()<<descs.data()),
+        "[0] struct epics:nt/NTNDArray:1.0 parent=[0]  [0:22)\n"
+        "    alarm -> 12 [12]\n"
+        "    alarm.message -> 15 [15]\n"
+        "    alarm.severity -> 13 [13]\n"
+        "    alarm.status -> 14 [14]\n"
+        "    attribute -> 21 [21]\n"
+        "    codec -> 2 [2]\n"
+        "    codec.name -> 3 [3]\n"
+        "    codec.parameters -> 4 [4]\n"
+        "    compressedSize -> 5 [5]\n"
+        "    dataTimeStamp -> 8 [8]\n"
+        "    dataTimeStamp.nanoseconds -> 10 [10]\n"
+        "    dataTimeStamp.secondsPastEpoch -> 9 [9]\n"
+        "    dataTimeStamp.userTag -> 11 [11]\n"
+        "    dimension -> 20 [20]\n"
+        "    timeStamp -> 16 [16]\n"
+        "    timeStamp.nanoseconds -> 18 [18]\n"
+        "    timeStamp.secondsPastEpoch -> 17 [17]\n"
+        "    timeStamp.userTag -> 19 [19]\n"
+        "    uncompressedSize -> 6 [6]\n"
+        "    uniqueId -> 7 [7]\n"
+        "    value -> 1 [1]\n"
+        "    value :  1 [1]\n"
+        "    codec :  2 [2]\n"
+        "    compressedSize :  5 [5]\n"
+        "    uncompressedSize :  6 [6]\n"
+        "    uniqueId :  7 [7]\n"
+        "    dataTimeStamp :  8 [8]\n"
+        "    alarm :  12 [12]\n"
+        "    timeStamp :  16 [16]\n"
+        "    dimension :  20 [20]\n"
+        "    attribute :  21 [21]\n"
+        "[1] union  parent=[0]  [1:2)\n"
+        "    booleanValue -> 0 [0]\n"
+        "    byteValue -> 1 [1]\n"
+        "    doubleValue -> 10 [10]\n"
+        "    floatValue -> 9 [9]\n"
+        "    intValue -> 3 [3]\n"
+        "    longValue -> 4 [4]\n"
+        "    shortValue -> 2 [2]\n"
+        "    ubyteValue -> 5 [5]\n"
+        "    uintValue -> 7 [7]\n"
+        "    ulongValue -> 8 [8]\n"
+        "    ushortValue -> 6 [6]\n"
+        "    booleanValue :  0 [0]\n"
+        "    [0] bool[]  parent=[0]  [0:1)\n"
+        "    byteValue :  1 [1]\n"
+        "    [0] int8_t[]  parent=[0]  [0:1)\n"
+        "    shortValue :  2 [2]\n"
+        "    [0] int16_t[]  parent=[0]  [0:1)\n"
+        "    intValue :  3 [3]\n"
+        "    [0] int32_t[]  parent=[0]  [0:1)\n"
+        "    longValue :  4 [4]\n"
+        "    [0] int64_t[]  parent=[0]  [0:1)\n"
+        "    ubyteValue :  5 [5]\n"
+        "    [0] uint8_t[]  parent=[0]  [0:1)\n"
+        "    ushortValue :  6 [6]\n"
+        "    [0] uint16_t[]  parent=[0]  [0:1)\n"
+        "    uintValue :  7 [7]\n"
+        "    [0] uint32_t[]  parent=[0]  [0:1)\n"
+        "    ulongValue :  8 [8]\n"
+        "    [0] uint64_t[]  parent=[0]  [0:1)\n"
+        "    floatValue :  9 [9]\n"
+        "    [0] float[]  parent=[0]  [0:1)\n"
+        "    doubleValue :  10 [10]\n"
+        "    [0] double[]  parent=[0]  [0:1)\n"
+        "[2] struct codec_t parent=[0]  [2:5)\n"
+        "    name -> 1 [3]\n"
+        "    parameters -> 2 [4]\n"
+        "    name :  1 [3]\n"
+        "    parameters :  2 [4]\n"
+        "[3] string  parent=[2]  [3:4)\n"
+        "[4] any  parent=[2]  [4:5)\n"
+        "[5] int64_t  parent=[0]  [5:6)\n"
+        "[6] int64_t  parent=[0]  [6:7)\n"
+        "[7] int32_t  parent=[0]  [7:8)\n"
+        "[8] struct time_t parent=[0]  [8:12)\n"
+        "    nanoseconds -> 2 [10]\n"
+        "    secondsPastEpoch -> 1 [9]\n"
+        "    userTag -> 3 [11]\n"
+        "    secondsPastEpoch :  1 [9]\n"
+        "    nanoseconds :  2 [10]\n"
+        "    userTag :  3 [11]\n"
+        "[9] int64_t  parent=[8]  [9:10)\n"
+        "[10] int32_t  parent=[8]  [10:11)\n"
+        "[11] int32_t  parent=[8]  [11:12)\n"
+        "[12] struct alarm_t parent=[0]  [12:16)\n"
+        "    message -> 3 [15]\n"
+        "    severity -> 1 [13]\n"
+        "    status -> 2 [14]\n"
+        "    severity :  1 [13]\n"
+        "    status :  2 [14]\n"
+        "    message :  3 [15]\n"
+        "[13] int32_t  parent=[12]  [13:14)\n"
+        "[14] int32_t  parent=[12]  [14:15)\n"
+        "[15] string  parent=[12]  [15:16)\n"
+        "[16] struct time_t parent=[0]  [16:20)\n"
+        "    nanoseconds -> 2 [18]\n"
+        "    secondsPastEpoch -> 1 [17]\n"
+        "    userTag -> 3 [19]\n"
+        "    secondsPastEpoch :  1 [17]\n"
+        "    nanoseconds :  2 [18]\n"
+        "    userTag :  3 [19]\n"
+        "[17] int64_t  parent=[16]  [17:18)\n"
+        "[18] int32_t  parent=[16]  [18:19)\n"
+        "[19] int32_t  parent=[16]  [19:20)\n"
+        "[20] struct[]  parent=[0]  [20:21)\n"
+        "    [0] struct dimension_t parent=[0]  [0:6)\n"
+        "        binning -> 4 [4]\n"
+        "        fullSize -> 3 [3]\n"
+        "        offset -> 2 [2]\n"
+        "        reverse -> 5 [5]\n"
+        "        size -> 1 [1]\n"
+        "        size :  1 [1]\n"
+        "        offset :  2 [2]\n"
+        "        fullSize :  3 [3]\n"
+        "        binning :  4 [4]\n"
+        "        reverse :  5 [5]\n"
+        "    [1] int32_t  parent=[0]  [1:2)\n"
+        "    [2] int32_t  parent=[0]  [2:3)\n"
+        "    [3] int32_t  parent=[0]  [3:4)\n"
+        "    [4] int32_t  parent=[0]  [4:5)\n"
+        "    [5] bool  parent=[0]  [5:6)\n"
+        "[21] struct[]  parent=[0]  [21:22)\n"
+        "    [0] struct epics:nt/NTAttribute:1.0 parent=[0]  [0:15)\n"
+        "        alarm -> 5 [5]\n"
+        "        alarm.message -> 8 [8]\n"
+        "        alarm.severity -> 6 [6]\n"
+        "        alarm.status -> 7 [7]\n"
+        "        descriptor -> 4 [4]\n"
+        "        name -> 1 [1]\n"
+        "        source -> 14 [14]\n"
+        "        sourceType -> 13 [13]\n"
+        "        tags -> 3 [3]\n"
+        "        timestamp -> 9 [9]\n"
+        "        timestamp.nanoseconds -> 11 [11]\n"
+        "        timestamp.secondsPastEpoch -> 10 [10]\n"
+        "        timestamp.userTag -> 12 [12]\n"
+        "        value -> 2 [2]\n"
+        "        name :  1 [1]\n"
+        "        value :  2 [2]\n"
+        "        tags :  3 [3]\n"
+        "        descriptor :  4 [4]\n"
+        "        alarm :  5 [5]\n"
+        "        timestamp :  9 [9]\n"
+        "        sourceType :  13 [13]\n"
+        "        source :  14 [14]\n"
+        "    [1] string  parent=[0]  [1:2)\n"
+        "    [2] any  parent=[0]  [2:3)\n"
+        "    [3] string[]  parent=[0]  [3:4)\n"
+        "    [4] string  parent=[0]  [4:5)\n"
+        "    [5] struct alarm_t parent=[0]  [5:9)\n"
+        "        message -> 3 [8]\n"
+        "        severity -> 1 [6]\n"
+        "        status -> 2 [7]\n"
+        "        severity :  1 [6]\n"
+        "        status :  2 [7]\n"
+        "        message :  3 [8]\n"
+        "    [6] int32_t  parent=[5]  [6:7)\n"
+        "    [7] int32_t  parent=[5]  [7:8)\n"
+        "    [8] string  parent=[5]  [8:9)\n"
+        "    [9] struct time_t parent=[0]  [9:13)\n"
+        "        nanoseconds -> 2 [11]\n"
+        "        secondsPastEpoch -> 1 [10]\n"
+        "        userTag -> 3 [12]\n"
+        "        secondsPastEpoch :  1 [10]\n"
+        "        nanoseconds :  2 [11]\n"
+        "        userTag :  3 [12]\n"
+        "    [10] int64_t  parent=[9]  [10:11)\n"
+        "    [11] int32_t  parent=[9]  [11:12)\n"
+        "    [12] int32_t  parent=[9]  [12:13)\n"
+        "    [13] int32_t  parent=[0]  [13:14)\n"
+        "    [14] string  parent=[0]  [14:15)\n"
+    );
 
     testDiag("Round trip back to bytes");
     std::vector<uint8_t> out;

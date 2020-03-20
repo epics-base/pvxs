@@ -56,12 +56,12 @@ void testEmpty()
     auto req = TestBuilder().makeReq();
 
     testShow()<<req;
-    testEq(std::string(SB()<<"\n"<<req), R"out(
-struct {
-    struct {
-    } field
-}
-)out");
+    testStrEq(std::string(SB()<<req),
+        "struct {\n"
+        "    struct {\n"
+        "    } field\n"
+        "}\n"
+    );
 }
 
 void testAssemble()
@@ -76,24 +76,24 @@ void testAssemble()
             .makeReq();
 
     testShow()<<req;
-    testEq(std::string(SB()<<"\n"<<req), R"out(
-struct {
-    struct {
-        struct {
-        } foo
-        struct {
-            struct {
-            } baz
-        } bar
-    } field
-    struct {
-        struct {
-            string abc = "xyz"
-            bool pipeline = true
-        } _options
-    } record
-}
-)out");
+    testStrEq(std::string(SB()<<req),
+        "struct {\n"
+        "    struct {\n"
+        "        struct {\n"
+        "        } foo\n"
+        "        struct {\n"
+        "            struct {\n"
+        "            } baz\n"
+        "        } bar\n"
+        "    } field\n"
+        "    struct {\n"
+        "        struct {\n"
+        "            string abc = \"xyz\"\n"
+        "            bool pipeline = true\n"
+        "        } _options\n"
+        "    } record\n"
+        "}\n"
+    );
 }
 
 void testParse1()
@@ -105,24 +105,24 @@ void testParse1()
             .makeReq();
 
     testShow()<<req;
-    testEq(std::string(SB()<<"\n"<<req), R"out(
-struct {
-    struct {
-        struct {
-        } foo
-        struct {
-            struct {
-            } baz
-        } bar
-    } field
-    struct {
-        struct {
-            string abc = "xyz"
-            string pipeline = "true"
-        } _options
-    } record
-}
-)out");
+    testStrEq(std::string(SB()<<req),
+        "struct {\n"
+        "    struct {\n"
+        "        struct {\n"
+        "        } foo\n"
+        "        struct {\n"
+        "            struct {\n"
+        "            } baz\n"
+        "        } bar\n"
+        "    } field\n"
+        "    struct {\n"
+        "        struct {\n"
+        "            string abc = \"xyz\"\n"
+        "            string pipeline = \"true\"\n"
+        "        } _options\n"
+        "    } record\n"
+        "}\n"
+    );
 }
 
 void testParse2()
@@ -134,24 +134,24 @@ void testParse2()
             .makeReq();
 
     testShow()<<req;
-    testEq(std::string(SB()<<"\n"<<req), R"out(
-struct {
-    struct {
-        struct {
-        } foo
-        struct {
-            struct {
-            } baz
-        } bar
-    } field
-    struct {
-        struct {
-            string abc = "xyz"
-            string pipeline = "true"
-        } _options
-    } record
-}
-)out");
+    testStrEq(std::string(SB()<<req),
+        "struct {\n"
+        "    struct {\n"
+        "        struct {\n"
+        "        } foo\n"
+        "        struct {\n"
+        "            struct {\n"
+        "            } baz\n"
+        "        } bar\n"
+        "    } field\n"
+        "    struct {\n"
+        "        struct {\n"
+        "            string abc = \"xyz\"\n"
+        "            string pipeline = \"true\"\n"
+        "        } _options\n"
+        "    } record\n"
+        "}\n"
+    );
 }
 
 void testValid()
@@ -244,21 +244,21 @@ void testArgs()
             .set("d", sub)
             .uriArgs();
 
-    testEq(std::string(SB()<<"\n"<<args), R"out(
-struct "epics:nt/NTURI:1.0" {
-    string scheme = ""
-    string authority = ""
-    string path = ""
-    struct {
-        string a = "14"
-        int64_t b = 3
-        int32_t[] c = {3}[1, 2, 3]
-        struct {
-            int32_t ival = 123
-        } d
-    } query
-}
-)out")<<"\n"<<args;
+    testStrEq(std::string(SB()<<args),
+         "struct \"epics:nt/NTURI:1.0\" {\n"
+         "    string scheme = \"\"\n"
+         "    string authority = \"\"\n"
+         "    string path = \"\"\n"
+         "    struct {\n"
+         "        string a = \"14\"\n"
+         "        int64_t b = 3\n"
+         "        int32_t[] c = {3}[1, 2, 3]\n"
+         "        struct {\n"
+         "            int32_t ival = 123\n"
+         "        } d\n"
+         "    } query\n"
+         "}\n"
+    );
 }
 
 } // namespace
