@@ -76,9 +76,25 @@ libevent.%:
 
 else # T_A
 
+ifneq (,$(wildcard $(CURDIR)/../libevent/CMakeLists.txt))
+# libevent >= 2.1 prefer CMake
+
 libevent.%:
 	$(CMAKE) $(CMAKEFLAGS) ../libevent
 	$(CMAKE) --build . $(CBUILDFLAGS) --target install
+
+else
+# libevent 2.0 only autotools
+# only host CC supported
+
+libevent.%: ../libevent/configuration
+	[ -f Makefile ] || ../libevent/configure --prefix=$(abspath $(INSTALL_LOCATION)/bundle/usr-$*) --disable-openssl
+	$(MAKE) install
+
+../libevent/configuration: ../libevent/configure.ac
+	(cd ../libevent && autoreconf -ivf)
+
+endif
 
 endif # T_A
 
