@@ -125,6 +125,26 @@ testCase testNotEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS
 PVXS_API
 testCase _testStrEq(const char *sLHS, const std::string& lhs, const char *sRHS, const std::string& rhs);
 
+template<typename LHS, typename RHS>
+testCase testArrEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS& rhs)
+{
+    bool eq = lhs.size()==rhs.size();
+    testCase ret;
+    ret<<sLHS<<" (";
+    test_print<LHS>::op(ret, lhs);
+    ret<<") == "<<sRHS<<" (";
+    test_print<RHS>::op(ret, rhs);
+    ret<<")\n";
+    for(size_t i=0; i<lhs.size() && i<rhs.size(); i++) {
+        if(lhs[i]!=rhs[i]) {
+            eq = false;
+            ret<<" ["<<i<<"] -> "<<lhs[i]<<" != "<<rhs[i]<<"\n";
+        }
+    }
+    ret.setPass(eq);
+    return ret;
+}
+
 } // namespace detail
 
 /** Assert that an exception is thrown.
@@ -183,6 +203,12 @@ testCase testThrows(FN fn)
 //! Functionally equivalent to testEq() with two std::string instances.
 //! Prints diff-like output which is friendlier to multi-line strings.
 #define testStrEq(LHS, RHS) ::pvxs::detail::_testStrEq(#LHS, LHS, #RHS, RHS)
+
+//! Macro which asserts equality between LHS and RHS.
+//! Evaluates to a pvxs::testCase
+//! Functionally equivalent to testEq() for objects with .size() and operator[].
+//! Prints element by element differences
+#define testArrEq(LHS, RHS) ::pvxs::detail::testArrEq(#LHS, LHS, #RHS, RHS)
 
 //! Macro which prints diagnostic (non-test) lines.
 //! Evaluates to a pvxs::testCase
