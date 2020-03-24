@@ -138,7 +138,7 @@ void testDeserialize1()
 }
 
 TypeDef simpledef(TypeCode::Struct, "simple_t", {
-                Member(TypeCode::Float64A, "value"),
+                Member(TypeCode::UInt64A, "value"),
                 Member(TypeCode::Struct, "timeStamp", "time_t", {
                     Member(TypeCode::UInt64, "secondsPastEpoch"),
                     Member(TypeCode::UInt32, "nanoseconds"),
@@ -185,7 +185,7 @@ void testSimpleDef()
         "    anya :  8 [8]\n"
         "    choice :  9 [9]\n"
         "    achoice :  10 [10]\n"
-        "[1] double[]  parent=[0]  [1:2)\n"
+        "[1] uint64_t[]  parent=[0]  [1:2)\n"
         "[2] struct time_t parent=[0]  [2:5)\n"
         "    nanoseconds -> 2 [4]\n"
         "    secondsPastEpoch -> 1 [3]\n"
@@ -224,6 +224,16 @@ void testSimpleDef()
 void testSerialize2()
 {
     testDiag("%s", __func__);
+
+    {
+        auto val = simpledef.create();
+
+        val["value"] = shared_array<const uint64_t>({1u, 0xdeadbeef, 2u}).castTo<const void>();
+
+        testToBytes(true, [&val](Buffer& buf) {
+            to_wire_valid(buf, val);
+        }, "\x01\x02\x03\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\xde\xad\xbe\xef\x00\x00\x00\x00\x00\x00\x00\x02");
+    }
 
     {
         auto val = simpledef.create();
@@ -320,6 +330,19 @@ void testSerialize2()
 void testDeserialize2()
 {
     testDiag("%s", __func__);
+
+    {
+        TypeStore ctxt;
+        auto val = simpledef.create();
+        testFromBytes(true, "\x01\x02\x03\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\xde\xad\xbe\xef\x00\x00\x00\x00\x00\x00\x00\x02",
+                      [&val, &ctxt](Buffer& buf) {
+            from_wire_valid(buf, ctxt, val);
+        });
+        testOk1(!!val["value"].isMarked());
+        testOk1(!val["arbitrary.sarr"].isMarked());
+        testArrEq(val["value"].as<shared_array<const void>>().castTo<const uint64_t>(),
+                  shared_array<const uint64_t>({1u, 0xdeadbeef, 2u}));
+    }
 
     {
         TypeStore ctxt;
@@ -493,6 +516,40 @@ void testDecode1()
            "[2] int32_t  parent=[0]  [2:3)\n"
            "[3] int32_t  parent=[0]  [3:4)\n"
      );
+}
+
+template<typename E, size_t N>
+void testArrayXCodeT(const char(&encoded)[N], std::initializer_list<E> values)
+{
+    shared_array<const E> expected(values);
+
+    auto code = TypeCode(ScalarMap<E>::code).arrayOf();
+    TypeDef def(TypeCode::Struct, {Member(code, "value")});
+
+    testToBytes(true, [&expected, &def](Buffer& buf) {
+        auto val = def.create();
+        val["value"] = expected.template castTo<const void>();
+        to_wire_valid(buf, val);
+    }, encoded);
+
+    TypeStore ctxt;
+    auto val2 = def.create();
+
+    testFromBytes(true, encoded,
+                  [&ctxt, &val2](Buffer& buf) {
+        from_wire_valid(buf, ctxt, val2);
+    });
+
+    testArrEq(expected, val2["value"].as<shared_array<const void>>().castTo<const E>());
+}
+
+void testArrayXCode()
+{
+    testDiag("%s", __func__);
+
+    testArrayXCodeT<uint32_t>("\x01\x02\x00", {});
+    testArrayXCodeT<uint16_t>("\x01\x02\x02\x00\x01\xff\xff", {1u, 0xffff});
+    testArrayXCodeT<std::string>("\x01\x02\x02\x05hello\x05world", {"hello", "world"});
 }
 
 /*  epics:nt/NTScalarArray:1.0
@@ -863,7 +920,7 @@ void testEmptyRequest()
         FixedBuf buf(false, msg);
         from_wire(buf, descs1, registry);
         testOk1(buf.good());
-        testEq(buf.size(), 0u)<<"remaining of "<<sizeof(msg-1);
+        testEq(buf.size(), 0u)<<"remaining of "<<sizeof(msg)-1;
     }
 
     if(testEq(registry.size(), 1u)) {
@@ -876,7 +933,7 @@ void testEmptyRequest()
         FixedBuf buf(false, msg);
         from_wire(buf, descs2, registry);
         testOk1(buf.good());
-        testEq(buf.size(), 0u)<<"remaining of "<<sizeof(msg-1);
+        testEq(buf.size(), 0u)<<"remaining of "<<sizeof(msg)-1;
     }
 
     testEq(descs1.size(), 1u);
@@ -893,7 +950,7 @@ void testEmptyRequest()
 
 MAIN(testxcode)
 {
-    testPlan(96);
+    testPlan(110);
     testSerialize1();
     testDeserialize1();
     testSimpleDef();
@@ -901,6 +958,7 @@ MAIN(testxcode)
     testDeserialize2();
     testDeserialize3();
     testDecode1();
+    testArrayXCode();
     testXCodeNTScalar();
     testXCodeNTNDArray();
     testEmptyRequest();
