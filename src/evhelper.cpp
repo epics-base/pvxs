@@ -448,7 +448,6 @@ EvInBuf::~EvInBuf() { refill(0); }
 bool EvInBuf::refill(size_t needed)
 {
     if(err) return false;
-    size_t len = size(); // unconsumed before request
 
     // drain consumed
     if(base && evbuffer_drain(backing, pos-base))
