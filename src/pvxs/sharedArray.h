@@ -397,9 +397,9 @@ public:
     }
 
     detail::Limiter format() const {
-        return Limiter(this->_data.get(),
-                       this->_count,
-                       detail::CaptureCode<typename std::remove_cv<E>::type>::code);
+        return detail::Limiter(this->_data.get(),
+                               this->_count,
+                               detail::CaptureCode<typename std::remove_cv<E>::type>::code);
     }
 };
 
