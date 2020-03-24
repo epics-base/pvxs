@@ -11,16 +11,16 @@ include $(TOP)/configure/CONFIG_PVXS_VERSION
 
 PROD_LIBS += pvxs Com
 
-TESTPROD += mailbox
+TESTPROD_HOST += mailbox
 mailbox_SRCS += mailbox.cpp
 
-TESTPROD += spam
+TESTPROD_HOST += spam
 spam_SRCS += spam.cpp
 
-TESTPROD += ticker
+TESTPROD_HOST += ticker
 ticker_SRCS += ticker.cpp
 
-TESTPROD += client
+TESTPROD_HOST += client
 client_SRCS += client.cpp
 
 #===========================

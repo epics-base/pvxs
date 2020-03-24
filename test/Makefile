@@ -14,75 +14,71 @@ USR_CPPFLAGS += -I$(TOP)/src
 
 PROD_LIBS += pvxs Com
 
-TESTPROD += testsock
+TESTPROD_HOST += testsock
 testsock_SRCS += testsock.cpp
 TESTS += testsock
 
-TESTPROD += testev
+TESTPROD_HOST += testev
 testev_SRCS += testev.cpp
 TESTS += testev
 
-TESTPROD += testudp
+TESTPROD_HOST += testudp
 testudp_SRCS += testudp.cpp
 TESTS += testudp
 
-TESTPROD += testshared
+TESTPROD_HOST += testshared
 testshared_SRCS += testshared.cpp
 TESTS += testshared
 
-TESTPROD += testbitmask
+TESTPROD_HOST += testbitmask
 testbitmask_SRCS += testbitmask.cpp
 TESTS += testbitmask
 
-TESTPROD += testxcode
+TESTPROD_HOST += testxcode
 testxcode_SRCS += testxcode.cpp
 TESTS += testxcode
 
-TESTPROD += testtype
+TESTPROD_HOST += testtype
 testtype_SRCS += testtype.cpp
 TESTS += testtype
 
-TESTPROD += testdata
+TESTPROD_HOST += testdata
 testdata_SRCS += testdata.cpp
 TESTS += testdata
 
-TESTPROD += testconfig
+TESTPROD_HOST += testconfig
 testconfig_SRCS += testconfig.cpp
 TESTS += testconfig
 
-TESTPROD += testpvreq
+TESTPROD_HOST += testpvreq
 testpvreq_SRCS += testpvreq.cpp
 TESTS += testpvreq
 
-TESTPROD += testinfo
+TESTPROD_HOST += testinfo
 testinfo_SRCS += testinfo.cpp
 TESTS += testinfo
 
-TESTPROD += testget
+TESTPROD_HOST += testget
 testget_SRCS += testget.cpp
 TESTS += testget
 
-TESTPROD += testmon
+TESTPROD_HOST += testmon
 testmon_SRCS += testmon.cpp
 TESTS += testmon
 
-TESTPROD += testput
+TESTPROD_HOST += testput
 testput_SRCS += testput.cpp
 TESTS += testput
 
-TESTPROD += testrpc
+TESTPROD_HOST += testrpc
 testrpc_SRCS += testrpc.cpp
 TESTS += testrpc
 
-TESTPROD += mcat
+TESTPROD_HOST += mcat
 mcat_SRCS += mcat.cpp
 # not a unittest
 
 TESTSCRIPTS_HOST += $(TESTS:%=%.t)
-ifneq ($(filter $(T_A),$(CROSS_COMPILER_RUNTEST_ARCHS)),)
-TESTPROD = $(TESTPROD_HOST)
-TESTSCRIPTS += $(TESTS:%=%.t)
-endif
 
 #===========================
 
