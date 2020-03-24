@@ -15,6 +15,7 @@
 #include <tuple>
 #include <regex>
 
+#include <epicsVersion.h>
 #include <epicsEvent.h>
 #include <epicsGetopt.h>
 #include <osiSock.h>
@@ -85,6 +86,7 @@ void usage(const char *name)
                "for (some) PVA client/server UDP traffic.\n"
                "\n"
                "  -h               Print this message\n"
+               "  -V        Print version and exit.\n"
                "  -C               Show only client Searches\n"
                "  -S               Show only server Beacons\n"
                "  -B hostip[:port] Listen on the given interface(s).  May be repeated.\n"
@@ -125,10 +127,14 @@ int main(int argc, char *argv[])
 
         {
             int opt;
-            while ((opt = getopt(argc, argv, "hvCSH:B:P:")) != -1) {
+            while ((opt = getopt(argc, argv, "hVvCSH:B:P:")) != -1) {
                 switch(opt) {
                 case 'h':
                     usage(argv[0]);
+                    return 0;
+                case 'V':
+                    std::cout<<pva::version_str()<<"\n";
+                    std::cout<<EPICS_VERSION_STRING<<"\n";
                     return 0;
                 default:
                     usage(argv[0]);

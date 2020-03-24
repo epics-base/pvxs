@@ -8,6 +8,7 @@
 #include <list>
 #include <atomic>
 
+#include <epicsVersion.h>
 #include <epicsStdlib.h>
 #include <epicsGetopt.h>
 #include <epicsThread.h>
@@ -25,6 +26,7 @@ void usage(const char* argv0)
     std::cerr<<"Usage: "<<argv0<<" <opts> [pvname ...]\n"
                "\n"
                "  -h        Show this message.\n"
+               "  -V        Print version and exit.\n"
                "  -v        Make more noise.\n"
                "  -d        Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.\n"
                "  -w <sec>  Operation timeout in seconds.  default 5 sec.\n"
@@ -41,10 +43,14 @@ int main(int argc, char *argv[])
 
     {
         int opt;
-        while ((opt = getopt(argc, argv, "hvdw:")) != -1) {
+        while ((opt = getopt(argc, argv, "hVvdw:")) != -1) {
             switch(opt) {
             case 'h':
                 usage(argv[0]);
+                return 0;
+            case 'V':
+                std::cout<<version_str()<<"\n";
+                std::cout<<EPICS_VERSION_STRING<<"\n";
                 return 0;
             case 'v':
                 verbose = true;
