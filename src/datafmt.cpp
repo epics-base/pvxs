@@ -39,7 +39,7 @@ struct FmtDelta {
             case StoreType::Array: {
                 auto& varr = store->as<shared_array<const void>>();
                 if(varr.original_type()!=ArrayType::Value) {
-                    strm<<" = "<<varr;
+                    strm<<" = "<<varr.format().limit(fmt._limit);
                 }
             }
                 break;
