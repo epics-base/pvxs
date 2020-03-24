@@ -23,6 +23,8 @@
 #include "utilpvt.h"
 #include "udp_collector.h"
 
+#include "pvxsVCS.h"
+
 namespace pvxs {
 
 #define stringifyX(X) #X
@@ -35,7 +37,11 @@ const char *version_str()
             "."
             stringify(PVXS_MINOR_VERSION)
             "."
-            stringify(PVXS_MAINTENANCE_VERSION);
+            stringify(PVXS_MAINTENANCE_VERSION)
+#ifdef PVXS_VCS_VERSION
+            " (" PVXS_VCS_VERSION ")"
+#endif
+            ;
 }
 
 unsigned long version_int()

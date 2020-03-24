@@ -38,6 +38,9 @@ EXPANDVARS += PVXS_MAINTENANCE_VERSION
 
 EXPANDFLAGS += $(foreach var,$(EXPANDVARS),-D$(var)="$(strip $($(var)))")
 
+GENVERSION = pvxsVCS.h
+GENVERSIONMACRO = PVXS_VCS_VERSION
+
 SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION)
 
 INC += pvxs/version.h
@@ -101,6 +104,13 @@ include $(TOP)/configure/RULES
 ../O.Common/pvxs/versionNum.h: ../pvxs/versionNum.h@
 	$(MKDIR) $(COMMON_DIR)/pvxs
 	$(EXPAND_TOOL) $(EXPANDFLAGS) $($@_EXPANDFLAGS) $< $@
+
+util$(DEP): $(COMMON_DIR)/$(GENVERSION)
+
+ifndef GENVERSIONHEADER
+$(COMMON_DIR)/$(GENVERSION):
+	echo "/* genVersionHeader.pl missing */" > $@
+endif
 
 ifeq ($(T_A),)
 cppcheck:
