@@ -29,6 +29,10 @@
 
 typedef epicsGuard<epicsMutex> Guard;
 
+// EvInBuf prefers to extract slices of this length from a backing buffer
+static constexpr
+size_t min_slice_size = 1024u;
+
 namespace pvxs {namespace impl {
 
 DEFINE_LOGGER(logerr, "pvxs.loop");
@@ -441,20 +445,30 @@ bool EvOutBuf::refill(size_t more)
 
 EvInBuf::~EvInBuf() { refill(0); }
 
-bool EvInBuf::refill(size_t more)
+bool EvInBuf::refill(size_t needed)
 {
     if(err) return false;
     size_t len = size(); // unconsumed before request
 
+    // drain consumed
     if(base && evbuffer_drain(backing, pos-base))
         throw std::bad_alloc();
 
     limit = base = pos = nullptr;
 
-    if(more) {
+    if(needed) {
+        // expand request in an attempt to reduce the number of refill()s
+        // but limit to actual backing buffer length, or pullup() will error
+        size_t requesting = std::min(std::max(needed, size_t(min_slice_size)),
+                                     evbuffer_get_length(backing));
+
+
         // ensure new segment contains at least the requested size (one element)
         // (we hope this is mostly a no-op)
-        (void)evbuffer_pullup(backing, len+more);
+        if(!evbuffer_pullup(backing, requesting)) {
+            // a logic error in computing requesting?
+            return false;
+        }
 
         evbuffer_iovec vec;
 
@@ -467,8 +481,8 @@ bool EvInBuf::refill(size_t more)
         base = pos = (uint8_t*)vec.iov_base;
         limit = base+vec.iov_len;
 
-        if(size() < len+more) {
-            return false; // pullup didn't work.
+        if(size() < needed) {
+            return false; // insufficient space
         }
     }
     return true;
