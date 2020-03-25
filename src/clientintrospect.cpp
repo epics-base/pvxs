@@ -28,6 +28,8 @@ struct InfoOp : public OperationBase
         Done,
     } state = Connecting;
 
+    INST_COUNTER(InfoOp);
+
     explicit InfoOp(const std::shared_ptr<Channel>& chan)
         :OperationBase(Info, chan)
     {}

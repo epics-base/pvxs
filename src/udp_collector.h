@@ -86,6 +86,9 @@ class PVXS_API UDPListener
     std::shared_ptr<UDPCollector> collector;
     const SockAddr dest;
     bool active;
+
+    INST_COUNTER(UDPListener);
+
     friend struct UDPCollector;
     friend struct UDPManager;
 

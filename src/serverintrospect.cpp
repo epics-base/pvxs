@@ -48,6 +48,8 @@ struct ServerIntrospect : public ServerOp
         conn->opByIOID.erase(ioid);
         ch->opByIOID.erase(ioid);
     }
+
+    INST_COUNTER(ServerIntrospect);
 };
 
 struct ServerIntrospectControl : public server::ConnectOp
@@ -125,6 +127,8 @@ struct ServerIntrospectControl : public server::ConnectOp
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerIntrospect> op;
+
+    INST_COUNTER(ServerIntrospectControl);
 };
 } // namespace
 

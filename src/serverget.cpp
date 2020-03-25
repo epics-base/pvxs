@@ -136,6 +136,8 @@ struct ServerGPR : public ServerOp
     std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onPut;
 
     std::function<void(std::unique_ptr<server::ExecOp>&&)> onGet;
+
+    INST_COUNTER(ServerGPR);
 };
 
 
@@ -246,6 +248,8 @@ struct ServerGPRConnect : public server::ConnectOp
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerGPR> op;
+
+    INST_COUNTER(ServerGPRConnect);
 };
 
 struct ServerGPRExec : public server::ExecOp
@@ -323,6 +327,8 @@ struct ServerGPRExec : public server::ExecOp
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerGPR> op;
+
+    INST_COUNTER(ServerGPRExec);
 };
 
 } // namespace

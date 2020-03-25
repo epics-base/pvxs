@@ -58,6 +58,76 @@ void cleanup_for_valgrind()
     impl::UDPManager::cleanup();
 }
 
+
+#define CASE(KLASS) std::atomic<size_t> cnt_ ## KLASS{}
+
+CASE(StructTop);
+
+CASE(UDPListener);
+
+CASE(GPROp);
+CASE(Connection);
+CASE(Channel);
+CASE(ClientPvt);
+CASE(InfoOp);
+CASE(SubScriptionImpl);
+
+CASE(ServerChannelControl);
+CASE(ServerChan);
+CASE(ServerConn);
+CASE(ServerSource);
+CASE(ServerPvt);
+CASE(ServerIntrospect);
+CASE(ServerIntrospectControl);
+CASE(ServerGPR);
+CASE(ServerGPRConnect);
+CASE(ServerGPRExec);
+CASE(MonitorOp);
+CASE(ServerMonitorControl);
+CASE(ServerMonitorSetup);
+CASE(SharedPVImpl);
+CASE(SubscriptionImpl);
+
+#undef CASE
+
+std::map<std::string, size_t> instanceSnapshot()
+{
+    std::map<std::string, size_t> ret;
+
+#define CASE(KLASS) ret[#KLASS] = cnt_ ## KLASS .load(std::memory_order_relaxed)
+
+CASE(StructTop);
+
+CASE(UDPListener);
+
+CASE(GPROp);
+CASE(Connection);
+CASE(Channel);
+CASE(ClientPvt);
+CASE(InfoOp);
+CASE(SubScriptionImpl);
+
+CASE(ServerChannelControl);
+CASE(ServerChan);
+CASE(ServerConn);
+CASE(ServerSource);
+CASE(ServerPvt);
+CASE(ServerIntrospect);
+CASE(ServerIntrospectControl);
+CASE(ServerGPR);
+CASE(ServerGPRConnect);
+CASE(ServerGPRExec);
+CASE(MonitorOp);
+CASE(ServerMonitorControl);
+CASE(ServerMonitorSetup);
+CASE(SharedPVImpl);
+CASE(SubscriptionImpl);
+
+#undef CASE
+
+    return ret;
+}
+
 std::ostream& operator<<(std::ostream& strm, ArrayType code)
 {
     switch(code) {

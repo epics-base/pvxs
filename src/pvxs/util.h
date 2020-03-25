@@ -7,6 +7,7 @@
 #ifndef PVXS_UTIL_H
 #define PVXS_UTIL_H
 
+#include <map>
 #include <functional>
 #include <ostream>
 #include <type_traits>
@@ -103,6 +104,10 @@ public:
 }
 
 #endif // !defined(__rtems__) && !defined(vxWorks)
+
+//! return a snapshot of internal instance counters
+PVXS_API
+std::map<std::string, size_t> instanceSnapshot();
 
 } // namespace pvxs
 

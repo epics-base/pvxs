@@ -86,6 +86,8 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
 
     uint32_t nextIOID = 0u;
 
+    INST_COUNTER(Connection);
+
     Connection(const std::shared_ptr<Context::Pvt>& context, const SockAddr &peerAddr);
     virtual ~Connection();
 
@@ -148,6 +150,8 @@ struct Channel {
     // points to storage of Connection::opByIOID
     std::map<uint32_t, RequestInfo*> opByIOID;
 
+    INST_COUNTER(Channel);
+
     Channel(const std::shared_ptr<Context::Pvt>& context, const std::string& name, uint32_t cid);
     ~Channel();
 
@@ -204,6 +208,8 @@ struct Context::Pvt
     UDPManager manager;
 
     const evevent beaconCleaner;
+
+    INST_COUNTER(ClientPvt);
 
     Pvt(const Config& conf);
     ~Pvt();

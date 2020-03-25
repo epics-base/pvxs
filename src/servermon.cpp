@@ -55,6 +55,8 @@ struct MonitorOp : public ServerOp,
 
     std::deque<Value> queue;
 
+    INST_COUNTER(MonitorOp);
+
     // caller must hold lock.
     // only used after State==Idle
     static
@@ -319,6 +321,8 @@ struct ServerMonitorControl : public server::MonitorControlOp
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<MonitorOp> op;
+
+    INST_COUNTER(ServerMonitorControl);
 };
 
 struct ServerMonitorSetup : public server::MonitorSetupOp
@@ -411,6 +415,8 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<MonitorOp> op;
+
+    INST_COUNTER(ServerMonitorSetup);
 };
 
 

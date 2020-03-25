@@ -13,6 +13,7 @@
 #  include <pthread.h>
 #endif
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <sstream>
@@ -232,6 +233,46 @@ public:
 
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const SockAddr& addr);
+
+template<std::atomic<size_t>* Cnt>
+struct InstCounter
+{
+    InstCounter() {(*Cnt).fetch_add(1, std::memory_order_relaxed);}
+    ~InstCounter() {(*Cnt).fetch_sub(1, std::memory_order_relaxed);}
+};
+
+#define INST_COUNTER(KLASS) InstCounter<&cnt_ ## KLASS> instances
+
+#define CASE(KLASS) extern std::atomic<size_t> cnt_ ## KLASS
+
+CASE(StructTop);
+
+CASE(UDPListener);
+
+CASE(GPROp);
+CASE(Connection);
+CASE(Channel);
+CASE(ClientPvt);
+CASE(InfoOp);
+CASE(SubScriptionImpl);
+
+CASE(ServerChannelControl);
+CASE(ServerChan);
+CASE(ServerConn);
+CASE(ServerSource);
+CASE(ServerPvt);
+CASE(ServerIntrospect);
+CASE(ServerIntrospectControl);
+CASE(ServerGPR);
+CASE(ServerGPRConnect);
+CASE(ServerGPRExec);
+CASE(MonitorOp);
+CASE(ServerMonitorControl);
+CASE(ServerMonitorSetup);
+CASE(SharedPVImpl);
+CASE(SubscriptionImpl);
+
+#undef CASE
 
 } // namespace pvxs
 

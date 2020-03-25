@@ -64,6 +64,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
     std::deque<Entry> queue;
     uint32_t window =0u, unack =0u;
 
+    INST_COUNTER(SubscriptionImpl);
+
     SubscriptionImpl(operation_t op, const std::shared_ptr<Channel>& chan)
         :OperationBase (op, chan)
         ,channelName(chan->name)

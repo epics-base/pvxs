@@ -140,6 +140,8 @@ struct StructTop {
 
     // empty, or the field of a structure which encloses this.
     std::weak_ptr<FieldStorage> enclosing;
+
+    INST_COUNTER(StructTop);
 };
 
 using Type = std::shared_ptr<const FieldDesc>;

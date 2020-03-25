@@ -7,6 +7,7 @@
 
 #include <pvxs/log.h>
 #include <pvxs/nt.h>
+#include "utilpvt.h"
 #include "clientimpl.h"
 
 namespace pvxs {
@@ -123,6 +124,8 @@ struct GPROp : public OperationBase
         Exec,       // waiting for reply to EXEC
         Done,
     } state = Connecting;
+
+    INST_COUNTER(GPROp);
 
     GPROp(operation_t op, const std::shared_ptr<Channel>& chan)
         :OperationBase (op, chan)

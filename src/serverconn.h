@@ -69,6 +69,8 @@ struct ServerChannelControl : public server::ChannelControl
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerChan> chan;
+
+    INST_COUNTER(ServerChannelControl);
 };
 
 struct ServerChan
@@ -91,6 +93,8 @@ struct ServerChan
 
     std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID; // our subset of ServerConn::opByIOID
 
+    INST_COUNTER(ServerChan);
+
     ServerChan(const std::shared_ptr<ServerConn>& conn, uint32_t sid, uint32_t cid, const std::string& name);
     ServerChan(const ServerChan&) = delete;
     ServerChan& operator=(const ServerChan&) = delete;
@@ -109,6 +113,8 @@ struct ServerConn : public ConnBase, public std::enable_shared_from_this<ServerC
     std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID;
 
     std::list<std::function<void()>> backlog;
+
+    INST_COUNTER(ServerConn);
 
     ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen);
     ServerConn(const ServerConn&) = delete;
@@ -174,6 +180,8 @@ struct ServerSource : public server::Source
 
     const Value info;
 
+    INST_COUNTER(ServerSource);
+
     ServerSource(server::Server::Pvt* serv);
 
     virtual void onSearch(Search &op) override final;
@@ -228,6 +236,8 @@ struct Server::Pvt
         Running,
         Stopping,
     } state;
+
+    INST_COUNTER(ServerPvt);
 
     Pvt(const Config& conf);
     ~Pvt();

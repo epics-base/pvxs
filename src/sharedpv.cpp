@@ -45,6 +45,8 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
     std::set<std::shared_ptr<MonitorControlOp>> subscribers;
 
     Value current;
+
+    INST_COUNTER(SharedPVImpl);
 };
 
 SharedPV SharedPV::buildMailbox()
