@@ -158,6 +158,7 @@ public:
     const std::shared_ptr<E>& dataPtr() const { return _data; }
 };
 
+//! Provide options when rendering with std::ostream.
 class Limiter {
     const void* _base;
     size_t _count;
@@ -169,6 +170,8 @@ public:
     Limiter(const void* base, size_t count, ArrayType type)
         :_base(base), _count(count), _type(type)
     {}
+    //! Maximum number of array elements to print.
+    //! "..." is printed in place of any further elements.
     Limiter& limit(size_t l) { _limit = l; return *this; }
 };
 
@@ -396,6 +399,7 @@ public:
         return shared_array<TO>(this->_data, this->_data.get(), this->_count); // implied cast to void*
     }
 
+    //! Provide options when rendering with std::ostream.
     detail::Limiter format() const {
         return detail::Limiter(this->_data.get(),
                                this->_count,
@@ -527,6 +531,7 @@ public:
         return *this;
     }
 
+    //! Provide options when rendering with std::ostream.
     detail::Limiter format() const {
         return detail::Limiter(this->_data.get(),
                                this->_count,
