@@ -34,7 +34,7 @@ struct TestBuilder : client::detail::CommonBuilder<TestBuilder, client::detail::
 
     template<typename T>
     TestBuilder& set(const std::string& name, const T& val, bool required=true) {
-        typename impl::StoreAs<T>::store_t norm(val);
+        const typename impl::StoreAs<T>::store_t& norm(impl::StoreTransform<T>::in(val));
         _set(name, &norm, impl::StoreAs<T>::code, required);
         return *this;
     }

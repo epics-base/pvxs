@@ -79,8 +79,8 @@ template<>
 struct StorageMap<const char*>
 { typedef std::string store_t;   static constexpr StoreType code{StoreType::String}; };
 
-template<>
-struct StorageMap<shared_array<const void>>
+template<typename E>
+struct StorageMap<shared_array<const E>>
 { typedef shared_array<const void> store_t;   static constexpr StoreType code{StoreType::Array}; };
 
 template<>
@@ -89,6 +89,25 @@ struct StorageMap<Value>
 
 template<typename T>
 using StoreAs = StorageMap<typename std::decay<T>::type>;
+
+template<typename T>
+struct StoreTransform {
+    // pass through by default
+    static inline const T& in (const T& v) { return v; }
+    static inline const T& out(const T& v) { return v; }
+};
+template<typename E>
+struct StoreTransform<shared_array<const E>> {
+    // cast shared_array to void
+    static inline
+    shared_array<const void> in(const shared_array<const E>& v) {
+        return v.template castTo<const void>();
+    }
+    static inline
+    shared_array<const E> out(const shared_array<const void>& v) {
+        return v.template castTo<const E>();
+    }
+};
 
 } // namespace impl
 
@@ -536,7 +555,7 @@ public:
     inline T as() const {
         typename impl::StoreAs<T>::store_t ret;
         copyOut(&ret, impl::StoreAs<T>::code);
-        return ret;
+        return impl::StoreTransform<T>::out(ret);
     }
 
     //! Attempt to extract value from field.
@@ -546,7 +565,7 @@ public:
         typename impl::StoreAs<T>::store_t temp;
         auto ret = tryCopyOut(&temp, impl::StoreAs<T>::code);
         if(ret) {
-            val = temp;
+            val = impl::StoreTransform<T>::out(temp);
         }
         return ret;
     }
@@ -558,7 +577,7 @@ public:
     void as(FN&& fn) const {
         typename impl::StoreAs<T>::store_t val;
         if(tryCopyOut(&val, impl::StoreAs<T>::code)) {
-            fn(val);
+            fn(impl::StoreTransform<T>::out(val));
         }
     }
 
@@ -566,7 +585,7 @@ public:
     //! @returns false if from<T>() would throw NoField or NoConvert
     template<typename T>
     inline bool tryFrom(const T& val) {
-        typename impl::StoreAs<T>::store_t norm(val);
+        const typename impl::StoreAs<T>::store_t& norm(impl::StoreTransform<T>::in(val));
         return copyIn(&norm, impl::StoreAs<T>::code);
     }
 
@@ -583,7 +602,7 @@ public:
      */
     template<typename T>
     void from(const T& val) {
-        typename impl::StoreAs<T>::store_t norm(val);
+        const typename impl::StoreAs<T>::store_t& norm(impl::StoreTransform<T>::in(val));
         copyIn(&norm, impl::StoreAs<T>::code);
     }
 

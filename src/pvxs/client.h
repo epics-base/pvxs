@@ -424,7 +424,7 @@ public:
      */
     template<typename T>
     SubBuilder& record(const std::string& name, const T& val) {
-        typename impl::StoreAs<T>::store_t norm(val);
+        const typename impl::StoreAs<T>::store_t& norm(impl::StoreTransform<T>::in(val));
         this->_record(name, &norm, impl::StoreAs<T>::code);
         return _sb();
     }
@@ -506,7 +506,7 @@ public:
     template<typename T>
     PutBuilder& set(const std::string& name, const T& val, bool required=true)
     {
-        typename impl::StoreAs<T>::store_t norm(val);
+        const typename impl::StoreAs<T>::store_t& norm(impl::StoreTransform<T>::in(val));
         return set(name, &norm, impl::StoreAs<T>::code, required);
     }
 
@@ -563,7 +563,7 @@ public:
     template<typename T>
     RPCBuilder& arg(const std::string& name, const T& val)
     {
-        typename impl::StoreAs<T>::store_t norm(val);
+        const typename impl::StoreAs<T>::store_t& norm(impl::StoreTransform<T>::in(val));
         _set(name, &norm, impl::StoreAs<T>::code, true);
         return *this;
     }

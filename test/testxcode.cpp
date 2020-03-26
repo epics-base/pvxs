@@ -340,7 +340,7 @@ void testDeserialize2()
         });
         testOk1(!!val["value"].isMarked());
         testOk1(!val["arbitrary.sarr"].isMarked());
-        testArrEq(val["value"].as<shared_array<const void>>().castTo<const uint64_t>(),
+        testArrEq(val["value"].as<shared_array<const uint64_t>>(),
                   shared_array<const uint64_t>({1u, 0xdeadbeef, 2u}));
     }
 
@@ -528,7 +528,7 @@ void testArrayXCodeT(const char(&encoded)[N], std::initializer_list<E> values)
 
     testToBytes(true, [&expected, &def](Buffer& buf) {
         auto val = def.create();
-        val["value"] = expected.template castTo<const void>();
+        val["value"] = expected;
         to_wire_valid(buf, val);
     }, encoded);
 
@@ -540,7 +540,7 @@ void testArrayXCodeT(const char(&encoded)[N], std::initializer_list<E> values)
         from_wire_valid(buf, ctxt, val2);
     });
 
-    testArrEq(expected, val2["value"].as<shared_array<const void>>().castTo<const E>());
+    testArrEq(expected, val2["value"].as<shared_array<const E>>());
 }
 
 void testArrayXCode()
