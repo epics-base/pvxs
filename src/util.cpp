@@ -203,6 +203,11 @@ std::ostream& operator<<(std::ostream& strm, const Limiter& lim)
     return strm;
 }
 
+void _throw_bad_cast(ArrayType from, ArrayType to)
+{
+    throw std::logic_error(SB()<<"Unable to cast array from "<<from<<" to "<<to);
+}
+
 Escaper::Escaper(const char* v)
     :val(v)
     ,count(v ? strlen(v) : 0)

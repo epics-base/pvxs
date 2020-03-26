@@ -178,6 +178,9 @@ public:
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const Limiter&);
 
+PVXS_API
+void _throw_bad_cast(ArrayType from, ArrayType to);
+
 } // namespace detail
 
 /** std::vector-like contigious array of items passed by reference.
@@ -379,23 +382,48 @@ public:
     }
 
 #if _DOXYGEN_
-    //! Cast to other type, preserving const-ness.
+    /** Cast to/from void, preserving const-ness.
+     *
+     * Allowed casts depend upon two aspects of type parameter E.
+     *
+     * Whether the base type is void or non-void.
+     * And whether or not the const qualifier is present.
+     *
+     * Type E may always be cast to itself.
+     *
+     * Casts must preseve const-ness.
+     * Either both of E and TO, or neither, must be const qualified.
+     *
+     * At most one of E or TO may have different non-void base type.
+     */
     template<typename TO>
     shared_array<TO>
     castTo() const;
 #endif
 
+    template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    shared_array<TO>
+    castTo() const {
+        return shared_array<TO>(this->_data, this->_data.get(), this->_count); // implied cast to void*
+    }
+
+    template<typename TO, typename std::enable_if<std::is_same<TO, E>{}, int>::type =0>
+    shared_array<TO>
+    castTo() const {
+        return *this;
+    }
+
     // static_cast<TO>() to non-void, preserving const-ness
     template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
-    castTo() const {
+    castToUnsafe() const {
         return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), this->_count);
     }
 
     // static_cast<TO>() to void, preserving const-ness
     template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
-    castTo() const {
+    castToUnsafe() const {
         return shared_array<TO>(this->_data, this->_data.get(), this->_count); // implied cast to void*
     }
 
@@ -519,13 +547,29 @@ public:
     template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
     castTo() const {
+        if(this->_data && _type!=detail::CaptureCode<typename std::remove_cv<TO>::type>::code) {
+            detail::_throw_bad_cast(_type, detail::CaptureCode<typename std::remove_cv<TO>::type>::code);
+        }
+        return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), this->_count);
+    }
+
+    template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    shared_array<TO>
+    castTo() const {
+        return *this;
+    }
+
+    // static_cast<TO>() to non-void, preserving const-ness
+    template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    shared_array<TO>
+    castToUnsafe() const {
         return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), this->_count);
     }
 
     // static_cast<TO>() to void, preserving const-ness
     template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
-    castTo() const {
+    castToUnsafe() const {
         // in reality this is either void -> void, or const void -> const void
         // aka. simple copy
         return *this;

@@ -135,11 +135,58 @@ void testComplex()
     testEq(*X[0], 4u);
 }
 
+void testCast()
+{
+    testDiag("%s", __func__);
+
+    shared_array<void> Void;
+
+    (void)Void.castTo<void>();
+    (void)Void.castTo<uint32_t>();
+    // not allowed
+    //(void)Void.castTo<const void>();
+    //(void)Void.castTo<const uint32_t>();
+
+    shared_array<const void> CVoid;
+
+    (void)CVoid.castTo<const void>();
+    (void)CVoid.castTo<const uint32_t>();
+    // not allowed
+    //(void)CVoid.castTo<void>();
+    //(void)CVoid.castTo<uint32_t>();
+
+    shared_array<uint32_t> Int;
+
+    (void)Int.castTo<uint32_t>();
+    (void)Int.castTo<void>();
+    // not allowed
+    //(void)Int.castTo<const uint32_t>();
+    //(void)Int.castTo<const void>();
+
+    shared_array<const uint32_t> CInt;
+
+    (void)CInt.castTo<const uint32_t>();
+    (void)CInt.castTo<const void>();
+    // not allowed
+    //(void)CInt.castTo<uint32_t>();
+    //(void)CInt.castTo<void>();
+
+    shared_array<double> Double({1.0, 2.0});
+    Void = Double.castTo<void>();
+    testThrows<std::logic_error>([&Void](){
+        (void)Void.castTo<uint32_t>();
+    })<<"Attempt cast to wrong type";
+
+    Void.clear();
+    // now doesn't throw
+    (void)Void.castTo<uint32_t>();
+}
+
 } // namespace
 
 MAIN(testshared)
 {
-    testPlan(93);
+    testPlan(94);
     testEmpty<void>();
     testEmpty<const void>();
     testEmpty<int32_t>();
@@ -151,5 +198,6 @@ MAIN(testshared)
     testFreeze();
     testFreezeError();
     testComplex();
+    testCast();
     return testDone();
 }
