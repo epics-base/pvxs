@@ -76,6 +76,14 @@ struct sa_default_delete {
     void operator()(E* e) const { delete[] e; }
 };
 
+// use of typename std::enable_if<std::is_void<E>{}>::type
+// as enabler for the shared_array<> void specialization below fails with gcc 4.8 and 4.9..
+// The is_void specialization isn't being selected, but no hint is given as to why.
+// This older style of enabler works though.  Go figure...
+template<typename T, class R = void> struct is_void {};
+template<class R> struct is_void<void,R> { typedef R type; };
+template<class R> struct is_void<const void,R> { typedef R type; };
+
 template<typename E>
 struct sa_base {
 protected:
@@ -437,7 +445,7 @@ public:
 
 
 template<typename E>
-class shared_array<E, typename std::enable_if<std::is_void<E>{}>::type >
+class shared_array<E, typename detail::is_void<E>::type >
     : public detail::sa_base<E>
 {
     static_assert (std::is_void<E>::value, "void specialization");
