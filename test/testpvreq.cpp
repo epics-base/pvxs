@@ -34,9 +34,8 @@ struct TestBuilder : client::detail::CommonBuilder<TestBuilder, client::detail::
 
     template<typename T>
     TestBuilder& set(const std::string& name, const T& val, bool required=true) {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t norm(val);
-        _set(name, &norm, map_t::code, required);
+        typename impl::StoreAs<T>::store_t norm(val);
+        _set(name, &norm, impl::StoreAs<T>::code, required);
         return *this;
     }
 

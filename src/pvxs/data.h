@@ -87,6 +87,9 @@ template<>
 struct StorageMap<Value>
 { typedef Value store_t;   static constexpr StoreType code{StoreType::Compound}; };
 
+template<typename T>
+using StoreAs = StorageMap<typename std::decay<T>::type>;
+
 } // namespace impl
 
 //! Groups of related types
@@ -531,9 +534,8 @@ public:
      */
     template<typename T>
     inline T as() const {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t ret;
-        copyOut(&ret, map_t::code);
+        typename impl::StoreAs<T>::store_t ret;
+        copyOut(&ret, impl::StoreAs<T>::code);
         return ret;
     }
 
@@ -541,9 +543,8 @@ public:
     //! @returns false if as<T>() would throw NoField or NoConvert
     template<typename T>
     inline bool as(T& val) const {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t temp;
-        auto ret = tryCopyOut(&temp, map_t::code);
+        typename impl::StoreAs<T>::store_t temp;
+        auto ret = tryCopyOut(&temp, impl::StoreAs<T>::code);
         if(ret) {
             val = temp;
         }
@@ -555,9 +556,8 @@ public:
     //! of the provided function.
     template<typename T, typename FN>
     void as(FN&& fn) const {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t val;
-        if(tryCopyOut(&val, map_t::code)) {
+        typename impl::StoreAs<T>::store_t val;
+        if(tryCopyOut(&val, impl::StoreAs<T>::code)) {
             fn(val);
         }
     }
@@ -566,9 +566,8 @@ public:
     //! @returns false if from<T>() would throw NoField or NoConvert
     template<typename T>
     inline bool tryFrom(const T& val) {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t norm(val);
-        return copyIn(&norm, map_t::code);
+        typename impl::StoreAs<T>::store_t norm(val);
+        return copyIn(&norm, impl::StoreAs<T>::code);
     }
 
     /** Assign from field.
@@ -584,9 +583,8 @@ public:
      */
     template<typename T>
     void from(const T& val) {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t norm(val);
-        copyIn(&norm, map_t::code);
+        typename impl::StoreAs<T>::store_t norm(val);
+        copyIn(&norm, impl::StoreAs<T>::code);
     }
 
     //! Inline assignment of sub-field.

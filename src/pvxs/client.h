@@ -424,9 +424,8 @@ public:
      */
     template<typename T>
     SubBuilder& record(const std::string& name, const T& val) {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t norm(val);
-        this->_record(name, &norm, map_t::code);
+        typename impl::StoreAs<T>::store_t norm(val);
+        this->_record(name, &norm, impl::StoreAs<T>::code);
         return _sb();
     }
 
@@ -507,9 +506,8 @@ public:
     template<typename T>
     PutBuilder& set(const std::string& name, const T& val, bool required=true)
     {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t norm(val);
-        return set(name, &norm, map_t::code, required);
+        typename impl::StoreAs<T>::store_t norm(val);
+        return set(name, &norm, impl::StoreAs<T>::code, required);
     }
 
     /** Provide the builder callback.
@@ -565,9 +563,8 @@ public:
     template<typename T>
     RPCBuilder& arg(const std::string& name, const T& val)
     {
-        typedef impl::StorageMap<typename std::decay<T>::type> map_t;
-        typename map_t::store_t norm(val);
-        _set(name, &norm, map_t::code, true);
+        typename impl::StoreAs<T>::store_t norm(val);
+        _set(name, &norm, impl::StoreAs<T>::code, true);
         return *this;
     }
 
