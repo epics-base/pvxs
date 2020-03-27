@@ -105,7 +105,7 @@ struct StoreTransform<shared_array<const E>> {
     }
     static inline
     shared_array<const E> out(const shared_array<const void>& v) {
-        return v.template castTo<const E>();
+        return v.template convertTo<const E>();
     }
 };
 

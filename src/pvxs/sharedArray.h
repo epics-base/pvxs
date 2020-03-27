@@ -41,6 +41,11 @@ enum class ArrayType : uint8_t {
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, ArrayType code);
 
+//! Return storage size (aka. sizeof() ) for array element type
+//! @throws std::logic_error for invalid types.
+PVXS_API
+size_t elementSize(ArrayType type);
+
 namespace detail {
 template<typename T>
 struct CaptureCode;
@@ -191,6 +196,14 @@ std::ostream& operator<<(std::ostream& strm, const Limiter&);
 
 PVXS_API
 void _throw_bad_cast(ArrayType from, ArrayType to);
+
+PVXS_API
+void convertArr(ArrayType dtype,       void *dbase,
+                ArrayType stype, const void *sbase,
+                size_t count);
+
+PVXS_API
+shared_array<void> copyAs(ArrayType dtype, ArrayType stype, const void *sbase, size_t count);
 
 } // namespace detail
 
@@ -438,6 +451,20 @@ public:
         return shared_array<TO>(this->_data, this->_data.get(), this->_count); // implied cast to void*
     }
 
+    template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    shared_array<TO>
+    convertTo() const {
+        if(detail::CaptureBase<TO>::code==detail::CaptureBase<E>::code) {
+            return castTo<TO>();
+        } else {
+            shared_array<TO> ret(this->_count);
+            detail::convertArr(detail::CaptureBase<TO>::code, (void*)ret._data.get(),
+                               detail::CaptureBase<E>::code, this->_data.get(),
+                               this->_count);
+            return ret;
+        }
+    }
+
     //! Provide options when rendering with std::ostream.
     detail::Limiter format() const {
         return detail::Limiter(this->_data.get(),
@@ -584,6 +611,26 @@ public:
         // in reality this is either void -> void, or const void -> const void
         // aka. simple copy
         return *this;
+    }
+
+    template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    shared_array<TO>
+    convertTo() const {
+        if(detail::CaptureBase<TO>::code==_type) {
+            return castTo<TO>();
+        } else {
+            shared_array<TO> ret(this->_count);
+            detail::convertArr(detail::CaptureBase<TO>::code, (void*)ret._data.get(),
+                               _type, this->_data.get(),
+                               this->_count);
+            return ret;
+        }
+    }
+
+    template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    shared_array<TO>
+    convertTo() const {
+        return castTo<TO>();
     }
 
     //! Provide options when rendering with std::ostream.
