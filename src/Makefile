@@ -62,6 +62,7 @@ LIBRARY = pvxs
 LIB_SRCS += log.cpp
 LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
+LIB_SRCS += sharedarray.cpp
 LIB_SRCS += bitmask.cpp
 LIB_SRCS += type.cpp
 LIB_SRCS += data.cpp
