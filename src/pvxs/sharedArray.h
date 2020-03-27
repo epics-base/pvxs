@@ -62,6 +62,9 @@ CASE(std::string, String);
 CASE(Value, Value);
 #undef CASE
 
+template<typename T>
+using CaptureBase = CaptureCode<typename std::remove_cv<T>::type>;
+
 template<typename T, typename Enable=void>
 struct sizeofx {
     static inline size_t op() { return sizeof(T); }
@@ -439,7 +442,7 @@ public:
     detail::Limiter format() const {
         return detail::Limiter(this->_data.get(),
                                this->_count,
-                               detail::CaptureCode<typename std::remove_cv<E>::type>::code);
+                               detail::CaptureBase<E>::code);
     }
 };
 
@@ -489,27 +492,27 @@ public:
     //! use existing alloc with delete[]
     shared_array(E* a, size_t len)
         :base_t(a, len)
-        ,_type(detail::CaptureCode<typename std::remove_cv<E>::type>::code)
+        ,_type(detail::CaptureBase<E>::code)
     {}
 
     //! use existing alloc w/ custom deletor
     template<typename B>
     shared_array(E* a, B b, size_t len)
         :base_t(a, b, len)
-        ,_type(detail::CaptureCode<typename std::remove_cv<E>::type>::code)
+        ,_type(detail::CaptureBase<E>::code)
     {}
 
     //! build around existing shared_ptr and length
     shared_array(const std::shared_ptr<E>& a, size_t len)
         :base_t(a, len)
-        ,_type(detail::CaptureCode<typename std::remove_cv<E>::type>::code)
+        ,_type(detail::CaptureBase<E>::code)
     {}
 
     //! alias existing shared_ptr and length
     template<typename A>
     shared_array(const std::shared_ptr<A>& a, E* b, size_t len)
         :base_t(a, b, len)
-        ,_type(detail::CaptureCode<typename std::remove_cv<A>::type>::code)
+        ,_type(detail::CaptureBase<A>::code)
     {}
 
 private:
@@ -555,8 +558,8 @@ public:
     template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
     shared_array<TO>
     castTo() const {
-        if(this->_data && _type!=detail::CaptureCode<typename std::remove_cv<TO>::type>::code) {
-            detail::_throw_bad_cast(_type, detail::CaptureCode<typename std::remove_cv<TO>::type>::code);
+        if(this->_data && _type!=detail::CaptureBase<TO>::code) {
+            detail::_throw_bad_cast(_type, detail::CaptureBase<TO>::code);
         }
         return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), this->_count);
     }
