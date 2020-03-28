@@ -230,7 +230,7 @@ shared_array<void> copyAs(ArrayType dtype, ArrayType stype, const void *sbase, s
  *   assert(arr.size()==3);
  *   shared_array<void> voidarr(arr.castTo<void>());
  *   assert(arr.size()==0);
- *   assert(voidarr.size()==3*sizeof(uint32_t)); // void size() bytes
+ *   assert(voidarr.size()==3); // void size() in elements
  * @endcode
  */
 template<typename E, class Enable>
@@ -373,8 +373,8 @@ public:
     inline reference back() const noexcept{return (*this)[this->m_count-1];}
 
     //! @brief Member access
-    //! @pre !empty() && i<size()
     //! Use sa.data() instead of &sa[0]
+    //! @pre !empty() && i<size()
     inline reference operator[](size_t i) const noexcept {return this->_data.get()[i];}
 
     //! @brief Member access
@@ -408,6 +408,8 @@ public:
 #if _DOXYGEN_
     /** Cast to/from void, preserving const-ness.
      *
+     * A "safe" version of static_cast<>()
+     *
      * Allowed casts depend upon two aspects of type parameter E.
      *
      * Whether the base type is void or non-void.
@@ -419,10 +421,22 @@ public:
      * Either both of E and TO, or neither, must be const qualified.
      *
      * At most one of E or TO may have different non-void base type.
+     *
+     * @throws std::logic_error on void -> non-void cast when requested type and the original_type() do not match.
      */
     template<typename TO>
     shared_array<TO>
     castTo() const;
+
+    /** Cast with fallback to copy.  Preserves const-ness
+     *
+     * Return either a reference or a copy of this array.
+     * A copy will be made if the requested type and the original_type() do not match.
+     * Otherwise functions like castTo().
+     */
+    template<typename TO>
+    shared_array<TO>
+    convertTo() const;
 #endif
 
     template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
@@ -471,6 +485,11 @@ public:
                                this->_count,
                                detail::CaptureBase<E>::code);
     }
+
+#ifdef _DOXYGEN_
+    //! return type of underlying array.  (void only)
+    inline ArrayType original_type() const;
+#endif
 };
 
 

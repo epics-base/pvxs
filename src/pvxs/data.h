@@ -341,6 +341,8 @@ CASE(UnionA)
  *     M::Struct("alarm", "alarm_t", {
  *         M::Int32("severity"),
  *     }),
+ *     def1.as("special"), // compose definitions
+ * });
  *
  * auto val = def2.create(); // instanciate a Value
  * });
@@ -385,6 +387,7 @@ public:
         :TypeDef(code, std::string(), children)
     {}
 
+    //! Use this definition as a member (eg. sub-structure) in another definition.
     Member as(const std::string& name) const;
 
 private:
