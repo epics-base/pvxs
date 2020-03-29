@@ -4,13 +4,17 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <osiSock.h>
+
 #ifdef _WIN32
-#include <mswsock.h>
+#  include <windows.h>
+#  include <mswsock.h>
 #endif
 
 #include <cstring>
 #include <system_error>
 #include <deque>
+#include <algorithm>
 
 #include <event2/event.h>
 #include <event2/thread.h>

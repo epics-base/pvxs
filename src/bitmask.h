@@ -9,6 +9,7 @@
 #include <ostream>
 #include <stdexcept>
 #include <vector>
+#include <algorithm>
 #include <cstdint>
 
 #include <pvxs/version.h>

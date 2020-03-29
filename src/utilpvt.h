@@ -6,8 +6,11 @@
 #ifndef UTILPVT_H
 #define UTILPVT_H
 
+#include <osiSock.h>
 
 #ifdef _WIN32
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
 #  include <synchapi.h>
 #else
 #  include <pthread.h>
