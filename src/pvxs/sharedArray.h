@@ -75,7 +75,7 @@ struct sizeofx {
     static inline size_t op() { return sizeof(T); }
 };
 template<typename T>
-struct sizeofx<T, typename std::enable_if<std::is_void<T>{}>::type> {
+struct sizeofx<T, typename std::enable_if<std::is_void<T>::value>::type> {
     static inline size_t op() { return 1u; } // treat void* as pointer to bytes
 };
 
@@ -83,14 +83,6 @@ template<typename E>
 struct sa_default_delete {
     void operator()(E* e) const { delete[] e; }
 };
-
-// use of typename std::enable_if<std::is_void<E>{}>::type
-// as enabler for the shared_array<> void specialization below fails with gcc 4.8 and 4.9..
-// The is_void specialization isn't being selected, but no hint is given as to why.
-// This older style of enabler works though.  Go figure...
-template<typename T, class R = void> struct is_void {};
-template<class R> struct is_void<void,R> { typedef R type; };
-template<class R> struct is_void<const void,R> { typedef R type; };
 
 template<typename E>
 struct sa_base {
@@ -440,33 +432,33 @@ public:
     convertTo() const;
 #endif
 
-    template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    template<typename TO, typename std::enable_if<std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     castTo() const {
         return shared_array<TO>(this->_data, this->_data.get(), this->_count); // implied cast to void*
     }
 
-    template<typename TO, typename std::enable_if<std::is_same<TO, E>{}, int>::type =0>
+    template<typename TO, typename std::enable_if<std::is_same<TO, E>::value, int>::type =0>
     shared_array<TO>
     castTo() const {
         return *this;
     }
 
     // static_cast<TO>() to non-void, preserving const-ness
-    template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    template<typename TO, typename std::enable_if<!std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     castToUnsafe() const {
         return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), this->_count);
     }
 
     // static_cast<TO>() to void, preserving const-ness
-    template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    template<typename TO, typename std::enable_if<std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     castToUnsafe() const {
         return shared_array<TO>(this->_data, this->_data.get(), this->_count); // implied cast to void*
     }
 
-    template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    template<typename TO, typename std::enable_if<!std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     convertTo() const {
         if(detail::CaptureBase<TO>::code==detail::CaptureBase<E>::code) {
@@ -495,7 +487,7 @@ public:
 
 
 template<typename E>
-class shared_array<E, typename detail::is_void<E>::type >
+class shared_array<E, typename std::enable_if<std::is_void<E>::value>::type >
     : public detail::sa_base<E>
 {
     static_assert (std::is_void<E>::value, "void specialization");
@@ -602,7 +594,7 @@ public:
     }
 
     // static_cast<TO>() to non-void, preserving const-ness
-    template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    template<typename TO, typename std::enable_if<!std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     castTo() const {
         if(this->_data && _type!=detail::CaptureBase<TO>::code) {
@@ -611,21 +603,21 @@ public:
         return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), this->_count);
     }
 
-    template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    template<typename TO, typename std::enable_if<std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     castTo() const {
         return *this;
     }
 
     // static_cast<TO>() to non-void, preserving const-ness
-    template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    template<typename TO, typename std::enable_if<!std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     castToUnsafe() const {
         return shared_array<TO>(this->_data, static_cast<TO*>(this->_data.get()), this->_count);
     }
 
     // static_cast<TO>() to void, preserving const-ness
-    template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    template<typename TO, typename std::enable_if<std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     castToUnsafe() const {
         // in reality this is either void -> void, or const void -> const void
@@ -633,7 +625,7 @@ public:
         return *this;
     }
 
-    template<typename TO, typename std::enable_if<!std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    template<typename TO, typename std::enable_if<!std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     convertTo() const {
         if(detail::CaptureBase<TO>::code==_type) {
@@ -647,7 +639,7 @@ public:
         }
     }
 
-    template<typename TO, typename std::enable_if<std::is_void<TO>{} && (std::is_const<E>{} == std::is_const<TO>{}), int>::type =0>
+    template<typename TO, typename std::enable_if<std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     convertTo() const {
         return castTo<TO>();

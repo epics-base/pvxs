@@ -192,7 +192,7 @@ inline void _from_wire(Buffer& buf, uint8_t *mem, bool reverse)
  * @param buf output buffer.  buf[0] through buf[sizeof(T)-1] must be valid.
  * @param val input variable
  */
-template<typename T, typename std::enable_if<sizeof(T)>=2 && std::is_scalar<T>{} && !std::is_pointer<T>{}, int>::type =0>
+template<typename T, typename std::enable_if<sizeof(T)>=2 && std::is_scalar<T>::value && !std::is_pointer<T>::value, int>::type =0>
 inline void to_wire(Buffer& buf, const T& val)
 {
     union {
@@ -203,7 +203,7 @@ inline void to_wire(Buffer& buf, const T& val)
     _to_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE);
 }
 
-template<typename T, typename std::enable_if<sizeof(T)==1 && std::is_scalar<T>{}, int>::type =0>
+template<typename T, typename std::enable_if<sizeof(T)==1 && std::is_scalar<T>::value, int>::type =0>
 inline void to_wire(Buffer& buf, const T& val)
 {
     if(!buf.ensure(1)) {

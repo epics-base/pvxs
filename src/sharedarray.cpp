@@ -135,7 +135,7 @@ void printValue(std::string& dest, const bool& src)
 }
 
 template<typename Src>
-typename std::enable_if<!std::is_same<Src, bool>{}>::type
+typename std::enable_if<!std::is_same<Src, bool>::value>::type
 printValue(std::string& dest, const Src& src)
 {
     std::ostringstream strm;

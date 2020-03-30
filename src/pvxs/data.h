@@ -50,17 +50,17 @@ struct StorageMap;
 
 // map signed integers to int64_t
 template<typename T>
-struct StorageMap<T, typename std::enable_if<std::is_integral<T>{} && std::is_signed<T>{}>::type>
+struct StorageMap<T, typename std::enable_if<std::is_integral<T>::value && std::is_signed<T>::value>::type>
 { typedef int64_t store_t;  static constexpr StoreType code{StoreType::Integer}; };
 
 // map unsigned integers to uint64_t
 template<typename T>
-struct StorageMap<T, typename std::enable_if<std::is_integral<T>{} && !std::is_signed<T>{} && !std::is_same<T,bool>{}>::type>
+struct StorageMap<T, typename std::enable_if<std::is_integral<T>::value && !std::is_signed<T>::value && !std::is_same<T,bool>::value>::type>
 { typedef uint64_t store_t; static constexpr StoreType code{StoreType::UInteger}; };
 
 // map floating point to double.  (truncates long double, but then PVA doesn't >8 byte primatives anyway support anyway)
 template<typename T>
-struct StorageMap<T, typename std::enable_if<std::is_floating_point<T>{}>::type>
+struct StorageMap<T, typename std::enable_if<std::is_floating_point<T>::value>::type>
 { typedef double store_t;   static constexpr StoreType code{StoreType::Real}; };
 
 template<>
@@ -623,7 +623,7 @@ public:
 #ifdef _DOXYGEN_
     Value&
 #else
-    typename std::enable_if<!std::is_same<T,Value>{}, Value&>::type
+    typename std::enable_if<!std::is_same<T,Value>::value, Value&>::type
 #endif
     operator=(const T& val) {
         from<T>(val);
