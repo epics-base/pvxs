@@ -29,7 +29,9 @@ class Escaper
 {
     const char* val;
     size_t count;
-    friend std::ostream& operator<<(std::ostream& strm, const Escaper& esc);
+    friend
+    PVXS_API
+    std::ostream& operator<<(std::ostream& strm, const Escaper& esc);
 public:
     PVXS_API explicit Escaper(const char* v);
     constexpr explicit Escaper(const char* v, size_t l) :val(v),count(l) {}

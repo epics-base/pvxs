@@ -181,6 +181,7 @@ class Limiter {
     size_t _limit=0u;
     ArrayType _type;
     friend
+    PVXS_API
     std::ostream& operator<<(std::ostream& strm, const Limiter& lim);
 public:
     Limiter(const void* base, size_t count, ArrayType type)

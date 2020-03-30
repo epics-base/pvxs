@@ -420,6 +420,7 @@ public:
     Value create() const;
 
     friend
+    PVXS_API
     std::ostream& operator<<(std::ostream& strm, const TypeDef&);
 };
 

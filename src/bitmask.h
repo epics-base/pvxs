@@ -236,6 +236,7 @@ public:
     }
 
     friend
+    PVXS_API
     bool operator==(const BitMask& lhs, const BitMask& rhs);
 };
 
