@@ -1,7 +1,12 @@
+#ifdef _COMMENT_
 /* Compiler inspection
  *
  * expanded as configure/CONFIG_SITE.Common.*
  */
+/* GCC preprocessor drops C comments from output.
+ * MSVC preprocessor emits C comments in output
+ */
+#endif
 #define VERSION_INT(V,R,M,P) ( ((V)<<24) | ((R)<<16) | ((M)<<8) | (P))
 
 CONFIG_LOADED=YES
@@ -16,7 +21,8 @@ USR_CXXFLAGS += -std=c++11
 #define GCC_VERSION VERSION_INT(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__, 0)
 
 /* LTO takes a nice chunk out of the .so text size, but blows up the .a size */
-#if GCC_VERSION>=VERSION_INT(4,9,0,0)
+/* native mingw builds using the MS ar doesn't understand LTO */
+#if !defined(_WIN32) && GCC_VERSION>=VERSION_INT(4,9,0,0)
 OPT_CFLAGS_YES += -flto
 OPT_CXXFLAGS_YES += -flto
 USR_LDFLAGS += -flto

@@ -15,6 +15,7 @@ CMAKEFLAGS += -DEVENT__DISABLE_OPENSSL=ON
 CMAKEFLAGS += -DEVENT__DISABLE_REGRESS=ON
 CMAKEFLAGS += -DEVENT__DISABLE_SAMPLES=ON
 CMAKEFLAGS += -DEVENT__DISABLE_TESTS=ON
+CMAKEFLAGS += -DEVENT__DISABLE_BENCHMARK=ON
 
 CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR=$(abspath $(TOP)/bundle/cmake)
 
@@ -25,17 +26,27 @@ CMAKEFLAGS_DEBUG_YES += -DCMAKE_BUILD_TYPE=RELEASE
 CMAKEFLAGS_DEBUG_NO += -DCMAKE_BUILD_TYPE=DEBUG
 CMAKEFLAGS += $(CMAKEFLAGS_DEBUG_$(IS_OPT))
 
+CMAKEFLAGS_WIN32_STATIC_NO += -DEVENT__LIBRARY_TYPE=SHARED
+CMAKEFLAGS_WIN32_STATIC_YES += -DEVENT__LIBRARY_TYPE=STATIC
+CMAKEFLAGS += $(CMAKEFLAGS_$(OS_CLASS)_STATIC_$(STATIC_BUILD))
+
 ifneq (,$(filter linux-%,$(EPICS_HOST_ARCH)))
-_TOOLCHAIN_windows-x64-mingw ?= x86_64-w64-mingw32
+# cross mingw hosted on linux
+CMAKE_TOOLCHAIN_windows-x64-mingw ?= x86_64-w64-mingw32
+endif
+
+ifneq (,$(filter win%,$(EPICS_HOST_ARCH)))
+# hosted mingw on windows
+CMAKEFLAGS_gcc += -G "MinGW Makefiles" -DCMAKE_C_COMPILER="$(CC)"
+
+# Use NMake for native windows since we must already have a MSVC version in %PATH%
+CMAKEFLAGS_msvc += -G "NMake Makefiles" -DCMAKE_C_COMPILER="$(CC)"
 endif
 
 # toolchain file when cross compiling
-CMAKE_TOOLCHAIN ?= $(_TOOLCHAIN_$(T_A))
-CMAKEFLAGS_CROSS_YES = -DCMAKE_TOOLCHAIN_FILE=$(CMAKE_TOOLCHAIN)
-CMAKEFLAGS += $(CMAKEFLAGS_CROSS_$(CROSS))
+CMAKE_TOOLCHAIN ?= $(CMAKE_TOOLCHAIN_$(T_A))
+CMAKEFLAGS += $(if $(CMAKE_TOOLCHAIN),-DCMAKE_TOOLCHAIN_FILE=$(CMAKE_TOOLCHAIN))
 
-# Use NMake for native windows since we must already have a MSVC version in %PATH%
-CMAKEFLAGS_msvc += -G "NMake Makefiles"
 CMAKEFLAGS += $(CMAKEFLAGS_$(CMPLR_CLASS))
 
 # flags for cmake --build
@@ -81,7 +92,7 @@ ifneq (,$(wildcard $(CURDIR)/../libevent/CMakeLists.txt))
 
 libevent.%:
 	$(CMAKE) $(CMAKEFLAGS) ../libevent
-	$(CMAKE) --build . $(CBUILDFLAGS) --target install
+	$(CMAKE) -E env --unset=MAKEFLAGS --unset=CC $(CMAKE) --build . $(CBUILDFLAGS) --target install
 
 else
 # libevent 2.0 only autotools
@@ -99,3 +110,13 @@ endif
 endif # T_A
 
 .PHONY: libevent libevent.%
+
+# These rules support printing a Makefile variable values.
+# Many variables are only set inside an O.<arch> build directory.
+#   make PRINT.T_A
+
+PRINT_Var = $(@:PRINT.%=%)
+PRINT.%:
+	@echo $(PRINT_Var) = '$($(PRINT_Var))'
+
+.PHONY: PRINT PRINT.%
