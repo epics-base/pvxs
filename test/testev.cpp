@@ -112,6 +112,7 @@ void test_fill_evbuf()
 
 MAIN(testev)
 {
+    SockAttach attach;
     testPlan(14);
     test_call();
     test_fill_evbuf();

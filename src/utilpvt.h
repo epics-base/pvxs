@@ -186,6 +186,11 @@ using aligned_union = std::aligned_union<Len, Types...>;
 } // namespace impl
 using namespace impl;
 
+struct SockAttach {
+    SockAttach() { osiSockAttach(); }
+    ~SockAttach() { osiSockRelease(); }
+};
+
 //! representation of a network address
 struct PVXS_API SockAddr {
     union store_t {

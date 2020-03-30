@@ -150,6 +150,7 @@ void testSearch(bool be, std::initializer_list<const char*> names)
 
 int main(int argc, char *argv[])
 {
+    SockAttach attach;
     testPlan(46);
     pvxs::logger_config_env();
     testBeacon(true);

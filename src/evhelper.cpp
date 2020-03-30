@@ -63,6 +63,8 @@ void evthread_init(void* unused)
 
 struct evbase::Pvt : public epicsThreadRunable
 {
+    SockAttach attach;
+
     struct Work {
         std::function<void()> fn;
         std::exception_ptr *result;

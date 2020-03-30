@@ -206,6 +206,7 @@ void test_to_wire()
 
 MAIN(testsock)
 {
+    SockAttach attach;
     testPlan(33);
     test_udp();
     test_local_mcast();
