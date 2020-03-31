@@ -163,6 +163,7 @@ void Member::_validate() const
 {
     if(!name.empty())
         name_validate(name.c_str());
+    Helper::node_validate(nullptr, id, code);
     for(auto& child : children) {
         Helper::node_validate(this, child.id, child.code);
     }
