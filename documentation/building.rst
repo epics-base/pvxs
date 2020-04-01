@@ -12,6 +12,10 @@ Prepare the PVXS source tree: ::
     EPICS_BASE=\$(TOP)/../epics-base
     EOF
 
+Build Base: ::
+
+    make -C epics-base
+
 Install or build libevent >=2.0
 
 On RHEL7 and later. ::
@@ -34,9 +38,8 @@ For additional archs: eg. ::
 
     make -C pvxs/bundle libevent.linux-x86_64-debug
 
-Build Base and PVXS: ::
+Build PVXS: ::
 
-    make -C epics-base
     make -C pvxs
 
 It is recommended to run automatic unittests when building a new (to you) version
