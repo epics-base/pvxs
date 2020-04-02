@@ -149,150 +149,17 @@ Value Value::clone() const
     return ret;
 }
 
-static
-bool assignCompatible(const FieldDesc* tdesc,
-                      const FieldStorage* tstore,
-                      const FieldDesc* sdesc,
-                      const FieldStorage* sstore)
-{
-    if(tdesc==sdesc) {
-        // exact match
-        return true;
-
-    } else if(!sdesc) {
-        // assignment of NULL is always a noop
-        return true;
-
-        // from this point we know tdesc!=NULL
-
-    } else if(tdesc->code.storedAs()!=sdesc->code.storedAs()) {
-        // TODO kind conversion?
-        return false;
-    }
-
-    switch (tdesc->code.storedAs()) {
-    case StoreType::Bool:
-    case StoreType::Real:
-    case StoreType::String:
-    case StoreType::Integer:
-    case StoreType::UInteger:
-        // simple scalar field
-        return true;
-    case StoreType::Null:
-        // Structure assignment allowed if src has all target fields (extras ignored)
-        for(size_t idx : range(size_t(1u), tdesc->size())) {
-            auto it = sdesc->mlookup.find(tdesc->miter[idx-1u].first);
-            if(it==sdesc->mlookup.end()) {
-                return false;
-            }
-            auto schild = sdesc + it->second;
-            auto tchild = tdesc + idx;
-
-            if(!assignCompatible(tchild, tstore+idx, schild, sstore+it->second))
-                return false;
-        }
-        return true;
-    case StoreType::Array:
-        if(tdesc->code!=sdesc->code) {
-            // TODO array type conversion?
-            return false;
-        } else if((tdesc->code.kind()==Kind::Bool)
-                  || (tdesc->code.kind()==Kind::Real)
-                  || (tdesc->code.kind()==Kind::String)
-                  || (tdesc->code.kind()==Kind::Integer)
-                  || tdesc->code==TypeCode::AnyA) {
-            return true;
-        } else {
-            // TODO StructS, UnionS
-            return false;
-        }
-        break;
-    case StoreType::Compound:
-        // not implemented (yet?)
-        return false;
-    }
-
-    return false;
-}
-
 Value& Value::assign(const Value& o)
 {
-    if(!assignCompatible(desc, store.get(),
-                         o.desc, o.store.get()))
-        throw std::runtime_error("assign() not supported for these types");
+    if(!store || !o.store)
+        throw std::logic_error("Can't assign() to/from empty Value");
 
-    if(desc && o.desc) {
-        for(size_t bit=0, end=desc->size(); bit<end;) {
-            auto sstore = o.store.get() + bit;
-            auto dstore = store.get() + bit;
-
-            if(!sstore->valid) {
-                bit++;
-                continue;
-            }
-
-            dstore->valid = true;
-
-            switch(dstore->code) {
-            case StoreType::Real:
-            case StoreType::Bool:
-            case StoreType::Integer:
-            case StoreType::UInteger:
-                dstore->as<uint64_t>() = sstore->as<uint64_t>();
-                bit++;
-                break;
-            case StoreType::String:
-                dstore->as<std::string>() = sstore->as<std::string>();
-                bit++;
-                break;
-            case StoreType::Array:
-                dstore->as<shared_array<const void>>() = sstore->as<shared_array<const void>>();
-                bit++;
-                break;
-            case StoreType::Compound:
-                dstore->as<Value>() = sstore->as<Value>();
-                bit++;
-                break;
-            case StoreType::Null: {
-                // copy entire sub-structure
-                auto sdesc = desc + bit;
-
-                for(auto end2 = bit + sdesc->size(); bit<end2; bit++)
-                {
-                    auto sstore = o.store.get() + bit;
-                    auto dstore = store.get() + bit;
-
-                    dstore->valid = true;
-
-                    switch(dstore->code) {
-                    case StoreType::Real:
-                    case StoreType::Bool:
-                    case StoreType::Integer:
-                    case StoreType::UInteger:
-                        dstore->as<uint64_t>() = sstore->as<uint64_t>();
-                        bit++;
-                        break;
-                    case StoreType::String:
-                        dstore->as<std::string>() = sstore->as<std::string>();
-                        bit++;
-                        break;
-                    case StoreType::Array:
-                        dstore->as<shared_array<const void>>() = sstore->as<shared_array<const void>>();
-                        bit++;
-                        break;
-                    case StoreType::Compound:
-                        dstore->as<Value>() = sstore->as<Value>();
-                        bit++;
-                        break;
-                    case StoreType::Null: // skip sub-struct nodes, we will copy all leaf nodes
-                        break;
-                    }
-
-                }
-            }
-                break;
-            }
-        }
+    if(type().kind()==Kind::Compound) {
+        // pass through Struct and others w/ type
+        copyIn(&o, StoreType::Compound);
+    } else {
+        // unpack other field types
+        copyIn(o.store.get(), o.store->code);
     }
     return *this;
 }
@@ -703,15 +570,10 @@ void Value::copyIn(const void *ptr, StoreType type)
 
                 for(auto& sfld : src.imarked()) {
                     if(sfld.type()==TypeCode::Struct) {
-                        // entire sub-struct marked
+                        // entire sub-struct marked.
 
-                        for(auto& sfld2 : sfld.iall()) {
-
-                            if(auto dfld = (*this)[src.nameOf(sfld2)]) {
-                                dfld.copyIn(&sfld2.store->store, sfld2.store->code);
-                            } else {
-                                throw NoField();
-                            }
+                        if(auto dfld = (*this)[src.nameOf(sfld)]) {
+                            dfld.mark();
                         }
 
                     } else {
@@ -722,6 +584,10 @@ void Value::copyIn(const void *ptr, StoreType type)
                         }
                     }
                 }
+                if(src.isMarked())
+                    mark();
+
+                return;
             }
         }
         throw NoConvert();

@@ -192,11 +192,76 @@ void testConvertScalar(const Store& store, const Inout& inout)
     testEq(inout, cont.as<Inout>())<<typeid(Store).name()<<"->"<<typeid(Inout).name();
 }
 
+void testAssignSimilar()
+{
+    testShow()<<__func__;
+
+    auto def1 = nt::NTScalar{TypeCode::UInt32}.build();
+    {
+        auto def2 = nt::NTScalar{TypeCode::UInt32}.build();
+
+        auto val1 = def1.create();
+        auto val2 = def2.create();
+
+        // succeeds as no fields are marked.
+        val1.assign(val2);
+        testFalse(val1.isMarked(false, true));
+
+        val2["value"] = 4;
+        val2["alarm.severity"] = 1;
+
+        val1.assign(val2);
+        testTrue(val1.isMarked(false, true));
+        testTrue(val1["value"].isMarked());
+        testFalse(val1["alarm"].isMarked());
+        testTrue(val1["alarm.severity"].isMarked());
+        testFalse(val1["alarm.status"].isMarked());
+
+        val1.unmark();
+
+        val2["alarm"].mark();
+
+        val1.assign(val2);
+        testTrue(val1.isMarked(false, true));
+        testTrue(val1["value"].isMarked());
+        testTrue(val1["alarm"].isMarked());
+        testTrue(val1["alarm.severity"].isMarked());
+        testTrue(val1["alarm.status"].isMarked());
+    }
+
+    {
+        auto def2 = nt::NTScalar{TypeCode::Float64, true}.build();
+
+        auto val1 = def1.create();
+        auto val2 = def2.create();
+
+        // succeeds as no fields are marked.
+        val1.assign(val2);
+        testFalse(val1.isMarked(false, true));
+
+        val2["value"] = 4;
+        val2["alarm.severity"] = 1;
+
+        val1.assign(val2);
+        testTrue(val1.isMarked(false, true));
+        testTrue(val1["value"].isMarked());
+        testEq(val1["value"].as<double>(), 4.0);
+
+        val1.unmark();
+
+        val2["display.description"] = "blah";
+
+        testThrows<NoField>([&val1, &val2]() {
+            val1.assign(val2);
+        });
+    }
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(62);
+    testPlan(78);
     testTraverse();
     testAssign();
     testName();
@@ -223,6 +288,7 @@ MAIN(testdata)
     testConvertScalar<std::string, int32_t>("-5", -5);
     testConvertScalar<std::string, double>("-5", -5.0);
     testConvertScalar<std::string, std::string>("-5", "-5");
+    testAssignSimilar();
     cleanup_for_valgrind();
     return testDone();
 }

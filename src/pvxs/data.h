@@ -494,8 +494,10 @@ public:
     Value cloneEmpty() const;
     //! allocate new storage and copy in our values
     Value clone() const;
-    //! copy values from other.  Must have matching types.
-    Value& assign(const Value&);
+    //! copy value(s) from other.
+    //! Acts like from(o) for kind==Kind::Compound .
+    //! Acts like from(o.as<T>()) for kind!=Kind::Compound
+    Value& assign(const Value& o);
 
     //! Use to allocate members for an array of Struct and array of Union
     Value allocMember();
