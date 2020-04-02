@@ -4,9 +4,15 @@ include $(TOP)/configure/CONFIG
 
 CMAKE ?= cmake
 
+ifdef T_A
+
 CMAKEFLAGS = $(CMD_CMAKEFLAGS)
 
-CMAKEFLAGS += -DCMAKE_INSTALL_PREFIX:PATH=$(abspath $(INSTALL_LOCATION)/bundle/usr-$*)
+# override definitions from CONFIG_PVXS_MODULE, but not from CLI arguments
+LIBEVENT = $(LIBEVENT_$(T_A))
+LIBEVENT_$(T_A) = $(INSTALL_LOCATION)/bundle/usr/$(T_A)
+
+CMAKEFLAGS += -DCMAKE_INSTALL_PREFIX:PATH=$(abspath $(LIBEVENT_$(T_A)))
 
 # not needed, and may not be available on embedded targets, so never try
 CMAKEFLAGS += -DEVENT__DISABLE_OPENSSL=ON
@@ -53,6 +59,8 @@ CMAKEFLAGS += $(CMAKEFLAGS_$(CMPLR_CLASS))
 # eg. "-j 2"  (that space is important)
 CBUILDFLAGS +=
 
+endif # T_A
+
 all: help
 
 help:
@@ -73,10 +81,10 @@ help:
 libevent: libevent.$(EPICS_HOST_ARCH)
 
 clean:
-	$(RMDIR) $(CURDIR)/O.* $(CURDIR)/usr-*
+	$(RMDIR) $(CURDIR)/O.* $(CURDIR)/usr
 
 clean.%:
-	$(RMDIR) $(CURDIR)/O.$* $(CURDIR)/usr-$*
+	$(RMDIR) $(CURDIR)/O.$* $(CURDIR)/usr/$*
 
 ifndef T_A
 
@@ -99,7 +107,7 @@ else
 # only host CC supported
 
 libevent.%: ../libevent/configuration
-	[ -f Makefile ] || ../libevent/configure --prefix=$(abspath $(INSTALL_LOCATION)/bundle/usr-$*) --disable-openssl
+	[ -f Makefile ] || ../libevent/configure --prefix=$(abspath $(LIBEVENT_$(T_A))) --disable-openssl
 	$(MAKE) install
 
 ../libevent/configuration: ../libevent/configure.ac

@@ -15,7 +15,7 @@ ifdef T_A
 LIBEVENT ?= $(LIBEVENT_$(T_A))
 
 # default to bundled location if it exists
-LIBEVENT_$(T_A) ?= $(wildcard $(abspath $(_PVXS)/../bundle/usr-$(T_A)))
+LIBEVENT_$(T_A) ?= $(wildcard $(abspath $(_PVXS)/../bundle/usr/$(T_A)))
 
 # apply to include search paths
 INCLUDES += $(if $(LIBEVENT),-I$(LIBEVENT)/include)
