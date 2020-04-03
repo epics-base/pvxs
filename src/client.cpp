@@ -568,7 +568,7 @@ void Context::Pvt::onSearchS(evutil_socket_t fd, short evt, void *raw)
         for(unsigned i=0; i<4 && static_cast<Pvt*>(raw)->onSearch(); i++) {}
 
     }catch(std::exception& e){
-        log_crit_printf(io, "Unhandled error in search Rx callback: %s\n", e.what());
+        log_exc_printf(io, "Unhandled error in search Rx callback: %s\n", e.what());
     }
 }
 
@@ -693,7 +693,7 @@ void Context::Pvt::tickSearchS(evutil_socket_t fd, short evt, void *raw)
     try {
         static_cast<Pvt*>(raw)->tickSearch();
     }catch(std::exception& e){
-        log_crit_printf(io, "Unhandled error in search timer callback: %s\n", e.what());
+        log_exc_printf(io, "Unhandled error in search timer callback: %s\n", e.what());
     }
 }
 
@@ -724,7 +724,7 @@ void Context::Pvt::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
     try {
         static_cast<Pvt*>(raw)->tickBeaconClean();
     }catch(std::exception& e){
-        log_crit_printf(io, "Unhandled error in beacon cleaner timer callback: %s\n", e.what());
+        log_exc_printf(io, "Unhandled error in beacon cleaner timer callback: %s\n", e.what());
     }
 }
 

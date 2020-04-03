@@ -15,7 +15,9 @@
 #include <pvxs/log.h>
 
 #include <envDefs.h>
+#include <dbDefs.h>
 #include <osiSock.h>
+#include <epicsStackTrace.h>
 #include <epicsString.h>
 #include <epicsAssert.h>
 #include <epicsStdio.h>
@@ -63,6 +65,13 @@ const char* log_prefix(const char* name, Level lvl)
     epicsSnprintf(prefix+N, sizeof(prefix)-N, " %s %s", lname, name);
 
     return prefix;
+}
+
+void log_stacktrace()
+{
+    // stack traces can be long.  flush to reduce truncation
+    errlogFlush();
+    epicsStackTrace();
 }
 
 } // namespace detail

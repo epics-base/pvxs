@@ -224,7 +224,7 @@ void ServerConn::handle_SEARCH()
             try {
                 pair.second->onSearch(op);
             }catch(std::exception& e){
-                log_err_printf(serversetup, "Unhandled error in Source::onSearch for '%s' : %s\n",
+                log_exc_printf(serversetup, "Unhandled error in Source::onSearch for '%s' : %s\n",
                            pair.first.second.c_str(), e.what());
             }
         }
@@ -311,7 +311,7 @@ void ServerConn::handle_CREATE_CHANNEL()
                         break;
                     }
                 }catch(std::exception& e){
-                    log_err_printf(connsetup, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
+                    log_exc_printf(connsetup, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
                                pair.first.second.c_str(), pair.first.first,
                                typeid(&e).name(), e.what());
                 }

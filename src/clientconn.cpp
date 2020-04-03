@@ -402,7 +402,7 @@ void Connection::tickEchoS(evutil_socket_t fd, short evt, void *raw)
     try {
         static_cast<Connection*>(raw)->tickEcho();
     }catch(std::exception& e){
-        log_crit_printf(io, "Unhandled error in echo timer callback: %s\n", e.what());
+        log_exc_printf(io, "Unhandled error in echo timer callback: %s\n", e.what());
     }
 }
 

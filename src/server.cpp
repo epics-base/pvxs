@@ -441,7 +441,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
             try {
                 pair.second->onSearch(searchOp);
             }catch(std::exception& e){
-                log_err_printf(serversetup, "Unhandled error in Source::onSearch for '%s' : %s\n",
+                log_exc_printf(serversetup, "Unhandled error in Source::onSearch for '%s' : %s\n",
                            pair.first.second.c_str(), e.what());
             }
         }
@@ -554,7 +554,7 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
     try {
         static_cast<Pvt*>(raw)->doBeacons(evt);
     }catch(std::exception& e){
-        log_crit_printf(serverio, "Unhandled error in beacon timer callback: %s\n", e.what());
+        log_exc_printf(serverio, "Unhandled error in beacon timer callback: %s\n", e.what());
     }
 }
 

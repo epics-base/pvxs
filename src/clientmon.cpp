@@ -84,7 +84,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
             try {
                 event(*this);
             }catch(std::exception& e){
-                log_err_printf(io, "Unhandled user exception in Monitor %s %s : %s\n",
+                log_exc_printf(io, "Unhandled user exception in Monitor %s %s : %s\n",
                                 __func__, typeid (e).name(), e.what());
             }
         }
@@ -312,8 +312,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         try {
             static_cast<SubscriptionImpl*>(raw)->tickAck();
         }catch(std::exception& e) {
-            log_crit_printf(io, "Unhandled exception in %s %s : %s\n",
-                            __func__, typeid (e).name(), e.what());
+            log_exc_printf(io, "Unhandled exception in %s %s : %s\n",
+                           __func__, typeid (e).name(), e.what());
         }
     }
 };

@@ -158,7 +158,7 @@ void Connection::handle_GET_FIELD()
         try {
             done(std::move(res));
         }catch(std::exception& e){
-            log_err_printf(setup, "Unhandled exception %s in Info result() callback: %s\n", typeid (e).name(), e.what());
+            log_exc_printf(setup, "Unhandled exception %s in Info result() callback: %s\n", typeid (e).name(), e.what());
         }
 
     } else {

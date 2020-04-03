@@ -133,7 +133,7 @@ struct evbase::Pvt : public epicsThreadRunable
             log_printf(logerr, lvl, "Exit loop worker: %d for %p\n", ret, base.get());
 
         }catch(std::exception& e){
-            log_crit_printf(logerr, "Unhandled exception in event_base run : %s\n",
+            log_exc_printf(logerr, "Unhandled exception in event_base run : %s\n",
                             e.what());
             start_sync.trigger();
         }
@@ -154,7 +154,7 @@ struct evbase::Pvt : public epicsThreadRunable
                     Guard G(lock);
                     *work.result = std::current_exception();
                 } else {
-                    log_crit_printf(logerr, "Unhandled exception in event_base : %s : %s\n",
+                    log_exc_printf(logerr, "Unhandled exception in event_base : %s : %s\n",
                                     typeid(e).name(), e.what());
                 }
             }
@@ -169,7 +169,7 @@ struct evbase::Pvt : public epicsThreadRunable
         try {
             self->doWork();
         }catch(std::exception& e){
-            log_crit_printf(logerr, "Unhandled error in doWorkS callback: %s\n", e.what());
+            log_exc_printf(logerr, "Unhandled error in doWorkS callback: %s\n", e.what());
         }
     }
 
