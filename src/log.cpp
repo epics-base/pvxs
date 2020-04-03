@@ -8,6 +8,8 @@
 #include <string>
 #include <list>
 
+#include <stdlib.h>
+
 // must include before epicsStdio.h to avoid clash with printf macro
 #include <event2/util.h>
 #include <event2/buffer.h>
@@ -37,6 +39,21 @@ DEFINE_LOGGER(logerr, "pvxs.ev");
 
 namespace detail {
 
+static
+void maybeAbort()
+{
+    static std::atomic<int> abort_check{};
+    auto check = abort_check.load();
+    if(abort_check==0) {
+        check = getenv("_PVXS_ABORT_ON_CRIT") ? 1 : -1;
+        abort_check = check;
+    }
+    if(check==1) {
+        errlogFlush();
+        abort();
+    }
+}
+
 const char* log_prefix(const char* name, Level lvl)
 {
     static thread_local char prefix[64];
@@ -63,6 +80,9 @@ const char* log_prefix(const char* name, Level lvl)
     }
 
     epicsSnprintf(prefix+N, sizeof(prefix)-N, " %s %s", lname, name);
+
+    if(lvl==Level::Crit)
+        maybeAbort();
 
     return prefix;
 }
