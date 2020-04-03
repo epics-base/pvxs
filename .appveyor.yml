@@ -1,0 +1,106 @@
+# .appveyor.yml for use with EPICS Base ci-scripts
+# (see: https://github.com/epics-base/ci-scripts)
+
+cache:
+  - C:\Users\appveyor\.tools
+
+init:
+  # Set autocrlf to make batch files work
+  - git config --global core.autocrlf true
+
+clone_depth: 50
+
+# Skipping commits affecting only specific files
+skip_commits:
+  files:
+    - 'documentation/*'
+    - '**/*.rst'
+    - '**/*.md'
+
+#---------------------------------#
+#   build matrix configuration    #
+#---------------------------------#
+
+# Build Configurations: dll/static, regular/debug
+configuration:
+  - dynamic
+  - static
+  - dynamic-debug
+  - static-debug
+
+# Environment variables: compiler toolchain
+environment:
+  SETUP_PATH: .
+  _PVXS_ABORT_ON_CRIT: 1
+  PVXS_LOG: pvxs.*=WARN
+
+  matrix:
+  - CMP: vs2019
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+    PATH: C:\Python37-x64;%PATH%
+    BASE: 7.0
+  - CMP: vs2017
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    PATH: C:\Python35-x64;%PATH%
+    BASE: 7.0
+  - CMP: vs2015
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+    PATH: C:\Python35-x64;%PATH%
+    BASE: 7.0
+  - CMP: mingw
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+    PATH: C:\Python35-x64;%PATH%
+    BASE: 7.0
+
+# Platform: architecture
+platform:
+  - x64
+
+#---------------------------------#
+#     building & testing          #
+#---------------------------------#
+
+install:
+  - cmd: python -m pip install git+https://github.com/mdavidsaver/ci-core-dumper#egg=ci-core-dumper
+  - cmd: git submodule update --init --recursive
+  - cmd: python .ci/appveyor/do.py prepare
+  - cmd: python .ci/appveyor/do.py exec python .ci-local/appveyor-libevent.py
+
+build_script:
+  - cmd: python .ci/appveyor/do.py build
+
+before_test:
+  - cmd: python -m ci_core_dumper -v install
+
+test_script:
+  - cmd: reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug"
+  - cmd: reg query "HKLM\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\AeDebug"
+  - cmd: python -m ci_core_dumper crash
+  - cmd: python .ci/appveyor/do.py --add-path "{TOP}\bundle\usr\{EPICS_HOST_ARCH}\lib" test
+
+on_failure:
+  - cmd: python -m ci_core_dumper -v report
+
+on_finish:
+  - ps: Get-ChildItem *.tap -Recurse -Force | % { Push-AppveyorArtifact $_.FullName -FileName $_.Name }
+  - cmd: python .ci/appveyor/do.py build test-results -s
+
+
+#---------------------------------#
+#         debugging               #
+#---------------------------------#
+
+## if you want to connect by remote desktop to a failed build, uncomment these lines
+## note that you will need to connect within the usual build timeout limit (60 minutes)
+## so you may want to adjust the build matrix above to just build the one of interest
+
+#on_failure:
+#  - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+#  - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+
+#---------------------------------#
+#         notifications           #
+#---------------------------------#
+
+notifications:
+  - provider: GitHubPullRequest
