@@ -378,6 +378,11 @@ void Context::Pvt::close()
             conn->cleanup();
         }
     });
+
+    tcp_loop.join();
+
+    // ensure any in-progress callbacks have completed
+    manager.sync();
 }
 
 void Context::Pvt::poke()

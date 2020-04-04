@@ -62,7 +62,7 @@ struct owned_ptr : public std::unique_ptr<T>
 struct PVXS_API evbase {
     explicit evbase(const std::string& name, unsigned prio=0);
     ~evbase();
-    void start();
+    void join();
 
     void sync();
 

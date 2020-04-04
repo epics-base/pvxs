@@ -99,6 +99,11 @@ struct evbase::Pvt : public epicsThreadRunable
     }
 
     virtual ~Pvt() {
+        join();
+    }
+
+    void join()
+    {
         if(event_base_loopexit(base.get(), nullptr))
             log_crit_printf(logerr, "evbase error while interrupting loop for %p\n", base.get());
         worker.exitWait();
@@ -188,6 +193,11 @@ evbase::evbase(const std::string &name, unsigned prio)
 {}
 
 evbase::~evbase() {}
+
+void evbase::join()
+{
+    pvt->join();
+}
 
 void evbase::sync()
 {
