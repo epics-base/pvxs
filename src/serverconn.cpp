@@ -47,9 +47,6 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 
     // queue connection validation message
     {
-        uint8_t flags = hostBE ? pva_flags::MSB : 0;
-        flags |= pva_flags::Server;
-
         VectorOutBuf M(hostBE, buf);
         to_wire(M, Header{pva_ctrl_msg::SetEndian, pva_flags::Control|pva_flags::Server, 0});
 
