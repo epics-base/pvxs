@@ -256,6 +256,7 @@ struct InstCounter
 CASE(StructTop);
 
 CASE(UDPListener);
+CASE(evbase);
 
 CASE(GPROp);
 CASE(Connection);

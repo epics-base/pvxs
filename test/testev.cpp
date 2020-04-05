@@ -26,6 +26,9 @@ void test_call()
 
     evbase base("TEST");
 
+    auto snap = instanceSnapshot();
+    testEq(snap["evbase"], 1u);
+
     testOk1(!base.inLoop());
 
     {
@@ -113,7 +116,7 @@ void test_fill_evbuf()
 MAIN(testev)
 {
     SockAttach attach;
-    testPlan(14);
+    testPlan(15);
     test_call();
     test_fill_evbuf();
     cleanup_for_valgrind();

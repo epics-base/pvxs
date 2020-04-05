@@ -8,8 +8,24 @@
 
 #include "pvxs/unittest.h"
 #include "utilpvt.h"
+#include "udp_collector.h"
 
 namespace pvxs {
+
+void cleanup_for_valgrind()
+{
+    for(auto& pair : instanceSnapshot()) {
+        // This will mess up test counts, but is the only way
+        // 'prove' will print the result in CI runs.
+        if(pair.second!=0)
+            testFail("Instance leak %s : %zu", pair.first.c_str(), pair.second);
+    }
+#if LIBEVENT_VERSION_NUMBER >= 0x02010000
+    libevent_global_shutdown();
+#endif
+    impl::logger_shutdown();
+    impl::UDPManager::cleanup();
+}
 
 testCase::testCase()
     :result(Diag)

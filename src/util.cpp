@@ -49,21 +49,13 @@ unsigned long version_int()
     return PVXS_VERSION;
 }
 
-void cleanup_for_valgrind()
-{
-#if LIBEVENT_VERSION_NUMBER >= 0x02010000
-    libevent_global_shutdown();
-#endif
-    impl::logger_shutdown();
-    impl::UDPManager::cleanup();
-}
-
 
 #define CASE(KLASS) std::atomic<size_t> cnt_ ## KLASS{}
 
 CASE(StructTop);
 
 CASE(UDPListener);
+CASE(evbase);
 
 CASE(GPROp);
 CASE(Connection);
@@ -99,6 +91,7 @@ std::map<std::string, size_t> instanceSnapshot()
 CASE(StructTop);
 
 CASE(UDPListener);
+CASE(evbase);
 
 CASE(GPROp);
 CASE(Connection);

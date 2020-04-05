@@ -22,6 +22,21 @@
 
 namespace pvxs {
 
+/** Free some internal global allocations to avoid false positives in
+ *  valgrind (or similar) tools looking for memory leaks.
+ *
+ *  Calls libevent_global_shutdown() when available (libevent >=2.1).
+ *
+ * @warning This function is optional.
+ *          If you don't understand the intended use case, then do not call it!
+ *
+ * @pre Caller must release all resources explicitly allocated through PVXS (on all threads).
+ * @post Invalidates internal state.
+ *       Use of __any__ API functions afterwards is undefined!
+ */
+PVXS_API
+void cleanup_for_valgrind();
+
 /** A single test case (or diagnostic line).
  *
  * Acts as an output string to accumulate test comment.

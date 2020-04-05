@@ -75,6 +75,7 @@ struct PVXS_API evbase {
     void assertInLoop();
     bool inLoop();
 
+    INST_COUNTER(evbase);
 private:
     struct Pvt;
     std::unique_ptr<Pvt> pvt;
