@@ -230,11 +230,13 @@ Context::Context(const Config& conf)
      */
     auto internal(std::make_shared<Pvt>(conf));
     internal->internal_self = internal;
+    cnt_ClientPvtLive.fetch_add(1u);
 
     // external
     pvt.reset(internal.get(), [internal](Pvt*) mutable {
         internal->close();
         internal.reset();
+        cnt_ClientPvtLive.fetch_sub(1u);
     });
     // we don't keep a weak_ptr to the external reference.
     // Caller is entirely responsible for keeping this server running

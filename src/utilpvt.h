@@ -262,6 +262,7 @@ CASE(GPROp);
 CASE(Connection);
 CASE(Channel);
 CASE(ClientPvt);
+CASE(ClientPvtLive);
 CASE(InfoOp);
 CASE(SubScriptionImpl);
 
