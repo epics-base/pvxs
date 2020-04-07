@@ -84,7 +84,7 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
     // entries always have matching entry in a Channel::opByIOID
     std::map<uint32_t, RequestInfo> opByIOID;
 
-    uint32_t nextIOID = 0u;
+    uint32_t nextIOID = 0x10002000u;
 
     INST_COUNTER(Connection);
 
@@ -171,7 +171,7 @@ struct Context::Pvt
 
     const Value caMethod;
 
-    uint32_t nextCID=0u;
+    uint32_t nextCID=0x12345678;
 
     evsocket searchTx;
     uint16_t searchRxPort;

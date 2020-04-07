@@ -108,7 +108,7 @@ struct ServerConn : public ConnBase, public std::enable_shared_from_this<ServerC
     std::string autoMethod;
     Value credentials;
 
-    uint32_t nextSID;
+    uint32_t nextSID=0x07050301;
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanBySID;
     std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID;
 

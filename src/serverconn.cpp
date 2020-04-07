@@ -32,7 +32,6 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
               bufferevent_socket_new(iface->server->acceptor_loop.base, sock, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS),
               SockAddr(peer, socklen))
     ,iface(iface)
-    ,nextSID(0)
 {
     log_debug_printf(connio, "Client %s connects\n", peerName.c_str());
 
