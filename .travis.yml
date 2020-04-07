@@ -18,11 +18,18 @@ env:
     - _PVXS_ABORT_ON_CRIT=1
 
 install:
+  - sudo pip install git+https://github.com/mdavidsaver/ci-core-dumper#egg=ci-core-dumper
   - ./.ci/travis/prepare.sh
   - ./.ci-local/travis-libevent.sh
 
+before_script:
+  - sudo ci-core-dumper install
+
 script:
   - ./.ci/travis/build.sh
+
+after_failure:
+  - ci-core-dumper report
 
 # If you need to do more during install and build,
 # add a local directory to your module and do e.g.
