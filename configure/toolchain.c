@@ -20,14 +20,6 @@ USR_CXXFLAGS += -std=c++11
 #if __GNUC__ && !__clang__
 #define GCC_VERSION VERSION_INT(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__, 0)
 
-/* LTO takes a nice chunk out of the .so text size, but blows up the .a size */
-/* native mingw builds using the MS ar doesn't understand LTO */
-#if !defined(_WIN32) && GCC_VERSION>=VERSION_INT(4,9,0,0)
-OPT_CFLAGS_YES += -flto
-OPT_CXXFLAGS_YES += -flto
-USR_LDFLAGS += -flto
-#endif
-
 /* Compress debug information on ELF targets for ~25%-50% reduction in .so and .a file size
  * (C++ debug info is Huuuge!)
  */
