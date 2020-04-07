@@ -234,8 +234,15 @@ Context::Context(const Config& conf)
 
     // external
     pvt.reset(internal.get(), [internal](Pvt*) mutable {
-        internal->close();
-        internal.reset();
+        auto temp(std::move(internal));
+        try {
+            temp->close();
+        }catch(std::exception& e){
+            // called through ~shared_ptr and can't propagate exceptions.
+            // log and continue...
+            log_exc_printf(setup, "Error while closing Context (%s) : %s\n",
+                           typeid(e).name(), e.what());
+        }
         cnt_ClientPvtLive.fetch_sub(1u);
     });
     // we don't keep a weak_ptr to the external reference.
