@@ -14,20 +14,8 @@ cache:
 env:
   global:
     - SETUP_PATH=.ci-local:.ci
-
-addons:
-  apt:
-    packages:
-    # for all EPICS builds
-    - libreadline6-dev
-    - libncurses5-dev
-    - perl
-    # for clang compiler
-    - clang
-    # for mingw builds
-    - g++-mingw-w64-x86-64
-    # for cross libevent
-    - cmake
+    - VV=1
+    - _PVXS_ABORT_ON_CRIT=1
 
 install:
   - ./.ci/travis/prepare.sh
@@ -62,43 +50,121 @@ jobs:
 # Different configurations of default gcc and clang
 
   - env: BASE=7.0 LIBEVENT_TAG=release-2.1.11-stable
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
 
   - env: BASE=3.15
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
 
   - env: BASE=7.0
     compiler: clang
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
+        - clang
 
 # Cross-compilations to Windows using MinGW and WINE
     
   - env: BASE=7.0 WINE=64 TEST=NO STATIC=YES
     compiler: mingw
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
+        - g++-mingw-w64-x86-64
 
   - env: BASE=7.0 WINE=64 TEST=NO STATIC=NO
     compiler: mingw
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
+        - g++-mingw-w64-x86-64
 
 # Other gcc versions (added as an extra package)
 
   - env: BASE=7.0 LIBEVENT_TAG=origin/patches-2.0
     dist: trusty
     compiler: gcc-4.8
-    addons: { apt: { packages: ["g++-4.8"], sources: ["ubuntu-toolchain-r-test"] } }
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
+        - clang
+        - g++-4.8
 
   - env: BASE=7.0
     dist: trusty
     compiler: gcc-4.9
-    addons: { apt: { packages: ["g++-4.9"], sources: ["ubuntu-toolchain-r-test"] } }
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
+        - clang
+        - g++-4.9
 
   - env: BASE=7.0
     compiler: gcc-6
-    addons: { apt: { packages: ["g++-6"], sources: ["ubuntu-toolchain-r-test"] } }
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
+        - clang
+        - g++-6
 
   - env: BASE=7.0
     compiler: gcc-7
-    addons: { apt: { packages: ["g++-7"], sources: ["ubuntu-toolchain-r-test"] } }
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
+        - clang
+        - g++-7
 
   - env: BASE=7.0
     compiler: gcc-8
-    addons: { apt: { packages: ["g++-8"], sources: ["ubuntu-toolchain-r-test"] } }
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
+        - clang
+        - g++-8
 
 # MacOS build
 
