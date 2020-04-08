@@ -27,6 +27,7 @@ before_script:
 
 script:
   - ./.ci/travis/build.sh
+  - ./.ci-local/cdt-check.sh
 
 after_failure:
   - ci-core-dumper report
