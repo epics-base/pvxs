@@ -1,3 +1,57 @@
+.. _reportbug:
+
+Reporting a Bug
+===============
+
+Before reporting a bug, please check to see if this issue has already been `reported <https://github.com/mdavidsaver/pvxs/issues>`_.
+
+When composing a new report, please run the included automatic tests "make runtests" and mention the results.
+It is enough to mention "All tests successful." if this is so.  (see `runtests`)
+
+`Bug reports <https://github.com/mdavidsaver/pvxs/issues>`_ should always include:
+
+* EPICS Base version or VCS commit
+* PVXS module version or VCS commit
+* libevent version or VCS commit (running "pvxget -V" shows these)
+* EPICS host and target archs.  (eg. "linux-x86_64")
+* Host OS name and version (eg. run "cat /etc/issue")
+* Compiler name and version (eg. run "gcc --version")
+* The values of any $EPICS_PVA* environment variables which are set.
+* Any local/site modifications to PVXS or libevent
+* Concise instructions for reproducing the issue.
+
+Additional information which may be relevant:
+
+* Number of network interfaces if more than one.
+* Whether clients and/or servers are on the same host or diffrent hosts.
+* Whether clients and/or servers are in the same subnet or different subnets
+* Whether network traffic crosses between virtual machine(s) and physical host(s).
+* Firewall rules on UDP traffic to/from port 5075 or TCP connections to port 5074
+* Any local/site modifications to EPICS Base
+
+.. _contrib:
+
+Contributing
+============
+
+The recommended path for including changes is through [Pull Request](https://github.com/mdavidsaver/pvxs/pulls).
+
+When changing c++ code please do:
+
+* Indent with 4 spaces.  No hard tabs.  UNIX style EoL.
+* Try to maintain the style of surrounding code.
+* Include meaningful code comments where reasonable.
+
+but do not:
+
+* Add any c++ global constructors or destructors in the pvxs library.  (Ok in tools, examples, or tests)
+
+When committing changes please do:
+
+* Include a commit message
+* Break up changes into multiple commits where reasonable
+* Include whitespace only changes as seperate commits
+
 Notes
 =====
 

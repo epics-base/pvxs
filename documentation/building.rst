@@ -1,3 +1,5 @@
+.. _building:
+
 Building from Source
 ====================
 
@@ -42,6 +44,11 @@ Build PVXS: ::
 
     make -C pvxs
 
+.. _runtests:
+
+Running Tests
+^^^^^^^^^^^^^
+
 It is recommended to run automatic unittests when building a new (to you) version
 of PVXS, or building on a new host.  ::
 
@@ -54,3 +61,21 @@ The bundled libevent may be built for some cross compile targets.
 Currently only cross mingw. ::
 
     make -C pvxs/bundle libevent.windows-x64-mingw
+
+Including PVXS in your application
+==================================
+
+Including PVXS in an application/IOC using the EPICS Makefiles is straightforward.
+Add PVXS to the application configure/RELEASE or RELEASE.local file. ::
+
+    cat <<EOF > configure/RELEASE.local
+    PVXS=/path/to/your/build/of/pvxs
+    EOF
+
+Then add the pvxs library as a dependency to your executable or library. eg. ::
+
+    PROD_IOC += myioc
+    ...
+    myioc_LIBS += pvxs
+
+libevent will be automatically added for linking.
