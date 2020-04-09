@@ -52,7 +52,7 @@ PVXS_API
 const char* log_prefix(const char* name, Level lvl);
 
 PVXS_API
-void log_stacktrace();
+void _log_printf(unsigned lvl, const char* fmt, ...) EPICS_PRINTF_STYLE(2,3);
 
 } // namespace detail
 
@@ -76,7 +76,7 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
  */
 #define log_printf(LOGGER, LVL, FMT, ...) do{ \
     if((LOGGER).test(LVL)) \
-        errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), __VA_ARGS__); \
+       ::pvxs::detail:: _log_printf(unsigned(LVL), "%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), __VA_ARGS__); \
 }while(0)
 
 #define log_crit_printf(LOGGER, ...)  log_printf(LOGGER, ::pvxs::Level::Crit, __VA_ARGS__)
@@ -84,12 +84,9 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
 #define log_warn_printf(LOGGER, ...)  log_printf(LOGGER, ::pvxs::Level::Warn, __VA_ARGS__)
 #define log_info_printf(LOGGER, ...)  log_printf(LOGGER, ::pvxs::Level::Info, __VA_ARGS__)
 #define log_debug_printf(LOGGER, ...) log_printf(LOGGER, ::pvxs::Level::Debug, __VA_ARGS__)
-
 #define log_exc_printf(LOGGER, FMT, ...)   do{ \
-    if((LOGGER).test(::pvxs::Level::Crit)) { \
-        errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::Crit), __VA_ARGS__); \
-        ::pvxs::detail::log_stacktrace(); \
-    } \
+    if((LOGGER).test(::pvxs::Level::Crit)) \
+       ::pvxs::detail:: _log_printf(unsigned(::pvxs::Level::Crit)|0x1000, "%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::Crit), __VA_ARGS__); \
 }while(0)
 
 #define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, FMT, ...) do{ if((LOGGER).test(LVL)) { \

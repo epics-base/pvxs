@@ -8,6 +8,7 @@
 #include <string>
 #include <list>
 
+#include <assert.h>
 #include <stdlib.h>
 
 // must include before epicsStdio.h to avoid clash with printf macro
@@ -21,7 +22,7 @@
 #include <osiSock.h>
 #include <epicsStackTrace.h>
 #include <epicsString.h>
-#include <epicsAssert.h>
+#include <cantProceed.h>
 #include <epicsStdio.h>
 #include <epicsThread.h>
 #include <epicsMutex.h>
@@ -40,19 +41,7 @@ DEFINE_LOGGER(logerr, "pvxs.ev");
 namespace detail {
 
 static
-void maybeAbort()
-{
-    static std::atomic<int> abort_check{};
-    auto check = abort_check.load();
-    if(abort_check==0) {
-        check = getenv("_PVXS_ABORT_ON_CRIT") ? 1 : -1;
-        abort_check = check;
-    }
-    if(check==1) {
-        errlogFlush();
-        abort();
-    }
-}
+unsigned char abortOnCrit;
 
 const char* log_prefix(const char* name, Level lvl)
 {
@@ -81,17 +70,39 @@ const char* log_prefix(const char* name, Level lvl)
 
     epicsSnprintf(prefix+N, sizeof(prefix)-N, " %s %s", lname, name);
 
-    if(lvl==Level::Crit)
-        maybeAbort();
-
     return prefix;
 }
 
-void log_stacktrace()
+void _log_printf(unsigned lvl, const char* fmt, ...)
 {
-    // stack traces can be long.  flush to reduce truncation
-    errlogFlush();
-    epicsStackTrace();
+    bool bt = lvl&0x1000;
+    auto L = Level(lvl&0xff);
+    auto abt = L==Level::Crit && abortOnCrit!=0;
+
+    if(abortOnCrit!=0 || L==Level::Crit) {
+        va_list args;
+        va_start(args, fmt);
+        errlogVprintf(fmt, args);
+        va_end(args);
+    }
+
+    if(abt) {
+        errlogFlush();
+        if(abortOnCrit==1) {
+            // C abort, end process
+            epicsStackTrace();
+            errlogFlush();
+            abort();
+        } else {
+            // EPICS "abort" halt
+            cantProceed("CRITICAL ERROR\n");
+        }
+
+    } else if(bt) {
+        errlogFlush();
+        epicsStackTrace();
+        errlogFlush();
+    }
 }
 
 } // namespace detail
@@ -197,6 +208,14 @@ struct logger_gbl_t {
 void logger_prepare(void *unused)
 {
     logger_gbl = new logger_gbl_t;
+
+    if(auto env = getenv("_PVXS_ABORT_ON_CRIT")) {
+        if(epicsStrCaseCmp(env, "YES")==0 || strcmp(env, "1")==0) {
+            detail::abortOnCrit = 1;
+        } else if(epicsStrCaseCmp(env, "EPICS")==0) {
+            detail::abortOnCrit = 2;
+        }
+    }
 }
 
 epicsThreadOnceId logger_once = EPICS_THREAD_ONCE_INIT;
@@ -225,7 +244,7 @@ Level logger::init()
 
 void xerrlogHexPrintf(const void *buf, size_t buflen)
 {
-    const uint8_t* const cbuf = static_cast<const uint8_t*>(buf);
+    const auto cbuf = static_cast<const uint8_t*>(buf);
 
     // whole buffer
     for(size_t pos=0; pos<buflen;)
