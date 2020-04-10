@@ -16,6 +16,7 @@ env:
     - SETUP_PATH=.ci-local:.ci
     - VV=1
     - _PVXS_ABORT_ON_CRIT=1
+    - PVXS_LOG=*=WARN
 
 install:
   - sudo pip install git+https://github.com/mdavidsaver/ci-core-dumper#egg=ci-core-dumper
@@ -26,6 +27,7 @@ before_script:
   - sudo ci-core-dumper install
 
 script:
+  - ulimit -c unlimited
   - ./.ci/travis/build.sh
   - ./.ci-local/cdt-check.sh
 
