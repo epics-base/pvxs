@@ -135,6 +135,9 @@ void ServerChannel_shutdown(const std::shared_ptr<ServerChan>& chan)
     }
 
     chan->opByIOID.clear();
+
+    if(chan->onClose)
+        chan->onClose("");
 }
 
 void ServerChannelControl::close()

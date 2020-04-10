@@ -101,22 +101,25 @@ struct Tester {
         testShow()<<__func__;
 
         std::atomic<bool> onFC{false}, onLD{false};
+        epicsEvent done;
 
         mbox.onFirstConnect([this, &onFC](){
-            testShow()<<__func__;
+            testShow()<<"In onFirstConnect()";
 
             mbox.open(initial);
             onFC.store(true);
         });
-        mbox.onLastDisconnect([this, &onLD](){
-            testShow()<<__func__;
+        mbox.onLastDisconnect([this, &onLD, &done](){
+            testShow()<<"In onLastDisconnect";
             mbox.close();
             onLD.store(true);
+            done.signal();
         });
 
         serv.start();
 
         testWait();
+        testOk1(done.wait(5.0));
 
         serv.stop();
 
@@ -239,7 +242,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(14);
+    testPlan(15);
     logger_config_env();
     Tester().testWaiter();
     Tester().loopback();
