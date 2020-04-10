@@ -86,7 +86,7 @@ void usage(const char *name)
                "for (some) PVA client/server UDP traffic.\n"
                "\n"
                "  -h               Print this message\n"
-               "  -V        Print version and exit.\n"
+               "  -V               Print version and exit.\n"
                "  -C               Show only client Searches\n"
                "  -S               Show only server Beacons\n"
                "  -B hostip[:port] Listen on the given interface(s).  May be repeated.\n"
@@ -135,6 +135,7 @@ int main(int argc, char *argv[])
                 case 'V':
                     std::cout<<pva::version_str()<<"\n";
                     std::cout<<EPICS_VERSION_STRING<<"\n";
+                    std::cout<<"libevent "<<event_get_version()<<"\n";
                     return 0;
                 default:
                     usage(argv[0]);

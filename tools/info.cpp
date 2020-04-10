@@ -16,6 +16,7 @@
 #include <pvxs/client.h>
 #include <pvxs/log.h>
 #include "utilpvt.h"
+#include "evhelper.h"
 
 using namespace pvxs;
 
@@ -51,6 +52,7 @@ int main(int argc, char *argv[])
             case 'V':
                 std::cout<<version_str()<<"\n";
                 std::cout<<EPICS_VERSION_STRING<<"\n";
+                std::cout<<"libevent "<<event_get_version()<<"\n";
                 return 0;
             case 'v':
                 verbose = true;
