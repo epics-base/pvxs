@@ -191,7 +191,9 @@ struct PVXS_API Source {
         friend struct impl::ServerConn;
     public:
 
+        //! Begin iterator of Name instances
         _names_t::iterator begin() { return _names.begin(); }
+        //! End iterator of Name instances
         _names_t::iterator end() { return _names.end(); }
         //! The Client endpoint address
         const char* source() const { return _src; }

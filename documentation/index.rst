@@ -36,6 +36,7 @@ This module is considered feature complete, but is not yet making releases.
    :maxdepth: 2
    :caption: Contents:
 
+   overview
    building
    cli
    value

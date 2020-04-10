@@ -19,5 +19,14 @@ The low-level API through which a `pvxs::server::Server` may issue requests on b
 .. doxygenstruct:: pvxs::server::ConnectOp
     :members:
 
+.. doxygenstruct:: pvxs::server::MonitorControlOp
+    :members:
+
+.. doxygenstruct:: pvxs::server::MonitorSetupOp
+    :members:
+
 .. doxygenstruct:: pvxs::server::ChannelControl
+    :members:
+
+.. doxygenstruct:: pvxs::server::MonitorStat
     :members:
