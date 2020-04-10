@@ -46,6 +46,12 @@ struct BasicTest {
         initial["value"] = 42;
     }
 
+    ~BasicTest()
+    {
+        if(cli.use_count()!=1u)
+            testAbort("Tester Context leak");
+    }
+
     void subscribe(const char *name)
     {
         sub = cli.monitor(name)

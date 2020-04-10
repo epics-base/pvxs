@@ -359,6 +359,7 @@ public:
     void hurryUp();
 
     explicit operator bool() const { return pvt.operator bool(); }
+    size_t use_count() const { return pvt.use_count(); }
 private:
     std::shared_ptr<Pvt> pvt;
 };

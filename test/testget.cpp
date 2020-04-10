@@ -43,6 +43,12 @@ struct Tester {
         initial["value"] = 42;
     }
 
+    ~Tester()
+    {
+        if(cli.use_count()!=1u)
+            testAbort("Tester Context leak");
+    }
+
     void testWaiter()
     {
         testShow()<<__func__;
