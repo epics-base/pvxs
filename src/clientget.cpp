@@ -456,7 +456,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
     assert(_get);
 
     ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx, _name);
+        auto chan = Channel::build(ctx->shared_from_this(), _name);
 
         auto op = std::make_shared<GPROp>(Operation::Get, chan);
         op->setDone(std::move(_result));
@@ -479,7 +479,7 @@ std::shared_ptr<Operation> PutBuilder::exec()
         throw std::logic_error("put() needs either a .build() or at least one .set()");
 
     ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx, _name);
+        auto chan = Channel::build(ctx->shared_from_this(), _name);
 
         auto op = std::make_shared<GPROp>(Operation::Put, chan);
         op->setDone(std::move(_result));
@@ -517,7 +517,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
         throw std::logic_error("Use of rpc() with argument and builder .arg() are mutually exclusive");
 
     ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx, _name);
+        auto chan = Channel::build(ctx->shared_from_this(), _name);
 
         auto op = std::make_shared<GPROp>(Operation::RPC, chan);
         op->setDone(std::move(_result));

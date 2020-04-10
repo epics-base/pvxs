@@ -510,7 +510,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     std::shared_ptr<Subscription> ret;
 
     ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx, _name);
+        auto chan = Channel::build(ctx->shared_from_this(), _name);
 
         auto op = std::make_shared<SubscriptionImpl>(Operation::Monitor, chan);
         op->event = std::move(_event);

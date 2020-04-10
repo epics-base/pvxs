@@ -173,7 +173,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
     assert(!_get);
 
     ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx, _name);
+        auto chan = Channel::build(ctx->shared_from_this(), _name);
 
         auto op = std::make_shared<InfoOp>(chan);
 

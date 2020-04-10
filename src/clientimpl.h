@@ -165,6 +165,10 @@ struct Channel {
 struct Context::Pvt
 {
     std::weak_ptr<Pvt> internal_self;
+    std::shared_ptr<Pvt> shared_from_this() {
+        std::shared_ptr<Pvt> ret(internal_self);
+        return ret;
+    }
 
     // "const" after ctor
     Config effective;
