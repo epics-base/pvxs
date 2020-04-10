@@ -36,33 +36,33 @@ struct InfoOp : public OperationBase
 
     virtual ~InfoOp()
     {
+        chan->context->tcp_loop.assertInLoop();
         _cancel(true);
     }
 
     virtual void cancel() override final {
-        _cancel(false);
-    }
-
-    void _cancel(bool implicit) {
         auto context = chan->context;
         decltype (done) junk;
-        context->tcp_loop.call([this, &junk, implicit](){
-            if(implicit && state!=Done) {
-                log_warn_printf(setup, "implied cancel of INFO on channel '%s'\n",
-                                chan ? chan->name.c_str() : "");
-            }
-            if(state==Waiting) {
-                chan->conn->sendDestroyRequest(chan->sid, ioid);
-
-                // This opens up a race with an in-flight reply.
-                chan->conn->opByIOID.erase(ioid);
-                chan->opByIOID.erase(ioid);
-            }
-            state = Done;
-            chan.reset();
+        context->tcp_loop.call([this, &junk](){
+            _cancel(false);
             junk = std::move(done);
             // leave opByIOID for GC
         });
+    }
+
+    void _cancel(bool implicit) {
+        if(implicit && state!=Done) {
+            log_warn_printf(setup, "implied cancel of INFO on channel '%s'\n",
+                            chan ? chan->name.c_str() : "");
+        }
+        if(state==Waiting) {
+            chan->conn->sendDestroyRequest(chan->sid, ioid);
+
+            // This opens up a race with an in-flight reply.
+            chan->conn->opByIOID.erase(ioid);
+            chan->opByIOID.erase(ioid);
+        }
+        state = Done;
     }
 
     virtual void createOp() override final
@@ -189,7 +189,21 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
         chan->pending.push_back(op);
         chan->createOperations();
 
-        ret = std::move(op);
+        ret.reset(op.get(), [op](Operation*) mutable {
+            // on user thread
+            auto temp(std::move(op));
+            temp->chan->context->tcp_loop.call([&temp]() {
+                // on worker
+                try {
+                    temp->_cancel(true);
+                }catch(std::exception& e){
+                    log_exc_printf(setup, "Channel %s error in info cancel(): %s",
+                                   temp->chan->name.c_str(), e.what());
+                }
+                // ensure dtor on worker
+                temp.reset();
+            });
+        });
     });
 
     return ret;

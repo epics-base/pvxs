@@ -249,7 +249,12 @@ void evbase::call(std::function<void()>&& fn)
 
 void evbase::assertInLoop()
 {
-    assert(pvt->worker.isCurrentThread());
+    if(!pvt->worker.isCurrentThread()) {
+        char name[32];
+        pvt->worker.getName(name, sizeof(name));
+        log_exc_printf(logerr, "Not in evbase working: \"%s\" != \"%s\"\n",
+                       name, epicsThread::getNameSelf());
+    }
 }
 
 bool evbase::inLoop()

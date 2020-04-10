@@ -42,7 +42,7 @@ struct ResultWaiter {
 // internal actions on an Operation
 struct OperationBase : public Operation
 {
-    std::shared_ptr<Channel> chan;
+    const std::shared_ptr<Channel> chan;
     uint32_t ioid;
     Value result;
     bool done;

@@ -131,6 +131,7 @@ struct GPROp : public OperationBase
         :OperationBase (op, chan)
     {}
     ~GPROp() {
+        chan->context->tcp_loop.assertInLoop();
         _cancel(true);
     }
 
@@ -161,30 +162,31 @@ struct GPROp : public OperationBase
         }
     }
 
-    virtual void cancel() override final {
-        _cancel(false);
-    }
-
-    void _cancel(bool implicit) {
+    virtual void cancel() override final
+    {
         auto context = chan->context;
         decltype (done) junk;
-        context->tcp_loop.call([this, &junk, implicit](){
-            if(implicit && state!=Done) {
-                log_warn_printf(setup, "implied cancel of op%x on channel '%s'\n",
-                                op, chan ? chan->name.c_str() : "");
-            }
-            if(state==GetOPut || state==Exec) {
-                chan->conn->sendDestroyRequest(chan->sid, ioid);
-
-                // This opens up a race with an in-flight reply.
-                chan->conn->opByIOID.erase(ioid);
-                chan->opByIOID.erase(ioid);
-            }
-            state = Done;
-            chan.reset();
+        context->tcp_loop.call([this, &junk](){
+            _cancel(false);
             junk = std::move(done);
             // leave opByIOID for GC
         });
+    }
+
+
+    void _cancel(bool implicit) {
+        if(implicit && state!=Done) {
+            log_warn_printf(setup, "implied cancel of op%x on channel '%s'\n",
+                            op, chan ? chan->name.c_str() : "");
+        }
+        if(state==GetOPut || state==Exec) {
+            chan->conn->sendDestroyRequest(chan->sid, ioid);
+
+            // This opens up a race with an in-flight reply.
+            chan->conn->opByIOID.erase(ioid);
+            chan->opByIOID.erase(ioid);
+        }
+        state = Done;
     }
 
     virtual void createOp() override final
@@ -450,6 +452,27 @@ void Connection::handle_GET() { handle_GPR(CMD_GET); }
 void Connection::handle_PUT() { handle_GPR(CMD_PUT); }
 void Connection::handle_RPC() { handle_GPR(CMD_RPC); }
 
+static
+void gpr_cleanup(std::shared_ptr<Operation>& ret, std::shared_ptr<GPROp>&& op)
+{
+    auto cap(std::move(op));
+    ret.reset(cap.get(), [cap](Operation*) mutable {
+        // from use thread
+        cap->chan->context->tcp_loop.call([&cap]() {
+            auto temp(std::move(cap));
+            // on worker
+            try {
+                temp->_cancel(true);
+            }catch(std::exception& e){
+                log_exc_printf(setup, "Channel %s error in get cancel(): %s",
+                               temp->chan->name.c_str(), e.what());
+            }
+            // ensure dtor on worker
+            temp.reset();
+        });
+    });
+}
+
 std::shared_ptr<Operation> GetBuilder::_exec_get()
 {
     std::shared_ptr<Operation> ret;
@@ -465,7 +488,8 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
         chan->pending.push_back(op);
         chan->createOperations();
 
-        ret = std::move(op);
+        gpr_cleanup(ret, std::move(op));
+        assert(ret);
     });
 
     return  ret;
@@ -503,7 +527,7 @@ std::shared_ptr<Operation> PutBuilder::exec()
         chan->pending.push_back(op);
         chan->createOperations();
 
-        ret = std::move(op);
+        gpr_cleanup(ret, std::move(op));
     });
 
     return  ret;
@@ -532,7 +556,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
         chan->pending.push_back(op);
         chan->createOperations();
 
-        ret = std::move(op);
+        gpr_cleanup(ret, std::move(op));
     });
 
     return  ret;
