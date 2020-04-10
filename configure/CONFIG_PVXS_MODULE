@@ -3,8 +3,8 @@
 _PVXS := $(dir $(lastword $(MAKEFILE_LIST)))
 
 # we're appending so must be idempotent
-ifeq (,$(_PVXS_INCLUDED))
-_PVXS_INCLUDED := YES
+ifeq (,$(_PVXS_CONF_INCLUDED))
+_PVXS_CONF_INCLUDED := YES
 
 ifdef T_A
 
@@ -42,10 +42,6 @@ LIBEVENT_SYS_LIBS_WIN32 = iphlpapi netapi32 ws2_32
 LIBEVENT_SYS_LIBS += $(LIBEVENT_SYS_LIBS_POSIX_$(POSIX))
 LIBEVENT_SYS_LIBS += $(LIBEVENT_SYS_LIBS_$(OS_CLASS))
 
-PROD_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
-LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
-
-
 endif # T_A
 
-endif # _PVXS_INCLUDED
+endif # _PVXS_CONF_INCLUDED

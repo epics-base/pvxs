@@ -1,0 +1,19 @@
+
+# we're appending so must be idempotent
+ifeq (,$(_PVXS_RULE_INCLUDED))
+_PVXS_RULE_INCLUDED := YES
+
+ifneq ($(_PVXS_CONF_INCLUDED),YES)
+$(error CONFIG_PVXS_MODULE was not loaded)
+endif
+
+_PVXS_CHECK_VARS := PROD TESTPROD $(PROD) $(TESTPROD) $(LIBRARY)
+
+# $(1) is PROD or LIBRARY name
+define _PVXS_ADD_LIBEVENT
+$(1)_SYS_LIBS += $$(if $$(findstring pvxs,$$($(1)_LIBS)),$$(LIBEVENT_SYS_LIBS))
+endef
+
+$(foreach loc,$(_PVXS_CHECK_VARS),$(eval $(call _PVXS_ADD_LIBEVENT,$(loc))))
+
+endif # _PVXS_RULE_INCLUDED

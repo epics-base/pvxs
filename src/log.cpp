@@ -79,7 +79,7 @@ void _log_printf(unsigned lvl, const char* fmt, ...)
     auto L = Level(lvl&0xff);
     auto abt = L==Level::Crit && abortOnCrit!=0;
 
-    if(abortOnCrit!=0 || L==Level::Crit) {
+    {
         va_list args;
         va_start(args, fmt);
         errlogVprintf(fmt, args);

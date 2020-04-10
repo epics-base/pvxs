@@ -93,10 +93,12 @@ LIB_SRCS += clientget.cpp
 LIB_SRCS += clientmon.cpp
 
 LIB_LIBS += Com
+LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
 
 #===========================
 
 include $(TOP)/configure/RULES
+include $(TOP)/configure/RULES_PVXS_MODULE
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 

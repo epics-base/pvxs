@@ -83,6 +83,7 @@ TESTSCRIPTS_HOST += $(TESTS:%=%.t)
 #===========================
 
 include $(TOP)/configure/RULES
+include $(TOP)/configure/RULES_PVXS_MODULE
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
