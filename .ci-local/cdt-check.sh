@@ -3,15 +3,12 @@ set -e
 
 ret=0
 echo "Checking for GCC style static constructors or destructors"
-for ff in lib/*/*.so.*
+for ff in src/O.*/*.o
 do
-    echo "Check $ff"
     if nm "$ff" | grep __static_initialization_and_destruction
     then
-        echo "  Found"
+        echo "  Found in $ff"
         ret=1
-    else
-        echo "  OK"
     fi
 done
 
