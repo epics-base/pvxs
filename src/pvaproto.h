@@ -251,7 +251,7 @@ void to_wire(Buffer& buf, const Size& size)
         buf.fault();
 
     } else if(size.size<254) {
-        buf.push(size.size);
+        buf.push(uint8_t(size.size));
 
     } else if(size.size<=0xffffffff) {
         buf.push(254);

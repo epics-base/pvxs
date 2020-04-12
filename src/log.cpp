@@ -252,7 +252,7 @@ void xerrlogHexPrintf(const void *buf, size_t buflen)
         // printed line (4 groups of 4 bytes)
         // addr : AAAAAAAA BBBBBBBB CCCCCCCC DDDDDDDD
         char buf[4][9] = {"","","",""};
-        const unsigned addr = pos;
+        const unsigned addr = unsigned(pos);
 
         for(unsigned grp=0; grp<4 && pos<buflen ; grp++)
         {

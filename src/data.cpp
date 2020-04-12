@@ -302,10 +302,10 @@ template<typename Src>
 bool copyOutScalar(const Src& src, void *ptr, StoreType type)
 {
     switch(type) {
-    case StoreType::Real:     *reinterpret_cast<double*>(ptr) = src; return true;
-    case StoreType::Integer:  *reinterpret_cast<int64_t*>(ptr) = src; return true;
-    case StoreType::UInteger: *reinterpret_cast<uint64_t*>(ptr) = src; return true;
-    case StoreType::Bool:     *reinterpret_cast<bool*>(ptr) = src; return true;
+    case StoreType::Real:     *reinterpret_cast<double*>(ptr) = double(src); return true;
+    case StoreType::Integer:  *reinterpret_cast<int64_t*>(ptr) = int64_t(src); return true;
+    case StoreType::UInteger: *reinterpret_cast<uint64_t*>(ptr) = uint64_t(src); return true;
+    case StoreType::Bool:     *reinterpret_cast<bool*>(ptr) = bool(src); return true;
     case StoreType::String:   *reinterpret_cast<std::string*>(ptr) = SB()<<src; return true;
     case StoreType::Null:
     case StoreType::Compound:
@@ -454,10 +454,10 @@ template<typename Dest>
 bool copyInScalar(Dest& dest, const void *ptr, StoreType type)
 {
     switch(type) {
-    case StoreType::Real:     dest = *reinterpret_cast<const double*>(ptr); return true;
-    case StoreType::Integer:  dest = *reinterpret_cast<const int64_t*>(ptr); return true;
-    case StoreType::UInteger: dest = *reinterpret_cast<const uint64_t*>(ptr); return true;
-    case StoreType::Bool:     dest = *reinterpret_cast<const bool*>(ptr); return true;
+    case StoreType::Real:     dest = Dest(*reinterpret_cast<const double*>(ptr)); return true;
+    case StoreType::Integer:  dest = Dest(*reinterpret_cast<const int64_t*>(ptr)); return true;
+    case StoreType::UInteger: dest = Dest(*reinterpret_cast<const uint64_t*>(ptr)); return true;
+    case StoreType::Bool:     dest = Dest(*reinterpret_cast<const bool*>(ptr)); return true;
     case StoreType::String:   return parseScalar(dest, *reinterpret_cast<const std::string*>(ptr));
     case StoreType::Null:
     case StoreType::Compound:

@@ -95,7 +95,7 @@ class BitMask : public detail::BitBase<BitMask> {
     std::vector<uint64_t> _words;
     // actual size in bits
     // _words.size()*64u >= _size
-    uint8_t _size=0u;
+    uint16_t _size=0u;
 
 public:
 

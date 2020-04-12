@@ -126,7 +126,7 @@ void convertCast(const void *sbase, void *dbase, size_t count)
     auto S = static_cast<const Src*>(sbase);
     auto D = static_cast<Dest*>(dbase);
     for(auto i : range(count))
-        D[i] = S[i];
+        D[i] = Dest(S[i]);
 }
 
 void printValue(std::string& dest, const bool& src)

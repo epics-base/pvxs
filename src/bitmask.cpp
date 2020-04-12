@@ -45,7 +45,7 @@ void BitMask::resize(size_t bits) {
     // round up to multiple of 64
     size_t storebits = ((bits-1u)|0x3f)+1u;
     _words.resize(storebits/64u, 0u);
-    _size = bits;
+    _size = uint16_t(bits);
 }
 
 size_t BitMask::findSet(size_t start) const
