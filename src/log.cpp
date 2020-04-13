@@ -45,7 +45,7 @@ unsigned char abortOnCrit;
 
 const char* log_prefix(const char* name, Level lvl)
 {
-    static thread_local char prefix[64];
+    thread_local char prefix[64];
     // YYYY-mm-ddTHH:MM:SS.FffFffFff
 
     epicsTimeStamp now;

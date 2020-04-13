@@ -41,8 +41,6 @@ namespace pvxs {namespace impl {
 
 DEFINE_LOGGER(logerr, "pvxs.loop");
 
-thread_local epicsEvent call_done;
-
 static
 epicsThreadOnceId evthread_once = EPICS_THREAD_ONCE_INIT;
 
@@ -227,6 +225,8 @@ void evbase::call(std::function<void()>&& fn)
         fn();
         return;
     }
+
+    thread_local epicsEvent call_done;
 
     auto& done = call_done;
     std::exception_ptr result;
