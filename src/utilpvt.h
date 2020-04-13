@@ -27,6 +27,14 @@
 #include <pvxs/version.h>
 #include <pvxs/util.h>
 
+#ifndef EPICS_ALWAYS_INLINE
+#  if __GNUC__
+#    define EPICS_ALWAYS_INLINE __inline__ __attribute__((always_inline))
+#  else
+#    define EPICS_ALWAYS_INLINE inline
+#  endif
+#endif
+
 namespace pvxs {namespace impl {
 
 //! in-line string builder (eg. for exception messages)

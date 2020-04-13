@@ -21,6 +21,7 @@
 
 #include <event2/buffer.h>
 #include <pvxs/version.h>
+#include "utilpvt.h"
 
 namespace pvxs {namespace impl {
 

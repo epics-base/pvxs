@@ -17,11 +17,6 @@ install: $(TOP)/configure/CONFIG_SITE.Common.$(T_A)
 $(TOP)/configure/CONFIG_SITE.Common.$(T_A): toolchain.c
 	$(PREPROCESS.cpp)
 
-else
-clean: cleanToolchain
-
-.PHONY: cleanToolchain
-cleanToolchain:
-	$(RM) $(wildcard CONFIG_SITE.Common.*)
+CLEANS += ../CONFIG_SITE.Common.$(T_A)
 
 endif

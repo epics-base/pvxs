@@ -20,7 +20,6 @@
 #include <envDefs.h>
 #include <dbDefs.h>
 #include <osiSock.h>
-#include <epicsStackTrace.h>
 #include <epicsString.h>
 #include <cantProceed.h>
 #include <epicsStdio.h>
@@ -29,8 +28,17 @@
 #include <epicsGuard.h>
 #include <epicsTime.h>
 
+#if EPICS_VERSION_INT>=VERSION_INT(3,15,0,0)
+#  include <epicsStackTrace.h>
+#  define USE_STACKTRACE
+#endif
+
 #include "evhelper.h"
 #include "utilpvt.h"
+
+#ifndef USE_STACKTRACE
+static void epicsStackTrace() {}
+#endif
 
 typedef epicsGuard<epicsMutex> Guard;
 

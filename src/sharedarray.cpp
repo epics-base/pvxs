@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include <epicsStdlib.h>
+#include <epicsTypes.h>
 
 #include <pvxs/sharedArray.h>
 #include <pvxs/data.h>
