@@ -74,10 +74,20 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
  *          log_info_printf(blah, "blah happened with %d\n", x);
  *  @endcode
  */
+#ifndef _MSC_VER
 #define log_printf(LOGGER, LVL, FMT, ...) do{ \
     if((LOGGER).test(LVL)) \
        ::pvxs::detail:: _log_printf(unsigned(LVL), "%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), __VA_ARGS__); \
 }while(0)
+
+#else
+// for some strange reason, trying to prepend any string to the format spec.
+// doesn't work right with MSVC
+#define log_printf(LOGGER, LVL, FMT, ...) do{ \
+    if((LOGGER).test(LVL)) \
+       ::pvxs::detail:: _log_printf(unsigned(LVL), "X " FMT, __VA_ARGS__); \
+}while(0)
+#endif
 
 #define log_crit_printf(LOGGER, ...)  log_printf(LOGGER, ::pvxs::Level::Crit, __VA_ARGS__)
 #define log_err_printf(LOGGER, ...)   log_printf(LOGGER, ::pvxs::Level::Err, __VA_ARGS__)
