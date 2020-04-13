@@ -508,6 +508,8 @@ public:
 
     //! Test if this field is marked as valid/changed
     bool isMarked(bool parents=true, bool children=false) const;
+    //! return *this if isMarked()==true, or a !valid() ref. if false.
+    Value ifMarked(bool parents=true, bool children=false) const;
     //! Mark this field as valid/changed
     void mark(bool v=true);
     //! Remove mark from this field

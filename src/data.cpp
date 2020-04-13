@@ -209,6 +209,14 @@ bool Value::isMarked(bool parents, bool children) const
     return false;
 }
 
+Value Value::ifMarked(bool parents, bool children) const
+{
+    Value ret;
+    if(isMarked(parents, children))
+        ret = *this;
+    return ret;
+}
+
 void Value::mark(bool v)
 {
     if(!desc)
