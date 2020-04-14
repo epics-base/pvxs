@@ -85,8 +85,8 @@ using void vs. non-void, and const vs. non-const element types.
 
 Arrays are initially created as non-const and non-void.
 After being populated, an array may be transformed using
-`pvxs::shared_array::freeze()` to become const and/or
-`pvxs::shared_array::castTo()` to become void.
+`pvxs::shared_array::freeze` to become const and/or
+`pvxs::shared_array::castTo` to become void.
 
 Only const Array values may be stored in `pvxs::Value`.
 
@@ -98,10 +98,10 @@ Only const Array values may be stored in `pvxs::Value`.
     top["value"] = arr.freeze();
     # freeze() acts like std::move().  arr is now empty
 
-The `pvxs::shared_array::freeze()` method is special in that it
+The `pvxs::shared_array::freeze` method is special in that it
 acts like std::move() in that it moves the array reference into the returned object.
 freeze() requires exclusive ownership of the reference being frozen.
-An exception will be thrown unless `pvxs::shared_array::unique()` would return true.
+An exception will be thrown unless `pvxs::shared_array::unique` would return true.
 
 Array values may be extracted from `pvxs::Value` as either const void or const non-void.
 The const non-void option is a convienence which may allocate and do an element by element conversion.

@@ -35,7 +35,7 @@ provide/claim a given PV name, the Source with the lowest "order" will win.
 Configuration
 -------------
 
-The recommended starting point when configuring a Server is `pvxs::server::Config::from_env()`
+The recommended starting point when configuring a Server is `pvxs::server::Config::from_env`
 which will use the following environment variables when set.
 
 Entries naming multiple environment variables will prefer the left most which is set.

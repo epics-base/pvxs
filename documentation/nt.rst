@@ -60,3 +60,8 @@ Container for image data used by areaDetector.
 .. doxygenstruct:: pvxs::nt::NTNDArray
     :members:
 
+NTURI
+-----
+
+.. doxygenclass:: pvxs::nt::NTURI
+    :members:
