@@ -22,15 +22,15 @@ Install or build libevent >=2.0
 
 On RHEL7 and later. ::
 
-    yum install libevent2-dev
+    yum install libevent-devel
 
 On RHEL6 and earlier. ::
 
-    yum install libevent-dev
+    yum install libevent2-devel
 
 On Debian/Ubuntu. ::
 
-    apt-get install libevent2-dev
+    apt-get install libevent-dev
 
 To build from source (Requires `CMake <https://cmake.org/>`_): ::
 
