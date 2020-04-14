@@ -728,7 +728,7 @@ void Value::traverse(const std::string &expr, bool modify)
             maybedot = false;
 
             size_t sep = expr.find_first_of(']', pos);
-            unsigned long long index=0;
+            epicsUInt64 index=0;
 
             if(expr[pos]=='['
                     && sep!=std::string::npos && sep-pos>=2

@@ -59,7 +59,7 @@ struct BasicTest {
                 .maskDisconnected(false)
                 .event([this](client::Subscription& sub) {
                     testDiag("Event evt");
-                    evt.trigger();
+                    evt.signal();
                 })
                 .exec();
     }
@@ -165,7 +165,7 @@ struct TestLifeCycle : public BasicTest
                         .maskDisconnected(false)
                         .event([&evt2](client::Subscription& sub) {
                             testDiag("Event evt2");
-                            evt2.trigger();
+                            evt2.signal();
                         })
                         .exec();
 

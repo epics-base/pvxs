@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
                     std::cerr<<"Error "<<typeid(e).name()<<" : "<<e.what()<<"\n";
                     ret=1;
                 }
-                done.trigger();
+                done.signal();
             })
             .exec();
 

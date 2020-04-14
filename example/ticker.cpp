@@ -31,9 +31,13 @@ int main(int argc, char* argv[])
     }
 
     if(argc>=3) {
-        double rate = 0.0;
-
-        if(epicsParseDouble(argv[2], &rate, nullptr) || rate<=0.0) {
+        double rate;
+        try {
+            rate = std::stod(argv[2]);
+            if (rate <= 0.0) {
+                throw std::runtime_error("negative");
+            }
+        } catch (...) {
             std::cerr<<"Rate must be a positive number, not "<<argv[2]<<"\n";
             return 1;
         }
@@ -80,7 +84,7 @@ int main(int argc, char* argv[])
 
     // connect to SIGINT/SIGTERM to break from main loop
     SigInt handle([&done]() {
-        done.trigger();
+        done.signal();
     });
 
     // Start server in background

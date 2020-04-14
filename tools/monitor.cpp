@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
                 if(verbose)
                     std::cerr<<argv[n]<<" Finished\n";
                 if(remaining.fetch_sub(1)==1)
-                    done.trigger();
+                    done.signal();
 
             }catch(client::Connected& conn) {
                 std::cerr<<argv[n]<<" Connected to "<<conn.peerName<<"\n";

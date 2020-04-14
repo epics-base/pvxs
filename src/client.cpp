@@ -157,7 +157,7 @@ void ResultWaiter::complete(Result&& result, bool interrupt)
         }
     }
     if(wakeup)
-        notify.trigger();
+        notify.signal();
 }
 
 OperationBase::OperationBase(operation_t op, const std::shared_ptr<Channel>& chan)

@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
                           }
 
                           if(remaining.fetch_sub(1)==1)
-                              done.trigger();
+                              done.signal();
                       })
                       .exec());
     }

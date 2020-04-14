@@ -59,7 +59,7 @@ struct Tester {
         auto op = cli.rpc("mailbox", std::move(arg))
                 .result([this](client::Result&& result) {
                     actual = std::move(result);
-                    done.trigger();
+                    done.signal();
                 })
                 .exec();
 

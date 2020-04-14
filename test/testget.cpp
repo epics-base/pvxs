@@ -73,7 +73,7 @@ struct Tester {
         auto op = cli.get("mailbox")
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
-                    done.trigger();
+                    done.signal();
                 })
                 .exec();
 
@@ -140,7 +140,7 @@ struct Tester {
         auto op = cli.info("mailbox")
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
-                    done.trigger();
+                    done.signal();
                 })
                 .exec();
 
@@ -162,7 +162,7 @@ struct Tester {
         cli.info("mailbox")
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
-                    done.trigger();
+                    done.signal();
                 })
                 .exec();
 
@@ -221,7 +221,7 @@ void testError(bool phase)
     auto op = cli.get("mailbox")
             .result([&actual, &done](client::Result&& result) {
                 actual = std::move(result);
-                done.trigger();
+                done.signal();
             })
             .exec();
 

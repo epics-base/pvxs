@@ -8,6 +8,7 @@
 
 #include <atomic>
 
+#include <cstddef>
 #include <stdarg.h>
 
 #include <compilerDependencies.h>

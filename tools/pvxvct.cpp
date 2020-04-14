@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
 
         epicsEvent done;
         pva::SigInt handle([&done](){
-            done.trigger();
+            done.signal();
         });
 
         done.wait();

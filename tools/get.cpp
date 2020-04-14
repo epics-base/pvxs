@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
                                      .arrayLimit(arrLimit);
 
                           if(remaining.fetch_sub(1)==1)
-                              done.trigger();
+                              done.signal();
                       })
                       .exec());
     }

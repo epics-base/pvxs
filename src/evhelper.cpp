@@ -129,7 +129,7 @@ struct evbase::Pvt : public epicsThreadRunable
             if(event_add(keepalive.get(), &tick))
                 throw std::runtime_error("Can't start keepalive timer");
 
-            start_sync.trigger();
+            start_sync.signal();
 
             log_info_printf(logerr, "Enter loop worker for %p\n", base.get());
 
@@ -141,7 +141,7 @@ struct evbase::Pvt : public epicsThreadRunable
         }catch(std::exception& e){
             log_exc_printf(logerr, "Unhandled exception in event_base run : %s\n",
                             e.what());
-            start_sync.trigger();
+            start_sync.signal();
         }
     }
 
@@ -165,7 +165,7 @@ struct evbase::Pvt : public epicsThreadRunable
                 }
             }
             if(work.notify)
-                work.notify->trigger();
+                work.notify->signal();
         }
     }
     static
