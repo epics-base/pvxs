@@ -65,7 +65,7 @@ struct Tester : public TesterBase
                 })
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
-                    done.trigger();
+                    done.signal();
                 })
                 .exec();
 
@@ -141,7 +141,7 @@ struct Tester : public TesterBase
         auto op = cli.info("mailbox")
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
-                    done.trigger();
+                    done.signal();
                 })
                 .exec();
 
@@ -163,7 +163,7 @@ struct Tester : public TesterBase
         cli.info("mailbox")
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
-                    done.trigger();
+                    done.signal();
                 })
                 .exec();
 
@@ -192,7 +192,7 @@ struct TestPutBuilder : public TesterBase
                 .set("nonexistant", "nope", false)
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
-                    done.trigger();
+                    done.signal();
                 })
                 .exec();
 
@@ -242,7 +242,7 @@ void testRO()
             })
             .result([&actual, &done](client::Result&& result) {
                 actual = std::move(result);
-                done.trigger();
+                done.signal();
             })
             .exec();
 
@@ -294,7 +294,7 @@ void testError()
     auto op = cli.get("mailbox")
             .result([&actual, &done](client::Result&& result) {
                 actual = std::move(result);
-                done.trigger();
+                done.signal();
             })
             .exec();
 

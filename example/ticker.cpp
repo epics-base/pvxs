@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
 
     // connect to SIGINT/SIGTERM to break from main loop
     SigInt handle([&done]() {
-        done.trigger();
+        done.signal();
     });
 
     // Start server in background
