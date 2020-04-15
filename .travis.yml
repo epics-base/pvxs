@@ -77,6 +77,15 @@ jobs:
         - gdb
         - cmake
 
+  - env: BASE=3.14
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gdb
+        - cmake
+
   - env: BASE=7.0
     compiler: clang
     addons:
