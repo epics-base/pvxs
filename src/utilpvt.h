@@ -40,32 +40,32 @@
 #ifdef VERSION_INT
 #  if EPICS_VERSION_INT>=VERSION_INT(3,15,0,0)
 #    define HAVE_EPICSPARSE
-#    define HAVE_INT64
+#    define HAVE_EPICSINT64
 #  endif
 #endif
 
-#ifndef HAVE_INT64
+#ifndef HAVE_EPICSINT64
   typedef int64_t epicsInt64;
   typedef uint64_t epicsUInt64;
-#endif // HAVE_INT64
+#endif // HAVE_EPICSINT64
 
 #ifndef HAVE_EPICSPARSE
-  int epicsParseInt8(const char* s, epicsInt8* val, int base, char** units);
-  int epicsParseInt16(const char* s, epicsInt16* val, int base, char** units);
-  int epicsParseInt32(const char* s, epicsInt32* val, int base, char** units);
-  int epicsParseInt64(const char* s, epicsInt64* val, int base, char** units);
-  int epicsParseUInt8(const char* s, epicsUInt8* val, int base, char** units);
-  int epicsParseUInt16(const char* s, epicsUInt16* val, int base, char** units);
-  int epicsParseUInt32(const char* s, epicsUInt32* val, int base, char** units);
-  int epicsParseUInt64(const char* s, epicsUInt64* val, int base, char** units);
-  int epicsParseFloat(const char* s, epicsFloat32* val, char** units);
-  int epicsParseDouble(const char* s, epicsFloat64* val, char** units);
-#  define epicsParseFloat32(str, to, units) epicsParseFloat(str, to, units)
-#  define epicsParseFloat64(str, to, units) epicsParseDouble(str, to, units)
-#  define epicsParseLong(str, to, base, units) epicsParseInt32(str, to, base, units)
-#  define epicsParseULong(str, to, base, units) epicsParseUInt32(str, to, base, units)
-#  define epicsParseLLong(str, to, base, units) epicsParseInt64(str, to, base, units)
-#  define epicsParseULLong(str, to, base, units) epicsParseUInt64(str, to, base, units)
+  PVXS_API int epicsParseInt8(const char* s, epicsInt8* val, int base, char** units);
+  PVXS_API int epicsParseInt16(const char* s, epicsInt16* val, int base, char** units);
+  PVXS_API int epicsParseInt32(const char* s, epicsInt32* val, int base, char** units);
+  PVXS_API int epicsParseInt64(const char* s, epicsInt64* val, int base, char** units);
+  PVXS_API int epicsParseUInt8(const char* s, epicsUInt8* val, int base, char** units);
+  PVXS_API int epicsParseUInt16(const char* s, epicsUInt16* val, int base, char** units);
+  PVXS_API int epicsParseUInt32(const char* s, epicsUInt32* val, int base, char** units);
+  PVXS_API int epicsParseUInt64(const char* s, epicsUInt64* val, int base, char** units);
+  PVXS_API int epicsParseFloat(const char* s, epicsFloat32* val, char** units);
+  PVXS_API int epicsParseDouble(const char* s, epicsFloat64* val, char** units);
+# define epicsParseFloat32(str, to, units) epicsParseFloat(str, to, units)
+# define epicsParseFloat64(str, to, units) epicsParseDouble(str, to, units)
+# define epicsParseLong(str, to, base, units) epicsParseInt32(str, to, base, units)
+# define epicsParseULong(str, to, base, units) epicsParseUInt32(str, to, base, units)
+# define epicsParseLLong(str, to, base, units) epicsParseInt64(str, to, base, units)
+# define epicsParseULLong(str, to, base, units) epicsParseUInt64(str, to, base, units)
 #endif // HAVE_EPICSPARSE
 
 namespace pvxs {namespace impl {

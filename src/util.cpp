@@ -411,103 +411,133 @@ void indent(std::ostream& strm, unsigned level) {
 }}
 
 #ifndef HAVE_EPICSPARSE
-int epicsParseInt8(const char* s, epicsInt8* val, int base, char**)
+PVXS_API int epicsParseInt8(const char* s, epicsInt8* val, int base, char**)
 {
     try {
-        *val = (std::stoi(s, 0, base) & 0xff);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+        size_t idx;
+        epicsInt8 v = (std::stoi(s, &idx, base) & 0xff);
+        if (idx == std::string(s).length()) {
+            *val = v;
+            return 0;
+        }
+    } catch (...) {}
+    return -1;
 }
 
-int epicsParseInt16(const char* s, epicsInt16* val, int base, char**)
+PVXS_API int epicsParseInt16(const char* s, epicsInt16* val, int base, char**)
 {
     try {
-        *val = (std::stoi(s, 0, base) & 0xffff);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+        size_t idx;
+        epicsInt16 v = (std::stoi(s, &idx, base) & 0xffff);
+        if (idx == std::string(s).length()) {
+            *val = v;
+            return 0;
+        }
+    } catch (...) {}
+    return -1;
 }
 
-int epicsParseInt32(const char* s, epicsInt32* val, int base, char**)
+PVXS_API int epicsParseInt32(const char* s, epicsInt32* val, int base, char**)
 {
     try {
-        *val = (std::stoi(s, 0, base) & 0xffffffff);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+        size_t idx;
+        epicsInt32 v = (std::stoi(s, &idx, base) & 0xffffffff);
+        if (idx == std::string(s).length()) {
+            *val = v;
+            return 0;
+        }
+    } catch (...) {}
+    return -1;
 }
 
-int epicsParseInt64(const char* s, epicsInt64* val, int base, char**)
+PVXS_API int epicsParseInt64(const char* s, epicsInt64* val, int base, char**)
 {
     try {
-        *val = (std::stoi(s, 0, base) & 0xffffffffffffffff);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+        size_t idx;
+        epicsInt64 v = (std::stoi(s, &idx, base) & 0xffffffffffffffff);
+        if (idx == std::string(s).length()) {
+            *val = v;
+            return 0;
+        }
+    } catch (...) {}
+    return -1;
 }
 
-int epicsParseUInt8(const char* s, epicsUInt8* val, int base, char**)
+PVXS_API int epicsParseUInt8(const char* s, epicsUInt8* val, int base, char**)
 {
     try {
-        *val = (std::stoul(s, 0, base) & 0xff);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+        size_t idx;
+        epicsUInt8 v = (std::stoul(s, &idx, base) & 0xff);
+        if (idx == std::string(s).length()) {
+            *val = v;
+            return 0;
+        }
+    } catch (...) {}
+    return -1;
 }
 
-int epicsParseUInt16(const char* s, epicsUInt16* val, int base, char**)
+PVXS_API int epicsParseUInt16(const char* s, epicsUInt16* val, int base, char**)
 {
     try {
-        *val = (std::stoul(s, 0, base) & 0xffff);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+        size_t idx;
+        epicsUInt16 v = (std::stoul(s, &idx, base) & 0xffff);
+        if (idx == std::string(s).length()) {
+            *val = v;
+            return 0;
+        }
+    } catch (...) {}
+    return -1;
 }
 
-int epicsParseUInt32(const char* s, epicsUInt32* val, int base, char**)
+PVXS_API int epicsParseUInt32(const char* s, epicsUInt32* val, int base, char**)
 {
     try {
-        *val = (std::stoul(s, 0, base) & 0xffffffff);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+        size_t idx;
+        epicsUInt32 v = (std::stoul(s, &idx, base) & 0xffffffff);
+        if (idx == std::string(s).length()) {
+            *val = v;
+            return 0;
+        }
+    } catch (...) {}
+    return -1;
 }
 
-int epicsParseUInt64(const char* s, epicsUInt64* val, int base, char**)
+PVXS_API int epicsParseUInt64(const char* s, epicsUInt64* val, int base, char**)
 {
     try {
-        *val = (std::stoul(s, 0, base) & 0xffffffffffffffff);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+        size_t idx;
+        epicsUInt64 v = (std::stoul(s, &idx, base) & 0xffffffffffffffff);
+        if (idx == std::string(s).length()) {
+            *val = v;
+            return 0;
+        }
+    } catch (...) {}
+    return -1;
 }
 
-int epicsParseFloat(const char* s, epicsFloat32* val, char**)
+PVXS_API int epicsParseFloat(const char* s, epicsFloat32* val, char**)
 {
     try {
-        *val = std::stof(s);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+        size_t idx;
+        epicsFloat32 v = std::stof(s, &idx);
+        if (idx == std::string(s).length()) {
+            *val = v;
+            return 0;
+        }
+    } catch (...) {}
+    return -1;
 }
 
-int epicsParseDouble(const char* s, epicsFloat64* val, char**)
+PVXS_API int epicsParseDouble(const char* s, epicsFloat64* val, char**)
 {
     try {
-        *val = std::stod(s);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+        size_t idx;
+        epicsFloat64 v = std::stod(s, &idx);
+        if (idx == std::string(s).length()) {
+            *val = v;
+            return 0;
+        }
+    } catch (...) {}
+    return -1;
 }
 #endif // HAVE_EPICSPARSE
