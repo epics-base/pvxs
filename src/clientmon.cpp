@@ -222,8 +222,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         }
         conn->enqueueTxBody(CMD_MONITOR);
 
-        log_debug_printf(io, "Server %s channel '%s' monitor INIT\n",
-                         conn->peerName.c_str(), chan->name.c_str());
+        log_debug_printf(io, "Server %s channel '%s' monitor INIT%s\n",
+                         conn->peerName.c_str(), chan->name.c_str(), pipeline?" pipeline":"");
 
         state = Creating;
 

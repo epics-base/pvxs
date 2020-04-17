@@ -480,6 +480,9 @@ void ServerConn::handle_MONITOR()
                 op->limit = qSize;
         });
 
+        if(op->limit < op->window)
+            op->limit = op->window;
+
         std::unique_ptr<ServerMonitorSetup> ctrl(new ServerMonitorSetup(this, iface->server->internal_self, chan->name, pvRequest, op));
 
         op->state = ServerOp::Creating;
@@ -487,8 +490,8 @@ void ServerConn::handle_MONITOR()
         opByIOID[ioid] = op;
         chan->opByIOID[ioid] = op;
 
-        log_debug_printf(connsetup, "Client %s Monitor INIT ioid=%u pvRequest=%s\n",
-                   peerName.c_str(), unsigned(ioid),
+        log_debug_printf(connsetup, "Client %s Monitor INIT%s ioid=%u pvRequest=%s\n",
+                   peerName.c_str(), op->pipeline ? " pipeline" : "", unsigned(ioid),
                    std::string(SB()<<pvRequest).c_str());
 
         if(chan->onSubscribe) {
