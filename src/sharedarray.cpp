@@ -65,6 +65,14 @@ size_t elementSize(ArrayType type)
 namespace detail {
 
 namespace {
+
+template<typename E>
+struct Print { static inline const E& as(const E& val) { return val; } };
+template<>
+struct Print<int8_t> { static inline int as(int8_t val) { return val; } };
+template<>
+struct Print<uint8_t> { static inline unsigned as(uint8_t val) { return val; } };
+
 template<typename E>
 void showArr(std::ostream& strm, const void* raw, size_t count, size_t limit)
 {
@@ -81,7 +89,7 @@ void showArr(std::ostream& strm, const void* raw, size_t count, size_t limit)
             strm<<"...";
             break;
         }
-        strm<<base[i];
+        strm<<Print<E>::as(base[i]);
     }
     strm<<']';
 }
