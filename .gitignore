@@ -6,7 +6,8 @@
 /include/
 /templates/
 /configure/*.local
-/configure/CONFIG_SITE.Common.*
+/configure/CONFIG_TOOLCHAIN.Common.*
+/configure/CONFIG_SDT.Common.*
 O.*/
 *.orig
 *.log

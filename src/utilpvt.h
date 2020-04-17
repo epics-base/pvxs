@@ -36,6 +36,13 @@
 #  endif
 #endif
 
+#if defined(USE_SDT) && defined(__linux__)
+#  define SDT_USE_VARIADIC
+#  include <sys/sdt.h>
+#else
+#  define STAP_PROBEV(provider, name, ...) do{}while(0)
+#endif
+
 namespace pvxs {namespace impl {
 
 //! in-line string builder (eg. for exception messages)
