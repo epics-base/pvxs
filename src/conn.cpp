@@ -201,9 +201,10 @@ void ConnBase::bevRead()
             if(auto n = evbuffer_get_length(segBuf.get()))
                 evbuffer_drain(segBuf.get(), n);
 
-            // wait for next header
-            bufferevent_setwatermark(bev.get(), EV_READ, 8, tcp_readahead);
         }
+
+        // wait for next header
+        bufferevent_setwatermark(bev.get(), EV_READ, 8, tcp_readahead);
     }
 
     if(!bev) {
