@@ -37,11 +37,9 @@
 #  endif
 #endif
 
-#ifdef VERSION_INT
-#  if EPICS_VERSION_INT>=VERSION_INT(3,15,0,0)
-#    define HAVE_EPICSPARSE
-#    define HAVE_EPICSINT64
-#  endif
+#if EPICS_VERSION_INT>=VERSION_INT(3,15,0,0)
+#  define HAVE_EPICSPARSE
+#  define HAVE_EPICSINT64
 #endif
 
 #ifndef HAVE_EPICSINT64
