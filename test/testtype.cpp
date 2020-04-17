@@ -416,6 +416,7 @@ void testFormat()
         "array.choice[0]->one int32_t = 1357\n"
         "array.choice[1] null\n"
         "array.choice[2] union\n"
+        "array.choice[2]->two struct\n"
         "array.choice[2]->two.ahalf int32_t = 2468\n"
         "array.more struct[] = {\?}[]\n"
     );

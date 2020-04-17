@@ -16,7 +16,7 @@ struct FmtDelta {
 
     void field(const std::string& prefix, const Value& val, bool verytop)
     {
-        if(!val.isMarked(true,false))
+        if(verytop && !val.isMarked())
             return;
 
         strm<<prefix;
@@ -63,6 +63,7 @@ struct FmtDelta {
                 for(auto idx : range(desc->members.size())) {
                     if(udesc == &desc->members[idx]) {
                         cprefix+=desc->miter[idx].first;
+                        break;
                     }
                 }
             }
