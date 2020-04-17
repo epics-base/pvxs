@@ -39,9 +39,11 @@ void testParse()
         testEq(conf.addressList[1], "5.6.7.8:9876");
     }
 
-    //epicsEnvUnset("EPICS_PVA_ADDR_LIST");
-    //epicsEnvUnset("EPICS_PVA_AUTO_ADDR_LIST");
-    //epicsEnvUnset("EPICS_PVA_BROADCAST_PORT");
+#if EPICS_VERSION_INT>=VERSION_INT(3,15,6,0)
+    epicsEnvUnset("EPICS_PVA_ADDR_LIST");
+    epicsEnvUnset("EPICS_PVA_AUTO_ADDR_LIST");
+    epicsEnvUnset("EPICS_PVA_BROADCAST_PORT");
+#endif
 }
 
 }
