@@ -7,8 +7,6 @@
 #include <cstring>
 #include <epicsAssert.h>
 
-#include <epicsStdlib.h>
-
 #include "dataimpl.h"
 #include "utilpvt.h"
 
@@ -353,25 +351,16 @@ void Value::copyOut(void *ptr, StoreType type) const
         switch(type) {
         case StoreType::String: *reinterpret_cast<std::string*>(ptr) = src; return;
         case StoreType::Integer: {
-            epicsInt64 temp;
-            if(epicsParseInt64(src.c_str(), &temp, 0, nullptr)==0) {
-                *reinterpret_cast<int64_t*>(ptr) = temp;
-                return;
-            }
+            *reinterpret_cast<int64_t*>(ptr) = parseTo<int64_t>(src);
+            return;
         }
         case StoreType::UInteger: {
-            epicsUInt64 temp;
-            if(epicsParseUInt64(src.c_str(), &temp, 0, nullptr)==0) {
-                *reinterpret_cast<uint64_t*>(ptr) = temp;
-                return;
-            }
+            *reinterpret_cast<uint64_t*>(ptr) = parseTo<uint64_t>(src);
+            return;
         }
         case StoreType::Real: {
-            double temp;
-            if(epicsParseDouble(src.c_str(), &temp, nullptr)==0) {
-                *reinterpret_cast<double*>(ptr) = temp;
-                return;
-            }
+            *reinterpret_cast<double*>(ptr) = parseTo<double>(src);
+            return;
         }
         case StoreType::Bool: {
             if(src=="true") { *reinterpret_cast<bool*>(ptr) = true; return; }
@@ -432,31 +421,6 @@ bool Value::tryCopyOut(void *ptr, StoreType type) const
 
 namespace {
 
-bool parseScalar(double& dest, const std::string& inp)
-{
-    return 0==epicsParseDouble(inp.c_str(), &dest, nullptr);
-}
-
-bool parseScalar(int64_t& dest, const std::string& inp)
-{
-    epicsInt64 t;
-    if(epicsParseInt64(inp.c_str(), &t, 0, nullptr)==0) {
-        dest = t;
-        return true;
-    }
-    return false;
-}
-
-bool parseScalar(uint64_t& dest, const std::string& inp)
-{
-    epicsUInt64 t;
-    if(epicsParseUInt64(inp.c_str(), &t, 0, nullptr)==0) {
-        dest = t;
-        return true;
-    }
-    return false;
-}
-
 // C-style cast between scalar storage types, and print to string (base 10)
 template<typename Dest>
 bool copyInScalar(Dest& dest, const void *ptr, StoreType type)
@@ -466,7 +430,7 @@ bool copyInScalar(Dest& dest, const void *ptr, StoreType type)
     case StoreType::Integer:  dest = Dest(*reinterpret_cast<const int64_t*>(ptr)); return true;
     case StoreType::UInteger: dest = Dest(*reinterpret_cast<const uint64_t*>(ptr)); return true;
     case StoreType::Bool:     dest = Dest(*reinterpret_cast<const bool*>(ptr)); return true;
-    case StoreType::String:   return parseScalar(dest, *reinterpret_cast<const std::string*>(ptr));
+    case StoreType::String:   dest = parseTo<Dest>(*reinterpret_cast<const std::string*>(ptr)); return true;
     case StoreType::Null:
     case StoreType::Compound:
     case StoreType::Array:
@@ -728,12 +692,11 @@ void Value::traverse(const std::string &expr, bool modify)
             maybedot = false;
 
             size_t sep = expr.find_first_of(']', pos);
-            unsigned long long index=0;
 
             if(expr[pos]=='['
-                    && sep!=std::string::npos && sep-pos>=2
-                    && !epicsParseULLong(expr.substr(pos+1, sep-1-pos).c_str(), &index, 0, nullptr))
+                    && sep!=std::string::npos && sep-pos>=2)
             {
+                auto index = parseTo<uint64_t>(expr.substr(pos+1, sep-1-pos));
                 auto& varr = store->as<shared_array<const void>>();
                 shared_array<const Value> arr;
                 if((varr.original_type()==ArrayType::Value)

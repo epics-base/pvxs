@@ -7,7 +7,6 @@
 #include <epicsAssert.h>
 #include <epicsMutex.h>
 #include <epicsGuard.h>
-#include <epicsStdlib.h>
 
 #include <deque>
 
@@ -530,11 +529,15 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
         if(ackAny.type()==TypeCode::String) {
             auto sval = ackAny.as<std::string>();
             if(sval.size()>1 && sval.back()=='%') {
-                double percent=50.0;
-                char *units = nullptr;
-                if(epicsParseDouble(sval.c_str(), &percent, &units)==0 && units && units[0]=='%') {
-                    if(percent>0.0 && percent<=100.0)
+                try {
+                    auto percent = parseTo<double>(sval);
+                    if(percent>0.0 && percent<=100.0) {
                         op->ackAt = uint32_t(percent * op->queueSize);
+                    } else {
+                        throw std::invalid_argument("not in range (0%, 100%]");
+                    }
+                }catch(std::exception&){
+                    log_warn_printf(monevt, "Error parsing as percent ackAny: \"%s\"\n", sval.c_str());
                 }
             }
 

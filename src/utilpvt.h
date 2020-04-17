@@ -47,24 +47,6 @@ struct SB {
     SB& operator<<(const T& i) { strm<<i; return *this; }
 };
 
-namespace idetail {
-// specific specializations in util.cpp
-template <typename T>
-struct as_str {PVXS_API static T op(const char *s);};
-} // namespace idetail
-
-template <typename T>
-inline T lexical_cast(const char *s)
-{
-    return idetail::as_str<T>::op(s);
-}
-
-template <typename T>
-inline T lexical_cast(const std::string& s)
-{
-    return idetail::as_str<T>::op(s.c_str());
-}
-
 void indent(std::ostream& strm, unsigned level);
 
 namespace idetail {
@@ -99,6 +81,19 @@ constexpr idetail::Range<I> range(I end) { return idetail::Range<I>{I(0), end}; 
 
 template<typename I>
 constexpr idetail::Range<I> range(I begin, I end) { return idetail::Range<I>{begin, end}; }
+
+template<typename T>
+T parseTo(const std::string& s); // not implemented
+
+template<>
+PVXS_API
+double parseTo<double>(const std::string& s);
+template<>
+PVXS_API
+uint64_t parseTo<uint64_t>(const std::string& s);
+template<>
+PVXS_API
+int64_t parseTo<int64_t>(const std::string& s);
 
 #ifdef _WIN32
 #  define RWLOCK_TYPE SRWLOCK

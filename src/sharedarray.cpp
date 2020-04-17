@@ -6,7 +6,6 @@
 
 #include <string.h>
 
-#include <epicsStdlib.h>
 #include <epicsTypes.h>
 
 #include <pvxs/sharedArray.h>
@@ -164,37 +163,26 @@ void parseValue(bool& dest, const std::string& src)
         throw std::runtime_error(SB()<<"Expected \"true\" or \"false\", not \""<<escape(src)<<"\"");
 }
 
-#define CASE(ETYPE, TYPE) \
-void parseValue(TYPE& dest, const std::string& src) { \
-    epics ## ETYPE temp; \
-    if(epicsParse ## ETYPE(src.c_str(), &temp, 0, nullptr)) \
-        throw std::runtime_error(SB()<<"Expected " #TYPE ", not \""<<escape(src)<<"\""); \
-    dest = temp; \
+template<typename Dest>
+typename std::enable_if<std::is_integral<Dest>::value && std::is_signed<Dest>::value>::type
+parseValue(Dest& dest, const std::string& src)
+{
+    dest = Dest(parseTo<int64_t>(src));
 }
 
-CASE(Int8, int8_t)
-CASE(Int16, int16_t)
-CASE(Int32, int32_t)
-CASE(Int64, int64_t)
-CASE(UInt8, uint8_t)
-CASE(UInt16, uint16_t)
-CASE(UInt32, uint32_t)
-CASE(UInt64, uint64_t)
-
-#undef CASE
-
-#define CASE(ETYPE, TYPE) \
-void parseValue(TYPE& dest, const std::string& src) { \
-    epics ## ETYPE temp; \
-    if(epicsParse ## ETYPE(src.c_str(), &temp, nullptr)) \
-        throw std::runtime_error(SB()<<"Expected " #TYPE ", not \""<<escape(src)<<"\""); \
-    dest = temp; \
+template<typename Dest>
+typename std::enable_if<std::is_integral<Dest>::value && !std::is_signed<Dest>::value && !std::is_same<Dest, bool>::value>::type
+parseValue(Dest& dest, const std::string& src)
+{
+    dest = Dest(parseTo<uint64_t>(src));
 }
 
-CASE(Float32, float)
-CASE(Float64, double)
-
-#undef CASE
+template<typename Dest>
+typename std::enable_if<std::is_floating_point<Dest>::value>::type
+parseValue(Dest& dest, const std::string& src)
+{
+    dest = Dest(parseTo<double>(src));
+}
 
 template<typename Dest>
 void convertFromStr(const void *sbase, void *dbase, size_t count)

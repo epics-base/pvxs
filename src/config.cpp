@@ -134,7 +134,7 @@ Config Config::from_env()
 
     if(const char *env = pickenv(&name, {"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
         try {
-            ret.tcp_port = lexical_cast<unsigned short>(env);
+            ret.tcp_port = parseTo<uint64_t>(env);
         }catch(std::exception& e) {
             log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
         }
@@ -142,7 +142,7 @@ Config Config::from_env()
 
     if(const char *env = pickenv(&name, {"EPICS_PVAS_BROADCAST_PORT", "EPICS_PVA_BROADCAST_PORT"})) {
         try {
-            ret.udp_port = lexical_cast<unsigned short>(env);
+            ret.udp_port = parseTo<uint64_t>(env);
         }catch(std::exception& e) {
             log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
         }
@@ -246,7 +246,7 @@ Config Config::from_env()
 
     if(const char *env = pickenv(&name, {"EPICS_PVA_BROADCAST_PORT"})) {
         try {
-            ret.udp_port = lexical_cast<unsigned short>(env);
+            ret.udp_port = parseTo<uint64_t>(env);
         }catch(std::exception& e) {
             log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
         }

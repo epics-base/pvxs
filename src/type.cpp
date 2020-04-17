@@ -7,8 +7,6 @@
 #include <cstring>
 #include <epicsAssert.h>
 
-#include <epicsStdlib.h>
-
 #include "dataimpl.h"
 #include "utilpvt.h"
 

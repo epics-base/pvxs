@@ -15,8 +15,6 @@
 
 #include <ctype.h>
 
-#include <epicsStdlib.h>
-
 #include <pvxs/util.h>
 #include <pvxs/sharedArray.h>
 #include <pvxs/data.h>
@@ -386,18 +384,35 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
 } // namespace pvxs
 
 namespace pvxs {namespace impl {
-namespace idetail {
 
 template<>
-unsigned short as_str<unsigned short>::op(const char *s)
-{
-    epicsUInt16 ret;
-    if(int err = epicsParseUInt16(s, &ret, 0, nullptr)) {
-        (void)err;
-        throw std::runtime_error(SB()<<"Unable to parse as uint16 : "<<s);
-    }
+double parseTo<double>(const std::string& s) {
+    size_t idx=0, L=s.size();
+    double ret = std::stod(s, &idx);
+    for(; idx<L && isspace(s[idx]); idx++) {}
+    if(idx<L)
+        throw std::invalid_argument(SB()<<"Extraneous charactors after double: \""<<escape(s)<<"\"");
     return ret;
 }
+
+template<>
+uint64_t parseTo<uint64_t>(const std::string& s) {
+    size_t idx=0, L=s.size();
+    unsigned long long ret = std::stoull(s, &idx, 0);
+    for(; idx<L && isspace(s[idx]); idx++) {}
+    if(idx<L)
+        throw std::invalid_argument(SB()<<"Extraneous charactors after integer: \""<<escape(s)<<"\"");
+    return ret;
+}
+
+template<>
+int64_t parseTo<int64_t>(const std::string& s) {
+    size_t idx=0, L=s.size();
+    long long ret = std::stoll(s, &idx, 0);
+    for(; idx<L && isspace(s[idx]); idx++) {}
+    if(idx<L)
+        throw std::invalid_argument(SB()<<"Extraneous charactors after unsigned: \""<<escape(s)<<"\"");
+    return ret;
 }
 
 void indent(std::ostream& strm, unsigned level) {

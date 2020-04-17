@@ -8,9 +8,12 @@
  */
 
 #include <iostream>
+#include <stdexcept>
+#include <string>
+
+#include <cstring>
 
 #include <epicsTime.h>
-#include <epicsStdlib.h>
 #include <epicsEvent.h>
 
 #include <pvxs/sharedpv.h>
@@ -31,14 +34,16 @@ int main(int argc, char* argv[])
     }
 
     if(argc>=3) {
-        double rate = 0.0;
-
-        if(epicsParseDouble(argv[2], &rate, nullptr) || rate<=0.0) {
-            std::cerr<<"Rate must be a positive number, not "<<argv[2]<<"\n";
+        try {
+            size_t idx=0;
+            delay = 1.0/std::stod(argv[2], &idx);
+            if(idx<std::strlen(argv[2]))
+                throw std::invalid_argument("Extraneous charactors");
+        }catch(std::exception& e){
+            std::cerr<<"Error parsing rate: "<<e.what()<<"\n";
             return 1;
-        }
 
-        delay = 1.0/rate;
+        }
     }
 
     // Read $PVXS_LOG from process environment and update
