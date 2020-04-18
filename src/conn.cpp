@@ -94,8 +94,10 @@ void ConnBase::bevEvent(short events)
 void ConnBase::bevRead()
 {
     auto rx = bufferevent_get_input(bev.get());
+    unsigned niter;
 
-    while(bev && evbuffer_get_length(rx)>=8) {
+
+    for(niter=0; niter<4 && bev && evbuffer_get_length(rx)>=8; niter++) {
         uint8_t header[8];
 
         auto ret = evbuffer_copyout(rx, header, sizeof(header));
