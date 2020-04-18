@@ -310,6 +310,8 @@ void ServerConn::bevRead()
             (void)bufferevent_disable(bev.get(), EV_READ);
             bufferevent_setwatermark(bev.get(), EV_WRITE, tcp_tx_limit/2, 0);
             log_debug_printf(connio, "%s suspend READ\n", peerName.c_str());
+
+            STAP_PROBEV(pvxs, rxpause, false, peerName.c_str(), evbuffer_get_length(tx));
         }
     }
 }
@@ -320,6 +322,8 @@ void ServerConn::bevWrite()
 
     auto tx = bufferevent_get_output(bev.get());
     // handle pending monitors
+
+    STAP_PROBEV(pvxs, rxbacklog, false, peerName.c_str(), backlog.size());
 
     while(!backlog.empty() && evbuffer_get_length(tx)<tcp_tx_limit) {
         auto fn = std::move(backlog.front());
@@ -333,6 +337,8 @@ void ServerConn::bevWrite()
         (void)bufferevent_enable(bev.get(), EV_READ);
         bufferevent_setwatermark(bev.get(), EV_WRITE, 0, 0);
         log_debug_printf(connio, "%s resume READ\n", peerName.c_str());
+
+        STAP_PROBEV(pvxs, rxresume, false, peerName.c_str(), evbuffer_get_length(tx));
     }
 }
 

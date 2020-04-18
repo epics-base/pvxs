@@ -28,6 +28,8 @@ ConnBase::ConnBase(bool isClient, bufferevent* bev, const SockAddr& peerAddr)
 {
     // initially wait for at least a header
     bufferevent_setwatermark(this->bev.get(), EV_READ, 8, tcp_readahead);
+
+    STAP_PROBEV(pvxs, connopen, isClient, peerName.c_str());
 }
 
 ConnBase::~ConnBase() {}
@@ -84,6 +86,7 @@ void ConnBase::bevEvent(short events)
         if(events&BEV_EVENT_TIMEOUT) {
             log_warn_printf(connio, "%s %s connection timeout\n", peerLabel(), peerName.c_str());
         }
+        STAP_PROBEV(pvxs, connclose, isClient, peerName.c_str(), events);
         bev.reset();
     }
 
@@ -96,6 +99,7 @@ void ConnBase::bevRead()
     auto rx = bufferevent_get_input(bev.get());
     unsigned niter;
 
+    STAP_PROBEV(pvxs, rxbegin, isClient, peerName.c_str(), evbuffer_get_length(rx));
 
     for(niter=0; niter<4 && bev && evbuffer_get_length(rx)>=8; niter++) {
         uint8_t header[8];
@@ -136,6 +140,7 @@ void ConnBase::bevRead()
             if(readahead < std::numeric_limits<size_t>::max()-tcp_readahead)
                 readahead += tcp_readahead;
             bufferevent_setwatermark(bev.get(), EV_READ, len, readahead);
+            STAP_PROBEV(pvxs, rxincomp, isClient, peerName.c_str(), len, readahead);
             break;
         }
 
@@ -167,6 +172,8 @@ void ConnBase::bevRead()
 
         if(!seg || seg==pva_flags::SegLast) {
             expectSeg = false;
+
+            STAP_PROBEV(pvxs, rxmsg, isClient, peerName.c_str(), segCmd, evbuffer_get_length(segBuf.get()));
 
             // ready to process segBuf
             switch(segCmd) {
@@ -204,11 +211,15 @@ void ConnBase::bevRead()
             if(auto n = evbuffer_get_length(segBuf.get()))
                 evbuffer_drain(segBuf.get(), n);
 
+        } else {
+            STAP_PROBEV(pvxs, rxseg, isClient, peerName.c_str(), segCmd, evbuffer_get_length(segBuf.get()));
         }
 
         // wait for next header
         bufferevent_setwatermark(bev.get(), EV_READ, 8, tcp_readahead);
     }
+
+    STAP_PROBEV(pvxs, rxend, isClient, peerName.c_str(), evbuffer_get_length(rx), niter);
 
     if(!bev) {
         cleanup();
