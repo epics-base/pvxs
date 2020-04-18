@@ -114,6 +114,7 @@ void ConnBase::bevRead()
         if(header[2]&pva_flags::Control) {
             // Control messages are not actually useful
             evbuffer_drain(rx, 8);
+            bufferevent_setwatermark(bev.get(), EV_READ, 8, tcp_readahead);
             continue;
         }
         // application message
