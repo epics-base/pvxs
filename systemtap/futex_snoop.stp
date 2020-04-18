@@ -1,0 +1,13 @@
+# observe all futex() calls.
+# Assumes use of -x <pid> to limit scope to a single process.
+
+private global FUTEX_WAIT = 0 /*, FUTEX_WAKE = 1 */
+
+probe syscall.futex {  
+    if(pid()!=target()) next
+    if(futex_uaddr!=$1 && uaddr2_uaddr!=$1) next
+
+    println("====================")
+    printf("%d futex tid=%d op=%x\n", gettimeofday_us(), tid(), op)
+    print_ubacktrace()
+}

@@ -1,0 +1,20 @@
+# monitor client and server (dis)connection events
+
+probe process("../lib/linux-*/libpvxs.so.*").mark("connopen") {
+    isClient = $arg1
+    peerType = isClient ? "server" : "client"
+    peerName=user_string($arg2)
+    printf("[%d] %s %s connects\n", pid(), peerType, peerName)
+}
+
+probe process("../lib/linux-*/libpvxs.so.*").mark("connclose") {
+    isClient = $arg1
+    peerType = isClient ? "server" : "client"
+    peerName=user_string($arg2)
+    events=$arg3 # reason
+    printf("[%d] %s %s disconnects w/ %x\n", pid(), peerType, peerName, events)
+}
+
+probe begin {
+    printf("PVXS peer (dis)connect events\n")
+}

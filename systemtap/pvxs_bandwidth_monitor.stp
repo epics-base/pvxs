@@ -1,0 +1,51 @@
+# monitor RX bandwidth usage by process
+
+global totalBytes
+global totalWakeups
+global totalTime
+global startTime
+global startBytes
+
+# beginning of RX buffer processing
+probe process("../lib/linux-*/libpvxs.so.*").mark("rxbegin") {
+    #isClient=$arg1
+    #peerName=$arg2
+    rxBytes=$arg3 # to process
+
+    startTime[tid()] = gettimeofday_us()
+    startBytes[tid()] = rxBytes
+}
+
+# end of RX buffer processing
+probe process("../lib/linux-*/libpvxs.so.*").mark("rxend") {
+    #isClient=$arg1
+    #peerName=$arg2
+    remaining=$arg3
+
+    tstart = startTime[tid()]
+    bstart = startBytes[tid()]
+    delete startTime[tid()]
+    delete startBytes[tid()]
+
+    totalBytes[pid()] += bstart - remaining
+    totalTime[pid()] += gettimeofday_us()-tstart
+    totalWakeups[pid()] += 1
+}
+
+probe begin {
+    printf("PID, recv() wakeups, total RX bytes, total time to process\n")
+}
+probe end {
+    println("Done.")
+}
+
+probe timer.s(10) {
+    println("====")
+    foreach (pid+ in totalWakeups)
+        printf("[PID %d] %d wakeups, %d bytes, %d us\n",
+               pid, totalWakeups[pid], totalBytes[pid], totalTime[pid])
+
+    delete totalBytes
+    delete totalWakeups
+    delete totalTime
+}
