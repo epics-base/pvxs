@@ -12,6 +12,7 @@
 #include <type_traits>
 #include <algorithm>
 #include <ostream>
+#include <iterator>
 
 #include <pvxs/version.h>
 
@@ -258,6 +259,15 @@ public:
     {
         auto raw = const_cast<_E_non_const*>(this->data());
         std::copy(L.begin(), L.end(), raw);
+    }
+
+    //! Construct a copy of another a sequence.
+    //! Requires random access iterators.
+    template<typename Iter, typename std::iterator_traits<Iter>::difference_type=0>
+    shared_array(Iter begin, Iter end)
+        :shared_array(end-begin) // requires RandomAccessIterator
+    {
+        std::copy(begin, end, this->begin());
     }
 
     //! @brief Allocate (with new[]) a new vector of size c

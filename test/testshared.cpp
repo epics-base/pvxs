@@ -5,6 +5,7 @@
  */
 
 #include <typeinfo>
+#include <vector>
 
 #include <pvxs/sharedArray.h>
 
@@ -182,11 +183,24 @@ void testCast()
     (void)Void.castTo<uint32_t>();
 }
 
+void testFromVector()
+{
+    testDiag("%s", __func__);
+
+    std::vector<uint32_t> V({1, 2, 3});
+
+    shared_array<uint32_t> A(V.begin(), V.end());
+    testEq(A.size(), 3u);
+    testEq(A.at(2), 3u);
+    // not consumed
+    testEq(V.size(), 3u);
+}
+
 } // namespace
 
 MAIN(testshared)
 {
-    testPlan(94);
+    testPlan(97);
     testEmpty<void>();
     testEmpty<const void>();
     testEmpty<int32_t>();
@@ -199,5 +213,6 @@ MAIN(testshared)
     testFreezeError();
     testComplex();
     testCast();
+    testFromVector();
     return testDone();
 }
