@@ -5,11 +5,13 @@
  */
 
 #include <cstring>
+#include <stdio.h>
 
 #include <epicsUnitTest.h>
 #include <testMain.h>
 #include <epicsThread.h>
 #include <osiSock.h>
+#include <iocsh.h>
 
 #include <evhelper.h>
 #include <pvxs/unittest.h>
@@ -212,7 +214,10 @@ MAIN(testsock)
     test_local_mcast();
     test_from_wire();
     test_to_wire();
-    testDiag("Done");
+    testDiag("Cleanup");
     cleanup_for_valgrind();
-    return testDone();
+    iocshCmd("var atExitDebug 1");
+    auto ret = testDone();
+    fprintf(stderr, "Done.\n");
+    return ret;
 }
