@@ -265,7 +265,7 @@ public:
     //! Requires random access iterators.
     template<typename Iter, typename std::iterator_traits<Iter>::difference_type=0>
     shared_array(Iter begin, Iter end)
-        :shared_array(end-begin) // requires RandomAccessIterator
+        :shared_array(std::distance(begin, end))
     {
         std::copy(begin, end, this->begin());
     }
