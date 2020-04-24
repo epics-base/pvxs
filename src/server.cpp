@@ -55,8 +55,8 @@ Server::Server(const Config& conf)
 
     // external
     pvt.reset(internal.get(), [internal](Pvt*) mutable {
-        internal->stop();
-        internal.reset();
+        auto trash(std::move(internal));
+        trash->stop();
     });
     // we don't keep a weak_ptr to the external reference.
     // Caller is entirely responsible for keeping this server running

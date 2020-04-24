@@ -79,9 +79,9 @@ public:
     //! Suitable for use in self-contained unit-tests.
     client::Config clientConfig() const;
 
-    //! Add a SharedPV to the builtin StaticSource
+    //! Add a SharedPV to the "builtin" StaticSource
     Server& addPV(const std::string& name, const SharedPV& pv);
-    //! Remove a SharedPV from the builtin StaticSource
+    //! Remove a SharedPV from the "builtin" StaticSource
     Server& removePV(const std::string& name);
 
     //! Add a Source to this server with an arbitrary source name.
