@@ -11,8 +11,11 @@ src_DEPEND_DIRS = configure
 DIRS += tools
 tools_DEPEND_DIRS = src
 
+DIRS += ioc
+ioc_DEPEND_DIRS = src
+
 DIRS += test
-test_DEPEND_DIRS = src
+test_DEPEND_DIRS = src ioc
 
 DIRS += example
 example_DEPEND_DIRS = src

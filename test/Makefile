@@ -12,7 +12,7 @@ include $(TOP)/configure/CONFIG_PVXS_VERSION
 # access to private headers
 USR_CPPFLAGS += -I$(TOP)/src
 
-PROD_LIBS += pvxs Com
+PROD_LIBS = pvxs Com
 
 TESTPROD_HOST += testsock
 testsock_SRCS += testsock.cpp
@@ -77,6 +77,20 @@ TESTS += testput
 TESTPROD_HOST += testrpc
 testrpc_SRCS += testrpc.cpp
 TESTS += testrpc
+
+ifdef BASE_3_15
+
+DBDDEPENDS_FILES += testioc.dbd$(DEP)
+testioc_DBD = base.dbd pvxsIoc.dbd
+TESTFILES += $(COMMON_DIR)/testioc.dbd
+
+TESTPROD_HOST += testioc
+testioc_SRCS += testioc.cpp
+testioc_SRCS += testioc_registerRecordDeviceDriver.cpp
+testioc_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
+TESTS += testioc
+
+endif
 
 TESTPROD_HOST += mcat
 mcat_SRCS += mcat.cpp
