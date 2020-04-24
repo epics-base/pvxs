@@ -102,7 +102,7 @@ public:
                                       int order =0);
 
     //! List all source names and priorities.
-    void listSource(std::vector<std::pair<std::string, int> >& names);
+    std::vector<std::pair<std::string, int> > listSource();
 
     explicit operator bool() const { return !!pvt; }
 
