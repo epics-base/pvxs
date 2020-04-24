@@ -23,6 +23,7 @@
 #include <osiSock.h>
 #include <epicsEvent.h>
 #include <epicsThread.h>
+#include <epicsExit.h>
 #include <epicsMutex.h>
 #include <epicsGuard.h>
 
@@ -58,6 +59,45 @@ void evthread_init(void* unused)
     // TODO fallback to libCom ?
 #endif
 }
+
+struct ThreadEvent
+{
+    std::atomic<epicsThreadPrivateId> pvt{};
+
+    static
+    void destroy(void* raw)
+    {
+        delete static_cast<epicsEvent*>(raw);
+    }
+
+    epicsEvent* get()
+    {
+        epicsThreadPrivateId id = pvt.load();
+        if(!id) {
+            auto temp = epicsThreadPrivateCreate();
+            if(pvt.compare_exchange_strong(id, temp)) {
+                // stored
+                id = temp;
+            } else {
+                // race
+                epicsThreadPrivateDelete(temp);
+                id = pvt.load();
+            }
+        }
+
+        auto evt = static_cast<epicsEvent*>(epicsThreadPrivateGet(id));
+
+        if(!evt) {
+            evt = new epicsEvent();
+            epicsThreadPrivateSet(id, evt);
+            epicsAtThreadExit(destroy, evt);
+        }
+
+        return evt;
+    }
+
+    inline epicsEvent* operator->() { return get(); }
+};
 
 struct evbase::Pvt : public epicsThreadRunable
 {
@@ -226,22 +266,21 @@ void evbase::call(std::function<void()>&& fn)
         return;
     }
 
-    thread_local epicsEvent call_done;
+    static ThreadEvent done;
 
-    auto& done = call_done;
     std::exception_ptr result;
     bool empty;
     {
         Guard G(pvt->lock);
         empty = pvt->actions.empty();
-        pvt->actions.emplace_back(std::move(fn), &result, &done);
+        pvt->actions.emplace_back(std::move(fn), &result, done.get());
     }
 
     timeval now{};
     if(empty && event_add(pvt->dowork.get(), &now))
         throw std::runtime_error("Unable to wakeup call()");
 
-    done.wait();
+    done->wait();
     Guard G(pvt->lock);
     if(result)
         std::rethrow_exception(result);
