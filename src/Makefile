@@ -17,11 +17,13 @@ $(error Toolchain inspection failed $(MAKEFILE_LIST))
 endif
 endif
 
+ifdef BASE_3_15
 ifeq ($(GNUISH),YES)
 # we explicitly mark dllimport/export anyway.
 # So hide our internal symbols to speed up linking/loading on all targets.
 USR_CFLAGS += -fvisibility=hidden
 USR_CXXFLAGS += -fvisibility=hidden -fvisibility-inlines-hidden
+endif
 endif
 
 # fault on any undefined symbols (eg. from missing LIB_SYS_LIBS)
