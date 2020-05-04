@@ -181,11 +181,9 @@ void SigInt::_handle(int num)
 SigInt::SigInt(decltype (handler)&& handler)
     :handler(std::move(handler))
 {
-    // we can't atomically replace multiple signal handler anyway
-
     SigInt* expect = nullptr;
 
-    if(!thesig.compare_exchange_weak(expect, this))
+    if(!thesig.compare_exchange_strong(expect, this))
         throw std::logic_error("Only one SigInt allowed");
 
     prevINT = signal(SIGINT, &_handle);
