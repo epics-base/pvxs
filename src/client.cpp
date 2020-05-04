@@ -147,17 +147,14 @@ Value ResultWaiter::wait(double timeout)
 
 void ResultWaiter::complete(Result&& result, bool interrupt)
 {
-    bool wakeup;
     {
         Guard G(lock);
-        wakeup = outcome==Busy;
-        if(wakeup) {
-            this->result = std::move(result);
-            outcome = interrupt ? Abort : Done;
-        }
+        if(outcome!=Busy)
+            return;
+        this->result = std::move(result);
+        outcome = interrupt ? Abort : Done;
     }
-    if(wakeup)
-        notify.signal();
+    notify.signal();
 }
 
 OperationBase::OperationBase(operation_t op, const std::shared_ptr<Channel>& chan)
