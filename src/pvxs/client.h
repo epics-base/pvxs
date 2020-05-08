@@ -358,6 +358,10 @@ public:
      */
     void hurryUp();
 
+    /** Immediately close unused channels and connections.
+     */
+    void cacheClear();
+
     explicit operator bool() const { return pvt.operator bool(); }
     size_t use_count() const { return pvt.use_count(); }
 private:

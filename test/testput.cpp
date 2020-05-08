@@ -85,6 +85,9 @@ struct Tester : public TesterBase
         } else {
             testSkip(2, "timeout");
         }
+
+        op.reset();
+        cli.cacheClear();
     }
 
     void loopback(bool get)

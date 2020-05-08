@@ -60,6 +60,9 @@ struct Tester {
         } else {
             testSkip(1, "timeout");
         }
+
+        op.reset();
+        cli.cacheClear();
     }
 
     void loopback()

@@ -135,6 +135,8 @@ struct Channel {
         Active,
     } state = Searching;
 
+    bool garbage = false;
+
     std::shared_ptr<Connection> conn;
     uint32_t sid = 0u;
 
@@ -193,7 +195,9 @@ struct Context::Pvt
     std::list<std::unique_ptr<UDPListener> > beaconRx;
 
     std::map<uint32_t, std::weak_ptr<Channel>> chanByCID;
-    std::map<std::string, std::weak_ptr<Channel>> chanByName;
+    // strong ref. loop through Channel::context
+    // explicitly broken by Context::close(), Context::cacheClear, or Context::Pvt::cacheClean()
+    std::map<std::string, std::shared_ptr<Channel>> chanByName;
 
     std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
 
@@ -212,6 +216,7 @@ struct Context::Pvt
     UDPManager manager;
 
     const evevent beaconCleaner;
+    const evevent cacheCleaner;
 
     INST_COUNTER(ClientPvt);
 
@@ -230,6 +235,8 @@ struct Context::Pvt
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickBeaconClean();
     static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);
+    void cacheClean();
+    static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
 };
 
 } // namespace client
