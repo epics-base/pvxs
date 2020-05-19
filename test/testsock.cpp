@@ -38,7 +38,7 @@ void test_udp()
 
     uint8_t msg[] = {0x12, 0x34, 0x56, 0x78};
     int ret = sendto(B.sock, (char*)msg, sizeof(msg), 0, &bind_addr->sa, bind_addr.size());
-    testOk(ret==(int)sizeof(msg), "Send test ret==%d", ret);
+    testOk(ret==(int)sizeof(msg), "Send test ret==%d(%d)", ret, EVUTIL_SOCKET_ERROR());
 
     uint8_t rxbuf[8] = {};
     SockAddr src;
@@ -48,7 +48,7 @@ void test_udp()
     ret = recvfrom(A.sock, (char*)rxbuf, sizeof(rxbuf), 0, &src->sa, &slen);
 
     testOk(ret==4 && rxbuf[0]==0x12 && rxbuf[1]==0x34 && rxbuf[2]==0x56 && rxbuf[3]==0x78,
-            "Recv'd %d [%u, %u, %u, %u]", ret, rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);
+            "Recv'd %d(%d) [%u, %u, %u, %u]", ret, EVUTIL_SOCKET_ERROR(), rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);
     testEq(src, send_addr);
 }
 
