@@ -548,7 +548,9 @@ void testArrayXCode()
     testDiag("%s", __func__);
 
     testArrayXCodeT<uint32_t>("\x01\x02\x00", {});
+    testArrayXCodeT<uint32_t>("\x01\x02\x01\x12\x34\x56\x78", {0x12345678});
     testArrayXCodeT<uint16_t>("\x01\x02\x02\x00\x01\xff\xff", {1u, 0xffff});
+    testArrayXCodeT<double>("\x01\x02\x01?\xf0\x00\x00\x00\x00\x00\x00", {1.0});
     testArrayXCodeT<std::string>("\x01\x02\x02\x05hello\x05world", {"hello", "world"});
 }
 
@@ -950,7 +952,7 @@ void testEmptyRequest()
 
 MAIN(testxcode)
 {
-    testPlan(110);
+    testPlan(116);
     testSerialize1();
     testDeserialize1();
     testSimpleDef();
