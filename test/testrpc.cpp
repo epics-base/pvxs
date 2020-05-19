@@ -25,12 +25,13 @@ using namespace pvxs;
 
 struct Tester {
     client::Result actual;
-    epicsEvent done;
+    epicsEvent start, done;
     Value initial;
     server::SharedPV mbox;
     server::Server serv;
     client::Context cli;
     bool fail = false;
+    bool wait = false;
 
     Tester()
         :initial(nt::NTScalar{TypeCode::Int32}.create())
@@ -46,10 +47,13 @@ struct Tester {
         initial["value"] = 1;
 
         mbox.onRPC([this](server::SharedPV& pv, std::unique_ptr<server::ExecOp>&& op, Value&& arg) {
-            if(fail)
+            if(fail) {
                 op->error("oops");
-            else
+            } else {
+                if(wait)
+                    start.wait(10.0);
                 op->reply(arg); // echo
+            }
         });
     }
 
@@ -142,11 +146,21 @@ struct Tester {
     {
         mbox.open(initial);
         serv.start();
+        wait = true;
 
         auto arg = initial.cloneEmpty();
         arg["value"] = 42;
         (void)doCall(std::move(arg));
-        testOk1(!done.wait(2.1));
+        // implicit cancel
+        start.signal();
+        if(!testOk1(!done.wait(2.1))) {
+            try {
+                auto R = actual();
+                testTrue(false)<<" unexpected success "<<R;
+            }catch(std::exception& e){
+                testTrue(false)<<" unexpected error "<<e.what();
+            }
+        }
 
     }
 
