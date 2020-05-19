@@ -113,7 +113,7 @@ struct evbase::Pvt : public epicsThreadRunable
     };
     std::deque<Work> actions;
 
-    std::unique_ptr<event_base> base;
+    owned_ptr<event_base> base;
     evevent keepalive;
     evevent dowork;
     epicsEvent start_sync;
@@ -122,8 +122,7 @@ struct evbase::Pvt : public epicsThreadRunable
     epicsThread worker;
 
     Pvt(const std::string& name, unsigned prio)
-        :base(nullptr)
-        ,worker(*this, name.c_str(),
+        :worker(*this, name.c_str(),
                 epicsThreadGetStackSize(epicsThreadStackBig),
                 prio)
     {
