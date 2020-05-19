@@ -17,6 +17,7 @@
 #include <pvxs/server.h>
 
 #include "utilpvt.h"
+#include "dataimpl.h"
 
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
@@ -298,6 +299,8 @@ void SharedPV::open(const Value& initial)
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
+    else if(!initial || initial.type()!=TypeCode::Struct)
+        throw std::logic_error("Must specify non-empty initial Struct");
 
     decltype (impl->pending) pending;
     decltype (impl->mpending) mpending;
@@ -382,8 +385,15 @@ void SharedPV::post(Value&& val)
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
+    else if(!val)
+        throw std::logic_error("Can't post() empty Value");
 
     Guard G(impl->lock);
+
+    if(!impl->current)
+        throw std::logic_error("Must open() before post()ing");
+    else if(Value::Helper::desc(impl->current)!=Value::Helper::desc(val))
+        throw std::logic_error("post() requires the exact type of open().  Recommend pvxs::Value::cloneEmpty()");
 
     impl->current.assign(val);
 

@@ -14,6 +14,9 @@ Library of common type definitions. ::
 
    ntscalar
 
+.. note::
+    The nt::* factories are expensive.  Avoid repeated use with `pvxs::Value::cloneEmpty`.
+
 .. _time_t:
 
 time_t

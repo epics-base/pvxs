@@ -218,7 +218,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
         Guard G(mon->lock);
 
         if(val && mon->type && mon->type.get()!=Value::Helper::desc(val))
-            throw std::logic_error("Type change not allowed in post()");
+            throw std::logic_error("Type change not allowed in post().  Recommend pvxs::Value::cloneEmpty()");
 
         if((mon->queue.size() < mon->limit) || force || !val) {
             mon->queue.push_back(std::move(val));
