@@ -427,6 +427,7 @@ void testFormat()
 MAIN(testtype)
 {
     testPlan(25);
+    testSetup();
     showSize();
     testBasic();
     testTypeDef();

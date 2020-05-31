@@ -207,6 +207,7 @@ void testError()
 MAIN(testinfo)
 {
     testPlan(12);
+    testSetup();
     logger_config_env();
     Tester().loopback();
     Tester().lazy();

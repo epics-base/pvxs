@@ -152,6 +152,7 @@ int main(int argc, char *argv[])
 {
     SockAttach attach;
     testPlan(46);
+    testSetup();
     pvxs::logger_config_env();
     testBeacon(true);
     testBeacon(false);

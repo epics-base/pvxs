@@ -208,6 +208,7 @@ MAIN(testsock)
 {
     SockAttach attach;
     testPlan(33);
+    testSetup();
     test_udp();
     test_local_mcast();
     test_from_wire();

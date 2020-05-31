@@ -251,6 +251,7 @@ struct TestReconn : public BasicTest
 MAIN(testmon)
 {
     testPlan(22);
+    testSetup();
     logger_config_env();
     TestLifeCycle().testBasic(true);
     TestLifeCycle().testBasic(false);

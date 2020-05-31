@@ -201,6 +201,7 @@ void testFromVector()
 MAIN(testshared)
 {
     testPlan(97);
+    testSetup();
     testEmpty<void>();
     testEmpty<const void>();
     testEmpty<int32_t>();

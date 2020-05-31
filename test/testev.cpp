@@ -117,6 +117,7 @@ MAIN(testev)
 {
     SockAttach attach;
     testPlan(15);
+    testSetup();
     test_call();
     test_fill_evbuf();
     cleanup_for_valgrind();

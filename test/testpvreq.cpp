@@ -265,6 +265,7 @@ void testArgs()
 MAIN(testpvreq)
 {
     testPlan(25);
+    testSetup();
     logger_config_env();
     testEmpty();
     testAssemble();

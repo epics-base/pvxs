@@ -953,6 +953,7 @@ void testEmptyRequest()
 MAIN(testxcode)
 {
     testPlan(116);
+    testSetup();
     testSerialize1();
     testDeserialize1();
     testSimpleDef();

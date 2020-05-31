@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
@@ -11,6 +11,18 @@
 #include "udp_collector.h"
 
 namespace pvxs {
+
+void testSetup()
+{
+#ifdef _WIN32
+    // One of the SEM_* options, either SEM_FAILCRITICALERRORS or SEM_NOGPFAULTERRORBOX,
+    // depending on who you ask, acts to disable Windows Error Reporting entirely.
+    // This also prevents the AeDebug facility from triggering.
+    UINT prev = SetErrorMode(0);
+    if(prev)
+        testDiag("SetErrorMode() disables 0x%x\n", (unsigned)prev);
+#endif
+}
 
 void cleanup_for_valgrind()
 {

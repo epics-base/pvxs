@@ -208,6 +208,7 @@ struct Tester {
 MAIN(testrpc)
 {
     testPlan(16);
+    testSetup();
     Tester().echo();
     Tester().lazy();
     Tester().null();

@@ -200,6 +200,7 @@ void testSer()
 MAIN(testbitmask)
 {
     testPlan(76);
+    testSetup();
     testEmpty();
     testBasic1();
     testBasic2();

@@ -262,6 +262,7 @@ void testAssignSimilar()
 MAIN(testdata)
 {
     testPlan(78);
+    testSetup();
     testTraverse();
     testAssign();
     testName();

@@ -319,6 +319,7 @@ void testError()
 MAIN(testput)
 {
     testPlan(26);
+    testSetup();
     logger_config_env();
     Tester().loopback(false);
     Tester().loopback(true);

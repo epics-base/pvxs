@@ -56,6 +56,7 @@ void testParse()
 MAIN(testconfig)
 {
     testPlan(4);
+    testSetup();
     logger_config_env();
     testParse();
     cleanup_for_valgrind();

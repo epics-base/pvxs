@@ -246,6 +246,7 @@ void testError(bool phase)
 MAIN(testget)
 {
     testPlan(15);
+    testSetup();
     logger_config_env();
     Tester().testWaiter();
     Tester().loopback();

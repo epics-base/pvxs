@@ -22,6 +22,11 @@
 
 namespace pvxs {
 
+/** Prepare for testing.  Call after testPlan()
+ */
+PVXS_API
+void testSetup();
+
 /** Free some internal global allocations to avoid false positives in
  *  valgrind (or similar) tools looking for memory leaks.
  *
