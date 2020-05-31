@@ -196,6 +196,8 @@ using namespace impl;
 
 struct Server::Pvt
 {
+    SockAttach attach;
+
     std::weak_ptr<Server::Pvt> internal_self;
 
     // "const" after ctor

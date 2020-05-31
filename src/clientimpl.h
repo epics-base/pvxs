@@ -166,6 +166,8 @@ struct Channel {
 
 struct Context::Pvt
 {
+    SockAttach attach;
+
     std::weak_ptr<Pvt> internal_self;
     std::shared_ptr<Pvt> shared_from_this() {
         std::shared_ptr<Pvt> ret(internal_self);
