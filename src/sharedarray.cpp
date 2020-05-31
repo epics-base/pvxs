@@ -67,11 +67,13 @@ namespace detail {
 namespace {
 
 template<typename E>
-struct Print { static inline const E& as(const E& val) { return val; } };
+struct Print { static inline void as(std::ostream& strm,const E& val) { strm<<val; } };
 template<>
-struct Print<int8_t> { static inline int as(int8_t val) { return val; } };
+struct Print<int8_t> { static inline void as(std::ostream& strm,int8_t val) { strm<<int(val); } };
 template<>
-struct Print<uint8_t> { static inline unsigned as(uint8_t val) { return val; } };
+struct Print<uint8_t> { static inline void as(std::ostream& strm,uint8_t val) { strm<<unsigned(val); } };
+template<>
+struct Print<std::string> { static inline void as(std::ostream& strm,const std::string& val) { strm<<"\""<<escape(val)<<"\"";} };
 
 template<typename E>
 void showArr(std::ostream& strm, const void* raw, size_t count, size_t limit)
@@ -89,7 +91,7 @@ void showArr(std::ostream& strm, const void* raw, size_t count, size_t limit)
             strm<<"...";
             break;
         }
-        strm<<Print<E>::as(base[i]);
+        Print<E>::as(strm, base[i]);
     }
     strm<<']';
 }
