@@ -21,6 +21,8 @@ skip_commits:
 #   build matrix configuration    #
 #---------------------------------#
 
+image: Visual Studio 2015
+
 # Build Configurations: dll/static, regular/debug
 configuration:
   - dynamic
@@ -30,7 +32,7 @@ configuration:
 
 # Environment variables: compiler toolchain
 environment:
-  SETUP_PATH: .
+  SETUP_PATH: .ci-local:.ci
   _PVXS_ABORT_ON_CRIT: 1
   PVXS_LOG: pvxs.*=WARN
 
@@ -63,11 +65,11 @@ platform:
 install:
   - cmd: python -m pip install git+https://github.com/mdavidsaver/ci-core-dumper#egg=ci-core-dumper
   - cmd: git submodule update --init --recursive
-  - cmd: python .ci/appveyor/do.py prepare
-  - cmd: python .ci/appveyor/do.py exec python .ci-local/appveyor-libevent.py
+  - cmd: python .ci/cue.py prepare
+  - cmd: python .ci/cue.py exec python .ci-local/libevent.py
 
 build_script:
-  - cmd: python .ci/appveyor/do.py build
+  - cmd: python .ci/cue.py build
 
 before_test:
   - cmd: python -m ci_core_dumper -v install
@@ -75,15 +77,14 @@ before_test:
 test_script:
   - cmd: reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug"
   - cmd: reg query "HKLM\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\AeDebug"
-  - cmd: python -m ci_core_dumper crash
-  - cmd: python .ci/appveyor/do.py --add-path "{TOP}\bundle\usr\{EPICS_HOST_ARCH}\lib" test
+  - cmd: python .ci/cue.py --add-path "{TOP}\bundle\usr\{EPICS_HOST_ARCH}\lib" test
 
 on_failure:
   - cmd: python -m ci_core_dumper -v report
 
 on_finish:
   - ps: Get-ChildItem *.tap -Recurse -Force | % { Push-AppveyorArtifact $_.FullName -FileName $_.Name }
-  - cmd: python .ci/appveyor/do.py build test-results -s
+  - cmd: python .ci/cue.py test-results
 
 
 #---------------------------------#

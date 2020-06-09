@@ -6,6 +6,12 @@ CMAKE ?= cmake
 
 ifdef T_A
 
+ifneq (,$(wildcard $(CURDIR)/../libevent/CMakeLists.txt))
+LIBEVENT_USE_CMAKE?=YES
+else
+LIBEVENT_USE_CMAKE?=NO
+endif
+
 CMAKEFLAGS = $(CMD_CMAKEFLAGS)
 
 # override definitions from CONFIG_PVXS_MODULE, but not from CLI arguments
@@ -17,12 +23,13 @@ CMAKEFLAGS += -DCMAKE_INSTALL_PREFIX:PATH=$(abspath $(LIBEVENT_$(T_A)))
 # not needed, and may not be available on embedded targets, so never try
 CMAKEFLAGS += -DEVENT__DISABLE_OPENSSL=ON
 
-# no run, so why bother?
+# not run, so why bother?
 CMAKEFLAGS += -DEVENT__DISABLE_REGRESS=ON
 CMAKEFLAGS += -DEVENT__DISABLE_SAMPLES=ON
 CMAKEFLAGS += -DEVENT__DISABLE_TESTS=ON
 CMAKEFLAGS += -DEVENT__DISABLE_BENCHMARK=ON
 
+# searched for toolchain files
 CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR=$(abspath $(TOP)/bundle/cmake)
 
 # check either $(HOST_OPT) or $(CROSS_OPT) depending on $(BUILD_CLASS)
@@ -42,18 +49,12 @@ CMAKE_TOOLCHAIN_windows-x64-mingw ?= x86_64-w64-mingw32
 endif
 
 ifneq (,$(filter win%,$(EPICS_HOST_ARCH)))
-# hosted mingw on windows
-CMAKEFLAGS_gcc += -G "MinGW Makefiles" -DCMAKE_C_COMPILER="$(CC)"
-
-# Use NMake for native windows since we must already have a MSVC version in %PATH%
-CMAKEFLAGS_msvc += -G "NMake Makefiles" -DCMAKE_C_COMPILER="$(CC)"
+CMAKEFLAGS += -G "MinGW Makefiles" -DCMAKE_C_COMPILER="$(CC)"
 endif
 
 # toolchain file when cross compiling
 CMAKE_TOOLCHAIN ?= $(CMAKE_TOOLCHAIN_$(T_A))
 CMAKEFLAGS += $(if $(CMAKE_TOOLCHAIN),-DCMAKE_TOOLCHAIN_FILE=$(CMAKE_TOOLCHAIN))
-
-CMAKEFLAGS += $(CMAKEFLAGS_$(CMPLR_CLASS))
 
 # flags for cmake --build
 # eg. "-j 2"  (that space is important)
@@ -95,7 +96,7 @@ libevent.%:
 
 else # T_A
 
-ifneq (,$(wildcard $(CURDIR)/../libevent/CMakeLists.txt))
+ifeq (YES,$(LIBEVENT_USE_CMAKE))
 # libevent >= 2.1 prefer CMake
 
 libevent.%:
