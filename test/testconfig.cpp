@@ -15,6 +15,11 @@
 #include <pvxs/server.h>
 #include <pvxs/log.h>
 
+#if EPICS_VERSION_INT>=VERSION_INT(3,15,6,0) && EPICS_VERSION_INT<VERSION_INT(7,0,0,0)
+#  define HAVE_ENV_UNSET
+#elif EPICS_VERSION_INT>=VERSION_INT(7,0,2,0)
+#  define HAVE_ENV_UNSET
+#endif
 using namespace pvxs;
 
 namespace {
@@ -39,7 +44,7 @@ void testParse()
         testEq(conf.addressList[1], "5.6.7.8:9876");
     }
 
-#if EPICS_VERSION_INT>=VERSION_INT(3,15,6,0)
+#ifdef HAVE_ENV_UNSET
     epicsEnvUnset("EPICS_PVA_ADDR_LIST");
     epicsEnvUnset("EPICS_PVA_AUTO_ADDR_LIST");
     epicsEnvUnset("EPICS_PVA_BROADCAST_PORT");
