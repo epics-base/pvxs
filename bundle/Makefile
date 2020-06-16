@@ -32,6 +32,8 @@ CMAKEFLAGS += -DEVENT__DISABLE_BENCHMARK=ON
 # searched for toolchain files
 CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR=$(abspath $(TOP)/bundle/cmake)
 
+CMAKEFLAGS += -DCMAKE_MAKE_PROGRAM=$(MAKE)
+
 # check either $(HOST_OPT) or $(CROSS_OPT) depending on $(BUILD_CLASS)
 IS_OPT = $($(BUILD_CLASS)_OPT)
 # cmake build types: DEBUG RELEASE RELWITHDEBINFO MINSIZEREL

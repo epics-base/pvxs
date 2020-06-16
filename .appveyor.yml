@@ -49,7 +49,7 @@ environment:
     APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
     PATH: C:\Python35-x64;%PATH%
     BASE: 7.0
-  - CMP: mingw
+  - CMP: gcc
     APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
     PATH: C:\Python35-x64;%PATH%
     BASE: 7.0
