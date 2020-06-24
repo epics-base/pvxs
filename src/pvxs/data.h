@@ -42,8 +42,8 @@ struct FieldStorage;
 struct FieldDesc;
 
 //! maps T to one of the types which can be stored in the FieldStorage::store union
-//! typename StorageMap<T>::store_t is, if existant, is one such type.
-//! store_t shall be cast-able to/from T.
+//! typename StorageMap<T>::store_t is, if existant, one such type.
+//! store_t shall be convertable-able to/from T through StoreTransform<T>::in() and out().
 //! StorageMap<T>::code is the associated StoreType.
 template<typename T, typename Enable=void>
 struct StorageMap;
@@ -58,7 +58,7 @@ template<typename T>
 struct StorageMap<T, typename std::enable_if<std::is_integral<T>::value && !std::is_signed<T>::value && !std::is_same<T,bool>::value>::type>
 { typedef uint64_t store_t; static constexpr StoreType code{StoreType::UInteger}; };
 
-// map floating point to double.  (truncates long double, but then PVA doesn't >8 byte primatives anyway support anyway)
+// map floating point to double.  (truncates long double, but then PVA doesn't have >8 byte primatives support anyway)
 template<typename T>
 struct StorageMap<T, typename std::enable_if<std::is_floating_point<T>::value>::type>
 { typedef double store_t;   static constexpr StoreType code{StoreType::Real}; };
