@@ -46,6 +46,10 @@ TESTPROD_HOST += testdata
 testdata_SRCS += testdata.cpp
 TESTS += testdata
 
+TESTPROD_HOST += testnt
+testnt_SRCS += testnt.cpp
+TESTS += testnt
+
 TESTPROD_HOST += testconfig
 testconfig_SRCS += testconfig.cpp
 TESTS += testconfig
