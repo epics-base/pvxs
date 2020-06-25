@@ -39,6 +39,14 @@ struct NTScalar {
     //! Include alarm (range) meta-data
     bool valueAlarm;
 
+    constexpr
+    NTScalar(TypeCode value = TypeCode::Float64,
+             bool display = false,
+             bool control = false,
+             bool valueAlarm = false)
+        :value(value), display(display), control(control), valueAlarm(valueAlarm)
+    {}
+
     //! A TypeDef which can be appended
     PVXS_API
     TypeDef build() const;
