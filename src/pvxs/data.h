@@ -243,6 +243,10 @@ private:
 public:
     struct Helper;
 
+    //! Empty/invalid Member
+    inline
+    Member() :code(TypeCode::Null) {}
+
     //! Member for non-Compund
     //! @pre code.kind()!=Kind::Compound
     inline
