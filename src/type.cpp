@@ -124,7 +124,7 @@ const char* TypeCode::name() const
 
 void Member::Helper::node_validate(const Member* parent, const std::string& id, TypeCode code)
 {
-    if(!id.empty() && code!=TypeCode::Struct && code!=TypeCode::Union)
+    if(!id.empty() && code.scalarOf()!=TypeCode::Struct && code.scalarOf()!=TypeCode::Union)
         throw std::logic_error("Only Struct or Union may have an ID");
     if(parent) {
         auto c = parent->code.scalarOf();
