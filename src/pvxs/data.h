@@ -675,33 +675,7 @@ private:
         {}
     };
     template<typename V>
-    class Iter : private IterInfo {
-        V *ref;
-        constexpr Iter(V* ref, size_t pos, bool marked, bool depth)
-            :IterInfo(pos, marked, depth), ref(ref)
-        {}
-        friend class Value;
-        friend class Iterable<V>;
-    public:
-        Iter() {}
-
-        V operator*() const { return ref->_iter_deref(*this); }
-        Iter& operator++() {
-            pos++;
-            if(marked && pos >= nextcheck)
-                ref->_iter_advance(*this);
-            return *this;
-        }
-        Iter operator++(int) {
-            Iter ret(*this);
-            pos++;
-            if(marked && pos >= nextcheck)
-                ref->_iter_advance(*this);
-            return ret;
-        }
-        bool operator==(const Iter& o) const { return pos == o.pos; }
-        bool operator!=(const Iter& o) const { return !(o==*this); }
-    };
+    class Iter;
     template<typename V>
     friend class Iter;
 
@@ -711,24 +685,7 @@ private:
 public:
 
     template<typename V>
-    class Iterable {
-        typedef Iter<V> iterator;
-        V* owner;
-        bool marked;
-        bool depth;
-    public:
-        constexpr Iterable(V* owner, bool marked, bool depth) :owner(owner), marked(marked), depth(depth) {}
-        iterator begin() const {
-            iterator ret{owner, 0u, marked, depth};
-            owner->_iter_fl(ret, true);
-            return ret;
-        }
-        iterator end() const {
-            iterator ret{owner, 0u, marked, depth};
-            owner->_iter_fl(ret, false);
-            return ret;
-        }
-    };
+    class Iterable;
 
     /** Depth-first iteration of all decendent fields
      *
@@ -739,15 +696,21 @@ public:
      * }
      * @endcode
      */
-    Iterable<Value> iall()      { return Iterable<Value>{this, false, true}; }
+    inline
+    Iterable<Value> iall();
     //! iteration of all child fields
-    Iterable<Value> ichildren() { return Iterable<Value>{this, false, false}; }
+    inline
+    Iterable<Value> ichildren();
     //! Depth-first iteration of all marked decendent fields
-    Iterable<Value> imarked()   { return Iterable<Value>{this, true , true}; }
+    inline
+    Iterable<Value> imarked();
 
-    Iterable<const Value> iall() const      { return Iterable<const Value>{this, false, true}; }
-    Iterable<const Value> ichildren() const { return Iterable<const Value>{this, false, false}; }
-    Iterable<const Value> imarked() const   { return Iterable<const Value>{this, true , true}; }
+    inline
+    Iterable<const Value> iall() const;
+    inline
+    Iterable<const Value> ichildren() const;
+    inline
+    Iterable<const Value> imarked() const;
 
     struct Fmt {
         const Value* top = nullptr;
@@ -767,6 +730,63 @@ public:
     };
     inline Fmt format() const { return Fmt(this); }
 };
+
+template<typename V>
+class Value::Iter : private Value::IterInfo {
+    const Value ref;
+    constexpr Iter(const Value& ref, size_t pos, bool marked, bool depth)
+        :IterInfo(pos, marked, depth), ref(ref)
+    {}
+    friend class Value;
+    friend class Iterable<V>;
+public:
+    Iter() :ref(nullptr) {}
+
+    V operator*() const { return ref._iter_deref(*this); }
+    Iter& operator++() {
+        pos++;
+        if(marked && pos >= nextcheck)
+            ref._iter_advance(*this);
+        return *this;
+    }
+    Iter operator++(int) {
+        Iter ret(*this);
+        pos++;
+        if(marked && pos >= nextcheck)
+            ref._iter_advance(*this);
+        return ret;
+    }
+    bool operator==(const Iter& o) const { return pos == o.pos; }
+    bool operator!=(const Iter& o) const { return !(o==*this); }
+};
+
+template<typename V>
+class Value::Iterable {
+    typedef Iter<V> iterator;
+    const Value owner;
+    bool marked;
+    bool depth;
+public:
+    constexpr Iterable(const Value& owner, bool marked, bool depth) :owner(owner), marked(marked), depth(depth) {}
+    iterator begin() const {
+        iterator ret{owner, 0u, marked, depth};
+        owner._iter_fl(ret, true);
+        return ret;
+    }
+    iterator end() const {
+        iterator ret{owner, 0u, marked, depth};
+        owner._iter_fl(ret, false);
+        return ret;
+    }
+};
+
+Value::Iterable<Value> Value::iall()      { return Iterable<Value>{*this, false, true}; }
+Value::Iterable<Value> Value::ichildren() { return Iterable<Value>{*this, false, false}; }
+Value::Iterable<Value> Value::imarked()   { return Iterable<Value>{*this, true , true}; }
+
+Value::Iterable<const Value> Value::iall() const      { return Iterable<const Value>{*this, false, true}; }
+Value::Iterable<const Value> Value::ichildren() const { return Iterable<const Value>{*this, false, false}; }
+Value::Iterable<const Value> Value::imarked() const   { return Iterable<const Value>{*this, true , true}; }
 
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const Value::Fmt& fmt);
