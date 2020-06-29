@@ -406,7 +406,7 @@ public:
     TypeDef& operator+=(const Iterable& children) {
         auto edit = _append_start();
         for(auto& child : children) {
-            _append(edit, child);
+            _append(*edit, child);
         }
         _append_finish(std::move(edit));
         return *this;
