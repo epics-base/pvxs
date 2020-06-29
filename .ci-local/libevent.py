@@ -44,14 +44,16 @@ print('PATH')
 [print("  ", K, "=", V) for K, V in env.items()]
 
 # update to specific libevent version
-if 'LIBEVENT_TAG' in os.environ:
-    tag = remote = os.environ['LIBEVENT_TAG']
-    if tag.startswith('origin/'):
-        remote = tag[7:]
+libevent_tag = os.environ.get('LIBEVENT_TAG', '')
+if len(libevent_tag):
+    if libevent_tag.startswith('origin/'):
+        libevent_tag = libevent_tag[7:]
 
-    check_call('git fetch origin '+remote,
+    check_call('git fetch --unshallow --tags origin',
                shell=True, cwd='bundle/libevent')
-    check_call('git reset --hard '+tag,
+    check_call('git log -n1 '+libevent_tag+' --',
+               shell=True, cwd='bundle/libevent')
+    check_call('git reset --hard '+libevent_tag+' --',
                shell=True, cwd='bundle/libevent')
 
 check_call('make -C bundle libevent', shell=True, env=env)
@@ -62,3 +64,10 @@ if os.environ.get('WINE')=='64':
         F.write('\nCROSS_COMPILER_TARGET_ARCHS+=windows-x64-mingw\n')
 
     check_call('make -C bundle libevent.windows-x64-mingw', shell=True, env=env)
+
+elif os.environ.get('WINE')=='32':
+    print('Enable mingw32')
+    with open('configure/CONFIG_SITE.local', 'a') as F:
+        F.write('\nCROSS_COMPILER_TARGET_ARCHS+=win32-x86-mingw\n')
+
+    check_call('make -C bundle libevent.win32-x86-mingw', shell=True, env=env)

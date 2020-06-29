@@ -16,6 +16,7 @@ skip_commits:
     - 'documentation/*'
     - '**/*.rst'
     - '**/*.md'
+    - '.github/*'
 
 #---------------------------------#
 #   build matrix configuration    #

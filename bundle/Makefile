@@ -140,7 +140,7 @@ libevent.%: ../libevent/configuration
 	[ -f Makefile ] || ../libevent/configure --prefix=$(abspath $(LIBEVENT_$(T_A))) $(CONFIGUREFLAGS)
 	$(MAKE) install
 
-../libevent/configuration: ../libevent/configure.ac
+../libevent/configuration:
 	(cd ../libevent && autoreconf -ivf)
 
 endif
