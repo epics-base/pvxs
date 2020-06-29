@@ -288,6 +288,40 @@ void testTypeDef()
            "}\n");
 }
 
+void testTypeDefDynamic()
+{
+    testDiag("%s()", __func__);
+
+    std::vector<Member> mem({
+                                Member(TypeCode::Float64, "value"),
+                            });
+
+    {
+        TypeDef def(TypeCode::Struct, "simple_t", mem);
+
+        auto val = def.create();
+
+        testTrue(val.valid());
+        testStrEq(std::string(SB()<<val),
+                  "struct \"simple_t\" {\n"
+                  "    double value = 0\n"
+                  "}\n");
+    }
+    {
+        TypeDef def(TypeCode::Struct, "simple_t", {});
+
+        def += mem;
+
+        auto val = def.create();
+
+        testTrue(val.valid());
+        testStrEq(std::string(SB()<<val),
+                  "struct \"simple_t\" {\n"
+                  "    double value = 0\n"
+                  "}\n");
+    }
+}
+
 //! Returns the frankenstruct
 Value neckBolt()
 {
@@ -426,11 +460,12 @@ void testFormat()
 
 MAIN(testtype)
 {
-    testPlan(25);
+    testPlan(29);
     testSetup();
     showSize();
     testBasic();
     testTypeDef();
+    testTypeDefDynamic();
     testFormat();
     cleanup_for_valgrind();
     return testDone();
