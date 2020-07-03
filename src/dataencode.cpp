@@ -758,6 +758,96 @@ void from_wire_type_value(Buffer& buf, TypeStore& ctxt, Value& val)
         from_wire_full(buf, ctxt, val);
 }
 
-}} // namespace pvxs::impl
+} // namespace impl
+
+namespace xcode {
+
+void encodeType(std::vector<uint8_t>& buf, const Value& prototype, bool be)
+{
+    VectorOutBuf out(be, buf);
+    to_wire(out, Value::Helper::desc(prototype));
+    if(!out.good())
+        throw std::runtime_error("Encode error");
+
+    // trim unused space
+    buf.resize(out.consumed());
+}
+
+void encodeFull(std::vector<uint8_t>& buf, const Value& value, bool be)
+{
+    if(!value)
+        throw std::invalid_argument("Can't encode empty Value");
+
+    VectorOutBuf out(be, buf);
+    to_wire_full(out, value);
+    if(!out.good())
+        throw std::runtime_error("Encode error");
+
+    // trim unused space
+    buf.resize(out.consumed());
+}
+
+void encodeValid(std::vector<uint8_t>& buf, const Value& value, bool be)
+{
+    if(value.type()!=TypeCode::Struct)
+        throw std::invalid_argument("partial/valid encode requires Struct");
+
+    VectorOutBuf out(be, buf);
+    to_wire_valid(out, value);
+    if(!out.good())
+        throw std::runtime_error("Encode error");
+
+    // trim unused space
+    buf.resize(out.consumed());
+}
+
+Value decodeType(const uint8_t*& buf, const uint8_t *bufend, bool be)
+{
+    // buf not actually modified
+    FixedBuf inp(be, const_cast<uint8_t*>(buf), bufend-buf);
+    TypeStore cache;
+    Value ret;
+    from_wire_type(inp, cache, ret);
+    if(!inp.good())
+        throw std::runtime_error("Decode error");
+
+    buf = inp.save();
+    return ret;
+}
+
+void decodeFull(Value& dest, const uint8_t*& buf, const uint8_t *bufend, bool be)
+{
+    if(!dest)
+        throw std::invalid_argument("Can't decode into empty Value");
+
+    // buf not actually modified
+    FixedBuf inp(be, const_cast<uint8_t*>(buf), bufend-buf);
+    TypeStore cache;
+    Value ret;
+    from_wire_full(inp, cache, dest);
+    if(!inp.good())
+        throw std::runtime_error("Decode error");
+
+    buf = inp.save();
+}
+
+void decodeValid(Value& dest, const uint8_t*& buf, const uint8_t *bufend, bool be)
+{
+    if(dest.type()!=TypeCode::Struct)
+        throw std::logic_error("partial/valid decode requires Struct");
+
+    // buf not actually modified
+    FixedBuf inp(be, const_cast<uint8_t*>(buf), bufend-buf);
+    TypeStore cache;
+    Value ret;
+    from_wire_valid(inp, cache, dest);
+    if(!inp.good())
+        throw std::runtime_error("Decode error");
+
+    buf = inp.save();
+}
+
+
+}} // namespace pvxs::xcode
 
 #endif // DATAENCODE_H
