@@ -1215,48 +1215,104 @@ void testEmptyRequest()
            "[0] struct  parent=[0]  [0:1)\n")<<"\nActual descs2\n"<<descs2.data();
 }
 
-void testPartialXCode()
+void testUserXCode()
 {
     testDiag("%s", __func__);
 
-    auto top = nt::NTScalar().create();
-    auto time(top["timeStamp"]);
+    auto top = TypeDef(TypeCode::Struct, {
+                           members::UInt32("value"),
+                           members::UInt32("other"),
+                       }).create();
 
-    testToBytes(true, [&](Buffer& B) {
-        to_wire(B, Value::Helper::desc(time));
-    }, "\x80\x06time_t\x03\x10secondsPastEpoch\x23\x0bnanoseconds\x22\x07userTag\x22");
+    {
+        std::vector<uint8_t> buf;
+        xcode::encodeType(buf, top);
+        testBytes(buf, "\x80\x00\x02\x05value\x26\x05other\x26");
+    }
 
-    time["secondsPastEpoch"] = 0x10203040;
+    {
+        std::vector<uint8_t> buf;
+        xcode::encodeType(buf, top);
+        xcode::encodeValid(buf, top);
+        testBytes(buf, "\x80\x00\x02\x05value\x26\x05other\x26\x00");
+    }
 
-    testToBytes(true, [&](Buffer& B) {
-        to_wire_full(B, time);
-    }, "\x00\x00\x00\x00\x10\x20\x30\x40\x00\x00\x00\x00\x00\x00\x00\x00");
+    top["value"] = 0xdeadbeef;
 
-    // from top, secondsPastEpoch is 8th bit
-    testToBytes(true, [&](Buffer& B) {
-        to_wire_valid(B, top);
-    }, "\x01\x80\x00\x00\x00\x00\x10\x20\x30\x40");
+    {
+        std::vector<uint8_t> buf;
+        xcode::encodeType(buf, top);
+        xcode::encodeValid(buf, top);
+        testBytes(buf, "\x80\x00\x02\x05value\x26\x05other\x26\x01\x02\xde\xad\xbe\xef");
+    }
 
-    // under timeStamp, secondsPastEpoch is 2nd bit
-    testToBytes(true, [&](Buffer& B) {
-        to_wire_valid(B, time);
-    }, "\x01\x02\x00\x00\x00\x00\x10\x20\x30\x40");
+    {
+        std::vector<uint8_t> buf;
+        xcode::encodeType(buf, top);
+        xcode::encodeFull(buf, top);
+        testBytes(buf, "\x80\x00\x02\x05value\x26\x05other\x26\xde\xad\xbe\xef\x00\x00\x00\x00");
+    }
 
-    top.unmark();
-    TypeStore ctxt;
-    testFromBytes(true, "\x01\x02\x00\x00\x00\x00\x10\x20\x30\x50", [&](Buffer& B) {
-        from_wire_valid(B, ctxt, time);
-    });
+    {
+        const char raw[] = "\x80\x00\x02\x05value\x26\x05other\x26";
+        auto pos = (const uint8_t*)raw;
+        auto end = sizeof(raw)-1u+(const uint8_t*)raw;
+        auto top2 = xcode::decodeType(pos, end);
+        testEq(pos, end);
+        testFalse(top.equalInst(top2));
+        testTrue(top.equalType(top2))<<"top: "<<top<<"\n top2: "<<top2;
+    }
 
-    testTrue(top["timeStamp.secondsPastEpoch"].isMarked(false));
-    testEq(top["timeStamp.secondsPastEpoch"].as<int64_t>(), 0x10203050);
+    {
+        const char raw[] = "\x80\x00\x02\x05value\x26\x05other\x26\x01\x02\xde\xad\xbe\xef";
+        auto pos = (const uint8_t*)raw;
+        auto end = sizeof(raw)-1u+(const uint8_t*)raw;
+        auto top2 = xcode::decodeType(pos, end);
+        xcode::decodeValid(top2, pos, end);
+        testEq(pos, end);
+        testFalse(top.equalInst(top2));
+        testTrue(top.equalType(top2))<<"top: "<<top<<"\n top2: "<<top2;
+        testTrue(top2["value"].isMarked());
+        testFalse(top2["other"].isMarked());
+        testEq(top2["value"].as<uint32_t>(), 0xdeadbeef);
+    }
+
+    {
+        const char raw[] = "\x80\x00\x02\x05value\x26\x05other\x26\xde\xad\xbe\xef\x00\x00\x00\x00";
+        auto pos = (const uint8_t*)raw;
+        auto end = sizeof(raw)-1u+(const uint8_t*)raw;
+        auto top2 = xcode::decodeType(pos, end);
+        xcode::decodeFull(top2, pos, end);
+        testEq(pos, end);
+        testFalse(top.equalInst(top2));
+        testTrue(top.equalType(top2))<<"top: "<<top<<"\n top2: "<<top2;
+        testTrue(top2["value"].isMarked());
+        testTrue(top2["other"].isMarked());
+        testEq(top2["value"].as<uint32_t>(), 0xdeadbeef);
+        testEq(top2["other"].as<uint32_t>(), 0u);
+    }
+
+    testThrows<std::runtime_error>([](){
+        const char raw[] = "\x80\x00\x02\x05va";
+        auto pos = (const uint8_t*)raw;
+        auto end = sizeof(raw)-1u+(const uint8_t*)raw;
+        auto top2 = xcode::decodeType(pos, end);
+    })<<"Truncated type";
+
+    testThrows<std::runtime_error>([](){
+        const char raw[] = "\x80\x00\x02\x05value\x26\x05other\x26\xde\xad\xbe";
+        auto pos = (const uint8_t*)raw;
+        auto end = sizeof(raw)-1u+(const uint8_t*)raw;
+        auto top2 = xcode::decodeType(pos, end);
+        xcode::decodeFull(top2, pos, end);
+    })<<"Truncated full Value";
 }
 
 } // namespace
 
 MAIN(testxcode)
 {
-    testPlan(150);
+    testPlan(165);
     testSetup();
     testDeserializeString();
     testSerialize1();
@@ -1274,6 +1330,6 @@ MAIN(testxcode)
     testRegressBadBitMask();
     testBadFieldName();
     testEmptyRequest();
-    testPartialXCode();
+    testUserXCode();
     return testDone();
 }

@@ -849,6 +849,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
         return; // do not send
     }
 
+    searchReply.clear();
     VectorOutBuf M(true, searchReply);
 
     M.skip(8, __FILE__, __LINE__); // fill in header after body length known
@@ -891,6 +892,7 @@ void Server::Pvt::doBeacons(short evt)
 {
     log_debug_printf(serversetup, "Server beacon timer expires\n%s", "");
 
+    beaconMsg.clear();
     VectorOutBuf M(true, beaconMsg);
     M.skip(8, __FILE__, __LINE__); // fill in header after body length known
 
