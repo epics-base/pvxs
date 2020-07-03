@@ -461,6 +461,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     if(nreply==0 && !msg.mustReply)
         return;
 
+    searchReply.clear();
     VectorOutBuf M(true, searchReply);
 
     M.skip(8); // fill in header after body length known
@@ -495,6 +496,7 @@ void Server::Pvt::doBeacons(short evt)
 {
     log_debug_printf(serversetup, "Server beacon timer expires\n%s", "");
 
+    beaconMsg.clear();
     VectorOutBuf M(true, beaconMsg);
     M.skip(8); // fill in header after body length known
 

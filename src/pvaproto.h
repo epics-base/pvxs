@@ -102,7 +102,7 @@ class PVXS_API VectorOutBuf : public Buffer
 public:
     // note: vector::data() is not constexpr in c++11
     VectorOutBuf(bool be, std::vector<uint8_t>& b)
-        :base_type(be, b.data(), b.size())
+        :base_type(be, b.data()+b.size(), 0u)
         ,backing(b)
     {}
     virtual ~VectorOutBuf();

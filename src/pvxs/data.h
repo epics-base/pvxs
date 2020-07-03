@@ -805,6 +805,53 @@ std::ostream& operator<<(std::ostream& strm, const Value& val)
     return strm<<val.format();
 }
 
+//! Encoding and decoding Value as a byte array
+namespace xcode {
+
+/** Encode type definition to byte array
+ */
+PVXS_API
+void encodeType(std::vector<uint8_t>& buf, const Value& prototype, bool be=true);
+
+/** Encode full (for structures) Value to byte array.
+ *
+ * Provided Value must not be empty.
+ */
+PVXS_API
+void encodeFull(std::vector<uint8_t>& buf, const Value& value, bool be=true);
+
+/** Encode a bit-mask and only valid Value fields to byte array.
+ *
+ * Provided Value must be a Struct
+ */
+PVXS_API
+void encodeValid(std::vector<uint8_t>& buf, const Value& value, bool be=true);
+
+/** Decode type definition from byte array.
+ *
+ * Returns a prototype (empty) Value
+ */
+PVXS_API
+Value decodeType(const uint8_t*& buf, const uint8_t* bufend, bool be=true);
+
+/** Decode all fields and store in destination Value
+ *
+ * Caller must ensure that the destination Value matches
+ * the type definition used to encode field values.
+ */
+PVXS_API
+void decodeFull(Value &dest, const uint8_t*& buf, const uint8_t *bufend, bool be=true);
+
+/** Decode a bit-mask and only value fields and store in destination Value
+ *
+ * Caller must ensure that the destination Value matches
+ * the type definition used to encode field values.
+ */
+PVXS_API
+void decodeValid(Value& dest, const uint8_t*& buf, const uint8_t *bufend, bool be=true);
+
+} // namespace xcode
+
 } // namespace pvxs
 
 #endif // PVXS_DATA_H

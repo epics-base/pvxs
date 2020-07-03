@@ -42,7 +42,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 
     auto tx = bufferevent_get_output(bev.get());
 
-    std::vector<uint8_t> buf(128);
+    std::vector<uint8_t> buf;
 
     // queue connection validation message
     {

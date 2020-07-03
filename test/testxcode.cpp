@@ -948,11 +948,104 @@ void testEmptyRequest()
            "[0] struct  parent=[0]  [0:1)\n")<<"\nActual descs2\n"<<descs2.data();
 }
 
+void testUserXCode()
+{
+    testDiag("%s", __func__);
+
+    auto top = TypeDef(TypeCode::Struct, {
+                           members::UInt32("value"),
+                           members::UInt32("other"),
+                       }).create();
+
+    {
+        std::vector<uint8_t> buf;
+        xcode::encodeType(buf, top);
+        testBytes(buf, "\x80\x00\x02\x05value\x26\x05other\x26");
+    }
+
+    {
+        std::vector<uint8_t> buf;
+        xcode::encodeType(buf, top);
+        xcode::encodeValid(buf, top);
+        testBytes(buf, "\x80\x00\x02\x05value\x26\x05other\x26\x00");
+    }
+
+    top["value"] = 0xdeadbeef;
+
+    {
+        std::vector<uint8_t> buf;
+        xcode::encodeType(buf, top);
+        xcode::encodeValid(buf, top);
+        testBytes(buf, "\x80\x00\x02\x05value\x26\x05other\x26\x01\x02\xde\xad\xbe\xef");
+    }
+
+    {
+        std::vector<uint8_t> buf;
+        xcode::encodeType(buf, top);
+        xcode::encodeFull(buf, top);
+        testBytes(buf, "\x80\x00\x02\x05value\x26\x05other\x26\xde\xad\xbe\xef\x00\x00\x00\x00");
+    }
+
+    {
+        const char raw[] = "\x80\x00\x02\x05value\x26\x05other\x26";
+        auto pos = (const uint8_t*)raw;
+        auto end = sizeof(raw)-1u+(const uint8_t*)raw;
+        auto top2 = xcode::decodeType(pos, end);
+        testEq(pos, end);
+        testFalse(top.equalInst(top2));
+        testTrue(top.equalType(top2))<<"top: "<<top<<"\n top2: "<<top2;
+    }
+
+    {
+        const char raw[] = "\x80\x00\x02\x05value\x26\x05other\x26\x01\x02\xde\xad\xbe\xef";
+        auto pos = (const uint8_t*)raw;
+        auto end = sizeof(raw)-1u+(const uint8_t*)raw;
+        auto top2 = xcode::decodeType(pos, end);
+        xcode::decodeValid(top2, pos, end);
+        testEq(pos, end);
+        testFalse(top.equalInst(top2));
+        testTrue(top.equalType(top2))<<"top: "<<top<<"\n top2: "<<top2;
+        testTrue(top2["value"].isMarked());
+        testFalse(top2["other"].isMarked());
+        testEq(top2["value"].as<uint32_t>(), 0xdeadbeef);
+    }
+
+    {
+        const char raw[] = "\x80\x00\x02\x05value\x26\x05other\x26\xde\xad\xbe\xef\x00\x00\x00\x00";
+        auto pos = (const uint8_t*)raw;
+        auto end = sizeof(raw)-1u+(const uint8_t*)raw;
+        auto top2 = xcode::decodeType(pos, end);
+        xcode::decodeFull(top2, pos, end);
+        testEq(pos, end);
+        testFalse(top.equalInst(top2));
+        testTrue(top.equalType(top2))<<"top: "<<top<<"\n top2: "<<top2;
+        testTrue(top2["value"].isMarked());
+        testTrue(top2["other"].isMarked());
+        testEq(top2["value"].as<uint32_t>(), 0xdeadbeef);
+        testEq(top2["other"].as<uint32_t>(), 0u);
+    }
+
+    testThrows<std::runtime_error>([](){
+        const char raw[] = "\x80\x00\x02\x05va";
+        auto pos = (const uint8_t*)raw;
+        auto end = sizeof(raw)-1u+(const uint8_t*)raw;
+        auto top2 = xcode::decodeType(pos, end);
+    })<<"Truncated type";
+
+    testThrows<std::runtime_error>([](){
+        const char raw[] = "\x80\x00\x02\x05value\x26\x05other\x26\xde\xad\xbe";
+        auto pos = (const uint8_t*)raw;
+        auto end = sizeof(raw)-1u+(const uint8_t*)raw;
+        auto top2 = xcode::decodeType(pos, end);
+        xcode::decodeFull(top2, pos, end);
+    })<<"Truncated full Value";
+}
+
 } // namespace
 
 MAIN(testxcode)
 {
-    testPlan(116);
+    testPlan(138);
     testSetup();
     testSerialize1();
     testDeserialize1();
@@ -965,5 +1058,6 @@ MAIN(testxcode)
     testXCodeNTScalar();
     testXCodeNTNDArray();
     testEmptyRequest();
+    testUserXCode();
     return testDone();
 }

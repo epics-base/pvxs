@@ -113,7 +113,7 @@ void testSearch(bool be, std::initializer_list<const char*> names)
     });
     sub->start();
 
-    std::vector<uint8_t> msg(1024, 0);
+    std::vector<uint8_t> msg;
     VectorOutBuf M(be, msg);
 
     M.skip(8); // placeholder for header
@@ -132,7 +132,7 @@ void testSearch(bool be, std::initializer_list<const char*> names)
         to_wire(M, name);
     }
 
-    auto pktlen = M.save()-msg.data();
+    auto pktlen = M.consumed();
 
     FixedBuf H(be, msg.data(), 8);
     to_wire(H, Header{CMD_SEARCH, 0, uint32_t(pktlen-8)});
