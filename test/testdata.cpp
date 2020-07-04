@@ -29,15 +29,18 @@ void testTraverse()
 
     {
         auto top2 = top["value<"];
-        testOk1(top.compareType(top2));
-        testOk1(top.compareInst(top2));
+        testOk1(top.equalType(top2));
+        testOk1(top.equalInst(top2));
     }
     {
         auto sevr1 = top["alarm.severity"];
         auto sevr2 = top["value<alarm.status<severity"];
-        testOk1(sevr1.compareType(sevr2));
-        testOk1(sevr1.compareInst(sevr2));
+        testOk1(sevr1.equalType(sevr2));
+        testOk1(sevr1.equalInst(sevr2));
     }
+
+    testFalse(top.equalType(top["alarm"]));
+    testFalse(top.equalType(top["value"]));
 }
 
 void testAssign()
@@ -261,7 +264,7 @@ void testAssignSimilar()
 
 MAIN(testdata)
 {
-    testPlan(78);
+    testPlan(80);
     testSetup();
     testTraverse();
     testAssign();

@@ -284,6 +284,53 @@ bool Value::idStartsWith(const std::string& prefix) const
     return ID.size()>=prefix.size() && prefix==ID.substr(0u, prefix.size());
 }
 
+bool Value::_equal(const impl::FieldDesc* A, const impl::FieldDesc* B)
+{
+    if(A==B) {
+        return true;
+
+    } else if(!A ^ !B) {
+        return false;
+
+    } else if(!A) { // !A && !B
+        return true;
+
+    } else if(A->size()!=B->size()) {
+        return false;
+    }
+
+    for(auto i : range(A->size())) {
+        if(A[i].code!=B[i].code)
+            return false;
+
+        if(A[i].code==TypeCode::StructA || A[i].code==TypeCode::UnionA) {
+            if(!_equal(&A[i].members[0], &B[i].members[0]))
+                return false;
+
+        } else if(A[i].code==TypeCode::Struct || A[i].code==TypeCode::Union) {
+            auto it = A[i].mlookup.begin();
+            auto end= A[i].mlookup.end();
+            auto it2= B[i].mlookup.begin();
+
+            for(;it!=end; ++it, ++it2) {
+                if(it->first!=it2->first) {
+                    return false; // different field name
+
+                } else if(it->second!=it2->second) {
+                    return false; // different field order
+
+                } else if(A[i].code==TypeCode::Union) {
+                    if(!_equal(&A[i].members[it->second], &B[i].members[it2->second]))
+                        return false;
+
+                } // else if A[i] is Struct, outer loop will reach members
+            }
+        }
+    }
+
+    return true;
+}
+
 const std::string &Value::nameOf(const Value& descendant) const
 {
     if(!store || !descendant.store)

@@ -528,10 +528,14 @@ public:
     //! Test prefix of Type ID string (Struct or Union only)
     bool idStartsWith(const std::string& prefix) const;
 
-    //! test for instance equality.
-    inline bool compareInst(const Value& o) const { return store==o.store; }
-//    int compareValue(const Value&) const;
-    inline int compareType(const Value& o) const { return desc==o.desc; }
+private:
+    static
+    bool _equal(const impl::FieldDesc* A, const impl::FieldDesc* B);
+public:
+    //! Test for instance equality.  aka. this==this
+    inline bool equalInst(const Value& o) const { return store==o.store; }
+    //! Test for equality of type only (including field names)
+    inline bool equalType(const Value& o) const { return _equal(desc, o.desc); }
 
     /** Return our name for a descendant field.
      * @code
