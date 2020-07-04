@@ -42,8 +42,8 @@ struct FieldStorage;
 struct FieldDesc;
 
 //! maps T to one of the types which can be stored in the FieldStorage::store union
-//! typename StorageMap<T>::store_t is, if existant, one such type.
-//! store_t shall be convertable-able to/from T through StoreTransform<T>::in() and out().
+//! typename StorageMap<T>::store_t is, if existent, one such type.
+//! store_t shall be convertible to/from T through StoreTransform<T>::in() and out().
 //! StorageMap<T>::code is the associated StoreType.
 template<typename T, typename Enable=void>
 struct StorageMap;
@@ -58,7 +58,7 @@ template<typename T>
 struct StorageMap<T, typename std::enable_if<std::is_integral<T>::value && !std::is_signed<T>::value && !std::is_same<T,bool>::value>::type>
 { typedef uint64_t store_t; static constexpr StoreType code{StoreType::UInteger}; };
 
-// map floating point to double.  (truncates long double, but then PVA doesn't have >8 byte primatives support anyway)
+// map floating point to double.  (truncates long double, but then PVA doesn't have >8 byte primitives support anyway)
 template<typename T>
 struct StorageMap<T, typename std::enable_if<std::is_floating_point<T>::value>::type>
 { typedef double store_t;   static constexpr StoreType code{StoreType::Real}; };
@@ -247,7 +247,7 @@ public:
     inline
     Member() :code(TypeCode::Null) {}
 
-    //! Member for non-Compund
+    //! Member for non-Compound
     //! @pre code.kind()!=Kind::Compound
     inline
     Member(TypeCode code, const std::string& name)
@@ -348,7 +348,7 @@ CASE(UnionA)
  *     def1.as("special"), // compose definitions
  * });
  *
- * auto val = def2.create(); // instanciate a Value
+ * auto val = def2.create(); // instantiate a Value
  * });
  * @endcode
  */
@@ -420,7 +420,7 @@ public:
         return *this;
     }
 
-    //! Instanciate this definition
+    //! Instantiate this definition
     Value create() const;
 
     friend
@@ -464,7 +464,7 @@ class PVXS_API Value {
     friend class TypeDef;
     // (maybe) storage for this field.  alias of StructTop::members[]
     std::shared_ptr<impl::FieldStorage> store;
-    // (maybe) owned thourgh StructTop (aliased as FieldStorage)
+    // (maybe) owned through StructTop (aliased as FieldStorage)
     const impl::FieldDesc* desc;
 public:
     struct Helper;
@@ -533,15 +533,15 @@ public:
 //    int compareValue(const Value&) const;
     inline int compareType(const Value& o) const { return desc==o.desc; }
 
-    /** Return our name for a decendent field.
+    /** Return our name for a descendant field.
      * @code
      *   Value v = ...;
      *   assert(v.nameOf(v["some.field"])=="some.field");
      * @endcode
-     * @throws NoField unless both this and decendent are valid()
-     * @throws std::logic_error if decendent is not actually a decendent
+     * @throws NoField unless both this and descendant are valid()
+     * @throws std::logic_error if descendant is not actually a descendant
      */
-    const std::string& nameOf(const Value& decendent) const;
+    const std::string& nameOf(const Value& descendant) const;
 
     // access to Value's ... value
     // not for Struct
@@ -626,7 +626,7 @@ public:
         return *this;
     }
 
-    //! shorthand for from<T>(const T&) except for T=Value (would be ambigious with ref. assignment)
+    //! shorthand for from<T>(const T&) except for T=Value (would be ambiguous with ref. assignment)
     template<typename T>
 #ifdef _DOXYGEN_
     Value&
@@ -643,11 +643,11 @@ private:
     void traverse(const std::string& expr, bool modify);
 public:
 
-    /** Attempt to access a decendant field.
+    /** Attempt to access a descendant field.
      *
      * Argument may be:
      * * name of a child field.  eg. "value"
-     * * name of a decendant field.  eg "alarm.severity"
+     * * name of a descendant field.  eg "alarm.severity"
      * * element of an array of structures.  eg "dimension[0]"
      * * name of a union field.  eg. "booleanValue"
      *
@@ -656,7 +656,7 @@ public:
      * * "dimension[0]size"
      * * "value->booleanValue"
      *
-     * @returns A valid() Value if the decendant field exists, otherwise an invalid Value.
+     * @returns A valid() Value if the descendant field exists, otherwise an invalid Value.
      */
     Value operator[](const char *name);
     inline Value operator[](const std::string& name) { return (*this)[name.c_str()]; }
@@ -691,7 +691,7 @@ public:
     template<typename V>
     class Iterable;
 
-    /** Depth-first iteration of all decendent fields
+    /** Depth-first iteration of all descendant fields
      *
      * @code
      * Value top(...);
@@ -705,7 +705,7 @@ public:
     //! iteration of all child fields
     inline
     Iterable<Value> ichildren();
-    //! Depth-first iteration of all marked decendent fields
+    //! Depth-first iteration of all marked descendant fields
     inline
     Iterable<Value> imarked();
 

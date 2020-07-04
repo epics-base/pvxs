@@ -87,7 +87,7 @@ void testIter()
         testDiag("field %s", val.nameOf(fld).c_str());
         i++;
     }
-    testEq(i, 9u)<<"# of decendent fields";
+    testEq(i, 9u)<<"# of descendant fields";
 
     i=0;
     for(auto fld : val.ichildren()) {
@@ -105,7 +105,7 @@ void testIter()
         return testEq(i, expect);
     };
 
-    testMarked(0u)<<"no decendent fields";
+    testMarked(0u)<<"no descendant fields";
 
     val["alarm.status"].mark();
 

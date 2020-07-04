@@ -71,7 +71,7 @@ public:
     }
 
     //! Add a new entry to the monitor queue.
-    //! If nFree()<=0 this element will be "squshed" to the last element in the queue
+    //! If nFree()<=0 this element will be "squashed" to the last element in the queue
     //! Returns @code nFree()>0u @endcode
     bool post(Value&& val) {
         return doPost(std::move(val), false, false);
@@ -198,7 +198,7 @@ struct PVXS_API Source {
         //! The Client endpoint address
         const char* source() const { return _src; }
     };
-    /** Called each time a client polls for the existance of some Channel names.
+    /** Called each time a client polls for the existence of some Channel names.
      *
      * A Source may only Search::claim() a Channel name if it is prepared to
      * immediately accept an onCreate() call for that Channel name.

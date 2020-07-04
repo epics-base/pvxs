@@ -201,7 +201,7 @@ shared_array<void> copyAs(ArrayType dtype, ArrayType stype, const void *sbase, s
 
 } // namespace detail
 
-/** std::vector-like contigious array of items passed by reference.
+/** std::vector-like contiguous array of items passed by reference.
  *
  * shared_array comes in const and non-const, as well as void and non-void variants.
  *

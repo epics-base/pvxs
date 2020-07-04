@@ -42,7 +42,7 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc);
 
 } // namespace detail
 
-//! Print string to output stream with non-printable charactors escaped.
+//! Print string to output stream with non-printable characters escaped.
 //!
 //! Outputs (almost) C-style escapes.
 //! Prefers short escapes for newline, tab, quote, etc ("\\n").
@@ -58,14 +58,14 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc);
 inline detail::Escaper escape(const std::string& s) {
     return detail::Escaper(s.c_str(), s.size());
 }
-//! Print nil terminated char array to output stream with non-printable charactors escaped.
+//! Print nil terminated char array to output stream with non-printable characters escaped.
 //! @code
 //!   std::cout<<pvxs::escape("this \"is a test\"");
 //! @endcode
 inline detail::Escaper escape(const char* s) {
     return detail::Escaper(s);
 }
-//! Print fixed length char array to output stream with non-printable charactors escaped.
+//! Print fixed length char array to output stream with non-printable characters escaped.
 //! @code
 //!   std::cout<<pvxs::escape("this \"is a test\"", 6);
 //!   // prints 'this \"'

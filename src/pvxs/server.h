@@ -39,7 +39,7 @@ struct Config;
  * In order to be useful, a Server will have one or more Source instances added
  * to it with addSource().
  *
- * As a convienence, each Server instance automatically contains a "builtin" StaticSource
+ * As a convenience, each Server instance automatically contains a "builtin" StaticSource
  * to which SharedPV instances can be directly added.
  * The "builtin" has priority zero, and can be accessed or even removed like any Source
  * explicitly added with addSource().
@@ -61,7 +61,7 @@ public:
 
     /** start() and then (maybe) stop()
      *
-     * run() may be interupted by calling interrupt(),
+     * run() may be interrupted by calling interrupt(),
      * or by SIGINT or SIGTERM (only one Server per process)
      *
      * Intended to simple CLI programs.
@@ -119,7 +119,7 @@ struct PVXS_API Config {
     std::vector<std::string> interfaces;
     //! Addresses (**not** host names) to which (UDP) beacons message will be sent.
     //! May include broadcast and/or unicast addresses.
-    //! Supplimented iif auto_beacon==true
+    //! Supplemented iif auto_beacon==true
     std::vector<std::string> beaconDestinations;
     //! TCP port to bind.  Default is 5075.  May be zero.
     unsigned short tcp_port = 5075;
@@ -134,7 +134,7 @@ struct PVXS_API Config {
     //! Default configuration using process environment
     static Config from_env();
 
-    //! Configuration limited to the local loopback interface on a randomly choosen port.
+    //! Configuration limited to the local loopback interface on a randomly chosen port.
     //! Suitable for use in self-contained unit-tests.
     static Config isolated();
 

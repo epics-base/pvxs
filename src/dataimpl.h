@@ -45,7 +45,7 @@ struct Buffer;
 /** Describes a single field, leaf or otherwise, in a nested structure.
  *
  * FieldDesc are always stored depth first as a contigious array,
- * with offset to decendent fields given as positive integers relative
+ * with offset to descendant fields given as positive integers relative
  * to the current field.  (not possible to jump _back_)
  *
  * We deal with two different numeric values:
@@ -58,7 +58,7 @@ struct FieldDesc {
     // type ID string (Struct/Union)
     std::string id;
 
-    // Lookup of all decendent fields of this Structure or Union.
+    // Lookup of all descendant fields of this Structure or Union.
     // "fld.sub.leaf" -> rel index
     // For Struct, relative to this
     // For Union, offset in members array

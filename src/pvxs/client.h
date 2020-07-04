@@ -116,7 +116,7 @@ struct PVXS_API Operation {
 
     /** @brief Block until Operation completion
      *
-     * As an alternative to a .result() callback, wait for operation competion,
+     * As an alternative to a .result() callback, wait for operation completion,
      * timeout, or interruption (via. interrupt() ).
      *
      * @param timeout Time to wait prior to throwing TimeoutError.  cf. epicsEvent::wait(double)
@@ -158,7 +158,7 @@ struct PVXS_API Subscription {
      * @returns A valid Value until the queue is empty
      * @throws Connected (depending on MonitorBuilder::maskConnected())
      * @throws Disconnect (depending on MonitorBuilder::maskDisconnect())
-     * @throws Finished  (depending on MonitorBuilder::maskDisonnect())
+     * @throws Finished  (depending on MonitorBuilder::maskDisconnect())
      * @throws RemoteError For server signaled errors
      * @throws std::exception For client side failures.
      *
@@ -199,7 +199,7 @@ public:
     //! An empty/dummy Context
     constexpr Context() = default;
     //! Create/allocate a new client with the provided config.
-    //! Config::build() is a convienent shorthand.
+    //! Config::build() is a convenient shorthand.
     explicit Context(const Config &);
     ~Context();
 
@@ -437,7 +437,7 @@ public:
     /** Parse pvRequest string.
      *
      *  Supported syntax is a list of zero or more entities
-     *  seperated by zero or more spaces.
+     *  separated by zero or more spaces.
      *
      *  - field(<fld.name>)
      *  - record(<key>=\<value>)
@@ -601,7 +601,7 @@ public:
     MonitorBuilder& event(std::function<void(Subscription&)>&& cb) { _event = std::move(cb); return *this; }
     //! Include Connected exceptions in queue (default false).
     MonitorBuilder& maskConnected(bool m = true) { _maskConn = m; return *this; }
-    //! Include Disconnected exceptiosn in queue (default true).
+    //! Include Disconnected exceptions in queue (default true).
     MonitorBuilder& maskDisconnected(bool m = true) { _maskDisconn = m; return *this; }
 
     PVXS_API

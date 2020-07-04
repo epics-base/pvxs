@@ -91,7 +91,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
 
         } else {
             auto& entry = cache[key];
-            // copy new node, and any decendents into cache
+            // copy new node, and any descendants into cache
             entry.resize(descs.size()-index);
             std::copy(descs.begin()+index,
                       descs.end(),
@@ -184,7 +184,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
                 name+='.';
 
                 if(code.code==TypeCode::Struct && code==cfld.code) {
-                    // copy decendent indicies for sub-struct
+                    // copy descendant indicies for sub-struct
                     for(auto& pair : cfld.mlookup) {
                         fld.mlookup[name+pair.first] = cindex - cref + pair.second;
                     }

@@ -26,7 +26,7 @@ struct TimeStamp {
  * def += {
  *      Member(TypeCode::String, "myspecial"),
  * };
- * auto value = def.create(); // instanciate a Value
+ * auto value = def.create(); // instantiate a Value
  * @endcode
  */
 struct NTScalar {
@@ -50,7 +50,7 @@ struct NTScalar {
     //! A TypeDef which can be appended
     PVXS_API
     TypeDef build() const;
-    //! Instanciate
+    //! Instantiate
     inline Value create() const {
         return build().create();
     }
@@ -60,14 +60,14 @@ struct NTScalar {
  *
  * @code
  * auto def = pvxs::nt::NTNDArray{}.build();
- * auto value = def.create(); // instanciate a Value
+ * auto value = def.create(); // instantiate a Value
  * @endcode
  */
 struct NTNDArray {
     //! A TypeDef which can be appended
     PVXS_API
     TypeDef build() const;
-    //! Instanciate
+    //! Instantiate
     inline Value create() const {
         return build().create();
     }
@@ -82,7 +82,7 @@ public:
     inline
     TypeDef build() const { return _def; }
 
-    //! Instanciate
+    //! Instantiate
     inline Value create() const {
         return build().create();
     }

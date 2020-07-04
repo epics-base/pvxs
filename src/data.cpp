@@ -284,14 +284,14 @@ bool Value::idStartsWith(const std::string& prefix) const
     return ID.size()>=prefix.size() && prefix==ID.substr(0u, prefix.size());
 }
 
-const std::string &Value::nameOf(const Value& decendent) const
+const std::string &Value::nameOf(const Value& descendant) const
 {
-    if(!store || !decendent.store)
+    if(!store || !descendant.store)
         throw NoField();
     auto pidx = store->index();
-    auto didx = decendent.store->index();
+    auto didx = descendant.store->index();
     if(pidx >= didx || didx >= store->top->members.size())
-        throw std::logic_error("not a decendent");
+        throw std::logic_error("not a descendant");
 
     // inefficient, but we don't keep a reverse mapping
     for(auto& it : desc->mlookup) {
@@ -299,7 +299,7 @@ const std::string &Value::nameOf(const Value& decendent) const
             return it.first;
     }
 
-    throw std::logic_error("missing decendent");
+    throw std::logic_error("missing descendant");
 }
 
 namespace {

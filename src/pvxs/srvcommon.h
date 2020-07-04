@@ -21,7 +21,7 @@ struct PVXS_API OpBase {
         Info, //!< A GET_FIELD operation
         Get,  //!< A GET operation
         Put,  //!< A PUT operation
-        RPC,  //!< A RPC operaton
+        RPC,  //!< A RPC operation
     };
 protected:
     std::string _peerName;
