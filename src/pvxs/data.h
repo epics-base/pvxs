@@ -741,7 +741,7 @@ public:
 
 template<typename V>
 class Value::Iter : private Value::IterInfo {
-    const Value ref;
+    Value ref;
     constexpr Iter(const Value& ref, size_t pos, bool marked, bool depth)
         :IterInfo(pos, marked, depth), ref(ref)
     {}
@@ -770,11 +770,12 @@ public:
 
 template<typename V>
 class Value::Iterable {
-    typedef Iter<V> iterator;
-    const Value owner;
-    bool marked;
-    bool depth;
+    Value owner;
+    bool marked = false;
+    bool depth = false;
 public:
+    typedef Iter<V> iterator;
+    constexpr Iterable() = default;
     constexpr Iterable(const Value& owner, bool marked, bool depth) :owner(owner), marked(marked), depth(depth) {}
     iterator begin() const {
         iterator ret{owner, 0u, marked, depth};
