@@ -48,11 +48,8 @@ struct Buffer;
  * with offset to descendant fields given as positive integers relative
  * to the current field.  (not possible to jump _back_)
  *
- * We deal with two different numeric values:
- * 1. indicies in this FieldDesc array.  found in FieldDesc::mlookup and FieldDesc::miter
- *    Relative to current position in FieldDesc array.  (aka this+n)
- * 2. offsets in associated FieldStorage array.  found in FieldDesc::index
- *    Relative to current FieldDesc*.
+ * We deal with indicies in this FieldDesc array.  found in FieldDesc::mlookup
+ * and FieldDesc::miter Relative to current position in FieldDesc array.  (aka this+n)
  */
 struct FieldDesc {
     // type ID string (Struct/Union)
@@ -60,8 +57,8 @@ struct FieldDesc {
 
     // Lookup of all descendant fields of this Structure or Union.
     // "fld.sub.leaf" -> rel index
-    // For Struct, relative to this
-    // For Union, offset in members array
+    // For Struct, relative to this (always >=1)
+    // For Union, offset in members array (one entry will always be zero)
     std::map<std::string, size_t> mlookup;
 
     // child iteration.  child# -> ("sub", rel index in enclosing vector<FieldDesc>)
@@ -73,8 +70,8 @@ struct FieldDesc {
     size_t parent_index=0;
 
     // For Union, UnionA, StructA
-    // For Union, the choices
-    // For UnionA/StructA, size()==1 containing a Union/Struct
+    // For Union, the choices concatenated together (members.size() !+ #choices)
+    // For UnionA/StructA containing a single Union/Struct
     std::vector<FieldDesc> members;
 
     TypeCode code{TypeCode::Null};

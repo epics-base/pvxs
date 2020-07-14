@@ -679,7 +679,10 @@ private:
         // all [pos, nextcheck) are marked
         size_t pos;
         size_t nextcheck;
+        // true only iterates marked fields (Struct),
+        // or only the selected field (Union)
         bool marked;
+        // false only iterates children (Struct only)
         bool depth;
         constexpr IterInfo() :pos(0u), nextcheck(0u), marked(false), depth(false) {}
         constexpr IterInfo(size_t pos, bool marked, bool depth)
@@ -757,15 +760,13 @@ public:
     V operator*() const { return ref._iter_deref(*this); }
     Iter& operator++() {
         pos++;
-        if(marked && pos >= nextcheck)
+        if(pos >= nextcheck)
             ref._iter_advance(*this);
         return *this;
     }
     Iter operator++(int) {
         Iter ret(*this);
-        pos++;
-        if(marked && pos >= nextcheck)
-            ref._iter_advance(*this);
+        ++(*this);
         return ret;
     }
     bool operator==(const Iter& o) const { return pos == o.pos; }

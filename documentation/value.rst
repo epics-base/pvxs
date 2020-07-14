@@ -13,12 +13,14 @@ Value Container
     #include <pvxs/data.h>
     namespace pvxs { ... }
 
+`pvxs::Value` is the primary data container type used with PVXS.
 A `pvxs::Value` may be obtained via the remote peer (client or server),
 or created locally.  See `ntapi` or `typedefapi`.
 
-`pvxs::Value` is a pointer-like object which, maybe, references
+`pvxs::Value` is a safe pointer-like object which, maybe, references
 a node in a tree of sub-structures and leaf fields.
-This tree is called a Sturture as it behaves in many ways like a C 'struct'.
+This tree will be referred to as a Structure as it behaves
+in many ways like a C 'struct'.
 
 For example, the following code:
 
@@ -51,7 +53,7 @@ Is analogous to the following pseudo code.
 With the chief functional difference being that the analogs of the casts are made safe.
 Also, the storage of the underlying Structure will be free'd when no more Values reference it.
 
-A Value which does not reference any underlying Structure is not valid.
+A Value which does not reference any underlying Structure is not valid, or "empty".
 
 .. code-block:: c++
 
@@ -69,6 +71,30 @@ All operations on an invalid Value should be safe and well defined.
 
 In this example, the operator[] lookup of a non-existant field returns an invalid Value.
 Attempting to extract an integer from this will then throw a `pvxs::NoField` exception.
+
+Iteration
+^^^^^^^^^
+
+`pvxs::Value` instances pointing to a non-array structured data field (Struct or Union)
+may be iterated.  Iteration comes in three variations: `pvxs::Value::iall`, `pvxs::Value::ichildren`,
+and `pvxs::Value::imarked`.
+
+For a Struct, iall() is a depth first traversal of all fields.
+ichildren() traverses all child fields (excluding eg. grandchildren
+and further).  imarked() considers all fields, but only visits
+those which have beem marked (`pvxs::Value::isMarked`).
+
+For a Union.  iall() and ichildren() are identical, and will
+visit all possible Union members, excluding the implicit NULL member.
+Traversal does not effect member selection.
+imarked() for a Union will visit at most one member (if one is selected)>
+
+Iteration of Union may return Value instances
+allocated with temporary storage.  Changes to these instances
+will not effect the underlying structure.
+
+Iteration of other field types, including StructA and UnionA is not implemented at this time,
+and will always appear as empty.
 
 .. doxygenclass:: pvxs::Value
     :members:

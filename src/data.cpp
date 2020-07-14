@@ -335,14 +335,23 @@ const std::string &Value::nameOf(const Value& descendant) const
 {
     if(!store || !descendant.store)
         throw NoField();
-    auto pidx = store->index();
-    auto didx = descendant.store->index();
-    if(pidx >= didx || didx >= store->top->members.size())
-        throw std::logic_error("not a descendant");
+
+    size_t doffset;
+    if(desc->code==TypeCode::Struct) {
+        doffset = descendant.desc - desc;
+        if(doffset==0 || doffset > desc->mlookup.size())
+            throw std::logic_error("not a descendant");
+
+    } else if(desc->code==TypeCode::Union) {
+        doffset = descendant.desc - desc->members.data();
+
+    } else {
+        throw std::logic_error("nameOf() only implemented for Struct and Union");
+    }
 
     // inefficient, but we don't keep a reverse mapping
     for(auto& it : desc->mlookup) {
-        if(it.second == didx-pidx)
+        if(it.second == doffset)
             return it.first;
     }
 
@@ -802,52 +811,123 @@ size_t Value::nmembers() const
 
 void Value::_iter_fl(Value::IterInfo &info, bool first) const
 {
-    if(!store)
-        throw NoField();
+    if(!desc || (desc->code!=TypeCode::Struct && desc->code!=TypeCode::Union)) {
+        // not iterable
+        info.pos = info.nextcheck = 0u;
+        return;
+    }
 
-    if(desc->code!=TypeCode::Struct) {
-        // TODO implement iteration of Union, or Struct[]/Union[]
-        info.pos = info.nextcheck = 0;
+    // Union iteration has no depth
+    if(desc->code.scalarOf()!=TypeCode::Struct)
+        info.depth = false;
 
-    } else if(info.depth) {
-        info.pos = info.nextcheck = first ? 1u : desc->size();
+    // array instances have no marking
+    if(desc->code.isarray())
+        info.marked = false;
 
-        if(info.marked)
-            _iter_advance(info);
+    size_t cnt;
+    if(info.depth)
+        cnt = desc->mlookup.size();
+    else
+        cnt = desc->miter.size();
+
+    info.pos = first ? 0 : cnt;
+
+    if(first && info.marked) {
+        info.nextcheck = info.pos;
+        _iter_advance(info);
 
     } else {
-        info.pos = info.nextcheck = first ? 0u : desc->miter.size();
+        info.nextcheck = cnt+1; // for !marked, never need to check
     }
 }
 
 void Value::_iter_advance(IterInfo& info) const
 {
-    assert(info.depth);
+    assert(desc);
+    assert(info.marked); // should not be reached for simple iteration
 
-    // scan forward to find next non-marked
-    for(auto idx : range(info.pos, desc->size())) {
-        auto S = store.get() + idx;
-        if(S->valid) {
-            auto D = desc + idx;
-            info.pos = idx;
-            info.nextcheck = idx + D->size();
-            return;
+    // for Struct, scan to next marked field
+    if(desc->code==TypeCode::Struct) {
+        assert(info.depth); // the following assume
+
+        // scan forward to find next non-marked
+        for(auto idx : range(info.pos, desc->mlookup.size())) {
+            auto S = store.get() + idx + 1u;
+            if(S->valid) {
+                auto D = desc + idx + 1u;
+                info.pos = idx;
+                info.nextcheck = idx + D->size();
+                return;
+            }
+        }
+
+        // end of iteration
+        info.pos = desc->mlookup.size();
+        info.nextcheck = info.pos+1;
+
+    } else if(desc->code==TypeCode::Union) {
+        assert(!info.depth); // the following assume
+
+        if(info.pos >= desc->miter.size())
+            return; // at end of iteration
+
+        auto& val = store->as<Value>();
+        auto pos_desc = &desc->members[desc->miter[info.pos].second];
+
+        if(!val || pos_desc > val.desc) {
+            // no field selected, or pos is after selection
+            // end of iteration
+            info.pos = desc->miter.size();
+            info.nextcheck = info.pos+1;
+
+        } else if(pos_desc < val.desc) {
+            // jump forward to selection
+            for(auto i : range(info.pos, desc->miter.size())) {
+                if(val.desc==&desc->members[desc->miter[i].second]) {
+                    info.pos = i;
+                    info.nextcheck = i+1;
+                    return;
+                }
+            }
+            assert(false); // corrupt iterator?
         }
     }
-
-    info.pos = info.nextcheck = desc->size();
 }
 
 Value Value::_iter_deref(const IterInfo& info) const
 {
-    auto idx = info.pos;
-    if(!info.depth)
-        idx = desc->miter[idx].second;
-
-    decltype (store) store2(store, store.get()+idx);
     Value ret;
-    ret.store = std::move(store2);
-    ret.desc = desc + idx;
+
+    if(desc->code==TypeCode::Struct) {
+        auto idx = info.pos;
+        if(info.depth)
+            idx++; // indexing starts with FieldDesc after top
+        else
+            idx = desc->miter[idx].second;
+
+        assert(idx>0u);
+        assert(idx<desc->size());
+        decltype (store) store2(store, store.get()+idx);
+        ret.store = std::move(store2);
+        ret.desc = desc + idx;
+
+    } else if(desc->code==TypeCode::Union) {
+        auto pos_desc = &desc->members[desc->miter[info.pos].second];
+
+        if(desc->code==TypeCode::Union && store->as<Value>().desc==pos_desc) {
+            // pointing to selected Union field
+            ret = store->as<Value>();
+
+        } else {
+            // array, or not selected union field.
+            // allocate temporary
+
+            std::shared_ptr<const FieldDesc> base(store, pos_desc);
+            ret = Value(base);
+        }
+    }
+
     return ret;
 }
 

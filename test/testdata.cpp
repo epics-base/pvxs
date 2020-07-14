@@ -78,7 +78,7 @@ void testName()
     });
 }
 
-void testIter()
+void testIterStruct()
 {
     testDiag("%s", __func__);
 
@@ -120,11 +120,57 @@ void testIter()
     testMarked(4u)<<"mark sub-struct";
 
     val.unmark();
-    val["value"].mark();
-    val["alarm.status"].mark();
-    val["timeStamp"].mark();
+    val["value"].mark(); // 1 field
+    val["alarm.status"].mark(); // 1 field
+    val["timeStamp"].mark(); // 4 fields (struct node and 3x leaves)
 
     testMarked(6u)<<"mark sub-struct";
+}
+
+void testIterUnion()
+{
+    testDiag("%s", __func__);
+
+    auto top = TypeDef(TypeCode::Union, {
+                           members::UInt32("A"),
+                           members::String("B"),
+                       }).create();
+
+    {
+        auto it = top.iall().begin();
+        auto end = top.iall().end();
+        if(testOk1(it!=end))
+            testEq(top.nameOf(*it), "A");
+        ++it;
+        if(testOk1(it!=end))
+            testEq(top.nameOf(*it), "B");
+        ++it;
+        testOk1(it==end);
+    }
+
+    testOk(top.imarked().begin()==top.imarked().end(), "imarked() empty");
+
+    top["->A"] = 42;
+
+    {
+        auto it = top.imarked().begin();
+        auto end = top.imarked().end();
+        if(testOk1(it!=end))
+            testEq(top.nameOf(*it), "A");
+        ++it;
+        testOk1(it==end);
+    }
+
+    top["->B"] = "test";
+
+    {
+        auto it = top.imarked().begin();
+        auto end = top.imarked().end();
+        if(testOk1(it!=end))
+            testEq(top.nameOf(*it), "B");
+        ++it;
+        testOk1(it==end);
+    }
 }
 
 void testPvRequest()
@@ -264,12 +310,13 @@ void testAssignSimilar()
 
 MAIN(testdata)
 {
-    testPlan(80);
+    testPlan(92);
     testSetup();
     testTraverse();
     testAssign();
     testName();
-    testIter();
+    testIterStruct();
+    testIterUnion();
     testPvRequest();
     testConvertScalar<double, bool>(1.0, true);
     testConvertScalar<double, bool>(0.0, false);
