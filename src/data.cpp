@@ -787,6 +787,19 @@ const Value Value::operator[](const char *name) const
     return ret;
 }
 
+size_t Value::nmembers() const
+{
+    switch(desc ? desc->code.code : TypeCode::Null) {
+    case TypeCode::Struct:
+    case TypeCode::StructA:
+    case TypeCode::Union:
+    case TypeCode::UnionA:
+        return desc->miter.size();
+    default:
+        return 0u;
+    }
+}
+
 void Value::_iter_fl(Value::IterInfo &info, bool first) const
 {
     if(!store)

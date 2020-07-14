@@ -667,6 +667,10 @@ public:
     const Value operator[](const char *name) const;
     inline const Value operator[](const std::string& name) const { return (*this)[name.c_str()]; }
 
+    //! Number of child fields.
+    //! only Struct, StructA, Union, UnionA return non-zero
+    size_t nmembers() const;
+
     template<typename V>
     class Iterable;
 private:
