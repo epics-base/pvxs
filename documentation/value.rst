@@ -72,6 +72,17 @@ All operations on an invalid Value should be safe and well defined.
 In this example, the operator[] lookup of a non-existant field returns an invalid Value.
 Attempting to extract an integer from this will then throw a `pvxs::NoField` exception.
 
+Value
+-----
+
+Field Lookup
+^^^^^^^^^^^^
+
+Access to members of structured types is accomplished through `pvxs::Value::operator[]` or `pvxs::Value::lookup`.
+These two methods differ in how errors are communicated.
+operator[] will return an "invalid" or "empty" Value if the expression does not address a member.
+lookup() will throw an exception describing where and how expression evaluation failed.
+
 Iteration
 ^^^^^^^^^
 
@@ -102,6 +113,8 @@ and will always appear as empty.
 .. doxygenstruct:: pvxs::NoField
 
 .. doxygenstruct:: pvxs::NoConvert
+
+.. doxygenstruct:: pvxs::LookupError
 
 Array fields
 ------------

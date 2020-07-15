@@ -27,6 +27,10 @@ void testTraverse()
 
     testOk1(!top["<"].valid());
 
+    testThrows<std::runtime_error>([&top](){
+        top.lookup("<");
+    });
+
     {
         auto top2 = top["value<"];
         testOk1(top.equalType(top2));
@@ -310,7 +314,7 @@ void testAssignSimilar()
 
 MAIN(testdata)
 {
-    testPlan(92);
+    testPlan(93);
     testSetup();
     testTraverse();
     testAssign();

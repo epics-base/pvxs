@@ -24,6 +24,13 @@ NoConvert::NoConvert()
 
 NoConvert::~NoConvert() {}
 
+LookupError::LookupError(const std::string& msg)
+    :std::runtime_error(msg)
+{}
+
+LookupError::~LookupError() {}
+
+
 std::shared_ptr<const impl::FieldDesc>
 Value::Helper::type(const Value& v)
 {
@@ -636,7 +643,7 @@ bool Value::tryCopyIn(const void *ptr, StoreType type)
     }
 }
 
-void Value::traverse(const std::string &expr, bool modify)
+void Value::traverse(const std::string &expr, bool modify, bool dothrow)
 {
     size_t pos=0;
     bool maybedot = false;
@@ -656,6 +663,8 @@ void Value::traverse(const std::string &expr, bool modify)
                 // at top
                 store.reset();
                 desc = nullptr;
+                if(dothrow)
+                    throw LookupError(SB()<<"Can't traverse to parent of root with '"<<expr<<"'");
                 break;
             }
 
@@ -670,6 +679,8 @@ void Value::traverse(const std::string &expr, bool modify)
                 if(expr[pos]!='.') {
                     store.reset();
                     desc = nullptr;
+                    if(dothrow)
+                        throw LookupError(SB()<<"expected '.' at "<<pos<<" in '"<<expr<<"'");
                     break;
                 }
                 maybedot = false;
@@ -680,7 +691,9 @@ void Value::traverse(const std::string &expr, bool modify)
 
             decltype (desc->mlookup)::const_iterator it;
 
-            if(sep>0 && (it=desc->mlookup.find(expr.substr(pos, sep-pos)))!=desc->mlookup.end()) {
+            const auto& name = expr.substr(pos, sep-pos);
+
+            if(sep>0 && (it=desc->mlookup.find(name))!=desc->mlookup.end()) {
                 // found it
                 auto next = desc+it->second;
                 decltype(store) value(store, store.get()+it->second);
@@ -692,6 +705,8 @@ void Value::traverse(const std::string &expr, bool modify)
                 // no such member
                 store.reset();
                 desc = nullptr;
+                if(dothrow)
+                    throw LookupError(SB()<<"no such member '"<<name<<"' in '"<<expr<<"'");
             }
 
         } else if(desc->code.code==TypeCode::Union || desc->code.code==TypeCode::Any) {
@@ -732,6 +747,8 @@ void Value::traverse(const std::string &expr, bool modify)
                             // traversing const Value, can't select Union
                             store.reset();
                             desc = nullptr;
+                            if(dothrow)
+                                throw LookupError(SB()<<"traversing const Value, can't select Union in '"<<expr<<"'");
                         }
                     }
                 }
@@ -739,6 +756,8 @@ void Value::traverse(const std::string &expr, bool modify)
                 // expected "->"
                 store.reset();
                 desc = nullptr;
+                if(dothrow)
+                    throw LookupError(SB()<<"expected -> in '"<<expr<<"'");
             }
 
         } else if(desc->code.isarray() && desc->code.kind()==Kind::Compound) {
@@ -766,33 +785,53 @@ void Value::traverse(const std::string &expr, bool modify)
                     // wrong element type or out of range
                     store.reset();
                     desc = nullptr;
+                    if(dothrow)
+                        throw std::runtime_error(SB()<<"wrong element type or out of range in '"<<expr<<"'");
                 }
 
             } else {
                 // syntax error
                 store.reset();
                 desc = nullptr;
+                if(dothrow)
+                    throw std::runtime_error(SB()<<"indexing syntax error in '"<<expr<<"'");
             }
 
         } else {
             // syntax error or wrong field type (can't index scalar array)
             store.reset();
             desc = nullptr;
+            if(dothrow)
+                throw std::runtime_error(SB()<<"indexing syntax error or wrong field type (can't index scalar array) in '"<<expr<<"'");
         }
     }
 }
 
-Value Value::operator[](const char *name)
+Value Value::operator[](const std::string& name)
 {
     Value ret(*this);
-    ret.traverse(name, true);
+    ret.traverse(name, true, false);
     return ret;
 }
 
-const Value Value::operator[](const char *name) const
+const Value Value::operator[](const std::string& name) const
 {
     Value ret(*this);
-    ret.traverse(name, false);
+    ret.traverse(name, false, false);
+    return ret;
+}
+
+Value Value::lookup(const std::string& name)
+{
+    Value ret(*this);
+    ret.traverse(name, true, true);
+    return ret;
+}
+
+const Value Value::lookup(const std::string& name) const
+{
+    Value ret(*this);
+    ret.traverse(name, false, true);
     return ret;
 }
 

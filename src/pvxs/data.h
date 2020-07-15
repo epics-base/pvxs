@@ -445,6 +445,12 @@ struct PVXS_API NoConvert : public std::runtime_error
     virtual ~NoConvert();
 };
 
+struct PVXS_API LookupError : public std::runtime_error
+{
+    explicit LookupError(const std::string& msg);
+    virtual ~LookupError();
+};
+
 /** Generic data container
  *
  * References a single data field, which may be free-standing (eg. "int x = 5;")
@@ -644,7 +650,7 @@ public:
 
     // Struct/Union access
 private:
-    void traverse(const std::string& expr, bool modify);
+    void traverse(const std::string& expr, bool modify, bool dothrow);
 public:
 
     /** Attempt to access a descendant field.
@@ -653,7 +659,7 @@ public:
      * * name of a child field.  eg. "value"
      * * name of a descendant field.  eg "alarm.severity"
      * * element of an array of structures.  eg "dimension[0]"
-     * * name of a union field.  eg. "booleanValue"
+     * * name of a union field.  eg. "->booleanValue"
      *
      * These may be composed.  eg.
      *
@@ -662,10 +668,18 @@ public:
      *
      * @returns A valid() Value if the descendant field exists, otherwise an invalid Value.
      */
-    Value operator[](const char *name);
-    inline Value operator[](const std::string& name) { return (*this)[name.c_str()]; }
-    const Value operator[](const char *name) const;
-    inline const Value operator[](const std::string& name) const { return (*this)[name.c_str()]; }
+    Value operator[](const std::string& name);
+    const Value operator[](const std::string& name) const;
+
+    /** Attempt to access a descendant field, or throw exception.
+     *
+     * Acts like operator[] on success, but throws a (hopefully descriptive)
+     * exception instead of returning an invalid Value.
+     *
+     * @throws LookupError If the lookup can not be satisfied
+     */
+    Value lookup(const std::string& name);
+    const Value lookup(const std::string& name) const;
 
     //! Number of child fields.
     //! only Struct, StructA, Union, UnionA return non-zero
