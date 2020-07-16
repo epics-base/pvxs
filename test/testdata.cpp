@@ -83,11 +83,16 @@ void testAssignUnion()
 
     testEq(val.nameOf(val["->"]), "s");
 
+    val = unselect;
+
+    testFalse(val["->"].valid());
+
     testThrows<std::invalid_argument>([&val](){
         val["->u16"] = "hello";
     });
 
-    //val = nullptr;
+    // previous selection succeeds, but assignment fails
+    testTrue(val["->"].valid());
 }
 
 void testName()

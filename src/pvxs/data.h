@@ -37,6 +37,8 @@ enum struct StoreType : uint8_t {
     Array,    //!< shared_array<const void>
 };
 
+constexpr struct unselect_t {} unselect;
+
 namespace impl {
 struct FieldStorage;
 struct FieldDesc;
@@ -86,6 +88,10 @@ struct StorageMap<shared_array<const E>>
 template<>
 struct StorageMap<Value>
 { typedef Value store_t;   static constexpr StoreType code{StoreType::Compound}; };
+
+template<>
+struct StorageMap<unselect_t>
+{ typedef unselect_t store_t; static constexpr StoreType code{StoreType::Null}; };
 
 template<typename T>
 using StoreAs = StorageMap<typename std::decay<T>::type>;
@@ -229,7 +235,7 @@ CASE(std::string, std::string, String);
 
 #undef CASE
 
-} // namespace
+} // namespace impl
 
 //! Definition of a member of a Struct/Union for use with TypeDef
 struct Member {

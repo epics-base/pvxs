@@ -584,12 +584,18 @@ void Value::copyIn(const void *ptr, StoreType type)
         break;
     }
     case StoreType::Compound:
+        if(type==StoreType::Null) {
+            store->as<Value>() = Value(); // unselect Union or Any
+            break;
+        }
+
         if(desc->code==TypeCode::Any) {
             // assigning variant union.
             auto& val = store->as<Value>();
             if(type==StoreType::Compound) {
                 val = *reinterpret_cast<const Value*>(ptr);
                 break;
+
             } else {
                 val = Value::Helper::build(ptr, type);
                 break;
