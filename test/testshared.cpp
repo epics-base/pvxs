@@ -196,11 +196,39 @@ void testFromVector()
     testEq(V.size(), 3u);
 }
 
+void testConvert()
+{
+    testDiag("%s", __func__);
+
+    static_assert (detail::CaptureCode<uint32_t>::code!=detail::CaptureCode<uint16_t>::code, "");
+
+    testArrEq(shared_array<uint32_t>({1u, 2u, 0xffffffffu}).convertTo<uint32_t>(),
+              shared_array<uint32_t>({1u, 2u, 0xffffffffu}));
+
+    testArrEq(shared_array<uint32_t>({1u, 2u, 0xffffffffu}).convertTo<uint16_t>(),
+              shared_array<uint16_t>({1u, 2u, 0xffffu}));
+
+    testArrEq(shared_array<uint32_t>({1u, 2u, 0xffffffffu}).convertTo<int32_t>(),
+              shared_array<int32_t>({1, 2, -1}));
+
+    testArrEq(shared_array<uint32_t>({1u, 2u, 0xffffffffu}).convertTo<int16_t>(),
+              shared_array<int16_t>({1, 2, -1}));
+
+    testArrEq(shared_array<int32_t>({1, 2, -1}).convertTo<uint32_t>(),
+              shared_array<uint32_t>({1u, 2u, 0xffffffffu}));
+
+    testArrEq(shared_array<int32_t>({1, 2, -1}).convertTo<double>(),
+              shared_array<double>({1.0, 2.0, -1.0}));
+
+    testArrEq(shared_array<int32_t>({1, 2, -1}).convertTo<std::string>(),
+              shared_array<std::string>({"1", "2", "-1"}));
+}
+
 } // namespace
 
 MAIN(testshared)
 {
-    testPlan(97);
+    testPlan(104);
     testSetup();
     testEmpty<void>();
     testEmpty<const void>();
@@ -215,5 +243,6 @@ MAIN(testshared)
     testComplex();
     testCast();
     testFromVector();
+    testConvert();
     return testDone();
 }

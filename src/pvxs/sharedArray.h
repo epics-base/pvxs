@@ -474,15 +474,11 @@ public:
     template<typename TO, typename std::enable_if<!std::is_void<TO>::value && (std::is_const<E>::value == std::is_const<TO>::value), int>::type =0>
     shared_array<TO>
     convertTo() const {
-        if(detail::CaptureBase<TO>::code==detail::CaptureBase<E>::code) {
-            return castTo<TO>();
-        } else {
-            shared_array<TO> ret(this->_count);
-            detail::convertArr(detail::CaptureBase<TO>::code, (void*)ret._data.get(),
-                               detail::CaptureBase<E>::code, this->_data.get(),
-                               this->_count);
-            return ret;
-        }
+        shared_array<TO> ret(this->_count);
+        detail::convertArr(detail::CaptureBase<TO>::code, (void*)ret._data.get(),
+                           detail::CaptureBase<E>::code, this->_data.get(),
+                           this->_count);
+        return ret;
     }
 
     //! Provide options when rendering with std::ostream.
