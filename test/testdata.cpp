@@ -67,6 +67,29 @@ void testAssign()
     testOk1(!val["alarm"].isMarked(true, false));
 }
 
+void testAssignUnion()
+{
+    testDiag("%s", __func__);
+
+    auto val = TypeDef(TypeCode::Union, {
+                           members::UInt16("u16"),
+                           members::String("s"),
+                       }).create();
+
+    val["->u16"] = 42;
+    testEq(val.as<std::string>(), "42");
+    val["->s"] = "test";
+    testEq(val.as<std::string>(), "test");
+
+    testEq(val.nameOf(val["->"]), "s");
+
+    testThrows<std::invalid_argument>([&val](){
+        val["->u16"] = "hello";
+    });
+
+    //val = nullptr;
+}
+
 void testName()
 {
     testDiag("%s", __func__);
@@ -314,10 +337,11 @@ void testAssignSimilar()
 
 MAIN(testdata)
 {
-    testPlan(93);
+    testPlan(97);
     testSetup();
     testTraverse();
     testAssign();
+    testAssignUnion();
     testName();
     testIterStruct();
     testIterUnion();

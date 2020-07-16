@@ -715,7 +715,7 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
 
             maybedot = false;
 
-            if(expr.size()-pos >= 3 && expr[pos]=='-' && expr[pos+1]=='>') {
+            if(expr.size()-pos >= 2 && expr[pos]=='-' && expr[pos+1]=='>') {
                 pos += 2; // skip past "->"
 
                 if(desc->code.code==TypeCode::Any) {
@@ -727,10 +727,10 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
                     size_t sep = expr.find_first_of("<[-.", pos);
 
                     decltype (desc->mlookup)::const_iterator it;
+                    auto& fld = store->as<Value>();
 
                     if(sep>0 && (it=desc->mlookup.find(expr.substr(pos, sep-pos)))!=desc->mlookup.end()) {
                         // found it.
-                        auto& fld = store->as<Value>();
 
                         if(modify || fld.desc==&desc->members[it->second]) {
                             // will select, or already selected
@@ -750,6 +750,16 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
                             if(dothrow)
                                 throw LookupError(SB()<<"traversing const Value, can't select Union in '"<<expr<<"'");
                         }
+
+                    } else if(fld.desc) {
+                        // deref selected
+                        *this = fld;
+
+                    } else {
+                        store.reset();
+                        desc = nullptr;
+                        if(dothrow)
+                            throw LookupError(SB()<<"can't deref. empty Union '"<<expr<<"'");
                     }
                 }
             } else {
