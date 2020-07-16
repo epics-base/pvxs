@@ -48,6 +48,7 @@ PVXS_API
 size_t elementSize(ArrayType type);
 
 //! Return a void array usable for the given storage type
+PVXS_API
 shared_array<void> allocArray(ArrayType type, size_t count);
 
 namespace detail {

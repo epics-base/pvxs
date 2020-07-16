@@ -196,6 +196,20 @@ void testFromVector()
     testEq(V.size(), 3u);
 }
 
+void testElemAlloc()
+{
+    testDiag("%s", __func__);
+
+    testEq(elementSize(ArrayType::UInt8), 1u);
+    testEq(elementSize(ArrayType::UInt16), 2u);
+    testEq(elementSize(ArrayType::UInt32), 4u);
+    testEq(elementSize(ArrayType::UInt64), 8u);
+
+    auto varr = allocArray(ArrayType::UInt32, 3u);
+    testEq(varr.size(), 3u);
+    testEq(varr.original_type(), ArrayType::UInt32);
+}
+
 void testConvert()
 {
     testDiag("%s", __func__);
@@ -228,7 +242,7 @@ void testConvert()
 
 MAIN(testshared)
 {
-    testPlan(104);
+    testPlan(110);
     testSetup();
     testEmpty<void>();
     testEmpty<const void>();
@@ -243,6 +257,7 @@ MAIN(testshared)
     testComplex();
     testCast();
     testFromVector();
+    testElemAlloc();
     testConvert();
     return testDone();
 }
