@@ -121,6 +121,8 @@ enum struct Kind : uint8_t {
     Null     = 0xe0,
 };
 
+enum class ArrayType : uint8_t;
+
 /** Possible Field types.
  *
  * eg. String is scalar string, StringA is array of strings.
@@ -183,6 +185,7 @@ struct TypeCode {
     constexpr TypeCode(code_t c) :code(c) {}
 
     PVXS_API StoreType storedAs() const;
+    PVXS_API ArrayType arrayType() const;
 
     //! associated array of type
     constexpr TypeCode arrayOf() const {return TypeCode{uint8_t(code|0x08)};}

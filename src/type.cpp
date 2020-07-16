@@ -80,6 +80,31 @@ StoreType TypeCode::storedAs() const
     }
 }
 
+ArrayType TypeCode::arrayType() const
+{
+    switch(code) {
+#define CASE(ATYPE, TYPE) case TypeCode::TYPE: return ArrayType::ATYPE
+    CASE(Bool, BoolA);
+    CASE(Int8, Int8A);
+    CASE(Int16, Int16A);
+    CASE(Int32, Int32A);
+    CASE(Int64, Int64A);
+    CASE(UInt8, UInt8A);
+    CASE(UInt16, UInt16A);
+    CASE(UInt32, UInt32A);
+    CASE(UInt64, UInt64A);
+    CASE(Float32, Float32A);
+    CASE(Float64, Float64A);
+    CASE(String, StringA);
+    CASE(Value, StructA);
+    CASE(Value, UnionA);
+    CASE(Value, AnyA);
+#undef CASE
+    default:
+        throw std::logic_error("TypeCode can not be mapped to ArrayType");
+    }
+}
+
 const char* TypeCode::name() const
 {
     switch(code) {
