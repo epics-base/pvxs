@@ -47,6 +47,9 @@ std::ostream& operator<<(std::ostream& strm, ArrayType code);
 PVXS_API
 size_t elementSize(ArrayType type);
 
+//! Return a void array usable for the given storage type
+shared_array<void> allocArray(ArrayType type, size_t count);
+
 namespace detail {
 template<typename T>
 struct CaptureCode;

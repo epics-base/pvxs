@@ -62,6 +62,31 @@ size_t elementSize(ArrayType type)
     throw std::logic_error("Invalid ArrayType");
 }
 
+shared_array<void> allocArray(ArrayType type, size_t count)
+{
+    switch(type) {
+#define CASE(CODE, TYPE) case ArrayType::CODE: return shared_array<TYPE>(count).castTo<void>()
+    CASE(Bool, bool);
+    CASE(UInt8, uint8_t);
+    CASE(UInt16, uint16_t);
+    CASE(UInt32, uint32_t);
+    CASE(UInt64, uint64_t);
+    CASE(Int8, int8_t);
+    CASE(Int16, int16_t);
+    CASE(Int32, int32_t);
+    CASE(Int64, int64_t);
+    CASE(Float32, float);
+    CASE(Float64, double);
+    CASE(String, std::string);
+    CASE(Value, Value);
+#undef CASE
+    case ArrayType::Null:
+        break;
+    }
+
+    throw std::logic_error("Invalid ArrayType");
+}
+
 namespace detail {
 
 namespace {
