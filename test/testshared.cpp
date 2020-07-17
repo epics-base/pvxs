@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <pvxs/sharedArray.h>
+#include <pvxs/data.h>
 
 #include <pvxs/unittest.h>
 #include <epicsUnitTest.h>
@@ -136,6 +137,30 @@ void testComplex()
     testEq(*X[0], 4u);
 }
 
+void testValue()
+{
+    testDiag("%s", __func__);
+
+    auto top = TypeDef(TypeCode::UInt32).create();
+
+    shared_array<Value> A(allocArray(ArrayType::Value, 2u).castTo<Value>());
+
+    A[0] = top.cloneEmpty();
+    A[0] = 1u;
+    A[1] = top.cloneEmpty();
+    A[1] = 2u;
+
+    auto varr(A.castTo<void>());
+    testEq(varr.size(), 2u);
+    testEq(varr.original_type(), ArrayType::Value);
+
+    auto B(varr.castTo<Value>());
+
+    testEq(B.size(), 2u);
+    testEq(B.at(0).as<uint32_t>(), 1u);
+    testEq(B.at(1).as<uint32_t>(), 2u);
+}
+
 void testCast()
 {
     testDiag("%s", __func__);
@@ -242,7 +267,7 @@ void testConvert()
 
 MAIN(testshared)
 {
-    testPlan(110);
+    testPlan(115);
     testSetup();
     testEmpty<void>();
     testEmpty<const void>();
@@ -255,6 +280,7 @@ MAIN(testshared)
     testFreeze();
     testFreezeError();
     testComplex();
+    testValue();
     testCast();
     testFromVector();
     testElemAlloc();
