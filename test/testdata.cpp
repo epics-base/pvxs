@@ -149,14 +149,14 @@ void testIterStruct()
     val.unmark();
     val["alarm"].mark();
 
-    testMarked(4u)<<"mark sub-struct";
+    testMarked(4u)<<"mark alarm sub-struct";
 
     val.unmark();
     val["value"].mark(); // 1 field
     val["alarm.status"].mark(); // 1 field
     val["timeStamp"].mark(); // 4 fields (struct node and 3x leaves)
 
-    testMarked(6u)<<"mark sub-struct";
+    testMarked(6u)<<"mark multiple sub-struct";
 }
 
 void testIterUnion()
@@ -342,7 +342,7 @@ void testAssignSimilar()
 
 MAIN(testdata)
 {
-    testPlan(97);
+    testPlan(99);
     testSetup();
     testTraverse();
     testAssign();

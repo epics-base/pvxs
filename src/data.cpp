@@ -609,7 +609,7 @@ void Value::copyIn(const void *ptr, StoreType type)
                 // copy struct to struct
                 // all marked source field may be mapped to destination fields
 
-                for(auto& sfld : src.imarked()) {
+                for(const auto& sfld : src.imarked()) {
                     if(sfld.type()==TypeCode::Struct) {
                         // entire sub-struct marked.
 
@@ -864,84 +864,131 @@ size_t Value::nmembers() const
     }
 }
 
-void Value::_iter_fl(Value::IterInfo &info, bool first) const
+template<>
+Value::Iterable<Value::_IAll>::iterator
+Value::Iterable<Value::_IAll>::end() const noexcept
 {
-    if(!desc || (desc->code!=TypeCode::Struct && desc->code!=TypeCode::Union)) {
-        // not iterable
-        info.pos = info.nextcheck = 0u;
-        return;
+    iterator ret{val, 0u};
+
+    if(val && val.type()==TypeCode::Struct) {
+        ret.pos = val.desc->mlookup.size();
+
+    } else if(val && val.type()==TypeCode::Union) {
+        ret.pos = val.desc->miter.size();
     }
-
-    // Union iteration has no depth
-    if(desc->code.scalarOf()!=TypeCode::Struct)
-        info.depth = false;
-
-    // array instances have no marking
-    if(desc->code.isarray())
-        info.marked = false;
-
-    size_t cnt;
-    if(info.depth)
-        cnt = desc->mlookup.size();
-    else
-        cnt = desc->miter.size();
-
-    info.pos = first ? 0 : cnt;
-
-    if(first && info.marked) {
-        info.nextcheck = info.pos;
-        _iter_advance(info);
-
-    } else {
-        info.nextcheck = cnt+1; // for !marked, never need to check
-    }
+    return ret;
 }
 
-void Value::_iter_advance(IterInfo& info) const
+
+template<>
+Value
+Value::_Iterator<Value::_IAll>::operator*() const noexcept
 {
-    assert(desc);
-    assert(info.marked); // should not be reached for simple iteration
+    Value ret;
 
-    // for Struct, scan to next marked field
-    if(desc->code==TypeCode::Struct) {
-        assert(info.depth); // the following assume
+    if(val.type()==TypeCode::Struct) {
+        decltype (ret.store) store(val.store, val.store.get() + 1u + pos);
+        ret.store = std::move(store);
+        ret.desc = val.desc + 1u + pos;
 
-        // scan forward to find next non-marked
-        for(auto idx : range(info.pos, desc->mlookup.size())) {
-            auto S = store.get() + idx + 1u;
+    } else if(val && val.type()==TypeCode::Union) {
+        auto pos_desc = &val.desc->members[val.desc->miter[pos].second];
+
+        if(val.store->as<Value>().desc==pos_desc) {
+            // pointing to selected Union field
+            ret = val.store->as<Value>();
+
+        } else {
+            std::shared_ptr<const FieldDesc> base(val.store, pos_desc);
+            ret = Value(base);
+        }
+    }
+    return ret;
+}
+
+template<>
+Value::Iterable<Value::_IChildren>::iterator
+Value::Iterable<Value::_IChildren>::end() const noexcept
+{
+    iterator ret{val, 0u};
+
+    if(val && (val.type()==TypeCode::Struct || val.type()==TypeCode::Union)) {
+        ret.pos = val.desc->miter.size();
+    }
+    return ret;
+}
+
+template<>
+Value
+Value::_Iterator<Value::_IChildren>::operator*() const noexcept
+{
+    auto offset = val.desc->miter[pos].second;
+    Value ret;
+
+    if(val.type()==TypeCode::Struct) {
+        decltype (ret.store) store(val.store, val.store.get() + offset);
+        ret.store = std::move(store);
+        ret.desc = val.desc + offset;
+
+    } else if(val && val.type()==TypeCode::Union) {
+        auto pos_desc = &val.desc->members[val.desc->miter[pos].second];
+
+        if(val.store->as<Value>().desc==pos_desc) {
+            // pointing to selected Union field
+            ret = val.store->as<Value>();
+
+        } else {
+            std::shared_ptr<const FieldDesc> base(val.store, pos_desc);
+            ret = Value(base);
+        }
+    }
+    return ret;
+}
+
+static
+void _next_marked(const Value& ref, size_t& pos, size_t& nextcheck)
+{
+    if(pos < nextcheck)
+        return;
+
+    if(ref.type()==TypeCode::Struct) {
+        auto base_desc = Value::Helper::desc(ref);
+
+        while(pos < base_desc->mlookup.size()) {
+            auto desc = base_desc + 1u + pos;
+            auto S = Value::Helper::store_ptr(ref) + 1u + pos;
             if(S->valid) {
-                auto D = desc + idx + 1u;
-                info.pos = idx;
-                info.nextcheck = idx + D->size();
+                nextcheck = pos + desc->size();
                 return;
             }
+
+            ++pos;
         }
+        nextcheck = pos;
 
-        // end of iteration
-        info.pos = desc->mlookup.size();
-        info.nextcheck = info.pos+1;
+    } else if(ref.type()==TypeCode::Union) {
+        auto desc = Value::Helper::desc(ref);
 
-    } else if(desc->code==TypeCode::Union) {
-        assert(!info.depth); // the following assume
+        if(pos >= desc->miter.size())
+            return; // end of iteration
 
-        if(info.pos >= desc->miter.size())
-            return; // at end of iteration
+        const auto& val = Value::Helper::store_ptr(ref)->as<Value>();
+        size_t sel_idx = Value::Helper::desc(val) - desc->members.data();
+        size_t pos_idx = desc->miter[pos].second;
 
-        auto& val = store->as<Value>();
-        auto pos_desc = &desc->members[desc->miter[info.pos].second];
-
-        if(!val || pos_desc > val.desc) {
+        if(!val || pos_idx > sel_idx) {
             // no field selected, or pos is after selection
             // end of iteration
-            info.pos = desc->miter.size();
-            info.nextcheck = info.pos+1;
 
-        } else if(pos_desc < val.desc) {
+            pos = desc->miter.size();
+
+        } else if(pos_idx < sel_idx) {
+            // before selected
             // jump forward to selection
-            for(auto i : range(info.pos, desc->miter.size())) {
-                if(val.desc==&desc->members[desc->miter[i].second]) {
-                    info.pos = i;
-                    info.nextcheck = i+1;
+
+            for(auto i : range(pos, desc->miter.size())) {
+                if(desc->miter[i].second == sel_idx) {
+                    pos = i;
                     return;
                 }
             }
@@ -950,40 +997,64 @@ void Value::_iter_advance(IterInfo& info) const
     }
 }
 
-Value Value::_iter_deref(const IterInfo& info) const
+template<>
+Value::Iterable<Value::_IMarked>::iterator
+Value::Iterable<Value::_IMarked>::begin() const noexcept
+{
+    iterator ret{val, 0u};
+    _next_marked(ret.val, ret.pos, ret.nextcheck);
+    return ret;
+}
+
+template<>
+Value::Iterable<Value::_IMarked>::iterator
+Value::Iterable<Value::_IMarked>::end() const noexcept
+{
+    iterator ret{val, 0u};
+
+    if(val && val.type()==TypeCode::Struct) {
+        ret.pos = val.desc->mlookup.size();
+
+    } else if(val && val.type()==TypeCode::Union) {
+        ret.pos = val.desc->miter.size();
+    }
+    ret.nextcheck = ret.pos;
+    return ret;
+}
+
+template<>
+Value
+Value::_Iterator<Value::_IMarked>::operator*() const noexcept
 {
     Value ret;
 
-    if(desc->code==TypeCode::Struct) {
-        auto idx = info.pos;
-        if(info.depth)
-            idx++; // indexing starts with FieldDesc after top
-        else
-            idx = desc->miter[idx].second;
+    if(val.type()==TypeCode::Struct) {
+        decltype (ret.store) store(val.store, val.store.get() + 1u + pos);
+        ret.store = std::move(store);
+        ret.desc = val.desc + 1u + pos;
 
-        assert(idx>0u);
-        assert(idx<desc->size());
-        decltype (store) store2(store, store.get()+idx);
-        ret.store = std::move(store2);
-        ret.desc = desc + idx;
+    } else if(val && val.type()==TypeCode::Union) {
+        auto pos_desc = &val.desc->members[val.desc->miter[pos].second];
 
-    } else if(desc->code==TypeCode::Union) {
-        auto pos_desc = &desc->members[desc->miter[info.pos].second];
-
-        if(desc->code==TypeCode::Union && store->as<Value>().desc==pos_desc) {
+        if(val.store->as<Value>().desc==pos_desc) {
             // pointing to selected Union field
-            ret = store->as<Value>();
+            ret = val.store->as<Value>();
 
         } else {
-            // array, or not selected union field.
-            // allocate temporary
-
-            std::shared_ptr<const FieldDesc> base(store, pos_desc);
+            std::shared_ptr<const FieldDesc> base(val.store, pos_desc);
             ret = Value(base);
         }
     }
-
     return ret;
+}
+
+template<>
+Value::_Iterator<Value::_IMarked>&
+Value::_Iterator<Value::_IMarked>::operator++() noexcept
+{
+    pos++;
+    _next_marked(val, pos, nextcheck);
+    return *this;
 }
 
 namespace impl {

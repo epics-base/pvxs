@@ -694,36 +694,25 @@ public:
     //! only Struct, StructA, Union, UnionA return non-zero
     size_t nmembers() const;
 
-    template<typename V>
-    class Iterable;
-private:
-    struct IterInfo {
-        // when Marked==true, index of next potentially unmarked field.
-        // all [pos, nextcheck) are marked
-        size_t pos;
-        size_t nextcheck;
-        // true only iterates marked fields (Struct),
-        // or only the selected field (Union)
-        bool marked;
-        // false only iterates children (Struct only)
-        bool depth;
-        constexpr IterInfo() :pos(0u), nextcheck(0u), marked(false), depth(false) {}
-        constexpr IterInfo(size_t pos, bool marked, bool depth)
-            :pos(pos), nextcheck(pos), marked(marked), depth(depth)
-        {}
+    struct _IAll {};
+    struct _IChildren {};
+    struct _IMarked {
+        size_t nextcheck=0u;
     };
-    template<typename V>
-    class Iter;
-    template<typename V>
-    friend class Iter;
-
-    void _iter_fl(IterInfo& info, bool first) const;
-    void _iter_advance(IterInfo& info) const;
-    Value _iter_deref(const IterInfo& info) const;
+private:
+    template<typename T>
+    struct _Iterator;
+    template<typename T>
+    friend struct _Iterator;
 public:
+    template<typename T>
+    struct Iterable;
+    template<typename T>
+    friend struct Iterable;
 
-    template<typename V>
-    class Iterable;
+    typedef Iterable<_IAll> IAll;
+    typedef Iterable<_IChildren> IChildren;
+    typedef Iterable<_IMarked> IMarked;
 
     /** Depth-first iteration of all descendant fields
      *
@@ -735,20 +724,13 @@ public:
      * @endcode
      */
     inline
-    Iterable<Value> iall();
+    IAll iall() const noexcept;
     //! iteration of all child fields
     inline
-    Iterable<Value> ichildren();
+    IChildren ichildren() const noexcept;
     //! Depth-first iteration of all marked descendant fields
     inline
-    Iterable<Value> imarked();
-
-    inline
-    Iterable<const Value> iall() const;
-    inline
-    Iterable<const Value> ichildren() const;
-    inline
-    Iterable<const Value> imarked() const;
+    IMarked imarked() const noexcept;
 
     struct Fmt {
         const Value* top = nullptr;
@@ -769,61 +751,126 @@ public:
     inline Fmt format() const { return Fmt(this); }
 };
 
-template<typename V>
-class Value::Iter : private Value::IterInfo {
-    Value ref;
-    constexpr Iter(const Value& ref, size_t pos, bool marked, bool depth)
-        :IterInfo(pos, marked, depth), ref(ref)
-    {}
+template<typename T>
+struct Value::_Iterator : private T
+{
+private:
+    Value val;
+    size_t pos = 0u;
     friend class Value;
-    friend class Iterable<V>;
+    friend struct Iterable<T>;
+    constexpr _Iterator(const Value& val, size_t pos) : val(val), pos(pos) {}
 public:
-    Iter() :ref(nullptr) {}
-
-    V operator*() const { return ref._iter_deref(*this); }
-    Iter& operator++() {
-        pos++;
-        if(pos >= nextcheck)
-            ref._iter_advance(*this);
-        return *this;
-    }
-    Iter operator++(int) {
-        Iter ret(*this);
+    _Iterator() = default;
+    Value operator*() const noexcept; // specialized per- _IterKind
+    _Iterator& operator++() noexcept; // specialized per- _IterKind
+    _Iterator operator++(int) noexcept {
+        _Iterator ret(*this);
         ++(*this);
         return ret;
     }
-    bool operator==(const Iter& o) const { return pos == o.pos; }
-    bool operator!=(const Iter& o) const { return !(o==*this); }
+    inline bool operator==(const _Iterator& o) const noexcept { return pos==o.pos; }
+    inline bool operator!=(const _Iterator& o) const noexcept { return pos!=o.pos; }
 };
 
-template<typename V>
-class Value::Iterable {
-    Value owner;
-    bool marked = false;
-    bool depth = false;
+template<typename T>
+struct Value::Iterable
+{
+private:
+    Value val;
+    friend class Value;
 public:
-    typedef Iter<V> iterator;
-    constexpr Iterable() = default;
-    constexpr Iterable(const Value& owner, bool marked, bool depth) :owner(owner), marked(marked), depth(depth) {}
-    iterator begin() const {
-        iterator ret{owner, 0u, marked, depth};
-        owner._iter_fl(ret, true);
-        return ret;
-    }
-    iterator end() const {
-        iterator ret{owner, 0u, marked, depth};
-        owner._iter_fl(ret, false);
-        return ret;
-    }
+    Iterable() = default;
+    explicit Iterable(const Value* val) :val(*val) {}
+    typedef _Iterator<T> iterator;
+    iterator begin() const noexcept; // specialized per- _IterKind
+    iterator end() const noexcept; // specialized per- _IterKind
 };
 
-Value::Iterable<Value> Value::iall()      { return Iterable<Value>{*this, false, true}; }
-Value::Iterable<Value> Value::ichildren() { return Iterable<Value>{*this, false, false}; }
-Value::Iterable<Value> Value::imarked()   { return Iterable<Value>{*this, true , true}; }
+template<>
+inline
+Value::Iterable<Value::_IAll>::iterator
+Value::Iterable<Value::_IAll>::begin() const noexcept {
+    return iterator(val, 0u); // always start pos==0
+}
 
-Value::Iterable<const Value> Value::iall() const      { return Iterable<const Value>{*this, false, true}; }
-Value::Iterable<const Value> Value::ichildren() const { return Iterable<const Value>{*this, false, false}; }
-Value::Iterable<const Value> Value::imarked() const   { return Iterable<const Value>{*this, true , true}; }
+template<>
+PVXS_API
+Value::Iterable<Value::_IAll>::iterator
+Value::Iterable<Value::_IAll>::end() const noexcept;
+
+template<>
+PVXS_API
+Value
+Value::_Iterator<Value::_IAll>::operator*() const noexcept;
+
+template<>
+inline
+Value::_Iterator<Value::_IAll>&
+Value::_Iterator<Value::_IAll>::operator++() noexcept {
+    pos++;
+    return *this;
+}
+
+template<>
+inline
+Value::Iterable<Value::_IChildren>::iterator
+Value::Iterable<Value::_IChildren>::begin() const noexcept {
+    return iterator(val, 0u); // always start pos==0
+}
+
+template<>
+PVXS_API
+Value::Iterable<Value::_IChildren>::iterator
+Value::Iterable<Value::_IChildren>::end() const noexcept;
+
+template<>
+PVXS_API
+Value
+Value::_Iterator<Value::_IChildren>::operator*() const noexcept;
+
+template<>
+inline
+Value::_Iterator<Value::_IChildren>&
+Value::_Iterator<Value::_IChildren>::operator++() noexcept {
+    pos++;
+    return *this;
+}
+
+template<>
+PVXS_API
+Value::Iterable<Value::_IMarked>::iterator
+Value::Iterable<Value::_IMarked>::begin() const noexcept;
+
+template<>
+PVXS_API
+Value::Iterable<Value::_IMarked>::iterator
+Value::Iterable<Value::_IMarked>::end() const noexcept;
+
+template<>
+PVXS_API
+Value
+Value::_Iterator<Value::_IMarked>::operator*() const noexcept;
+
+template<>
+PVXS_API
+Value::_Iterator<Value::_IMarked>&
+Value::_Iterator<Value::_IMarked>::operator++() noexcept;
+
+Value::Iterable<Value::_IAll>
+Value::iall() const noexcept {
+    return Iterable<Value::_IAll>{this};
+}
+
+Value::Iterable<Value::_IChildren>
+Value::ichildren() const noexcept {
+    return Iterable<Value::_IChildren>{this};
+}
+
+Value::Iterable<Value::_IMarked>
+Value::imarked() const noexcept {
+    return Iterable<Value::_IMarked>{this};
+}
 
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const Value::Fmt& fmt);
