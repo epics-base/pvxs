@@ -512,9 +512,41 @@ void Value::copyIn(const void *ptr, StoreType type)
         throw NoField();
 
     switch(store->code) {
-    case StoreType::Real:     if(!copyInScalar(store->as<double>(), ptr, type)) throw NoConvert(); break;
-    case StoreType::Integer:  if(!copyInScalar(store->as<int64_t>(), ptr, type)) throw NoConvert(); break;
-    case StoreType::UInteger: if(!copyInScalar(store->as<uint64_t>(), ptr, type)) throw NoConvert(); break;
+    case StoreType::Real: {
+        if(!copyInScalar(store->as<double>(), ptr, type)) throw NoConvert();
+        // truncate as if assigned to narrower type
+        if(desc->code==TypeCode::Float32)
+            store->as<double>() = float(store->as<double>());
+        break;
+    }
+    case StoreType::Integer: {
+        if(!copyInScalar(store->as<int64_t>(), ptr, type)) throw NoConvert();
+        // truncate as if assigned to narrower type
+        int64_t orig = store->as<int64_t>();
+        switch(desc->code.code) {
+        case TypeCode::Int8: orig = int8_t(orig); break;
+        case TypeCode::Int16: orig = int16_t(orig); break;
+        case TypeCode::Int32: orig = int32_t(orig); break;
+        case TypeCode::Int64: orig = int64_t(orig); break;
+        default: break;
+        }
+        store->as<int64_t>() = orig;
+        break;
+    }
+    case StoreType::UInteger: {
+        if(!copyInScalar(store->as<uint64_t>(), ptr, type)) throw NoConvert();
+        // truncate as if assigned to narrower type
+        int64_t orig = store->as<int64_t>();
+        switch(desc->code.code) {
+        case TypeCode::UInt8: orig = uint8_t(orig); break;
+        case TypeCode::UInt16: orig = uint16_t(orig); break;
+        case TypeCode::UInt32: orig = uint32_t(orig); break;
+        case TypeCode::UInt64: orig = uint64_t(orig); break;
+        default: break;
+        }
+        store->as<int64_t>() = orig;
+        break;
+    }
     case StoreType::Bool: {
         auto& dest = store->as<bool>();
         switch(type) {

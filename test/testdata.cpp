@@ -273,6 +273,26 @@ void testConvertScalar(const Store& store, const Inout& inout)
     testEq(inout, cont.as<Inout>())<<typeid(Store).name()<<"->"<<typeid(Inout).name();
 }
 
+template<typename Store, typename In, typename Out>
+void testConvertScalar2(const Store& store, const In& in, const Out& out)
+{
+    testShow()<<__func__<<"("<<store<<","<<in<<","<<out<<")";
+
+    typedef impl::ScalarMap<Store> store_t;
+
+    auto cont = TypeDef(store_t::code).create();
+
+    try {
+        cont.from(in);
+    }catch(std::exception& e){
+        testCase(false)<<"Error storing as "<<typeid (Store).name()<<" "<<in<<" : "<<e.what();
+    }
+
+    testEq(store, cont.as<Store>())<<typeid(Store).name();
+
+    testEq(out, cont.as<Out>())<<typeid(Store).name()<<"->"<<typeid(Out).name();
+}
+
 void testAssignSimilar()
 {
     testShow()<<__func__;
@@ -342,7 +362,7 @@ void testAssignSimilar()
 
 MAIN(testdata)
 {
-    testPlan(99);
+    testPlan(111);
     testSetup();
     testTraverse();
     testAssign();
@@ -351,6 +371,7 @@ MAIN(testdata)
     testIterStruct();
     testIterUnion();
     testPvRequest();
+
     testConvertScalar<double, bool>(1.0, true);
     testConvertScalar<double, bool>(0.0, false);
     testConvertScalar<double, uint32_t>(5.0, 5);
@@ -365,6 +386,10 @@ MAIN(testdata)
     testConvertScalar<int32_t, int32_t>(-5, -5);
     testConvertScalar<int32_t, double>(-5, -5.0);
     testConvertScalar<int32_t, std::string>(-5, "-5");
+    testConvertScalar<uint32_t, int32_t>(0xffffffff, -1);
+    testConvertScalar<uint32_t, int16_t>(0xffffffff, -1);
+    testConvertScalar<uint16_t, int32_t>(0xffff, 0xffff);
+    testConvertScalar<uint32_t, int32_t>(0x80000000, -2147483648);
     testConvertScalar<std::string, bool>("true", true);
     testConvertScalar<std::string, bool>("false", false);
     testConvertScalar<std::string, uint32_t>("5", 5);
@@ -372,6 +397,10 @@ MAIN(testdata)
     testConvertScalar<std::string, int32_t>("-5", -5);
     testConvertScalar<std::string, double>("-5", -5.0);
     testConvertScalar<std::string, std::string>("-5", "-5");
+
+    testConvertScalar2<int32_t, uint64_t, int64_t>(-2147483648, 0x80000000, -2147483648);
+    testConvertScalar2<int32_t, uint64_t, int64_t>(0, 0x100000000llu, -0);
+
     testAssignSimilar();
     cleanup_for_valgrind();
     return testDone();

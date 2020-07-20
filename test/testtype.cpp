@@ -28,6 +28,31 @@ void showSize()
 #undef CASE
 }
 
+void testCode()
+{
+    testDiag("%s()", __func__);
+
+    testEq(TypeCode{TypeCode::UInt8}.size(), 1u);
+    testEq(TypeCode{TypeCode::UInt16}.size(), 2u);
+    testEq(TypeCode{TypeCode::UInt32}.size(), 4u);
+    testEq(TypeCode{TypeCode::UInt64}.size(), 8u);
+
+    testEq(TypeCode{TypeCode::UInt8A}.size(), 1u);
+    testEq(TypeCode{TypeCode::UInt16A}.size(), 2u);
+    testEq(TypeCode{TypeCode::UInt32A}.size(), 4u);
+    testEq(TypeCode{TypeCode::UInt64A}.size(), 8u);
+
+    testEq(TypeCode{TypeCode::Int8}.size(), 1u);
+    testEq(TypeCode{TypeCode::Int16}.size(), 2u);
+    testEq(TypeCode{TypeCode::Int32}.size(), 4u);
+    testEq(TypeCode{TypeCode::Int64}.size(), 8u);
+
+    testEq(TypeCode{TypeCode::Int8A}.size(), 1u);
+    testEq(TypeCode{TypeCode::Int16A}.size(), 2u);
+    testEq(TypeCode{TypeCode::Int32A}.size(), 4u);
+    testEq(TypeCode{TypeCode::Int64A}.size(), 8u);
+}
+
 void testBasic()
 {
     testDiag("%s()", __func__);
@@ -460,9 +485,10 @@ void testFormat()
 
 MAIN(testtype)
 {
-    testPlan(29);
+    testPlan(45);
     testSetup();
     showSize();
+    testCode();
     testBasic();
     testTypeDef();
     testTypeDefDynamic();
