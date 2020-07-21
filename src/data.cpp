@@ -18,10 +18,6 @@ NoField::NoField()
 
 NoField::~NoField() {}
 
-NoConvert::NoConvert()
-    :std::runtime_error ("No conversion defined")
-{}
-
 NoConvert::~NoConvert() {}
 
 LookupError::LookupError(const std::string& msg)
@@ -457,8 +453,6 @@ void Value::copyOut(void *ptr, StoreType type) const
             src.copyOut(ptr, type);
             return;
 
-        } else {
-            throw NoConvert();
         }
 
         break;
@@ -467,7 +461,7 @@ void Value::copyOut(void *ptr, StoreType type) const
         break;
     }
 
-    throw NoConvert();
+    throw NoConvert(SB()<<"Can't extract "<<this->type()<<" as "<<type);
 }
 
 bool Value::tryCopyOut(void *ptr, StoreType type) const
@@ -513,14 +507,14 @@ void Value::copyIn(const void *ptr, StoreType type)
 
     switch(store->code) {
     case StoreType::Real: {
-        if(!copyInScalar(store->as<double>(), ptr, type)) throw NoConvert();
+        if(!copyInScalar(store->as<double>(), ptr, type)) throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
         // truncate as if assigned to narrower type
         if(desc->code==TypeCode::Float32)
             store->as<double>() = float(store->as<double>());
         break;
     }
     case StoreType::Integer: {
-        if(!copyInScalar(store->as<int64_t>(), ptr, type)) throw NoConvert();
+        if(!copyInScalar(store->as<int64_t>(), ptr, type)) throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
         // truncate as if assigned to narrower type
         int64_t orig = store->as<int64_t>();
         switch(desc->code.code) {
@@ -534,7 +528,7 @@ void Value::copyIn(const void *ptr, StoreType type)
         break;
     }
     case StoreType::UInteger: {
-        if(!copyInScalar(store->as<uint64_t>(), ptr, type)) throw NoConvert();
+        if(!copyInScalar(store->as<uint64_t>(), ptr, type)) throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
         // truncate as if assigned to narrower type
         int64_t orig = store->as<int64_t>();
         switch(desc->code.code) {
@@ -559,7 +553,7 @@ void Value::copyIn(const void *ptr, StoreType type)
             else if("false"==*reinterpret_cast<const std::string*>(ptr)) { dest = false; break; }
             // fall through
         default:
-            throw NoConvert();
+            throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
         }
         break;
     }
@@ -573,7 +567,7 @@ void Value::copyIn(const void *ptr, StoreType type)
         case StoreType::Real:     dest = SB()<<*reinterpret_cast<const double*>(ptr); break;
         case StoreType::Bool:     dest = (*reinterpret_cast<const bool*>(ptr)) ? "true" : "false"; break;
         default:
-            throw NoConvert();
+            throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
         }
         break;
     }
@@ -594,7 +588,7 @@ void Value::copyIn(const void *ptr, StoreType type)
                     // enforce member type for Struct[] and Union[]
                     for(auto& val : tsrc) {
                         if(val.desc && val.desc!=desc->members.data()) {
-                            throw NoConvert();
+                            throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
                         }
                     }
                 }
@@ -606,12 +600,12 @@ void Value::copyIn(const void *ptr, StoreType type)
 
             } else {
                 // TODO: alloc and convert
-                throw NoConvert();
+                throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
             }
             break;
         }
         default:
-            throw NoConvert();
+            throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
         }
         break;
     }
@@ -633,7 +627,7 @@ void Value::copyIn(const void *ptr, StoreType type)
                 break;
             }
         }
-        throw NoConvert();
+        throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
     case StoreType::Null:
         if(type==StoreType::Compound) {
             auto& src = *reinterpret_cast<const Value*>(ptr);
@@ -663,7 +657,7 @@ void Value::copyIn(const void *ptr, StoreType type)
                 return;
             }
         }
-        throw NoConvert();
+        throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
     }
 
     mark();

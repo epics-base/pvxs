@@ -12,6 +12,24 @@
 
 namespace pvxs {
 
+std::ostream& operator<<(std::ostream& strm, StoreType c)
+{
+    const char* name = "<\?\?\?>";
+    switch(c) {
+#define CASE(CODE) case StoreType::CODE: name = #CODE; break
+    CASE(Null);
+    CASE(Bool);
+    CASE(Real);
+    CASE(Integer);
+    CASE(UInteger);
+    CASE(String);
+    CASE(Compound);
+    CASE(Array);
+#undef CASE
+    }
+    return strm<<name;
+}
+
 struct Member::Helper {
     static
     void node_validate(const Member* parent, const std::string& id, TypeCode code);

@@ -87,7 +87,7 @@ void testAssignUnion()
 
     testFalse(val["->"].valid());
 
-    testThrows<std::invalid_argument>([&val](){
+    testThrows<NoConvert>([&val](){
         val["->u16"] = "hello";
     });
 

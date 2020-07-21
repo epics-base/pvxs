@@ -37,6 +37,9 @@ enum struct StoreType : uint8_t {
     Array,    //!< shared_array<const void>
 };
 
+PVXS_API
+std::ostream& operator<<(std::ostream& strm, StoreType c);
+
 constexpr struct unselect_t {} unselect;
 
 namespace impl {
@@ -450,7 +453,7 @@ struct PVXS_API NoField : public std::runtime_error
 //! Thrown when a Value can not be converted to the requested type
 struct PVXS_API NoConvert : public std::runtime_error
 {
-    explicit NoConvert();
+    NoConvert(const std::string& msg) : std::runtime_error(msg) {}
     virtual ~NoConvert();
 };
 
@@ -521,7 +524,7 @@ public:
     //! Use to allocate members for an array of Struct and array of Union
     Value allocMember();
 
-    //! Does this Value actual reference some underlying storage
+    //! Does this Value actually reference some underlying storage
     inline bool valid() const { return desc; }
     inline explicit operator bool() const { return desc; }
 
@@ -581,6 +584,9 @@ public:
      * - std::string
      * - Value
      * - shared_array<const void>
+     *
+     * @throws NoField !this->valid()
+     * @throws NoConvert if the field value can not be coerced to type T
      */
     template<typename T>
     inline T as() const {

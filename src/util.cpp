@@ -386,30 +386,51 @@ namespace pvxs {namespace impl {
 template<>
 double parseTo<double>(const std::string& s) {
     size_t idx=0, L=s.size();
-    double ret = std::stod(s, &idx);
+    double ret;
+    try {
+        ret = std::stod(s, &idx);
+    }catch(std::invalid_argument& e) {
+        throw NoConvert(SB()<<"Invalid input : \""<<escape(s)<<"\"");
+    }catch(std::out_of_range& e) {
+        throw NoConvert(SB()<<"Out of range : \""<<escape(s)<<"\"");
+    }
     for(; idx<L && isspace(s[idx]); idx++) {}
     if(idx<L)
-        throw std::invalid_argument(SB()<<"Extraneous charactors after double: \""<<escape(s)<<"\"");
+        NoConvert(SB()<<"Extraneous characters after double: \""<<escape(s)<<"\"");
     return ret;
 }
 
 template<>
 uint64_t parseTo<uint64_t>(const std::string& s) {
     size_t idx=0, L=s.size();
-    unsigned long long ret = std::stoull(s, &idx, 0);
+    unsigned long long ret;
+    try {
+        ret = std::stoull(s, &idx, 0);
+    }catch(std::invalid_argument& e) {
+        throw NoConvert(SB()<<"Invalid input : \""<<escape(s)<<"\"");
+    }catch(std::out_of_range& e) {
+        throw NoConvert(SB()<<"Out of range : \""<<escape(s)<<"\"");
+    }
     for(; idx<L && isspace(s[idx]); idx++) {}
     if(idx<L)
-        throw std::invalid_argument(SB()<<"Extraneous charactors after integer: \""<<escape(s)<<"\"");
+        throw NoConvert(SB()<<"Extraneous characters after integer: \""<<escape(s)<<"\"");
     return ret;
 }
 
 template<>
 int64_t parseTo<int64_t>(const std::string& s) {
     size_t idx=0, L=s.size();
-    long long ret = std::stoll(s, &idx, 0);
+    long long ret;
+    try {
+        ret = std::stoll(s, &idx, 0);
+    }catch(std::invalid_argument& e) {
+        throw NoConvert(SB()<<"Invalid input : \""<<escape(s)<<"\"");
+    }catch(std::out_of_range& e) {
+        throw NoConvert(SB()<<"Out of range : \""<<escape(s)<<"\"");
+    }
     for(; idx<L && isspace(s[idx]); idx++) {}
     if(idx<L)
-        throw std::invalid_argument(SB()<<"Extraneous charactors after unsigned: \""<<escape(s)<<"\"");
+        throw NoConvert(SB()<<"Extraneous characters after unsigned: \""<<escape(s)<<"\"");
     return ret;
 }
 
