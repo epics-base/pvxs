@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <iterator>
 
 #include <dbDefs.h>
 #include <osiSock.h>
@@ -48,17 +49,40 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
     }
 }
 
-const char* pickenv(const char** picked, std::initializer_list<const char*> names)
+std::string join_addr(const std::vector<std::string>& in)
 {
-    for(auto name : names) {
-        if(auto val = getenv(name)) {
-            if(picked)
-                *picked = name;
-            return val;
-        }
-    }
-    return nullptr;
+    std::ostringstream strm;
+    std::copy(in.begin(), in.end(), std::ostream_iterator<std::string>(strm, " "));
+    return strm.str();
 }
+
+struct PickOne {
+    const std::map<std::string, std::string>& defs;
+    bool useenv;
+
+    std::string name, val;
+
+    bool operator()(std::initializer_list<const char*> names) {
+        for(auto candidate : names) {
+            if(useenv) {
+                if(auto eval = getenv(candidate)) {
+                    name = candidate;
+                    val = eval;
+                    return true;
+                }
+
+            } else {
+                auto it = defs.find(candidate);
+                if(it!=defs.end()) {
+                    name = candidate;
+                    val = it->second;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+};
 
 template<typename Fn>
 struct cleaner {
@@ -126,47 +150,50 @@ void removeDups(std::vector<std::string>& addrs)
 
 namespace server {
 
-Config Config::from_env()
+static
+void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv)
 {
-    Config ret;
+    PickOne pickone{defs, useenv};
 
-    const char* name;
-
-    if(const char *env = pickenv(&name, {"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
+    if(pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
         try {
-            ret.tcp_port = parseTo<uint64_t>(env);
+            self.tcp_port = parseTo<uint64_t>(pickone.val);
         }catch(std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
+            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
 
-    if(const char *env = pickenv(&name, {"EPICS_PVAS_BROADCAST_PORT", "EPICS_PVA_BROADCAST_PORT"})) {
+    if(pickone({"EPICS_PVAS_BROADCAST_PORT", "EPICS_PVA_BROADCAST_PORT"})) {
         try {
-            ret.udp_port = parseTo<uint64_t>(env);
+            self.udp_port = parseTo<uint64_t>(pickone.val);
         }catch(std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
+            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
 
-    if(const char *env = pickenv(&name, {"EPICS_PVAS_INTF_ADDR_LIST"})) {
-        split_addr_into(name, ret.interfaces, env, ret.tcp_port);
+    if(pickone({"EPICS_PVAS_INTF_ADDR_LIST"})) {
+        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, self.tcp_port);
     }
 
-    if(auto env = pickenv(&name, {"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(name, ret.beaconDestinations, env, ret.udp_port);
+    if(pickone({"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
+        split_addr_into(pickone.name.c_str(), self.beaconDestinations, pickone.val, self.udp_port);
     }
 
-    if(const char *env = pickenv(&name, {"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
-        if(epicsStrCaseCmp(env, "YES")==0) {
-            ret.auto_beacon = true;
-        } else if(epicsStrCaseCmp(env, "NO")==0) {
-            ret.auto_beacon = false;
+    if(pickone({"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
+        if(epicsStrCaseCmp(pickone.val.c_str(), "YES")==0) {
+            self.auto_beacon = true;
+        } else if(epicsStrCaseCmp(pickone.val.c_str(), "NO")==0) {
+            self.auto_beacon = false;
         } else {
-            log_err_printf(serversetup, "%s invalid bool value (YES/NO)", name);
+            log_err_printf(serversetup, "%s invalid bool value (YES/NO)", pickone.name.c_str());
         }
     }
+}
 
-    return ret;
+Config& Config::applyEnv()
+{
+    _fromDefs(*this, std::map<std::string, std::string>(), true);
+    return *this;
 }
 
 Config Config::isolated()
@@ -180,6 +207,21 @@ Config Config::isolated()
     ret.beaconDestinations.emplace_back("127.0.0.1");
 
     return ret;
+}
+
+Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
+{
+    _fromDefs(*this, defs, false);
+    return *this;
+}
+
+void Config::updateDefs(defs_t& defs) const
+{
+    defs["EPICS_PVAS_BROADCAST_PORT"] = SB()<<udp_port;
+    defs["EPICS_PVAS_SERVER_PORT"] = SB()<<tcp_port;
+    defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = auto_beacon ? "YES" : "NO";
+    defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
+    defs["EPICS_PVAS_INTF_ADDR_LIST"] = join_addr(interfaces);
 }
 
 void Config::expand()
@@ -238,39 +280,55 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
 
 namespace client {
 
-Config Config::from_env()
+static
+void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv)
 {
-    Config ret;
+    PickOne pickone{defs, useenv};
 
-    const char* name;
-
-    if(const char *env = pickenv(&name, {"EPICS_PVA_BROADCAST_PORT"})) {
+    if(pickone({"EPICS_PVA_BROADCAST_PORT"})) {
         try {
-            ret.udp_port = parseTo<uint64_t>(env);
+            self.udp_port = parseTo<uint64_t>(pickone.val);
         }catch(std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", name, e.what());
+            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
-    if(ret.udp_port==0u) {
+    if(self.udp_port==0u) {
         log_err_printf(serversetup, "ignoring EPICS_PVA_BROADCAST_PORT=%d", 0);
-        ret.udp_port = 5076;
+        self.udp_port = 5076;
     }
 
-    if(const char *env = pickenv(&name, {"EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(name, ret.addressList, env, ret.udp_port);
+    if(pickone({"EPICS_PVA_ADDR_LIST"})) {
+        split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, self.udp_port);
     }
 
-    if(const char *env = pickenv(&name, {"EPICS_PVA_AUTO_ADDR_LIST"})) {
-        if(epicsStrCaseCmp(env, "YES")==0) {
-            ret.autoAddrList = true;
-        } else if(epicsStrCaseCmp(env, "NO")==0) {
-            ret.autoAddrList = false;
+    if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
+        if(epicsStrCaseCmp(pickone.val.c_str(), "YES")==0) {
+            self.autoAddrList = true;
+        } else if(epicsStrCaseCmp(pickone.val.c_str(), "NO")==0) {
+            self.autoAddrList = false;
         } else {
-            log_err_printf(serversetup, "%s invalid bool value (YES/NO)", name);
+            log_err_printf(serversetup, "%s invalid bool value (YES/NO)", pickone.name.c_str());
         }
     }
+}
 
-    return ret;
+Config& Config::applyEnv()
+{
+    _fromDefs(*this, std::map<std::string, std::string>(), true);
+    return *this;
+}
+
+Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
+{
+    _fromDefs(*this, defs, false);
+    return *this;
+}
+
+void Config::updateDefs(defs_t& defs) const
+{
+    defs["EPICS_PVA_BROADCAST_PORT"] = SB()<<udp_port;
+    defs["EPICS_PVA_AUTO_ADDR_LIST"] = autoAddrList ? "YES" : "NO";
+    defs["EPICS_PVA_ADDR_LIST"] = join_addr(interfaces);
 }
 
 void Config::expand()

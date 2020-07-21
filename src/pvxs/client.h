@@ -8,6 +8,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <map>
 #include <vector>
 #include <memory>
 #include <functional>
@@ -625,8 +626,23 @@ struct PVXS_API Config {
     //! Whether to extend the addressList with local interface broadcast addresses.  (recommended)
     bool autoAddrList = true;
 
+    // compat
+    static inline Config from_env() { return Config{}.applyEnv(); }
+
     //! Default configuration using process environment
-    static Config from_env();
+    static inline Config fromEnv()  { return Config{}.applyEnv(); }
+
+    //! update using defined EPICS_PVA* environment variables
+    Config& applyEnv();
+
+    typedef std::map<std::string, std::string> defs_t;
+    //! update with definitions as with EPICS_PVA* environment variables
+    //! Process environment is not changed.
+    Config& applyDefs(const defs_t& defs);
+
+    //! extract definitions with environment variable names as keys.
+    //! Process environment is not changed.
+    void updateDefs(defs_t& defs) const;
 
     /** Apply rules to translate current requested configuration
      *  into one which can actually be loaded based on current host network configuration.

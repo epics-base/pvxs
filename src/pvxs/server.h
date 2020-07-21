@@ -13,6 +13,7 @@
 #include <string>
 #include <tuple>
 #include <set>
+#include <map>
 #include <vector>
 #include <memory>
 #include <array>
@@ -131,12 +132,27 @@ struct PVXS_API Config {
     //! Server unique ID.  Only meaningful in readback via Server::config()
     std::array<uint8_t, 12> guid{};
 
+    // compat
+    static inline Config from_env() { return Config{}.applyEnv(); }
+
     //! Default configuration using process environment
-    static Config from_env();
+    static inline Config fromEnv()  { return Config{}.applyEnv(); }
 
     //! Configuration limited to the local loopback interface on a randomly chosen port.
     //! Suitable for use in self-contained unit-tests.
     static Config isolated();
+
+    //! update using defined EPICS_PVA* environment variables
+    Config& applyEnv();
+
+    typedef std::map<std::string, std::string> defs_t;
+    //! update with definitions as with EPICS_PVA* environment variables.
+    //! Process environment is not changed.
+    Config& applyDefs(const defs_t& def);
+
+    //! extract definitions with environment variable names as keys.
+    //! Process environment is not changed.
+    void updateDefs(defs_t& defs) const;
 
     /** Apply rules to translate current requested configuration
      *  into one which can actually be loaded based on current host network configuration.

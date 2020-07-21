@@ -28,7 +28,7 @@ A simple usage is:
 
     src.add(argv[1], pv);
 
-    auto serv = server::Server::Config::from_env()
+    auto serv = server::Server::Config::fromEnv()
             .build()
             .addSource("box", src.source());
 

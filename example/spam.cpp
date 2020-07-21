@@ -102,7 +102,7 @@ int main(int argc, char* argv[])
 
     // Build server which will server this PV
     // Configure using process environment.
-    server::Server serv = server::Config::from_env()
+    server::Server serv = server::Config::fromEnv()
             .build()
             .addSource("spamsrc", src);
 

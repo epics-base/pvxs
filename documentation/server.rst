@@ -19,7 +19,7 @@ The basic recipe to run a server using configuration from the process environmen
 
 .. code-block:: c++
 
-    auto serv = server::Config::from_env()
+    auto serv = server::Config::fromEnv()
                 .build()
     // call serv.addSource() at least once
     serv.run(); // run intil SIGINT or serv.interrupt()
@@ -35,7 +35,7 @@ provide/claim a given PV name, the Source with the lowest "order" will win.
 Configuration
 -------------
 
-The recommended starting point when configuring a Server is `pvxs::server::Config::from_env`
+The recommended starting point when configuring a Server is `pvxs::server::Config::fromEnv`
 which will use the following environment variables when set.
 
 Entries naming multiple environment variables will prefer the left most which is set.

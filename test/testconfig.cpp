@@ -33,10 +33,10 @@ void testParse()
 
     client::Config conf;
     try {
-        conf = client::Config::from_env();
-        testPass("client::Config::from_env()");
+        conf = client::Config::fromEnv();
+        testPass("client::Config::fromEnv()");
     }catch(std::exception& e){
-        testFail("client::Config::from_env() %s : %s", typeid (e).name(), e.what());
+        testFail("client::Config::fromEnv() %s : %s", typeid (e).name(), e.what());
     }
 
     if(testEq(conf.addressList.size(), 2u)) {
