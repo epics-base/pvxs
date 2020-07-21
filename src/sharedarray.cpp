@@ -234,6 +234,9 @@ void convertArr(ArrayType dtype,       void *dbase,
                 ArrayType stype, const void *sbase,
                 size_t count)
 {
+    if(count==0u)
+        return; // ignore type when no elements.  (conflating empty array with Null array)
+
     switch (stype) {
     case ArrayType::Bool:
         switch(dtype) {
@@ -458,7 +461,7 @@ void convertArr(ArrayType dtype,       void *dbase,
     case ArrayType::Null:
         break;
     }
-    throw NoConvert();
+    throw NoConvert(SB()<<"No array conversion from "<<stype<<" to "<<dtype);
 }
 
 shared_array<void> copyAs(ArrayType dtype, ArrayType stype, const void *sbase, size_t count)
