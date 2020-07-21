@@ -282,7 +282,8 @@ void Member::Helper::copy_tree(const FieldDesc* desc, Member& node)
 TypeDef::TypeDef(const Value& val)
 {
     if(val.desc) {
-        auto root(std::make_shared<Member>(val.desc->code, val.desc->id));
+        auto root(std::make_shared<Member>(val.desc->code, ""));
+        root->id = val.desc->id;
 
         Member::Helper::copy_tree(val.desc, *root);
 

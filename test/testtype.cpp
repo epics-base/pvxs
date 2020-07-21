@@ -347,6 +347,30 @@ void testTypeDefDynamic()
     }
 }
 
+void testTypeDefAppend()
+{
+    testDiag("%s()", __func__);
+
+    auto base = TypeDef(TypeCode::Struct, "epics:nt/NTDummy:0.0", {
+                            members::UInt32("A"),
+                        }).create();
+
+    auto sub = TypeDef(base);
+    sub += {
+            members::UInt32("B"),
+    };
+
+    auto amend = sub.create();
+
+    testEq(base.id(), "epics:nt/NTDummy:0.0");
+    testEq(base["A"].type(), TypeCode::UInt32);
+    testEq(base["B"].type(), TypeCode::Null);
+
+    testEq(amend.id(), "epics:nt/NTDummy:0.0");
+    testEq(amend["A"].type(), TypeCode::UInt32);
+    testEq(amend["B"].type(), TypeCode::UInt32);
+}
+
 //! Returns the frankenstruct
 Value neckBolt()
 {
@@ -485,13 +509,14 @@ void testFormat()
 
 MAIN(testtype)
 {
-    testPlan(45);
+    testPlan(51);
     testSetup();
     showSize();
     testCode();
     testBasic();
     testTypeDef();
     testTypeDefDynamic();
+    testTypeDefAppend();
     testFormat();
     cleanup_for_valgrind();
     return testDone();
