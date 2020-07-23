@@ -407,7 +407,7 @@ void SharedPV::post(const Value& val)
     }
 }
 
-void SharedPV::fetch(Value& val)
+void SharedPV::fetch(Value& val) const
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
@@ -416,6 +416,20 @@ void SharedPV::fetch(Value& val)
 
     if(impl->current) {
         val.assign(impl->current);
+    } else {
+        throw std::logic_error("open() first");
+    }
+}
+
+Value SharedPV::fetch() const
+{
+    if(!impl)
+        throw std::logic_error("Empty SharedPV");
+
+    Guard G(impl->lock);
+
+    if(impl->current) {
+        return impl->current.clone();
     } else {
         throw std::logic_error("open() first");
     }

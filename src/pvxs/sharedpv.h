@@ -72,8 +72,10 @@ struct PVXS_API SharedPV
 
     //! Update the internal data value, and dispatch subscription updates to any clients.
     void post(const Value& val);
-    //! query the internal data value.
-    void fetch(Value& val);
+    //! query the internal data value and update the provided Value.
+    void fetch(Value& val) const;
+    //! Return a (shallow) copy of the internal data value
+    Value fetch() const;
 
     struct Impl;
 private:
