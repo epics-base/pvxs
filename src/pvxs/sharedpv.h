@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <memory>
+#include <map>
 
 #include <pvxs/version.h>
 #include "srvcommon.h"
@@ -102,6 +103,9 @@ struct PVXS_API StaticSource
     StaticSource& add(const std::string& name, const SharedPV& pv);
     //! Remove a single name
     StaticSource& remove(const std::string& name);
+
+    typedef std::map<std::string, SharedPV> list_t;
+    list_t list() const;
 
     struct Impl;
 private:

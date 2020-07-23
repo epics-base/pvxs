@@ -439,7 +439,7 @@ struct StaticSource::Impl : public Source
 {
     RWLock lock;
 
-    std::map<std::string, SharedPV> pvs;
+    list_t pvs;
     decltype (List::names) list;
 
     virtual void onSearch(Search &op) override
@@ -538,6 +538,20 @@ StaticSource& StaticSource::remove(const std::string& name)
     pv.close();
 
     return *this;
+}
+
+StaticSource::list_t StaticSource::list() const
+{
+    list_t ret;
+
+    if(!impl)
+        throw std::logic_error("Empty StaticSource");
+
+    {
+        auto G(impl->lock.lockReader());
+
+        return impl->pvs; // copies map
+    }
 }
 
 } // namespace server
