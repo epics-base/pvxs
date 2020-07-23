@@ -99,6 +99,9 @@ struct PVXS_API StaticSource
     //! Fetch the Source interface, which may be used with Server::addSource()
     std::shared_ptr<Source> source() const;
 
+    //! call SharedPV::close() on all PVs
+    void close();
+
     //! Add a new name through which a SharedPV may be addressed.
     StaticSource& add(const std::string& name, const SharedPV& pv);
     //! Remove a single name

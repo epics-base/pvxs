@@ -506,6 +506,20 @@ std::shared_ptr<Source> StaticSource::source() const
     return impl;
 }
 
+void StaticSource::close()
+{
+    if(!impl)
+        throw std::logic_error("Empty StaticSource");
+
+    {
+        auto G(impl->lock.lockReader());
+
+        for(auto& pair : impl->pvs) {
+            pair.second.close();
+        }
+    }
+}
+
 StaticSource& StaticSource::add(const std::string& name, const SharedPV &pv)
 {
     if(!impl)
