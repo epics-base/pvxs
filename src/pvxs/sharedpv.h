@@ -52,9 +52,9 @@ struct PVXS_API SharedPV
     void attach(std::unique_ptr<ChannelControl>&& op);
 
     //! Callback when the number of attach()d clients becomes non-zero.
-    void onFirstConnect(std::function<void()>&& fn);
+    void onFirstConnect(std::function<void(SharedPV&)>&& fn);
     //! Callback when the number of attach()d clients becomes zero.
-    void onLastDisconnect(std::function<void()>&& fn);
+    void onLastDisconnect(std::function<void(SharedPV&)>&& fn);
     //! Callback when a client executes a new Put operation.
     void onPut(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)>&& fn);
     //! Callback when a client executes an RPC operation.

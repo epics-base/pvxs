@@ -36,8 +36,8 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
 
     std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)> onPut;
     std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)> onRPC;
-    std::function<void()> onFirstConnect;
-    std::function<void()> onLastDisconnect;
+    std::function<void(SharedPV&)> onFirstConnect;
+    std::function<void(SharedPV&)> onLastDisconnect;
 
     ptr_set<std::weak_ptr<ChannelControl>> channels;
 
@@ -244,7 +244,9 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
         if(self->channels.empty() && self->onLastDisconnect) {
             auto cb(self->onLastDisconnect);
             UnGuard U(G);
-            cb();
+            SharedPV pv;
+            pv.impl = self;
+            cb(pv);
         }
     });
 
@@ -259,11 +261,13 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
     if(first && self->onFirstConnect) {
         auto cb(self->onFirstConnect);
         UnGuard U(G);
-        cb();
+        SharedPV pv;
+        pv.impl = self;
+        cb(pv);
     }
 }
 
-void SharedPV::onFirstConnect(std::function<void()>&& fn)
+void SharedPV::onFirstConnect(std::function<void(SharedPV&)>&& fn)
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
@@ -271,7 +275,7 @@ void SharedPV::onFirstConnect(std::function<void()>&& fn)
     impl->onFirstConnect = std::move(fn);
 }
 
-void SharedPV::onLastDisconnect(std::function<void()>&& fn)
+void SharedPV::onLastDisconnect(std::function<void(SharedPV&)>&& fn)
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");

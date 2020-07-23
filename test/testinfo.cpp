@@ -82,13 +82,13 @@ struct Tester {
         std::atomic<bool> onFC{false}, onLD{false};
         epicsEvent done;
 
-        mbox.onFirstConnect([this, &onFC](){
+        mbox.onFirstConnect([this, &onFC](server::SharedPV&){
             testShow()<<"In onFirstConnect()";
 
             mbox.open(initial);
             onFC.store(true);
         });
-        mbox.onLastDisconnect([this, &onLD, &done](){
+        mbox.onLastDisconnect([this, &onLD, &done](server::SharedPV&){
             testShow()<<"In onLastDisconnect";
             mbox.close();
             onLD.store(true);
