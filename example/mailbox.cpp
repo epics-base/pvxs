@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
 
         // (optional) update the SharedPV cache and send
         // a update to any subscribers
-        pv.post(std::move(top));
+        pv.post(top);
 
         // Required.  Inform client that PUT operation is complete.
         op->reply();

@@ -60,28 +60,31 @@ struct PVXS_API MonitorControlOp : public OpBase {
     virtual ~MonitorControlOp();
 
 protected:
-    virtual bool doPost(Value&& val, bool maybe, bool force) =0;
+    virtual bool doPost(const Value& val, bool maybe, bool force) =0;
 public:
 
     //! Add a new entry to the monitor queue.
     //! If nFree()<=0 the output queue will be over-filled with this element.
     //! Returns @code nFree()>0u @endcode
-    bool forcePost(Value&& val) {
-        return doPost(std::move(val), false, true);
+    //! @warning Caller must not modify the Value
+    bool forcePost(const Value& val) {
+        return doPost(val, false, true);
     }
 
     //! Add a new entry to the monitor queue.
     //! If nFree()<=0 this element will be "squashed" to the last element in the queue
     //! Returns @code nFree()>0u @endcode
-    bool post(Value&& val) {
-        return doPost(std::move(val), false, false);
+    //! @warning Caller must not modify the Value
+    bool post(const Value& val) {
+        return doPost(val, false, false);
     }
 
     //! Add a new entry to the monitor queue.
     //! If nFree()<=0 return false and take no other action
     //! Returns @code nFree()>0u @endcode
-    bool tryPost(Value&& val) {
-        return doPost(std::move(val), true, false);
+    //! @warning Caller must not modify the Value
+    bool tryPost(const Value& val) {
+        return doPost(val, true, false);
     }
 
     //! Signal to subscriber that this subscription will not yield any further events.

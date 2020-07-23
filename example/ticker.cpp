@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
 
         val["value"] = count++;
 
-        pv.post(std::move(val));
+        pv.post(val);
 
         std::cout<<"Count "<<count<<"\n";
     }

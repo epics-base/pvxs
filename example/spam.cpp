@@ -62,7 +62,7 @@ public:
 
                     log_debug_printf(app, "%s count %u\n", sub->peerName().c_str(), unsigned(cnt));
 
-                }while(sub->tryPost(std::move(update)));
+                }while(sub->tryPost(update));
             };
 
             sub->onHighMark(fill);

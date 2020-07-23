@@ -209,7 +209,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
         finish();
     }
 
-    virtual bool doPost(Value&& val, bool maybe, bool force) override final
+    virtual bool doPost(const Value& val, bool maybe, bool force) override final
     {
         auto mon(op.lock());
         if(!mon)
@@ -221,7 +221,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
             throw std::logic_error("Type change not allowed in post().  Recommend pvxs::Value::cloneEmpty()");
 
         if((mon->queue.size() < mon->limit) || force || !val) {
-            mon->queue.push_back(std::move(val));
+            mon->queue.push_back(val);
 
         } else if(!maybe) {
             // squash

@@ -69,7 +69,7 @@ SharedPV SharedPV::buildMailbox()
             }
         }
 
-        pv.post(std::move(val));
+        pv.post(val);
 
         op->reply();
     });
@@ -381,7 +381,7 @@ void SharedPV::close()
     }
 }
 
-void SharedPV::post(Value&& val)
+void SharedPV::post(const Value& val)
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
@@ -397,8 +397,13 @@ void SharedPV::post(Value&& val)
 
     impl->current.assign(val);
 
+    if(impl->subscribers.empty())
+        return;
+
+    auto copy(val.clone());
+
     for(auto& sub : impl->subscribers) {
-        sub->post(val.clone());
+        sub->post(copy);
     }
 }
 

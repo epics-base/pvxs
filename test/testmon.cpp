@@ -68,7 +68,7 @@ struct BasicTest {
     {
         auto update(initial.cloneEmpty());
         update["value"] = v;
-        mbox.post(std::move(update));
+        mbox.post(update);
     }
 
     static
@@ -183,7 +183,7 @@ struct TestLifeCycle : public BasicTest
 
         auto update(initial.cloneEmpty());
         update["value"] = 39;
-        mbox2.post(std::move(update));
+        mbox2.post(update);
 
         if(auto val = pop(sub2, evt2)) {
             testEq(val["value"].as<int32_t>(), 39);
@@ -224,9 +224,9 @@ struct TestReconn : public BasicTest
 
         testFalse(sub->pop())<<"No events after Disconnect";
 
-        mbox.post(std::move(initial
-                            .cloneEmpty()
-                            .update("value", 15)));
+        mbox.post(initial
+                  .cloneEmpty()
+                  .update("value", 15));
 
         errlogFlush();
         testDiag("Starting server");
