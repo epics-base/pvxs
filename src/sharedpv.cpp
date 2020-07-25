@@ -441,7 +441,7 @@ Value SharedPV::fetch() const
 
 struct StaticSource::Impl : public Source
 {
-    RWLock lock;
+    mutable RWLock lock;
 
     list_t pvs;
     decltype (List::names) list;
@@ -487,6 +487,17 @@ struct StaticSource::Impl : public Source
         ret.dynamic = false;
 
         return ret;
+    }
+
+    virtual void show(std::ostream& strm) override final
+    {
+        strm<<"StaticProvider";
+
+        auto G(lock.lockReader());
+        for(auto& pair : pvs) {
+            strm<<"\n"<<indent{}<<pair.first;
+            // TODO: details for SharedPV
+        }
     }
 };
 

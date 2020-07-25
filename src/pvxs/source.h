@@ -228,6 +228,8 @@ struct PVXS_API Source {
     /** A Client is requesting a list of Channel names which we may claim.
      */
     virtual List onList();
+
+    virtual void show(std::ostream& strm);
 };
 
 }} // namespace pvxs::server

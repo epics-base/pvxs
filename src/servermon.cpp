@@ -195,6 +195,11 @@ struct MonitorOp : public ServerOp,
             scheduled = true;
         }
     }
+
+    void show(std::ostream& strm) const override final
+    {
+        strm<<"MONITOR\n";
+    }
 };
 
 struct ServerMonitorSetup;

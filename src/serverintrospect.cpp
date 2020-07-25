@@ -49,6 +49,11 @@ struct ServerIntrospect : public ServerOp
         ch->opByIOID.erase(ioid);
     }
 
+    void show(std::ostream& strm) const override final
+    {
+        strm<<"INFO\n";
+    }
+
     INST_COUNTER(ServerIntrospect);
 };
 

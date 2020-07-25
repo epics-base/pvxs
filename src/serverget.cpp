@@ -126,6 +126,19 @@ struct ServerGPR : public ServerOp
         }
     }
 
+    void show(std::ostream& strm) const override final
+    {
+        switch(cmd) {
+#define CASE(CMD) case CMD_ ## CMD : strm<< #CMD "\n"; break
+        CASE(GET);
+        CASE(PUT);
+        CASE(RPC);
+#undef CASE
+        default:
+            strm<<"CMD"<<std::hex<<cmd<<"\n";
+        }
+    }
+
     pva_app_msg_t cmd;
     uint8_t subcmd; // valid when state==Executing or Creating
     bool lastRequest=false;

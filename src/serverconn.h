@@ -51,6 +51,8 @@ struct ServerOp
     ServerOp(const ServerOp&) = delete;
     ServerOp& operator=(const ServerOp&) = delete;
     virtual ~ServerOp() =0;
+
+    virtual void show(std::ostream& strm) const =0;
 };
 
 struct ServerChannelControl : public server::ChannelControl

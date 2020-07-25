@@ -107,10 +107,17 @@ public:
 
     explicit operator bool() const { return !!pvt; }
 
+    friend
+    PVXS_API
+    std::ostream& operator<<(std::ostream& strm, const Server& serv);
+
     struct Pvt;
 private:
     std::shared_ptr<Pvt> pvt;
 };
+
+PVXS_API
+std::ostream& operator<<(std::ostream& strm, const Server& serv);
 
 //! Configuration for a Server
 struct PVXS_API Config {

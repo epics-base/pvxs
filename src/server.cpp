@@ -219,6 +219,101 @@ Server& Server::interrupt()
     return *this;
 }
 
+std::ostream& operator<<(std::ostream& strm, const Server& serv)
+{
+    auto detail = Detailed::level(strm);
+
+    if(!serv.pvt) {
+        strm<<indent{}<<"NULL";
+
+    } else {
+        strm<<indent{}<<serv.config();
+
+        {
+            auto L(serv.pvt->sourcesLock.lockReader());
+
+            for(auto& pair : serv.pvt->sources) {
+                strm<<indent{}<<"Source: "<<pair.first.second<<" prio="<<pair.first.first<<" ";
+                if(!pair.second) {
+                    strm<<"NULL";
+
+                } else if(detail>0) {
+                    Indented I(strm);
+                    Detailed D(strm, detail-1);
+                    pair.second->show(strm);
+                }
+                strm<<"\n";
+            }
+        }
+
+        if(detail<2)
+            return strm;
+
+        serv.pvt->acceptor_loop.call([&serv, &strm, detail](){
+            strm<<indent{}<<"State: ";
+            switch(serv.pvt->state) {
+#define CASE(STATE) case Server::Pvt::STATE: strm<< #STATE; break
+            CASE(Stopped);
+            CASE(Starting);
+            CASE(Running);
+            CASE(Stopping);
+#undef CASE
+            }
+            strm<<"\n";
+
+            Indented I(strm);
+
+            for(auto& pair : serv.pvt->connections) {
+                auto conn = pair.first;
+
+                strm<<indent{}<<"Peer"<<conn->peerName
+                    <<" backlog="<<conn->backlog.size()
+                    <<" auth="<<conn->autoMethod<<"\n";
+                if(detail>2)
+                    strm<<conn->credentials;
+
+                if(detail<=2)
+                    continue;
+
+                Indented I(strm);
+
+                for(auto& pair : conn->chanBySID) {
+                    auto& chan = pair.second;
+
+                    if(chan->state==ServerChan::Creating) {
+                        strm<<indent{}<<"CREATING sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
+                    } else if(chan->state==ServerChan::Destroy) {
+                        strm<<indent{}<<"DESTROY  sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
+                    } else if(chan->opByIOID.empty()) {
+                        strm<<indent{}<<"IDLE     sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
+                    }
+
+                    for(auto& pair : chan->opByIOID) {
+                        auto& op = pair.second;
+                        if(!op) {
+                            strm<<indent{}<<"NULL ioid="<<pair.first<<"\n";
+                        } else {
+                            strm<<indent{};
+                            switch (op->state) {
+#define CASE(STATE) case ServerOp::STATE: strm<< #STATE; break
+                            CASE(Creating);
+                            CASE(Idle);
+                            CASE(Executing);
+                            CASE(Dead);
+#undef CASE
+                            }
+                            strm<<" ioid="<<pair.first<<" ";
+                            op->show(strm);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    return strm;
+}
+
 Server::Pvt::Pvt(const Config &conf)
     :effective(conf)
     ,beaconMsg(128)
@@ -563,6 +658,18 @@ Source::~Source() {}
 
 Source::List Source::onList() {
     return Source::List{};
+}
+
+void Source::show(std::ostream& strm)
+{
+    auto list(onList());
+    strm<<(list.dynamic ? "Dynamic":"")<<"Source";
+    Indented I(strm);
+    if(list.names) {
+        for(auto& name : *list.names) {
+            strm<<"\n"<<indent{}<<name;
+        }
+    }
 }
 
 OpBase::~OpBase() {}
