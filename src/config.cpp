@@ -25,7 +25,8 @@ DEFINE_LOGGER(config, "pvxs.config");
 namespace pvxs {
 
 namespace {
-void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp, uint16_t defaultPort)
+void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp,
+                     uint16_t defaultPort, bool required=false)
 {
     size_t pos=0u;
 
@@ -39,6 +40,8 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
 
             sockaddr_in addr = {};
             if(aToIPAddr(temp.c_str(), defaultPort, &addr)) {
+                if(required)
+                    throw std::runtime_error(SB()<<"invalid IP or non-existent hostname \""<<temp<<"\"");
                 log_err_printf(config, "%s ignoring invalid '%s'\n", name, temp.c_str());
                 continue;
             }
@@ -172,7 +175,7 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVAS_INTF_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, self.tcp_port);
+        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, self.tcp_port, true);
     }
 
     if(pickone({"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
