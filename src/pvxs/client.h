@@ -399,6 +399,7 @@ protected:
     std::shared_ptr<Req> req;
     unsigned _prio = 0u;
 
+    CommonBase() = default;
     CommonBase(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : ctx(ctx), _name(name) {}
     ~CommonBase();
 
@@ -416,6 +417,7 @@ protected:
     struct Args;
     std::shared_ptr<Args> _args;
 
+    PRBase() = default;
     PRBase(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : CommonBase(ctx, name) {}
     ~PRBase();
 
@@ -428,6 +430,7 @@ protected:
 template<typename SubBuilder, typename Base>
 class CommonBuilder : public Base {
 protected:
+    CommonBuilder() = default;
     constexpr CommonBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : Base(ctx, name) {}
     inline SubBuilder& _sb() { return static_cast<SubBuilder&>(*this); }
 public:
@@ -475,12 +478,13 @@ public:
 //! Prepare a remote GET or GET_FIELD (info) operation.
 class GetBuilder : public detail::CommonBuilder<GetBuilder, detail::CommonBase> {
     std::function<void(Result&&)> _result;
-    bool _get;
+    bool _get = false;
     PVXS_API
     std::shared_ptr<Operation> _exec_info();
     PVXS_API
     std::shared_ptr<Operation> _exec_get();
 public:
+    GetBuilder() = default;
     GetBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, bool get) :CommonBuilder{ctx,name}, _get(get) {}
     //! Callback through which result Value or an error will be delivered.
     //! The functor is stored in the Operation returned by exec().
@@ -505,6 +509,7 @@ class PutBuilder : public detail::CommonBuilder<PutBuilder, detail::PRBase> {
     std::function<Value(Value&&)> _builder;
     std::function<void(Result&&)> _result;
 public:
+    PutBuilder() = default;
     PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
 
     /** If fetchPresent is true (the default).  Then the Value passed to
@@ -569,6 +574,7 @@ class RPCBuilder : public detail::CommonBuilder<RPCBuilder, detail::PRBase> {
     std::function<void(Result&&)> _result;
     friend class Context;
 public:
+    RPCBuilder() = default;
     RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
     //! Callback through which result Value or an error will be delivered.
     //! The functor is stored in the Operation returned by exec().
@@ -614,6 +620,7 @@ class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder, detail::Comm
     bool _maskConn = true;
     bool _maskDisconn = false;
 public:
+    MonitorBuilder() = default;
     MonitorBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
     //! Install event callback
     //! The functor is stored in the Subscription returned by exec().
@@ -633,7 +640,6 @@ MonitorBuilder Context::monitor(const std::string& name) { return MonitorBuilder
 class RequestBuilder : public detail::CommonBuilder<RequestBuilder, detail::CommonBase>
 {
 public:
-    RequestBuilder() :CommonBuilder{nullptr,std::string()} {}
     //! Return composed pvRequest
     Value build() const {
         return _buildReq();

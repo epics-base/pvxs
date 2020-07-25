@@ -504,6 +504,9 @@ void Connection::handle_MONITOR()
 
 std::shared_ptr<Subscription> MonitorBuilder::exec()
 {
+    if(!ctx)
+        throw std::logic_error("NULL Builder");
+
     std::shared_ptr<Subscription> ret;
 
     ctx->tcp_loop.call([&ret, this]() {

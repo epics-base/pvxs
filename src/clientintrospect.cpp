@@ -168,6 +168,9 @@ void Connection::handle_GET_FIELD()
 
 std::shared_ptr<Operation> GetBuilder::_exec_info()
 {
+    if(!ctx)
+        throw std::logic_error("NULL Builder");
+
     std::shared_ptr<Operation> ret;
 
     assert(!_get);

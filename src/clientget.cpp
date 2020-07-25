@@ -475,6 +475,9 @@ void gpr_cleanup(std::shared_ptr<Operation>& ret, std::shared_ptr<GPROp>&& op)
 
 std::shared_ptr<Operation> GetBuilder::_exec_get()
 {
+    if(!ctx)
+        throw std::logic_error("NULL Builder");
+
     std::shared_ptr<Operation> ret;
     assert(_get);
 
@@ -497,6 +500,9 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
 
 std::shared_ptr<Operation> PutBuilder::exec()
 {
+    if(!ctx)
+        throw std::logic_error("NULL Builder");
+
     std::shared_ptr<Operation> ret;
 
     if(!_builder && !_args)
@@ -535,6 +541,9 @@ std::shared_ptr<Operation> PutBuilder::exec()
 
 std::shared_ptr<Operation> RPCBuilder::exec()
 {
+    if(!ctx)
+        throw std::logic_error("NULL Builder");
+
     std::shared_ptr<Operation> ret;
 
     if(_args && _argument)
