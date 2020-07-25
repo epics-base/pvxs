@@ -28,10 +28,6 @@ struct TestBuilder : client::detail::CommonBuilder<TestBuilder, client::detail::
         :client::detail::CommonBuilder<TestBuilder, client::detail::PRBase>(nullptr, "")
     {}
 
-    Value makeReq() const {
-        return _buildReq();
-    }
-
     template<typename T>
     TestBuilder& set(const std::string& name, const T& val, bool required=true) {
         const typename impl::StoreAs<T>::store_t& norm(impl::StoreTransform<T>::in(val));
@@ -52,7 +48,7 @@ void testEmpty()
 {
     testShow()<<__func__;
 
-    auto req = TestBuilder().makeReq();
+    auto req = client::Context::request().build();
 
     testShow()<<req;
     testStrEq(std::string(SB()<<req),
@@ -67,12 +63,12 @@ void testAssemble()
 {
     testShow()<<__func__;
 
-    auto req = TestBuilder()
+    auto req = client::Context::request()
             .field("foo")
             .field("bar.baz")
             .record("abc", "xyz")
             .record("pipeline", true)
-            .makeReq();
+            .build();
 
     testShow()<<req;
     testStrEq(std::string(SB()<<req),
@@ -99,9 +95,9 @@ void testParse1()
 {
     testShow()<<__func__;
 
-    auto req = TestBuilder()
+    auto req = client::Context::request()
             .pvRequest("field(foo)field(bar.baz)record[abc=xyz]record[pipeline=true]")
-            .makeReq();
+            .build();
 
     testShow()<<req;
     testStrEq(std::string(SB()<<req),
@@ -128,9 +124,9 @@ void testParse2()
 {
     testShow()<<__func__;
 
-    auto req = TestBuilder()
+    auto req = client::Context::request()
             .pvRequest("field(foo,bar.baz)record[abc=xyz,pipeline=true]")
-            .makeReq();
+            .build();
 
     testShow()<<req;
     testStrEq(std::string(SB()<<req),
@@ -170,7 +166,7 @@ void testValid()
 
     for(auto& pvr : valid) {
         try {
-            testCase(true)<<pvr<<"\n"<<TestBuilder().pvRequest(pvr).makeReq();
+            testCase(true)<<pvr<<"\n"<<client::Context::request().pvRequest(pvr).build();
         }catch(std::exception& e){
             testCase(false)<<pvr<<" : "<<typeid(e).name()<<" : "<<e.what();
         }
@@ -198,9 +194,9 @@ void testError()
     for(auto& pvr : errors) {
 
         testThrows<std::runtime_error>([&pvr](){
-            auto req = TestBuilder()
+            auto req = client::Context::request()
                     .pvRequest(pvr)
-                    .makeReq();
+                    .build();
             testShow()<<req;
         })<<pvr;
     }

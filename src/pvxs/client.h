@@ -184,6 +184,7 @@ class GetBuilder;
 class PutBuilder;
 class RPCBuilder;
 class MonitorBuilder;
+class RequestBuilder;
 
 /** An independent PVA protocol client instance
  *
@@ -351,6 +352,23 @@ public:
      */
     inline
     MonitorBuilder monitor(const std::string& pvname);
+
+    /** Compose a pvRequest independently of a network operation.
+     *
+     * This is not a network operation.
+     *
+     * Use of request() is optional.  pvRequests can be composed
+     * with individual network operation Builders.
+     *
+     * @code
+     * Value pvReq = Context::request()
+     *                      .pvRequest("field(value)field(blah)")
+     *                      .record("pipeline", true)
+     *                      .build();
+     * @endcode
+     */
+    static inline
+    RequestBuilder request();
 
     /** Request prompt search of any disconnected channels.
      *
@@ -611,6 +629,17 @@ public:
     friend struct Context::Pvt;
 };
 MonitorBuilder Context::monitor(const std::string& name) { return MonitorBuilder{pvt, name}; }
+
+class RequestBuilder : public detail::CommonBuilder<RequestBuilder, detail::CommonBase>
+{
+public:
+    RequestBuilder() :CommonBuilder{nullptr,std::string()} {}
+    //! Return composed pvRequest
+    Value build() const {
+        return _buildReq();
+    }
+};
+RequestBuilder Context::request() { return RequestBuilder{}; }
 
 struct PVXS_API Config {
     //! List of unicast and broadcast addresses
