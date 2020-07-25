@@ -120,6 +120,7 @@ struct evbase::Pvt : public epicsThreadRunable
     epicsMutex lock;
 
     epicsThread worker;
+    bool running = true;
 
     Pvt(const std::string& name, unsigned prio)
         :worker(*this, name.c_str(),
@@ -142,6 +143,10 @@ struct evbase::Pvt : public epicsThreadRunable
 
     void join()
     {
+        {
+            Guard G(lock);
+            running = false;
+        }
         if(worker.isCurrentThread())
             log_err_printf(logerr, "evbase self-joining: %s\n", worker.getNameSelf());
         if(event_base_loopexit(base.get(), nullptr))
@@ -249,6 +254,8 @@ void evbase::dispatch(std::function<void()>&& fn)
     bool empty;
     {
         Guard G(pvt->lock);
+        if(!pvt->running)
+            throw std::logic_error("Worker stopped");
         empty = pvt->actions.empty();
         pvt->actions.emplace_back(std::move(fn), nullptr, nullptr);
     }
@@ -271,6 +278,8 @@ void evbase::call(std::function<void()>&& fn)
     bool empty;
     {
         Guard G(pvt->lock);
+        if(!pvt->running)
+            throw std::logic_error("Worker stopped");
         empty = pvt->actions.empty();
         pvt->actions.emplace_back(std::move(fn), &result, done.get());
     }
