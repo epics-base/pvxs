@@ -43,9 +43,9 @@ struct ResultWaiter {
 struct OperationBase : public Operation
 {
     const std::shared_ptr<Channel> chan;
-    uint32_t ioid;
+    uint32_t ioid = 0;
     Value result;
-    bool done;
+    bool done = false;
     std::shared_ptr<ResultWaiter> waiter;
 
     OperationBase(operation_t op, const std::shared_ptr<Channel>& chan);
