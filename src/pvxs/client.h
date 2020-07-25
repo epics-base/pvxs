@@ -403,7 +403,7 @@ protected:
     CommonBase(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : ctx(ctx), _name(name) {}
     ~CommonBase();
 
-    void _rawRequest(Value&&);
+    void _rawRequest(const Value&);
     void _field(const std::string& s);
     void _record(const std::string& key, const void* value, StoreType vtype);
     void _parse(const std::string& req);
@@ -467,7 +467,7 @@ public:
     SubBuilder& pvRequest(const std::string& expr) { this->_parse(expr); return _sb(); }
 
     //! Store raw pvRequest blob.
-    SubBuilder& rawRequest(Value&& r) { this->_rawRequest(std::move(r)); return _sb(); }
+    SubBuilder& rawRequest(const Value& r) { this->_rawRequest(r); return _sb(); }
 
     SubBuilder& priority(int p) { this->_prio = p; return _sb(); }
     SubBuilder& server(const std::string& s) { this->_server = s; return _sb(); }

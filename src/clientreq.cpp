@@ -31,11 +31,11 @@ struct CommonBase::Req {
 
 CommonBase::~CommonBase() {}
 
-void CommonBase::_rawRequest(Value&& raw)
+void CommonBase::_rawRequest(const Value& raw)
 {
     if(!req)
         req = std::make_shared<Req>();
-    req->pvRequest = std::move(raw);
+    req->pvRequest = raw;
 }
 void CommonBase::_field(const std::string& s)
 {
