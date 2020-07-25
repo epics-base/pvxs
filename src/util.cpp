@@ -121,6 +121,87 @@ CASE(SubscriptionImpl);
     return ret;
 }
 
+// _assume_ only positive indices will be used
+static
+std::atomic<int> indentIndex{INT_MIN};
+
+std::ostream& operator<<(std::ostream& strm, const indent&)
+{
+    auto idx = indentIndex.load(std::memory_order_relaxed);
+    if(idx!=INT_MIN) {
+        auto n = strm.iword(idx);
+        for(auto i : range(n)) {
+            (void)i;
+            strm<<"    ";
+        }
+    }
+    return strm;
+}
+
+Indented::Indented(std::ostream& strm, int depth)
+    :strm(&strm)
+    ,depth(depth)
+{
+    auto idx = indentIndex.load();
+    if(idx==INT_MIN) {
+        auto newidx = std::ostream::xalloc();
+        if(indentIndex.compare_exchange_strong(idx, newidx)) {
+            idx = newidx;
+        } else {
+            // lost race.  no way to undo xalloc(), so just wasted...
+            idx = indentIndex.load();
+        }
+    }
+    strm.iword(idx) += depth;
+}
+
+Indented::~Indented()
+{
+    if(strm)
+        strm->iword(indentIndex.load()) -= depth;
+}
+
+// _assume_ only positive indices will be used
+static
+std::atomic<int> detailIndex{INT_MIN};
+
+Detailed::Detailed(std::ostream& strm, int lvl)
+    :strm(&strm)
+{
+    auto idx = detailIndex.load();
+    if(idx==INT_MIN) {
+        auto newidx = std::ostream::xalloc();
+        if(detailIndex.compare_exchange_strong(idx, newidx)) {
+            idx = newidx;
+        } else {
+            // lost race.  no way to undo xalloc(), so just wasted...
+            idx = detailIndex.load();
+        }
+    }
+
+    auto& ref = strm.iword(idx);
+    this->lvl = ref;
+    ref = lvl;
+}
+
+Detailed::~Detailed()
+{
+    if(strm)
+        strm->iword(detailIndex.load()) = lvl;
+}
+
+int Detailed::level(std::ostream &strm)
+{
+    int ret = 0;
+    auto idx = detailIndex.load(std::memory_order_relaxed);
+    if(idx==INT_MIN) {
+        strm<<"Hint: Wrap with pvxs::Detailed()\n";
+    } else {
+        ret = strm.iword(idx);
+    }
+    return ret;
+}
+
 namespace detail {
 
 Escaper::Escaper(const char* v)
@@ -432,13 +513,6 @@ int64_t parseTo<int64_t>(const std::string& s) {
     if(idx<L)
         throw NoConvert(SB()<<"Extraneous characters after unsigned: \""<<escape(s)<<"\"");
     return ret;
-}
-
-void indent(std::ostream& strm, unsigned level) {
-    for(auto i : range(level)) {
-        (void)i;
-        strm<<"    ";
-    }
 }
 
 }}

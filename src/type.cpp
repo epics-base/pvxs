@@ -38,7 +38,7 @@ struct Member::Helper {
     static
     void copy_tree(const FieldDesc* desc, Member& node);
     static
-    void show_Node(std::ostream& strm, const std::string& name, const Member* node, unsigned level=0);
+    void show_Node(std::ostream& strm, const std::string& name, const Member* node);
 };
 
 bool TypeCode::valid() const
@@ -387,7 +387,7 @@ Value TypeDef::create() const
     return Value(desc);
 }
 
-void Member::Helper::show_Node(std::ostream& strm, const std::string& name, const Member* node, unsigned level)
+void Member::Helper::show_Node(std::ostream& strm, const std::string& name, const Member* node)
 {
     strm<<node->code;
     if(!node->id.empty())
@@ -395,10 +395,11 @@ void Member::Helper::show_Node(std::ostream& strm, const std::string& name, cons
     if(!node->children.empty()) {
         strm<<" {\n";
         for(auto& cnode : node->children) {
-            indent(strm, level+1);
-            show_Node(strm, cnode.name, &cnode, level+1);
+            Indented I(strm);
+            strm<<indent{};
+            show_Node(strm, cnode.name, &cnode);
         }
-        indent(strm, level);
+        strm<<indent{};
         strm.put('}');
         if(!name.empty())
             strm<<" "<<name;
@@ -422,12 +423,11 @@ std::ostream& operator<<(std::ostream& strm, const TypeDef& def)
 
 namespace impl {
 
-void show_FieldDesc(std::ostream& strm, const FieldDesc* desc, unsigned level)
+void show_FieldDesc(std::ostream& strm, const FieldDesc* desc)
 {
     for(auto idx : range(desc->size())) {
         auto& fld = desc[idx];
-        indent(strm, level);
-        strm<<"["<<idx<<"] "<<fld.code<<' '<<fld.id
+        strm<<indent{}<<"["<<idx<<"] "<<fld.code<<' '<<fld.id
             <<" parent=["<<(idx-fld.parent_index)   <<"]"
               "  ["<<idx<<":"<<idx+fld.size()<<")\n";
 
@@ -435,31 +435,30 @@ void show_FieldDesc(std::ostream& strm, const FieldDesc* desc, unsigned level)
         case TypeCode::Struct:
             // note: need to ensure stable lexical iteration order if fld.mlookup ever becomes unordered_map
             for(auto& pair : fld.mlookup) {
-                indent(strm, level);
-                strm<<"    "<<pair.first<<" -> "<<pair.second<<" ["<<(idx+pair.second)<<"]\n";
+                strm<<indent{}<<"    "<<pair.first<<" -> "<<pair.second<<" ["<<(idx+pair.second)<<"]\n";
             }
             for(auto& pair : fld.miter) {
-                indent(strm, level);
-                strm<<"    "<<pair.first<<" :  "<<pair.second<<" ["<<(idx+pair.second)<<"]\n";
+                strm<<indent{}<<"    "<<pair.first<<" :  "<<pair.second<<" ["<<(idx+pair.second)<<"]\n";
             }
             break;
 
         case TypeCode::Union:
             for(auto& pair : fld.mlookup) {
-                indent(strm, level);
-                strm<<"    "<<pair.first<<" -> "<<pair.second<<" ["<<(pair.second)<<"]\n";
+                strm<<indent{}<<"    "<<pair.first<<" -> "<<pair.second<<" ["<<(pair.second)<<"]\n";
             }
             for(auto& pair : fld.miter) {
-                indent(strm, level);
-                strm<<"    "<<pair.first<<" :  "<<pair.second<<" ["<<(pair.second)<<"]\n";
-                show_FieldDesc(strm, fld.members.data()+pair.second, level+1u);
+                strm<<indent{}<<"    "<<pair.first<<" :  "<<pair.second<<" ["<<(pair.second)<<"]\n";
+                Indented I(strm);
+                show_FieldDesc(strm, fld.members.data()+pair.second);
             }
             break;
 
         case TypeCode::StructA:
-        case TypeCode::UnionA:
-            show_FieldDesc(strm, fld.members.data(), level+1u);
+        case TypeCode::UnionA: {
+            Indented I(strm);
+            show_FieldDesc(strm, fld.members.data());
             break;
+        }
         default:
             break;
         }
@@ -468,7 +467,7 @@ void show_FieldDesc(std::ostream& strm, const FieldDesc* desc, unsigned level)
 
 std::ostream& operator<<(std::ostream& strm, const FieldDesc* desc)
 {
-    show_FieldDesc(strm, desc, 0u);
+    show_FieldDesc(strm, desc);
     return strm;
 }
 

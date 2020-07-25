@@ -111,6 +111,47 @@ public:
 PVXS_API
 std::map<std::string, size_t> instanceSnapshot();
 
+//! See Indented
+struct indent {};
+
+PVXS_API
+std::ostream& operator<<(std::ostream& strm, const indent&);
+
+//! Scoped indentation for std::ostream
+struct PVXS_API Indented {
+    explicit Indented(std::ostream& strm, int depth=1);
+    Indented(const Indented&) = delete;
+    Indented(Indented&& o) noexcept
+        :strm(o.strm)
+        ,depth(o.depth)
+    {
+        o.strm = nullptr;
+        o.depth = 0;
+    }
+    ~Indented();
+private:
+    std::ostream *strm;
+    int depth;
+};
+
+struct PVXS_API Detailed {
+    explicit Detailed(std::ostream& strm, int lvl=1);
+    Detailed(const Detailed&) = delete;
+    Detailed(Detailed&& o) noexcept
+        :strm(o.strm)
+        ,lvl(o.lvl)
+    {
+        o.strm = nullptr;
+        o.lvl = 0;
+    }
+    ~Detailed();
+    static
+    int level(std::ostream& strm);
+private:
+    std::ostream *strm;
+    int lvl;
+};
+
 } // namespace pvxs
 
 #endif // PVXS_UTIL_H

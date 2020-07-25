@@ -127,10 +127,9 @@ struct FmtTree {
 
     void top(const std::string& member,
              const FieldDesc *desc,
-             const FieldStorage* store,
-             unsigned level=0)
+             const FieldStorage* store)
     {
-        indent(strm, level);
+        strm<<indent{};
         if(!desc) {
             strm<<"null\n";
             return;
@@ -148,10 +147,10 @@ struct FmtTree {
                 strm<<" {\n";
                 for(auto& pair : desc->miter) {
                     auto cdesc = desc + pair.second;
-                    top(pair.first, cdesc, store + pair.second, level+1);
+                    Indented I(strm);
+                    top(pair.first, cdesc, store + pair.second);
                 }
-                indent(strm, level);
-                strm<<"}";
+                strm<<indent{}<<"}";
                 if(!member.empty())
                     strm<<" "<<member;
                 strm<<"\n";
@@ -174,10 +173,10 @@ struct FmtTree {
                     }
                 }
             }
+            Indented I(strm);
             top(std::string(),
                 Value::Helper::desc(fld),
-                Value::Helper::store_ptr(fld),
-                level+1);
+                Value::Helper::store_ptr(fld));
         }
             break;
         case StoreType::Array: {
@@ -190,13 +189,12 @@ struct FmtTree {
                 auto arr = varr.castTo<const Value>();
                 strm<<" [\n";
                 for(auto& val : arr) {
+                    Indented I(strm);
                     top(std::string(),
                         Value::Helper::desc(val),
-                        Value::Helper::store_ptr(val),
-                        level+1);
+                        Value::Helper::store_ptr(val));
                 }
-                indent(strm, level);
-                strm<<"]\n";
+                strm<<indent{}<<"]\n";
             }
         }
             break;

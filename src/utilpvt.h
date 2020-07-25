@@ -48,8 +48,6 @@ struct SB {
     SB& operator<<(const T& i) { strm<<i; return *this; }
 };
 
-void indent(std::ostream& strm, unsigned level);
-
 namespace idetail {
 template <typename I>
 struct Range {
