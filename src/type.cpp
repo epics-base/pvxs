@@ -94,7 +94,7 @@ StoreType TypeCode::storedAs() const
         return StoreType::Compound;
 
     } else {
-        throw std::logic_error("TypeCode::storedAs() not map");
+        throw std::logic_error(SB()<<"TypeCode::storedAs("<<(*this)<<") not map");
     }
 }
 
@@ -163,6 +163,17 @@ const char* TypeCode::name() const
 #undef CASE
     }
     return "\?\?\?_t";
+}
+
+std::ostream& operator<<(std::ostream& strm, TypeCode c)
+{
+    auto name = c.name();
+    if(name[0]!='?') {
+        strm<<name;
+    } else {
+        strm<<"TypeCode(0x"<<std::hex<<(unsigned)c.code<<")";
+    }
+    return strm;
 }
 
 void Member::Helper::node_validate(const Member* parent, const std::string& id, TypeCode code)

@@ -211,10 +211,8 @@ inline bool operator==(TypeCode lhs, TypeCode rhs) {
 inline bool operator!=(TypeCode lhs, TypeCode rhs) {
     return lhs.code!=rhs.code;
 }
-inline std::ostream& operator<<(std::ostream& strm, TypeCode c) {
-    strm<<c.name();
-    return strm;
-}
+PVXS_API
+std::ostream& operator<<(std::ostream& strm, TypeCode c);
 
 namespace impl {
 template<typename T>
