@@ -335,7 +335,7 @@ public:
      * @endcode
      */
     inline
-    RPCBuilder rpc(const std::string& pvname, Value&& arg);
+    RPCBuilder rpc(const std::string& pvname, const Value& arg);
 
     /** Create a new subscription for changes to a PV.
      *
@@ -629,9 +629,9 @@ public:
     friend struct Context::Pvt;
 };
 RPCBuilder Context::rpc(const std::string& name) { return RPCBuilder{pvt, name}; }
-RPCBuilder Context::rpc(const std::string& name, Value&& arg) {
+RPCBuilder Context::rpc(const std::string& name, const Value &arg) {
     RPCBuilder ret{pvt, name};
-    ret._argument = std::move(arg);
+    ret._argument = arg;
     return ret;
 }
 
