@@ -192,10 +192,12 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
         chan->pending.push_back(op);
         chan->createOperations();
 
-        ret.reset(op.get(), [op](Operation*) mutable {
+        auto loop(op->chan->context->tcp_loop);
+        ret.reset(op.get(), [op, loop](Operation*) mutable {
             // on user thread
             auto temp(std::move(op));
-            temp->chan->context->tcp_loop.call([&temp]() {
+            auto L(std::move(loop));
+            L.call([&temp]() {
                 // on worker
                 try {
                     temp->_cancel(true);

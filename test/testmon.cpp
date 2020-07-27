@@ -48,7 +48,7 @@ struct BasicTest {
 
     ~BasicTest()
     {
-        if(cli.use_count()!=1u)
+        if(cli.use_count()>1u)
             testAbort("Tester Context leak");
     }
 
@@ -83,6 +83,17 @@ struct BasicTest {
             }
         }
         return ret;
+    }
+
+    void orphan()
+    {
+        testShow()<<__func__;
+
+        auto op = cli.monitor("nonexistent").exec();
+
+        // clear Context to orphan in-progress operation
+        cli = client::Context();
+        op.reset();
     }
 };
 
@@ -253,6 +264,7 @@ MAIN(testmon)
     testPlan(22);
     testSetup();
     logger_config_env();
+    BasicTest().orphan();
     TestLifeCycle().testBasic(true);
     TestLifeCycle().testBasic(false);
     TestLifeCycle().testSecond();

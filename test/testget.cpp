@@ -45,7 +45,7 @@ struct Tester {
 
     ~Tester()
     {
-        if(cli.use_count()!=1u)
+        if(cli.use_count()>1u)
             testAbort("Tester Context leak");
     }
 
@@ -173,6 +173,17 @@ struct Tester {
 
         testOk1(!done.wait(2.1));
     }
+
+    void orphan()
+    {
+        testShow()<<__func__;
+
+        auto op = cli.get("nonexistent").exec();
+
+        // clear Context to orphan in-progress operation
+        cli = client::Context();
+        op.reset();
+    }
 };
 
 struct ErrorSource : public server::Source
@@ -253,6 +264,7 @@ MAIN(testget)
     Tester().lazy();
     Tester().timeout();
     Tester().cancel();
+    Tester().orphan();
     testError(false);
     testError(true);
     cleanup_for_valgrind();

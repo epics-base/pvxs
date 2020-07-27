@@ -60,6 +60,9 @@ struct owned_ptr : public std::unique_ptr<T>
 };
 
 struct PVXS_API evbase {
+    evbase() = default;
+    evbase(const evbase&) = default;
+    evbase(evbase&&) = default;
     explicit evbase(const std::string& name, unsigned prio=0);
     ~evbase();
     void join();
@@ -75,12 +78,13 @@ struct PVXS_API evbase {
     void assertInLoop();
     bool inLoop();
 
-    INST_COUNTER(evbase);
+    inline void reset() { pvt.reset(); }
+
 private:
     struct Pvt;
-    std::unique_ptr<Pvt> pvt;
+    std::shared_ptr<Pvt> pvt;
 public:
-    event_base* const base;
+    event_base* base = nullptr;
 };
 
 typedef owned_ptr<event> evevent;

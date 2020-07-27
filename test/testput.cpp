@@ -174,6 +174,19 @@ struct Tester : public TesterBase
 
         testOk1(!done.wait(2.1));
     }
+
+    void orphan()
+    {
+        testShow()<<__func__;
+
+        auto op = cli.put("nonexistent")
+                     .set("value", "foo")
+                     .exec();
+
+        // clear Context to orphan in-progress operation
+        cli = client::Context();
+        op.reset();
+    }
 };
 
 struct TestPutBuilder : public TesterBase
@@ -326,6 +339,7 @@ MAIN(testput)
     Tester().lazy();
     Tester().timeout();
     Tester().cancel();
+    Tester().orphan();
     TestPutBuilder().testSet();
     testRO();
     testError();

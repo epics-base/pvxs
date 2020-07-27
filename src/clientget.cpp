@@ -456,9 +456,11 @@ static
 void gpr_cleanup(std::shared_ptr<Operation>& ret, std::shared_ptr<GPROp>&& op)
 {
     auto cap(std::move(op));
-    ret.reset(cap.get(), [cap](Operation*) mutable {
+    auto loop(cap->chan->context->tcp_loop);
+    ret.reset(cap.get(), [cap, loop](Operation*) mutable {
+        auto L(std::move(loop));
         // from use thread
-        cap->chan->context->tcp_loop.call([&cap]() {
+        L.call([&cap]() {
             auto temp(std::move(cap));
             // on worker
             try {

@@ -201,6 +201,17 @@ struct Tester {
         testEq(result["query.a"].as<int32_t>(), 5);
         testEq(result["query.b"].as<std::string>(), "hello");
     }
+
+    void orphan()
+    {
+        testShow()<<__func__;
+
+        auto op = cli.rpc("nonexistent").exec();
+
+        // clear Context to orphan in-progress operation
+        cli = client::Context();
+        op.reset();
+    }
 };
 
 } // namespace
@@ -216,6 +227,7 @@ MAIN(testrpc)
     Tester().cancel();
     Tester().error();
     Tester().builder();
+    Tester().orphan();
     cleanup_for_valgrind();
     return testDone();
 }

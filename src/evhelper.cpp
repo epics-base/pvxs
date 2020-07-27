@@ -122,6 +122,8 @@ struct evbase::Pvt : public epicsThreadRunable
     epicsThread worker;
     bool running = true;
 
+    INST_COUNTER(evbase);
+
     Pvt(const std::string& name, unsigned prio)
         :worker(*this, name.c_str(),
                 epicsThreadGetStackSize(epicsThreadStackBig),

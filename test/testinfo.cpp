@@ -149,6 +149,17 @@ struct Tester {
 
         testOk1(!done.wait(2.1));
     }
+
+    void orphan()
+    {
+        testShow()<<__func__;
+
+        auto op = cli.info("nonexistent").exec();
+
+        // clear Context to orphan in-progress operation
+        cli = client::Context();
+        op.reset();
+    }
 };
 
 struct ErrorSource : public server::Source
@@ -213,6 +224,7 @@ MAIN(testinfo)
     Tester().lazy();
     Tester().timeout();
     Tester().cancel();
+    Tester().orphan();
     testError();
     return testDone();
 }

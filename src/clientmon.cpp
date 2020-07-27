@@ -563,10 +563,12 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
         chan->pending.push_back(op);
         chan->createOperations();
 
-        ret.reset(op.get(), [op](Subscription*) mutable {
+        auto loop(op->chan->context->tcp_loop);
+        ret.reset(op.get(), [op, loop](Subscription*) mutable {
             // on user thread
             auto temp(std::move(op));
-            temp->chan->context->tcp_loop.call([&temp]() {
+            auto L(std::move(loop));
+            L.call([&temp]() {
                 // on worker
                 try {
                     temp->_cancel(true);

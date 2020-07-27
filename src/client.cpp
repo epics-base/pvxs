@@ -412,10 +412,11 @@ void Context::Pvt::close()
         conns.clear();
         chans.clear();
 
-        assert(internal_self.use_count()==1);
+        // internal_self.use_count() may be >1 if
+        // we are orphaning some Operations
     });
 
-    tcp_loop.join();
+    tcp_loop.sync();
 
     // ensure any in-progress callbacks have completed
     manager.sync();
