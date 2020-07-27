@@ -165,6 +165,11 @@ OperationBase::OperationBase(operation_t op, const std::shared_ptr<Channel>& cha
 
 OperationBase::~OperationBase() {}
 
+const std::string& OperationBase::name()
+{
+    return chan->name;
+}
+
 Value OperationBase::wait(double timeout)
 {
     if(!waiter)

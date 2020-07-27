@@ -98,6 +98,7 @@ public:
 
 //! Handle for in-progress operation
 struct PVXS_API Operation {
+    //! Operation type
     const enum operation_t {
         Info    = 17, // CMD_GET_FIELD
         Get     = 10, // CMD_GET
@@ -110,6 +111,9 @@ struct PVXS_API Operation {
     Operation(const Operation&) = delete;
     Operation& operator=(const Operation&) = delete;
     virtual ~Operation() =0;
+
+    //! PV name
+    virtual const std::string& name() =0;
 
     //! Explicitly cancel a pending operation.
     //! Blocks until an in-progress callback has completed.

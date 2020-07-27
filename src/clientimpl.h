@@ -54,6 +54,7 @@ struct OperationBase : public Operation
     virtual void createOp() =0;
     virtual void disconnected(const std::shared_ptr<OperationBase>& self) =0;
 
+    virtual const std::string& name() override final;
     virtual Value wait(double timeout=-1.0) override final;
     virtual void interrupt() override final;
 };
