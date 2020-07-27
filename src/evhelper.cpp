@@ -107,8 +107,8 @@ struct evbase::Pvt : public epicsThreadRunable
         std::function<void()> fn;
         std::exception_ptr *result;
         epicsEvent *notify;
-        Work(const std::function<void()>& fn, std::exception_ptr *result, epicsEvent *notify)
-            :fn(fn), result(result), notify(notify)
+        Work(std::function<void()>&& fn, std::exception_ptr *result, epicsEvent *notify)
+            :fn(std::move(fn)), result(result), notify(notify)
         {}
     };
     std::deque<Work> actions;
