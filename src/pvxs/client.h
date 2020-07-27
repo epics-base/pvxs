@@ -376,6 +376,23 @@ public:
 
     /** Request prompt search of any disconnected channels.
      *
+     * This method is recommended for use when executing a batch of operations.
+     *
+     * @code
+     * Context ctxt = ...;
+     * std::vector<std::string> pvnames = ...;
+     * std::vector<Operation> ops(pvnames.size());
+     *
+     * // Initiate all operations
+     * for(size_t i=0; i<pvname.size(); i++)
+     *     ops[i] = ctxt.get(pvnames[i]).exec();
+     *
+     * ctxt.hurryUp(); // indicate end of batch
+     *
+     * for(size_t i=0; i<pvname.size(); i++)
+     *     ... = ops[i].wait(); // wait for results
+     * @endcode
+     *
      * Optional.  Equivalent to detection of a new server.
      * This method has no effect if called more often than once per 30 seconds.
      */
