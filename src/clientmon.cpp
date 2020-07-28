@@ -162,17 +162,19 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         return ret;
     }
 
-    virtual void cancel() override final {
+    virtual bool cancel() override final {
         auto context = chan->context;
         decltype (event) junk;
-        context->tcp_loop.call([this, &junk](){
-            _cancel(false);
+        bool ret;
+        context->tcp_loop.call([this, &junk, &ret](){
+            ret = _cancel(false);
             junk = std::move(event);
             // leave opByIOID for GC
         });
+        return ret;
     }
 
-    void _cancel(bool implicit) {
+    bool _cancel(bool implicit) {
         if(implicit && state!=Done) {
             log_info_printf(io, "Server %s channel %s monitor implied cancel\n",
                             chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
@@ -192,7 +194,9 @@ struct SubscriptionImpl : public OperationBase, public Subscription
             if(pipeline)
                 (void)event_del(ackTick.get());
         }
+        bool ret = state!=Done;
         state = Done;
+        return ret;
     }
 
     virtual void createOp() override final

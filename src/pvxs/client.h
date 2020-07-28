@@ -117,7 +117,8 @@ struct PVXS_API Operation {
 
     //! Explicitly cancel a pending operation.
     //! Blocks until an in-progress callback has completed.
-    virtual void cancel() =0;
+    //! @returns true if the operation was cancelled, or false if already complete.
+    virtual bool cancel() =0;
 
     /** @brief Block until Operation completion
      *
@@ -147,7 +148,7 @@ struct PVXS_API Subscription {
 
     //! Explicitly cancel a active subscription.
     //! Blocks until any in-progress callback has completed.
-    virtual void cancel() =0;
+    virtual bool cancel() =0;
 
     //! Ask a server to stop sending updates to this Subscription
     virtual void pause(bool p=true) =0;

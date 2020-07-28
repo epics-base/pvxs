@@ -40,17 +40,19 @@ struct InfoOp : public OperationBase
         _cancel(true);
     }
 
-    virtual void cancel() override final {
+    virtual bool cancel() override final {
         auto context = chan->context;
         decltype (done) junk;
-        context->tcp_loop.call([this, &junk](){
-            _cancel(false);
+        bool ret = false;
+        context->tcp_loop.call([this, &junk, &ret](){
+            ret = _cancel(false);
             junk = std::move(done);
             // leave opByIOID for GC
         });
+        return ret;
     }
 
-    void _cancel(bool implicit) {
+    bool _cancel(bool implicit) {
         if(implicit && state!=Done) {
             log_warn_printf(setup, "implied cancel of INFO on channel '%s'\n",
                             chan ? chan->name.c_str() : "");
@@ -62,7 +64,9 @@ struct InfoOp : public OperationBase
             chan->conn->opByIOID.erase(ioid);
             chan->opByIOID.erase(ioid);
         }
+        bool ret = state!=Done;
         state = Done;
+        return ret;
     }
 
     virtual void createOp() override final
