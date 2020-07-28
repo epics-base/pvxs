@@ -344,9 +344,8 @@ void SockAddr::setPort(unsigned short port)
 
 void SockAddr::setAddress(const char *name, unsigned short port)
 {
-    SockAddr temp;
-    int templen = sizeof(temp.store);
-    if(evutil_parse_sockaddr_port(name, &temp->sa, &templen))
+    SockAddr temp(AF_INET);
+    if(aToIPAddr(name, port, &temp->in))
         throw std::runtime_error(std::string("Unable to parse as IP addresss: ")+name);
     if(temp.port()==0)
         temp.setPort(port);
