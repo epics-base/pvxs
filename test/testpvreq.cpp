@@ -91,6 +91,46 @@ void testAssemble()
     );
 }
 
+void testParseEmpty()
+{
+    testShow()<<__func__;
+
+    auto req = client::Context::request()
+            .pvRequest("")
+            .build();
+
+    testShow()<<req;
+    testStrEq(std::string(SB()<<req),
+        "struct {\n"
+        "    struct {\n"
+        "    } field\n"
+        "}\n"
+    );
+}
+
+void testParseValue()
+{
+    testShow()<<__func__;
+
+    auto req = client::Context::request()
+            .pvRequest("field(value)")
+            .build();
+
+    testShow()<<req;
+    testStrEq(std::string(SB()<<req),
+        "struct {\n"
+        "    struct {\n"
+        "        struct {\n"
+        "        } value\n"
+        "    } field\n"
+        "    struct {\n"
+        "        struct {\n"
+        "        } _options\n"
+        "    } record\n"
+        "}\n"
+    );
+}
+
 void testParse1()
 {
     testShow()<<__func__;
@@ -260,11 +300,13 @@ void testArgs()
 
 MAIN(testpvreq)
 {
-    testPlan(25);
+    testPlan(27);
     testSetup();
     logger_config_env();
     testEmpty();
     testAssemble();
+    testParseEmpty();
+    testParseValue();
     testParse1();
     testParse2();
     testValid();
