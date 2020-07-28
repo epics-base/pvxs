@@ -59,6 +59,18 @@ std::string join_addr(const std::vector<std::string>& in)
     return strm.str();
 }
 
+void parse_bool(bool& dest, const std::string& name, const std::string& val)
+{
+    if(epicsStrCaseCmp(val.c_str(), "YES")==0 || val=="1") {
+        dest = true;
+    } else if(epicsStrCaseCmp(val.c_str(), "NO")==0 || val=="0") {
+        dest = false;
+    } else {
+        log_err_printf(serversetup, "%s invalid bool value (YES/NO) : '%s'\n",
+                       name.c_str(), val.c_str());
+    }
+}
+
 struct PickOne {
     const std::map<std::string, std::string>& defs;
     bool useenv;
@@ -183,13 +195,7 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
-        if(epicsStrCaseCmp(pickone.val.c_str(), "YES")==0) {
-            self.auto_beacon = true;
-        } else if(epicsStrCaseCmp(pickone.val.c_str(), "NO")==0) {
-            self.auto_beacon = false;
-        } else {
-            log_err_printf(serversetup, "%s invalid bool value (YES/NO)", pickone.name.c_str());
-        }
+        parse_bool(self.auto_beacon, pickone.name, pickone.val);
     }
 }
 
@@ -305,13 +311,7 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
-        if(epicsStrCaseCmp(pickone.val.c_str(), "YES")==0) {
-            self.autoAddrList = true;
-        } else if(epicsStrCaseCmp(pickone.val.c_str(), "NO")==0) {
-            self.autoAddrList = false;
-        } else {
-            log_err_printf(serversetup, "%s invalid bool value (YES/NO)", pickone.name.c_str());
-        }
+        parse_bool(self.autoAddrList, pickone.name, pickone.val);
     }
 }
 
