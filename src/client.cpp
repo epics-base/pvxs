@@ -361,6 +361,7 @@ Context::Pvt::Pvt(const Config& conf)
         auto top = ntohl(saddr->in.sin_addr.s_addr)>>24u;
         auto isucast = !isbcast && top<239 && top>224;
 
+        log_info_printf(io, "Searching to %s%s\n", saddr.tostring().c_str(), (isucast?" unicast":""));
         searchDest.emplace_back(saddr, isucast);
     }
 

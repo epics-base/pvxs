@@ -22,10 +22,29 @@
 #endif
 using namespace pvxs;
 
+namespace std {
+ostream& operator<<(ostream& strm, const vector<string>& v)
+{
+    strm<<"[";
+    bool first=true;
+    for(auto& e : v) {
+        if(first)
+            first = false;
+        else
+            strm<<", ";
+        strm<<'"'<<e<<'"';
+    }
+    strm<<"]";
+    return strm;
+}
+}
+
 namespace {
 
 void testParse()
 {
+    testShow()<<__func__;
+
     epicsEnvSet("EPICS_PVA_ADDR_LIST", "  1.2.3.4  5.6.7.8:9876  ");
     epicsEnvSet("EPICS_PVA_AUTO_ADDR_LIST", "NO");
     epicsEnvSet("EPICS_PVA_BROADCAST_PORT", "1234");
@@ -51,12 +70,88 @@ void testParse()
 #endif
 }
 
+void testDefs()
+{
+    testShow()<<__func__;
+
+    {
+        client::Config::defs_t defs;
+        client::Config conf;
+
+        conf.udp_port = 1234;
+        conf.interfaces = {"1.2.3.4", "1.1.1.1"};
+        conf.addressList = {"1.2.1.2", "4.3.2.1:1234"};
+        conf.autoAddrList = false;
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_BROADCAST_PORT"], "1234");
+        testEq(defs["EPICS_PVA_AUTO_ADDR_LIST"], "NO");
+        testEq(defs["EPICS_PVA_ADDR_LIST"], "1.2.1.2 4.3.2.1:1234");
+        testEq(defs["EPICS_PVA_INTF_ADDR_LIST"], "1.2.3.4 1.1.1.1");
+    }
+
+    {
+        client::Config::defs_t defs;
+        client::Config conf;
+
+        defs["EPICS_PVA_BROADCAST_PORT"] = "1234";
+        defs["EPICS_PVA_AUTO_ADDR_LIST"] = "NO";
+        defs["EPICS_PVA_ADDR_LIST"] = "1.2.1.2 4.3.2.1:1234";
+        defs["EPICS_PVA_INTF_ADDR_LIST"] = "1.2.3.4 1.1.1.1";
+        conf.applyDefs(defs);
+        testEq(conf.udp_port, 1234);
+        testFalse(conf.autoAddrList);
+        testEq(conf.addressList, std::vector<std::string>({"1.2.1.2:1234", "4.3.2.1:1234"}));
+        testEq(conf.interfaces, std::vector<std::string>({"1.2.3.4", "1.1.1.1"}));
+    }
+
+    {
+        server::Config::defs_t defs;
+        server::Config conf;
+
+        conf.udp_port = 1234;
+        conf.tcp_port = 5678;
+        conf.interfaces = {"1.2.3.4", "1.1.1.1"};
+        conf.beaconDestinations = {"1.2.1.2", "4.3.2.1:1234"};
+        conf.auto_beacon = false;
+
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_BROADCAST_PORT"], "1234");
+        testEq(defs["EPICS_PVAS_BROADCAST_PORT"], "1234");
+        testEq(defs["EPICS_PVA_SERVER_PORT"], "5678");
+        testEq(defs["EPICS_PVAS_SERVER_PORT"], "5678");
+        testEq(defs["EPICS_PVA_AUTO_ADDR_LIST"], "NO");
+        testEq(defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"], "NO");
+        testEq(defs["EPICS_PVA_ADDR_LIST"], "1.2.1.2 4.3.2.1:1234");
+        testEq(defs["EPICS_PVAS_BEACON_ADDR_LIST"], "1.2.1.2 4.3.2.1:1234");
+        testEq(defs["EPICS_PVA_INTF_ADDR_LIST"], "1.2.3.4 1.1.1.1");
+        testEq(defs["EPICS_PVAS_INTF_ADDR_LIST"], "1.2.3.4 1.1.1.1");
+    }
+
+    {
+        server::Config::defs_t defs;
+        server::Config conf;
+
+        defs["EPICS_PVAS_BROADCAST_PORT"] = "1234";
+        defs["EPICS_PVAS_SERVER_PORT"] = "5678";
+        defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = "NO";
+        defs["EPICS_PVAS_BEACON_ADDR_LIST"] = "1.2.1.2 4.3.2.1:1234";
+        defs["EPICS_PVAS_INTF_ADDR_LIST"] = "1.2.3.4 1.1.1.1";
+        conf.applyDefs(defs);
+        testEq(conf.udp_port, 1234);
+        testEq(conf.tcp_port, 5678);
+        testFalse(conf.auto_beacon);
+        testEq(conf.beaconDestinations, std::vector<std::string>({"1.2.1.2:1234", "4.3.2.1:1234"}));
+        testEq(conf.interfaces, std::vector<std::string>({"1.2.3.4:5678", "1.1.1.1:5678"}));
+    }
+}
+
 }
 
 MAIN(testconfig)
 {
-    testPlan(4);
+    testPlan(27);
     testSetup();
+    testDefs();
     logger_config_env();
     testParse();
     cleanup_for_valgrind();

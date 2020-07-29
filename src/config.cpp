@@ -8,7 +8,6 @@
 #include <vector>
 #include <string>
 #include <sstream>
-#include <iterator>
 
 #include <dbDefs.h>
 #include <osiSock.h>
@@ -45,9 +44,12 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
                 log_err_printf(config, "%s ignoring invalid '%s'\n", name, temp.c_str());
                 continue;
             }
-            char buf[24];
-            ipAddrToDottedIP(&addr, buf, sizeof(buf));
-            out.emplace_back(buf);
+            std::ostringstream strm;
+            uint32_t ip = ntohl(addr.sin_addr.s_addr);
+            strm<<((ip>>24)&0xff)<<'.'<<((ip>>16)&0xff)<<'.'<<((ip>>8)&0xff)<<'.'<<((ip>>0)&0xff);
+            if(addr.sin_port)
+                strm<<':'<<ntohs(addr.sin_port);
+            out.emplace_back(strm.str());
         }
     }
 }
@@ -55,7 +57,14 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
 std::string join_addr(const std::vector<std::string>& in)
 {
     std::ostringstream strm;
-    std::copy(in.begin(), in.end(), std::ostream_iterator<std::string>(strm, " "));
+    bool first=true;
+    for(auto& addr : in) {
+        if(first)
+            first = false;
+        else
+            strm<<' ';
+        strm<<addr;
+    }
     return strm.str();
 }
 
@@ -226,11 +235,11 @@ Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
 
 void Config::updateDefs(defs_t& defs) const
 {
-    defs["EPICS_PVAS_BROADCAST_PORT"] = SB()<<udp_port;
-    defs["EPICS_PVAS_SERVER_PORT"] = SB()<<tcp_port;
-    defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = auto_beacon ? "YES" : "NO";
-    defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
-    defs["EPICS_PVAS_INTF_ADDR_LIST"] = join_addr(interfaces);
+    defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = SB()<<udp_port;
+    defs["EPICS_PVA_SERVER_PORT"]    = defs["EPICS_PVAS_SERVER_PORT"]    = SB()<<tcp_port;
+    defs["EPICS_PVA_AUTO_ADDR_LIST"] = defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = auto_beacon ? "YES" : "NO";
+    defs["EPICS_PVA_ADDR_LIST"]      = defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
+    defs["EPICS_PVA_INTF_ADDR_LIST"] = defs["EPICS_PVAS_INTF_ADDR_LIST"]   = join_addr(interfaces);
 }
 
 void Config::expand()
@@ -313,6 +322,10 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
         parse_bool(self.autoAddrList, pickone.name, pickone.val);
     }
+
+    if(pickone({"EPICS_PVA_INTF_ADDR_LIST"})) {
+        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, 0);
+    }
 }
 
 Config& Config::applyEnv()
@@ -331,7 +344,8 @@ void Config::updateDefs(defs_t& defs) const
 {
     defs["EPICS_PVA_BROADCAST_PORT"] = SB()<<udp_port;
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = autoAddrList ? "YES" : "NO";
-    defs["EPICS_PVA_ADDR_LIST"] = join_addr(interfaces);
+    defs["EPICS_PVA_ADDR_LIST"] = join_addr(addressList);
+    defs["EPICS_PVA_INTF_ADDR_LIST"] = join_addr(interfaces);
 }
 
 void Config::expand()
