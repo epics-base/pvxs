@@ -370,10 +370,8 @@ void SharedPV::close()
     {
         Guard G(impl->lock);
 
-        if(!impl->current)
-            return; // ignore double close()
-
-        impl->current = Value();
+        if(impl->current)
+            impl->current = Value();
 
         impl->subscribers.clear();
         channels = std::move(impl->channels);

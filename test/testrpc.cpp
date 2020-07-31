@@ -109,6 +109,20 @@ struct Tester {
         // mbox not open
         serv.start();
 
+        std::atomic<bool> onFC{false}, onLD{false};
+        epicsEvent fldone;
+
+        mbox.onFirstConnect([&onFC](server::SharedPV&){
+            testShow()<<"In onFirstConnect()";
+
+            onFC.store(true);
+        });
+        mbox.onLastDisconnect([&onLD, &fldone](server::SharedPV&){
+            testShow()<<"In onLastDisconnect";
+            onLD.store(true);
+            fldone.signal();
+        });
+
         auto arg = initial.cloneEmpty();
         arg["value"] = 42;
         auto op = doCall(std::move(arg));
@@ -118,6 +132,14 @@ struct Tester {
             testOk1(!!ret["value"].as(v));
             testEq(v, 42);
         }
+
+        op.reset();
+        cli.cacheClear();
+        testOk1(fldone.wait(5.0));
+
+        testOk1(!mbox.isOpen());
+        testOk1(!!onFC.load());
+        testOk1(!!onLD.load());
     }
 
     void null()
@@ -218,7 +240,7 @@ struct Tester {
 
 MAIN(testrpc)
 {
-    testPlan(16);
+    testPlan(20);
     testSetup();
     Tester().echo();
     Tester().lazy();
