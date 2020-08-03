@@ -30,7 +30,9 @@ ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
     ,state(Creating)
 {}
 
-ServerChan::~ServerChan() {}
+ServerChan::~ServerChan() {
+    assert(state==Destroy);
+}
 
 ServerChannelControl::ServerChannelControl(const std::shared_ptr<ServerConn> &conn, const std::shared_ptr<ServerChan>& channel)
     :server(conn->iface->server->internal_self)
@@ -110,28 +112,27 @@ void ServerChannel_shutdown(const std::shared_ptr<ServerChan>& chan)
     if(chan->state==ServerChan::Destroy)
         return;
 
-    auto conn = chan->conn.lock();
-    if(!conn)
-        return;
-
     chan->state = ServerChan::Destroy;
 
-    conn->chanBySID.erase(chan->sid);
+    if(auto conn = chan->conn.lock()) {
 
-    for(auto& pair : chan->opByIOID) {
-        auto op = pair.second;
-        if(op->state==ServerOp::Dead)
-            continue;
+        conn->chanBySID.erase(chan->sid);
 
-        if(op->state==ServerOp::Executing && op->onCancel)
-            op->onCancel();
+        for(auto& pair : chan->opByIOID) {
+            auto op = pair.second;
+            if(op->state==ServerOp::Dead)
+                continue;
 
-        op->state = ServerOp::Dead;
+            if(op->state==ServerOp::Executing && op->onCancel)
+                op->onCancel();
 
-        if(op->onClose)
-            op->onClose("");
+            op->state = ServerOp::Dead;
 
-        conn->opByIOID.erase(op->ioid);
+            if(op->onClose)
+                op->onClose("");
+
+            conn->opByIOID.erase(op->ioid);
+        }
     }
 
     chan->opByIOID.clear();
@@ -152,20 +153,16 @@ void ServerChannelControl::close()
         if(!ch)
             return;
         auto conn = ch->conn.lock();
-        if(conn) {
-            if(ch->state==ServerChan::Active) {
-                // Send unsolicited Channel Destroy
+        if(conn && ch->state==ServerChan::Active) {
+            // Send unsolicited Channel Destroy
 
-                auto tx = bufferevent_get_output(conn->bev.get());
-                EvOutBuf R(hostBE, tx);
-                to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
-                to_wire(R, ch->sid);
-                to_wire(R, ch->cid);
-
-                ServerChannel_shutdown(ch);
-            }
-            ch->state = ServerChan::Destroy;
+            auto tx = bufferevent_get_output(conn->bev.get());
+            EvOutBuf R(hostBE, tx);
+            to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
+            to_wire(R, ch->sid);
+            to_wire(R, ch->cid);
         }
+        ServerChannel_shutdown(ch);
     });
 }
 

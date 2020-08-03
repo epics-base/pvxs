@@ -279,21 +279,16 @@ void ServerConn::cleanup()
 {
     log_debug_printf(connsetup, "Client %s Cleanup TCP Connection\n", peerName.c_str());
 
-    auto it = iface->server->connections.find(this);
-    if(it!=iface->server->connections.end()) {
-        auto self = std::move(it->second);
-        iface->server->connections.erase(it);
+    iface->server->connections.erase(this);
 
-        for(auto& pair : self->opByIOID) {
-            if(pair.second->onClose)
-                pair.second->onClose("");
-        }
-        for(auto& pair : self->chanBySID) {
-            if(pair.second->onClose)
-                pair.second->onClose("");
-        }
-
-        // delete this
+    for(auto& pair : opByIOID) {
+        if(pair.second->onClose)
+            pair.second->onClose("");
+    }
+    for(auto& pair : chanBySID) {
+        pair.second->state = ServerChan::Destroy;
+        if(pair.second->onClose)
+            pair.second->onClose("");
     }
 }
 
