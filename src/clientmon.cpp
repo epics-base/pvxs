@@ -386,7 +386,7 @@ void Connection::handle_MONITOR()
         op = info->handle.lock();
         if(!op) {
             // assume op has already sent CMD_DESTROY_REQUEST
-            log_debug_printf(io, "Server %s ignoring stake cmd%02x ioid %u\n",
+            log_debug_printf(io, "Server %s ignoring stale cmd%02x ioid %u\n",
                              peerName.c_str(), CMD_MONITOR, unsigned(ioid));
             return;
         }

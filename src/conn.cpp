@@ -169,32 +169,37 @@ void ConnBase::bevRead()
             expectSeg = false;
 
             // ready to process segBuf
-            switch(segCmd) {
-            default:
-                log_debug_printf(connio, "%s %s Ignore unexpected command 0x%02x\n", peerLabel(), peerName.c_str(), segCmd);
-                evbuffer_drain(segBuf.get(), evbuffer_get_length(segBuf.get()));
-                break;
-#define CASE(OP) case CMD_##OP: handle_##OP(); break
-                CASE(ECHO);
-                CASE(CONNECTION_VALIDATION);
-                CASE(CONNECTION_VALIDATED);
-                CASE(SEARCH);
-                CASE(AUTHNZ);
+            try {
+                switch(segCmd) {
+                default:
+                    log_debug_printf(connio, "%s %s Ignore unexpected command 0x%02x\n", peerLabel(), peerName.c_str(), segCmd);
+                    evbuffer_drain(segBuf.get(), evbuffer_get_length(segBuf.get()));
+                    break;
+    #define CASE(OP) case CMD_##OP: handle_##OP(); break
+                    CASE(ECHO);
+                    CASE(CONNECTION_VALIDATION);
+                    CASE(CONNECTION_VALIDATED);
+                    CASE(SEARCH);
+                    CASE(AUTHNZ);
 
-                CASE(CREATE_CHANNEL);
-                CASE(DESTROY_CHANNEL);
+                    CASE(CREATE_CHANNEL);
+                    CASE(DESTROY_CHANNEL);
 
-                CASE(GET);
-                CASE(PUT);
-                CASE(PUT_GET);
-                CASE(MONITOR);
-                CASE(RPC);
-                CASE(CANCEL_REQUEST);
-                CASE(DESTROY_REQUEST);
-                CASE(GET_FIELD);
+                    CASE(GET);
+                    CASE(PUT);
+                    CASE(PUT_GET);
+                    CASE(MONITOR);
+                    CASE(RPC);
+                    CASE(CANCEL_REQUEST);
+                    CASE(DESTROY_REQUEST);
+                    CASE(GET_FIELD);
 
-                CASE(MESSAGE);
-#undef CASE
+                    CASE(MESSAGE);
+    #undef CASE
+                }
+            }catch(std::exception& e){
+                log_exc_printf(connio, "%s Error while processing cmd 0x%02x: %s\n", peerLabel(), segCmd, e.what());
+                bev.reset();
             }
             // handlers may have cleared bev to force disconnect
             if(!bev)
