@@ -32,6 +32,7 @@ ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
 
 ServerChan::~ServerChan() {
     assert(state==Destroy);
+    assert(!onClose);
 }
 
 ServerChannelControl::ServerChannelControl(const std::shared_ptr<ServerConn> &conn, const std::shared_ptr<ServerChan>& channel)
@@ -99,7 +100,7 @@ void ServerChannelControl::onClose(std::function<void(const std::string&)>&& fn)
 
     serv->acceptor_loop.call([this, &fn](){
         auto ch = chan.lock();
-        if(!ch)
+        if(!ch || ch->state==ServerChan::Destroy)
             return;
 
         ch->onClose = std::move(fn);
@@ -128,8 +129,10 @@ void ServerChannel_shutdown(const std::shared_ptr<ServerChan>& chan)
 
             op->state = ServerOp::Dead;
 
-            if(op->onClose)
-                op->onClose("");
+            if(op->onClose) {
+                auto fn(std::move(op->onClose));
+                fn("");
+            }
 
             conn->opByIOID.erase(op->ioid);
         }
@@ -137,8 +140,10 @@ void ServerChannel_shutdown(const std::shared_ptr<ServerChan>& chan)
 
     chan->opByIOID.clear();
 
-    if(chan->onClose)
-        chan->onClose("");
+    if(chan->onClose) {
+        auto fn(std::move(chan->onClose));
+        fn("");
+    }
 }
 
 void ServerChannelControl::close()
@@ -325,6 +330,7 @@ void ServerConn::handle_CREATE_CHANNEL()
                 sts.code = Status::Fatal;
                 sts.msg = "Refused to create Channel";
                 sts.trace = "pvx:serv:refusechan:";
+                chan->state = ServerChan::Destroy;
 
                 sid = -1;
             }

@@ -287,8 +287,10 @@ void ServerConn::cleanup()
     }
     for(auto& pair : chanBySID) {
         pair.second->state = ServerChan::Destroy;
-        if(pair.second->onClose)
-            pair.second->onClose("");
+        if(pair.second->onClose) {
+            auto fn(std::move(pair.second->onClose));
+            fn("");
+        }
     }
 }
 
