@@ -17,10 +17,59 @@
 #include <pvxs/sharedArray.h>
 #include <pvxs/client.h>
 #include <pvxs/nt.h>
-#include "utilpvt.h"
+#include "dataimpl.h"
+#include "pvrequest.h"
 
 namespace {
 using namespace pvxs;
+
+void testPvRequest()
+{
+    namespace M = members;
+
+    testDiag("%s", __func__);
+
+    auto def = nt::NTScalar{TypeCode::String}.build();
+    auto val = def.create();
+    testShow()<<val;
+
+    {
+        auto rdef = TypeDef(TypeCode::Struct, {
+                                M::Struct("field", {})
+                            });
+
+        auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+
+        testEq(mask, BitMask({0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 10u));
+    }
+
+    {
+        auto rdef = TypeDef(TypeCode::Struct, {
+                                M::Struct("field", {
+                                    M::Struct("value", {}),
+                                })
+                            });
+
+        auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+
+        testEq(mask, BitMask({0, 1}, 10u));
+    }
+
+    {
+        auto rdef = TypeDef(TypeCode::Struct, {
+                                M::Struct("field", {
+                                    M::Struct("timeStamp", {}),
+                                    M::Struct("alarm", {
+                                        M::Struct("status", {}),
+                                    }),
+                                })
+                            });
+
+        auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+
+        testEq(mask, BitMask({0, 2, 4, 6, 7, 8, 9}, 10u));
+    }
+}
 
 struct TestBuilder : client::detail::CommonBuilder<TestBuilder, client::detail::PRBase>
 {
@@ -300,9 +349,10 @@ void testArgs()
 
 MAIN(testpvreq)
 {
-    testPlan(27);
+    testPlan(30);
     testSetup();
     logger_config_env();
+    testPvRequest();
     testEmpty();
     testAssemble();
     testParseEmpty();
