@@ -71,6 +71,36 @@ void testPvRequest()
     }
 }
 
+void testPvMask()
+{
+    auto val = nt::NTScalar{TypeCode::String}.create();
+
+    auto rdef = TypeDef(TypeCode::Struct, {
+                            members::Struct("field", {
+                                members::Struct("value", {}),
+                            })
+                        });
+
+    auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+
+    testFalse(testmask(val, mask));
+
+    val["alarm.status"].mark();
+    testFalse(testmask(val, mask));
+
+    val["value"].mark();
+    testTrue(testmask(val, mask));
+
+    val["alarm.status"].unmark();
+    testTrue(testmask(val, mask));
+
+    val.unmark();
+    testFalse(testmask(val, mask));
+
+    val.mark();
+    testTrue(testmask(val, mask));
+}
+
 struct TestBuilder : client::detail::CommonBuilder<TestBuilder, client::detail::PRBase>
 {
     TestBuilder()
@@ -349,10 +379,11 @@ void testArgs()
 
 MAIN(testpvreq)
 {
-    testPlan(30);
+    testPlan(36);
     testSetup();
     logger_config_env();
     testPvRequest();
+    testPvMask();
     testEmpty();
     testAssemble();
     testParseEmpty();

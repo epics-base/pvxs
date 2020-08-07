@@ -220,27 +220,29 @@ struct ServerMonitorControl : public server::MonitorControlOp
         if(!mon)
             return false;
 
-        Guard G(mon->lock);
-
         if(val && mon->type && mon->type.get()!=Value::Helper::desc(val))
             throw std::logic_error("Type change not allowed in post().  Recommend pvxs::Value::cloneEmpty()");
 
-        if((mon->queue.size() < mon->limit) || force || !val) {
-            mon->queue.push_back(val);
+        if(testmask(val, mon->pvMask)) {
+            Guard G(mon->lock);
 
-        } else if(!maybe) {
-            // squash
-            assert(mon->limit>0 && !mon->queue.empty());
+            if((mon->queue.size() < mon->limit) || force || !val) {
+                mon->queue.push_back(val);
 
-            mon->queue.back().assign(val);
-            // TODO track overrun
+            } else if(!maybe) {
+                // squash
+                assert(mon->limit>0 && !mon->queue.empty());
 
-        } else {
-            // nope
+                mon->queue.back().assign(val);
+                // TODO track overrun
+
+            } else {
+                // nope
+            }
+
+            if(auto serv = server.lock())
+                MonitorOp::maybeReply(serv.get(), mon);
         }
-
-        if(auto serv = server.lock())
-            MonitorOp::maybeReply(serv.get(), mon);
 
         return mon->queue.size() < mon->limit;
     }

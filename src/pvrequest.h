@@ -16,6 +16,9 @@ namespace impl {
 PVXS_API
 BitMask request2mask(const FieldDesc* desc, const Value& pvRequest);
 
+PVXS_API
+bool testmask(const Value& update, const BitMask& mask);
+
 }} // namespace pvxs::impl
 
 #endif // PVREQUEST_H

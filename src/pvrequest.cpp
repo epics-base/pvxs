@@ -71,5 +71,25 @@ BitMask request2mask(const FieldDesc* desc, const Value& pvRequest)
     return ret;
 }
 
+bool testmask(const Value& update, const BitMask& mask)
+{
+    auto desc = Value::Helper::desc(update);
+    auto store = Value::Helper::store_ptr(update);
+
+    if(!desc)
+        return false;
+
+    if(store->valid && mask[0])
+        return true;
+
+    if(desc->code==TypeCode::Struct) {
+        for(auto idx : range(size_t(1u), desc->size())) {
+            if(store[idx].valid && mask[idx])
+                return true;
+        }
+    }
+
+    return false;
+}
 
 }} // namespace pvxs::impl
