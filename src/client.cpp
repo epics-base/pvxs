@@ -210,6 +210,8 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<Context::Pvt>& con
         context->chanByName[chan->name] = chan;
 
         context->searchBuckets[context->currentBucket].push_back(chan);
+
+        context->poke(true);
     }
 
     return chan;
@@ -269,7 +271,7 @@ void Context::hurryUp()
         throw std::logic_error("NULL Context");
 
     pvt->manager.loop().call([this](){
-        pvt->poke();
+        pvt->poke(true);
     });
 }
 
@@ -423,12 +425,15 @@ void Context::Pvt::close()
     manager.sync();
 }
 
-void Context::Pvt::poke()
+void Context::Pvt::poke(bool force)
 {
+    if(poked)
+        return;
+
     epicsTimeStamp now{};
 
     double age = -1.0;
-    if(epicsTimeGetCurrent(&now) || (age=epicsTimeDiffInSeconds(&now, &lastPoke))<30.0) {
+    if(!force && (epicsTimeGetCurrent(&now) || (age=epicsTimeDiffInSeconds(&now, &lastPoke))<30.0)) {
         log_debug_printf(setup, "Ignoring hurryUp() age=%.1f sec\n", age);
         return;
     }
@@ -439,6 +444,7 @@ void Context::Pvt::poke()
     timeval immediate{0,0};
     if(event_add(searchTimer.get(), &immediate))
         throw std::runtime_error("Unable to schedule searchTimer");
+    poked = true;
 }
 
 void Context::Pvt::onBeacon(const UDPManager::Beacon& msg)
@@ -461,7 +467,7 @@ void Context::Pvt::onBeacon(const UDPManager::Beacon& msg)
                guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11],
                msg.server.tostring().c_str());
 
-    poke();
+    poke(false);
 }
 
 bool Context::Pvt::onSearch()
@@ -617,6 +623,8 @@ void Context::Pvt::onSearchS(evutil_socket_t fd, short evt, void *raw)
 
 void Context::Pvt::tickSearch()
 {
+    poked = false;
+
     auto idx = currentBucket;
     currentBucket = (currentBucket+1u)%searchBuckets.size();
 

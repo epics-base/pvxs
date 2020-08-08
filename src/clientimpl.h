@@ -186,6 +186,7 @@ struct Context::Pvt
     uint16_t searchRxPort;
 
     epicsTimeStamp lastPoke{};
+    bool poked = false;
 
     std::vector<uint8_t> searchMsg;
 
@@ -228,7 +229,7 @@ struct Context::Pvt
 
     void close();
 
-    void poke();
+    void poke(bool force);
 
     void onBeacon(const UDPManager::Beacon& msg);
 
