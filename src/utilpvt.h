@@ -253,7 +253,7 @@ struct InstCounter
 
 #define INST_COUNTER(KLASS) InstCounter<&cnt_ ## KLASS> instances
 
-#define CASE(KLASS) extern std::atomic<size_t> cnt_ ## KLASS
+#define CASE(KLASS) PVXS_API extern std::atomic<size_t> cnt_ ## KLASS
 
 CASE(StructTop);
 
