@@ -79,9 +79,9 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
     void notify()
     {
-        log_info_printf(monevt, "Server %s channel '%s' monitor notify\n",
+        log_info_printf(monevt, "Server %s channel '%s' monitor %snotify\n",
                         chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
-                        chan->name.c_str());
+                        chan->name.c_str(), needNotify ? "" : "skip ");
         if(needNotify && event) {
             needNotify = false;
 
@@ -244,7 +244,11 @@ struct SubscriptionImpl : public OperationBase, public Subscription
             if(!maskConn) {
                 empty = queue.empty();
 
-                queue.emplace_back(Entry(std::make_exception_ptr(Connected(conn->peerName))));
+                queue.emplace_back(std::make_exception_ptr(Connected(conn->peerName)));
+
+                log_debug_printf(io, "Server %s channel %s monitor PUSH Connected\n",
+                                 chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
+                                 chan->name.c_str());
             }
             if(pipeline)
                 window = queueSize;
@@ -276,7 +280,11 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                 Guard G(lock);
                 empty = queue.empty();
 
-                queue.emplace_back(Entry(std::make_exception_ptr(Disconnect())));
+                queue.emplace_back(std::make_exception_ptr(Disconnect()));
+
+                log_debug_printf(io, "Server %s channel %s monitor PUSH Disconnect\n",
+                                 chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
+                                 chan->name.c_str());
             }
 
             chan->pending.push_back(self);
@@ -488,7 +496,7 @@ void Connection::handle_MONITOR()
         }
 
         if(mon->queue.empty()) {
-            log_err_printf(io, "Server %s channel '%s' MONITOR empty update!\n",
+            log_err_printf(io, "Server %s channel '%s' monitor empty update!\n",
                            peerName.c_str(), mon->chan->name.c_str());
             notify = false;
         }
