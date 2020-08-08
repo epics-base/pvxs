@@ -81,8 +81,11 @@ ServerConn::~ServerConn()
 const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
 {
     auto it = chanBySID.find(sid);
-    if(it==chanBySID.end())
-        throw std::runtime_error(SB()<<"Client "<<peerName<<" non-existant SID "<<sid);
+    if(it==chanBySID.end()) {
+        static decltype (it->second) empty{};
+        return empty;
+        //throw std::runtime_error(SB()<<"Client "<<peerName<<" non-existant SID "<<sid);
+    }
     return it->second;
 }
 
@@ -216,15 +219,15 @@ void ServerConn::handle_DESTROY_REQUEST()
         throw std::runtime_error("Error decoding DestroyOp");
 
     auto& chan = lookupSID(sid);
-
     auto it = opByIOID.find(ioid);
-    auto n = chan->opByIOID.erase(ioid);
 
-    if(it==opByIOID.end() || n!=1) {
+    if(!chan || it==opByIOID.end() || 1!=chan->opByIOID.erase(ioid)) {
         log_warn_printf(connsetup, "Client %s can't destroy non-existant op %u:%u\n",
                    peerName.c_str(), unsigned(sid), unsigned(ioid));
 
-    } else {
+    }
+
+    if(it!=opByIOID.end()) {
         auto op = it->second;
         opByIOID.erase(it);
         op->state = ServerOp::Dead;

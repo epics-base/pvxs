@@ -28,7 +28,6 @@ namespace pvxs {namespace impl {
 struct ServIface;
 struct ServerConn;
 struct ServerChan;
-struct ServerChan;
 
 // base for tracking in-progress operations.  cf. ServerConn::opByIOID and ServerChan::opByIOID
 struct ServerOp

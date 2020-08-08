@@ -378,8 +378,9 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
 
         auto& chan = lookupSID(sid);
 
-        if(opByIOID.find(ioid)!=opByIOID.end()) {
-            log_err_printf(connsetup, "Client %s reuses existing ioid %u\n", peerName.c_str(), unsigned(ioid));
+        if(!chan || opByIOID.find(ioid)!=opByIOID.end()) {
+            log_err_printf(connsetup, "Client %s reuses existing sid %u ioid %u\n",
+                           peerName.c_str(), unsigned(sid), unsigned(ioid));
             bev.reset();
             return;
         }

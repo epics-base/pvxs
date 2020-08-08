@@ -472,8 +472,9 @@ void ServerConn::handle_MONITOR()
 
         auto& chan = lookupSID(sid);
 
-        if(opByIOID.find(ioid)!=opByIOID.end()) {
-            log_err_printf(connsetup, "Client %s reuses existing ioid %u\n", peerName.c_str(), unsigned(ioid));
+        if(!chan || opByIOID.find(ioid)!=opByIOID.end()) {
+            log_err_printf(connsetup, "Client %s reuses existing sid %u ioid %u\n",
+                           peerName.c_str(), unsigned(sid), unsigned(ioid));
             bev.reset();
             return;
         }
@@ -540,7 +541,13 @@ void ServerConn::handle_MONITOR()
             return;
         }
 
-        auto& chan = lookupSID(sid);
+        auto chan(op->chan.lock());
+        if(!chan || chan->sid!=sid) {
+            log_err_printf(connio, "Client %s MONITOR inconsistent sid %u:%u ioid %u\n",
+                           peerName.c_str(), unsigned(sid), unsigned(chan ? chan->sid : -1), ioid);
+            bev.reset();
+            return;
+        }
 
         // pvAccessCPP won't accept ack and start/stop in the same message,
         // although it will accept destroy in any !INIT message.
