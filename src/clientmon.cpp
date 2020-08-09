@@ -62,6 +62,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
     std::deque<Entry> queue;
     uint32_t window =0u, unack =0u;
+    // user code has seen pop()==nullptr
+    bool needNotify = true;
 
     INST_COUNTER(SubscriptionImpl);
 
@@ -80,7 +82,9 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         log_info_printf(monevt, "Server %s channel '%s' monitor notify\n",
                         chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
                         chan->name.c_str());
-        if(event) {
+        if(needNotify && event) {
+            needNotify = false;
+
             try {
                 event(*this);
             }catch(std::exception& e){
@@ -155,6 +159,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                     ret = std::move(ent.val);
 
             } else {
+                needNotify = true;
+
                 log_info_printf(monevt, "channel '%s' monitor pop() empty\n",
                                 channelName.c_str());
             }
