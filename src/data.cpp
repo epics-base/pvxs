@@ -613,9 +613,8 @@ void Value::copyIn(const void *ptr, StoreType type)
         if(type==StoreType::Null) {
             store->as<Value>() = Value(); // unselect Union or Any
             break;
-        }
 
-        if(desc->code==TypeCode::Any) {
+        } else if(desc->code==TypeCode::Any) {
             // assigning variant union.
             auto& val = store->as<Value>();
             if(type==StoreType::Compound) {
@@ -624,6 +623,52 @@ void Value::copyIn(const void *ptr, StoreType type)
 
             } else {
                 val = Value::Helper::build(ptr, type);
+                break;
+            }
+
+        } else if(desc->code==TypeCode::Union) {
+            auto& val = store->as<Value>();
+            if(type==StoreType::Compound) {
+                // assign union from Value.  (eg. during Value::clone())
+                // select and assign
+                auto& src = *reinterpret_cast<const Value*>(ptr);
+                for(auto i : range(desc->miter.size())) {
+                    auto idx(desc->miter[i].second);
+
+                    if(src.desc!=&desc->members[idx])
+                        continue;
+
+                    std::shared_ptr<const FieldDesc> udesc(store->top->desc, &desc->members[idx]);
+                    Value temp(udesc, *this);
+                    temp.assign(src);
+                    val = std::move(temp);
+                    break;
+                }
+                if(!val)
+                    throw NoConvert("Unsupported assignment to unselected union");
+                break;
+
+            } else if(!val) {
+                // caller is attempting to assign a value to an unselected discriminating union.
+                // attempt convenient, but inefficient auto-selection
+                for(auto i : range(desc->miter.size())) {
+                    auto idx(desc->miter[i].second);
+                    std::shared_ptr<const FieldDesc> udesc(store->top->desc, &desc->members[idx]);
+                    Value temp(udesc, *this);
+                    try{
+                        temp.copyIn(ptr, type);
+                    }catch(NoConvert&){
+                        continue;
+                    }
+                    val = std::move(temp);
+                }
+                if(!val)
+                    throw NoConvert("Unsupported assignment to unselected union");
+                break;
+
+            } else {
+                // union member already selected, auto-deref
+                val.copyIn(ptr, type);
                 break;
             }
         }
@@ -644,8 +689,13 @@ void Value::copyIn(const void *ptr, StoreType type)
                         }
 
                     } else {
-                        if(auto dfld = (*this)[src.nameOf(sfld)]) {
-                            dfld.copyIn(&sfld.store->store, sfld.store->code);
+                        auto& name(src.nameOf(sfld));
+                        if(auto dfld = (*this)[name]) {
+                            try {
+                                dfld.copyIn(&sfld.store->store, sfld.store->code);
+                            }catch(NoConvert& e){
+                                throw NoConvert(SB()<<"field \""<<name<<"\" : "<<e.what());
+                            }
                         } else {
                             throw NoField();
                         }

@@ -410,6 +410,17 @@ Value neckBolt()
                    }).create();
 }
 
+void testOp()
+{
+    testDiag("%s()", __func__);
+
+    Value top(neckBolt());
+    top["scalar.choice->one"] = 42;
+
+    (void)top.cloneEmpty();
+    (void)top.clone();
+}
+
 void testFormat()
 {
     testDiag("%s()", __func__);
@@ -517,6 +528,7 @@ MAIN(testtype)
     testTypeDef();
     testTypeDefDynamic();
     testTypeDefAppend();
+    testOp();
     testFormat();
     cleanup_for_valgrind();
     return testDone();
