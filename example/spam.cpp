@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
     auto src = std::make_shared<SpamSource>();
     src->names->insert(argv[1]);
 
-    // Build server which will server this PV
+    // Build server which will serve this PV
     // Configure using process environment.
     server::Server serv = server::Config::fromEnv()
             .build()

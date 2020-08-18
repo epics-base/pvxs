@@ -109,4 +109,6 @@ int main(int argc, char* argv[])
 
         std::cout<<"Result is:\n"<<result<<std::endl;
     }
+
+    return 0;
 }

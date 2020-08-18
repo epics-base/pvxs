@@ -23,6 +23,12 @@ ticker_SRCS += ticker.cpp
 TESTPROD_HOST += client
 client_SRCS += client.cpp
 
+TESTPROD_HOST += rpc_server
+rpc_server_SRCS += rpc_server.cpp
+
+TESTPROD_HOST += rpc_client
+rpc_client_SRCS += rpc_client.cpp
+
 #===========================
 
 include $(TOP)/configure/RULES
