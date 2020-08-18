@@ -229,6 +229,7 @@ struct PVXS_API Source {
      */
     virtual List onList();
 
+    //! Print status information.
     virtual void show(std::ostream& strm);
 };
 

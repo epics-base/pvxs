@@ -47,6 +47,23 @@ namespace ioc {
  *  Others may be added (or removed) later.
  *
  *  @throws std::logic_error if called before instance is created, or after instance is destroyed.
+ *
+ * @code
+ * static void myinitHook(initHookState state) {
+ *     if(state!=initHookAfterIocBuilt)
+ *         return;
+ *
+ *     server::SharedPV mypv(...);
+ *     ioc::server()
+ *           .addPV("my:pv:name", mypv);
+ * }
+ * static void myregistrar() {
+ *     initHookRegister(&myinitHook);
+ * }
+ * extern "C" {
+ *     epicsExportRegistrar(myregistrar); // needs matching entry in .dbd
+ * }
+ * @endcode
  */
 PVXS_IOC_API
 server::Server server();

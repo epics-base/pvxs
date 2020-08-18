@@ -10,7 +10,9 @@ Server
    sharedpv
    source
 
-`pvxs::server::Server` represents a PVA protocol server. :: 
+`pvxs::server::Server` represents a PVA protocol server.
+
+.. code-block:: c++
 
     #include <pvxs/server.h>
     namespace pvxs { namespace server { ... } }
@@ -21,7 +23,7 @@ The basic recipe to run a server using configuration from the process environmen
 
     auto serv = server::Config::fromEnv()
                 .build()
-    // call serv.addSource() at least once
+    // calls to serv.addPV() or serv.addSource()
     serv.run(); // run intil SIGINT or serv.interrupt()
     // could also call serv.start() and later serv.stop()
 
@@ -72,3 +74,36 @@ EPICS_PVAS_BROADCAST_PORT or EPICS_PVA_BROADCAST_PORT
 
 .. doxygenclass:: pvxs::server::Server
     :members:
+
+IOC Integration
+---------------
+
+.. code-block:: c++
+
+    #include <pvxs/server.h>
+    namespace pvxs { namespace namespace ioc { ... } }
+
+The separate "pvxsIoc" library exists to run a PVXS server as part of an IOC.
+See also `includepvxs`.
+
+IOC Integration respects the **$PVXS_LOG** environment variable.
+Changes to this environment variable are possible prior to
+calling "\*_registerRecordDeviceDriver(pdbbase)".
+
+IOC shell
+^^^^^^^^^
+
+The "pvxsIoc" library adds several IOC shell functions and variables.
+
+pvxsr(int level)
+    PVXS Server Report.  Shows information about server config (level==0)
+    or about connected clients (level>0).  Indirectly calls `pvxs::server::Source::show`.
+
+pvxsl(int level)
+    PVXS Server List.  Lists attached Sources and PV names.
+    Indirectly calls `pvxs::server::Source::onList`.
+
+Adding PVs
+^^^^^^^^^^
+
+.. doxygenfunction:: pvxs::ioc::server

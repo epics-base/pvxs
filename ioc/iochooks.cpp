@@ -225,7 +225,7 @@ void pvxsRegistrar()
     }
 }
 
-} // namesapce
+} // namespace
 
 namespace pvxs {
 namespace ioc {
