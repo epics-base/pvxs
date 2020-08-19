@@ -7,6 +7,7 @@
 #include <atomic>
 #include <memory>
 #include <stdexcept>
+#include <sstream>
 
 #include <pvxs/log.h>
 #include <pvxs/server.h>
@@ -61,8 +62,10 @@ void pvxsr(int detail)
 {
     try {
         if(auto serv = instance.load()) {
-            // TODO
-            (void)serv;
+            std::ostringstream strm;
+            Detailed D(strm, detail);
+            strm<<*serv;
+            printf("%s", strm.str().c_str());
         }
     } catch(std::exception& e) {
         fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
