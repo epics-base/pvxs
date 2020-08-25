@@ -122,6 +122,25 @@ protected:
     static void tickEchoS(evutil_socket_t fd, short evt, void *raw);
 };
 
+struct ConnectImpl : public Connect
+{
+    const std::shared_ptr<Channel> chan;
+    const std::string _name;
+    std::atomic<bool> _connected;
+    std::function<void()> _onConn;
+    std::function<void()> _onDis;
+
+    ConnectImpl(const std::shared_ptr<Channel>& chan, const std::string& name)
+        :chan(chan)
+        ,_name(name)
+        ,_connected{false}
+    {}
+    virtual ~ConnectImpl();
+
+    virtual const std::string &name() const override final;
+    virtual bool connected() const override final;
+};
+
 struct Channel {
     const std::shared_ptr<Context::Pvt> context;
     const std::string name;
@@ -152,6 +171,8 @@ struct Channel {
 
     // points to storage of Connection::opByIOID
     std::map<uint32_t, RequestInfo*> opByIOID;
+
+    std::list<ConnectImpl*> connectors;
 
     INST_COUNTER(Channel);
 

@@ -191,11 +191,22 @@ public:
     virtual Value pop() =0;
 };
 
+//! Handle for entry in Channel cache
+struct PVXS_API Connect {
+    virtual ~Connect() =0;
+
+    //! Name passed to Context::connect()
+    virtual const std::string& name() const =0;
+    //! Poll (momentary) connection status
+    virtual bool connected() const =0;
+};
+
 class GetBuilder;
 class PutBuilder;
 class RPCBuilder;
 class MonitorBuilder;
 class RequestBuilder;
+class ConnectBuilder;
 
 /** An independent PVA protocol client instance
  *
@@ -377,6 +388,19 @@ public:
      */
     inline
     MonitorBuilder monitor(const std::string& pvname);
+
+    /** Manually add, and maintain, an entry in the Channel cache.
+     *
+     * This optional method may be used when it is known that a given PV
+     * will be needed in future.
+     * ConnectBuilder::onConnect() and ConnectBuilder::onDisconnect()
+     * may be used to get asynchronous notification, or
+     * the returned Connect object may be used to poll Channel (dis)connect state.
+     *
+     * @since UNRELEASED
+     */
+    inline
+    ConnectBuilder connect(const std::string& pvname);
 
     /** Compose a pvRequest independently of a network operation.
      *
@@ -699,6 +723,30 @@ public:
     }
 };
 RequestBuilder Context::request() { return RequestBuilder{}; }
+
+//! cf. Context::connect()
+//! @since UNRELEASED
+class ConnectBuilder
+{
+    std::shared_ptr<Context::Pvt> ctx;
+    std::string _pvname;
+    std::function<void()> _onConn;
+    std::function<void()> _onDis;
+public:
+    ConnectBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& pvname)
+        :ctx(ctx)
+        ,_pvname(pvname)
+    {}
+
+    //! Handler to be invoked when channel becomes connected.
+    ConnectBuilder& onConnect(std::function<void()>&& cb) { _onConn = std::move(cb); return *this; }
+    //! Handler to be invoked when channel becomes disconnected.
+    ConnectBuilder& onDisconnect(std::function<void()>&& cb) { _onDis = std::move(cb); return *this; }
+
+    PVXS_API
+    std::shared_ptr<Connect> exec();
+};
+ConnectBuilder Context::connect(const std::string& pvname) { return ConnectBuilder{pvt, pvname}; }
 
 struct PVXS_API Config {
     //! List of unicast and broadcast addresses

@@ -46,7 +46,53 @@ struct Tester {
     ~Tester()
     {
         if(cli.use_count()>1u)
-            testAbort("Tester Context leak");
+            testAbort("Tester Context leak: %u", unsigned(cli.use_count()));
+    }
+
+    void testConnector()
+    {
+        testShow()<<__func__;
+
+        mbox.open(initial);
+        serv.start();
+
+        epicsEvent evt;
+        bool connd = false,
+             discd = false;
+
+        auto ctor = cli.connect("mailbox")
+                .onConnect([&evt, &connd]()
+        {
+            testDiag("onConnect%c", !connd ? '.' : '?');
+            connd = true;
+            evt.signal();
+        })
+                .onDisconnect([&evt, &discd]()
+        {
+            testDiag("onDisconnect%c", !discd ? '.' : '?');
+            discd = true;
+            evt.signal();
+        })
+                .exec();
+
+        // ensure de-dup
+        auto ctor2 = cli.connect("mailbox").exec();
+
+        testTrue(evt.wait(5.0))<<"Wait for Connect";
+        testTrue(connd);
+
+        // ensure de-dup
+        auto ctor3 = cli.connect("mailbox").exec();
+
+        testTrue(ctor->connected());
+        testTrue(ctor2->connected());
+        testTrue(ctor3->connected());
+
+        serv.stop();
+
+        testTrue(evt.wait(5.0))<<"Wait for Disconnect";
+        testTrue(discd);
+        testFalse(ctor->connected());
     }
 
     void testWaiter()
@@ -256,9 +302,10 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(15);
+    testPlan(23);
     testSetup();
     logger_config_env();
+    Tester().testConnector();
     Tester().testWaiter();
     Tester().loopback();
     Tester().lazy();

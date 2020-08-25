@@ -127,10 +127,64 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
     self->sid = 0xdeadbeef; // spoil
     context->searchBuckets[context->currentBucket].push_back(self);
 
+    auto conns(connectors); // copy list
+
+    for(auto& conn : conns) {
+        conn->_connected.store(false, std::memory_order_relaxed);
+        if(conn->_onDis)
+            conn->_onDis();
+    }
+
     log_debug_printf(io, "Server %s detach channel '%s' to re-search\n",
                      conn ? conn->peerName.c_str() : "<disconnected>",
                      self->name.c_str());
 
+}
+
+Connect::~Connect() {}
+
+ConnectImpl::~ConnectImpl() {}
+
+const std::string& ConnectImpl::name() const
+{
+    return _name;
+}
+bool ConnectImpl::connected() const
+{
+    return _connected.load(std::memory_order_relaxed);
+}
+
+std::shared_ptr<Connect> ConnectBuilder::exec()
+{
+    if(!ctx)
+        throw std::logic_error("NULL Builder");
+
+    std::shared_ptr<ConnectImpl> ret;
+
+    ctx->tcp_loop.call([&ret, this]() {
+        auto chan = Channel::build(ctx->shared_from_this(), _pvname);
+
+        auto loop(this->ctx->tcp_loop);
+        std::shared_ptr<ConnectImpl> internal(new ConnectImpl(chan, _pvname));
+        internal->_connected = chan->state==Channel::Active;
+
+        ret.reset(internal.get(), [internal, loop](ConnectImpl* ptr) mutable {
+            // cleanup from user code (maybe user thread)
+            auto self(std::move(internal));
+            auto L(std::move(loop));
+
+            L.call([&self]() {
+                self->chan->connectors.remove(self.get());
+            });
+        });
+
+        internal->_onConn = std::move(_onConn);
+        internal->_onDis = std::move(_onDis);
+
+        chan->connectors.push_back(internal.get());
+    });
+
+    return ret;
 }
 
 Value ResultWaiter::wait(double timeout)

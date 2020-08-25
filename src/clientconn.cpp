@@ -340,6 +340,14 @@ void Connection::handle_CREATE_CHANNEL()
                          chan->name.c_str(), unsigned(chan->cid), unsigned(chan->sid));
 
         chan->createOperations();
+
+        auto conns(chan->connectors); // copy list
+
+        for(auto& conn : conns) {
+            conn->_connected.store(true, std::memory_order_relaxed);
+            if(conn->_onConn)
+                conn->_onConn();
+        }
     }
 }
 
