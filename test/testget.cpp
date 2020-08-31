@@ -101,14 +101,21 @@ struct Tester {
 
         mbox.open(initial);
         serv.start();
+        std::atomic<bool> hadInit{false};
 
-        auto op = cli.get("mailbox").exec();
+        auto op = cli.get("mailbox")
+                .onInit([&hadInit](const Value& prototype) {
+                    testShow()<<"onInit() << "<<prototype;
+                    hadInit.store(prototype["value"].valid());
+                })
+                .exec();
 
         cli.hurryUp();
 
         auto result = op->wait(5.0);
 
         testEq(result["value"].as<int32_t>(), 42);
+        testTrue(hadInit.load());
     }
 
     void testWait()
@@ -302,7 +309,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(23);
+    testPlan(24);
     testSetup();
     logger_config_env();
     Tester().testConnector();

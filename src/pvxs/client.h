@@ -496,6 +496,7 @@ protected:
 template<typename SubBuilder, typename Base>
 class CommonBuilder : public Base {
 protected:
+    std::function<void (const Value&)> _onInit;
     CommonBuilder() = default;
     constexpr CommonBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : Base(ctx, name) {}
     inline SubBuilder& _sb() { return static_cast<SubBuilder&>(*this); }
@@ -537,6 +538,11 @@ public:
 
     SubBuilder& priority(int p) { this->_prio = p; return _sb(); }
     SubBuilder& server(const std::string& s) { this->_server = s; return _sb(); }
+
+    // Expert API
+    // called during operation INIT phase for Get/Put/Monitor when remote type
+    // description is available.
+    SubBuilder& onInit(std::function<void (const Value&)>&& cb) { this->_onInit = std::move(cb); return _sb(); }
 };
 
 } // namespace detail

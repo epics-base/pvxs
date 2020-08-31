@@ -39,6 +39,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
     evevent ackTick;
 
     // const after exec()
+    std::function<void (const Value&)> onInit;
     std::function<void(Subscription&)> event;
     Value pvRequest;
     bool pipeline = false;
@@ -447,6 +448,9 @@ void Connection::handle_MONITOR()
                         peerName.c_str(),
                         mon->chan->name.c_str());
 
+        if(mon->onInit)
+            mon->onInit(info->prototype);
+
         mon->state = SubscriptionImpl::Idle;
 
         if(mon->autostart)
@@ -547,6 +551,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 
         auto op = std::make_shared<SubscriptionImpl>(Operation::Monitor, chan);
         op->event = std::move(_event);
+        op->onInit = std::move(_onInit);
         op->pvRequest = _buildReq();
         op->maskConn = _maskConn;
         op->maskDiscon = _maskDisconn;
