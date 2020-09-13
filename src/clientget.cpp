@@ -183,7 +183,8 @@ struct GPROp : public OperationBase
         }
         if(state==GetOPut || state==Exec) {
             chan->conn->sendDestroyRequest(chan->sid, ioid);
-
+        }
+        if(state==Creating || state==GetOPut || state==Exec) {
             // This opens up a race with an in-flight reply.
             chan->conn->opByIOID.erase(ioid);
             chan->opByIOID.erase(ioid);
