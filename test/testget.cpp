@@ -237,6 +237,46 @@ struct Tester {
         cli = client::Context();
         op.reset();
     }
+
+    void manualExec()
+    {
+        testShow()<<__func__;
+
+        epicsEvent initd;
+        epicsEvent done;
+
+        mbox.open(initial);
+        serv.start();
+
+        auto op = cli.get("mailbox")
+                .autoExec(false)
+                .onInit([&initd](const Value& prototype) {
+                    testDiag("onInit()");
+                    initd.signal();
+                })
+                .result([&initd](client::Result&& result) {
+                    testFail("result() unexpected error prior to onInit()");
+                    initd.signal();
+                })
+                .exec();
+
+        testOk1(initd.wait(5.0));
+        testDiag("reExec() 1");
+        op->reExec(Value(), [&done](client::Result&& result) {
+            testTrue(!!result());
+            testDiag("result() 1");
+            done.signal();
+        });
+
+        testOk1(done.wait(5.0));
+        testDiag("reExec() 2");
+        op->reExec(Value(), [&done](client::Result&& result) {
+            testTrue(!!result());
+            testDiag("result() 2");
+            done.signal();
+        });
+        testOk1(done.wait(5.0));
+    }
 };
 
 struct ErrorSource : public server::Source
@@ -309,7 +349,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(24);
+    testPlan(29);
     testSetup();
     logger_config_env();
     Tester().testConnector();
@@ -319,6 +359,7 @@ MAIN(testget)
     Tester().timeout();
     Tester().cancel();
     Tester().orphan();
+    Tester().manualExec();
     testError(false);
     testError(true);
     cleanup_for_valgrind();

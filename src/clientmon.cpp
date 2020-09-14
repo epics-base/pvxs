@@ -210,6 +210,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         return ret;
     }
 
+    void reExec(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
+
     virtual void createOp() override final
     {
         if(state!=Connecting) {
