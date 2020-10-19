@@ -45,6 +45,8 @@ effected named arguments.
 .. doxygenclass:: pvxs::client::Context
     :members:
 
+.. _clientgetapi:
+
 Get/Info
 ^^^^^^^^
 
@@ -55,6 +57,8 @@ which will never have any fields marked.
 
 .. doxygenclass:: pvxs::client::GetBuilder
     :members:
+
+.. _clientputapi:
 
 Put
 ^^^
@@ -73,6 +77,8 @@ to an NTEnum.
 
 .. doxygenclass:: pvxs::client::PutBuilder
     :members:
+
+.. _clientrpcapi:
 
 RPC
 ^^^
@@ -112,6 +118,8 @@ if the operation succeeded, or an exception.
 .. doxygenclass:: pvxs::client::Result
     :members:
 
+.. _clientmonapi:
+
 Monitor
 ^^^^^^^
 
@@ -128,8 +136,13 @@ The `pvxs::client::Subscription::pop` method will remove an entry from the queue
 Data updates are returned as a valid Value.
 Events/errors are thrown as exceptions.
 
+An `pvxs::client::MonitorBuilder::event` callback is only invoked when the
+Subscription queue becomes not-empty.
+It will not be called again until `pvxs::client::Subscription::pop` has returned
+an empty/invliad Value.
+
 The special exceptions `pvxs::client::Connected`, `pvxs::client::Disconnect`, and `pvxs::client::Finished`
-have specific meaning for a Subscription.
+have specific meaning when thrown by `pvxs::client::Subscription::pop`.
 
 Connected
     Depending on `pvxs::client::MonitorBuilder::maskConnected` (default true).

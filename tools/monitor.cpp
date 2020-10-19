@@ -108,33 +108,39 @@ int main(int argc, char *argv[])
 
             ops.push_back(ctxt.monitor(argv[n])
                           .pvRequest(request)
+                          .maskConnected(false)
+                          .maskDisconnected(false)
                           .event([&argv, n, verbose, &remaining, &done, format, arrLimit](client::Subscription& mon)
             {
-
-                try {
-                    while(auto update = mon.pop()) {
+                while(true) {
+                    try {
+                        auto update = mon.pop();
+                        if(!update) {
+                            // event queue empty
+                            log_info_printf(app, "%s POP empty\n", argv[n]);
+                            break;
+                        }
                         log_info_printf(app, "%s POP data\n", argv[n]);
                         std::cout<<argv[n]<<"\n"<<update.format()
                                    .format(format)
                                    .arrayLimit(arrLimit);
+
+                    }catch(client::Finished& conn) {
+                        log_info_printf(app, "%s POP Finished\n", argv[n]);
+                        if(verbose)
+                            std::cerr<<argv[n]<<" Finished\n";
+                        if(remaining.fetch_sub(1)==1)
+                            done.signal();
+
+                    }catch(client::Connected& conn) {
+                        std::cerr<<argv[n]<<" Connected to "<<conn.peerName<<"\n";
+
+                    }catch(client::Disconnect& conn) {
+                        std::cerr<<argv[n]<<" Disconnected\n";
+
+                    }catch(std::exception& err) {
+                        std::cerr<<argv[n]<<" Error "<<typeid (err).name()<<" : "<<err.what()<<"\n";
                     }
-                    log_info_printf(app, "%s POP empty\n", argv[n]);
-
-                }catch(client::Finished& conn) {
-                    log_info_printf(app, "%s POP Finished\n", argv[n]);
-                    if(verbose)
-                        std::cerr<<argv[n]<<" Finished\n";
-                    if(remaining.fetch_sub(1)==1)
-                        done.signal();
-
-                }catch(client::Connected& conn) {
-                    std::cerr<<argv[n]<<" Connected to "<<conn.peerName<<"\n";
-
-                }catch(client::Disconnect& conn) {
-                    std::cerr<<argv[n]<<" Disconnected\n";
-
-                }catch(std::exception& err) {
-                    std::cerr<<argv[n]<<" Error "<<typeid (err).name()<<" : "<<err.what()<<"\n";
                 }
 
             }).exec());

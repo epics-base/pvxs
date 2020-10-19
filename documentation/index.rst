@@ -33,7 +33,7 @@ Status
 This module is considered feature complete, but is not yet making releases.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    overview

@@ -235,6 +235,7 @@ public:
      *               .exec();
      * // store op until completion
      * @endcode
+     * See <a href="#get-info">Get</a> for details.
      */
     inline
     GetBuilder get(const std::string& pvname);
@@ -262,6 +263,8 @@ public:
      *               .exec();
      * // store op until completion
      * @endcode
+     *
+     * See <a href="#get-info">Info</a> for details.
      */
     inline
     GetBuilder info(const std::string& pvname);
@@ -301,6 +304,8 @@ public:
      *               .exec();
      * // store op until completion
      * @endcode
+     *
+     * See <a href="#put">Put</a> for details.
      */
     inline
     PutBuilder put(const std::string& pvname);
@@ -334,6 +339,8 @@ public:
      *               .exec();
      * // store op until completion
      * @endcode
+     *
+     * See <a href="#rpc">RPC</a> for details.
      */
     inline
     RPCBuilder rpc(const std::string& pvname, const Value& arg);
@@ -343,17 +350,24 @@ public:
      * @code
      * auto sub = ctxt.monitor("pv:name")
      *                .event([](Subscription& sub) {
-     *                    try {
-     *                        while(Value update = sub.pop()) {
+     *                    // Subscription queue becomes not empty
+     *                    while(true) {
+     *                        try {
+     *                            Value update = sub.pop();
+     *                            if(!update)
+     *                                break; // Subscription queue becomes not empty
      *                            std::cout<<update<<"\n";
+     *                        } catch(std::exception& e) {
+     *                            // may be Connected(), Disconnect(), Finished(), or RemoteError()
+     *                            std::cerr<<"Error "<<e.what()<<"\n";
      *                        }
-     *                     } catch(std::exception& e) {
-     *                         std::cerr<<"Error "<<e.what()<<"\n";
-     *                     }
+     *                    }
      *                })
      *                .exec();
      * // store op until completion
      * @endcode
+     *
+     * See <a href="#monitor">Monitor</a> for details.
      */
     inline
     MonitorBuilder monitor(const std::string& pvname);
@@ -644,8 +658,14 @@ class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder, detail::Comm
 public:
     MonitorBuilder() = default;
     MonitorBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
-    //! Install event callback
-    //! The functor is stored in the Subscription returned by exec().
+    /** Install FIFO not-empty event callback.
+     *
+     *  This functor will be called each time the Subscription event queue becomes
+     *  not empty.  A Subscription becomes empty when Subscription::pop() returns
+     *  an empty/invalid Value.
+     *
+     *  The functor is stored in the Subscription returned by exec().
+     */
     MonitorBuilder& event(std::function<void(Subscription&)>&& cb) { _event = std::move(cb); return *this; }
     //! Include Connected exceptions in queue (default false).
     MonitorBuilder& maskConnected(bool m = true) { _maskConn = m; return *this; }
