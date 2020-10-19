@@ -79,6 +79,7 @@ language = None
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 default_role = "any"
+primary_domain = "cpp"
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
