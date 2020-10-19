@@ -31,7 +31,7 @@ EPICS_PVA_BROADCAST_PORT
     // Context configured from process environment
     client::Context ctxt = client::Config::fromEnv().build();
 
-Programatic configuration can be accomplished by explicitly filling in a `pvxs::client::Config`.
+Programmatic configuration can be accomplished by explicitly filling in a `pvxs::client::Config`.
 
 Making Requests
 ---------------
@@ -68,7 +68,7 @@ Put
 In the generic form of put(), the field values to sent have
 to be passed to the builder callback.
 This is necessary as the server mandated PV type definition
-is not known when an Put operation is initiated.
+is not known when a Put operation is initiated.
 
 Additionally, a put operation will by default first fetch the
 present value of the PV and provide it to the builder callback.
@@ -131,7 +131,7 @@ The caller **must** retain this handle or the operation will be implicitly cance
 
 Until cancelled, a Subscription will attempt to (re)connect to the requested PV.
 
-A Subscription object allows access to an queue of data updates as Value and events/errors as exceptions.
+A Subscription object allows access to a queue of data updates as Value and events/errors as exceptions.
 The `pvxs::client::Subscription::pop` method will remove an entry from the queue, or return an empty/invalid Value.
 Data updates are returned as a valid Value.
 Events/errors are thrown as exceptions.
@@ -155,7 +155,7 @@ Disconnect
 
 Finished
     Depending on `pvxs::client::MonitorBuilder::maskDisconnected` (default false).
-    Queued when a the server indicates that Subscription will receive no more date updates as a normal completion.
+    Queued when the server indicates that Subscription will receive no more date updates as a normal completion.
     Finished is a sub-class of Disconnect.
 
 There are several aspects of a Subscription which may be selected through the MonitorBuilder.
@@ -218,7 +218,7 @@ All operations except info() (GET_FIELD) take a Value which servers may use to m
 Conventionally, the two ways this may be done is to provide a mask to limit the (sub)fields for which data is returned.
 Secondly, to provide certain well-known options to modify the operation.
 
-the pvRequest conditions may be specified in three ways through the methods of `pvxs::client::detail::CommonBuilder`
+The pvRequest conditions may be specified in three ways through the methods of `pvxs::client::detail::CommonBuilder`
 exposed through the individual \*Builder types.
 
 Programatic
@@ -238,7 +238,7 @@ Fallback
 Syntax
 ^^^^^^
 
-The parser byhind `pvxs::client::detail::CommonBuilder::pvRequest` understands the following grammar.
+The parser behind `pvxs::client::detail::CommonBuilder::pvRequest` understands the following grammar.
 
 .. productionlist::
     pvRequest : | entry | pvRequest entry

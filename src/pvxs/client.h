@@ -235,7 +235,7 @@ public:
      *               .exec();
      * // store op until completion
      * @endcode
-     * See <a href="#get-info">Get</a> for details.
+     * See GetBuilder and <a href="#get-info">Get/Info</a> for details.
      */
     inline
     GetBuilder get(const std::string& pvname);
@@ -264,7 +264,7 @@ public:
      * // store op until completion
      * @endcode
      *
-     * See <a href="#get-info">Info</a> for details.
+     * See GetBuilder and <a href="#get-info">Get/Info</a> for details.
      */
     inline
     GetBuilder info(const std::string& pvname);
@@ -305,7 +305,7 @@ public:
      * // store op until completion
      * @endcode
      *
-     * See <a href="#put">Put</a> for details.
+     * See PutBuilder and <a href="#put">Put</a> for details.
      */
     inline
     PutBuilder put(const std::string& pvname);
@@ -340,7 +340,7 @@ public:
      * // store op until completion
      * @endcode
      *
-     * See <a href="#rpc">RPC</a> for details.
+     * See RPCBuilder and <a href="#rpc">RPC</a> for details.
      */
     inline
     RPCBuilder rpc(const std::string& pvname, const Value& arg);
@@ -367,7 +367,7 @@ public:
      * // store op until completion
      * @endcode
      *
-     * See <a href="#monitor">Monitor</a> for details.
+     * See MonitorBuilder and <a href="#monitor">Monitor</a> for details.
      */
     inline
     MonitorBuilder monitor(const std::string& pvname);
@@ -512,6 +512,7 @@ public:
 } // namespace detail
 
 //! Prepare a remote GET or GET_FIELD (info) operation.
+//! See Context::get()
 class GetBuilder : public detail::CommonBuilder<GetBuilder, detail::CommonBase> {
     std::function<void(Result&&)> _result;
     bool _get = false;
@@ -540,6 +541,7 @@ GetBuilder Context::info(const std::string& name) { return GetBuilder{pvt, name,
 GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, true}; }
 
 //! Prepare a remote PUT operation
+//! See Context::put()
 class PutBuilder : public detail::CommonBuilder<PutBuilder, detail::PRBase> {
     bool _doGet = true;
     std::function<Value(Value&&)> _builder;
@@ -604,7 +606,8 @@ public:
 };
 PutBuilder Context::put(const std::string& name) { return PutBuilder{pvt, name}; }
 
-//! Prepare a remote RPC operation
+//! Prepare a remote RPC operation.
+//! See Context::rpc()
 class RPCBuilder : public detail::CommonBuilder<RPCBuilder, detail::PRBase> {
     Value _argument;
     std::function<void(Result&&)> _result;
@@ -651,6 +654,7 @@ RPCBuilder Context::rpc(const std::string& name, const Value &arg) {
 }
 
 //! Prepare a remote subscription
+//! See Context::monitor()
 class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder, detail::CommonBase> {
     std::function<void(Subscription&)> _event;
     bool _maskConn = true;
