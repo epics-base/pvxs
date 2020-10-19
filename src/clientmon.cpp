@@ -39,6 +39,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
     evevent ackTick;
 
     // const after exec()
+    std::weak_ptr<SubscriptionImpl> self; // internal
     std::function<void (const Value&)> onInit;
     std::function<void(Subscription&)> event;
     Value pvRequest;
@@ -171,6 +172,10 @@ struct SubscriptionImpl : public OperationBase, public Subscription
             }
         }
         return ret;
+    }
+
+    virtual std::shared_ptr<Subscription> shared_from_this() const override final {
+        return std::shared_ptr<Subscription>(self);
     }
 
     virtual bool cancel() override final {
@@ -552,6 +557,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
         auto chan = Channel::build(ctx->shared_from_this(), _name);
 
         auto op = std::make_shared<SubscriptionImpl>(Operation::Monitor, chan);
+        op->self = op;
         op->event = std::move(_event);
         op->onInit = std::move(_onInit);
         op->pvRequest = _buildReq();

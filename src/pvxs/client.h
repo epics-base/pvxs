@@ -193,6 +193,11 @@ public:
      * @endcode
      */
     virtual Value pop() =0;
+
+    //! Return strong internal reference which will not prevent
+    //! implicit cancellation when the last reference returned
+    //! by exec() is released.
+    virtual std::shared_ptr<Subscription> shared_from_this() const =0;
 };
 
 //! Handle for entry in Channel cache
