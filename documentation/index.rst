@@ -13,8 +13,8 @@ The canonical version of this page is https://mdavidsaver.github.io/pvxs
 
 Versioned source can be found at https://github.com/mdavidsaver/pvxs ,
 which is also where `issues <https://github.com/mdavidsaver/pvxs/issues>`_ should be reported.
-See `reportbug`.
-Also `contrib` if you are so inclined.
+See :ref:`reportbug`.
+Also :ref:`contrib` if you are so inclined.
 
 Dependencies
 
@@ -25,7 +25,7 @@ Dependencies
 * `libevent <http://libevent.org/>`_ >=2.0.1
 * (optional) `CMake <https://cmake.org/>`_ >=3.1, only needed when building bundled libevent
 
-See `building` for details.
+See :ref:`building` for details.
 
 Status
 ------

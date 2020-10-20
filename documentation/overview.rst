@@ -16,7 +16,7 @@ The PVAccess network protocol is a hybrid supporting request/response,
 and publish/subscribe operations.
 
 PVA is closely related to the Channel Access (CA) protocol,
-which may work along side, and is intended to supersede.
+which may work alongside, and is intended to supersede.
 
 Four protocol operations are supported by PVXS.
 
@@ -41,7 +41,7 @@ hardware).
 A common example of a PV is a measurement value, for example
 a temperature measured by a particular sensor.
 
-Another example would be an electro-mechanical relay, which may be opened or closed.
+Another example would be an electromechanical relay, which may be opened or closed.
 
 In this case a Get operation would poll the current open/closed state of the relay.
 A Monitor operation (subscription) would receive notification when the relay state changes.
@@ -83,9 +83,9 @@ with the single `pvxs::Value` class.
 This avoids the need for explicit (often unsafe) downcasting (base to derived) within this hierarchy.
 
 Further, handling of PVField instances was always by smart pointer,
-opening may possibilities to dereference NULL pointers.
+opening many possibilities to dereference NULL pointers.
 By contract, Value objects handle this indirection internally.
-Operations on a empty (aka. NULL) Value are well defined and made safe by the type system and exceptions.
+Operations on a empty (aka. NULL) Value are well-defined and made safe by the type system and exceptions.
 
 Sub-field Lookup
 ^^^^^^^^^^^^^^^^
@@ -205,7 +205,7 @@ In order to find out if the "value" field has actually been provided,
 one must obtain the numeric field offset (bit index) and query the BitSet.
 
 This approach opens the possibility of testing the wrong bit, or more commonly ,
-not enough bits as it requires explicit knowledge of the PVA concept of "compress" bits
+not enough bits as it requires explicit knowledge about the PVA concept of "compress" bits
 for the top structure and any intermediate sub-structures.
 
 With PVXS Get completion is notified through an callback functor set with `pvxs::client::GetBuilder::result`.
