@@ -146,6 +146,12 @@ struct PVXS_API Subscription {
 
     virtual ~Subscription() =0;
 
+protected:
+    virtual const std::string& _name() =0;
+public:
+    //! PV name
+    inline const std::string& name() { return _name(); }
+
     //! Explicitly cancel a active subscription.
     //! Blocks until any in-progress callback has completed.
     virtual bool cancel() =0;

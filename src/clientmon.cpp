@@ -77,6 +77,10 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         _cancel(true);
     }
 
+    virtual const std::string& _name() override final {
+        return channelName;
+    }
+
     void notify()
     {
         log_info_printf(monevt, "Server %s channel '%s' monitor %snotify\n",
