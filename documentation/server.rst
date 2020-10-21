@@ -84,9 +84,9 @@ IOC Integration
     namespace pvxs { namespace namespace ioc { ... } }
 
 The separate "pvxsIoc" library exists to run a PVXS server as part of an IOC.
-See also `includepvxs`.
+See also :ref:`includepvxs`.
 
-IOC Integration respects the **$PVXS_LOG** environment variable.
+IOC Integration respects the **$PVXS_LOG** as well as **$EPICS_PVA\*** environment variables.
 Changes to this environment variable are possible prior to
 calling "\*_registerRecordDeviceDriver(pdbbase)".
 

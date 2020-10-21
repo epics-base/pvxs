@@ -482,7 +482,18 @@ public:
         return ret;
     }
 
-    //! Provide options when rendering with std::ostream.
+    /** Provide options when rendering with std::ostream.
+     *
+     * @code
+     *   shared_array<int32_t> arr({1,2,3,4});
+     *   // print entire array
+     *   //   {4}[1,2,3,4]
+     *   std::cout<<arr;
+     *   // print at most 3 elements
+     *   //   {4}[1,2,3,...]
+     *   std::cout<<arr.format().limit(3);
+     * @endcode
+     */
     detail::Limiter format() const {
         return detail::Limiter(this->_data.get(),
                                this->_count,

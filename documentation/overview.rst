@@ -78,20 +78,21 @@ Comparison with pvDataCPP
 The data component (`pvxs::Value`) of PVXS corresponds with the `pvDataCPP <https://github.com/epics-base/pvDataCPP>`_ module.
 It also incorporates parts of the `normativeTypesCPP <https://github.com/epics-base/normativeTypesCPP>`_ module (cf. `ntapi`).
 
-The most obvious difference in the design of pvData vs. PVXS is that "class PVField" hierarchy is replaced
+The most obvious difference in the design of pvData vs. PVXS is that the "class PVField" hierarchy is replaced
 with the single `pvxs::Value` class.
-This avoids the need for explicit (often unsafe) downcasting (base to derived) within this hierarchy.
+This avoids the need for explicit, often unsafe, downcasting (base to derived) within this hierarchy.
 
 Further, handling of PVField instances was always by smart pointer,
 opening many possibilities to dereference NULL pointers.
-By contract, Value objects handle this indirection internally.
-Operations on a empty (aka. NULL) Value are well-defined and made safe by the type system and exceptions.
+By contrast, Value objects handle this indirection internally.
+Operations on a empty (aka. NULL) Value are well-defined,
+and are made safe by the type system and exceptions.
 
 Sub-field Lookup
 ^^^^^^^^^^^^^^^^
 
 Consider the following examples with pvDataCPP.
-First, as originally recommended.
+First, as seen in early code.
 
 .. code-block:: c++
 
@@ -103,11 +104,11 @@ First, as originally recommended.
 
 It is necessary to always remember to check for NULL when looking up sub-fields.
 Experience has shown that this is very easy to forget, and the result is a client crash
-if eg. the server type changes from Int (int32) and Long (int64).
+if eg. the server type changes from PVInt (int32) to PVLong (int64).
 
 This can be improved by using the getSubFieldT() method which throws instead of returning NULL.
-Using PVScalar intermediate base class to request opportunistic conversion between scalar types,
-and throws if this is not possible.
+Using PVScalar intermediate base class allows opportunistic conversion between scalar types,
+and throws when this is not possible (eg. between array and scalar).
 
 .. code-block:: c++
 
@@ -158,7 +159,7 @@ With PVXS
 
     Value top = ...;
     for(Value fld : top.ichildren()) {
-        std::cout<< top.nameOf(fld) <<" : "<<*fld<<"\n";
+        std::cout<< top.nameOf(fld) <<" : "<<fld<<"\n";
     }
 
 Where **ichildren()** could be replaced with **iall()** for a depth first iteration
@@ -169,7 +170,7 @@ Testing for changed fields
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 While the PVA protocol is based around the idea of transferring partial updates
-to some structure fields, the PVField containers don't incorporate this.
+to some structure fields, the PVField container classes don't incorporate this.
 Instead, it is necessary to handle an separate BitSet object provided alongside each PVStructure.
 
 With PVXS, tracking of changed (or valid) fields is built into the Value class.
@@ -197,25 +198,24 @@ interface.
             }
         }
 
-To unpack this.  Provided that sts.isSuccess(), and neither top nor valid are NULL,
+To unpack this.  Provided that sts.isSuccess(), and that neither 'top' nor 'valid' are NULL,
 the valid bit mask indicates which fields the server has actually provided a value for.
 Others retain a local default (zero or empty).
 
-In order to find out if the "value" field has actually been provided,
-one must obtain the numeric field offset (bit index) and query the BitSet.
+In order to find out if the "value" field has actually been provided by the server,
+one must obtain the numeric field offset (bit index) with getFieldOffset(),
+and then query the BitSet.
 
-This approach opens the possibility of testing the wrong bit, or more commonly ,
+This approach opens the possibility of testing the wrong bit, or more commonly,
 not enough bits as it requires explicit knowledge about the PVA concept of "compress" bits
 for the top structure and any intermediate sub-structures.
-
-With PVXS Get completion is notified through an callback functor set with `pvxs::client::GetBuilder::result`.
 
 .. code-block:: c++
 
     [](const pvxs::client::Result&& result)
     {
         try {
-            Value top = result(); // throws on remote error
+            Value top = result(); // throws on local or remote error
             if(Value value = top["value"].ifMarked()) {
                 // "value" exists and is provided
                 int32_t val = value.as<uint32_t>();
@@ -225,7 +225,10 @@ With PVXS Get completion is notified through an callback functor set with `pvxs:
             // also handles local errors
         }
 
-This `pvxs::Value::ifMarked` method allows the lookup and test to be combined.
+With PVXS, Get completion is notified through an callback functor set with `pvxs::client::GetBuilder::result`,
+which will throw an exception if a local or remote error has occurred.
+
+The `pvxs::Value::ifMarked` method allows the lookup and test to be combined.
 It is also possible to test separately with the `pvxs::Value::isMarked` method.
 
 Tracking changed fields
