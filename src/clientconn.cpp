@@ -345,7 +345,7 @@ void Connection::handle_DESTROY_CHANNEL()
 
     EvInBuf M(peerBE, segBuf.get(), 16);
 
-    uint32_t cid, sid;
+    uint32_t cid=0, sid=0;
     from_wire(M, sid);
     from_wire(M, cid);
 

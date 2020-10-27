@@ -255,7 +255,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t ioid;
-    uint8_t subcmd;
+    uint8_t subcmd=0;
     Status sts;
     Value data; // hold prototype (INIT) or reply data (GET)
 
