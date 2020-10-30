@@ -32,7 +32,7 @@ CMAKEFLAGS += -DEVENT__DISABLE_BENCHMARK=ON
 # searched for toolchain files
 CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR=$(abspath $(TOP)/bundle/cmake)
 
-CMAKEFLAGS += -DCMAKE_MAKE_PROGRAM=$(MAKE)
+CMAKEFLAGS += -DCMAKE_MAKE_PROGRAM="$(MAKE)"
 
 # check either $(HOST_OPT) or $(CROSS_OPT) depending on $(BUILD_CLASS)
 IS_OPT = $($(BUILD_CLASS)_OPT)
@@ -41,9 +41,14 @@ CMAKEFLAGS_DEBUG_YES += -DCMAKE_BUILD_TYPE=RELEASE
 CMAKEFLAGS_DEBUG_NO += -DCMAKE_BUILD_TYPE=DEBUG
 CMAKEFLAGS += $(CMAKEFLAGS_DEBUG_$(IS_OPT))
 
-CMAKEFLAGS_WIN32_STATIC_NO += -DEVENT__LIBRARY_TYPE=SHARED
-CMAKEFLAGS_WIN32_STATIC_YES += -DEVENT__LIBRARY_TYPE=STATIC
-CMAKEFLAGS += $(CMAKEFLAGS_$(OS_CLASS)_STATIC_$(STATIC_BUILD))
+ifeq ($(OS_CLASS),WIN32)
+# On Win32 we must choose between only static and only shared
+CMAKEFLAGS_SHARED_YES += -DEVENT__LIBRARY_TYPE=SHARED
+else
+CMAKEFLAGS_SHARED_YES += -DEVENT__LIBRARY_TYPE=BOTH
+endif
+CMAKEFLAGS_SHARED_NO += -DEVENT__LIBRARY_TYPE=STATIC
+CMAKEFLAGS += $(CMAKEFLAGS_SHARED_$(SHARED_LIBRARIES))
 
 ifneq (,$(filter linux-%,$(EPICS_HOST_ARCH)))
 # cross mingw hosted on linux
@@ -109,8 +114,19 @@ else
 # libevent 2.0 only autotools
 # only host CC supported
 
+CONFIGUREFLAGS += --disable-openssl
+
+ifeq ($(OS_CLASS),WIN32)
+# On Win32 we must choose between only static and only shared
+CONFIGUREFLAGS_SHARED_YES += --enable-shared --disable-static
+else
+CONFIGUREFLAGS_SHARED_YES += --enable-shared --enable-static
+endif
+CONFIGUREFLAGS_SHARED_NO += --disable-shared --enable-static
+CONFIGUREFLAGS += $(CONFIGUREFLAGS_SHARED_$(SHARED_LIBRARIES))
+
 libevent.%: ../libevent/configuration
-	[ -f Makefile ] || ../libevent/configure --prefix=$(abspath $(LIBEVENT_$(T_A))) --disable-openssl
+	[ -f Makefile ] || ../libevent/configure --prefix=$(abspath $(LIBEVENT_$(T_A))) $(CONFIGUREFLAGS)
 	$(MAKE) install
 
 ../libevent/configuration: ../libevent/configure.ac
