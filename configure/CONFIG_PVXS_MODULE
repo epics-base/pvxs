@@ -11,6 +11,7 @@ ifdef T_A
 # use custom libevent2 install prefix by:
 #   setting LIBEVENT only for single arch build
 #   setting LIBEVENT_$(T_A) for each arch
+#   leave unset to use implicit system search path
 # NOTE: only needed if not present in default search paths
 LIBEVENT ?= $(LIBEVENT_$(T_A))
 
@@ -20,28 +21,18 @@ LIBEVENT_$(T_A) ?= $(wildcard $(abspath $(_PVXS)/../bundle/usr/$(T_A)))
 # apply to include search paths
 INCLUDES += $(if $(LIBEVENT),-I$(LIBEVENT)/include)
 
-ifeq (msvc,$(CMPLR_CLASS))
-# Select lib file directly
-LIBEVENT_SYS_LIBS  = $(LIBEVENT)/lib/event_core
+LIBEVENT_BUNDLE_LIBS += event_core
+LIBEVENT_BUNDLE_LIBS_POSIX_YES = event_pthreads
+LIBEVENT_BUNDLE_LIBS += $(LIBEVENT_BUNDLE_LIBS_POSIX_$(POSIX))
 
-else
-# apply to library search paths, and -rpath
-_PVXS_DEPLIB_DIRS += $(if $(LIBEVENT),$(LIBEVENT)/lib)
-
-PROD_DEPLIB_DIRS   += $(_PVXS_DEPLIB_DIRS)
-SHRLIB_DEPLIB_DIRS += $(_PVXS_DEPLIB_DIRS)
-
-LIBEVENT_SYS_LIBS  = event_core
-
-endif
-
-# automatically add necessary libraries
-LIBEVENT_SYS_LIBS_POSIX_YES = event_pthreads
 LIBEVENT_SYS_LIBS_WIN32 = iphlpapi netapi32 ws2_32
-
-LIBEVENT_SYS_LIBS += $(LIBEVENT_SYS_LIBS_POSIX_$(POSIX))
 LIBEVENT_SYS_LIBS += $(LIBEVENT_SYS_LIBS_$(OS_CLASS))
+
+event_core_DIR = $(LIBEVENT)/lib
+event_pthreads_DIR = $(LIBEVENT)/lib
 
 endif # T_A
 
 endif # _PVXS_CONF_INCLUDED
+
+# logic continues in RULES_PVXS_MODULE

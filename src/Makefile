@@ -95,6 +95,14 @@ LIB_SRCS += clientget.cpp
 LIB_SRCS += clientmon.cpp
 
 LIB_LIBS += Com
+
+# special case matching configure/RULES_PVXS_MODULE
+ifeq (,$(LIBEVENT))
+LIB_SYS_LIBS += $(LIBEVENT_BUNDLE_LIBS)
+else
+LIB_LIBS += $(LIBEVENT_BUNDLE_LIBS)
+endif
+
 LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
 
 #===========================
