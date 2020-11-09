@@ -109,6 +109,17 @@ ifeq (YES,$(LIBEVENT_USE_CMAKE))
 libevent.%:
 	$(CMAKE) $(CMAKEFLAGS) ../libevent
 	$(CMAKE) -E env --unset=MAKEFLAGS --unset=CC $(CMAKE) --build . $(CBUILDFLAGS) --target install
+ifneq (,$(filter %mingw,$(T_A)))
+ifeq (NO,$(SHARED_LIBRARIES))
+	$(CP) $(LIBEVENT_$(T_A))/lib/libevent_core.a $(LIBEVENT_$(T_A))/lib/event_core.lib
+# HACK: when STATIC_BUILD=YES we (in configure/RULES_PVXS_MODULE) inject the event_core
+#       dependency via <target>_LIBS += event_core which requires end existance of
+#       $(event_core_DIR)/event_core.lib however, cmake outputs the *nix style name
+#       libevent_core.a (probably because it can coexist with the dll import library
+#       named libevent_core.dll.a).
+#       As a crutch we make a copy
+endif
+endif
 
 else
 # libevent 2.0 only autotools
