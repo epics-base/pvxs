@@ -76,7 +76,7 @@ inline detail::Escaper escape(const char* s,size_t n) {
 
 #if !defined(__rtems__) && !defined(vxWorks)
 
-/** minimal portable process signal handling in CLI tools.
+/** Minimal portable process signal handling in CLI tools.
  *
  * @code
  *     epicsEvent evt;
@@ -87,13 +87,16 @@ inline detail::Escaper escape(const char* s,size_t n) {
  *     evt.wait();
  *     // completion, or SIGINT
  * @endcode
+ *
+ * Saves existing handler, which are restored by dtor.
  */
 class PVXS_API SigInt {
     void (*prevINT)(int);
     void (*prevTERM)(int);
-    std::function<void()> handler;
+    const std::function<void()> handler;
     static void _handle(int);
 public:
+    //! Install signal handler.
     SigInt(decltype (handler)&& handler);
     ~SigInt();
 };
@@ -101,8 +104,9 @@ public:
 #else // !defined(__rtems__) && !defined(vxWorks)
 
 class SigInt {
+    const std::function<void()> handler;
 public:
-    SigInt(std::function<void()>&& handler) {}
+    SigInt(std::function<void()>&& handler) :handler(std::move(handler)) {}
 }
 
 #endif // !defined(__rtems__) && !defined(vxWorks)
