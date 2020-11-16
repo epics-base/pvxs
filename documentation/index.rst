@@ -27,10 +27,11 @@ Dependencies
 
 See :ref:`building` for details.
 
-Status
-------
+Download
+--------
 
-This module is considered feature complete, but is not yet making releases.
+Releases are published to https://github.com/mdavidsaver/pvxs/releases.
+See :ref:`relpolicy` for details.
 
 .. toctree::
    :maxdepth: 3
@@ -45,6 +46,7 @@ This module is considered feature complete, but is not yet making releases.
    util
    example
    details
+   releasenotes
 
 
 Indices and tables

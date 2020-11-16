@@ -1,3 +1,7 @@
+*******
+Details
+*******
+
 .. _reportbug:
 
 Reporting a Bug
@@ -29,18 +33,41 @@ Additional information which may be relevant:
 * Firewall rules on UDP traffic to/from port 5075 or TCP connections to port 5074
 * Any local/site modifications to EPICS Base
 
+.. _relpolicy:
+
+Release Policy
+==============
+
+PVXS Release numbering follows the `Semantic Versioning <https://semver.org/>`_
+scheme of MAJOR.MINOR.PATCH with the following amendments.
+
+* A change to the MAJOR number indicates that a backwards incompatible change to some part of the API.
+  This may not effect every user application.
+  This policy is intended to provide users with confidence in upgrading when MAJOR does not change.
+* The PATCH number will only be incremented if changes to the public API are believed to maintain ABI compatibility.
+  MINOR will be incremented when a known ABI incompatible change is made.
+  Library SONAMES take the form MAJOR.MINOR.
+* At this time only one version number is maintained, which is applied to both
+  the main libpvxs.so and the auxiliary libpvxsIoc.so.
+  Statements about API or ABI compatibility apply to both libraries as a group.
+
+Each release will be accompanied by a signed tag in the repository,
+which may be verified with the author's GPG key
+`5C159E669D69E2D4C4E74E540C8E1C8347330CFB <http://keys.gnupg.net/pks/lookup?op=get&search=0x5C159E669D69E2D4C4E74E540C8E1C8347330CFB>`_.
+
 .. _contrib:
 
 Contributing
 ============
 
-The recommended path for including changes is through [Pull Request](https://github.com/mdavidsaver/pvxs/pulls).
+The recommended path for including changes is through `Pull Request <https://github.com/mdavidsaver/pvxs/pulls>`_.
 
 When changing c++ code please do:
 
 * Indent with 4 spaces.  No hard tabs.  UNIX style EoL.
 * Try to maintain the style of surrounding code.
 * Include meaningful code comments where reasonable.
+* Add doxygen tags ``@since UNRELEASED`` or ``@until UNRELEASED`` when documenting additions/changes to public APIs.
 
 but do not:
 
@@ -52,8 +79,8 @@ When committing changes please do:
 * Break up changes into multiple commits where reasonable
 * Include whitespace only changes as seperate commits
 
-Notes
-=====
+Implementation Notes
+====================
 
 Misc. notes on design and Implementation.
 
