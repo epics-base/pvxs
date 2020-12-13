@@ -1,0 +1,4 @@
+#define EPICS_HOST_ARCH "@EPICS_HOST_ARCH@"
+#define T_A "@T_A@"
+#define OS_CLASS "@OS_CLASS@"
+#define CMPLR_CLASS "@CMPLR_CLASS@"

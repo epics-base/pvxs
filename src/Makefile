@@ -34,9 +34,16 @@ ifeq (,$(PVXS_MAJOR_VERSION))
 $(error PVXS_MAJOR_VERSION undefined, problem reading cfg/CONFIG_PVXS_VERSION)
 endif
 
+# see below for special case versionNum.h
+EXPAND += describe.h
+
 EXPANDVARS += PVXS_MAJOR_VERSION
 EXPANDVARS += PVXS_MINOR_VERSION
 EXPANDVARS += PVXS_MAINTENANCE_VERSION
+EXPANDVARS += EPICS_HOST_ARCH T_A OS_CLASS
+ifdef BASE_3_15
+EXPANDVARS += CMPLR_CLASS
+endif
 
 EXPANDFLAGS += $(foreach var,$(EXPANDVARS),-D$(var)="$(strip $($(var)))")
 
@@ -61,6 +68,7 @@ INC += pvxs/client.h
 
 LIBRARY = pvxs
 
+LIB_SRCS += describe.cpp
 LIB_SRCS += log.cpp
 LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
@@ -118,6 +126,7 @@ include $(TOP)/configure/RULES_PVXS_MODULE
 	$(MKDIR) $(COMMON_DIR)/pvxs
 	$(EXPAND_TOOL) $(EXPANDFLAGS) $($@_EXPANDFLAGS) $< $@
 
+describe$(DEP): describe.h
 util$(DEP): $(COMMON_DIR)/$(GENVERSION)
 
 ifndef GENVERSIONHEADER

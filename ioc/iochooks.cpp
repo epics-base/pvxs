@@ -72,6 +72,17 @@ void pvxsr(int detail)
     }
 }
 
+void pvxs_target_info()
+{
+    try {
+        std::ostringstream capture;
+        target_information(capture);
+        printf("%s", capture.str().c_str());
+    } catch(std::exception& e) {
+        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
+    }
+}
+
 // index_sequence from:
 //http://stackoverflow.com/questions/17424477/implementation-c14-make-integer-sequence
 
@@ -127,11 +138,11 @@ struct ToStr { typedef const char* type; };
 template<typename ...Args>
 struct Reg {
     const char* const name;
-    const char* const argnames[sizeof...(Args)];
+    const char* const argnames[1+sizeof...(Args)];
 
     constexpr explicit Reg(const char* name, typename ToStr<Args>::type... descs)
         :name(name)
-        ,argnames{descs...}
+        ,argnames{descs..., 0}
     {}
 
     template<void (*fn)(Args...), size_t... Idxs>
@@ -144,8 +155,8 @@ struct Reg {
     template<void (*fn)(Args...), size_t... Idxs>
     void doit(index_sequence<Idxs...>)
     {
-        static const iocshArg argstack[sizeof...(Args)] = {{argnames[Idxs], Arg<Args>::code}...};
-        static const iocshArg * const args[] = {&argstack[Idxs]...};
+        static const iocshArg argstack[1+sizeof...(Args)] = {{argnames[Idxs], Arg<Args>::code}...};
+        static const iocshArg * const args[] = {&argstack[Idxs]..., 0};
         static const iocshFuncDef def = {name, sizeof...(Args), args};
 
         iocshRegister(&def, &call<fn, Idxs...>);
@@ -207,6 +218,7 @@ void pvxsRegistrar()
 
         Reg<int>("pvxsl", "detail").ister<&pvxsl>();
         Reg<int>("pvxsr", "detail").ister<&pvxsr>();
+        Reg<>("pvxs_target_info").ister<&pvxs_target_info>();
 
         auto serv = instance.load();
         if(!serv) {

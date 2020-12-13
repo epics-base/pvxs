@@ -25,7 +25,7 @@ namespace {
 
 MAIN(testioc)
 {
-    testPlan(4);
+    testPlan(5);
     testSetup();
 
     testdbPrepare();
@@ -37,6 +37,7 @@ MAIN(testioc)
     testdbReadDatabase("testioc.dbd", nullptr, nullptr);
     testEq(0, testioc_registerRecordDeviceDriver(pdbbase));
     testEq(0, iocshCmd("pvxsr()"));
+    testEq(0, iocshCmd("pvxs_target_info()"));
 
     testTrue(!!ioc::server());
 

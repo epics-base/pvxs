@@ -156,6 +156,18 @@ private:
     int lvl;
 };
 
+/** Describe build and runtime configuration of current system.
+ *
+ * Print information which may be using for when troubleshooting,
+ * or creating a bug report.
+ *
+ * Printed by CLI "pvxinfo -D" and iocsh "pvxs_target_information".
+ *
+ * @returns The same ostream passed as argument.
+ */
+PVXS_API
+std::ostream& target_information(std::ostream&);
+
 } // namespace pvxs
 
 #endif // PVXS_UTIL_H

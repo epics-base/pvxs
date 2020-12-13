@@ -29,6 +29,7 @@ void usage(const char* argv0)
                "  -V        Print version and exit.\n"
                "  -v        Make more noise.\n"
                "  -d        Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.\n"
+               "  -D        Print host troubleshooting information.\n"
                "  -w <sec>  Operation timeout in seconds.  default 5 sec.\n"
                ;
 }
@@ -44,7 +45,7 @@ int main(int argc, char *argv[])
 
         {
             int opt;
-            while ((opt = getopt(argc, argv, "hVvdw:")) != -1) {
+            while ((opt = getopt(argc, argv, "hVvdDw:")) != -1) {
                 switch(opt) {
                 case 'h':
                     usage(argv[0]);
@@ -60,6 +61,9 @@ int main(int argc, char *argv[])
                 case 'd':
                     logger_level_set("pvxs.*", Level::Debug);
                     break;
+                case 'D':
+                    target_information(std::cout);
+                    return 0;
                 case 'w':
                     timeout = parseTo<double>(optarg);
                     break;

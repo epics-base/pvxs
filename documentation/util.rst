@@ -136,3 +136,5 @@ Misc. utility code. ::
 .. doxygenfunction:: pvxs::cleanup_for_valgrind
 
 .. doxygenclass:: pvxs::SigInt
+
+.. doxygenfunction:: pvxs::target_information
