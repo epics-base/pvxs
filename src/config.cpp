@@ -264,7 +264,7 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
 {
     bool first;
 
-    strm<<"EPICS_PVAS_INTF_ADDR_LIST=\"";
+    strm<<indent{}<<"EPICS_PVAS_INTF_ADDR_LIST=\"";
     first = true;
     for(auto& iface : conf.interfaces) {
         if(first)
@@ -275,7 +275,7 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
     }
     strm<<"\"\n";
 
-    strm<<"EPICS_PVAS_BEACON_ADDR_LIST=\"";
+    strm<<indent{}<<"EPICS_PVAS_BEACON_ADDR_LIST=\"";
     first = true;
     for(auto& iface : conf.beaconDestinations) {
         if(first)
@@ -286,11 +286,11 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
     }
     strm<<"\"\n";
 
-    strm<<"EPICS_PVAS_AUTO_BEACON_ADDR_LIST="<<(conf.auto_beacon?"YES":"NO")<<'\n';
+    strm<<indent{}<<"EPICS_PVAS_AUTO_BEACON_ADDR_LIST="<<(conf.auto_beacon?"YES":"NO")<<'\n';
 
-    strm<<"EPICS_PVAS_SERVER_PORT="<<conf.tcp_port<<'\n';
+    strm<<indent{}<<"EPICS_PVAS_SERVER_PORT="<<conf.tcp_port<<'\n';
 
-    strm<<"EPICS_PVAS_BROADCAST_PORT="<<conf.udp_port<<'\n';
+    strm<<indent{}<<"EPICS_PVAS_BROADCAST_PORT="<<conf.udp_port<<'\n';
 
     return strm;
 }
@@ -369,7 +369,7 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
 {
     bool first;
 
-    strm<<"EPICS_PVA_ADDR_LIST=\"";
+    strm<<indent{}<<"EPICS_PVA_ADDR_LIST=\"";
     first = true;
     for(auto& iface : conf.addressList) {
         if(first)
@@ -380,9 +380,9 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
     }
     strm<<"\"\n";
 
-    strm<<"EPICS_PVA_AUTO_ADDR_LIST="<<(conf.autoAddrList?"YES":"NO")<<'\n';
+    strm<<indent{}<<"EPICS_PVA_AUTO_ADDR_LIST="<<(conf.autoAddrList?"YES":"NO")<<'\n';
 
-    strm<<"EPICS_PVA_BROADCAST_PORT="<<conf.udp_port<<'\n';
+    strm<<indent{}<<"EPICS_PVA_BROADCAST_PORT="<<conf.udp_port<<'\n';
 
     return strm;
 }
