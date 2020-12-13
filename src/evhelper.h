@@ -137,6 +137,9 @@ struct PVXS_API evsocket
     //! Selects interface to use when sending mcasts
     //! @see IP_MULTICAST_IF
     void mcast_iface(const SockAddr& iface) const;
+
+    //! wraps osiSockDiscoverBroadcastAddresses()
+    std::vector<SockAddr> interfaces(const SockAddr* match=nullptr);
 };
 
 }} // namespace pvxs::impl

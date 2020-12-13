@@ -144,18 +144,9 @@ void expandAddrList(const std::vector<std::string>& ifaces,
             continue;
         }
 
-        osiSockAddr match = {};
-        match.ia = saddr->in;
-        osiSockDiscoverBroadcastAddresses(&blist, dummy.sock, &match);
-
-        while(ELLNODE *cur = ellGet(&blist)) {
-            osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
-
-            SockAddr temp(&node->addr.sa, sizeof(node->addr.ia));
-            free(node);
-            temp.setPort(0u);
-
-            bcasts.push_back(temp.tostring());
+        for(auto& addr : dummy.interfaces(&saddr)) {
+            addr.setPort(0u);
+            bcasts.push_back(addr.tostring());
         }
     }
 

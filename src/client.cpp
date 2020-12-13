@@ -314,21 +314,9 @@ Context::Pvt::Pvt(const Config& conf)
     searchBuckets.resize(nBuckets);
 
     std::set<std::string> bcasts;
-    {
-        ELLLIST list = ELLLIST_INIT;
-        osiSockAddr any{};
-
-        osiSockDiscoverBroadcastAddresses(&list, searchTx.sock, &any);
-
-        while(ELLNODE *cur = ellGet(&list)) {
-            osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
-
-            SockAddr addr(&node->addr.sa, sizeof(node->addr));
-            addr.setPort(0u);
-            bcasts.insert(addr.tostring());
-
-            free(node);
-        }
+    for(auto& addr : searchTx.interfaces()) {
+        addr.setPort(0u);
+        bcasts.insert(addr.tostring());
     }
 
     {

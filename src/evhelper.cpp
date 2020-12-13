@@ -26,6 +26,8 @@
 #include <epicsExit.h>
 #include <epicsMutex.h>
 #include <epicsGuard.h>
+#include <dbDefs.h>
+#include <ellLib.h>
 
 #include "evhelper.h"
 #include "pvaproto.h"
@@ -415,6 +417,41 @@ void evsocket::mcast_iface(const SockAddr& iface) const
 
     // IPV6_MULTICAST_IF
 }
+
+std::vector<SockAddr> evsocket::interfaces(const SockAddr* match)
+{
+    if(match && match->family()!=AF_INET) {
+        throw std::logic_error("osiSockDiscoverBroadcastAddresses() only understands AF_INET");
+    }
+    evsocket dummy(AF_INET, SOCK_DGRAM, 0);
+
+    osiSockAddr realmatch;
+    if(match) {
+        memcpy(&realmatch.ia, &(*match)->in, sizeof(realmatch.ia));
+    } else {
+        realmatch.ia.sin_family = AF_INET;
+        realmatch.ia.sin_addr.s_addr = htonl(INADDR_ANY);
+        realmatch.ia.sin_port = 0;
+    }
+
+    ELLLIST bcasts = ELLLIST_INIT;
+    osiSockDiscoverBroadcastAddresses(&bcasts, dummy.sock, &realmatch);
+
+    std::vector<SockAddr> ret;
+    ret.reserve(ellCount(&bcasts));
+
+    while(ellCount(&bcasts)) {
+        auto cur = ellFirst(&bcasts);
+        ellDelete(&bcasts, cur);
+        osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
+        if(node->addr.sa.sa_family==AF_INET)
+            ret.emplace_back(&node->addr.sa, sizeof(node->addr));
+        free(node);
+    }
+
+    return ret;
+}
+
 void to_wire(Buffer& buf, const SockAddr& val)
 {
     if(!buf.ensure(16)) {

@@ -378,20 +378,9 @@ Server::Pvt::Pvt(const Config &conf)
         // i[1] host
         // mix together first interface and all local bcast addresses
         pun.i[1] = osiLocalAddr(dummy.sock).ia.sin_addr.s_addr;
-        {
-            ELLLIST bcasts = ELLLIST_INIT;
-            osiSockAddr match;
-            match.ia.sin_family = AF_INET;
-            match.ia.sin_addr.s_addr = htonl(INADDR_ANY);
-            match.ia.sin_port = 0;
-            osiSockDiscoverBroadcastAddresses(&bcasts, dummy.sock, &match);
-
-            while(ELLNODE *cur = ellGet(&bcasts)) {
-                osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
-                if(node->addr.sa.sa_family==AF_INET)
-                    pun.i[1] ^= ntohl(node->addr.ia.sin_addr.s_addr);
-                free(cur);
-            }
+        for(auto& addr : dummy.interfaces()) {
+            if(addr.family()==AF_INET)
+                pun.i[1] ^= ntohl(addr->in.sin_addr.s_addr);
         }
 
         // i[2] process on host
