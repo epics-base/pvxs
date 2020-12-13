@@ -124,6 +124,7 @@ cleaner<Fn> make_cleaner(Fn&& fn) {
 void expandAddrList(const std::vector<std::string>& ifaces,
                     std::vector<std::string>& addrs)
 {
+    SockAttach attach;
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
 
     std::vector<std::string> bcasts;
