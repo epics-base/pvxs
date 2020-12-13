@@ -31,10 +31,17 @@ jobs:
       BASE: ${{ matrix.base }}
       WINE: ${{ matrix.wine }}
       LIBEVENT_TAG: ${{ matrix.libevent }}
+      EXTRA: ${{ matrix.extra }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          - os: ubuntu-20.04
+            cmp: gcc
+            configuration: default
+            base: "7.0"
+            extra: "CMD_CPPFLAGS=-Werror"
+
           - os: ubuntu-20.04
             cmp: gcc
             configuration: default
