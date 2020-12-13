@@ -132,8 +132,10 @@ jobs:
       run: python .ci/cue.py exec python .ci-local/libevent.py
     - name: Build main module
       run: python .ci/cue.py build
+    - name: Host info
+      run: python .ci/cue.py --add-path "{TOP}/bin/{EPICS_HOST_ARCH}" --add-path "{TOP}/bundle/usr/{EPICS_HOST_ARCH}/lib" exec pvxinfo -D
     - name: Run main module tests
-      run: python .ci/cue.py --add-path "{TOP}\bundle\usr\{EPICS_HOST_ARCH}\lib" test
+      run: python .ci/cue.py --add-path "{TOP}/bundle/usr/{EPICS_HOST_ARCH}/lib" test
     - name: Collect and show test results
       run: python .ci/cue.py test-results
     - name: CDT Check

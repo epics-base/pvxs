@@ -78,6 +78,7 @@ before_test:
 test_script:
   - cmd: reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug"
   - cmd: reg query "HKLM\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\AeDebug"
+  - cmd: python .ci/cue.py --add-path "{TOP}\bin\{EPICS_HOST_ARCH}" --add-path "{TOP}\bundle\usr\{EPICS_HOST_ARCH}\lib" exec pvxinfo -D
   - cmd: python .ci/cue.py --add-path "{TOP}\bundle\usr\{EPICS_HOST_ARCH}\lib" test
 
 on_failure:
