@@ -29,6 +29,8 @@ A clear and concise description of what you expected to happen.
  - Target OS: [if different from host]
  - Compiler version: [e.g. run "gcc -V"]
 
+Alternately, from a successful build, include the output of `pvxinfo -D`.
+
 **Network configuration**
 Values of any `$EPICS_PVA*` environment variables.
 Mention if host(s) have more than one network interface, or on different subnets.
