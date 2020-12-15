@@ -161,7 +161,7 @@ struct PVXS_API ChannelControl : public OpBase {
 struct PVXS_API Source {
     virtual ~Source() =0;
 
-    /** An iterable of names being sought.
+    /** An iterable of names (Name) being sought.
      *
      * @code
      *   virtual void onSearch(Search& search) {
@@ -182,7 +182,7 @@ struct PVXS_API Source {
         public:
             //! The Channel name
             inline const char* name() const { return _name; }
-            //! The caller claims to be able to respond to an onCreate()
+            //! The caller claims to be able to respond to an onCreate() for this name.
             inline void claim() { _claim = true; }
             // TODO claim w/ redirect
         };
@@ -193,17 +193,21 @@ struct PVXS_API Source {
         friend struct Server::Pvt;
         friend struct impl::ServerConn;
     public:
+        typedef Name value_type;
+        typedef _names_t::iterator iterator;
 
+        //! Number of names
+        inline size_t size() const { return _names.size(); }
         //! Begin iterator of Name instances
-        _names_t::iterator begin() { return _names.begin(); }
+        iterator begin() { return _names.begin(); }
         //! End iterator of Name instances
-        _names_t::iterator end() { return _names.end(); }
+        iterator end() { return _names.end(); }
         //! The Client endpoint address
         const char* source() const { return _src; }
     };
-    /** Called each time a client polls for the existence of some Channel names.
+    /** Called each time a client polls for the existence of some Channel names (Search::Name).
      *
-     * A Source may only Search::claim() a Channel name if it is prepared to
+     * A Source may only Search::Name::claim() a Channel name if it is prepared to
      * immediately accept an onCreate() call for that Channel name.
      * In other situations it should wait for the client to retry.
      */
@@ -211,9 +215,9 @@ struct PVXS_API Source {
 
     /** A Client is attempting to open a connection to a certain Channel.
      *
-     *  This Channel name may not be one which seen or claimed by onSearch().
+     *  This Channel name may not be one which was seen or claimed by onSearch().
      *
-     *  Callee with either do nothing, or std::move() the ChannelControl and call ChannelControl::setHandler()
+     *  Callee will either do nothing, or std::move() the ChannelControl and call ChannelControl::setHandler()
      */
     virtual void onCreate(std::unique_ptr<ChannelControl>&& op) =0;
 
