@@ -697,7 +697,7 @@ void Context::Pvt::tickSearch()
         auto consumed = M.save() - searchMsg.data();
         {
             FixedBuf H(true, searchMsg.data(), 8);
-            to_wire(H, Header{CMD_SEARCH, pva_flags::Server, uint32_t(consumed-8u)});
+            to_wire(H, Header{CMD_SEARCH, 0, uint32_t(consumed-8u)});
         }
         for(auto& pair : searchDest) {
             *pflags = pair.second ? 0x80 : 0x00;
