@@ -621,7 +621,7 @@ public:
     template<typename T>
     inline bool tryFrom(const T& val) {
         const typename impl::StoreAs<T>::store_t& norm(impl::StoreTransform<T>::in(val));
-        return copyIn(&norm, impl::StoreAs<T>::code);
+        return tryCopyIn(&norm, impl::StoreAs<T>::code);
     }
 
     /** Assign from field.
