@@ -600,7 +600,11 @@ public:
         typename impl::StoreAs<T>::store_t temp;
         auto ret = tryCopyOut(&temp, impl::StoreAs<T>::code);
         if(ret) {
-            val = impl::StoreTransform<T>::out(temp);
+            try {
+                val = impl::StoreTransform<T>::out(temp);
+            }catch(std::exception&){
+                ret = false;
+            }
         }
         return ret;
     }
