@@ -66,8 +66,6 @@ struct ServerChannelControl : public server::ChannelControl
     virtual void onClose(std::function<void(const std::string&)>&& fn) override final;
     virtual void close() override final;
 
-    virtual std::pair<std::string, Value> rawCredentials() const override final;
-
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerChan> chan;
 
@@ -106,8 +104,7 @@ struct ServerConn : public ConnBase, public std::enable_shared_from_this<ServerC
 {
     ServIface* const iface;
 
-    std::string autoMethod;
-    Value credentials;
+    std::shared_ptr<const server::ClientCredentials> cred;
 
     uint32_t nextSID=0x07050301;
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanBySID;

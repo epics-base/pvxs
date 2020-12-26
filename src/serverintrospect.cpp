@@ -67,8 +67,7 @@ struct ServerIntrospectControl : public server::ConnectOp
     {
         _op = Info;
         _name = chan->name;
-        _peerName = conn->peerName;
-        _ifaceName = conn->iface->name;
+        _cred = conn->cred;
     }
     virtual ~ServerIntrospectControl() {
         error("Implict Cancel");
@@ -110,20 +109,6 @@ struct ServerIntrospectControl : public server::ConnectOp
             if(auto oper = op.lock())
                 oper->onClose = std::move(fn);
         });
-    }
-
-    virtual std::pair<std::string, Value> rawCredentials() const override final
-    {
-        std::pair<std::string, Value> ret;
-        auto serv = server.lock();
-        if(serv)
-            serv->acceptor_loop.call([this, &ret](){
-                if(auto oper = op.lock())
-                    if(auto chan = oper->chan.lock())
-                        if(auto conn = chan->conn.lock())
-                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
-            });
-        return ret;
     }
 
     // we'll never use these, so no reason to store

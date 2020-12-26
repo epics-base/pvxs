@@ -268,9 +268,9 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 
                 strm<<indent{}<<"Peer"<<conn->peerName
                     <<" backlog="<<conn->backlog.size()
-                    <<" auth="<<conn->autoMethod<<"\n";
+                    <<" auth="<<conn->cred->method<<"\n";
                 if(detail>2)
-                    strm<<conn->credentials;
+                    strm<<*conn->cred;
 
                 if(detail<=2)
                     continue;

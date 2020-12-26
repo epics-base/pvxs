@@ -41,8 +41,7 @@ ServerChannelControl::ServerChannelControl(const std::shared_ptr<ServerConn> &co
 {
     _op = None;
     _name = channel->name;
-    _peerName = conn->peerName;
-    _ifaceName = conn->iface->name;
+    _cred = conn->cred;
 }
 
 ServerChannelControl::~ServerChannelControl() {}
@@ -169,19 +168,6 @@ void ServerChannelControl::close()
         }
         ServerChannel_shutdown(ch);
     });
-}
-
-std::pair<std::string, Value> ServerChannelControl::rawCredentials() const
-{
-    std::pair<std::string, Value> ret;
-    auto serv = server.lock();
-    if(serv)
-        serv->acceptor_loop.call([this, &ret](){
-            if(auto chan = this->chan.lock())
-                if(auto conn = chan->conn.lock())
-                    ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
-        });
-    return ret;
 }
 
 void ServerConn::handle_SEARCH()

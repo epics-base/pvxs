@@ -315,20 +315,6 @@ struct ServerMonitorControl : public server::MonitorControlOp
         });
     }
 
-    virtual std::pair<std::string, Value> rawCredentials() const override final
-    {
-        std::pair<std::string, Value> ret;
-        auto serv = server.lock();
-        if(serv)
-            serv->acceptor_loop.call([this, &ret](){
-                if(auto oper = op.lock())
-                    if(auto chan = oper->chan.lock())
-                        if(auto conn = chan->conn.lock())
-                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
-            });
-        return ret;
-    }
-
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<MonitorOp> op;
 
@@ -347,8 +333,7 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
     {
         _op = Info;
         _name = name;
-        _peerName = conn->peerName;
-        _ifaceName = conn->iface->name;
+        _cred = conn->cred;
         _pvRequest = request;
     }
     virtual ~ServerMonitorSetup() {
@@ -409,20 +394,6 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
         });
     }
 
-    virtual std::pair<std::string, Value> rawCredentials() const override final
-    {
-        std::pair<std::string, Value> ret;
-        auto serv = server.lock();
-        if(serv)
-            serv->acceptor_loop.call([this, &ret](){
-                if(auto oper = op.lock())
-                    if(auto chan = oper->chan.lock())
-                        if(auto conn = chan->conn.lock())
-                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
-            });
-        return ret;
-    }
-
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<MonitorOp> op;
 
@@ -439,8 +410,7 @@ ServerMonitorControl::ServerMonitorControl(ServerMonitorSetup* setup,
 {
     _op = Info;
     _name = name;
-    _peerName = setup->peerName();
-    _ifaceName = setup->name();
+    _cred = setup->credentials();
 }
 
 } // namespace

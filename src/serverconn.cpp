@@ -18,6 +18,22 @@
 // limit on size of TX buffer above which we suspend RX
 static constexpr size_t tcp_tx_limit = 0x100000;
 
+namespace pvxs {
+namespace server {
+std::set<std::string> ClientCredentials::roles() const
+{
+    std::set<std::string> ret;
+    osdGetRoles(account, ret);
+    return ret;
+}
+
+std::ostream& operator<<(std::ostream& strm, const ClientCredentials& cred)
+{
+    strm<<cred.method<<"/"<<cred.account<<"@"<<cred.peer;
+    return strm;
+}
+}} // namespace pvxs::server
+
 namespace pvxs {namespace impl {
 
 // message related to client state and errors
@@ -34,6 +50,15 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     ,iface(iface)
 {
     log_debug_printf(connio, "Client %s connects\n", peerName.c_str());
+
+    {
+        auto cred(std::make_shared<server::ClientCredentials>());
+        cred->peer = peerName;
+        cred->iface = iface->name;
+        // paranoia placeholder prior to handle_CONNECTION_VALIDATION()
+        cred->method = cred->account = "anonymous";
+        this->cred = std::move(cred);
+    }
 
     bufferevent_setcb(bev.get(), &bevReadS, &bevWriteS, &bevEventS, this);
 
@@ -145,8 +170,20 @@ void ServerConn::handle_CONNECTION_VALIDATION()
                        peerName.c_str(), selected.c_str(),
                        std::string(SB()<<auth).c_str());
 
-            autoMethod = selected;
-            credentials = auth;
+            auto C(std::make_shared<server::ClientCredentials>(*cred));
+
+            if(selected=="ca") {
+                auth["user"].as<std::string>([&C, &selected](const std::string& user) {
+                    C->method = selected;
+                    C->account = user;
+                });
+            }
+            if(C->method.empty()) {
+                C->account = C->method = "anonymous";
+            }
+            C->raw = auth;
+
+            cred = std::move(C);
         }
     }
 
