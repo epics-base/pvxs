@@ -46,7 +46,8 @@ void testAccount()
 
 MAIN(testutil)
 {
-    testPlan(3);
+    testPlan(4);
+    testTrue(version_abi_check())<<" 0x"<<std::hex<<PVXS_VERSION<<" ~= 0x"<<std::hex<<PVXS_ABI_VERSION;
     testAccount();
     return testDone();
 }
