@@ -72,6 +72,7 @@ LIB_SRCS += describe.cpp
 LIB_SRCS += log.cpp
 LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
+LIB_SRCS += osgroups.cpp
 LIB_SRCS += sharedarray.cpp
 LIB_SRCS += bitmask.cpp
 LIB_SRCS += type.cpp

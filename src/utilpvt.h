@@ -20,6 +20,7 @@
 
 #include <atomic>
 #include <memory>
+#include <set>
 #include <string>
 #include <sstream>
 #include <type_traits>
@@ -151,6 +152,9 @@ public:
 #undef RWLOCK_WUNLOCK
 #undef RWLOCK_RLOCK
 #undef RWLOCK_RUNLOCK
+
+PVXS_API
+void osdGetRoles(const std::string& account, std::set<std::string>& roles);
 
 void logger_shutdown();
 
