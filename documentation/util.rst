@@ -76,6 +76,8 @@ Compile time access to PVXS library version information. ::
 
 .. doxygendefine:: PVXS_VERSION
 
+.. doxygendefine:: PVXS_ABI_VERSION
+
 .. doxygendefine:: VERSION_INT
 
 eg. to conditionally compile based on library version. ::
@@ -87,6 +89,10 @@ eg. to conditionally compile based on library version. ::
 .. doxygenfunction:: pvxs::version_int
 
 .. doxygenfunction:: pvxs::version_str
+
+.. doxygenfunction:: pvxs::version_abi_int
+
+.. doxygenfunction:: pvxs::version_abi_check
 
 Unit-test helpers
 -----------------

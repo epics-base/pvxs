@@ -45,6 +45,10 @@
 //! Current library version
 #define PVXS_VERSION VERSION_INT(PVXS_MAJOR_VERSION, PVXS_MINOR_VERSION, PVXS_MAINTENANCE_VERSION, 0)
 
+//! Current library ABI version
+//! @since UNRELEASED
+#define PVXS_ABI_VERSION VERSION_INT(PVXS_MAJOR_VERSION, PVXS_MINOR_VERSION, 0, 0)
+
 #ifdef __GNUC__
 #  define GCC_VERSION VERSION_INT(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__, 0)
 #endif
@@ -58,6 +62,28 @@ const char *version_str();
 //! @returns PVXS_VERSION captured at library compile time
 PVXS_API
 unsigned long version_int();
+
+//! @returns PVXS_ABI_VERSION captured at library compile time
+//! @since UNRELEASED
+PVXS_API
+unsigned long version_abi_int();
+
+/** Runtime ABI check.
+ *
+ * This test is only meaningful if it is preformed prior to any
+ * other library calls.
+ *
+ * It is guaranteed that the library has no global constructors.
+ *
+ * @returns true if the header and library ABI versions match,
+ *               and if the header version is not newer than the library version.
+ *
+ * @since UNRELEASED
+ */
+static inline
+bool version_abi_check() {
+    return PVXS_ABI_VERSION==version_abi_int() && PVXS_VERSION<=version_int();
+}
 
 }
 

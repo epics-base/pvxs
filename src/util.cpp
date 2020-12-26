@@ -47,6 +47,11 @@ unsigned long version_int()
     return PVXS_VERSION;
 }
 
+unsigned long version_abi_int()
+{
+    return PVXS_ABI_VERSION;
+}
+
 
 #define CASE(KLASS) std::atomic<size_t> cnt_ ## KLASS{}
 
