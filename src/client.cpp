@@ -342,6 +342,43 @@ void Context::cacheClear()
     });
 }
 
+Report Context::report() const
+{
+    Report ret;
+
+    pvt->tcp_loop.call([this, &ret](){
+
+        for(auto& pair : pvt->connByAddr) {
+            auto conn = pair.second.lock();
+            if(!conn)
+                continue;
+
+            ret.connections.emplace_back();
+            auto& sconn = ret.connections.back();
+            sconn.peer = conn->peerName;
+            sconn.tx = conn->statTx;
+            sconn.rx = conn->statRx;
+
+            // omit stats for transitory conn->creatingByCID
+
+            for(auto& pair : conn->chanBySID) {
+                auto chan = pair.second.lock();
+                if(!chan)
+                    continue;
+
+                sconn.channels.emplace_back();
+                auto& schan = sconn.channels.back();
+                schan.name = chan->name;
+                schan.tx = chan->statTx;
+                schan.rx = chan->statRx;
+            }
+        }
+
+    });
+
+    return ret;
+}
+
 static
 Value buildCAMethod()
 {

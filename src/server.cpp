@@ -219,6 +219,40 @@ Server& Server::interrupt()
     return *this;
 }
 
+Report Server::report() const
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+
+    Report ret;
+
+    pvt->acceptor_loop.call([this, &ret](){
+
+        for(auto& pair : pvt->connections) {
+            auto conn = pair.first;
+
+            ret.connections.emplace_back();
+            auto& sconn = ret.connections.back();
+            sconn.peer = conn->peerName;
+            sconn.tx = conn->statTx;
+            sconn.rx = conn->statRx;
+
+            for(auto& pair : conn->chanBySID) {
+                auto& chan = pair.second;
+
+                sconn.channels.emplace_back();
+                auto& schan = sconn.channels.back();
+                schan.name = chan->name;
+                schan.tx = chan->statTx;
+                schan.rx = chan->statRx;
+            }
+        }
+
+    });
+
+    return ret;
+}
+
 std::ostream& operator<<(std::ostream& strm, const Server& serv)
 {
     auto detail = Detailed::level(strm);

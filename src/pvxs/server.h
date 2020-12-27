@@ -21,6 +21,7 @@
 #include <pvxs/version.h>
 #include <pvxs/util.h>
 #include <pvxs/data.h>
+#include <pvxs/netcommon.h>
 
 namespace pvxs {
 namespace client {
@@ -31,6 +32,7 @@ namespace server {
 struct SharedPV;
 struct Source;
 struct Config;
+using pvxs::impl::Report;
 
 /** PV Access protocol server instance
  *
@@ -112,6 +114,10 @@ public:
 
     //! List all source names and priorities.
     std::vector<std::pair<std::string, int> > listSource();
+
+    //! Compile report about peers and channels
+    //! @since UNRELEASED
+    Report report() const;
 
     explicit operator bool() const { return !!pvt; }
 

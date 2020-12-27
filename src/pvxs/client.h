@@ -19,12 +19,14 @@
 
 #include <pvxs/version.h>
 #include <pvxs/data.h>
+#include <pvxs/netcommon.h>
 
 namespace pvxs {
 namespace client {
 
 class Context;
 struct Config;
+using pvxs::impl::Report;
 
 //! Operation failed because of connection to server was lost
 struct PVXS_API Disconnect : public std::runtime_error
@@ -455,6 +457,10 @@ public:
     /** Immediately close unused channels and connections.
      */
     void cacheClear();
+
+    //! Compile report about peers and channels
+    //! @since UNRELEASED
+    Report report() const;
 
     explicit operator bool() const { return pvt.operator bool(); }
     size_t use_count() const { return pvt.use_count(); }
