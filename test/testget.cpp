@@ -88,11 +88,33 @@ struct Tester {
         testTrue(ctor2->connected());
         testTrue(ctor3->connected());
 
+        // generate some traffic on the channel
+        (void)cli.get("mailbox").exec()->wait(1.0);
+
+        auto sreport(serv.report());
+        auto creport(cli.report());
+
         serv.stop();
 
         testTrue(evt.wait(5.0))<<"Wait for Disconnect";
         testTrue(discd);
         testFalse(ctor->connected());
+
+        auto checkReport = [](const impl::Report& report) {
+            if(testEq(report.connections.size(), 1u)) {
+                auto& conn = report.connections.front();
+                testNotEq(conn.tx, 0u);
+                testNotEq(conn.rx, 0u);
+                if(testEq(conn.channels.size(), 1u)) {
+                    auto& chan = conn.channels.front();
+                    testNotEq(chan.tx, 0u);
+                    testNotEq(chan.rx, 0u);
+                    testEq(chan.name, "mailbox");
+                }
+            }
+        };
+        checkReport(sreport);
+        checkReport(creport);
     }
 
     void testWaiter()
@@ -349,7 +371,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(29);
+    testPlan(43);
     testSetup();
     logger_config_env();
     Tester().testConnector();
