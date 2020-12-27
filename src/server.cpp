@@ -279,19 +279,20 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 
                 for(auto& pair : conn->chanBySID) {
                     auto& chan = pair.second;
+                    strm<<indent{}<<chan->name<<' ';
 
                     if(chan->state==ServerChan::Creating) {
-                        strm<<indent{}<<"CREATING sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
+                        strm<<"CREATING sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
                     } else if(chan->state==ServerChan::Destroy) {
-                        strm<<indent{}<<"DESTROY  sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
+                        strm<<"DESTROY  sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
                     } else if(chan->opByIOID.empty()) {
-                        strm<<indent{}<<"IDLE     sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
+                        strm<<"IDLE     sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
                     }
 
                     for(auto& pair : chan->opByIOID) {
                         auto& op = pair.second;
                         if(!op) {
-                            strm<<indent{}<<"NULL ioid="<<pair.first<<"\n";
+                            strm<<"NULL ioid="<<pair.first<<"\n";
                         } else {
                             strm<<indent{};
                             switch (op->state) {
