@@ -94,6 +94,8 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 
         if(evbuffer_add(tx, buf.data(), M.save()-buf.data()))
             throw std::bad_alloc();
+
+        statTx += M.save()-buf.data();
     }
 
     if(bufferevent_enable(bev.get(), EV_READ|EV_WRITE))
@@ -128,6 +130,8 @@ void ServerConn::handle_ECHO()
 
     // maybe help reduce latency
     bufferevent_flush(bev.get(), EV_WRITE, BEV_FLUSH);
+
+    statTx += 8u + len;
 }
 
 static

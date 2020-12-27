@@ -85,6 +85,8 @@ struct ServerChan
         Destroy,  // DESTROY_CHANNEL request received and/or reply sent
     } state;
 
+    size_t statTx{}, statRx{};
+
     std::function<void(std::unique_ptr<server::ConnectOp>&&)> onOp;
     std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onRPC;
     std::function<void(std::unique_ptr<server::MonitorSetupOp>&&)> onSubscribe;

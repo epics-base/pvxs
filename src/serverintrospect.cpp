@@ -42,7 +42,7 @@ struct ServerIntrospect : public ServerOp
                 to_wire(R, type);
         }
 
-        conn->enqueueTxBody(CMD_GET_FIELD);
+        ch->statTx += conn->enqueueTxBody(CMD_GET_FIELD);
 
         state = ServerOp::Dead;
         conn->opByIOID.erase(ioid);
@@ -126,6 +126,7 @@ void ServerConn::handle_GET_FIELD()
 {
     // aka. GetField
 
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid = -1, ioid = -1;
@@ -144,6 +145,7 @@ void ServerConn::handle_GET_FIELD()
                        peerName.c_str(), unsigned(sid), unsigned(ioid));
         return;
     }
+    chan->statRx += rxlen;
 
     auto op(std::make_shared<ServerIntrospect>(chan, ioid));
     std::unique_ptr<ServerIntrospectControl> ctrl(new ServerIntrospectControl(this, chan.get(), iface->server->internal_self, op));

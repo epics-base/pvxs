@@ -176,6 +176,8 @@ struct Channel {
 
     std::list<ConnectImpl*> connectors;
 
+    size_t statTx{}, statRx{};
+
     INST_COUNTER(Channel);
 
     Channel(const std::shared_ptr<Context::Pvt>& context, const std::string& name, uint32_t cid);

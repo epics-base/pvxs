@@ -88,7 +88,7 @@ Channel::~Channel()
             to_wire(R, sid);
             to_wire(R, cid);
         }
-        conn->enqueueTxBody(CMD_DESTROY_CHANNEL);
+        statTx += conn->enqueueTxBody(CMD_DESTROY_CHANNEL);
     }
 }
 

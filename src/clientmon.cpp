@@ -121,7 +121,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                     to_wire(R, ioid);
                     to_wire(R, subcmd);
                 }
-                conn->enqueueTxBody(CMD_MONITOR);
+                chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
 
                 state = p ? Idle : Running;
             }
@@ -240,7 +240,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
             if(pipeline)
                 to_wire(R, queueSize);
         }
-        conn->enqueueTxBody(CMD_MONITOR);
+        chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
 
         log_debug_printf(io, "Server %s channel '%s' monitor INIT%s\n",
                          conn->peerName.c_str(), chan->name.c_str(), pipeline?" pipeline":"");
@@ -325,7 +325,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                 to_wire(R, uint8_t(0x80));
                 to_wire(R, uint32_t(unack));
             }
-            conn->enqueueTxBody(CMD_MONITOR);
+            chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
 
             window += unack;
             unack = 0u;
@@ -345,6 +345,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
 void Connection::handle_MONITOR()
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t ioid=0;
@@ -441,6 +442,8 @@ void Connection::handle_MONITOR()
         bev.reset();
         return;
     }
+
+    mon->chan->statRx += rxlen;
 
     Entry update;
 

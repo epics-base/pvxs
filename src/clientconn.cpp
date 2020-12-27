@@ -63,7 +63,7 @@ void Connection::createChannels()
             to_wire(R, chan->cid);
             to_wire(R, chan->name);
         }
-        enqueueTxBody(CMD_CREATE_CHANNEL);
+        chan->statTx += enqueueTxBody(CMD_CREATE_CHANNEL);
 
         creatingByCID[chan->cid] = chan;
         chan->state = Channel::Creating;
@@ -278,6 +278,7 @@ void Connection::handle_CONNECTION_VALIDATED()
 
 void Connection::handle_CREATE_CHANNEL()
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t cid, sid;
@@ -320,6 +321,7 @@ void Connection::handle_CREATE_CHANNEL()
         }
         creatingByCID.erase(it);
     }
+    chan->statRx += rxlen;
 
     if(!sts.isSuccess()) {
         // server refuses to create a channel, but presumably responded positivly to search
@@ -409,6 +411,8 @@ void Connection::tickEcho()
 
     // maybe help reduce latency
     bufferevent_flush(bev.get(), EV_WRITE, BEV_FLUSH);
+
+    statTx += 8;
 }
 
 void Connection::tickEchoS(evutil_socket_t fd, short evt, void *raw)

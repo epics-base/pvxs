@@ -39,15 +39,18 @@ const char* ConnBase::peerLabel() const
     return isClient ? "Server" : "Client";
 }
 
-void ConnBase::enqueueTxBody(pva_app_msg_t cmd)
+size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
 {
+    auto blen = evbuffer_get_length(txBody.get());
     auto tx = bufferevent_get_output(bev.get());
     to_evbuf(tx, Header{cmd,
                         uint8_t(isClient ? 0u : pva_flags::Server),
-                        uint32_t(evbuffer_get_length(txBody.get()))},
+                        uint32_t(blen)},
              hostBE);
     auto err = evbuffer_add_buffer(tx, txBody.get());
     assert(!err);
+    statTx += 8u + blen;
+    return 8u + blen;
 }
 
 #define CASE(Op) void ConnBase::handle_##Op() {}
@@ -119,6 +122,7 @@ void ConnBase::bevRead()
         if(header[2]&pva_flags::Control) {
             // Control messages are not actually useful
             evbuffer_drain(rx, 8);
+            statRx += 8u;
             continue;
         }
         // application message
@@ -147,6 +151,7 @@ void ConnBase::bevRead()
             unsigned n = evbuffer_remove_buffer(rx, segBuf.get(), len);
             assert(n==len); // we know rx buf contains the entire body
         }
+        statRx += 8u + len;
 
         // so far we do not use segmentation to support incremental processing
         // of long messages.  We instead accumulate all segments of a message

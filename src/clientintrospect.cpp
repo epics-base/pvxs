@@ -88,7 +88,7 @@ struct InfoOp : public OperationBase
             // sub-field, which no one knows how to use...
             to_wire(R, "");
         }
-        conn->enqueueTxBody(CMD_GET_FIELD);
+        chan->statTx += conn->enqueueTxBody(CMD_GET_FIELD);
 
         log_debug_printf(io, "Server %s channel '%s' GET_INFO\n", conn->peerName.c_str(), chan->name.c_str());
 
@@ -111,6 +111,7 @@ struct InfoOp : public OperationBase
 
 void Connection::handle_GET_FIELD()
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t ioid=0u;
@@ -143,6 +144,8 @@ void Connection::handle_GET_FIELD()
         opByIOID.erase(it);
         info->chan->opByIOID.erase(ioid);
     }
+
+    info->chan->statRx += rxlen;
 
     if(info->state!=InfoOp::Waiting) {
         log_warn_printf(io, "Server %s ignore second reply to GET_FIELD\n", peerName.c_str());

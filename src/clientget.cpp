@@ -287,7 +287,7 @@ struct GPROp : public OperationBase
                 throw std::logic_error("Invalid state in GPR sendReply()");
             }
         }
-        chan->conn->enqueueTxBody(state==GPROp::Done ? CMD_DESTROY_REQUEST :  (pva_app_msg_t)op);
+        chan->statTx += chan->conn->enqueueTxBody(state==GPROp::Done ? CMD_DESTROY_REQUEST :  (pva_app_msg_t)op);
 
         if(state==GPROp::Done) {
             // CMD_DESTROY_REQUEST is not acknowledged (sigh...)
@@ -320,7 +320,7 @@ struct GPROp : public OperationBase
             to_wire(R, Value::Helper::desc(pvRequest));
             to_wire_full(R, pvRequest);
         }
-        conn->enqueueTxBody(pva_app_msg_t(uint8_t(op)));
+        chan->statTx += conn->enqueueTxBody(pva_app_msg_t(uint8_t(op)));
 
         log_debug_printf(io, "Server %s channel '%s' op%02x INIT\n",
                          conn->peerName.c_str(), chan->name.c_str(), op);
@@ -359,6 +359,7 @@ struct GPROp : public OperationBase
 
 void Connection::handle_GPR(pva_app_msg_t cmd)
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t ioid;
@@ -465,6 +466,8 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
         bev.reset();
         return;
     }
+
+    gpr->chan->statRx += rxlen;
 
     // advance operation state
 

@@ -33,6 +33,8 @@ struct ConnBase
     uint8_t segCmd;
     evbuf segBuf, txBody;
 
+    size_t statTx{}, statRx{};
+
     ConnBase(bool isClient, bufferevent* bev, const SockAddr& peerAddr);
     ConnBase(const ConnBase&) = delete;
     ConnBase& operator=(const ConnBase&) = delete;
@@ -40,7 +42,7 @@ struct ConnBase
 
     const char* peerLabel() const;
 
-    void enqueueTxBody(pva_app_msg_t cmd);
+    size_t enqueueTxBody(pva_app_msg_t cmd);
 
 protected:
 #define CASE(Op) virtual void handle_##Op();

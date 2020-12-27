@@ -165,6 +165,8 @@ void ServerChannelControl::close()
             to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
             to_wire(R, ch->sid);
             to_wire(R, ch->cid);
+            conn->statTx += 16u;
+            ch->statTx += 16u;
         }
         ServerChannel_shutdown(ch);
     });
@@ -389,6 +391,9 @@ void ServerConn::handle_DESTROY_CHANNEL()
 
         if(!R.good())
             bev.reset();
+
+        statTx += 16u;
+        // don't bother to increment for channel
     }
 }
 

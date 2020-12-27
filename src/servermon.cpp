@@ -147,7 +147,7 @@ struct MonitorOp : public ServerOp,
             }
         }
 
-        conn->enqueueTxBody(pva_app_msg_t::CMD_MONITOR);
+        ch->statTx += conn->enqueueTxBody(pva_app_msg_t::CMD_MONITOR);
 
         if(state == ServerOp::Dead) {
             ch->opByIOID.erase(ioid);
@@ -417,6 +417,7 @@ ServerMonitorControl::ServerMonitorControl(ServerMonitorSetup* setup,
 
 void ServerConn::handle_MONITOR()
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid = -1, ioid = -1;
@@ -451,6 +452,7 @@ void ServerConn::handle_MONITOR()
             bev.reset();
             return;
         }
+        chan->statRx += rxlen;
 
         auto op(std::make_shared<MonitorOp>(chan, ioid));
         op->window = nack;
@@ -521,6 +523,7 @@ void ServerConn::handle_MONITOR()
             bev.reset();
             return;
         }
+        chan->statRx += rxlen;
 
         // pvAccessCPP won't accept ack and start/stop in the same message,
         // although it will accept destroy in any !INIT message.

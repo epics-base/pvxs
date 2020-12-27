@@ -105,7 +105,7 @@ struct ServerGPR : public ServerOp
             assert(R.good());
         }
 
-        conn->enqueueTxBody(cmd);
+        ch->statTx += conn->enqueueTxBody(cmd);
 
         if(state == ServerOp::Dead) {
             ch->opByIOID.erase(ioid);
@@ -330,6 +330,7 @@ struct ServerGPRExec : public server::ExecOp
 
 void ServerConn::handle_GPR(pva_app_msg_t cmd)
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid = -1, ioid = -1;
@@ -366,6 +367,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             bev.reset();
             return;
         }
+        chan->statRx += rxlen;
 
         auto op(std::make_shared<ServerGPR>(chan, ioid));
         op->cmd = cmd;
@@ -441,6 +443,8 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         auto chan = op->chan.lock();
         if(!chan)
             throw std::logic_error("live op on dead channel");
+
+        chan->statRx += rxlen;
 
         if(op->state==ServerOp::Idle) {
             // all set
