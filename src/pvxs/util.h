@@ -13,12 +13,6 @@
 #include <type_traits>
 
 #include <osiSock.h>
-#include <event2/util.h>
-
-#ifdef _WIN32
-#  include <ws2ipdef.h>
-#endif
-
 #include <pvxs/version.h>
 
 namespace pvxs {

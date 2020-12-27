@@ -13,6 +13,7 @@
 #  include <windows.h>
 #  include <synchapi.h>
 #  include <errhandlingapi.h>
+#  include <ws2ipdef.h>
 #else
 #  include <pthread.h>
 #endif
@@ -22,6 +23,8 @@
 #include <string>
 #include <sstream>
 #include <type_traits>
+
+#include <event2/util.h>
 
 #include <compilerDependencies.h>
 
