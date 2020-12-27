@@ -268,6 +268,7 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 
                 strm<<indent{}<<"Peer"<<conn->peerName
                     <<" backlog="<<conn->backlog.size()
+                    <<" TX="<<conn->statTx<<" RX="<<conn->statRx
                     <<" auth="<<conn->cred->method<<"\n";
                 if(detail>2)
                     strm<<*conn->cred;
@@ -279,7 +280,7 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 
                 for(auto& pair : conn->chanBySID) {
                     auto& chan = pair.second;
-                    strm<<indent{}<<chan->name<<' ';
+                    strm<<indent{}<<chan->name<<" TX="<<chan->statTx<<" RX="<<chan->statRx<<' ';
 
                     if(chan->state==ServerChan::Creating) {
                         strm<<"CREATING sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
