@@ -157,6 +157,7 @@ struct ServerGPR : public ServerOp
 struct ServerGPRConnect : public server::ConnectOp
 {
     ServerGPRConnect(ServerConn* conn,
+                     pva_app_msg_t cmd,
                      const std::weak_ptr<server::Server::Pvt>& server,
                      const std::string& name,
                      const Value& request,
@@ -164,7 +165,12 @@ struct ServerGPRConnect : public server::ConnectOp
         :server(server)
         ,op(op)
     {
-        _op = Info;
+        switch(cmd) {
+        case CMD_GET: _op = Get; break;
+        case CMD_PUT: _op = Put; break;
+        case CMD_RPC: _op = RPC; break;
+        default: _op = None; break; // should never be reached
+        }
         _name = name;
         _peerName = conn->peerName;
         _ifaceName = conn->iface->name;
@@ -387,7 +393,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
 
         auto op(std::make_shared<ServerGPR>(chan, ioid));
         op->cmd = cmd;
-        std::unique_ptr<ServerGPRConnect> ctrl(new ServerGPRConnect(this, iface->server->internal_self, chan->name, pvRequest, op));
+        std::unique_ptr<ServerGPRConnect> ctrl(new ServerGPRConnect(this, cmd, iface->server->internal_self, chan->name, pvRequest, op));
 
         op->subcmd = subcmd;
         op->state = ServerOp::Creating;
