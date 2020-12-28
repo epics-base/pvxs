@@ -40,10 +40,13 @@ struct Config;
  * In order to be useful, a Server will have one or more Source instances added
  * to it with addSource().
  *
- * As a convenience, each Server instance automatically contains a "builtin" StaticSource
+ * As a convenience, each Server instance automatically contains a "__builtin" StaticSource
  * to which SharedPV instances can be directly added.
- * The "builtin" has priority zero, and can be accessed or even removed like any Source
+ * The "__builtin" has priority zero, and can be accessed or even removed like any Source
  * explicitly added with addSource().
+ *
+ * There is also a "__server" source which provides the special "server" PV
+ * used by the pvlist CLI.
  */
 class PVXS_API Server
 {
@@ -80,16 +83,21 @@ public:
     //! Suitable for use in self-contained unit-tests.
     client::Config clientConfig() const;
 
-    //! Add a SharedPV to the "builtin" StaticSource
+    //! Add a SharedPV to the "__builtin" StaticSource
     Server& addPV(const std::string& name, const SharedPV& pv);
-    //! Remove a SharedPV from the "builtin" StaticSource
+    //! Remove a SharedPV from the "__builtin" StaticSource
     Server& removePV(const std::string& name);
 
     //! Add a Source to this server with an arbitrary source name.
     //!
+    //! Source names beginning with "__" are reserved for internal use.
+    //! eg. "__builtin" and "__server".
+    //!
     //! @param name Source name
     //! @param src The Source.  A strong reference to this Source which will be released by removeSource() or ~Server()
     //! @param order Determines the order in which this Source::onCreate() will be called.  Lowest first.
+    //!
+    //! @throws std::runtime_error If this (name, order) has already been added.
     Server& addSource(const std::string& name,
                       const std::shared_ptr<Source>& src,
                       int order =0);

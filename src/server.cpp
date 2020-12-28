@@ -42,7 +42,7 @@ Server::Server(const Config& conf)
     /* Here be dragons.
      *
      * We keep two different ref. counters.
-     * - "externel" counter which keeps a server running.
+     * - "external" counter which keeps a server running.
      * - "internal" which only keeps server storage from being destroyed.
      *
      * External refs are held as Server::pvt.  Internal refs are
@@ -405,8 +405,8 @@ Server::Pvt::Pvt(const Config &conf)
     // Add magic "server" PV
     {
         auto L = sourcesLock.lockWriter();
-        sources[std::make_pair(-1, "server")] = std::make_shared<ServerSource>(this);
-        sources[std::make_pair(-1, "builtin")] = builtinsrc.source();
+        sources[std::make_pair(-1, "__server")] = std::make_shared<ServerSource>(this);
+        sources[std::make_pair(-1, "__builtin")] = builtinsrc.source();
     }
 }
 
