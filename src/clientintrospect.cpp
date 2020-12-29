@@ -30,21 +30,20 @@ struct InfoOp : public OperationBase
 
     INST_COUNTER(InfoOp);
 
-    explicit InfoOp(const std::shared_ptr<Channel>& chan)
-        :OperationBase(Info, chan)
+    explicit InfoOp(const evbase& loop)
+        :OperationBase(Info, loop)
     {}
 
     virtual ~InfoOp()
     {
-        chan->context->tcp_loop.assertInLoop();
+        loop.assertInLoop();
         _cancel(true);
     }
 
     virtual bool cancel() override final {
-        auto context = chan->context;
         decltype (done) junk;
         bool ret = false;
-        context->tcp_loop.call([this, &junk, &ret](){
+        loop.call([this, &junk, &ret](){
             ret = _cancel(false);
             junk = std::move(done);
             // leave opByIOID for GC
@@ -178,47 +177,44 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    std::shared_ptr<Operation> ret;
+    auto op(std::make_shared<InfoOp>(ctx->tcp_loop));
+    if(_result) {
+        op->done = std::move(_result);
+    } else {
+        auto waiter = op->waiter = std::make_shared<ResultWaiter>();
+        op->done = [waiter](Result&& result) {
+            waiter->complete(std::move(result), false);
+        };
+    }
 
-    assert(!_get);
+    std::shared_ptr<InfoOp> external(op.get(), [op](InfoOp*) mutable {
+        // from user thread
+        auto loop(op->loop);
+        // std::bind for lack of c++14 generalized capture
+        // to move internal ref to worker for dtor
+        loop.call(std::bind([](std::shared_ptr<InfoOp>& op) {
+                      // on worker
 
-    ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx->shared_from_this(), _name);
-
-        auto op = std::make_shared<InfoOp>(chan);
-
-        if(_result) {
-            op->done = std::move(_result);
-        } else {
-            auto waiter = op->waiter = std::make_shared<ResultWaiter>();
-            op->done = [waiter](Result&& result) {
-                waiter->complete(std::move(result), false);
-            };
-        }
-
-        chan->pending.push_back(op);
-        chan->createOperations();
-
-        auto loop(op->chan->context->tcp_loop);
-        ret.reset(op.get(), [op, loop](Operation*) mutable {
-            // on user thread
-            auto temp(std::move(op));
-            auto L(std::move(loop));
-            L.call([&temp]() {
-                // on worker
-                try {
-                    temp->_cancel(true);
-                }catch(std::exception& e){
-                    log_exc_printf(setup, "Channel %s error in info cancel(): %s",
-                                   temp->chan->name.c_str(), e.what());
-                }
-                // ensure dtor on worker
-                temp.reset();
-            });
-        });
+                      // ordering of dispatch()/call() ensures creation before destruction
+                      assert(op->chan);
+                      op->_cancel(true);
+                  }, std::move(op)));
+        assert(!op);
+        op.reset();
     });
 
-    return ret;
+    auto name(std::move(_name));
+    auto context(ctx->shared_from_this());
+    context->tcp_loop.dispatch([op, context, name]() {
+        // on worker
+
+        op->chan = Channel::build(context, name);
+
+        op->chan->pending.push_back(op);
+        op->chan->createOperations();
+    });
+
+    return external;
 }
 
 } // namespace client

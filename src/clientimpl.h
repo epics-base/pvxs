@@ -42,13 +42,15 @@ struct ResultWaiter {
 // internal actions on an Operation
 struct OperationBase : public Operation
 {
-    const std::shared_ptr<Channel> chan;
+    const evbase loop;
+    // remaining members only accessibly from loop worker
+    std::shared_ptr<Channel> chan;
     uint32_t ioid = 0;
     Value result;
     bool done = false;
     std::shared_ptr<ResultWaiter> waiter;
 
-    OperationBase(operation_t op, const std::shared_ptr<Channel>& chan);
+    OperationBase(operation_t op, const evbase& loop);
     virtual ~OperationBase();
 
     virtual void createOp() =0;

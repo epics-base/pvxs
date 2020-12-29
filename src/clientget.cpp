@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
@@ -130,11 +130,11 @@ struct GPROp : public OperationBase
 
     INST_COUNTER(GPROp);
 
-    GPROp(operation_t op, const std::shared_ptr<Channel>& chan)
-        :OperationBase (op, chan)
+    GPROp(operation_t op, const evbase& loop)
+        :OperationBase (op, loop)
     {}
     ~GPROp() {
-        chan->context->tcp_loop.assertInLoop();
+        loop.assertInLoop();
         _cancel(true);
     }
 
@@ -168,11 +168,10 @@ struct GPROp : public OperationBase
 
     virtual bool cancel() override final
     {
-        auto context = chan->context;
         decltype (done) junk;
         decltype (onInit) junkI;
         bool ret;
-        context->tcp_loop.call([this, &junk, &junkI, &ret](){
+        loop.call([this, &junk, &junkI, &ret](){
             ret = _cancel(false);
             junk = std::move(done);
             junkI = std::move(onInit);
@@ -208,8 +207,7 @@ struct GPROp : public OperationBase
         auto a(arg);
         auto cb(std::move(resultcb));
 
-        auto context = chan->context;
-        context->tcp_loop.dispatch([this, a, cb]() mutable {
+        loop.dispatch([this, a, cb]() mutable {
             if(autoExec) {
                 client::Result ret(std::make_exception_ptr(std::invalid_argument("reExec() requires Operation creation with .autoExec(false)")));
                 cb(std::move(ret));
@@ -527,52 +525,50 @@ void Connection::handle_PUT() { handle_GPR(CMD_PUT); }
 void Connection::handle_RPC() { handle_GPR(CMD_RPC); }
 
 static
-void gpr_cleanup(std::shared_ptr<Operation>& ret, std::shared_ptr<GPROp>&& op)
+std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<Context::Pvt>& context,
+                                     std::string name, // need to capture by value
+                                     const std::shared_ptr<GPROp>& op)
 {
-    auto cap(std::move(op));
-    auto loop(cap->chan->context->tcp_loop);
-    ret.reset(cap.get(), [cap, loop](Operation*) mutable {
-        auto L(std::move(loop));
-        // from use thread
-        L.call([&cap]() {
-            auto temp(std::move(cap));
-            // on worker
-            try {
-                temp->_cancel(true);
-            }catch(std::exception& e){
-                log_exc_printf(setup, "Channel %s error in get cancel(): %s",
-                               temp->chan->name.c_str(), e.what());
-            }
-            // ensure dtor on worker
-            temp.reset();
-        });
+    auto internal(op);
+    std::shared_ptr<GPROp> external(internal.get(), [internal](GPROp*) mutable {
+        // (maybe) user thread
+        auto loop(internal->loop);
+        // std::bind for lack of c++14 generalized capture
+        // to move internal ref to worker for dtor
+        loop.call(std::bind([](std::shared_ptr<GPROp>& op) {
+                      // on worker
+
+                      // ordering of dispatch()/call() ensures creation before destruction
+                      assert(op->chan);
+                      op->_cancel(true);                  }, std::move(internal)));
+        assert(!internal);
+        internal.reset();
     });
+
+    context->tcp_loop.dispatch([internal, context, name]() {
+        // on worker
+
+        internal->chan = Channel::build(context, name);
+
+        internal->chan->pending.push_back(internal);
+        internal->chan->createOperations();
+    });
+
+    return external;
 }
 
 std::shared_ptr<Operation> GetBuilder::_exec_get()
 {
+    assert(_get);
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    std::shared_ptr<Operation> ret;
-    assert(_get);
+    auto op(std::make_shared<GPROp>(Operation::Get, ctx->tcp_loop));
+    op->setDone(std::move(_result), std::move(_onInit));
+    op->autoExec = _autoexec;
+    op->pvRequest = _buildReq();
 
-    ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx->shared_from_this(), _name);
-
-        auto op = std::make_shared<GPROp>(Operation::Get, chan);
-        op->setDone(std::move(_result), std::move(_onInit));
-        op->autoExec = _autoexec;
-        op->pvRequest = _buildReq();
-
-        chan->pending.push_back(op);
-        chan->createOperations();
-
-        gpr_cleanup(ret, std::move(op));
-        assert(ret);
-    });
-
-    return  ret;
+    return gpr_setup(ctx->shared_from_this(), _name, op);
 }
 
 std::shared_ptr<Operation> PutBuilder::exec()
@@ -580,41 +576,27 @@ std::shared_ptr<Operation> PutBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    std::shared_ptr<Operation> ret;
+    auto op(std::make_shared<GPROp>(Operation::Put, ctx->tcp_loop));
+    op->setDone(std::move(_result), std::move(_onInit));
 
-    if(!_builder && !_args)
-        throw std::logic_error("put() needs either a .build() or at least one .set()");
+    if(_builder) {
+        op->builder = std::move(_builder);
+    } else if(_args) {
+        // PRBase builder doesn't use current value
+        _doGet = false;
 
-    ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx->shared_from_this(), _name);
+        auto build = std::move(_args);
+        op->builder = [build](Value&& prototype) -> Value {
+            return build->build(std::move(prototype));
+        };
+    } else {
+        // handled above
+    }
+    op->getOput = _doGet;
+    op->autoExec = _autoexec;
+    op->pvRequest = _buildReq();
 
-        auto op = std::make_shared<GPROp>(Operation::Put, chan);
-        op->setDone(std::move(_result), std::move(_onInit));
-
-        if(_builder) {
-            op->builder = std::move(_builder);
-        } else if(_args) {
-            // PRBase builder doesn't use current value
-            _doGet = false;
-
-            auto build = std::move(_args);
-            op->builder = [build](Value&& prototype) -> Value {
-                return build->build(std::move(prototype));
-            };
-        } else {
-            // handled above
-        }
-        op->getOput = _doGet;
-        op->autoExec = _autoexec;
-        op->pvRequest = _buildReq();
-
-        chan->pending.push_back(op);
-        chan->createOperations();
-
-        gpr_cleanup(ret, std::move(op));
-    });
-
-    return  ret;
+    return gpr_setup(ctx->shared_from_this(), _name, op);
 }
 
 std::shared_ptr<Operation> RPCBuilder::exec()
@@ -622,34 +604,20 @@ std::shared_ptr<Operation> RPCBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    std::shared_ptr<Operation> ret;
+    auto op(std::make_shared<GPROp>(Operation::RPC, ctx->tcp_loop));
+    op->setDone(std::move(_result), std::move(_onInit));
+    if(_argument) {
+        if(!_autoexec)
+            throw std::invalid_argument("Pass RPC argument during reExec()");
+        op->arg = std::move(_argument);
+    } else if(_args) {
+        op->arg = _args->uriArgs();
+        op->arg["path"] = _name;
+    }
+    op->autoExec = _autoexec;
+    op->pvRequest = _buildReq();
 
-    if(_args && _argument)
-        throw std::logic_error("Use of rpc() with argument and builder .arg() are mutually exclusive");
-
-    ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx->shared_from_this(), _name);
-
-        auto op = std::make_shared<GPROp>(Operation::RPC, chan);
-        op->setDone(std::move(_result), std::move(_onInit));
-        if(_argument) {
-            if(!_autoexec)
-                throw std::invalid_argument("Pass RPC argument during reExec()");
-            op->arg = std::move(_argument);
-        } else if(_args) {
-            op->arg = _args->uriArgs();
-            op->arg["path"] = _name;
-        }
-        op->autoExec = _autoexec;
-        op->pvRequest = _buildReq();
-
-        chan->pending.push_back(op);
-        chan->createOperations();
-
-        gpr_cleanup(ret, std::move(op));
-    });
-
-    return  ret;
+    return gpr_setup(ctx->shared_from_this(), _name, op);
 }
 
 } // namespace client

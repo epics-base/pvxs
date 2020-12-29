@@ -213,9 +213,9 @@ void ResultWaiter::complete(Result&& result, bool interrupt)
     notify.signal();
 }
 
-OperationBase::OperationBase(operation_t op, const std::shared_ptr<Channel>& chan)
+OperationBase::OperationBase(operation_t op, const evbase& loop)
     :Operation(op)
-    ,chan(chan)
+    ,loop(loop)
 {}
 
 OperationBase::~OperationBase() {}
