@@ -202,7 +202,8 @@ struct evbase::Pvt : public epicsThreadRunable
         }
         for(auto& work : todo) {
             try {
-                work.fn();
+                auto fn(std::move(work.fn));
+                fn();
             }catch(std::exception& e){
                 if(work.result) {
                     Guard G(lock);
