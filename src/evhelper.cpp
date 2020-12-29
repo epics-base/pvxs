@@ -152,7 +152,7 @@ struct evbase::Pvt : public epicsThreadRunable
             running = false;
         }
         if(worker.isCurrentThread())
-            log_err_printf(logerr, "evbase self-joining: %s\n", worker.getNameSelf());
+            log_crit_printf(logerr, "evbase self-joining: %s\n", worker.getNameSelf());
         if(event_base_loopexit(base.get(), nullptr))
             log_crit_printf(logerr, "evbase error while interrupting loop for %p\n", base.get());
         worker.exitWait();
