@@ -243,17 +243,17 @@ evbase::evbase(const std::string &name, unsigned prio)
 
 evbase::~evbase() {}
 
-void evbase::join()
+void evbase::join() const
 {
     pvt->join();
 }
 
-void evbase::sync()
+void evbase::sync() const
 {
     call([](){});
 }
 
-void evbase::dispatch(std::function<void()>&& fn)
+void evbase::dispatch(std::function<void()>&& fn) const
 {
     bool empty;
     {
@@ -269,7 +269,7 @@ void evbase::dispatch(std::function<void()>&& fn)
         throw std::runtime_error("Unable to wakeup dispatch()");
 }
 
-void evbase::call(std::function<void()>&& fn)
+void evbase::call(std::function<void()>&& fn) const
 {
     if(pvt->worker.isCurrentThread()) {
         fn();
@@ -298,7 +298,7 @@ void evbase::call(std::function<void()>&& fn)
         std::rethrow_exception(result);
 }
 
-void evbase::assertInLoop()
+void evbase::assertInLoop() const
 {
     if(!pvt->worker.isCurrentThread()) {
         char name[32];
@@ -308,7 +308,7 @@ void evbase::assertInLoop()
     }
 }
 
-bool evbase::inLoop()
+bool evbase::inLoop() const
 {
     return pvt->worker.isCurrentThread();
 }

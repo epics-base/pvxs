@@ -65,18 +65,18 @@ struct PVXS_API evbase {
     evbase(evbase&&) = default;
     explicit evbase(const std::string& name, unsigned prio=0);
     ~evbase();
-    void join();
+    void join() const;
 
-    void sync();
+    void sync() const;
 
     // queue request to execute in event loop.  return immediately.
-    void dispatch(std::function<void()>&& fn);
+    void dispatch(std::function<void()>&& fn) const;
 
     // queue request to execute in event loop.  return after executed.
-    void call(std::function<void()>&& fn);
+    void call(std::function<void()>&& fn) const;
 
-    void assertInLoop();
-    bool inLoop();
+    void assertInLoop() const;
+    bool inLoop() const;
 
     inline void reset() { pvt.reset(); }
 
