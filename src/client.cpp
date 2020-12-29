@@ -159,32 +159,42 @@ std::shared_ptr<Connect> ConnectBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    std::shared_ptr<ConnectImpl> ret;
+    auto op(std::make_shared<ConnectImpl>(ctx->tcp_loop, _pvname));
+    op->_onConn = std::move(_onConn);
+    op->_onDis = std::move(_onDis);
 
-    ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx->shared_from_this(), _pvname);
+    std::shared_ptr<ConnectImpl> external(op.get(), [op](ConnectImpl*) mutable {
+        // from user thread
+        auto loop(op->loop);
+        // std::bind for lack of c++14 generalized capture
+        // to move internal ref to worker for dtor
+        loop.call(std::bind([](std::shared_ptr<ConnectImpl>& op) {
+                      // on worker
 
-        auto loop(this->ctx->tcp_loop);
-        std::shared_ptr<ConnectImpl> internal(new ConnectImpl(chan, _pvname));
-        internal->_connected = chan->state==Channel::Active;
-
-        ret.reset(internal.get(), [internal, loop](ConnectImpl* ptr) mutable {
-            // cleanup from user code (maybe user thread)
-            auto self(std::move(internal));
-            auto L(std::move(loop));
-
-            L.call([&self]() {
-                self->chan->connectors.remove(self.get());
-            });
-        });
-
-        internal->_onConn = std::move(_onConn);
-        internal->_onDis = std::move(_onDis);
-
-        chan->connectors.push_back(internal.get());
+                      // ordering of dispatch()/call() ensures creation before destruction
+                      assert(op->chan);
+                      op->chan->connectors.remove(op.get());
+                  }, std::move(op)));
+        assert(!op);
+        op.reset();
     });
 
-    return ret;
+    auto context(ctx->shared_from_this());
+    context->tcp_loop.dispatch([op, context]() {
+        // on worker
+
+        op->chan = Channel::build(context, op->_name);
+
+        bool cur = op->_connected = op->chan->state==Channel::Active;
+        if(cur && op->_onConn)
+            op->_onConn();
+        else if(!cur && op->_onDis)
+            op->_onDis();
+
+        op->chan->connectors.push_back(op.get());
+    });
+
+    return external;
 }
 
 Value ResultWaiter::wait(double timeout)

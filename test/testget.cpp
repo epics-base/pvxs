@@ -56,33 +56,55 @@ struct Tester {
         mbox.open(initial);
         serv.start();
 
-        epicsEvent evt;
-        bool connd = false,
-             discd = false;
+        struct info {
+            epicsEvent evt;
+            std::atomic<bool> current{false};
+            std::atomic<size_t> connd{0}, discd{0};
+            bool wait(bool state, double timeout) {
+                while(current!=state) {
+                    if(!evt.wait(timeout))
+                        return false;
+                }
+                return true;
+            }
+        } evt, evt2, evt3;
 
-        auto ctor = cli.connect("mailbox")
-                .onConnect([&evt, &connd]()
-        {
-            testDiag("onConnect%c", !connd ? '.' : '?');
-            connd = true;
-            evt.signal();
-        })
-                .onDisconnect([&evt, &discd]()
-        {
-            testDiag("onDisconnect%c", !discd ? '.' : '?');
-            discd = true;
-            evt.signal();
-        })
-                .exec();
+        auto setup = [this](info& i) -> std::shared_ptr<client::Connect> {
+            return cli.connect("mailbox")
+                    .onConnect([&i]()
+            {
+                i.current = true;
+                i.connd++;
+                testDiag("onConnect %p %zu", &i, i.connd.load());
+                i.evt.signal();
+            })
+                    .onDisconnect([&i]()
+            {
+                i.current = false;
+                i.discd++;
+                testDiag("onDisconnect %p %zu", &i, i.discd.load());
+                i.evt.signal();
+            })
+                    .exec();
+        };
 
+        auto ctor(setup(evt));
         // ensure de-dup
-        auto ctor2 = cli.connect("mailbox").exec();
+        auto ctor2(setup(evt2));
 
-        testTrue(evt.wait(5.0))<<"Wait for Connect";
-        testTrue(connd);
+        testTrue(evt.wait(true, 5.0))<<" Wait for Connect 1";
+        testEq(evt.discd, 1u); // initially disconnected
+        testEq(evt.connd, 1u);
+        testTrue(evt2.wait(true, 5.0))<<" Wait for Connect 2";
+        testEq(evt2.discd, 1u); // initially disconnected
+        testEq(evt2.connd, 1u);
 
-        // ensure de-dup
-        auto ctor3 = cli.connect("mailbox").exec();
+        // ensure de-dup of connected
+        auto ctor3(setup(evt3));
+
+        testTrue(evt3.wait(true, 5.0))<<" Wait for Connect 3";
+        testEq(evt3.discd, 0u); // initially connected
+        testEq(evt3.connd, 1u);
 
         testTrue(ctor->connected());
         testTrue(ctor2->connected());
@@ -94,10 +116,12 @@ struct Tester {
         auto sreport(serv.report());
         auto creport(cli.report());
 
+        testDiag("Stop server");
         serv.stop();
 
-        testTrue(evt.wait(5.0))<<"Wait for Disconnect";
-        testTrue(discd);
+        testTrue(evt.wait(false, 5.0))<<" Wait for Disconnect 1";
+        testEq(evt.discd, 2u);
+        testEq(evt.connd, 1u);
         testFalse(ctor->connected());
 
         auto checkReport = [](const impl::Report& report) {
@@ -371,7 +395,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(43);
+    testPlan(51);
     testSetup();
     logger_config_env();
     Tester().testConnector();

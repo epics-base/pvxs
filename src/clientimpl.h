@@ -126,14 +126,15 @@ protected:
 
 struct ConnectImpl : public Connect
 {
-    const std::shared_ptr<Channel> chan;
+    const evbase loop;
+    std::shared_ptr<Channel> chan;
     const std::string _name;
     std::atomic<bool> _connected;
     std::function<void()> _onConn;
     std::function<void()> _onDis;
 
-    ConnectImpl(const std::shared_ptr<Channel>& chan, const std::string& name)
-        :chan(chan)
+    ConnectImpl(const evbase& loop, const std::string& name)
+        :loop(loop)
         ,_name(name)
         ,_connected{false}
     {}
