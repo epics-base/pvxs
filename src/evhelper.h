@@ -61,22 +61,51 @@ struct owned_ptr : public std::unique_ptr<T>
 
 struct PVXS_API evbase {
     evbase() = default;
-    evbase(const evbase&) = default;
-    evbase(evbase&&) = default;
     explicit evbase(const std::string& name, unsigned prio=0);
     ~evbase();
+
+    evbase internal() const;
+
     void join() const;
 
     void sync() const;
 
-    // queue request to execute in event loop.  return immediately.
-    void dispatch(std::function<void()>&& fn) const;
+private:
+    bool _dispatch(std::function<void()>&& fn, bool dothrow) const;
+    bool _call(std::function<void()>&& fn, bool dothrow) const;
+public:
 
     // queue request to execute in event loop.  return after executed.
-    void call(std::function<void()>&& fn) const;
+    inline
+    void call(std::function<void()>&& fn) const {
+        _call(std::move(fn), true);
+    }
+    inline
+    bool tryCall(std::function<void()>&& fn) const {
+        return _call(std::move(fn), false);
+    }
+
+    // queue request to execute in event loop.  return immediately.
+    inline
+    void dispatch(std::function<void()>&& fn) const {
+        _dispatch(std::move(fn), true);
+    }
+    inline
+    bool tryDispatch(std::function<void()>&& fn) const {
+        return _dispatch(std::move(fn), false);
+    }
+
+    bool tryInvoke(bool docall, std::function<void()>&& fn) const {
+        if(docall)
+            return tryCall(std::move(fn));
+        else
+            return tryDispatch(std::move(fn));
+    }
 
     void assertInLoop() const;
-    bool inLoop() const;
+    //! Caller must be on the worker, or the worker must be stopped.
+    //! @returns true if working is running.
+    bool assertInRunningLoop() const;
 
     inline void reset() { pvt.reset(); }
 

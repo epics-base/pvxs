@@ -29,15 +29,13 @@ void test_call()
     auto snap = instanceSnapshot();
     testEq(snap["evbase"], 1u);
 
-    testOk1(!base.inLoop());
-
     {
         bool called = false;
         base.call([&called, &base]() {
             testDiag("in loop 1");
             called = true;
-            testOk1(!!base.inLoop());
             base.assertInLoop();
+            testTrue(base.assertInRunningLoop());
         });
         testOk1(called==true);
     }
@@ -65,6 +63,16 @@ void test_call()
         testFail("Caught wrong exception : %s \"%s\"", typeid(e).name(), e.what());
     }
 
+    auto internal(base.internal());
+    base = evbase();
+    // loop stopped
+
+    testFalse(internal.assertInRunningLoop());
+    testThrows<std::logic_error>([&internal]() {
+        internal.call([]() {});
+    });
+
+    testFalse(internal.tryCall([](){}));
 }
 
 void test_fill_evbuf()
@@ -116,7 +124,7 @@ void test_fill_evbuf()
 MAIN(testev)
 {
     SockAttach attach;
-    testPlan(15);
+    testPlan(17);
     testSetup();
     test_call();
     test_fill_evbuf();

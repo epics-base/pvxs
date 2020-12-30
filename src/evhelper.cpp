@@ -105,6 +105,8 @@ struct evbase::Pvt : public epicsThreadRunable
 {
     SockAttach attach;
 
+    std::weak_ptr<Pvt> internal_self;
+
     struct Work {
         std::function<void()> fn;
         std::exception_ptr *result;
@@ -140,10 +142,7 @@ struct evbase::Pvt : public epicsThreadRunable
         }
     }
 
-    virtual ~Pvt()
-    {
-        join();
-    }
+    virtual ~Pvt() {}
 
     void join()
     {
@@ -238,11 +237,27 @@ struct evbase::Pvt : public epicsThreadRunable
 };
 
 evbase::evbase(const std::string &name, unsigned prio)
-    :pvt(new Pvt(name, prio))
-    ,base(pvt->base.get())
-{}
+{
+    auto internal(std::make_shared<Pvt>(name, prio));
+    internal->internal_self = internal;
+
+    pvt.reset(internal.get(), [internal](Pvt*) mutable {
+        auto temp(std::move(internal));
+        temp->join();
+    });
+
+    base = pvt->base.get();
+}
 
 evbase::~evbase() {}
+
+evbase evbase::internal() const
+{
+    evbase ret;
+    ret.pvt = decltype(pvt)(pvt->internal_self);
+    ret.base = base;
+    return ret;
+}
 
 void evbase::join() const
 {
@@ -254,13 +269,16 @@ void evbase::sync() const
     call([](){});
 }
 
-void evbase::dispatch(std::function<void()>&& fn) const
+bool evbase::_dispatch(std::function<void()>&& fn, bool dothrow) const
 {
     bool empty;
     {
         Guard G(pvt->lock);
-        if(!pvt->running)
-            throw std::logic_error("Worker stopped");
+        if(!pvt->running) {
+            if(dothrow)
+                throw std::logic_error("Worker stopped");
+            return false;
+        }
         empty = pvt->actions.empty();
         pvt->actions.emplace_back(std::move(fn), nullptr, nullptr);
     }
@@ -268,13 +286,15 @@ void evbase::dispatch(std::function<void()>&& fn) const
     timeval now{};
     if(empty && event_add(pvt->dowork.get(), &now))
         throw std::runtime_error("Unable to wakeup dispatch()");
+
+    return true;
 }
 
-void evbase::call(std::function<void()>&& fn) const
+bool evbase::_call(std::function<void()>&& fn, bool dothrow) const
 {
     if(pvt->worker.isCurrentThread()) {
         fn();
-        return;
+        return true;
     }
 
     static ThreadEvent done;
@@ -283,8 +303,11 @@ void evbase::call(std::function<void()>&& fn) const
     bool empty;
     {
         Guard G(pvt->lock);
-        if(!pvt->running)
-            throw std::logic_error("Worker stopped");
+        if(!pvt->running) {
+            if(dothrow)
+                throw std::logic_error("Worker stopped");
+            return false;
+        }
         empty = pvt->actions.empty();
         pvt->actions.emplace_back(std::move(fn), &result, done.get());
     }
@@ -297,6 +320,7 @@ void evbase::call(std::function<void()>&& fn) const
     Guard G(pvt->lock);
     if(result)
         std::rethrow_exception(result);
+    return true;
 }
 
 void evbase::assertInLoop() const
@@ -309,9 +333,20 @@ void evbase::assertInLoop() const
     }
 }
 
-bool evbase::inLoop() const
+bool evbase::assertInRunningLoop() const
 {
-    return pvt->worker.isCurrentThread();
+    if(pvt->worker.isCurrentThread())
+        return true;
+
+    Guard G(pvt->lock);
+    if(!pvt->running)
+        return false;
+
+    char name[32];
+    pvt->worker.getName(name, sizeof(name));
+    log_exc_printf(logerr, "Not in running evbase worker: \"%s\" != \"%s\"\n",
+                   name, epicsThread::getNameSelf());
+    throw std::logic_error("Not in running evbase worker");
 }
 
 evsocket::evsocket(evutil_socket_t sock)
