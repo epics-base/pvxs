@@ -180,7 +180,9 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    auto op(std::make_shared<InfoOp>(ctx->tcp_loop));
+    auto context(ctx->impl->shared_from_this());
+
+    auto op(std::make_shared<InfoOp>(context->tcp_loop));
     if(_result) {
         op->done = std::move(_result);
     } else {
@@ -207,7 +209,6 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
     });
 
     auto name(std::move(_name));
-    auto context(ctx->shared_from_this());
     context->tcp_loop.dispatch([op, context, name]() {
         // on worker
 

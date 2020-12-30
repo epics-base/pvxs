@@ -528,7 +528,7 @@ void Connection::handle_PUT() { handle_GPR(CMD_PUT); }
 void Connection::handle_RPC() { handle_GPR(CMD_RPC); }
 
 static
-std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<Context::Pvt>& context,
+std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context,
                                      std::string name, // need to capture by value
                                      const std::shared_ptr<GPROp>& op)
 {
@@ -566,12 +566,14 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    auto op(std::make_shared<GPROp>(Operation::Get, ctx->tcp_loop));
+    auto context(ctx->impl->shared_from_this());
+
+    auto op(std::make_shared<GPROp>(Operation::Get, context->tcp_loop));
     op->setDone(std::move(_result), std::move(_onInit));
     op->autoExec = _autoexec;
     op->pvRequest = _buildReq();
 
-    return gpr_setup(ctx->shared_from_this(), _name, op);
+    return gpr_setup(context, _name, op);
 }
 
 std::shared_ptr<Operation> PutBuilder::exec()
@@ -579,7 +581,9 @@ std::shared_ptr<Operation> PutBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    auto op(std::make_shared<GPROp>(Operation::Put, ctx->tcp_loop));
+    auto context(ctx->impl->shared_from_this());
+
+    auto op(std::make_shared<GPROp>(Operation::Put, context->tcp_loop));
     op->setDone(std::move(_result), std::move(_onInit));
 
     if(_builder) {
@@ -599,7 +603,7 @@ std::shared_ptr<Operation> PutBuilder::exec()
     op->autoExec = _autoexec;
     op->pvRequest = _buildReq();
 
-    return gpr_setup(ctx->shared_from_this(), _name, op);
+    return gpr_setup(context, _name, op);
 }
 
 std::shared_ptr<Operation> RPCBuilder::exec()
@@ -607,7 +611,9 @@ std::shared_ptr<Operation> RPCBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    auto op(std::make_shared<GPROp>(Operation::RPC, ctx->tcp_loop));
+    auto context(ctx->impl->shared_from_this());
+
+    auto op(std::make_shared<GPROp>(Operation::RPC, context->tcp_loop));
     op->setDone(std::move(_result), std::move(_onInit));
     if(_argument) {
         if(!_autoexec)
@@ -620,7 +626,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
     op->autoExec = _autoexec;
     op->pvRequest = _buildReq();
 
-    return gpr_setup(ctx->shared_from_this(), _name, op);
+    return gpr_setup(context, _name, op);
 }
 
 } // namespace client

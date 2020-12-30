@@ -69,7 +69,7 @@ Timeout::Timeout()
 {}
 Timeout::~Timeout() {}
 
-Channel::Channel(const std::shared_ptr<Context::Pvt>& context, const std::string& name, uint32_t cid)
+Channel::Channel(const std::shared_ptr<ContextImpl>& context, const std::string& name, uint32_t cid)
     :context(context)
     ,name(name)
     ,cid(cid)
@@ -159,7 +159,9 @@ std::shared_ptr<Connect> ConnectBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    auto op(std::make_shared<ConnectImpl>(ctx->tcp_loop, _pvname));
+    auto context(ctx->impl->shared_from_this());
+
+    auto op(std::make_shared<ConnectImpl>(context->tcp_loop, _pvname));
     op->_onConn = std::move(_onConn);
     op->_onDis = std::move(_onDis);
 
@@ -179,7 +181,6 @@ std::shared_ptr<Connect> ConnectBuilder::exec()
         op.reset();
     });
 
-    auto context(ctx->shared_from_this());
     context->tcp_loop.dispatch([op, context]() {
         // on worker
 
@@ -255,7 +256,7 @@ RequestInfo::RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationB
     ,handle(handle)
 {}
 
-std::shared_ptr<Channel> Channel::build(const std::shared_ptr<Context::Pvt>& context, const std::string& name)
+std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& context, const std::string& name)
 {
 
     std::shared_ptr<Channel> chan;
@@ -287,38 +288,8 @@ Operation::~Operation() {}
 Subscription::~Subscription() {}
 
 Context::Context(const Config& conf)
-{
-    /* Here be dragons.
-     *
-     * We keep two different ref. counters.
-     * - "externel" counter which keeps a server running.
-     * - "internal" which only keeps server storage from being destroyed.
-     *
-     * External refs are held as Server::pvt.  Internal refs are
-     * held by various in-progress operations (OpBase sub-classes)
-     * Which need to safely access server storage, but should not
-     * prevent a server from stopping.
-     */
-    auto internal(std::make_shared<Pvt>(conf));
-    internal->internal_self = internal;
-    cnt_ClientPvtLive.fetch_add(1u);
-
-    // external
-    pvt.reset(internal.get(), [internal](Pvt*) mutable {
-        auto temp(std::move(internal));
-        try {
-            temp->close();
-        }catch(std::exception& e){
-            // called through ~shared_ptr and can't propagate exceptions.
-            // log and continue...
-            log_exc_printf(setup, "Error while closing Context (%s) : %s\n",
-                           typeid(e).name(), e.what());
-        }
-        cnt_ClientPvtLive.fetch_sub(1u);
-    });
-    // we don't keep a weak_ptr to the external reference.
-    // Caller is entirely responsible for keeping this server running
-}
+    :pvt(std::make_shared<Pvt>(conf))
+{}
 
 Context::~Context() {}
 
@@ -327,7 +298,7 @@ const Config& Context::config() const
     if(!pvt)
         throw std::logic_error("NULL Context");
 
-    return pvt->effective;
+    return pvt->impl->effective;
 }
 
 void Context::hurryUp()
@@ -335,8 +306,8 @@ void Context::hurryUp()
     if(!pvt)
         throw std::logic_error("NULL Context");
 
-    pvt->manager.loop().call([this](){
-        pvt->poke(true);
+    pvt->impl->manager.loop().call([this](){
+        pvt->impl->poke(true);
     });
 }
 
@@ -345,10 +316,10 @@ void Context::cacheClear()
     if(!pvt)
         throw std::logic_error("NULL Context");
 
-    pvt->tcp_loop.call([this](){
+    pvt->impl->tcp_loop.call([this](){
         // run twice to ensure both mark and sweep of all unused channels
-        pvt->cacheClean();
-        pvt->cacheClean();
+        pvt->impl->cacheClean();
+        pvt->impl->cacheClean();
     });
 }
 
@@ -356,9 +327,9 @@ Report Context::report() const
 {
     Report ret;
 
-    pvt->tcp_loop.call([this, &ret](){
+    pvt->impl->tcp_loop.call([this, &ret](){
 
-        for(auto& pair : pvt->connByAddr) {
+        for(auto& pair : pvt->impl->connByAddr) {
             auto conn = pair.second.lock();
             if(!conn)
                 continue;
@@ -400,16 +371,16 @@ Value buildCAMethod()
                    }).create();
 }
 
-Context::Pvt::Pvt(const Config& conf)
+ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     :effective(conf)
     ,caMethod(buildCAMethod())
     ,searchTx(AF_INET, SOCK_DGRAM, 0)
-    ,tcp_loop("PVXCTCP", epicsThreadPriorityCAServerLow)
-    ,searchRx(event_new(tcp_loop.base, searchTx.sock, EV_READ|EV_PERSIST, &Pvt::onSearchS, this))
-    ,searchTimer(event_new(tcp_loop.base, -1, EV_TIMEOUT, &Pvt::tickSearchS, this))
+    ,tcp_loop(tcp_loop)
+    ,searchRx(event_new(tcp_loop.base, searchTx.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
+    ,searchTimer(event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::tickSearchS, this))
     ,manager(UDPManager::instance())
-    ,beaconCleaner(event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &Pvt::tickBeaconCleanS, this))
-    ,cacheCleaner(event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &Pvt::cacheCleanS, this))
+    ,beaconCleaner(event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::tickBeaconCleanS, this))
+    ,cacheCleaner(event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::cacheCleanS, this))
 {
     effective.expand();
 
@@ -480,9 +451,9 @@ Context::Pvt::Pvt(const Config& conf)
         log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
 }
 
-Context::Pvt::~Pvt() {}
+ContextImpl::~ContextImpl() {}
 
-void Context::Pvt::close()
+void ContextImpl::close()
 {
     // terminate all active connections
     tcp_loop.call([this]() {
@@ -516,7 +487,7 @@ void Context::Pvt::close()
     manager.sync();
 }
 
-void Context::Pvt::poke(bool force)
+void ContextImpl::poke(bool force)
 {
     {
         Guard G(pokeLock);
@@ -541,7 +512,7 @@ void Context::Pvt::poke(bool force)
         throw std::runtime_error("Unable to schedule searchTimer");
 }
 
-void Context::Pvt::onBeacon(const UDPManager::Beacon& msg)
+void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
 {
     const auto& guid = msg.guid;
 
@@ -565,7 +536,7 @@ void Context::Pvt::onBeacon(const UDPManager::Beacon& msg)
     poke(false);
 }
 
-bool Context::Pvt::onSearch()
+bool ContextImpl::onSearch()
 {
     searchMsg.resize(0x10000);
     SockAddr src;
@@ -680,7 +651,7 @@ bool Context::Pvt::onSearch()
 
                 auto it = connByAddr.find(serv);
                 if(it==connByAddr.end() || !(chan->conn = it->second.lock())) {
-                    connByAddr[serv] = chan->conn = std::make_shared<Connection>(internal_self.lock(), serv);
+                    connByAddr[serv] = chan->conn = std::make_shared<Connection>(shared_from_this(), serv);
                 }
 
                 chan->conn->pending.push_back(chan);
@@ -709,7 +680,7 @@ bool Context::Pvt::onSearch()
     return true;
 }
 
-void Context::Pvt::onSearchS(evutil_socket_t fd, short evt, void *raw)
+void ContextImpl::onSearchS(evutil_socket_t fd, short evt, void *raw)
 {
     try {
         log_debug_printf(io, "UDP search Rx event %x\n", evt);
@@ -719,7 +690,7 @@ void Context::Pvt::onSearchS(evutil_socket_t fd, short evt, void *raw)
         // limit number of packets processed before going back to the reactor
         unsigned i;
         const unsigned limit = 40;
-        for(i=0; i<limit && static_cast<Pvt*>(raw)->onSearch(); i++) {}
+        for(i=0; i<limit && static_cast<ContextImpl*>(raw)->onSearch(); i++) {}
         log_debug_printf(io, "UDP search processed %u/%u\n", i, limit);
 
     }catch(std::exception& e){
@@ -727,7 +698,7 @@ void Context::Pvt::onSearchS(evutil_socket_t fd, short evt, void *raw)
     }
 }
 
-void Context::Pvt::tickSearch()
+void ContextImpl::tickSearch()
 {
     {
         Guard G(pokeLock);
@@ -862,16 +833,16 @@ void Context::Pvt::tickSearch()
         log_err_printf(setup, "Error re-enabling search timer on\n%s", "");
 }
 
-void Context::Pvt::tickSearchS(evutil_socket_t fd, short evt, void *raw)
+void ContextImpl::tickSearchS(evutil_socket_t fd, short evt, void *raw)
 {
     try {
-        static_cast<Pvt*>(raw)->tickSearch();
+        static_cast<ContextImpl*>(raw)->tickSearch();
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in search timer callback: %s\n", e.what());
     }
 }
 
-void Context::Pvt::tickBeaconClean()
+void ContextImpl::tickBeaconClean()
 {
     epicsTimeStamp now;
     epicsTimeGetCurrent(&now);
@@ -894,16 +865,16 @@ void Context::Pvt::tickBeaconClean()
     }
 }
 
-void Context::Pvt::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
+void ContextImpl::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
 {
     try {
-        static_cast<Pvt*>(raw)->tickBeaconClean();
+        static_cast<ContextImpl*>(raw)->tickBeaconClean();
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in beacon cleaner timer callback: %s\n", e.what());
     }
 }
 
-void Context::Pvt::cacheClean()
+void ContextImpl::cacheClean()
 {
     std::set<std::string> trash;
 
@@ -928,13 +899,23 @@ void Context::Pvt::cacheClean()
     }
 }
 
-void Context::Pvt::cacheCleanS(evutil_socket_t fd, short evt, void *raw)
+void ContextImpl::cacheCleanS(evutil_socket_t fd, short evt, void *raw)
 {
     try {
-        static_cast<Pvt*>(raw)->tickBeaconClean();
+        static_cast<ContextImpl*>(raw)->tickBeaconClean();
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in beacon cleaner timer callback: %s\n", e.what());
     }
+}
+
+Context::Pvt::Pvt(const Config& conf)
+    :loop("PVXCTCP", epicsThreadPriorityCAServerLow)
+    ,impl(std::make_shared<ContextImpl>(conf, loop))
+{}
+
+Context::Pvt::~Pvt()
+{
+    impl->close();
 }
 
 } // namespace client

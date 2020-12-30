@@ -552,7 +552,9 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    auto op(std::make_shared<SubscriptionImpl>(ctx->tcp_loop));
+    auto context(ctx->impl->shared_from_this());
+
+    auto op(std::make_shared<SubscriptionImpl>(context->tcp_loop));
     op->self = op;
     op->event = std::move(_event);
     op->onInit = std::move(_onInit);
@@ -619,7 +621,6 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     });
 
     auto name(std::move(_name));
-    auto context(ctx->shared_from_this());
     context->tcp_loop.dispatch([op, context, name]() {
         // on worker
 

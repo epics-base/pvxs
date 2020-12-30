@@ -67,7 +67,7 @@ CASE(GPROp);
 CASE(Connection);
 CASE(Channel);
 CASE(ClientPvt);
-CASE(ClientPvtLive);
+CASE(ClientContextImpl);
 CASE(InfoOp);
 CASE(SubScriptionImpl);
 
@@ -104,7 +104,7 @@ CASE(GPROp);
 CASE(Connection);
 CASE(Channel);
 CASE(ClientPvt);
-CASE(ClientPvtLive);
+CASE(ClientContextImpl);
 CASE(InfoOp);
 CASE(SubScriptionImpl);
 

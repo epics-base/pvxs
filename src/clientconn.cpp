@@ -14,7 +14,7 @@ namespace client {
 
 DEFINE_LOGGER(io, "pvxs.client.io");
 
-Connection::Connection(const std::shared_ptr<Context::Pvt>& context, const SockAddr& peerAddr)
+Connection::Connection(const std::shared_ptr<ContextImpl>& context, const SockAddr& peerAddr)
     :ConnBase (true,
                bufferevent_socket_new(context->tcp_loop.base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS),
                peerAddr)

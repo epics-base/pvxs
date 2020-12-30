@@ -24,6 +24,7 @@ namespace pvxs {
 namespace client {
 
 struct Channel;
+struct ContextImpl;
 
 struct ResultWaiter {
     epicsMutex lock;
@@ -72,7 +73,7 @@ struct RequestInfo {
 };
 
 struct Connection : public ConnBase, public std::enable_shared_from_this<Connection> {
-    const std::shared_ptr<Context::Pvt> context;
+    const std::shared_ptr<ContextImpl> context;
 
     const evevent echoTimer;
 
@@ -91,7 +92,7 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
 
     INST_COUNTER(Connection);
 
-    Connection(const std::shared_ptr<Context::Pvt>& context, const SockAddr &peerAddr);
+    Connection(const std::shared_ptr<ContextImpl>& context, const SockAddr &peerAddr);
     virtual ~Connection();
 
     void createChannels();
@@ -145,7 +146,7 @@ struct ConnectImpl : public Connect
 };
 
 struct Channel {
-    const std::shared_ptr<Context::Pvt> context;
+    const std::shared_ptr<ContextImpl> context;
     const std::string name;
     // Our choosen ID for this channel.
     // used as persistent CID and searchID
@@ -181,25 +182,19 @@ struct Channel {
 
     INST_COUNTER(Channel);
 
-    Channel(const std::shared_ptr<Context::Pvt>& context, const std::string& name, uint32_t cid);
+    Channel(const std::shared_ptr<ContextImpl>& context, const std::string& name, uint32_t cid);
     ~Channel();
 
     void createOperations();
     void disconnect(const std::shared_ptr<Channel>& self);
 
     static
-    std::shared_ptr<Channel> build(const std::shared_ptr<Context::Pvt>& context, const std::string &name);
+    std::shared_ptr<Channel> build(const std::shared_ptr<ContextImpl>& context, const std::string &name);
 };
 
-struct Context::Pvt
+struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 {
     SockAttach attach;
-
-    std::weak_ptr<Pvt> internal_self;
-    std::shared_ptr<Pvt> shared_from_this() {
-        std::shared_ptr<Pvt> ret(internal_self);
-        return ret;
-    }
 
     // "const" after ctor
     Config effective;
@@ -235,7 +230,7 @@ struct Context::Pvt
 
     std::map<uint32_t, std::weak_ptr<Channel>> chanByCID;
     // strong ref. loop through Channel::context
-    // explicitly broken by Context::close(), Context::cacheClear, or Context::Pvt::cacheClean()
+    // explicitly broken by Context::close(), Context::cacheClear, or ContextImpl::cacheClean()
     std::map<std::string, std::shared_ptr<Channel>> chanByName;
 
     std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
@@ -251,10 +246,10 @@ struct Context::Pvt
     const evevent beaconCleaner;
     const evevent cacheCleaner;
 
-    INST_COUNTER(ClientPvt);
+    INST_COUNTER(ClientContextImpl);
 
-    Pvt(const Config& conf);
-    ~Pvt();
+    ContextImpl(const Config& conf, const evbase &tcp_loop);
+    ~ContextImpl();
 
     void close();
 
@@ -270,6 +265,16 @@ struct Context::Pvt
     static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);
     void cacheClean();
     static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
+};
+
+struct Context::Pvt {
+    evbase loop;
+    std::shared_ptr<ContextImpl> impl;
+
+    INST_COUNTER(ClientPvt);
+
+    Pvt(const Config& conf);
+    ~Pvt(); // I call ContextImpl::close()
 };
 
 } // namespace client
