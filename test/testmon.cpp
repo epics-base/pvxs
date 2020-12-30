@@ -95,6 +95,35 @@ struct BasicTest {
         cli = client::Context();
         op.reset();
     }
+
+    void cancel()
+    {
+        testShow()<<__func__;
+        epicsEvent done;
+
+        cli.monitor("nonexistent")
+                .onInit([&done](const Value&) {
+            done.signal();
+        })
+                .exec();
+
+        testOk1(!done.wait(1.1));
+    }
+
+    void asyncCancel()
+    {
+        testShow()<<__func__;
+        auto done(std::make_shared<epicsEvent>());
+
+        cli.monitor("nonexistent")
+                .syncCancel(false)
+                .onInit([done](const Value&) {
+            done->signal();
+        })
+                .exec();
+
+        testOk1(!done->wait(1.1));
+    }
 };
 
 struct TestLifeCycle : public BasicTest
@@ -261,10 +290,12 @@ struct TestReconn : public BasicTest
 
 MAIN(testmon)
 {
-    testPlan(22);
+    testPlan(24);
     testSetup();
     logger_config_env();
     BasicTest().orphan();
+    BasicTest().cancel();
+    BasicTest().asyncCancel();
     TestLifeCycle().testBasic(true);
     TestLifeCycle().testBasic(false);
     TestLifeCycle().testSecond();

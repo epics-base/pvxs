@@ -480,6 +480,7 @@ protected:
     std::shared_ptr<Req> req;
     unsigned _prio = 0u;
     bool _autoexec = true;
+    bool _syncCancel = true;
 
     CommonBase() = default;
     CommonBase(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : ctx(ctx), _name(name) {}
@@ -564,6 +565,15 @@ public:
     // control whether operations automatically proceed from INIT to EXEC
     // cf. reExec()
     SubBuilder& autoExec(bool b) { this->_autoexec = b; return _sb(); }
+
+    /** Controls whether Operation::cancel() and Subscription::cancel() synchronize.
+     *
+     * When true (the default) explicit or implicit cancel blocks until any
+     * in progress callback has completed.  This makes safe some use of
+     * references in callbacks.
+     * @since UNRELEASED
+     */
+    SubBuilder& syncCancel(bool b) { this->_syncCancel = b; return _sb(); }
 };
 
 } // namespace detail

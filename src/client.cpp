@@ -910,7 +910,7 @@ void ContextImpl::cacheCleanS(evutil_socket_t fd, short evt, void *raw)
 
 Context::Pvt::Pvt(const Config& conf)
     :loop("PVXCTCP", epicsThreadPriorityCAServerLow)
-    ,impl(std::make_shared<ContextImpl>(conf, loop))
+    ,impl(std::make_shared<ContextImpl>(conf, loop.internal()))
 {}
 
 Context::Pvt::~Pvt()

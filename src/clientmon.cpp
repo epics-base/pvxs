@@ -74,8 +74,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         ,ackTick(event_new(loop.base, -1, EV_TIMEOUT, &tickAckS, this))
     {}
     virtual ~SubscriptionImpl() {
-        loop.assertInLoop();
-        _cancel(true);
+        if(loop.assertInRunningLoop())
+            _cancel(true);
     }
 
     virtual const std::string& _name() override final {
@@ -604,20 +604,20 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 
     op->ackAt = std::max(1u, std::min(op->ackAt, op->queueSize));
 
-    std::shared_ptr<SubscriptionImpl> external(op.get(), [op](SubscriptionImpl*) mutable {
+    auto syncCancel(_syncCancel);
+    std::shared_ptr<SubscriptionImpl> external(op.get(), [op, syncCancel](SubscriptionImpl*) mutable {
         // from user thread
-        auto loop(op->loop);
+        auto temp(std::move(op));
+        auto loop(temp->loop);
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
-        loop.call(std::bind([](std::shared_ptr<SubscriptionImpl>& op) {
-                      // on worker
+        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<SubscriptionImpl>& op) {
+                           // on worker
 
-                      // ordering of dispatch()/call() ensures creation before destruction
-                      assert(op->chan);
-                      op->_cancel(true);
-                  }, std::move(op)));
-        assert(!op);
-        op.reset();
+                           // ordering of dispatch()/call() ensures creation before destruction
+                           assert(op->chan);
+                           op->_cancel(true);
+                       }, std::move(temp)));
     });
 
     auto name(std::move(_name));

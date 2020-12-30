@@ -134,8 +134,8 @@ struct GPROp : public OperationBase
         :OperationBase (op, loop)
     {}
     ~GPROp() {
-        loop.assertInLoop();
-        _cancel(true);
+        if(loop.assertInRunningLoop())
+            _cancel(true);
     }
 
     void setDone(decltype (done)&& donecb, decltype (onInit)&& initcb)
@@ -530,22 +530,23 @@ void Connection::handle_RPC() { handle_GPR(CMD_RPC); }
 static
 std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context,
                                      std::string name, // need to capture by value
-                                     const std::shared_ptr<GPROp>& op)
+                                     const std::shared_ptr<GPROp>& op,
+                                     bool syncCancel)
 {
     auto internal(op);
-    std::shared_ptr<GPROp> external(internal.get(), [internal](GPROp*) mutable {
+    std::shared_ptr<GPROp> external(internal.get(), [internal, syncCancel](GPROp*) mutable {
         // (maybe) user thread
-        auto loop(internal->loop);
+        auto temp(std::move(internal));
+        auto loop(temp->loop);
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
-        loop.call(std::bind([](std::shared_ptr<GPROp>& op) {
-                      // on worker
+        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<GPROp>& op) {
+                           // on worker
 
-                      // ordering of dispatch()/call() ensures creation before destruction
-                      assert(op->chan);
-                      op->_cancel(true);                  }, std::move(internal)));
-        assert(!internal);
-        internal.reset();
+                           // ordering of dispatch()/call() ensures creation before destruction
+                           assert(op->chan);
+                           op->_cancel(true);
+                       }, std::move(temp)));
     });
 
     context->tcp_loop.dispatch([internal, context, name]() {
@@ -573,7 +574,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
     op->autoExec = _autoexec;
     op->pvRequest = _buildReq();
 
-    return gpr_setup(context, _name, op);
+    return gpr_setup(context, _name, op, _syncCancel);
 }
 
 std::shared_ptr<Operation> PutBuilder::exec()
@@ -603,7 +604,7 @@ std::shared_ptr<Operation> PutBuilder::exec()
     op->autoExec = _autoexec;
     op->pvRequest = _buildReq();
 
-    return gpr_setup(context, _name, op);
+    return gpr_setup(context, _name, op, _syncCancel);
 }
 
 std::shared_ptr<Operation> RPCBuilder::exec()
@@ -626,7 +627,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
     op->autoExec = _autoexec;
     op->pvRequest = _buildReq();
 
-    return gpr_setup(context, _name, op);
+    return gpr_setup(context, _name, op, _syncCancel);
 }
 
 } // namespace client

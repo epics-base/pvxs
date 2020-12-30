@@ -150,6 +150,32 @@ struct Tester {
         testOk1(!done.wait(2.1));
     }
 
+    void asyncCancel()
+    {
+        testShow()<<__func__;
+
+        struct info_t {
+            client::Result actual;
+            epicsEvent done;
+        };
+        auto info(std::make_shared<info_t>());
+
+        serv.start();
+
+        // not storing Operation -> immediate cancel()
+        cli.info("mailbox")
+                .syncCancel(false)
+                .result([info](client::Result&& result) {
+                    info->actual = std::move(result);
+                    info->done.signal();
+                })
+                .exec();
+
+        cli.hurryUp();
+
+        testOk1(!info->done.wait(2.1));
+    }
+
     void orphan()
     {
         testShow()<<__func__;
@@ -217,13 +243,14 @@ void testError()
 
 MAIN(testinfo)
 {
-    testPlan(12);
+    testPlan(13);
     testSetup();
     logger_config_env();
     Tester().loopback();
     Tester().lazy();
     Tester().timeout();
     Tester().cancel();
+    Tester().asyncCancel();
     Tester().orphan();
     testError();
     return testDone();

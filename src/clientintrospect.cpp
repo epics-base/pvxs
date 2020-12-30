@@ -36,8 +36,8 @@ struct InfoOp : public OperationBase
 
     virtual ~InfoOp()
     {
-        loop.assertInLoop();
-        _cancel(true);
+        if(loop.assertInRunningLoop())
+            _cancel(true);
     }
 
     virtual bool cancel() override final {
@@ -192,20 +192,20 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
         };
     }
 
-    std::shared_ptr<InfoOp> external(op.get(), [op](InfoOp*) mutable {
+    auto syncCancel(_syncCancel);
+    std::shared_ptr<InfoOp> external(op.get(), [op, syncCancel](InfoOp*) mutable {
         // from user thread
-        auto loop(op->loop);
+        auto temp(std::move(op));
+        auto loop(temp->loop);
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
-        loop.call(std::bind([](std::shared_ptr<InfoOp>& op) {
-                      // on worker
+        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<InfoOp>& op) {
+                           // on worker
 
-                      // ordering of dispatch()/call() ensures creation before destruction
-                      assert(op->chan);
-                      op->_cancel(true);
-                  }, std::move(op)));
-        assert(!op);
-        op.reset();
+                           // ordering of dispatch()/call() ensures creation before destruction
+                           assert(op->chan);
+                           op->_cancel(true);
+                       }, std::move(temp)));
     });
 
     auto name(std::move(_name));

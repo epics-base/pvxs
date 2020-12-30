@@ -268,7 +268,11 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 };
 
 struct Context::Pvt {
+    // external ref to running loop.
+    // impl directly, and indirectly, contains internal refs
+private:
     evbase loop;
+public:
     std::shared_ptr<ContextImpl> impl;
 
     INST_COUNTER(ClientPvt);
