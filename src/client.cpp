@@ -415,24 +415,27 @@ void Context::Pvt::close()
 
 void Context::Pvt::poke(bool force)
 {
-    if(poked)
-        return;
+    {
+        Guard G(pokeLock);
+        if(poked)
+            return;
 
-    epicsTimeStamp now{};
+        epicsTimeStamp now{};
 
-    double age = -1.0;
-    if(!force && (epicsTimeGetCurrent(&now) || (age=epicsTimeDiffInSeconds(&now, &lastPoke))<30.0)) {
-        log_debug_printf(setup, "Ignoring hurryUp() age=%.1f sec\n", age);
-        return;
+        double age = -1.0;
+        if(!force && (epicsTimeGetCurrent(&now) || (age=epicsTimeDiffInSeconds(&now, &lastPoke))<30.0)) {
+            log_debug_printf(setup, "Ignoring hurryUp() age=%.1f sec\n", age);
+            return;
+        }
+        lastPoke = now;
+        poked = true;
     }
-    lastPoke = now;
 
     log_debug_printf(setup, "hurryUp()%s\n", "");
 
     timeval immediate{0,0};
     if(event_add(searchTimer.get(), &immediate))
         throw std::runtime_error("Unable to schedule searchTimer");
-    poked = true;
 }
 
 void Context::Pvt::onBeacon(const UDPManager::Beacon& msg)
@@ -611,7 +614,10 @@ void Context::Pvt::onSearchS(evutil_socket_t fd, short evt, void *raw)
 
 void Context::Pvt::tickSearch()
 {
-    poked = false;
+    {
+        Guard G(pokeLock);
+        poked = false;
+    }
 
     auto idx = currentBucket;
     currentBucket = (currentBucket+1u)%searchBuckets.size();

@@ -185,6 +185,8 @@ struct Context::Pvt
     evsocket searchTx;
     uint16_t searchRxPort;
 
+    // poked from both TCP and UDP workers
+    epicsMutex pokeLock;
     epicsTimeStamp lastPoke{};
     bool poked = false;
 
