@@ -274,14 +274,20 @@ struct ServerGPRConnect : public server::ConnectOp
 struct ServerGPRExec : public server::ExecOp
 {
     ServerGPRExec(ServerConn* conn,
-                     const std::weak_ptr<server::Server::Pvt>& server,
-                     const std::string& name,
-                     const Value& request,
-                     const std::weak_ptr<ServerGPR>& op)
+                  pva_app_msg_t cmd,
+                  const std::weak_ptr<server::Server::Pvt>& server,
+                  const std::string& name,
+                  const Value& request,
+                  const std::weak_ptr<ServerGPR>& op)
         :server(server)
         ,op(op)
     {
-        _op = Info;
+        switch(cmd) {
+        case CMD_GET: _op = Get; break;
+        case CMD_PUT: _op = Put; break;
+        case CMD_RPC: _op = RPC; break;
+        default: _op = None; break; // should never be reached
+        }
         _name = name;
         _peerName = conn->peerName;
         _ifaceName = conn->iface->name;
@@ -466,7 +472,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             if(!op->lastRequest)
                 op->lastRequest = subcmd&0x10;
 
-            std::unique_ptr<ServerGPRExec> ctrl{new ServerGPRExec(this, iface->server->internal_self, chan->name, val, op)};
+            std::unique_ptr<ServerGPRExec> ctrl{new ServerGPRExec(this, cmd, iface->server->internal_self, chan->name, val, op)};
 
             op->subcmd = subcmd;
             op->state = ServerOp::Executing;
