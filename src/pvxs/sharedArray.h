@@ -22,21 +22,24 @@ class Value;
 
 template<typename E, class Enable = void> class shared_array;
 
+//! Identify real array type in void specializations of shared_array.
+//! @see shared_array::original_type()
 enum class ArrayType : uint8_t {
-    Null  = 0xff,
-    Bool  = 0x08,
-    Int8  = 0x28,
-    Int16 = 0x29,
-    Int32 = 0x2a,
-    Int64 = 0x2b,
-    UInt8 = 0x2c,
-    UInt16= 0x2d,
-    UInt32= 0x2e,
-    UInt64= 0x2f,
-    Float32=0x4a,
-    Float64=0x4b,
-    String= 0x68,
-    Value = 0x88, // also used for 0x89 and 0x8a
+    Null  = 0xff, //!< Untyped
+    Bool  = 0x08, //!< bool
+    Int8  = 0x28, //!< int8_t
+    Int16 = 0x29, //!< int16_t
+    Int32 = 0x2a, //!< int32_t
+    Int64 = 0x2b, //!< int64_t
+    UInt8 = 0x2c, //!< uint8_t
+    UInt16= 0x2d, //!< uint16_t
+    UInt32= 0x2e, //!< uint32_t
+    UInt64= 0x2f, //!< uint64_t
+    Float32=0x4a, //!< float
+    Float64=0x4b, //!< double
+    String= 0x68, //!< std::string
+    Value = 0x88, //!< Value
+    // also used for 0x89 and 0x8a
 };
 
 PVXS_API

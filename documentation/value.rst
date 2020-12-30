@@ -170,3 +170,5 @@ of the underlying array prior to using `pvxs::shared_array::castTo`.
 
 .. doxygenclass:: pvxs::detail::Limiter
     :members:
+
+.. doxygenenum:: pvxs::ArrayType
