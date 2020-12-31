@@ -504,7 +504,7 @@ public:
      *  separated by zero or more spaces.
      *
      *  - field(<fld.name>)
-     *  - record(<key>=\<value>)
+     *  - record[<key>=\<value>]
      */
     SubBuilder& pvRequest(const std::string& expr) { this->_parse(expr); return _sb(); }
 

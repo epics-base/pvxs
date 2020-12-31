@@ -29,7 +29,7 @@ def read_version(fmt):
 # -- Project information -----------------------------------------------------
 
 project = 'PVXS'
-copyright = '2020 Osprey DCS LLC'
+copyright = '2021 Osprey DCS LLC'
 author = 'Michael Davidsaver'
 
 # The short X.Y version
