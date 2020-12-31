@@ -141,7 +141,8 @@ struct Tester : public TesterBase
 
         // server not started
 
-        auto op = cli.info("mailbox")
+        auto op = cli.put("mailbox")
+                .set("value", int32_t(42))
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
                     done.signal();
@@ -163,7 +164,8 @@ struct Tester : public TesterBase
         serv.start();
 
         // not storing Operation -> immediate cancel()
-        cli.info("mailbox")
+        cli.put("mailbox")
+                .set("value", int32_t(42))
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
                     done.signal();
