@@ -23,6 +23,7 @@ typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
 DEFINE_LOGGER(logshared, "pvxs.server.sharedpv");
+DEFINE_LOGGER(logmailbox, "pvxs.mailbox");
 
 namespace pvxs {
 namespace server {
@@ -57,8 +58,6 @@ SharedPV SharedPV::buildMailbox()
 
     ret.onPut([](SharedPV& pv, std::unique_ptr<ExecOp>&& op, Value&& val) {
 
-        log_debug_printf(logshared, "%s on %s mailbox put\n", op->peerName().c_str(), op->name().c_str());
-
         auto ts(val["timeStamp"]);
         if(ts && !ts.isMarked(true, true)) {
             // use current time
@@ -68,6 +67,10 @@ SharedPV SharedPV::buildMailbox()
                 ts["nanoseconds"] = now.nsec;
             }
         }
+
+        log_debug_printf(logmailbox, "%s on %s mailbox put: %s\n",
+                         op->peerName().c_str(), op->name().c_str(),
+                         std::string(SB()<<val).c_str());
 
         pv.post(val);
 
