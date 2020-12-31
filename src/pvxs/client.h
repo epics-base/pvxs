@@ -143,8 +143,11 @@ struct PVXS_API Operation {
     virtual void interrupt() =0;
 
     // Expert API
-    // (Re)issue request built with autoExec(false)
-    virtual void reExec(const Value& arg, std::function<void(client::Result&&)>&& resultcb) =0;
+    // usable when Builder::autoExec(false)
+    // For GET/PUT, (re)issue request for current value
+    virtual void reExecGet(std::function<void(client::Result&&)>&& resultcb) =0;
+    // For PUT (re)issue request to set current value
+    virtual void reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) =0;
 };
 
 //! Handle for monitor subscription
@@ -562,8 +565,8 @@ public:
     SubBuilder& onInit(std::function<void (const Value&)>&& cb) { this->_onInit = std::move(cb); return _sb(); }
 
     // Expert API
-    // control whether operations automatically proceed from INIT to EXEC
-    // cf. reExec()
+    // for GET/PUT control whether operations automatically proceed from INIT to EXEC
+    // cf. Operation::reExec()
     SubBuilder& autoExec(bool b) { this->_autoexec = b; return _sb(); }
 
     /** Controls whether Operation::cancel() and Subscription::cancel() synchronize.

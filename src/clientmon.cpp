@@ -213,7 +213,10 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         return ret;
     }
 
-    void reExec(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
+    // not actually visible through Subscription.
+    // an artifact of using OperationBase for convenience
+    void reExecGet(std::function<void(client::Result&&)>&& resultcb) override final {}
+    void reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
 
     virtual void createOp() override final
     {
@@ -551,6 +554,8 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 {
     if(!ctx)
         throw std::logic_error("NULL Builder");
+    if(!_autoexec)
+        throw std::logic_error("autoExec(false) not possible for monitor()");
 
     auto context(ctx->impl->shared_from_this());
 

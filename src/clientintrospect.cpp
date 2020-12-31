@@ -68,7 +68,9 @@ struct InfoOp : public OperationBase
         return ret;
     }
 
-    void reExec(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
+    // not meaningful for GET_FIELD operation
+    void reExecGet(std::function<void(client::Result&&)>&& resultcb) override final {}
+    void reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
 
     virtual void createOp() override final
     {
@@ -179,6 +181,8 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
 {
     if(!ctx)
         throw std::logic_error("NULL Builder");
+    if(!_autoexec)
+        throw std::logic_error("autoExec(false) not possible for info()");
 
     auto context(ctx->impl->shared_from_this());
 

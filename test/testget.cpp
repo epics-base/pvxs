@@ -334,7 +334,7 @@ struct Tester {
 
         testOk1(initd.wait(5.0));
         testDiag("reExec() 1");
-        op->reExec(Value(), [&done](client::Result&& result) {
+        op->reExecGet([&done](client::Result&& result) {
             testTrue(!!result());
             testDiag("result() 1");
             done.signal();
@@ -342,7 +342,7 @@ struct Tester {
 
         testOk1(done.wait(5.0));
         testDiag("reExec() 2");
-        op->reExec(Value(), [&done](client::Result&& result) {
+        op->reExecGet([&done](client::Result&& result) {
             testTrue(!!result());
             testDiag("result() 2");
             done.signal();
