@@ -59,6 +59,60 @@ struct owned_ptr : public std::unique_ptr<T>
     }
 };
 
+/* It seems that std::function<void()>(Fn&&) from gcc (circa 8.3) and clang (circa 7.0)
+ * always copies the functor/lambda.  We can't allow this when transferring ownership
+ * of shared_ptr<> instances to a worker thread as it leaves the caller thread with a
+ * reference.
+ *
+ * std::unique_ptr<int> arg{new int(42)};
+ * // eg. with
+ * auto lambda = [arg{std::move(arg)}]() { // c++14 capture w/ move
+ *     auto trash(std::move(arg));
+ * };
+ * // or
+ * auto lambda = std::bind([](std::unique_ptr<int>& arg) { // c++11 capture w/ move
+ *     auto trash(std::move(arg));
+ * }, std::move(arg));
+ * // the following line tries to copy the unique_ptr which fails to compile
+ * std::function<void()> fn(std::move(lambda));
+ *
+ * So we invent our own limited, non-copyable, version of std::function<void()>.
+ */
+namespace mdetail {
+struct PVXS_API VFunctor0 {
+    virtual ~VFunctor0() =0;
+    virtual void invoke() =0;
+};
+template<typename Fn>
+struct Functor0 : public VFunctor0 {
+    Functor0() = default;
+    Functor0(const Functor0&) = delete;
+    Functor0(Functor0&&) = default;
+    Functor0(Fn&& fn) : fn(std::move(fn)) {}
+    virtual ~Functor0() {}
+
+    void invoke() override final { fn(); }
+private:
+    Fn fn;
+};
+} // namespace detail
+
+struct mfunction {
+    mfunction() = default;
+    template<typename Fn>
+    mfunction(Fn&& fn)
+        :fn{new mdetail::Functor0<Fn>(std::move(fn))}
+    {}
+    void operator()() const {
+        fn->invoke();
+    }
+    explicit operator bool() const {
+        return fn.operator bool();
+    }
+private:
+    std::unique_ptr<mdetail::VFunctor0> fn;
+};
+
 struct PVXS_API evbase {
     evbase() = default;
     explicit evbase(const std::string& name, unsigned prio=0);
@@ -71,31 +125,31 @@ struct PVXS_API evbase {
     void sync() const;
 
 private:
-    bool _dispatch(std::function<void()>&& fn, bool dothrow) const;
-    bool _call(std::function<void()>&& fn, bool dothrow) const;
+    bool _dispatch(mfunction&& fn, bool dothrow) const;
+    bool _call(mfunction&& fn, bool dothrow) const;
 public:
 
     // queue request to execute in event loop.  return after executed.
     inline
-    void call(std::function<void()>&& fn) const {
+    void call(mfunction&& fn) const {
         _call(std::move(fn), true);
     }
     inline
-    bool tryCall(std::function<void()>&& fn) const {
+    bool tryCall(mfunction&& fn) const {
         return _call(std::move(fn), false);
     }
 
     // queue request to execute in event loop.  return immediately.
     inline
-    void dispatch(std::function<void()>&& fn) const {
+    void dispatch(mfunction&& fn) const {
         _dispatch(std::move(fn), true);
     }
     inline
-    bool tryDispatch(std::function<void()>&& fn) const {
+    bool tryDispatch(mfunction&& fn) const {
         return _dispatch(std::move(fn), false);
     }
 
-    bool tryInvoke(bool docall, std::function<void()>&& fn) const {
+    bool tryInvoke(bool docall, mfunction&& fn) const {
         if(docall)
             return tryCall(std::move(fn));
         else

@@ -44,6 +44,10 @@ namespace pvxs {namespace impl {
 
 DEFINE_LOGGER(logerr, "pvxs.loop");
 
+namespace mdetail {
+VFunctor0::~VFunctor0() {}
+}
+
 static
 epicsThreadOnceId evthread_once = EPICS_THREAD_ONCE_INIT;
 
@@ -108,10 +112,10 @@ struct evbase::Pvt : public epicsThreadRunable
     std::weak_ptr<Pvt> internal_self;
 
     struct Work {
-        std::function<void()> fn;
+        mfunction fn;
         std::exception_ptr *result;
         epicsEvent *notify;
-        Work(std::function<void()>&& fn, std::exception_ptr *result, epicsEvent *notify)
+        Work(mfunction&& fn, std::exception_ptr *result, epicsEvent *notify)
             :fn(std::move(fn)), result(result), notify(notify)
         {}
     };
@@ -269,7 +273,7 @@ void evbase::sync() const
     call([](){});
 }
 
-bool evbase::_dispatch(std::function<void()>&& fn, bool dothrow) const
+bool evbase::_dispatch(mfunction&& fn, bool dothrow) const
 {
     bool empty;
     {
@@ -290,7 +294,7 @@ bool evbase::_dispatch(std::function<void()>&& fn, bool dothrow) const
     return true;
 }
 
-bool evbase::_call(std::function<void()>&& fn, bool dothrow) const
+bool evbase::_call(mfunction&& fn, bool dothrow) const
 {
     if(pvt->worker.isCurrentThread()) {
         fn();
