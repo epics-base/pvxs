@@ -554,8 +554,6 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 {
     if(!ctx)
         throw std::logic_error("NULL Builder");
-    if(!_autoexec)
-        throw std::logic_error("autoExec(false) not possible for monitor()");
 
     auto context(ctx->impl->shared_from_this());
 
@@ -566,6 +564,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     op->pvRequest = _buildReq();
     op->maskConn = _maskConn;
     op->maskDiscon = _maskDisconn;
+    op->autostart = _autoexec;
 
     auto options = op->pvRequest["record._options"];
 
