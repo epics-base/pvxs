@@ -656,7 +656,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
     auto context(ctx->impl->shared_from_this());
 
     auto op(std::make_shared<GPROp>(Operation::RPC, context->tcp_loop));
-    op->setDone(std::move(_result), std::move(_onInit));
+    op->setDone(std::move(_result), nullptr);
     if(_argument) {
         if(!_autoexec)
             throw std::invalid_argument("Pass RPC argument during reExec()");

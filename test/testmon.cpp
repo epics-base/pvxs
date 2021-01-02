@@ -102,7 +102,8 @@ struct BasicTest {
         epicsEvent done;
 
         cli.monitor("nonexistent")
-                .onInit([&done](const Value&) {
+                .onInit([&done](client::Subscription&, const Value&)
+        {
             done.signal();
         })
                 .exec();
@@ -117,7 +118,8 @@ struct BasicTest {
 
         cli.monitor("nonexistent")
                 .syncCancel(false)
-                .onInit([done](const Value&) {
+                .onInit([done](client::Subscription&, const Value&)
+        {
             done->signal();
         })
                 .exec();

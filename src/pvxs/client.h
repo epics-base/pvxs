@@ -516,7 +516,6 @@ protected:
 template<typename SubBuilder, typename Base>
 class CommonBuilder : public Base {
 protected:
-    std::function<void (const Value&)> _onInit;
     CommonBuilder() = default;
     constexpr CommonBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : Base(ctx, name) {}
     inline SubBuilder& _sb() { return static_cast<SubBuilder&>(*this); }
@@ -560,11 +559,6 @@ public:
     SubBuilder& server(const std::string& s) { this->_server = s; return _sb(); }
 
     // Expert API
-    // called during operation INIT phase for Get/Put/Monitor when remote type
-    // description is available.
-    SubBuilder& onInit(std::function<void (const Value&)>&& cb) { this->_onInit = std::move(cb); return _sb(); }
-
-    // Expert API
     // for GET/PUT control whether operations automatically proceed from INIT to EXEC
     // cf. Operation::reExec()
     SubBuilder& autoExec(bool b) { this->_autoexec = b; return _sb(); }
@@ -584,6 +578,7 @@ public:
 //! Prepare a remote GET or GET_FIELD (info) operation.
 //! See Context::get()
 class GetBuilder : public detail::CommonBuilder<GetBuilder, detail::CommonBase> {
+    std::function<void (const Value&)> _onInit;
     std::function<void(Result&&)> _result;
     bool _get = false;
     PVXS_API
@@ -596,6 +591,11 @@ public:
     //! Callback through which result Value or an error will be delivered.
     //! The functor is stored in the Operation returned by exec().
     GetBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
+
+    // Expert API
+    // called during operation INIT phase for Get/Put/Monitor when remote type
+    // description is available.
+    GetBuilder& onInit(std::function<void (const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
 
     /** Execute the network operation.
      *  The caller must keep returned Operation pointer until completion
@@ -613,9 +613,10 @@ GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, 
 //! Prepare a remote PUT operation
 //! See Context::put()
 class PutBuilder : public detail::CommonBuilder<PutBuilder, detail::PRBase> {
-    bool _doGet = true;
+    std::function<void (const Value&)> _onInit;
     std::function<Value(Value&&)> _builder;
     std::function<void(Result&&)> _result;
+    bool _doGet = true;
 public:
     PutBuilder() = default;
     PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
@@ -664,6 +665,11 @@ public:
      *  The functor is stored in the Operation returned by exec().
      */
     PutBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
+
+    // Expert API
+    // called during operation INIT phase for Get/Put/Monitor when remote type
+    // description is available.
+    PutBuilder& onInit(std::function<void (const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
 
     /** Execute the network operation.
      *  The caller must keep returned Operation pointer until completion
@@ -726,6 +732,7 @@ RPCBuilder Context::rpc(const std::string& name, const Value &arg) {
 //! Prepare a remote subscription
 //! See Context::monitor()
 class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder, detail::CommonBase> {
+    std::function<void(Subscription&, const Value&)> _onInit;
     std::function<void(Subscription&)> _event;
     bool _maskConn = true;
     bool _maskDisconn = false;
@@ -745,6 +752,11 @@ public:
     MonitorBuilder& maskConnected(bool m = true) { _maskConn = m; return *this; }
     //! Include Disconnected exceptions in queue (default true).
     MonitorBuilder& maskDisconnected(bool m = true) { _maskDisconn = m; return *this; }
+
+    // Expert API
+    // called during operation INIT phase for Get/Put/Monitor when remote type
+    // description is available.
+    MonitorBuilder& onInit(std::function<void (Subscription&, const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
 
     //! Submit request to subscribe
     PVXS_API

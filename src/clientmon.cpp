@@ -40,7 +40,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
     // const after exec()
     std::weak_ptr<SubscriptionImpl> self; // internal
-    std::function<void (const Value&)> onInit;
+    std::function<void (Subscription&, const Value&)> onInit;
     std::function<void(Subscription&)> event;
     Value pvRequest;
     bool pipeline = false;
@@ -460,7 +460,7 @@ void Connection::handle_MONITOR()
                         mon->chan->name.c_str());
 
         if(mon->onInit)
-            mon->onInit(info->prototype);
+            mon->onInit(*mon, info->prototype);
 
         mon->state = SubscriptionImpl::Idle;
 
