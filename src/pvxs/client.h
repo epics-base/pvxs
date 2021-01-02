@@ -199,6 +199,10 @@ public:
      */
     virtual Value pop() =0;
 
+    // Expert API
+    // replace handler stored with MonitorBuilder::event()
+    virtual void onEvent(std::function<void(Subscription&)>&&) =0;
+
     //! Return strong internal reference which will not prevent
     //! implicit cancellation when the last reference returned
     //! by exec() is released.

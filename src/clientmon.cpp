@@ -177,6 +177,14 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         return std::shared_ptr<Subscription>(self);
     }
 
+    virtual void onEvent(std::function<void(Subscription&)>&& fn) override final {
+        decltype (event) junk;
+        loop.call([this, &junk, &fn]() {
+            junk = std::move(event);
+            this->event = std::move(fn);
+        });
+    }
+
     virtual bool cancel() override final {
         decltype (event) junk;
         bool ret;
