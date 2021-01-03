@@ -383,22 +383,30 @@ public:
     /** Create a new subscription for changes to a PV.
      *
      * @code
+     * MPMCFIFO<std::shared_ptr<Subscription>> workqueue(42u);
+     *
      * auto sub = ctxt.monitor("pv:name")
-     *                .event([](Subscription& sub) {
-     *                    // Subscription queue becomes not empty
-     *                    while(true) {
-     *                        try {
-     *                            Value update = sub.pop();
-     *                            if(!update)
-     *                                break; // Subscription queue becomes not empty
-     *                            std::cout<<update<<"\n";
-     *                        } catch(std::exception& e) {
-     *                            // may be Connected(), Disconnect(), Finished(), or RemoteError()
-     *                            std::cerr<<"Error "<<e.what()<<"\n";
-     *                        }
-     *                    }
+     *                .event([&workqueue](Subscription& sub) {
+     *                    // Subscription queue becomes not empty.
+     *                    // Avoid I/O on PVXS worker thread,
+     *                    // delegate to application thread
+     *                    workqueue.push(sub.shared_from_this());
      *                })
      *                .exec();
+     *
+     * while(auto sub = workqueue.pop()) { // could workqueue.push(nullptr) to break
+     *     try {
+     *         Value update = sub.pop();
+     *         if(!update)
+     *             continue; // Subscription queue empty, wait for another event callback
+     *         std::cout<<update<<"\n";
+     *     } catch(std::exception& e) {
+     *         // may be Connected(), Disconnect(), Finished(), or RemoteError()
+     *         std::cerr<<"Error "<<e.what()<<"\n";
+     *     }
+     *     // queue not empty, reschedule
+     *     workqueue.push(sub);
+     * }
      * // store op until completion
      * @endcode
      *

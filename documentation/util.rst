@@ -152,3 +152,6 @@ Misc. utility code. ::
 .. doxygenclass:: pvxs::SigInt
 
 .. doxygenfunction:: pvxs::target_information
+
+.. doxygenclass:: pvxs::MPMCFIFO
+    :members:

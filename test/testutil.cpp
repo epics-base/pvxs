@@ -19,6 +19,132 @@
 namespace {
 using namespace pvxs;
 
+void testFill()
+{
+    testShow()<<__func__;
+
+    MPMCFIFO<std::unique_ptr<int>> Q(4u);
+
+    for(int i=0; i<4; i++)
+        Q.push(std::unique_ptr<int>{new int(i)});
+
+    testEq(*Q.pop(), 0);
+    testEq(*Q.pop(), 1);
+    testEq(*Q.pop(), 2);
+    testEq(*Q.pop(), 3);
+}
+
+struct Spammer : public epicsThreadRunable
+{
+    MPMCFIFO<int>& Q;
+    const int begin, end;
+    epicsThread worker;
+    Spammer(MPMCFIFO<int>& Q, int begin, int end)
+        :Q(Q)
+        ,begin(begin)
+        ,end(end)
+        ,worker(*this, "spammer", epicsThreadGetStackSize(epicsThreadStackBig))
+    {
+        worker.start();
+    }
+
+    void run() override final {
+        for(auto i=begin; i<end; i++)
+            Q.push(i);
+    }
+};
+
+void testSpam()
+{
+    testShow()<<__func__;
+
+    MPMCFIFO<int> Q(32u);
+    std::vector<bool> rxd(1024, false);
+
+    Spammer A(Q, 0, 256);
+    Spammer B(Q, 256, 512);
+    Spammer C(Q, 512, 768);
+    Spammer D(Q, 768, 1024);
+
+    // not critical, but try to get some of the spammers to block
+    epicsThreadSleep(0.1);
+
+    for(size_t i=0; i<rxd.size(); i++) {
+        auto n = Q.pop();
+        rxd.at(n) = true;
+    }
+
+    bool ok = true;
+    for(size_t i=0; i<rxd.size(); i++) {
+        ok &= rxd[i];
+    }
+    testTrue(ok)<<" Received all";
+}
+
+struct Receiver : public epicsThreadRunable
+{
+    MPMCFIFO<int>& Q;
+    std::array<std::atomic<bool>, 1024>& rxd;
+    epicsThread worker;
+    Receiver(MPMCFIFO<int>& Q, std::array<std::atomic<bool>, 1024>& rxd)
+        :Q(Q)
+        ,rxd(rxd)
+        ,worker(*this, "rxer", epicsThreadGetStackSize(epicsThreadStackBig))
+    {
+        worker.start();
+    }
+
+    void run() override final {
+        while(true) {
+            int val = Q.pop();
+            if(val<0)
+                break;
+            bool prev = rxd[val].exchange(true, std::memory_order_relaxed);
+            if(prev)
+                testFail("Duplicate %d", val);
+        }
+    }
+};
+
+void testSpamMany()
+{
+    testShow()<<__func__;
+
+    MPMCFIFO<int> Q(32u);
+    std::array<std::atomic<bool>, 1024> rxd{};
+
+    Spammer A(Q, 0, 256);
+    Spammer B(Q, 256, 512);
+    Spammer C(Q, 512, 768);
+    Spammer D(Q, 768, 1024);
+
+    Receiver X(Q, rxd);
+    Receiver Y(Q, rxd);
+    Receiver Z(Q, rxd);
+
+    // not critical, but try to get some of the spammers to block
+    epicsThreadSleep(0.1);
+
+    A.worker.exitWait();
+    B.worker.exitWait();
+    C.worker.exitWait();
+    D.worker.exitWait();
+    testDiag("All push()'d");
+
+    Q.push(-1);
+    Q.push(-1);
+    Q.push(-1);
+    X.worker.exitWait();
+    Y.worker.exitWait();
+    Z.worker.exitWait();
+    testDiag("All pop()'d");
+
+    bool ok = true;
+    for(size_t i=0; i<rxd.size(); i++) {
+        ok &= rxd[i];
+    }
+    testTrue(ok)<<" Received all";
+}
 
 void testAccount()
 {
@@ -46,8 +172,11 @@ void testAccount()
 
 MAIN(testutil)
 {
-    testPlan(4);
+    testPlan(10);
     testTrue(version_abi_check())<<" 0x"<<std::hex<<PVXS_VERSION<<" ~= 0x"<<std::hex<<PVXS_ABI_VERSION;
+    testFill();
+    testSpam();
+    testSpamMany();
     testAccount();
     return testDone();
 }

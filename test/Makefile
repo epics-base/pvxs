@@ -18,6 +18,10 @@ TESTPROD_HOST += testsock
 testsock_SRCS += testsock.cpp
 TESTS += testsock
 
+TESTPROD_HOST += testutil
+testutil_SRCS += testutil.cpp
+TESTS += testutil
+
 TESTPROD_HOST += testev
 testev_SRCS += testev.cpp
 TESTS += testev

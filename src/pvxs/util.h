@@ -9,11 +9,17 @@
 
 #include <map>
 #include <array>
+#include <deque>
 #include <functional>
 #include <iosfwd>
 #include <type_traits>
+#include <stdexcept>
 
 #include <osiSock.h>
+#include <epicsEvent.h>
+#include <epicsMutex.h>
+#include <epicsGuard.h>
+
 #include <pvxs/version.h>
 
 namespace pvxs {
@@ -167,6 +173,119 @@ private:
  */
 PVXS_API
 std::ostream& target_information(std::ostream&);
+
+/** Thread-safe, bounded, multi-producer, multi-consumer FIFO queue.
+ *
+ * Queue value_type must be movable.  If T is also copy constructable,
+ * then push(const T&) may be used.
+ *
+ * As an exception, the destructor is not re-entrant.  Concurrent calls
+ * to methods during destruction will result in undefined behavior.
+ *
+ * @code
+ * MPMCFIFO<std::function<void()>> Q(42);
+ * ...
+ * while(auto work = Q.pop()) { // Q.push(nullptr) to break loop
+ *     work();
+ * }
+ * @endcode
+ *
+ * @since UNRELEASED
+ */
+template<typename T>
+class MPMCFIFO {
+    epicsMutex lock;
+    epicsEvent notifyW, notifyR;
+    std::deque<T> Q;
+    const size_t nlimit;
+    unsigned nwriters=0u, nreaders=0u;
+
+    typedef epicsGuard<epicsMutex> Guard;
+    typedef epicsGuardRelease<epicsMutex> UnGuard;
+public:
+    //! Template parameter
+    typedef T value_type;
+
+    //! Construct a new queue
+    explicit MPMCFIFO(size_t limit)
+        :nlimit(limit)
+    {
+        if(!nlimit)
+            throw std::invalid_argument("MPMCFIFO limit must be >0");
+    }
+    //! Destructor is not re-entrant
+    ~MPMCFIFO() {}
+
+    /** Construct a new element into the queue.
+     *
+     * Will block while full.
+     */
+    template<typename ...Args>
+    void emplace(Args&&... args) {
+        bool wakeup;
+        {
+            Guard G(lock);
+            // while full, wait for reader to consume an entry
+            while(Q.size()>=nlimit) {
+                nwriters++;
+                {
+                    UnGuard U(G);
+                    notifyW.wait();
+                }
+                nwriters--;
+            }
+            // notify reader when queue becomes not empty
+            wakeup = Q.empty() && nreaders;
+            Q.emplace_back(std::forward<Args>(args)...);
+        }
+        if(wakeup)
+            notifyR.signal();
+    }
+
+    //! Move a new element to the queue
+    void push(T&& ent) {
+        // delegate to T::T(T&&)
+        emplace(std::move(ent));
+    }
+
+    //! Copy a new element to the queue
+    void push(const T& ent) {
+        // delegate to T::T(const T&)
+        emplace(ent);
+    }
+
+    /** Remove an element from the queue.
+     *
+     * Blocks while queue is empty.
+     */
+    T pop() {
+        bool wakeupW, wakeupR;
+        T ret;
+        {
+            Guard G(lock);
+            // wait for queue to become not empty
+            while(Q.empty()) {
+                nreaders++;
+                {
+                    UnGuard U(G);
+                    notifyR.wait();
+                }
+                nreaders--;
+            }
+            // wakeup a writer since the queue will have an empty entry
+            wakeupW = nwriters;
+            ret = std::move(Q.front());
+            Q.pop_front();
+            // wakeup next reader if entries remain
+            wakeupR = !Q.empty() && nreaders;
+        }
+        if(wakeupR)
+            notifyR.signal();
+        if(wakeupW)
+            notifyW.signal();
+        return ret;
+    }
+};
 
 } // namespace pvxs
 
