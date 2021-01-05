@@ -467,12 +467,20 @@ void Connection::handle_MONITOR()
                         peerName.c_str(),
                         mon->chan->name.c_str());
 
-        if(mon->onInit)
-            mon->onInit(*mon, info->prototype);
-
         mon->state = SubscriptionImpl::Idle;
 
-        if(mon->autostart)
+        try {
+            if(mon->onInit)
+                mon->onInit(*mon, info->prototype);
+        }catch(std::exception& e){
+            mon->state = SubscriptionImpl::Done;
+            update.exc = std::current_exception();
+            log_debug_printf(io, "Server %s channel %s monitor Create error: %s\n",
+                            peerName.c_str(),
+                            mon->chan->name.c_str(), e.what());
+        }
+
+        if(mon->autostart && mon->state == SubscriptionImpl::Idle)
             mon->resume();
 
     } else if(data) { // Idle or Running

@@ -514,8 +514,11 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
             if(gpr->onInit)
                 gpr->onInit(data);
         } catch(std::exception& e) {
+            log_err_printf(setup, "Server %s op%02x \"%s\" onInit() error: %s\n",
+                           peerName.c_str(), cmd, gpr->chan->name.c_str(), e.what());
             gpr->result = Result(std::current_exception());
             gpr->state = GPROp::Done;
+            gpr->notify();
         }
 
         if(gpr->state==GPROp::Idle && gpr->autoExec)
