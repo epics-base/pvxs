@@ -364,6 +364,11 @@ Server::Pvt::Pvt(const Config &conf)
 #endif
     }
 
+    for(const auto& addr : effective.ignoreAddrs) {
+        SockAddr temp(AF_INET, addr.c_str());
+        ignoreList.push_back(temp);
+    }
+
 
     acceptor_loop.call([this](){
         // from acceptor worker
@@ -534,6 +539,20 @@ void Server::Pvt::stop()
 void Server::Pvt::onSearch(const UDPManager::Search& msg)
 {
     // on UDPManager worker
+
+    for(const auto& addr : ignoreList) { // expected to be a short list
+        if(msg.src.family()!=addr.family()) {
+            // skip
+        } else if(msg.src->in.sin_addr.s_addr != addr->in.sin_addr.s_addr) {
+            // skip
+        } else if(addr->in.sin_port==0) {
+            // ignore all ports
+            return;
+        } else if(msg.src->in.sin_port == addr->in.sin_port) {
+            // ignore specific sender port
+            return;
+        }
+    }
 
     log_debug_printf(serverio, "%s searching\n", msg.src.tostring().c_str());
 

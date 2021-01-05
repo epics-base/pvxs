@@ -217,6 +217,7 @@ struct Server::Pvt
 
     std::list<std::unique_ptr<UDPListener> > listeners;
     std::vector<SockAddr> beaconDest;
+    std::vector<SockAddr> ignoreList;
 
     std::list<ServIface> interfaces;
     std::map<ServerConn*, std::shared_ptr<ServerConn> > connections;

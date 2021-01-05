@@ -182,6 +182,10 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
         split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, self.tcp_port, true);
     }
 
+    if(pickone({"EPICS_PVAS_IGNORE_ADDR_LIST"})) {
+        split_addr_into(pickone.name.c_str(), self.ignoreAddrs, pickone.val, 0, true);
+    }
+
     if(pickone({"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
         split_addr_into(pickone.name.c_str(), self.beaconDestinations, pickone.val, self.udp_port);
     }
@@ -223,6 +227,7 @@ void Config::updateDefs(defs_t& defs) const
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = auto_beacon ? "YES" : "NO";
     defs["EPICS_PVA_ADDR_LIST"]      = defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
     defs["EPICS_PVA_INTF_ADDR_LIST"] = defs["EPICS_PVAS_INTF_ADDR_LIST"]   = join_addr(interfaces);
+    defs["EPICS_PVAS_IGNORE_ADDR_LIST"]   = join_addr(ignoreAddrs);
 }
 
 void Config::expand()
@@ -240,33 +245,27 @@ void Config::expand()
 
     removeDups(interfaces);
     removeDups(beaconDestinations);
+    removeDups(ignoreAddrs);
 }
 
 std::ostream& operator<<(std::ostream& strm, const Config& conf)
 {
-    bool first;
+    auto showAddrs = [&strm](const char* var, const std::vector<std::string>& addrs) {
+        strm<<indent{}<<var<<"=\"";
+        bool first = true;
+        for(auto& iface : addrs) {
+            if(first)
+                first = false;
+            else
+                strm<<' ';
+            strm<<iface;
+        }
+        strm<<"\"\n";
+    };
 
-    strm<<indent{}<<"EPICS_PVAS_INTF_ADDR_LIST=\"";
-    first = true;
-    for(auto& iface : conf.interfaces) {
-        if(first)
-            first = false;
-        else
-            strm<<' ';
-        strm<<iface;
-    }
-    strm<<"\"\n";
-
-    strm<<indent{}<<"EPICS_PVAS_BEACON_ADDR_LIST=\"";
-    first = true;
-    for(auto& iface : conf.beaconDestinations) {
-        if(first)
-            first = false;
-        else
-            strm<<' ';
-        strm<<iface;
-    }
-    strm<<"\"\n";
+    showAddrs("EPICS_PVAS_INTF_ADDR_LIST", conf.interfaces);
+    showAddrs("EPICS_PVAS_BEACON_ADDR_LIST", conf.beaconDestinations);
+    showAddrs("EPICS_PVAS_IGNORE_ADDR_LIST", conf.ignoreAddrs);
 
     strm<<indent{}<<"EPICS_PVAS_AUTO_BEACON_ADDR_LIST="<<(conf.auto_beacon?"YES":"NO")<<'\n';
 

@@ -133,6 +133,11 @@ struct PVXS_API Config {
     //! interfaces.empty() treated as an alias for "0.0.0.0", which may also be given explicitly.
     //! Port numbers are optional and unused (parsed and ignored)
     std::vector<std::string> interfaces;
+    //! Ignore client requests originating from addresses in this list.
+    //! Entries must be IP addresses with optional port numbers.
+    //! Port number zero (default) is treated as a wildcard which matches any port.
+    //! @since UNRELEASED
+    std::vector<std::string> ignoreAddrs;
     //! Addresses (**not** host names) to which (UDP) beacons message will be sent.
     //! May include broadcast and/or unicast addresses.
     //! Supplemented iif auto_beacon==true

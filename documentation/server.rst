@@ -69,6 +69,11 @@ EPICS_PVAS_BROADCAST_PORT or EPICS_PVA_BROADCAST_PORT
     If already in use, then an exception is thrown.
     Sets `pvxs::server::Config::udp_port`
 
+EPICS_PVAS_IGNORE_ADDR_LIST
+    Space seperated list of addresses with optional port.
+    Port zero is treated as a wildcard to match any port.
+    UDP traffic from matched addresses will be ignored with no further processing.
+
 .. doxygenstruct:: pvxs::server::Config
     :members:
 
