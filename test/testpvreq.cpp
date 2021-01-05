@@ -69,6 +69,34 @@ void testPvRequest()
 
         testEq(mask, BitMask({0, 2, 4, 6, 7, 8, 9}, 10u));
     }
+
+    {
+        auto rdef = TypeDef(TypeCode::Struct, {
+                                M::Struct("field", {
+                                    M::Struct("timeStamp", {}),
+                                    M::Struct("nonexistant", {}),
+                                    M::Struct("alarm", {
+                                        M::Struct("status", {}),
+                                    }),
+                                })
+                            });
+
+        auto mask = request2mask(Value::Helper::desc(val), rdef.create());
+
+        testEq(mask, BitMask({0, 2, 4, 6, 7, 8, 9}, 10u))<<" include including non-existant";
+    }
+
+    {
+        auto rdef = TypeDef(TypeCode::Struct, {
+                                M::Struct("field", {
+                                    M::Struct("nonexistant", {}),
+                                })
+                            });
+
+        testThrows<std::runtime_error>([&val, &rdef](){
+            (void)request2mask(Value::Helper::desc(val), rdef.create());
+        })<<" empty mask";
+    }
 }
 
 void testPvMask()
@@ -379,7 +407,7 @@ void testArgs()
 
 MAIN(testpvreq)
 {
-    testPlan(36);
+    testPlan(38);
     testSetup();
     logger_config_env();
     testPvRequest();
