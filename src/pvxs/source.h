@@ -26,7 +26,8 @@ protected:
 public:
     const Value& pvRequest() const { return _pvRequest; }
 
-    //! For GET_FIELD, GET, or PUT.  Inform peer of our data-type
+    //! For GET_FIELD, GET, or PUT.  Inform peer of our data-type.
+    //! @throws std::runtime_error if the client pvRequest() field mask does not select any fields of prototype.
     virtual void connect(const Value& prototype) =0;
     //! Indicate that this operation can not be setup
     virtual void error(const std::string& msg) =0;
@@ -120,6 +121,7 @@ public:
 
     //! Inform peer of our data-type and acquire control of subscription queue.
     //! The queue is initially stopped.
+    //! @throws std::runtime_error if the client pvRequest() field mask does not select any fields of prototype.
     virtual std::unique_ptr<MonitorControlOp> connect(const Value& prototype) =0;
     //! Indicate that this operation can not be setup
     virtual void error(const std::string& msg) =0;
