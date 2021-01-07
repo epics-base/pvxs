@@ -353,7 +353,7 @@ void Connection::handle_MONITOR()
 
     if(init || final)
         from_wire(M, sts);
-    if(init)
+    if(init && sts.isSuccess())
         from_wire_type(M, rxRegistry, data);
 
     RequestInfo* info=nullptr;
@@ -462,7 +462,15 @@ void Connection::handle_MONITOR()
     }
 
     bool notify = false;
-    if(!init) {
+    if(init && !sts.isSuccess()) {
+        log_debug_printf(io, "Server %s channel %s monitor PUSH init error\n",
+                        peerName.c_str(),
+                        mon->chan->name.c_str());
+
+        mon->queue.emplace_back(std::move(update));
+        notify = true;
+
+    } else if(!init) {
         Guard G(mon->lock);
 
         if(mon->pipeline) {
