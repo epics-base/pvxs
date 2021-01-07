@@ -49,6 +49,45 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
     Value current;
 
     INST_COUNTER(SharedPVImpl);
+
+    static
+    void connectOp(const std::shared_ptr<Impl>& self, const std::shared_ptr<ConnectOp>& conn)
+    {
+        try{
+            conn->connect(self->current);
+        }catch(std::exception& e){
+            log_warn_printf(logshared, "%s Client %s: Can't attach() get: %s\n",
+                            conn->name().c_str(), conn->peerName().c_str(), e.what());
+            // not re-throwing for consistency
+            // we couldn't deliver an error after pending
+            conn->error(e.what());
+        }
+    }
+
+    static
+    void connectSub(const std::shared_ptr<Impl>& self,
+                                                 const std::shared_ptr<MonitorSetupOp>& conn)
+    {
+        try {
+            std::shared_ptr<MonitorControlOp> sub(conn->connect(self->current));
+
+            conn->onClose([self, sub](const std::string& msg) {
+                log_debug_printf(logshared, "%s on %s Monitor onClose\n", sub->peerName().c_str(), sub->name().c_str());
+                Guard G(self->lock);
+                self->subscribers.erase(sub);
+            });
+
+            sub->post(self->current.clone());
+            self->subscribers.emplace(std::move(sub));
+
+        }catch(std::exception& e){
+            log_warn_printf(logshared, "%s Client %s: Can't attach() monitor: %s\n",
+                            conn->name().c_str(), conn->peerName().c_str(), e.what());
+            // not re-throwing for consistency
+            // we couldn't deliver an error after pending
+            conn->error(e.what());
+        }
+    }
 };
 
 SharedPV SharedPV::buildMailbox()
@@ -192,7 +231,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
 
         } else {
             UnGuard U(G);
-            conn->connect(self->current);
+            Impl::connectOp(self, conn);
         }
     });
 
@@ -218,17 +257,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
             self->mpending.insert(std::move(conn));
 
         } else {
-            auto ctrl = conn->connect(self->current);
-            std::shared_ptr<MonitorControlOp> sub(std::move(ctrl));
-
-            conn->onClose([self, sub](const std::string& msg) {
-                log_debug_printf(logshared, "%s on %s Monitor onClose\n", sub->peerName().c_str(), sub->name().c_str());
-                Guard G(self->lock);
-                self->subscribers.erase(sub);
-            });
-
-            sub->post(self->current.clone());
-            self->subscribers.emplace(std::move(sub));
+            Impl::connectSub(self, conn);
         }
     });
 
@@ -329,19 +358,10 @@ void SharedPV::open(const Value& initial)
     //      API to batch?
 
     for(auto& op : pending) {
-        op->connect(initial);
+        Impl::connectOp(impl, op);
     }
     for(auto& op : mpending) {
-        auto ctrl = op->connect(initial);
-        auto self(impl);
-        std::shared_ptr<MonitorControlOp> sub(std::move(ctrl));
-
-        op->onClose([self, sub](const std::string& msg) {
-            Guard G(self->lock);
-            self->subscribers.erase(sub);
-        });
-
-        subscribers.emplace(sub);
+        Impl::connectSub(impl, op);
     }
 
     {

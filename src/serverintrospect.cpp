@@ -168,8 +168,15 @@ void ServerConn::handle_GET_FIELD()
     opByIOID[ioid] = op;
     chan->opByIOID[ioid] = op;
 
-    if(chan->onOp)
-        chan->onOp(std::move(ctrl));
+    if(chan->onOp) {
+        try {
+            chan->onOp(std::move(ctrl));
+        }catch(std::exception& e){
+            // a remote error will be signaled from ~ServerIntrospectControl
+            log_err_printf(connsetup, "Client %s Info \"%s\" onOp() error: %s\n",
+                           peerName.c_str(), chan->name.c_str(), e.what());
+        }
+    }
 }
 
 }} // namespace pvxs::impl

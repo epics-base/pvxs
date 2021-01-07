@@ -415,7 +415,13 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             ctrl->connect(Value());
 
         } else if(chan->onOp) { // GET, PUT
-            chan->onOp(std::move(ctrl));
+            try {
+                chan->onOp(std::move(ctrl));
+            }catch(std::exception& e){
+                // a remote error will be signaled from ~ServerGPRConnect
+                log_err_printf(connsetup, "Client %s op%2x \"%s\" onOp() error: %s\n",
+                               peerName.c_str(), cmd, chan->name.c_str(), e.what());
+            }
 
         } else {
             ctrl->error("Get/Put/RPC not implemented for this PV");
