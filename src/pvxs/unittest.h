@@ -78,6 +78,10 @@ public:
         return *this;
     }
 
+    //! Override current pass/fail result if input matches a regular expression
+    //! @since UNRELEASED
+    testCase& setPassMatch(const std::string& expr, const std::string& inp);
+
     //! Append to message
     template<typename T>
     inline testCase& operator<<(const T& v) {
@@ -145,6 +149,9 @@ testCase testNotEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS
 PVXS_API
 testCase _testStrEq(const char *sLHS, const std::string& lhs, const char *sRHS, const std::string& rhs);
 
+PVXS_API
+testCase _testStrMatch(const char *spat, const std::string& pat, const char *sstr, const std::string& str);
+
 template<typename LHS, typename RHS>
 testCase testArrEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS& rhs)
 {
@@ -198,6 +205,40 @@ testCase testThrows(FN fn)
     return ret;
 }
 
+/** Assert that an exception is throw with a certain message.
+ *
+ * @tparam Exception The exception type which should be thrown
+ * @param expr A regular expression
+ * @param fn A callable
+ *
+ * @returns A testCase which passes if an Exception instance was caught
+ *          and std::exception::what() matched the provided regular expression.
+ *
+ * @code
+ * testThrowsMatch<std::runtime_error>("happened", []() {
+ *      testShow()<<"Now you see me";
+ *      throw std::runtime_error("I happened");
+ *      testShow()<<"Now you don't";
+ * })<<"some message";
+ * @endcode
+ *
+ * @since UNRELEASED
+ */
+template<class Exception, typename FN>
+testCase testThrowsMatch(const std::string& expr, FN fn)
+{
+    testCase ret(false);
+    try {
+        fn();
+        ret<<"Unexpected success - ";
+    }catch(Exception& e){
+        ret.setPassMatch(expr, e.what())<<"Expected matching (\""<<expr<<"\") exception \""<<e.what()<<"\" - ";
+    }catch(std::exception& e){
+        ret<<"Unexpected exception "<<typeid(e).name()<<" \""<<e.what()<<"\" - ";
+    }
+    return ret;
+}
+
 } // namespace pvxs
 
 //! Macro which assert that an expression evaluate to 'true'.
@@ -223,6 +264,11 @@ testCase testThrows(FN fn)
 //! Functionally equivalent to testEq() with two std::string instances.
 //! Prints diff-like output which is friendlier to multi-line strings.
 #define testStrEq(LHS, RHS) ::pvxs::detail::_testStrEq(#LHS, LHS, #RHS, RHS)
+
+//! Macro which asserts that STR matches the regular expression EXPR
+//! Evaluates to a pvxs::testCase
+//! @since UNRELEASED
+#define testStrMatch(EXPR, STR) ::pvxs::detail::_testStrMatch(#EXPR, EXPR, #STR, STR)
 
 //! Macro which asserts equality between LHS and RHS.
 //! Evaluates to a pvxs::testCase

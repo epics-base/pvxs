@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <regex>
+
 #include <epicsUnitTest.h>
 
 #include "pvxs/unittest.h"
@@ -92,6 +94,20 @@ testCase::~testCase()
     }
 }
 
+testCase& testCase::setPassMatch(const std::string& expr, const std::string& inp)
+{
+    std::regex ex;
+    try {
+        ex.assign(expr);
+        setPass(std::regex_match(inp, ex));
+
+    }catch(std::regex_error& e) {
+        setPass(false);
+        (*this)<<" expression error: "<<e.what()<<" :";
+    }
+    return *this;
+}
+
 namespace detail {
 
 size_t findNextLine(const std::string& s, size_t pos=0u)
@@ -143,6 +159,15 @@ testCase _testStrEq(const char *sLHS, const std::string& lhs, const char *sRHS, 
         posL = eol;
     }
 
+    return ret;
+}
+
+testCase _testStrMatch(const char *spat, const std::string& pat, const char *sstr, const std::string& str)
+{
+    std::regex expr;
+    testCase ret;
+    ret.setPassMatch(pat, str);
+    ret<<spat<<" (\""<<pat<<"\") match "<<str<<" (\""<<escape(str)<<"\")";
     return ret;
 }
 

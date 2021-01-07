@@ -110,6 +110,12 @@ Extensions to epicsUnitTest.h ::
 
 .. doxygendefine:: testNotEq
 
+.. doxygendefine:: testStrEq
+
+.. doxygendefine:: testStrMatch
+
+.. doxygendefine:: testArrEq
+
 .. doxygendefine:: testShow
 
 The testEq() macro and friends expand to a function which returns a `pvxs::testCase` instance
@@ -121,6 +127,8 @@ which may be used as a `std::ostream` to append text describing a test. eg. ::
     }
 
 .. doxygenfunction:: pvxs::testThrows
+
+.. doxygenfunction:: pvxs::testThrowsMatch
 
 .. doxygenclass:: pvxs::testCase
     :members:
