@@ -349,6 +349,22 @@ struct Tester {
         });
         testOk1(done.wait(5.0));
     }
+
+    void badRequest()
+    {
+        testShow()<<__func__;
+
+        mbox.open(initial);
+        serv.start();
+
+        auto op = cli.get("mailbox")
+                .field("invalid")
+                .exec();
+
+        testThrowsMatch<std::runtime_error>("Empty field selection", [&op]() {
+            testShow()<<op->wait(4.0);
+        })<<" pvRequest selects no fields";
+    }
 };
 
 struct ErrorSource : public server::Source
@@ -421,7 +437,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(52);
+    testPlan(53);
     testSetup();
     logger_config_env();
     Tester().testConnector();
@@ -433,6 +449,7 @@ MAIN(testget)
     Tester().asyncCancel();
     Tester().orphan();
     Tester().manualExec();
+    Tester().badRequest();
     testError(false);
     testError(true);
     cleanup_for_valgrind();

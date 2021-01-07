@@ -126,6 +126,34 @@ struct BasicTest {
 
         testOk1(!done->wait(1.1));
     }
+
+    void badRequest()
+    {
+        testShow()<<__func__;
+
+        serv.start();
+        mbox.open(initial);
+
+        auto sub(cli.monitor("mailbox")
+                 .field("nonexistant")
+                 .maskConnected(false)
+                 .maskDisconnected(false)
+                 .event([this](client::Subscription&) {
+                     testDiag("Event evt");
+                     evt.signal();
+                 })
+                 .exec());
+
+        cli.hurryUp();
+
+        testThrows<client::Connected>([this, &sub]() {
+            testShow()<<pop(sub, evt);
+        });
+
+        testThrows<client::RemoteError>([this, &sub]() {
+            testShow()<<pop(sub, evt);
+        });
+    }
 };
 
 struct TestLifeCycle : public BasicTest
@@ -292,12 +320,13 @@ struct TestReconn : public BasicTest
 
 MAIN(testmon)
 {
-    testPlan(24);
+    testPlan(26);
     testSetup();
     logger_config_env();
     BasicTest().orphan();
     BasicTest().cancel();
     BasicTest().asyncCancel();
+    BasicTest().badRequest();
     TestLifeCycle().testBasic(true);
     TestLifeCycle().testBasic(false);
     TestLifeCycle().testSecond();
