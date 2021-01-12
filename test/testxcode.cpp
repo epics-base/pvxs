@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
@@ -49,6 +49,35 @@ void testFromBytes(bool be, const char(&input)[N], Fn&& fn)
     FixedBuf S(be, buf);
     fn(S);
     testCase(S.good() && S.empty())<<"Deserialize \""<<escape(std::string((const char*)input, N-1))<<"\" leaves "<<S.good()<<" "<<S.size();
+}
+
+void testDeserializeString()
+{
+    testDiag("%s", __func__);
+
+    {
+        std::string dut("canary");
+        testFromBytes(true, "\x00", [&dut](Buffer& buf) {
+            from_wire(buf, dut);
+        });
+        testEq(dut, "");
+    }
+
+    {
+        std::string dut("canary");
+        testFromBytes(true, "\xff", [&dut](Buffer& buf) {
+            from_wire(buf, dut);
+        });
+        testEq(dut, "");
+    }
+
+    {
+        std::string dut("canary");
+        testFromBytes(true, "\x0bhello world", [&dut](Buffer& buf) {
+            from_wire(buf, dut);
+        });
+        testEq(dut, "hello world");
+    }
 }
 
 void testSerialize1()
@@ -952,8 +981,9 @@ void testEmptyRequest()
 
 MAIN(testxcode)
 {
-    testPlan(116);
+    testPlan(122);
     testSetup();
+    testDeserializeString();
     testSerialize1();
     testDeserialize1();
     testSimpleDef();

@@ -318,7 +318,10 @@ void from_wire(Buffer& buf, std::string& s)
 {
     Size len{0};
     from_wire(buf, len);
-    if(!buf.ensure(len.size)) {
+    if(len.size==size_t(-1)) {
+        s.clear();
+
+    } else if(!buf.ensure(len.size)) {
         buf.fault();
 
     } else {
