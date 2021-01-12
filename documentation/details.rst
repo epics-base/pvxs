@@ -27,11 +27,56 @@ It is enough to mention "All tests successful." if this is so.  (see `runtests`)
 Additional information which may be relevant:
 
 * Number of network interfaces if more than one.
-* Whether clients and/or servers are on the same host or diffrent hosts.
+* Whether clients and/or servers are on the same host or different hosts.
 * Whether clients and/or servers are in the same subnet or different subnets
 * Whether network traffic crosses between virtual machine(s) and physical host(s).
 * Firewall rules on UDP traffic to/from port 5075 or TCP connections to port 5074
 * Any local/site modifications to EPICS Base
+
+If the module has built successfully, then running ``pvxinfo -D`` will
+report much of this information.
+
+Packet Capture
+--------------
+
+Some kinds of issues can be easily reproduced by the reporter, but not by others.
+eg. those related to interoperability, site private applications, or "environmental" conditions.
+In these cases it may be necessary to capture the troublesome network traffic to file.
+This section provides a quick guide for using `Wireshark <http://www.wireshark.org/>`_ to do this.
+
+An important concern when providing a packet capture taken on a private network is to
+avoid unintentionally capturing unrelated, and potentially sensitive, traffic.
+
+Usage of the ``pva.lua`` extension found in `cashark <https://github.com/mdavidsaver/cashark>`_
+provides a quick way to filter out non-PVA traffic. ::
+
+    wireshark -X lua_script:pva.lua
+
+While Wireshark is running, apply a display filter of ``pva`` to show only PV Access protocol traffic.
+From the ``File`` menu, select ``Export Specified Packets``, then choose to export only displayed packets.
+Please also check ``Compress with gzip``.
+
+If it is necessary to select only a specific PVA exchange, use the
+`Follow TCP Stream <https://www.wireshark.org/docs/wsug_html_chunked/ChAdvFollowStreamSection.html>`_
+feature to display/export only packets associated with a single TCP connection.
+This will result in a display filter expression like ``tcp.stream eq 1``.
+When trying to identify a single connection/stream, it may be helpful to apply a filter like ``pva.pv=="special:pv:name"``.
+
+If if isn't convenient to run the full Wireshark GUI when capturing,
+the ``tshark`` CLI utility may be used to capture raw traffic to file.
+Display filters like ``pva.lua`` may not be used during capture,
+so it will be necessary to filter again using the GUI on another host to produce a second (cooked) capture file. ::
+
+    tshark -i any -f '!port ssh' -w raw.pcapng
+    gzip raw.pcapng
+    # copy raw.pcapng.gz to another host
+    wireshark -X lua_script:pva.lua raw.pcapng.gz
+
+If is doubt about whether private information has been successfully excluded,
+packet capture files may be sent privately to the author by email instead of uploading to github.
+The author's PGP key may be found below.
+
+Please **compress** all capture files uploaded or sent!
 
 .. _relpolicy:
 
@@ -51,6 +96,8 @@ scheme of MAJOR.MINOR.PATCH with the following amendments.
   the main libpvxs.so and the auxiliary libpvxsIoc.so.
   Statements about API or ABI compatibility apply to both libraries as a group.
 
+.. _pgpkey:
+  
 Each release will be accompanied by a signed tag in the repository,
 which may be verified with the author's GPG key
 `5C159E669D69E2D4C4E74E540C8E1C8347330CFB <http://keys.gnupg.net/pks/lookup?op=get&search=0x5C159E669D69E2D4C4E74E540C8E1C8347330CFB>`_.
@@ -77,7 +124,7 @@ When committing changes please do:
 
 * Include a commit message
 * Break up changes into multiple commits where reasonable
-* Include whitespace only changes as seperate commits
+* Include whitespace only changes as separate commits
 
 Implementation Notes
 ====================
