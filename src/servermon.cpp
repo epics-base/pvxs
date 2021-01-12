@@ -464,8 +464,8 @@ void ServerConn::handle_MONITOR()
         }
 
         if(!M.good()) {
-            log_debug_printf(connio, "Client %s\n Invalid MONITOR/%x INIT\n",
-                       peerName.c_str(), subcmd);
+            log_debug_printf(connio, "%s:%d Client %s\n Invalid MONITOR/%x INIT\n",
+                       M.file(), M.line(), peerName.c_str(), subcmd);
             bev.reset();
             return;
         }
@@ -515,8 +515,8 @@ void ServerConn::handle_MONITOR()
         }
 
         if(!M.good()) {
-            log_debug_printf(connio, "Client %s\n Invalid MONITOR/%x CMD\n",
-                       peerName.c_str(), subcmd);
+            log_debug_printf(connio, "%s:%d Client %s\n Invalid MONITOR/%x CMD\n",
+                       M.file(), M.line(), peerName.c_str(), subcmd);
             bev.reset();
             return;
         }

@@ -150,7 +150,7 @@ void ServerConn::handle_GET_FIELD()
     from_wire(M, ioid);
     from_wire(M, subfield);
     if(!M.good())
-        throw std::runtime_error("Error decoding Introspect");
+        throw std::runtime_error(SB()<<M.file()<<':'<<M.line()<<" Error decoding Introspect");
 
     auto& chan = lookupSID(sid);
 

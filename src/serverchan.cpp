@@ -221,7 +221,7 @@ void ServerConn::handle_SEARCH()
     }
 
     if(!M.good())
-        throw std::runtime_error("TCP Search decode error");
+        throw std::runtime_error(SB()<<M.file()<<':'<<M.line()<<" TCP Search decode error");
 
     {
         auto G(iface->server->sourcesLock.lockReader());
@@ -349,7 +349,8 @@ void ServerConn::handle_CREATE_CHANNEL()
             // "spec" calls for uint16_t Access Rights here, but pvAccessCPP don't include this (it's useless anyway)
             if(!R.good()) {
                 M.fault(__FILE__, __LINE__);
-                log_err_printf(connio, "Client %s Encode error in CreateChan\n", peerName.c_str());
+                log_err_printf(connio, "%s:%d Client %s Encode error in CreateChan\n",
+                               M.file(), M.line(), peerName.c_str());
                 break;
             }
         }
@@ -358,7 +359,8 @@ void ServerConn::handle_CREATE_CHANNEL()
     }
 
     if(!M.good()) {
-        log_err_printf(connio, "Client %s Decode error in CreateChan\n", peerName.c_str());
+        log_err_printf(connio, "%s:%d Client %s Decode error in CreateChan\n",
+                       M.file(), M.line(), peerName.c_str());
         bev.reset();
     }
 }
@@ -372,7 +374,7 @@ void ServerConn::handle_DESTROY_CHANNEL()
     from_wire(M, sid);
     from_wire(M, cid);
     if(!M.good())
-        throw std::runtime_error("Decode error in DestroyChan");
+        throw std::runtime_error(SB()<<M.file()<<':'<<M.line()<<" Decode error in DestroyChan");
 
     auto it = chanBySID.find(sid);
     if(it==chanBySID.end()) {

@@ -135,7 +135,8 @@ void ServerConn::handle_CONNECTION_VALIDATION()
         from_wire_type_value(M, rxRegistry, auth);
 
         if(!M.good()) {
-            log_err_printf(connio, "Client %s Truncated/Invalid ConnValid from client\n", peerName.c_str());
+            log_err_printf(connio, "%s:%d Client %s Truncated/Invalid ConnValid from client\n",
+                           M.file(), M.line(), peerName.c_str());
             bev.reset();
             return;
 
@@ -181,7 +182,7 @@ void ServerConn::handle_CANCEL_REQUEST()
     from_wire(M, sid);
     from_wire(M, ioid);
     if(!M.good())
-        throw std::runtime_error("Error decoding DestroyOp");
+        throw std::runtime_error(SB()<<M.file()<<':'<<M.line()<<" Error decoding DestroyOp");
 
     auto it = opByIOID.find(ioid);
     if(it==opByIOID.end()) {
@@ -216,7 +217,7 @@ void ServerConn::handle_DESTROY_REQUEST()
     from_wire(M, sid);
     from_wire(M, ioid);
     if(!M.good())
-        throw std::runtime_error("Error decoding DestroyOp");
+        throw std::runtime_error(SB()<<M.file()<<':'<<M.line()<<" Error decoding DestroyOp");
 
     auto& chan = lookupSID(sid);
     auto it = opByIOID.find(ioid);
@@ -250,7 +251,7 @@ void ServerConn::handle_MESSAGE()
     from_wire(M, msg);
 
     if(!M.good())
-        throw std::runtime_error("Decode error for Message");
+        throw std::runtime_error(SB()<<M.file()<<':'<<M.line()<<" Decode error for Message");
 
     auto it = opByIOID.find(ioid);
     if(it==opByIOID.end()) {

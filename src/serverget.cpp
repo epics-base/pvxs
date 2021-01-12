@@ -382,8 +382,8 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         from_wire_type_value(M, rxRegistry, pvRequest);
 
         if(!M.good()) {
-            log_debug_printf(connio, "Client %s\n Invalid op=%x/%x INIT\n",
-                       peerName.c_str(), cmd, subcmd);
+            log_debug_printf(connio, "%s:%d Client %s\n Invalid op=%x/%x INIT\n",
+                       M.file(), M.line(), peerName.c_str(), cmd, subcmd);
             bev.reset();
             return;
         }
@@ -462,8 +462,8 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         }
 
         if(!M.good()) {
-            log_debug_printf(connio, "Client %s\n Invalid op=%x/%x Get\n",
-                       peerName.c_str(), cmd, subcmd);
+            log_debug_printf(connio, "%s:%d Client %s\n Invalid op=%x/%x Get\n",
+                       M.file(), M.line(), peerName.c_str(), cmd, subcmd);
             bev.reset();
             return;
         }

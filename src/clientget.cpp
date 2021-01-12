@@ -353,7 +353,8 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
     }
 
     if(!M.good() || !gpr) {
-        log_crit_printf(io, "Server %s sends invalid op%02x.  Disconnecting...\n", peerName.c_str(), cmd);
+        log_crit_printf(io, "%s:%d Server %s sends invalid op%02x.  Disconnecting...\n",
+                        M.file(), M.line(), peerName.c_str(), cmd);
         bev.reset();
         return;
     }

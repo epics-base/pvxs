@@ -591,7 +591,9 @@ bool Context::Pvt::onSearch()
     }
 
     if(!M.good()) {
-        log_hex_printf(io, Level::Err, &searchMsg[0], nrx, "Invalid search reply %d from %s\n", nrx, src.tostring().c_str());
+        log_hex_printf(io, Level::Err, &searchMsg[0], nrx,
+                "%s:%d Invalid search reply %d from %s\n",
+                M.file(), M.line(), nrx, src.tostring().c_str());
     }
 
     return true;

@@ -430,7 +430,8 @@ void Connection::handle_MONITOR()
     }
 
     if(!M.good() || !mon) {
-        log_crit_printf(io, "Server %s sends invalid MONITOR.  Disconnecting...\n", peerName.c_str());
+        log_crit_printf(io, "%s:%d Server %s sends invalid MONITOR.  Disconnecting...\n",
+                        M.file(), M.line(), peerName.c_str());
         bev.reset();
         return;
     }

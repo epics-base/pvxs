@@ -188,7 +188,8 @@ void Connection::handle_CONNECTION_VALIDATION()
     }
 
     if(!M.good()) {
-        log_err_printf(io, "Server %s sends invalid CONNECTION_VALIDATION.  Disconnect...\n", peerName.c_str());
+        log_err_printf(io, "%s:%d Server %s sends invalid CONNECTION_VALIDATION.  Disconnect...\n",
+                       M.file(), M.line(), peerName.c_str());
         bev.reset();
         return;
     }
@@ -255,7 +256,8 @@ void Connection::handle_CONNECTION_VALIDATED()
     from_wire(M, sts);
 
     if(!M.good()) {
-        log_crit_printf(io, "Server %s sends invalid CONNECTION_VALIDATED.  Disconnecting...\n", peerName.c_str());
+        log_crit_printf(io, "%s:%d Server %s sends invalid CONNECTION_VALIDATED.  Disconnecting...\n",
+                        M.file(), M.line(), peerName.c_str());
         bev.reset();
         return;
 
@@ -285,7 +287,8 @@ void Connection::handle_CREATE_CHANNEL()
     // "spec" calls for uint16_t Access Rights here, but pvAccessCPP don't include this (it's useless anyway)
 
     if(!M.good()) {
-        log_crit_printf(io, "Server %s sends invalid CREATE_CHANNEL.  Disconnecting...\n", peerName.c_str());
+        log_crit_printf(io, "%s:%d Server %s sends invalid CREATE_CHANNEL.  Disconnecting...\n",
+                        M.file(), M.line(), peerName.c_str());
         bev.reset();
         return;
     }
@@ -350,7 +353,8 @@ void Connection::handle_DESTROY_CHANNEL()
     from_wire(M, cid);
 
     if(!M.good()) {
-        log_crit_printf(io, "Server %s sends invalid DESTROY_CHANNEL.  Disconnecting...\n", peerName.c_str());
+        log_crit_printf(io, "%s:%d Server %s sends invalid DESTROY_CHANNEL.  Disconnecting...\n",
+                        M.file(), M.line(), peerName.c_str());
         bev.reset();
         return;
     }

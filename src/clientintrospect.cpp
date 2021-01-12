@@ -122,7 +122,8 @@ void Connection::handle_GET_FIELD()
         from_wire_type(M, rxRegistry, prototype);
 
     if(!M.good()) {
-        log_crit_printf(io, "Server %s sends invalid GET_FIELD.  Disconnecting...\n", peerName.c_str());
+        log_crit_printf(io, "%s:%d Server %s sends invalid GET_FIELD.  Disconnecting...\n",
+                        M.file(), M.line(), peerName.c_str());
         bev.reset();
         return;
     }

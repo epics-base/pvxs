@@ -58,6 +58,8 @@ public:
         errline = lineno;
     }
     EPICS_ALWAYS_INLINE bool good() const { return !err; }
+    inline const char* file() const { return err ? err : "(null)"; }
+    EPICS_ALWAYS_INLINE int line() const { return errline; }
 
     // ensure (be resize/refill) that size()>=i
     inline bool ensure(size_t i) {
