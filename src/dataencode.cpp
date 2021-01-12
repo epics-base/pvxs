@@ -69,7 +69,7 @@ void to_wire(Buffer& buf, const FieldDesc* cur)
 void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, unsigned depth)
 {
     if(!buf.good() || depth>20) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
         return;
     }
 
@@ -86,7 +86,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
         from_wire(buf, key);
         from_wire(buf, descs, cache, depth+1u);
         if(!buf.good() || index==descs.size()) {
-            buf.fault();
+            buf.fault(__FILE__, __LINE__);
             return;
 
         } else {
@@ -106,11 +106,11 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
         from_wire(buf, key);
         auto it = cache.find(key);
         if(it==cache.end()) {
-            buf.fault();
+            buf.fault(__FILE__, __LINE__);
         }
 
         if(!buf.good() || it->second.empty()) {
-            buf.fault();
+            buf.fault(__FILE__, __LINE__);
             return;
 
         } else {
@@ -123,7 +123,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
 
     } else if(code.code!=0xff && code.code&0x10) {
         // fixed length is deprecated
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
 
     } else {
         // actual field
@@ -140,7 +140,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
         case TypeCode::UnionA:
             from_wire(buf, descs.back().members, cache, depth+1);
             if(!buf.good() || descs.back().members.empty() || descs.back().members[0].code!=code.scalarOf()) {
-                buf.fault();
+                buf.fault(__FILE__, __LINE__);
                 return;
             }
             break;
@@ -168,7 +168,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
                 from_wire(buf, name);
                 from_wire(buf, cdescs, cache, depth+1);
                 if(!buf.good() || cindex>=cdescs.size()) {
-                    buf.fault();
+                    buf.fault(__FILE__, __LINE__);
                     return;
                 }
 
@@ -211,7 +211,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
             case TypeCode::Any:
                 break;
             default:
-                buf.fault();
+                buf.fault(__FILE__, __LINE__);
                 break;
             }
         }
@@ -435,7 +435,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
     } // end case
 
     assert(false);
-    buf.fault();
+    buf.fault(__FILE__, __LINE__);
 }
 
 void to_wire_full(Buffer& buf, const Value& val)
@@ -671,7 +671,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
 
                     } else {
                         // invalid selector
-                        buf.fault();
+                        buf.fault(__FILE__, __LINE__);
                         return;
                     }
                 }
@@ -713,7 +713,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
     }
     } // end case
 
-    buf.fault();
+    buf.fault(__FILE__, __LINE__);
 }
 
 void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val)
@@ -729,7 +729,7 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
     auto store = Value::Helper::store(val);
 
     if(!desc || !store) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
         return;
     }
 

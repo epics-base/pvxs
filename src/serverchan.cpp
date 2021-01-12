@@ -194,7 +194,7 @@ void ServerConn::handle_SEARCH()
     from_wire(M, searchID);
     from_wire(M, flags);
     bool mustReply = flags&pva_search_flags::MustReply;
-    M.skip(3 + 16 + 2); // unused and replyAddr (we always and only reply to TCP peer)
+    M.skip(3 + 16 + 2, __FILE__, __LINE__); // unused and replyAddr (we always and only reply to TCP peer)
 
     bool foundtcp = false;
     Size nproto{0};
@@ -348,7 +348,7 @@ void ServerConn::handle_CREATE_CHANNEL()
             to_wire(R, sts);
             // "spec" calls for uint16_t Access Rights here, but pvAccessCPP don't include this (it's useless anyway)
             if(!R.good()) {
-                M.fault();
+                M.fault(__FILE__, __LINE__);
                 log_err_printf(connio, "Client %s Encode error in CreateChan\n", peerName.c_str());
                 break;
             }

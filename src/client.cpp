@@ -504,7 +504,7 @@ bool Context::Pvt::onSearch()
     FixedBuf M(be, searchMsg.data(), nrx);
 
     const uint8_t cmd = M[3];
-    M.skip(4);
+    M.skip(4, __FILE__, __LINE__);
 
     uint32_t len=0;
     from_wire(M, len);
@@ -524,7 +524,7 @@ bool Context::Pvt::onSearch()
         _from_wire<12>(M, &guid[0], false);
         // searchSequenceID
         // we don't use this and instead rely on ID for individual PVs
-        M.skip(4u);
+        M.skip(4u, __FILE__, __LINE__);
 
         from_wire(M, serv);
         if(serv.isAny())
@@ -534,7 +534,7 @@ bool Context::Pvt::onSearch()
 
         if(M.size()<4u || M[0]!=3u || M[1]!='t' || M[2]!='c' || M[3]!='p')
             return true;
-        M.skip(4u);
+        M.skip(4u, __FILE__, __LINE__);
 
         from_wire(M, found);
         if(!found)
@@ -587,7 +587,7 @@ bool Context::Pvt::onSearch()
         }
 
     } else {
-        M.fault();
+        M.fault(__FILE__, __LINE__);
     }
 
     if(!M.good()) {
@@ -630,7 +630,7 @@ void Context::Pvt::tickSearch()
     while(!bucket.empty()) {
         searchMsg.resize(0x10000);
         FixedBuf M(true, searchMsg.data(), searchMsg.size());
-        M.skip(8); // fill in header after body length known
+        M.skip(8, __FILE__, __LINE__); // fill in header after body length known
 
         // searchSequenceID
         // we don't use this and instead rely on IDs for individual PVs
@@ -655,7 +655,7 @@ void Context::Pvt::tickSearch()
         // placeholder for channel count;
         auto pcount = M.save();
         uint16_t count = 0u;
-        M.skip(2u);
+        M.skip(2u, __FILE__, __LINE__);
 
         bool payload = false;
         while(!bucket.empty()) {

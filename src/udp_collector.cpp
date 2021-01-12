@@ -96,7 +96,7 @@ struct UDPCollector : public UDPManager::Search,
 
         uint8_t cmd = M[3];
 
-        M.skip(4);
+        M.skip(4, __FILE__, __LINE__);
         uint32_t len=0;
         from_wire(M, len);
 
@@ -117,7 +117,7 @@ struct UDPCollector : public UDPManager::Search,
             from_wire(M, searchID);
             from_wire(M, flags);
             mustReply = flags&pva_search_flags::MustReply;
-            M.skip(3); // unused/reserved
+            M.skip(3, __FILE__, __LINE__); // unused/reserved
 
             from_wire(M, replyAddr);
             from_wire(M, port);
@@ -138,7 +138,7 @@ struct UDPCollector : public UDPManager::Search,
                 // shortcut to avoid allocating a std::string
                 // "tcp" is the only value we expect to see
                 foundtcp |= M.size()>=3 && nchar.size==3 && M[0]=='t' && M[1]=='c' && M[2]=='p';
-                M.skip(nchar.size);
+                M.skip(nchar.size, __FILE__, __LINE__);
             }
 
             // one Search message can include many PV names.
@@ -160,7 +160,7 @@ struct UDPCollector : public UDPManager::Search,
                 if(foundtcp && chlen.size<=M.size() && M.good()) {
                     names.push_back(UDPManager::Search::Name{reinterpret_cast<const char*>(M.save()), id});
                 }
-                M.skip(chlen.size);
+                M.skip(chlen.size, __FILE__, __LINE__);
             }
 
             if(M.good()) {
@@ -181,7 +181,7 @@ struct UDPCollector : public UDPManager::Search,
             uint16_t port = 0;
 
             _from_wire<12>(M, &beaconMsg.guid[0], false);
-            M.skip(4); // skip flags, seq, and change count.  unused
+            M.skip(4, __FILE__, __LINE__); // skip flags, seq, and change count.  unused
             from_wire(M, beaconMsg.server);
             from_wire(M, port);
             if(beaconMsg.server.isAny()) {
@@ -191,7 +191,7 @@ struct UDPCollector : public UDPManager::Search,
 
             Size protolen{0};
             from_wire(M, protolen);
-            M.skip(protolen.size); // ignore string
+            M.skip(protolen.size, __FILE__, __LINE__); // ignore string
 
             // ignore remaining "server status" blob
 

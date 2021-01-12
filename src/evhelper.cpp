@@ -456,7 +456,7 @@ std::vector<SockAddr> evsocket::interfaces(const SockAddr* match)
 void to_wire(Buffer& buf, const SockAddr& val)
 {
     if(!buf.ensure(16)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
         return;
 
     } else if(val.family()==AF_INET) {
@@ -476,7 +476,7 @@ void to_wire(Buffer& buf, const SockAddr& val)
 void from_wire(Buffer &buf, SockAddr& val)
 {
     if(!buf.ensure(16)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
         return;
     }
 

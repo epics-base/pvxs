@@ -548,7 +548,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
     VectorOutBuf M(true, searchReply);
 
-    M.skip(8); // fill in header after body length known
+    M.skip(8, __FILE__, __LINE__); // fill in header after body length known
 
     _to_wire<12>(M, effective.guid.data(), false);
     to_wire(M, msg.searchID);
@@ -581,7 +581,7 @@ void Server::Pvt::doBeacons(short evt)
     log_debug_printf(serversetup, "Server beacon timer expires\n%s", "");
 
     VectorOutBuf M(true, beaconMsg);
-    M.skip(8); // fill in header after body length known
+    M.skip(8, __FILE__, __LINE__); // fill in header after body length known
 
     _to_wire<12>(M, effective.guid.data(), false);
     to_wire(M, uint8_t(0u)); // flags (aka. QoS, aka. undefined)

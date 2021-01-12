@@ -334,7 +334,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
 
         if(uint8_t(op->op)!=cmd) {
             // peer mixes up IOID and operation type
-            M.fault();
+            M.fault(__FILE__, __LINE__);
 
         } else {
             gpr = static_cast<GPROp*>(op.get());
@@ -347,7 +347,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
             } else if((gpr->state==GPROp::Exec) && !init && !get) {
 
             } else {
-                M.fault();
+                M.fault(__FILE__, __LINE__);
             }
         }
     }

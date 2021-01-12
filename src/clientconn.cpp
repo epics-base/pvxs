@@ -170,7 +170,7 @@ void Connection::handle_CONNECTION_VALIDATION()
     // unused
     //   serverReceiveBufferSize
     //   serverIntrospectionRegistryMaxSize
-    M.skip(4u + 2u);
+    M.skip(4u + 2u, __FILE__, __LINE__);
 
     Size nauth{};
     from_wire(M, nauth);

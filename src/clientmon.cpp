@@ -411,7 +411,7 @@ void Connection::handle_MONITOR()
 
         if(uint8_t(op->op)!=CMD_MONITOR) {
             // peer mixes up IOID and operation type
-            M.fault();
+            M.fault(__FILE__, __LINE__);
 
         } else {
             mon = static_cast<SubscriptionImpl*>(op.get());
@@ -424,7 +424,7 @@ void Connection::handle_MONITOR()
             } else if((mon->state==SubscriptionImpl::Running) && !init) {
 
             } else {
-                M.fault();
+                M.fault(__FILE__, __LINE__);
             }
         }
     }

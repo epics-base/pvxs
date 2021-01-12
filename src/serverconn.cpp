@@ -50,7 +50,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         to_wire(M, Header{pva_ctrl_msg::SetEndian, pva_flags::Control|pva_flags::Server, 0});
 
         auto save = M.save();
-        M.skip(8); // placeholder for header
+        M.skip(8, __FILE__, __LINE__); // placeholder for header
         auto bstart = M.save();
 
         // serverReceiveBufferSize, not used
@@ -128,7 +128,7 @@ void ServerConn::handle_CONNECTION_VALIDATION()
 
     std::string selected;
     {
-        M.skip(4+2+2); // ignore unused buffer, introspection size, and QoS
+        M.skip(4+2+2, __FILE__, __LINE__); // ignore unused buffer, introspection size, and QoS
         from_wire(M, selected);
 
         Value auth;

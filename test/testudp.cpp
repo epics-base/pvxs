@@ -116,9 +116,9 @@ void testSearch(bool be, std::initializer_list<const char*> names)
     std::vector<uint8_t> msg(1024, 0);
     VectorOutBuf M(be, msg);
 
-    M.skip(8); // placeholder for header
+    M.skip(8, __FILE__, __LINE__); // placeholder for header
     to_wire(M, uint32_t(0x12345678));
-    M.skip(4);
+    M.skip(4, __FILE__, __LINE__);
     SockAddr reply(SockAddr::any(AF_INET, 0x1020));
     to_wire(M, reply);
     to_wire(M, uint16_t(reply.port()));

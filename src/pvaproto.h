@@ -36,11 +36,14 @@ struct PVXS_API Buffer {
 protected:
     // valid range to read/write is [pos, limit)
     uint8_t *pos, *limit;
-    bool err;
+
+    // this is a static __FILE__ string
+    const char* err = nullptr;
+    int errline = -1;
 
     virtual bool refill(size_t more);
 
-    constexpr Buffer(bool be, uint8_t* buf, size_t n) :pos(buf), limit(buf+n), err(false), be(be) {}
+    constexpr Buffer(bool be, uint8_t* buf, size_t n) :pos(buf), limit(buf+n), be(be) {}
     virtual ~Buffer() {}
 public:
     const bool be;
@@ -48,14 +51,19 @@ public:
     // all sub-classes define
     //   bool refill(size_t more)
 
-    EPICS_ALWAYS_INLINE void fault() { err = true; }
+    // would be nice to use GCC specific __builtin_FILE() and __builtin_LINE() here,
+    // but MSVC has nothing equivalent :(
+    EPICS_ALWAYS_INLINE void fault(const char *fname, int lineno) {
+        err = fname;
+        errline = lineno;
+    }
     EPICS_ALWAYS_INLINE bool good() const { return !err; }
 
     // ensure (be resize/refill) that size()>=i
     inline bool ensure(size_t i) {
         return !err && (i<=size() || refill(i));
     }
-    inline void skip(size_t i) {
+    inline void skip(size_t i, const char *fname, int lineno) {
         do {
             if(i<=size()) {
                 pos += i;
@@ -64,7 +72,7 @@ public:
             pos = limit;
             i -= size();
         } while(refill(i));
-        fault();
+        fault(fname, lineno);
     }
 
     EPICS_ALWAYS_INLINE bool empty() const { return limit==pos; }
@@ -152,7 +160,7 @@ template<unsigned N>
 inline void _to_wire(Buffer& buf, const uint8_t *mem, bool reverse)
 {
     if(!buf.ensure(N)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
         return;
 
     } else if(reverse) {
@@ -172,7 +180,7 @@ template <unsigned N>
 inline void _from_wire(Buffer& buf, uint8_t *mem, bool reverse)
 {
     if(!buf.ensure(N)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
         return;
 
     } else if(reverse) {
@@ -208,7 +216,7 @@ template<typename T, typename std::enable_if<sizeof(T)==1 && std::is_scalar<T>::
 inline void to_wire(Buffer& buf, const T& val)
 {
     if(!buf.ensure(1)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
     } else {
         buf.push(val);
     }
@@ -249,7 +257,7 @@ inline
 void to_wire(Buffer& buf, const Size& size)
 {
     if(!buf.ensure(1)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
 
     } else if(size.size<254) {
         buf.push(uint8_t(size.size));
@@ -263,7 +271,7 @@ void to_wire(Buffer& buf, const Size& size)
         buf.push(255);
 
     } else {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
     }
 }
 
@@ -271,7 +279,7 @@ inline
 void from_wire(Buffer& buf, Size& size)
 {
     if(!buf.ensure(1)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
         return;
     }
     uint8_t s=buf.pop();
@@ -289,7 +297,7 @@ void from_wire(Buffer& buf, Size& size)
 
     } else {
         // unreachable (64-bit size so far not used)
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
     }
 }
 
@@ -299,7 +307,7 @@ void to_wire(Buffer& buf, const char *s)
     Size len{s ? strlen(s) : 0};
     to_wire(buf, len);
     if(!buf.ensure(len.size)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
 
     } else {
         for(size_t i=0; i<len.size; i++)
@@ -322,7 +330,7 @@ void from_wire(Buffer& buf, std::string& s)
         s.clear();
 
     } else if(!buf.ensure(len.size)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
 
     } else {
         s = std::string((char*)buf.save(), len.size);
@@ -334,7 +342,7 @@ inline
 void to_wire(Buffer& buf, std::initializer_list<uint8_t> bytes)
 {
     if(!buf.ensure(bytes.size())) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
 
     } else {
         for (auto byte : bytes) {
@@ -366,7 +374,7 @@ inline
 void to_wire(Buffer& buf, const Status& sts)
 {
     if(!buf.ensure(1)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
 
     } else if(sts.code==Status::Ok && sts.msg.empty() && sts.trace.empty()) {
         buf.push(255);
@@ -382,7 +390,7 @@ inline
 void from_wire(Buffer& buf, Status& sts)
 {
     if(!buf.ensure(1)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
 
     } else if(255==buf[0]) {
         buf._skip(1);
@@ -486,7 +494,7 @@ template<typename Buf>
 void to_wire(Buf& buf, const Header& H)
 {
     if(!buf.ensure(8)) {
-        buf.fault();
+        buf.fault(__FILE__, __LINE__);
 
     } else {
         buf[0] = 0xca;
