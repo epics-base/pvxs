@@ -201,7 +201,7 @@ For example, the following creates a reference loop between the Operation instan
 
     Context ctxt(...);
     myptr->op = ctxt.get("pv:name")
-                    .result([ctxt](Result&& result) {
+                    .result([myptr](Result&& result) { // <-- Danger!
                     })
                     .exec();
 
