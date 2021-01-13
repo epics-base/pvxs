@@ -37,8 +37,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 
     bufferevent_setcb(bev.get(), &bevReadS, &bevWriteS, &bevEventS, this);
 
-    timeval timo = {30, 0};
-    bufferevent_set_timeouts(bev.get(), &timo, &timo);
+    bufferevent_set_timeouts(bev.get(), &tcp_timeout, &tcp_timeout);
 
     auto tx = bufferevent_get_output(bev.get());
 

@@ -24,8 +24,7 @@ Connection::Connection(const std::shared_ptr<Context::Pvt>& context, const SockA
     bufferevent_setcb(bev.get(), &bevReadS, nullptr, &bevEventS, this);
 
     // shorter timeout until connect() ?
-    timeval timo = {30, 0};
-    bufferevent_set_timeouts(bev.get(), &timo, &timo);
+    bufferevent_set_timeouts(bev.get(), &tcp_timeout, &tcp_timeout);
 
     if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
         throw std::runtime_error("Unable to begin connecting");
@@ -100,8 +99,7 @@ void Connection::bevEvent(short events)
             throw std::logic_error("Unable to enable BEV");
 
         // start echo timer
-        timeval interval{15, 0};
-        if(event_add(echoTimer.get(), &interval))
+        if(event_add(echoTimer.get(), &tcp_echo_period))
             log_err_printf(io, "Server %s error starting echoTimer\n", peerName.c_str());
     }
 }
