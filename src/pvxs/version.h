@@ -46,7 +46,7 @@
 #define PVXS_VERSION VERSION_INT(PVXS_MAJOR_VERSION, PVXS_MINOR_VERSION, PVXS_MAINTENANCE_VERSION, 0)
 
 //! Current library ABI version
-//! @since UNRELEASED
+//! @since 0.1.1
 #define PVXS_ABI_VERSION VERSION_INT(PVXS_MAJOR_VERSION, PVXS_MINOR_VERSION, 0, 0)
 
 #ifdef __GNUC__
@@ -64,7 +64,7 @@ PVXS_API
 unsigned long version_int();
 
 //! @returns PVXS_ABI_VERSION captured at library compile time
-//! @since UNRELEASED
+//! @since 0.1.1
 PVXS_API
 unsigned long version_abi_int();
 
@@ -78,7 +78,7 @@ unsigned long version_abi_int();
  * @returns true if the header and library ABI versions match,
  *               and if the header version is not newer than the library version.
  *
- * @since UNRELEASED
+ * @since 0.1.1
  */
 static inline
 bool version_abi_check() {

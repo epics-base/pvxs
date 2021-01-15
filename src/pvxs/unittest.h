@@ -79,7 +79,7 @@ public:
     }
 
     //! Override current pass/fail result if input matches a regular expression
-    //! @since UNRELEASED
+    //! @since 0.1.1
     testCase& setPassMatch(const std::string& expr, const std::string& inp);
 
     //! Append to message
@@ -222,7 +222,7 @@ testCase testThrows(FN fn)
  * })<<"some message";
  * @endcode
  *
- * @since UNRELEASED
+ * @since 0.1.1
  */
 template<class Exception, typename FN>
 testCase testThrowsMatch(const std::string& expr, FN fn)
@@ -267,7 +267,7 @@ testCase testThrowsMatch(const std::string& expr, FN fn)
 
 //! Macro which asserts that STR matches the regular expression EXPR
 //! Evaluates to a pvxs::testCase
-//! @since UNRELEASED
+//! @since 0.1.1
 #define testStrMatch(EXPR, STR) ::pvxs::detail::_testStrMatch(#EXPR, EXPR, #STR, STR)
 
 //! Macro which asserts equality between LHS and RHS.
