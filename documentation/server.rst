@@ -74,6 +74,13 @@ EPICS_PVAS_IGNORE_ADDR_LIST
     Port zero is treated as a wildcard to match any port.
     UDP traffic from matched addresses will be ignored with no further processing.
 
+EPICS_PVA_CONN_TMO
+    Inactivity timeout for TCP connections.  For compatibility with pvAccessCPP
+    a multiplier of 4/3 is applied.  So a value of 30 results in a 40 second timeout.
+
+.. versionadded:: UNRELEASED
+    Prior to UNRELEASED *EPICS_PVA_CONN_TMO* was ignored.
+
 .. doxygenstruct:: pvxs::server::Config
     :members:
 

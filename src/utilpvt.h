@@ -251,6 +251,15 @@ public:
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const SockAddr& addr);
 
+inline
+timeval totv(double t)
+{
+    timeval ret;
+    ret.tv_sec = t;
+    ret.tv_usec = (t - ret.tv_sec)*1e6;
+    return ret;
+}
+
 //! Scoped restore of std::ostream state (format flags, fill char, and field width)
 struct Restore {
     std::ostream& strm;

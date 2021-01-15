@@ -8,9 +8,13 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <limits>
+#include <cmath>
 
 #include <dbDefs.h>
 #include <osiSock.h>
+#include <epicsMath.h>
+#include <epicsStdlib.h>
 #include <epicsString.h>
 
 #include <pvxs/log.h>
@@ -25,6 +29,14 @@ DEFINE_LOGGER(config, "pvxs.config");
 namespace pvxs {
 
 namespace {
+
+/* Historically pvAccessCPP used $EPICS_PVA_CONN_TMO as the period
+ * between sending CMD_ECHO.  *::Config::tcpTimeout is the actual
+ * inactivity timeout period.  Apply a scaling factor to add a
+ * go from one to the other.
+ */
+constexpr double tmoScale = 4.0/3.0; // 40 second idle timeout / 30 configured
+
 void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp,
                      uint16_t defaultPort, bool required=false)
 {
@@ -84,6 +96,24 @@ void parse_bool(bool& dest, const std::string& name, const std::string& val)
         dest = false;
     } else {
         log_err_printf(config, "%s invalid bool value (YES/NO) : '%s'\n",
+                       name.c_str(), val.c_str());
+    }
+}
+
+void parse_timeout(double& dest, const std::string& name, const std::string& val)
+{
+    double temp;
+    try {
+        temp = parseTo<double>(val);
+
+        if(!std::isfinite(temp)
+                || temp<0.0
+                || temp>double(std::numeric_limits<time_t>::max()))
+            throw std::out_of_range("Out of range");
+
+        dest = temp*tmoScale;
+    } catch(std::exception& e) {
+        log_err_printf(serversetup, "%s invalid double value : '%s'\n",
                        name.c_str(), val.c_str());
     }
 }
@@ -153,6 +183,26 @@ void removeDups(std::vector<std::string>& addrs)
                 addrs.end());
 }
 
+void enforceTimeout(double& tmo)
+{
+    /* Inactivity timeouts with PVA have a long (and growing) history.
+     *
+     * - Originally pvAccessCPP clients didn't send CMD_ECHO, and servers would never timeout.
+     * - Since module version 7.0.0 (in Base 7.0.3) clients send echo every 15 seconds, and
+     *   either peer will timeout after 30 seconds of inactivity.
+     * - pvAccessJava clients send CMD_ECHO every 30 seconds, and timeout after 60 seconds.
+     *
+     * So this was a bug, with c++ server timeout racing with Java client echo.
+     *
+     * - As a compromise, continue to send echo at least every 15 seconds,
+     *   and increase default timeout to 40.
+     */
+    if(!std::isfinite(tmo) || tmo <= 0.0 || tmo >= double(std::numeric_limits<time_t>::max()))
+        tmo = 40.0;
+    else if(tmo < 2.0)
+        tmo = 2.0;
+}
+
 } // namespace
 
 namespace server {
@@ -193,6 +243,10 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     if(pickone({"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
         parse_bool(self.auto_beacon, pickone.name, pickone.val);
     }
+
+    if(pickone({"EPICS_PVA_CONN_TMO"})) {
+        parse_timeout(self.tcpTimeout, pickone.name, pickone.val);
+    }
 }
 
 Config& Config::applyEnv()
@@ -228,6 +282,7 @@ void Config::updateDefs(defs_t& defs) const
     defs["EPICS_PVA_ADDR_LIST"]      = defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
     defs["EPICS_PVA_INTF_ADDR_LIST"] = defs["EPICS_PVAS_INTF_ADDR_LIST"]   = join_addr(interfaces);
     defs["EPICS_PVAS_IGNORE_ADDR_LIST"]   = join_addr(ignoreAddrs);
+    defs["EPICS_PVA_CONN_TMO"] = SB()<<tcpTimeout/tmoScale;
 }
 
 void Config::expand()
@@ -246,6 +301,8 @@ void Config::expand()
     removeDups(interfaces);
     removeDups(beaconDestinations);
     removeDups(ignoreAddrs);
+
+    enforceTimeout(tcpTimeout);
 }
 
 std::ostream& operator<<(std::ostream& strm, const Config& conf)
@@ -272,6 +329,8 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
     strm<<indent{}<<"EPICS_PVAS_SERVER_PORT="<<conf.tcp_port<<'\n';
 
     strm<<indent{}<<"EPICS_PVAS_BROADCAST_PORT="<<conf.udp_port<<'\n';
+
+    strm<<indent{}<<"EPICS_PVA_CONN_TMO="<<conf.tcpTimeout/tmoScale<<'\n';
 
     return strm;
 }
@@ -308,6 +367,10 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     if(pickone({"EPICS_PVA_INTF_ADDR_LIST"})) {
         split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, 0);
     }
+
+    if(pickone({"EPICS_PVA_CONN_TMO"})) {
+        parse_timeout(self.tcpTimeout, pickone.name, pickone.val);
+    }
 }
 
 Config& Config::applyEnv()
@@ -328,6 +391,7 @@ void Config::updateDefs(defs_t& defs) const
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = autoAddrList ? "YES" : "NO";
     defs["EPICS_PVA_ADDR_LIST"] = join_addr(addressList);
     defs["EPICS_PVA_INTF_ADDR_LIST"] = join_addr(interfaces);
+    defs["EPICS_PVA_CONN_TMO"] = SB()<<tcpTimeout/tmoScale;
 }
 
 void Config::expand()
@@ -344,6 +408,8 @@ void Config::expand()
     }
 
     removeDups(addressList);
+
+    enforceTimeout(tcpTimeout);
 }
 
 std::ostream& operator<<(std::ostream& strm, const Config& conf)
@@ -364,6 +430,8 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
     strm<<indent{}<<"EPICS_PVA_AUTO_ADDR_LIST="<<(conf.autoAddrList?"YES":"NO")<<'\n';
 
     strm<<indent{}<<"EPICS_PVA_BROADCAST_PORT="<<conf.udp_port<<'\n';
+
+    strm<<indent{}<<"EPICS_PVA_CONN_TMO="<<conf.tcpTimeout/tmoScale<<'\n';
 
     return strm;
 }

@@ -25,6 +25,14 @@ EPICS_PVA_AUTO_ADDR_LIST
 EPICS_PVA_BROADCAST_PORT
     Default UDP port to which UDP searches will be sent.  5076 if unset.
 
+EPICS_PVA_CONN_TMO
+    Inactivity timeout for TCP connections.  For compatibility with pvAccessCPP
+    a multiplier of 4/3 is applied.  So a value of 30 results in a 40 second timeout.
+    Prior to UNRELEASED this variable was ignored.
+
+.. versionadded:: UNRELEASED
+    Prior to UNRELEASED *EPICS_PVA_CONN_TMO* was ignored.
+
 .. code-block:: c++
 
     using namespace pvxs;
