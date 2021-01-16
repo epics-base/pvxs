@@ -183,7 +183,7 @@ Ownership
 
 User provided callbacks are in the form of std::function which may,
 directly or indirectly, store shared_ptr<> instances.
-The returned Operation and Subscription instances may be treated as
+The returned Operation and Subscription instances should be treated as
 storing the std::function instance(s) and thus any shared_ptr<> captured in them.
 
 Therefore, in order to avoid a resource leak,
