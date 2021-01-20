@@ -458,10 +458,8 @@ void Context::Pvt::onBeacon(const UDPManager::Beacon& msg)
         beaconSenders.emplace(msg.src, BTrack{msg.guid, now});
     }
 
-    log_debug_printf(io, "%s New server %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
-               msg.src.tostring().c_str(),
-               guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11],
-               msg.server.tostring().c_str());
+    log_debug_printf(io, "%s\n",
+                     std::string(SB()<<msg.src<<" New server "<<guid<<' '<<msg.server).c_str());
 
     poke(false);
 }
@@ -527,7 +525,7 @@ bool Context::Pvt::onSearch()
     }
 
     if(cmd==CMD_SEARCH_RESPONSE) {
-        std::array<uint8_t, 12> guid;
+        ServerGUID guid;
         SockAddr serv;
         uint16_t port = 0;
         uint8_t found = 0u;
@@ -787,9 +785,8 @@ void Context::Pvt::tickBeaconClean()
 
         if(age < -15.0 || age > 2.1*180.0) {
             auto& guid = cur->second.guid;
-            log_debug_printf(io, "Lost server %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
-                       guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11],
-                       cur->first.tostring().c_str());
+            log_debug_printf(io, "%s\n",
+                             std::string(SB()<<" Lost server "<<guid<<' '<<cur->first).c_str());
 
             beaconSenders.erase(cur);
         }

@@ -251,6 +251,25 @@ public:
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const SockAddr& addr);
 
+//! Scoped restore of std::ostream state (format flags, fill char, and field width)
+struct Restore {
+    std::ostream& strm;
+    std::ios_base::fmtflags pflags;
+    std::ostream::char_type pfill;
+    std::streamsize pwidth;
+    Restore(std::ostream& strm)
+        :strm(strm)
+        ,pflags(strm.flags())
+        ,pfill(strm.fill())
+        ,pwidth(strm.width())
+    {}
+    ~Restore() {
+        strm.flags(pflags);
+        strm.fill(pfill);
+        strm.width(pwidth);
+    }
+};
+
 template<std::atomic<size_t>* Cnt>
 struct InstCounter
 {

@@ -253,6 +253,16 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc)
 
 } // namespace detail
 
+std::ostream& operator<<(std::ostream& strm, const ServerGUID& guid)
+{
+    Restore R(strm);
+    strm.width(2);
+    strm<<"0x"<<std::hex<<std::setfill('0');
+    for(size_t i=0; i<guid.size(); i++)
+        strm<<std::setw(2)<<unsigned(guid[i]);
+    return strm;
+}
+
 #if !defined(__rtems__) && !defined(vxWorks)
 
 static

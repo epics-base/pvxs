@@ -36,7 +36,7 @@ struct PVXS_API UDPManager
     struct Beacon {
         SockAddr& src;
         SockAddr server;
-        std::array<uint8_t, 12> guid;
+        ServerGUID guid;
         Beacon(SockAddr& src) :src(src) {}
     };
     //! Create subscription for Beacon messages.

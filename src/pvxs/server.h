@@ -145,7 +145,7 @@ struct PVXS_API Config {
     bool auto_beacon = true;
 
     //! Server unique ID.  Only meaningful in readback via Server::config()
-    std::array<uint8_t, 12> guid{};
+    ServerGUID guid{};
 
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }

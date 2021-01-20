@@ -8,6 +8,7 @@
 #define PVXS_UTIL_H
 
 #include <map>
+#include <array>
 #include <functional>
 #include <iosfwd>
 #include <type_traits>
@@ -67,6 +68,11 @@ inline detail::Escaper escape(const char* s) {
 inline detail::Escaper escape(const char* s,size_t n) {
     return detail::Escaper(s,n);
 }
+
+struct ServerGUID : public std::array<uint8_t, 12> {};
+
+PVXS_API
+std::ostream& operator<<(std::ostream&, const ServerGUID&);
 
 #if !defined(__rtems__) && !defined(vxWorks)
 
