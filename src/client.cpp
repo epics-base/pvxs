@@ -614,8 +614,11 @@ void Context::Pvt::onSearchS(evutil_socket_t fd, short evt, void *raw)
         if(!(evt&EV_READ))
             return;
 
-        // handle up to 4 packets before going back to the reactor
-        for(unsigned i=0; i<4 && static_cast<Pvt*>(raw)->onSearch(); i++) {}
+        // limit number of packets processed before going back to the reactor
+        unsigned i;
+        const unsigned limit = 40;
+        for(i=0; i<limit && static_cast<Pvt*>(raw)->onSearch(); i++) {}
+        log_debug_printf(io, "UDP search processed %u/%u\n", i, limit);
 
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in search Rx callback: %s\n", e.what());
