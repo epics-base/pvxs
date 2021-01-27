@@ -131,11 +131,16 @@ int main(int argc, char *argv[])
             done.signal();
         });
 
-        if(!done.wait(timeout)) {
-            std::cerr<<"Timeout\n";
+        bool waited = done.wait(timeout);
+        ops.clear(); // implied cancel
+
+        if(!waited) {
+            std::cerr<<"Timeout with "<<remaining.load()<<" outstanding\n";
             return 1;
+
         } else if(remaining.load()==0u) {
             return 0;
+
         } else {
             if(verbose)
                 std::cerr<<"Interrupted\n";
