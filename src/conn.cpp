@@ -93,11 +93,12 @@ void ConnBase::bevEvent(short events)
 
 void ConnBase::bevRead()
 {
+    // temporarily disable to bound the processing loop and ensure fairness with other connections
+    bufferevent_disable(bev.get(), EV_READ);
+
     auto rx = bufferevent_get_input(bev.get());
-    unsigned niter;
 
-
-    for(niter=0; niter<4 && bev && evbuffer_get_length(rx)>=8; niter++) {
+    while(bev && evbuffer_get_length(rx)>=8) {
         uint8_t header[8];
 
         auto ret = evbuffer_copyout(rx, header, sizeof(header));
@@ -116,7 +117,6 @@ void ConnBase::bevRead()
         if(header[2]&pva_flags::Control) {
             // Control messages are not actually useful
             evbuffer_drain(rx, 8);
-            bufferevent_setwatermark(bev.get(), EV_READ, 8, tcp_readahead);
             continue;
         }
         // application message
@@ -136,7 +136,8 @@ void ConnBase::bevRead()
             if(readahead < std::numeric_limits<size_t>::max()-tcp_readahead)
                 readahead += tcp_readahead;
             bufferevent_setwatermark(bev.get(), EV_READ, len, readahead);
-            break;
+            bufferevent_enable(bev.get(), EV_READ);
+            return;
         }
 
         evbuffer_drain(rx, 8);
@@ -210,12 +211,16 @@ void ConnBase::bevRead()
                 evbuffer_drain(segBuf.get(), n);
 
         }
-
-        // wait for next header
-        bufferevent_setwatermark(bev.get(), EV_READ, 8, tcp_readahead);
     }
 
-    if(!bev) {
+    if(bev) {
+        // incomplete body took earlier return
+        assert(evbuffer_get_length(rx)<8);
+        // wait for next header
+        bufferevent_setwatermark(bev.get(), EV_READ, 8, tcp_readahead);
+        bufferevent_enable(bev.get(), EV_READ);
+
+    } else {
         cleanup();
     }
 }
