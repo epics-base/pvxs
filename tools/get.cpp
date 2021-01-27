@@ -111,7 +111,9 @@ int main(int argc, char *argv[])
             ops.push_back(ctxt.get(argv[n])
                           .pvRequest(request)
                           .result([&argv, n, &remaining, &done, format, arrLimit](client::Result&& result) {
-                              std::cout<<argv[n]<<"\n"<<result()
+                              std::cout<<argv[n]<<"\n";
+                              Indented I(std::cout);
+                              std::cout<<result()
                                          .format()
                                          .format(format)
                                          .arrayLimit(arrLimit);

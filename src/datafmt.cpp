@@ -19,7 +19,7 @@ struct FmtDelta {
         if(verytop && !val.isMarked())
             return;
 
-        strm<<prefix;
+        strm<<indent{}<<prefix;
         if(!verytop)
             strm<<" ";
         strm<<val.type().name();
@@ -82,7 +82,7 @@ struct FmtDelta {
 
                 for(auto idx : range(aval.size())) {
                     std::ostringstream strm;
-                    strm<<prefix<<'['<<idx<<']';
+                    strm<<indent{}<<prefix<<'['<<idx<<']';
 
                     top(strm.str(), aval[idx], false);
                 }
@@ -100,7 +100,7 @@ struct FmtDelta {
     void top(const std::string& prefix, const Value& val, bool verytop)
     {
         if(!val) {
-            strm<<prefix;
+            strm<<indent{}<<prefix;
             if(!verytop)
                 strm<<' ';
             strm<<"null\n";
