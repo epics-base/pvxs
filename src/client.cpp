@@ -29,7 +29,8 @@ namespace client {
 constexpr timeval bucketInterval{1,0};
 constexpr size_t nBuckets = 30u;
 
-constexpr size_t maxSearchPayload = 0x4000;
+// try not to fragment with usual MTU==1500
+constexpr size_t maxSearchPayload = 1400;
 
 constexpr timeval channelCacheCleanInterval{10,0};
 
@@ -667,11 +668,24 @@ void Context::Pvt::tickSearch()
                 continue;
             }
 
-            if(searchMsg.size()<=maxSearchPayload-(5+chan->name.size()))
-                break;
-
+            auto save = M.save();
             to_wire(M, uint32_t(chan->cid));
             to_wire(M, chan->name);
+
+            if(!M.good()) {
+                // some absurdly long PV name?
+                log_err_printf(io, "PV name exceeds search buffer: '%s'\n", chan->name.c_str());
+                // drop it on the floor
+                bucket.pop_front();
+                continue;
+
+            } else if(size_t(M.save() - searchMsg.data()) > maxSearchPayload) {
+                assert(payload); // must have something
+                // too large, defer
+                M.restore(save);
+                break;
+            }
+
             count++;
 
             auto ninc = chan->nSearch = std::min(searchBuckets.size(), chan->nSearch+1u);
@@ -694,6 +708,7 @@ void Context::Pvt::tickSearch()
                               bucket.begin());
             payload = true;
         }
+        assert(M.good());
 
         if(!payload)
             break;

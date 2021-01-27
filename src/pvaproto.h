@@ -88,6 +88,7 @@ public:
     EPICS_ALWAYS_INLINE void _skip(size_t i) { pos+=i; }
 
     uint8_t* save() const { return pos; }
+    void restore(uint8_t* p) { pos = p; }
 };
 
 //! (de)serialization to/from buffers which are fixed size and contigious
