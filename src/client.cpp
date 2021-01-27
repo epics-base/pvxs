@@ -340,6 +340,7 @@ Context::Pvt::Pvt(const Config& conf)
         if(setsockopt(searchTx.sock, SOL_SOCKET, SO_BROADCAST, (char *)&val, sizeof(val)))
             log_err_printf(setup, "Unable to setup beacon sender SO_BROADCAST: %d\n", SOCKERRNO);
     }
+    enable_SO_RXQ_OVFL(searchTx.sock);
 
     for(auto& addr : effective.addressList) {
         auto isbcast = bcasts.find(addr)!=bcasts.end();
@@ -466,9 +467,15 @@ bool Context::Pvt::onSearch()
 {
     searchMsg.resize(0x10000);
     SockAddr src;
+    uint32_t ndrop = 0u;
 
     osiSocklen_t alen = src.size();
-    const int nrx = recvfrom(searchTx.sock, (char*)&searchMsg[0], searchMsg.size()-1, 0, &src->sa, &alen);
+    const int nrx = recvfromx(searchTx.sock, (char*)&searchMsg[0], searchMsg.size()-1, &src->sa, &alen, &ndrop);
+
+    if(nrx>=0 && ndrop!=0 && prevndrop!=ndrop) {
+        log_debug_printf(io, "UDP search reply buffer overflow %u -> %u\n", unsigned(prevndrop), unsigned(ndrop));
+        prevndrop = ndrop;
+    }
 
     if(nrx<0) {
         int err = evutil_socket_geterror(searchTx.sock);

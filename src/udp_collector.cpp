@@ -39,6 +39,7 @@ struct UDPCollector : public UDPManager::Search,
     std::string name;
     evsocket sock;
     evevent rx;
+    uint32_t prevndrop;
 
     std::vector<uint8_t> buf;
 
@@ -52,10 +53,16 @@ struct UDPCollector : public UDPManager::Search,
     bool handle_one()
     {
         osiSocklen_t alen = src.size();
+        uint32_t ndrop = 0u;
 
         // For Search messages, we use PV name strings in-place by adding nils.
         // Ensure one extra byte at the end of the buffer for a nil after the last PV name
-        const int nrx = recvfrom(sock.sock, (char*)&buf[0], buf.size()-1, 0, &src->sa, &alen);
+        const int nrx = recvfromx(sock.sock, (char*)&buf[0], buf.size()-1, &src->sa, &alen, &ndrop);
+
+        if(nrx>=0 && ndrop!=0u && prevndrop!=ndrop) {
+            log_debug_printf(logio, "UDP collector socket buffer overflowed %u -> %u\n", unsigned(prevndrop), unsigned(ndrop));
+            prevndrop = ndrop;
+        }
 
         if(nrx<0) {
             int err = evutil_socket_geterror(sock.sock);
@@ -261,6 +268,7 @@ UDPCollector::UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, cons
     manager->loop.assertInLoop();
 
     epicsSocketEnableAddressUseForDatagramFanout(sock.sock);
+    enable_SO_RXQ_OVFL(sock.sock);
     sock.bind(this->bind_addr);
     name = "UDP "+this->bind_addr.tostring();
 

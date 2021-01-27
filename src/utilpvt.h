@@ -196,6 +196,10 @@ struct SockAttach {
     ~SockAttach() { osiSockRelease(); }
 };
 
+// Linux specific SO_RXQ_OVFL exposes OS dropped packet counter
+void enable_SO_RXQ_OVFL(SOCKET sock);
+int recvfromx(SOCKET sock, void *buf, size_t buflen, sockaddr* peer, osiSocklen_t* peerlen, uint32_t *ndrop);
+
 //! representation of a network address
 struct PVXS_API SockAddr {
     union store_t {

@@ -181,6 +181,7 @@ struct Context::Pvt
     const Value caMethod;
 
     uint32_t nextCID=0x12345678;
+    uint32_t prevndrop = 0u;
 
     evsocket searchTx;
     uint16_t searchRxPort;
