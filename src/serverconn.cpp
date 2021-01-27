@@ -301,9 +301,9 @@ void ServerConn::bevRead()
 {
     ConnBase::bevRead();
 
-    if(!bev) {
+    if(bev) {
+        auto tx = bufferevent_get_output(bev.get());
 
-    } else if(auto tx = bufferevent_get_output(bev.get())) {
         if(evbuffer_get_length(tx)>=tcp_tx_limit) {
             // write buffer "full".  stop reading until it drains
             // TODO configure
