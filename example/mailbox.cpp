@@ -23,7 +23,7 @@ using namespace pvxs;
 int main(int argc, char* argv[])
 {
     if(argc<=1) {
-        std::cerr<<"Usage: "<<argv[0]<<" <pvname>\n";
+        std::cerr<<"Usage: "<<argv[0]<<" <pvname> [pvname1 [...]]\n";
         return 1;
     }
 
@@ -43,51 +43,60 @@ int main(int argc, char* argv[])
     initial["alarm.status"] = 0;
     initial["alarm.message"] = "";
 
-    // Actually creating the mailbox PV.
-    // buildMailbox() installs a default onPut() handler which
-    // stores whatever a client sends (subject to our data type).
-    server::SharedPV pv(server::SharedPV::buildMailbox());
+    std::vector<server::SharedPV> pvs(argc-1u);
 
-    // (optional) Replace the default PUT handler to do a range check
-    pv.onPut([](server::SharedPV& pv,
-                std::unique_ptr<server::ExecOp>&& op,
-                Value&& top)
-    {
+    for(size_t i=0ul; i<pvs.size(); i++) {
+        // Actually creating a mailbox PV.
+        // buildMailbox() installs a default onPut() handler which
+        // stores whatever a client sends (subject to our data type).
+        server::SharedPV pv(server::SharedPV::buildMailbox());
 
-        // (optional) arbitrarily clip value to [-100.0, 100.0]
-        double val(top["value"].as<double>());
-        if(val<-100.0)
-            top["value"] = -100.0;
-        else if(val>100.0)
-            top["value"] = 100.0;
+        // (optional) Replace the default PUT handler to do a range check
+        pv.onPut([](server::SharedPV& pv,
+                 std::unique_ptr<server::ExecOp>&& op,
+                 Value&& top)
+         {
 
-        // (optional) Provide a timestamp if the client has not (common)
-        Value ts(top["timeStamp"]);
-        if(!ts.isMarked(true, true)) {
-            // use current time
-            epicsTimeStamp now;
-            if(!epicsTimeGetCurrent(&now)) {
-                ts["secondsPastEpoch"] = now.secPastEpoch + POSIX_TIME_AT_EPICS_EPOCH;
-                ts["nanoseconds"] = now.nsec;
-            }
-        }
+             // (optional) arbitrarily clip value to [-100.0, 100.0]
+             double val(top["value"].as<double>());
+             if(val<-100.0)
+                 top["value"] = -100.0;
+             else if(val>100.0)
+                 top["value"] = 100.0;
 
-        // (optional) update the SharedPV cache and send
-        // a update to any subscribers
-        pv.post(top);
+             // (optional) Provide a timestamp if the client has not (common)
+             Value ts(top["timeStamp"]);
+             if(!ts.isMarked(true, true)) {
+                 // use current time
+                 epicsTimeStamp now;
+                 if(!epicsTimeGetCurrent(&now)) {
+                     ts["secondsPastEpoch"] = now.secPastEpoch + POSIX_TIME_AT_EPICS_EPOCH;
+                     ts["nanoseconds"] = now.nsec;
+                 }
+             }
 
-        // Required.  Inform client that PUT operation is complete.
-        op->reply();
-    });
+             // (optional) update the SharedPV cache and send
+             // a update to any subscribers
+             pv.post(top);
 
-    // Associate a data type (and maybe initial value) with this PV
-    pv.open(initial);
+             // Required.  Inform client that PUT operation is complete.
+             op->reply();
+         });
+
+        // Associate a data type (and maybe initial value) with this PV
+        pv.open(initial);
+
+        pvs[i] = std::move(pv);
+    }
 
     // Build server which will serve this PV
     // Configure using process environment.
     server::Server serv = server::Config::fromEnv()
-            .build()
-            .addPV(argv[1], pv);
+            .build();
+
+    for(size_t i=0ul; i<pvs.size(); i++) {
+        serv.addPV(argv[i+1], pvs[i]);
+    }
 
     // (optional) Print the configuration this server is using
     // with any auto-address list expanded.
