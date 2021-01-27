@@ -78,6 +78,10 @@ TESTPROD_HOST += testrpc
 testrpc_SRCS += testrpc.cpp
 TESTS += testrpc
 
+TESTPROD_HOST += test1000
+test1000_SRCS += test1000.cpp
+TESTS += test1000
+
 ifdef BASE_3_15
 
 DBDDEPENDS_FILES += testioc.dbd$(DEP)
