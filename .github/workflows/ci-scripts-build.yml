@@ -118,7 +118,9 @@ jobs:
       with:
         submodules: true
     - name: "apt-get install"
-      run: sudo apt-get -y install g++-mingw-w64-x86-64 cmake gdb
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install g++-mingw-w64-x86-64 cmake gdb
       if: runner.os == 'Linux'
     - name: "apt-get install ${{ matrix.cmp }}"
       run: |
