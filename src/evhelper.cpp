@@ -320,15 +320,23 @@ evsocket::evsocket(evutil_socket_t sock)
     if(sock==evutil_socket_t(-1))
         throw std::bad_alloc();
 
+    evutil_make_socket_closeonexec(sock);
+
     if(evutil_make_socket_nonblocking(sock)) {
         evutil_closesocket(sock);
         throw std::runtime_error("Unable to make non-blocking socket");
     }
 }
 
+// Linux specific way to atomically create a socket with O_CLOEXEC
+#ifndef SOCK_CLOEXEC
+#  define SOCK_CLOEXEC 0
+#endif
+
 evsocket::evsocket(int af, int type, int proto)
-    :evsocket(socket(af, type, proto))
-{}
+    :evsocket(socket(af, type | SOCK_CLOEXEC, proto))
+{
+}
 
 evsocket::evsocket(evsocket&& o) noexcept
     :sock(o.sock)

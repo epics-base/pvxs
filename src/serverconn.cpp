@@ -366,7 +366,7 @@ ServIface::ServIface(const std::string& addr, unsigned short port, server::Serve
 #endif
 
     const int backlog = 4;
-    listener = evlisten(evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED, backlog, sock.sock));
+    listener = evlisten(evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
 
     if(!LEV_OPT_DISABLED)
         evconnlistener_disable(listener.get());
