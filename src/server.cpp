@@ -371,14 +371,18 @@ Server::Pvt::Pvt(const Config &conf)
         } pun;
         static_assert (sizeof(pun)==12, "");
 
+        // seed with some randomness to avoid making UUID a vector
+        // for information disclosure
+        evutil_secure_rng_add_bytes((char*)pun.b.data(), sizeof(pun.b));
+
         // i[0] (start) time
         epicsTimeStamp now;
         epicsTimeGetCurrent(&now);
-        pun.i[0] = now.secPastEpoch ^ now.nsec;
+        pun.i[0] ^= now.secPastEpoch ^ now.nsec;
 
         // i[1] host
         // mix together first interface and all local bcast addresses
-        pun.i[1] = osiLocalAddr(dummy.sock).ia.sin_addr.s_addr;
+        pun.i[1] ^= ntohl(osiLocalAddr(dummy.sock).ia.sin_addr.s_addr);
         for(auto& addr : dummy.interfaces()) {
             if(addr.family()==AF_INET)
                 pun.i[1] ^= ntohl(addr->in.sin_addr.s_addr);
@@ -386,11 +390,11 @@ Server::Pvt::Pvt(const Config &conf)
 
         // i[2] process on host
 #if defined(_WIN32)
-        pun.i[2] = GetCurrentProcessId();
+        pun.i[2] ^= GetCurrentProcessId();
 #elif !defined(__rtems__) && !defined(vxWorks)
-        pun.i[2] = getpid();
+        pun.i[2] ^= getpid();
 #else
-        pun.i[2] = 0xdeadbeef;
+        pun.i[2] ^= 0xdeadbeef;
 #endif
         // and a bit of server instance within this process
         pun.i[2] ^= uint32_t(effective.tcp_port)<<16u;
