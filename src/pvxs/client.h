@@ -20,6 +20,7 @@
 #include <pvxs/version.h>
 #include <pvxs/data.h>
 #include <pvxs/netcommon.h>
+#include <pvxs/util.h>
 
 namespace pvxs {
 namespace client {
@@ -495,6 +496,10 @@ public:
      * @since UNRELEASED 'name' and 'action' arguments.  Defaults to previous behavior.
      */
     void cacheClear(const std::string& name = std::string(), cacheAction action = Clean);
+
+    //! Ignore any search replies with these GUIDs
+    //! @since UNRELEASED
+    void ignoreServerGUIDs(const std::vector<ServerGUID>& guids);
 
     //! Compile report about peers and channels
     //! @since UNRELEASED

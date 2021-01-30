@@ -218,6 +218,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     evsocket searchTx;
     uint16_t searchRxPort;
 
+    std::vector<ServerGUID> ignoreServerGUIDs;
+
     // poked and beaconSenders from both TCP and UDP workers
     epicsMutex pokeLock;
     epicsTimeStamp lastPoke{};

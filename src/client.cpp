@@ -392,6 +392,16 @@ void Context::cacheClear(const std::string& name, cacheAction action)
     });
 }
 
+void Context::ignoreServerGUIDs(const std::vector<ServerGUID>& guids)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+
+    pvt->impl->manager.loop().call([this, &guids](){
+        pvt->impl->ignoreServerGUIDs = guids;
+    });
+}
+
 Report Context::report() const
 {
     Report ret;
@@ -670,6 +680,13 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, Buffer& M, bool ist
 
     uint16_t nSearch = 0u;
     from_wire(M, nSearch);
+
+    if(M.good()) {
+        for(const ServerGUID& ignore : self.ignoreServerGUIDs) {
+            if(guid==ignore)
+                return;
+        }
+    }
 
     for(auto n : range(nSearch)) {
         (void)n;
