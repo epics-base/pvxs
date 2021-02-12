@@ -3,8 +3,22 @@
 Release Notes
 =============
 
-0.1.2 (UNRELEASED)
+0.1.3 (UNRELEASED)
 ------------------
+
+0.1.2 (FEB 2021)
+----------------
+
+* Bug Fixes
+
+ * Fix TCP connection "stall" (incorrect deferred read).
+
+* Changes
+
+ * Raise UDP search reply processing limit.
+ * Try not to fragment UDP search packets.
+ * mailbox example can serve more than one PV.
+ * Indent printed field=value in delta output mode.
 
 0.1.1 (Jan 2021)
 ----------------
