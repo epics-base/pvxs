@@ -108,17 +108,6 @@ struct PickOne {
     }
 };
 
-template<typename Fn>
-struct cleaner {
-    Fn fn;
-    ~cleaner() { fn(); }
-};
-
-template<typename Fn>
-cleaner<Fn> make_cleaner(Fn&& fn) {
-    return cleaner<Fn>{std::move(fn)};
-}
-
 // Fill out address list by appending broadcast addresses
 // of any and all local interface addresses already included
 void expandAddrList(const std::vector<std::string>& ifaces,
@@ -130,12 +119,6 @@ void expandAddrList(const std::vector<std::string>& ifaces,
     std::vector<std::string> bcasts;
 
     for(auto& addr : ifaces) {
-
-        ELLLIST blist = ELLLIST_INIT;
-        auto bclean = make_cleaner([&blist] {
-            ellFree(&blist);
-        });
-
         SockAddr saddr(AF_INET);
         try {
             saddr.setAddress(addr.c_str());
