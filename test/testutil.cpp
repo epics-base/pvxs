@@ -5,6 +5,7 @@
  */
 
 #include <vector>
+#include <ostream>
 
 #include <epicsUnitTest.h>
 #include <testMain.h>
@@ -18,6 +19,19 @@
 
 namespace {
 using namespace pvxs;
+
+void testServerGUID()
+{
+    testShow()<<__func__;
+
+    testEq("0x000000000000000000000000", std::string(SB()<<ServerGUID{}));
+
+    ServerGUID seq;
+    for(size_t i=0; i<seq.size(); i++)
+        seq[i] = i;
+    testEq("0x000102030405060708090a0b", std::string(SB()<<seq));
+
+}
 
 void testFill()
 {
@@ -172,8 +186,9 @@ void testAccount()
 
 MAIN(testutil)
 {
-    testPlan(10);
+    testPlan(12);
     testTrue(version_abi_check())<<" 0x"<<std::hex<<PVXS_VERSION<<" ~= 0x"<<std::hex<<PVXS_ABI_VERSION;
+    testServerGUID();
     testFill();
     testSpam();
     testSpamMany();
