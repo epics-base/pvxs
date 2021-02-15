@@ -72,7 +72,7 @@ std::ostream& target_information(std::ostream& strm)
     }
 
     {
-        strm<<"Versions\n";
+        strm<<indent{}<<"Versions\n";
         Indented I(strm);
         strm<<indent{}<<version_str()<<"\n";
         strm<<indent{}<<EPICS_VERSION_STRING<<"\n";
