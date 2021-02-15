@@ -134,8 +134,10 @@ struct ServerGPR : public ServerOp
         CASE(PUT);
         CASE(RPC);
 #undef CASE
-        default:
+        default: {
+            Restore R(strm);
             strm<<"CMD"<<std::hex<<cmd<<"\n";
+        }
         }
     }
 
