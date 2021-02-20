@@ -3,8 +3,15 @@
 Release Notes
 =============
 
-0.1.3 (UNRELEASED)
+0.1.4 (UNRELEASED)
 ------------------
+
+0.1.3 (FEB 2021)
+----------------
+
+* Bug Fixes
+
+ * Fix regression from 0.1.2 causing possible crash on targets defining SO_RXQ_OVFL (eg. Linux).
 
 0.1.2 (FEB 2021)
 ----------------
