@@ -304,7 +304,7 @@ void enable_SO_RXQ_OVFL(SOCKET sock)
 int recvfromx(SOCKET sock, void *buf, size_t buflen, sockaddr* peer, osiSocklen_t* peerlen, uint32_t *ndrop)
 {
 #ifdef SO_RXQ_OVFL
-    alignas (alignof (msghdr)) char cbuf[CMSG_SPACE(4u)];
+    alignas (alignof (cmsghdr)) char cbuf[CMSG_SPACE(4u)];
     iovec iov = {buf, buflen};
     msghdr msg = {};
     msg.msg_iov = &iov;
@@ -316,16 +316,18 @@ int recvfromx(SOCKET sock, void *buf, size_t buflen, sockaddr* peer, osiSocklen_
 
     int ret = recvmsg(sock, &msg, 0);
 
-    if(ret>=0 && peerlen)
-        *peerlen = msg.msg_namelen;
+    if(ret>=0) {
+        if(peerlen)
+            *peerlen = msg.msg_namelen;
 
-    if(msg.msg_flags & MSG_CTRUNC)
-        log_debug_printf(log, "MSG_CTRUNC %zu, %zu\n", msg.msg_controllen, sizeof(cbuf));
+        if(msg.msg_flags & MSG_CTRUNC)
+            log_debug_printf(log, "MSG_CTRUNC %zu, %zu\n", msg.msg_controllen, sizeof(cbuf));
 
-    if(ndrop) {
-        for(cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr ; hdr = CMSG_NXTHDR(&msg, hdr)) {
-            if(hdr->cmsg_level==SOL_SOCKET && hdr->cmsg_type==SO_RXQ_OVFL && hdr->cmsg_len>=CMSG_LEN(4u)) {
-                memcpy(ndrop, CMSG_DATA(hdr), 4u);
+        if(ndrop) {
+            for(cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr ; hdr = CMSG_NXTHDR(&msg, hdr)) {
+                if(hdr->cmsg_level==SOL_SOCKET && hdr->cmsg_type==SO_RXQ_OVFL && hdr->cmsg_len>=CMSG_LEN(4u)) {
+                    memcpy(ndrop, CMSG_DATA(hdr), 4u);
+                }
             }
         }
     }
