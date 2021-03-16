@@ -468,6 +468,8 @@ void Connection::handle_MONITOR()
                         peerName.c_str(),
                         mon->chan->name.c_str());
 
+        Guard G(mon->lock);
+
         mon->queue.emplace_back(std::move(update));
         notify = true;
 

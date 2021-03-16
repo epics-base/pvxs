@@ -223,8 +223,11 @@ struct ServerMonitorControl : public server::MonitorControlOp
         if(val && mon->type && mon->type.get()!=Value::Helper::desc(val))
             throw std::logic_error("Type change not allowed in post().  Recommend pvxs::Value::cloneEmpty()");
 
-        if(testmask(val, mon->pvMask)) {
-            Guard G(mon->lock);
+        // pvMask is const at this point, so no need to lock
+        bool real = testmask(val, mon->pvMask);
+
+        Guard G(mon->lock);
+        if(real) {
 
             if((mon->queue.size() < mon->limit) || force || !val) {
                 mon->queue.push_back(val);
