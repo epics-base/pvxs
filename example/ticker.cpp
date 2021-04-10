@@ -28,22 +28,23 @@ int main(int argc, char* argv[])
 {
     double delay = 1.0;
 
-    if(argc<=1) {
-        std::cerr<<"Usage: "<<argv[0]<<" <pvname> [rateHz]\n";
+    if(argc<=1 || strcmp(argv[1], "-h")==0) {
+        std::cerr<<"Usage: "<<argv[0]<<" <pvname> [pvname2 ...] [rateHz]\n";
         return 1;
     }
 
     if(argc>=3) {
         try {
             size_t idx=0;
-            delay = 1.0/std::stod(argv[2], &idx);
-            if(idx<std::strlen(argv[2]))
+            delay = 1.0/std::stod(argv[argc-1], &idx);
+            if(idx<std::strlen(argv[argc-1]))
                 throw std::invalid_argument("Extraneous charactors");
         }catch(std::exception& e){
             std::cerr<<"Error parsing rate: "<<e.what()<<"\n";
             return 1;
-
         }
+        std::cout<<"Tick rate "<<(1.0/delay)<<" Hz"<<std::endl;
+        argc--;
     }
 
     // Read $PVXS_LOG from process environment and update
@@ -73,8 +74,12 @@ int main(int argc, char* argv[])
     // Build server which will serve this PV
     // Configure using process environment.
     server::Server serv = server::Config::fromEnv()
-            .build()
-            .addPV(argv[1], pv);
+            .build();
+
+    for(int i=1; i<argc; i++) {
+        std::cout<<"PV "<<argv[i]<<"\n";
+        serv.addPV(argv[i], pv);
+    }
 
     // (optional) Print the configuration this server is using
     // with any auto-address list expanded.
@@ -91,7 +96,7 @@ int main(int argc, char* argv[])
     // Start server in background
     serv.start();
 
-    std::cout<<"Running\n";
+    std::cout<<"Running"<<std::endl;
 
     uint32_t count = 0u;
 
@@ -102,14 +107,14 @@ int main(int argc, char* argv[])
 
         pv.post(val);
 
-        std::cout<<"Count "<<count<<"\n";
+        std::cout<<"Count "<<count<<std::endl;
     }
 
     // (optional) explicitly stop server.
     // Implied when 'serv' goes out of scope
     serv.stop();
 
-    std::cout<<"Done\n";
+    std::cout<<"Done"<<std::endl;
 
     return 0;
 }
