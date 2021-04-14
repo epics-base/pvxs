@@ -24,6 +24,9 @@ time_t
 
 Commonly used sub-structure to represent a time
 
+.. doxygenstruct:: pvxs::nt::TimeStamp
+    :members:
+
 **"secondsPastEpoch"**
     Seconds since POSIX epoch of 1 Jan 1970 UTC.
     Note that the EPICS epoch is 631152000 seconds after the POSIX epoch.
@@ -36,6 +39,9 @@ Commonly used sub-structure to represent a time
 
 alarm_t
 -------
+
+.. doxygenstruct:: pvxs::nt::Alarm
+    :members:
 
 **"severity"**
     Enumeration of 0 - No Alarm, 1 - Minor, 2 - Major, 3 - Invalid.

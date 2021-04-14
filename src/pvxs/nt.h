@@ -14,7 +14,34 @@ struct epicsTimeStamp; // epicsTime.h
 namespace pvxs {
 namespace nt {
 
+/** The time_t struct
+ *
+ * @code
+ * // equivalent
+ * struct time_t {
+ *     int64_t secondsPastEpoch;
+ *     int32_t nanoseconds;
+ *     int32_t userTag;
+ * };
+ * @endcode
+ */
 struct TimeStamp {
+    PVXS_API
+    TypeDef build();
+};
+
+/** The alarm_t struct
+ *
+ * @code
+ * // equivalent
+ * struct alarm_t {
+ *     int32_t severity;
+ *     int32_t status;
+ *     string message;
+ * };
+ * @endcode
+ */
+struct Alarm {
     PVXS_API
     TypeDef build();
 };

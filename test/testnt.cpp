@@ -22,7 +22,7 @@ void testNTScalar()
     // plain, without display meta
     auto top = nt::NTScalar{TypeCode::Int32}.create();
 
-    testTrue(top.idStartsWith("epics:nt/NTScalar:"));
+    testTrue(top.idStartsWith("epics:nt/NTScalar:"))<<"\n"<<top;
 
     testEq(top["value"].type(), TypeCode::Int32);
     testEq(top["display.limitLow"].type(), TypeCode::Null);
@@ -52,7 +52,7 @@ void testNTNDArray()
 
     auto top = nt::NTNDArray{}.create();
 
-    testTrue(top.idStartsWith("epics:nt/NTNDArray:"));
+    testTrue(top.idStartsWith("epics:nt/NTNDArray:"))<<"\n"<<top;
 }
 
 void testNTURI()
@@ -68,7 +68,7 @@ void testNTURI()
 
     auto top = def.call(42, "hello");
 
-    testTrue(top.idStartsWith("epics:nt/NTURI:"));
+    testTrue(top.idStartsWith("epics:nt/NTURI:"))<<"\n"<<top;
     testEq(top["query.arg1"].as<uint32_t>(), 42u);
     testEq(top["query.arg2"].as<std::string>(), "hello");
 }

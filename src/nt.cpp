@@ -9,6 +9,30 @@
 namespace pvxs {
 namespace nt {
 
+TypeDef TimeStamp::build()
+{
+    using namespace pvxs::members;
+
+    TypeDef def(TypeCode::Struct, "time_t", {
+                    Int64("secondsPastEpoch"),
+                    Int32("nanoseconds"),
+                    Int32("userTag"),
+                });
+    return def;
+}
+
+TypeDef Alarm::build()
+{
+    using namespace pvxs::members;
+
+    TypeDef def(TypeCode::Struct, "alarm_t", {
+                    Int32("severity"),
+                    Int32("status"),
+                    String("message"),
+                });
+    return def;
+}
+
 TypeDef NTScalar::build() const
 {
     using namespace pvxs::members;
@@ -24,11 +48,7 @@ TypeDef NTScalar::build() const
                            Int32("status"),
                            String("message"),
                        }),
-                       Struct("timeStamp", "time_t", {
-                           Int64("secondsPastEpoch"),
-                           Int32("nanoseconds"),
-                           Int32("userTag"),
-                       }),
+                       TimeStamp{}.build().as("timeStamp"),
                    });
 
     const bool isnumeric = value.kind()==Kind::Integer || value.kind()==Kind::Real;
@@ -88,11 +108,7 @@ TypeDef NTNDArray::build() const
 {
     using namespace pvxs::members;
 
-    auto time_t = {
-        Int64("secondsPastEpoch"),
-        Int32("nanoseconds"),
-        Int32("userTag"),
-    };
+    auto time_t(TimeStamp{}.build());
     auto alarm_t = {
         Int32("severity"),
         Int32("status"),
@@ -120,9 +136,9 @@ TypeDef NTNDArray::build() const
                     Int64("compressedSize"),
                     Int64("uncompressedSize"),
                     Int32("uniqueId"),
-                    Struct("dataTimeStamp", "time_t", time_t),
+                    time_t.as("dataTimeStamp"),
                     Struct("alarm", "alarm_t", alarm_t),
-                    Struct("timeStamp", "time_t", time_t),
+                    time_t.as("timeStamp"),
                     StructA("dimension", "dimension_t", {
                         Int32("size"),
                         Int32("offset"),
@@ -136,7 +152,7 @@ TypeDef NTNDArray::build() const
                         StringA("tags"),
                         String("descriptor"),
                         Struct("alarm", "alarm_t", alarm_t),
-                        Struct("timeStamp", "time_t", time_t),
+                        time_t.as("timeStamp"),
                         Int32("sourceType"),
                         String("source"),
                     }),
