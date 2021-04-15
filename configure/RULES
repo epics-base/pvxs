@@ -4,3 +4,21 @@ include $(CONFIG)/RULES
 
 # Library should be rebuilt because LIBOBJS may have changed.
 $(LIBNAME): ../Makefile
+
+# $1 is full qualified library name (libX.so.A.B)
+# $2 is compat suffix
+define COMPAT_def
+build: $$(INSTALL_SHRLIBS:%$$(SHRLIB_SUFFIX)=%$$(SHRLIB_SUFFIX_BASE).$2)
+# eg.
+#  ../../lib/linux-x86/libpvxs.so.0.0.0: Makefile
+#  	ln -s libpvxs.so.0.0.1 ../../lib/linux-x86/libpvxs.so.0.0.0
+$$(INSTALL_SHRLIBS:%$$(SHRLIB_SUFFIX)=%$$(SHRLIB_SUFFIX_BASE).$2): Makefile
+	$(RM) $$@
+	ln -s $$(notdir $$(@:%$$(SHRLIB_SUFFIX_BASE).$2=%$$(SHRLIB_SUFFIX))) $$@
+endef
+
+ifneq (,$(COMPAT_VERSIONS))
+$(foreach lib,$(INSTALL_SHRLIBS),\
+	$(foreach compat,$(COMPAT_VERSIONS),\
+		$(eval $(call COMPAT_def,$(lib),$(compat)))))
+endif

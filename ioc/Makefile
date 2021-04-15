@@ -19,8 +19,6 @@ INC += pvxs/iochooks.h
 
 LIBRARY += pvxsIoc
 
-SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION)
-
 pvxsIoc_SRCS += iochooks.cpp
 
 LIB_LIBS += pvxs

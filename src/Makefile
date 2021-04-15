@@ -50,8 +50,6 @@ EXPANDFLAGS += $(foreach var,$(EXPANDVARS),-D$(var)="$(strip $($(var)))")
 GENVERSION = pvxsVCS.h
 GENVERSIONMACRO = PVXS_VCS_VERSION
 
-SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION)
-
 INC += pvxs/version.h
 INC += pvxs/versionNum.h
 INC += pvxs/log.h
