@@ -59,4 +59,4 @@ The output will be very verbose.  Look for lines like the following: ::
 Repeat with "pvxinfo" in place of "pvxget".
 
 If the "accepts auth" line is seen, but no subsequent error message,
-then see `reportbug` and attach the output of "pvxget -d ...".
+then see :ref:`reportbug` and attach the output of "pvxget -d ...".

@@ -11,7 +11,7 @@ clean:
 	rm -rf html _build
 
 # conf.py reads CONFIG_PVXS_VERSION to extract version number
-gen: ../cfg/CONFIG_PVXS_VERSION
+gen: ../include/pvxs/version.h
 	doxygen
 	$(PYTHON) -m sphinx -j auto -b html . html
 
