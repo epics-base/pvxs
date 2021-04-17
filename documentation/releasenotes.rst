@@ -3,8 +3,24 @@
 Release Notes
 =============
 
-0.1.6 (UNRELEASED)
+0.2.0 (UNRELEASED)
 ------------------
+
+* Changes
+
+ * To simplify usage in situations with complex threading, many client methods avoid unnecessary
+   synchronization with the client worker thread.
+   Cancellation still synchronizes by default, but this may now be controlled with
+   the new syncCancel() Builder methods.  cf. `pvxs::client::detail::CommonBuilder::syncCancel()`.
+
+* Additions
+
+ * Add server ignore address list.  cf. `pvxs::server::Config::ignoreAddrs`.  Configured from $EPICS_PVAS_IGNORE_ADDR_LIST.
+ * Allow TCP timeout to be configured.
+ * Add `pvxs::client::Context::connect()` to force Channel creation and retention.
+ * Add `pvxs::client::Subscription::shared_from_this()` which can be used with eg. `pvxs::MPMCFIFO` (also newly added).
+ * Add per Server/Context statistical reporting of network bandwidth used by TCP connection, and by Channel.
+   cf. `pvxs::client::Context::report()` and `pvxs::server::Server::report()`.
 
 0.1.5 (May 2021)
 ----------------

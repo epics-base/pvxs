@@ -176,6 +176,18 @@ the event queue
 .. doxygenstruct:: pvxs::client::Subscription
     :members:
 
+Connect
+^^^^^^^
+
+Request that a Channel be created now which may be used by other Operations,
+allowing them to complete more quickly.
+
+.. doxygenclass:: pvxs::client::ConnectBuilder
+    :members:
+
+.. doxygenstruct:: pvxs::client::Connect
+    :members:
+
 Threading
 ^^^^^^^^^
 

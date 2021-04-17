@@ -807,6 +807,7 @@ public:
     //! Handler to be invoked when channel becomes disconnected.
     ConnectBuilder& onDisconnect(std::function<void()>&& cb) { _onDis = std::move(cb); return *this; }
 
+    //! Submit request to connect
     PVXS_API
     std::shared_ptr<Connect> exec();
 };
