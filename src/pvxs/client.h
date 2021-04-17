@@ -682,6 +682,7 @@ public:
     //! Include Disconnected exceptions in queue (default true).
     MonitorBuilder& maskDisconnected(bool m = true) { _maskDisconn = m; return *this; }
 
+    //! Submit request to subscribe
     PVXS_API
     std::shared_ptr<Subscription> exec();
 

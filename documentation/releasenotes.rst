@@ -6,6 +6,15 @@ Release Notes
 0.1.4 (UNRELEASED)
 ------------------
 
+* Bug Fixes
+
+ * Fix potential locking issue monitor queue
+ * Fix potential locking issue in Shared PV with concurrent open()/close() vs. post()
+
+* Additions
+
+ * Add `pvxs::nt::TimeStamp` and `pvxs::nt::Alarm`.
+
 0.1.3 (FEB 2021)
 ----------------
 
