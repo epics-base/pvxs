@@ -172,8 +172,8 @@ struct GPROp : public OperationBase
     {
         decltype (done) junk;
         decltype (onInit) junkI;
-        bool ret;
-        loop.call([this, &junk, &junkI, &ret](){
+        bool ret = false;
+        (void)loop.tryCall([this, &junk, &junkI, &ret](){
             ret = _cancel(false);
             junk = std::move(done);
             junkI = std::move(onInit);

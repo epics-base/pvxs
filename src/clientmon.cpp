@@ -187,8 +187,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
     virtual bool cancel() override final {
         decltype (event) junk;
-        bool ret;
-        loop.call([this, &junk, &ret](){
+        bool ret = false;
+        (void)loop.tryCall([this, &junk, &ret](){
             ret = _cancel(false);
             junk = std::move(event);
             // leave opByIOID for GC

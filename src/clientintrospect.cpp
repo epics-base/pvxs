@@ -43,7 +43,7 @@ struct InfoOp : public OperationBase
     virtual bool cancel() override final {
         decltype (done) junk;
         bool ret = false;
-        loop.call([this, &junk, &ret](){
+        (void)loop.tryCall([this, &junk, &ret](){
             ret = _cancel(false);
             junk = std::move(done);
             // leave opByIOID for GC
