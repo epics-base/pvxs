@@ -32,6 +32,9 @@ pvxput_SRCS += put.cpp
 PROD += pvxcall
 pvxcall_SRCS += call.cpp
 
+PROD += pvxlist
+pvxlist_SRCS += list.cpp
+
 #===========================
 
 include $(TOP)/configure/RULES

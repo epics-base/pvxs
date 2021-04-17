@@ -542,6 +542,7 @@ def define_DSOS(self):
         'clientintrospect.cpp',
         'clientget.cpp',
         'clientmon.cpp',
+        'clientdiscover.cpp',
     ]
 
     src_pvxs = [os.path.join('src', src) for src in src_pvxs]

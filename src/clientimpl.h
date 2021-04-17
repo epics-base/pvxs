@@ -203,6 +203,26 @@ struct Channel {
                                    const std::string& server);
 };
 
+struct Discovery : public OperationBase
+{
+    const std::shared_ptr<ContextImpl> context;
+    std::function<void(const Discovered &)> notify;
+    bool running = false;
+
+    Discovery(const std::shared_ptr<ContextImpl>& context);
+    ~Discovery();
+
+    virtual bool cancel() override final;
+private:
+    bool _cancel(bool implicit);
+
+    // unused for this special case
+    virtual void _reExecGet(std::function<void (Result &&)> &&resultcb) override final;
+    virtual void _reExecPut(const Value &arg, std::function<void (Result &&)> &&resultcb) override final;
+    virtual void createOp() override final;
+    virtual void disconnected(const std::shared_ptr<OperationBase> &self) override final;
+};
+
 struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 {
     SockAttach attach;
@@ -225,11 +245,13 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     epicsTimeStamp lastPoke{};
     bool poked = false;
 
-    struct BTrack {
-        ServerGUID guid;
-        epicsTimeStamp lastRx;
+    // map: GUID -> proto+endpoint -> last beacon time
+    struct LastTime {
+        epicsTimeStamp time{};
+        explicit operator bool() const { return time.secPastEpoch || time.nsec; }
     };
-    std::map<SockAddr, BTrack> beaconSenders;
+
+    std::map<ServerGUID, std::map<std::pair<std::string, SockAddr>, LastTime>> beaconTrack;
 
     std::vector<uint8_t> searchMsg;
 
@@ -259,6 +281,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     // we keep a ref here as long as beaconCleaner is in use
     UDPManager manager;
 
+    std::map<Discovery*, std::weak_ptr<Discovery>> discoverers;
+
     const evevent beaconCleaner;
     const evevent cacheCleaner;
     const evevent nsChecker;
@@ -274,11 +298,13 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     void poke(bool force);
 
+    void serverEvent(const Discovered &evt);
+
     void onBeacon(const UDPManager::Beacon& msg);
 
     bool onSearch();
     static void onSearchS(evutil_socket_t fd, short evt, void *raw);
-    void tickSearch();
+    void tickSearch(bool discover);
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickBeaconClean();
     static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);

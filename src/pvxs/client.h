@@ -107,6 +107,7 @@ struct PVXS_API Operation {
         Put     = 11, // CMD_PUT
         RPC     = 20, // CMD_RPC
         Monitor = 13, // CMD_MONITOR
+        Discover = 3, // CMD_SEARCH
     } op;
 
     explicit constexpr Operation(operation_t op) :op(op) {}
@@ -235,6 +236,8 @@ class RPCBuilder;
 class MonitorBuilder;
 class RequestBuilder;
 class ConnectBuilder;
+struct Discovered;
+class DiscoverBuilder;
 
 /** An independent PVA protocol client instance
  *
@@ -462,6 +465,30 @@ public:
      */
     static inline
     RequestBuilder request();
+
+    /** Discover the presence or absence of Servers.
+     *
+     * Combines information from periodic Server Beacon messages, and optionally
+     * Discover pings, to provide notice when PVA servers appear or disappear
+     * from attached networks.
+     *
+     * Note that a discover() Operation will never complete with a Value,
+     * and so can only end with a timeout or cancellation.
+     *
+     * @code
+     * Context ctxt(...);
+     * auto op = ctxt.discover([](const Discovered& evt) {
+     *                  std::cout<<evt<<std::endl;
+     *              })
+     *              .pingAll(false) // implied default
+     *              .exec();
+     * op->wait(10.0); // wait 10 seconds, will always timeout.
+     * @endcode
+     *
+     * @since UNRELEASED
+     */
+    inline
+    DiscoverBuilder discover(std::function<void(const Discovered &)> && fn);
 
     /** Request prompt search of any disconnected channels.
      *
@@ -862,6 +889,55 @@ public:
     std::shared_ptr<Connect> exec();
 };
 ConnectBuilder Context::connect(const std::string& pvname) { return ConnectBuilder{pvt, pvname}; }
+
+//! Change of state event associated with a Context::discover()
+struct Discovered {
+    //! What sort of event is this?
+    enum event_t {
+        Online=1,     //!< Beacon from new server GUID
+        Timeout=2,    //!< Beacon timeout for previous server
+    } event;
+    std::string peer;  //!< source of Beacon
+    std::string proto; //!< Advertised protocol.  eg. "tcp"
+    std::string server;//!< Server protocol endpoint.
+    ServerGUID guid;   //!< Server provided ID
+    epicsTime time;
+};
+PVXS_API
+std::ostream& operator<<(std::ostream& strm, const Discovered& evt);
+//! Prepare a Context::discover() operation
+//! @since UNRELEASED
+class DiscoverBuilder
+{
+    std::shared_ptr<Context::Pvt> ctx;
+    std::function<void(const Discovered &)> _fn;
+    bool _syncCancel = true;
+    bool _ping = false;
+public:
+    DiscoverBuilder(const std::shared_ptr<Context::Pvt>& ctx, std::function<void(const Discovered &)>&& fn)
+        :ctx(ctx)
+        ,_fn(fn)
+    {}
+
+    /** Controls whether client will actively seek to immediately discover all servers.
+     *
+     * If false, then client will only wait for servers to periodically announce themselves.
+     */
+    DiscoverBuilder& pingAll(bool b) { this->_ping = b; return *this; }
+
+    /** Controls whether Operation::cancel() synchronizes.
+     *
+     * When true (the default) explicit or implicit cancel blocks until any
+     * in progress callback has completed.  This makes safe some use of
+     * references in callbacks.
+     */
+    DiscoverBuilder& syncCancel(bool b) { this->_syncCancel = b; return *this; }
+
+    //! Execute.  The returned Operation will never complete.
+    PVXS_API
+    std::shared_ptr<Operation> exec();
+};
+DiscoverBuilder Context::discover(std::function<void (const Discovered &)> && fn) { return DiscoverBuilder(pvt, std::move(fn)); }
 
 struct PVXS_API Config {
     //! List of unicast and broadcast addresses

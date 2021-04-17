@@ -383,12 +383,11 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
         }
         beaconMsg.server.setPort(port);
 
-        std::string proto;
-        from_wire(M, proto);
+        from_wire(M, beaconMsg.proto);
 
         // ignore remaining "server status" blob
 
-        if(M.good() && proto=="tcp") {
+        if(M.good()) {
             for(auto L : listeners) {
                 if(L->beaconCB) {
                     (L->beaconCB)(beaconMsg);

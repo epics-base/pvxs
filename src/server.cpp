@@ -40,6 +40,11 @@ DEFINE_LOGGER(serversetup, "pvxs.server.setup");
 DEFINE_LOGGER(serverio, "pvxs.server.io");
 DEFINE_LOGGER(serversearch, "pvxs.server.search");
 
+// mimic pvAccessCPP server (almost)
+// send a "burst" of beacons, then fallback to a longer interval
+static constexpr timeval beaconIntervalShort{15, 0};
+static constexpr timeval beaconIntervalLong{180, 0};
+
 Server Server::fromEnv()
 {
     return Config::fromEnv().build();
@@ -722,9 +727,9 @@ void Server::Pvt::doBeacons(short evt)
 
     // mimic pvAccessCPP server (almost)
     // send a "burst" of beacons, then fallback to a longer interval
-    timeval interval{180, 0};
+    timeval interval(beaconIntervalLong);
     if(beaconCnt<10u) {
-        interval = {15, 0};
+        interval = beaconIntervalShort;
         beaconCnt++;
     }
     if(event_add(beaconTimer.get(), &interval))

@@ -35,10 +35,11 @@ struct PVXS_API UDPManager
     evbase& loop();
 
     struct Beacon {
-        SockAddr& src;
+        const SockAddr& src;
+        std::string proto;
         SockAddr server;
         ServerGUID guid;
-        Beacon(SockAddr& src) :src(src) {}
+        Beacon(const SockAddr& src) :src(src) {}
     };
     //! Create subscription for Beacon messages.
     //! Must call UDPListener::start()
