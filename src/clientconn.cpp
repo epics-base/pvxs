@@ -92,6 +92,7 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
 void Connection::bevEvent(short events)
 {
     ConnBase::bevEvent(events);
+    // called Connection::cleanup()
 
     if(bev && (events&BEV_EVENT_CONNECTED)) {
         log_debug_printf(io, "Connected to %s\n", peerName.c_str());
@@ -117,6 +118,8 @@ void Connection::cleanup()
 {
     // (maybe) keep myself alive
     std::shared_ptr<Connection> self;
+
+    ready = false;
 
     context->connByAddr.erase(peerAddr);
 
@@ -274,6 +277,11 @@ void Connection::handle_CONNECTION_VALIDATED()
     ready = true;
 
     createChannels();
+
+    if(nameserver) {
+        log_info_printf(io, "(re)connected to nameserver %s\n", peerName.c_str());
+        context->poke(true);
+    }
 }
 
 void Connection::handle_CREATE_CHANNEL()

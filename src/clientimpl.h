@@ -78,6 +78,7 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
     const evevent echoTimer;
 
     bool ready = false;
+    bool nameserver = false;
 
     // channels to be created on this Connection (in state==Connecting
     std::list<std::weak_ptr<Channel>> pending;
@@ -236,6 +237,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
 
+    std::vector<std::pair<SockAddr, std::shared_ptr<Connection>>> nameServers;
+
     evbase tcp_loop;
     const evevent searchRx;
     const evevent searchTimer;
@@ -246,11 +249,14 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     const evevent beaconCleaner;
     const evevent cacheCleaner;
+    const evevent nsChecker;
 
     INST_COUNTER(ClientContextImpl);
 
     ContextImpl(const Config& conf, const evbase &tcp_loop);
     ~ContextImpl();
+
+    void startNS();
 
     void close();
 
@@ -266,6 +272,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);
     void cacheClean();
     static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
+    void onNSCheck();
+    static void onNSCheckS(evutil_socket_t fd, short evt, void *raw);
 };
 
 struct Context::Pvt {

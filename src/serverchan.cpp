@@ -237,7 +237,7 @@ void ServerConn::handle_SEARCH()
 
         EvOutBuf R(hostBE, txBody.get());
 
-        _to_wire<12>(M, iface->server->effective.guid.data(), false);
+        _to_wire<12>(R, iface->server->effective.guid.data(), false);
         to_wire(R, searchID);
         to_wire(R, SockAddr::any(AF_INET));
         to_wire(R, iface->bind_addr.port());

@@ -360,6 +360,10 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
         split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, self.udp_port);
     }
 
+    if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
+        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, 5075);
+    }
+
     if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
         parse_bool(self.autoAddrList, pickone.name, pickone.val);
     }
