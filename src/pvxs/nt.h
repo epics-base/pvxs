@@ -24,6 +24,7 @@ namespace nt {
  *     int32_t userTag;
  * };
  * @endcode
+ * @since 0.1.4
  */
 struct TimeStamp {
     PVXS_API
@@ -40,6 +41,7 @@ struct TimeStamp {
  *     string message;
  * };
  * @endcode
+ * @since 0.1.4
  */
 struct Alarm {
     PVXS_API
