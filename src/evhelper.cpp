@@ -163,6 +163,7 @@ struct evbase::Pvt : public epicsThreadRunable
 
     virtual void run() override final
     {
+        INST_COUNTER(evbaseRunning);
         try {
             decltype (base) tbase(event_base_new());
             if(evthread_make_base_notifiable(tbase.get())) {
