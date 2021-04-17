@@ -570,6 +570,7 @@ void Connection::handle_RPC() { handle_GPR(CMD_RPC); }
 static
 std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context,
                                      std::string name, // need to capture by value
+                                     std::string server,
                                      std::shared_ptr<GPROp>&& op,
                                      bool syncCancel)
 {
@@ -591,10 +592,10 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
                        }, std::move(temp)));
     });
 
-    context->tcp_loop.dispatch([internal, context, name]() {
+    context->tcp_loop.dispatch([internal, context, name, server]() {
         // on worker
 
-        internal->chan = Channel::build(context, name);
+        internal->chan = Channel::build(context, name, server);
 
         internal->chan->pending.push_back(internal);
         internal->chan->createOperations();
@@ -616,7 +617,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
     op->autoExec = _autoexec;
     op->pvRequest = _buildReq();
 
-    return gpr_setup(context, _name, std::move(op), _syncCancel);
+    return gpr_setup(context, _name, _server, std::move(op), _syncCancel);
 }
 
 std::shared_ptr<Operation> PutBuilder::exec()
@@ -646,7 +647,7 @@ std::shared_ptr<Operation> PutBuilder::exec()
     op->autoExec = _autoexec;
     op->pvRequest = _buildReq();
 
-    return gpr_setup(context, _name, std::move(op), _syncCancel);
+    return gpr_setup(context, _name, _server, std::move(op), _syncCancel);
 }
 
 std::shared_ptr<Operation> RPCBuilder::exec()
@@ -671,7 +672,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
     op->autoExec = _autoexec;
     op->pvRequest = _buildReq();
 
-    return gpr_setup(context, _name, std::move(op), _syncCancel);
+    return gpr_setup(context, _name, _server, std::move(op), _syncCancel);
 }
 
 } // namespace client

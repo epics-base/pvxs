@@ -39,6 +39,16 @@ Connection::~Connection()
     cleanup();
 }
 
+std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
+                                              const SockAddr& serv)
+{
+    std::shared_ptr<Connection> ret;
+    auto it = context->connByAddr.find(serv);
+    if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
+        context->connByAddr[serv] = ret = std::make_shared<Connection>(context, serv);
+    }
+    return ret;
+}
 
 void Connection::createChannels()
 {

@@ -642,10 +642,11 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     });
 
     auto name(std::move(_name));
-    context->tcp_loop.dispatch([op, context, name]() {
+    auto server(std::move(_server));
+    context->tcp_loop.dispatch([op, context, name, server]() {
         // on worker
 
-        op->chan = Channel::build(context, name);
+        op->chan = Channel::build(context, name, server);
 
         op->chan->pending.push_back(op);
         op->chan->createOperations();

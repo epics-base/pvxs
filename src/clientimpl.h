@@ -96,6 +96,10 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
     Connection(const std::shared_ptr<ContextImpl>& context, const SockAddr &peerAddr);
     virtual ~Connection();
 
+    static
+    std::shared_ptr<Connection> build(const std::shared_ptr<ContextImpl>& context,
+                                      const SockAddr& serv);
+
     void createChannels();
 
     void sendDestroyRequest(uint32_t sid, uint32_t ioid);
@@ -166,6 +170,9 @@ struct Channel {
     std::shared_ptr<Connection> conn;
     uint32_t sid = 0u;
 
+    // channel created with .server() to bypass normal search process
+    SockAddr forcedServer;
+
     // when state==Searching, number of repeatitions
     size_t nSearch = 0u;
 
@@ -191,7 +198,9 @@ struct Channel {
     void disconnect(const std::shared_ptr<Channel>& self);
 
     static
-    std::shared_ptr<Channel> build(const std::shared_ptr<ContextImpl>& context, const std::string &name);
+    std::shared_ptr<Channel> build(const std::shared_ptr<ContextImpl>& context,
+                                   const std::string& name,
+                                   const std::string& server);
 };
 
 struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
@@ -233,7 +242,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::map<uint32_t, std::weak_ptr<Channel>> chanByCID;
     // strong ref. loop through Channel::context
     // explicitly broken by Context::close(), Context::cacheClear, or ContextImpl::cacheClean()
-    std::map<std::string, std::shared_ptr<Channel>> chanByName;
+    // chanByName key'd by (pv, forceServer)
+    std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
 
     std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
 
