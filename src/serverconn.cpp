@@ -343,6 +343,7 @@ ServIface::ServIface(const std::string& addr, unsigned short port, server::Serve
     ,sock(AF_INET, SOCK_STREAM, 0)
 {
     server->acceptor_loop.assertInLoop();
+    auto orig_port = bind_addr.port();
 
     // try to bind to requested port, then fallback to a random port
     while(true) {
@@ -359,6 +360,10 @@ ServIface::ServIface(const std::string& addr, unsigned short port, server::Serve
     }
 
     name = bind_addr.tostring();
+
+    if(bind_addr.port() != orig_port) {
+        log_warn_printf(connsetup, "Server unable to bind port %u, falling back to %s\n", orig_port, name.c_str());
+    }
 
     // added in libevent 2.1.1
 #ifndef LEV_OPT_DISABLED
