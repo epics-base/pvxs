@@ -108,6 +108,7 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
     CASE(CONNECTION_VALIDATION);
     CASE(CONNECTION_VALIDATED);
 
+    CASE(SEARCH_RESPONSE);
     CASE(CREATE_CHANNEL);
     CASE(DESTROY_CHANNEL);
 

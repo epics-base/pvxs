@@ -58,6 +58,7 @@ size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
     CASE(CONNECTION_VALIDATION);
     CASE(CONNECTION_VALIDATED);
     CASE(SEARCH);
+    CASE(SEARCH_RESPONSE);
     CASE(AUTHNZ);
 
     CASE(CREATE_CHANNEL);
@@ -188,6 +189,7 @@ void ConnBase::bevRead()
                     CASE(CONNECTION_VALIDATION);
                     CASE(CONNECTION_VALIDATED);
                     CASE(SEARCH);
+                    CASE(SEARCH_RESPONSE);
                     CASE(AUTHNZ);
 
                     CASE(CREATE_CHANNEL);

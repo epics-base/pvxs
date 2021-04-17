@@ -536,6 +536,83 @@ void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
     poke(false);
 }
 
+static
+void procSearchReply(ContextImpl& self, const SockAddr& src, Buffer& M, bool istcp)
+{
+    ServerGUID guid;
+    SockAddr serv(AF_INET);
+    uint16_t port = 0;
+    uint8_t found = 0u;
+
+    _from_wire<12>(M, &guid[0], false);
+    // searchSequenceID
+    // we don't use this and instead rely on ID for individual PVs
+    M.skip(4u, __FILE__, __LINE__);
+
+    from_wire(M, serv);
+    if(serv.isAny())
+        serv = src;
+    from_wire(M, port);
+    if(istcp && port==0)
+        port = src.port();
+    serv.setPort(port);
+
+    if(M.size()<4u || M[0]!=3u || M[1]!='t' || M[2]!='c' || M[3]!='p')
+        return;
+    M.skip(4u, __FILE__, __LINE__);
+
+    from_wire(M, found);
+    if(!found)
+        return;
+
+    uint16_t nSearch = 0u;
+    from_wire(M, nSearch);
+
+    for(auto n : range(nSearch)) {
+        (void)n;
+
+        uint32_t id=0u;
+        from_wire(M, id);
+        if(!M.good())
+            break;
+
+        std::shared_ptr<Channel> chan;
+        {
+            auto it = self.chanByCID.find(id);
+            if(it==self.chanByCID.end())
+                continue;
+
+            chan = it->second.lock();
+            if(!chan)
+                continue;
+        }
+
+        log_debug_printf(io, "Search reply for %s\n", chan->name.c_str());
+
+        if(chan->state==Channel::Searching) {
+            chan->guid = guid;
+            chan->replyAddr = serv;
+
+            auto it = self.connByAddr.find(serv);
+            if(it==self.connByAddr.end() || !(chan->conn = it->second.lock())) {
+                self.connByAddr[serv] = chan->conn = std::make_shared<Connection>(self.shared_from_this(), serv);
+            }
+
+            chan->conn->pending.push_back(chan);
+            chan->state = Channel::Connecting;
+
+            chan->conn->createChannels();
+
+        } else if(chan->guid!=guid) {
+            log_err_printf(duppv, "Duplicate PV name %s from %s and %s\n",
+                           chan->name.c_str(),
+                           chan->replyAddr.tostring().c_str(),
+                           serv.tostring().c_str());
+        }
+    }
+
+}
+
 bool ContextImpl::onSearch()
 {
     searchMsg.resize(0x10000);
@@ -597,75 +674,7 @@ bool ContextImpl::onSearch()
     }
 
     if(cmd==CMD_SEARCH_RESPONSE) {
-        ServerGUID guid;
-        SockAddr serv;
-        uint16_t port = 0;
-        uint8_t found = 0u;
-
-        _from_wire<12>(M, &guid[0], false);
-        // searchSequenceID
-        // we don't use this and instead rely on ID for individual PVs
-        M.skip(4u, __FILE__, __LINE__);
-
-        from_wire(M, serv);
-        if(serv.isAny())
-            serv = src;
-        from_wire(M, port);
-        serv.setPort(port);
-
-        if(M.size()<4u || M[0]!=3u || M[1]!='t' || M[2]!='c' || M[3]!='p')
-            return true;
-        M.skip(4u, __FILE__, __LINE__);
-
-        from_wire(M, found);
-        if(!found)
-            return true;
-
-        uint16_t nSearch = 0u;
-        from_wire(M, nSearch);
-
-        for(auto n : range(nSearch)) {
-            (void)n;
-
-            uint32_t id=0u;
-            from_wire(M, id);
-            if(!M.good())
-                break;
-
-            std::shared_ptr<Channel> chan;
-            {
-                auto it = chanByCID.find(id);
-                if(it==chanByCID.end())
-                    continue;
-
-                chan = it->second.lock();
-                if(!chan)
-                    continue;
-            }
-
-            log_debug_printf(io, "Search reply for %s\n", chan->name.c_str());
-
-            if(chan->state==Channel::Searching) {
-                chan->guid = guid;
-                chan->replyAddr = serv;
-
-                auto it = connByAddr.find(serv);
-                if(it==connByAddr.end() || !(chan->conn = it->second.lock())) {
-                    connByAddr[serv] = chan->conn = std::make_shared<Connection>(shared_from_this(), serv);
-                }
-
-                chan->conn->pending.push_back(chan);
-                chan->state = Channel::Connecting;
-
-                chan->conn->createChannels();
-
-            } else if(chan->guid!=guid) {
-                log_err_printf(duppv, "Duplicate PV name %s from %s and %s\n",
-                               chan->name.c_str(),
-                               chan->replyAddr.tostring().c_str(),
-                               serv.tostring().c_str());
-            }
-        }
+        procSearchReply(*this, src, M, false);
 
     } else {
         M.fault(__FILE__, __LINE__);
@@ -678,6 +687,19 @@ bool ContextImpl::onSearch()
     }
 
     return true;
+}
+
+void Connection::handle_SEARCH_RESPONSE()
+{
+    EvInBuf M(peerBE, segBuf.get(), 16);
+
+    procSearchReply(*context, peerAddr, M, true);
+
+    if(!M.good()) {
+        log_crit_printf(io, "%s:%d Server %s sends invalid SEARCH_RESPONSE.  Disconnecting...\n",
+                        M.file(), M.line(), peerName.c_str());
+        bev.reset();
+    }
 }
 
 void ContextImpl::onSearchS(evutil_socket_t fd, short evt, void *raw)
