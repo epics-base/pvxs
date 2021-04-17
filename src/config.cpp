@@ -29,6 +29,8 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
 {
     size_t pos=0u;
 
+    // parse, resolve host names, then re-print.
+    // Catch syntax errors early, and normalize prior to removing duplicates
     while(pos<inp.size()) {
         auto start = inp.find_first_not_of(" \t\r\n", pos);
         auto end = inp.find_first_of(" \t\r\n", start);
@@ -52,6 +54,11 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
             out.emplace_back(strm.str());
         }
     }
+
+    // remove any duplicates
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()),
+              out.end());
 }
 
 std::string join_addr(const std::vector<std::string>& in)
