@@ -237,17 +237,18 @@ void ServerConn::handle_SEARCH()
 
         EvOutBuf R(hostBE, txBody.get());
 
-        to_wire(M, searchID);
-        to_wire(M, iface->bind_addr);
-        to_wire(M, iface->bind_addr.port());
-        to_wire(M, "tcp");
+        _to_wire<12>(M, iface->server->effective.guid.data(), false);
+        to_wire(R, searchID);
+        to_wire(R, SockAddr::any(AF_INET));
+        to_wire(R, iface->bind_addr.port());
+        to_wire(R, "tcp");
         // "found" flag
-        to_wire(M, uint8_t(nreply!=0 ? 1 : 0));
+        to_wire(R, uint8_t(nreply!=0 ? 1 : 0));
 
-        to_wire(M, uint16_t(nreply));
+        to_wire(R, uint16_t(nreply));
         for(auto i : range(op._names.size())) {
             if(op._names[i]._claim)
-                to_wire(M, uint32_t(nameStorage[i].first));
+                to_wire(R, uint32_t(nameStorage[i].first));
         }
     }
 
