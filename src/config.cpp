@@ -356,12 +356,24 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
         self.udp_port = 5076;
     }
 
+    if(pickone({"EPICS_PVA_SERVER_PORT", "EPICS_PVAS_SERVER_PORT"})) {
+        try {
+            self.tcp_port = parseTo<uint64_t>(pickone.val);
+        }catch(std::exception& e) {
+            log_warn_printf(clientsetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+        }
+    }
+    if(self.tcp_port==0u && !self.nameServers.empty()) {
+        log_warn_printf(clientsetup, "ignoring EPICS_PVA_SERVER_PORT=%d\n", 0);
+        self.tcp_port = 5075;
+    }
+
     if(pickone({"EPICS_PVA_ADDR_LIST"})) {
         split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, self.udp_port);
     }
 
     if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
-        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, 5075);
+        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, self.tcp_port);
     }
 
     if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
@@ -392,6 +404,7 @@ Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
 void Config::updateDefs(defs_t& defs) const
 {
     defs["EPICS_PVA_BROADCAST_PORT"] = SB()<<udp_port;
+    defs["EPICS_PVA_SERVER_PORT"] = SB()<<tcp_port;
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = autoAddrList ? "YES" : "NO";
     defs["EPICS_PVA_ADDR_LIST"] = join_addr(addressList);
     defs["EPICS_PVA_INTF_ADDR_LIST"] = join_addr(interfaces);
@@ -402,6 +415,9 @@ void Config::expand()
 {
     if(udp_port==0)
         throw std::runtime_error("Client can't use UDP random port");
+
+    if(tcp_port==0)
+        tcp_port = 5075;
 
     if(interfaces.empty())
         interfaces.emplace_back("0.0.0.0");
@@ -434,6 +450,8 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
     strm<<indent{}<<"EPICS_PVA_AUTO_ADDR_LIST="<<(conf.autoAddrList?"YES":"NO")<<'\n';
 
     strm<<indent{}<<"EPICS_PVA_BROADCAST_PORT="<<conf.udp_port<<'\n';
+
+    strm<<indent{}<<"EPICS_PVA_SERVER_PORT="<<conf.tcp_port<<'\n';
 
     strm<<indent{}<<"EPICS_PVA_CONN_TMO="<<conf.tcpTimeout/tmoScale<<'\n';
 

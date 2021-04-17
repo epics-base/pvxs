@@ -150,6 +150,7 @@ client::Config Server::clientConfig() const
 
     client::Config ret;
     ret.udp_port = pvt->effective.udp_port;
+    ret.tcp_port = pvt->effective.tcp_port;
     ret.interfaces = pvt->effective.interfaces;
     ret.addressList = pvt->effective.interfaces;
     ret.autoAddrList = false;

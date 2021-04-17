@@ -829,6 +829,10 @@ struct PVXS_API Config {
 
     //! UDP port to bind.  Default is 5076.  May be zero, cf. Server::config() to find allocated port.
     unsigned short udp_port = 5076;
+    //! Default TCP port for name servers
+    //! @since UNRELEASED
+    unsigned short tcp_port = 5075;
+
     //! Whether to extend the addressList with local interface broadcast addresses.  (recommended)
     bool autoAddrList = true;
 
