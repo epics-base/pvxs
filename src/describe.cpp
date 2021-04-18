@@ -8,6 +8,9 @@
 #  include <sys/utsname.h>
 #endif
 
+#include <ostream>
+#include <string>
+
 #include <osiSock.h>
 #include <dbDefs.h>
 #include <epicsThread.h>

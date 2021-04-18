@@ -6,6 +6,7 @@
 
 #include <typeinfo>
 #include <vector>
+#include <string>
 
 #include <pvxs/sharedArray.h>
 #include <pvxs/data.h>

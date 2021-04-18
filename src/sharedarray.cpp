@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <string>
+
 #include <string.h>
 
 #include <epicsTypes.h>

@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <vector>
 #include <iosfwd>
+#include <string>
 #include <memory>
 #include <typeinfo>
 #include <tuple>

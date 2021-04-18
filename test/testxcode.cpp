@@ -7,6 +7,8 @@
 #include <epicsUnitTest.h>
 #include <testMain.h>
 
+#include <string>
+
 #include <pvxs/util.h>
 #include <pvxs/unittest.h>
 #include <pvxs/nt.h>
