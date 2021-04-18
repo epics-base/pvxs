@@ -9,7 +9,7 @@
 
 #include <map>
 #include <functional>
-#include <ostream>
+#include <iosfwd>
 #include <type_traits>
 
 #include <osiSock.h>

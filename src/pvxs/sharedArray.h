@@ -11,7 +11,7 @@
 #include <memory>
 #include <type_traits>
 #include <algorithm>
-#include <ostream>
+#include <iosfwd>
 #include <iterator>
 
 #include <pvxs/version.h>

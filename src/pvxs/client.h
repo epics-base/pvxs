@@ -12,7 +12,7 @@
 #include <vector>
 #include <memory>
 #include <functional>
-#include <ostream>
+#include <iosfwd>
 #include <typeinfo>
 
 #include <epicsTime.h>

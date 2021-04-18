@@ -8,7 +8,7 @@
 
 #include <osiSock.h>
 
-#include <ostream>
+#include <iosfwd>
 #include <functional>
 #include <string>
 #include <tuple>

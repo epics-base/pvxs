@@ -9,7 +9,7 @@
 #include <initializer_list>
 #include <stdexcept>
 #include <vector>
-#include <ostream>
+#include <iosfwd>
 #include <memory>
 #include <typeinfo>
 #include <tuple>
