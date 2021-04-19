@@ -373,7 +373,7 @@ Server::Pvt::Pvt(const Config &conf)
 
         // seed with some randomness to avoid making UUID a vector
         // for information disclosure
-        evutil_secure_rng_add_bytes((char*)pun.b.data(), sizeof(pun.b));
+        evutil_secure_rng_get_bytes((char*)pun.b.data(), sizeof(pun.b));
 
         // i[0] (start) time
         epicsTimeStamp now;
