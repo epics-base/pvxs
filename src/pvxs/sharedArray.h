@@ -553,22 +553,22 @@ public:
     }
 
     //! use existing alloc with delete[]
-    shared_array(E* a, size_t len)
+    shared_array(E* a, size_t len, ArrayType type)
         :base_t(a, len)
-        ,_type(detail::CaptureBase<E>::code)
+        ,_type(type)
     {}
 
     //! use existing alloc w/ custom deletor
     template<typename B>
-    shared_array(E* a, B b, size_t len)
+    shared_array(E* a, B b, size_t len, ArrayType type)
         :base_t(a, b, len)
-        ,_type(detail::CaptureBase<E>::code)
+        ,_type(type)
     {}
 
     //! build around existing shared_ptr and length
-    shared_array(const std::shared_ptr<E>& a, size_t len)
+    shared_array(const std::shared_ptr<E>& a, size_t len, ArrayType type)
         :base_t(a, len)
-        ,_type(detail::CaptureBase<E>::code)
+        ,_type(type)
     {}
 
     //! alias existing shared_ptr and length

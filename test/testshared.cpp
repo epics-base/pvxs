@@ -105,6 +105,35 @@ void testVoid()
     testEq(Z.size(), 2u);
 }
 
+template<typename Void, typename I>
+void testVoidAssemble()
+{
+    testDiag("%s", __func__);
+
+    pvxs::ArrayType code = pvxs::detail::CaptureBase<I>::code;
+
+    auto temp = (typename std::remove_cv<I>::type*)calloc(3, sizeof(I));
+    if(!temp)
+        testAbort("calloc failure");
+
+    temp[0] = 1;
+    temp[1] = 2;
+    temp[2] = 3;
+
+    pvxs::shared_array<Void> X((Void*)temp, [](Void *p) {
+        free((void*)p);
+    }, 3u, code);
+
+    testEq(temp, X.data());
+    testEq(code, X.original_type());
+    testEq(3u, X.size());
+
+    auto Y(X.template castTo<I>());
+    testEq(temp, Y.data());
+    testEq(3u, Y.size());
+    testEq(Y[0], 1u);
+}
+
 void testFreeze()
 {
     testDiag("%s", __func__);
@@ -268,7 +297,7 @@ void testConvert()
 
 MAIN(testshared)
 {
-    testPlan(115);
+    testPlan(127);
     testSetup();
     testEmpty<void>();
     testEmpty<const void>();
@@ -278,6 +307,8 @@ MAIN(testshared)
     testInt<const int32_t>();
     testVoid<void, uint32_t>();
     testVoid<const void, const uint32_t>();
+    testVoidAssemble<void, uint32_t>();
+    testVoidAssemble<const void, const uint32_t>();
     testFreeze();
     testFreezeError();
     testComplex();
