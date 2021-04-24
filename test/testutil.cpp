@@ -182,16 +182,37 @@ void testAccount()
     }
 }
 
+void testTestEq()
+{
+    testShow()<<__func__;
+
+    testStrNotEq((char*)nullptr, std::string());
+    testStrNotEq(std::string(), (char*)nullptr);
+    testStrEq((char*)nullptr, (char*)nullptr);
+    testStrEq(std::string(), std::string());
+
+    testStrEq("hello", "hello");
+    testStrEq("hello", std::string("hello"));
+    testStrEq(std::string("hello"), "hello");
+    testStrEq(std::string("hello"), std::string("hello"));
+
+    testStrNotEq("hello", "world");
+    testStrNotEq("hello", std::string("world"));
+    testStrNotEq(std::string("hello"), "world");
+    testStrNotEq(std::string("hello"), std::string("world"));
+}
+
 } // namespace
 
 MAIN(testutil)
 {
-    testPlan(12);
+    testPlan(24);
     testTrue(version_abi_check())<<" 0x"<<std::hex<<PVXS_VERSION<<" ~= 0x"<<std::hex<<PVXS_ABI_VERSION;
     testServerGUID();
     testFill();
     testSpam();
     testSpamMany();
     testAccount();
+    testTestEq();
     return testDone();
 }

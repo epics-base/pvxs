@@ -118,10 +118,20 @@ size_t findNextLine(const std::string& s, size_t pos=0u)
     return next;
 }
 
-testCase _testStrEq(const char *sLHS, const std::string& lhs, const char *sRHS, const std::string& rhs)
+testCase _testStrTest(unsigned op, const char *sLHS, const char* rlhs, const char *sRHS, const char* rrhs)
 {
-    testCase ret(lhs==rhs);
-    ret<<sLHS<<" == "<<sRHS<<"\n";
+    bool eq;
+    if(rlhs==rrhs) // same string.  handles NULL==NULL
+        eq = true;
+    else if(!rlhs ^ !rrhs) // one NULL
+        eq = false;
+    else
+        eq = strcmp(rlhs, rrhs)==0;
+    testCase ret(eq==op);
+    ret<<sLHS<<(op ? " == " : " != ")<<sRHS<<"\n";
+
+    std::string lhs(rlhs ? rlhs : "<null>");
+    std::string rhs(rrhs ? rrhs : "<null>");
 
     size_t posL=0u, posR=0u;
 
