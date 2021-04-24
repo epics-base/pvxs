@@ -274,7 +274,7 @@ public:
     shared_array(Iter begin, Iter end)
         :shared_array(std::distance(begin, end))
     {
-        std::copy(begin, end, this->begin());
+        std::copy(begin, end, const_cast<_E_non_const*>(this->begin()));
     }
 
     //! @brief Allocate (with new[]) a new vector of size c
