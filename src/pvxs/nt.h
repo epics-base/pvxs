@@ -85,6 +85,20 @@ struct NTScalar {
     }
 };
 
+/** An enumerated value (choice from a list of strings)
+ *
+ * @since UNRELEASED
+ */
+struct NTEnum {
+    //! A TypeDef which can be appended
+    PVXS_API
+    TypeDef build() const;
+    //! Instantiate
+    inline Value create() const {
+        return build().create();
+    }
+};
+
 /** The areaDetector inspired N-dimension array/image container.
  *
  * @code

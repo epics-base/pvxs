@@ -104,6 +104,22 @@ TypeDef NTScalar::build() const
     return def;
 }
 
+TypeDef NTEnum::build() const
+{
+    using namespace pvxs::members;
+
+    TypeDef def(TypeCode::Struct, "epics:nt/NTEnum:1.0", {
+                    Struct("value", "enum_t", {
+                        Int32("index"),
+                        StringA("choices"),
+                    }),
+                    Alarm{}.build().as("alarm"),
+                    TimeStamp{}.build().as("timeStamp"),
+                });
+
+    return def;
+}
+
 TypeDef NTNDArray::build() const
 {
     using namespace pvxs::members;

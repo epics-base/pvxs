@@ -73,12 +73,22 @@ void testNTURI()
     testEq(top["query.arg2"].as<std::string>(), "hello");
 }
 
+void testNTEnum()
+{
+    testDiag("In %s", __func__);
+
+    auto top = nt::NTEnum{}.create();
+
+    testTrue(top.idStartsWith("epics:nt/NTEnum:"))<<"\n"<<top;
+}
+
 } // namespace
 
 MAIN(testnt) {
-    testPlan(17);
+    testPlan(18);
     testNTScalar();
     testNTNDArray();
     testNTURI();
+    testNTEnum();
     return testDone();
 }
