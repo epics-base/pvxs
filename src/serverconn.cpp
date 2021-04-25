@@ -361,7 +361,7 @@ ServIface::ServIface(const std::string& addr, unsigned short port, server::Serve
 
     name = bind_addr.tostring();
 
-    if(bind_addr.port() != orig_port) {
+    if(orig_port && bind_addr.port() != orig_port) {
         log_warn_printf(connsetup, "Server unable to bind port %u, falling back to %s\n", orig_port, name.c_str());
     }
 
