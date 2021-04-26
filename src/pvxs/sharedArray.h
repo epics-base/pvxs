@@ -160,7 +160,7 @@ public:
 
     void swap(sa_base& o) noexcept {
         std::swap(_data, o._data);
-        std::swap(_count, o._data);
+        std::swap(_count, o._count);
     }
 
     //! Number of elements
@@ -380,7 +380,7 @@ public:
     inline const_reverse_iterator crend() const noexcept{return rend();}
 
     inline reference front() const noexcept{return (*this)[0];}
-    inline reference back() const noexcept{return (*this)[this->m_count-1];}
+    inline reference back() const noexcept{return (*this)[this->_count-1];}
 
     //! @brief Member access
     //! Use sa.data() instead of &sa[0]
