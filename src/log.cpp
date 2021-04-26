@@ -158,7 +158,7 @@ struct logger_gbl_t {
     {
         std::string name(logger->name);
 
-        auto lvl = Level::Err;
+        auto lvl = Level::Warn;
 
         // see if this logger name has already been configured.
         auto it = loggers.find(logger->name);
