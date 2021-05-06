@@ -189,24 +189,31 @@ struct logger_gbl_t {
         if(lvl<=Level(0))
             lvl = Level(1);
 
+        decltype (config)::value_type* conf = nullptr;
+
         for(auto& tup : config) {
             if(tup.first==exp) {
                 // update of existing config
-                if(tup.second!=lvl) {
-                    tup.second = lvl;
-
-                    for(auto& pair : loggers) {
-                        if(epicsStrGlobMatch(pair.first.c_str(), tup.first.c_str())) {
-                            pair.second->lvl.store(lvl, std::memory_order_relaxed);
-                        }
-                    }
-                }
-                return;
+                conf = &tup;
+                break;
             }
         }
         // new config
 
-        config.emplace_back(exp, lvl);
+        if(!conf) {
+            config.emplace_back(exp, Level(-1));
+            conf = &config.back();
+        }
+
+        if(conf->second!=lvl) {
+            conf->second = lvl;
+
+            for(auto& pair : loggers) {
+                if(epicsStrGlobMatch(pair.first.c_str(), conf->first.c_str())) {
+                    pair.second->lvl.store(lvl, std::memory_order_relaxed);
+                }
+            }
+        }
     }
 } *logger_gbl;
 

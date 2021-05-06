@@ -22,6 +22,10 @@ TESTPROD_HOST += testev
 testev_SRCS += testev.cpp
 TESTS += testev
 
+TESTPROD_HOST += testlog
+testlog_SRCS += testlog.cpp
+TESTS += testlog
+
 TESTPROD_HOST += testudp
 testudp_SRCS += testudp.cpp
 TESTS += testudp
