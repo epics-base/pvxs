@@ -336,13 +336,13 @@ void logger_config_env()
 
 
             if(key.empty() || val.empty()) {
-                fprintf(stderr, "PVXS_LOG ignore invalid: '%s=%s'\n", key.c_str(), val.c_str());
+                errlogPrintf("PVXS_LOG ignore invalid: '%s=%s'\n", key.c_str(), val.c_str());
 
             } else if(auto lvl = name2lvl(val)) {
                 logger_gbl->set(key.c_str(), Level(lvl));
 
             } else {
-                fprintf(stderr, "PVXS_LOG ignore invalid level: '%s=%s'\n", key.c_str(), val.c_str());
+                errlogPrintf("PVXS_LOG ignore invalid level: '%s=%s'\n", key.c_str(), val.c_str());
             }
 
         }
@@ -351,6 +351,8 @@ void logger_config_env()
         if(*env==',')
             ++env;
     }
+
+    errlogFlush();
 }
 
 } // namespace pvxs

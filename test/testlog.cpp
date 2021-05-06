@@ -87,7 +87,9 @@ void testEnv()
     logger_level_clear();
 
     epicsEnvSet("PVXS_LOG", "foo,env.*=INFO,env.other.c=DEBUG,bar=FAKELEVEL");
+    eltc(0);
     logger_config_env();
+    eltc(1);
 
     (void)enva.test(Level::Info);
     (void)envb.test(Level::Info);
