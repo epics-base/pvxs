@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <limits>
+
 #include <epicsAssert.h>
 
 #include <pvxs/log.h>
