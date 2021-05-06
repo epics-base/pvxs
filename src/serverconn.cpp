@@ -222,7 +222,7 @@ void ServerConn::handle_DESTROY_REQUEST()
     auto it = opByIOID.find(ioid);
 
     if(!chan || it==opByIOID.end() || 1!=chan->opByIOID.erase(ioid)) {
-        log_warn_printf(connsetup, "Client %s can't destroy non-existant op %u:%u\n",
+        log_debug_printf(connsetup, "Client %s can't destroy non-existent op %u:%u\n",
                    peerName.c_str(), unsigned(sid), unsigned(ioid));
 
     }

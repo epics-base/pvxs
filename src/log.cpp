@@ -234,7 +234,7 @@ Level logger::init()
     auto lvl = this->lvl.load();
     if(lvl==Level(-1)) {
         // maybe we initialize
-        if(this->lvl.compare_exchange_strong(lvl, Level::Err)) {
+        if(this->lvl.compare_exchange_strong(lvl, Level::Warn)) {
             // logger now has default config of Level::Err
             // we will fully initialize
             epicsThreadOnce(&logger_once, &logger_prepare, nullptr);

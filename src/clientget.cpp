@@ -178,7 +178,7 @@ struct GPROp : public OperationBase
 
     bool _cancel(bool implicit) {
         if(implicit && state!=Done) {
-            log_warn_printf(setup, "implied cancel of op%x on channel '%s'\n",
+            log_info_printf(setup, "implied cancel of op%x on channel '%s'\n",
                             op, chan ? chan->name.c_str() : "");
         }
         if(state==GetOPut || state==Exec) {

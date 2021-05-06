@@ -54,7 +54,7 @@ struct InfoOp : public OperationBase
 
     bool _cancel(bool implicit) {
         if(implicit && state!=Done) {
-            log_warn_printf(setup, "implied cancel of INFO on channel '%s'\n",
+            log_info_printf(setup, "implied cancel of INFO on channel '%s'\n",
                             chan ? chan->name.c_str() : "");
         }
         if(state==Waiting) {
