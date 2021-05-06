@@ -171,7 +171,6 @@ struct logger_gbl_t {
             for(auto& tup : config) {
                 if(epicsStrGlobMatch(name.c_str(), tup.first.c_str())) {
                     lvl = tup.second;
-                    break;
                 }
             }
         }

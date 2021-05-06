@@ -7,8 +7,8 @@
 #include <ostream>
 
 #include <testMain.h>
-
 #include <epicsUnitTest.h>
+#include <envDefs.h>
 
 #include <pvxs/unittest.h>
 #include <pvxs/log.h>
@@ -25,6 +25,8 @@ std::ostream& operator<<(std::ostream& strm, Level lvl)
     CASE(Info);
     CASE(Debug);
 #undef CASE
+    default:
+        strm<<"Level("<<int(lvl)<<")";
     }
     return strm;
 }
@@ -74,12 +76,35 @@ void testLog()
     testEq(loggerb.lvl.load(), Level::Err);
 }
 
+DEFINE_LOGGER(enva, "env.a");
+DEFINE_LOGGER(envb, "env.b");
+DEFINE_LOGGER(envc, "env.other.c");
+
+void testEnv()
+{
+    testDiag("%s", __func__);
+
+    logger_level_clear();
+
+    epicsEnvSet("PVXS_LOG", "foo,env.*=INFO,env.other.c=DEBUG,bar=FAKELEVEL");
+    logger_config_env();
+
+    (void)enva.test(Level::Info);
+    (void)envb.test(Level::Info);
+    (void)envc.test(Level::Info);
+
+    testEq(enva.lvl.load(), Level::Info);
+    testEq(envb.lvl.load(), Level::Info);
+    testEq(envc.lvl.load(), Level::Debug);
+}
+
 } // namespace
 
 MAIN(testlog)
 {
-    testPlan(13);
+    testPlan(16);
     testSetup();
     testLog();
+    testEnv();
     return testDone();
 }
