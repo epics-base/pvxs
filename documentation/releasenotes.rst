@@ -3,9 +3,26 @@
 Release Notes
 =============
 
-0.1.5 (UNRELEASED)
+0.1.6 (UNRELEASED)
 ------------------
 
+0.1.5 (May 2021)
+----------------
+
+* Bug Fixes
+
+ * Fix several previously unusable template methods of `pvxs::shared_array`
+ * Fix `pvxs::logger_level_set`
+
+* Changes
+
+ * Default logger level changed from Err to Warn.
+ * Server warns when falling back from requested TCP port.
+ * Public headers include <iosfwd> instead of <ostream>.
+
+* Additions
+
+ * Add `pvxs::nt::NTEnum`
 
 0.1.4 (APR 2021)
 ----------------
