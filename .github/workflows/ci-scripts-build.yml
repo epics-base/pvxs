@@ -3,8 +3,6 @@
 
 # This is YAML - indentation levels are crucial
 
-# Set the 'name:' properties to values that work for you (pvxs)
-
 name: PVXS
 
 # Trigger on pushes and PRs to any branch
@@ -21,7 +19,7 @@ env:
   PVXS_LOG: pvxs.*=WARN
 
 jobs:
-  build-pvxs:
+  native:
     name: ${{ matrix.os }}/${{ matrix.cmp }}/${{ matrix.configuration }}/${{ matrix.base }}/${{ matrix.wine }}/${{ matrix.libevent }}
     runs-on: ${{ matrix.os }}
     # Set environment variables from matrix parameters
@@ -76,24 +74,6 @@ jobs:
             configuration: default
             base: "3.14"
 
-          - os: ubuntu-16.04
-            cmp: gcc-4.8
-            utoolchain: true
-            configuration: default
-            base: "7.0"
-
-          - os: ubuntu-16.04
-            cmp: gcc-4.9
-            utoolchain: true
-            configuration: default
-            base: "7.0"
-
-          - os: ubuntu-20.04
-            cmp: gcc-8
-            utoolchain: true
-            configuration: default
-            base: "7.0"
-
           - os: ubuntu-20.04
             cmp: clang
             configuration: default
@@ -123,15 +103,6 @@ jobs:
         sudo apt-get update
         sudo apt-get -y install g++-mingw-w64-x86-64 cmake gdb
       if: runner.os == 'Linux'
-    - name: "apt-get install ${{ matrix.cmp }}"
-      run: |
-        export GCC_NAME="${{ matrix.cmp }}"
-        sudo apt-get update
-        sudo apt-get -y install software-properties-common
-        sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-        sudo apt-get update
-        sudo apt-get -y install g++-${GCC_NAME#gcc-}
-      if: matrix.utoolchain
     - name: Automatic core dumper analysis
       uses: mdavidsaver/ci-core-dumper@master
     - name: Prepare and compile dependencies
@@ -149,3 +120,80 @@ jobs:
     - name: CDT Check
       run: ./.ci-local/cdt-check.sh
       if: runner.os == 'Linux'
+
+  docker:
+    name: ${{ matrix.image }}/${{ matrix.cmp }}/${{ matrix.configuration }}/${{ matrix.base }}/${{ matrix.wine }}/${{ matrix.libevent }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+    env:
+      CMP: ${{ matrix.cmp }}
+      BCFG: ${{ matrix.configuration }}
+      BASE: ${{ matrix.base }}
+      WINE: ${{ matrix.wine }}
+      LIBEVENT_TAG: ${{ matrix.libevent }}
+      EXTRA: ${{ matrix.extra }}
+      VV: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: centos:7
+            cmp: gcc
+            configuration: default
+            base: "7.0"
+
+          - image: centos:8
+            cmp: gcc
+            configuration: default
+            base: "7.0"
+
+          - image: fedora:34
+            cmp: gcc
+            configuration: default
+            base: "7.0"
+
+    steps:
+    - name: "Build newer Git"
+      # actions/checkout@v2 wants git >=2.18
+      # centos:7 has 1.8
+      if: matrix.image=='centos:7'
+      run: |
+        yum -y install curl make gcc curl-devel expat-devel gettext-devel openssl-devel zlib-devel perl-ExtUtils-MakeMaker
+        curl https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.29.0.tar.gz | tar -xz
+        cd git-*
+        make -j2 prefix=/usr/local all
+        make prefix=/usr/local install
+        cd ..
+        rm -rf git-*
+        type -a git
+        git --version
+    - name: "Redhat setup"
+      run: |
+        dnfyum() {
+            dnf -y "$@" || yum -y "$@"
+            return $?
+        }
+        dnfyum install python3 gdb make perl gcc-c++ glibc-devel readline-devel ncurses-devel perl-devel libevent-devel
+        git --version || dnfyum install git
+        # rather than just bite the bullet and link python3 -> python,
+        # people would rather just break all existing scripts...
+        [ -e /usr/bin/python ] || ln -sf /usr/bin/python3 /usr/bin/python
+        python --version
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Automatic core dumper analysis
+      uses: mdavidsaver/ci-core-dumper@master
+    - name: Prepare and compile dependencies
+      run: python .ci/cue.py prepare
+    - name: Build main module
+      run: python .ci/cue.py build
+    - name: Host info
+      run: python .ci/cue.py --add-path "{TOP}/bin/{EPICS_HOST_ARCH}" exec pvxinfo -D
+    - name: Run main module tests
+      run: python -m ci_core_dumper exec python .ci/cue.py test
+    - name: Collect and show test results
+      run: python .ci/cue.py test-results
+    - name: CDT Check
+      run: ./.ci-local/cdt-check.sh
