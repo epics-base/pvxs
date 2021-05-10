@@ -628,7 +628,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
     M.skip(8, __FILE__, __LINE__); // fill in header after body length known
 
-    _to_wire<12>(M, effective.guid.data(), false);
+    _to_wire<12>(M, effective.guid.data(), false, __FILE__, __LINE__);
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
     to_wire(M, uint16_t(effective.tcp_port));
@@ -661,7 +661,7 @@ void Server::Pvt::doBeacons(short evt)
     VectorOutBuf M(true, beaconMsg);
     M.skip(8, __FILE__, __LINE__); // fill in header after body length known
 
-    _to_wire<12>(M, effective.guid.data(), false);
+    _to_wire<12>(M, effective.guid.data(), false, __FILE__, __LINE__);
     to_wire(M, uint8_t(0u)); // flags (aka. QoS, aka. undefined)
     to_wire(M, uint8_t(beaconSeq++)); // sequence
     to_wire(M, uint16_t(beaconChange));// change count

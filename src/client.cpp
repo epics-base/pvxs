@@ -580,7 +580,7 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, Buffer& M, bool ist
     uint16_t port = 0;
     uint8_t found = 0u;
 
-    _from_wire<12>(M, &guid[0], false);
+    _from_wire<12>(M, &guid[0], false, __FILE__, __LINE__);
     // searchSequenceID
     // we don't use this and instead rely on ID for individual PVs
     M.skip(4u, __FILE__, __LINE__);

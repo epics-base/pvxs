@@ -187,7 +187,7 @@ struct UDPCollector : public UDPManager::Search,
         case CMD_BEACON: {
             uint16_t port = 0;
 
-            _from_wire<12>(M, &beaconMsg.guid[0], false);
+            _from_wire<12>(M, &beaconMsg.guid[0], false, __FILE__, __LINE__);
             M.skip(4, __FILE__, __LINE__); // skip flags, seq, and change count.  unused
             from_wire(M, beaconMsg.server);
             from_wire(M, port);

@@ -160,10 +160,10 @@ public:
 
 // assumes prior buf.ensure(M) where M>=N
 template<unsigned N>
-inline void _to_wire(Buffer& buf, const uint8_t *mem, bool reverse)
+inline void _to_wire(Buffer& buf, const uint8_t *mem, bool reverse, const char *fname, int lineno)
 {
     if(!buf.ensure(N)) {
-        buf.fault(__FILE__, __LINE__);
+        buf.fault(fname, lineno);
         return;
 
     } else if(reverse) {
@@ -180,10 +180,10 @@ inline void _to_wire(Buffer& buf, const uint8_t *mem, bool reverse)
 }
 
 template <unsigned N>
-inline void _from_wire(Buffer& buf, uint8_t *mem, bool reverse)
+inline void _from_wire(Buffer& buf, uint8_t *mem, bool reverse, const char *fname, int lineno)
 {
     if(!buf.ensure(N)) {
-        buf.fault(__FILE__, __LINE__);
+        buf.fault(fname, lineno);
         return;
 
     } else if(reverse) {
@@ -212,7 +212,7 @@ inline void to_wire(Buffer& buf, const T& val)
         uint8_t b[sizeof(T)];
     } pun;
     pun.v = val;
-    _to_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE);
+    _to_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE, __FILE__, __LINE__);
 }
 
 template<typename T, typename std::enable_if<sizeof(T)==1 && std::is_scalar<T>::value, int>::type =0>
@@ -238,7 +238,7 @@ inline void from_wire(Buffer& buf, T& val)
         T v;
         uint8_t b[sizeof(T)];
     } pun;
-    _from_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE);
+    _from_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE, __FILE__, __LINE__);
     if(buf.good())
         val = pun.v;
 }
