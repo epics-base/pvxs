@@ -11,6 +11,9 @@ include $(TOP)/configure/CONFIG_PVXS_VERSION
 
 PROD_LIBS += pvxs Com
 
+TESTPROD_HOST += simplesrv
+simplesrv_SRCS += simplesrv.cpp
+
 TESTPROD_HOST += mailbox
 mailbox_SRCS += mailbox.cpp
 
@@ -19,6 +22,9 @@ spam_SRCS += spam.cpp
 
 TESTPROD_HOST += ticker
 ticker_SRCS += ticker.cpp
+
+TESTPROD_HOST += simpleget
+simpleget_SRCS += simpleget.cpp
 
 TESTPROD_HOST += client
 client_SRCS += client.cpp

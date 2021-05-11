@@ -741,6 +741,7 @@ public:
     inline
     IMarked imarked() const noexcept;
 
+    //! Provides options to control printing of a Value via std::ostream.
     struct Fmt {
         const Value* top = nullptr;
         size_t _limit=0u;
@@ -751,12 +752,24 @@ public:
         bool _showValue = true;
 
         Fmt(const Value* top) :top(top) {}
+        //! Show Value in tree/struct format
         Fmt& tree() { _format = Tree; return *this; }
+        //! Show Value in delta format
         Fmt& delta()  { _format = Delta ; return *this; }
+        //! Explicitly select format_t
         Fmt& format(format_t f) { _format = f ; return *this; }
+        //! Whether to show field values, or only type information
         Fmt& showValue(bool v) { _showValue = v; return *this; }
+        //! When non-zero, arrays output will be truncated with "..." after cnt elements.
         Fmt& arrayLimit(size_t cnt) { _limit = cnt; return *this; }
     };
+    /** Configurable printing via std::ostream
+     *
+     * @code
+     * Value val;
+     * std::cout<<val.format().arrayLimit(10);
+     * @endcode
+     */
     inline Fmt format() const { return Fmt(this); }
 };
 

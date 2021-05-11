@@ -40,13 +40,13 @@ See :ref:`relpolicy` for details.
    :caption: Contents:
 
    overview
+   example
    building
    cli
    value
    client
    server
    util
-   example
    details
    releasenotes
 
