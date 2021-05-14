@@ -97,10 +97,16 @@ template<>
 struct StorageMap<unselect_t>
 { typedef unselect_t store_t; static constexpr StoreType code{StoreType::Null}; };
 
+// drill through enum{} to handle as underlying integer type
+template<typename T>
+struct StorageMap<T, typename std::enable_if<std::is_enum<T>::value>::type>
+        :StorageMap<typename std::underlying_type<T>::type>
+{};
+
 template<typename T>
 using StoreAs = StorageMap<typename std::decay<T>::type>;
 
-template<typename T>
+template<typename T, typename Enable=void>
 struct StoreTransform {
     // pass through by default
     static inline const T& in (const T& v) { return v; }
@@ -117,6 +123,14 @@ struct StoreTransform<shared_array<const E>> {
     shared_array<const E> out(const shared_array<const void>& v) {
         return v.template convertTo<const E>();
     }
+};
+template<typename T>
+struct StoreTransform<T, typename std::enable_if<std::is_enum<T>::value>::type> {
+    typedef typename std::underlying_type<T>::type itype_t;
+    static inline
+    itype_t in(const T& v) { return v; }
+    static inline
+    T out(const itype_t& v) { return static_cast<T>(v); }
 };
 
 } // namespace impl
@@ -583,6 +597,7 @@ public:
      * - std::string
      * - Value
      * - shared_array<const void>
+     * - An enum where the underlying type is one of the preceding (since UNRELEASED).
      *
      * @throws NoField !this->valid()
      * @throws NoConvert if the field value can not be coerced to type T
@@ -639,6 +654,7 @@ public:
      * - std::string
      * - Value
      * - shared_array<const void>
+     * - An enum where the underlying type is one of the preceding (since UNRELEASED).
      */
     template<typename T>
     void from(const T& val) {

@@ -7,6 +7,7 @@
 #include <testMain.h>
 
 #include <epicsUnitTest.h>
+#include <alarm.h>
 
 #include <pvxs/unittest.h>
 #include <pvxs/data.h>
@@ -64,6 +65,9 @@ void testAssign()
     testOk1(!val["alarm.status"].isMarked(true, true));
     testOk1(!!val["alarm"].isMarked(true, true));
     testOk1(!val["alarm"].isMarked(true, false));
+
+    val["alarm.severity"] = INVALID_ALARM;
+    testEq(val["alarm.severity"].as<epicsAlarmSeverity>(), INVALID_ALARM);
 }
 
 void testAssignUnion()
@@ -342,7 +346,7 @@ void testExtract()
 
 MAIN(testdata)
 {
-    testPlan(115);
+    testPlan(116);
     testSetup();
     testTraverse();
     testAssign();
