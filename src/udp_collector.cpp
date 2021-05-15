@@ -34,7 +34,7 @@ DEFINE_LOGGER(logsetup, "pvxs.udp.setup");
 struct UDPCollector : public UDPManager::Search,
                       public std::enable_shared_from_this<UDPCollector>
 {
-    const std::shared_ptr<UDPManager::Pvt> manager;
+    UDPManager::Pvt* const manager;
     SockAddr bind_addr;
     std::string name;
     evsocket sock;
@@ -47,7 +47,7 @@ struct UDPCollector : public UDPManager::Search,
 
     std::set<UDPListener*> listeners;
 
-    UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, const SockAddr& bind_addr);
+    UDPCollector(UDPManager::Pvt* manager, const SockAddr& bind_addr);
     ~UDPCollector();
 
     bool handle_one()
@@ -240,7 +240,7 @@ public:
 };
 
 
-struct UDPManager::Pvt : public std::enable_shared_from_this<Pvt> {
+struct UDPManager::Pvt {
 
     evbase loop;
 
@@ -257,7 +257,7 @@ struct UDPManager::Pvt : public std::enable_shared_from_this<Pvt> {
     }
 };
 
-UDPCollector::UDPCollector(const std::shared_ptr<UDPManager::Pvt>& manager, const SockAddr& bind_addr)
+UDPCollector::UDPCollector(UDPManager::Pvt *manager, const SockAddr& bind_addr)
     :manager(manager)
     ,bind_addr(bind_addr)
     ,sock(bind_addr.family(), SOCK_DGRAM, 0)
@@ -349,7 +349,7 @@ std::unique_ptr<UDPListener> UDPManager::onBeacon(SockAddr& dest,
     pvt->loop.call([this, &ret, &dest, &cb](){
         // from event loop worker
 
-        ret.reset(new UDPListener(pvt.get(), dest));
+        ret.reset(new UDPListener(pvt, dest));
         ret->beaconCB = std::move(cb);
     });
 
@@ -367,7 +367,7 @@ std::unique_ptr<UDPListener> UDPManager::onSearch(SockAddr& dest,
     pvt->loop.call([this, &ret, &dest, &cb](){
         // from event loop worker
 
-        ret.reset(new UDPListener(pvt.get(), dest));
+        ret.reset(new UDPListener(pvt, dest));
         ret->searchCB = std::move(cb);
     });
 
@@ -382,8 +382,9 @@ void UDPManager::sync()
     pvt->loop.sync();
 }
 
-UDPListener::UDPListener(UDPManager::Pvt *manager, SockAddr &dest)
-    :dest(dest)
+UDPListener::UDPListener(const std::shared_ptr<UDPManager::Pvt> &manager, SockAddr &dest)
+    :manager(manager)
+    ,dest(dest)
     ,active(false)
 {
     manager->loop.assertInLoop();
@@ -400,14 +401,13 @@ UDPListener::UDPListener(UDPManager::Pvt *manager, SockAddr &dest)
     }
 
     if(!collector) {
-        collector.reset(new UDPCollector(manager->shared_from_this(), dest));
+        collector.reset(new UDPCollector(manager.get(), dest));
         dest = collector->bind_addr;
     }
 }
 
 UDPListener::~UDPListener()
 {
-    auto manager = collector->manager;
     manager->loop.call([this](){
         // from event loop worker
 
@@ -416,12 +416,11 @@ UDPListener::~UDPListener()
 
         collector.reset(); // destroy UDPCollector from worker
     });
-    // UDPManager may be destroyed at this point, which joins its event loop worker
 }
 
 void UDPListener::start(bool s)
 {
-    collector->manager->loop.call([this, s](){
+    manager->loop.call([this, s](){
         if(s && !active) {
             collector->listeners.insert(this);
 

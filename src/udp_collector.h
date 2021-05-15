@@ -85,6 +85,7 @@ class PVXS_API UDPListener
 {
     std::function<void(UDPManager::Search&)> searchCB;
     std::function<void(UDPManager::Beacon&)> beaconCB;
+    const std::shared_ptr<UDPManager::Pvt> manager;
     std::shared_ptr<UDPCollector> collector;
     const SockAddr dest;
     bool active;
@@ -95,7 +96,7 @@ class PVXS_API UDPListener
     friend struct UDPManager;
 
 public:
-    UDPListener(UDPManager::Pvt *manager, SockAddr& dest);
+    UDPListener(const std::shared_ptr<UDPManager::Pvt>& manager, SockAddr& dest);
     ~UDPListener();
 
     void start(bool s=true);
