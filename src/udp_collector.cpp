@@ -39,7 +39,7 @@ struct UDPCollector : public UDPManager::Search,
     std::string name;
     evsocket sock;
     evevent rx;
-    uint32_t prevndrop;
+    uint32_t prevndrop{};
 
     std::vector<uint8_t> buf;
 
