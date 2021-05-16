@@ -47,7 +47,7 @@ protected:
     constexpr Buffer(bool be, uint8_t* buf, size_t n) :pos(buf), limit(buf+n), be(be) {}
     virtual ~Buffer() {}
 public:
-    const bool be;
+    bool be;
 
     // all sub-classes define
     //   bool refill(size_t more)
@@ -612,6 +612,22 @@ void to_wire(Buf& buf, const Header& H)
 }
 
 void to_evbuf(evbuffer *buf, const Header& H, bool be);
+
+template<typename Buf>
+void from_wire(Buf& buf, Header& H)
+{
+    if(!buf.ensure(8) || buf[0]!=0xca || buf[1]==0) {
+        buf.fault(__FILE__, __LINE__);
+
+    } else {
+        H.cmd = buf[3];
+        H.flags = buf[2];
+        // Set/change buffer endianness
+        buf.be = H.flags&pva_flags::MSB;
+        buf.skip(4u, __FILE__, __LINE__);
+        from_wire(buf, H.len);
+    }
+}
 
 }} // namespace pvxs::impl
 

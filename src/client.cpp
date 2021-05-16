@@ -769,43 +769,27 @@ bool ContextImpl::onSearch()
         }
         return false; // wait for more I/O
 
-    } else if(nrx<8) {
-        // maybe a zero (body) length packet?
-        // maybe an OS error?
+    }
 
-        log_info_printf(io, "UDP ignore runt%s\n", "");
-        return true;
+    FixedBuf M(true, searchMsg.data(), nrx);
+    Header head{};
+    from_wire(M, head); // overwrites M.be
 
-    } else if(searchMsg[0]!=0xca || searchMsg[1]==0 || (searchMsg[2]&(pva_flags::Control|pva_flags::SegMask))) {
-        // minimum header size is 8 bytes
-        // ID byte must by 0xCA (because PVA has some paternal envy)
-        // ignore incompatible version 0
+    if(!M.good() || (head.flags&(pva_flags::Control|pva_flags::SegMask))) {
         // UDP packets can't contain control messages, or use segmentation
 
-        log_info_printf(io, "UDP ignore header%u %02x%02x%02x%02x\n",
-                   unsigned(nrx), searchMsg[0], searchMsg[1], searchMsg[2], searchMsg[3]);
+        log_hex_printf(io, Level::Debug, &searchMsg[0], nrx, "Ignore UDP message from %s\n", src.tostring().c_str());
         return true;
     }
 
     log_hex_printf(io, Level::Debug, &searchMsg[0], nrx, "UDP search Rx %d from %s\n", nrx, src.tostring().c_str());
 
-    bool be = searchMsg[2]&pva_flags::MSB;
-
-    FixedBuf M(be, searchMsg.data(), nrx);
-
-    const uint8_t cmd = M[3];
-    M.skip(4, __FILE__, __LINE__);
-
-    uint32_t len=0;
-    from_wire(M, len);
-
-    if(len > M.size() && M.good()) {
-        log_info_printf(io, "UDP ignore header%u %02x%02x%02x%02x\n",
-                   unsigned(M.size()), M[0], M[1], M[2], M[3]);
+    if(head.len > M.size() && M.good()) {
+        log_info_printf(io, "UDP ignore header truncated%s", "\n");
         return true;
     }
 
-    if(cmd==CMD_SEARCH_RESPONSE) {
+    if(head.cmd==CMD_SEARCH_RESPONSE) {
         procSearchReply(*this, src, M, false);
 
     } else {
@@ -978,8 +962,10 @@ void ContextImpl::tickSearch()
                            unsigned(ntx), unsigned(consumed));
 
             } else {
-                log_debug_printf(io, "Search to %s %s\n", pair.first.tostring().c_str(),
-                                 pair.second ? "ucast" : "bcast");
+                log_hex_printf(io, Level::Debug, (char*)searchMsg.data(), consumed,
+                               "Search to %s %s\n",
+                               pair.first.tostring().c_str(),
+                               pair.second ? "ucast" : "bcast");
             }
         }
         *pflags |= 0x80; // TCP search is always "unicast"
