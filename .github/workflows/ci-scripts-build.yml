@@ -20,7 +20,7 @@ env:
 
 jobs:
   native:
-    name: ${{ matrix.os }}/${{ matrix.cmp }}/${{ matrix.configuration }}/${{ matrix.base }}/${{ matrix.wine }}/${{ matrix.libevent }}
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     # Set environment variables from matrix parameters
     env:
@@ -35,61 +35,66 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-20.04
+          - name: Native Linux (WError)
+            os: ubuntu-20.04
             cmp: gcc
             configuration: default
             base: "7.0"
             extra: "CMD_CPPFLAGS=-Werror"
 
-          - os: ubuntu-20.04
+          - name: Cross mingw64 DLL
+            os: ubuntu-20.04
             cmp: gcc
             configuration: default
             base: "7.0"
             wine: "64"
 
-          - os: ubuntu-20.04
+          - name: Cross mingw64 static
+            os: ubuntu-20.04
             cmp: gcc
             configuration: static
             base: "7.0"
             wine: "64"
 
-          - os: ubuntu-20.04
+          - name: Native Linux with clang
+            os: ubuntu-20.04
             cmp: clang
             configuration: default
             base: "7.0"
 
-          - os: ubuntu-20.04
+          - name: Native Linux with libevent stable
+            os: ubuntu-20.04
             cmp: gcc
             configuration: default
             base: "7.0"
             libevent: "release-2.0.22-stable"
 
-          - os: ubuntu-20.04
+          - name: Native Linux with 3.15
+            os: ubuntu-20.04
             cmp: gcc
             configuration: default
             base: "3.15"
 
-          - os: ubuntu-20.04
+          - name: Native Linux with 3.14
+            os: ubuntu-20.04
             cmp: gcc
             configuration: default
             base: "3.14"
 
-          - os: ubuntu-20.04
+          - name: OSX
+            os: macos-latest
             cmp: clang
             configuration: default
             base: "7.0"
 
-          - os: macos-latest
-            cmp: clang
-            configuration: default
-            base: "7.0"
-
-          - os: windows-2019
+          - name: vs2019 DLL
+            os: windows-2019
             cmp: vs2019
             configuration: default
             base: "7.0"
 
-          - os: windows-2019
+          - name: vs2019 static
+            os: windows-2019
             cmp: vs2019
             configuration: static
             base: "7.0"
@@ -120,9 +125,15 @@ jobs:
     - name: CDT Check
       run: ./.ci-local/cdt-check.sh
       if: runner.os == 'Linux'
+    - name: Upload tapfiles Artifact
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v2
+      with:
+        name: tapfiles ${{ matrix.name }}
+        path: '**/O.*/*.tap'
 
   docker:
-    name: ${{ matrix.image }}/${{ matrix.cmp }}/${{ matrix.configuration }}/${{ matrix.base }}/${{ matrix.wine }}/${{ matrix.libevent }}
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.image }}
@@ -138,17 +149,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: centos:7
+          - name: Linux centos 7
+            image: centos:7
             cmp: gcc
             configuration: default
             base: "7.0"
 
-          - image: centos:8
+          - name: Linux centos 8
+            image: centos:8
             cmp: gcc
             configuration: default
             base: "7.0"
 
-          - image: fedora:34
+          - name: Linux fedora 34
+            image: fedora:34
             cmp: gcc
             configuration: default
             base: "7.0"
@@ -197,3 +211,9 @@ jobs:
       run: python .ci/cue.py test-results
     - name: CDT Check
       run: ./.ci-local/cdt-check.sh
+    - name: Upload tapfiles Artifact
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v2
+      with:
+        name: tapfiles ${{ matrix.name }}
+        path: '**/O.*/*.tap'
