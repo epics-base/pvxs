@@ -125,7 +125,12 @@ else
 # libevent 2.0 only autotools
 # only host CC supported
 
+CONFIGUREFLAGS = $(CMD_CONFIGUREFLAGS)
+
 CONFIGUREFLAGS += --disable-openssl
+
+# The definition from Base includes arguments '-ru' which confuses autoconf 2.69 (circa rhel7)
+CONFIGUREFLAGS+=AR=$(firstword $(AR))
 
 ifeq ($(OS_CLASS),WIN32)
 # On Win32 we must choose between only static and only shared
