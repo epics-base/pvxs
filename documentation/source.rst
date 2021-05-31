@@ -12,11 +12,16 @@ The `pvxs::server::Source` interface is a more general, and complex, means of al
 to respond to PV names as clients search for them.
 This may be necessary in specialized cases such as gateway, proxy, or bridge servers.
 
+.. _sourcethreading:
+
 Threading
 ---------
 
-The `pvxs::server::Source::onSearch` and `pvxs::server::Source::onCreate` callbacks may be invoked concurrently.
-All callbacks stored through a `pvxs::server::ChannelControl` and related \*Op will be serialized.
+A Server will invoke user callback functions from one or more internal worker threads.
+However, it is guaranteed that callbacks relating to a given PV will never be executed concurrently.
+This implies that callbacks for a single operation,
+those stored through a `pvxs::server::ChannelControl` and related \*Op,
+will also never be executed concurrently.
 
 Ownership and Lifetime
 ----------------------

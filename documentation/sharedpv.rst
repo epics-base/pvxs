@@ -70,6 +70,8 @@ An example of a SharedPV with a custom Put handler
 
     pv.open(initial);
 
+.. note:: SharedPV follows the Source rules for :ref:`sourcethreading` and locking.
+
 .. doxygenstruct:: pvxs::server::SharedPV
     :members:
 
