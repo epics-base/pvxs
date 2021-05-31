@@ -348,7 +348,7 @@ Context::Pvt::Pvt(const Config& conf)
         try {
             saddr.setAddress(addr.c_str(), effective.udp_port);
         }catch(std::runtime_error& e) {
-            log_err_printf(setup, "%s  Ignoring...\n", e.what());
+            log_err_printf(setup, "%s  Ignoring %s\n", e.what(), addr.c_str());
         }
         auto top = ntohl(saddr->in.sin_addr.s_addr)>>24u;
         auto isucast = !isbcast && top<239 && top>224;

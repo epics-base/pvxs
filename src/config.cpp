@@ -19,6 +19,7 @@
 #include "evhelper.h"
 
 DEFINE_LOGGER(serversetup, "pvxs.server.setup");
+DEFINE_LOGGER(clientsetup, "pvxs.client.setup");
 DEFINE_LOGGER(config, "pvxs.config");
 
 namespace pvxs {
@@ -82,7 +83,7 @@ void parse_bool(bool& dest, const std::string& name, const std::string& val)
     } else if(epicsStrCaseCmp(val.c_str(), "NO")==0 || val=="0") {
         dest = false;
     } else {
-        log_err_printf(serversetup, "%s invalid bool value (YES/NO) : '%s'\n",
+        log_err_printf(config, "%s invalid bool value (YES/NO) : '%s'\n",
                        name.c_str(), val.c_str());
     }
 }
@@ -289,11 +290,11 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
         try {
             self.udp_port = parseTo<uint64_t>(pickone.val);
         }catch(std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+            log_warn_printf(clientsetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
     if(self.udp_port==0u) {
-        log_err_printf(serversetup, "ignoring EPICS_PVA_BROADCAST_PORT=%d\n", 0);
+        log_warn_printf(clientsetup, "ignoring EPICS_PVA_BROADCAST_PORT=%d\n", 0);
         self.udp_port = 5076;
     }
 
