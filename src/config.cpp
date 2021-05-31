@@ -293,7 +293,7 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
         }
     }
     if(self.udp_port==0u) {
-        log_err_printf(serversetup, "ignoring EPICS_PVA_BROADCAST_PORT=%d", 0);
+        log_err_printf(serversetup, "ignoring EPICS_PVA_BROADCAST_PORT=%d\n", 0);
         self.udp_port = 5076;
     }
 
