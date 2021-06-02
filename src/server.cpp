@@ -335,16 +335,35 @@ Server::Pvt::Pvt(const Config &conf)
 
     auto manager = UDPManager::instance();
 
+    evsocket dummy(AF_INET, SOCK_DGRAM, 0);
+
     for(const auto& iface : effective.interfaces) {
         SockAddr addr(AF_INET, iface.c_str());
         addr.setPort(effective.udp_port);
+
         listeners.push_back(manager.onSearch(addr,
                                              std::bind(&Pvt::onSearch, this, std::placeholders::_1) ));
+
         // update to allow udp_port==0
         effective.udp_port = addr.port();
+
+#ifndef _WIN32
+        if(!addr.isAny()) {
+            /* An oddness of BSD sockets (not winsock) is that binding to
+             * INADDR_ANY will receive unicast and broadcast, but binding to
+             * a specific interface address receives only unicast.  The trick
+             * is to bind a second socket to the interface broadcast address,
+             * which will then receive only broadcasts.
+             */
+            for(auto bcast : dummy.interfaces(&addr)) {
+                bcast.setPort(addr.port());
+                listeners.push_back(manager.onSearch(bcast,
+                                                     std::bind(&Pvt::onSearch, this, std::placeholders::_1) ));
+            }
+        }
+#endif
     }
 
-    evsocket dummy(AF_INET, SOCK_DGRAM, 0);
 
     acceptor_loop.call([this](){
         // from acceptor worker
