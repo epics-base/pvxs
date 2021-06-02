@@ -227,6 +227,11 @@ public:
     inline unsigned short family() const { return store.sa.sa_family; }
     unsigned short port() const;
     void setPort(unsigned short port);
+    SockAddr withPort(unsigned short port) {
+        SockAddr temp(*this);
+        temp.setPort(port);
+        return temp;
+    }
 
     void setAddress(const char *, unsigned short port=0);
 

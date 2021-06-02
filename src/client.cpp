@@ -391,10 +391,10 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
 
     searchBuckets.resize(nBuckets);
 
-    std::set<std::string> bcasts;
+    std::set<SockAddr> bcasts;
     for(auto& addr : searchTx.interfaces()) {
         addr.setPort(0u);
-        bcasts.insert(addr.tostring());
+        bcasts.insert(addr);
     }
 
     {
@@ -420,15 +420,17 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     enable_SO_RXQ_OVFL(searchTx.sock);
 
     for(auto& addr : effective.addressList) {
-        auto isbcast = bcasts.find(addr)!=bcasts.end();
         SockAddr saddr(AF_INET);
         try {
             saddr.setAddress(addr.c_str(), effective.udp_port);
         }catch(std::runtime_error& e) {
             log_err_printf(setup, "%s  Ignoring %s\n", e.what(), addr.c_str());
+            continue;
         }
         auto top = ntohl(saddr->in.sin_addr.s_addr)>>24u;
-        auto isucast = !isbcast && top<239 && top>224;
+        auto ismcast = top>224 && top<239;
+        bool isbcast = bcasts.find(saddr.withPort(0))!=bcasts.end(); // TODO: exclude port
+        auto isucast = !isbcast && !ismcast;
 
         log_info_printf(io, "Searching to %s%s\n", saddr.tostring().c_str(), (isucast?" unicast":""));
         searchDest.emplace_back(saddr, isucast);
