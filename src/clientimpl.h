@@ -186,10 +186,16 @@ struct Context::Pvt
     evsocket searchTx;
     uint16_t searchRxPort;
 
-    // poked from both TCP and UDP workers
+    // poked and beaconSenders from both TCP and UDP workers
     epicsMutex pokeLock;
     epicsTimeStamp lastPoke{};
     bool poked = false;
+
+    struct BTrack {
+        std::array<uint8_t, 12> guid;
+        epicsTimeStamp lastRx;
+    };
+    std::map<SockAddr, BTrack> beaconSenders;
 
     std::vector<uint8_t> searchMsg;
 
@@ -211,12 +217,6 @@ struct Context::Pvt
     evbase tcp_loop;
     const evevent searchRx;
     const evevent searchTimer;
-
-    struct BTrack {
-        std::array<uint8_t, 12> guid;
-        epicsTimeStamp lastRx;
-    };
-    std::map<SockAddr, BTrack> beaconSenders;
 
     // beacon handling done on UDP worker.
     // we keep a ref here as long as beaconCleaner is in use

@@ -447,13 +447,16 @@ void Context::Pvt::onBeacon(const UDPManager::Beacon& msg)
     epicsTimeStamp now;
     epicsTimeGetCurrent(&now);
 
-    auto it = beaconSenders.find(msg.src);
-    if(it!=beaconSenders.end() && msg.guid==it->second.guid) {
-        it->second.lastRx = now;
-        return;
-    }
+    {
+        Guard G(pokeLock);
+        auto it = beaconSenders.find(msg.src);
+        if(it!=beaconSenders.end() && msg.guid==it->second.guid) {
+            it->second.lastRx = now;
+            return;
+        }
 
-    beaconSenders.emplace(msg.src, BTrack{msg.guid, now});
+        beaconSenders.emplace(msg.src, BTrack{msg.guid, now});
+    }
 
     log_debug_printf(io, "%s New server %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
                msg.src.tostring().c_str(),
@@ -773,6 +776,8 @@ void Context::Pvt::tickBeaconClean()
 {
     epicsTimeStamp now;
     epicsTimeGetCurrent(&now);
+
+    Guard G(pokeLock);
 
     auto it = beaconSenders.begin();
     while(it!=beaconSenders.end()) {
