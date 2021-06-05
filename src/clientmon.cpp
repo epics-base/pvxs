@@ -575,6 +575,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 
     auto op(std::make_shared<SubscriptionImpl>(context->tcp_loop));
     op->self = op;
+    op->channelName = _name;
     op->event = std::move(_event);
     op->onInit = std::move(_onInit);
     op->pvRequest = _buildReq();

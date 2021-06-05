@@ -113,7 +113,7 @@ class SigInt {
     const std::function<void()> handler;
 public:
     SigInt(std::function<void()>&& handler) :handler(std::move(handler)) {}
-}
+};
 
 #endif // !defined(__rtems__) && !defined(vxWorks)
 
