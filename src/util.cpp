@@ -24,6 +24,20 @@
 
 #include "pvxsVCS.h"
 
+extern "C" {
+// unofficial helpers for dynamic loading
+PVXS_API
+unsigned long pvxs_version_int()
+{
+    return PVXS_VERSION;
+}
+PVXS_API
+unsigned long pvxs_version_abi_int()
+{
+    return PVXS_ABI_VERSION;
+}
+}
+
 namespace pvxs {
 
 DEFINE_LOGGER(log, "pvxs.util");

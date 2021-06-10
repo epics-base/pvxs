@@ -3,13 +3,17 @@
 
 # This is YAML - indentation levels are crucial
 
-name: PVXS
+name: PVXS EPICS
 
 # Trigger on pushes and PRs to any branch
 on:
   push:
     paths-ignore:
       - .appveyor.yml
+      - setup.py
+      - MANIFEST.in
+      - pyproject.toml
+      - python/*
   pull_request:
 
 env:
