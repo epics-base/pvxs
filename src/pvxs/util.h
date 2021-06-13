@@ -183,7 +183,7 @@ std::ostream& target_information(std::ostream&);
  * to methods during destruction will result in undefined behavior.
  *
  * @code
- * MPMCFIFO<std::function<void()>> Q(42);
+ * MPMCFIFO<std::function<void()>> Q;
  * ...
  * while(auto work = Q.pop()) { // Q.push(nullptr) to break loop
  *     work();
@@ -194,7 +194,7 @@ std::ostream& target_information(std::ostream&);
  */
 template<typename T>
 class MPMCFIFO {
-    epicsMutex lock;
+    mutable epicsMutex lock;
     epicsEvent notifyW, notifyR;
     std::deque<T> Q;
     const size_t nlimit;
@@ -207,14 +207,22 @@ public:
     typedef T value_type;
 
     //! Construct a new queue
-    explicit MPMCFIFO(size_t limit)
+    //! @param limit If non-zero, then emplace()/push() will block while while
+    //!              queue size is greater than or equal to this limit.
+    explicit MPMCFIFO(size_t limit=0u)
         :nlimit(limit)
-    {
-        if(!nlimit)
-            throw std::invalid_argument("MPMCFIFO limit must be >0");
-    }
+    {}
     //! Destructor is not re-entrant
     ~MPMCFIFO() {}
+
+    //! Poll number of elements in the work queue at this moment.
+    size_t size() const {
+        Guard G(lock);
+        return Q.size();
+    }
+    size_t max_size() const {
+        return nlimit ? nlimit : Q.max_size();
+    }
 
     /** Construct a new element into the queue.
      *
@@ -226,7 +234,7 @@ public:
         {
             Guard G(lock);
             // while full, wait for reader to consume an entry
-            while(Q.size()>=nlimit) {
+            while(nlimit && Q.size()>=nlimit) {
                 nwriters++;
                 {
                     UnGuard U(G);
