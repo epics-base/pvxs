@@ -270,7 +270,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickBeaconClean();
     static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);
-    void cacheClean();
+    void cacheClean(const std::string &name);
     static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
     void onNSCheck();
     static void onNSCheckS(evutil_socket_t fd, short evt, void *raw);

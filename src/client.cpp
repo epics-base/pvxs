@@ -315,15 +315,15 @@ void Context::hurryUp()
     });
 }
 
-void Context::cacheClear()
+void Context::cacheClear(const std::string& name)
 {
     if(!pvt)
         throw std::logic_error("NULL Context");
 
-    pvt->impl->tcp_loop.call([this](){
+    pvt->impl->tcp_loop.call([this, name](){
         // run twice to ensure both mark and sweep of all unused channels
-        pvt->impl->cacheClean();
-        pvt->impl->cacheClean();
+        pvt->impl->cacheClean(name);
+        pvt->impl->cacheClean(name);
     });
 }
 
@@ -978,11 +978,14 @@ void ContextImpl::onNSCheckS(evutil_socket_t fd, short evt, void *raw)
     }
 }
 
-void ContextImpl::cacheClean()
+void ContextImpl::cacheClean(const std::string& name)
 {
     std::set<std::string> trash;
 
     for(auto& pair : chanByName) {
+        if(!name.empty() && pair.first!=name)
+            continue; // skip
+
         if(pair.second.use_count()<=1) {
             if(!pair.second->garbage) {
                 // mark for next sweep

@@ -469,9 +469,14 @@ public:
      */
     void hurryUp();
 
-    /** Immediately close unused channels and connections.
+    /** Channel cache maintenance.
+     *
+     * @param name If empty (default), remove all channels from cache.
+     *             If not empty, only remove the named channel.
+     *
+     * @since UNRELEASED 'name' argument added.
      */
-    void cacheClear();
+    void cacheClear(const std::string& name = std::string());
 
     //! Compile report about peers and channels
     //! @since UNRELEASED
