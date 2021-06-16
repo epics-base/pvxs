@@ -165,7 +165,16 @@ struct evbase::Pvt : public epicsThreadRunable
     {
         INST_COUNTER(evbaseRunning);
         try {
-            decltype (base) tbase(event_base_new());
+            evconfig conf(event_config_new());
+#ifdef __rtems__
+            /* with libbsd circa RTEMS 5.1
+             * TCP peer close/reset notifications appear to be lost.
+             * Maybe due to absence of NOTE_EOF?
+             * poll() seems to work though.
+             */
+            event_config_avoid_method(conf.get(), "kqueue");
+#endif
+            decltype (base) tbase(event_base_new_with_config(conf.get()));
             if(evthread_make_base_notifiable(tbase.get())) {
                 throw std::runtime_error("evthread_make_base_notifiable");
             }

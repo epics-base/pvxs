@@ -60,7 +60,13 @@ ifneq (,$(filter win%,$(EPICS_HOST_ARCH)))
 CMAKEFLAGS += -G "MinGW Makefiles" -DCMAKE_C_COMPILER="$(CC)"
 endif
 
+ifneq (,$(filter RTEMS%,$(T_A)))
+CMAKE_TOOLCHAIN_$(T_A) = $(T_A).cmake
+CMAKE_TOOLCHAIN_D_$(T_A) = $(CMAKE_TOOLCHAIN_$(T_A))
+endif
+
 # toolchain file when cross compiling
+CMAKE_TOOLCHAIN_D ?= $(CMAKE_TOOLCHAIN_D_$(T_A))
 CMAKE_TOOLCHAIN ?= $(CMAKE_TOOLCHAIN_$(T_A))
 CMAKEFLAGS += $(if $(CMAKE_TOOLCHAIN),-DCMAKE_TOOLCHAIN_FILE=$(CMAKE_TOOLCHAIN))
 
@@ -107,7 +113,7 @@ else # T_A
 ifeq (YES,$(LIBEVENT_USE_CMAKE))
 # libevent >= 2.1 prefer CMake
 
-libevent.%:
+libevent.%: $(CMAKE_TOOLCHAIN_D)
 	$(CMAKE) $(CMAKEFLAGS) ../libevent
 	$(CMAKE) -E env --unset=MAKEFLAGS --unset=CC $(CMAKE) --build . $(CBUILDFLAGS) --target install
 ifneq (,$(filter %mingw,$(T_A)))
@@ -121,6 +127,22 @@ ifeq (NO,$(SHARED_LIBRARIES))
 #       As a crutch we make a copy
 endif
 endif
+
+EXPANDFLAGS = $(foreach var,$(EXPANDVARS),-D$(var)="$($(var))")
+
+ifneq (,$(filter RTEMS%,$(T_A)))
+# cf. cmake/RTEMS.cmake@
+EXPANDVARS+=RTEMS_CPU
+EXPANDVARS+=RTEMS_BSP
+EXPANDVARS+=RTEMS_VERSION
+EXPANDVARS+=RTEMS_BASE
+EXPANDVARS+=CPU_CFLAGS
+
+$(T_A).cmake: ../cmake/RTEMS.cmake@
+	$(PERL) $(TOOLS)/expandVars.pl -a $(T_A) -t $(INSTALL_LOCATION) $(EXPANDFLAGS) $< $@
+# can't use $(EXPAND_TOOL) as this def is in a RULES_ file...
+endif
+
 
 else
 # libevent 2.0 only autotools

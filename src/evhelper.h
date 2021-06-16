@@ -25,6 +25,10 @@
 // hooks for std::unique_ptr
 namespace std {
 template<>
+struct default_delete<event_config> {
+    inline void operator()(event_config* ev) { event_config_free(ev); }
+};
+template<>
 struct default_delete<event_base> {
     inline void operator()(event_base* ev) { event_base_free(ev); }
 };
@@ -170,6 +174,7 @@ public:
     event_base* base = nullptr;
 };
 
+typedef owned_ptr<event_config> evconfig;
 typedef owned_ptr<event> evevent;
 typedef owned_ptr<evconnlistener> evlisten;
 typedef owned_ptr<bufferevent> evbufferevent;

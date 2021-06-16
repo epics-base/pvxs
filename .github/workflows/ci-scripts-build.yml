@@ -28,7 +28,10 @@ jobs:
       BCFG: ${{ matrix.configuration }}
       BASE: ${{ matrix.base }}
       WINE: ${{ matrix.wine }}
+      RTEMS: ${{ matrix.rtems }}
+      RTEMS_TARGET: ${{ matrix.rtems_target }}
       LIBEVENT_TAG: ${{ matrix.libevent }}
+      TEST: ${{ matrix.test }}
       EXTRA: ${{ matrix.extra }}
       VV: "1"
     strategy:
@@ -56,6 +59,15 @@ jobs:
             base: "7.0"
             wine: "64"
 
+          - name: RTEMS5
+            os: ubuntu-20.04
+            cmp: gcc
+            configuration: default
+            base: "7.0"
+            rtems: "5"
+            rtems_target: RTEMS-pc686-qemu
+            test: NO
+ 
           - name: Native Linux with clang
             os: ubuntu-20.04
             cmp: clang
