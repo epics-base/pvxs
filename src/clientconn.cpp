@@ -116,9 +116,6 @@ std::shared_ptr<ConnBase> Connection::self_from_this()
 
 void Connection::cleanup()
 {
-    // (maybe) keep myself alive
-    std::shared_ptr<Connection> self;
-
     ready = false;
 
     context->connByAddr.erase(peerAddr);

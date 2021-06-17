@@ -183,7 +183,7 @@ struct evbase::Pvt : public epicsThreadRunable
 
             start_sync.signal();
 
-            log_info_printf(logerr, "Enter loop worker for %p\n", base.get());
+            log_info_printf(logerr, "Enter loop worker for %p using %s\n", base.get(), event_base_get_method(base.get()));
 
             int ret = event_base_loop(base.get(), 0);
 
