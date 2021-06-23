@@ -119,7 +119,7 @@ struct PVXS_API Operation {
 
     //! Explicitly cancel a pending operation.
     //! Blocks until an in-progress callback has completed.
-    //! @returns true if the operation was cancelled, or false if already complete.
+    //! @returns true if the operation was canceled, or false if already complete.
     virtual bool cancel() =0;
 
     /** @brief Block until Operation completion
@@ -206,6 +206,7 @@ public:
     //! Return strong internal reference which will not prevent
     //! implicit cancellation when the last reference returned
     //! by exec() is released.
+    //! @since UNRELEASED
     virtual std::shared_ptr<Subscription> shared_from_this() const =0;
 };
 
