@@ -232,14 +232,14 @@ struct GPROp : public OperationBase
         });
     }
 
-    void reExecGet(std::function<void(client::Result&&)>&& resultcb) override final
+    void _reExecGet(std::function<void(client::Result&&)>&& resultcb) override final
     {
         if(op!=Get && op!=Put)
             throw std::logic_error("reExecGet() only meaningful for .get() and .put()");
 
         _reExecImpl(false, Value(), std::move(resultcb));
     }
-    void reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final
+    void _reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final
     {
         if(op!=Get && op!=Put) {
             throw std::logic_error("reExecPut() only meaningful for .put()");

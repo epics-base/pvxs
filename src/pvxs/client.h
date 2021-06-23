@@ -142,12 +142,17 @@ struct PVXS_API Operation {
     //! Queue an interruption of a wait() or wait(double) call.
     virtual void interrupt() =0;
 
-    // Expert API
+protected:
+    virtual void _reExecGet(std::function<void(client::Result&&)>&& resultcb) =0;
+    virtual void _reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) =0;
+public:
+#ifdef PVXS_EXPERT_API_ENABLED
     // usable when Builder::autoExec(false)
     // For GET/PUT, (re)issue request for current value
-    virtual void reExecGet(std::function<void(client::Result&&)>&& resultcb) =0;
+    inline void reExecGet(std::function<void(client::Result&&)>&& resultcb) { this->_reExecGet(std::move(resultcb)); }
     // For PUT (re)issue request to set current value
-    virtual void reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) =0;
+    inline void reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) { this->_reExecPut(arg, std::move(resultcb)); }
+#endif
 };
 
 //! Handle for monitor subscription
@@ -199,9 +204,13 @@ public:
      */
     virtual Value pop() =0;
 
-    // Expert API
+protected:
+    virtual void _onEvent(std::function<void(Subscription&)>&&) =0;
+public:
+#ifdef PVXS_EXPERT_API_ENABLED
     // replace handler stored with MonitorBuilder::event()
-    virtual void onEvent(std::function<void(Subscription&)>&&) =0;
+    inline void onEvent(std::function<void(Subscription&)>&& fn) { this->_onEvent(std::move(fn)); }
+#endif
 
     //! Return strong internal reference which will not prevent
     //! implicit cancellation when the last reference returned
@@ -479,9 +488,11 @@ public:
      */
     void cacheClear(const std::string& name = std::string());
 
+#ifdef PVXS_EXPERT_API_ENABLED
     //! Compile report about peers and channels
     //! @since UNRELEASED
     Report report() const;
+#endif
 
     explicit operator bool() const { return pvt.operator bool(); }
     size_t use_count() const { return pvt.use_count(); }
@@ -576,10 +587,11 @@ public:
     SubBuilder& priority(int p) { this->_prio = p; return _sb(); }
     SubBuilder& server(const std::string& s) { this->_server = s; return _sb(); }
 
-    // Expert API
+#ifdef PVXS_EXPERT_API_ENABLED
     // for GET/PUT control whether operations automatically proceed from INIT to EXEC
     // cf. Operation::reExec()
     SubBuilder& autoExec(bool b) { this->_autoexec = b; return _sb(); }
+#endif
 
     /** Controls whether Operation::cancel() and Subscription::cancel() synchronize.
      *
@@ -610,10 +622,11 @@ public:
     //! The functor is stored in the Operation returned by exec().
     GetBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
 
-    // Expert API
+#ifdef PVXS_EXPERT_API_ENABLED
     // called during operation INIT phase for Get/Put/Monitor when remote type
     // description is available.
     GetBuilder& onInit(std::function<void (const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
+#endif
 
     /** Execute the network operation.
      *  The caller must keep returned Operation pointer until completion
@@ -684,10 +697,11 @@ public:
      */
     PutBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
 
-    // Expert API
+#ifdef PVXS_EXPERT_API_ENABLED
     // called during operation INIT phase for Get/Put/Monitor when remote type
     // description is available.
     PutBuilder& onInit(std::function<void (const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
+#endif
 
     /** Execute the network operation.
      *  The caller must keep returned Operation pointer until completion
@@ -771,10 +785,11 @@ public:
     //! Include Disconnected exceptions in queue (default true).
     MonitorBuilder& maskDisconnected(bool m = true) { _maskDisconn = m; return *this; }
 
-    // Expert API
+#ifdef PVXS_EXPERT_API_ENABLED
     // called during operation INIT phase for Get/Put/Monitor when remote type
     // description is available.
     MonitorBuilder& onInit(std::function<void (Subscription&, const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
+#endif
 
     //! Submit request to subscribe
     PVXS_API

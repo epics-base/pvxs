@@ -11,6 +11,8 @@
 namespace pvxs {
 namespace impl {
 
+#ifdef PVXS_EXPERT_API_ENABLED
+
 /** Snapshot of information about a client/server
  *
  * cf. pvxs::server::Server::report()
@@ -42,5 +44,7 @@ struct Report {
 
 } // namespace impl
 } // namespace pvxs
+
+#endif // PVXS_EXPERT_API_ENABLED
 
 #endif // PVXS_NETCOMMON_H

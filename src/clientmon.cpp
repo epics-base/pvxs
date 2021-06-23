@@ -177,7 +177,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         return std::shared_ptr<Subscription>(self);
     }
 
-    virtual void onEvent(std::function<void(Subscription&)>&& fn) override final {
+    virtual void _onEvent(std::function<void(Subscription&)>&& fn) override final {
         decltype (event) junk;
         loop.call([this, &junk, &fn]() {
             junk = std::move(event);
@@ -223,8 +223,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
     // not actually visible through Subscription.
     // an artifact of using OperationBase for convenience
-    void reExecGet(std::function<void(client::Result&&)>&& resultcb) override final {}
-    void reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
+    void _reExecGet(std::function<void(client::Result&&)>&& resultcb) override final {}
+    void _reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
 
     virtual void createOp() override final
     {

@@ -69,8 +69,8 @@ struct InfoOp : public OperationBase
     }
 
     // not meaningful for GET_FIELD operation
-    void reExecGet(std::function<void(client::Result&&)>&& resultcb) override final {}
-    void reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
+    void _reExecGet(std::function<void(client::Result&&)>&& resultcb) override final {}
+    void _reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
 
     virtual void createOp() override final
     {

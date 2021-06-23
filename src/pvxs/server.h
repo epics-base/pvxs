@@ -115,9 +115,11 @@ public:
     //! List all source names and priorities.
     std::vector<std::pair<std::string, int> > listSource();
 
+#ifdef PVXS_EXPERT_API_ENABLED
     //! Compile report about peers and channels
     //! @since UNRELEASED
     Report report() const;
+#endif
 
     explicit operator bool() const { return !!pvt; }
 
