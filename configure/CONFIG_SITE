@@ -41,6 +41,10 @@ CHECK_RELEASE = YES
 -include $(TOP)/../CONFIG_SITE.local
 -include $(TOP)/configure/CONFIG_SITE.local
 
+# Allow internal use of Expert API
+# see ttps://mdavidsaver.github.io/pvxs/details.html#expert-apis
+USR_CPPFLAGS += -DPVXS_ENABLE_EXPERT_API
+
 # MSVC - skip defining min()/max() macros and enable APIs
 USR_CPPFLAGS_WIN32 += -DNOMINMAX -D_WIN32_WINNT=_WIN32_WINNT_VISTA
 
