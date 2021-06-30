@@ -174,6 +174,20 @@ void ServerChannelControl::close()
     });
 }
 
+void ServerChannelControl::_updateInfo(const std::shared_ptr<const ReportInfo>& info)
+{
+    auto serv = server.lock();
+    if(!serv)
+        return;
+
+    serv->acceptor_loop.call([this, &info](){
+        auto ch = chan.lock();
+        if(!ch)
+            return;
+        ch->reportInfo = info;
+    });
+}
+
 void ServerConn::handle_SEARCH()
 {
     EvInBuf M(peerBE, segBuf.get(), 16);

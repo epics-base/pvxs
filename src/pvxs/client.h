@@ -27,7 +27,6 @@ namespace client {
 
 class Context;
 struct Config;
-using pvxs::impl::Report;
 
 //! Operation failed because of connection to server was lost
 struct PVXS_API Disconnect : public std::runtime_error
@@ -503,7 +502,7 @@ public:
 
     //! Compile report about peers and channels
     //! @since UNRELEASED
-    Report report() const;
+    Report report(bool zero=true) const;
 #endif
 
     explicit operator bool() const { return pvt.operator bool(); }

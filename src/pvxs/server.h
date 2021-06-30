@@ -32,7 +32,6 @@ namespace server {
 struct SharedPV;
 struct Source;
 struct Config;
-using pvxs::impl::Report;
 
 /** PV Access protocol server instance
  *
@@ -117,8 +116,9 @@ public:
 
 #ifdef PVXS_EXPERT_API_ENABLED
     //! Compile report about peers and channels
+    //! @param zero If true, zero counters after reading
     //! @since UNRELEASED
-    Report report() const;
+    Report report(bool zero=true) const;
 #endif
 
     explicit operator bool() const { return !!pvt; }

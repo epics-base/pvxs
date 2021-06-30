@@ -66,6 +66,8 @@ struct ServerChannelControl : public server::ChannelControl
     virtual void onClose(std::function<void(const std::string&)>&& fn) override final;
     virtual void close() override final;
 
+    virtual void _updateInfo(const std::shared_ptr<const ReportInfo>& info) override final;
+
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerChan> chan;
 
@@ -86,6 +88,7 @@ struct ServerChan
     } state;
 
     size_t statTx{}, statRx{};
+    std::shared_ptr<const ReportInfo> reportInfo;
 
     std::function<void(std::unique_ptr<server::ConnectOp>&&)> onOp;
     std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onRPC;

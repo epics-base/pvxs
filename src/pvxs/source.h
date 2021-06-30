@@ -153,6 +153,14 @@ struct PVXS_API ChannelControl : public OpBase {
     virtual void close() =0;
 
     // TODO: signal Rights?
+
+#ifdef PVXS_EXPERT_API_ENABLED
+    // Store info struct which will be returned with Report::Channel
+    inline void updateInfo(const std::shared_ptr<const ReportInfo>& info)
+    { this->_updateInfo(info); }
+#endif
+private:
+    virtual void _updateInfo(const std::shared_ptr<const ReportInfo>& info) =0;
 };
 
 /** Interface through which a Server discovers Channel names and

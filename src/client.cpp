@@ -402,11 +402,11 @@ void Context::ignoreServerGUIDs(const std::vector<ServerGUID>& guids)
     });
 }
 
-Report Context::report() const
+Report Context::report(bool zero) const
 {
     Report ret;
 
-    pvt->impl->tcp_loop.call([this, &ret](){
+    pvt->impl->tcp_loop.call([this, &ret, zero](){
 
         for(auto& pair : pvt->impl->connByAddr) {
             auto conn = pair.second.lock();
@@ -418,6 +418,10 @@ Report Context::report() const
             sconn.peer = conn->peerName;
             sconn.tx = conn->statTx;
             sconn.rx = conn->statRx;
+
+            if(zero) {
+                conn->statTx = conn->statRx = 0u;
+            }
 
             // omit stats for transitory conn->creatingByCID
 
@@ -431,6 +435,10 @@ Report Context::report() const
                 schan.name = chan->name;
                 schan.tx = chan->statTx;
                 schan.rx = chan->statRx;
+
+                if(zero) {
+                    chan->statTx = chan->statRx = 0u;
+                }
             }
         }
 

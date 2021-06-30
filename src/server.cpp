@@ -31,6 +31,9 @@
 #include "udp_collector.h"
 
 namespace pvxs {
+namespace impl {
+ReportInfo::~ReportInfo() {}
+}
 namespace server {
 using namespace impl;
 
@@ -221,14 +224,14 @@ Server& Server::interrupt()
     return *this;
 }
 
-Report Server::report() const
+Report Server::report(bool zero) const
 {
     if(!pvt)
         throw std::logic_error("NULL Server");
 
     Report ret;
 
-    pvt->acceptor_loop.call([this, &ret](){
+    pvt->acceptor_loop.call([this, &ret, zero](){
 
         for(auto& pair : pvt->connections) {
             auto conn = pair.first;
@@ -236,8 +239,13 @@ Report Server::report() const
             ret.connections.emplace_back();
             auto& sconn = ret.connections.back();
             sconn.peer = conn->peerName;
+            sconn.credentials = conn->cred;
             sconn.tx = conn->statTx;
             sconn.rx = conn->statRx;
+
+            if(zero) {
+                conn->statTx = conn->statRx = 0u;
+            }
 
             for(auto& pair : conn->chanBySID) {
                 auto& chan = pair.second;
@@ -247,6 +255,11 @@ Report Server::report() const
                 schan.name = chan->name;
                 schan.tx = chan->statTx;
                 schan.rx = chan->statRx;
+                schan.info = chan->reportInfo;
+
+                if(zero) {
+                    chan->statTx = chan->statRx = 0u;
+                }
             }
         }
 
