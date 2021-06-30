@@ -18,7 +18,7 @@ CMAKEFLAGS = $(CMD_CMAKEFLAGS)
 LIBEVENT = $(LIBEVENT_$(T_A))
 LIBEVENT_$(T_A) = $(INSTALL_LOCATION)/bundle/usr/$(T_A)
 
-CMAKEFLAGS += -DCMAKE_INSTALL_PREFIX:PATH=$(abspath $(LIBEVENT_$(T_A)))
+CMAKEFLAGS += -DCMAKE_INSTALL_PREFIX:PATH="$(abspath $(LIBEVENT_$(T_A)))"
 
 # not needed, and may not be available on embedded targets, so never try
 CMAKEFLAGS += -DEVENT__DISABLE_OPENSSL=ON
@@ -31,7 +31,7 @@ CMAKEFLAGS += -DEVENT__DISABLE_TESTS=ON
 CMAKEFLAGS += -DEVENT__DISABLE_BENCHMARK=ON
 
 # searched for toolchain files
-CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR=$(abspath $(TOP)/bundle/cmake)
+CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR="$(abspath $(TOP)/bundle/cmake)"
 
 CMAKEFLAGS += -DCMAKE_MAKE_PROGRAM="$(MAKE)"
 
@@ -68,7 +68,7 @@ endif
 # toolchain file when cross compiling
 CMAKE_TOOLCHAIN_D ?= $(CMAKE_TOOLCHAIN_D_$(T_A))
 CMAKE_TOOLCHAIN ?= $(CMAKE_TOOLCHAIN_$(T_A))
-CMAKEFLAGS += $(if $(CMAKE_TOOLCHAIN),-DCMAKE_TOOLCHAIN_FILE=$(CMAKE_TOOLCHAIN))
+CMAKEFLAGS += $(if $(CMAKE_TOOLCHAIN),-DCMAKE_TOOLCHAIN_FILE="$(CMAKE_TOOLCHAIN)")
 
 # flags for cmake --build
 # eg. "-j 2"  (that space is important)

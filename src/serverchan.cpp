@@ -158,7 +158,8 @@ void ServerChannelControl::close()
             return;
         auto conn = ch->conn.lock();
         if(conn && ch->state==ServerChan::Active) {
-            // Send unsolicited Channel Destroy
+            log_debug_printf(connio, "%s %s Send unsolicited Channel Destroy\n",
+                             conn->peerName.c_str(), ch->name.c_str());
 
             auto tx = bufferevent_get_output(conn->bev.get());
             EvOutBuf R(hostBE, tx);

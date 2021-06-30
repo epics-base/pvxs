@@ -861,7 +861,7 @@ void ContextImpl::tickSearch()
             FixedBuf C(true, pcount, 2u);
             to_wire(C, count);
         }
-        auto consumed = M.save() - searchMsg.data();
+        size_t consumed = M.save() - searchMsg.data();
         {
             FixedBuf H(true, searchMsg.data(), 8);
             to_wire(H, Header{CMD_SEARCH, 0, uint32_t(consumed-8u)});

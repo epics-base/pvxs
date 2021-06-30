@@ -80,7 +80,7 @@ void test_call()
         auto ival(std::make_shared<int>(42));
         base.call(std::bind([&called](std::shared_ptr<int>& ival) {
                       auto trash(std::move(ival));
-                      testEq(trash.use_count(), 1u);
+                      testEq(trash.use_count(), 1);
                       called = true;
                   }, std::move(ival)));
         testTrue(called);

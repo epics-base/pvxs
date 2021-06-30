@@ -8,6 +8,8 @@
 #include <string>
 #include <list>
 
+#include <pvxs/version.h>
+
 namespace pvxs {
 namespace impl {
 

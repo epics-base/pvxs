@@ -428,7 +428,7 @@ Server::Pvt::Pvt(const Config &conf)
         union {
             std::array<uint32_t, 3> i;
             std::array<uint8_t, 3*4> b;
-        } pun;
+        } pun{};
         static_assert (sizeof(pun)==12, "");
 
         // seed with some randomness to avoid making UUID a vector
@@ -672,7 +672,7 @@ void Server::Pvt::doBeacons(short evt)
     // "NULL" serverStatus
     to_wire(M, uint8_t(0xff));
 
-    auto pktlen = M.save()-beaconMsg.data();
+    size_t pktlen = M.save()-beaconMsg.data();
 
     // now going back to fill in header
     FixedBuf H(true, beaconMsg.data(), 8);
@@ -702,12 +702,10 @@ void Server::Pvt::doBeacons(short evt)
 
     // mimic pvAccessCPP server (almost)
     // send a "burst" of beacons, then fallback to a longer interval
-    timeval interval;
+    timeval interval{180, 0};
     if(beaconCnt<10u) {
         interval = {15, 0};
         beaconCnt++;
-    } else {
-        interval = {180, 0};
     }
     if(event_add(beaconTimer.get(), &interval))
         log_err_printf(serversetup, "Error re-enabling beacon timer on\n%s", "");
