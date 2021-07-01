@@ -218,32 +218,6 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
     }
 }
 
-namespace {
-template<typename E, typename C = E>
-void to_wire(Buffer& buf, const shared_array<const void>& varr)
-{
-    auto arr = varr.castTo<const E>();
-    to_wire(buf, Size{arr.size()});
-    for(auto i : range(arr.size())) {
-        to_wire(buf, C(arr[i]));
-    }
-}
-
-template<typename E, typename C = E>
-void from_wire(Buffer& buf, shared_array<const void>& varr)
-{
-    Size slen{};
-    from_wire(buf, slen);
-    shared_array<E> arr(slen.size);
-    for(auto i : range(arr.size())) {
-        C temp{};
-        from_wire(buf, temp);
-        arr[i] = temp;
-    }
-    varr = arr.freeze().template castTo<const void>();
-}
-}
-
 // serialize a field and all children (if Compound)
 static
 void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<const FieldStorage>& store)

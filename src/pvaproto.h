@@ -21,6 +21,7 @@
 
 #include <event2/buffer.h>
 #include <pvxs/version.h>
+#include <pvxs/sharedArray.h>
 #include "utilpvt.h"
 
 namespace pvxs {namespace impl {
@@ -406,6 +407,105 @@ void from_wire(Buffer& buf, Status& sts)
         from_wire(buf, sts.msg);
         from_wire(buf, sts.trace);
     }
+}
+
+template<typename E, typename C = E>
+static inline
+void to_wire(Buffer& buf, const shared_array<const void>& varr)
+{
+    auto arr = varr.castTo<const E>();
+    to_wire(buf, Size{arr.size()});
+
+    if(std::is_pod<C>::value) {
+        // optimize handling of types with fixed element size
+
+        auto src = reinterpret_cast<const char*>(arr.data());
+
+        for(size_t nremain = arr.size()*sizeof(C); nremain;) {
+            if(!buf.ensure(sizeof(C))) {
+                buf.fault(__FILE__, __LINE__);
+                break;
+            }
+
+            // rounds down to element size.  requires sizeof(C) by a power of 2
+            size_t nbytes = std::min(buf.size(), nremain)&~(sizeof(C)-1u);
+
+            if(buf.be==hostBE) { // already in native order, just copy
+                memcpy(buf.save(), src, nbytes);
+
+            } else { // must swap byte order
+                auto dest = buf.save();
+
+                for(size_t i=0; i<nbytes; i+=sizeof(C)) {
+                    for(size_t n=0u; n<sizeof(C); n++) {
+                        dest[i + sizeof(C)-1-n] = src[i + n];
+
+                    }
+                }
+            }
+
+            src += nbytes;
+            buf.skip(nbytes, __FILE__, __LINE__);
+            nremain -= nbytes;
+        }
+
+    } else {
+        // handle variable size element types
+        for(auto i : range(arr.size())) {
+            to_wire(buf, C(arr[i]));
+        }
+    }
+}
+
+template<typename E, typename C = E>
+static inline
+void from_wire(Buffer& buf, shared_array<const void>& varr)
+{
+    Size slen{};
+    from_wire(buf, slen);
+    shared_array<E> arr(slen.size);
+
+    if(std::is_pod<C>::value) {
+        // optimize handling of types with fixed element size
+
+        auto dest = reinterpret_cast<char*>(arr.data());
+
+        for(size_t nremain = arr.size()*sizeof(C); nremain;) {
+            if(!buf.ensure(sizeof(C))) {
+                buf.fault(__FILE__, __LINE__);
+                break;
+            }
+
+            // rounds down to element size.  requires sizeof(C) by a power of 2
+            size_t nbytes = std::min(buf.size(), nremain)&~(sizeof(C)-1u);
+
+            if(buf.be==hostBE) { // already in native order, just copy
+                memcpy(dest, buf.save(), nbytes);
+
+            } else { // must swap byte order
+                auto src = buf.save();
+
+                for(size_t i=0; i<nbytes; i+=sizeof(C)) {
+                    for(size_t n=0u; n<sizeof(C); n++) {
+                        dest[i + sizeof(C)-1-n] = src[i + n];
+
+                    }
+                }
+            }
+
+            dest += nbytes;
+            buf.skip(nbytes, __FILE__, __LINE__);
+            nremain -= nbytes;
+        }
+
+    } else {
+        for(auto i : range(arr.size())) {
+            C temp{};
+            from_wire(buf, temp);
+            arr[i] = temp;
+        }
+    }
+    varr = arr.freeze().template castTo<const void>();
 }
 
 /* PVA Message Header
