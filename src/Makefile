@@ -10,6 +10,7 @@ include $(TOP)/configure/CONFIG_PVXS_VERSION
 #=============================
 
 USR_CPPFLAGS += -DPVXS_API_BUILDING
+USR_CPPFLAGS += -DPVXS_ENABLE_EXPERT_API
 
 ifdef T_A
 ifneq ($(CONFIG_LOADED),YES)
