@@ -59,9 +59,9 @@ void Connection::createChannels()
 
     auto todo = std::move(pending);
 
-    for(auto& wchan : todo) {
-        auto chan = wchan.lock();
-        if(!chan)
+    for(auto& pair : todo) {
+        auto chan = pair.second.lock();
+        if(!chan || chan->state!=Channel::Connecting)
             continue;
 
         {
@@ -137,36 +137,26 @@ void Connection::cleanup()
         log_err_printf(io, "Server %s error stopping echoTimer\n", peerName.c_str());
 
     // return Channels to Searching state
-    for(auto& wchan : pending) {
-        auto chan = wchan.lock();
-        if(!chan)
-            continue;
-
-        chan->disconnect(chan);
+    std::set<std::shared_ptr<Channel>> todo;
+    for(auto& pair : pending) {
+        if(auto chan = pair.second.lock())
+            todo.insert(chan);
     }
     for(auto& pair : chanBySID) {
-        auto chan = pair.second.lock();
-        if(!chan)
-            continue;
-
-        chan->disconnect(chan);
+        if(auto chan = pair.second.lock())
+            todo.insert(chan);
     }
     for(auto& pair : creatingByCID) {
-        auto chan = pair.second.lock();
-        if(!chan)
-            continue;
+        if(auto chan = pair.second.lock())
+            todo.insert(chan);
+    }
 
+    for(auto& chan : todo) {
         chan->disconnect(chan);
     }
 
-    auto ops = std::move(opByIOID);
-    for (auto& pair : ops) {
-        auto op = pair.second.handle.lock();
-        if(!op)
-            continue;
-        op->chan->opByIOID.erase(op->ioid);
-        op->disconnected(op);
-    }
+    // Channel::disconnect() should clean
+    assert(opByIOID.empty());
 
     // paranoia
     pending.clear();
@@ -361,8 +351,7 @@ void Connection::handle_CREATE_CHANNEL()
         auto conns(chan->connectors); // copy list
 
         for(auto& conn : conns) {
-            conn->_connected.store(true, std::memory_order_relaxed);
-            if(conn->_onConn)
+            if(!conn->_connected.exchange(true, std::memory_order_relaxed) && conn->_onConn)
                 conn->_onConn();
         }
     }
@@ -370,20 +359,19 @@ void Connection::handle_CREATE_CHANNEL()
 
 void Connection::handle_DESTROY_CHANNEL()
 {
-    // (maybe) keep myself alive
-    std::shared_ptr<Connection> self;
-
-    EvInBuf M(peerBE, segBuf.get(), 16);
-
     uint32_t cid=0, sid=0;
-    from_wire(M, sid);
-    from_wire(M, cid);
+    {
+        EvInBuf M(peerBE, segBuf.get(), 16);
 
-    if(!M.good()) {
-        log_crit_printf(io, "%s:%d Server %s sends invalid DESTROY_CHANNEL.  Disconnecting...\n",
-                        M.file(), M.line(), peerName.c_str());
-        bev.reset();
-        return;
+        from_wire(M, sid);
+        from_wire(M, cid);
+
+        if(!M.good()) {
+            log_crit_printf(io, "%s:%d Server %s sends invalid DESTROY_CHANNEL.  Disconnecting...\n",
+                            M.file(), M.line(), peerName.c_str());
+            bev.reset();
+            return;
+        }
     }
 
     std::shared_ptr<Channel> chan;
@@ -397,17 +385,7 @@ void Connection::handle_DESTROY_CHANNEL()
     }
 
     chanBySID.erase(sid);
-
-    chan->state = Channel::Searching;
-    chan->sid = 0xdeadbeef; // spoil
-    self = std::move(chan->conn);
-    context->searchBuckets[context->currentBucket].push_back(chan);
-
-    for(auto& pair : chan->opByIOID) {
-        auto op = pair.second->handle.lock();
-        opByIOID.erase(pair.first); // invalidates pair.second
-        op->disconnected(op);
-    }
+    chan->disconnect(chan);
 
     log_debug_printf(io, "Server %s destroys channel '%s' %u:%u\n",
                      peerName.c_str(), chan->name.c_str(), unsigned(cid), unsigned(sid));

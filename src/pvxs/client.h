@@ -479,16 +479,23 @@ public:
      */
     void hurryUp();
 
+#ifdef PVXS_EXPERT_API_ENABLED
+    //! Actions of cacheClear()
+    //! @since UNRELEASED
+    enum cacheAction {
+        Clean,      //!< Remove channel(s) if unused.  Optional for user code.
+        Drop,       //!< Remove channel(s) unconditionally.  Prevents reuse of open channel(s).
+        Disconnect, //!< Remove channels(s) unconditionally, and cancel any in-progress operations.
+    };
+
     /** Channel cache maintenance.
      *
-     * @param name If empty (default), remove all channels from cache.
-     *             If not empty, only remove the named channel.
+     * @param action cf. cacheAction
      *
-     * @since UNRELEASED 'name' argument added.
+     * @since UNRELEASED 'name' and 'action' arguments.  Defaults to previous behavior.
      */
-    void cacheClear(const std::string& name = std::string());
+    void cacheClear(const std::string& name = std::string(), cacheAction action = Clean);
 
-#ifdef PVXS_EXPERT_API_ENABLED
     //! Compile report about peers and channels
     //! @since UNRELEASED
     Report report() const;

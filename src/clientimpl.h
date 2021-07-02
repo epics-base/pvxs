@@ -80,8 +80,8 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
     bool ready = false;
     bool nameserver = false;
 
-    // channels to be created on this Connection (in state==Connecting
-    std::list<std::weak_ptr<Channel>> pending;
+    // channels to be created on this Connection in state==Connecting
+    std::map<uint32_t, std::weak_ptr<Channel>> pending;
 
     std::map<uint32_t, std::weak_ptr<Channel>> creatingByCID, // in state==Creating
                                                chanBySID;     // in state==Active
@@ -241,7 +241,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     std::map<uint32_t, std::weak_ptr<Channel>> chanByCID;
     // strong ref. loop through Channel::context
-    // explicitly broken by Context::close(), Context::cacheClear, or ContextImpl::cacheClean()
+    // explicitly broken by Context::close(), Context::cacheClear(), or ContextImpl::cacheClean()
     // chanByName key'd by (pv, forceServer)
     std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
 
@@ -280,7 +280,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickBeaconClean();
     static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);
-    void cacheClean(const std::string &name);
+    void cacheClean(const std::string &name, Context::cacheAction force);
     static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
     void onNSCheck();
     static void onNSCheckS(evutil_socket_t fd, short evt, void *raw);
