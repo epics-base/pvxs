@@ -266,7 +266,7 @@ struct TestLifeCycle : public BasicTest
 
 struct TestReconn : public BasicTest
 {
-    void testReconn()
+    void testReconn(bool closechan)
     {
         testShow()<<__func__;
 
@@ -286,22 +286,33 @@ struct TestReconn : public BasicTest
             testFail("Missing data update");
         }
 
-        testDiag("Stop server");
-        serv.stop();
+        if(closechan) {
+            testDiag("Close channel");
+            mbox.close();
+
+        } else {
+            testDiag("Stop server");
+            serv.stop();
+        }
 
         testThrows<client::Disconnect>([this](){
             pop(sub, evt);
         })<<"Expecting Disconnect after stopping server";
 
         testFalse(sub->pop())<<"No events after Disconnect";
-
-        mbox.post(initial
-                  .cloneEmpty()
-                  .update("value", 15));
-
         errlogFlush();
-        testDiag("Starting server");
-        serv.start();
+
+        initial["value"] = 15;
+
+        if(closechan) {
+            testDiag("reopen channel");
+            mbox.open(initial);
+
+        } else {
+            testDiag("Starting server");
+            mbox.post(initial);
+            serv.start();
+        }
 
         testThrows<client::Connected>([this](){
             auto x = pop(sub, evt);
@@ -321,7 +332,7 @@ struct TestReconn : public BasicTest
 
 MAIN(testmon)
 {
-    testPlan(26);
+    testPlan(32);
     testSetup();
     logger_config_env();
     BasicTest().orphan();
@@ -331,7 +342,8 @@ MAIN(testmon)
     TestLifeCycle().testBasic(true);
     TestLifeCycle().testBasic(false);
     TestLifeCycle().testSecond();
-    TestReconn().testReconn();
+    TestReconn().testReconn(false);
+    TestReconn().testReconn(true);
     cleanup_for_valgrind();
     return testDone();
 }
