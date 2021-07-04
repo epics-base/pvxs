@@ -302,12 +302,26 @@ void ServerConn::handle_CREATE_CHANNEL()
             for(auto& pair : iface->server->sources) {
                 try {
                     pair.second->onCreate(std::move(op));
-                    if(!op || chan->onOp || chan->onClose || chan->state!=ServerChan::Creating) {
-                        claimed = chan->state==ServerChan::Creating;
-                        log_debug_printf(serversearch, "Client %s %s channel to %s through %s\n", peerName.c_str(),
-                                   claimed?"accepted":"rejected", name.c_str(), pair.first.second.c_str());
-                        break;
+                    const char* msg = nullptr;
+
+                    if(chan->state!=ServerChan::Creating) {
+                        msg = "rejected";
+
+                    } else if(chan->onOp || chan->onRPC || chan->onSubscribe || chan->onClose) {
+                        msg = "accepted";
+                        claimed = true;
+
+                    } else if(!op) {
+                        msg = "discarded";
                     }
+
+                    log_debug_printf(serversearch, "Client %s %s channel to %s through %s\n",
+                                     peerName.c_str(),
+                                     msg ? msg : "ignored",
+                                     name.c_str(), pair.first.second.c_str());
+
+                    if(msg)
+                        break;
                 }catch(std::exception& e){
                     log_exc_printf(serversearch, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
                                pair.first.second.c_str(), pair.first.first,

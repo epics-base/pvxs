@@ -219,7 +219,12 @@ struct PVXS_API Source {
      *
      *  This Channel name may not be one which was seen or claimed by onSearch().
      *
-     *  Callee will either do nothing, or std::move() the ChannelControl and call ChannelControl::setHandler()
+     *  Callee may:
+     *
+     *  - Do nothing, allowing some other Source with higher/later order a chance to create.
+     *  - Call ChannelControl::close() to explicitly reject the channel.
+     *  - std::move() the op and/or call ChannelControl::setHandler() to accept the new channel.
+     *  - std::move() the op and allow ChannelControl to be destroyed to implicitly reject the channel.
      */
     virtual void onCreate(std::unique_ptr<ChannelControl>&& op) =0;
 
