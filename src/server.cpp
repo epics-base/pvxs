@@ -36,6 +36,7 @@ using namespace impl;
 
 DEFINE_LOGGER(serversetup, "pvxs.server.setup");
 DEFINE_LOGGER(serverio, "pvxs.server.io");
+DEFINE_LOGGER(serversearch, "pvxs.server.search");
 
 Server::Server(const Config& conf)
 {
@@ -638,8 +639,10 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
     to_wire(M, uint16_t(nreply));
     for(auto i : range(msg.names.size())) {
-        if(searchOp._names[i]._claim)
+        if(searchOp._names[i]._claim) {
             to_wire(M, uint32_t(msg.names[i].id));
+            log_debug_printf(serversearch, "Search claimed '%s'\n", msg.names[i].name);
+        }
     }
     auto pktlen = M.save()-searchReply.data();
 

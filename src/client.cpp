@@ -683,8 +683,11 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, Buffer& M, bool ist
 
     if(M.good()) {
         for(const ServerGUID& ignore : self.ignoreServerGUIDs) {
-            if(guid==ignore)
+            if(guid==ignore) {
+                log_info_printf(io, "Ignore reply from %s with %s\n",
+                                 src.tostring().c_str(), std::string(SB()<<guid).c_str());
                 return;
+            }
         }
     }
 

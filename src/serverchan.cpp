@@ -18,6 +18,7 @@ DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
 DEFINE_LOGGER(serversetup, "pvxs.server.setup");
+DEFINE_LOGGER(serversearch, "pvxs.server.search");
 
 ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
                        uint32_t sid,
@@ -218,7 +219,7 @@ void ServerConn::handle_SEARCH()
             try {
                 pair.second->onSearch(op);
             }catch(std::exception& e){
-                log_exc_printf(serversetup, "Unhandled error in Source::onSearch for '%s' : %s\n",
+                log_exc_printf(serversearch, "Unhandled error in Source::onSearch for '%s' : %s\n",
                            pair.first.second.c_str(), e.what());
             }
         }
@@ -248,8 +249,10 @@ void ServerConn::handle_SEARCH()
 
         to_wire(R, uint16_t(nreply));
         for(auto i : range(op._names.size())) {
-            if(op._names[i]._claim)
+            if(op._names[i]._claim) {
                 to_wire(R, uint32_t(nameStorage[i].first));
+                log_debug_printf(serversearch, "Search claimed '%s'\n", op._names[i]._name);
+            }
         }
     }
 
@@ -301,12 +304,12 @@ void ServerConn::handle_CREATE_CHANNEL()
                     pair.second->onCreate(std::move(op));
                     if(!op || chan->onOp || chan->onClose || chan->state!=ServerChan::Creating) {
                         claimed = chan->state==ServerChan::Creating;
-                        log_debug_printf(connsetup, "Client %s %s channel to %s through %s\n", peerName.c_str(),
+                        log_debug_printf(serversearch, "Client %s %s channel to %s through %s\n", peerName.c_str(),
                                    claimed?"accepted":"rejected", name.c_str(), pair.first.second.c_str());
                         break;
                     }
                 }catch(std::exception& e){
-                    log_exc_printf(connsetup, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
+                    log_exc_printf(serversearch, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
                                pair.first.second.c_str(), pair.first.first,
                                typeid(&e).name(), e.what());
                 }

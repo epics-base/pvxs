@@ -23,6 +23,7 @@ typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
 DEFINE_LOGGER(logshared, "pvxs.server.sharedpv");
+DEFINE_LOGGER(logsource, "pvxs.server.staticsource");
 DEFINE_LOGGER(logmailbox, "pvxs.mailbox");
 
 namespace pvxs {
@@ -470,8 +471,10 @@ struct StaticSource::Impl : public Source
         auto G(lock.lockReader());
         for(auto& name : op) {
             auto it(pvs.find(name.name()));
-            if(it!=pvs.end())
+            if(it!=pvs.end()) {
                 name.claim();
+                log_debug_printf(logsource, "%p claim '%s'\n", this, name.name());
+            }
         }
     }
 
@@ -481,7 +484,10 @@ struct StaticSource::Impl : public Source
         {
             auto G(lock.lockReader());
             auto it(pvs.find(op->name()));
-            if(it==pvs.end())
+            bool found = it!=pvs.end();
+            log_debug_printf(logsource, "%p %screate '%s'\n",
+                             this, found ? "":"can't ", op->name().c_str());
+            if(!found)
                 return; // not mine
             pv = it->second;
         }
