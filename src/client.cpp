@@ -204,26 +204,26 @@ std::shared_ptr<Connect> ConnectBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
+    auto syncCancel(_syncCancel);
     auto context(ctx->impl->shared_from_this());
 
     auto op(std::make_shared<ConnectImpl>(context->tcp_loop, _pvname));
     op->_onConn = std::move(_onConn);
     op->_onDis = std::move(_onDis);
 
-    std::shared_ptr<ConnectImpl> external(op.get(), [op](ConnectImpl*) mutable {
+    std::shared_ptr<ConnectImpl> external(op.get(), [op, syncCancel](ConnectImpl*) mutable {
         // from user thread
-        auto loop(op->loop);
+        auto temp(std::move(op));
+        auto loop(temp->loop);
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
-        loop.call(std::bind([](std::shared_ptr<ConnectImpl>& op) {
+        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<ConnectImpl>& op) {
                       // on worker
 
                       // ordering of dispatch()/call() ensures creation before destruction
                       assert(op->chan);
                       op->chan->connectors.remove(op.get());
-                  }, std::move(op)));
-        assert(!op);
-        op.reset();
+                  }, std::move(temp)));
     });
 
     context->tcp_loop.dispatch([op, context]() {

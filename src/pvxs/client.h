@@ -829,6 +829,7 @@ class ConnectBuilder
     std::string _pvname;
     std::function<void()> _onConn;
     std::function<void()> _onDis;
+    bool _syncCancel = true;
 public:
     ConnectBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& pvname)
         :ctx(ctx)
@@ -839,6 +840,15 @@ public:
     ConnectBuilder& onConnect(std::function<void()>&& cb) { _onConn = std::move(cb); return *this; }
     //! Handler to be invoked when channel becomes disconnected.
     ConnectBuilder& onDisconnect(std::function<void()>&& cb) { _onDis = std::move(cb); return *this; }
+
+    /** Controls whether Connect::~Connect() synchronizes.
+     *
+     * When true (the default) explicit or implicit cancel blocks until any
+     * in progress callback has completed.  This makes safe some use of
+     * references in callbacks.
+     * @since UNRELEASED
+     */
+    ConnectBuilder& syncCancel(bool b) { this->_syncCancel = b; return *this; }
 
     //! Submit request to connect
     PVXS_API
