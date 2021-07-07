@@ -52,7 +52,9 @@ struct FieldDesc;
 //! store_t shall be convertible to/from T through StoreTransform<T>::in() and out().
 //! StorageMap<T>::code is the associated StoreType.
 template<typename T, typename Enable=void>
-struct StorageMap;
+struct StorageMap {
+    typedef void not_storable;
+};
 
 // map signed integers to int64_t
 template<typename T>
@@ -629,7 +631,7 @@ public:
     //! If possible, this value is cast to T and passed as the only argument
     //! of the provided function.
     template<typename T, typename FN>
-    void as(FN&& fn) const {
+    typename impl::StorageMap<typename std::decay<FN>::type>::not_storable as(FN&& fn) const {
         typename impl::StoreAs<T>::store_t val;
         if(tryCopyOut(&val, impl::StoreAs<T>::code)) {
             fn(impl::StoreTransform<T>::out(val));
