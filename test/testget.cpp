@@ -97,7 +97,8 @@ struct Tester {
         testEq(evt.discd, 1u); // initially disconnected
         testEq(evt.connd, 1u);
         testTrue(evt2.wait(true, 5.0))<<" Wait for Connect 2";
-        testEq(evt2.discd, 1u); // initially disconnected
+        // evt2 may not see the initial "fake" disconnected event if the channel has already connected
+        testOk(evt2.discd<=1u, "second event #discd=%zu", evt2.discd.load()); // initially disconnected
         testEq(evt2.connd, 1u);
 
         // ensure de-dup of connected

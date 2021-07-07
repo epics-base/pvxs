@@ -66,7 +66,6 @@ jobs:
             base: "7.0"
             rtems: "5"
             rtems_target: RTEMS-pc686-qemu
-            test: NO
  
           - name: Native Linux with clang
             os: ubuntu-20.04
@@ -118,7 +117,7 @@ jobs:
     - name: "apt-get install"
       run: |
         sudo apt-get update
-        sudo apt-get -y install g++-mingw-w64-x86-64 cmake gdb
+        sudo apt-get -y install g++-mingw-w64-x86-64 cmake gdb qemu-system-x86
       if: runner.os == 'Linux'
     - name: Automatic core dumper analysis
       uses: mdavidsaver/ci-core-dumper@master
