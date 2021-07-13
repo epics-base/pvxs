@@ -230,6 +230,9 @@ struct PVXS_API evsocket
     std::vector<SockAddr> interfaces(const SockAddr* match=nullptr);
 };
 
-}} // namespace pvxs::impl
+} // namespace impl
+
+
+} // namespace pvxs
 
 #endif /* EVHELPER_H */

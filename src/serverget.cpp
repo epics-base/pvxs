@@ -51,7 +51,9 @@ struct ServerGPR : public ServerOp
                 // noop
 
             } else if(cmd==CMD_GET || (cmd==CMD_PUT && (subcmd&0x40))) {
-                if(!value || Value::Helper::desc(value)!=this->type.get())
+                if(!value)
+                    throw std::logic_error("GET must reply Value");
+                else if(Value::Helper::desc(value)!=this->type.get())
                     throw std::logic_error("GET must reply with exact type previously passed to connect()");
 
             } else if(cmd==CMD_PUT) {

@@ -663,4 +663,6 @@ void to_evbuf(evbuffer *buf, const Header& H, bool be)
         throw std::bad_alloc();
 }
 
-}} // namespace pvxs::impl
+} // namespace impl
+
+} // namespace pvxs
