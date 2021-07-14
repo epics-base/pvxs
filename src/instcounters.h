@@ -11,6 +11,7 @@ CASE(StructTop);
 CASE(UDPListener);
 CASE(evbase);
 CASE(evbaseRunning);
+CASE(Timer);
 
 CASE(GPROp);
 CASE(Connection);

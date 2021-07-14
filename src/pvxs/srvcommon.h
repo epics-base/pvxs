@@ -11,6 +11,7 @@
 #include <functional>
 
 #include <pvxs/version.h>
+#include <pvxs/util.h>
 #include <pvxs/data.h>
 
 namespace pvxs {
@@ -98,6 +99,16 @@ public:
     const Value& pvRequest() const { return _pvRequest; }
 
     virtual ~ExecOp();
+
+#ifdef PVXS_EXPERT_API_ENABLED
+    //! Create/start timer.  cb runs on worker associated with Channel of this Operation.
+    //! @since UNRELEASED
+    Timer timerOneShot(double delay, std::function<void()>&& cb) {
+        return _timerOneShot(delay, std::move(cb));
+    }
+#endif // PVXS_EXPERT_API_ENABLED
+private:
+    virtual Timer _timerOneShot(double delay, std::function<void()>&& cb) =0;
 };
 
 }} // namespace pvxs::server

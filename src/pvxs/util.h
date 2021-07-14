@@ -14,6 +14,7 @@
 #include <iosfwd>
 #include <type_traits>
 #include <stdexcept>
+#include <memory>
 
 #include <osiSock.h>
 #include <epicsEvent.h>
@@ -294,6 +295,30 @@ public:
         return ret;
     }
 };
+
+struct Timer;
+
+#ifdef PVXS_EXPERT_API_ENABLED
+
+//! Timer associated with a client::Context or server::Server
+//! @since UNRELEASED
+struct PVXS_API Timer {
+    struct Pvt;
+
+    //! dtor implicitly cancel()s
+    ~Timer();
+    //! Explicit cancel.
+    //! @returns true if the timer was running, and now is not.
+    bool cancel();
+
+    explicit operator bool() const { return pvt.operator bool(); }
+
+private:
+    std::shared_ptr<Pvt> pvt;
+    friend struct Pvt;
+};
+
+#endif // PVXS_EXPERT_API_ENABLED
 
 } // namespace pvxs
 

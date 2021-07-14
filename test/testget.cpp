@@ -367,6 +367,43 @@ struct Tester {
             testShow()<<op->wait(4.0);
         })<<" pvRequest selects no fields";
     }
+
+    void delayExec()
+    {
+        testShow()<<__func__;
+
+        epicsEvent done;
+        Timer slowdown;
+
+        mbox.onPut([this, &done, &slowdown](server::SharedPV& pv, std::unique_ptr<server::ExecOp>&& rawop, Value&& rawval) {
+            // on server worker
+            std::shared_ptr<server::ExecOp> op(std::move(rawop));
+            auto val(std::move(rawval));
+            testPass("In onPut");
+
+            slowdown = op->timerOneShot(0.01, [](){
+                testFail("I should not run.");
+            });
+
+            testTrue(slowdown.cancel());
+
+            slowdown = op->timerOneShot(0.01, [this, &done, op, val](){
+                testPass("I should run");
+                done.signal();
+                mbox.post(val);
+                op->reply();
+            });
+
+            // op->reply() from timer
+        });
+
+        mbox.open(initial);
+        serv.start();
+
+        auto op = cli.put("mailbox")
+                .set("value", 42)
+                .exec()->wait(5.0);
+    }
 };
 
 struct ErrorSource : public server::Source
@@ -439,7 +476,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(53);
+    testPlan(56);
     testSetup();
     logger_config_env();
     Tester().testConnector();
@@ -452,6 +489,7 @@ MAIN(testget)
     Tester().orphan();
     Tester().manualExec();
     Tester().badRequest();
+    Tester().delayExec();
     testError(false);
     testError(true);
     cleanup_for_valgrind();

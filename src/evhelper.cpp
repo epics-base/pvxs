@@ -43,6 +43,7 @@ size_t min_slice_size = 1024u;
 namespace pvxs {namespace impl {
 
 DEFINE_LOGGER(logerr, "pvxs.loop");
+DEFINE_LOGGER(logtimer, "pvxs.timer");
 
 namespace mdetail {
 VFunctor0::~VFunctor0() {}
@@ -664,5 +665,82 @@ void to_evbuf(evbuffer *buf, const Header& H, bool be)
 }
 
 } // namespace impl
+
+Timer::~Timer() {}
+
+bool Timer::cancel()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Timer");
+
+    auto P(std::move(pvt));
+
+    return P->cancel();
+}
+
+Timer::Pvt::~Pvt() {
+    log_debug_printf(logtimer, "Timer %p %s\n", this, __func__);
+    (void)cancel();
+}
+
+bool Timer::Pvt::cancel()
+{
+    bool ret = false;
+    decltype (cb) trash;
+
+    log_debug_printf(logtimer, "Timer %p pcancel\n", this);
+
+    base.call([this, &ret, &trash](){
+        trash = std::move(cb);
+        if(auto T = std::move(timer)) {
+            log_debug_printf(logtimer, "Timer %p dispose %p\n", this, T.get());
+            ret = event_pending(T.get(), EV_TIMEOUT, nullptr);
+            (void)event_del(T.get());
+        }
+    });
+
+    return ret;
+}
+
+static
+void expire_cb(evutil_socket_t, short, void * raw)
+{
+    auto self(static_cast<Timer::Pvt*>(raw));
+    log_debug_printf(logtimer, "Timer %p expires\n", self);
+    assert(self->base.base);
+
+    try {
+        self->cb();
+    } catch(std::exception& e){
+        log_exc_printf(logtimer, "Unhandled exception in Timer callback: %s\n", e.what());
+    }
+}
+
+Timer Timer::Pvt::buildOneShot(double delay, const evbase& base, std::function<void()>&& cb)
+{
+    if(!cb)
+        throw std::invalid_argument("NULL cb");
+
+    Timer ret;
+    ret.pvt = std::make_shared<Timer::Pvt>(base, std::move(cb));
+
+    base.call([&ret, &base, delay](){
+        evevent timer(event_new(base.base, -1, EV_TIMEOUT, &expire_cb, ret.pvt.get()));
+        ret.pvt->timer = std::move(timer);
+
+        auto timo(totv(delay));
+
+        if(event_add(ret.pvt->timer.get(), &timo))
+            throw std::runtime_error("Unable to start oneshot timer");
+
+        log_debug_printf(logtimer, "Create timer %p as %p with delay %f and %s\n",
+                         ret.pvt.get(),
+                         ret.pvt->timer.get(),
+                         delay,
+                         ret.pvt->cb.target_type().name());
+    });
+
+    return ret;
+}
 
 } // namespace pvxs

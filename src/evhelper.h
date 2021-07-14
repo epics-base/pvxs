@@ -233,6 +233,28 @@ struct PVXS_API evsocket
 } // namespace impl
 
 
+#ifdef PVXS_EXPERT_API_ENABLED
+
+struct Timer::Pvt {
+    const evbase base;
+    std::function<void()> cb;
+    evevent timer;
+
+    Pvt(const evbase& base, std::function<void()>&& cb)
+        :base(base), cb(std::move(cb))
+    {}
+    ~Pvt();
+
+    bool cancel();
+
+    static
+    Timer buildOneShot(double delay, const evbase &base, std::function<void()>&& cb);
+
+    INST_COUNTER(Timer);
+};
+
+#endif // PVXS_EXPERT_API_ENABLED
+
 } // namespace pvxs
 
 #endif /* EVHELPER_H */

@@ -326,6 +326,15 @@ struct ServerGPRExec : public server::ExecOp
         });
     }
 
+    virtual Timer _timerOneShot(double delay, std::function<void()>&& fn) override final
+    {
+        auto serv = server.lock();
+        if(!serv)
+            throw std::logic_error("Can't start timer on deal server");
+
+        return Timer::Pvt::buildOneShot(delay, serv->acceptor_loop.internal(), std::move(fn));
+    }
+
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerGPR> op;
 
