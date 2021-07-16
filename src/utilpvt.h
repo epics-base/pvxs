@@ -298,37 +298,7 @@ struct InstCounter
 #define INST_COUNTER(KLASS) InstCounter<&cnt_ ## KLASS> instances
 
 #define CASE(KLASS) PVXS_API extern std::atomic<size_t> cnt_ ## KLASS
-
-CASE(StructTop);
-
-CASE(UDPListener);
-CASE(evbase);
-CASE(evbaseRunning);
-
-CASE(GPROp);
-CASE(Connection);
-CASE(Channel);
-CASE(ClientPvt);
-CASE(ClientContextImpl);
-CASE(InfoOp);
-CASE(SubScriptionImpl);
-
-CASE(ServerChannelControl);
-CASE(ServerChan);
-CASE(ServerConn);
-CASE(ServerSource);
-CASE(ServerPvt);
-CASE(ServerIntrospect);
-CASE(ServerIntrospectControl);
-CASE(ServerGPR);
-CASE(ServerGPRConnect);
-CASE(ServerGPRExec);
-CASE(MonitorOp);
-CASE(ServerMonitorControl);
-CASE(ServerMonitorSetup);
-CASE(SharedPVImpl);
-CASE(SubscriptionImpl);
-
+#include "instcounters.h"
 #undef CASE
 
 } // namespace pvxs
