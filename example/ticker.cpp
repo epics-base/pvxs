@@ -105,6 +105,13 @@ int main(int argc, char* argv[])
 
         val["value"] = count++;
 
+        // optional, but highly recommended to post() data updates with a timestamp
+        epicsTimeStamp now;
+        if(!epicsTimeGetCurrent(&now)) {
+            val["timeStamp.secondsPastEpoch"] = now.secPastEpoch + POSIX_TIME_AT_EPICS_EPOCH;
+            val["timeStamp.nanoseconds"] = now.nsec;
+        }
+
         pv.post(val);
 
         std::cout<<"Count "<<count<<std::endl;
