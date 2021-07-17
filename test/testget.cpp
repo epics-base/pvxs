@@ -404,6 +404,28 @@ struct Tester {
                 .set("value", 42)
                 .exec()->wait(5.0);
     }
+
+    void ordering()
+    {
+        testShow()<<__func__;
+
+        auto src2(server::StaticSource::build());
+        auto mbox2(server::SharedPV::buildMailbox());
+        src2.add("mailbox", mbox2);
+
+        serv.addSource("other", src2.source(), -50);
+
+        auto other = initial["value"].as<int32_t>()+1;
+
+        mbox.open(initial);
+        mbox2.open(initial.cloneEmpty()
+                   .update("value", other));
+        serv.start();
+
+        auto val = cli.get("mailbox").exec()->wait(5.0);
+
+        testEq(val["value"].as<int32_t>(), other);
+    }
 };
 
 struct ErrorSource : public server::Source
@@ -476,7 +498,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(56);
+    testPlan(57);
     testSetup();
     logger_config_env();
     Tester().testConnector();
@@ -490,6 +512,7 @@ MAIN(testget)
     Tester().manualExec();
     Tester().badRequest();
     Tester().delayExec();
+    Tester().ordering();
     testError(false);
     testError(true);
     cleanup_for_valgrind();
