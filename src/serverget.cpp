@@ -148,6 +148,7 @@ struct ServerGPR : public ServerOp
     bool lastRequest=false;
 
     std::shared_ptr<const FieldDesc> type;
+    Value pvRequest;
     BitMask pvMask; // mask computed from pvRequest .fields
 
     std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onPut;
@@ -266,8 +267,8 @@ struct ServerGPRExec : public server::ExecOp
                   pva_app_msg_t cmd,
                   const std::weak_ptr<server::Server::Pvt>& server,
                   const std::string& name,
-                  const Value& request,
-                  const std::weak_ptr<ServerGPR>& op)
+                  //const Value& request,
+                  const std::shared_ptr<ServerGPR>& op)
         :server(server)
         ,op(op)
     {
@@ -279,6 +280,7 @@ struct ServerGPRExec : public server::ExecOp
         }
         _name = name;
         _cred = conn->cred;
+        _pvRequest = op->pvRequest;
     }
     virtual ~ServerGPRExec() {}
 
@@ -375,6 +377,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
 
         auto op(std::make_shared<ServerGPR>(chan, ioid));
         op->cmd = cmd;
+        op->pvRequest = pvRequest;
         std::unique_ptr<ServerGPRConnect> ctrl(new ServerGPRConnect(this, cmd, iface->server->internal_self, chan->name, pvRequest, op));
 
         op->subcmd = subcmd;
@@ -456,7 +459,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             if(!op->lastRequest)
                 op->lastRequest = subcmd&0x10;
 
-            std::unique_ptr<ServerGPRExec> ctrl{new ServerGPRExec(this, cmd, iface->server->internal_self, chan->name, val, op)};
+            std::unique_ptr<ServerGPRExec> ctrl{new ServerGPRExec(this, cmd, iface->server->internal_self, chan->name, op)};
 
             op->subcmd = subcmd;
             op->state = ServerOp::Executing;

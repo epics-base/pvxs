@@ -80,7 +80,6 @@ public:
 
 //! Handle when an operation is being executed
 struct PVXS_API ExecOp : public OpBase {
-
     //! Issue a reply without data.  (eg. to complete a PUT)
     virtual void reply() =0;
     //! Issue a reply with data.  For a GET or RPC  (or PUT/Get)
@@ -90,6 +89,13 @@ struct PVXS_API ExecOp : public OpBase {
 
     //! Callback invoked if the peer cancels the operation before reply() or error() is called.
     virtual void onCancel(std::function<void()>&&) =0;
+
+protected:
+    Value _pvRequest;
+public:
+    //! Access to pvRequest blob
+    //! @since UNRELEASED
+    const Value& pvRequest() const { return _pvRequest; }
 
     virtual ~ExecOp();
 };
