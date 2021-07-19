@@ -229,9 +229,10 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
             // serialize entire sub-structure
             for(auto off : range(desc->size())) {
                 auto cdesc = desc + off;
+                if(cdesc->code==TypeCode::Struct) // skip sub-struct nodes.  Would be redundant
+                    continue;
                 std::shared_ptr<const FieldStorage> cstore(store, store.get()+off); // TODO avoid shared_ptr/aliasing here
-                if(cdesc->code!=TypeCode::Struct)
-                    to_wire_field(buf, cdesc, cstore);
+                to_wire_field(buf, cdesc, cstore);
             }
         }
             return;
@@ -428,9 +429,13 @@ void to_wire_valid(Buffer& buf, const Value& val, const BitMask* mask)
 
     BitMask valid(desc->size());
 
-    for(auto bit : range(desc->size())) {
-        if((store.get()+bit)->valid && (!mask || (*mask)[bit]))
+    for(size_t bit=0u, N=desc->size(); bit<N;) {
+        if(store.get()[bit].valid && (!mask || (*mask)[bit])) {
             valid[bit] = true;
+            bit += desc[bit].size(); // maybe skip past entire sub-struct
+        } else {
+            bit++;
+        }
     }
 
     to_wire(buf, valid);
