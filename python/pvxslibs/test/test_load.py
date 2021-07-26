@@ -15,3 +15,11 @@ class TestLoad(unittest.TestCase):
         pvxs_version_int.restype = ctypes.c_ulong
 
         self.assertNotEqual(0, pvxs_version_int())
+
+class TestVersion(unittest.TestCase):
+    def test_ver(self):
+        from ..version import version_info, abi_requires
+        self.assertGreater(version_info, (0,0,0))
+        self.assertLess(version_info, (99,0,0))
+
+        self.assertNotEqual('', abi_requires())
