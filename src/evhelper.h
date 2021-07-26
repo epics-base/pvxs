@@ -11,6 +11,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <map>
+#include <set>
 
 #include <event2/event.h>
 #include <event2/buffer.h>
@@ -19,6 +21,8 @@
 
 #include <pvxs/version.h>
 #include <utilpvt.h>
+
+#include <epicsTime.h>
 
 #include "pvaproto.h"
 
@@ -228,6 +232,18 @@ struct PVXS_API evsocket
 
     //! wraps osiSockDiscoverBroadcastAddresses()
     std::vector<SockAddr> broadcasts(const SockAddr* match=nullptr) const;
+};
+
+struct PVXS_API IfaceMap {
+    IfaceMap();
+
+    // return true if ifindex is valid, and addr is one of the addresses currently assigned to it.
+    bool has_address(int64_t ifindex, const SockAddr& addr);
+
+    void refresh();
+
+    std::map<int64_t, std::set<SockAddr, SockAddrOnlyLess>> info;
+    epicsTime updated;
 };
 
 } // namespace impl

@@ -546,6 +546,11 @@ def define_DSOS(self):
 
     src_pvxs = [os.path.join('src', src) for src in src_pvxs]
 
+    if OS_CLASS=='WIN32':
+        src_pvxs += ['src/os/WIN32/osdSockExt.cpp']
+    else:
+        src_pvxs += ['src/os/default/osdSockExt.cpp']
+
     event_libs = []
     if OS_CLASS=='WIN32':
         event_libs = ['ws2_32','shell32','advapi32','bcrypt','iphlpapi']

@@ -750,14 +750,13 @@ bool ContextImpl::onSearch()
 {
     searchMsg.resize(0x10000);
     SockAddr src;
-    uint32_t ndrop = 0u;
 
-    osiSocklen_t alen = src.size();
-    const int nrx = recvfromx(searchTx.sock, (char*)&searchMsg[0], searchMsg.size()-1, &src->sa, &alen, &ndrop);
+    recvfromx rx{searchTx.sock, (char*)&searchMsg[0], searchMsg.size()-1, &src};
+    const int nrx = rx.call();
 
-    if(nrx>=0 && ndrop!=0 && prevndrop!=ndrop) {
-        log_debug_printf(io, "UDP search reply buffer overflow %u -> %u\n", unsigned(prevndrop), unsigned(ndrop));
-        prevndrop = ndrop;
+    if(nrx>=0 && rx.ndrop!=0 && prevndrop!=rx.ndrop) {
+        log_debug_printf(io, "UDP search reply buffer overflow %u -> %u\n", unsigned(prevndrop), unsigned(rx.ndrop));
+        prevndrop = rx.ndrop;
     }
 
     if(nrx<0) {

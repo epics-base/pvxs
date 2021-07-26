@@ -86,6 +86,8 @@ LIB_SRCS += nt.cpp
 LIB_SRCS += evhelper.cpp
 LIB_SRCS += udp_collector.cpp
 
+LIB_SRCS += osdSockExt.cpp
+
 LIB_SRCS += config.cpp
 LIB_SRCS += conn.cpp
 

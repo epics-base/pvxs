@@ -20,7 +20,6 @@
 #include <event2/thread.h>
 
 #include <errlog.h>
-#include <osiSock.h>
 #include <epicsEvent.h>
 #include <epicsThread.h>
 #include <epicsExit.h>
@@ -44,6 +43,7 @@ namespace pvxs {namespace impl {
 
 DEFINE_LOGGER(logerr, "pvxs.loop");
 DEFINE_LOGGER(logtimer, "pvxs.timer");
+DEFINE_LOGGER(logiface, "pvxs.iface");
 
 namespace mdetail {
 VFunctor0::~VFunctor0() {}
@@ -367,8 +367,16 @@ bool evbase::assertInRunningLoop() const
 evsocket::evsocket(evutil_socket_t sock)
     :sock(sock)
 {
-    if(sock==evutil_socket_t(-1))
-        throw std::bad_alloc();
+    if(sock==evutil_socket_t(-1)) {
+        int err = SOCKERRNO;
+#ifdef _WIN32
+        if(err==WSANOTINITIALISED) {
+            throw std::runtime_error("WSANOTINITIALISED");
+        }
+#endif
+        (void)err;
+        throw std::runtime_error("Unable to allocate socket");
+    }
 
     evutil_make_socket_closeonexec(sock);
 
@@ -386,6 +394,19 @@ evsocket::evsocket(evutil_socket_t sock)
 evsocket::evsocket(int af, int type, int proto)
     :evsocket(socket(af, type | SOCK_CLOEXEC, proto))
 {
+#ifdef __linux__
+#  ifndef IP_MULTICAST_ALL
+#    define IP_MULTICAST_ALL		49
+#  endif
+    // Disable non-compliant legacy behavior of Linux IP stack
+    if(af==AF_INET && type==SOCK_DGRAM){
+        int val = 0;
+        if(setsockopt(sock, IPPROTO_IP, IP_MULTICAST_ALL, (char*)&val, sizeof(val))) {
+            log_warn_printf(logerr, "Unable to clear IP_MULTICAST_ALL (err=%d).  This may cause problems on multi-homed hosts.\n",
+                            evutil_socket_geterror(sock));
+        }
+    }
+#endif
 }
 
 evsocket::evsocket(evsocket&& o) noexcept
@@ -509,6 +530,48 @@ std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match) const
     }
 
     return ret;
+}
+
+#if EPICS_VERSION_INT<VERSION_INT(7,0,3,1)
+#  define getMonotonic getCurrent
+#endif
+
+IfaceMap::IfaceMap()
+{
+    refresh();
+    updated = epicsTime::getMonotonic();
+}
+
+bool IfaceMap::has_address(int64_t ifindex, const SockAddr &addr)
+{
+    if(addr.isAny())
+        return true;
+
+    auto now(epicsTime::getMonotonic());
+    auto age = now-updated;
+    bool first = true;
+
+retry:
+    if(!first || age > 60) {
+        refresh();
+        updated = now;
+    } else {
+        log_debug_printf(logiface, "using cache age %.2f sec\n", age);
+    }
+
+    auto ifit(info.find(ifindex));
+    if(ifit!=info.end()) {
+        const auto& iface = ifit->second;
+        auto adit(iface.find(addr));
+        return adit!=iface.end();
+    }
+    if(first) {
+        // re-try once
+        first = false;
+        goto retry;
+    }
+    log_warn_printf(logiface, "Encountered unknown interface index %lld\n", (long long)ifindex);
+    return false;
 }
 
 void to_wire(Buffer& buf, const SockAddr& val)

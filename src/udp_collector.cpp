@@ -52,16 +52,16 @@ struct UDPCollector : public UDPManager::Search,
 
     bool handle_one()
     {
-        osiSocklen_t alen = src.size();
-        uint32_t ndrop = 0u;
+        SockAddr dest;
 
         // For Search messages, we use PV name strings in-place by adding nils.
         // Ensure one extra byte at the end of the buffer for a nil after the last PV name
-        const int nrx = recvfromx(sock.sock, (char*)&buf[0], buf.size()-1, &src->sa, &alen, &ndrop);
+        recvfromx rx{sock.sock, (char*)&buf[0], buf.size()-1, &src, &dest};
+        const int nrx = rx.call();
 
-        if(nrx>=0 && ndrop!=0u && prevndrop!=ndrop) {
-            log_debug_printf(logio, "UDP collector socket buffer overflowed %u -> %u\n", unsigned(prevndrop), unsigned(ndrop));
-            prevndrop = ndrop;
+        if(nrx>=0 && rx.ndrop!=0u && prevndrop!=rx.ndrop) {
+            log_debug_printf(logio, "UDP collector socket buffer overflowed %u -> %u\n", unsigned(prevndrop), unsigned(rx.ndrop));
+            prevndrop = rx.ndrop;
         }
 
         if(nrx<0) {
@@ -93,7 +93,8 @@ struct UDPCollector : public UDPManager::Search,
             return true;
         }
 
-        log_hex_printf(logio, Level::Debug, &buf[0], nrx, "UDP Rx %d from %s\n", nrx, src.tostring().c_str());
+        log_hex_printf(logio, Level::Debug, &buf[0], nrx, "UDP Rx %d, %s -> %s\n",
+                nrx, src.tostring().c_str(), dest.tostring().c_str());
 
         names.clear();
 
@@ -268,6 +269,7 @@ UDPCollector::UDPCollector(UDPManager::Pvt *manager, const SockAddr& bind_addr)
 
     epicsSocketEnableAddressUseForDatagramFanout(sock.sock);
     enable_SO_RXQ_OVFL(sock.sock);
+    enable_IP_PKTINFO(sock.sock);
     sock.bind(this->bind_addr);
     name = "UDP "+this->bind_addr.tostring();
 
