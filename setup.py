@@ -620,7 +620,7 @@ pvxs_ver = '%(PVXS_MAJOR_VERSION)s.%(PVXS_MINOR_VERSION)s.%(PVXS_MAINTENANCE_VER
 
 setup(
     name='pvxslibs',
-    version=pvxs_ver+"a3",
+    version=pvxs_ver+"a4",
     description="PVXS libraries packaged for python",
     url='https://mdavidsaver.github.io/pvxs',
     author='Michael Davidsaver',

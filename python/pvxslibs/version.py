@@ -15,9 +15,10 @@ __all__ = (
 
 version = get_distribution('pvxslibs').version # as a string
 
-version_info  = (int(x) for x in re.match(r'([\d]+)\.([\d]+)\.([\d]+)', version).groups())
+version_info  = re.match(r'([\d]+)\.([\d]+)\.([\d]+)([ab]\d+)?', version).groups()
 
-version_info = namedtuple('Version', ['major', 'minor', 'maintainance'])(*version_info)
+version_info = namedtuple('Version', ['major', 'minor', 'maintainance', 'dev']) \
+    (int(version_info[0]), int(version_info[1]), int(version_info[2]), version_info[3])
 
 def abi_requires():
     """Return a version requirement string which identifies
@@ -28,4 +29,4 @@ def abi_requires():
     """
     nextminor = version_info.minor+1
 
-    return 'pvxslibs >={0.major}.{0.minor}.{0.maintainance}, <{0.major}.{1}.0a1'.format(version_info, nextminor)
+    return 'pvxslibs >={0}, <{1.major}.{2}.0a1'.format(version, version_info, nextminor)
