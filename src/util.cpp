@@ -256,55 +256,6 @@ SigInt::~SigInt()
 
 #endif // !defined(__rtems__) && !defined(vxWorks)
 
-void enable_SO_RXQ_OVFL(SOCKET sock)
-{
-#ifdef SO_RXQ_OVFL
-    // Linux specific feature exposes OS dropped packet count
-    {
-        int val = 1;
-        if(setsockopt(sock, SOL_SOCKET, SO_RXQ_OVFL, (char*)&val, sizeof(val)))
-            log_warn_printf(log, "Unable to set SO_RXQ_OVFL: %d\n", SOCKERRNO);
-    }
-#endif
-}
-
-int recvfromx(SOCKET sock, void *buf, size_t buflen, sockaddr* peer, osiSocklen_t* peerlen, uint32_t *ndrop)
-{
-#ifdef SO_RXQ_OVFL
-    alignas (alignof (cmsghdr)) char cbuf[CMSG_SPACE(4u)];
-    iovec iov = {buf, buflen};
-    msghdr msg = {};
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1u;
-    msg.msg_name = peer;
-    msg.msg_namelen = peerlen ? *peerlen : 0;
-    msg.msg_control = cbuf;
-    msg.msg_controllen = sizeof(cbuf);
-
-    int ret = recvmsg(sock, &msg, 0);
-
-    if(ret>=0) {
-        if(peerlen)
-            *peerlen = msg.msg_namelen;
-
-        if(msg.msg_flags & MSG_CTRUNC)
-            log_debug_printf(log, "MSG_CTRUNC %zu, %zu\n", msg.msg_controllen, sizeof(cbuf));
-
-        if(ndrop) {
-            for(cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr ; hdr = CMSG_NXTHDR(&msg, hdr)) {
-                if(hdr->cmsg_level==SOL_SOCKET && hdr->cmsg_type==SO_RXQ_OVFL && hdr->cmsg_len>=CMSG_LEN(4u)) {
-                    memcpy(ndrop, CMSG_DATA(hdr), 4u);
-                }
-            }
-        }
-    }
-
-    return ret;
-
-#else
-    return recvfrom(sock, (char*)buf, buflen, 0, peer, peerlen);
-#endif
-}
 
 SockAddr::SockAddr(int af)
 {

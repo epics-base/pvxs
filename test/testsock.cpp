@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <osiSockExt.h>
+
 #include <cstring>
 
 #include <epicsUnitTest.h>
@@ -15,8 +17,42 @@
 #include <pvxs/unittest.h>
 #include <pvxs/log.h>
 
+#ifdef _WIN32
+#  include <windows.h>
+#  include <psapi.h>
+
+static
+bool is_wine()
+{
+    HMODULE nt = GetModuleHandle("ntdll.dll");
+    return nt && GetProcAddress(nt, "wine_get_version");
+}
+#endif
+
 namespace {
 using namespace pvxs;
+
+void test_ifacemap()
+{
+    testDiag("Enter %s", __func__);
+
+    impl::IfaceMap ifs;
+    ifs.refresh();
+
+    testFalse(ifs.info.empty())<<" found "<<ifs.info.size()<<" interfaces";
+
+    bool foundlo = false;
+    const auto lo(SockAddr::loopback(AF_INET));
+
+    for(const auto& iface : ifs.info) {
+        for(const auto& addr : iface.second) {
+            if(addr!=lo)
+                continue;
+            testTrue(!foundlo)<<" Found loopback with index "<<iface.first;
+            foundlo = true;
+        }
+    }
+}
 
 void test_udp()
 {
@@ -27,6 +63,7 @@ void test_udp()
 
     SockAddr bind_addr(SockAddr::loopback(AF_INET));
 
+    enable_IP_PKTINFO(A.sock);
     A.bind(bind_addr);
     testNotEq(bind_addr.port(), 0)<<"bound port";
 
@@ -42,32 +79,35 @@ void test_udp()
 
     uint8_t rxbuf[8] = {};
     SockAddr src;
+    SockAddr dest;
 
     testDiag("Call recvfrom()");
-    socklen_t slen = src.size();
-    ret = recvfrom(A.sock, (char*)rxbuf, sizeof(rxbuf), 0, &src->sa, &slen);
+    ret = recvfromx{A.sock, (char*)rxbuf, sizeof(rxbuf), &src, &dest}.call();
+    // only the destination address is captured, not the port
+    if(dest.family()==AF_INET)
+        dest.setPort(bind_addr.port());
 
     testOk(ret==4 && rxbuf[0]==0x12 && rxbuf[1]==0x34 && rxbuf[2]==0x56 && rxbuf[3]==0x78,
             "Recv'd %d(%d) [%u, %u, %u, %u]", ret, EVUTIL_SOCKET_ERROR(), rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);
     testEq(src, send_addr);
+    testEq(dest, bind_addr);
 }
 
 void test_local_mcast()
 {
     testDiag("Enter %s", __func__);
 
+    IfaceMap ifinfo;
+
     evsocket A(AF_INET, SOCK_DGRAM, 0),
              B(AF_INET, SOCK_DGRAM, 0);
 
-    SockAddr mcast_addr(AF_INET);
-    mcast_addr.setAddress("224.0.0.128");
+    SockAddr mcast_addr(AF_INET, "224.0.0.128");
 
-#ifdef _WIN32
+    // We could bind to mcast_addr on all targets except WIN32
     SockAddr bind_addr(SockAddr::any(AF_INET));
-#else
-    SockAddr bind_addr(mcast_addr);
-#endif
 
+    enable_IP_PKTINFO(A.sock);
     A.bind(bind_addr);
     mcast_addr.setPort(bind_addr.port());
 
@@ -88,14 +128,108 @@ void test_local_mcast()
 
     uint8_t rxbuf[8] = {};
     SockAddr src;
+    SockAddr dest;
 
     testDiag("Call recvfrom()");
-    socklen_t slen = src.size();
-    ret = recvfrom(A.sock, (char*)rxbuf, sizeof(rxbuf), 0, &src->sa, &slen);
+    recvfromx rx{A.sock, (char*)rxbuf, sizeof(rxbuf), &src, &dest};
+    ret = rx.call();
+    if(dest.family()==AF_INET)
+        dest.setPort(mcast_addr.port());
+
+    testTrue(ret>=0 && rx.dstif>0 && ifinfo.has_address(rx.dstif, sender_addr))
+            <<" received on index "<<rx.dstif;
+
     testOk(ret==4 && rxbuf[0]==0x12 && rxbuf[1]==0x34 && rxbuf[2]==0x56 && rxbuf[3]==0x78,
             "Recv'd %d [%u, %u, %u, %u]", ret, rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);
 
     testEq(src, sender_addr);
+    testEq(dest, mcast_addr);
+}
+
+void test_mcast_scope()
+{
+    testDiag("Enter %s", __func__);
+
+    SockAddr mcast_addr(AF_INET, "224.0.0.128");
+    auto any(SockAddr::any(AF_INET));
+    auto lo(SockAddr::loopback(AF_INET));
+    auto sender(SockAddr::loopback(AF_INET));
+
+    evsocket TX (AF_INET, SOCK_DGRAM, 0),
+             RX1(AF_INET, SOCK_DGRAM, 0),
+             RX2(AF_INET, SOCK_DGRAM, 0),
+             RX3(AF_INET, SOCK_DGRAM, 0),
+             RX4(AF_INET, SOCK_DGRAM, 0);
+
+    epicsSocketEnableAddressUseForDatagramFanout(RX1.sock);
+    epicsSocketEnableAddressUseForDatagramFanout(RX2.sock);
+    epicsSocketEnableAddressUseForDatagramFanout(RX3.sock);
+    epicsSocketEnableAddressUseForDatagramFanout(RX4.sock);
+
+    TX.mcast_loop(true);
+    TX.mcast_ttl(1u);
+    // endure message goes out through LO
+    TX.mcast_iface(lo);
+    TX.bind(sender);
+    testShow()<<" sender bound to "<<sender;
+
+    // ordering of bind() before joining mcast group is "strongly recommended"
+    // by winsock bind() documentation
+
+    RX1.bind(any);
+    mcast_addr.setPort(any.port()); // bind all RX* to the same port
+    lo.setPort(any.port());
+    testShow()<<" RX1 bound to "<<any;
+    RX2.bind(any);
+    testShow()<<" RX2 bound to "<<any;
+    RX3.bind(lo);
+    testShow()<<" RX3 bound to "<<lo;
+#ifndef _WIN32
+    // winsock doesn't allow binding to an mcast address
+    RX4.bind(mcast_addr);
+    testShow()<<" RX4 bound to "<<mcast_addr;
+#endif
+
+    testShow()<<" Join RX1 to "<<mcast_addr<<" on "<<lo;
+    RX1.mcast_join(mcast_addr, lo);
+
+    const char msg[] = "hello world!";
+    auto msglen = sizeof(msg)-1u;
+
+    auto ret = sendto(TX.sock, msg, msglen, 0, &mcast_addr->sa, lo.size());
+    testEq(ret, int(msglen))<<" sendto("<<sender<<" -> "<<mcast_addr<<") err="<<EVUTIL_SOCKET_ERROR();
+
+    auto doRX = [&lo, &msg, msglen](unsigned idx, evsocket& sock, bool expectrx) {
+        testShow()<<"RX"<<idx<<" expect "<<(expectrx ? "success" : "failure");
+        char buf[sizeof(msg)-1u+2u];
+        SockAddr src, dest;
+        recvfromx rx{sock.sock, buf, sizeof(buf), &src, &dest};
+
+        auto ret = rx.call();
+        if(expectrx) {
+            testEq(ret, int(msglen))<<" recvfrom() RX"<<idx<<" err="<<EVUTIL_SOCKET_ERROR()<<" src="<<src;
+            testTrue(lo.compare(src))<<" RX"<<idx<<" from "<<src;
+
+            testTrue(memcmp(buf, msg, msglen)==0)<<" RX"<<idx;
+
+        } else {
+            testTrue(ret<0)<<" RX"<<idx<<" expected error ret="<<ret<<" err="<<EVUTIL_SOCKET_ERROR();
+            testSkip(2, "Not relevant");
+        }
+    };
+
+#ifdef _WIN32
+    doRX(1, RX1, true);
+    doRX(2, RX2, is_wine()); // really Linux IP stack, and we couldn't clear IP_MULTICAST_ALL
+    doRX(3, RX3, false);
+    testSkip(3, "winsock doesn't allow bind() to an mcast address");
+
+#else
+    doRX(1, RX1, true);
+    doRX(2, RX2, false);
+    doRX(3, RX3, false);
+    doRX(4, RX4, false);
+#endif
 }
 
 void test_from_wire()
@@ -207,10 +341,13 @@ void test_to_wire()
 MAIN(testsock)
 {
     SockAttach attach;
-    testPlan(33);
+    logger_config_env();
+    testPlan(51);
     testSetup();
+    test_ifacemap();
     test_udp();
     test_local_mcast();
+    test_mcast_scope();
     test_from_wire();
     test_to_wire();
     testDiag("Done");
