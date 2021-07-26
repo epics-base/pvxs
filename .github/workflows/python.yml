@@ -330,7 +330,7 @@ jobs:
           path: dist/*
 
       - name: Upload wheels
-        if: github.event_name=='push' && github.ref=='refs/heads/master' && matrix.piparch
+        if: github.event_name=='push' && github.ref=='refs/heads/master'
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
