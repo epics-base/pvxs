@@ -599,7 +599,7 @@ public:
      * - std::string
      * - Value
      * - shared_array<const void>
-     * - An enum where the underlying type is one of the preceding (since UNRELEASED).
+     * - An enum where the underlying type is one of the preceding (since 0.2.0).
      *
      * @throws NoField !this->valid()
      * @throws NoConvert if the field value can not be coerced to type T
@@ -656,7 +656,7 @@ public:
      * - std::string
      * - Value
      * - shared_array<const void>
-     * - An enum where the underlying type is one of the preceding (since UNRELEASED).
+     * - An enum where the underlying type is one of the preceding (since 0.2.0).
      */
     template<typename T>
     void from(const T& val) {

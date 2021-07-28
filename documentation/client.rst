@@ -28,10 +28,10 @@ EPICS_PVA_BROADCAST_PORT
 EPICS_PVA_CONN_TMO
     Inactivity timeout for TCP connections.  For compatibility with pvAccessCPP
     a multiplier of 4/3 is applied.  So a value of 30 results in a 40 second timeout.
-    Prior to UNRELEASED this variable was ignored.
+    Prior to 0.2.0 this variable was ignored.
 
-.. versionadded:: UNRELEASED
-    Prior to UNRELEASED *EPICS_PVA_CONN_TMO* was ignored.
+.. versionadded:: 0.2.0
+    Prior to 0.2.0 *EPICS_PVA_CONN_TMO* was ignored.
 
 .. code-block:: c++
 

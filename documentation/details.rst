@@ -117,6 +117,8 @@ If a change is considered,
 best effort will be made to involve developers/sites known to make use of Expert API.
 Prospective users of the Expert API are encouraged to contact the author.
 
+Elements of the Expert API may be "promoted" to regular/full API status if warranted.
+
 .. _contrib:
 
 Contributing

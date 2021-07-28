@@ -215,7 +215,7 @@ public:
     //! Return strong internal reference which will not prevent
     //! implicit cancellation when the last reference returned
     //! by exec() is released.
-    //! @since UNRELEASED
+    //! @since 0.2.0
     virtual std::shared_ptr<Subscription> shared_from_this() const =0;
 };
 
@@ -433,7 +433,7 @@ public:
      * may be used to get asynchronous notification, or
      * the returned Connect object may be used to poll Channel (dis)connect state.
      *
-     * @since UNRELEASED
+     * @since 0.2.0
      */
     inline
     ConnectBuilder connect(const std::string& pvname);
@@ -481,7 +481,7 @@ public:
 
 #ifdef PVXS_EXPERT_API_ENABLED
     //! Actions of cacheClear()
-    //! @since UNRELEASED
+    //! @since 0.2.0
     enum cacheAction {
         Clean,      //!< Remove channel(s) if unused.  Optional for user code.
         Drop,       //!< Remove channel(s) unconditionally.  Prevents reuse of open channel(s).
@@ -492,16 +492,16 @@ public:
      *
      * @param action cf. cacheAction
      *
-     * @since UNRELEASED 'name' and 'action' arguments.  Defaults to previous behavior.
+     * @since 0.2.0 'name' and 'action' arguments.  Defaults to previous behavior.
      */
     void cacheClear(const std::string& name = std::string(), cacheAction action = Clean);
 
     //! Ignore any search replies with these GUIDs
-    //! @since UNRELEASED
+    //! @since 0.2.0
     void ignoreServerGUIDs(const std::vector<ServerGUID>& guids);
 
     //! Compile report about peers and channels
-    //! @since UNRELEASED
+    //! @since 0.2.0
     Report report(bool zero=true) const;
 #endif
 
@@ -609,7 +609,7 @@ public:
      * When true (the default) explicit or implicit cancel blocks until any
      * in progress callback has completed.  This makes safe some use of
      * references in callbacks.
-     * @since UNRELEASED
+     * @since 0.2.0
      */
     SubBuilder& syncCancel(bool b) { this->_syncCancel = b; return _sb(); }
 };
@@ -821,7 +821,7 @@ public:
 RequestBuilder Context::request() { return RequestBuilder{}; }
 
 //! cf. Context::connect()
-//! @since UNRELEASED
+//! @since 0.2.0
 class ConnectBuilder
 {
     std::shared_ptr<Context::Pvt> ctx;
@@ -845,7 +845,7 @@ public:
      * When true (the default) explicit or implicit cancel blocks until any
      * in progress callback has completed.  This makes safe some use of
      * references in callbacks.
-     * @since UNRELEASED
+     * @since 0.2.0
      */
     ConnectBuilder& syncCancel(bool b) { this->_syncCancel = b; return *this; }
 
@@ -866,20 +866,20 @@ struct PVXS_API Config {
 
     //! List of TCP name servers.
     //! Client context will maintain connections, and send search requests, to these servers.
-    //! @since UNRELEASED
+    //! @since 0.2.0
     std::vector<std::string> nameServers;
 
     //! UDP port to bind.  Default is 5076.  May be zero, cf. Server::config() to find allocated port.
     unsigned short udp_port = 5076;
     //! Default TCP port for name servers
-    //! @since UNRELEASED
+    //! @since 0.2.0
     unsigned short tcp_port = 5075;
 
     //! Whether to extend the addressList with local interface broadcast addresses.  (recommended)
     bool autoAddrList = true;
 
     //! Inactivity timeout interval for TCP connections.  (seconds)
-    //! @since UNRELEASED
+    //! @since 0.2.0
     double tcpTimeout = 40.0;
 
     // compat

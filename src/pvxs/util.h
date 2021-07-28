@@ -191,7 +191,7 @@ std::ostream& target_information(std::ostream&);
  * }
  * @endcode
  *
- * @since UNRELEASED
+ * @since 0.2.0
  */
 template<typename T>
 class MPMCFIFO {
@@ -301,7 +301,7 @@ struct Timer;
 #ifdef PVXS_EXPERT_API_ENABLED
 
 //! Timer associated with a client::Context or server::Server
-//! @since UNRELEASED
+//! @since 0.2.0
 struct PVXS_API Timer {
     struct Pvt;
 

@@ -33,7 +33,7 @@ namespace impl {
  *
  * cf. pvxs::server::Server::report() and pvxs::client::Context::report()
  *
- * @since UNRELEASED
+ * @since 0.2.0
  */
 struct Report {
     //! Info for a single channel (to a particular PV name on a particular server)

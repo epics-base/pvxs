@@ -25,7 +25,7 @@ namespace server {
  * - "ca" - Client provided account name.
  * - "anonymous" - Client provided no credentials.  account will also be "anonymous".
  *
- * @since UNRELEASED
+ * @since 0.2.0
  */
 struct PVXS_API ClientCredentials {
     //! Peer address (eg. numeric IPv4)
@@ -71,7 +71,7 @@ public:
     //! The Channel name
     const std::string& name() const { return _name; }
     //! Client credentials.  Never NULL.
-    //! @since UNRELEASED
+    //! @since 0.2.0
     const std::shared_ptr<const ClientCredentials>& credentials() const { return _cred; }
     //! Operation type
     op_t op() const { return _op; }
@@ -95,14 +95,14 @@ protected:
     Value _pvRequest;
 public:
     //! Access to pvRequest blob
-    //! @since UNRELEASED
+    //! @since 0.2.0
     const Value& pvRequest() const { return _pvRequest; }
 
     virtual ~ExecOp();
 
 #ifdef PVXS_EXPERT_API_ENABLED
     //! Create/start timer.  cb runs on worker associated with Channel of this Operation.
-    //! @since UNRELEASED
+    //! @since 0.2.0
     Timer timerOneShot(double delay, std::function<void()>&& cb) {
         return _timerOneShot(delay, std::move(cb));
     }

@@ -283,7 +283,7 @@ testCase testThrowsMatch(const std::string& expr, FN fn)
 //! Evaluates to a pvxs::testCase
 //! Functionally equivalent to testNotEq() with two std::string instances.
 //! Prints diff-like output which is friendlier to multi-line strings.
-//! @since UNRELEASED
+//! @since 0.2.0
 #define testStrNotEq(LHS, RHS) ::pvxs::detail::_testStrTest(0, #LHS, ::pvxs::detail::asStr(LHS), #RHS, ::pvxs::detail::asStr(RHS))
 
 //! Macro which asserts that STR matches the regular expression EXPR

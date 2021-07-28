@@ -3,8 +3,18 @@
 Release Notes
 =============
 
-0.2.0 (UNRELEASED)
+0.2.1 (UNRELEASED)
 ------------------
+
+0.2.0 (July 2021)
+-----------------
+
+* Bug fixes
+
+ * Resolve ambiguity between Value::as(T&) and Value::as(FN&&) causing issue with GCC 4.8.
+ * Fix encoding of (Sub)Struct w/ valid set.
+ * Fix locking issue with client tracking of server beacons.
+ * Fix binding to specific interface addresses.
 
 * Changes
 
@@ -12,6 +22,8 @@ Release Notes
    synchronization with the client worker thread.
    Cancellation still synchronizes by default, but this may now be controlled with
    the new syncCancel() Builder methods.  cf. `pvxs::client::detail::CommonBuilder::syncCancel()`.
+ * Client Op Builder server() method now implemented.
+ * Client channel cache now periodically prunes unused Channels automatically.
 
 * Additions
 
@@ -19,6 +31,10 @@ Release Notes
  * Allow TCP timeout to be configured.
  * Add `pvxs::client::Context::connect()` to force Channel creation and retention.
  * Add `pvxs::client::Subscription::shared_from_this()` which can be used with eg. the new `pvxs::MPMCFIFO` to create a work queue.
+ * Add `pvxs::server::ExecOp::pvRequest()`
+ * Semi-public :ref:`expertapi`.
+ * Update bundled libevent
+ * Preliminary support for RTEMS 5.1 with libbsd
 
 0.1.5 (May 2021)
 ----------------

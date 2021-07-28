@@ -117,7 +117,7 @@ public:
 #ifdef PVXS_EXPERT_API_ENABLED
     //! Compile report about peers and channels
     //! @param zero If true, zero counters after reading
-    //! @since UNRELEASED
+    //! @since 0.2.0
     Report report(bool zero=true) const;
 #endif
 
@@ -144,7 +144,7 @@ struct PVXS_API Config {
     //! Ignore client requests originating from addresses in this list.
     //! Entries must be IP addresses with optional port numbers.
     //! Port number zero (default) is treated as a wildcard which matches any port.
-    //! @since UNRELEASED
+    //! @since 0.2.0
     std::vector<std::string> ignoreAddrs;
     //! Addresses (**not** host names) to which (UDP) beacons message will be sent.
     //! May include broadcast and/or unicast addresses.
@@ -158,7 +158,7 @@ struct PVXS_API Config {
     bool auto_beacon = true;
 
     //! Inactivity timeout interval for TCP connections.  (seconds)
-    //! @since UNRELEASED
+    //! @since 0.2.0
     double tcpTimeout = 40.0;
 
     //! Server unique ID.  Only meaningful in readback via Server::config()
