@@ -405,7 +405,7 @@ Server::Pvt::Pvt(const Config &conf)
              * is to bind a second socket to the interface broadcast address,
              * which will then receive only broadcasts.
              */
-            for(auto bcast : dummy.interfaces(&addr)) {
+            for(auto bcast : dummy.broadcasts(&addr)) {
                 bcast.setPort(addr.port());
                 listeners.push_back(manager.onSearch(bcast,
                                                      std::bind(&Pvt::onSearch, this, std::placeholders::_1) ));
@@ -457,7 +457,7 @@ Server::Pvt::Pvt(const Config &conf)
         // i[1] host
         // mix together first interface and all local bcast addresses
         pun.i[1] ^= ntohl(osiLocalAddr(dummy.sock).ia.sin_addr.s_addr);
-        for(auto& addr : dummy.interfaces()) {
+        for(auto& addr : dummy.broadcasts()) {
             if(addr.family()==AF_INET)
                 pun.i[1] ^= ntohl(addr->in.sin_addr.s_addr);
         }

@@ -165,7 +165,7 @@ void expandAddrList(const std::vector<std::string>& ifaces,
             continue;
         }
 
-        for(auto& addr : dummy.interfaces(&saddr)) {
+        for(auto& addr : dummy.broadcasts(&saddr)) {
             addr.setPort(0u);
             bcasts.push_back(addr.tostring());
         }

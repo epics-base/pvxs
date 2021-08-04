@@ -475,7 +475,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     searchBuckets.resize(nBuckets);
 
     std::set<SockAddr> bcasts;
-    for(auto& addr : searchTx.interfaces()) {
+    for(auto& addr : searchTx.broadcasts()) {
         addr.setPort(0u);
         bcasts.insert(addr);
     }

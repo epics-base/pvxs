@@ -227,7 +227,7 @@ struct PVXS_API evsocket
     void mcast_iface(const SockAddr& iface) const;
 
     //! wraps osiSockDiscoverBroadcastAddresses()
-    std::vector<SockAddr> interfaces(const SockAddr* match=nullptr);
+    std::vector<SockAddr> broadcasts(const SockAddr* match=nullptr);
 };
 
 } // namespace impl
