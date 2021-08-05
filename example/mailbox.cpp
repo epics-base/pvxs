@@ -91,8 +91,7 @@ int main(int argc, char* argv[])
 
     // Build server which will serve this PV
     // Configure using process environment.
-    server::Server serv = server::Config::fromEnv()
-            .build();
+    auto serv(server::Server::fromEnv());
 
     for(size_t i=0ul; i<pvs.size(); i++) {
         serv.addPV(argv[i+1], pvs[i]);

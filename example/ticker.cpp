@@ -73,8 +73,7 @@ int main(int argc, char* argv[])
 
     // Build server which will serve this PV
     // Configure using process environment.
-    server::Server serv = server::Config::fromEnv()
-            .build();
+    auto serv(server::Server::fromEnv());
 
     for(int i=1; i<argc; i++) {
         std::cout<<"PV "<<argv[i]<<"\n";

@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
     logger_config_env();
 
     // Configure client using $EPICS_PVA_*
-    client::Context ctxt(client::Config::fromEnv().build());
+    auto ctxt(client::Context::fromEnv());
 
     // fetch PV "some:pv:name" and wait up to 5 seconds for a reply.
     // (throws an exception on error, including timeout)

@@ -59,6 +59,14 @@ public:
     explicit Server(const Config&);
     ~Server();
 
+    /** Create new server based on configuration from $EPICS_PVA* environment variables.
+     *
+     * Shorthand for @code Config::fromEnv().build() @endcode.
+     * @since UNRELEASED
+     */
+    static
+    Server fromEnv();
+
     //! Begin serving.  Does not block.
     Server& start();
     //! Stop server

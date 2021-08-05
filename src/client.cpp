@@ -353,6 +353,11 @@ Operation::~Operation() {}
 
 Subscription::~Subscription() {}
 
+Context Context::fromEnv()
+{
+    return Config::fromEnv().build();
+}
+
 Context::Context(const Config& conf)
     :pvt(std::make_shared<Pvt>(conf))
 {

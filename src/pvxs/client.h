@@ -255,6 +255,14 @@ public:
     explicit Context(const Config &);
     ~Context();
 
+    /** Create new client context based on configuration from $EPICS_PVA* environment variables.
+     *
+     * Shorthand for @code Config::fromEnv().build() @endcode.
+     * @since UNRELEASED
+     */
+    static
+    Context fromEnv();
+
     //! effective config of running client
     const Config& config() const;
 

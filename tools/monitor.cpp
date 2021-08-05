@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        auto ctxt = client::Config::fromEnv().build();
+        auto ctxt(client::Context::fromEnv());
 
         if(verbose)
             std::cout<<"Effective config\n"<<ctxt.config();

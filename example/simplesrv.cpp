@@ -27,8 +27,7 @@ int main(int argc, char* argv[]) {
     server::SharedPV pv(server::SharedPV::buildMailbox());
     pv.open(initial);
 
-    server::Config::fromEnv()        // Configure a server using $EPICS_PVAS_* or $EPICS_PVA_*
-            .build()
+    server::Server::fromEnv()        // Configure a server using $EPICS_PVAS_* or $EPICS_PVA_*
             .addPV("my:pv:name", pv) // add (and name) one local PV
             .run();                  // run until SIGINT
 

@@ -41,6 +41,11 @@ DEFINE_LOGGER(serversetup, "pvxs.server.setup");
 DEFINE_LOGGER(serverio, "pvxs.server.io");
 DEFINE_LOGGER(serversearch, "pvxs.server.search");
 
+Server Server::fromEnv()
+{
+    return Config::fromEnv().build();
+}
+
 Server::Server(const Config& conf)
 {
     /* Here be dragons.
