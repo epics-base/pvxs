@@ -74,7 +74,7 @@ void testPvRequest()
         auto rdef = TypeDef(TypeCode::Struct, {
                                 M::Struct("field", {
                                     M::Struct("timeStamp", {}),
-                                    M::Struct("nonexistant", {}),
+                                    M::Struct("nonexistent", {}),
                                     M::Struct("alarm", {
                                         M::Struct("status", {}),
                                     }),
@@ -83,13 +83,13 @@ void testPvRequest()
 
         auto mask = request2mask(Value::Helper::desc(val), rdef.create());
 
-        testEq(mask, BitMask({0, 2, 4, 6, 7, 8, 9}, 10u))<<" include including non-existant";
+        testEq(mask, BitMask({0, 2, 4, 6, 7, 8, 9}, 10u))<<" include including non-existent";
     }
 
     {
         auto rdef = TypeDef(TypeCode::Struct, {
                                 M::Struct("field", {
-                                    M::Struct("nonexistant", {}),
+                                    M::Struct("nonexistent", {}),
                                 })
                             });
 
@@ -357,7 +357,7 @@ void testBuilder()
             .set("value", "14")
             .set("alarm.severity", 3)
             .set("alarm", 42, false)
-            .set("nonexistant", 42, false);
+            .set("nonexistent", 42, false);
 
     auto built = builder.builder(nt::NTScalar{TypeCode::UInt32}.create());
 

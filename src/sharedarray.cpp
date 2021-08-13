@@ -177,7 +177,7 @@ printValue(std::string& dest, const Src& src)
 {
     std::ostringstream strm;
     strm<<src;
-    // no error check, we only print POD scalar types which are unambigious
+    // no error check, we only print POD scalar types which are unambiguous
     dest = strm.str();
 }
 

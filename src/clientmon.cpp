@@ -393,7 +393,7 @@ void Connection::handle_MONITOR()
                 lvl = Level::Err;
             }
 
-            log_printf(io, lvl,  "Server %s uses non-existant IOID %u.  Ignoring...\n",
+            log_printf(io, lvl,  "Server %s uses non-existent IOID %u.  Ignoring...\n",
                        peerName.c_str(), unsigned(ioid));
             return;
         }

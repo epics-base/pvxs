@@ -285,7 +285,7 @@ struct TestPutBuilder : public TesterBase
                 .set("value", "5")
                 .set("alarm.severity", 3)
                 .set("alarm", "not going to happen", false)
-                .set("nonexistant", "nope", false)
+                .set("nonexistent", "nope", false)
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
                     done.signal();

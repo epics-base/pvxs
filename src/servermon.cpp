@@ -32,7 +32,7 @@ struct MonitorOp : public ServerOp,
     {}
     virtual ~MonitorOp() {}
 
-    // only access from acceptor worker thread
+    // only access from accepter worker thread
     std::function<void(bool)> onStart;
     std::function<void()> onLowMark;
     std::function<void()> onHighMark;
@@ -186,7 +186,7 @@ struct MonitorOp : public ServerOp,
         }
 
         if(state==Executing && !queue.empty() && (!pipeline || window)) {
-            // reshedule myself
+            // reschedule myself
             assert(!scheduled); // we've been holding the lock, so this should not have changed
 
             conn->iface->server->acceptor_loop.dispatch([self]() {
@@ -502,7 +502,7 @@ void ServerConn::handle_MONITOR()
             // since server destroy commands aren't acknowledged, we can race
             // with traffic sent by the client before processing our destroy.
             // so we can't fault hard, so just ignore and hope for the best.
-            log_debug_printf(connio, "Client %s MONITORs non-existant IOID %u\n",
+            log_debug_printf(connio, "Client %s MONITORs non-existent IOID %u\n",
                        peerName.c_str(), unsigned(ioid));
             return;
 

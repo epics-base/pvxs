@@ -427,7 +427,7 @@ public:
      *
      * Type E may always be cast to itself.
      *
-     * Casts must preseve const-ness.
+     * Casts must preserve const-ness.
      * Either both of E and TO, or neither, must be const qualified.
      *
      * At most one of E or TO may have different non-void base type.

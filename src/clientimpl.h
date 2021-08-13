@@ -154,7 +154,7 @@ struct ConnectImpl : public Connect
 struct Channel {
     const std::shared_ptr<ContextImpl> context;
     const std::string name;
-    // Our choosen ID for this channel.
+    // Our chosen ID for this channel.
     // used as persistent CID and searchID
     const uint32_t cid;
 
@@ -173,7 +173,7 @@ struct Channel {
     // channel created with .server() to bypass normal search process
     SockAddr forcedServer;
 
-    // when state==Searching, number of repeatitions
+    // when state==Searching, number of repetitions
     size_t nSearch = 0u;
 
     // GUID of last positive reply when state!=Searching

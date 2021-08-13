@@ -171,7 +171,7 @@ struct PVRParser
             input++;
 
         if(start==input)
-            throw std::runtime_error("invalid charactor near: "+std::string(start));
+            throw std::runtime_error("invalid character near: "+std::string(start));
 
         lexval = std::string(start, input-start);
 

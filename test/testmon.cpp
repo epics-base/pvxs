@@ -136,7 +136,7 @@ struct BasicTest {
         mbox.open(initial);
 
         auto sub(cli.monitor("mailbox")
-                 .field("nonexistant")
+                 .field("nonexistent")
                  .maskConnected(false)
                  .maskDisconnected(false)
                  .event([this](client::Subscription&) {

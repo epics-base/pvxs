@@ -44,11 +44,11 @@ struct Buffer;
 
 /** Describes a single field, leaf or otherwise, in a nested structure.
  *
- * FieldDesc are always stored depth first as a contigious array,
+ * FieldDesc are always stored depth first as a contiguous array,
  * with offset to descendant fields given as positive integers relative
  * to the current field.  (not possible to jump _back_)
  *
- * We deal with indicies in this FieldDesc array.  found in FieldDesc::mlookup
+ * We deal with indices in this FieldDesc array.  found in FieldDesc::mlookup
  * and FieldDesc::miter Relative to current position in FieldDesc array.  (aka this+n)
  */
 struct FieldDesc {

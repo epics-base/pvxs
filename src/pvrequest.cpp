@@ -46,7 +46,7 @@ BitMask request2mask(const FieldDesc* desc, const Value& pvRequest)
                     }
 
                 } else {
-                    // request of non-existant field
+                    // request of non-existent field
                 }
             }
         }

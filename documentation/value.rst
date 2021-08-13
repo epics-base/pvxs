@@ -67,7 +67,7 @@ All operations on an invalid Value should be safe and well defined.
 .. code-block:: c++
 
     Value top(nt::NTScalar{TypeCode::Int32}.create());
-    int32_t val = top["nonexistant"].as<int32_t>();
+    int32_t val = top["nonexistent"].as<int32_t>();
 
 In this example, the operator[] lookup of a non-existant field returns an invalid Value.
 Attempting to extract an integer from this will then throw a `pvxs::NoField` exception.

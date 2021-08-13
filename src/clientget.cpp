@@ -400,7 +400,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
     bool init = subcmd&0x08;
     bool get  = subcmd&0x40;
 
-    // immediately deserialize in unambigous cases
+    // immediately deserialize in unambiguous cases
 
     if(M.good() && cmd!=CMD_RPC && init && sts.isSuccess()) {
         // INIT of PUT or GET, decode type description
@@ -436,7 +436,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
                 lvl = Level::Err;
             }
 
-            log_printf(io, lvl,  "Server %s uses non-existant IOID %u.  Ignoring...\n",
+            log_printf(io, lvl,  "Server %s uses non-existent IOID %u.  Ignoring...\n",
                        peerName.c_str(), unsigned(ioid));
             return;
         }

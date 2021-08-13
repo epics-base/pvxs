@@ -426,7 +426,7 @@ Server::Pvt::Pvt(const Config &conf)
 
 
     acceptor_loop.call([this](){
-        // from acceptor worker
+        // from accepter worker
 
         bool firstiface = true;
         for(const auto& addr : effective.interfaces) {

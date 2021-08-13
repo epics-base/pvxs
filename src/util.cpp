@@ -371,7 +371,7 @@ void SockAddr::setAddress(const char *name, unsigned short port)
 {
     SockAddr temp(AF_INET);
     if(aToIPAddr(name, port, &temp->in))
-        throw std::runtime_error(std::string("Unable to parse as IP addresss: ")+name);
+        throw std::runtime_error(std::string("Unable to parse as IP address: ")+name);
     if(temp.port()==0)
         temp.setPort(port);
     (*this) = temp;

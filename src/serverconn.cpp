@@ -111,7 +111,7 @@ const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
     if(it==chanBySID.end()) {
         static decltype (it->second) empty{};
         return empty;
-        //throw std::runtime_error(SB()<<"Client "<<peerName<<" non-existant SID "<<sid);
+        //throw std::runtime_error(SB()<<"Client "<<peerName<<" non-existent SID "<<sid);
     }
     return it->second;
 }
@@ -227,7 +227,7 @@ void ServerConn::handle_CANCEL_REQUEST()
 
     auto it = opByIOID.find(ioid);
     if(it==opByIOID.end()) {
-        log_warn_printf(connsetup, "Client %s Cancel of non-existant Op %u\n", peerName.c_str(), unsigned(ioid));
+        log_warn_printf(connsetup, "Client %s Cancel of non-existent Op %u\n", peerName.c_str(), unsigned(ioid));
         return;
     }
 
@@ -296,7 +296,7 @@ void ServerConn::handle_MESSAGE()
 
     auto it = opByIOID.find(ioid);
     if(it==opByIOID.end()) {
-        log_debug_printf(connsetup, "Client %s Message on non-existant ioid\n", peerName.c_str());
+        log_debug_printf(connsetup, "Client %s Message on non-existent ioid\n", peerName.c_str());
         return;
     }
     auto chan = it->second->chan.lock();

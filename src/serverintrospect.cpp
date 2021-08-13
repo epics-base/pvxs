@@ -70,7 +70,7 @@ struct ServerIntrospectControl : public server::ConnectOp
         _cred = conn->cred;
     }
     virtual ~ServerIntrospectControl() {
-        error("Implict Cancel");
+        error("Implicit Cancel");
     }
 
     virtual void connect(const Value& prototype) override final
@@ -92,7 +92,7 @@ struct ServerIntrospectControl : public server::ConnectOp
     {
         auto serv = server.lock();
         if(!serv)
-            return; // soft fail if already completed, cancelled, disconnected, ....
+            return; // soft fail if already completed, canceled, disconnected, ....
 
         serv->acceptor_loop.call([this, type, &sts](){
             if(auto oper = op.lock())

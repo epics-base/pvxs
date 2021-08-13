@@ -282,7 +282,7 @@ void ServerConn::handle_CREATE_CHANNEL()
     auto G(iface->server->sourcesLock.lockReader());
 
     // one channel create request contains main channel names.
-    // each of which will received a seperate reply.
+    // each of which will received a separate reply.
 
     uint16_t count = 0;
     from_wire(M, count);
@@ -399,7 +399,7 @@ void ServerConn::handle_DESTROY_CHANNEL()
 
     auto it = chanBySID.find(sid);
     if(it==chanBySID.end()) {
-        log_debug_printf(connsetup, "Client %s DestroyChan non-existant sid=%d cid=%d\n", peerName.c_str(),
+        log_debug_printf(connsetup, "Client %s DestroyChan non-existent sid=%d cid=%d\n", peerName.c_str(),
                    unsigned(sid), unsigned(cid));
         return;
     }

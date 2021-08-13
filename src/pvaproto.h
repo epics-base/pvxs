@@ -92,7 +92,7 @@ public:
     void restore(uint8_t* p) { pos = p; }
 };
 
-//! (de)serialization to/from buffers which are fixed size and contigious
+//! (de)serialization to/from buffers which are fixed size and contiguous
 struct PVXS_API FixedBuf : public Buffer
 {
     typedef Buffer base_type;
@@ -246,7 +246,7 @@ inline void from_wire(Buffer& buf, T& val)
 
 //! wrapper to disambiguate size_t from uint32_t or uint64_t.
 //!
-//! __Always__ initialize w/ zero for sane behavour on error.
+//! __Always__ initialize w/ zero for sane behavior on error.
 //! @code
 //!   sbuf M;
 //!   Size blen{0};

@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
             size_t idx=0;
             delay = 1.0/std::stod(argv[argc-1], &idx);
             if(idx<std::strlen(argv[argc-1]))
-                throw std::invalid_argument("Extraneous charactors");
+                throw std::invalid_argument("Extraneous characters");
         }catch(std::exception& e){
             std::cerr<<"Error parsing rate: "<<e.what()<<"\n";
             return 1;

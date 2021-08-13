@@ -329,7 +329,7 @@ void Connection::handle_CREATE_CHANNEL()
     chan->statRx += rxlen;
 
     if(!sts.isSuccess()) {
-        // server refuses to create a channel, but presumably responded positivly to search
+        // server refuses to create a channel, but presumably responded positively to search
 
         chan->state = Channel::Searching;
         context->searchBuckets[context->currentBucket].push_back(chan);
@@ -378,7 +378,7 @@ void Connection::handle_DESTROY_CHANNEL()
     {
         auto it = chanBySID.find(sid);
         if(it==chanBySID.end() || !(chan = it->second.lock())) {
-            log_debug_printf(io, "Server %s destroys non-existant channel %u:%u\n",
+            log_debug_printf(io, "Server %s destroys non-existent channel %u:%u\n",
                              peerName.c_str(), unsigned(cid), unsigned(sid));
             return;
         }
