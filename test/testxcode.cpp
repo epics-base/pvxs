@@ -940,6 +940,29 @@ void testXCodeNTNDArray()
     testEq(msg, out);
 }
 
+// test decode/re-encode of definitions with non-conformant field names
+void testBadFieldName()
+{
+    testDiag("%s", __func__);
+    namespace M = members;
+
+    Value proto;
+    TypeStore store;
+    testFromBytes(true, "\x80\x00\x01\bin-valid&", [&store, &proto](Buffer& B) {
+        from_wire_type(B, store, proto);
+    });
+
+    testToBytes(true, [proto](Buffer& B) {
+        to_wire(B, Value::Helper::desc(proto));
+    }, "\x80\x00\x01\bin-valid&");
+
+    // TODO: should local access be allowed?
+    testThrows<std::runtime_error>([&proto](){
+        proto["in-valid"] = 42;
+        testEq(proto["in-valid"].as<uint32_t>(), 42u);
+    });
+}
+
 void testRegressRedundantBitMask()
 {
     testDiag("%s", __func__);
@@ -1080,7 +1103,7 @@ void testEmptyRequest()
 
 MAIN(testxcode)
 {
-    testPlan(129);
+    testPlan(132);
     testSetup();
     testDeserializeString();
     testSerialize1();
@@ -1094,6 +1117,7 @@ MAIN(testxcode)
     testXCodeNTScalar();
     testXCodeNTNDArray();
     testRegressRedundantBitMask();
+    testBadFieldName();
     testEmptyRequest();
     return testDone();
 }
