@@ -196,13 +196,12 @@ struct UDPCollector : public UDPManager::Search,
             }
             beaconMsg.server.setPort(port);
 
-            Size protolen{0};
-            from_wire(M, protolen);
-            M.skip(protolen.size, __FILE__, __LINE__); // ignore string
+            std::string proto;
+            from_wire(M, proto);
 
             // ignore remaining "server status" blob
 
-            if(M.good()) {
+            if(M.good() && proto=="tcp") {
                 for(auto L : listeners) {
                     if(L->beaconCB) {
                         (L->beaconCB)(beaconMsg);
