@@ -4,7 +4,18 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include <regex>
+#include "pvxs/version.h"
+
+#if !defined(GCC_VERSION) || GCC_VERSION>VERSION_INT(4,9,0,0)
+#  include <regex>
+
+#else
+// GCC 4.8 provides the regex header and symbols, but with a no-op implementation
+// so fill in the gap with POSIX regex
+#  include <sys/types.h>
+#  include <regex.h>
+#  define USE_POSIX_REGEX
+#endif
 
 #include <epicsUnitTest.h>
 
@@ -96,15 +107,33 @@ testCase::~testCase()
 
 testCase& testCase::setPassMatch(const std::string& expr, const std::string& inp)
 {
+#ifdef USE_POSIX_REGEX
+    regex_t ex{};
+
+    if(auto err = regcomp(&ex, expr.c_str(), REG_EXTENDED|REG_NOSUB)) {
+        auto len = regerror(err, &ex, nullptr, 0u);
+        std::vector<char> msg(len+1);
+        (void)regerror(err, &ex, msg.data(), len);
+        msg[len] = '\0'; // paranoia
+        setPass(false);
+        (*this)<<" expression error: "<<msg.data()<<" :";
+
+    } else {
+        setPass(regexec(&ex, inp.c_str(), 0, nullptr, 0)!=REG_NOMATCH);
+        regfree(&ex);
+    }
+
+#else
     std::regex ex;
     try {
-        ex.assign(expr);
+        ex.assign(expr, std::regex_constants::extended);
         setPass(std::regex_match(inp, ex));
 
     }catch(std::regex_error& e) {
         setPass(false);
         (*this)<<" expression error: "<<e.what()<<" :";
     }
+#endif
     return *this;
 }
 
@@ -174,7 +203,6 @@ testCase _testStrTest(unsigned op, const char *sLHS, const char* rlhs, const cha
 
 testCase _testStrMatch(const char *spat, const std::string& pat, const char *sstr, const std::string& str)
 {
-    std::regex expr;
     testCase ret;
     ret.setPassMatch(pat, str);
     ret<<spat<<" (\""<<pat<<"\") match "<<str<<" (\""<<escape(str)<<"\")";

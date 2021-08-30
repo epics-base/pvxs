@@ -200,13 +200,15 @@ void testTestEq()
     testStrNotEq("hello", std::string("world"));
     testStrNotEq(std::string("hello"), "world");
     testStrNotEq(std::string("hello"), std::string("world"));
+
+    testStrMatch("[Hh]ello [Ww]orld", "hello world");
 }
 
 } // namespace
 
 MAIN(testutil)
 {
-    testPlan(24);
+    testPlan(25);
     testTrue(version_abi_check())<<" 0x"<<std::hex<<PVXS_VERSION<<" ~= 0x"<<std::hex<<PVXS_ABI_VERSION;
     testServerGUID();
     testFill();

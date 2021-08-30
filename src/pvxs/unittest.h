@@ -79,7 +79,8 @@ public:
     }
 
     //! Override current pass/fail result if input matches a regular expression
-    //! @since 0.1.1
+    //! @since UNRELEASED Expression syntax is POSIX extended.
+    //! @since 0.1.1 Added
     testCase& setPassMatch(const std::string& expr, const std::string& inp);
 
     //! Append to message
@@ -288,6 +289,7 @@ testCase testThrowsMatch(const std::string& expr, FN fn)
 
 //! Macro which asserts that STR matches the regular expression EXPR
 //! Evaluates to a pvxs::testCase
+//! @since UNRELEASED Expression syntax is POSIX extended.
 //! @since 0.1.1
 #define testStrMatch(EXPR, STR) ::pvxs::detail::_testStrMatch(#EXPR, EXPR, #STR, STR)
 
