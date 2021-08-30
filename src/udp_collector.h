@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <tuple>
+#include <set>
 #include <vector>
 #include <array>
 
@@ -83,11 +84,14 @@ private:
 
 class PVXS_API UDPListener
 {
+    friend struct UDPManager;
+
     std::function<void(UDPManager::Search&)> searchCB;
     std::function<void(UDPManager::Beacon&)> beaconCB;
     const std::shared_ptr<UDPManager::Pvt> manager;
     std::shared_ptr<UDPCollector> collector;
     const SockAddr dest;
+    std::set<SockAddr> mcasts;
     bool active;
 
     INST_COUNTER(UDPListener);
@@ -95,9 +99,11 @@ class PVXS_API UDPListener
     friend struct UDPCollector;
     friend struct UDPManager;
 
-public:
     UDPListener(const std::shared_ptr<UDPManager::Pvt>& manager, SockAddr& dest);
+public:
     ~UDPListener();
+
+    void addMCast(const SockAddr& mcast);
 
     void start(bool s=true);
     inline void stop() { start(false); }
