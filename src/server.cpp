@@ -7,7 +7,6 @@
 
 #include <list>
 #include <map>
-#include <regex>
 #include <system_error>
 #include <functional>
 #include <atomic>

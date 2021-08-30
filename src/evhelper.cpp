@@ -477,7 +477,7 @@ void evsocket::mcast_iface(const SockAddr& iface) const
     // IPV6_MULTICAST_IF
 }
 
-std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match)
+std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match) const
 {
     if(match && match->family()!=AF_INET) {
         throw std::logic_error("osiSockDiscoverBroadcastAddresses() only understands AF_INET");
