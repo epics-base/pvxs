@@ -479,7 +479,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
 
     searchBuckets.resize(nBuckets);
 
-    std::set<SockAddr> bcasts;
+    std::set<SockAddr, SockAddrOnlyLess> bcasts;
     for(auto& addr : searchTx.broadcasts()) {
         addr.setPort(0u);
         bcasts.insert(addr);
@@ -517,7 +517,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
         }
         auto top = ntohl(saddr->in.sin_addr.s_addr)>>24u;
         auto ismcast = top>224 && top<239;
-        bool isbcast = bcasts.find(saddr.withPort(0))!=bcasts.end(); // TODO: exclude port
+        bool isbcast = bcasts.find(saddr)!=bcasts.end();
         auto isucast = !isbcast && !ismcast;
 
         log_info_printf(io, "Searching to %s%s\n", saddr.tostring().c_str(), (isucast?" unicast":""));

@@ -88,7 +88,7 @@ struct ThreadEvent
             } else {
                 // race
                 epicsThreadPrivateDelete(temp);
-                id = pvt.load();
+                assert(id);
             }
         }
 
