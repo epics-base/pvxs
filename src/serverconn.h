@@ -229,6 +229,8 @@ struct Server::Pvt
 
     std::vector<uint8_t> searchReply;
 
+    // properly a local of Pvt::onSearch() on the UDP worker.
+    // made a member to avoid re-alloc of _names vector.
     Source::Search searchOp;
 
     StaticSource builtinsrc;
