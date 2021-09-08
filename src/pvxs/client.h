@@ -940,10 +940,15 @@ public:
 DiscoverBuilder Context::discover(std::function<void (const Discovered &)> && fn) { return DiscoverBuilder(pvt, std::move(fn)); }
 
 struct PVXS_API Config {
-    //! List of unicast and broadcast addresses
+    /** List of unicast, multicast, and broadcast addresses to which search requests will be sent.
+     *
+     * Entries may take the forms:
+     * - <ipaddr>[:<port#>]
+     * - <ipmultiaddr>[:<port>][,<ttl>][@<ifaceaddr>]
+     */
     std::vector<std::string> addressList;
 
-    //! List of interface addresses on which beacons may be received.
+    //! List of local interface addresses on which beacons may be received.
     //! Also constrains autoAddrList to only consider broadcast addresses of listed interfaces.
     //! Empty implies wildcard 0.0.0.0
     std::vector<std::string> interfaces;

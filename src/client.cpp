@@ -468,11 +468,15 @@ Value buildCAMethod()
 }
 
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
-    :effective(conf)
+    :canIPv6(evsocket::canIPv6())
+    ,ifmap(IfaceMap::instance())
+    ,effective(conf)
     ,caMethod(buildCAMethod())
-    ,searchTx(AF_INET, SOCK_DGRAM, 0)
+    ,searchTx4(AF_INET, SOCK_DGRAM, 0)
+    ,searchTx6(AF_INET6, SOCK_DGRAM, 0)
     ,tcp_loop(tcp_loop)
-    ,searchRx(event_new(tcp_loop.base, searchTx.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
+    ,searchRx4(event_new(tcp_loop.base, searchTx4.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
+    ,searchRx6(event_new(tcp_loop.base, searchTx6.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
     ,searchTimer(event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::tickSearchS, this))
     ,manager(UDPManager::instance())
     ,beaconCleaner(event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::tickBeaconCleanS, this))
@@ -484,52 +488,60 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     searchBuckets.resize(nBuckets);
 
     std::set<SockAddr, SockAddrOnlyLess> bcasts;
-    for(auto& addr : searchTx.broadcasts()) {
+    for(auto& addr : searchTx4.broadcasts()) {
         addr.setPort(0u);
         bcasts.insert(addr);
     }
 
+    searchTx6.ipv6_only();
+
     {
-        osiSockAddr any{};
-        any.ia.sin_family = AF_INET;
-        if(bind(searchTx.sock, &any.sa, sizeof(any.ia)))
+        auto any(SockAddr::any(searchTx4.af));
+        if(bind(searchTx4.sock, &any->sa, any.size()))
             throw std::runtime_error("Unable to bind random UDP port");
 
-        socklen_t alen = sizeof(any);
-        if(getsockname(searchTx.sock, &any.sa, &alen))
+        socklen_t alen = any.capacity();
+        if(getsockname(searchTx4.sock, &any->sa, &alen))
             throw std::runtime_error("Unable to readback random UDP port");
 
-        searchRxPort = ntohs(any.ia.sin_port);
+        searchRxPort = any.port();
 
         log_debug_printf(setup, "Using UDP Rx port %u\n", searchRxPort);
     }
-
     {
-        int val = 1;
-        if(setsockopt(searchTx.sock, SOL_SOCKET, SO_BROADCAST, (char *)&val, sizeof(val)))
-            log_err_printf(setup, "Unable to setup beacon sender SO_BROADCAST: %d\n", SOCKERRNO);
+        auto any(SockAddr::any(searchTx6.af, searchRxPort));
+        if(bind(searchTx6.sock, &any->sa, any.size()))
+            throw std::runtime_error("Unable to bind random UDP6 port");
     }
-    enable_SO_RXQ_OVFL(searchTx.sock);
+
+    searchTx4.set_broadcast(true);
+    searchTx4.enable_SO_RXQ_OVFL();
+    searchTx6.enable_SO_RXQ_OVFL();
 
     for(auto& addr : effective.addressList) {
-        SockAddr saddr(AF_INET);
+        SockEndpoint ep;
         try {
-            saddr.setAddress(addr.c_str(), effective.udp_port);
-        }catch(std::runtime_error& e) {
-            log_err_printf(setup, "%s  Ignoring %s\n", e.what(), addr.c_str());
+            ep = SockEndpoint(addr, effective.udp_port);
+        }catch(std::exception& e){
+            log_warn_printf(setup, "%s  Ignoring malformed address %s\n", e.what(), addr.c_str());
             continue;
         }
-        // if !bcast and !mcast
-        auto isucast = bcasts.find(saddr)==bcasts.end() && !saddr.isMCast();
+        assert(ep.addr.family()==AF_INET || ep.addr.family()==AF_INET6);
 
-        log_info_printf(io, "Searching to %s%s\n", saddr.tostring().c_str(), (isucast?" unicast":""));
-        searchDest.emplace_back(saddr, isucast);
+        // if !bcast and !mcast
+        auto isucast = !ep.addr.isMCast();
+
+        if(isucast && ep.addr.family()==AF_INET && bcasts.find(ep.addr)!=bcasts.end())
+            isucast = false;
+
+        log_info_printf(io, "Searching to %s%s\n", std::string(SB()<<ep).c_str(), (isucast?" unicast":""));
+        searchDest.emplace_back(ep, isucast);
     }
 
     for(auto& addr : effective.nameServers) {
-        SockAddr saddr(AF_INET);
+        SockAddr saddr;
         try {
-            saddr.setAddress(addr.c_str(), 5075);
+            saddr.setAddress(addr.c_str(), effective.tcp_port);
         }catch(std::runtime_error& e) {
             log_err_printf(setup, "%s  Ignoring...\n", e.what());
         }
@@ -538,12 +550,22 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
         nameServers.emplace_back(saddr, nullptr);
     }
 
+    const auto cb([this](const UDPManager::Beacon& msg) {
+        onBeacon(msg);
+    });
+
     for(auto& iface : effective.interfaces) {
-        SockAddr addr(AF_INET, iface.c_str(), effective.udp_port);
-        log_info_printf(io, "Listening for beacons on %s\n", addr.tostring().c_str());
-        beaconRx.push_back(manager.onBeacon(addr, [this](const UDPManager::Beacon& msg) {
-            onBeacon(msg);
-        }));
+        SockEndpoint addr(iface.c_str(), effective.udp_port);
+        beaconRx.push_back(manager.onBeacon(addr, cb));
+        log_info_printf(io, "Listening for beacons on %s\n", addr.addr.tostring().c_str());
+
+        if(addr.addr.family()==AF_INET && addr.addr.isAny()) {
+            // if listening on 0.0.0.0, also listen on [::]
+            auto any6(addr);
+            any6.addr = SockAddr::any(AF_INET6);
+
+            beaconRx.push_back(manager.onBeacon(any6, cb));
+        }
     }
 
     for(auto& listener : beaconRx) {
@@ -552,8 +574,10 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
 
     if(event_add(searchTimer.get(), &bucketInterval))
         log_err_printf(setup, "Error enabling search timer\n%s", "");
-    if(event_add(searchRx.get(), nullptr))
-        log_err_printf(setup, "Error enabling search RX\n%s", "");
+    if(event_add(searchRx4.get(), nullptr))
+        log_err_printf(setup, "Error enabling search RX4\n%s", "");
+    if(event_add(searchRx6.get(), nullptr))
+        log_err_printf(setup, "Error enabling search RX6\n%s", "");
     if(event_add(beaconCleaner.get(), &beaconCleanInterval))
         log_err_printf(setup, "Error enabling beacon clean timer on\n%s", "");
     if(event_add(cacheCleaner.get(), &channelCacheCleanInterval))
@@ -586,7 +610,8 @@ void ContextImpl::close()
     // terminate all active connections
     tcp_loop.call([this]() {
         (void)event_del(searchTimer.get());
-        (void)event_del(searchRx.get());
+        (void)event_del(searchRx4.get());
+        (void)event_del(searchRx6.get());
         (void)event_del(beaconCleaner.get());
         (void)event_del(cacheCleaner.get());
 
@@ -670,7 +695,7 @@ static
 void procSearchReply(ContextImpl& self, const SockAddr& src, Buffer& M, bool istcp)
 {
     ServerGUID guid;
-    SockAddr serv(AF_INET);
+    SockAddr serv;
     uint16_t port = 0;
     uint8_t found = 0u;
     uint32_t seq = 0u;
@@ -762,12 +787,12 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, Buffer& M, bool ist
 
 }
 
-bool ContextImpl::onSearch()
+bool ContextImpl::onSearch(evutil_socket_t fd)
 {
     searchMsg.resize(0x10000);
     SockAddr src;
 
-    recvfromx rx{searchTx.sock, (char*)&searchMsg[0], searchMsg.size()-1, &src};
+    recvfromx rx{fd, (char*)&searchMsg[0], searchMsg.size()-1, &src};
     const int nrx = rx.call();
 
     if(nrx>=0 && rx.ndrop!=0 && prevndrop!=rx.ndrop) {
@@ -776,7 +801,7 @@ bool ContextImpl::onSearch()
     }
 
     if(nrx<0) {
-        int err = evutil_socket_geterror(searchTx.sock);
+        int err = evutil_socket_geterror(fd);
         if(err==SOCK_EWOULDBLOCK || err==EAGAIN || err==SOCK_EINTR) {
             // nothing to do here
         } else {
@@ -844,7 +869,7 @@ void ContextImpl::onSearchS(evutil_socket_t fd, short evt, void *raw)
         // limit number of packets processed before going back to the reactor
         unsigned i;
         const unsigned limit = 40;
-        for(i=0; i<limit && static_cast<ContextImpl*>(raw)->onSearch(); i++) {}
+        for(i=0; i<limit && static_cast<ContextImpl*>(raw)->onSearch(fd); i++) {}
         log_debug_printf(io, "UDP search processed %u/%u\n", i, limit);
 
     }catch(std::exception& e){
@@ -976,20 +1001,27 @@ void ContextImpl::tickSearch(bool discover)
             to_wire(H, Header{CMD_SEARCH, 0, uint32_t(consumed-8u)});
         }
         for(auto& pair : searchDest) {
-            if(pair.second)
+            auto& dest = pair.first.addr.family()==AF_INET ? searchTx4 : searchTx6;
+
+            if(pair.second) {
                 *pflags |= pva_search_flags::Unicast;
-            else
+
+            } else {
                 *pflags &= ~pva_search_flags::Unicast;
 
-            int ntx = sendto(searchTx.sock, (char*)searchMsg.data(), consumed, 0, &pair.first->sa, pair.first.size());
+                dest.mcast_prep_sendto(pair.first);
+            }
+
+            int ntx = sendto(dest.sock, (char*)searchMsg.data(), consumed, 0,
+                             &pair.first.addr->sa, pair.first.addr.size());
 
             if(ntx<0) {
-                int err = evutil_socket_geterror(searchTx.sock);
+                int err = evutil_socket_geterror(dest.sock);
                 auto lvl = Level::Warn;
                 if(err==EINTR || err==EPERM)
                     lvl = Level::Debug;
-                log_printf(io, lvl, "Search tx error (%d) %s\n",
-                           err, evutil_socket_error_to_string(err));
+                log_printf(io, lvl, "Search tx %s error (%d) %s\n",
+                           pair.first.addr.tostring().c_str(), err, evutil_socket_error_to_string(err));
 
             } else if(unsigned(ntx)<consumed) {
                 log_warn_printf(io, "Search truncated %u < %u",
@@ -998,7 +1030,7 @@ void ContextImpl::tickSearch(bool discover)
             } else {
                 log_hex_printf(io, Level::Debug, (char*)searchMsg.data(), consumed,
                                "Search to %s %s\n",
-                               pair.first.tostring().c_str(),
+                               std::string(SB()<<pair.first).c_str(),
                                pair.second ? "ucast" : "bcast");
             }
         }

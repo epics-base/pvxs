@@ -375,10 +375,12 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 }
 
 Server::Pvt::Pvt(const Config &conf)
-    :effective(conf)
+    :canIPv6(evsocket::canIPv6())
+    ,effective(conf)
     ,beaconMsg(128)
     ,acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow-2)
-    ,beaconSender(AF_INET, SOCK_DGRAM, 0)
+    ,beaconSender4(AF_INET, SOCK_DGRAM, 0)
+    ,beaconSender6(AF_INET6, SOCK_DGRAM, 0)
     ,beaconTimer(event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this))
     ,searchReply(0x10000)
     ,builtinsrc(StaticSource::build())
@@ -386,62 +388,74 @@ Server::Pvt::Pvt(const Config &conf)
 {
     effective.expand();
 
-    {
-        int val = 1;
-        if(setsockopt(beaconSender.sock, SOL_SOCKET, SO_BROADCAST, (char *)&val, sizeof(val)))
-            log_err_printf(serversetup, "Unable to setup beacon sender SO_BROADCAST: %d\n", SOCKERRNO);
-    }
+    beaconSender4.set_broadcast(true);
 
     auto manager = UDPManager::instance();
 
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
 
-    for(const auto& iface : effective.interfaces) {
-        SockAddr addr(AF_INET, iface.c_str());
-        addr.setPort(effective.udp_port);
+    const auto cb(std::bind(&Pvt::onSearch, this, std::placeholders::_1));
 
-        listeners.push_back(manager.onSearch(addr,
-                                             std::bind(&Pvt::onSearch, this, std::placeholders::_1) ));
+    std::vector<SockAddr> tcpifaces; // may have port zero
+    for(const auto& iface : effective.interfaces) {
+        SockEndpoint addr(iface.c_str());
+        if(!addr.addr.isMCast())
+            tcpifaces.push_back(addr.addr);
+
+        addr.addr.setPort(effective.udp_port);
+
+        listeners.push_back(manager.onSearch(addr, cb));
 
         // update to allow udp_port==0
-        effective.udp_port = addr.port();
+        effective.udp_port = addr.addr.port();
+
+        if(addr.addr.family()==AF_INET && addr.addr.isAny()) {
+            // if listening on 0.0.0.0, also listen on [::]
+            auto any6(addr);
+            any6.addr = SockAddr::any(AF_INET6);
+
+            listeners.push_back(manager.onSearch(any6, cb));
+        }
 
 #ifndef _WIN32
-        if(!addr.isAny()) {
+        if(addr.addr.family()==AF_INET && !addr.addr.isAny() && !addr.addr.isMCast()) {
             /* An oddness of BSD sockets (not winsock) is that binding to
              * INADDR_ANY will receive unicast and broadcast, but binding to
              * a specific interface address receives only unicast.  The trick
              * is to bind a second socket to the interface broadcast address,
              * which will then receive only broadcasts.
              */
-            for(auto bcast : dummy.broadcasts(&addr)) {
-                bcast.setPort(addr.port());
-                listeners.push_back(manager.onSearch(bcast,
-                                                     std::bind(&Pvt::onSearch, this, std::placeholders::_1) ));
+            for(auto bcast : dummy.broadcasts(&addr.addr)) {
+                bcast.setPort(addr.addr.port());
+                listeners.push_back(manager.onSearch(bcast, cb));
             }
         }
 #endif
     }
 
     for(const auto& addr : effective.ignoreAddrs) {
-        SockAddr temp(AF_INET, addr.c_str());
+        SockAddr temp(addr.c_str());
         ignoreList.push_back(temp);
     }
 
 
-    acceptor_loop.call([this](){
+    acceptor_loop.call([this, &tcpifaces](){
         // from accepter worker
 
         bool firstiface = true;
-        for(const auto& addr : effective.interfaces) {
-            interfaces.emplace_back(addr, effective.tcp_port, this, firstiface);
+        for(auto& addr : tcpifaces) {
+            if(addr.port()==0)
+                addr.setPort(effective.tcp_port);
+
+            interfaces.emplace_back(addr, this, firstiface);
+
             if(firstiface || effective.tcp_port==0)
                 effective.tcp_port = interfaces.back().bind_addr.port();
             firstiface = false;
         }
 
         for(const auto& addr : effective.beaconDestinations) {
-            beaconDest.emplace_back(AF_INET, addr.c_str(), effective.udp_port);
+            beaconDest.emplace_back(addr.c_str(), effective.udp_port);
         }
     });
 
@@ -706,10 +720,13 @@ void Server::Pvt::doBeacons(short evt)
     assert(M.good() && H.good());
 
     for(const auto& dest : beaconDest) {
-        int ntx = sendto(beaconSender.sock, (char*)beaconMsg.data(), pktlen, 0, &dest->sa, dest.size());
+        auto& sender = dest.addr.family()==AF_INET ? beaconSender4 : beaconSender6;
+        sender.mcast_prep_sendto(dest);
+
+        int ntx = sendto(sender.sock, (char*)beaconMsg.data(), pktlen, 0, &dest.addr->sa, dest.addr.size());
 
         if(ntx<0) {
-            int err = evutil_socket_geterror(beaconSender.sock);
+            int err = evutil_socket_geterror(sender.sock);
             auto lvl = Level::Warn;
             if(err==EINTR || err==EPERM)
                 lvl = Level::Debug;
@@ -721,7 +738,7 @@ void Server::Pvt::doBeacons(short evt)
                        unsigned(ntx), unsigned(pktlen));
 
         } else {
-            log_debug_printf(serverio, "Beacon tx to %s\n", dest.tostring().c_str());
+            log_debug_printf(serverio, "Beacon tx to %s\n", std::string(SB()<<dest).c_str());
         }
     }
 

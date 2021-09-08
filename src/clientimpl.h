@@ -226,6 +226,8 @@ private:
 struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 {
     SockAttach attach;
+    const bool canIPv6;
+    IfaceMap& ifmap;
 
     // "const" after ctor
     Config effective;
@@ -235,7 +237,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     uint32_t nextCID=0x12345678;
     uint32_t prevndrop = 0u;
 
-    evsocket searchTx;
+    evsocket searchTx4, searchTx6;
     uint16_t searchRxPort;
 
     std::vector<ServerGUID> ignoreServerGUIDs;
@@ -256,7 +258,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::vector<uint8_t> searchMsg;
 
     // search destination address and whether to set the unicast flag
-    std::vector<std::pair<SockAddr, bool>> searchDest;
+    std::vector<std::pair<SockEndpoint, bool>> searchDest;
 
     size_t currentBucket = 0u;
     std::vector<std::list<std::weak_ptr<Channel>>> searchBuckets;
@@ -274,7 +276,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::vector<std::pair<SockAddr, std::shared_ptr<Connection>>> nameServers;
 
     evbase tcp_loop;
-    const evevent searchRx;
+    const evevent searchRx4, searchRx6;
     const evevent searchTimer;
 
     // beacon handling done on UDP worker.
@@ -302,7 +304,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     void onBeacon(const UDPManager::Beacon& msg);
 
-    bool onSearch();
+    bool onSearch(evutil_socket_t fd);
     static void onSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickSearch(bool discover);
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);

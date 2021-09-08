@@ -39,17 +39,23 @@ struct PVXS_API UDPManager
         std::string proto;
         SockAddr server;
         ServerGUID guid;
+        uint8_t peerVersion;
         Beacon(const SockAddr& src) :src(src) {}
     };
     //! Create subscription for Beacon messages.
     //! Must call UDPListener::start()
+    std::unique_ptr<UDPListener> onBeacon(SockEndpoint& dest,
+                                          std::function<void(const Beacon&)>&& cb);
     std::unique_ptr<UDPListener> onBeacon(SockAddr& dest,
                                           std::function<void(const Beacon&)>&& cb);
 
     struct PVXS_API Search {
+        std::vector<std::string> otherproto; // any protocols other than "tcp"
         SockAddr src;
         SockAddr server;
         uint32_t searchID;
+        uint8_t peerVersion;
+        bool protoTCP; // included protocol "tcp"
         bool mustReply;
         struct Name {
             const char *name;
@@ -66,6 +72,8 @@ struct PVXS_API UDPManager
     };
     //! Create subscription for Search messages.
     //! Must call UDPListener::start()
+    std::unique_ptr<UDPListener> onSearch(SockEndpoint& dest,
+                                          std::function<void(const Search&)>&& cb);
     std::unique_ptr<UDPListener> onSearch(SockAddr& dest,
                                           std::function<void(const Search&)>&& cb);
 
@@ -91,8 +99,8 @@ class PVXS_API UDPListener
     std::function<void(UDPManager::Beacon&)> beaconCB;
     const std::shared_ptr<UDPManager::Pvt> manager;
     std::shared_ptr<UDPCollector> collector;
-    const SockAddr dest;
-    std::set<SockAddr> mcasts;
+    const SockEndpoint dest;
+    MCastMembership cur;
     bool active;
 
     INST_COUNTER(UDPListener);
@@ -100,11 +108,9 @@ class PVXS_API UDPListener
     friend struct UDPCollector;
     friend struct UDPManager;
 
-    UDPListener(const std::shared_ptr<UDPManager::Pvt>& manager, SockAddr& dest);
+    UDPListener(const std::shared_ptr<UDPManager::Pvt>& manager, SockEndpoint& dest);
 public:
     ~UDPListener();
-
-    void addMCast(const SockAddr& mcast);
 
     void start(bool s=true);
     inline void stop() { start(false); }

@@ -20,6 +20,7 @@
 #include <pvxs/log.h>
 #include "serverconn.h"
 #include "clientimpl.h"
+#include "utilpvt.h"
 #include "evhelper.h"
 
 DEFINE_LOGGER(serversetup, "pvxs.server.setup");
@@ -27,6 +28,116 @@ DEFINE_LOGGER(clientsetup, "pvxs.client.setup");
 DEFINE_LOGGER(config, "pvxs.config");
 
 namespace pvxs {
+
+SockEndpoint::SockEndpoint(const char* ep, uint16_t defport)
+{
+    // <IP46>
+    // <IP46>,<ttl#>
+    // <IP46>@ifacename
+    // <IP46>,<ttl#>@ifacename
+    auto comma = strchr(ep, ',');
+    auto at = strchr(ep, '@');
+
+    if(comma && at && comma > at) {
+        throw std::runtime_error(SB()<<'"'<<escape(ep)<<"\" comma expected before @");
+    }
+
+    if(!comma && !at) {
+        addr.setAddress(ep, defport);
+
+    } else { // comma || at
+        auto firstsep = comma ? comma : at;
+        addr.setAddress(std::string(ep, firstsep-ep), defport);
+
+        if(comma && !at) {
+            ttl = parseTo<int64_t>(comma+1);
+
+        } else if(comma) {
+            ttl = parseTo<int64_t>(std::string(comma+1, at-comma-1));
+        }
+
+        if(at)
+            iface = at+1;
+    }
+
+    auto& ifmap = IfaceMap::instance();
+
+    if(addr.family()==AF_INET6) {
+        if(iface.empty() && addr->in6.sin6_scope_id) {
+            // interface index provide with IPv6 address
+            // we map back to symbolic name for storage
+            iface = ifmap.name_of(addr->in6.sin6_scope_id);
+        }
+        addr->in6.sin6_scope_id = 0;
+
+    } else if(addr.family()==AF_INET && addr.isMCast() && !iface.empty()) {
+        SockAddr ifaddr(AF_INET);
+
+        if(evutil_inet_pton(AF_INET, iface.c_str(), &ifaddr->in.sin_addr.s_addr)==1) {
+            // map interface address to symbolic name
+
+            iface = ifmap.name_of(ifaddr);
+        }
+    }
+
+    if(!iface.empty() && !ifmap.index_of(iface)) {
+        log_warn_printf(config, "Invalid interface address or name: \"%s\"\n", iface.c_str());
+    }
+}
+
+MCastMembership SockEndpoint::resolve() const
+{
+    if(!addr.isMCast())
+        throw std::logic_error("not mcast");
+
+    auto& ifmap = IfaceMap::instance();
+
+    MCastMembership m;
+    m.af = addr.family();
+    if(m.af==AF_INET) {
+        auto& req = m.req.in;
+        req.imr_multiaddr.s_addr = addr->in.sin_addr.s_addr;
+
+        if(!iface.empty()) {
+            auto iface = ifmap.address_of(this->iface);
+            if(iface.family()==AF_INET) {
+                req.imr_interface.s_addr = iface->in.sin_addr.s_addr;
+            }
+        }
+
+    } else if(m.af==AF_INET6) {
+        auto& req = m.req.in6;
+        req.ipv6mr_multiaddr = addr->in6.sin6_addr;
+
+        if(!iface.empty()) {
+            req.ipv6mr_interface = ifmap.index_of(this->iface);
+            if(!req.ipv6mr_interface) {
+                log_warn_printf(config, "Unable to resolve interface '%s'\n", iface.c_str());
+            }
+        }
+
+    } else {
+        throw std::logic_error("Unsupported address family");
+    }
+    return m;
+}
+
+std::ostream& operator<<(std::ostream& strm, const SockEndpoint& addr)
+{
+    strm<<addr.addr;
+    if(addr.addr.isMCast()) {
+        if(addr.ttl)
+            strm<<','<<addr.ttl;
+        if(!addr.iface.empty())
+            strm<<'@'<<addr.iface;
+    }
+    return strm;
+}
+
+bool operator==(const SockEndpoint& lhs, const SockEndpoint& rhs)
+{
+    return lhs.addr==rhs.addr && lhs.ttl==rhs.ttl && lhs.iface==rhs.iface;
+}
 
 namespace {
 
@@ -50,21 +161,18 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
         pos = end;
 
         if(start<end) {
-            auto temp = inp.substr(start, end==std::string::npos ? end : end-start);
+            auto temp(inp.substr(start, end==std::string::npos ? end : end-start));
+            try {
+                SockEndpoint ep(temp);
+                if(ep.addr.port()==0)
+                    ep.addr.setPort(defaultPort);
+                out.push_back(SB()<<ep);
 
-            sockaddr_in addr = {};
-            if(aToIPAddr(temp.c_str(), defaultPort, &addr)) {
+            } catch(std::exception& e){
                 if(required)
-                    throw std::runtime_error(SB()<<"invalid IP or non-existent hostname \""<<temp<<"\"");
-                log_err_printf(config, "%s ignoring invalid '%s'\n", name, temp.c_str());
-                continue;
+                    throw std::runtime_error(SB()<<"invalid endpoint \""<<temp<<"\" "<<e.what());
+                log_err_printf(config, "%s ignoring invalid '%s' : %s\n", name, temp.c_str(), e.what());
             }
-            std::ostringstream strm;
-            uint32_t ip = ntohl(addr.sin_addr.s_addr);
-            strm<<((ip>>24)&0xff)<<'.'<<((ip>>16)&0xff)<<'.'<<((ip>>8)&0xff)<<'.'<<((ip>>0)&0xff);
-            if(addr.sin_port)
-                strm<<':'<<ntohs(addr.sin_port);
-            out.emplace_back(strm.str());
         }
     }
 
@@ -146,41 +254,111 @@ struct PickOne {
     }
 };
 
+std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs, uint16_t defport=0)
+{
+    std::vector<SockEndpoint> ret;
+    for(const auto& addr : addrs) {
+        try {
+            ret.emplace_back(addr, defport);
+        }catch(std::runtime_error& e){
+            log_warn_printf(config, "Ignoring %s : %s\n", addr.c_str(), e.what());
+            continue;
+        }
+    }
+    return ret;
+}
+
+void printAddresses(std::vector<std::string>& out, std::vector<SockEndpoint>& inp)
+{
+    std::vector<std::string> temp;
+    temp.reserve(inp.size());
+
+    for(auto& addr : inp) {
+        temp.emplace_back(SB()<<addr);
+    }
+    out = std::move(temp);
+}
+
 // Fill out address list by appending broadcast addresses
 // of any and all local interface addresses already included
-void expandAddrList(const std::vector<std::string>& ifaces,
-                    std::vector<std::string>& addrs)
+void expandAddrList(const std::vector<SockEndpoint>& ifaces,
+                    std::vector<SockEndpoint>& addrs)
 {
     SockAttach attach;
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
 
-    std::vector<std::string> bcasts;
-
-    for(auto& addr : ifaces) {
-        SockAddr saddr(AF_INET);
-        try {
-            saddr.setAddress(addr.c_str());
-        }catch(std::runtime_error& e){
-            log_warn_printf(config, "%s  Ignoring...\n", e.what());
+    for(auto& saddr : ifaces) {
+        if(saddr.addr.family()!=AF_INET)
             continue;
-        }
 
-        for(auto& addr : dummy.broadcasts(&saddr)) {
+        for(auto& addr : dummy.broadcasts(&saddr.addr)) {
             addr.setPort(0u);
-            bcasts.push_back(addr.tostring());
+            addrs.emplace_back(addr);
         }
-    }
-
-    addrs.reserve(addrs.size()+bcasts.size());
-    for(auto& bcast : bcasts) {
-        addrs.push_back(std::move(bcast));
     }
 }
 
-void removeDups(std::vector<std::string>& addrs)
+void addGroups(std::vector<SockEndpoint>& ifaces,
+               const std::vector<SockEndpoint>& addrs)
 {
+    auto& ifmap = IfaceMap::instance();
+    std::set<std::string> allifaces;
+
+    for(const auto& addr : addrs) {
+        if(!addr.addr.isMCast())
+            continue;
+
+        if(!addr.iface.empty()) {
+            // interface already specified
+            ifaces.push_back(addr);
+
+        } else {
+            // no interface specified, treat as wildcard
+            if(allifaces.empty())
+                allifaces = ifmap.all_external();
+
+            for(auto& iface : allifaces) {
+                auto ifaceaddr(addr);
+                ifaceaddr.iface = iface;
+                ifaces.push_back(ifaceaddr);
+            }
+        }
+    }
+}
+
+// remove duplicates while preserving order of first appearance
+template<typename A>
+void removeDups(std::vector<A>& addrs)
+{
+    std::sort(addrs.begin(), addrs.end());
     addrs.erase(std::unique(addrs.begin(), addrs.end()),
                 addrs.end());
+}
+
+// special handling for SockEndpoint where duplication is based on
+// address,interface.  Duplicates are combined with the longest TTL.
+template<>
+void removeDups(std::vector<SockEndpoint>& addrs)
+{
+    std::map<std::pair<SockAddr, std::string>, size_t> seen;
+    for(size_t i=0; i<addrs.size(); ) {
+        auto& ep = addrs[i];
+        auto key = std::make_pair(ep.addr, ep.iface);
+        auto it = seen.find(key);
+        if(it==seen.end()) { // first sighting
+            seen[key] = i++;
+
+        } else { // duplicate
+            auto& orig = addrs[it->second];
+
+            if(ep.ttl > orig.ttl) { // w/ longer TTL
+                orig.ttl = ep.ttl;
+            }
+
+            addrs.erase(addrs.begin()+i);
+            // 'ep' and 'orig' are invalidated
+        }
+    }
 }
 
 void enforceTimeout(double& tmo)
@@ -287,22 +465,35 @@ void Config::updateDefs(defs_t& defs) const
 
 void Config::expand()
 {
+    if(tcp_port==0)
+        tcp_port = 5075;
+
+    auto ifaces(parseAddresses(interfaces));
+    auto bdest(parseAddresses(beaconDestinations));
+
     // empty interface address list implies the wildcard
     // (because no addresses isn't interesting...)
-    if(interfaces.empty()) {
-        interfaces.emplace_back("0.0.0.0");
+    if(ifaces.empty()) {
+        ifaces.emplace_back(SockAddr::any(AF_INET));
     }
 
     if(auto_beacon) {
-        expandAddrList(interfaces, beaconDestinations);
+        // use interface list add ipv4 broadcast addresses to beaconDestinations.
+        // 0.0.0.0 -> adds all bcasts
+        // otherwise add bcast for each iface address
+        expandAddrList(ifaces, bdest);
+        addGroups(ifaces, bdest);
         auto_beacon = false;
     }
 
-    removeDups(interfaces);
-    removeDups(beaconDestinations);
+    removeDups(ifaces);
+    printAddresses(interfaces, ifaces);
+    removeDups(bdest);
+    printAddresses(beaconDestinations, bdest);
     removeDups(ignoreAddrs);
 
     enforceTimeout(tcpTimeout);
+
 }
 
 std::ostream& operator<<(std::ostream& strm, const Config& conf)
@@ -419,15 +610,21 @@ void Config::expand()
     if(tcp_port==0)
         tcp_port = 5075;
 
-    if(interfaces.empty())
-        interfaces.emplace_back("0.0.0.0");
+    auto ifaces(parseAddresses(interfaces));
+    auto addrs(parseAddresses(addressList));
+
+    if(ifaces.empty())
+        ifaces.emplace_back(SockAddr::any(AF_INET));
 
     if(autoAddrList) {
-        expandAddrList(interfaces, addressList);
+        expandAddrList(ifaces, addrs);
+        addGroups(ifaces, addrs);
         autoAddrList = false;
     }
 
-    removeDups(addressList);
+    printAddresses(interfaces, ifaces);
+    removeDups(addrs);
+    printAddresses(addressList, addrs);
 
     enforceTimeout(tcpTimeout);
 }

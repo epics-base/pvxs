@@ -258,8 +258,8 @@ SigInt::~SigInt()
 
 
 SockAddr::SockAddr(int af)
+    :store{}
 {
-    memset(&store, 0, sizeof(store));
     store.sa.sa_family = af;
     if(af!=AF_INET
 #ifdef AF_INET6
@@ -269,21 +269,26 @@ SockAddr::SockAddr(int af)
         throw std::invalid_argument("Unsupported address family");
 }
 
-SockAddr::SockAddr(int af, const char *address, unsigned short port)
-    :SockAddr(af)
+SockAddr::SockAddr(const char *address, unsigned short port)
+    :SockAddr(AF_UNSPEC)
 {
     setAddress(address, port);
 }
 
-SockAddr::SockAddr(const sockaddr *addr, ev_socklen_t len)
-    :SockAddr(addr->sa_family)
+SockAddr::SockAddr(const sockaddr *addr)
+    :SockAddr(addr ? addr->sa_family : AF_UNSPEC)
 {
-    if(len<0 || len>ev_socklen_t(size()))
-        throw std::invalid_argument("Truncated Address");
-    memcpy(&store, addr, len);
+    if(!addr)
+        return; // treat NULL as AF_UNSPEC
+
+    if(family()!=AF_UNSPEC && family()!=AF_INET && family()!=AF_INET6)
+        throw std::invalid_argument("Unsupported address family");
+
+    if(family()!=AF_UNSPEC)
+        memcpy(&store, addr, family()==AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
 }
 
-size_t SockAddr::size() const
+size_t SockAddr::size() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return sizeof(store.in);
@@ -295,7 +300,7 @@ size_t SockAddr::size() const
     }
 }
 
-unsigned short SockAddr::port() const
+unsigned short SockAddr::port() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return ntohs(store.in.sin_port);
@@ -318,17 +323,97 @@ void SockAddr::setPort(unsigned short port)
     }
 }
 
-void SockAddr::setAddress(const char *name, unsigned short port)
+void SockAddr::setAddress(const char *name, unsigned short defport)
 {
-    SockAddr temp(AF_INET);
-    if(aToIPAddr(name, port, &temp->in))
-        throw std::runtime_error(std::string("Unable to parse as IP address: ")+name);
-    if(temp.port()==0)
-        temp.setPort(port);
+    assert(name);
+    // too bad evutil_parse_sockaddr_port() treats ":0" as an error...
+
+    /* looking for
+     * [ipv6]:port
+     * ipv6
+     * [ipv6]
+     * ipv4:port
+     * ipv4
+     */
+    // TODO: could optimize to find all of these with a single loop
+    const char *firstc = strchr(name, ':'),
+               *lastc  = strrchr(name, ':'),
+               *openb  = strchr(name, '['),
+               *closeb = strrchr(name, ']');
+
+    if(!openb ^ !closeb) {
+        // '[' w/o ']' or vis. versa
+        throw std::runtime_error(SB()<<"IPv6 with mismatched brackets \""<<escape(name)<<"\"");
+    }
+
+    char scratch[INET6_ADDRSTRLEN+1];
+    const char *addr, *port;
+    SockAddr temp;
+    void *sockaddr;
+
+    if(!firstc && !openb) {
+        // no brackets or port.
+        // plain ipv4
+        addr = name;
+        port = nullptr;
+        temp->sa.sa_family = AF_INET;
+        sockaddr = (void*)&temp->in.sin_addr.s_addr;
+
+    } else if(firstc && firstc==lastc && !openb) {
+        // no bracket and only one ':'
+        // ipv4 w/ port
+        size_t addrlen = firstc-name;
+        if(addrlen >= sizeof(scratch))
+            throw std::runtime_error(SB()<<"IPv4 address too long \""<<escape(name)<<"\"");
+
+        memcpy(scratch, name, addrlen);
+        scratch[addrlen] = '\0';
+        addr = scratch;
+        port = lastc+1;
+        temp->sa.sa_family = AF_INET;
+        sockaddr = (void*)&temp->in.sin_addr.s_addr;
+
+    } else if(firstc && firstc!=lastc && !openb) {
+        // no bracket and more than one ':'
+        // bare ipv6
+        addr = name;
+        port = nullptr;
+        temp->sa.sa_family = AF_INET6;
+        sockaddr = (void*)&temp->in6.sin6_addr;
+
+    } else if(openb) {
+        // brackets
+        // ipv6, maybe with port
+        size_t addrlen = closeb-openb-1u;
+        if(addrlen >= sizeof(scratch))
+            throw std::runtime_error(SB()<<"IPv6 address too long \""<<escape(name)<<"\"");
+
+        memcpy(scratch, openb+1, addrlen);
+        scratch[addrlen] = '\0';
+        addr = scratch;
+        if(lastc > closeb)
+            port = lastc+1;
+        else
+            port = nullptr;
+        temp->sa.sa_family = AF_INET6;
+        sockaddr = (void*)&temp->in6.sin6_addr;
+
+    } else {
+        throw std::runtime_error(SB()<<"Invalid IP address form \""<<escape(name)<<"\"");
+    }
+
+    if(evutil_inet_pton(temp->sa.sa_family, addr, sockaddr)<=0)
+        throw std::runtime_error(SB()<<"Not a valid IP address \""<<escape(name)<<"\"");
+
+    if(port)
+        temp.setPort(parseTo<uint64_t>(port));
+    else
+        temp.setPort(defport);
+
     (*this) = temp;
 }
 
-bool SockAddr::isAny() const
+bool SockAddr::isAny() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return store.in.sin_addr.s_addr==htonl(INADDR_ANY);
@@ -339,7 +424,7 @@ bool SockAddr::isAny() const
     }
 }
 
-bool SockAddr::isLO() const
+bool SockAddr::isLO() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return store.in.sin_addr.s_addr==htonl(INADDR_LOOPBACK);
@@ -350,15 +435,36 @@ bool SockAddr::isLO() const
     }
 }
 
-bool SockAddr::isMCast() const
+bool SockAddr::isMCast() const noexcept
 {
     switch(store.sa.sa_family) {
-    case AF_INET: return IN_MULTICAST(store.in.sin_addr.s_addr);
+    case AF_INET: return IN_MULTICAST(ntohl(store.in.sin_addr.s_addr));
 #ifdef AF_INET6
     case AF_INET6: return IN6_IS_ADDR_MULTICAST(&store.in6.sin6_addr);
 #endif
     default: return false;
     }
+}
+
+SockAddr SockAddr::map4to6() const
+{
+    SockAddr ret;
+    if(family()==AF_INET) {
+        static_assert (sizeof(ret->in6.sin6_addr)==16, "");
+        ret->in6.sin6_family = AF_INET6;
+        ret->in6.sin6_addr.s6_addr[10] = 0xff;
+        ret->in6.sin6_addr.s6_addr[11] = 0xff;
+        memcpy(&ret->in6.sin6_addr.s6_addr[12], &store.in.sin_addr.s_addr, 4u);
+
+        ret->in6.sin6_port = store.in.sin_port;
+
+    } else if(family()==AF_INET6) {
+        ret = *this;
+
+    } else {
+        throw std::logic_error("Invalid address family");
+    }
+    return ret;
 }
 
 std::string SockAddr::tostring() const
@@ -428,12 +534,15 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
             char buf[INET6_ADDRSTRLEN+1];
             if(evutil_inet_ntop(AF_INET6, &addr->in6.sin6_addr, buf, sizeof(buf))) {
                 buf[sizeof(buf)-1] = '\0'; // paranoia
+                strm<<'['<<buf<<']';
+
             } else {
                 strm<<"<\?\?\?>";
             }
-            strm<<buf;
-            if(ntohs(addr->in6.sin6_port))
-                strm<<':'<<ntohs(addr->in6.sin6_port);
+            if(addr->in6.sin6_scope_id)
+                strm<<"%"<<addr->in6.sin6_scope_id;
+            if(auto port = ntohs(addr->in6.sin6_port))
+                strm<<':'<<port;
             break;
     }
 #endif

@@ -46,7 +46,7 @@ DEFINE_LOGGER(remote, "pvxs.remote.log");
 ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen)
     :ConnBase(false,
               bufferevent_socket_new(iface->server->acceptor_loop.base, sock, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS),
-              SockAddr(peer, socklen))
+              SockAddr(peer))
     ,iface(iface)
 {
     log_debug_printf(connio, "Client %s connects\n", peerName.c_str());
@@ -379,13 +379,20 @@ void ServerConn::bevWrite()
 }
 
 
-ServIface::ServIface(const std::string& addr, unsigned short port, server::Server::Pvt *server, bool fallback)
+ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fallback)
     :server(server)
-    ,bind_addr(AF_INET, addr.c_str(), port)
-    ,sock(AF_INET, SOCK_STREAM, 0)
+    ,bind_addr(addr)
 {
     server->acceptor_loop.assertInLoop();
     auto orig_port = bind_addr.port();
+
+    if(server->canIPv6 && bind_addr.family()==AF_INET && bind_addr.isAny()) {
+        // promote to IPv6 with IPv4 support
+        bind_addr = SockAddr::any(AF_INET6, bind_addr.port());
+        log_debug_printf(connsetup, "Promote 0.0.0.0 -> [::]%s", "\n");
+    }
+
+    sock = evsocket(bind_addr.family(), SOCK_STREAM, 0);
 
     if(evutil_make_listen_socket_reuseable(sock.sock))
         log_warn_printf(connsetup, "Unable to make socket reusable%s", "\n");
@@ -396,9 +403,12 @@ ServIface::ServIface(const std::string& addr, unsigned short port, server::Serve
             sock.bind(bind_addr);
         } catch(std::system_error& e) {
             if(fallback && e.code().value()==SOCK_EADDRINUSE) {
+                log_debug_printf(connsetup, "Address %s in use", bind_addr.tostring().c_str());
                 bind_addr.setPort(0);
+                fallback = false;
                 continue;
             }
+            log_err_printf(connsetup, "Bind to %s fails", bind_addr.tostring().c_str());
             throw;
         }
         break;
@@ -426,11 +436,6 @@ void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, s
 {
     auto self = static_cast<ServIface*>(raw);
     try {
-        if(peer->sa_family!=AF_INET) {
-            log_crit_printf(connsetup, "Interface %s Rejecting !ipv4 client\n", self->name.c_str());
-            evutil_closesocket(sock);
-            return;
-        }
         auto conn(std::make_shared<ServerConn>(self, sock, peer, socklen));
         self->server->connections[conn.get()] = std::move(conn);
     }catch(std::exception& e){

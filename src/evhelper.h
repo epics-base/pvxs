@@ -193,12 +193,13 @@ void from_wire(Buffer &buf, SockAddr& val);
 struct PVXS_API evsocket
 {
     evutil_socket_t sock;
+    int af;
 
     // default construct an invalid socket
-    constexpr evsocket() noexcept :sock(-1) {}
+    constexpr evsocket() noexcept :sock(-1), af(AF_UNSPEC) {}
 
     // construct from a valid (not -1) socket
-    explicit evsocket(evutil_socket_t sock);
+    explicit evsocket(int af, evutil_socket_t sock);
 
     // create a new socket
     evsocket(int, int, int);
@@ -217,33 +218,80 @@ struct PVXS_API evsocket
     inline operator bool() const { return sock!=-1; }
 
     void bind(SockAddr& addr) const;
-    //! join mcast group.  Receive mcasts send to this group which arrive on the given interface
-    //! @see IP_ADD_MEMBERSHIP
-    void mcast_join(const SockAddr& grp, const SockAddr& iface) const;
-    //! Set time-to-live out mcasts sent from this socket
-    //! @see IP_MULTICAST_TTL
-    void mcast_ttl(unsigned ttl) const;
+
+    void set_broadcast(bool b) const;
+
+    //! Join multicast group, optionally on selected interface
+    bool mcast_join(const MCastMembership& m) const;
+    //! Reverse previous join
+    void mcast_leave(const MCastMembership& m) const;
+    //! Prepare socket for subsequent sendto() with TTL and output interface
+    void mcast_prep_sendto(const SockEndpoint& ep) const;
+
     //! Whether mcasts sent from this socket should be received to local listeners
-    //! @see IP_MULTICAST_LOOP
+    //! @see IP_MULTICAST_LOOP and IPV6_MULTICAST_LOOP
     void mcast_loop(bool loop) const;
-    //! Selects interface to use when sending mcasts
-    //! @see IP_MULTICAST_IF
-    void mcast_iface(const SockAddr& iface) const;
+    //! Disable IPv4 through IPv6 socket
+    void ipv6_only(bool b=true) const;
+
+    //! Linux specific include OS dropped packet counter as cmsg
+    void enable_SO_RXQ_OVFL() const;
+
+    void enable_IP_PKTINFO() const;
 
     //! wraps osiSockDiscoverBroadcastAddresses()
     std::vector<SockAddr> broadcasts(const SockAddr* match=nullptr) const;
+
+    static
+    bool canIPv6();
 };
 
 struct PVXS_API IfaceMap {
+    static
+    IfaceMap& instance();
+    static
+    void cleanup();
+
     IfaceMap();
 
-    // return true if ifindex is valid, and addr is one of the addresses currently assigned to it.
-    bool has_address(int64_t ifindex, const SockAddr& addr);
+    // return true if ifindex is valid, and addr an interface address assigned to it.
+    bool has_address(uint64_t ifindex, const SockAddr& addr);
+    // lookup interface name by index
+    std::string name_of(uint64_t index);
+    // find (an) interface name with this address.  useful for IPv4.  returns empty string if not found.
+    std::string name_of(const SockAddr& addr);
+    // returns 0 if not found
+    uint64_t index_of(const std::string& name);
+    // is this a valid interface or broadcast address?
+    bool is_address(const SockAddr& addr);
+    // is this a valid interface or broadcast address?
+    bool is_broadcast(const SockAddr& addr);
+    // look up interface address.  useful for IPV4.  returns AF_UNSPEC if not found
+    SockAddr address_of(const std::string& name);
+    // all interface names except LO
+    std::set<std::string> all_external();
 
-    void refresh();
+    // caller must hold lock
+    void refresh(bool force=false);
 
-    std::map<int64_t, std::set<SockAddr, SockAddrOnlyLess>> info;
+    struct Iface {
+        std::string name;
+        uint64_t index;
+        bool isLO;
+        // interface address(s) -> (maybe) broadcast addr
+        std::map<SockAddr, SockAddr, SockAddrOnlyLess> addrs;
+        Iface(const std::string& name, uint64_t index, bool isLO) :name(name), index(index), isLO(isLO) {}
+    };
+
+    epicsMutex lock;
+    std::map<uint64_t, Iface> byIndex;
+    std::map<std::string, Iface*> byName;
+    // map address to tuple of interface and broadcast?
+    std::multimap<SockAddr, std::pair<Iface*, bool>, SockAddrOnlyLess> byAddr;
     epicsTime updated;
+private:
+    static
+    decltype (byIndex) _refresh();
 };
 
 } // namespace impl

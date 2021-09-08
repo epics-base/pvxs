@@ -4,6 +4,11 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#ifdef __APPLE__
+// expose IPV6_PKTINFO
+#  define __APPLE_USE_RFC_3542
+#endif
+
 #include "osiSockExt.h"
 
 #include <string.h>
@@ -19,6 +24,11 @@ extern "C" {
 }
 #endif
 
+// some *BSD (OSX but not RTEMS5/libbsd) use IPV6_PKTINFO to enable RX
+#if defined(IPV6_PKTINFO) && !defined(IPV6_RECVPKTINFO)
+#  define IPV6_RECVPKTINFO IPV6_PKTINFO
+#endif
+
 #include <pvxs/log.h>
 #include <evhelper.h>
 
@@ -29,7 +39,7 @@ DEFINE_LOGGER(logiface, "pvxs.iface");
 
 void osiSockAttachExt() {}
 
-void enable_SO_RXQ_OVFL(SOCKET sock)
+void evsocket::enable_SO_RXQ_OVFL() const
 {
 #ifdef SO_RXQ_OVFL
     // Linux specific feature exposes OS dropped packet count
@@ -40,34 +50,42 @@ void enable_SO_RXQ_OVFL(SOCKET sock)
 #endif
 }
 
-void enable_IP_PKTINFO(SOCKET sock)
+void evsocket::enable_IP_PKTINFO() const
 {
-    /* linux, some *BSD's (OSX), and winsock package both destination address (from ip header)
+    if(af==AF_INET) {
+
+        /* linux, some *BSD's (OSX), and winsock package both destination address (from ip header)
      * and receiving interface index (from host) into one IP_PKTINFO control message.
      * Remaining *BSD's can deliver these in separate IP_ORIGDSTADDR and IP_RECVIF messages.
      */
 #ifdef IP_PKTINFO
-    int val = 1;
-    if(setsockopt(sock, IPPROTO_IP, IP_PKTINFO, (char*)&val, sizeof(val)))
-        log_warn_printf(log, "Unable to set IP_PKTINFO: %d\n", SOCKERRNO);
+        int val = 1;
+        if(setsockopt(sock, IPPROTO_IP, IP_PKTINFO, (char*)&val, sizeof(val)))
+            log_warn_printf(log, "Unable to set IP_PKTINFO: %d\n", SOCKERRNO);
 
 #else
 #  ifdef IP_ORIGDSTADDR
-    {
-        int val = 1;
-        if(setsockopt(sock, IPPROTO_IP, IP_ORIGDSTADDR, (char*)&val, sizeof(val)))
-            log_warn_printf(log, "Unable to set IP_ORIGDSTADDR: %d\n", SOCKERRNO);
-    }
+        {
+            int val = 1;
+            if(setsockopt(sock, IPPROTO_IP, IP_ORIGDSTADDR, (char*)&val, sizeof(val)))
+                log_warn_printf(log, "Unable to set IP_ORIGDSTADDR: %d\n", SOCKERRNO);
+        }
 
 #  endif
 #  ifdef IP_RECVIF
-    {
-        int val = 1;
-        if(setsockopt(sock, IPPROTO_IP, IP_RECVIF, (char*)&val, sizeof(val)))
-            log_warn_printf(log, "Unable to set IP_RECVIF: %d\n", SOCKERRNO);
-    }
+        {
+            int val = 1;
+            if(setsockopt(sock, IPPROTO_IP, IP_RECVIF, (char*)&val, sizeof(val)))
+                log_warn_printf(log, "Unable to set IP_RECVIF: %d\n", SOCKERRNO);
+        }
 #  endif
 #endif
+
+    } else if(af==AF_INET6) {
+        int val = 1;
+        if(setsockopt(sock, IPPROTO_IPV6, IPV6_RECVPKTINFO, (char*)&val, sizeof(val)))
+            log_warn_printf(log, "Unable to set IPV6_PKTINFO reception: %d\n", SOCKERRNO);
+    }
 }
 
 int recvfromx::call()
@@ -81,10 +99,12 @@ int recvfromx::call()
     msg.msg_name = &(*src)->sa;
     msg.msg_namelen = src ? src->size() : 0u;
 
-    alignas (alignof (cmsghdr)) char cbuf[0u
+    alignas (cmsghdr) char cbuf[0u
 #ifdef SO_RXQ_OVFL
             + CMSG_SPACE(sizeof(ndrop))
 #endif
+            // only need space for IPv4 option(s) or IPv6 option, never both.
+            + impl::cmax(0
 #ifdef IP_PKTINFO
             + CMSG_SPACE(sizeof(in_pktinfo))
 #else
@@ -95,6 +115,9 @@ int recvfromx::call()
             + CMSG_SPACE(sizeof(sockaddr_dl))
 #  endif
 #endif
+                  ,0
+            + CMSG_SPACE(sizeof(in6_pktinfo))
+                  ) // cmax
             ];
     msg.msg_control = cbuf;
     msg.msg_controllen = sizeof(cbuf);
@@ -143,6 +166,16 @@ int recvfromx::call()
             }
 #  endif
 #endif
+            else if(hdr->cmsg_level==IPPROTO_IPV6 && hdr->cmsg_type==IPV6_PKTINFO && hdr->cmsg_len>=CMSG_LEN(sizeof(in6_pktinfo))) {
+                if(dst) {
+                    (*dst)->in6.sin6_family = AF_INET6;
+                    memcpy(&(*dst)->in6.sin6_addr, CMSG_DATA(hdr) + offsetof(in6_pktinfo, ipi6_addr), sizeof(in6_addr));
+                }
+
+                decltype(in6_pktinfo::ipi6_ifindex) idx;
+                memcpy(&idx, CMSG_DATA(hdr) + offsetof(in6_pktinfo, ipi6_ifindex), sizeof(idx));
+                dstif = idx;
+            }
         }
     }
 
@@ -151,20 +184,22 @@ int recvfromx::call()
 
 namespace impl {
 
-void IfaceMap::refresh() {
+decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
     ifaddrs* addrs = nullptr;
 
-    decltype (info) temp;
+    decltype (byIndex) temp;
 
     if(getifaddrs(&addrs)) {
         log_warn_printf(logiface, "Unable to getifaddrs() errno=%d\n", errno);
-        return;
+        return temp;
     }
 
     try {
         for(const ifaddrs* ifa = addrs; ifa; ifa = ifa->ifa_next) {
-            if(ifa->ifa_addr->sa_family!=AF_INET) {
-                log_debug_printf(logiface, "Ignoring interface '%s' address !ipv4\n", ifa->ifa_name);
+            const auto af = ifa->ifa_addr->sa_family;
+            if((af!=AF_INET && af!=AF_INET6) || ifa->ifa_name[0]=='\0') {
+                log_debug_printf(logiface, "Ignoring interface '%s' address family=%d\n",
+                                 ifa->ifa_name, af);
                 continue;
             }
 
@@ -174,12 +209,28 @@ void IfaceMap::refresh() {
                 continue;
             }
 
-            //TODO: any flags to check?
+            if(!(ifa->ifa_flags&IFF_UP))
+                continue; // not configured, skip...
 
-            auto pair = temp[idx].emplace(ifa->ifa_addr, sizeof(sockaddr_in));
+            auto it = temp.find(idx);
+            if(it==temp.end()) {
+                // encountering new index
+                bool isLO = ifa->ifa_flags&IFF_LOOPBACK;
+                auto pair = temp.emplace(std::piecewise_construct,
+                                         std::forward_as_tuple(idx),
+                                         std::forward_as_tuple(ifa->ifa_name, idx, isLO));
+                assert(pair.second);
+                it = pair.first;
+            }
 
-            log_debug_printf(logiface, "Found interface %lld \"%s\" w/ %s\n",
-                             (long long)idx, ifa->ifa_name, pair.first->tostring().c_str());
+            // IFF_BROADCAST does not apply to IPv6
+            bool hasB = ifa->ifa_addr->sa_family==AF_INET && (ifa->ifa_flags&IFF_BROADCAST);
+
+            auto pair = it->second.addrs.emplace(SockAddr(ifa->ifa_addr),
+                                                 SockAddr(hasB ? ifa->ifa_broadaddr : nullptr));
+
+            log_debug_printf(logiface, "Found interface %lld \"%s\" w/ %d %s\n",
+                             (long long)idx, ifa->ifa_name, af, pair.first->first.tostring().c_str());
         }
 
     } catch(...){
@@ -188,7 +239,7 @@ void IfaceMap::refresh() {
     }
     freeifaddrs(addrs);
 
-    info.swap(temp);
+    return temp;
 }
 
 } // namespace impl

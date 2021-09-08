@@ -56,7 +56,7 @@ struct SB {
 };
 
 
-void threadOnce(epicsThreadOnceId *id, EPICSTHREADFUNC fn, void *arg);
+void threadOnce(epicsThreadOnceId *id, EPICSTHREADFUNC fn, void *arg=nullptr);
 
 namespace idetail {
 template <typename I>

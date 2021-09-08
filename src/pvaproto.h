@@ -589,8 +589,13 @@ enum class pva_subcmd {
 };
 
 struct Header {
-    uint8_t cmd, flags;
-    uint32_t len;
+    uint8_t cmd=0u, flags=0u, version=0u;
+    uint32_t len=0u;
+    constexpr Header() {}
+    explicit
+    constexpr Header(uint8_t cmd, uint8_t flags, uint32_t len)
+        :cmd(cmd), flags(flags), version(0u), len(len)
+    {}
 };
 
 template<typename Buf>
@@ -622,6 +627,7 @@ void from_wire(Buf& buf, Header& H)
     } else {
         H.cmd = buf[3];
         H.flags = buf[2];
+        H.version = buf[1];
         // Set/change buffer endianness
         buf.be = H.flags&pva_flags::MSB;
         buf.skip(4u, __FILE__, __LINE__);

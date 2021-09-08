@@ -54,13 +54,20 @@ void osiSockAttachExt()
     epicsThreadOnce(&oseOnce, &oseDoOnce, nullptr);
 }
 
-void enable_SO_RXQ_OVFL(SOCKET sock) {}
+void evsocket::enable_SO_RXQ_OVFL() const {}
 
-void enable_IP_PKTINFO(SOCKET sock)
+void evsocket::enable_IP_PKTINFO() const
 {
-    int val = 1;
-    if(setsockopt(sock, IPPROTO_IP, IP_PKTINFO, (char*)&val, sizeof(val)))
-        log_warn_printf(log, "Unable to set IP_PKTINFO: %d\n", SOCKERRNO);
+    if(af==AF_INET) {
+        int val = 1;
+        if(setsockopt(sock, IPPROTO_IP, IP_PKTINFO, (char*)&val, sizeof(val)))
+            log_warn_printf(log, "Unable to set IP_PKTINFO: %d\n", SOCKERRNO);
+
+    } else if(af==AF_INET6) {
+        int val = 1;
+        if(setsockopt(sock, IPPROTO_IPV6, IPV6_PKTINFO, (char*)&val, sizeof(val)))
+            log_warn_printf(log, "Unable to set IPV6_RECVPKTINFO: %d\n", SOCKERRNO);
+    }
 }
 
 int recvfromx::call()
@@ -77,7 +84,8 @@ int recvfromx::call()
     msg.name = &(*src)->sa;
     msg.namelen = src->size();
 
-    alignas (alignof (WSACMSGHDR)) char cbuf[WSA_CMSG_SPACE(sizeof(in_pktinfo))];
+    // will receive either in6_pktinfo or in_pktinfo, not both.  in6_pktinfo is larger
+    alignas (WSACMSGHDR) char cbuf[WSA_CMSG_SPACE(sizeof(in6_pktinfo))];
     msg.Control = {sizeof(cbuf), cbuf};
 
     DWORD nrx=0u;
@@ -96,6 +104,16 @@ int recvfromx::call()
                 memcpy(&idx, WSA_CMSG_DATA(hdr) + offsetof(in_pktinfo, ipi_ifindex), sizeof(idx));
                 dstif = idx;
             }
+            else if(hdr->cmsg_level==IPPROTO_IPV6 && hdr->cmsg_type==IPV6_PKTINFO && hdr->cmsg_len>=WSA_CMSG_LEN(sizeof(in6_pktinfo))) {
+                if(dst) {
+                    (*dst)->in6.sin6_family = AF_INET6;
+                    memcpy(&(*dst)->in6.sin6_addr, WSA_CMSG_DATA(hdr) + offsetof(in6_pktinfo, ipi6_addr), sizeof(in6_addr));
+                }
+
+                decltype(in6_pktinfo::ipi6_ifindex) idx;
+                memcpy(&idx, WSA_CMSG_DATA(hdr) + offsetof(in6_pktinfo, ipi6_ifindex), sizeof(idx));
+                dstif = idx;
+            }
         }
 
         return nrx;
@@ -111,12 +129,16 @@ namespace impl {
 #  define GAA_FLAG_INCLUDE_ALL_INTERFACES 0
 #endif
 
-void IfaceMap::refresh() {
+decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
     std::vector<char> ifaces(1024u);
-    decltype (info) temp;
+    decltype (byIndex) temp;
 
     {
-        constexpr ULONG flags = GAA_FLAG_SKIP_ANYCAST|GAA_FLAG_SKIP_MULTICAST|GAA_FLAG_SKIP_DNS_SERVER|GAA_FLAG_INCLUDE_ALL_INTERFACES;
+        constexpr ULONG flags = GAA_FLAG_SKIP_ANYCAST
+                |GAA_FLAG_SKIP_MULTICAST
+                |GAA_FLAG_SKIP_DNS_SERVER
+                |GAA_FLAG_INCLUDE_PREFIX
+                |GAA_FLAG_INCLUDE_ALL_INTERFACES;
 
         ULONG buflen = ifaces.size();
         auto err = GetAdaptersAddresses(AF_INET, flags, 0, reinterpret_cast<IP_ADAPTER_ADDRESSES*>(ifaces.data()), &buflen);
@@ -130,28 +152,73 @@ void IfaceMap::refresh() {
 
         if(err) {
             log_warn_printf(logiface, "Unable to GetAdaptersAddresses() error=%lld\n", (unsigned long long)err);
-            return;
+            return temp;
         }
     }
 
     for(auto iface = reinterpret_cast<const IP_ADAPTER_ADDRESSES*>(ifaces.data()); iface ; iface = iface->Next) {
-        auto& info = temp[iface->IfIndex];
 
-        //TODO: any flags to check?
+        if(!(iface->OperStatus & IfOperStatusUp))
+            continue; // not configured, skip...
 
-        for(auto addr = iface->FirstUnicastAddress; addr; addr = addr->Next) {
+        // TODO: IfIndex vs. Ipv6IfIndex which one to use?
 
-            if(addr->Address.lpSockaddr->sa_family!=AF_INET)
+        bool isLO = iface->IfType==IF_TYPE_SOFTWARE_LOOPBACK;
+        auto pair = temp.emplace(std::piecewise_construct,
+                                 std::forward_as_tuple(iface->IfIndex),
+                                 std::forward_as_tuple(iface->AdapterName, iface->IfIndex, isLO));
+
+        auto& info = pair.first->second;
+
+        // find the IPv4 broadcast address, if any
+        std::set<std::pair<SockAddr, SockAddr>> prefixes;
+        for(auto prefix = iface->FirstPrefix; prefix; prefix = prefix->Next) {
+            SockAddr addr(prefix->Address.lpSockaddr);
+            auto p = prefix->PrefixLength;
+
+            if(addr.family()!=AF_INET || p<=0u || p>=32u)
                 continue;
 
-            auto pair = info.emplace(addr->Address.lpSockaddr, sizeof(sockaddr_in));
+            sockaddr_in mask{AF_INET};
+            mask.sin_addr.s_addr = htonl(0xffffffff<<(32u-p));
+            auto pair = prefixes.emplace(addr, (sockaddr*)&mask);
 
-            log_debug_printf(logiface, "Found interface %lld \"%s\" w/ %s\n",
-                             (long long)iface->IfIndex, iface->AdapterName, pair.first->tostring().c_str());
+            log_debug_printf(logiface, "Prefix %s/%s\n", addr.tostring().c_str(), pair.first->second.tostring().c_str());
+        }
+
+        for(auto addr = iface->FirstUnicastAddress; addr; addr = addr->Next) {
+            const auto af = addr->Address.lpSockaddr->sa_family;
+            if(af!=AF_INET && af!=AF_INET6) {
+                log_debug_printf(logiface, "Ignoring interface '%s' address family=%d\n",
+                                 iface->AdapterName, af);
+                continue;
+            }
+
+            SockAddr iaddr(addr->Address.lpSockaddr);
+            SockAddr bcast;
+            if(iaddr.family()==AF_INET && !isLO) {
+                auto A = ntohl(iaddr->in.sin_addr.s_addr);
+                for(auto& pair : prefixes) {
+                    auto P = ntohl(pair.first->in.sin_addr.s_addr);
+                    auto M = ntohl(pair.second->in.sin_addr.s_addr);
+                    if((A&M)==P) {
+                        auto B = P | ~M;
+                        bcast->in.sin_family = AF_INET;
+                        bcast->in.sin_addr.s_addr = htonl(B);
+                    }
+                }
+            }
+
+            auto pair = info.addrs.emplace(iaddr, bcast);
+
+            log_debug_printf(logiface, "Found interface %lld \"%s\" w/ %s/%s\n",
+                             (long long)iface->IfIndex, iface->AdapterName,
+                             pair.first->first.tostring().c_str(),
+                             pair.first->second.tostring().c_str());
         }
     }
 
-    info.swap(temp);
+    return temp;
 }
 
 } // namespace impl

@@ -7,6 +7,7 @@
 #include <osiSockExt.h>
 
 #include <cstring>
+#include <system_error>
 
 #include <epicsUnitTest.h>
 #include <testMain.h>
@@ -36,35 +37,49 @@ void test_ifacemap()
 {
     testDiag("Enter %s", __func__);
 
-    impl::IfaceMap ifs;
-    ifs.refresh();
+    auto& ifs = IfaceMap::instance();
 
-    testFalse(ifs.info.empty())<<" found "<<ifs.info.size()<<" interfaces";
+    epicsGuard<epicsMutex> G(ifs.lock); // since we are playing around with the internals...
+
+    ifs.refresh(true);
+
+    testFalse(ifs.byIndex.empty())<<" found "<<ifs.byIndex.size()<<" interfaces";
 
     bool foundlo = false;
     const auto lo(SockAddr::loopback(AF_INET));
 
-    for(const auto& iface : ifs.info) {
-        for(const auto& addr : iface.second) {
-            if(addr!=lo)
+    for(const auto& pair : ifs.byIndex) {
+        auto& iface = pair.second;
+        testDiag("Interface %u \"%s\"", unsigned(iface.index), iface.name.c_str());
+        for(const auto& pair : iface.addrs) {
+            testDiag("  Address %s/%s", pair.first.tostring().c_str(), pair.second.tostring().c_str());
+            if(pair.first!=lo)
                 continue;
-            testTrue(!foundlo)<<" Found loopback with index "<<iface.first;
+            testTrue(!foundlo)<<" Found loopback with index "<<iface.index;
             foundlo = true;
         }
     }
 }
 
-void test_udp()
+void test_udp(int af)
 {
-    testDiag("Enter %s", __func__);
+    testDiag("Enter %s(%d)", __func__, af);
 
-    evsocket A(AF_INET, SOCK_DGRAM, 0),
-             B(AF_INET, SOCK_DGRAM, 0);
+    evsocket A(af, SOCK_DGRAM, 0),
+             B(af, SOCK_DGRAM, 0);
 
-    SockAddr bind_addr(SockAddr::loopback(AF_INET));
+    SockAddr bind_addr(SockAddr::loopback(af));
 
-    enable_IP_PKTINFO(A.sock);
-    A.bind(bind_addr);
+    A.enable_IP_PKTINFO();
+    try{
+        A.bind(bind_addr);
+    }catch(std::system_error& e){
+        if(af==AF_INET6 && e.code().value()==SOCK_EADDRNOTAVAIL) {
+            testSkip(7, "No runtime IPv6 support");
+            return;
+        }
+        testAbort("Unable to bind %s : (%d) %s", bind_addr.tostring().c_str(), e.code().value(), e.what());
+    }
     testNotEq(bind_addr.port(), 0)<<"bound port";
 
     SockAddr send_addr(bind_addr);
@@ -84,7 +99,7 @@ void test_udp()
     testDiag("Call recvfrom()");
     ret = recvfromx{A.sock, (char*)rxbuf, sizeof(rxbuf), &src, &dest}.call();
     // only the destination address is captured, not the port
-    if(dest.family()==AF_INET)
+    if(dest.family()!=AF_UNSPEC)
         dest.setPort(bind_addr.port());
 
     testOk(ret==4 && rxbuf[0]==0x12 && rxbuf[1]==0x34 && rxbuf[2]==0x56 && rxbuf[3]==0x78,
@@ -102,28 +117,27 @@ void test_local_mcast()
     evsocket A(AF_INET, SOCK_DGRAM, 0),
              B(AF_INET, SOCK_DGRAM, 0);
 
-    SockAddr mcast_addr(AF_INET, "224.0.0.128");
+    SockEndpoint mcast_addr("224.0.0.128,1@127.0.0.1");
 
     // We could bind to mcast_addr on all targets except WIN32
     SockAddr bind_addr(SockAddr::any(AF_INET));
 
-    enable_IP_PKTINFO(A.sock);
+    A.enable_IP_PKTINFO();
     A.bind(bind_addr);
-    mcast_addr.setPort(bind_addr.port());
+    mcast_addr.addr.setPort(bind_addr.port());
 
     SockAddr sender_addr(SockAddr::loopback(AF_INET));
     B.bind(sender_addr);
 
     // receiving socket joins on the loopback interface
-    A.mcast_join(mcast_addr, sender_addr); // ignores port(s)
+    A.mcast_join(mcast_addr.resolve()); // ignores port(s)
 
     // sending socket targets the loopback interface
-    B.mcast_iface(sender_addr); // ignores port(s)
-    B.mcast_ttl(1);
+    B.mcast_prep_sendto(mcast_addr); // ignores port(s)
     B.mcast_loop(true);
 
     uint8_t msg[] = {0x12, 0x34, 0x56, 0x78};
-    int ret = sendto(B.sock, (char*)msg, sizeof(msg), 0, &mcast_addr->sa, mcast_addr.size());
+    int ret = sendto(B.sock, (char*)msg, sizeof(msg), 0, &mcast_addr.addr->sa, mcast_addr.addr.size());
     testEq(ret, (int)sizeof(msg))<<"Send test";
 
     uint8_t rxbuf[8] = {};
@@ -134,7 +148,7 @@ void test_local_mcast()
     recvfromx rx{A.sock, (char*)rxbuf, sizeof(rxbuf), &src, &dest};
     ret = rx.call();
     if(dest.family()==AF_INET)
-        dest.setPort(mcast_addr.port());
+        dest.setPort(mcast_addr.addr.port());
 
     testTrue(ret>=0 && rx.dstif>0 && ifinfo.has_address(rx.dstif, sender_addr))
             <<" received on index "<<rx.dstif;
@@ -143,14 +157,14 @@ void test_local_mcast()
             "Recv'd %d [%u, %u, %u, %u]", ret, rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);
 
     testEq(src, sender_addr);
-    testEq(dest, mcast_addr);
+    testEq(dest, mcast_addr.addr);
 }
 
 void test_mcast_scope()
 {
     testDiag("Enter %s", __func__);
 
-    SockAddr mcast_addr(AF_INET, "224.0.0.128");
+    SockEndpoint mcast_addr("224.0.0.128,1@127.0.0.1");
     auto any(SockAddr::any(AF_INET));
     auto lo(SockAddr::loopback(AF_INET));
     auto sender(SockAddr::loopback(AF_INET));
@@ -167,9 +181,7 @@ void test_mcast_scope()
     epicsSocketEnableAddressUseForDatagramFanout(RX4.sock);
 
     TX.mcast_loop(true);
-    TX.mcast_ttl(1u);
-    // endure message goes out through LO
-    TX.mcast_iface(lo);
+    TX.mcast_prep_sendto(mcast_addr);
     TX.bind(sender);
     testShow()<<" sender bound to "<<sender;
 
@@ -177,7 +189,7 @@ void test_mcast_scope()
     // by winsock bind() documentation
 
     RX1.bind(any);
-    mcast_addr.setPort(any.port()); // bind all RX* to the same port
+    mcast_addr.addr.setPort(any.port()); // bind all RX* to the same port
     lo.setPort(any.port());
     testShow()<<" RX1 bound to "<<any;
     RX2.bind(any);
@@ -186,17 +198,17 @@ void test_mcast_scope()
     testShow()<<" RX3 bound to "<<lo;
 #ifndef _WIN32
     // winsock doesn't allow binding to an mcast address
-    RX4.bind(mcast_addr);
+    RX4.bind(mcast_addr.addr);
     testShow()<<" RX4 bound to "<<mcast_addr;
 #endif
 
     testShow()<<" Join RX1 to "<<mcast_addr<<" on "<<lo;
-    RX1.mcast_join(mcast_addr, lo);
+    RX1.mcast_join(mcast_addr.resolve());
 
     const char msg[] = "hello world!";
     auto msglen = sizeof(msg)-1u;
 
-    auto ret = sendto(TX.sock, msg, msglen, 0, &mcast_addr->sa, lo.size());
+    auto ret = sendto(TX.sock, msg, msglen, 0, &mcast_addr.addr->sa, mcast_addr.addr.size());
     testEq(ret, int(msglen))<<" sendto("<<sender<<" -> "<<mcast_addr<<") err="<<EVUTIL_SOCKET_ERROR();
 
     auto doRX = [&lo, &msg, msglen](unsigned idx, evsocket& sock, bool expectrx) {
@@ -342,10 +354,15 @@ MAIN(testsock)
 {
     SockAttach attach;
     logger_config_env();
-    testPlan(51);
+    testPlan(58);
     testSetup();
     test_ifacemap();
-    test_udp();
+    test_udp(AF_INET);
+    try{
+        test_udp(AF_INET6);
+    }catch(std::exception&e){
+        testAbort("test_udp6: %s", e.what());
+    }
     test_local_mcast();
     test_mcast_scope();
     test_from_wire();

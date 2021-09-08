@@ -50,6 +50,7 @@ void cleanup_for_valgrind()
 #endif
     impl::logger_shutdown();
     impl::UDPManager::cleanup();
+    IfaceMap::cleanup();
 }
 
 testCase::testCase()

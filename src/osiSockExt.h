@@ -10,10 +10,20 @@
 #include <osiSock.h>
 
 #include <string>
+#include <string.h>
 
 #include <event2/util.h>
 
 #include <pvxs/version.h>
+
+// added with Base 3.15
+#ifndef SOCK_EADDRNOTAVAIL
+#  ifdef _WIN32
+#    define SOCK_EADDRNOTAVAIL WSAEADDRNOTAVAIL
+#  else
+#    define SOCK_EADDRNOTAVAIL EADDRNOTAVAIL
+#  endif
+#endif
 
 namespace pvxs {
 
@@ -39,16 +49,16 @@ private:
 public:
 
     explicit SockAddr(int af = AF_UNSPEC);
-    explicit SockAddr(int af, const char *address, unsigned short port=0);
-    explicit SockAddr(const sockaddr *addr, ev_socklen_t len);
-    inline explicit SockAddr(int af, const std::string& address) :SockAddr(af, address.c_str()) {}
+    explicit SockAddr(const char *address, unsigned short port=0);
+    explicit SockAddr(const sockaddr *addr);
+    inline explicit SockAddr(const std::string& address, unsigned short port=0) :SockAddr(address.c_str(), port) {}
 
-    size_t size() const;
+    size_t size() const noexcept;
     inline
     size_t capacity() const { return sizeof(store); }
 
-    inline unsigned short family() const { return store.sa.sa_family; }
-    unsigned short port() const;
+    inline unsigned short family() const noexcept { return store.sa.sa_family; }
+    unsigned short port() const noexcept;
     void setPort(unsigned short port);
     SockAddr withPort(unsigned short port) const {
         SockAddr temp(*this);
@@ -57,10 +67,15 @@ public:
     }
 
     void setAddress(const char *, unsigned short port=0);
+    inline void setAddress(const std::string& s, unsigned short port=0) {
+        setAddress(s.c_str(), port);
+    }
 
-    bool isAny() const;
-    bool isLO() const;
-    bool isMCast() const;
+    bool isAny() const noexcept;
+    bool isLO() const noexcept;
+    bool isMCast() const noexcept;
+
+    SockAddr map4to6() const;
 
     store_t* operator->() { return &store; }
     const store_t* operator->() const { return &store; }
@@ -95,11 +110,53 @@ struct SockAddrOnlyLess {
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const SockAddr& addr);
 
-// Linux specific include OS dropped packet counter as cmsg
-void enable_SO_RXQ_OVFL(SOCKET sock);
-// Include destination address as cmsg
+// resolved multicast group membership request
+struct MCastMembership {
+    int af = AF_UNSPEC;
+    union {
+        ip_mreq in;
+        ipv6_mreq in6;
+    } req{};
+    bool operator<(const MCastMembership& o) const {
+        if(af==o.af) {
+            if(af==AF_INET)
+                return memcmp(&req.in, &o.req.in, sizeof(o.req.in));
+            else
+                return memcmp(&req.in6, &o.req.in6, sizeof(o.req.in6));
+        }
+        return af<o.af;
+    }
+};
+
+/** search/beacon destination
+ *
+ *  <IP46>
+ *  <IP46>,<ttl#>
+ *  <IP46>@iface
+ *  <IP46>,<ttl#>@iface
+ */
+struct PVXS_API SockEndpoint {
+    SockAddr addr; // ucast, mcast, or bcast
+    // if mcast, then output TTL and interface
+    int ttl=-1;
+    std::string iface;
+
+    SockEndpoint() = default;
+    SockEndpoint(const char* ep, uint16_t defport=0);
+    SockEndpoint(const std::string& ep, uint16_t defport=0) :SockEndpoint(ep.c_str(), defport) {}
+    explicit SockEndpoint(const SockAddr& addr) :addr(addr) {}
+
+    MCastMembership resolve() const;
+};
+
 PVXS_API
-void enable_IP_PKTINFO(SOCKET sock);
+std::ostream& operator<<(std::ostream& strm, const SockEndpoint& addr);
+
+PVXS_API
+bool operator==(const SockEndpoint& lhs, const SockEndpoint& rhs);
+
+inline
+bool operator!=(const SockEndpoint& lhs, const SockEndpoint& rhs) { return !(lhs==rhs); }
 
 struct recvfromx {
     evutil_socket_t sock;

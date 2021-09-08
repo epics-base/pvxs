@@ -44,6 +44,7 @@ namespace pvxs {namespace impl {
 DEFINE_LOGGER(logerr, "pvxs.loop");
 DEFINE_LOGGER(logtimer, "pvxs.timer");
 DEFINE_LOGGER(logiface, "pvxs.iface");
+DEFINE_LOGGER(logsock, "pvxs.sock");
 
 namespace mdetail {
 VFunctor0::~VFunctor0() {}
@@ -364,18 +365,22 @@ bool evbase::assertInRunningLoop() const
     throw std::logic_error("Not in running evbase worker");
 }
 
-evsocket::evsocket(evutil_socket_t sock)
+evsocket::evsocket(int af, evutil_socket_t sock)
     :sock(sock)
+    ,af(af)
 {
     if(sock==evutil_socket_t(-1)) {
-        int err = SOCKERRNO;
+        int err = evutil_socket_geterror(sock);
 #ifdef _WIN32
         if(err==WSANOTINITIALISED) {
             throw std::runtime_error("WSANOTINITIALISED");
         }
 #endif
-        (void)err;
-        throw std::runtime_error("Unable to allocate socket");
+        throw std::system_error(err, std::system_category());
+    }
+    if(af!=AF_INET && af!=AF_INET6) {
+        evutil_closesocket(sock);
+        throw std::logic_error("Unsupported address family");
     }
 
     evutil_make_socket_closeonexec(sock);
@@ -392,7 +397,7 @@ evsocket::evsocket(evutil_socket_t sock)
 #endif
 
 evsocket::evsocket(int af, int type, int proto)
-    :evsocket(socket(af, type | SOCK_CLOEXEC, proto))
+    :evsocket(af, socket(af, type | SOCK_CLOEXEC, proto))
 {
 #ifdef __linux__
 #  ifndef IP_MULTICAST_ALL
@@ -411,8 +416,10 @@ evsocket::evsocket(int af, int type, int proto)
 
 evsocket::evsocket(evsocket&& o) noexcept
     :sock(o.sock)
+    ,af(o.af)
 {
     o.sock = evutil_socket_t(-1);
+    o.af = AF_UNSPEC;
 }
 
 evsocket& evsocket::operator=(evsocket&& o) noexcept
@@ -421,7 +428,9 @@ evsocket& evsocket::operator=(evsocket&& o) noexcept
         if(sock!=evutil_socket_t(-1))
             evutil_closesocket(sock);
         sock = o.sock;
+        af = o.af;
         o.sock = evutil_socket_t(-1);
+        o.af = AF_UNSPEC;
     }
     return *this;
 }
@@ -446,56 +455,124 @@ void evsocket::bind(SockAddr& addr) const
         log_err_printf(logerr, "Unable to fetch address of newly bound socket\n%s", "");
 }
 
-void evsocket::mcast_join(const SockAddr& grp, const SockAddr& iface) const
+void evsocket::set_broadcast(bool b) const
 {
-    if(grp.family()!=iface.family() || grp.family()!=AF_INET)
-        throw std::invalid_argument("Unsupported address family");
-
-    ip_mreq req{};
-    req.imr_multiaddr.s_addr = grp->in.sin_addr.s_addr;
-    req.imr_interface.s_addr = iface->in.sin_addr.s_addr;
-
-    int ret = setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&req, sizeof(req));
-    if(ret)
-        log_err_printf(logerr, "Unable to join mcast group %s on %s : %s\n",
-                   grp.tostring().c_str(), iface.tostring().c_str(),
-                   evutil_socket_error_to_string(evutil_socket_geterror(sock)));
-
-    // IPV6_ADD_MEMBERSHIP
+    int val = b;
+    if(setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&val, sizeof(val)))
+        log_err_printf(logerr, "Unable to setup beacon sender SO_BROADCAST: %d\n", SOCKERRNO);
 }
 
-void evsocket::mcast_ttl(unsigned ttl) const
-{
-    int ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (char*)&ttl, sizeof(ttl));
-    if(ret)
-        log_err_printf(logerr, "Unable to set mcast TTL : %s\n",
-                   evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+#ifndef IPV6_ADD_MEMBERSHIP
+#  define IPV6_ADD_MEMBERSHIP IPV6_JOIN_GROUP
+#endif
+#ifndef IPV6_DROP_MEMBERSHIP
+#  define IPV6_DROP_MEMBERSHIP IPV6_LEAVE_GROUP
+#endif
 
-    // ipv6 variant?
+bool evsocket::mcast_join(const MCastMembership& m) const
+{
+    if(m.af==AF_INET) {
+        auto& req = m.req.in;
+
+        if(setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&req, sizeof(req))) {
+            log_err_printf(logerr, "Unable to join mcast4 group: %s\n",
+                       evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+            return false;
+        }
+
+    } else if(m.af==AF_INET6) {
+        auto& req = m.req.in6;
+
+        if(setsockopt(sock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, (char*)&req, sizeof(req))) {
+            log_err_printf(logerr, "Unable to join mcast6 group : %s\n",
+                       evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+            return false;
+        }
+    }
+    return true;
+}
+
+void evsocket::mcast_leave(const MCastMembership &m) const
+{
+    if(m.af==AF_INET) {
+        if(setsockopt(sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, (char*)&m.req.in, sizeof(m.req.in)))
+            log_err_printf(logerr, "Unable to leave mcast4 group: %s\n",
+                       evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+
+    } else if(m.af==AF_INET6) {
+        if(setsockopt(sock, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, (char*)&m.req.in6, sizeof(m.req.in6)))
+            log_err_printf(logerr, "Unable to leave mcast6 group: %s\n",
+                       evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+    }
+}
+
+void evsocket::mcast_prep_sendto(const SockEndpoint& ep) const
+{
+    if(ep.addr.family()!=af)
+        throw std::logic_error("Inconsistent address family or not mcast");
+
+    else if(!ep.addr.isMCast())
+        return;
+
+    auto& ifmap = IfaceMap::instance();
+
+    if(af==AF_INET) {
+        SockAddr iface(AF_INET);
+        if(!ep.iface.empty())
+            iface = ifmap.address_of(ep.iface);
+
+        if(setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (char*)&ep.ttl, sizeof(ep.ttl)))
+            log_err_printf(logerr, "Unable to set mcast TTL : %s\n",
+                       evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+
+        if(setsockopt(sock, IPPROTO_IP, IP_MULTICAST_IF, (char*)&iface->in.sin_addr, sizeof(iface->in.sin_addr)))
+            log_err_printf(logerr, "Unable to set mcast IF : %s\n",
+                       evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+
+    } else if(af==AF_INET6) {
+        int index = 0u;
+        if(!ep.iface.empty())
+            index = ifmap.index_of(ep.iface);
+
+        if(setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, (char*)&ep.ttl, sizeof(ep.ttl)))
+            log_err_printf(logerr, "Unable to set mcast TTL : %s\n",
+                       evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+
+        if(setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, (char*)&index, sizeof(index)))
+            log_err_printf(logerr, "Unable to set mcast IF : %s\n",
+                       evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+    }
 }
 
 void evsocket::mcast_loop(bool loop) const
 {
-    unsigned char val = loop ? 1 : 0;
-    int ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char*)&val, sizeof(val));
-    if(ret)
-        log_err_printf(logerr, "Unable to set mcast loopback : %s\n",
-                   evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+    /* On Linux (at least) IP_MULTICAST_LOOP is not exactly equivalent to IPV6_MULTICAST_LOOP,
+     * and we are allowed to set both.  So we do...
+     */
+    if(af==AF_INET || af==AF_INET6) {
+        unsigned char val = loop ? 1 : 0;
+        if(setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char*)&val, sizeof(val)))
+            log_err_printf(logerr, "Unable to set mcast loopback4 : %s\n",
+                       evutil_socket_error_to_string(evutil_socket_geterror(sock)));
 
-    // IPV6_MULTICAST_LOOP
+    }
+    if(af==AF_INET6) {
+        unsigned int val = loop ? 1 : 0;
+        if(setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, (char*)&val, sizeof(val)))
+            log_err_printf(logerr, "Unable to set mcast loopback6 : %s\n",
+                       evutil_socket_error_to_string(evutil_socket_geterror(sock)));
+    }
 }
 
-void evsocket::mcast_iface(const SockAddr& iface) const
+void evsocket::ipv6_only(bool b) const
 {
-    if(iface.family()!=AF_INET)
+    if(af!=AF_INET6)
         throw std::invalid_argument("Unsupported address family");
 
-    int ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_IF, (char*)&iface->in.sin_addr, sizeof(iface->in.sin_addr));
-    if(ret)
-        log_err_printf(logerr, "Unable to set mcast TTL : %s\n",
+    int v=b;
+    if(setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&v, sizeof(v)))
+        log_err_printf(logerr, "Unable to set IPv6 only : %s\n",
                    evutil_socket_error_to_string(evutil_socket_geterror(sock)));
-
-    // IPV6_MULTICAST_IF
 }
 
 std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match) const
@@ -503,6 +580,11 @@ std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match) const
     if(match && match->family()!=AF_INET) {
         throw std::logic_error("osiSockDiscoverBroadcastAddresses() only understands AF_INET");
     }
+
+    std::vector<SockAddr> ret;
+    if(af==AF_INET6)
+        return ret; // IPv6 does not have broadcast addresses
+
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
 
     osiSockAddr realmatch;
@@ -517,7 +599,6 @@ std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match) const
     ELLLIST bcasts = ELLLIST_INIT;
     osiSockDiscoverBroadcastAddresses(&bcasts, dummy.sock, &realmatch);
 
-    std::vector<SockAddr> ret;
     ret.reserve(ellCount(&bcasts));
 
     while(ellCount(&bcasts)) {
@@ -525,54 +606,223 @@ std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match) const
         ellDelete(&bcasts, cur);
         osiSockAddrNode *node = CONTAINER(cur, osiSockAddrNode, node);
         if(node->addr.sa.sa_family==AF_INET)
-            ret.emplace_back(&node->addr.sa, sizeof(node->addr));
+            ret.emplace_back(&node->addr.sa);
         free(node);
     }
 
     return ret;
 }
 
+#if defined(_WIN32) && !defined(EAFNOSUPPORT)
+#  define EAFNOSUPPORT WSAESOCKTNOSUPPORT
+#endif
+
+bool evsocket::canIPv6()
+{
+    auto sock = socket(AF_INET6, SOCK_DGRAM, 0);
+    if(sock!=evutil_socket_t(-1)) {
+        evutil_closesocket(sock);
+        return true;
+    }
+    int err = evutil_socket_geterror(sock);
+    if(err!=EAFNOSUPPORT) {
+        log_warn_printf(logsock, "Unexpected errno %d while probing IPv6: %s\n",
+                        err, evutil_socket_error_to_string(err));
+    }
+    return false;
+}
+
 #if EPICS_VERSION_INT<VERSION_INT(7,0,3,1)
 #  define getMonotonic getCurrent
 #endif
 
+static epicsThreadOnceId mapOnce = EPICS_THREAD_ONCE_INIT;
+
+static IfaceMap* theinstance;
+
+static
+void mapInit(void*)
+{
+    theinstance = new IfaceMap();
+}
+
+IfaceMap& IfaceMap::instance()
+{
+    threadOnce(&mapOnce, &mapInit);
+    assert(theinstance);
+    return *theinstance;
+}
+
+void IfaceMap::cleanup()
+{
+    delete theinstance;
+    theinstance = nullptr;
+}
+
 IfaceMap::IfaceMap()
 {
     refresh();
-    updated = epicsTime::getMonotonic();
 }
 
-bool IfaceMap::has_address(int64_t ifindex, const SockAddr &addr)
+void IfaceMap::refresh(bool force)
 {
+    auto now(epicsTime::getMonotonic());
+    auto age = now-updated;
+    double threshold = force ? 10.0 : 600.0; // TODO: configurable?
+    if(age<threshold && !byIndex.empty())
+        return;
+    log_debug_printf(logiface, "refresh%s after %.1f sec\n", force?" forced":"", age);
+    auto temp = _refresh();
+    // cross-index
+    decltype (byName) tempN;
+    decltype (byAddr) tempA;
+    for(auto& pair : temp) {
+        auto& iface = pair.second;
+        tempN[iface.name] = &iface;
+        for(auto& pair : iface.addrs) {
+            tempA.emplace(pair.first, std::make_pair(&iface, false));
+            if(pair.second.family()==AF_INET)
+                tempA.emplace(pair.second, std::make_pair(&iface, true));
+        }
+    }
+    byIndex.swap(temp);
+    byName.swap(tempN);
+    byAddr.swap(tempA);
+    updated = now;
+}
+
+namespace {
+
+template<typename FN>
+bool try_cache(IfaceMap& self, FN&& fn)
+{
+    bool force = false;
+retry:
+    self.refresh(force);
+    bool found = fn();
+    if(!found && !force) {
+        force = true;
+        goto retry;
+    }
+    return found;
+}
+
+} // namespace
+
+bool IfaceMap::has_address(uint64_t ifindex, const SockAddr &addr)
+{
+    Guard G(lock);
+
     if(addr.isAny())
         return true;
 
-    auto now(epicsTime::getMonotonic());
-    auto age = now-updated;
-    bool first = true;
-
-retry:
-    if(!first || age > 60) {
-        refresh();
-        updated = now;
-    } else {
-        log_debug_printf(logiface, "using cache age %.2f sec\n", age);
-    }
-
-    auto ifit(info.find(ifindex));
-    if(ifit!=info.end()) {
-        const auto& iface = ifit->second;
-        auto adit(iface.find(addr));
-        return adit!=iface.end();
-    }
-    if(first) {
-        // re-try once
-        first = false;
-        goto retry;
-    }
-    log_warn_printf(logiface, "Encountered unknown interface index %lld\n", (long long)ifindex);
-    return false;
+    bool found = try_cache(*this, [this, ifindex, &addr]() {
+        auto ifit(byIndex.find(ifindex));
+        if(ifit!=byIndex.end()) {
+            const auto& addrs = ifit->second.addrs;
+            return addrs.find(addr)!=addrs.end();
+        }
+        return false;
+    });
+    return found;
 }
+
+std::string IfaceMap::name_of(uint64_t index)
+{
+    Guard G(lock);
+
+    std::string name;
+    bool found = try_cache(*this, [this, index, &name](){
+        auto it(byIndex.find(index));
+        if(it!=byIndex.end()) {
+            name = it->second.name;
+            return true;
+        }
+        return false;
+    });
+    if(!found) {
+        // fallback to numeric index
+        name = SB()<<index;
+    }
+    return name;
+}
+
+std::string IfaceMap::name_of(const SockAddr& addr)
+{
+    Guard G(lock);
+
+    std::string name;
+    try_cache(*this, [this, addr, &name](){
+        auto it(byAddr.find(addr));
+        if(it!=byAddr.end()) {
+            name = it->second.first->name;
+            return true;
+        }
+        return false;
+    });
+    return name;
+}
+
+uint64_t IfaceMap::index_of(const std::string& name)
+{
+    Guard G(lock);
+
+    uint64_t ret = 0u;
+    try_cache(*this, [&ret, this, name]() {
+        auto it = byName.find(name);
+        bool hit = it!=byName.end();
+        if(hit)
+            ret = it->second->index;
+        return hit;
+    });
+    return ret;
+}
+
+bool IfaceMap::is_address(const SockAddr& addr)
+{
+    Guard G(lock);
+
+    return try_cache(*this, [this, addr]() {
+        return byAddr.find(addr)!=byAddr.end();
+    });
+}
+
+bool IfaceMap::is_broadcast(const SockAddr& addr)
+{
+    Guard G(lock);
+
+    return try_cache(*this, [this, addr]() {
+        auto it(byAddr.find(addr));
+        return it!=byAddr.end() && it->second.second;
+    });
+}
+
+SockAddr IfaceMap::address_of(const std::string& name)
+{
+    Guard G(lock);
+
+    SockAddr ret;
+    try_cache(*this, [this, name, &ret]() {
+        auto it(byName.find(name));
+        if(it!=byName.end() && !it->second->addrs.empty()) {
+            ret = it->second->addrs.begin()->first;
+        }
+        return false;
+    });
+    return ret;
+}
+
+std::set<std::string> IfaceMap::all_external()
+{
+    std::set<std::string> ret;
+    Guard G(lock);
+    refresh();
+    for(auto& pair : byIndex) {
+        ret.emplace(pair.second.name);
+    }
+    return ret;
+}
+
 
 void to_wire(Buffer& buf, const SockAddr& val)
 {

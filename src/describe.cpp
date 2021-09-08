@@ -103,7 +103,7 @@ std::ostream& target_information(std::ostream& strm)
 #endif
 
         auto localaddr(osiLocalAddr(dummy.sock));
-        strm<<indent{}<<"osiLocalAddr() -> "<<SockAddr(&localaddr.sa, sizeof(localaddr)).tostring()<<"\n";
+        strm<<indent{}<<"osiLocalAddr() -> "<<SockAddr(&localaddr.sa).tostring()<<"\n";
 
         strm<<indent{}<<"osiSockDiscoverBroadcastAddresses() ->\n";
         Indented J(strm);

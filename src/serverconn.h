@@ -169,7 +169,7 @@ struct ServIface
     evsocket sock;
     evlisten listener;
 
-    ServIface(const std::string& addr, unsigned short port, server::Server::Pvt *server, bool fallback);
+    ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fallback);
 
     static void onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw);
 };
@@ -200,6 +200,7 @@ using namespace impl;
 struct Server::Pvt
 {
     SockAttach attach;
+    const bool canIPv6;
 
     std::weak_ptr<Server::Pvt> internal_self;
 
@@ -218,13 +219,13 @@ struct Server::Pvt
     evbase acceptor_loop;
 
     std::list<std::unique_ptr<UDPListener> > listeners;
-    std::vector<SockAddr> beaconDest;
+    std::vector<SockEndpoint> beaconDest;
     std::vector<SockAddr> ignoreList;
 
     std::list<ServIface> interfaces;
     std::map<ServerConn*, std::shared_ptr<ServerConn> > connections;
 
-    evsocket beaconSender;
+    evsocket beaconSender4, beaconSender6;
     evevent beaconTimer;
 
     std::vector<uint8_t> searchReply;

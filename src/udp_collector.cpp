@@ -36,9 +36,9 @@ struct UDPCollector : public UDPManager::Search,
 {
     UDPManager::Pvt* const manager;
     SockAddr bind_addr; // address our socket is bound to
-    SockAddr lo_mcast_addr; // destination endpoint for local mcast forwarding
+    SockEndpoint lo_mcast_addr; // destination endpoint for local mcast forwarding
     SockAddr lo_addr;
-    std::set<std::pair<SockAddr, SockAddr>> mcast_grps; // mcast group+iface pairs which our socket has joined
+    std::set<MCastMembership> mcast_grps; // mcast group+iface pairs which our socket has joined
     std::string name;
     evsocket sock;
     evevent rx;
@@ -50,7 +50,7 @@ struct UDPCollector : public UDPManager::Search,
 
     std::set<UDPListener*> listeners;
 
-    UDPCollector(UDPManager::Pvt* manager, uint16_t port);
+    UDPCollector(UDPManager::Pvt* manager, int af, uint16_t port);
     ~UDPCollector();
 
     void addListener(UDPListener *l);
@@ -93,13 +93,15 @@ public:
 struct UDPManager::Pvt {
 
     evbase loop;
-    IfaceMap ifmap;
+    IfaceMap& ifmap;
 
     // only manipulate from loop worker thread
-    std::map<uint16_t, UDPCollector*> collectors;
+    // key'd by address family and port#
+    std::map<std::pair<int, uint16_t>, UDPCollector*> collectors;
 
     Pvt()
         :loop("PVXUDP", epicsThreadPriorityCAServerLow-4)
+        ,ifmap(IfaceMap::instance())
     {}
     ~Pvt()
     {
@@ -107,12 +109,12 @@ struct UDPManager::Pvt {
         assert(collectors.empty());
     }
 
-    std::shared_ptr<UDPCollector> collect(const SockAddr& dest)
+    std::shared_ptr<UDPCollector> collect(const SockEndpoint& dest)
     {
         std::shared_ptr<UDPCollector> collector;
 
-        if(dest.port()!=0) {
-            auto it = collectors.find(dest.port());
+        if(dest.addr.port()!=0) {
+            auto it = collectors.find(std::make_pair(dest.addr.family(), dest.addr.port()));
             if(it!=collectors.end()) {
                 try {
                     collector = it->second->shared_from_this();
@@ -123,26 +125,26 @@ struct UDPManager::Pvt {
         }
 
         if(!collector) {
-            collector.reset(new UDPCollector(this, dest.port()));
+            collector.reset(new UDPCollector(this, dest.addr.family(), dest.addr.port()));
         }
         return collector;
     }
 };
 
-UDPCollector::UDPCollector(UDPManager::Pvt *manager, uint16_t requested_port)
+UDPCollector::UDPCollector(UDPManager::Pvt *manager, int af, uint16_t requested_port)
     :manager(manager)
-    ,bind_addr(SockAddr::any(AF_INET, requested_port))
-    ,lo_mcast_addr(bind_addr.family(), "224.0.0.128")
+    ,bind_addr(SockAddr::any(af, requested_port))
+    ,lo_mcast_addr("224.0.0.128,1@127.0.0.1")
     ,lo_addr(SockAddr::loopback(bind_addr.family()))
-    ,sock(bind_addr.family(), SOCK_DGRAM, 0)
+    ,sock(af, SOCK_DGRAM, 0)
     ,rx(event_new(manager->loop.base, sock.sock, EV_READ|EV_PERSIST, &handle_static, this))
     ,beaconMsg(src)
 {
     manager->loop.assertInLoop();
 
     epicsSocketEnableAddressUseForDatagramFanout(sock.sock);
-    enable_SO_RXQ_OVFL(sock.sock);
-    enable_IP_PKTINFO(sock.sock);
+    sock.enable_SO_RXQ_OVFL();
+    sock.enable_IP_PKTINFO();
 
     /* Always bind to wildcard to receive all uni/broad/multicast, and also to send them.
      * Notes:
@@ -158,31 +160,32 @@ UDPCollector::UDPCollector(UDPManager::Pvt *manager, uint16_t requested_port)
     sock.bind(bind_addr);
     name = "UDP "+bind_addr.tostring();
 
-    lo_mcast_addr.setPort(bind_addr.port());
-    lo_addr.setPort(bind_addr.port());
+    if(af==AF_INET) {
+        lo_mcast_addr.addr.setPort(bind_addr.port());
+        lo_addr.setPort(bind_addr.port());
 
-    // join local group to receive
-    sock.mcast_join(lo_mcast_addr, lo_addr);
-    // setup for re-transmit
-    sock.mcast_ttl(1); // make default explicit, we will only send to lo_mcast_addr.
-    sock.mcast_loop(true);
-    sock.mcast_iface(lo_addr);
+        // join local group to receive
+        auto Mem(lo_mcast_addr.resolve());
+        sock.mcast_join(Mem);
+        // setup for re-transmit
+        sock.mcast_loop(true);
 
-    mcast_grps.emplace(lo_mcast_addr, lo_addr);
+        mcast_grps.emplace(Mem);
+    }
 
     log_info_printf(logsetup, "Bound %d to %s as lo\n", sock.sock, name.c_str());
 
     if(event_add(rx.get(), nullptr))
         throw std::runtime_error("Unable to create collector Rx event");
 
-    manager->collectors[bind_addr.port()] = this;
+    manager->collectors[std::make_pair(af, bind_addr.port())] = this;
 }
 
 UDPCollector::~UDPCollector()
 {
     manager->loop.assertInLoop();
 
-    manager->collectors.erase(bind_addr.port());
+    manager->collectors.erase(std::make_pair(bind_addr.family(), bind_addr.port()));
 
     // we should only be destroyed after that last listener has removed itself
     assert(listeners.empty());
@@ -191,23 +194,24 @@ UDPCollector::~UDPCollector()
 
 void UDPCollector::addListener(UDPListener *l)
 {
-    for(const auto& mcast : l->mcasts) {
-        const auto tup(std::make_pair(mcast, l->dest));
-        if(mcast_grps.find(tup)==mcast_grps.end()) {
-            mcast_grps.insert(tup);
-
-            log_debug_printf(logsetup, "collector joining %s on %s\n",
-                             mcast.tostring().c_str(),
-                             l->dest.tostring().c_str());
-
-            sock.mcast_join(mcast, l->dest);
+    if(l->dest.addr.isMCast()) {
+        l->cur = l->dest.resolve();
+        auto it(mcast_grps.find(l->cur));
+        if(it==mcast_grps.end() && sock.mcast_join(l->cur)) {
+            mcast_grps.emplace(l->cur);
+            log_debug_printf(logsetup, "collector joining %s\n",
+                             std::string(SB()<<l->dest).c_str());
         }
     }
     listeners.insert(l);
+
+    log_debug_printf(logsetup, "Start listening for UDP %s\n", std::string(SB()<<l->dest).c_str());
 }
 
 void UDPCollector::delListener(UDPListener *l)
 {
+    log_debug_printf(logsetup, "Stop listening for UDP %s\n", std::string(SB()<<l->dest).c_str());
+
     listeners.erase(l);
 
     // TODO: bother to cleanup mcast group membership?
@@ -236,14 +240,21 @@ bool UDPCollector::handle_one()
 
     if(nrx<0) {
         int err = evutil_socket_geterror(sock.sock);
-        if(err==SOCK_EWOULDBLOCK || err==EAGAIN || err==SOCK_EINTR) {
-            // nothing to do here
-        } else {
+        if(err!=SOCK_EWOULDBLOCK && err!=EAGAIN && err!=SOCK_EINTR) {
             log_warn_printf(logio, "UDP RX Error on %s : %s\n", name.c_str(),
                             evutil_socket_error_to_string(err));
         }
         return false; // wait for more I/O
 
+    }
+
+    if(dest.family()!=AF_UNSPEC)
+        dest.setPort(bind_addr.port());
+
+    if(src.isMCast()) {
+        // should never happen.  It it does, we won't be tricked into amplifying a DDoS.
+        log_debug_printf(logio, "Ignoring UDP with mcast source %s.\n", src.tostring().c_str());
+        return true;
     }
 
     log_hex_printf(logio, Level::Debug, rxbuf, nrx, "UDP %d Rx %d, %s -> %s @%u (%s)\n",
@@ -280,8 +291,9 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
     switch(head.cmd) {
 
     case CMD_SEARCH: {
+        peerVersion = head.version;
+
         uint8_t flags = 0;
-        SockAddr replyAddr;
         uint16_t port = 0;
 
         from_wire(M, searchID);
@@ -292,16 +304,16 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
         M.skip(3, __FILE__, __LINE__); // unused/reserved
 
         auto save_replyAddr = M.save();
-        from_wire(M, replyAddr);
+        from_wire(M, server);
         from_wire(M, port);
-        if(replyAddr.isAny()) {
-            replyAddr = src;
+        if(server.isAny()) {
+            server = src;
             if(origin==OriginTag) {
                 log_err_printf(logio, "CMD_ORIGIN_TAG search with reply to sender never works%s", "\n");
                 return;
             }
         }
-        replyAddr.setPort(port);
+        server.setPort(port);
 
         if(M.good() && origin==Loopback && (flags&pva_search_flags::Unicast) && dest.family()!=AF_UNSPEC) {
             assert(buf==&this->buf[cmd_origin_tag_size]);
@@ -310,7 +322,7 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
             // recipient of forwarded message must use, and trust, replyAddr in body :(
             {
                 FixedBuf R(M.be, save_replyAddr, 16u);
-                to_wire(R, replyAddr);
+                to_wire(R, server);
                 assert(R.good());
             }
             forwardM(dest, buf, nrx);
@@ -318,18 +330,18 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
         }
 
         // so far, only "tcp" transport has ever been seen.
-        // however, we will consider and ignore any others which might appear
-        bool foundtcp = false;
+        // however, we will pass through others which might appear
+        otherproto.clear();
         Size nproto{0};
         from_wire(M, nproto);
         for(size_t i=0; i<nproto.size && M.good(); i++) {
-            Size nchar{0};
-            from_wire(M, nchar);
-
-            // shortcut to avoid allocating a std::string
-            // "tcp" is the only value we expect to see
-            foundtcp |= M.size()>=3 && nchar.size==3 && M[0]=='t' && M[1]=='c' && M[2]=='p';
-            M.skip(nchar.size, __FILE__, __LINE__);
+            std::string prot;
+            from_wire(M, prot);
+            if(prot=="tcp") {
+                protoTCP = true;
+            } else {
+                otherproto.push_back(prot);
+            }
         }
 
         // one Search message can include many PV names.
@@ -348,14 +360,14 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
             from_wire(M, chlen);
             // inject nil for previous PV name
             *mundge = '\0';
-            if(foundtcp && chlen.size<=M.size() && M.good()) {
+            if(protoTCP && chlen.size<=M.size() && M.good()) {
                 names.push_back(UDPManager::Search::Name{reinterpret_cast<const char*>(M.save()), id});
             }
             M.skip(chlen.size, __FILE__, __LINE__);
         }
 
         // used by our reply()
-        src = replyAddr;
+        src = server;
 
         if(M.good()) {
             // ensure nil for final PV name
@@ -372,6 +384,8 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
     }
 
     case CMD_BEACON: {
+        beaconMsg.peerVersion = head.version;
+
         uint16_t port = 0;
 
         _from_wire<12>(M, &beaconMsg.guid[0], false, __FILE__, __LINE__);
@@ -389,6 +403,8 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
 
         if(M.good()) {
             for(auto L : listeners) {
+                if(L->dest.addr.compare(dest)!=0)
+                    break; // TODO: check interface index against L->cur
                 if(L->beaconCB) {
                     (L->beaconCB)(beaconMsg);
                 }
@@ -406,7 +422,7 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
         // only accept when sent to the mcast address from the loopback address
         //   since we only join the mcast group on loopback this will hopefully
         //   frustrate attempts to inject CMD_ORIGIN_TAG externally.
-        if(M.good() && origin==Loopback && dest.compare(lo_mcast_addr,false)==0 && src.isLO()) {
+        if(M.good() && origin==Loopback && dest.compare(lo_mcast_addr.addr,false)==0 && src.isLO()) {
             originaddr.setPort(bind_addr.port());
 
             process_one(originaddr, M.save(), M.size(), OriginTag);
@@ -417,7 +433,7 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
                          originaddr.tostring().c_str(),
                          M.good() ? 'T' : 'F',
                          origin==Loopback ? 'T' : 'F',
-                         dest.compare(lo_mcast_addr,false)==0 ? 'T' : 'F',
+                         dest.compare(lo_mcast_addr.addr,false)==0 ? 'T' : 'F',
                          src.isLO() ? 'T' : 'F');
 
         break;
@@ -445,7 +461,8 @@ void UDPCollector::forwardM(const SockAddr& origin, const uint8_t *pbuf, size_t 
         assert(M.save()==&buf[cmd_origin_tag_size]);
     }
 
-    src = lo_mcast_addr;
+    sock.mcast_prep_sendto(lo_mcast_addr);
+    src = lo_mcast_addr.addr;
     reply(&buf[0], cmd_origin_tag_size+plen);
 }
 
@@ -518,7 +535,7 @@ void UDPManager::cleanup()
     udp_gbl = nullptr;
 }
 
-std::unique_ptr<UDPListener> UDPManager::onBeacon(SockAddr& dest,
+std::unique_ptr<UDPListener> UDPManager::onBeacon(SockEndpoint &dest,
                                                   std::function<void(const Beacon&)>&& cb)
 {
     if(!pvt)
@@ -536,7 +553,16 @@ std::unique_ptr<UDPListener> UDPManager::onBeacon(SockAddr& dest,
     return ret;
 }
 
-std::unique_ptr<UDPListener> UDPManager::onSearch(SockAddr& dest,
+std::unique_ptr<UDPListener> UDPManager::onBeacon(SockAddr& dest,
+                                                  std::function<void(const Beacon&)>&& cb)
+{
+    SockEndpoint ep(dest);
+    auto ret(onBeacon(ep, std::move(cb)));
+    dest = ep.addr;
+    return ret;
+}
+
+std::unique_ptr<UDPListener> UDPManager::onSearch(SockEndpoint &dest,
                                                   std::function<void(const Search&)>&& cb)
 {
     if(!pvt)
@@ -554,6 +580,15 @@ std::unique_ptr<UDPListener> UDPManager::onSearch(SockAddr& dest,
     return ret;
 }
 
+std::unique_ptr<UDPListener> UDPManager::onSearch(SockAddr& dest,
+                                                  std::function<void(const Search&)>&& cb)
+{
+    SockEndpoint ep(dest);
+    auto ret(onSearch(ep, std::move(cb)));
+    dest = ep.addr;
+    return ret;
+}
+
 void UDPManager::sync()
 {
     if(!pvt)
@@ -562,15 +597,16 @@ void UDPManager::sync()
     pvt->loop.sync();
 }
 
-UDPListener::UDPListener(const std::shared_ptr<UDPManager::Pvt> &manager, SockAddr &dest)
+UDPListener::UDPListener(const std::shared_ptr<UDPManager::Pvt> &manager, SockEndpoint &ep)
     :manager(manager)
-    ,dest(dest)
+    ,collector(manager->collect(ep))
+    ,dest([&ep, this]() -> SockEndpoint{
+        ep.addr.setPort(collector->bind_addr.port());
+        return ep;
+    }())
     ,active(false)
 {
     manager->loop.assertInLoop();
-
-    collector = manager->collect(dest);
-    dest.setPort(collector->bind_addr.port());
 }
 
 UDPListener::~UDPListener()
@@ -582,17 +618,6 @@ UDPListener::~UDPListener()
             collector->delListener(this);
 
         collector.reset(); // destroy UDPCollector from worker
-    });
-}
-
-void UDPListener::addMCast(const SockAddr& mcast)
-{
-    manager->loop.call([this, &mcast](){
-        if(active)
-            throw std::logic_error("must addMCast() before start()");
-
-        collector->mcast_grps.emplace(mcast.withPort(collector->bind_addr.port()),
-                                      dest);
     });
 }
 
