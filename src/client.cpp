@@ -519,10 +519,8 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
             log_err_printf(setup, "%s  Ignoring %s\n", e.what(), addr.c_str());
             continue;
         }
-        auto top = ntohl(saddr->in.sin_addr.s_addr)>>24u;
-        auto ismcast = top>224 && top<239;
-        bool isbcast = bcasts.find(saddr)!=bcasts.end();
-        auto isucast = !isbcast && !ismcast;
+        // if !bcast and !mcast
+        auto isucast = bcasts.find(saddr)==bcasts.end() && !saddr.isMCast();
 
         log_info_printf(io, "Searching to %s%s\n", saddr.tostring().c_str(), (isucast?" unicast":""));
         searchDest.emplace_back(saddr, isucast);

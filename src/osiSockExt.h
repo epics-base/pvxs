@@ -44,6 +44,8 @@ public:
     inline explicit SockAddr(int af, const std::string& address) :SockAddr(af, address.c_str()) {}
 
     size_t size() const;
+    inline
+    size_t capacity() const { return sizeof(store); }
 
     inline unsigned short family() const { return store.sa.sa_family; }
     unsigned short port() const;
@@ -58,6 +60,7 @@ public:
 
     bool isAny() const;
     bool isLO() const;
+    bool isMCast() const;
 
     store_t* operator->() { return &store; }
     const store_t* operator->() const { return &store; }

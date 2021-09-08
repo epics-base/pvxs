@@ -350,6 +350,17 @@ bool SockAddr::isLO() const
     }
 }
 
+bool SockAddr::isMCast() const
+{
+    switch(store.sa.sa_family) {
+    case AF_INET: return IN_MULTICAST(store.in.sin_addr.s_addr);
+#ifdef AF_INET6
+    case AF_INET6: return IN6_IS_ADDR_MULTICAST(&store.in6.sin6_addr);
+#endif
+    default: return false;
+    }
+}
+
 std::string SockAddr::tostring() const
 {
     std::ostringstream strm;
