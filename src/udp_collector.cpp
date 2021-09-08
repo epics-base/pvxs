@@ -491,17 +491,13 @@ epicsThreadOnceId collector_once = EPICS_THREAD_ONCE_INIT;
 void collector_init(void *unused)
 {
     (void)unused;
-    try {
-        udp_gbl = new udp_gbl_t;
-    }catch(std::exception& e){
-        log_exc_printf(logsetup, "Unable to alloc udp_gbl: %s\n", e.what());
-    }
+    udp_gbl = new udp_gbl_t;
 }
 } // namespace
 
 UDPManager UDPManager::instance()
 {
-    epicsThreadOnce(&collector_once, &collector_init, nullptr);
+    threadOnce(&collector_once, &collector_init, nullptr);
     assert(udp_gbl);
 
     Guard G(udp_gbl->lock);

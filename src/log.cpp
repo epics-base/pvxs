@@ -243,7 +243,7 @@ Level logger::init()
         if(this->lvl.compare_exchange_strong(lvl, Level::Warn)) {
             // logger now has default config of Level::Err
             // we will fully initialize
-            epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
+            threadOnce(&logger_once, &logger_prepare, nullptr);
             assert(logger_gbl);
 
             Guard G(logger_gbl->lock);
@@ -295,7 +295,7 @@ void xerrlogHexPrintf(const void *buf, size_t buflen)
 
 void logger_level_set(const char *name, int lvl)
 {
-    epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
+    threadOnce(&logger_once, &logger_prepare, nullptr);
     assert(logger_gbl);
 
     Guard G(logger_gbl->lock);
@@ -304,7 +304,7 @@ void logger_level_set(const char *name, int lvl)
 
 void logger_level_clear()
 {
-    epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
+    threadOnce(&logger_once, &logger_prepare, nullptr);
     assert(logger_gbl);
 
     Guard G(logger_gbl->lock);
@@ -317,7 +317,7 @@ void logger_config_env()
     if(!env || !*env)
         return;
 
-    epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
+    threadOnce(&logger_once, &logger_prepare, nullptr);
 
     Guard G(logger_gbl->lock);
 
@@ -366,7 +366,7 @@ namespace pvxs {namespace impl {
 
 void logger_shutdown()
 {
-    epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
+    threadOnce(&logger_once, &logger_prepare, nullptr);
 
     errlogFlush();
 

@@ -138,7 +138,7 @@ struct evbase::Pvt : public epicsThreadRunable
                 epicsThreadGetStackSize(epicsThreadStackBig),
                 prio)
     {
-        epicsThreadOnce(&evthread_once, &evthread_init, nullptr);
+        threadOnce(&evthread_once, &evthread_init, nullptr);
 
         worker.start();
         start_sync.wait();

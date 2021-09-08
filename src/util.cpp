@@ -439,6 +439,31 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
 
 namespace pvxs {namespace impl {
 
+struct onceArgs {
+    EPICSTHREADFUNC fn;
+    void *arg;
+    std::exception_ptr err;
+};
+
+static
+void onceWrapper(void *raw)
+{
+    auto args = static_cast<onceArgs*>(raw);
+    try {
+        args->fn(args->arg);
+    }catch(...){
+        args->err = std::current_exception();
+    }
+}
+
+void threadOnce(epicsThreadOnceId *id, EPICSTHREADFUNC fn, void *arg)
+{
+    onceArgs args{fn, arg};
+    epicsThreadOnce(id, &onceWrapper, &args);
+    if(args.err)
+        std::rethrow_exception(args.err);
+}
+
 template<>
 double parseTo<double>(const std::string& s) {
     size_t idx=0, L=s.size();
