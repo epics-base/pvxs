@@ -99,7 +99,8 @@ int main(int argc, char *argv[])
         if(verbose)
             std::cout<<"Effective config\n"<<ctxt.config();
 
-        MPMCFIFO<std::shared_ptr<client::Subscription>> workqueue(argc-optind);
+        // space for every subscription and one more for SigInt
+        MPMCFIFO<std::shared_ptr<client::Subscription>> workqueue(argc-optind+1);
         std::list<decltype (workqueue)::value_type> ops;
 
         int remaining = argc-optind;
