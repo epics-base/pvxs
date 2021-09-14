@@ -290,14 +290,14 @@ void CommonBase::_parse(const std::string& req)
 
 Value CommonBase::_buildReq() const
 {
-    if(!req) {
+    if(req && req->pvRequest) {
+        return req->pvRequest;
+
+    } else if(!req) {
         using namespace pvxs::members;
         return TypeDef(TypeCode::Struct, {
                            Struct("field", {}),
                        }).create();
-
-    } else if(req->pvRequest) {
-        return req->pvRequest;
 
     } else {
         using namespace pvxs::members;
@@ -306,7 +306,7 @@ Value CommonBase::_buildReq() const
                                 req->fields,
                             });
 
-        {
+        if(!req->options.empty()) {
             std::vector<Member> opts;
             for(auto& pair : req->options) {
                 opts.push_back(TypeDef(pair.second).as(pair.first));

@@ -230,10 +230,6 @@ void testParseValue()
         "        struct {\n"
         "        } value\n"
         "    } field\n"
-        "    struct {\n"
-        "        struct {\n"
-        "        } _options\n"
-        "    } record\n"
         "}\n"
     );
 }
