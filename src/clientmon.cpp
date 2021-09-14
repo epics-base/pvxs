@@ -49,6 +49,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
     uint32_t queueSize = 4u, ackAt=0u;
 
     // only access from loop
+    mutable std::weak_ptr<Subscription>     external_internal; // 'self' wrapped to be returned by shared_from_this()
 
     enum state_t : uint8_t {
         Connecting, // waiting for an active Channel
@@ -174,7 +175,37 @@ struct SubscriptionImpl : public OperationBase, public Subscription
     }
 
     virtual std::shared_ptr<Subscription> shared_from_this() const override final {
-        return std::shared_ptr<Subscription>(self);
+        // on worker?
+        std::shared_ptr<Subscription> ret;
+        loop.call([this, &ret](){
+            // really on worker
+
+            // try to re-use already wrapped
+            ret = external_internal.lock();
+            if(!ret) {
+                // nope, need to build a fresh one
+
+                // we want to return 'self' to user code, but need to ensure it is
+                // disposed of from our worker thread.
+                std::shared_ptr<SubscriptionImpl> strong(self);
+
+                ret.reset(strong.get(), [strong](Subscription*) mutable {
+                    // on worker?
+                    auto junk(std::move(strong));
+                    // need to do cleanup on worker if running
+                    auto loop(junk->loop);
+                    loop.tryCall(std::bind([](std::shared_ptr<SubscriptionImpl>& junk){
+                         // really on worker
+                         // cleanup here when worker is running
+                         junk.reset();
+                     }, std::move(junk)));
+                    // or cleanup here when worker is stopped, and lambda is destroyed
+                });
+                // hack: external_internal is 'mutable' so that shared_from_this() can appear to be const
+                external_internal = ret;
+            }
+        });
+        return ret;
     }
 
     virtual void _onEvent(std::function<void(Subscription&)>&& fn) override final {
