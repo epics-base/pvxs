@@ -262,7 +262,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
                 self->mpending.insert(std::move(conn));
 
             } else {
-                temp = self->current;
+                temp = self->current.clone();
             }
         }
         if(temp)
@@ -359,7 +359,9 @@ void SharedPV::open(const Value& initial)
         pending = std::move(impl->pending);
         mpending = std::move(impl->mpending);
 
-        impl->current = temp = initial.clone();
+        impl->current = initial.clone();
+        // make a second copy as 'temp' will be queued
+        temp = initial.clone();
     }
 
     // TODO the following is really inefficient if we aren't on a worker.
