@@ -157,9 +157,23 @@ public:
 #endif
 };
 
+//! Information about the state of a Subscription
+struct SubscriptionStat {
+    //! Number of events in the queue
+    size_t nQueue=0;
+    //! Number of Value updates where the server reported at least
+    //! one update dropped/squashed.
+    size_t nSrvSquash=0;
+    //! Number of Value updates dropped/squashed due to client queue overflow
+    size_t nCliSquash=0;
+    //! Max queue size so far
+    size_t maxQueue=0;
+    //! Limit on queue size
+    size_t limitQueue=0;
+};
+
 //! Handle for monitor subscription
 struct PVXS_API Subscription {
-
     virtual ~Subscription() =0;
 
 protected:
@@ -172,16 +186,16 @@ public:
     //! Blocks until any in-progress callback has completed.
     virtual bool cancel() =0;
 
-    //! Ask a server to stop sending updates to this Subscription
+    //! Ask a server to stop (true) or re-start (false), sending updates to this Subscription
     virtual void pause(bool p=true) =0;
     //! Shorthand for @code pause(false) @endcode
     inline void resume() { pause(false); }
 
     /** De-queue update from subscription event queue.
      *
-     *  If the queue is empty, return an empty/invalid Value (Value::valid()==false).
-     *  A data update is returned as a Value.
-     *  An error or special event is thrown.
+     * If the queue is empty, return an empty/invalid Value (Value::valid()==false).
+     * A data update is returned as a Value.
+     * An error or special event is thrown.
      *
      * @returns A valid Value until the queue is empty
      * @throws Connected (depending on MonitorBuilder::maskConnected())
@@ -194,17 +208,42 @@ public:
      * std::shared_ptr<Subscription> sub(...);
      * try {
      *     while(auto update = sub.pop()) {
+     *         // have data update
      *         ...
      *     }
-     * } catch(Connected& con) {
-     * } catch(Finished& con) {
-     * } catch(Disconnect& con) {
-     * } catch(RemoteError& con) {
-     * } catch(std::exception& con) {
+     *     // queue empty
+     * } catch(Connected& con) {   // if MonitorBuilder::maskConnected(false)
+     * } catch(Finished& con) {    // if MonitorBuilder::maskDisconnected(false)
+     * } catch(Disconnect& con) {  // if MonitorBuilder::maskDisconnected(false)
+     * } catch(RemoteError& con) { // error message from server
+     * } catch(std::exception& con) { // client side error
      * }
      * @endcode
      */
     virtual Value pop() =0;
+
+protected:
+    virtual bool doPop(std::vector<Value>& out, size_t limit=0u) =0;
+public:
+
+#ifdef PVXS_EXPERT_API_ENABLED
+    /** De-queue a batch of updates from subscription event queue.
+     *
+     * @param out Updated with any Values dequeued.  Will always be clear()d
+     * @param limit When non-zero, an upper limit on the number of Values which will be dequeued.
+     * @return true if the queue was not emptied, and pop() should be called again.
+     *         false if the queue was emptied, and a further onEvent() callback may be awaited.
+     * @throws the same exceptions as non-batch pop()
+     *
+     * @since UNRELEASED Added
+     */
+    inline bool pop(std::vector<Value>& out, size_t limit=0u)
+    { return doPop(out, limit); }
+#endif
+
+    //! Poll statistics
+    //! @since UNRELEASED
+    virtual void stats(SubscriptionStat&, bool reset = false) =0;
 
 protected:
     virtual void _onEvent(std::function<void(Subscription&)>&&) =0;

@@ -45,15 +45,15 @@ public:
 //! Information about a running monitor
 struct MonitorStat {
     //! Number of available elements in the output flow window.
-    size_t window;
+    size_t window=0;
 
     //! Number of un-sent updates in the local queue.  Doesn't count updates
     //! serialized and in the TX buffer.
-    size_t nQueue, limitQueue;
+    size_t nQueue=0, limitQueue=0;
 
-    bool running;
-    bool finished;
-    bool pipeline;
+    bool running=false;
+    bool finished=false;
+    bool pipeline=false;
 };
 
 //! Handle for active subscription
