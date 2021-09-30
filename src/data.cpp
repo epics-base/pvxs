@@ -493,6 +493,33 @@ void Value::copyOut(void *ptr, StoreType type) const
         break;
     }
     case StoreType::Null:
+        if(desc->id=="enum_t") {
+            // special case handling for NTEnum
+            auto index((*this).lookup("index"));
+            switch(type) {
+            case StoreType::Integer:
+                *reinterpret_cast<int64_t*>(ptr) = index.as<int64_t>();
+                return;
+
+            case StoreType::UInteger:
+                *reinterpret_cast<uint64_t*>(ptr) = index.as<uint64_t>();
+                return;
+
+            case StoreType::String: {
+                auto idx = index.as<uint64_t>();
+                auto choices = (*this).lookup("choices").as<shared_array<const std::string>>();
+                if(idx < choices.size()) {
+                    *reinterpret_cast<std::string*>(ptr) = choices[idx];
+                    return;
+
+                } else {
+                    throw NoConvert(SB()<<"enum_t index "<<index<<" out of range for "<<choices.size());
+                }
+            }
+            default:
+                break;
+            }
+        }
         break;
     }
 
@@ -760,6 +787,32 @@ void Value::copyIn(const void *ptr, StoreType type)
                     mark();
 
                 return;
+            }
+        } else if(desc->id=="enum_t") {
+            auto index((*this).lookup("index"));
+            switch(type) {
+            case StoreType::Integer:
+                index = *reinterpret_cast<const int64_t*>(ptr);
+                return;
+            case StoreType::UInteger:
+                index = *reinterpret_cast<const uint64_t*>(ptr);
+                return;
+            case StoreType::String: {
+                auto& choice(*reinterpret_cast<const std::string*>(ptr));
+                auto choices((*this).lookup("choices").as<shared_array<const std::string>>());
+                for(auto idx : range(choices.size())) {
+                    if(choice == choices[idx]) {
+                        index = idx;
+                        return;
+                    }
+                }
+                // try to parse as string
+                index = parseTo<uint64_t>(choice);
+                return;
+            }
+                break;
+            default:
+                break;
             }
         }
         throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
