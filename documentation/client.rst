@@ -12,7 +12,7 @@ Configuration
 -------------
 
 The recommended starting point is creating new context configured from $PVA_* environment variables.
-Use `pvxs::client::Config::fromEnv` and then `pvxs::client::Config::build`.
+Use `pvxs::client::Context::fromEnv`.
 
 EPICS_PVA_ADDR_LIST
     A list of destination addresses to which UDP search messages will be sent.
@@ -37,7 +37,7 @@ EPICS_PVA_CONN_TMO
 
     using namespace pvxs;
     // Context configured from process environment
-    client::Context ctxt = client::Config::fromEnv().build();
+    client::Context ctxt = client::Context::fromEnv();
 
 Programmatic configuration can be accomplished by explicitly filling in a `pvxs::client::Config`.
 
