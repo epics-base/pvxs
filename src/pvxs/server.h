@@ -62,7 +62,7 @@ public:
     /** Create new server based on configuration from $EPICS_PVA* environment variables.
      *
      * Shorthand for @code Config::fromEnv().build() @endcode.
-     * @since UNRELEASED
+     * @since 0.2.1
      */
     static
     Server fromEnv();

@@ -3,8 +3,29 @@
 Release Notes
 =============
 
-0.2.1 (UNRELEASED)
+0.2.2 (UNRELEASED)
 ------------------
+
+0.2.1 (Oct 2021)
+----------------
+
+* Bug fixes
+
+ * Fix `pvxsmonitor` hang when interrupted (Ctrl+c).
+ * Fix `pvxs::client::Subscription::shared_from_this()` leaking internal reference.
+ * Fix SharedPV potential race conditions involving "current" Value.
+
+* Changes
+
+ * Ignore beacons with protocol field other than "tcp".  Forward compatibility.
+ * Limit packet hex dumps to 64 bytes.
+ * `testStrMatch()` now specified POSIX regular expression syntax.
+ * Client operations builders `rawRequest(Value())` is now a no-op.
+   Previously produced a non-nonsensical empty request.
+
+* Additions
+
+ * Add `pvxs::client::Context::fromEnv()`.
 
 0.2.0 (July 2021)
 -----------------
