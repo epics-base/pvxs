@@ -11,6 +11,7 @@ from setuptools import Command, Distribution
 from setuptools_dso import DSO, Extension, setup, build_dso, ProbeToolchain
 from epicscorelibs.config import get_config_var
 import epicscorelibs.path
+import epicscorelibs.version
 
 def pvxsversion():
     with open(os.path.join('configure', 'CONFIG_PVXS_VERSION'), 'r') as F:
@@ -620,7 +621,7 @@ pvxs_ver = '%(PVXS_MAJOR_VERSION)s.%(PVXS_MINOR_VERSION)s.%(PVXS_MAINTENANCE_VER
 
 setup(
     name='pvxslibs',
-    version=pvxs_ver+"a2",
+    version=pvxs_ver+"a3",
     description="PVXS libraries packaged for python",
     url='https://mdavidsaver.github.io/pvxs',
     author='Michael Davidsaver',
@@ -647,7 +648,10 @@ setup(
     # cf. PEP 518
     #setup_requires = ['setuptools_dso'],
     # also need at runtime for DSO filename lookup
-    install_requires = ['setuptools_dso>=2.1a3'],
+    install_requires = [
+        'setuptools_dso>=2.1a3',
+        epicscorelibs.version.abi_requires(),
+    ],
     packages=['pvxslibs', 'pvxslibs.lib', 'pvxslibs.test'],
     package_dir={'': 'python'},
     x_dsos = define_DSOS,
