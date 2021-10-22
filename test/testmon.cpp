@@ -75,15 +75,15 @@ struct BasicTest {
     static
     Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt)
     {
-        Value ret(sub->pop());
-        while(!ret) {
-            if(!evt.wait(5.0)) {
+        while(true) {
+            if(auto ret = sub->pop()) {
+                return ret;
+
+            } else if (!evt.wait(5.0)) {
                 testFail("timeout waiting for event");
-            } else {
-                ret = sub->pop();
+                return Value();
             }
         }
-        return ret;
     }
 
     void orphan()
