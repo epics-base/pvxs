@@ -35,6 +35,9 @@ pvxcall_SRCS += call.cpp
 PROD += pvxlist
 pvxlist_SRCS += list.cpp
 
+PROD += pvxmshim
+pvxmshim_SRCS += mshim.cpp
+
 #===========================
 
 include $(TOP)/configure/RULES
