@@ -593,7 +593,7 @@ bool EvOutBuf::refill(size_t more)
 
     evbuffer_iovec vec;
     vec.iov_base = base;
-    vec.iov_len  = pos-base;
+    vec.iov_len  = base ? pos - base : 0u;
 
     if(base && evbuffer_commit_space(backing, &vec, 1))
         throw std::bad_alloc(); // leak?
