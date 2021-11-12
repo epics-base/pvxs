@@ -489,7 +489,7 @@ void testDecode1()
      *   int userTag
      */
     std::vector<uint8_t> msg({
-        // update cache with key 0
+        // update cache with key 1
         0xFD, 0x00, 0x01,
         // structure
         0x80,
@@ -511,12 +511,12 @@ void testDecode1()
                     0x22
     });
 
-    std::vector<FieldDesc> descs;
+    auto descs(std::make_shared<std::vector<FieldDesc>>());
     TypeStore cache;
 
     {
         FixedBuf buf(true, msg);
-        from_wire(buf, descs, cache);
+        from_wire(buf, *descs, cache);
         testOk1(buf.good());
         testEq(buf.size(), 0u)<<"Of "<<msg.size();
     }
@@ -529,13 +529,13 @@ void testDecode1()
         }
     }
 
-    if(testOk1(!descs.empty())) {
-        testEq(descs.size(), descs.front().size());
+    if(testOk1(!descs->empty())) {
+        testEq(descs->size(), descs->front().size());
     }
 
     //   cat <<EOF | sed -e 's|"|\\"|g' -e 's|^# |    "|' -e 's|$|\\n"|g'
     // paste in Actual
-    testStrEq(std::string(SB()<<descs.data()),
+    testStrEq(std::string(SB()<<descs->data()),
            "[0] struct timeStamp_t parent=[0]  [0:4)\n"
            "    nanoSeconds -> 2 [2]\n"
            "    secondsPastEpoch -> 1 [1]\n"
@@ -547,6 +547,22 @@ void testDecode1()
            "[2] int32_t  parent=[0]  [2:3)\n"
            "[3] int32_t  parent=[0]  [3:4)\n"
      );
+
+    auto descs2(std::make_shared<std::vector<FieldDesc>>());
+    {
+        std::vector<uint8_t> msg({
+            // Pull from cache with key 1
+            0xFE, 0x00, 0x01});
+        FixedBuf buf(true, msg);
+        from_wire(buf, *descs2, cache);
+        testOk1(buf.good());
+        testEq(buf.size(), 0u)<<"Of "<<msg.size();
+    }
+
+    auto A(Value::Helper::build(std::shared_ptr<const FieldDesc>(descs, descs->data())));
+    auto B(Value::Helper::build(std::shared_ptr<const FieldDesc>(descs2, descs2->data())));
+
+    testTrue(A.equalType(B));
 }
 
 template<typename E, size_t N>
@@ -1103,7 +1119,7 @@ void testEmptyRequest()
 
 MAIN(testxcode)
 {
-    testPlan(132);
+    testPlan(135);
     testSetup();
     testDeserializeString();
     testSerialize1();
