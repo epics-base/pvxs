@@ -619,17 +619,25 @@ std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match) const
 
 bool evsocket::canIPv6()
 {
-    auto sock = socket(AF_INET6, SOCK_DGRAM, 0);
-    if(sock!=evutil_socket_t(-1)) {
-        evutil_closesocket(sock);
+    try {
+        evsocket sock(AF_INET6, SOCK_DGRAM, 0);
+        auto addr(SockAddr::loopback(AF_INET6));
+        sock.bind(addr);
         return true;
+
+    }catch(std::system_error& e){
+        auto err = e.code().value(); // errno
+        switch(err) {
+        case EAFNOSUPPORT: // socket() fails.  OS kernel not built with IPv6 support
+        case SOCK_EADDRNOTAVAIL:// bind() fails.  Missing [::1].  Incomplete IPv6 config
+            break;
+        default:
+            log_warn_printf(logsock, "Unexpected errno %d while probing IPv6: %s\n",
+                            err, evutil_socket_error_to_string(err));
+            break;
+        }
+        return false;
     }
-    int err = evutil_socket_geterror(sock);
-    if(err!=EAFNOSUPPORT) {
-        log_warn_printf(logsock, "Unexpected errno %d while probing IPv6: %s\n",
-                        err, evutil_socket_error_to_string(err));
-    }
-    return false;
 }
 
 #if EPICS_VERSION_INT<VERSION_INT(7,0,3,1)

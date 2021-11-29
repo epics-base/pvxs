@@ -8,6 +8,7 @@
 
 #include <cstring>
 #include <system_error>
+#include <sstream>
 
 #include <epicsUnitTest.h>
 #include <testMain.h>
@@ -32,6 +33,45 @@ bool is_wine()
 
 namespace {
 using namespace pvxs;
+
+void test_bind46(const char* saddr1, const char* saddr2, int type, int expect)
+{
+    const std::string label = SB()<<__func__<<"("<<saddr1<<", "<<saddr2<<", "<<(type==SOCK_STREAM?"tcp":"udp")<<", "<<expect<<")";
+    testDiag("%s", label.c_str());
+
+    SockAddr addr1(saddr1);
+    SockAddr addr2(saddr2);
+
+    evsocket s1(addr1.family(), type, 0),
+             s2(addr2.family(), type, 0);
+
+    try {
+        s1.bind(addr1);
+    }catch(std::exception& e){
+        testFail("bind() error: %s", e.what());
+        return;
+    }
+
+    addr2.setPort(addr1.port());
+
+    auto doListen = [type](const SockAddr& addr, const evsocket& sock) {
+        if(type==SOCK_STREAM && listen(sock.sock, 4u)) {
+            auto err = evutil_socket_geterror(sock.sock);
+            testFail("Unable to listen on %s : (%d) %s",
+                     addr.tostring().c_str(), err, evutil_socket_error_to_string(err));
+        }
+    };
+    doListen(addr1, s1);
+
+    try{
+        s2.bind(addr2);
+        doListen(addr2, s2);
+        testEq(0, expect)<<label;
+    }catch(std::system_error& e){
+        auto err = e.code().value();
+        testEq(err, expect)<<label<<" : "<<evutil_socket_error_to_string(err);
+    }
+}
 
 void test_ifacemap()
 {
@@ -354,8 +394,36 @@ MAIN(testsock)
 {
     SockAttach attach;
     logger_config_env();
-    testPlan(58);
+    testPlan(66);
     testSetup();
+    // check for behavior when binding ipv4 and ipv6 to the same socket
+    // as a function of socket type and order.
+    if(evsocket::canIPv6()) {
+        // IPv4 and v6 loopback addresses are entirely distinct,
+        // so no problem binding to both w/ or w/o IPV6_V6ONLY
+        test_bind46("127.0.0.1" , "::1"       , SOCK_DGRAM  , 0);
+        test_bind46("::1"       , "127.0.0.1" , SOCK_DGRAM  , 0);
+        test_bind46("127.0.0.1" , "::1"       , SOCK_STREAM , 0);
+        test_bind46("::1"       , "127.0.0.1" , SOCK_STREAM , 0);
+#if defined(_WIN32) || defined(__rtems__)
+        test_bind46("0.0.0.0"   , "::"        , SOCK_DGRAM  , 0);
+        test_bind46("::"        , "0.0.0.0"   , SOCK_DGRAM  , 0);
+        test_bind46("0.0.0.0"   , "::"        , SOCK_STREAM , 0);
+        test_bind46("::"        , "0.0.0.0"   , SOCK_STREAM , 0);
+#elif defined(__linux__)
+        test_bind46("0.0.0.0"   , "::"        , SOCK_DGRAM  , EADDRINUSE);
+        test_bind46("::"        , "0.0.0.0"   , SOCK_DGRAM  , EADDRINUSE);
+        test_bind46("0.0.0.0"   , "::"        , SOCK_STREAM , EADDRINUSE);
+        test_bind46("::"        , "0.0.0.0"   , SOCK_STREAM , EADDRINUSE);
+#else
+        test_bind46("0.0.0.0"   , "::"        , SOCK_DGRAM  , 0);
+        test_bind46("::"        , "0.0.0.0"   , SOCK_DGRAM  , EADDRINUSE);
+        test_bind46("0.0.0.0"   , "::"        , SOCK_STREAM , 0);
+        test_bind46("::"        , "0.0.0.0"   , SOCK_STREAM , EADDRINUSE);
+#endif
+    } else {
+        testSkip(8, "No IPv6 runtime support");
+    }
     test_ifacemap();
     test_udp(AF_INET);
     try{
