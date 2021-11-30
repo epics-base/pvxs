@@ -20,6 +20,7 @@
 #include <pvxs/sharedpv.h>
 #include <pvxs/source.h>
 #include <pvxs/nt.h>
+#include "evhelper.h"
 
 namespace {
 using namespace pvxs;
@@ -30,10 +31,10 @@ struct Tester {
     server::Server serv;
     client::Context cli;
 
-    Tester()
+    Tester(int family=AF_INET)
         :initial(nt::NTScalar{TypeCode::Int32}.create())
         ,mbox(server::SharedPV::buildReadonly())
-        ,serv(server::Config::isolated()
+        ,serv(server::Config::isolated(family)
               .build()
               .addPV("mailbox", mbox))
         ,cli(serv.clientConfig().build())
@@ -498,12 +499,18 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(57);
+    testPlan(59);
     testSetup();
     logger_config_env();
+    bool canIPv6 = pvxs::impl::evsocket::canIPv6();
     Tester().testConnector();
     Tester().testWaiter();
-    Tester().loopback();
+    Tester(AF_INET).loopback();
+    if(canIPv6) {
+        Tester(AF_INET6).loopback();
+    } else {
+        testSkip(2, "No IPv6 Support");
+    }
     Tester().lazy();
     Tester().timeout();
     Tester().cancel();

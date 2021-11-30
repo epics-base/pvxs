@@ -180,7 +180,8 @@ struct PVXS_API Config {
 
     //! Configuration limited to the local loopback interface on a randomly chosen port.
     //! Suitable for use in self-contained unit-tests.
-    static Config isolated();
+    //! @since UNRELEASED Address family argument added.
+    static Config isolated(int family=AF_INET);
 
     //! update using defined EPICS_PVA* environment variables
     Config& applyEnv();

@@ -315,7 +315,7 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
         }
         server.setPort(port);
 
-        if(M.good() && origin==Loopback && (flags&pva_search_flags::Unicast) && dest.family()!=AF_UNSPEC) {
+        if(M.good() && origin==Loopback && (flags&pva_search_flags::Unicast) && dest.family()==AF_INET) {
             assert(buf==&this->buf[cmd_origin_tag_size]);
             // clear unicast flag in forwarded message
             *save_flags &= ~pva_search_flags::Unicast;

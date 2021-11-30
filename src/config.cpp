@@ -433,15 +433,25 @@ Config& Config::applyEnv()
     return *this;
 }
 
-Config Config::isolated()
+Config Config::isolated(int family)
 {
     Config ret;
 
     ret.udp_port = 0u;
     ret.tcp_port = 0u;
-    ret.interfaces.emplace_back("127.0.0.1");
     ret.auto_beacon = false;
-    ret.beaconDestinations.emplace_back("127.0.0.1");
+    switch(family) {
+    case AF_INET:
+        ret.interfaces.emplace_back("127.0.0.1");
+        ret.beaconDestinations.emplace_back("127.0.0.1");
+        break;
+    case AF_INET6:
+        ret.interfaces.emplace_back("::1");
+        ret.beaconDestinations.emplace_back("::1");
+        break;
+    default:
+        throw std::logic_error(SB()<<"Unsupported address family "<<family);
+    }
 
     return ret;
 }
