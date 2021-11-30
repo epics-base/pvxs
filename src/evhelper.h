@@ -214,10 +214,15 @@ struct PVXS_API evsocket
 
     ~evsocket();
 
+    SockAddr sockname() const;
+
     // test validity
     inline operator bool() const { return sock!=-1; }
 
+    void bind(const SockAddr& addr) const;
     void bind(SockAddr& addr) const;
+
+    void listen(int backlog) const;
 
     void set_broadcast(bool b) const;
 

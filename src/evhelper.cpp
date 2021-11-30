@@ -441,18 +441,37 @@ evsocket::~evsocket()
         evutil_closesocket(sock);
 }
 
-void evsocket::bind(SockAddr& addr) const
+SockAddr evsocket::sockname() const
+{
+    SockAddr addr;
+    socklen_t slen = addr.size();
+    if(getsockname(sock, &addr->sa, &slen))
+        std::logic_error("Unable to fetch address of newly bound socket");
+    return addr;
+}
+
+void evsocket::bind(const SockAddr& addr) const
 {
     int ret = ::bind(sock, &addr->sa, addr.size());
     if(ret!=0) {
         int err = evutil_socket_geterror(sock);
         throw std::system_error(err, std::system_category());
     }
+}
 
-    socklen_t slen = addr.size();
-    ret = getsockname(sock, &addr->sa, &slen);
-    if(ret)
-        log_err_printf(logerr, "Unable to fetch address of newly bound socket\n%s", "");
+void evsocket::bind(SockAddr& addr) const
+{
+    const SockAddr& arg = addr;
+    bind(arg);
+    addr = sockname();
+}
+
+void evsocket::listen(int backlog) const
+{
+    if(::listen(sock, backlog)) {
+        int err = evutil_socket_geterror(sock);
+        throw std::system_error(err, std::system_category());
+    }
 }
 
 void evsocket::set_broadcast(bool b) const
