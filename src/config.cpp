@@ -487,6 +487,17 @@ void Config::expand()
         ifaces.emplace_back(SockAddr::any(AF_INET));
     }
 
+    auto& ifmap = IfaceMap::instance();
+
+    for(auto& ep : ifaces) {
+        if(!ep.addr.isMCast()) {}
+        else if(!ep.iface.empty()) {
+            ifaces.emplace_back(ifmap.address_of(ep.iface));
+        } else {
+            ifaces.emplace_back(SockAddr::any(ep.addr.family()));
+        }
+    }
+
     if(auto_beacon) {
         // use interface list add ipv4 broadcast addresses to beaconDestinations.
         // 0.0.0.0 -> adds all bcasts

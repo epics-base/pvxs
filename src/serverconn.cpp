@@ -386,11 +386,14 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
     server->acceptor_loop.assertInLoop();
     auto orig_port = bind_addr.port();
 
+#ifdef __linux__
     if(server->canIPv6 && bind_addr.family()==AF_INET && bind_addr.isAny()) {
-        // promote to IPv6 with IPv4 support
+        // Linux IP stack disallows binding both 0.0.0.0 and [::] for the same port.
+        // so promote to IPv6 when possible
         bind_addr = SockAddr::any(AF_INET6, bind_addr.port());
         log_debug_printf(connsetup, "Promote 0.0.0.0 -> [::]%s", "\n");
     }
+#endif
 
     sock = evsocket(bind_addr.family(), SOCK_STREAM, 0);
 

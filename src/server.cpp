@@ -433,6 +433,10 @@ Server::Pvt::Pvt(const Config &conf)
 #endif
     }
 
+    if(tcpifaces.empty()) {
+        log_err_printf(serversetup, "Server Unreachable.  Interface address list includes not TCP interfaces.%s", "\n");
+    }
+
     for(const auto& addr : effective.ignoreAddrs) {
         SockAddr temp(addr.c_str());
         ignoreList.push_back(temp);
