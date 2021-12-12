@@ -374,7 +374,7 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
             *M.save() = '\0';
 
             for(auto L : listeners) {
-                if(L->searchCB) {
+                if(L->searchCB && (L->dest.addr.isAny() || L->dest.addr==dest)) {
                     (L->searchCB)(*this);
                 }
             }
@@ -403,9 +403,7 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
 
         if(M.good()) {
             for(auto L : listeners) {
-                if(L->dest.addr.compare(dest)!=0)
-                    break; // TODO: check interface index against L->cur
-                if(L->beaconCB) {
+                if(L->beaconCB && (L->dest.addr.isAny() || L->dest.addr==dest)) {
                     (L->beaconCB)(beaconMsg);
                 }
             }
@@ -559,6 +557,9 @@ std::unique_ptr<UDPListener> UDPManager::onBeacon(SockAddr& dest,
     SockEndpoint ep(dest);
     auto ret(onBeacon(ep, std::move(cb)));
     dest = ep.addr;
+
+    log_debug_printf(logsetup, "Listening for BEACON on %s\n", std::string(SB()<<dest).c_str());
+
     return ret;
 }
 
@@ -576,6 +577,8 @@ std::unique_ptr<UDPListener> UDPManager::onSearch(SockEndpoint &dest,
         ret.reset(new UDPListener(pvt, dest));
         ret->searchCB = std::move(cb);
     });
+
+    log_debug_printf(logsetup, "Listening for SEARCH on %s\n", std::string(SB()<<dest).c_str());
 
     return ret;
 }
