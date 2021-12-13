@@ -489,13 +489,40 @@ void Config::expand()
 
     auto& ifmap = IfaceMap::instance();
 
-    for(auto& ep : ifaces) {
-        if(!ep.addr.isMCast()) {}
-        else if(!ep.iface.empty()) {
+    for(size_t i=0; i<ifaces.size(); i++) {
+        auto& ep = ifaces[i];
+
+        if(evsocket::canIPv6 && ep.addr.isAny()) {
+            // special handling for IP4/6 wildcard addresses
+
+            if(evsocket::ipstack==evsocket::Linsock && ep.addr.family()==AF_INET) {
+                // Linux IP stack disallows binding both 0.0.0.0 and [::] for the same port.
+                // so promote to IPv6 when possible
+                ep.addr = SockAddr::any(AF_INET6, ep.addr.port());
+                log_debug_printf(serversetup, "Promote 0.0.0.0 -> [::]%s", "\n");
+
+            } else if(evsocket::ipstack!=evsocket::Linsock) {
+                /* Other IP stacks allow binding different sockets.
+                 * OSX has the added oddity of ordering dependence.
+                 * 0.0.0.0 and the :: is allowed, but not the reverse.
+                 *
+                 * So when possible, we always bind both in the allowed order.
+                 */
+                ep.addr = SockAddr::any(AF_INET, ep.addr.port());
+                ifaces.emplace(ifaces.begin()+i+1u,
+                               SockAddr::any(AF_INET6, ep.addr.port()));
+                i++; // continue after newly inserted EP
+            }
+
+        } else if(!ep.addr.isMCast()) {
+            // no-op
+
+        } else if(!ep.iface.empty()) {
             ifaces.emplace_back(ifmap.address_of(ep.iface));
         } else {
             ifaces.emplace_back(SockAddr::any(ep.addr.family()));
         }
+        // ep invalidated by emplace()
     }
 
     if(auto_beacon) {
