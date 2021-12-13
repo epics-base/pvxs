@@ -502,7 +502,7 @@ MAIN(testget)
     testPlan(59);
     testSetup();
     logger_config_env();
-    bool canIPv6 = pvxs::impl::evsocket::canIPv6();
+    const bool canIPv6 = pvxs::impl::evsocket::canIPv6;
     Tester().testConnector();
     Tester().testWaiter();
     Tester(AF_INET).loopback();

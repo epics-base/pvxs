@@ -398,7 +398,7 @@ MAIN(testsock)
     testSetup();
     // check for behavior when binding ipv4 and ipv6 to the same socket
     // as a function of socket type and order.
-    if(evsocket::canIPv6()) {
+    if(evsocket::canIPv6) {
         // IPv4 and v6 loopback addresses are entirely distinct,
         // so no problem binding to both w/ or w/o IPV6_V6ONLY
         test_bind46("127.0.0.1" , "::1"       , SOCK_DGRAM  , 0);

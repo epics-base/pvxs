@@ -200,7 +200,6 @@ using namespace impl;
 struct Server::Pvt
 {
     SockAttach attach;
-    const bool canIPv6;
 
     std::weak_ptr<Server::Pvt> internal_self;
 

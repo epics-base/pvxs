@@ -468,8 +468,7 @@ Value buildCAMethod()
 }
 
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
-    :canIPv6(evsocket::canIPv6())
-    ,ifmap(IfaceMap::instance())
+    :ifmap(IfaceMap::instance())
     ,effective(conf)
     ,caMethod(buildCAMethod())
     ,searchTx4(AF_INET, SOCK_DGRAM, 0)

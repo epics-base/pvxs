@@ -365,6 +365,8 @@ bool evbase::assertInRunningLoop() const
     throw std::logic_error("Not in running evbase worker");
 }
 
+bool evsocket::canIPv6;
+
 evsocket::evsocket(int af, evutil_socket_t sock)
     :sock(sock)
     ,af(af)
@@ -636,7 +638,7 @@ std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match) const
 #  define EAFNOSUPPORT WSAESOCKTNOSUPPORT
 #endif
 
-bool evsocket::canIPv6()
+bool evsocket::init_canIPv6()
 {
     try {
         evsocket sock(AF_INET6, SOCK_DGRAM, 0);

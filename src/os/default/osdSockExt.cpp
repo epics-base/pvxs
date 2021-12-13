@@ -37,7 +37,19 @@ namespace pvxs {
 DEFINE_LOGGER(log, "pvxs.util");
 DEFINE_LOGGER(logiface, "pvxs.iface");
 
-void osiSockAttachExt() {}
+static
+epicsThreadOnceId oseOnce = EPICS_THREAD_ONCE_INIT;
+
+static
+void oseDoOnce(void*)
+{
+    evsocket::canIPv6 = evsocket::init_canIPv6();
+}
+
+void osiSockAttachExt() {
+    osiSockAttach();
+    epicsThreadOnce(&oseOnce, &oseDoOnce, nullptr);
+}
 
 void evsocket::enable_SO_RXQ_OVFL() const
 {

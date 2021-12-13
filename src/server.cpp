@@ -375,8 +375,7 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 }
 
 Server::Pvt::Pvt(const Config &conf)
-    :canIPv6(evsocket::canIPv6())
-    ,effective(conf)
+    :effective(conf)
     ,beaconMsg(128)
     ,acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow-2)
     ,beaconSender4(AF_INET, SOCK_DGRAM, 0)

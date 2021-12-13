@@ -248,7 +248,9 @@ struct PVXS_API evsocket
     std::vector<SockAddr> broadcasts(const SockAddr* match=nullptr) const;
 
     static
-    bool canIPv6();
+    bool canIPv6;
+
+    static bool init_canIPv6();
 };
 
 struct PVXS_API IfaceMap {

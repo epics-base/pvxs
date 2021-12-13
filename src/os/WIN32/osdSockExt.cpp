@@ -46,6 +46,8 @@ void oseDoOnce(void*)
     }
     if(!WSARecvMsg)
         cantProceed("Unable to get &WSARecvMsg!!");
+
+    evsocket::canIPv6 = evsocket::init_canIPv6();
 }
 
 void osiSockAttachExt()

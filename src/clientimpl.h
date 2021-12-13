@@ -226,7 +226,6 @@ private:
 struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 {
     SockAttach attach;
-    const bool canIPv6;
     IfaceMap& ifmap;
 
     // "const" after ctor
