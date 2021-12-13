@@ -251,6 +251,13 @@ struct PVXS_API evsocket
     bool canIPv6;
 
     static bool init_canIPv6();
+
+    enum ipstack_t {
+        Linsock,
+        Winsock,
+        GenericBSD,
+    };
+    static ipstack_t ipstack;
 };
 
 struct PVXS_API IfaceMap {

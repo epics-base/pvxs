@@ -44,6 +44,12 @@ static
 void oseDoOnce(void*)
 {
     evsocket::canIPv6 = evsocket::init_canIPv6();
+#ifdef __linux__
+    // TODO: detect WSL1 somehow.  (Is WSL2 really Linux IP stack?)
+    evsocket::ipstack = evsocket::Linsock;
+#else
+    evsocket::ipstack = evsocket::GenericBSD;
+#endif
 }
 
 void osiSockAttachExt() {

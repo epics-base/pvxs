@@ -416,8 +416,8 @@ Server::Pvt::Pvt(const Config &conf)
             listeners.push_back(manager.onSearch(any6, cb));
         }
 
-#ifndef _WIN32
-        if(addr.addr.family()==AF_INET && !addr.addr.isAny() && !addr.addr.isMCast()) {
+        if(evsocket::ipstack!=evsocket::Winsock
+                && addr.addr.family()==AF_INET && !addr.addr.isAny() && !addr.addr.isMCast()) {
             /* An oddness of BSD sockets (not winsock) is that binding to
              * INADDR_ANY will receive unicast and broadcast, but binding to
              * a specific interface address receives only unicast.  The trick
@@ -429,7 +429,6 @@ Server::Pvt::Pvt(const Config &conf)
                 listeners.push_back(manager.onSearch(bcast, cb));
             }
         }
-#endif
     }
 
     if(tcpifaces.empty()) {

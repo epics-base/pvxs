@@ -19,6 +19,16 @@
 #include <epicsThread.h>
 #include <cantProceed.h>
 
+#  include <windows.h>
+#  include <psapi.h>
+
+static
+bool is_wine()
+{
+    HMODULE nt = GetModuleHandle("ntdll.dll");
+    return nt && GetProcAddress(nt, "wine_get_version");
+}
+
 namespace pvxs {
 
 DEFINE_LOGGER(log, "pvxs.util");
@@ -48,6 +58,7 @@ void oseDoOnce(void*)
         cantProceed("Unable to get &WSARecvMsg!!");
 
     evsocket::canIPv6 = evsocket::init_canIPv6();
+    evsocket::ipstack = is_wine() ? evsocket::Linsock : evsocket::Winsock;
 }
 
 void osiSockAttachExt()

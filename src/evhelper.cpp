@@ -366,6 +366,7 @@ bool evbase::assertInRunningLoop() const
 }
 
 bool evsocket::canIPv6;
+evsocket::ipstack_t evsocket::ipstack;
 
 evsocket::evsocket(int af, evutil_socket_t sock)
     :sock(sock)

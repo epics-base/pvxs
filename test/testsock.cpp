@@ -19,18 +19,6 @@
 #include <pvxs/unittest.h>
 #include <pvxs/log.h>
 
-#ifdef _WIN32
-#  include <windows.h>
-#  include <psapi.h>
-
-static
-bool is_wine()
-{
-    HMODULE nt = GetModuleHandle("ntdll.dll");
-    return nt && GetProcAddress(nt, "wine_get_version");
-}
-#endif
-
 namespace {
 using namespace pvxs;
 
@@ -236,11 +224,11 @@ void test_mcast_scope()
     testShow()<<" RX2 bound to "<<any;
     RX3.bind(lo);
     testShow()<<" RX3 bound to "<<lo;
-#ifndef _WIN32
-    // winsock doesn't allow binding to an mcast address
-    RX4.bind(mcast_addr.addr);
-    testShow()<<" RX4 bound to "<<mcast_addr;
-#endif
+    if(evsocket::ipstack!=evsocket::Winsock) {
+        // winsock doesn't allow binding to an mcast address
+        RX4.bind(mcast_addr.addr);
+        testShow()<<" RX4 bound to "<<mcast_addr;
+    }
 
     testShow()<<" Join RX1 to "<<mcast_addr<<" on "<<lo;
     RX1.mcast_join(mcast_addr.resolve());
@@ -272,7 +260,7 @@ void test_mcast_scope()
 
 #ifdef _WIN32
     doRX(1, RX1, true);
-    doRX(2, RX2, is_wine()); // really Linux IP stack, and we couldn't clear IP_MULTICAST_ALL
+    doRX(2, RX2, evsocket::ipstack==evsocket::Linsock); // WINE: really Linux IP stack, but we couldn't clear IP_MULTICAST_ALL
     doRX(3, RX3, false);
     testSkip(3, "winsock doesn't allow bind() to an mcast address");
 
