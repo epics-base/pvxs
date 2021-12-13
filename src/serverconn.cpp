@@ -403,12 +403,12 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
             sock.bind(bind_addr);
         } catch(std::system_error& e) {
             if(fallback && e.code().value()==SOCK_EADDRINUSE) {
-                log_debug_printf(connsetup, "Address %s in use", bind_addr.tostring().c_str());
+                log_debug_printf(connsetup, "Address %s in use\n", bind_addr.tostring().c_str());
                 bind_addr.setPort(0);
                 fallback = false;
                 continue;
             }
-            log_err_printf(connsetup, "Bind to %s fails", bind_addr.tostring().c_str());
+            log_err_printf(connsetup, "Bind to %s fails\n", bind_addr.tostring().c_str());
             throw;
         }
         break;
