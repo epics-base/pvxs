@@ -59,6 +59,11 @@ jobs:
             python: "3.9"
             piparch: macosx_10_9_intel
 
+          - name: osx 3.10 intel
+            os: macos-latest
+            python: "3.10"
+            piparch: macosx_10_10_intel
+
           # Windows py builds
 
           ## missing Microsoft Visual C++ 9.0
@@ -89,6 +94,11 @@ jobs:
           - name: win64 3.9
             os: windows-latest
             python: "3.9"
+            piparch: win_amd64
+
+          - name: win64 3.10
+            os: windows-latest
+            python: "3.10"
             piparch: win_amd64
 
     steps:
@@ -211,6 +221,12 @@ jobs:
             os: ubuntu-latest
             pyver: cp39-cp39
             manylinux: manylinux2010
+            arch: x86_64
+
+          - name: linux 3.10 amd64
+            os: ubuntu-latest
+            pyver: cp310-cp310
+            manylinux: manylinux2014
             arch: x86_64
 
           # Linux py builds x32
