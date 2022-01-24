@@ -618,6 +618,7 @@ build_dso.sub_commands.extend([
 
 
 pvxs_ver = '%(PVXS_MAJOR_VERSION)s.%(PVXS_MINOR_VERSION)s.%(PVXS_MAINTENANCE_VERSION)s'%pvxsversion
+pvxs_ver += 'a1'
 
 setup(
     name='pvxslibs',

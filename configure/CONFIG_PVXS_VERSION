@@ -1,6 +1,6 @@
 PVXS_MAJOR_VERSION = 0
 PVXS_MINOR_VERSION = 2
-PVXS_MAINTENANCE_VERSION = 2
+PVXS_MAINTENANCE_VERSION = 3
 
 # Version range conditions in Makefiles
 #
@@ -12,7 +12,8 @@ PVXS_MAINTENANCE_VERSION = 2
 #
 # ifneq ($(PVXS_X_Y_Z),YES)   # PVXS != X.Y.Z
 #
-PVXS_0_2_2 = YES
+PVXS_0_2_3 = YES
+PVXS_0_2_2 = NO
 PVXS_0_2_1 = NO
 PVXS_0_2_0 = NO
 # 0.1 series releases did not define any PVXS_0_1_X
