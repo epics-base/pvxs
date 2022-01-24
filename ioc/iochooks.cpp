@@ -177,7 +177,7 @@ void pvxsAtExit(void* unused)
                 // take ownership
                 std::unique_ptr<server::Server> trash(serv);
                 trash->stop();
-                log_debug_printf(log, "Stopped Server?%s", "\n");
+                log_debug_printf(log, "Stopped Server?\n");
             }
         }
     } catch(std::exception& e) {
