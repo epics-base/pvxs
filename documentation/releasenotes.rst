@@ -3,8 +3,14 @@
 Release Notes
 =============
 
-0.2.2 (UNRELEASED)
+0.2.3 (UNRELEASED)
 ------------------
+
+0.2.2 (Jan 2022)
+----------------
+
+* No functional change to libraries.
+* Updates to python packaging.
 
 0.2.1 (Oct 2021)
 ----------------
