@@ -288,10 +288,18 @@ void expandAddrList(const std::vector<SockEndpoint>& ifaces,
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
 
     for(auto& saddr : ifaces) {
-        if(saddr.addr.family()!=AF_INET)
-            continue;
+        auto matchAddr = &saddr.addr;
 
-        for(auto& addr : dummy.broadcasts(&saddr.addr)) {
+        if(evsocket::ipstack==evsocket::Linsock && saddr.addr.family()==AF_INET6 && saddr.addr.isAny()) {
+            // special case handling to match "promote" in server::Config::expand()
+            // treat [::] as 0.0.0.0
+            matchAddr = nullptr;
+
+        } else if(saddr.addr.family()!=AF_INET) {
+            continue;
+        }
+
+        for(auto& addr : dummy.broadcasts(matchAddr)) {
             addr.setPort(0u);
             addrs.emplace_back(addr);
         }

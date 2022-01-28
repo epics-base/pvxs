@@ -145,15 +145,47 @@ void testDefs()
     }
 }
 
+void testServerAuto()
+{
+    testShow()<<__func__;
+
+    /* We assume that the test host has at least
+     * one interface other than localhost configured.
+     * It need not be usable (eg. due to firewall).
+     */
+    server::Config conf;
+    conf.expand();
+
+    testFalse(conf.interfaces.empty())<<conf.interfaces;
+    testFalse(conf.beaconDestinations.empty())<<conf.beaconDestinations;
 }
+
+void testClientAuto()
+{
+    testShow()<<__func__;
+
+    /* We assume that the test host has at least
+     * one interface other than localhost configured.
+     * It need not be usable (eg. due to firewall).
+     */
+    client::Config conf;
+    conf.expand();
+
+    testFalse(conf.interfaces.empty())<<conf.interfaces;
+    testFalse(conf.addressList.empty())<<conf.addressList;
+}
+
+} // namespace
 
 MAIN(testconfig)
 {
-    testPlan(27);
+    testPlan(31);
     testSetup();
     testDefs();
     logger_config_env();
     testParse();
+    testServerAuto();
+    testClientAuto();
     cleanup_for_valgrind();
     return testDone();
 }
