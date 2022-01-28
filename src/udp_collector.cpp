@@ -457,7 +457,7 @@ bool UDPCollector::reply(const void *msg, size_t msglen) const
     log_hex_printf(logio, Level::Debug, msg, msglen, "Send %s -> %s\n",
                    bind_addr.tostring().c_str(), src.tostring().c_str());
 
-    int ntx = sendto(sock.sock, (char*)msg, msglen, 0, &src->sa, src.size());
+    auto ntx = sendto(sock.sock, (char*)msg, msglen, 0, &src->sa, src.size());
     if(ntx<0) {
         int err = evutil_socket_geterror(sock.sock);
         if(err==SOCK_EWOULDBLOCK || err==EAGAIN || err==SOCK_EINTR) {
