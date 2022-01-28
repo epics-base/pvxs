@@ -48,7 +48,7 @@ size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
                         uint32_t(blen)},
              hostBE);
     auto err = evbuffer_add_buffer(tx, txBody.get());
-    assert(!err);
+    assert(!err); // could only fail if frozen/pinned, which is not the case
     statTx += 8u + blen;
     return 8u + blen;
 }

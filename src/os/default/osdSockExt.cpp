@@ -149,7 +149,7 @@ int recvfromx::call()
 
     if(ret>=0) { // on success, check for control messages
         if(msg.msg_flags & MSG_CTRUNC)
-            log_warn_printf(log, "MSG_CTRUNC, expand buffer %zu <- %zu\n", msg.msg_controllen, sizeof(cbuf));
+            log_warn_printf(log, "MSG_CTRUNC, expand buffer %zu <- %zu\n", size_t(msg.msg_controllen), sizeof(cbuf));
 
         for(cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr ; hdr = CMSG_NXTHDR(&msg, hdr)) {
             if(0) {}

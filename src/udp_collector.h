@@ -93,8 +93,6 @@ private:
 
 class PVXS_API UDPListener
 {
-    friend struct UDPManager;
-
     std::function<void(UDPManager::Search&)> searchCB;
     std::function<void(UDPManager::Beacon&)> beaconCB;
     const std::shared_ptr<UDPManager::Pvt> manager;
