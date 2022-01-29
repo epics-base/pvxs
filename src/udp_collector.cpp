@@ -173,7 +173,7 @@ UDPCollector::UDPCollector(UDPManager::Pvt *manager, int af, uint16_t requested_
         mcast_grps.emplace(Mem);
     }
 
-    log_info_printf(logsetup, "Bound %d to %s as lo\n", sock.sock, name.c_str());
+    log_info_printf(logsetup, "Bound to %s as lo\n", name.c_str());
 
     if(event_add(rx.get(), nullptr))
         throw std::runtime_error("Unable to create collector Rx event");
@@ -257,8 +257,8 @@ bool UDPCollector::handle_one()
         return true;
     }
 
-    log_hex_printf(logio, Level::Debug, rxbuf, nrx, "UDP %d Rx %d, %s -> %s @%u (%s)\n",
-            sock.sock, nrx, src.tostring().c_str(), dest.tostring().c_str(), unsigned(rx.dstif), bind_addr.tostring().c_str());
+    log_hex_printf(logio, Level::Debug, rxbuf, nrx, "UDP Rx %d, %s -> %s @%u (%s)\n",
+            nrx, src.tostring().c_str(), dest.tostring().c_str(), unsigned(rx.dstif), bind_addr.tostring().c_str());
 
     origin_t origin = manager->ifmap.has_address(rx.dstif, lo_addr) ? Loopback : Remote;
 

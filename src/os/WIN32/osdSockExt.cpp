@@ -104,7 +104,8 @@ int recvfromx::call()
     DWORD nrx=0u;
     if(!WSARecvMsg(sock, &msg, &nrx, nullptr, nullptr)) {
         if(msg.dwFlags & MSG_CTRUNC)
-            log_debug_printf(log, "MSG_CTRUNC %zu, %zu\n", msg.Control.len, sizeof(cbuf));
+            log_debug_printf(log, "MSG_CTRUNC %lu, %lu\n",
+                             (unsigned long)msg.Control.len, (unsigned long)sizeof(cbuf));
 
         for(WSACMSGHDR *hdr = WSA_CMSG_FIRSTHDR(&msg); hdr ; hdr = WSA_CMSG_NXTHDR(&msg, hdr)) {
             if(hdr->cmsg_level==IPPROTO_IP && hdr->cmsg_type==IP_PKTINFO && hdr->cmsg_len>=WSA_CMSG_LEN(sizeof(in_pktinfo))) {
@@ -164,12 +165,15 @@ decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
         }
 
         if(err) {
-            log_warn_printf(logiface, "Unable to GetAdaptersAddresses() error=%lld\n", (unsigned long long)err);
+            log_warn_printf(logiface, "Unable to GetAdaptersAddresses() error=%lu\n", (unsigned long)err);
             return temp;
         }
     }
 
     for(auto iface = reinterpret_cast<const IP_ADAPTER_ADDRESSES*>(ifaces.data()); iface ; iface = iface->Next) {
+        const char* ifName = iface->AdapterName;
+        if(!ifName)
+            ifName = "<AdapterName==NULL>";
 
         if(!(iface->OperStatus & IfOperStatusUp))
             continue; // not configured, skip...
@@ -179,7 +183,7 @@ decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
         bool isLO = iface->IfType==IF_TYPE_SOFTWARE_LOOPBACK;
         auto pair = temp.emplace(std::piecewise_construct,
                                  std::forward_as_tuple(iface->IfIndex),
-                                 std::forward_as_tuple(iface->AdapterName, iface->IfIndex, isLO));
+                                 std::forward_as_tuple(ifName, iface->IfIndex, isLO));
 
         auto& info = pair.first->second;
 
@@ -203,7 +207,7 @@ decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
             const auto af = addr->Address.lpSockaddr->sa_family;
             if(af!=AF_INET && af!=AF_INET6) {
                 log_debug_printf(logiface, "Ignoring interface '%s' address family=%d\n",
-                                 iface->AdapterName, af);
+                                 ifName, af);
                 continue;
             }
 
@@ -224,8 +228,8 @@ decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
 
             auto pair = info.addrs.emplace(iaddr, bcast);
 
-            log_debug_printf(logiface, "Found interface %lld \"%s\" w/ %s/%s\n",
-                             (long long)iface->IfIndex, iface->AdapterName,
+            log_debug_printf(logiface, "Found interface %lu \"%s\" w/ %s/%s\n",
+                             (unsigned long)iface->IfIndex, ifName,
                              pair.first->first.tostring().c_str(),
                              pair.first->second.tostring().c_str());
         }
