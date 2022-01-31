@@ -48,10 +48,13 @@ namespace detail {
 static
 unsigned char abortOnCrit;
 
-const char* log_prefix(const char* name, Level lvl)
+const char* log_prep(logger& log, unsigned rawlvl)
 {
-    thread_local char prefix[64];
-    // YYYY-mm-ddTHH:MM:SS.FffFffFff
+    auto lvl = (Level)(rawlvl&0xff);
+    if(!log.test(lvl))
+        return nullptr; // don't log
+
+    thread_local char prefix[80];
 
     epicsTimeStamp now;
     size_t N;
@@ -73,25 +76,24 @@ const char* log_prefix(const char* name, Level lvl)
     default:           lname = "<\?\?\?>"; break;
     }
 
-    epicsSnprintf(prefix+N, sizeof(prefix)-N, " %s %s", lname, name);
+    int ret = epicsSnprintf(prefix+N, sizeof(prefix)-N, " %s %s", lname, log.name);
+    if(ret >=0 ) {
+        N += size_t(ret);
+        if(N>60) {
+            // prefix is too long (arbitrary), so move message content to next line
+            epicsSnprintf(prefix+N, sizeof(prefix)-N, "\n    ");
+        }
+    }
 
     return prefix;
 }
 
-void _log_printf(unsigned lvl, const char* fmt, ...)
+static
+void _log_vprintf(unsigned rawlvl, const char *fmt, va_list args)
 {
-    bool bt = lvl&0x1000;
-    auto L = Level(lvl&0xff);
-    auto abt = L==Level::Crit && abortOnCrit!=0;
+    errlogVprintf(fmt, args);
 
-    {
-        va_list args;
-        va_start(args, fmt);
-        errlogVprintf(fmt, args);
-        va_end(args);
-    }
-
-    if(abt) {
+    if(Level(rawlvl&0xff)==Level::Crit && abortOnCrit!=0) {
         errlogFlush();
         if(abortOnCrit==1) {
             // C abort, end process
@@ -103,11 +105,28 @@ void _log_printf(unsigned lvl, const char* fmt, ...)
             cantProceed("CRITICAL ERROR\n");
         }
 
-    } else if(bt) {
+    } else if(rawlvl&0x1000) {
         errlogFlush();
         epicsStackTrace();
         errlogFlush();
     }
+}
+
+void _log_printf(unsigned rawlvl, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    _log_vprintf(rawlvl, fmt, args);
+    va_end(args);
+}
+
+void _log_printf_hex(unsigned rawlvl, const void *buf, size_t buflen, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    xerrlogHexPrintf(buf, buflen);
+    _log_vprintf(rawlvl, fmt, args);
+    va_end(args);
 }
 
 } // namespace detail

@@ -50,10 +50,13 @@ public:
 namespace detail {
 
 PVXS_API
-const char* log_prefix(const char* name, Level lvl);
+const char *log_prep(logger& log, unsigned lvl);
 
 PVXS_API
-void _log_printf(unsigned lvl, const char* fmt, ...) EPICS_PRINTF_STYLE(2,3);
+void _log_printf(unsigned rawlvl, const char *fmt, ...) EPICS_PRINTF_STYLE(2,3);
+
+PVXS_API
+void _log_printf_hex(unsigned rawlvl, const void *buf, size_t buflen, const char *fmt, ...) EPICS_PRINTF_STYLE(4,5);
 
 } // namespace detail
 
@@ -76,8 +79,8 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
  *  @endcode
  */
 #define log_printf(LOGGER, LVL, FMT, ...) do{ \
-    if((LOGGER).test(LVL)) \
-       ::pvxs::detail:: _log_printf(unsigned(LVL), "%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), __VA_ARGS__); \
+    if(auto _log_prefix = ::pvxs::detail::log_prep(LOGGER, unsigned(LVL))) \
+        ::pvxs::detail:: _log_printf(unsigned(LVL), "%s " FMT, _log_prefix, __VA_ARGS__); \
 }while(0)
 
 /* A note about MSVC (legacy) pre-processor weirdness.
@@ -98,19 +101,16 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
  * Thus FMT is explicitly matched in the following "outer" macros.
  */
 
+#define log_exc_printf(LOGGER, FMT, ...)  log_printf(LOGGER, unsigned(::pvxs::Level::Crit)|0x1000, FMT, __VA_ARGS__)
 #define log_crit_printf(LOGGER, FMT, ...)  log_printf(LOGGER, ::pvxs::Level::Crit, FMT, __VA_ARGS__)
 #define log_err_printf(LOGGER, FMT, ...)   log_printf(LOGGER, ::pvxs::Level::Err, FMT, __VA_ARGS__)
 #define log_warn_printf(LOGGER, FMT, ...)  log_printf(LOGGER, ::pvxs::Level::Warn, FMT, __VA_ARGS__)
 #define log_info_printf(LOGGER, FMT, ...)  log_printf(LOGGER, ::pvxs::Level::Info, FMT, __VA_ARGS__)
 #define log_debug_printf(LOGGER, FMT, ...) log_printf(LOGGER, ::pvxs::Level::Debug, FMT, __VA_ARGS__)
-#define log_exc_printf(LOGGER, FMT, ...)   do{ \
-    if((LOGGER).test(::pvxs::Level::Crit)) \
-       ::pvxs::detail:: _log_printf(unsigned(::pvxs::Level::Crit)|0x1000, "%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::Crit), __VA_ARGS__); \
-}while(0)
 
-#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, FMT, ...) do{ if((LOGGER).test(LVL)) { \
-        xerrlogHexPrintf(BUF, BUFLEN); \
-        errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), __VA_ARGS__); } \
+#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, FMT, ...) do{ \
+    if(auto _log_prefix = ::pvxs::detail::log_prep(LOGGER, unsigned(LVL))) \
+        ::pvxs::detail:: _log_printf_hex(unsigned(LVL), BUF, BUFLEN, "%s " FMT, _log_prefix, __VA_ARGS__);\
     }while(0)
 
 //! Set level for a specific logger
