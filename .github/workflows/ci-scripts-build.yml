@@ -170,12 +170,6 @@ jobs:
             configuration: default
             base: "7.0"
 
-          - name: Linux centos 8
-            image: centos:8
-            cmp: gcc
-            configuration: default
-            base: "7.0"
-
           - name: Linux fedora 34
             image: fedora:34
             cmp: gcc
