@@ -388,7 +388,7 @@ ServIface::ServIface(const std::string& addr, unsigned short port, server::Serve
     auto orig_port = bind_addr.port();
 
     if(evutil_make_listen_socket_reuseable(sock.sock))
-        log_warn_printf(connsetup, "Unable to make socket reusable\n");
+        log_warn_printf(connsetup, "Unable to make socket reusable%s", "\n");
 
     // try to bind to requested port, then fallback to a random port
     while(true) {

@@ -65,8 +65,7 @@ void _log_printf(unsigned lvl, const char* fmt, ...) EPICS_PRINTF_STYLE(2,3);
 PVXS_API
 void xerrlogHexPrintf(const void *buf, size_t buflen);
 
-/** @macro log_printf
- *  Try to log a message at the defined level.
+/** Try to log a message at the defined level.
  *
  * Due to portability issues with MSVC, log formats must have at least one argument.
  *
@@ -76,17 +75,16 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
  *          log_info_printf(blah, "blah happened with %d\n", x);
  *  @endcode
  */
-
-#if defined(_MSC_VER) && (!defined(_MSVC_TRADITIONAL) || _MSVC_TRADITIONAL==1)
-// MSVC when _MSVC_TRADITIONAL undefined (prior to vs2017)
-// or later when using legacy pre-processor.
-// empty __VA_ARGS__ swallows a leading comma
-
 #define log_printf(LOGGER, LVL, FMT, ...) do{ \
     if((LOGGER).test(LVL)) \
        ::pvxs::detail:: _log_printf(unsigned(LVL), "%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), __VA_ARGS__); \
 }while(0)
 
+#define log_crit_printf(LOGGER, FMT, ...)  log_printf(LOGGER, ::pvxs::Level::Crit, FMT, __VA_ARGS__)
+#define log_err_printf(LOGGER, FMT, ...)   log_printf(LOGGER, ::pvxs::Level::Err, FMT, __VA_ARGS__)
+#define log_warn_printf(LOGGER, FMT, ...)  log_printf(LOGGER, ::pvxs::Level::Warn, FMT, __VA_ARGS__)
+#define log_info_printf(LOGGER, FMT, ...)  log_printf(LOGGER, ::pvxs::Level::Info, FMT, __VA_ARGS__)
+#define log_debug_printf(LOGGER, FMT, ...) log_printf(LOGGER, ::pvxs::Level::Debug, FMT, __VA_ARGS__)
 #define log_exc_printf(LOGGER, FMT, ...)   do{ \
     if((LOGGER).test(::pvxs::Level::Crit)) \
        ::pvxs::detail:: _log_printf(unsigned(::pvxs::Level::Crit)|0x1000, "%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::Crit), __VA_ARGS__); \
@@ -96,33 +94,6 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
         xerrlogHexPrintf(BUF, BUFLEN); \
         errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), __VA_ARGS__); } \
     }while(0)
-
-#else // _MSVC_TRADITIONAL
-// GCC, clang, or msvc with compliant pre-processor (/experimental:preprocessor)
-// a repeat of the preceding with __VA_ARGS__ -> ##__VA_ARGS__
-
-#define log_printf(LOGGER, LVL, FMT, ...) do{ \
-    if((LOGGER).test(LVL)) \
-       ::pvxs::detail:: _log_printf(unsigned(LVL), "%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), ##__VA_ARGS__); \
-}while(0)
-
-#define log_exc_printf(LOGGER, FMT, ...)   do{ \
-    if((LOGGER).test(::pvxs::Level::Crit)) \
-       ::pvxs::detail:: _log_printf(unsigned(::pvxs::Level::Crit)|0x1000, "%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, ::pvxs::Level::Crit), ##__VA_ARGS__); \
-}while(0)
-
-#define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, FMT, ...) do{ if((LOGGER).test(LVL)) { \
-        xerrlogHexPrintf(BUF, BUFLEN); \
-        errlogPrintf("%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), ##__VA_ARGS__); } \
-    }while(0)
-
-#endif // _MSVC_TRADITIONAL
-
-#define log_crit_printf(LOGGER, ...)  log_printf(LOGGER, ::pvxs::Level::Crit, __VA_ARGS__)
-#define log_err_printf(LOGGER, ...)   log_printf(LOGGER, ::pvxs::Level::Err, __VA_ARGS__)
-#define log_warn_printf(LOGGER, ...)  log_printf(LOGGER, ::pvxs::Level::Warn, __VA_ARGS__)
-#define log_info_printf(LOGGER, ...)  log_printf(LOGGER, ::pvxs::Level::Info, __VA_ARGS__)
-#define log_debug_printf(LOGGER, ...) log_printf(LOGGER, ::pvxs::Level::Debug, __VA_ARGS__)
 
 //! Set level for a specific logger
 PVXS_API void logger_level_set(const char *name, int lvl);
