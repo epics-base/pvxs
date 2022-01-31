@@ -105,14 +105,16 @@ jobs:
           - name: vs2019 DLL
             os: windows-2019
             cmp: vs2019
-            configuration: default
+            configuration: debug
             base: "7.0"
+            extra: "CMD_CXXFLAGS=-analysis"
 
           - name: vs2019 static
             os: windows-2019
             cmp: vs2019
-            configuration: static
+            configuration: static-debug
             base: "7.0"
+            extra: "CMD_CXXFLAGS=-analysis"
 
     steps:
     - uses: actions/checkout@v2

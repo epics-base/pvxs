@@ -16,6 +16,14 @@
 
 #include <pvxs/version.h>
 
+// MSVC specific function parameter annotation for printf() spec. validation.
+#ifndef _MSC_VER
+#  define _Printf_format_string_
+#elif defined(PVXS_API_BUILDING)
+// Internally, treat some printf() related warnings as errors.
+#  pragma warning(error:6302; error:6303; error:6306)
+#endif
+
 namespace pvxs {
 
 //! Importance of message
@@ -53,10 +61,10 @@ PVXS_API
 const char *log_prep(logger& log, unsigned lvl);
 
 PVXS_API
-void _log_printf(unsigned rawlvl, const char *fmt, ...) EPICS_PRINTF_STYLE(2,3);
+void _log_printf(unsigned rawlvl, _Printf_format_string_ const char *fmt, ...) EPICS_PRINTF_STYLE(2,3);
 
 PVXS_API
-void _log_printf_hex(unsigned rawlvl, const void *buf, size_t buflen, const char *fmt, ...) EPICS_PRINTF_STYLE(4,5);
+void _log_printf_hex(unsigned rawlvl, _Printf_format_string_ const void *buf, size_t buflen, const char *fmt, ...) EPICS_PRINTF_STYLE(4,5);
 
 } // namespace detail
 
