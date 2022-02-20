@@ -79,6 +79,8 @@ Then add the pvxs and pvxsIoc libraries as a dependencies to your IOC or support
 
     PROD_IOC += myioc
     ...
+    myioc_DBD += pvxsIoc.dbd
+    ...
     myioc_LIBS += pvxsIoc pvxs
     myioc_LIBS += $(EPICS_BASE_IOC_LIBS)
 
