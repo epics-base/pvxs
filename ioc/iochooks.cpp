@@ -32,7 +32,7 @@ void pvxsl(int detail)
     try {
         if(auto serv = instance.load()) {
             for(auto& pair : serv->listSource()) {
-                auto src = serv->getSource(pair.first);
+                auto src = serv->getSource(pair.first, pair.second);
                 if(!src)
                     continue; // race?
 
