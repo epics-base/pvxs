@@ -24,6 +24,7 @@
 #include <string>
 #include <sstream>
 #include <type_traits>
+#include <limits>
 
 #include <event2/util.h>
 
