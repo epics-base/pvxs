@@ -152,8 +152,7 @@ int main(int argc, char* argv[])
     src->name = argv[optind];
     src->fname = argv[optind+1];
 
-    auto serv = server::Config::fromEnv()
-            .build()
+    auto serv = server::Server::fromEnv()
             .addSource("mcat", src);
 
     std::cout<<"Effective config\n"<<serv.config();

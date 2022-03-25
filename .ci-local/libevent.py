@@ -71,3 +71,10 @@ elif os.environ.get('WINE')=='32':
         F.write('\nCROSS_COMPILER_TARGET_ARCHS+=win32-x86-mingw\n')
 
     check_call('make -C bundle libevent.win32-x86-mingw', shell=True, env=env)
+
+elif os.environ.get('RTEMS_TARGET'):
+    print('Enable RTEMS')
+    with open('configure/CONFIG_SITE.local', 'a') as F:
+        F.write('\nCROSS_COMPILER_TARGET_ARCHS+=%s\n'%os.environ['RTEMS_TARGET'])
+
+    check_call('make -C bundle libevent.'+os.environ['RTEMS_TARGET'], shell=True, env=env)

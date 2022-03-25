@@ -232,10 +232,8 @@ int main(int argc, char *argv[])
                 return;
 
             const auto& guid = msg.guid;
-            log_info_printf(out, "%s Beacon %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
-                       msg.src.tostring().c_str(),
-                       guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11],
-                       msg.server.tostring().c_str());
+            log_debug_printf(out, "%s\n",
+                             std::string(pva::impl::SB()<<msg.src<<" Beacon "<<guid<<' '<<msg.server).c_str());
 
         };
 

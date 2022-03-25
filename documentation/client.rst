@@ -12,7 +12,7 @@ Configuration
 -------------
 
 The recommended starting point is creating new context configured from $PVA_* environment variables.
-Use `pvxs::client::Config::fromEnv` and then `pvxs::client::Config::build`.
+Use `pvxs::client::Context::fromEnv`.
 
 EPICS_PVA_ADDR_LIST
     A list of destination addresses to which UDP search messages will be sent.
@@ -25,11 +25,19 @@ EPICS_PVA_AUTO_ADDR_LIST
 EPICS_PVA_BROADCAST_PORT
     Default UDP port to which UDP searches will be sent.  5076 if unset.
 
+EPICS_PVA_CONN_TMO
+    Inactivity timeout for TCP connections.  For compatibility with pvAccessCPP
+    a multiplier of 4/3 is applied.  So a value of 30 results in a 40 second timeout.
+    Prior to 0.2.0 this variable was ignored.
+
+.. versionadded:: 0.2.0
+    Prior to 0.2.0 *EPICS_PVA_CONN_TMO* was ignored.
+
 .. code-block:: c++
 
     using namespace pvxs;
     // Context configured from process environment
-    client::Context ctxt = client::Config::fromEnv().build();
+    client::Context ctxt = client::Context::fromEnv();
 
 Programmatic configuration can be accomplished by explicitly filling in a `pvxs::client::Config`.
 
@@ -166,6 +174,18 @@ the event queue
     :members:
 
 .. doxygenstruct:: pvxs::client::Subscription
+    :members:
+
+Connect
+^^^^^^^
+
+Request that a Channel be created now which may be used by other Operations,
+allowing them to complete more quickly.
+
+.. doxygenclass:: pvxs::client::ConnectBuilder
+    :members:
+
+.. doxygenstruct:: pvxs::client::Connect
     :members:
 
 Threading

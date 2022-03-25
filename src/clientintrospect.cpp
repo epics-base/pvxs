@@ -30,21 +30,20 @@ struct InfoOp : public OperationBase
 
     INST_COUNTER(InfoOp);
 
-    explicit InfoOp(const std::shared_ptr<Channel>& chan)
-        :OperationBase(Info, chan)
+    explicit InfoOp(const evbase& loop)
+        :OperationBase(Info, loop)
     {}
 
     virtual ~InfoOp()
     {
-        chan->context->tcp_loop.assertInLoop();
-        _cancel(true);
+        if(loop.assertInRunningLoop())
+            _cancel(true);
     }
 
     virtual bool cancel() override final {
-        auto context = chan->context;
         decltype (done) junk;
         bool ret = false;
-        context->tcp_loop.call([this, &junk, &ret](){
+        (void)loop.tryCall([this, &junk, &ret](){
             ret = _cancel(false);
             junk = std::move(done);
             // leave opByIOID for GC
@@ -54,7 +53,7 @@ struct InfoOp : public OperationBase
 
     bool _cancel(bool implicit) {
         if(implicit && state!=Done) {
-            log_warn_printf(setup, "implied cancel of INFO on channel '%s'\n",
+            log_info_printf(setup, "implied cancel of INFO on channel '%s'\n",
                             chan ? chan->name.c_str() : "");
         }
         if(state==Waiting) {
@@ -68,6 +67,10 @@ struct InfoOp : public OperationBase
         state = Done;
         return ret;
     }
+
+    // not meaningful for GET_FIELD operation
+    void _reExecGet(std::function<void(client::Result&&)>&& resultcb) override final {}
+    void _reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
 
     virtual void createOp() override final
     {
@@ -87,7 +90,7 @@ struct InfoOp : public OperationBase
             // sub-field, which no one knows how to use...
             to_wire(R, "");
         }
-        conn->enqueueTxBody(CMD_GET_FIELD);
+        chan->statTx += conn->enqueueTxBody(CMD_GET_FIELD);
 
         log_debug_printf(io, "Server %s channel '%s' GET_INFO\n", conn->peerName.c_str(), chan->name.c_str());
 
@@ -110,6 +113,7 @@ struct InfoOp : public OperationBase
 
 void Connection::handle_GET_FIELD()
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t ioid=0u;
@@ -143,6 +147,8 @@ void Connection::handle_GET_FIELD()
         info->chan->opByIOID.erase(ioid);
     }
 
+    info->chan->statRx += rxlen;
+
     if(info->state!=InfoOp::Waiting) {
         log_warn_printf(io, "Server %s ignore second reply to GET_FIELD\n", peerName.c_str());
         return;
@@ -175,48 +181,49 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
 {
     if(!ctx)
         throw std::logic_error("NULL Builder");
+    if(!_autoexec)
+        throw std::logic_error("autoExec(false) not possible for info()");
 
-    std::shared_ptr<Operation> ret;
+    auto context(ctx->impl->shared_from_this());
 
-    assert(!_get);
+    auto op(std::make_shared<InfoOp>(context->tcp_loop));
+    if(_result) {
+        op->done = std::move(_result);
+    } else {
+        auto waiter = op->waiter = std::make_shared<ResultWaiter>();
+        op->done = [waiter](Result&& result) {
+            waiter->complete(std::move(result), false);
+        };
+    }
 
-    ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx->shared_from_this(), _name);
+    auto syncCancel(_syncCancel);
+    std::shared_ptr<InfoOp> external(op.get(), [op, syncCancel](InfoOp*) mutable {
+        // from user thread
+        auto temp(std::move(op));
+        auto loop(temp->loop);
+        // std::bind for lack of c++14 generalized capture
+        // to move internal ref to worker for dtor
+        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<InfoOp>& op) {
+                           // on worker
 
-        auto op = std::make_shared<InfoOp>(chan);
-
-        if(_result) {
-            op->done = std::move(_result);
-        } else {
-            auto waiter = op->waiter = std::make_shared<ResultWaiter>();
-            op->done = [waiter](Result&& result) {
-                waiter->complete(std::move(result), false);
-            };
-        }
-
-        chan->pending.push_back(op);
-        chan->createOperations();
-
-        auto loop(op->chan->context->tcp_loop);
-        ret.reset(op.get(), [op, loop](Operation*) mutable {
-            // on user thread
-            auto temp(std::move(op));
-            auto L(std::move(loop));
-            L.call([&temp]() {
-                // on worker
-                try {
-                    temp->_cancel(true);
-                }catch(std::exception& e){
-                    log_exc_printf(setup, "Channel %s error in info cancel(): %s",
-                                   temp->chan->name.c_str(), e.what());
-                }
-                // ensure dtor on worker
-                temp.reset();
-            });
-        });
+                           // ordering of dispatch()/call() ensures creation before destruction
+                           assert(op->chan);
+                           op->_cancel(true);
+                       }, std::move(temp)));
     });
 
-    return ret;
+    auto name(std::move(_name));
+    auto server(std::move(_server));
+    context->tcp_loop.dispatch([op, context, name, server]() {
+        // on worker
+
+        op->chan = Channel::build(context, name, server);
+
+        op->chan->pending.push_back(op);
+        op->chan->createOperations();
+    });
+
+    return external;
 }
 
 } // namespace client

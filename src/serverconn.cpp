@@ -18,6 +18,22 @@
 // limit on size of TX buffer above which we suspend RX
 static constexpr size_t tcp_tx_limit = 0x100000;
 
+namespace pvxs {
+namespace server {
+std::set<std::string> ClientCredentials::roles() const
+{
+    std::set<std::string> ret;
+    osdGetRoles(account, ret);
+    return ret;
+}
+
+std::ostream& operator<<(std::ostream& strm, const ClientCredentials& cred)
+{
+    strm<<cred.method<<"/"<<cred.account<<"@"<<cred.peer;
+    return strm;
+}
+}} // namespace pvxs::server
+
 namespace pvxs {namespace impl {
 
 // message related to client state and errors
@@ -35,9 +51,19 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 {
     log_debug_printf(connio, "Client %s connects\n", peerName.c_str());
 
+    {
+        auto cred(std::make_shared<server::ClientCredentials>());
+        cred->peer = peerName;
+        cred->iface = iface->name;
+        // paranoia placeholder prior to handle_CONNECTION_VALIDATION()
+        cred->method = cred->account = "anonymous";
+        this->cred = std::move(cred);
+    }
+
     bufferevent_setcb(bev.get(), &bevReadS, &bevWriteS, &bevEventS, this);
 
-    bufferevent_set_timeouts(bev.get(), &tcp_timeout, &tcp_timeout);
+    timeval tmo(totv(iface->server->effective.tcpTimeout));
+    bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
     auto tx = bufferevent_get_output(bev.get());
 
@@ -68,6 +94,8 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 
         if(evbuffer_add(tx, buf.data(), M.save()-buf.data()))
             throw std::bad_alloc();
+
+        statTx += M.save()-buf.data();
     }
 
     if(bufferevent_enable(bev.get(), EV_READ|EV_WRITE))
@@ -83,7 +111,7 @@ const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
     if(it==chanBySID.end()) {
         static decltype (it->second) empty{};
         return empty;
-        //throw std::runtime_error(SB()<<"Client "<<peerName<<" non-existant SID "<<sid);
+        //throw std::runtime_error(SB()<<"Client "<<peerName<<" non-existent SID "<<sid);
     }
     return it->second;
 }
@@ -102,6 +130,8 @@ void ServerConn::handle_ECHO()
 
     // maybe help reduce latency
     bufferevent_flush(bev.get(), EV_WRITE, BEV_FLUSH);
+
+    statTx += 8u + len;
 }
 
 static
@@ -144,8 +174,20 @@ void ServerConn::handle_CONNECTION_VALIDATION()
                        peerName.c_str(), selected.c_str(),
                        std::string(SB()<<auth).c_str());
 
-            autoMethod = selected;
-            credentials = auth;
+            auto C(std::make_shared<server::ClientCredentials>(*cred));
+
+            if(selected=="ca") {
+                auth["user"].as<std::string>([&C, &selected](const std::string& user) {
+                    C->method = selected;
+                    C->account = user;
+                });
+            }
+            if(C->method.empty()) {
+                C->account = C->method = "anonymous";
+            }
+            C->raw = auth;
+
+            cred = std::move(C);
         }
     }
 
@@ -185,7 +227,7 @@ void ServerConn::handle_CANCEL_REQUEST()
 
     auto it = opByIOID.find(ioid);
     if(it==opByIOID.end()) {
-        log_warn_printf(connsetup, "Client %s Cancel of non-existant Op %u\n", peerName.c_str(), unsigned(ioid));
+        log_warn_printf(connsetup, "Client %s Cancel of non-existent Op %u\n", peerName.c_str(), unsigned(ioid));
         return;
     }
 
@@ -222,7 +264,7 @@ void ServerConn::handle_DESTROY_REQUEST()
     auto it = opByIOID.find(ioid);
 
     if(!chan || it==opByIOID.end() || 1!=chan->opByIOID.erase(ioid)) {
-        log_warn_printf(connsetup, "Client %s can't destroy non-existant op %u:%u\n",
+        log_debug_printf(connsetup, "Client %s can't destroy non-existent op %u:%u\n",
                    peerName.c_str(), unsigned(sid), unsigned(ioid));
 
     }
@@ -254,7 +296,7 @@ void ServerConn::handle_MESSAGE()
 
     auto it = opByIOID.find(ioid);
     if(it==opByIOID.end()) {
-        log_debug_printf(connsetup, "Client %s Message on non-existant ioid\n", peerName.c_str());
+        log_debug_printf(connsetup, "Client %s Message on non-existent ioid\n", peerName.c_str());
         return;
     }
     auto chan = it->second->chan.lock();
@@ -344,6 +386,9 @@ ServIface::ServIface(const std::string& addr, unsigned short port, server::Serve
 {
     server->acceptor_loop.assertInLoop();
     auto orig_port = bind_addr.port();
+
+    if(evutil_make_listen_socket_reuseable(sock.sock))
+        log_warn_printf(connsetup, "Unable to make socket reusable%s", "\n");
 
     // try to bind to requested port, then fallback to a random port
     while(true) {

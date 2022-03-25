@@ -39,15 +39,18 @@ const char* ConnBase::peerLabel() const
     return isClient ? "Server" : "Client";
 }
 
-void ConnBase::enqueueTxBody(pva_app_msg_t cmd)
+size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
 {
+    auto blen = evbuffer_get_length(txBody.get());
     auto tx = bufferevent_get_output(bev.get());
     to_evbuf(tx, Header{cmd,
                         uint8_t(isClient ? 0u : pva_flags::Server),
-                        uint32_t(evbuffer_get_length(txBody.get()))},
+                        uint32_t(blen)},
              hostBE);
     auto err = evbuffer_add_buffer(tx, txBody.get());
     assert(!err);
+    statTx += 8u + blen;
+    return 8u + blen;
 }
 
 #define CASE(Op) void ConnBase::handle_##Op() {}
@@ -55,6 +58,7 @@ void ConnBase::enqueueTxBody(pva_app_msg_t cmd)
     CASE(CONNECTION_VALIDATION);
     CASE(CONNECTION_VALIDATED);
     CASE(SEARCH);
+    CASE(SEARCH_RESPONSE);
     CASE(AUTHNZ);
 
     CASE(CREATE_CHANNEL);
@@ -78,13 +82,13 @@ void ConnBase::bevEvent(short events)
         if(events&BEV_EVENT_ERROR) {
             int err = EVUTIL_SOCKET_ERROR();
             const char *msg = evutil_socket_error_to_string(err);
-            log_err_printf(connio, "%s %s connection closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
+            log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
         }
         if(events&BEV_EVENT_EOF) {
-            log_debug_printf(connio, "%s %s connection closed by peer\n", peerLabel(), peerName.c_str());
+            log_debug_printf(connio, "connection to %s %s closed by peer\n", peerLabel(), peerName.c_str());
         }
         if(events&BEV_EVENT_TIMEOUT) {
-            log_warn_printf(connio, "%s %s connection timeout\n", peerLabel(), peerName.c_str());
+            log_warn_printf(connio, "connection to %s %s timeout\n", peerLabel(), peerName.c_str());
         }
         bev.reset();
     }
@@ -119,6 +123,7 @@ void ConnBase::bevRead()
         if(header[2]&pva_flags::Control) {
             // Control messages are not actually useful
             evbuffer_drain(rx, 8);
+            statRx += 8u;
             continue;
         }
         // application message
@@ -147,6 +152,7 @@ void ConnBase::bevRead()
             unsigned n = evbuffer_remove_buffer(rx, segBuf.get(), len);
             assert(n==len); // we know rx buf contains the entire body
         }
+        statRx += 8u + len;
 
         // so far we do not use segmentation to support incremental processing
         // of long messages.  We instead accumulate all segments of a message
@@ -183,6 +189,7 @@ void ConnBase::bevRead()
                     CASE(CONNECTION_VALIDATION);
                     CASE(CONNECTION_VALIDATED);
                     CASE(SEARCH);
+                    CASE(SEARCH_RESPONSE);
                     CASE(AUTHNZ);
 
                     CASE(CREATE_CHANNEL);

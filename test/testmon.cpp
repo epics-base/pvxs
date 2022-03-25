@@ -3,6 +3,7 @@
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
+#define PVXS_ENABLE_EXPERT_API
 
 #include <atomic>
 
@@ -74,15 +75,15 @@ struct BasicTest {
     static
     Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt)
     {
-        Value ret(sub->pop());
-        while(!ret) {
-            if(!evt.wait(5.0)) {
+        while(true) {
+            if(auto ret = sub->pop()) {
+                return ret;
+
+            } else if (!evt.wait(5.0)) {
                 testFail("timeout waiting for event");
-            } else {
-                ret = sub->pop();
+                return Value();
             }
         }
-        return ret;
     }
 
     void orphan()
@@ -94,6 +95,65 @@ struct BasicTest {
         // clear Context to orphan in-progress operation
         cli = client::Context();
         op.reset();
+    }
+
+    void cancel()
+    {
+        testShow()<<__func__;
+        epicsEvent done;
+
+        cli.monitor("nonexistent")
+                .onInit([&done](client::Subscription&, const Value&)
+        {
+            done.signal();
+        })
+                .exec();
+
+        testOk1(!done.wait(1.1));
+    }
+
+    void asyncCancel()
+    {
+        testShow()<<__func__;
+        auto done(std::make_shared<epicsEvent>());
+
+        cli.monitor("nonexistent")
+                .syncCancel(false)
+                .onInit([done](client::Subscription&, const Value&)
+        {
+            done->signal();
+        })
+                .exec();
+
+        testOk1(!done->wait(1.1));
+    }
+
+    void badRequest()
+    {
+        testShow()<<__func__;
+
+        serv.start();
+        mbox.open(initial);
+
+        auto sub(cli.monitor("mailbox")
+                 .field("nonexistent")
+                 .maskConnected(false)
+                 .maskDisconnected(false)
+                 .event([this](client::Subscription&) {
+                     testDiag("Event evt");
+                     evt.signal();
+                 })
+                 .exec());
+
+        cli.hurryUp();
+
+        testThrows<client::Connected>([this, &sub]() {
+            testShow()<<pop(sub, evt);
+        });
+
+        testThrows<client::RemoteError>([this, &sub]() {
+            testShow()<<pop(sub, evt);
+        });
     }
 };
 
@@ -206,7 +266,7 @@ struct TestLifeCycle : public BasicTest
 
 struct TestReconn : public BasicTest
 {
-    void testReconn()
+    void testReconn(bool closechan)
     {
         testShow()<<__func__;
 
@@ -226,22 +286,33 @@ struct TestReconn : public BasicTest
             testFail("Missing data update");
         }
 
-        testDiag("Stop server");
-        serv.stop();
+        if(closechan) {
+            testDiag("Close channel");
+            mbox.close();
+
+        } else {
+            testDiag("Stop server");
+            serv.stop();
+        }
 
         testThrows<client::Disconnect>([this](){
             pop(sub, evt);
         })<<"Expecting Disconnect after stopping server";
 
         testFalse(sub->pop())<<"No events after Disconnect";
-
-        mbox.post(initial
-                  .cloneEmpty()
-                  .update("value", 15));
-
         errlogFlush();
-        testDiag("Starting server");
-        serv.start();
+
+        initial["value"] = 15;
+
+        if(closechan) {
+            testDiag("reopen channel");
+            mbox.open(initial);
+
+        } else {
+            testDiag("Starting server");
+            mbox.post(initial);
+            serv.start();
+        }
 
         testThrows<client::Connected>([this](){
             auto x = pop(sub, evt);
@@ -261,14 +332,18 @@ struct TestReconn : public BasicTest
 
 MAIN(testmon)
 {
-    testPlan(22);
+    testPlan(32);
     testSetup();
     logger_config_env();
     BasicTest().orphan();
+    BasicTest().cancel();
+    BasicTest().asyncCancel();
+    BasicTest().badRequest();
     TestLifeCycle().testBasic(true);
     TestLifeCycle().testBasic(false);
     TestLifeCycle().testSecond();
-    TestReconn().testReconn();
+    TestReconn().testReconn(false);
+    TestReconn().testReconn(true);
     cleanup_for_valgrind();
     return testDone();
 }

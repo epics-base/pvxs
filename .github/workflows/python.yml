@@ -1,0 +1,354 @@
+# .github/workflows/ci-scripts-build.yml for use with EPICS Base ci-scripts
+# (see: https://github.com/epics-base/ci-scripts)
+
+# This is YAML - indentation levels are crucial
+
+name: PVXS Python
+
+on:
+  push:
+    paths-ignore:
+      - tools/*
+      - test/*
+      - example/*
+      - documentation/*
+  pull_request:
+
+env:
+  _PVXS_ABORT_ON_CRIT: 1
+  PVXS_LOG: pvxs.*=WARN
+
+jobs:
+  native:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    env:
+      PRE: "--pre"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux64 test
+            os: ubuntu-latest
+            python: "3.5"
+            source: true
+
+          # OSX py builds
+          - name: osx 2.7 intel
+            os: macos-latest
+            python: "2.7"
+            piparch: macosx_10_9_intel
+
+          - name: osx 3.6 intel
+            os: macos-latest
+            python: "3.6"
+            piparch: macosx_10_9_intel
+
+          - name: osx 3.7 intel
+            os: macos-latest
+            python: "3.7"
+            piparch: macosx_10_9_intel
+
+          - name: osx 3.8 intel
+            os: macos-latest
+            python: "3.8"
+            piparch: macosx_10_9_intel
+
+          - name: osx 3.9 intel
+            os: macos-latest
+            python: "3.9"
+            piparch: macosx_10_9_intel
+
+          - name: osx 3.10 intel
+            os: macos-latest
+            python: "3.10"
+            piparch: macosx_10_10_intel
+
+          # Windows py builds
+
+          ## missing Microsoft Visual C++ 9.0
+          #- os: windows-latest
+          #  python: "2.7"
+          #  piparch: win_amd64
+
+          - name: win64 3.5
+            os: windows-latest
+            python: "3.5"
+            piparch: win_amd64
+
+          - name: win64 3.6
+            os: windows-latest
+            python: "3.6"
+            piparch: win_amd64
+
+          - name: win64 3.7
+            os: windows-latest
+            python: "3.7"
+            piparch: win_amd64
+
+          - name: win64 3.8
+            os: windows-latest
+            python: "3.8"
+            piparch: win_amd64
+
+          - name: win64 3.9
+            os: windows-latest
+            python: "3.9"
+            piparch: win_amd64
+
+          - name: win64 3.10
+            os: windows-latest
+            python: "3.10"
+            piparch: win_amd64
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Automatic core dumper analysis
+        uses: mdavidsaver/ci-core-dumper@master
+
+
+      - name: Setup native python
+        if: matrix.python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python }}
+          #architecture: x64
+
+      - name: Prepare
+        shell: bash
+        run: |
+          python -m pip install -U pip
+          python -m pip install twine
+          python --version
+          python -m pip --version
+          python -m twine -h
+
+          python -m pip install setuptools wheel nose2
+          python -m pip install $PRE setuptools_dso>=2.1a1 epicscorelibs>=7.0.3.99.2.0a1
+
+      - name: Source
+        run: python setup.py sdist --formats=gztar
+
+      - name: Wheel
+        shell: bash
+        run: |
+          set -x
+          [ "${{ matrix.piparch }}" ] && export SETUPTOOLS_DSO_PLAT_NAME="${{ matrix.piparch }}"
+          python -m pip wheel -v -w dist dist/pvxslibs-*.tar.gz
+
+      - name: Test Wheel
+        shell: bash
+        run: |
+          cd dist
+          ls
+          python -m pip install pvxslibs-*.whl
+          python -m nose2 pvxslibs
+
+      - name: List Artifacts
+        shell: bash
+        run: ls dist/*
+
+      - name: Save Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: epicscorelibs
+          path: dist/*
+
+      - name: Upload wheels
+        if: github.event_name=='push' && github.ref=='refs/heads/master' && matrix.piparch
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          python -m twine upload --skip-existing dist/pvxslibs-*.whl
+
+      - name: Upload source
+        if: github.event_name=='push' && github.ref=='refs/heads/master' && matrix.source
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          python -m twine upload --skip-existing dist/pvxslibs-*.tar.*
+
+  docker:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    env:
+      PRE: "--pre"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux py builds x64
+          - name: linux 2.7 amd64
+            pyver: cp27-cp27m
+            manylinux: manylinux1
+            arch: x86_64
+
+          - name: linux 2.7u amd64
+            os: ubuntu-latest
+            pyver: cp27-cp27mu
+            manylinux: manylinux1
+            arch: x86_64
+
+          - name: linux 3.5 amd64
+            os: ubuntu-latest
+            pyver: cp35-cp35m
+            manylinux: manylinux1
+            arch: x86_64
+
+          - name: linux 3.6 amd64
+            os: ubuntu-latest
+            pyver: cp36-cp36m
+            manylinux: manylinux1
+            arch: x86_64
+
+          - name: linux 3.7 amd64
+            os: ubuntu-latest
+            pyver: cp37-cp37m
+            manylinux: manylinux1
+            arch: x86_64
+
+          - name: linux 3.8 amd64
+            os: ubuntu-latest
+            pyver: cp38-cp38
+            manylinux: manylinux1
+            arch: x86_64
+
+          - name: linux 3.9 amd64
+            os: ubuntu-latest
+            pyver: cp39-cp39
+            manylinux: manylinux2010
+            arch: x86_64
+
+          - name: linux 3.10 amd64
+            os: ubuntu-latest
+            pyver: cp310-cp310
+            manylinux: manylinux2014
+            arch: x86_64
+
+          # Linux py builds x32
+          - name: linux 2.7 i686
+            pyver: cp27-cp27m
+            manylinux: manylinux1
+            arch: i686
+            pre: linux32
+
+          - name: linux 2.7u i686
+            os: ubuntu-latest
+            pyver: cp27-cp27mu
+            manylinux: manylinux1
+            arch: i686
+            pre: linux32
+
+          - name: linux 3.5 i686
+            os: ubuntu-latest
+            pyver: cp35-cp35m
+            manylinux: manylinux1
+            arch: i686
+            pre: linux32
+
+          - name: linux 3.6 i686
+            os: ubuntu-latest
+            pyver: cp36-cp36m
+            manylinux: manylinux1
+            arch: i686
+            pre: linux32
+
+          - name: linux 3.7 i686
+            os: ubuntu-latest
+            pyver: cp37-cp37m
+            manylinux: manylinux1
+            arch: i686
+            pre: linux32
+
+          - name: linux 3.8 i686
+            os: ubuntu-latest
+            pyver: cp38-cp38
+            manylinux: manylinux1
+            arch: i686
+            pre: linux32
+
+          - name: linux 3.9 i686
+            os: ubuntu-latest
+            pyver: cp39-cp39
+            manylinux: manylinux2010
+            arch: i686
+            pre: linux32
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Setup native python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python || '3.7' }}
+          #architecture: x64
+
+      - name: Native Prep/Info
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install setuptools wheel twine
+          which python
+          python --version
+          python -m pip --version
+          python -m twine -h
+
+      - name: PY Source
+        run: |
+          echo "PRE=$PRE"
+          python -m pip install setuptools wheel nose2
+          python -m pip install --only-binary numpy $PRE setuptools_dso>=2.1a1 epicscorelibs>=7.0.3.99.2.0a1
+          python setup.py sdist --formats=gztar
+          ls dist/*
+
+      - name: Docker PY build
+        if: matrix.pyver && !matrix.source
+        run: |
+          # can't use GHA native docker support since GHA magic binaries need .so absent from old manylinux images :(
+          cat <<EOF > runit.sh
+          #!/bin/sh
+          set -e -x
+          cd /io
+          [ -d dist ]
+          ls dist/*
+          export PATH="/opt/python/${{ matrix.pyver }}/bin:\$PATH"
+          export SETUPTOOLS_DSO_PLAT_NAME="${{ matrix.manylinux }}_${{ matrix.arch }}"
+          which python
+          python -m pip install -U pip
+          python -m pip install setuptools wheel nose2
+          python -m pip install --only-binary numpy $PRE setuptools_dso>=2.1a1 epicscorelibs>=7.0.3.99.2.0a1
+
+          python -m pip wheel -v --only-binary numpy -w dist dist/pvxslibs-*.tar.gz
+
+          cd dist
+          python -m pip install pvxslibs-*.whl
+          python -m nose2 pvxslibs
+          cd ..
+
+          EOF
+          cat runit.sh
+          chmod +x runit.sh
+          docker pull quay.io/pypa/${{ matrix.manylinux }}_${{ matrix.arch }}
+          docker run --rm -v `pwd`:/io quay.io/pypa/${{ matrix.manylinux }}_${{ matrix.arch }} ${{ matrix.pre }} /io/runit.sh
+
+      - name: List Artifacts
+        run: ls dist/*
+
+      - name: Save Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: epicscorelibs
+          path: dist/*
+
+      - name: Upload wheels
+        if: github.event_name=='push' && github.ref=='refs/heads/master'
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          python -m twine upload --skip-existing dist/pvxslibs-*.whl

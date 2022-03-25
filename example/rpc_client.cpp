@@ -34,8 +34,7 @@ int main(int argc, char* argv[])
     logger_config_env();
 
     // Create a client context
-    client::Context ctxt(client::Config::fromEnv()
-                         .build());
+    auto ctxt(client::Context::fromEnv());
 
     auto reply(ctxt.rpc(argv[1])
                    .arg("lhs", argv[2])

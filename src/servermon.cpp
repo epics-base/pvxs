@@ -32,7 +32,7 @@ struct MonitorOp : public ServerOp,
     {}
     virtual ~MonitorOp() {}
 
-    // only access from acceptor worker thread
+    // only access from accepter worker thread
     std::function<void(bool)> onStart;
     std::function<void()> onLowMark;
     std::function<void()> onHighMark;
@@ -147,7 +147,7 @@ struct MonitorOp : public ServerOp,
             }
         }
 
-        conn->enqueueTxBody(pva_app_msg_t::CMD_MONITOR);
+        ch->statTx += conn->enqueueTxBody(pva_app_msg_t::CMD_MONITOR);
 
         if(state == ServerOp::Dead) {
             ch->opByIOID.erase(ioid);
@@ -186,7 +186,7 @@ struct MonitorOp : public ServerOp,
         }
 
         if(state==Executing && !queue.empty() && (!pipeline || window)) {
-            // reshedule myself
+            // reschedule myself
             assert(!scheduled); // we've been holding the lock, so this should not have changed
 
             conn->iface->server->acceptor_loop.dispatch([self]() {
@@ -315,20 +315,6 @@ struct ServerMonitorControl : public server::MonitorControlOp
         });
     }
 
-    virtual std::pair<std::string, Value> rawCredentials() const override final
-    {
-        std::pair<std::string, Value> ret;
-        auto serv = server.lock();
-        if(serv)
-            serv->acceptor_loop.call([this, &ret](){
-                if(auto oper = op.lock())
-                    if(auto chan = oper->chan.lock())
-                        if(auto conn = chan->conn.lock())
-                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
-            });
-        return ret;
-    }
-
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<MonitorOp> op;
 
@@ -347,8 +333,7 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
     {
         _op = Info;
         _name = name;
-        _peerName = conn->peerName;
-        _ifaceName = conn->iface->name;
+        _cred = conn->cred;
         _pvRequest = request;
     }
     virtual ~ServerMonitorSetup() {
@@ -409,20 +394,6 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
         });
     }
 
-    virtual std::pair<std::string, Value> rawCredentials() const override final
-    {
-        std::pair<std::string, Value> ret;
-        auto serv = server.lock();
-        if(serv)
-            serv->acceptor_loop.call([this, &ret](){
-                if(auto oper = op.lock())
-                    if(auto chan = oper->chan.lock())
-                        if(auto conn = chan->conn.lock())
-                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
-            });
-        return ret;
-    }
-
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<MonitorOp> op;
 
@@ -439,14 +410,14 @@ ServerMonitorControl::ServerMonitorControl(ServerMonitorSetup* setup,
 {
     _op = Info;
     _name = name;
-    _peerName = setup->peerName();
-    _ifaceName = setup->name();
+    _cred = setup->credentials();
 }
 
 } // namespace
 
 void ServerConn::handle_MONITOR()
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid = -1, ioid = -1;
@@ -481,6 +452,7 @@ void ServerConn::handle_MONITOR()
             bev.reset();
             return;
         }
+        chan->statRx += rxlen;
 
         auto op(std::make_shared<MonitorOp>(chan, ioid));
         op->window = nack;
@@ -530,7 +502,7 @@ void ServerConn::handle_MONITOR()
             // since server destroy commands aren't acknowledged, we can race
             // with traffic sent by the client before processing our destroy.
             // so we can't fault hard, so just ignore and hope for the best.
-            log_debug_printf(connio, "Client %s MONITORs non-existant IOID %u\n",
+            log_debug_printf(connio, "Client %s MONITORs non-existent IOID %u\n",
                        peerName.c_str(), unsigned(ioid));
             return;
 
@@ -551,6 +523,7 @@ void ServerConn::handle_MONITOR()
             bev.reset();
             return;
         }
+        chan->statRx += rxlen;
 
         // pvAccessCPP won't accept ack and start/stop in the same message,
         // although it will accept destroy in any !INIT message.

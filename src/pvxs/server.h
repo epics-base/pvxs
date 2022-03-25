@@ -21,6 +21,7 @@
 #include <pvxs/version.h>
 #include <pvxs/util.h>
 #include <pvxs/data.h>
+#include <pvxs/netcommon.h>
 
 namespace pvxs {
 namespace client {
@@ -57,6 +58,14 @@ public:
     //! Create/allocate, but do not start, a new server with the provided config.
     explicit Server(const Config&);
     ~Server();
+
+    /** Create new server based on configuration from $EPICS_PVA* environment variables.
+     *
+     * Shorthand for @code Config::fromEnv().build() @endcode.
+     * @since 0.2.1
+     */
+    static
+    Server fromEnv();
 
     //! Begin serving.  Does not block.
     Server& start();
@@ -113,6 +122,13 @@ public:
     //! List all source names and priorities.
     std::vector<std::pair<std::string, int> > listSource();
 
+#ifdef PVXS_EXPERT_API_ENABLED
+    //! Compile report about peers and channels
+    //! @param zero If true, zero counters after reading
+    //! @since 0.2.0
+    Report report(bool zero=true) const;
+#endif
+
     explicit operator bool() const { return !!pvt; }
 
     friend
@@ -133,6 +149,11 @@ struct PVXS_API Config {
     //! interfaces.empty() treated as an alias for "0.0.0.0", which may also be given explicitly.
     //! Port numbers are optional and unused (parsed and ignored)
     std::vector<std::string> interfaces;
+    //! Ignore client requests originating from addresses in this list.
+    //! Entries must be IP addresses with optional port numbers.
+    //! Port number zero (default) is treated as a wildcard which matches any port.
+    //! @since 0.2.0
+    std::vector<std::string> ignoreAddrs;
     //! Addresses (**not** host names) to which (UDP) beacons message will be sent.
     //! May include broadcast and/or unicast addresses.
     //! Supplemented iif auto_beacon==true
@@ -144,8 +165,12 @@ struct PVXS_API Config {
     //! Whether to populate the beacon address list automatically.  (recommended)
     bool auto_beacon = true;
 
+    //! Inactivity timeout interval for TCP connections.  (seconds)
+    //! @since 0.2.0
+    double tcpTimeout = 40.0;
+
     //! Server unique ID.  Only meaningful in readback via Server::config()
-    std::array<uint8_t, 12> guid{};
+    ServerGUID guid{};
 
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }

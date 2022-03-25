@@ -18,9 +18,17 @@ TESTPROD_HOST += testsock
 testsock_SRCS += testsock.cpp
 TESTS += testsock
 
+TESTPROD_HOST += testutil
+testutil_SRCS += testutil.cpp
+TESTS += testutil
+
 TESTPROD_HOST += testev
 testev_SRCS += testev.cpp
 TESTS += testev
+
+TESTPROD_HOST += testlog
+testlog_SRCS += testlog.cpp
+TESTS += testlog
 
 TESTPROD_HOST += testudp
 testudp_SRCS += testudp.cpp
@@ -82,6 +90,13 @@ TESTPROD_HOST += test1000
 test1000_SRCS += test1000.cpp
 TESTS += test1000
 
+ifdef BASE_7_0
+
+TESTPROD_HOST += benchdata
+benchdata_SRCS += benchdata.cpp
+
+endif
+
 ifdef BASE_3_15
 
 DBDDEPENDS_FILES += testioc.dbd$(DEP)
@@ -94,6 +109,8 @@ testioc_SRCS += testioc_registerRecordDeviceDriver.cpp
 testioc_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTS += testioc
 
+PROD_SRCS_RTEMS += rtemsTestData.c
+
 endif
 
 TESTPROD_HOST += mcat
@@ -101,6 +118,12 @@ mcat_SRCS += mcat.cpp
 # not a unittest
 
 TESTSCRIPTS_HOST += $(TESTS:%=%.t)
+ifdef BASE_3_15
+ifneq ($(filter $(T_A),$(CROSS_COMPILER_RUNTEST_ARCHS)),)
+TESTPROD = $(TESTPROD_HOST)
+TESTSCRIPTS = $(TESTSCRIPTS_HOST)
+endif
+endif
 
 #===========================
 
@@ -109,3 +132,7 @@ include $(TOP)/configure/RULES_PVXS_MODULE
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
+ifdef BASE_3_15
+rtemsTestData.c : $(TESTFILES) $(TOOLS)/epicsMakeMemFs.pl
+	$(PERL) $(TOOLS)/epicsMakeMemFs.pl $@ epicsRtemsFSImage $(TESTFILES)
+endif

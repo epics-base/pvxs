@@ -7,6 +7,7 @@
 #include <testMain.h>
 
 #include <epicsUnitTest.h>
+#include <alarm.h>
 
 #include <pvxs/unittest.h>
 #include <pvxs/data.h>
@@ -64,6 +65,9 @@ void testAssign()
     testOk1(!val["alarm.status"].isMarked(true, true));
     testOk1(!!val["alarm"].isMarked(true, true));
     testOk1(!val["alarm"].isMarked(true, false));
+
+    val["alarm.severity"] = INVALID_ALARM;
+    testEq(val["alarm.severity"].as<epicsAlarmSeverity>(), INVALID_ALARM);
 }
 
 void testAssignUnion()
@@ -309,11 +313,40 @@ void testAssignSimilar()
     }
 }
 
+void testExtract()
+{
+    testShow()<<__func__;
+
+    auto top = nt::NTScalar{TypeCode::Int32}.create();
+
+    top["value"] = 42;
+
+    testEq(top["value"].as<int32_t>(), 42);
+    {
+        int32_t val = -1;
+        testTrue(top["value"].as(val));
+        testEq(val, 42);
+    }
+    {
+        std::string val("canary");
+        testTrue(top["value"].as(val));
+        testEq(val, "42");
+    }
+    {
+        bool ran = false;
+        top["value"].as<int32_t>([&ran](const int32_t& v) {
+            testEq(v, 42);
+            ran = true;
+        });
+        testTrue(ran);
+    }
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(108);
+    testPlan(116);
     testSetup();
     testTraverse();
     testAssign();
@@ -356,6 +389,7 @@ MAIN(testdata)
     testConvertScalar2<int32_t, uint64_t, int64_t>(0, 0x100000000llu, -0);
 
     testAssignSimilar();
+    testExtract();
     cleanup_for_valgrind();
     return testDone();
 }

@@ -200,7 +200,7 @@ public:
     _OnlySet onlySet(size_t a, size_t b) const { return _OnlySet{this, a, b}; }
     // all()
 
-    // evaulate expression
+    // evaluate expression
     template<typename Inp>
     BitMask(const detail::BitBase<Inp>& expr) {
         resize(expr.size());
@@ -208,7 +208,7 @@ public:
             _words[i] = expr.word(i);
     }
 
-    // evaulate expression
+    // evaluate expression
     template<typename Inp>
     BitMask& operator=(const detail::BitBase<Inp>& expr) {
         resize(expr.size());
@@ -217,7 +217,7 @@ public:
         return *this;
     }
 
-    // evaulate expression
+    // evaluate expression
     template<typename Inp>
     BitMask& operator|=(const detail::BitBase<Inp>& expr) {
         resize(expr.size());
@@ -226,7 +226,7 @@ public:
         return *this;
     }
 
-    // evaulate expression
+    // evaluate expression
     template<typename Inp>
     BitMask& operator&=(const detail::BitBase<Inp>& expr) {
         resize(expr.size());

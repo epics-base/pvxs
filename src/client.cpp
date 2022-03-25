@@ -36,6 +36,8 @@ constexpr timeval channelCacheCleanInterval{10,0};
 
 constexpr timeval beaconCleanInterval{2*180, 0};
 
+constexpr timeval tcpNSCheckInterval{10, 0};
+
 Disconnect::Disconnect()
     :std::runtime_error("Disconnected")
     ,time(epicsTime::getCurrent())
@@ -69,7 +71,7 @@ Timeout::Timeout()
 {}
 Timeout::~Timeout() {}
 
-Channel::Channel(const std::shared_ptr<Context::Pvt>& context, const std::string& name, uint32_t cid)
+Channel::Channel(const std::shared_ptr<ContextImpl>& context, const std::string& name, uint32_t cid)
     :context(context)
     ,name(name)
     ,cid(cid)
@@ -77,19 +79,7 @@ Channel::Channel(const std::shared_ptr<Context::Pvt>& context, const std::string
 
 Channel::~Channel()
 {
-    context->chanByCID.erase(cid);
-    // searchBuckets cleaned in tickSearch()
-    if((state==Creating || state==Active) && conn && conn->bev) {
-        {
-            (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
-
-            EvOutBuf R(hostBE, conn->txBody.get());
-
-            to_wire(R, sid);
-            to_wire(R, cid);
-        }
-        conn->enqueueTxBody(CMD_DESTROY_CHANNEL);
-    }
+    disconnect(nullptr);
 }
 
 void Channel::createOperations()
@@ -121,16 +111,136 @@ void Channel::createOperations()
     }
 }
 
+// call on disconnect or CMD_DESTROY_CHANNEL
+// detach from Connection and notify Connect and *Op
 void Channel::disconnect(const std::shared_ptr<Channel>& self)
 {
-    self->state = Channel::Searching;
-    self->sid = 0xdeadbeef; // spoil
-    context->searchBuckets[context->currentBucket].push_back(self);
+    assert(!self || this==self.get());
+    auto current(std::move(conn));
 
-    log_debug_printf(io, "Server %s detach channel '%s' to re-search\n",
-                     conn ? conn->peerName.c_str() : "<disconnected>",
-                     self->name.c_str());
+    switch(state) {
+    case Channel::Connecting:
+        current->pending.erase(cid);
+        break;
+    case Channel::Creating:
+        current->creatingByCID.erase(cid);
+        break;
+    case Channel::Active:
+        current->chanBySID.erase(sid);
+        break;
+    default:
+        break;
+    }
 
+    if((state==Creating || state==Active) && current && current->bev) {
+        {
+            (void)evbuffer_drain(current->txBody.get(), evbuffer_get_length(current->txBody.get()));
+
+            EvOutBuf R(hostBE, current->txBody.get());
+
+            to_wire(R, sid);
+            to_wire(R, cid);
+        }
+        statTx += current->enqueueTxBody(CMD_DESTROY_CHANNEL);
+    }
+
+    state = Channel::Searching;
+    sid = 0xdeadbeef; // spoil
+
+    auto conns(connectors); // copy list
+
+    for(auto& interested : conns) {
+        if(interested->_connected.exchange(false, std::memory_order_relaxed) && interested->_onDis)
+            interested->_onDis();
+    }
+
+    auto ops(std::move(opByIOID));
+    for(auto& pair : ops) {
+        auto op = pair.second->handle.lock();
+        current->opByIOID.erase(pair.first);
+        if(op)
+            op->disconnected(op);
+    }
+
+    if(!self) { // in ~Channel
+        // searchBuckets cleaned in tickSearch()
+
+    } else if(forcedServer.family()==AF_UNSPEC) { // begin search
+
+        context->searchBuckets[context->currentBucket].push_back(self);
+
+        log_debug_printf(io, "Server %s detach channel '%s' to re-search\n",
+                         current ? current->peerName.c_str() : "<disconnected>",
+                         name.c_str());
+
+    } else { // reconnect to specific server
+        // TODO: holdoff to prevent fast reconnect loop
+
+        conn = Connection::build(context, forcedServer);
+
+        conn->pending[cid] = self;
+        state = Connecting;
+
+        conn->createChannels();
+
+    }
+}
+
+Connect::~Connect() {}
+
+ConnectImpl::~ConnectImpl() {}
+
+const std::string& ConnectImpl::name() const
+{
+    return _name;
+}
+bool ConnectImpl::connected() const
+{
+    return _connected.load(std::memory_order_relaxed);
+}
+
+std::shared_ptr<Connect> ConnectBuilder::exec()
+{
+    if(!ctx)
+        throw std::logic_error("NULL Builder");
+
+    auto syncCancel(_syncCancel);
+    auto context(ctx->impl->shared_from_this());
+
+    auto op(std::make_shared<ConnectImpl>(context->tcp_loop, _pvname));
+    op->_onConn = std::move(_onConn);
+    op->_onDis = std::move(_onDis);
+
+    std::shared_ptr<ConnectImpl> external(op.get(), [op, syncCancel](ConnectImpl*) mutable {
+        // from user thread
+        auto temp(std::move(op));
+        auto loop(temp->loop);
+        // std::bind for lack of c++14 generalized capture
+        // to move internal ref to worker for dtor
+        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<ConnectImpl>& op) {
+                      // on worker
+
+                      // ordering of dispatch()/call() ensures creation before destruction
+                      assert(op->chan);
+                      op->chan->connectors.remove(op.get());
+                  }, std::move(temp)));
+    });
+
+    context->tcp_loop.dispatch([op, context]() {
+        // on worker
+
+        op->chan = Channel::build(context, op->_name, std::string());
+
+        bool cur = op->_connected = op->chan->state==Channel::Active;
+        if(cur && op->_onConn)
+            op->_onConn();
+        else if(!cur && op->_onDis)
+            op->_onDis();
+
+        op->chan->connectors.push_back(op.get());
+    });
+
+    return external;
 }
 
 Value ResultWaiter::wait(double timeout)
@@ -159,9 +269,9 @@ void ResultWaiter::complete(Result&& result, bool interrupt)
     notify.signal();
 }
 
-OperationBase::OperationBase(operation_t op, const std::shared_ptr<Channel>& chan)
+OperationBase::OperationBase(operation_t op, const evbase& loop)
     :Operation(op)
-    ,chan(chan)
+    ,loop(loop)
 {}
 
 OperationBase::~OperationBase() {}
@@ -191,12 +301,20 @@ RequestInfo::RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationB
     ,handle(handle)
 {}
 
-std::shared_ptr<Channel> Channel::build(const std::shared_ptr<Context::Pvt>& context, const std::string& name)
+std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& context,
+                                        const std::string& name,
+                                        const std::string& server)
 {
+    SockAddr forceServer;
+    decltype (context->chanByName)::key_type namekey(name, server);
+
+    if(!server.empty()) {
+        forceServer.setAddress(server.c_str(), context->effective.tcp_port);
+    }
 
     std::shared_ptr<Channel> chan;
 
-    auto it = context->chanByName.find(name);
+    auto it = context->chanByName.find(namekey);
     if(it!=context->chanByName.end()) {
         chan = it->second;
         chan->garbage = false;
@@ -207,12 +325,25 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<Context::Pvt>& con
             context->nextCID++;
 
         chan = std::make_shared<Channel>(context, name, context->nextCID);
+
         context->chanByCID[chan->cid] = chan;
-        context->chanByName[chan->name] = chan;
+        context->chanByName[namekey] = chan;
 
-        context->searchBuckets[context->currentBucket].push_back(chan);
+        if(server.empty()) {
+            context->searchBuckets[context->currentBucket].push_back(chan);
 
-        context->poke(true);
+            context->poke(true);
+
+        } else { // bypass search and connect so a specific server
+            chan->forcedServer = forceServer;
+            chan->conn = Connection::build(context, forceServer);
+
+            chan->conn->pending[chan->cid] = chan;
+            chan->state = Connecting;
+
+            chan->conn->createChannels();
+
+        }
     }
 
     return chan;
@@ -222,38 +353,15 @@ Operation::~Operation() {}
 
 Subscription::~Subscription() {}
 
-Context::Context(const Config& conf)
+Context Context::fromEnv()
 {
-    /* Here be dragons.
-     *
-     * We keep two different ref. counters.
-     * - "externel" counter which keeps a server running.
-     * - "internal" which only keeps server storage from being destroyed.
-     *
-     * External refs are held as Server::pvt.  Internal refs are
-     * held by various in-progress operations (OpBase sub-classes)
-     * Which need to safely access server storage, but should not
-     * prevent a server from stopping.
-     */
-    auto internal(std::make_shared<Pvt>(conf));
-    internal->internal_self = internal;
-    cnt_ClientPvtLive.fetch_add(1u);
+    return Config::fromEnv().build();
+}
 
-    // external
-    pvt.reset(internal.get(), [internal](Pvt*) mutable {
-        auto temp(std::move(internal));
-        try {
-            temp->close();
-        }catch(std::exception& e){
-            // called through ~shared_ptr and can't propagate exceptions.
-            // log and continue...
-            log_exc_printf(setup, "Error while closing Context (%s) : %s\n",
-                           typeid(e).name(), e.what());
-        }
-        cnt_ClientPvtLive.fetch_sub(1u);
-    });
-    // we don't keep a weak_ptr to the external reference.
-    // Caller is entirely responsible for keeping this server running
+Context::Context(const Config& conf)
+    :pvt(std::make_shared<Pvt>(conf))
+{
+    pvt->impl->startNS();
 }
 
 Context::~Context() {}
@@ -263,7 +371,7 @@ const Config& Context::config() const
     if(!pvt)
         throw std::logic_error("NULL Context");
 
-    return pvt->effective;
+    return pvt->impl->effective;
 }
 
 void Context::hurryUp()
@@ -271,21 +379,77 @@ void Context::hurryUp()
     if(!pvt)
         throw std::logic_error("NULL Context");
 
-    pvt->manager.loop().call([this](){
-        pvt->poke(true);
+    pvt->impl->manager.loop().call([this](){
+        pvt->impl->poke(true);
     });
 }
 
-void Context::cacheClear()
+void Context::cacheClear(const std::string& name, cacheAction action)
 {
     if(!pvt)
         throw std::logic_error("NULL Context");
 
-    pvt->tcp_loop.call([this](){
+    pvt->impl->tcp_loop.call([this, name, action](){
         // run twice to ensure both mark and sweep of all unused channels
-        pvt->cacheClean();
-        pvt->cacheClean();
+        log_debug_printf(setup, "cacheClear('%s')\n", name.c_str());
+        pvt->impl->cacheClean(name, action);
+        pvt->impl->cacheClean(name, action);
     });
+}
+
+void Context::ignoreServerGUIDs(const std::vector<ServerGUID>& guids)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+
+    pvt->impl->manager.loop().call([this, &guids](){
+        pvt->impl->ignoreServerGUIDs = guids;
+    });
+}
+
+Report Context::report(bool zero) const
+{
+    Report ret;
+
+    pvt->impl->tcp_loop.call([this, &ret, zero](){
+
+        for(auto& pair : pvt->impl->connByAddr) {
+            auto conn = pair.second.lock();
+            if(!conn)
+                continue;
+
+            ret.connections.emplace_back();
+            auto& sconn = ret.connections.back();
+            sconn.peer = conn->peerName;
+            sconn.tx = conn->statTx;
+            sconn.rx = conn->statRx;
+
+            if(zero) {
+                conn->statTx = conn->statRx = 0u;
+            }
+
+            // omit stats for transitory conn->creatingByCID
+
+            for(auto& pair : conn->chanBySID) {
+                auto chan = pair.second.lock();
+                if(!chan)
+                    continue;
+
+                sconn.channels.emplace_back();
+                auto& schan = sconn.channels.back();
+                schan.name = chan->name;
+                schan.tx = chan->statTx;
+                schan.rx = chan->statRx;
+
+                if(zero) {
+                    chan->statTx = chan->statRx = 0u;
+                }
+            }
+        }
+
+    });
+
+    return ret;
 }
 
 static
@@ -299,25 +463,26 @@ Value buildCAMethod()
                    }).create();
 }
 
-Context::Pvt::Pvt(const Config& conf)
+ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     :effective(conf)
     ,caMethod(buildCAMethod())
     ,searchTx(AF_INET, SOCK_DGRAM, 0)
-    ,tcp_loop("PVXCTCP", epicsThreadPriorityCAServerLow)
-    ,searchRx(event_new(tcp_loop.base, searchTx.sock, EV_READ|EV_PERSIST, &Pvt::onSearchS, this))
-    ,searchTimer(event_new(tcp_loop.base, -1, EV_TIMEOUT, &Pvt::tickSearchS, this))
+    ,tcp_loop(tcp_loop)
+    ,searchRx(event_new(tcp_loop.base, searchTx.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
+    ,searchTimer(event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::tickSearchS, this))
     ,manager(UDPManager::instance())
-    ,beaconCleaner(event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &Pvt::tickBeaconCleanS, this))
-    ,cacheCleaner(event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &Pvt::cacheCleanS, this))
+    ,beaconCleaner(event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::tickBeaconCleanS, this))
+    ,cacheCleaner(event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::cacheCleanS, this))
+    ,nsChecker(event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
 {
     effective.expand();
 
     searchBuckets.resize(nBuckets);
 
-    std::set<std::string> bcasts;
-    for(auto& addr : searchTx.interfaces()) {
+    std::set<SockAddr> bcasts;
+    for(auto& addr : searchTx.broadcasts()) {
         addr.setPort(0u);
-        bcasts.insert(addr.tostring());
+        bcasts.insert(addr);
     }
 
     {
@@ -343,18 +508,32 @@ Context::Pvt::Pvt(const Config& conf)
     enable_SO_RXQ_OVFL(searchTx.sock);
 
     for(auto& addr : effective.addressList) {
-        auto isbcast = bcasts.find(addr)!=bcasts.end();
         SockAddr saddr(AF_INET);
         try {
             saddr.setAddress(addr.c_str(), effective.udp_port);
         }catch(std::runtime_error& e) {
-            log_err_printf(setup, "%s  Ignoring...\n", e.what());
+            log_err_printf(setup, "%s  Ignoring %s\n", e.what(), addr.c_str());
+            continue;
         }
         auto top = ntohl(saddr->in.sin_addr.s_addr)>>24u;
-        auto isucast = !isbcast && top<239 && top>224;
+        auto ismcast = top>224 && top<239;
+        bool isbcast = bcasts.find(saddr.withPort(0))!=bcasts.end(); // TODO: exclude port
+        auto isucast = !isbcast && !ismcast;
 
         log_info_printf(io, "Searching to %s%s\n", saddr.tostring().c_str(), (isucast?" unicast":""));
         searchDest.emplace_back(saddr, isucast);
+    }
+
+    for(auto& addr : effective.nameServers) {
+        SockAddr saddr(AF_INET);
+        try {
+            saddr.setAddress(addr.c_str(), 5075);
+        }catch(std::runtime_error& e) {
+            log_err_printf(setup, "%s  Ignoring...\n", e.what());
+        }
+
+        log_info_printf(io, "Searching to TCP %s\n", saddr.tostring().c_str());
+        nameServers.emplace_back(saddr, nullptr);
     }
 
     for(auto& iface : effective.interfaces) {
@@ -379,9 +558,28 @@ Context::Pvt::Pvt(const Config& conf)
         log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
 }
 
-Context::Pvt::~Pvt() {}
+ContextImpl::~ContextImpl() {}
 
-void Context::Pvt::close()
+void ContextImpl::startNS()
+{
+    if(nameServers.empty()) // vector size const after ctor, contents remain mutable
+        return;
+
+    tcp_loop.call([this]() {
+        // start connections to name servers
+        for(auto& ns : nameServers) {
+            const auto& serv = ns.first;
+            ns.second = Connection::build(shared_from_this(), serv);
+            ns.second->nameserver = true;
+            log_debug_printf(io, "Connecting to nameserver %s\n", ns.second->peerName.c_str());
+        }
+
+        if(event_add(nsChecker.get(), &tcpNSCheckInterval))
+            log_err_printf(setup, "Error enabling TCP search reconnect timer\n%s", "");
+    });
+}
+
+void ContextImpl::close()
 {
     // terminate all active connections
     tcp_loop.call([this]() {
@@ -415,7 +613,7 @@ void Context::Pvt::close()
     manager.sync();
 }
 
-void Context::Pvt::poke(bool force)
+void ContextImpl::poke(bool force)
 {
     {
         Guard G(pokeLock);
@@ -440,30 +638,115 @@ void Context::Pvt::poke(bool force)
         throw std::runtime_error("Unable to schedule searchTimer");
 }
 
-void Context::Pvt::onBeacon(const UDPManager::Beacon& msg)
+void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
 {
     const auto& guid = msg.guid;
 
     epicsTimeStamp now;
     epicsTimeGetCurrent(&now);
 
-    auto it = beaconSenders.find(msg.src);
-    if(it!=beaconSenders.end() && msg.guid==it->second.guid) {
-        it->second.lastRx = now;
-        return;
+    {
+        Guard G(pokeLock);
+        auto it = beaconSenders.find(msg.src);
+        if(it!=beaconSenders.end() && msg.guid==it->second.guid) {
+            it->second.lastRx = now;
+            return;
+        }
+
+        beaconSenders.emplace(msg.src, BTrack{msg.guid, now});
     }
 
-    beaconSenders.emplace(msg.src, BTrack{msg.guid, now});
-
-    log_debug_printf(io, "%s New server %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
-               msg.src.tostring().c_str(),
-               guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11],
-               msg.server.tostring().c_str());
+    log_debug_printf(io, "%s\n",
+                     std::string(SB()<<msg.src<<" New server "<<guid<<' '<<msg.server).c_str());
 
     poke(false);
 }
 
-bool Context::Pvt::onSearch()
+static
+void procSearchReply(ContextImpl& self, const SockAddr& src, Buffer& M, bool istcp)
+{
+    ServerGUID guid;
+    SockAddr serv(AF_INET);
+    uint16_t port = 0;
+    uint8_t found = 0u;
+
+    _from_wire<12>(M, &guid[0], false, __FILE__, __LINE__);
+    // searchSequenceID
+    // we don't use this and instead rely on ID for individual PVs
+    M.skip(4u, __FILE__, __LINE__);
+
+    from_wire(M, serv);
+    if(serv.isAny())
+        serv = src;
+    from_wire(M, port);
+    if(istcp && port==0)
+        port = src.port();
+    serv.setPort(port);
+
+    if(M.size()<4u || M[0]!=3u || M[1]!='t' || M[2]!='c' || M[3]!='p')
+        return;
+    M.skip(4u, __FILE__, __LINE__);
+
+    from_wire(M, found);
+    if(!found)
+        return;
+
+    uint16_t nSearch = 0u;
+    from_wire(M, nSearch);
+
+    if(M.good()) {
+        for(const ServerGUID& ignore : self.ignoreServerGUIDs) {
+            if(guid==ignore) {
+                log_info_printf(io, "Ignore reply from %s with %s\n",
+                                 src.tostring().c_str(), std::string(SB()<<guid).c_str());
+                return;
+            }
+        }
+    }
+
+    for(auto n : range(nSearch)) {
+        (void)n;
+
+        uint32_t id=0u;
+        from_wire(M, id);
+        if(!M.good())
+            break;
+
+        std::shared_ptr<Channel> chan;
+        {
+            auto it = self.chanByCID.find(id);
+            if(it==self.chanByCID.end())
+                continue;
+
+            chan = it->second.lock();
+            if(!chan)
+                continue;
+        }
+
+        log_debug_printf(io, "Search reply for %s\n", chan->name.c_str());
+
+        if(chan->state==Channel::Searching) {
+            chan->guid = guid;
+            chan->replyAddr = serv;
+
+            chan->conn = Connection::build(self.shared_from_this(), serv);
+
+            chan->conn->pending[chan->cid] = chan;
+            chan->state = Channel::Connecting;
+
+            chan->conn->createChannels();
+
+        } else if(chan->guid!=guid) {
+            log_err_printf(duppv, "Duplicate PV name %s from %s and %s\n",
+                           chan->name.c_str(),
+                           chan->replyAddr.tostring().c_str(),
+                           serv.tostring().c_str());
+        }
+    }
+
+}
+
+bool ContextImpl::onSearch()
 {
     searchMsg.resize(0x10000);
     SockAddr src;
@@ -524,75 +807,7 @@ bool Context::Pvt::onSearch()
     }
 
     if(cmd==CMD_SEARCH_RESPONSE) {
-        std::array<uint8_t, 12> guid;
-        SockAddr serv;
-        uint16_t port = 0;
-        uint8_t found = 0u;
-
-        _from_wire<12>(M, &guid[0], false);
-        // searchSequenceID
-        // we don't use this and instead rely on ID for individual PVs
-        M.skip(4u, __FILE__, __LINE__);
-
-        from_wire(M, serv);
-        if(serv.isAny())
-            serv = src;
-        from_wire(M, port);
-        serv.setPort(port);
-
-        if(M.size()<4u || M[0]!=3u || M[1]!='t' || M[2]!='c' || M[3]!='p')
-            return true;
-        M.skip(4u, __FILE__, __LINE__);
-
-        from_wire(M, found);
-        if(!found)
-            return true;
-
-        uint16_t nSearch = 0u;
-        from_wire(M, nSearch);
-
-        for(auto n : range(nSearch)) {
-            (void)n;
-
-            uint32_t id=0u;
-            from_wire(M, id);
-            if(!M.good())
-                break;
-
-            std::shared_ptr<Channel> chan;
-            {
-                auto it = chanByCID.find(id);
-                if(it==chanByCID.end())
-                    continue;
-
-                chan = it->second.lock();
-                if(!chan)
-                    continue;
-            }
-
-            log_debug_printf(io, "Search reply for %s\n", chan->name.c_str());
-
-            if(chan->state==Channel::Searching) {
-                chan->guid = guid;
-                chan->replyAddr = serv;
-
-                auto it = connByAddr.find(serv);
-                if(it==connByAddr.end() || !(chan->conn = it->second.lock())) {
-                    connByAddr[serv] = chan->conn = std::make_shared<Connection>(internal_self.lock(), serv);
-                }
-
-                chan->conn->pending.push_back(chan);
-                chan->state = Channel::Connecting;
-
-                chan->conn->createChannels();
-
-            } else if(chan->guid!=guid) {
-                log_err_printf(duppv, "Duplicate PV name %s from %s and %s\n",
-                               chan->name.c_str(),
-                               chan->replyAddr.tostring().c_str(),
-                               serv.tostring().c_str());
-            }
-        }
+        procSearchReply(*this, src, M, false);
 
     } else {
         M.fault(__FILE__, __LINE__);
@@ -607,7 +822,20 @@ bool Context::Pvt::onSearch()
     return true;
 }
 
-void Context::Pvt::onSearchS(evutil_socket_t fd, short evt, void *raw)
+void Connection::handle_SEARCH_RESPONSE()
+{
+    EvInBuf M(peerBE, segBuf.get(), 16);
+
+    procSearchReply(*context, peerAddr, M, true);
+
+    if(!M.good()) {
+        log_crit_printf(io, "%s:%d Server %s sends invalid SEARCH_RESPONSE.  Disconnecting...\n",
+                        M.file(), M.line(), peerName.c_str());
+        bev.reset();
+    }
+}
+
+void ContextImpl::onSearchS(evutil_socket_t fd, short evt, void *raw)
 {
     try {
         log_debug_printf(io, "UDP search Rx event %x\n", evt);
@@ -617,7 +845,7 @@ void Context::Pvt::onSearchS(evutil_socket_t fd, short evt, void *raw)
         // limit number of packets processed before going back to the reactor
         unsigned i;
         const unsigned limit = 40;
-        for(i=0; i<limit && static_cast<Pvt*>(raw)->onSearch(); i++) {}
+        for(i=0; i<limit && static_cast<ContextImpl*>(raw)->onSearch(); i++) {}
         log_debug_printf(io, "UDP search processed %u/%u\n", i, limit);
 
     }catch(std::exception& e){
@@ -625,7 +853,7 @@ void Context::Pvt::onSearchS(evutil_socket_t fd, short evt, void *raw)
     }
 }
 
-void Context::Pvt::tickSearch()
+void ContextImpl::tickSearch()
 {
     {
         Guard G(pokeLock);
@@ -660,6 +888,7 @@ void Context::Pvt::tickSearch()
         to_wire(M, uint32_t(0u));
         to_wire(M, uint32_t(0u));
 
+        auto pport = M.save();
         to_wire(M, uint16_t(searchRxPort));
 
         to_wire(M, uint8_t(1u));
@@ -727,7 +956,7 @@ void Context::Pvt::tickSearch()
             FixedBuf C(true, pcount, 2u);
             to_wire(C, count);
         }
-        auto consumed = M.save() - searchMsg.data();
+        size_t consumed = M.save() - searchMsg.data();
         {
             FixedBuf H(true, searchMsg.data(), 8);
             to_wire(H, Header{CMD_SEARCH, 0, uint32_t(consumed-8u)});
@@ -754,25 +983,49 @@ void Context::Pvt::tickSearch()
                                  pair.second ? "ucast" : "bcast");
             }
         }
+        *pflags |= 0x80; // TCP search is always "unicast"
+        // TCP search replies should always come back on the same connection,
+        // so zero out the meaningless response port.
+        pport[0] = pport[1] = 0;
+
+        for(auto& pair : nameServers) {
+            auto& serv = pair.second;
+
+            if(!serv->ready || !serv->bev)
+                continue;
+
+            auto tx = bufferevent_get_output(serv->bev.get());
+
+            // arbitrarily skip searching if TX buffer is too full
+            // TODO: configure limit?
+            if(evbuffer_get_length(tx) > 64*1024u)
+                continue;
+
+            (void)evbuffer_add(tx, (char*)searchMsg.data(), consumed);
+            // fail silently, will retry
+        }
+
     }
 
     if(event_add(searchTimer.get(), &bucketInterval))
         log_err_printf(setup, "Error re-enabling search timer on\n%s", "");
 }
 
-void Context::Pvt::tickSearchS(evutil_socket_t fd, short evt, void *raw)
+void ContextImpl::tickSearchS(evutil_socket_t fd, short evt, void *raw)
 {
     try {
-        static_cast<Pvt*>(raw)->tickSearch();
+        static_cast<ContextImpl*>(raw)->tickSearch();
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in search timer callback: %s\n", e.what());
     }
 }
 
-void Context::Pvt::tickBeaconClean()
+void ContextImpl::tickBeaconClean()
 {
     epicsTimeStamp now;
     epicsTimeGetCurrent(&now);
+
+    Guard G(pokeLock);
 
     auto it = beaconSenders.begin();
     while(it!=beaconSenders.end()) {
@@ -782,56 +1035,98 @@ void Context::Pvt::tickBeaconClean()
 
         if(age < -15.0 || age > 2.1*180.0) {
             auto& guid = cur->second.guid;
-            log_debug_printf(io, "Lost server %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %s\n",
-                       guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7], guid[8], guid[9], guid[10], guid[11],
-                       cur->first.tostring().c_str());
+            log_debug_printf(io, "%s\n",
+                             std::string(SB()<<" Lost server "<<guid<<' '<<cur->first).c_str());
 
             beaconSenders.erase(cur);
         }
     }
 }
 
-void Context::Pvt::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
+void ContextImpl::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
 {
     try {
-        static_cast<Pvt*>(raw)->tickBeaconClean();
+        static_cast<ContextImpl*>(raw)->tickBeaconClean();
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in beacon cleaner timer callback: %s\n", e.what());
     }
 }
 
-void Context::Pvt::cacheClean()
+void ContextImpl::onNSCheck()
 {
-    std::set<std::string> trash;
+    for(auto& ns : nameServers) {
+        if(ns.second && ns.second->bev) // connecting or connected
+            continue;
 
-    for(auto& pair : chanByName) {
-        if(pair.second.use_count()<=1) {
-            if(!pair.second->garbage) {
+        ns.second = Connection::build(shared_from_this(), ns.first);
+        ns.second->nameserver = true;
+        log_debug_printf(io, "Reconnecting nameserver %s\n", ns.second->peerName.c_str());
+    }
+}
+
+void ContextImpl::onNSCheckS(evutil_socket_t fd, short evt, void *raw)
+{
+    try {
+        static_cast<ContextImpl*>(raw)->onNSCheck();
+    }catch(std::exception& e){
+        log_exc_printf(io, "Unhandled error in TCP nameserver timer callback: %s\n", e.what());
+    }
+}
+
+void ContextImpl::cacheClean(const std::string& name, Context::cacheAction action)
+{
+    auto next(chanByName.begin()),
+         end(chanByName.end());
+
+    while(next!=end) {
+        auto cur(next++);
+
+        if(!name.empty() && cur->first.first!=name)
+            continue;
+
+        else if(action!=Context::Clean || cur->second.use_count()<=1) {
+            cur->second->garbage = true;
+
+            if(action==Context::Clean && !cur->second->garbage) {
                 // mark for next sweep
-                log_debug_printf(setup, "Chan GC mark '%s'\n", pair.first.c_str());
-                pair.second->garbage = true;
+                log_debug_printf(setup, "Chan GC mark '%s':'%s'\n",
+                                 cur->first.first.c_str(), cur->first.second.c_str());
 
             } else {
-                // sweep
-                trash.insert(pair.first);
+                log_debug_printf(setup, "Chan GC sweep '%s':'%s'\n",
+                                 cur->first.first.c_str(), cur->first.second.c_str());
+
+                auto trash(std::move(cur->second));
+
+                // explicitly break ref. loop of channel cache
+                chanByName.erase(cur);
+
+                if(action==Context::Disconnect) {
+                    trash->disconnect(trash);
+                }
             }
         }
     }
-
-    // explicitly break ref. loop of channel cache
-    for(auto& name : trash) {
-        chanByName.erase(name);
-        log_debug_printf(setup, "Chan GC sweep '%s'\n", name.c_str());
-    }
 }
 
-void Context::Pvt::cacheCleanS(evutil_socket_t fd, short evt, void *raw)
+void ContextImpl::cacheCleanS(evutil_socket_t fd, short evt, void *raw)
 {
     try {
-        static_cast<Pvt*>(raw)->tickBeaconClean();
+        static_cast<ContextImpl*>(raw)->cacheClean(std::string(), Context::Clean);
+        static_cast<ContextImpl*>(raw)->tickBeaconClean();
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in beacon cleaner timer callback: %s\n", e.what());
     }
+}
+
+Context::Pvt::Pvt(const Config& conf)
+    :loop("PVXCTCP", epicsThreadPriorityCAServerLow)
+    ,impl(std::make_shared<ContextImpl>(conf, loop.internal()))
+{}
+
+Context::Pvt::~Pvt()
+{
+    impl->close();
 }
 
 } // namespace client

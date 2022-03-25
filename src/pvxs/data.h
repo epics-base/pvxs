@@ -52,7 +52,9 @@ struct FieldDesc;
 //! store_t shall be convertible to/from T through StoreTransform<T>::in() and out().
 //! StorageMap<T>::code is the associated StoreType.
 template<typename T, typename Enable=void>
-struct StorageMap;
+struct StorageMap {
+    typedef void not_storable;
+};
 
 // map signed integers to int64_t
 template<typename T>
@@ -97,10 +99,16 @@ template<>
 struct StorageMap<unselect_t>
 { typedef unselect_t store_t; static constexpr StoreType code{StoreType::Null}; };
 
+// drill through enum{} to handle as underlying integer type
+template<typename T>
+struct StorageMap<T, typename std::enable_if<std::is_enum<T>::value>::type>
+        :StorageMap<typename std::underlying_type<T>::type>
+{};
+
 template<typename T>
 using StoreAs = StorageMap<typename std::decay<T>::type>;
 
-template<typename T>
+template<typename T, typename Enable=void>
 struct StoreTransform {
     // pass through by default
     static inline const T& in (const T& v) { return v; }
@@ -117,6 +125,14 @@ struct StoreTransform<shared_array<const E>> {
     shared_array<const E> out(const shared_array<const void>& v) {
         return v.template convertTo<const E>();
     }
+};
+template<typename T>
+struct StoreTransform<T, typename std::enable_if<std::is_enum<T>::value>::type> {
+    typedef typename std::underlying_type<T>::type itype_t;
+    static inline
+    itype_t in(const T& v) { return v; }
+    static inline
+    T out(const itype_t& v) { return static_cast<T>(v); }
 };
 
 } // namespace impl
@@ -583,6 +599,7 @@ public:
      * - std::string
      * - Value
      * - shared_array<const void>
+     * - An enum where the underlying type is one of the preceding (since 0.2.0).
      *
      * @throws NoField !this->valid()
      * @throws NoConvert if the field value can not be coerced to type T
@@ -614,7 +631,7 @@ public:
     //! If possible, this value is cast to T and passed as the only argument
     //! of the provided function.
     template<typename T, typename FN>
-    void as(FN&& fn) const {
+    typename impl::StorageMap<typename std::decay<FN>::type>::not_storable as(FN&& fn) const {
         typename impl::StoreAs<T>::store_t val;
         if(tryCopyOut(&val, impl::StoreAs<T>::code)) {
             fn(impl::StoreTransform<T>::out(val));
@@ -639,6 +656,7 @@ public:
      * - std::string
      * - Value
      * - shared_array<const void>
+     * - An enum where the underlying type is one of the preceding (since 0.2.0).
      */
     template<typename T>
     void from(const T& val) {
@@ -741,6 +759,7 @@ public:
     inline
     IMarked imarked() const noexcept;
 
+    //! Provides options to control printing of a Value via std::ostream.
     struct Fmt {
         const Value* top = nullptr;
         size_t _limit=0u;
@@ -751,12 +770,24 @@ public:
         bool _showValue = true;
 
         Fmt(const Value* top) :top(top) {}
+        //! Show Value in tree/struct format
         Fmt& tree() { _format = Tree; return *this; }
+        //! Show Value in delta format
         Fmt& delta()  { _format = Delta ; return *this; }
+        //! Explicitly select format_t
         Fmt& format(format_t f) { _format = f ; return *this; }
+        //! Whether to show field values, or only type information
         Fmt& showValue(bool v) { _showValue = v; return *this; }
+        //! When non-zero, arrays output will be truncated with "..." after cnt elements.
         Fmt& arrayLimit(size_t cnt) { _limit = cnt; return *this; }
     };
+    /** Configurable printing via std::ostream
+     *
+     * @code
+     * Value val;
+     * std::cout<<val.format().arrayLimit(10);
+     * @endcode
+     */
     inline Fmt format() const { return Fmt(this); }
 };
 

@@ -86,12 +86,13 @@ Release Policy
 PVXS Release numbering follows the `Semantic Versioning <https://semver.org/>`_
 scheme of MAJOR.MINOR.PATCH with the following amendments.
 
-* A change to the MAJOR number indicates that a backwards incompatible change to some part of the API.
+* A change to the MAJOR number indicates that a backwards incompatible change to some part of the public API.
   This may not effect every user application.
   This policy is intended to provide users with confidence in upgrading when MAJOR does not change.
 * The PATCH number will only be incremented if changes to the public API are believed to maintain ABI compatibility.
   MINOR will be incremented when a known ABI incompatible change is made.
   Library SONAMES take the form MAJOR.MINOR.
+* Backwards incompatible changes to semi-public :ref:`expertapi` may appear in a MINOR release.
 * At this time only one version number is maintained, which is applied to both
   the main libpvxs.so and the auxiliary libpvxsIoc.so.
   Statements about API or ABI compatibility apply to both libraries as a group.
@@ -101,6 +102,22 @@ scheme of MAJOR.MINOR.PATCH with the following amendments.
 Each release will be accompanied by a signed tag in the repository,
 which may be verified with the author's GPG key
 `5C159E669D69E2D4C4E74E540C8E1C8347330CFB <http://keys.gnupg.net/pks/lookup?op=get&search=0x5C159E669D69E2D4C4E74E540C8E1C8347330CFB>`_.
+
+.. _expertapi:
+
+Expert APIs
+===========
+
+The Expert API are a set of semi-public definitions and methods which are not intended for general use,
+and may be subject to incompatible change in a minor release.
+Expert API calls are wrapped by "#ifdef PVXS_EXPERT_API_ENABLED"
+to prevent unintentional usage.
+
+If a change is considered,
+best effort will be made to involve developers/sites known to make use of Expert API.
+Prospective users of the Expert API are encouraged to contact the author.
+
+Elements of the Expert API may be "promoted" to regular/full API status if warranted.
 
 .. _contrib:
 

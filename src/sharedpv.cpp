@@ -23,6 +23,7 @@ typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
 DEFINE_LOGGER(logshared, "pvxs.server.sharedpv");
+DEFINE_LOGGER(logsource, "pvxs.server.staticsource");
 DEFINE_LOGGER(logmailbox, "pvxs.mailbox");
 
 namespace pvxs {
@@ -54,6 +55,7 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
     void connectOp(const std::shared_ptr<Impl>& self, const std::shared_ptr<ConnectOp>& conn, const Value& current)
     {
         try{
+            // unlocked as connect() will sync. with the client worker
             conn->connect(current);
         }catch(std::exception& e){
             log_warn_printf(logshared, "%s Client %s: Can't attach() get: %s\n",
@@ -65,20 +67,28 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
     }
 
     static
-    void connectSub(const std::shared_ptr<Impl>& self,
+    void connectSub(Guard& G,
+                    const std::shared_ptr<Impl>& self,
                     const std::shared_ptr<MonitorSetupOp>& conn,
                     const Value& current)
     {
+        G.assertIdenticalMutex(self->lock);
         try {
-            std::shared_ptr<MonitorControlOp> sub(conn->connect(current));
+            std::shared_ptr<MonitorControlOp> sub;
+            {
+                UnGuard U(G);
 
-            conn->onClose([self, sub](const std::string& msg) {
-                log_debug_printf(logshared, "%s on %s Monitor onClose\n", sub->peerName().c_str(), sub->name().c_str());
-                Guard G(self->lock);
-                self->subscribers.erase(sub);
-            });
+                // unlock as connect() and onClose() sync. with the client worker
+                sub = conn->connect(current);
 
-            sub->post(current);
+                conn->onClose([self, sub](const std::string& msg) {
+                    log_debug_printf(logshared, "%s on %s Monitor onClose\n", sub->peerName().c_str(), sub->name().c_str());
+                    Guard G(self->lock);
+                    self->subscribers.erase(sub);
+                });
+
+                sub->post(current);
+            }
             self->subscribers.emplace(std::move(sub));
 
         }catch(std::exception& e){
@@ -244,28 +254,23 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
 
         std::shared_ptr<MonitorSetupOp> conn(std::move(op));
 
-        Value temp;
-        {
-            Guard G(self->lock);
+        Guard G(self->lock);
 
-            if(!self->current) {
-                // no type
+        if(!self->current) {
+            // no type
 
-                // this onClose will be later replaced if/when the monitor is open()'d
-                conn->onClose([self, conn](const std::string& msg) {
-                    log_debug_printf(logshared, "%s on %s Monitor onClose\n", conn->peerName().c_str(), conn->name().c_str());
-                    Guard G(self->lock);
-                    self->mpending.erase(conn);
-                });
+            // this onClose will be later replaced if/when the monitor is open()'d
+            conn->onClose([self, conn](const std::string& msg) {
+                log_debug_printf(logshared, "%s on %s Monitor onClose\n", conn->peerName().c_str(), conn->name().c_str());
+                Guard G(self->lock);
+                self->mpending.erase(conn);
+            });
 
-                self->mpending.insert(std::move(conn));
+            self->mpending.insert(std::move(conn));
 
-            } else {
-                temp = self->current;
-            }
+        } else {
+            Impl::connectSub(G, self, conn, self->current.clone());
         }
-        if(temp)
-            Impl::connectSub(self, conn, temp);
     });
 
     ctrl->onClose([self, ctrl](const std::string& msg) {
@@ -358,18 +363,21 @@ void SharedPV::open(const Value& initial)
         pending = std::move(impl->pending);
         mpending = std::move(impl->mpending);
 
-        impl->current = temp = initial.clone();
-    }
+        impl->current = initial.clone();
+        // make a second copy as 'temp' will be queued
+        temp = initial.clone();
 
-    // TODO the following is really inefficient if we aren't on a worker.
-    //      API to batch?
+        // TODO these loops will be really inefficient if we aren't on a worker.
+        //      API to batch?
+
+        for(auto& op : mpending) {
+            Impl::connectSub(G, impl, op, temp);
+            // initial open post()'d
+        }
+    }
 
     for(auto& op : pending) {
         Impl::connectOp(impl, op, temp);
-    }
-    for(auto& op : mpending) {
-        Impl::connectSub(impl, op, temp);
-        // initial open post()'d
     }
 }
 
@@ -470,8 +478,10 @@ struct StaticSource::Impl : public Source
         auto G(lock.lockReader());
         for(auto& name : op) {
             auto it(pvs.find(name.name()));
-            if(it!=pvs.end())
+            if(it!=pvs.end()) {
                 name.claim();
+                log_debug_printf(logsource, "%p claim '%s'\n", this, name.name());
+            }
         }
     }
 
@@ -481,7 +491,10 @@ struct StaticSource::Impl : public Source
         {
             auto G(lock.lockReader());
             auto it(pvs.find(op->name()));
-            if(it==pvs.end())
+            bool found = it!=pvs.end();
+            log_debug_printf(logsource, "%p %screate '%s'\n",
+                             this, found ? "":"can't ", op->name().c_str());
+            if(!found)
                 return; // not mine
             pv = it->second;
         }

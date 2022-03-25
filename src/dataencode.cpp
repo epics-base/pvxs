@@ -184,7 +184,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
                 name+='.';
 
                 if(code.code==TypeCode::Struct && code==cfld.code) {
-                    // copy descendant indicies for sub-struct
+                    // copy descendant indices for sub-struct
                     for(auto& pair : cfld.mlookup) {
                         fld.mlookup[name+pair.first] = cindex - cref + pair.second;
                     }
@@ -218,32 +218,6 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
     }
 }
 
-namespace {
-template<typename E, typename C = E>
-void to_wire(Buffer& buf, const shared_array<const void>& varr)
-{
-    auto arr = varr.castTo<const E>();
-    to_wire(buf, Size{arr.size()});
-    for(auto i : range(arr.size())) {
-        to_wire(buf, C(arr[i]));
-    }
-}
-
-template<typename E, typename C = E>
-void from_wire(Buffer& buf, shared_array<const void>& varr)
-{
-    Size slen{};
-    from_wire(buf, slen);
-    shared_array<E> arr(slen.size);
-    for(auto i : range(arr.size())) {
-        C temp{};
-        from_wire(buf, temp);
-        arr[i] = temp;
-    }
-    varr = arr.freeze().template castTo<const void>();
-}
-}
-
 // serialize a field and all children (if Compound)
 static
 void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<const FieldStorage>& store)
@@ -255,9 +229,10 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
             // serialize entire sub-structure
             for(auto off : range(desc->size())) {
                 auto cdesc = desc + off;
+                if(cdesc->code==TypeCode::Struct) // skip sub-struct nodes.  Would be redundant
+                    continue;
                 std::shared_ptr<const FieldStorage> cstore(store, store.get()+off); // TODO avoid shared_ptr/aliasing here
-                if(cdesc->code!=TypeCode::Struct)
-                    to_wire_field(buf, cdesc, cstore);
+                to_wire_field(buf, cdesc, cstore);
             }
         }
             return;
@@ -454,9 +429,13 @@ void to_wire_valid(Buffer& buf, const Value& val, const BitMask* mask)
 
     BitMask valid(desc->size());
 
-    for(auto bit : range(desc->size())) {
-        if((store.get()+bit)->valid && (!mask || (*mask)[bit]))
+    for(size_t bit=0u, N=desc->size(); bit<N;) {
+        if(store.get()[bit].valid && (!mask || (*mask)[bit])) {
             valid[bit] = true;
+            bit += desc[bit].size(); // maybe skip past entire sub-struct
+        } else {
+            bit++;
+        }
     }
 
     to_wire(buf, valid);

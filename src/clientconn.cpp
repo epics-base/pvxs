@@ -14,7 +14,7 @@ namespace client {
 
 DEFINE_LOGGER(io, "pvxs.client.io");
 
-Connection::Connection(const std::shared_ptr<Context::Pvt>& context, const SockAddr& peerAddr)
+Connection::Connection(const std::shared_ptr<ContextImpl>& context, const SockAddr& peerAddr)
     :ConnBase (true,
                bufferevent_socket_new(context->tcp_loop.base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS),
                peerAddr)
@@ -24,7 +24,8 @@ Connection::Connection(const std::shared_ptr<Context::Pvt>& context, const SockA
     bufferevent_setcb(bev.get(), &bevReadS, nullptr, &bevEventS, this);
 
     // shorter timeout until connect() ?
-    bufferevent_set_timeouts(bev.get(), &tcp_timeout, &tcp_timeout);
+    timeval tmo(totv(context->effective.tcpTimeout));
+    bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
     if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
         throw std::runtime_error("Unable to begin connecting");
@@ -38,6 +39,16 @@ Connection::~Connection()
     cleanup();
 }
 
+std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
+                                              const SockAddr& serv)
+{
+    std::shared_ptr<Connection> ret;
+    auto it = context->connByAddr.find(serv);
+    if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
+        context->connByAddr[serv] = ret = std::make_shared<Connection>(context, serv);
+    }
+    return ret;
+}
 
 void Connection::createChannels()
 {
@@ -48,9 +59,9 @@ void Connection::createChannels()
 
     auto todo = std::move(pending);
 
-    for(auto& wchan : todo) {
-        auto chan = wchan.lock();
-        if(!chan)
+    for(auto& pair : todo) {
+        auto chan = pair.second.lock();
+        if(!chan || chan->state!=Channel::Connecting)
             continue;
 
         {
@@ -62,7 +73,7 @@ void Connection::createChannels()
             to_wire(R, chan->cid);
             to_wire(R, chan->name);
         }
-        enqueueTxBody(CMD_CREATE_CHANNEL);
+        chan->statTx += enqueueTxBody(CMD_CREATE_CHANNEL);
 
         creatingByCID[chan->cid] = chan;
         chan->state = Channel::Creating;
@@ -91,6 +102,7 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
 void Connection::bevEvent(short events)
 {
     ConnBase::bevEvent(events);
+    // called Connection::cleanup()
 
     if(bev && (events&BEV_EVENT_CONNECTED)) {
         log_debug_printf(io, "Connected to %s\n", peerName.c_str());
@@ -99,7 +111,10 @@ void Connection::bevEvent(short events)
             throw std::logic_error("Unable to enable BEV");
 
         // start echo timer
-        if(event_add(echoTimer.get(), &tcp_echo_period))
+        // tcpTimeout(40) -> 15 second echo period
+        // bound echo to range [1, 15]
+        timeval tmo(totv(std::max(1.0, std::min(15.0, context->effective.tcpTimeout*3.0/8.0))));
+        if(event_add(echoTimer.get(), &tmo))
             log_err_printf(io, "Server %s error starting echoTimer\n", peerName.c_str());
     }
 }
@@ -111,8 +126,7 @@ std::shared_ptr<ConnBase> Connection::self_from_this()
 
 void Connection::cleanup()
 {
-    // (maybe) keep myself alive
-    std::shared_ptr<Connection> self;
+    ready = false;
 
     context->connByAddr.erase(peerAddr);
 
@@ -123,36 +137,26 @@ void Connection::cleanup()
         log_err_printf(io, "Server %s error stopping echoTimer\n", peerName.c_str());
 
     // return Channels to Searching state
-    for(auto& wchan : pending) {
-        auto chan = wchan.lock();
-        if(!chan)
-            continue;
-
-        chan->disconnect(chan);
+    std::set<std::shared_ptr<Channel>> todo;
+    for(auto& pair : pending) {
+        if(auto chan = pair.second.lock())
+            todo.insert(chan);
     }
     for(auto& pair : chanBySID) {
-        auto chan = pair.second.lock();
-        if(!chan)
-            continue;
-
-        chan->disconnect(chan);
+        if(auto chan = pair.second.lock())
+            todo.insert(chan);
     }
     for(auto& pair : creatingByCID) {
-        auto chan = pair.second.lock();
-        if(!chan)
-            continue;
+        if(auto chan = pair.second.lock())
+            todo.insert(chan);
+    }
 
+    for(auto& chan : todo) {
         chan->disconnect(chan);
     }
 
-    auto ops = std::move(opByIOID);
-    for (auto& pair : ops) {
-        auto op = pair.second.handle.lock();
-        if(!op)
-            continue;
-        op->chan->opByIOID.erase(op->ioid);
-        op->disconnected(op);
-    }
+    // Channel::disconnect() should clean
+    assert(opByIOID.empty());
 
     // paranoia
     pending.clear();
@@ -270,10 +274,16 @@ void Connection::handle_CONNECTION_VALIDATED()
     ready = true;
 
     createChannels();
+
+    if(nameserver) {
+        log_info_printf(io, "(re)connected to nameserver %s\n", peerName.c_str());
+        context->poke(true);
+    }
 }
 
 void Connection::handle_CREATE_CHANNEL()
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t cid, sid;
@@ -316,9 +326,10 @@ void Connection::handle_CREATE_CHANNEL()
         }
         creatingByCID.erase(it);
     }
+    chan->statRx += rxlen;
 
     if(!sts.isSuccess()) {
-        // server refuses to create a channel, but presumably responded positivly to search
+        // server refuses to create a channel, but presumably responded positively to search
 
         chan->state = Channel::Searching;
         context->searchBuckets[context->currentBucket].push_back(chan);
@@ -336,49 +347,45 @@ void Connection::handle_CREATE_CHANNEL()
                          chan->name.c_str(), unsigned(chan->cid), unsigned(chan->sid));
 
         chan->createOperations();
+
+        auto conns(chan->connectors); // copy list
+
+        for(auto& conn : conns) {
+            if(!conn->_connected.exchange(true, std::memory_order_relaxed) && conn->_onConn)
+                conn->_onConn();
+        }
     }
 }
 
 void Connection::handle_DESTROY_CHANNEL()
 {
-    // (maybe) keep myself alive
-    std::shared_ptr<Connection> self;
-
-    EvInBuf M(peerBE, segBuf.get(), 16);
-
     uint32_t cid=0, sid=0;
-    from_wire(M, sid);
-    from_wire(M, cid);
+    {
+        EvInBuf M(peerBE, segBuf.get(), 16);
 
-    if(!M.good()) {
-        log_crit_printf(io, "%s:%d Server %s sends invalid DESTROY_CHANNEL.  Disconnecting...\n",
-                        M.file(), M.line(), peerName.c_str());
-        bev.reset();
-        return;
+        from_wire(M, sid);
+        from_wire(M, cid);
+
+        if(!M.good()) {
+            log_crit_printf(io, "%s:%d Server %s sends invalid DESTROY_CHANNEL.  Disconnecting...\n",
+                            M.file(), M.line(), peerName.c_str());
+            bev.reset();
+            return;
+        }
     }
 
     std::shared_ptr<Channel> chan;
     {
         auto it = chanBySID.find(sid);
         if(it==chanBySID.end() || !(chan = it->second.lock())) {
-            log_debug_printf(io, "Server %s destroys non-existant channel %u:%u\n",
+            log_debug_printf(io, "Server %s destroys non-existent channel %u:%u\n",
                              peerName.c_str(), unsigned(cid), unsigned(sid));
             return;
         }
     }
 
     chanBySID.erase(sid);
-
-    chan->state = Channel::Searching;
-    chan->sid = 0xdeadbeef; // spoil
-    self = std::move(chan->conn);
-    context->searchBuckets[context->currentBucket].push_back(chan);
-
-    for(auto& pair : chan->opByIOID) {
-        auto op = pair.second->handle.lock();
-        opByIOID.erase(pair.first); // invalidates pair.second
-        op->disconnected(op);
-    }
+    chan->disconnect(chan);
 
     log_debug_printf(io, "Server %s destroys channel '%s' %u:%u\n",
                      peerName.c_str(), chan->name.c_str(), unsigned(cid), unsigned(sid));
@@ -397,6 +404,8 @@ void Connection::tickEcho()
 
     // maybe help reduce latency
     bufferevent_flush(bev.get(), EV_WRITE, BEV_FLUSH);
+
+    statTx += 8;
 }
 
 void Connection::tickEchoS(evutil_socket_t fd, short evt, void *raw)

@@ -1194,7 +1194,7 @@ FieldStorage::~FieldStorage()
 
 size_t FieldStorage::index() const
 {
-    const size_t ret = this-top->members.data();
+    const size_t ret = this - top->members.data();
     return ret;
 }
 

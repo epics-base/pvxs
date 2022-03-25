@@ -87,7 +87,7 @@ struct NTScalar {
 
 /** An enumerated value (choice from a list of strings)
  *
- * @since UNRELEASED
+ * @since 0.1.5
  */
 struct NTEnum {
     //! A TypeDef which can be appended

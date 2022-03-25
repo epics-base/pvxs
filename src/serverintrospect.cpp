@@ -42,7 +42,7 @@ struct ServerIntrospect : public ServerOp
                 to_wire(R, type);
         }
 
-        conn->enqueueTxBody(CMD_GET_FIELD);
+        ch->statTx += conn->enqueueTxBody(CMD_GET_FIELD);
 
         state = ServerOp::Dead;
         conn->opByIOID.erase(ioid);
@@ -67,11 +67,10 @@ struct ServerIntrospectControl : public server::ConnectOp
     {
         _op = Info;
         _name = chan->name;
-        _peerName = conn->peerName;
-        _ifaceName = conn->iface->name;
+        _cred = conn->cred;
     }
     virtual ~ServerIntrospectControl() {
-        error("Implict Cancel");
+        error("Implicit Cancel");
     }
 
     virtual void connect(const Value& prototype) override final
@@ -93,7 +92,7 @@ struct ServerIntrospectControl : public server::ConnectOp
     {
         auto serv = server.lock();
         if(!serv)
-            return; // soft fail if already completed, cancelled, disconnected, ....
+            return; // soft fail if already completed, canceled, disconnected, ....
 
         serv->acceptor_loop.call([this, type, &sts](){
             if(auto oper = op.lock())
@@ -112,20 +111,6 @@ struct ServerIntrospectControl : public server::ConnectOp
         });
     }
 
-    virtual std::pair<std::string, Value> rawCredentials() const override final
-    {
-        std::pair<std::string, Value> ret;
-        auto serv = server.lock();
-        if(serv)
-            serv->acceptor_loop.call([this, &ret](){
-                if(auto oper = op.lock())
-                    if(auto chan = oper->chan.lock())
-                        if(auto conn = chan->conn.lock())
-                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
-            });
-        return ret;
-    }
-
     // we'll never use these, so no reason to store
     virtual void onGet(std::function<void(std::unique_ptr<server::ExecOp>&& fn)>&& fn) override final {}
     virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&& fn, Value&&)>&& fn) override final {}
@@ -141,6 +126,7 @@ void ServerConn::handle_GET_FIELD()
 {
     // aka. GetField
 
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid = -1, ioid = -1;
@@ -159,6 +145,7 @@ void ServerConn::handle_GET_FIELD()
                        peerName.c_str(), unsigned(sid), unsigned(ioid));
         return;
     }
+    chan->statRx += rxlen;
 
     auto op(std::make_shared<ServerIntrospect>(chan, ioid));
     std::unique_ptr<ServerIntrospectControl> ctrl(new ServerIntrospectControl(this, chan.get(), iface->server->internal_self, op));

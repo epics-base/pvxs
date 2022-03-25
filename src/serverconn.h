@@ -66,7 +66,7 @@ struct ServerChannelControl : public server::ChannelControl
     virtual void onClose(std::function<void(const std::string&)>&& fn) override final;
     virtual void close() override final;
 
-    virtual std::pair<std::string, Value> rawCredentials() const override final;
+    virtual void _updateInfo(const std::shared_ptr<const ReportInfo>& info) override final;
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerChan> chan;
@@ -87,6 +87,9 @@ struct ServerChan
         Destroy,  // DESTROY_CHANNEL request received and/or reply sent
     } state;
 
+    size_t statTx{}, statRx{};
+    std::shared_ptr<const ReportInfo> reportInfo;
+
     std::function<void(std::unique_ptr<server::ConnectOp>&&)> onOp;
     std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onRPC;
     std::function<void(std::unique_ptr<server::MonitorSetupOp>&&)> onSubscribe;
@@ -106,8 +109,7 @@ struct ServerConn : public ConnBase, public std::enable_shared_from_this<ServerC
 {
     ServIface* const iface;
 
-    std::string autoMethod;
-    Value credentials;
+    std::shared_ptr<const server::ClientCredentials> cred;
 
     uint32_t nextSID=0x07050301;
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanBySID;
@@ -217,6 +219,7 @@ struct Server::Pvt
 
     std::list<std::unique_ptr<UDPListener> > listeners;
     std::vector<SockAddr> beaconDest;
+    std::vector<SockAddr> ignoreList;
 
     std::list<ServIface> interfaces;
     std::map<ServerConn*, std::shared_ptr<ServerConn> > connections;
@@ -226,6 +229,8 @@ struct Server::Pvt
 
     std::vector<uint8_t> searchReply;
 
+    // properly a local of Pvt::onSearch() on the UDP worker.
+    // made a member to avoid re-alloc of _names vector.
     Source::Search searchOp;
 
     StaticSource builtinsrc;

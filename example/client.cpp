@@ -34,8 +34,7 @@ int main(int argc, char* argv[])
     logger_config_env();
 
     // Create a client context
-    client::Context ctxt(client::Config::fromEnv()
-                         .build());
+    auto ctxt(client::Context::fromEnv());
 
     // Fetch current value
     int32_t current;

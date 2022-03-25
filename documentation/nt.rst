@@ -61,6 +61,14 @@ alarm_t
 **"message"**
     Arbitrary string describing the condition being alarmed.
 
+NTEnum
+------
+
+Container for a scalar value selection from a list of strings.
+
+.. doxygenstruct:: pvxs::nt::NTEnum
+    :members:
+
 NTNDArray
 ---------
 

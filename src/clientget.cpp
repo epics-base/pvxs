@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
@@ -109,16 +109,21 @@ namespace {
 
 struct GPROp : public OperationBase
 {
+    std::weak_ptr<GPROp> internal_self;
+
     std::function<Value(Value&&)> builder;
     std::function<void(Result&&)> done;
+    std::function<void (const Value&)> onInit;
     Value pvRequest;
-    Value rpcarg;
+    Value arg;
     Result result;
     bool getOput = false;
+    bool autoExec = true;
 
     enum state_t : uint8_t {
         Connecting, // waiting for an active Channel
         Creating,   // waiting for reply to INIT
+        Idle,       // waiting for explicit exec request
         GetOPut,    // waiting for reply to GET (CMD_PUT only)
         BuildPut,   // waiting for PUT builder callback
         Exec,       // waiting for reply to EXEC
@@ -127,18 +132,19 @@ struct GPROp : public OperationBase
 
     INST_COUNTER(GPROp);
 
-    GPROp(operation_t op, const std::shared_ptr<Channel>& chan)
-        :OperationBase (op, chan)
+    GPROp(operation_t op, const evbase& loop)
+        :OperationBase (op, loop)
     {}
     ~GPROp() {
-        chan->context->tcp_loop.assertInLoop();
-        _cancel(true);
+        if(loop.assertInRunningLoop())
+            _cancel(true);
     }
 
-    void setDone(decltype (done)&& cb)
+    void setDone(decltype (done)&& donecb, decltype (onInit)&& initcb)
     {
-        if(cb) {
-            done = std::move(cb);
+        onInit = std::move(initcb);
+        if(donecb) {
+            done = std::move(donecb);
         } else {
             auto waiter = this->waiter = std::make_shared<ResultWaiter>();
             done = [waiter](Result&& result) {
@@ -164,12 +170,13 @@ struct GPROp : public OperationBase
 
     virtual bool cancel() override final
     {
-        auto context = chan->context;
         decltype (done) junk;
-        bool ret;
-        context->tcp_loop.call([this, &junk, &ret](){
+        decltype (onInit) junkI;
+        bool ret = false;
+        (void)loop.tryCall([this, &junk, &junkI, &ret](){
             ret = _cancel(false);
             junk = std::move(done);
+            junkI = std::move(onInit);
             // leave opByIOID for GC
         });
         return ret;
@@ -178,13 +185,13 @@ struct GPROp : public OperationBase
 
     bool _cancel(bool implicit) {
         if(implicit && state!=Done) {
-            log_warn_printf(setup, "implied cancel of op%x on channel '%s'\n",
+            log_info_printf(setup, "implied cancel of op%x on channel '%s'\n",
                             op, chan ? chan->name.c_str() : "");
         }
-        if(state==GetOPut || state==Exec) {
+        if(state==Idle || state==GetOPut || state==Exec) {
             chan->conn->sendDestroyRequest(chan->sid, ioid);
         }
-        if(state==Creating || state==GetOPut || state==Exec) {
+        if(state==Creating || state==Idle || state==GetOPut || state==Exec) {
             // This opens up a race with an in-flight reply.
             chan->conn->opByIOID.erase(ioid);
             chan->opByIOID.erase(ioid);
@@ -192,6 +199,133 @@ struct GPROp : public OperationBase
         bool ret = state!=Done;
         state = Done;
         return ret;
+    }
+
+    void _reExecImpl(bool put, const Value& arg, std::function<void(client::Result&&)>&& resultcb)
+    {
+        auto a(arg);
+        auto cb(std::move(resultcb));
+        std::shared_ptr<GPROp> self(internal_self);
+
+        loop.dispatch([self, a, cb, put]() mutable {
+            if(self->autoExec) {
+                client::Result ret(std::make_exception_ptr(std::invalid_argument("reExec() requires Operation creation with .autoExec(false)")));
+                cb(std::move(ret));
+                return;
+            }
+            if(self->state!=Idle)
+                return;
+
+            if(self->op==RPC) {
+                self->arg = std::move(a);
+
+            } else if(put && self->op==Put) {
+                self->builder = [a](Value&&) -> Value {
+                    // caller should be passing a Value of the correct prototype
+                    // given through onInit().
+                    return a;
+                };
+            }
+            self->done = std::move(cb);
+
+            self->_reExec(put);
+        });
+    }
+
+    void _reExecGet(std::function<void(client::Result&&)>&& resultcb) override final
+    {
+        if(op!=Get && op!=Put)
+            throw std::logic_error("reExecGet() only meaningful for .get() and .put()");
+
+        _reExecImpl(false, Value(), std::move(resultcb));
+    }
+    void _reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final
+    {
+        if(op!=Get && op!=Put) {
+            throw std::logic_error("reExecPut() only meaningful for .put()");
+
+        } else if(!arg) {
+            throw std::invalid_argument("reExecPut() Put requires Value");
+        }
+        _reExecImpl(true, arg, std::move(resultcb));
+    }
+
+    void _reExec(bool put)
+    {
+        if(op==Put && !put) {
+            state = GPROp::GetOPut;
+
+        } else if(op==Put && put) {
+            state = GPROp::BuildPut;
+
+        } else {
+            state = GPROp::Exec;
+        }
+
+        sendReply();
+    }
+
+    void sendReply()
+    {
+        Value temp;
+
+        // transient state (because builder callback is synchronous)
+        if(state==GPROp::BuildPut) {
+            temp = arg.clone();
+
+            try {
+                temp = builder(std::move(temp));
+                state = GPROp::Exec;
+
+            } catch(std::exception& e) {
+                result = Result(std::current_exception());
+                state = GPROp::Done;
+            }
+        }
+
+        // act on new operation state
+
+        {
+            (void)evbuffer_drain(chan->conn->txBody.get(), evbuffer_get_length(chan->conn->txBody.get()));
+
+            EvOutBuf R(hostBE, chan->conn->txBody.get());
+
+            to_wire(R, chan->sid);
+            to_wire(R, ioid);
+            if(state==GPROp::GetOPut) {
+                to_wire(R, uint8_t(0x40));
+
+            } else if(state==GPROp::Exec) {
+                to_wire(R, uint8_t(0x00));
+                if(op==Put) {
+                    to_wire_valid(R, temp);
+
+                } else if(op==RPC) {
+                    to_wire(R, Value::Helper::desc(arg));
+                    if(arg)
+                        to_wire_full(R, arg);
+                }
+
+            } else if(state==GPROp::Done) {
+                // we're actually building CMD_DESTROY_REQUEST
+                // nothing more needed
+
+            } else {
+                throw std::logic_error("Invalid state in GPR sendReply()");
+            }
+        }
+        chan->statTx += chan->conn->enqueueTxBody(state==GPROp::Done ? CMD_DESTROY_REQUEST :  (pva_app_msg_t)op);
+
+        if(state==GPROp::Done) {
+            // CMD_DESTROY_REQUEST is not acknowledged (sigh...)
+            // but at this point a server should not send further GET/PUT/RPC w/ this IOID
+            // so we can ~safely forget about it.
+            // we might get CMD_MESSAGE, but these could be ignored with no ill effects.
+            chan->conn->opByIOID.erase(ioid);
+            chan->opByIOID.erase(ioid);
+
+            notify();
+        }
     }
 
     virtual void createOp() override final
@@ -213,7 +347,7 @@ struct GPROp : public OperationBase
             to_wire(R, Value::Helper::desc(pvRequest));
             to_wire_full(R, pvRequest);
         }
-        conn->enqueueTxBody(pva_app_msg_t(uint8_t(op)));
+        chan->statTx += conn->enqueueTxBody(pva_app_msg_t(uint8_t(op)));
 
         log_debug_printf(io, "Server %s channel '%s' op%02x INIT\n",
                          conn->peerName.c_str(), chan->name.c_str(), op);
@@ -226,18 +360,18 @@ struct GPROp : public OperationBase
         if(state==Connecting || state==Done) {
             // noop
 
-        } else if(state==Creating || state==GetOPut || (state==Exec && op==Get)) {
-            // return to pending
-
-            chan->pending.push_back(self);
-            state = Connecting;
-
-        } else if(state==Exec) {
+        } else if(state==Exec && op!=Get && !autoExec) {
             // can't restart as server side-effects may occur
             state = Done;
             result = Result(std::make_exception_ptr(Disconnect()));
 
             notify();
+
+        } else if(state==Creating || state==Idle || state==GetOPut || state==Exec) {
+            // return to pending
+
+            chan->pending.push_back(self);
+            state = Connecting;
 
         } else {
             state = Done;
@@ -252,6 +386,7 @@ struct GPROp : public OperationBase
 
 void Connection::handle_GPR(pva_app_msg_t cmd)
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t ioid;
@@ -265,7 +400,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
     bool init = subcmd&0x08;
     bool get  = subcmd&0x40;
 
-    // immediately deserialize in unambigous cases
+    // immediately deserialize in unambiguous cases
 
     if(M.good() && cmd!=CMD_RPC && init && sts.isSuccess()) {
         // INIT of PUT or GET, decode type description
@@ -301,7 +436,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
                 lvl = Level::Err;
             }
 
-            log_printf(io, lvl,  "Server %s uses non-existant IOID %u.  Ignoring...\n",
+            log_printf(io, lvl,  "Server %s uses non-existent IOID %u.  Ignoring...\n",
                        peerName.c_str(), unsigned(ioid));
             return;
         }
@@ -359,99 +494,73 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
         return;
     }
 
+    gpr->chan->statRx += rxlen;
+
     // advance operation state
 
     decltype (gpr->state) prev = gpr->state;
 
     if(!sts.isSuccess()) {
         gpr->result = Result(std::make_exception_ptr(RemoteError(sts.msg)));
-        gpr->state = GPROp::Done;
+        gpr->state = gpr->state==GPROp::Creating || gpr->autoExec ? GPROp::Done : GPROp::Idle;
 
     } else if(gpr->state==GPROp::Creating) {
 
-        if(cmd==CMD_PUT && gpr->getOput) {
-            gpr->state = GPROp::GetOPut;
+        gpr->state = GPROp::Idle;
+        if(cmd==CMD_PUT || cmd==CMD_GET)
+            gpr->arg = data; // save for later use in sendReply()
 
-        } else if(cmd==CMD_PUT && !gpr->getOput) {
+        try {
+            if(gpr->onInit)
+                gpr->onInit(data);
+        } catch(std::exception& e) {
+            log_err_printf(setup, "Server %s op%02x \"%s\" onInit() error: %s\n",
+                           peerName.c_str(), cmd, gpr->chan->name.c_str(), e.what());
+            gpr->result = Result(std::current_exception());
+            gpr->state = GPROp::Done;
+            gpr->notify();
+        }
+
+        if(gpr->state==GPROp::Idle && gpr->autoExec)
+            gpr->_reExec(!gpr->getOput);
+        // reply may now be sent, or deferred
+        return;
+
+    } else if(gpr->state==GPROp::GetOPut) {
+        if(gpr->autoExec) {
+            // proceed to execute put
             gpr->state = GPROp::BuildPut;
 
         } else {
-            gpr->state = GPROp::Exec;
+            // deliver get result
+            gpr->state = GPROp::Idle;
+            gpr->result = Result(std::move(data), peerName);
+            gpr->notify();
+            return;
         }
-
-    } else if(gpr->state==GPROp::GetOPut) {
-        gpr->state = GPROp::BuildPut;
 
         info->prototype.assign(data);
 
     } else if(gpr->state==GPROp::Exec) {
-        gpr->state = GPROp::Done;
-
         // data always empty for CMD_PUT
         gpr->result = Result(std::move(data), peerName);
+
+        if(!gpr->autoExec) {
+            gpr->state = GPROp::Idle;
+            gpr->notify();
+            return;
+        }
+        gpr->state = GPROp::Done;
 
     } else {
         // should be avoided above
         throw std::logic_error("GPR advance state inconsistent");
     }
 
-    // transient state (because builder callback is synchronous)
-    if(gpr->state==GPROp::BuildPut) {
-        Value arg(info->prototype.clone());
-
-        try {
-            info->prototype = gpr->builder(std::move(arg));
-            gpr->state = GPROp::Exec;
-
-        } catch(std::exception& e) {
-            gpr->result = Result(std::current_exception());
-            gpr->state = GPROp::Done;
-        }
-    }
-
     log_debug_printf(io, "Server %s channel %s op%02x state %d -> %d\n",
-                     peerName.c_str(), op->chan->name.c_str(), cmd, prev, gpr->state);
+                     peerName.c_str(), gpr->chan->name.c_str(), cmd, prev, gpr->state);
 
-    // act on new operation state
-
-    {
-        (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
-
-        EvOutBuf R(hostBE, txBody.get());
-
-        to_wire(R, op->chan->sid);
-        to_wire(R, ioid);
-        if(gpr->state==GPROp::GetOPut) {
-            to_wire(R, uint8_t(0x40));
-
-        } else if(gpr->state==GPROp::Exec) {
-            to_wire(R, uint8_t(0x00));
-            if(cmd==CMD_PUT) {
-                to_wire_valid(R, info->prototype);
-
-            } else if(cmd==CMD_RPC) {
-                to_wire(R, Value::Helper::desc(gpr->rpcarg));
-                if(gpr->rpcarg)
-                    to_wire_full(R, gpr->rpcarg);
-            }
-
-        } else if(gpr->state==GPROp::Done) {
-            // we're actually building CMD_DESTROY_REQUEST
-            // nothing more needed
-        }
-    }
-    enqueueTxBody(gpr->state==GPROp::Done ? CMD_DESTROY_REQUEST :  cmd);
-
-    if(gpr->state==GPROp::Done) {
-        // CMD_DESTROY_REQUEST is not acknowledged (sigh...)
-        // but at this point a server should not send further GET/PUT/RPC w/ this IOID
-        // so we can ~safely forget about it.
-        // we might get CMD_MESSAGE, but these could be ignored with no ill effects.
-        opByIOID.erase(ioid);
-        gpr->chan->opByIOID.erase(ioid);
-
-        gpr->notify();
-    }
+    gpr->sendReply();
 }
 
 void Connection::handle_GET() { handle_GPR(CMD_GET); }
@@ -459,51 +568,56 @@ void Connection::handle_PUT() { handle_GPR(CMD_PUT); }
 void Connection::handle_RPC() { handle_GPR(CMD_RPC); }
 
 static
-void gpr_cleanup(std::shared_ptr<Operation>& ret, std::shared_ptr<GPROp>&& op)
+std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context,
+                                     std::string name, // need to capture by value
+                                     std::string server,
+                                     std::shared_ptr<GPROp>&& op,
+                                     bool syncCancel)
 {
-    auto cap(std::move(op));
-    auto loop(cap->chan->context->tcp_loop);
-    ret.reset(cap.get(), [cap, loop](Operation*) mutable {
-        auto L(std::move(loop));
-        // from use thread
-        L.call([&cap]() {
-            auto temp(std::move(cap));
-            // on worker
-            try {
-                temp->_cancel(true);
-            }catch(std::exception& e){
-                log_exc_printf(setup, "Channel %s error in get cancel(): %s",
-                               temp->chan->name.c_str(), e.what());
-            }
-            // ensure dtor on worker
-            temp.reset();
-        });
+    auto internal(std::move(op));
+    internal->internal_self = internal;
+
+    std::shared_ptr<GPROp> external(internal.get(), [internal, syncCancel](GPROp*) mutable {
+        // (maybe) user thread
+        auto temp(std::move(internal));
+        auto loop(temp->loop);
+        // std::bind for lack of c++14 generalized capture
+        // to move internal ref to worker for dtor
+        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<GPROp>& op) {
+                           // on worker
+
+                           // ordering of dispatch()/call() ensures creation before destruction
+                           assert(op->chan);
+                           op->_cancel(true);
+                       }, std::move(temp)));
     });
+
+    context->tcp_loop.dispatch([internal, context, name, server]() {
+        // on worker
+
+        internal->chan = Channel::build(context, name, server);
+
+        internal->chan->pending.push_back(internal);
+        internal->chan->createOperations();
+    });
+
+    return external;
 }
 
 std::shared_ptr<Operation> GetBuilder::_exec_get()
 {
+    assert(_get);
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    std::shared_ptr<Operation> ret;
-    assert(_get);
+    auto context(ctx->impl->shared_from_this());
 
-    ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx->shared_from_this(), _name);
+    auto op(std::make_shared<GPROp>(Operation::Get, context->tcp_loop));
+    op->setDone(std::move(_result), std::move(_onInit));
+    op->autoExec = _autoexec;
+    op->pvRequest = _buildReq();
 
-        auto op = std::make_shared<GPROp>(Operation::Get, chan);
-        op->setDone(std::move(_result));
-        op->pvRequest = _buildReq();
-
-        chan->pending.push_back(op);
-        chan->createOperations();
-
-        gpr_cleanup(ret, std::move(op));
-        assert(ret);
-    });
-
-    return  ret;
+    return gpr_setup(context, _name, _server, std::move(op), _syncCancel);
 }
 
 std::shared_ptr<Operation> PutBuilder::exec()
@@ -511,72 +625,54 @@ std::shared_ptr<Operation> PutBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    std::shared_ptr<Operation> ret;
+    auto context(ctx->impl->shared_from_this());
 
-    if(!_builder && !_args)
-        throw std::logic_error("put() needs either a .build() or at least one .set()");
+    auto op(std::make_shared<GPROp>(Operation::Put, context->tcp_loop));
+    op->setDone(std::move(_result), std::move(_onInit));
 
-    ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx->shared_from_this(), _name);
+    if(_builder) {
+        op->builder = std::move(_builder);
+    } else if(_args) {
+        // PRBase builder doesn't use current value
+        _doGet = false;
 
-        auto op = std::make_shared<GPROp>(Operation::Put, chan);
-        op->setDone(std::move(_result));
+        auto build = std::move(_args);
+        op->builder = [build](Value&& prototype) -> Value {
+            return build->build(std::move(prototype));
+        };
+    } else {
+        // handled above
+    }
+    op->getOput = _doGet;
+    op->autoExec = _autoexec;
+    op->pvRequest = _buildReq();
 
-        if(_builder) {
-            op->builder = std::move(_builder);
-        } else if(_args) {
-            // PRBase builder doesn't use current value
-            _doGet = false;
-
-            auto build = std::move(_args);
-            op->builder = [build](Value&& prototype) -> Value {
-                return build->build(std::move(prototype));
-            };
-        } else {
-            // handled above
-        }
-        op->getOput = _doGet;
-        op->pvRequest = _buildReq();
-
-        chan->pending.push_back(op);
-        chan->createOperations();
-
-        gpr_cleanup(ret, std::move(op));
-    });
-
-    return  ret;
+    return gpr_setup(context, _name, _server, std::move(op), _syncCancel);
 }
 
 std::shared_ptr<Operation> RPCBuilder::exec()
 {
     if(!ctx)
         throw std::logic_error("NULL Builder");
+    if(!_autoexec)
+        throw std::logic_error("autoExec(false) not possible for rpc()");
 
-    std::shared_ptr<Operation> ret;
+    auto context(ctx->impl->shared_from_this());
 
-    if(_args && _argument)
-        throw std::logic_error("Use of rpc() with argument and builder .arg() are mutually exclusive");
+    auto op(std::make_shared<GPROp>(Operation::RPC, context->tcp_loop));
+    op->setDone(std::move(_result), nullptr);
+    if(_argument) {
+        if(!_autoexec)
+            throw std::invalid_argument("Pass RPC argument during reExec()");
+        op->arg = std::move(_argument);
+    } else if(_args) {
+        op->arg = _args->uriArgs();
+        op->arg["path"] = _name;
+    }
+    op->autoExec = _autoexec;
+    op->pvRequest = _buildReq();
 
-    ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx->shared_from_this(), _name);
-
-        auto op = std::make_shared<GPROp>(Operation::RPC, chan);
-        op->setDone(std::move(_result));
-        if(_argument) {
-            op->rpcarg = std::move(_argument);
-        } else if(_args) {
-            op->rpcarg = _args->uriArgs();
-            op->rpcarg["path"] = _name;
-        }
-        op->pvRequest = _buildReq();
-
-        chan->pending.push_back(op);
-        chan->createOperations();
-
-        gpr_cleanup(ret, std::move(op));
-    });
-
-    return  ret;
+    return gpr_setup(context, _name, _server, std::move(op), _syncCancel);
 }
 
 } // namespace client

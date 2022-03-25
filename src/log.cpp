@@ -171,7 +171,6 @@ struct logger_gbl_t {
             for(auto& tup : config) {
                 if(epicsStrGlobMatch(name.c_str(), tup.first.c_str())) {
                     lvl = tup.second;
-                    break;
                 }
             }
         }
@@ -189,24 +188,31 @@ struct logger_gbl_t {
         if(lvl<=Level(0))
             lvl = Level(1);
 
+        decltype (config)::value_type* conf = nullptr;
+
         for(auto& tup : config) {
             if(tup.first==exp) {
                 // update of existing config
-                if(tup.second!=lvl) {
-                    tup.second = lvl;
-
-                    for(auto& pair : loggers) {
-                        if(epicsStrGlobMatch(pair.first.c_str(), tup.first.c_str())) {
-                            pair.second->lvl.store(lvl, std::memory_order_relaxed);
-                        }
-                    }
-                }
-                return;
+                conf = &tup;
+                break;
             }
         }
         // new config
 
-        config.emplace_back(exp, lvl);
+        if(!conf) {
+            config.emplace_back(exp, Level(-1));
+            conf = &config.back();
+        }
+
+        if(conf->second!=lvl) {
+            conf->second = lvl;
+
+            for(auto& pair : loggers) {
+                if(epicsStrGlobMatch(pair.first.c_str(), conf->first.c_str())) {
+                    pair.second->lvl.store(lvl, std::memory_order_relaxed);
+                }
+            }
+        }
     }
 } *logger_gbl;
 
@@ -234,7 +240,7 @@ Level logger::init()
     auto lvl = this->lvl.load();
     if(lvl==Level(-1)) {
         // maybe we initialize
-        if(this->lvl.compare_exchange_strong(lvl, Level::Err)) {
+        if(this->lvl.compare_exchange_strong(lvl, Level::Warn)) {
             // logger now has default config of Level::Err
             // we will fully initialize
             epicsThreadOnce(&logger_once, &logger_prepare, nullptr);
@@ -250,6 +256,9 @@ Level logger::init()
 void xerrlogHexPrintf(const void *buf, size_t buflen)
 {
     const auto cbuf = static_cast<const uint8_t*>(buf);
+    bool elipsis = buflen > 64u;
+    if(elipsis)
+        buflen = 64u;
 
     // whole buffer
     for(size_t pos=0; pos<buflen;)
@@ -280,6 +289,8 @@ void xerrlogHexPrintf(const void *buf, size_t buflen)
 
         errlogPrintf("%04x : %s %s %s %s\n", addr, buf[0], buf[1], buf[2], buf[3]);
     }
+    if(elipsis)
+        errlogPrintf("...\n");
 }
 
 void logger_level_set(const char *name, int lvl)
@@ -330,13 +341,13 @@ void logger_config_env()
 
 
             if(key.empty() || val.empty()) {
-                fprintf(stderr, "PVXS_LOG ignore invalid: '%s=%s'\n", key.c_str(), val.c_str());
+                errlogPrintf("PVXS_LOG ignore invalid: '%s=%s'\n", key.c_str(), val.c_str());
 
             } else if(auto lvl = name2lvl(val)) {
                 logger_gbl->set(key.c_str(), Level(lvl));
 
             } else {
-                fprintf(stderr, "PVXS_LOG ignore invalid level: '%s=%s'\n", key.c_str(), val.c_str());
+                errlogPrintf("PVXS_LOG ignore invalid level: '%s=%s'\n", key.c_str(), val.c_str());
             }
 
         }
@@ -345,6 +356,8 @@ void logger_config_env()
         if(*env==',')
             ++env;
     }
+
+    errlogFlush();
 }
 
 } // namespace pvxs

@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
             size_t idx=0;
             delay = 1.0/std::stod(argv[argc-1], &idx);
             if(idx<std::strlen(argv[argc-1]))
-                throw std::invalid_argument("Extraneous charactors");
+                throw std::invalid_argument("Extraneous characters");
         }catch(std::exception& e){
             std::cerr<<"Error parsing rate: "<<e.what()<<"\n";
             return 1;
@@ -73,8 +73,7 @@ int main(int argc, char* argv[])
 
     // Build server which will serve this PV
     // Configure using process environment.
-    server::Server serv = server::Config::fromEnv()
-            .build();
+    auto serv(server::Server::fromEnv());
 
     for(int i=1; i<argc; i++) {
         std::cout<<"PV "<<argv[i]<<"\n";
@@ -104,6 +103,13 @@ int main(int argc, char* argv[])
         auto val = initial.cloneEmpty();
 
         val["value"] = count++;
+
+        // optional, but highly recommended to post() data updates with a timestamp
+        epicsTimeStamp now;
+        if(!epicsTimeGetCurrent(&now)) {
+            val["timeStamp.secondsPastEpoch"] = now.secPastEpoch + POSIX_TIME_AT_EPICS_EPOCH;
+            val["timeStamp.nanoseconds"] = now.nsec;
+        }
 
         pv.post(val);
 

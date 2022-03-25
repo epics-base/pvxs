@@ -51,7 +51,9 @@ struct ServerGPR : public ServerOp
                 // noop
 
             } else if(cmd==CMD_GET || (cmd==CMD_PUT && (subcmd&0x40))) {
-                if(!value || Value::Helper::desc(value)!=this->type.get())
+                if(!value)
+                    throw std::logic_error("GET must reply Value");
+                else if(Value::Helper::desc(value)!=this->type.get())
                     throw std::logic_error("GET must reply with exact type previously passed to connect()");
 
             } else if(cmd==CMD_PUT) {
@@ -105,7 +107,7 @@ struct ServerGPR : public ServerOp
             assert(R.good());
         }
 
-        conn->enqueueTxBody(cmd);
+        ch->statTx += conn->enqueueTxBody(cmd);
 
         if(state == ServerOp::Dead) {
             ch->opByIOID.erase(ioid);
@@ -134,8 +136,10 @@ struct ServerGPR : public ServerOp
         CASE(PUT);
         CASE(RPC);
 #undef CASE
-        default:
+        default: {
+            Restore R(strm);
             strm<<"CMD"<<std::hex<<cmd<<"\n";
+        }
         }
     }
 
@@ -144,6 +148,7 @@ struct ServerGPR : public ServerOp
     bool lastRequest=false;
 
     std::shared_ptr<const FieldDesc> type;
+    Value pvRequest;
     BitMask pvMask; // mask computed from pvRequest .fields
 
     std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)> onPut;
@@ -172,8 +177,7 @@ struct ServerGPRConnect : public server::ConnectOp
         default: _op = None; break; // should never be reached
         }
         _name = name;
-        _peerName = conn->peerName;
-        _ifaceName = conn->iface->name;
+        _cred = conn->cred;
         _pvRequest = request;
     }
     virtual ~ServerGPRConnect() {
@@ -251,20 +255,6 @@ struct ServerGPRConnect : public server::ConnectOp
         });
     }
 
-    virtual std::pair<std::string, Value> rawCredentials() const override final
-    {
-        std::pair<std::string, Value> ret;
-        auto serv = server.lock();
-        if(serv)
-            serv->acceptor_loop.call([this, &ret](){
-                if(auto oper = op.lock())
-                    if(auto chan = oper->chan.lock())
-                        if(auto conn = chan->conn.lock())
-                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
-            });
-        return ret;
-    }
-
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerGPR> op;
 
@@ -277,8 +267,8 @@ struct ServerGPRExec : public server::ExecOp
                   pva_app_msg_t cmd,
                   const std::weak_ptr<server::Server::Pvt>& server,
                   const std::string& name,
-                  const Value& request,
-                  const std::weak_ptr<ServerGPR>& op)
+                  //const Value& request,
+                  const std::shared_ptr<ServerGPR>& op)
         :server(server)
         ,op(op)
     {
@@ -289,8 +279,8 @@ struct ServerGPRExec : public server::ExecOp
         default: _op = None; break; // should never be reached
         }
         _name = name;
-        _peerName = conn->peerName;
-        _ifaceName = conn->iface->name;
+        _cred = conn->cred;
+        _pvRequest = op->pvRequest;
     }
     virtual ~ServerGPRExec() {}
 
@@ -336,18 +326,13 @@ struct ServerGPRExec : public server::ExecOp
         });
     }
 
-    virtual std::pair<std::string, Value> rawCredentials() const override final
+    virtual Timer _timerOneShot(double delay, std::function<void()>&& fn) override final
     {
-        std::pair<std::string, Value> ret;
         auto serv = server.lock();
-        if(serv)
-            serv->acceptor_loop.call([this, &ret](){
-                if(auto oper = op.lock())
-                    if(auto chan = oper->chan.lock())
-                        if(auto conn = chan->conn.lock())
-                            ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
-            });
-        return ret;
+        if(!serv)
+            throw std::logic_error("Can't start timer on deal server");
+
+        return Timer::Pvt::buildOneShot(delay, serv->acceptor_loop.internal(), std::move(fn));
     }
 
     const std::weak_ptr<server::Server::Pvt> server;
@@ -360,6 +345,7 @@ struct ServerGPRExec : public server::ExecOp
 
 void ServerConn::handle_GPR(pva_app_msg_t cmd)
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid = -1, ioid = -1;
@@ -396,9 +382,11 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             bev.reset();
             return;
         }
+        chan->statRx += rxlen;
 
         auto op(std::make_shared<ServerGPR>(chan, ioid));
         op->cmd = cmd;
+        op->pvRequest = pvRequest;
         std::unique_ptr<ServerGPRConnect> ctrl(new ServerGPRConnect(this, cmd, iface->server->internal_self, chan->name, pvRequest, op));
 
         op->subcmd = subcmd;
@@ -432,7 +420,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         std::shared_ptr<ServerGPR> op;
         auto it = opByIOID.find(ioid);
         if(it==opByIOID.end() || it->second->state==ServerOp::Dead) {
-            log_debug_printf(connio, "Client %s Gets non-existant IOID %u\n",
+            log_debug_printf(connio, "Client %s Gets non-existent IOID %u\n",
                        peerName.c_str(), unsigned(ioid));
             return;
 
@@ -472,18 +460,20 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         if(!chan)
             throw std::logic_error("live op on dead channel");
 
+        chan->statRx += rxlen;
+
         if(op->state==ServerOp::Idle) {
             // all set
 
             if(!op->lastRequest)
                 op->lastRequest = subcmd&0x10;
 
-            std::unique_ptr<ServerGPRExec> ctrl{new ServerGPRExec(this, cmd, iface->server->internal_self, chan->name, val, op)};
+            std::unique_ptr<ServerGPRExec> ctrl{new ServerGPRExec(this, cmd, iface->server->internal_self, chan->name, op)};
 
             op->subcmd = subcmd;
             op->state = ServerOp::Executing;
 
-            log_debug_printf(connsetup, "CLient %s Get executing\n", peerName.c_str());
+            log_debug_printf(connsetup, "Client %s op%x executing\n", peerName.c_str(), cmd);
 
             try {
                 if(cmd==CMD_RPC && isput) {

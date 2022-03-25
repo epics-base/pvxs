@@ -8,11 +8,19 @@
 #define PVXS_UTIL_H
 
 #include <map>
+#include <array>
+#include <deque>
 #include <functional>
 #include <iosfwd>
 #include <type_traits>
+#include <stdexcept>
+#include <memory>
 
 #include <osiSock.h>
+#include <epicsEvent.h>
+#include <epicsMutex.h>
+#include <epicsGuard.h>
+
 #include <pvxs/version.h>
 
 namespace pvxs {
@@ -68,6 +76,11 @@ inline detail::Escaper escape(const char* s,size_t n) {
     return detail::Escaper(s,n);
 }
 
+struct ServerGUID : public std::array<uint8_t, 12> {};
+
+PVXS_API
+std::ostream& operator<<(std::ostream&, const ServerGUID&);
+
 #if !defined(__rtems__) && !defined(vxWorks)
 
 /** Minimal portable process signal handling in CLI tools.
@@ -101,7 +114,7 @@ class SigInt {
     const std::function<void()> handler;
 public:
     SigInt(std::function<void()>&& handler) :handler(std::move(handler)) {}
-}
+};
 
 #endif // !defined(__rtems__) && !defined(vxWorks)
 
@@ -161,6 +174,151 @@ private:
  */
 PVXS_API
 std::ostream& target_information(std::ostream&);
+
+/** Thread-safe, bounded, multi-producer, multi-consumer FIFO queue.
+ *
+ * Queue value_type must be movable.  If T is also copy constructable,
+ * then push(const T&) may be used.
+ *
+ * As an exception, the destructor is not re-entrant.  Concurrent calls
+ * to methods during destruction will result in undefined behavior.
+ *
+ * @code
+ * MPMCFIFO<std::function<void()>> Q;
+ * ...
+ * while(auto work = Q.pop()) { // Q.push(nullptr) to break loop
+ *     work();
+ * }
+ * @endcode
+ *
+ * @since 0.2.0
+ */
+template<typename T>
+class MPMCFIFO {
+    mutable epicsMutex lock;
+    epicsEvent notifyW, notifyR;
+    std::deque<T> Q;
+    const size_t nlimit;
+    unsigned nwriters=0u, nreaders=0u;
+
+    typedef epicsGuard<epicsMutex> Guard;
+    typedef epicsGuardRelease<epicsMutex> UnGuard;
+public:
+    //! Template parameter
+    typedef T value_type;
+
+    //! Construct a new queue
+    //! @param limit If non-zero, then emplace()/push() will block while while
+    //!              queue size is greater than or equal to this limit.
+    explicit MPMCFIFO(size_t limit=0u)
+        :nlimit(limit)
+    {}
+    //! Destructor is not re-entrant
+    ~MPMCFIFO() {}
+
+    //! Poll number of elements in the work queue at this moment.
+    size_t size() const {
+        Guard G(lock);
+        return Q.size();
+    }
+    size_t max_size() const {
+        return nlimit ? nlimit : Q.max_size();
+    }
+
+    /** Construct a new element into the queue.
+     *
+     * Will block while full.
+     */
+    template<typename ...Args>
+    void emplace(Args&&... args) {
+        bool wakeup;
+        {
+            Guard G(lock);
+            // while full, wait for reader to consume an entry
+            while(nlimit && Q.size()>=nlimit) {
+                nwriters++;
+                {
+                    UnGuard U(G);
+                    notifyW.wait();
+                }
+                nwriters--;
+            }
+            // notify reader when queue becomes not empty
+            wakeup = Q.empty() && nreaders;
+            Q.emplace_back(std::forward<Args>(args)...);
+        }
+        if(wakeup)
+            notifyR.signal();
+    }
+
+    //! Move a new element to the queue
+    void push(T&& ent) {
+        // delegate to T::T(T&&)
+        emplace(std::move(ent));
+    }
+
+    //! Copy a new element to the queue
+    void push(const T& ent) {
+        // delegate to T::T(const T&)
+        emplace(ent);
+    }
+
+    /** Remove an element from the queue.
+     *
+     * Blocks while queue is empty.
+     */
+    T pop() {
+        bool wakeupW, wakeupR;
+        T ret;
+        {
+            Guard G(lock);
+            // wait for queue to become not empty
+            while(Q.empty()) {
+                nreaders++;
+                {
+                    UnGuard U(G);
+                    notifyR.wait();
+                }
+                nreaders--;
+            }
+            // wakeup a writer since the queue will have an empty entry
+            wakeupW = nwriters;
+            ret = std::move(Q.front());
+            Q.pop_front();
+            // wakeup next reader if entries remain
+            wakeupR = !Q.empty() && nreaders;
+        }
+        if(wakeupR)
+            notifyR.signal();
+        if(wakeupW)
+            notifyW.signal();
+        return ret;
+    }
+};
+
+struct Timer;
+
+#ifdef PVXS_EXPERT_API_ENABLED
+
+//! Timer associated with a client::Context or server::Server
+//! @since 0.2.0
+struct PVXS_API Timer {
+    struct Pvt;
+
+    //! dtor implicitly cancel()s
+    ~Timer();
+    //! Explicit cancel.
+    //! @returns true if the timer was running, and now is not.
+    bool cancel();
+
+    explicit operator bool() const { return pvt.operator bool(); }
+
+private:
+    std::shared_ptr<Pvt> pvt;
+    friend struct Pvt;
+};
+
+#endif // PVXS_EXPERT_API_ENABLED
 
 } // namespace pvxs
 

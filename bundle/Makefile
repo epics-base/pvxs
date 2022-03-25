@@ -18,10 +18,11 @@ CMAKEFLAGS = $(CMD_CMAKEFLAGS)
 LIBEVENT = $(LIBEVENT_$(T_A))
 LIBEVENT_$(T_A) = $(INSTALL_LOCATION)/bundle/usr/$(T_A)
 
-CMAKEFLAGS += -DCMAKE_INSTALL_PREFIX:PATH=$(abspath $(LIBEVENT_$(T_A)))
+CMAKEFLAGS += -DCMAKE_INSTALL_PREFIX:PATH="$(abspath $(LIBEVENT_$(T_A)))"
 
 # not needed, and may not be available on embedded targets, so never try
 CMAKEFLAGS += -DEVENT__DISABLE_OPENSSL=ON
+CMAKEFLAGS += -DEVENT__DISABLE_MBEDTLS=ON
 
 # not run, so why bother?
 CMAKEFLAGS += -DEVENT__DISABLE_REGRESS=ON
@@ -30,7 +31,7 @@ CMAKEFLAGS += -DEVENT__DISABLE_TESTS=ON
 CMAKEFLAGS += -DEVENT__DISABLE_BENCHMARK=ON
 
 # searched for toolchain files
-CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR=$(abspath $(TOP)/bundle/cmake)
+CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR="$(abspath $(TOP)/bundle/cmake)"
 
 CMAKEFLAGS += -DCMAKE_MAKE_PROGRAM="$(MAKE)"
 
@@ -59,9 +60,15 @@ ifneq (,$(filter win%,$(EPICS_HOST_ARCH)))
 CMAKEFLAGS += -G "MinGW Makefiles" -DCMAKE_C_COMPILER="$(CC)"
 endif
 
+ifneq (,$(filter RTEMS%,$(T_A)))
+CMAKE_TOOLCHAIN_$(T_A) = $(T_A).cmake
+CMAKE_TOOLCHAIN_D_$(T_A) = $(CMAKE_TOOLCHAIN_$(T_A))
+endif
+
 # toolchain file when cross compiling
+CMAKE_TOOLCHAIN_D ?= $(CMAKE_TOOLCHAIN_D_$(T_A))
 CMAKE_TOOLCHAIN ?= $(CMAKE_TOOLCHAIN_$(T_A))
-CMAKEFLAGS += $(if $(CMAKE_TOOLCHAIN),-DCMAKE_TOOLCHAIN_FILE=$(CMAKE_TOOLCHAIN))
+CMAKEFLAGS += $(if $(CMAKE_TOOLCHAIN),-DCMAKE_TOOLCHAIN_FILE="$(CMAKE_TOOLCHAIN)")
 
 # flags for cmake --build
 # eg. "-j 2"  (that space is important)
@@ -106,7 +113,7 @@ else # T_A
 ifeq (YES,$(LIBEVENT_USE_CMAKE))
 # libevent >= 2.1 prefer CMake
 
-libevent.%:
+libevent.%: $(CMAKE_TOOLCHAIN_D)
 	$(CMAKE) $(CMAKEFLAGS) ../libevent
 	$(CMAKE) -E env --unset=MAKEFLAGS --unset=CC $(CMAKE) --build . $(CBUILDFLAGS) --target install
 ifneq (,$(filter %mingw,$(T_A)))
@@ -121,11 +128,32 @@ ifeq (NO,$(SHARED_LIBRARIES))
 endif
 endif
 
+EXPANDFLAGS = $(foreach var,$(EXPANDVARS),-D$(var)="$($(var))")
+
+ifneq (,$(filter RTEMS%,$(T_A)))
+# cf. cmake/RTEMS.cmake@
+EXPANDVARS+=RTEMS_CPU
+EXPANDVARS+=RTEMS_BSP
+EXPANDVARS+=RTEMS_VERSION
+EXPANDVARS+=RTEMS_BASE
+EXPANDVARS+=CPU_CFLAGS
+
+$(T_A).cmake: ../cmake/RTEMS.cmake@
+	$(PERL) $(TOOLS)/expandVars.pl -a $(T_A) -t $(INSTALL_LOCATION) $(EXPANDFLAGS) $< $@
+# can't use $(EXPAND_TOOL) as this def is in a RULES_ file...
+endif
+
+
 else
 # libevent 2.0 only autotools
 # only host CC supported
 
+CONFIGUREFLAGS = $(CMD_CONFIGUREFLAGS)
+
 CONFIGUREFLAGS += --disable-openssl
+
+# The definition from Base includes arguments '-ru' which confuses autoconf 2.69 (circa rhel7)
+CONFIGUREFLAGS+=AR=$(firstword $(AR))
 
 ifeq ($(OS_CLASS),WIN32)
 # On Win32 we must choose between only static and only shared

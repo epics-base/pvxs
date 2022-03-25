@@ -38,7 +38,7 @@ TypeDef NTScalar::build() const
     using namespace pvxs::members;
 
     if(!value.valid() || value.kind()==Kind::Compound)
-        throw std::logic_error("NTScalar only permits (array of) primative");
+        throw std::logic_error("NTScalar only permits (array of) primitive");
 
     TypeDef def(TypeCode::Struct,
                    value.isarray() ? "epics:nt/NTScalarArray:1.0" : "epics:nt/NTScalar:1.0", {

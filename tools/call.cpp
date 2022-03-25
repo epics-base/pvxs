@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
             query[pair.first] = pair.second;
         }
 
-        auto ctxt = client::Config::fromEnv().build();
+        auto ctxt(client::Context::fromEnv());
 
         if(verbose)
             std::cout<<"Effective config\n"<<ctxt.config();

@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#define PVXS_ENABLE_EXPERT_API
+
 #include <atomic>
 
 #include <testMain.h>

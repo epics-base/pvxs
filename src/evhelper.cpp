@@ -43,6 +43,11 @@ size_t min_slice_size = 1024u;
 namespace pvxs {namespace impl {
 
 DEFINE_LOGGER(logerr, "pvxs.loop");
+DEFINE_LOGGER(logtimer, "pvxs.timer");
+
+namespace mdetail {
+VFunctor0::~VFunctor0() {}
+}
 
 static
 epicsThreadOnceId evthread_once = EPICS_THREAD_ONCE_INIT;
@@ -105,11 +110,13 @@ struct evbase::Pvt : public epicsThreadRunable
 {
     SockAttach attach;
 
+    std::weak_ptr<Pvt> internal_self;
+
     struct Work {
-        std::function<void()> fn;
+        mfunction fn;
         std::exception_ptr *result;
         epicsEvent *notify;
-        Work(std::function<void()>&& fn, std::exception_ptr *result, epicsEvent *notify)
+        Work(mfunction&& fn, std::exception_ptr *result, epicsEvent *notify)
             :fn(std::move(fn)), result(result), notify(notify)
         {}
     };
@@ -140,10 +147,7 @@ struct evbase::Pvt : public epicsThreadRunable
         }
     }
 
-    virtual ~Pvt()
-    {
-        join();
-    }
+    virtual ~Pvt() {}
 
     void join()
     {
@@ -160,8 +164,18 @@ struct evbase::Pvt : public epicsThreadRunable
 
     virtual void run() override final
     {
+        INST_COUNTER(evbaseRunning);
         try {
-            decltype (base) tbase(event_base_new());
+            evconfig conf(event_config_new());
+#ifdef __rtems__
+            /* with libbsd circa RTEMS 5.1
+             * TCP peer close/reset notifications appear to be lost.
+             * Maybe due to absence of NOTE_EOF?
+             * poll() seems to work though.
+             */
+            event_config_avoid_method(conf.get(), "kqueue");
+#endif
+            decltype (base) tbase(event_base_new_with_config(conf.get()));
             if(evthread_make_base_notifiable(tbase.get())) {
                 throw std::runtime_error("evthread_make_base_notifiable");
             }
@@ -179,7 +193,7 @@ struct evbase::Pvt : public epicsThreadRunable
 
             start_sync.signal();
 
-            log_info_printf(logerr, "Enter loop worker for %p\n", base.get());
+            log_info_printf(logerr, "Enter loop worker for %p using %s\n", base.get(), event_base_get_method(base.get()));
 
             int ret = event_base_loop(base.get(), 0);
 
@@ -238,11 +252,27 @@ struct evbase::Pvt : public epicsThreadRunable
 };
 
 evbase::evbase(const std::string &name, unsigned prio)
-    :pvt(new Pvt(name, prio))
-    ,base(pvt->base.get())
-{}
+{
+    auto internal(std::make_shared<Pvt>(name, prio));
+    internal->internal_self = internal;
+
+    pvt.reset(internal.get(), [internal](Pvt*) mutable {
+        auto temp(std::move(internal));
+        temp->join();
+    });
+
+    base = pvt->base.get();
+}
 
 evbase::~evbase() {}
+
+evbase evbase::internal() const
+{
+    evbase ret;
+    ret.pvt = decltype(pvt)(pvt->internal_self);
+    ret.base = base;
+    return ret;
+}
 
 void evbase::join() const
 {
@@ -254,13 +284,16 @@ void evbase::sync() const
     call([](){});
 }
 
-void evbase::dispatch(std::function<void()>&& fn) const
+bool evbase::_dispatch(mfunction&& fn, bool dothrow) const
 {
     bool empty;
     {
         Guard G(pvt->lock);
-        if(!pvt->running)
-            throw std::logic_error("Worker stopped");
+        if(!pvt->running) {
+            if(dothrow)
+                throw std::logic_error("Worker stopped");
+            return false;
+        }
         empty = pvt->actions.empty();
         pvt->actions.emplace_back(std::move(fn), nullptr, nullptr);
     }
@@ -268,13 +301,15 @@ void evbase::dispatch(std::function<void()>&& fn) const
     timeval now{};
     if(empty && event_add(pvt->dowork.get(), &now))
         throw std::runtime_error("Unable to wakeup dispatch()");
+
+    return true;
 }
 
-void evbase::call(std::function<void()>&& fn) const
+bool evbase::_call(mfunction&& fn, bool dothrow) const
 {
     if(pvt->worker.isCurrentThread()) {
         fn();
-        return;
+        return true;
     }
 
     static ThreadEvent done;
@@ -283,8 +318,11 @@ void evbase::call(std::function<void()>&& fn) const
     bool empty;
     {
         Guard G(pvt->lock);
-        if(!pvt->running)
-            throw std::logic_error("Worker stopped");
+        if(!pvt->running) {
+            if(dothrow)
+                throw std::logic_error("Worker stopped");
+            return false;
+        }
         empty = pvt->actions.empty();
         pvt->actions.emplace_back(std::move(fn), &result, done.get());
     }
@@ -297,6 +335,7 @@ void evbase::call(std::function<void()>&& fn) const
     Guard G(pvt->lock);
     if(result)
         std::rethrow_exception(result);
+    return true;
 }
 
 void evbase::assertInLoop() const
@@ -309,9 +348,20 @@ void evbase::assertInLoop() const
     }
 }
 
-bool evbase::inLoop() const
+bool evbase::assertInRunningLoop() const
 {
-    return pvt->worker.isCurrentThread();
+    if(pvt->worker.isCurrentThread())
+        return true;
+
+    Guard G(pvt->lock);
+    if(!pvt->running)
+        return false;
+
+    char name[32];
+    pvt->worker.getName(name, sizeof(name));
+    log_exc_printf(logerr, "Not in running evbase worker: \"%s\" != \"%s\"\n",
+                   name, epicsThread::getNameSelf());
+    throw std::logic_error("Not in running evbase worker");
 }
 
 evsocket::evsocket(evutil_socket_t sock)
@@ -427,7 +477,7 @@ void evsocket::mcast_iface(const SockAddr& iface) const
     // IPV6_MULTICAST_IF
 }
 
-std::vector<SockAddr> evsocket::interfaces(const SockAddr* match)
+std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match) const
 {
     if(match && match->family()!=AF_INET) {
         throw std::logic_error("osiSockDiscoverBroadcastAddresses() only understands AF_INET");
@@ -543,7 +593,7 @@ bool EvOutBuf::refill(size_t more)
 
     evbuffer_iovec vec;
     vec.iov_base = base;
-    vec.iov_len  = pos-base;
+    vec.iov_len  = base ? pos - base : 0u;
 
     if(base && evbuffer_commit_space(backing, &vec, 1))
         throw std::bad_alloc(); // leak?
@@ -614,4 +664,83 @@ void to_evbuf(evbuffer *buf, const Header& H, bool be)
         throw std::bad_alloc();
 }
 
-}} // namespace pvxs::impl
+} // namespace impl
+
+Timer::~Timer() {}
+
+bool Timer::cancel()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Timer");
+
+    auto P(std::move(pvt));
+
+    return P->cancel();
+}
+
+Timer::Pvt::~Pvt() {
+    log_debug_printf(logtimer, "Timer %p %s\n", this, __func__);
+    (void)cancel();
+}
+
+bool Timer::Pvt::cancel()
+{
+    bool ret = false;
+    decltype (cb) trash;
+
+    log_debug_printf(logtimer, "Timer %p pcancel\n", this);
+
+    base.call([this, &ret, &trash](){
+        trash = std::move(cb);
+        if(auto T = std::move(timer)) {
+            log_debug_printf(logtimer, "Timer %p dispose %p\n", this, T.get());
+            ret = event_pending(T.get(), EV_TIMEOUT, nullptr);
+            (void)event_del(T.get());
+        }
+    });
+
+    return ret;
+}
+
+static
+void expire_cb(evutil_socket_t, short, void * raw)
+{
+    auto self(static_cast<Timer::Pvt*>(raw));
+    log_debug_printf(logtimer, "Timer %p expires\n", self);
+    assert(self->base.base);
+
+    try {
+        self->cb();
+    } catch(std::exception& e){
+        log_exc_printf(logtimer, "Unhandled exception in Timer callback: %s\n", e.what());
+    }
+}
+
+Timer Timer::Pvt::buildOneShot(double delay, const evbase& base, std::function<void()>&& cb)
+{
+    if(!cb)
+        throw std::invalid_argument("NULL cb");
+
+    Timer ret;
+    ret.pvt = std::make_shared<Timer::Pvt>(base, std::move(cb));
+
+    base.call([&ret, &base, delay](){
+        evevent timer(event_new(base.base, -1, EV_TIMEOUT, &expire_cb, ret.pvt.get()));
+        ret.pvt->timer = std::move(timer);
+
+        auto timo(totv(delay));
+
+        if(event_add(ret.pvt->timer.get(), &timo))
+            throw std::runtime_error("Unable to start oneshot timer");
+
+        log_debug_printf(logtimer, "Create timer %p as %p with delay %f and %s\n",
+                         ret.pvt.get(),
+                         ret.pvt->timer.get(),
+                         delay,
+                         ret.pvt->cb.target_type().name());
+    });
+
+    return ret;
+}
+
+} // namespace pvxs

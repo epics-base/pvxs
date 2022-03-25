@@ -20,6 +20,7 @@
 
 #include <atomic>
 #include <memory>
+#include <set>
 #include <string>
 #include <sstream>
 #include <type_traits>
@@ -152,6 +153,9 @@ public:
 #undef RWLOCK_RLOCK
 #undef RWLOCK_RUNLOCK
 
+PVXS_API
+void osdGetRoles(const std::string& account, std::set<std::string>& roles);
+
 void logger_shutdown();
 
 // std::max() isn't constexpr until c++14 :(
@@ -223,6 +227,11 @@ public:
     inline unsigned short family() const { return store.sa.sa_family; }
     unsigned short port() const;
     void setPort(unsigned short port);
+    SockAddr withPort(unsigned short port) {
+        SockAddr temp(*this);
+        temp.setPort(port);
+        return temp;
+    }
 
     void setAddress(const char *, unsigned short port=0);
 
@@ -251,6 +260,34 @@ public:
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const SockAddr& addr);
 
+inline
+timeval totv(double t)
+{
+    timeval ret;
+    ret.tv_sec = t;
+    ret.tv_usec = (t - ret.tv_sec)*1e6;
+    return ret;
+}
+
+//! Scoped restore of std::ostream state (format flags, fill char, and field width)
+struct Restore {
+    std::ostream& strm;
+    std::ios_base::fmtflags pflags;
+    std::ostream::char_type pfill;
+    std::streamsize pwidth;
+    Restore(std::ostream& strm)
+        :strm(strm)
+        ,pflags(strm.flags())
+        ,pfill(strm.fill())
+        ,pwidth(strm.width())
+    {}
+    ~Restore() {
+        strm.flags(pflags);
+        strm.fill(pfill);
+        strm.width(pwidth);
+    }
+};
+
 template<std::atomic<size_t>* Cnt>
 struct InstCounter
 {
@@ -261,36 +298,7 @@ struct InstCounter
 #define INST_COUNTER(KLASS) InstCounter<&cnt_ ## KLASS> instances
 
 #define CASE(KLASS) PVXS_API extern std::atomic<size_t> cnt_ ## KLASS
-
-CASE(StructTop);
-
-CASE(UDPListener);
-CASE(evbase);
-
-CASE(GPROp);
-CASE(Connection);
-CASE(Channel);
-CASE(ClientPvt);
-CASE(ClientPvtLive);
-CASE(InfoOp);
-CASE(SubScriptionImpl);
-
-CASE(ServerChannelControl);
-CASE(ServerChan);
-CASE(ServerConn);
-CASE(ServerSource);
-CASE(ServerPvt);
-CASE(ServerIntrospect);
-CASE(ServerIntrospectControl);
-CASE(ServerGPR);
-CASE(ServerGPRConnect);
-CASE(ServerGPRExec);
-CASE(MonitorOp);
-CASE(ServerMonitorControl);
-CASE(ServerMonitorSetup);
-CASE(SharedPVImpl);
-CASE(SubscriptionImpl);
-
+#include "instcounters.h"
 #undef CASE
 
 } // namespace pvxs

@@ -107,7 +107,7 @@ std::ostream& target_information(std::ostream& strm)
 
         strm<<indent{}<<"osiSockDiscoverBroadcastAddresses() ->\n";
         Indented J(strm);
-        for(auto& addr : dummy.interfaces()) {
+        for(auto& addr : dummy.broadcasts()) {
             strm<<indent{}<<addr.tostring()<<"\n";
         }
     }

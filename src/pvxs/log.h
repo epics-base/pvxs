@@ -80,6 +80,24 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
        ::pvxs::detail:: _log_printf(unsigned(LVL), "%s " FMT, ::pvxs::detail::log_prefix((LOGGER).name, LVL), __VA_ARGS__); \
 }while(0)
 
+/* A note about MSVC (legacy) pre-processor weirdness.
+ * Care needs to be taken when expanding nested macros w/ __VA_ARGS__.
+ * Expansion of __VA_ARGS__ for the outer macro seems to result in
+ * all of the contents, including commas, being treated as a single
+ * token.  Which won't be split during expansion of the inner macro!
+ *
+ *   #define inner(FMT, ...) printf("%s " FMT, "prefix", __VA_ARGS__)
+ *   #define outer(...) inner(__VA_ARGS__)
+ *   outer("%d", 42);
+ * expands to
+ *   printf("%s " "%d", 42, "prefix");
+ *
+ * The prefix string has jumped to the end because FMT has expanded
+ * with all of the arguments of outer(...).  Surprise!
+ *
+ * Thus FMT is explicitly matched in the following "outer" macros.
+ */
+
 #define log_crit_printf(LOGGER, FMT, ...)  log_printf(LOGGER, ::pvxs::Level::Crit, FMT, __VA_ARGS__)
 #define log_err_printf(LOGGER, FMT, ...)   log_printf(LOGGER, ::pvxs::Level::Err, FMT, __VA_ARGS__)
 #define log_warn_printf(LOGGER, FMT, ...)  log_printf(LOGGER, ::pvxs::Level::Warn, FMT, __VA_ARGS__)

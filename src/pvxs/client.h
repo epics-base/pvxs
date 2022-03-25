@@ -19,6 +19,8 @@
 
 #include <pvxs/version.h>
 #include <pvxs/data.h>
+#include <pvxs/netcommon.h>
+#include <pvxs/util.h>
 
 namespace pvxs {
 namespace client {
@@ -117,7 +119,7 @@ struct PVXS_API Operation {
 
     //! Explicitly cancel a pending operation.
     //! Blocks until an in-progress callback has completed.
-    //! @returns true if the operation was cancelled, or false if already complete.
+    //! @returns true if the operation was canceled, or false if already complete.
     virtual bool cancel() =0;
 
     /** @brief Block until Operation completion
@@ -139,6 +141,18 @@ struct PVXS_API Operation {
 
     //! Queue an interruption of a wait() or wait(double) call.
     virtual void interrupt() =0;
+
+protected:
+    virtual void _reExecGet(std::function<void(client::Result&&)>&& resultcb) =0;
+    virtual void _reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) =0;
+public:
+#ifdef PVXS_EXPERT_API_ENABLED
+    // usable when Builder::autoExec(false)
+    // For GET/PUT, (re)issue request for current value
+    inline void reExecGet(std::function<void(client::Result&&)>&& resultcb) { this->_reExecGet(std::move(resultcb)); }
+    // For PUT (re)issue request to set current value
+    inline void reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) { this->_reExecPut(arg, std::move(resultcb)); }
+#endif
 };
 
 //! Handle for monitor subscription
@@ -189,6 +203,30 @@ public:
      * @endcode
      */
     virtual Value pop() =0;
+
+protected:
+    virtual void _onEvent(std::function<void(Subscription&)>&&) =0;
+public:
+#ifdef PVXS_EXPERT_API_ENABLED
+    // replace handler stored with MonitorBuilder::event()
+    inline void onEvent(std::function<void(Subscription&)>&& fn) { this->_onEvent(std::move(fn)); }
+#endif
+
+    //! Return strong internal reference which will not prevent
+    //! implicit cancellation when the last reference returned
+    //! by exec() is released.
+    //! @since 0.2.0
+    virtual std::shared_ptr<Subscription> shared_from_this() const =0;
+};
+
+//! Handle for entry in Channel cache
+struct PVXS_API Connect {
+    virtual ~Connect() =0;
+
+    //! Name passed to Context::connect()
+    virtual const std::string& name() const =0;
+    //! Poll (momentary) connection status
+    virtual bool connected() const =0;
 };
 
 class GetBuilder;
@@ -196,6 +234,7 @@ class PutBuilder;
 class RPCBuilder;
 class MonitorBuilder;
 class RequestBuilder;
+class ConnectBuilder;
 
 /** An independent PVA protocol client instance
  *
@@ -215,6 +254,14 @@ public:
     //! Config::build() is a convenient shorthand.
     explicit Context(const Config &);
     ~Context();
+
+    /** Create new client context based on configuration from $EPICS_PVA* environment variables.
+     *
+     * Shorthand for @code Config::fromEnv().build() @endcode.
+     * @since 0.2.1
+     */
+    static
+    Context fromEnv();
 
     //! effective config of running client
     const Config& config() const;
@@ -354,22 +401,30 @@ public:
     /** Create a new subscription for changes to a PV.
      *
      * @code
+     * MPMCFIFO<std::shared_ptr<Subscription>> workqueue(42u);
+     *
      * auto sub = ctxt.monitor("pv:name")
-     *                .event([](Subscription& sub) {
-     *                    // Subscription queue becomes not empty
-     *                    while(true) {
-     *                        try {
-     *                            Value update = sub.pop();
-     *                            if(!update)
-     *                                break; // Subscription queue becomes not empty
-     *                            std::cout<<update<<"\n";
-     *                        } catch(std::exception& e) {
-     *                            // may be Connected(), Disconnect(), Finished(), or RemoteError()
-     *                            std::cerr<<"Error "<<e.what()<<"\n";
-     *                        }
-     *                    }
+     *                .event([&workqueue](Subscription& sub) {
+     *                    // Subscription queue becomes not empty.
+     *                    // Avoid I/O on PVXS worker thread,
+     *                    // delegate to application thread
+     *                    workqueue.push(sub.shared_from_this());
      *                })
      *                .exec();
+     *
+     * while(auto sub = workqueue.pop()) { // could workqueue.push(nullptr) to break
+     *     try {
+     *         Value update = sub.pop();
+     *         if(!update)
+     *             continue; // Subscription queue empty, wait for another event callback
+     *         std::cout<<update<<"\n";
+     *     } catch(std::exception& e) {
+     *         // may be Connected(), Disconnect(), Finished(), or RemoteError()
+     *         std::cerr<<"Error "<<e.what()<<"\n";
+     *     }
+     *     // queue not empty, reschedule
+     *     workqueue.push(sub);
+     * }
      * // store op until completion
      * @endcode
      *
@@ -377,6 +432,19 @@ public:
      */
     inline
     MonitorBuilder monitor(const std::string& pvname);
+
+    /** Manually add, and maintain, an entry in the Channel cache.
+     *
+     * This optional method may be used when it is known that a given PV
+     * will be needed in future.
+     * ConnectBuilder::onConnect() and ConnectBuilder::onDisconnect()
+     * may be used to get asynchronous notification, or
+     * the returned Connect object may be used to poll Channel (dis)connect state.
+     *
+     * @since 0.2.0
+     */
+    inline
+    ConnectBuilder connect(const std::string& pvname);
 
     /** Compose a pvRequest independently of a network operation.
      *
@@ -419,9 +487,31 @@ public:
      */
     void hurryUp();
 
-    /** Immediately close unused channels and connections.
+#ifdef PVXS_EXPERT_API_ENABLED
+    //! Actions of cacheClear()
+    //! @since 0.2.0
+    enum cacheAction {
+        Clean,      //!< Remove channel(s) if unused.  Optional for user code.
+        Drop,       //!< Remove channel(s) unconditionally.  Prevents reuse of open channel(s).
+        Disconnect, //!< Remove channels(s) unconditionally, and cancel any in-progress operations.
+    };
+
+    /** Channel cache maintenance.
+     *
+     * @param action cf. cacheAction
+     *
+     * @since 0.2.0 'name' and 'action' arguments.  Defaults to previous behavior.
      */
-    void cacheClear();
+    void cacheClear(const std::string& name = std::string(), cacheAction action = Clean);
+
+    //! Ignore any search replies with these GUIDs
+    //! @since 0.2.0
+    void ignoreServerGUIDs(const std::vector<ServerGUID>& guids);
+
+    //! Compile report about peers and channels
+    //! @since 0.2.0
+    Report report(bool zero=true) const;
+#endif
 
     explicit operator bool() const { return pvt.operator bool(); }
     size_t use_count() const { return pvt.use_count(); }
@@ -440,6 +530,8 @@ protected:
     struct Req;
     std::shared_ptr<Req> req;
     unsigned _prio = 0u;
+    bool _autoexec = true;
+    bool _syncCancel = true;
 
     CommonBase() = default;
     CommonBase(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : ctx(ctx), _name(name) {}
@@ -513,6 +605,21 @@ public:
 
     SubBuilder& priority(int p) { this->_prio = p; return _sb(); }
     SubBuilder& server(const std::string& s) { this->_server = s; return _sb(); }
+
+#ifdef PVXS_EXPERT_API_ENABLED
+    // for GET/PUT control whether operations automatically proceed from INIT to EXEC
+    // cf. Operation::reExec()
+    SubBuilder& autoExec(bool b) { this->_autoexec = b; return _sb(); }
+#endif
+
+    /** Controls whether Operation::cancel() and Subscription::cancel() synchronize.
+     *
+     * When true (the default) explicit or implicit cancel blocks until any
+     * in progress callback has completed.  This makes safe some use of
+     * references in callbacks.
+     * @since 0.2.0
+     */
+    SubBuilder& syncCancel(bool b) { this->_syncCancel = b; return _sb(); }
 };
 
 } // namespace detail
@@ -520,6 +627,7 @@ public:
 //! Prepare a remote GET or GET_FIELD (info) operation.
 //! See Context::get()
 class GetBuilder : public detail::CommonBuilder<GetBuilder, detail::CommonBase> {
+    std::function<void (const Value&)> _onInit;
     std::function<void(Result&&)> _result;
     bool _get = false;
     PVXS_API
@@ -532,6 +640,12 @@ public:
     //! Callback through which result Value or an error will be delivered.
     //! The functor is stored in the Operation returned by exec().
     GetBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
+
+#ifdef PVXS_EXPERT_API_ENABLED
+    // called during operation INIT phase for Get/Put/Monitor when remote type
+    // description is available.
+    GetBuilder& onInit(std::function<void (const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
+#endif
 
     /** Execute the network operation.
      *  The caller must keep returned Operation pointer until completion
@@ -549,9 +663,10 @@ GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, 
 //! Prepare a remote PUT operation
 //! See Context::put()
 class PutBuilder : public detail::CommonBuilder<PutBuilder, detail::PRBase> {
-    bool _doGet = true;
+    std::function<void (const Value&)> _onInit;
     std::function<Value(Value&&)> _builder;
     std::function<void(Result&&)> _result;
+    bool _doGet = true;
 public:
     PutBuilder() = default;
     PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
@@ -600,6 +715,12 @@ public:
      *  The functor is stored in the Operation returned by exec().
      */
     PutBuilder& result(std::function<void(Result&&)>&& cb) { _result = std::move(cb); return *this; }
+
+#ifdef PVXS_EXPERT_API_ENABLED
+    // called during operation INIT phase for Get/Put/Monitor when remote type
+    // description is available.
+    PutBuilder& onInit(std::function<void (const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
+#endif
 
     /** Execute the network operation.
      *  The caller must keep returned Operation pointer until completion
@@ -662,6 +783,7 @@ RPCBuilder Context::rpc(const std::string& name, const Value &arg) {
 //! Prepare a remote subscription
 //! See Context::monitor()
 class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder, detail::CommonBase> {
+    std::function<void(Subscription&, const Value&)> _onInit;
     std::function<void(Subscription&)> _event;
     bool _maskConn = true;
     bool _maskDisconn = false;
@@ -682,6 +804,12 @@ public:
     //! Include Disconnected exceptions in queue (default true).
     MonitorBuilder& maskDisconnected(bool m = true) { _maskDisconn = m; return *this; }
 
+#ifdef PVXS_EXPERT_API_ENABLED
+    // called during operation INIT phase for Get/Put/Monitor when remote type
+    // description is available.
+    MonitorBuilder& onInit(std::function<void (Subscription&, const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
+#endif
+
     //! Submit request to subscribe
     PVXS_API
     std::shared_ptr<Subscription> exec();
@@ -700,6 +828,41 @@ public:
 };
 RequestBuilder Context::request() { return RequestBuilder{}; }
 
+//! cf. Context::connect()
+//! @since 0.2.0
+class ConnectBuilder
+{
+    std::shared_ptr<Context::Pvt> ctx;
+    std::string _pvname;
+    std::function<void()> _onConn;
+    std::function<void()> _onDis;
+    bool _syncCancel = true;
+public:
+    ConnectBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& pvname)
+        :ctx(ctx)
+        ,_pvname(pvname)
+    {}
+
+    //! Handler to be invoked when channel becomes connected.
+    ConnectBuilder& onConnect(std::function<void()>&& cb) { _onConn = std::move(cb); return *this; }
+    //! Handler to be invoked when channel becomes disconnected.
+    ConnectBuilder& onDisconnect(std::function<void()>&& cb) { _onDis = std::move(cb); return *this; }
+
+    /** Controls whether Connect::~Connect() synchronizes.
+     *
+     * When true (the default) explicit or implicit cancel blocks until any
+     * in progress callback has completed.  This makes safe some use of
+     * references in callbacks.
+     * @since 0.2.0
+     */
+    ConnectBuilder& syncCancel(bool b) { this->_syncCancel = b; return *this; }
+
+    //! Submit request to connect
+    PVXS_API
+    std::shared_ptr<Connect> exec();
+};
+ConnectBuilder Context::connect(const std::string& pvname) { return ConnectBuilder{pvt, pvname}; }
+
 struct PVXS_API Config {
     //! List of unicast and broadcast addresses
     std::vector<std::string> addressList;
@@ -709,10 +872,23 @@ struct PVXS_API Config {
     //! Empty implies wildcard 0.0.0.0
     std::vector<std::string> interfaces;
 
+    //! List of TCP name servers.
+    //! Client context will maintain connections, and send search requests, to these servers.
+    //! @since 0.2.0
+    std::vector<std::string> nameServers;
+
     //! UDP port to bind.  Default is 5076.  May be zero, cf. Server::config() to find allocated port.
     unsigned short udp_port = 5076;
+    //! Default TCP port for name servers
+    //! @since 0.2.0
+    unsigned short tcp_port = 5075;
+
     //! Whether to extend the addressList with local interface broadcast addresses.  (recommended)
     bool autoAddrList = true;
+
+    //! Inactivity timeout interval for TCP connections.  (seconds)
+    //! @since 0.2.0
+    double tcpTimeout = 40.0;
 
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }

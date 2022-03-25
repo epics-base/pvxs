@@ -21,6 +21,7 @@
 
 #include <event2/buffer.h>
 #include <pvxs/version.h>
+#include <pvxs/sharedArray.h>
 #include "utilpvt.h"
 
 namespace pvxs {namespace impl {
@@ -91,7 +92,7 @@ public:
     void restore(uint8_t* p) { pos = p; }
 };
 
-//! (de)serialization to/from buffers which are fixed size and contigious
+//! (de)serialization to/from buffers which are fixed size and contiguous
 struct PVXS_API FixedBuf : public Buffer
 {
     typedef Buffer base_type;
@@ -160,10 +161,10 @@ public:
 
 // assumes prior buf.ensure(M) where M>=N
 template<unsigned N>
-inline void _to_wire(Buffer& buf, const uint8_t *mem, bool reverse)
+inline void _to_wire(Buffer& buf, const uint8_t *mem, bool reverse, const char *fname, int lineno)
 {
     if(!buf.ensure(N)) {
-        buf.fault(__FILE__, __LINE__);
+        buf.fault(fname, lineno);
         return;
 
     } else if(reverse) {
@@ -180,10 +181,10 @@ inline void _to_wire(Buffer& buf, const uint8_t *mem, bool reverse)
 }
 
 template <unsigned N>
-inline void _from_wire(Buffer& buf, uint8_t *mem, bool reverse)
+inline void _from_wire(Buffer& buf, uint8_t *mem, bool reverse, const char *fname, int lineno)
 {
     if(!buf.ensure(N)) {
-        buf.fault(__FILE__, __LINE__);
+        buf.fault(fname, lineno);
         return;
 
     } else if(reverse) {
@@ -212,7 +213,7 @@ inline void to_wire(Buffer& buf, const T& val)
         uint8_t b[sizeof(T)];
     } pun;
     pun.v = val;
-    _to_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE);
+    _to_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE, __FILE__, __LINE__);
 }
 
 template<typename T, typename std::enable_if<sizeof(T)==1 && std::is_scalar<T>::value, int>::type =0>
@@ -238,14 +239,14 @@ inline void from_wire(Buffer& buf, T& val)
         T v;
         uint8_t b[sizeof(T)];
     } pun;
-    _from_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE);
+    _from_wire<sizeof(T)>(buf, pun.b, buf.be ^ hostBE, __FILE__, __LINE__);
     if(buf.good())
         val = pun.v;
 }
 
 //! wrapper to disambiguate size_t from uint32_t or uint64_t.
 //!
-//! __Always__ initialize w/ zero for sane behavour on error.
+//! __Always__ initialize w/ zero for sane behavior on error.
 //! @code
 //!   sbuf M;
 //!   Size blen{0};
@@ -406,6 +407,105 @@ void from_wire(Buffer& buf, Status& sts)
         from_wire(buf, sts.msg);
         from_wire(buf, sts.trace);
     }
+}
+
+template<typename E, typename C = E>
+static inline
+void to_wire(Buffer& buf, const shared_array<const void>& varr)
+{
+    auto arr = varr.castTo<const E>();
+    to_wire(buf, Size{arr.size()});
+
+    if(std::is_pod<C>::value) {
+        // optimize handling of types with fixed element size
+
+        auto src = reinterpret_cast<const char*>(arr.data());
+
+        for(size_t nremain = arr.size()*sizeof(C); nremain;) {
+            if(!buf.ensure(sizeof(C))) {
+                buf.fault(__FILE__, __LINE__);
+                break;
+            }
+
+            // rounds down to element size.  requires sizeof(C) by a power of 2
+            size_t nbytes = std::min(buf.size(), nremain)&~(sizeof(C)-1u);
+
+            if(buf.be==hostBE) { // already in native order, just copy
+                memcpy(buf.save(), src, nbytes);
+
+            } else { // must swap byte order
+                auto dest = buf.save();
+
+                for(size_t i=0; i<nbytes; i+=sizeof(C)) {
+                    for(size_t n=0u; n<sizeof(C); n++) {
+                        dest[i + sizeof(C)-1-n] = src[i + n];
+
+                    }
+                }
+            }
+
+            src += nbytes;
+            buf.skip(nbytes, __FILE__, __LINE__);
+            nremain -= nbytes;
+        }
+
+    } else {
+        // handle variable size element types
+        for(auto i : range(arr.size())) {
+            to_wire(buf, C(arr[i]));
+        }
+    }
+}
+
+template<typename E, typename C = E>
+static inline
+void from_wire(Buffer& buf, shared_array<const void>& varr)
+{
+    Size slen{};
+    from_wire(buf, slen);
+    shared_array<E> arr(slen.size);
+
+    if(std::is_pod<C>::value) {
+        // optimize handling of types with fixed element size
+
+        auto dest = reinterpret_cast<char*>(arr.data());
+
+        for(size_t nremain = arr.size()*sizeof(C); nremain;) {
+            if(!buf.ensure(sizeof(C))) {
+                buf.fault(__FILE__, __LINE__);
+                break;
+            }
+
+            // rounds down to element size.  requires sizeof(C) by a power of 2
+            size_t nbytes = std::min(buf.size(), nremain)&~(sizeof(C)-1u);
+
+            if(buf.be==hostBE) { // already in native order, just copy
+                memcpy(dest, buf.save(), nbytes);
+
+            } else { // must swap byte order
+                auto src = buf.save();
+
+                for(size_t i=0; i<nbytes; i+=sizeof(C)) {
+                    for(size_t n=0u; n<sizeof(C); n++) {
+                        dest[i + sizeof(C)-1-n] = src[i + n];
+
+                    }
+                }
+            }
+
+            dest += nbytes;
+            buf.skip(nbytes, __FILE__, __LINE__);
+            nremain -= nbytes;
+        }
+
+    } else {
+        for(auto i : range(arr.size())) {
+            C temp{};
+            from_wire(buf, temp);
+            arr[i] = temp;
+        }
+    }
+    varr = arr.freeze().template castTo<const void>();
 }
 
 /* PVA Message Header

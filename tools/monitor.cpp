@@ -94,15 +94,17 @@ int main(int argc, char *argv[])
             }
         }
 
-        auto ctxt = client::Config::fromEnv().build();
+        auto ctxt(client::Context::fromEnv());
 
         if(verbose)
             std::cout<<"Effective config\n"<<ctxt.config();
 
-        std::list<std::shared_ptr<client::Subscription>> ops;
+        // space for every subscription and one more for SigInt
+        MPMCFIFO<std::shared_ptr<client::Subscription>> workqueue(argc-optind+1);
+        std::list<decltype (workqueue)::value_type> ops;
 
-        std::atomic<int> remaining{argc-optind};
-        epicsEvent done;
+        int remaining = argc-optind;
+        std::atomic<bool> interrupt{false};
 
         for(auto n : range(optind, argc)) {
 
@@ -110,56 +112,64 @@ int main(int argc, char *argv[])
                           .pvRequest(request)
                           .maskConnected(false)
                           .maskDisconnected(false)
-                          .event([&argv, n, verbose, &remaining, &done, format, arrLimit](client::Subscription& mon)
-            {
-                while(true) {
-                    try {
-                        auto update = mon.pop();
-                        if(!update) {
-                            // event queue empty
-                            log_info_printf(app, "%s POP empty\n", argv[n]);
-                            break;
-                        }
-                        log_info_printf(app, "%s POP data\n", argv[n]);
-                        std::cout<<argv[n]<<"\n"<<update.format()
-                                   .format(format)
-                                   .arrayLimit(arrLimit);
-
-                    }catch(client::Finished& conn) {
-                        log_info_printf(app, "%s POP Finished\n", argv[n]);
-                        if(verbose)
-                            std::cerr<<argv[n]<<" Finished\n";
-                        if(remaining.fetch_sub(1)==1)
-                            done.signal();
-
-                    }catch(client::Connected& conn) {
-                        std::cerr<<argv[n]<<" Connected to "<<conn.peerName<<"\n";
-
-                    }catch(client::Disconnect& conn) {
-                        std::cerr<<argv[n]<<" Disconnected\n";
-
-                    }catch(std::exception& err) {
-                        std::cerr<<argv[n]<<" Error "<<typeid (err).name()<<" : "<<err.what()<<"\n";
-                    }
-                }
-
-            }).exec());
+                          .event([&workqueue](client::Subscription& mon)
+                            {
+                                workqueue.push(mon.shared_from_this());
+                            })
+                          .exec());
         }
 
         // expedite search after starting all requests
         ctxt.hurryUp();
 
-        SigInt sig([&done]() {
-            done.signal();
+        SigInt sig([&interrupt, &workqueue]() {
+            interrupt = true;
+            workqueue.push(nullptr);
         });
 
-        done.wait();
+        while(auto mon = workqueue.pop()) {
+            if(remaining==0u || interrupt.load())
+                break;
+            auto& name = mon->name();
 
-        if(remaining.load()==0u) {
+            try {
+                auto update = mon->pop();
+                if(!update) {
+                    // event queue empty
+                    log_info_printf(app, "%s POP empty\n", name.c_str());
+                    continue;
+                }
+                log_info_printf(app, "%s POP empty\n", name.c_str());
+
+                std::cout<<name<<"\n"<<update.format()
+                           .format(format)
+                           .arrayLimit(arrLimit);
+
+            }catch(client::Finished& conn) {
+                log_info_printf(app, "%s POP Finished\n", name.c_str());
+                if(verbose)
+                    std::cerr<<name.c_str()<<" Finished\n";
+                remaining--;
+
+            }catch(client::Connected& conn) {
+                std::cerr<<name.c_str()<<" Connected to "<<conn.peerName<<"\n";
+
+            }catch(client::Disconnect& conn) {
+                std::cerr<<name.c_str()<<" Disconnected\n";
+
+            }catch(std::exception& err) {
+                std::cerr<<name.c_str()<<" Error "<<typeid (err).name()<<" : "<<err.what()<<"\n";
+            }
+
+             // this subscription queue is not empty, reschedule
+            workqueue.push(std::move(mon));
+        }
+
+        if(remaining==0u) {
             return 0;
 
         } else {
-            if(verbose)
+            if(verbose && interrupt)
                 std::cerr<<"Interrupted\n";
             return 2;
         }

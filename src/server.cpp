@@ -7,7 +7,6 @@
 
 #include <list>
 #include <map>
-#include <regex>
 #include <system_error>
 #include <functional>
 #include <atomic>
@@ -31,11 +30,20 @@
 #include "udp_collector.h"
 
 namespace pvxs {
+namespace impl {
+ReportInfo::~ReportInfo() {}
+}
 namespace server {
 using namespace impl;
 
 DEFINE_LOGGER(serversetup, "pvxs.server.setup");
 DEFINE_LOGGER(serverio, "pvxs.server.io");
+DEFINE_LOGGER(serversearch, "pvxs.server.search");
+
+Server Server::fromEnv()
+{
+    return Config::fromEnv().build();
+}
 
 Server::Server(const Config& conf)
 {
@@ -150,6 +158,7 @@ client::Config Server::clientConfig() const
 
     client::Config ret;
     ret.udp_port = pvt->effective.udp_port;
+    ret.tcp_port = pvt->effective.tcp_port;
     ret.interfaces = pvt->effective.interfaces;
     ret.addressList = pvt->effective.interfaces;
     ret.autoAddrList = false;
@@ -219,6 +228,50 @@ Server& Server::interrupt()
     return *this;
 }
 
+Report Server::report(bool zero) const
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+
+    Report ret;
+
+    pvt->acceptor_loop.call([this, &ret, zero](){
+
+        for(auto& pair : pvt->connections) {
+            auto conn = pair.first;
+
+            ret.connections.emplace_back();
+            auto& sconn = ret.connections.back();
+            sconn.peer = conn->peerName;
+            sconn.credentials = conn->cred;
+            sconn.tx = conn->statTx;
+            sconn.rx = conn->statRx;
+
+            if(zero) {
+                conn->statTx = conn->statRx = 0u;
+            }
+
+            for(auto& pair : conn->chanBySID) {
+                auto& chan = pair.second;
+
+                sconn.channels.emplace_back();
+                auto& schan = sconn.channels.back();
+                schan.name = chan->name;
+                schan.tx = chan->statTx;
+                schan.rx = chan->statRx;
+                schan.info = chan->reportInfo;
+
+                if(zero) {
+                    chan->statTx = chan->statRx = 0u;
+                }
+            }
+        }
+
+    });
+
+    return ret;
+}
+
 std::ostream& operator<<(std::ostream& strm, const Server& serv)
 {
     auto detail = Detailed::level(strm);
@@ -268,9 +321,10 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 
                 strm<<indent{}<<"Peer"<<conn->peerName
                     <<" backlog="<<conn->backlog.size()
-                    <<" auth="<<conn->autoMethod<<"\n";
+                    <<" TX="<<conn->statTx<<" RX="<<conn->statRx
+                    <<" auth="<<conn->cred->method<<"\n";
                 if(detail>2)
-                    strm<<conn->credentials;
+                    strm<<*conn->cred;
 
                 if(detail<=2)
                     continue;
@@ -279,7 +333,7 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 
                 for(auto& pair : conn->chanBySID) {
                     auto& chan = pair.second;
-                    strm<<indent{}<<chan->name<<' ';
+                    strm<<indent{}<<chan->name<<" TX="<<chan->statTx<<" RX="<<chan->statRx<<' ';
 
                     if(chan->state==ServerChan::Creating) {
                         strm<<"CREATING sid="<<chan->sid<<" cid="<<chan->cid<<"\n";
@@ -335,19 +389,43 @@ Server::Pvt::Pvt(const Config &conf)
 
     auto manager = UDPManager::instance();
 
+    evsocket dummy(AF_INET, SOCK_DGRAM, 0);
+
     for(const auto& iface : effective.interfaces) {
         SockAddr addr(AF_INET, iface.c_str());
         addr.setPort(effective.udp_port);
+
         listeners.push_back(manager.onSearch(addr,
                                              std::bind(&Pvt::onSearch, this, std::placeholders::_1) ));
+
         // update to allow udp_port==0
         effective.udp_port = addr.port();
+
+#ifndef _WIN32
+        if(!addr.isAny()) {
+            /* An oddness of BSD sockets (not winsock) is that binding to
+             * INADDR_ANY will receive unicast and broadcast, but binding to
+             * a specific interface address receives only unicast.  The trick
+             * is to bind a second socket to the interface broadcast address,
+             * which will then receive only broadcasts.
+             */
+            for(auto bcast : dummy.broadcasts(&addr)) {
+                bcast.setPort(addr.port());
+                listeners.push_back(manager.onSearch(bcast,
+                                                     std::bind(&Pvt::onSearch, this, std::placeholders::_1) ));
+            }
+        }
+#endif
     }
 
-    evsocket dummy(AF_INET, SOCK_DGRAM, 0);
+    for(const auto& addr : effective.ignoreAddrs) {
+        SockAddr temp(AF_INET, addr.c_str());
+        ignoreList.push_back(temp);
+    }
+
 
     acceptor_loop.call([this](){
-        // from acceptor worker
+        // from accepter worker
 
         bool firstiface = true;
         for(const auto& addr : effective.interfaces) {
@@ -368,7 +446,7 @@ Server::Pvt::Pvt(const Config &conf)
         union {
             std::array<uint32_t, 3> i;
             std::array<uint8_t, 3*4> b;
-        } pun;
+        } pun{};
         static_assert (sizeof(pun)==12, "");
 
         // seed with some randomness to avoid making UUID a vector
@@ -383,7 +461,7 @@ Server::Pvt::Pvt(const Config &conf)
         // i[1] host
         // mix together first interface and all local bcast addresses
         pun.i[1] ^= ntohl(osiLocalAddr(dummy.sock).ia.sin_addr.s_addr);
-        for(auto& addr : dummy.interfaces()) {
+        for(auto& addr : dummy.broadcasts()) {
             if(addr.family()==AF_INET)
                 pun.i[1] ^= ntohl(addr->in.sin_addr.s_addr);
         }
@@ -516,6 +594,20 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 {
     // on UDPManager worker
 
+    for(const auto& addr : ignoreList) { // expected to be a short list
+        if(msg.src.family()!=addr.family()) {
+            // skip
+        } else if(msg.src->in.sin_addr.s_addr != addr->in.sin_addr.s_addr) {
+            // skip
+        } else if(addr->in.sin_port==0) {
+            // ignore all ports
+            return;
+        } else if(msg.src->in.sin_port == addr->in.sin_port) {
+            // ignore specific sender port
+            return;
+        }
+    }
+
     log_debug_printf(serverio, "%s searching\n", msg.src.tostring().c_str());
 
     searchOp._names.resize(msg.names.size());
@@ -554,7 +646,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
     M.skip(8, __FILE__, __LINE__); // fill in header after body length known
 
-    _to_wire<12>(M, effective.guid.data(), false);
+    _to_wire<12>(M, effective.guid.data(), false, __FILE__, __LINE__);
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
     to_wire(M, uint16_t(effective.tcp_port));
@@ -564,8 +656,10 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
     to_wire(M, uint16_t(nreply));
     for(auto i : range(msg.names.size())) {
-        if(searchOp._names[i]._claim)
+        if(searchOp._names[i]._claim) {
             to_wire(M, uint32_t(msg.names[i].id));
+            log_debug_printf(serversearch, "Search claimed '%s'\n", msg.names[i].name);
+        }
     }
     auto pktlen = M.save()-searchReply.data();
 
@@ -587,7 +681,7 @@ void Server::Pvt::doBeacons(short evt)
     VectorOutBuf M(true, beaconMsg);
     M.skip(8, __FILE__, __LINE__); // fill in header after body length known
 
-    _to_wire<12>(M, effective.guid.data(), false);
+    _to_wire<12>(M, effective.guid.data(), false, __FILE__, __LINE__);
     to_wire(M, uint8_t(0u)); // flags (aka. QoS, aka. undefined)
     to_wire(M, uint8_t(beaconSeq++)); // sequence
     to_wire(M, uint16_t(beaconChange));// change count
@@ -598,7 +692,7 @@ void Server::Pvt::doBeacons(short evt)
     // "NULL" serverStatus
     to_wire(M, uint8_t(0xff));
 
-    auto pktlen = M.save()-beaconMsg.data();
+    size_t pktlen = M.save()-beaconMsg.data();
 
     // now going back to fill in header
     FixedBuf H(true, beaconMsg.data(), 8);
@@ -628,12 +722,10 @@ void Server::Pvt::doBeacons(short evt)
 
     // mimic pvAccessCPP server (almost)
     // send a "burst" of beacons, then fallback to a longer interval
-    timeval interval;
+    timeval interval{180, 0};
     if(beaconCnt<10u) {
         interval = {15, 0};
         beaconCnt++;
-    } else {
-        interval = {180, 0};
     }
     if(event_add(beaconTimer.get(), &interval))
         log_err_printf(serversetup, "Error re-enabling beacon timer on\n%s", "");

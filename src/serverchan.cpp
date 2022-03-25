@@ -18,6 +18,7 @@ DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
 DEFINE_LOGGER(serversetup, "pvxs.server.setup");
+DEFINE_LOGGER(serversearch, "pvxs.server.search");
 
 ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
                        uint32_t sid,
@@ -41,8 +42,7 @@ ServerChannelControl::ServerChannelControl(const std::shared_ptr<ServerConn> &co
 {
     _op = None;
     _name = channel->name;
-    _peerName = conn->peerName;
-    _ifaceName = conn->iface->name;
+    _cred = conn->cred;
 }
 
 ServerChannelControl::~ServerChannelControl() {}
@@ -159,29 +159,33 @@ void ServerChannelControl::close()
             return;
         auto conn = ch->conn.lock();
         if(conn && ch->state==ServerChan::Active) {
-            // Send unsolicited Channel Destroy
+            log_debug_printf(connio, "%s %s Send unsolicited Channel Destroy\n",
+                             conn->peerName.c_str(), ch->name.c_str());
 
             auto tx = bufferevent_get_output(conn->bev.get());
             EvOutBuf R(hostBE, tx);
             to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
             to_wire(R, ch->sid);
             to_wire(R, ch->cid);
+            conn->statTx += 16u;
+            ch->statTx += 16u;
         }
         ServerChannel_shutdown(ch);
     });
 }
 
-std::pair<std::string, Value> ServerChannelControl::rawCredentials() const
+void ServerChannelControl::_updateInfo(const std::shared_ptr<const ReportInfo>& info)
 {
-    std::pair<std::string, Value> ret;
     auto serv = server.lock();
-    if(serv)
-        serv->acceptor_loop.call([this, &ret](){
-            if(auto chan = this->chan.lock())
-                if(auto conn = chan->conn.lock())
-                    ret = std::make_pair(conn->autoMethod, conn->credentials.clone());
-        });
-    return ret;
+    if(!serv)
+        return;
+
+    serv->acceptor_loop.call([this, &info](){
+        auto ch = chan.lock();
+        if(!ch)
+            return;
+        ch->reportInfo = info;
+    });
 }
 
 void ServerConn::handle_SEARCH()
@@ -229,7 +233,7 @@ void ServerConn::handle_SEARCH()
             try {
                 pair.second->onSearch(op);
             }catch(std::exception& e){
-                log_exc_printf(serversetup, "Unhandled error in Source::onSearch for '%s' : %s\n",
+                log_exc_printf(serversearch, "Unhandled error in Source::onSearch for '%s' : %s\n",
                            pair.first.second.c_str(), e.what());
             }
         }
@@ -249,17 +253,20 @@ void ServerConn::handle_SEARCH()
 
         EvOutBuf R(hostBE, txBody.get());
 
-        to_wire(M, searchID);
-        to_wire(M, iface->bind_addr);
-        to_wire(M, iface->bind_addr.port());
-        to_wire(M, "tcp");
+        _to_wire<12>(R, iface->server->effective.guid.data(), false, __FILE__, __LINE__);
+        to_wire(R, searchID);
+        to_wire(R, SockAddr::any(AF_INET));
+        to_wire(R, iface->bind_addr.port());
+        to_wire(R, "tcp");
         // "found" flag
-        to_wire(M, uint8_t(nreply!=0 ? 1 : 0));
+        to_wire(R, uint8_t(nreply!=0 ? 1 : 0));
 
-        to_wire(M, uint16_t(nreply));
+        to_wire(R, uint16_t(nreply));
         for(auto i : range(op._names.size())) {
-            if(op._names[i]._claim)
-                to_wire(M, uint32_t(nameStorage[i].first));
+            if(op._names[i]._claim) {
+                to_wire(R, uint32_t(nameStorage[i].first));
+                log_debug_printf(serversearch, "Search claimed '%s'\n", op._names[i]._name);
+            }
         }
     }
 
@@ -275,7 +282,7 @@ void ServerConn::handle_CREATE_CHANNEL()
     auto G(iface->server->sourcesLock.lockReader());
 
     // one channel create request contains main channel names.
-    // each of which will received a seperate reply.
+    // each of which will received a separate reply.
 
     uint16_t count = 0;
     from_wire(M, count);
@@ -309,14 +316,28 @@ void ServerConn::handle_CREATE_CHANNEL()
             for(auto& pair : iface->server->sources) {
                 try {
                     pair.second->onCreate(std::move(op));
-                    if(!op || chan->onOp || chan->onClose || chan->state!=ServerChan::Creating) {
-                        claimed = chan->state==ServerChan::Creating;
-                        log_debug_printf(connsetup, "Client %s %s channel to %s through %s\n", peerName.c_str(),
-                                   claimed?"accepted":"rejected", name.c_str(), pair.first.second.c_str());
-                        break;
+                    const char* msg = nullptr;
+
+                    if(chan->state!=ServerChan::Creating) {
+                        msg = "rejected";
+
+                    } else if(chan->onOp || chan->onRPC || chan->onSubscribe || chan->onClose) {
+                        msg = "accepted";
+                        claimed = true;
+
+                    } else if(!op) {
+                        msg = "discarded";
                     }
+
+                    log_debug_printf(serversearch, "Client %s %s channel to %s through %s\n",
+                                     peerName.c_str(),
+                                     msg ? msg : "ignored",
+                                     name.c_str(), pair.first.second.c_str());
+
+                    if(msg)
+                        break;
                 }catch(std::exception& e){
-                    log_exc_printf(connsetup, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
+                    log_exc_printf(serversearch, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
                                pair.first.second.c_str(), pair.first.first,
                                typeid(&e).name(), e.what());
                 }
@@ -378,7 +399,7 @@ void ServerConn::handle_DESTROY_CHANNEL()
 
     auto it = chanBySID.find(sid);
     if(it==chanBySID.end()) {
-        log_debug_printf(connsetup, "Client %s DestroyChan non-existant sid=%d cid=%d\n", peerName.c_str(),
+        log_debug_printf(connsetup, "Client %s DestroyChan non-existent sid=%d cid=%d\n", peerName.c_str(),
                    unsigned(sid), unsigned(cid));
         return;
     }
@@ -403,6 +424,9 @@ void ServerConn::handle_DESTROY_CHANNEL()
 
         if(!R.good())
             bev.reset();
+
+        statTx += 16u;
+        // don't bother to increment for channel
     }
 }
 

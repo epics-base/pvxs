@@ -24,6 +24,7 @@ namespace pvxs {
 namespace client {
 
 struct Channel;
+struct ContextImpl;
 
 struct ResultWaiter {
     epicsMutex lock;
@@ -42,13 +43,15 @@ struct ResultWaiter {
 // internal actions on an Operation
 struct OperationBase : public Operation
 {
-    const std::shared_ptr<Channel> chan;
+    const evbase loop;
+    // remaining members only accessibly from loop worker
+    std::shared_ptr<Channel> chan;
     uint32_t ioid = 0;
     Value result;
     bool done = false;
     std::shared_ptr<ResultWaiter> waiter;
 
-    OperationBase(operation_t op, const std::shared_ptr<Channel>& chan);
+    OperationBase(operation_t op, const evbase& loop);
     virtual ~OperationBase();
 
     virtual void createOp() =0;
@@ -70,14 +73,15 @@ struct RequestInfo {
 };
 
 struct Connection : public ConnBase, public std::enable_shared_from_this<Connection> {
-    const std::shared_ptr<Context::Pvt> context;
+    const std::shared_ptr<ContextImpl> context;
 
     const evevent echoTimer;
 
     bool ready = false;
+    bool nameserver = false;
 
-    // channels to be created on this Connection (in state==Connecting
-    std::list<std::weak_ptr<Channel>> pending;
+    // channels to be created on this Connection in state==Connecting
+    std::map<uint32_t, std::weak_ptr<Channel>> pending;
 
     std::map<uint32_t, std::weak_ptr<Channel>> creatingByCID, // in state==Creating
                                                chanBySID;     // in state==Active
@@ -89,8 +93,12 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
 
     INST_COUNTER(Connection);
 
-    Connection(const std::shared_ptr<Context::Pvt>& context, const SockAddr &peerAddr);
+    Connection(const std::shared_ptr<ContextImpl>& context, const SockAddr &peerAddr);
     virtual ~Connection();
+
+    static
+    std::shared_ptr<Connection> build(const std::shared_ptr<ContextImpl>& context,
+                                      const SockAddr& serv);
 
     void createChannels();
 
@@ -105,6 +113,7 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
     CASE(CONNECTION_VALIDATION);
     CASE(CONNECTION_VALIDATED);
 
+    CASE(SEARCH_RESPONSE);
     CASE(CREATE_CHANNEL);
     CASE(DESTROY_CHANNEL);
 
@@ -122,10 +131,30 @@ protected:
     static void tickEchoS(evutil_socket_t fd, short evt, void *raw);
 };
 
+struct ConnectImpl : public Connect
+{
+    const evbase loop;
+    std::shared_ptr<Channel> chan;
+    const std::string _name;
+    std::atomic<bool> _connected;
+    std::function<void()> _onConn;
+    std::function<void()> _onDis;
+
+    ConnectImpl(const evbase& loop, const std::string& name)
+        :loop(loop)
+        ,_name(name)
+        ,_connected{false}
+    {}
+    virtual ~ConnectImpl();
+
+    virtual const std::string &name() const override final;
+    virtual bool connected() const override final;
+};
+
 struct Channel {
-    const std::shared_ptr<Context::Pvt> context;
+    const std::shared_ptr<ContextImpl> context;
     const std::string name;
-    // Our choosen ID for this channel.
+    // Our chosen ID for this channel.
     // used as persistent CID and searchID
     const uint32_t cid;
 
@@ -141,11 +170,14 @@ struct Channel {
     std::shared_ptr<Connection> conn;
     uint32_t sid = 0u;
 
-    // when state==Searching, number of repeatitions
+    // channel created with .server() to bypass normal search process
+    SockAddr forcedServer;
+
+    // when state==Searching, number of repetitions
     size_t nSearch = 0u;
 
     // GUID of last positive reply when state!=Searching
-    std::array<uint8_t, 12> guid;
+    ServerGUID guid;
     SockAddr replyAddr;
 
     std::list<std::weak_ptr<OperationBase>> pending;
@@ -153,27 +185,27 @@ struct Channel {
     // points to storage of Connection::opByIOID
     std::map<uint32_t, RequestInfo*> opByIOID;
 
+    std::list<ConnectImpl*> connectors;
+
+    size_t statTx{}, statRx{};
+
     INST_COUNTER(Channel);
 
-    Channel(const std::shared_ptr<Context::Pvt>& context, const std::string& name, uint32_t cid);
+    Channel(const std::shared_ptr<ContextImpl>& context, const std::string& name, uint32_t cid);
     ~Channel();
 
     void createOperations();
     void disconnect(const std::shared_ptr<Channel>& self);
 
     static
-    std::shared_ptr<Channel> build(const std::shared_ptr<Context::Pvt>& context, const std::string &name);
+    std::shared_ptr<Channel> build(const std::shared_ptr<ContextImpl>& context,
+                                   const std::string& name,
+                                   const std::string& server);
 };
 
-struct Context::Pvt
+struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 {
     SockAttach attach;
-
-    std::weak_ptr<Pvt> internal_self;
-    std::shared_ptr<Pvt> shared_from_this() {
-        std::shared_ptr<Pvt> ret(internal_self);
-        return ret;
-    }
 
     // "const" after ctor
     Config effective;
@@ -186,10 +218,18 @@ struct Context::Pvt
     evsocket searchTx;
     uint16_t searchRxPort;
 
-    // poked from both TCP and UDP workers
+    std::vector<ServerGUID> ignoreServerGUIDs;
+
+    // poked and beaconSenders from both TCP and UDP workers
     epicsMutex pokeLock;
     epicsTimeStamp lastPoke{};
     bool poked = false;
+
+    struct BTrack {
+        ServerGUID guid;
+        epicsTimeStamp lastRx;
+    };
+    std::map<SockAddr, BTrack> beaconSenders;
 
     std::vector<uint8_t> searchMsg;
 
@@ -203,20 +243,17 @@ struct Context::Pvt
 
     std::map<uint32_t, std::weak_ptr<Channel>> chanByCID;
     // strong ref. loop through Channel::context
-    // explicitly broken by Context::close(), Context::cacheClear, or Context::Pvt::cacheClean()
-    std::map<std::string, std::shared_ptr<Channel>> chanByName;
+    // explicitly broken by Context::close(), Context::cacheClear(), or ContextImpl::cacheClean()
+    // chanByName key'd by (pv, forceServer)
+    std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
 
     std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
+
+    std::vector<std::pair<SockAddr, std::shared_ptr<Connection>>> nameServers;
 
     evbase tcp_loop;
     const evevent searchRx;
     const evevent searchTimer;
-
-    struct BTrack {
-        std::array<uint8_t, 12> guid;
-        epicsTimeStamp lastRx;
-    };
-    std::map<SockAddr, BTrack> beaconSenders;
 
     // beacon handling done on UDP worker.
     // we keep a ref here as long as beaconCleaner is in use
@@ -224,11 +261,14 @@ struct Context::Pvt
 
     const evevent beaconCleaner;
     const evevent cacheCleaner;
+    const evevent nsChecker;
 
-    INST_COUNTER(ClientPvt);
+    INST_COUNTER(ClientContextImpl);
 
-    Pvt(const Config& conf);
-    ~Pvt();
+    ContextImpl(const Config& conf, const evbase &tcp_loop);
+    ~ContextImpl();
+
+    void startNS();
 
     void close();
 
@@ -242,8 +282,24 @@ struct Context::Pvt
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickBeaconClean();
     static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);
-    void cacheClean();
+    void cacheClean(const std::string &name, Context::cacheAction force);
     static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
+    void onNSCheck();
+    static void onNSCheckS(evutil_socket_t fd, short evt, void *raw);
+};
+
+struct Context::Pvt {
+    // external ref to running loop.
+    // impl directly, and indirectly, contains internal refs
+private:
+    evbase loop;
+public:
+    std::shared_ptr<ContextImpl> impl;
+
+    INST_COUNTER(ClientPvt);
+
+    Pvt(const Config& conf);
+    ~Pvt(); // I call ContextImpl::close()
 };
 
 } // namespace client

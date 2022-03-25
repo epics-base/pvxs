@@ -79,7 +79,8 @@ public:
     }
 
     //! Override current pass/fail result if input matches a regular expression
-    //! @since 0.1.1
+    //! @since 0.2.1 Expression syntax is POSIX extended.
+    //! @since 0.1.1 Added
     testCase& setPassMatch(const std::string& expr, const std::string& inp);
 
     //! Append to message
@@ -146,8 +147,22 @@ testCase testNotEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS
     return ret;
 }
 
+template<typename T>
+struct as_str {
+    static const char* op(const T& v) { return v; }
+};
+template<> struct as_str<std::string> {
+    static const char* op(const std::string& v) { return v.c_str(); }
+};
+template<> struct as_str<const std::string> {
+    static const char* op(const std::string& v) { return v.c_str(); }
+};
+
+template<typename T>
+const char* asStr(const T& v) { return as_str<T>::op(v); }
+
 PVXS_API
-testCase _testStrEq(const char *sLHS, const std::string& lhs, const char *sRHS, const std::string& rhs);
+testCase _testStrTest(unsigned op, const char *sLHS, const char* lhs, const char *sRHS, const char* rhs);
 
 PVXS_API
 testCase _testStrMatch(const char *spat, const std::string& pat, const char *sstr, const std::string& str);
@@ -263,10 +278,18 @@ testCase testThrowsMatch(const std::string& expr, FN fn)
 //! Evaluates to a pvxs::testCase
 //! Functionally equivalent to testEq() with two std::string instances.
 //! Prints diff-like output which is friendlier to multi-line strings.
-#define testStrEq(LHS, RHS) ::pvxs::detail::_testStrEq(#LHS, LHS, #RHS, RHS)
+#define testStrEq(LHS, RHS) ::pvxs::detail::_testStrTest(1, #LHS, ::pvxs::detail::asStr(LHS), #RHS, ::pvxs::detail::asStr(RHS))
+
+//! Macro which asserts inequality between LHS and RHS.
+//! Evaluates to a pvxs::testCase
+//! Functionally equivalent to testNotEq() with two std::string instances.
+//! Prints diff-like output which is friendlier to multi-line strings.
+//! @since 0.2.0
+#define testStrNotEq(LHS, RHS) ::pvxs::detail::_testStrTest(0, #LHS, ::pvxs::detail::asStr(LHS), #RHS, ::pvxs::detail::asStr(RHS))
 
 //! Macro which asserts that STR matches the regular expression EXPR
 //! Evaluates to a pvxs::testCase
+//! @since 0.2.1 Expression syntax is POSIX extended.
 //! @since 0.1.1
 #define testStrMatch(EXPR, STR) ::pvxs::detail::_testStrMatch(#EXPR, EXPR, #STR, STR)
 

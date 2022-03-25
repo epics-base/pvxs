@@ -171,6 +171,7 @@ std::ostream& operator<<(std::ostream& strm, TypeCode c)
     if(name[0]!='?') {
         strm<<name;
     } else {
+        Restore R(strm);
         strm<<"TypeCode(0x"<<std::hex<<(unsigned)c.code<<")";
     }
     return strm;

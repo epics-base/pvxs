@@ -3,6 +3,7 @@
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
+#define PVXS_ENABLE_EXPERT_API
 
 #include <atomic>
 
@@ -189,6 +190,83 @@ struct Tester : public TesterBase
         cli = client::Context();
         op.reset();
     }
+
+    void manualExec()
+    {
+        testShow()<<__func__;
+
+        epicsEvent initd;
+        epicsEvent done;
+        Value top;
+
+        mbox.open(initial);
+        serv.start();
+
+        auto op = cli.put("mailbox")
+                .autoExec(false)
+                .onInit([&initd, &top](const Value& prototype) {
+                    testDiag("onInit()");
+                    top = prototype;
+                    initd.signal();
+                })
+                .result([&initd](client::Result&& result) {
+                    testFail("result() unexpected error prior to onInit()");
+                    initd.signal();
+                })
+                .exec();
+
+        testOk1(initd.wait(5.0));
+
+        testDiag("reExec() GET 1");
+        top["value"] = 123u;
+
+        op->reExecGet([&done](client::Result&& result) {
+            testDiag("result() GET 1");
+            if(testFalse(result.error())) {
+                testEq(result()["value"].as<uint32_t>(), 1u);
+            }
+            done.signal();
+        });
+
+        testOk1(done.wait(5.0));
+
+        testDiag("reExec() PUT 1");
+        top["value"] = 123u;
+
+        op->reExecPut(top.clone(), [&done](client::Result&& result) {
+            testDiag("result() PUT 1");
+            testFalse(result.error());
+            done.signal();
+        });
+
+        testOk1(done.wait(5.0));
+        testEq(mbox.fetch()["value"].as<uint32_t>(), 123u);
+
+        testDiag("reExec() GET 2");
+        top["value"] = 123u;
+
+        op->reExecGet([&done](client::Result&& result) {
+            testDiag("result() GET 2");
+            if(testFalse(result.error())) {
+                testEq(result()["value"].as<uint32_t>(), 123u);
+            }
+            done.signal();
+        });
+
+        testOk1(done.wait(5.0));
+
+        testDiag("reExec() 2");
+        top["value"] = 124u;
+
+        op->reExecPut(top, [&done](client::Result&& result) {
+            testDiag("result() PUT 2");
+            testFalse(result.error());
+            done.signal();
+        });
+
+        testOk1(done.wait(5.0));
+        testEq(mbox.fetch()["value"].as<uint32_t>(), 124u);
+    }
 };
 
 struct TestPutBuilder : public TesterBase
@@ -207,7 +285,7 @@ struct TestPutBuilder : public TesterBase
                 .set("value", "5")
                 .set("alarm.severity", 3)
                 .set("alarm", "not going to happen", false)
-                .set("nonexistant", "nope", false)
+                .set("nonexistent", "nope", false)
                 .result([&actual, &done](client::Result&& result) {
                     actual = std::move(result);
                     done.signal();
@@ -333,7 +411,7 @@ void testError()
 
 MAIN(testput)
 {
-    testPlan(26);
+    testPlan(39);
     testSetup();
     logger_config_env();
     Tester().loopback(false);
@@ -342,6 +420,7 @@ MAIN(testput)
     Tester().timeout();
     Tester().cancel();
     Tester().orphan();
+    Tester().manualExec();
     TestPutBuilder().testSet();
     testRO();
     testError();

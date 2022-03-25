@@ -36,7 +36,7 @@ struct PVXS_API UDPManager
     struct Beacon {
         SockAddr& src;
         SockAddr server;
-        std::array<uint8_t, 12> guid;
+        ServerGUID guid;
         Beacon(SockAddr& src) :src(src) {}
     };
     //! Create subscription for Beacon messages.
@@ -85,6 +85,7 @@ class PVXS_API UDPListener
 {
     std::function<void(UDPManager::Search&)> searchCB;
     std::function<void(UDPManager::Beacon&)> beaconCB;
+    const std::shared_ptr<UDPManager::Pvt> manager;
     std::shared_ptr<UDPCollector> collector;
     const SockAddr dest;
     bool active;
@@ -95,7 +96,7 @@ class PVXS_API UDPListener
     friend struct UDPManager;
 
 public:
-    UDPListener(UDPManager::Pvt *manager, SockAddr& dest);
+    UDPListener(const std::shared_ptr<UDPManager::Pvt>& manager, SockAddr& dest);
     ~UDPListener();
 
     void start(bool s=true);

@@ -33,12 +33,14 @@ struct Entry {
 
 struct SubscriptionImpl : public OperationBase, public Subscription
 {
-    // for use in log messages, event after cancel()
-    const std::string channelName;
+    // for use in log messages, even after cancel()
+    std::string channelName;
 
     evevent ackTick;
 
     // const after exec()
+    std::weak_ptr<SubscriptionImpl> self; // internal
+    std::function<void (Subscription&, const Value&)> onInit;
     std::function<void(Subscription&)> event;
     Value pvRequest;
     bool pipeline = false;
@@ -46,7 +48,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
     bool maskConn = false, maskDiscon = true;
     uint32_t queueSize = 4u, ackAt=0u;
 
-    // only access from tcp_loop
+    // only access from loop
+    mutable std::weak_ptr<Subscription>     external_internal; // 'self' wrapped to be returned by shared_from_this()
 
     enum state_t : uint8_t {
         Connecting, // waiting for an active Channel
@@ -67,14 +70,13 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
     INST_COUNTER(SubscriptionImpl);
 
-    SubscriptionImpl(operation_t op, const std::shared_ptr<Channel>& chan)
-        :OperationBase (op, chan)
-        ,channelName(chan->name)
-        ,ackTick(event_new(chan->context->tcp_loop.base, -1, EV_TIMEOUT, &tickAckS, this))
+    SubscriptionImpl(const evbase& loop)
+        :OperationBase (Operation::Monitor, loop)
+        ,ackTick(event_new(loop.base, -1, EV_TIMEOUT, &tickAckS, this))
     {}
     virtual ~SubscriptionImpl() {
-        chan->context->tcp_loop.assertInLoop();
-        _cancel(true);
+        if(loop.assertInRunningLoop())
+            _cancel(true);
     }
 
     virtual const std::string& _name() override final {
@@ -100,7 +102,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
     virtual void pause(bool p) override final
     {
-        chan->context->tcp_loop.call([this, p](){
+        loop.call([this, p](){
             log_info_printf(io, "Server %s channel %s monitor %s\n",
                             chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
                             chan->name.c_str(),
@@ -120,7 +122,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                     to_wire(R, ioid);
                     to_wire(R, subcmd);
                 }
-                conn->enqueueTxBody(CMD_MONITOR);
+                chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
 
                 state = p ? Idle : Running;
             }
@@ -172,11 +174,52 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         return ret;
     }
 
-    virtual bool cancel() override final {
-        auto context = chan->context;
+    virtual std::shared_ptr<Subscription> shared_from_this() const override final {
+        // on worker?
+        std::shared_ptr<Subscription> ret;
+        loop.call([this, &ret](){
+            // really on worker
+
+            // try to re-use already wrapped
+            ret = external_internal.lock();
+            if(!ret) {
+                // nope, need to build a fresh one
+
+                // we want to return 'self' to user code, but need to ensure it is
+                // disposed of from our worker thread.
+                std::shared_ptr<SubscriptionImpl> strong(self);
+
+                ret.reset(strong.get(), [strong](Subscription*) mutable {
+                    // on worker?
+                    auto junk(std::move(strong));
+                    // need to do cleanup on worker if running
+                    auto loop(junk->loop);
+                    loop.tryCall(std::bind([](std::shared_ptr<SubscriptionImpl>& junk){
+                         // really on worker
+                         // cleanup here when worker is running
+                         junk.reset();
+                     }, std::move(junk)));
+                    // or cleanup here when worker is stopped, and lambda is destroyed
+                });
+                // hack: external_internal is 'mutable' so that shared_from_this() can appear to be const
+                external_internal = ret;
+            }
+        });
+        return ret;
+    }
+
+    virtual void _onEvent(std::function<void(Subscription&)>&& fn) override final {
         decltype (event) junk;
-        bool ret;
-        context->tcp_loop.call([this, &junk, &ret](){
+        loop.call([this, &junk, &fn]() {
+            junk = std::move(event);
+            this->event = std::move(fn);
+        });
+    }
+
+    virtual bool cancel() override final {
+        decltype (event) junk;
+        bool ret = false;
+        (void)loop.tryCall([this, &junk, &ret](){
             ret = _cancel(false);
             junk = std::move(event);
             // leave opByIOID for GC
@@ -209,6 +252,11 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         return ret;
     }
 
+    // not actually visible through Subscription.
+    // an artifact of using OperationBase for convenience
+    void _reExecGet(std::function<void(client::Result&&)>&& resultcb) override final {}
+    void _reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final {}
+
     virtual void createOp() override final
     {
         if(state!=Connecting) {
@@ -234,7 +282,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
             if(pipeline)
                 to_wire(R, queueSize);
         }
-        conn->enqueueTxBody(CMD_MONITOR);
+        chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
 
         log_debug_printf(io, "Server %s channel '%s' monitor INIT%s\n",
                          conn->peerName.c_str(), chan->name.c_str(), pipeline?" pipeline":"");
@@ -319,7 +367,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                 to_wire(R, uint8_t(0x80));
                 to_wire(R, uint32_t(unack));
             }
-            conn->enqueueTxBody(CMD_MONITOR);
+            chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
 
             window += unack;
             unack = 0u;
@@ -339,6 +387,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
 void Connection::handle_MONITOR()
 {
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t ioid=0;
@@ -375,7 +424,7 @@ void Connection::handle_MONITOR()
                 lvl = Level::Err;
             }
 
-            log_printf(io, lvl,  "Server %s uses non-existant IOID %u.  Ignoring...\n",
+            log_printf(io, lvl,  "Server %s uses non-existent IOID %u.  Ignoring...\n",
                        peerName.c_str(), unsigned(ioid));
             return;
         }
@@ -436,6 +485,8 @@ void Connection::handle_MONITOR()
         return;
     }
 
+    mon->chan->statRx += rxlen;
+
     Entry update;
 
     if(!sts.isSuccess()) {
@@ -449,7 +500,18 @@ void Connection::handle_MONITOR()
 
         mon->state = SubscriptionImpl::Idle;
 
-        if(mon->autostart)
+        try {
+            if(mon->onInit)
+                mon->onInit(*mon, info->prototype);
+        }catch(std::exception& e){
+            mon->state = SubscriptionImpl::Done;
+            update.exc = std::current_exception();
+            log_debug_printf(io, "Server %s channel %s monitor Create error: %s\n",
+                            peerName.c_str(),
+                            mon->chan->name.c_str(), e.what());
+        }
+
+        if(mon->autostart && mon->state == SubscriptionImpl::Idle)
             mon->resume();
 
     } else if(data) { // Idle or Running
@@ -540,82 +602,88 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    std::shared_ptr<Subscription> ret;
+    auto context(ctx->impl->shared_from_this());
 
-    ctx->tcp_loop.call([&ret, this]() {
-        auto chan = Channel::build(ctx->shared_from_this(), _name);
+    auto op(std::make_shared<SubscriptionImpl>(context->tcp_loop));
+    op->self = op;
+    op->channelName = _name;
+    op->event = std::move(_event);
+    op->onInit = std::move(_onInit);
+    op->pvRequest = _buildReq();
+    op->maskConn = _maskConn;
+    op->maskDiscon = _maskDisconn;
+    op->autostart = _autoexec;
 
-        auto op = std::make_shared<SubscriptionImpl>(Operation::Monitor, chan);
-        op->event = std::move(_event);
-        op->pvRequest = _buildReq();
-        op->maskConn = _maskConn;
-        op->maskDiscon = _maskDisconn;
+    auto options = op->pvRequest["record._options"];
 
-        auto options = op->pvRequest["record._options"];
-
-        options["queueSize"].as<uint32_t>([&op](uint32_t Q) {
-            if(Q>1)
-                op->queueSize = Q;
-        });
-
-        (void)options["pipeline"].as(op->pipeline);
-
-        auto ackAny = options["ackAny"];
-
-        if(ackAny.type()==TypeCode::String) {
-            auto sval = ackAny.as<std::string>();
-            if(sval.size()>1 && sval.back()=='%') {
-                try {
-                    auto percent = parseTo<double>(sval);
-                    if(percent>0.0 && percent<=100.0) {
-                        op->ackAt = uint32_t(percent * op->queueSize);
-                    } else {
-                        throw std::invalid_argument("not in range (0%, 100%]");
-                    }
-                }catch(std::exception&){
-                    log_warn_printf(monevt, "Error parsing as percent ackAny: \"%s\"\n", sval.c_str());
-                }
-            }
-
-        }
-
-        if(op->ackAt==0u){
-            uint32_t count=0u;
-
-            if(ackAny.as(count)) {
-                op->ackAt = count;
-            }
-        }
-
-        if(op->ackAt==0u){
-            op->ackAt = op->queueSize/2u;
-        }
-
-        op->ackAt = std::max(1u, std::min(op->ackAt, op->queueSize));
-
-        chan->pending.push_back(op);
-        chan->createOperations();
-
-        auto loop(op->chan->context->tcp_loop);
-        ret.reset(op.get(), [op, loop](Subscription*) mutable {
-            // on user thread
-            auto temp(std::move(op));
-            auto L(std::move(loop));
-            L.call([&temp]() {
-                // on worker
-                try {
-                    temp->_cancel(true);
-                }catch(std::exception& e){
-                    log_exc_printf(monevt, "Channel %s error in monitor cancel(): %s",
-                                   temp->channelName.c_str(), e.what());
-                }
-                // ensure dtor on worker
-                temp.reset();
-            });
-        });
+    options["queueSize"].as<uint32_t>([&op](uint32_t Q) {
+        if(Q>1)
+            op->queueSize = Q;
     });
 
-    return  ret;
+    (void)options["pipeline"].as(op->pipeline);
+
+    auto ackAny = options["ackAny"];
+
+    if(ackAny.type()==TypeCode::String) {
+        auto sval = ackAny.as<std::string>();
+        if(sval.size()>1 && sval.back()=='%') {
+            try {
+                auto percent = parseTo<double>(sval);
+                if(percent>0.0 && percent<=100.0) {
+                    op->ackAt = uint32_t(percent * op->queueSize);
+                } else {
+                    throw std::invalid_argument("not in range (0%, 100%]");
+                }
+            }catch(std::exception&){
+                log_warn_printf(monevt, "Error parsing as percent ackAny: \"%s\"\n", sval.c_str());
+            }
+        }
+
+    }
+
+    if(op->ackAt==0u){
+        uint32_t count=0u;
+
+        if(ackAny.as(count)) {
+            op->ackAt = count;
+        }
+    }
+
+    if(op->ackAt==0u){
+        op->ackAt = op->queueSize/2u;
+    }
+
+    op->ackAt = std::max(1u, std::min(op->ackAt, op->queueSize));
+
+    auto syncCancel(_syncCancel);
+    std::shared_ptr<SubscriptionImpl> external(op.get(), [op, syncCancel](SubscriptionImpl*) mutable {
+        // from user thread
+        auto temp(std::move(op));
+        auto loop(temp->loop);
+        // std::bind for lack of c++14 generalized capture
+        // to move internal ref to worker for dtor
+        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<SubscriptionImpl>& op) {
+                           // on worker
+
+                           // ordering of dispatch()/call() ensures creation before destruction
+                           assert(op->chan);
+                           op->_cancel(true);
+                       }, std::move(temp)));
+    });
+
+    auto name(std::move(_name));
+    auto server(std::move(_server));
+    context->tcp_loop.dispatch([op, context, name, server]() {
+        // on worker
+
+        op->chan = Channel::build(context, name, server);
+
+        op->chan->pending.push_back(op);
+        op->chan->createOperations();
+    });
+
+    return external;
 }
 
 } // namespace client

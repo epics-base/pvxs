@@ -24,6 +24,20 @@
 
 #include "pvxsVCS.h"
 
+extern "C" {
+// unofficial helpers for dynamic loading
+PVXS_API
+unsigned long pvxs_version_int()
+{
+    return PVXS_VERSION;
+}
+PVXS_API
+unsigned long pvxs_version_abi_int()
+{
+    return PVXS_ABI_VERSION;
+}
+}
+
 namespace pvxs {
 
 DEFINE_LOGGER(log, "pvxs.util");
@@ -57,36 +71,7 @@ unsigned long version_abi_int()
 
 
 #define CASE(KLASS) std::atomic<size_t> cnt_ ## KLASS{}
-
-CASE(StructTop);
-
-CASE(UDPListener);
-CASE(evbase);
-
-CASE(GPROp);
-CASE(Connection);
-CASE(Channel);
-CASE(ClientPvt);
-CASE(ClientPvtLive);
-CASE(InfoOp);
-CASE(SubScriptionImpl);
-
-CASE(ServerChannelControl);
-CASE(ServerChan);
-CASE(ServerConn);
-CASE(ServerSource);
-CASE(ServerPvt);
-CASE(ServerIntrospect);
-CASE(ServerIntrospectControl);
-CASE(ServerGPR);
-CASE(ServerGPRConnect);
-CASE(ServerGPRExec);
-CASE(MonitorOp);
-CASE(ServerMonitorControl);
-CASE(ServerMonitorSetup);
-CASE(SharedPVImpl);
-CASE(SubscriptionImpl);
-
+#include "instcounters.h"
 #undef CASE
 
 std::map<std::string, size_t> instanceSnapshot()
@@ -94,36 +79,7 @@ std::map<std::string, size_t> instanceSnapshot()
     std::map<std::string, size_t> ret;
 
 #define CASE(KLASS) ret[#KLASS] = cnt_ ## KLASS .load(std::memory_order_relaxed)
-
-CASE(StructTop);
-
-CASE(UDPListener);
-CASE(evbase);
-
-CASE(GPROp);
-CASE(Connection);
-CASE(Channel);
-CASE(ClientPvt);
-CASE(ClientPvtLive);
-CASE(InfoOp);
-CASE(SubScriptionImpl);
-
-CASE(ServerChannelControl);
-CASE(ServerChan);
-CASE(ServerConn);
-CASE(ServerSource);
-CASE(ServerPvt);
-CASE(ServerIntrospect);
-CASE(ServerIntrospectControl);
-CASE(ServerGPR);
-CASE(ServerGPRConnect);
-CASE(ServerGPRExec);
-CASE(MonitorOp);
-CASE(ServerMonitorControl);
-CASE(ServerMonitorSetup);
-CASE(SharedPVImpl);
-CASE(SubscriptionImpl);
-
+#include "instcounters.h"
 #undef CASE
 
     return ret;
@@ -240,6 +196,7 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc)
                 if(c>=' ' && c<='~') { // isprint()
                     strm.put(c);
                 } else {
+                    Restore R(strm);
                     strm<<"\\x"<<std::hex<<std::setw(2)<<std::setfill('0')<<unsigned(c&0xff);
                 }
                 continue;
@@ -252,6 +209,16 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc)
 
 
 } // namespace detail
+
+std::ostream& operator<<(std::ostream& strm, const ServerGUID& guid)
+{
+    Restore R(strm);
+    strm.width(2);
+    strm<<"0x"<<std::hex<<std::setfill('0');
+    for(size_t i=0; i<guid.size(); i++)
+        strm<<std::setw(2)<<unsigned(guid[i]);
+    return strm;
+}
 
 #if !defined(__rtems__) && !defined(vxWorks)
 
@@ -404,7 +371,7 @@ void SockAddr::setAddress(const char *name, unsigned short port)
 {
     SockAddr temp(AF_INET);
     if(aToIPAddr(name, port, &temp->in))
-        throw std::runtime_error(std::string("Unable to parse as IP addresss: ")+name);
+        throw std::runtime_error(std::string("Unable to parse as IP address: ")+name);
     if(temp.port()==0)
         temp.setPort(port);
     (*this) = temp;

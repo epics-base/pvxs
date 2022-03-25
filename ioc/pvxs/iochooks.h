@@ -36,9 +36,10 @@ namespace ioc {
 /** Return the singleton Server instance which is setup
  *  for use in an IOC process.
  *
- *  This Server instance is created during in a registrar function,
- *  started by the initHookAfterCaServerRunning phase of iocInit(),
- *  and stopped and destroyed via an epicsAtExit() hook.
+ *  This Server instance is created during a registrar function,
+ *  started by the initHookAfterCaServerRunning phase of iocInit().
+ *  It is stopped and destroyed during an epicsAtExit() hook added
+ *  during an initHookAfterInitDatabase hook..
  *
  *  Any configuration changes via. epicsEnvSet() must be made before registrars are run
  *  by \*_registerRecordDeviceDriver(pdbbase).
