@@ -149,6 +149,7 @@ void ConnBase::bevRead()
         // application message
 
         peerBE = header[2]&pva_flags::MSB;
+        peerVersion = header[1];
 
         // a bit verbose :P
         FixedBuf L(peerBE, header+4, 4);

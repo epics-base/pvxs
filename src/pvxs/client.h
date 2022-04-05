@@ -894,15 +894,16 @@ ConnectBuilder Context::connect(const std::string& pvname) { return ConnectBuild
 //! Change of state event associated with a Context::discover()
 struct Discovered {
     //! What sort of event is this?
-    enum event_t {
+    enum event_t : uint8_t {
         Online=1,     //!< Beacon from new server GUID
         Timeout=2,    //!< Beacon timeout for previous server
     } event;
+    uint8_t peerVersion; //!< Last reported peer PVA protocol version.
     std::string peer;  //!< source of Beacon
     std::string proto; //!< Advertised protocol.  eg. "tcp"
     std::string server;//!< Server protocol endpoint.
     ServerGUID guid;   //!< Server provided ID
-    epicsTime time;
+    epicsTime time;    //!< Local system time of event
 };
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const Discovered& evt);

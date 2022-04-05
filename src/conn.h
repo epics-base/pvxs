@@ -30,6 +30,7 @@ struct ConnBase
     bool sendBE;
     bool peerBE;
     bool expectSeg;
+    uint8_t peerVersion;
 
     uint8_t segCmd;
     evbuf segBuf, txBody;

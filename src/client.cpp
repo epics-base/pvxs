@@ -677,8 +677,16 @@ void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
 
         auto& lastRx(beaconTrack[msg.guid][std::make_pair(msg.proto, msg.server)]);
         if((newserv = !lastRx)) {
-            serverEvent(Discovered{Discovered::Online, msg.src.tostring(), msg.proto, msg.server.tostring(), msg.guid, now});
+            serverEvent(Discovered{Discovered::Online,
+                                   msg.peerVersion,
+                                   msg.src.tostring(),
+                                   msg.proto,
+                                   msg.server.tostring(),
+                                   msg.guid,
+                                   now
+                        });
         }
+        lastRx.peerVersion = msg.peerVersion;
         lastRx.time = now;
     }
 
@@ -691,7 +699,7 @@ void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
 }
 
 static
-void procSearchReply(ContextImpl& self, const SockAddr& src, Buffer& M, bool istcp)
+void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion, Buffer& M, bool istcp)
 {
     ServerGUID guid;
     SockAddr serv;
@@ -737,6 +745,7 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, Buffer& M, bool ist
         fakebeacon.proto = proto;
         fakebeacon.server = serv;
         fakebeacon.guid = guid;
+        fakebeacon.peerVersion = peerVersion;
 
         self.onBeacon(fakebeacon);
     }
@@ -830,7 +839,7 @@ bool ContextImpl::onSearch(evutil_socket_t fd)
     }
 
     if(head.cmd==CMD_SEARCH_RESPONSE) {
-        procSearchReply(*this, src, M, false);
+        procSearchReply(*this, src, head.version, M, false);
 
     } else {
         M.fault(__FILE__, __LINE__);
@@ -849,7 +858,7 @@ void Connection::handle_SEARCH_RESPONSE()
 {
     EvInBuf M(peerBE, segBuf.get(), 16);
 
-    procSearchReply(*context, peerAddr, M, true);
+    procSearchReply(*context, peerAddr, peerVersion, M, true);
 
     if(!M.good()) {
         log_crit_printf(io, "%s:%d Server %s sends invalid SEARCH_RESPONSE.  Disconnecting...\n",
@@ -1092,7 +1101,14 @@ void ContextImpl::tickBeaconClean()
                 log_debug_printf(io, "%s\n",
                                  std::string(SB()<<" Lost server "<<cur->first<<' '<<cur->first).c_str());
 
-                serverEvent(Discovered{Discovered::Timeout, "", cur2->first.first, cur2->first.second.tostring(), cur->first, now});
+                serverEvent(Discovered{Discovered::Timeout,
+                                       cur2->second.peerVersion,
+                                       "", // no associated Beacon
+                                       cur2->first.first,
+                                       cur2->first.second.tostring(),
+                                       cur->first,
+                                       now
+                            });
 
                 cur->second.erase(cur2);
             }

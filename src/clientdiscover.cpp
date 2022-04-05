@@ -129,6 +129,7 @@ std::ostream& operator<<(std::ostream& strm, const Discovered& serv)
     strm<<" guid: "<<serv.guid
         <<" proto: "<<escape(serv.proto)
         <<" server: "<<serv.server
+        <<" ver: "<<unsigned(serv.peerVersion)
         <<" via: "<<serv.peer;
 
     return strm;

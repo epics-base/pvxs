@@ -248,6 +248,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     // map: GUID -> proto+endpoint -> last beacon time
     struct LastTime {
+        uint8_t peerVersion{0xff};
         epicsTimeStamp time{};
         explicit operator bool() const { return time.secPastEpoch || time.nsec; }
     };
