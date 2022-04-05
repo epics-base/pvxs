@@ -9,7 +9,7 @@ Release Notes
 * Add support for IPv4 multicast and IPv6 uni/multicast for UDP.  And IPv6 unicast for TCP.
   See :ref:`addrspec` for entries which may now appear in **EPICS_PVA*_ADDR_LIST**.
 * PVXS now attempts to fanout unicast searches through the loopback interface, and
-  to handle `CMD_ORIGIN_TAG` messages (aka. the local multicast hack).
+  to handle ``CMD_ORIGIN_TAG`` messages (aka. the local multicast hack).
 * Add `pvxs::client::Context::discover` to enumerate and track PVA Servers.
 * ``pvxlist`` add "continous" mode.  (eg. ``pvxlist -v -w 0``)
   To immediately Discover new servers, then continue listening for Beacons to detect
@@ -36,8 +36,8 @@ Release Notes
 
  * Ignore beacons with protocol field other than "tcp".  Forward compatibility.
  * Limit packet hex dumps to 64 bytes.
- * `testStrMatch()` now specified POSIX regular expression syntax.
- * Client operations builders `rawRequest(Value())` is now a no-op.
+ * ``testStrMatch()`` now specified POSIX regular expression syntax.
+ * Client operations builders ``rawRequest(Value())`` is now a no-op.
    Previously produced a non-nonsensical empty request.
 
 * Additions
@@ -142,7 +142,7 @@ Release Notes
 
 * Changes
 
- * Changed name of automatic Sources `builtin` and `server` to `__builtin` and `__server`.
+ * Changed name of automatic Sources ``"builtin"`` and ``"server"`` to ``"__builtin"`` and ``"__server"``.
    Document that Source names beginning with `__` are reserved.
 
 0.1.0 (Dec 2020)
