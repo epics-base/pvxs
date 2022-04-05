@@ -48,6 +48,7 @@ jobs:
             configuration: default
             base: "7.0"
             extra: "CMD_CPPFLAGS=-Werror"
+            doc: 1
 
           - name: Cross mingw64 DLL
             os: ubuntu-20.04
@@ -133,6 +134,11 @@ jobs:
       run: python .ci/cue.py exec python .ci-local/libevent.py
     - name: Build main module
       run: python .ci/cue.py build
+    - name: Generate Docs
+      if: matrix.doc
+      run: |
+        sudo apt-get -y install doxygen python-is-python3 python3-breathe
+        make -C documentation
     - name: Host info
       run: python .ci/cue.py --add-path "{TOP}/bin/{EPICS_HOST_ARCH}" --add-path "{TOP}/bundle/usr/{EPICS_HOST_ARCH}/lib" exec pvxinfo -D
     - name: Run main module tests
