@@ -40,6 +40,7 @@ See :ref:`relpolicy` for details.
    :caption: Contents:
 
    overview
+   netconfig
    example
    building
    cli

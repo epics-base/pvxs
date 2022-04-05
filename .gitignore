@@ -10,6 +10,8 @@
 /build/
 /dist/
 O.*/
+__pycache__/
+*.so*
 *.orig
 *.log
 .*.swp

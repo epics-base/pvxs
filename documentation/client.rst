@@ -8,6 +8,8 @@ Client
     #include <pvxs/client.h>
     namespace pvxs { namespace client { ... } }
 
+.. _clientconf:
+
 Configuration
 -------------
 
@@ -22,6 +24,9 @@ EPICS_PVA_AUTO_ADDR_LIST
     If "YES" then all local broadcast addresses will be implicitly appended to $EPICS_PVA_ADDR_LIST
     "YES" if unset.
 
+EPICS_PVA_NAME_SERVERS
+    A list of the addresses of listening TCP sockets to which search messages will be sent.
+
 EPICS_PVA_BROADCAST_PORT
     Default UDP port to which UDP searches will be sent.  5076 if unset.
 
@@ -29,6 +34,12 @@ EPICS_PVA_CONN_TMO
     Inactivity timeout for TCP connections.  For compatibility with pvAccessCPP
     a multiplier of 4/3 is applied.  So a value of 30 results in a 40 second timeout.
     Prior to 0.2.0 this variable was ignored.
+
+.. versionadded:: UNRELEASED
+   **EPICS_PVA_ADDR_LIST** may contain IPv4 multicast, and IPv6 uni/multicast addresses.
+
+.. versionadded:: 0.2.0
+    Added **EPICS_PVA_NAME_SERVERS**.
 
 .. versionadded:: 0.2.0
     Prior to 0.2.0 *EPICS_PVA_CONN_TMO* was ignored.

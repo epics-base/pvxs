@@ -622,8 +622,8 @@ public:
      *  Supported syntax is a list of zero or more entities
      *  separated by zero or more spaces.
      *
-     *  - field(<fld.name>)
-     *  - record[<key>=\<value>]
+     *  - ``field(<fld.name>)``
+     *  - ``record[<key>=\<value>]``
      */
     SubBuilder& pvRequest(const std::string& expr) { this->_parse(expr); return _sb(); }
 
@@ -943,8 +943,8 @@ struct PVXS_API Config {
     /** List of unicast, multicast, and broadcast addresses to which search requests will be sent.
      *
      * Entries may take the forms:
-     * - <ipaddr>[:<port#>]
-     * - <ipmultiaddr>[:<port>][,<ttl>][@<ifaceaddr>]
+     * - ``<ipaddr>[:<port#>]``
+     * - ``<ipmultiaddr>[:<port>][,<ttl>][@<ifaceaddr>]``
      */
     std::vector<std::string> addressList;
 

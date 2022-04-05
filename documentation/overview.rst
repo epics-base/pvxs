@@ -7,6 +7,8 @@ Basics
 What is EPICS?
 ^^^^^^^^^^^^^^
 
+https://docs.epics-controls.org/en/latest/guides/EPICS_Intro.html
+
 https://epics.anl.gov/
 
 What is PVAccess?

@@ -37,12 +37,12 @@ as search requests are received. eg. ::
     2020-04-09T19:37:01.146442772 INFO pvxvct   "my:random:test:pvname"
     ...
 
-Note that pvxvct does not use the $EPICS_PVA* environment variables
+Note that pvxvct does not use the **$EPICS_PVA*** environment variables
 and by default listens on "0.0.0.0:5076".  Sites using a non-default
 port will need to add "-B 0.0.0.0:<port>".
 
-If searches are not seen, then investigate client configuration
-($EPICS_PVA_* environment variables), and firewall settings.
+If searches are not seen, then investigate client :ref:`clientconf`
+(**$EPICS_PVA*** environment variables), and firewall settings.
 
 If searches are seen, then switch to "pvxget -d ..." and a real PV name.
 The output will be very verbose.  Look for lines like the following: ::
