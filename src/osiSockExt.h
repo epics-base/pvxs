@@ -50,7 +50,7 @@ public:
 
     explicit SockAddr(int af = AF_UNSPEC);
     explicit SockAddr(const char *address, unsigned short port=0);
-    explicit SockAddr(const sockaddr *addr);
+    explicit SockAddr(const sockaddr *addr, socklen_t alen=0);
     inline explicit SockAddr(const std::string& address, unsigned short port=0) :SockAddr(address.c_str(), port) {}
 
     size_t size() const noexcept;
@@ -157,6 +157,47 @@ bool operator==(const SockEndpoint& lhs, const SockEndpoint& rhs);
 
 inline
 bool operator!=(const SockEndpoint& lhs, const SockEndpoint& rhs) { return !(lhs==rhs); }
+
+struct GetAddrInfo {
+    explicit GetAddrInfo(const char *name);
+    inline explicit GetAddrInfo(const std::string& name) :GetAddrInfo(name.c_str()) {}
+    GetAddrInfo(const GetAddrInfo&) = delete;
+    inline
+    GetAddrInfo(GetAddrInfo&& o) :info(o.info) {
+        o.info = nullptr;
+    }
+    ~GetAddrInfo();
+
+    struct iterator {
+        evutil_addrinfo *pos = nullptr;
+        inline iterator() = default;
+        inline iterator(evutil_addrinfo *pos) :pos(pos) {}
+        inline SockAddr operator*() const {
+            return SockAddr(pos->ai_addr, pos->ai_addrlen);
+        }
+        inline iterator& operator++() {
+            pos = pos->ai_next;
+            return *this;
+        }
+        inline iterator operator++(int) {
+            auto ret(*this);
+            pos = pos->ai_next;
+            return ret;
+        }
+        inline bool operator==(const iterator& o) const {
+            return pos==o.pos;
+        }
+        inline bool operator!=(const iterator& o) const {
+            return pos!=o.pos;
+        }
+    };
+
+    inline iterator begin() const { return iterator{info}; }
+    inline iterator end() const { return iterator{}; }
+
+private:
+    evutil_addrinfo *info;
+};
 
 struct recvfromx {
     evutil_socket_t sock;

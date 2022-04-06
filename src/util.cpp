@@ -275,13 +275,16 @@ SockAddr::SockAddr(const char *address, unsigned short port)
     setAddress(address, port);
 }
 
-SockAddr::SockAddr(const sockaddr *addr)
+SockAddr::SockAddr(const sockaddr *addr, socklen_t alen)
     :SockAddr(addr ? addr->sa_family : AF_UNSPEC)
 {
     if(!addr)
         return; // treat NULL as AF_UNSPEC
 
-    if(family()!=AF_UNSPEC && family()!=AF_INET && family()!=AF_INET6)
+    if(family()==AF_UNSPEC) {}
+    else if(family()==AF_INET && (!alen || alen>=sizeof(sockaddr_in))) {}
+    else if(family()==AF_INET6 && (!alen || alen>=sizeof(sockaddr_in6))) {}
+    else
         throw std::invalid_argument("Unsupported address family");
 
     if(family()!=AF_UNSPEC)
@@ -402,8 +405,26 @@ void SockAddr::setAddress(const char *name, unsigned short defport)
         throw std::runtime_error(SB()<<"Invalid IP address form \""<<escape(name)<<"\"");
     }
 
-    if(evutil_inet_pton(temp->sa.sa_family, addr, sockaddr)<=0)
-        throw std::runtime_error(SB()<<"Not a valid IP address \""<<escape(name)<<"\"");
+    if(evutil_inet_pton(temp->sa.sa_family, addr, sockaddr)<=0) {
+        // not a plain IP4/6 address.
+        // Fall back to synchronous DNS lookup (could be sloooow)
+
+        GetAddrInfo info(addr);
+
+        // We may get a mixture of IP v4 and/or v6 addresses.
+        // For maximum compatibility, we always prefer IPv4
+
+        for(const auto addr : info) {
+            if(addr.family()==AF_INET || (addr.family()==AF_INET6 && temp.family()==AF_UNSPEC)) {
+                temp = addr;
+                if(addr.family()==AF_INET)
+                    break;
+            }
+        }
+
+        if(temp.family()==AF_UNSPEC) // lookup succeeded, but no addresses.  Can this happen?
+            throw std::runtime_error(SB()<<"Not a valid host name or IP address \""<<escape(name)<<"\"");
+    }
 
     if(port)
         temp.setPort(parseTo<uint64_t>(port));
@@ -555,10 +576,22 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
     return strm;
 }
 
+GetAddrInfo::GetAddrInfo(const char *name)
+{
+    if(auto err = evutil_getaddrinfo(name, nullptr, nullptr, &info)) {
+        throw std::runtime_error(SB()<<"Error resolving \""<<escape(name)<<"\" : "<<evutil_gai_strerror(err));
+    }
+}
+
+GetAddrInfo::~GetAddrInfo()
+{
+    if(info)
+        evutil_freeaddrinfo(info);
+}
+
 } // namespace pvxs
 
 namespace pvxs {namespace impl {
-
 struct onceArgs {
     EPICSTHREADFUNC fn;
     void *arg;
