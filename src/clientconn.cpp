@@ -179,6 +179,10 @@ void Connection::handle_CONNECTION_VALIDATION()
 
     std::string selected;
 
+    /* Server list given in reverse order of priority.
+     * Old pvAccess* was missing a "break" when looping,
+     * so it took the last known plugin.
+     */
     for(auto n : range(nauth.size)) {
         (void)n;
 

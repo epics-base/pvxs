@@ -82,6 +82,11 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         to_wire(M, uint32_t(0x10000));
         // serverIntrospectionRegistryMaxSize, also not used
         to_wire(M, uint16_t(0x7fff));
+
+        /* list given in reverse order of priority.
+         * Old pvAccess* was missing a "break" when looping,
+         * so it took the last known plugin.
+         */
         to_wire(M, Size{2});
         to_wire(M, "anonymous");
         to_wire(M, "ca");
