@@ -6,6 +6,7 @@ Release Notes
 0.3.0 (UNRELEASED)
 ------------------
 
+* Fix protocol **incompatibility** with Big Endian servers.
 * Add support for IPv4 multicast and IPv6 uni/multicast for UDP.  And IPv6 unicast for TCP.
   See :ref:`addrspec` for entries which may now appear in **EPICS_PVA*_ADDR_LIST**.
 * PVXS now attempts to fanout unicast searches through the loopback interface, and

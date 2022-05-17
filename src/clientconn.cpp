@@ -67,7 +67,7 @@ void Connection::createChannels()
         {
             (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
-            EvOutBuf R(hostBE, txBody.get());
+            EvOutBuf R(sendBE, txBody.get());
 
             to_wire(R, uint16_t(1u));
             to_wire(R, chan->cid);
@@ -90,7 +90,7 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
     {
         (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
-        EvOutBuf R(hostBE, txBody.get());
+        EvOutBuf R(sendBE, txBody.get());
 
         to_wire(R, sid);
         to_wire(R, ioid);
@@ -232,7 +232,7 @@ void Connection::handle_CONNECTION_VALIDATION()
     {
         (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
-        EvOutBuf R(hostBE, txBody.get());
+        EvOutBuf R(sendBE, txBody.get());
 
         // serverReceiveBufferSize, not used
         to_wire(R, uint32_t(0x10000));
@@ -316,7 +316,7 @@ void Connection::handle_CREATE_CHANNEL()
                 {
                     (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
-                    EvOutBuf R(hostBE, txBody.get());
+                    EvOutBuf R(sendBE, txBody.get());
                     to_wire(R, sid);
                     to_wire(R, cid);
                 }
@@ -400,7 +400,7 @@ void Connection::tickEcho()
 
     auto tx = bufferevent_get_output(bev.get());
 
-    to_evbuf(tx, Header{CMD_ECHO, 0u, 0u}, hostBE);
+    to_evbuf(tx, Header{CMD_ECHO, 0u, 0u}, sendBE);
 
     // maybe help reduce latency
     bufferevent_flush(bev.get(), EV_WRITE, BEV_FLUSH);

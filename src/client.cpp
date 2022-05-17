@@ -140,7 +140,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
         {
             (void)evbuffer_drain(current->txBody.get(), evbuffer_get_length(current->txBody.get()));
 
-            EvOutBuf R(hostBE, current->txBody.get());
+            EvOutBuf R(current->sendBE, current->txBody.get());
 
             to_wire(R, sid);
             to_wire(R, cid);

@@ -71,7 +71,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 
     // queue connection validation message
     {
-        VectorOutBuf M(hostBE, buf);
+        VectorOutBuf M(sendBE, buf);
         to_wire(M, Header{pva_ctrl_msg::SetEndian, pva_flags::Control|pva_flags::Server, 0});
 
         auto save = M.save();
@@ -87,7 +87,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         to_wire(M, "ca");
         auto bend = M.save();
 
-        FixedBuf H(hostBE, save, 8);
+        FixedBuf H(sendBE, save, 8);
         to_wire(H, Header{CMD_CONNECTION_VALIDATION, pva_flags::Server, uint32_t(bend-bstart)});
 
         assert(M.good() && H.good());
@@ -123,7 +123,7 @@ void ServerConn::handle_ECHO()
     auto tx = bufferevent_get_output(bev.get());
     uint32_t len = evbuffer_get_length(segBuf.get());
 
-    to_evbuf(tx, Header{CMD_ECHO, pva_flags::Server, len}, hostBE);
+    to_evbuf(tx, Header{CMD_ECHO, pva_flags::Server, len}, sendBE);
 
     auto err = evbuffer_add_buffer(tx, segBuf.get());
     assert(!err);
@@ -140,7 +140,7 @@ void auth_complete(ServerConn *self, const Status& sts)
     (void)evbuffer_drain(self->txBody.get(), evbuffer_get_length(self->txBody.get()));
 
     {
-        EvOutBuf M(hostBE, self->txBody.get());
+        EvOutBuf M(self->sendBE, self->txBody.get());
         to_wire(M, sts);
     }
 

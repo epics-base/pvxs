@@ -22,6 +22,7 @@ ConnBase::ConnBase(bool isClient, bufferevent* bev, const SockAddr& peerAddr)
     ,peerName(peerAddr.tostring())
     ,bev(bev)
     ,isClient(isClient)
+    ,sendBE(EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG)
     ,peerBE(true) // arbitrary choice, default should be overwritten before use
     ,expectSeg(false)
     ,segCmd(0xff)
@@ -46,7 +47,7 @@ size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
     to_evbuf(tx, Header{cmd,
                         uint8_t(isClient ? 0u : pva_flags::Server),
                         uint32_t(blen)},
-             hostBE);
+             sendBE);
     auto err = evbuffer_add_buffer(tx, txBody.get());
     assert(!err); // could only fail if frozen/pinned, which is not the case
     statTx += 8u + blen;
@@ -121,6 +122,25 @@ void ConnBase::bevRead()
                        "%s %s Receive header\n", peerLabel(), peerName.c_str());
 
         if(header[2]&pva_flags::Control) {
+            if(header[3]==pva_ctrl_msg::SetEndian) {
+                /* This should be the first message sent by a (supposedly) server.
+                 * However, old pvAccess* accepts it from either peer at any time.
+                 *
+                 * The protocol spec. claims that we should inspect the size field
+                 * (bytes 4-7) and act as follows.
+                 * 0x00000000 - Send future messages using endianness on this (received)
+                 *              message.  Peer will ignore MSB flag in our headers!
+                 * 0xffffffff - Send future messages as we like.  Peer will test the
+                 *              MSB flag.
+                 *
+                 * However, neither pvAccessCPP nor pvAccessJava actually test this.
+                 * Instead the 0x00000000 behavior is assumed.
+                 *
+                 * So we latch the byte order here, as the peer should ignore the MSB
+                 * flag subsequent messages...
+                 */
+                sendBE = header[2]&pva_flags::MSB;
+            }
             // Control messages are not actually useful
             evbuffer_drain(rx, 8);
             statRx += 8u;

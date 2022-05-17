@@ -163,7 +163,7 @@ void ServerChannelControl::close()
                              conn->peerName.c_str(), ch->name.c_str());
 
             auto tx = bufferevent_get_output(conn->bev.get());
-            EvOutBuf R(hostBE, tx);
+            EvOutBuf R(conn->sendBE, tx);
             to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
             to_wire(R, ch->sid);
             to_wire(R, ch->cid);
@@ -251,7 +251,7 @@ void ServerConn::handle_SEARCH()
     {
         (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
-        EvOutBuf R(hostBE, txBody.get());
+        EvOutBuf R(sendBE, txBody.get());
 
         _to_wire<12>(R, iface->server->effective.guid.data(), false, __FILE__, __LINE__);
         to_wire(R, searchID);
@@ -363,7 +363,7 @@ void ServerConn::handle_CREATE_CHANNEL()
         {
             (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
-            EvOutBuf R(hostBE, txBody.get());
+            EvOutBuf R(sendBE, txBody.get());
             to_wire(R, cid);
             to_wire(R, sid);
             to_wire(R, sts);
@@ -417,7 +417,7 @@ void ServerConn::handle_DESTROY_CHANNEL()
 
     {
         auto tx = bufferevent_get_output(bev.get());
-        EvOutBuf R(hostBE, tx);
+        EvOutBuf R(sendBE, tx);
         to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
         to_wire(R, sid);
         to_wire(R, cid);

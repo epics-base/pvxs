@@ -286,9 +286,11 @@ struct GPROp : public OperationBase
         // act on new operation state
 
         {
-            (void)evbuffer_drain(chan->conn->txBody.get(), evbuffer_get_length(chan->conn->txBody.get()));
+            auto& conn = chan->conn;
 
-            EvOutBuf R(hostBE, chan->conn->txBody.get());
+            (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
+
+            EvOutBuf R(conn->sendBE, conn->txBody.get());
 
             to_wire(R, chan->sid);
             to_wire(R, ioid);
@@ -339,7 +341,7 @@ struct GPROp : public OperationBase
         {
             (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
 
-            EvOutBuf R(hostBE, conn->txBody.get());
+            EvOutBuf R(conn->sendBE, conn->txBody.get());
 
             to_wire(R, chan->sid);
             to_wire(R, ioid);

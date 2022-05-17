@@ -120,7 +120,7 @@ struct MonitorOp : public ServerOp,
         {
             (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
 
-            EvOutBuf R(hostBE, conn->txBody.get());
+            EvOutBuf R(conn->sendBE, conn->txBody.get());
             to_wire(R, uint32_t(ioid));
             to_wire(R, subcmd);
             if(subcmd&0x08) {

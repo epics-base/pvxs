@@ -27,6 +27,7 @@ struct ConnBase
     TypeStore rxRegistry;
 
     const bool isClient;
+    bool sendBE;
     bool peerBE;
     bool expectSeg;
 

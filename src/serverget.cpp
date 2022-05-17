@@ -69,7 +69,7 @@ struct ServerGPR : public ServerOp
         {
             (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
 
-            EvOutBuf R(hostBE, conn->txBody.get());
+            EvOutBuf R(conn->sendBE, conn->txBody.get());
             to_wire(R, uint32_t(ioid));
             to_wire(R, subcmd);
             to_wire(R, sts);

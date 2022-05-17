@@ -116,7 +116,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
                     (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
 
-                    EvOutBuf R(hostBE, conn->txBody.get());
+                    EvOutBuf R(conn->sendBE, conn->txBody.get());
 
                     to_wire(R, chan->sid);
                     to_wire(R, ioid);
@@ -272,7 +272,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
             (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
 
-            EvOutBuf R(hostBE, conn->txBody.get());
+            EvOutBuf R(conn->sendBE, conn->txBody.get());
 
             to_wire(R, chan->sid);
             to_wire(R, ioid);
@@ -360,7 +360,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
             {
                 (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
 
-                EvOutBuf R(hostBE, conn->txBody.get());
+                EvOutBuf R(conn->sendBE, conn->txBody.get());
 
                 to_wire(R, chan->sid);
                 to_wire(R, ioid);
