@@ -36,7 +36,7 @@ struct ConnBase
 
     size_t statTx{}, statRx{};
 
-    ConnBase(bool isClient, bufferevent* bev, const SockAddr& peerAddr);
+    ConnBase(bool isClient, bool sendBE, bufferevent* bev, const SockAddr& peerAddr);
     ConnBase(const ConnBase&) = delete;
     ConnBase& operator=(const ConnBase&) = delete;
     virtual ~ConnBase();

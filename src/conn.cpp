@@ -17,12 +17,12 @@ DEFINE_LOGGER(connio, "pvxs.tcp.io");
 namespace pvxs {
 namespace impl {
 
-ConnBase::ConnBase(bool isClient, bufferevent* bev, const SockAddr& peerAddr)
+ConnBase::ConnBase(bool isClient, bool sendBE, bufferevent* bev, const SockAddr& peerAddr)
     :peerAddr(peerAddr)
     ,peerName(peerAddr.tostring())
     ,bev(bev)
     ,isClient(isClient)
-    ,sendBE(EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG)
+    ,sendBE(sendBE)
     ,peerBE(true) // arbitrary choice, default should be overwritten before use
     ,expectSeg(false)
     ,segCmd(0xff)

@@ -16,6 +16,7 @@
 #include <typeinfo>
 
 #include <epicsTime.h>
+#include <epicsEndian.h>
 
 #include <pvxs/version.h>
 #include <pvxs/data.h>
@@ -971,6 +972,10 @@ struct PVXS_API Config {
     //! @since 0.2.0
     double tcpTimeout = 40.0;
 
+private:
+    bool BE = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
+public:
+
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }
 
@@ -1004,6 +1009,12 @@ struct PVXS_API Config {
     Context build() const {
         return Context(*this);
     }
+
+#ifdef PVXS_EXPERT_API_ENABLED
+    // for protocol compatibility testing
+    inline Config& overrideSendBE(bool be) { BE = be; return *this; }
+    inline bool sendBE() const { return BE; }
+#endif
 };
 
 PVXS_API

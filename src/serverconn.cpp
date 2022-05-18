@@ -44,7 +44,7 @@ DEFINE_LOGGER(connio, "pvxs.tcp.io");
 DEFINE_LOGGER(remote, "pvxs.remote.log");
 
 ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen)
-    :ConnBase(false,
+    :ConnBase(false, iface->server->effective.sendBE(),
               bufferevent_socket_new(iface->server->acceptor_loop.base, sock, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS),
               SockAddr(peer))
     ,iface(iface)

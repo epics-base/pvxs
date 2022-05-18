@@ -94,6 +94,10 @@ TESTPROD_HOST += test1000
 test1000_SRCS += test1000.cpp
 TESTS += test1000
 
+TESTPROD_HOST += testendian
+testendian_SRCS += testendian.cpp
+TESTS += testendian
+
 ifdef BASE_7_0
 
 TESTPROD_HOST += benchdata

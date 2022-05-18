@@ -18,6 +18,8 @@
 #include <memory>
 #include <array>
 
+#include <epicsEndian.h>
+
 #include <pvxs/version.h>
 #include <pvxs/util.h>
 #include <pvxs/data.h>
@@ -172,6 +174,10 @@ struct PVXS_API Config {
     //! Server unique ID.  Only meaningful in readback via Server::config()
     ServerGUID guid{};
 
+private:
+    bool BE = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
+public:
+
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }
 
@@ -209,6 +215,12 @@ struct PVXS_API Config {
     inline Server build() const {
         return Server(*this);
     }
+
+#ifdef PVXS_EXPERT_API_ENABLED
+    // for protocol compatibility testing
+    inline Config& overrideSendBE(bool be) { BE = be; return *this; }
+    inline bool sendBE() const { return BE; }
+#endif
 };
 
 PVXS_API
