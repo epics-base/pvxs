@@ -156,21 +156,26 @@ jobs:
           name: epicscorelibs
           path: dist/*
 
+      - name: Check wheels
+        run: python -m twine check dist/pvxslibs-*.whl
+
+      - name: Check source
+        if: matrix.source
+        run: python -m twine check dist/pvxslibs-*.tar.*
+
       - name: Upload wheels
         if: github.event_name=='push' && github.ref=='refs/heads/master' && matrix.piparch
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: |
-          python -m twine upload --skip-existing dist/pvxslibs-*.whl
+        run: python -m twine upload --skip-existing dist/pvxslibs-*.whl
 
       - name: Upload source
         if: github.event_name=='push' && github.ref=='refs/heads/master' && matrix.source
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: |
-          python -m twine upload --skip-existing dist/pvxslibs-*.tar.*
+        run: python -m twine upload --skip-existing dist/pvxslibs-*.tar.*
 
   docker:
     name: ${{ matrix.name }}
@@ -345,10 +350,12 @@ jobs:
           name: epicscorelibs
           path: dist/*
 
+      - name: Check wheels
+        run: python -m twine check dist/pvxslibs-*.whl
+
       - name: Upload wheels
         if: github.event_name=='push' && github.ref=='refs/heads/master'
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: |
-          python -m twine upload --skip-existing dist/pvxslibs-*.whl
+        run: python -m twine upload --skip-existing dist/pvxslibs-*.whl
