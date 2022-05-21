@@ -16,6 +16,8 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
+import time
+
 def read_version(fmt):
     import os, re
     parts = {}
@@ -29,7 +31,7 @@ def read_version(fmt):
 # -- Project information -----------------------------------------------------
 
 project = 'PVXS'
-copyright = '2021 Osprey DCS LLC'
+copyright = time.strftime('%Y Michael Davidsaver and Osprey DCS LLC')
 author = 'Michael Davidsaver'
 
 # The short X.Y version
