@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-0.3.0 (UNRELEASED)
-------------------
+0.3.0 (May 2022)
+----------------
 
 * Fix protocol **incompatibility** with Big Endian servers.
 * Add support for IPv4 multicast and IPv6 uni/multicast for UDP.  And IPv6 unicast for TCP.
