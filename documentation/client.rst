@@ -35,7 +35,7 @@ EPICS_PVA_CONN_TMO
     a multiplier of 4/3 is applied.  So a value of 30 results in a 40 second timeout.
     Prior to 0.2.0 this variable was ignored.
 
-.. versionadded:: UNRELEASED
+.. versionadded:: 0.3.0
    **EPICS_PVA_ADDR_LIST** may contain IPv4 multicast, and IPv6 uni/multicast addresses.
 
 .. versionadded:: 0.2.0

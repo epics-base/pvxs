@@ -486,7 +486,7 @@ public:
      * op->wait(10.0); // wait 10 seconds, will always timeout.
      * @endcode
      *
-     * @since UNRELEASED
+     * @since 0.3.0
      */
     inline
     DiscoverBuilder discover(std::function<void(const Discovered &)> && fn);
@@ -908,7 +908,7 @@ struct Discovered {
 PVXS_API
 std::ostream& operator<<(std::ostream& strm, const Discovered& evt);
 //! Prepare a Context::discover() operation
-//! @since UNRELEASED
+//! @since 0.3.0
 class DiscoverBuilder
 {
     std::shared_ptr<Context::Pvt> ctx;
