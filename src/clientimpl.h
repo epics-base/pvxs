@@ -246,14 +246,15 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     epicsTimeStamp lastPoke{};
     bool poked = false;
 
-    // map: GUID -> proto+endpoint -> last beacon time
-    struct LastTime {
-        uint8_t peerVersion{0xff};
+    // map: endpoint+proto -> Beaconer
+    typedef std::pair<SockAddr, std::string> BeaconServer;
+    struct BeaconInfo {
+        SockAddr sender;
+        ServerGUID guid{};
+        uint8_t peerVersion{};
         epicsTimeStamp time{};
-        explicit operator bool() const { return time.secPastEpoch || time.nsec; }
     };
-
-    std::map<ServerGUID, std::map<std::pair<std::string, SockAddr>, LastTime>> beaconTrack;
+    std::map<BeaconServer, BeaconInfo> beaconTrack;
 
     std::vector<uint8_t> searchMsg;
 

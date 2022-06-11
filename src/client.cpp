@@ -18,6 +18,7 @@
 
 DEFINE_LOGGER(setup, "pvxs.client.setup");
 DEFINE_LOGGER(io, "pvxs.client.io");
+DEFINE_LOGGER(beacon, "pvxs.client.beacon");
 DEFINE_LOGGER(duppv, "pvxs.client.dup");
 
 typedef epicsGuard<epicsMutex> Guard;
@@ -33,6 +34,9 @@ constexpr size_t nBuckets = 30u;
 constexpr size_t maxSearchPayload = 1400;
 
 constexpr timeval channelCacheCleanInterval{10,0};
+
+// limit on the number of GUIDs * protocols * addresses we will track
+constexpr size_t beaconTrackLimit{20000};
 
 constexpr timeval beaconCleanInterval{180, 0};
 
@@ -666,33 +670,76 @@ void ContextImpl::poke(bool force)
 
 void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
 {
-    const auto& guid = msg.guid;
-
     epicsTimeStamp now;
     epicsTimeGetCurrent(&now);
 
-    bool newserv;
-    {
-        Guard G(pokeLock);
+    Guard G(pokeLock);
 
-        auto& lastRx(beaconTrack[msg.guid][std::make_pair(msg.proto, msg.server)]);
-        if((newserv = !lastRx)) {
-            serverEvent(Discovered{Discovered::Online,
-                                   msg.peerVersion,
-                                   msg.src.tostring(),
-                                   msg.proto,
-                                   msg.server.tostring(),
-                                   msg.guid,
-                                   now
-                        });
+    const decltype (beaconTrack)::key_type key(msg.server, msg.proto);
+
+    auto it = beaconTrack.find(key);
+
+    enum {
+        Update,
+        Change,
+        New,
+    } action = Update;
+
+    if(it==beaconTrack.end()) {
+        if(beaconTrack.size() >= beaconTrackLimit) {
+            // Overloaded.  Assume that some server is in a fast restart loop.
+            // Ignore it, and continue tracking other/older servers.
+            log_debug_printf(beacon, "Tracking too many beacons, ignoring %s\n",
+                             std::string(SB()<<msg.src<<" "<<msg.guid<<' '<<msg.server).c_str());
+            return;
         }
-        lastRx.peerVersion = msg.peerVersion;
-        lastRx.time = now;
+        auto pair(beaconTrack.emplace(key, BeaconInfo()));
+        assert(pair.second); // we just checked that this key is not there.
+        it = pair.first;
+
+        action = New;
     }
 
-    if(newserv) {
-        log_debug_printf(io, "%s\n",
-                         std::string(SB()<<msg.src<<" New server "<<guid<<' '<<msg.server).c_str());
+    auto& cur(it->second);
+
+    if(action==Update && (cur.guid!=msg.guid || cur.peerVersion!=msg.peerVersion)) {
+        action = Change;
+        log_debug_printf(beacon, "Update server %s\n",
+                         std::string(SB()<<msg.src<<" : "<<msg.server<<'/'<<msg.proto
+                                     <<" "<<cur.guid<<'/'<<(unsigned)cur.peerVersion
+                                     <<" -> "<<msg.guid<<'/'<<(unsigned)msg.peerVersion).c_str());
+
+        serverEvent(Discovered{Discovered::Timeout,
+                               cur.peerVersion,
+                               msg.src.tostring(),
+                               it->first.second,
+                               it->first.first.tostring(),
+                               cur.guid,
+                               now
+                    });
+    }
+
+    cur.guid = msg.guid;
+    cur.peerVersion = msg.peerVersion;
+    cur.time = now;
+    // don't trigger if sender changes as server (mis)configuration
+    // could see beacons reach us from multiple interfaces.
+    cur.sender = msg.src;
+
+    if(action!=Update) {
+        if(action==New)
+            log_debug_printf(beacon, "New server %s\n",
+                             std::string(SB()<<msg.src<<" : "<<msg.server<<'/'<<msg.proto
+                                         <<" "<<cur.guid<<'/'<<(unsigned)cur.peerVersion).c_str());
+
+        serverEvent(Discovered{Discovered::Online,
+                               msg.peerVersion,
+                               msg.src.tostring(),
+                               msg.proto,
+                               msg.server.tostring(),
+                               msg.guid,
+                               now
+                    });
 
         poke(false);
     }
@@ -1090,31 +1137,24 @@ void ContextImpl::tickBeaconClean()
 
     auto it = beaconTrack.begin();
     while(it!=beaconTrack.end()) {
-        auto cur = it++; // [GUID, {[proto, EP], lastRx}]
+        auto cur = it++;
 
-        auto it2 = cur->second.begin();
-        while(it2!=cur->second.end()) {
-            auto cur2 = it2++; // [[proto, EP], lastRx]
-            double age = epicsTimeDiffInSeconds(&now, &cur2->second.time);
+        double age = epicsTimeDiffInSeconds(&now, &cur->second.time);
 
-            if(age < -15.0 || age > 2*beaconCleanInterval.tv_sec) {
-                log_debug_printf(io, "%s\n",
-                                 std::string(SB()<<" Lost server "<<cur->first<<' '<<cur->first).c_str());
+        if(age < -15.0 || age > 2*beaconCleanInterval.tv_sec) {
+            log_debug_printf(io, "%s\n",
+                             std::string(SB()<<" Lost server "<<cur->second.guid
+                                         <<' '<<cur->first.second<<'/'<<cur->first.first).c_str());
 
-                serverEvent(Discovered{Discovered::Timeout,
-                                       cur2->second.peerVersion,
-                                       "", // no associated Beacon
-                                       cur2->first.first,
-                                       cur2->first.second.tostring(),
-                                       cur->first,
-                                       now
-                            });
+            serverEvent(Discovered{Discovered::Timeout,
+                                   cur->second.peerVersion,
+                                   "", // no associated Beacon
+                                   cur->first.second,
+                                   cur->first.first.tostring(),
+                                   cur->second.guid,
+                                   now
+                        });
 
-                cur->second.erase(cur2);
-            }
-        }
-
-        if(cur->second.empty()) {
             beaconTrack.erase(cur);
         }
     }
