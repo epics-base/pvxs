@@ -606,7 +606,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 
     auto op(std::make_shared<SubscriptionImpl>(context->tcp_loop));
     op->self = op;
-    op->channelName = _name;
+    op->channelName = std::move(_name);
     op->event = std::move(_event);
     op->onInit = std::move(_onInit);
     op->pvRequest = _buildReq();
@@ -672,12 +672,11 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
                        }, std::move(temp)));
     });
 
-    auto name(std::move(_name));
     auto server(std::move(_server));
-    context->tcp_loop.dispatch([op, context, name, server]() {
+    context->tcp_loop.dispatch([op, context, server]() {
         // on worker
 
-        op->chan = Channel::build(context, name, server);
+        op->chan = Channel::build(context, op->channelName, server);
 
         op->chan->pending.push_back(op);
         op->chan->createOperations();
