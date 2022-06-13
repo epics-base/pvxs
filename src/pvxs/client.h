@@ -862,6 +862,7 @@ class ConnectBuilder
 {
     std::shared_ptr<Context::Pvt> ctx;
     std::string _pvname;
+    std::string _server;
     std::function<void()> _onConn;
     std::function<void()> _onDis;
     bool _syncCancel = true;
@@ -884,6 +885,8 @@ public:
      * @since 0.2.0
      */
     ConnectBuilder& syncCancel(bool b) { this->_syncCancel = b; return *this; }
+
+    ConnectBuilder& server(const std::string& s) { this->_server = s; return *this; }
 
     //! Submit request to connect
     PVXS_API

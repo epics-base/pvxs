@@ -234,10 +234,11 @@ std::shared_ptr<Connect> ConnectBuilder::exec()
                   }, std::move(temp)));
     });
 
-    context->tcp_loop.dispatch([op, context]() {
+    auto server(std::move(_server));
+    context->tcp_loop.dispatch([op, context, server]() {
         // on worker
 
-        op->chan = Channel::build(context, op->_name, std::string());
+        op->chan = Channel::build(context, op->_name, server);
 
         bool cur = op->_connected = op->chan->state==Channel::Active;
         if(cur && op->_onConn)
