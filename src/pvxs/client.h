@@ -867,6 +867,7 @@ class ConnectBuilder
     std::function<void()> _onDis;
     bool _syncCancel = true;
 public:
+    ConnectBuilder() = default;
     ConnectBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& pvname)
         :ctx(ctx)
         ,_pvname(pvname)
