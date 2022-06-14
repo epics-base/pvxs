@@ -9,22 +9,20 @@ PVXS is functionally equivilant to the
 `pvAccessCPP <https://github.com/epics-base/pvAccessCPP>`_ modules,
 which it hopes to eventually surplant (Ok, the author hopes).
 
-The canonical version of this page is https://mdavidsaver.github.io/pvxs
-
-Versioned source can be found at https://github.com/mdavidsaver/pvxs ,
-which is also where `issues <https://github.com/mdavidsaver/pvxs/issues>`_ should be reported.
-See :ref:`reportbug`.
-Also :ref:`contrib` if you are so inclined.
+- VCS: https://github.com/mdavidsaver/pvxs
+- Docs: https://mdavidsaver.github.io/pvxs
+- `Issues <https://github.com/mdavidsaver/pvxs/issues>`_ (see :ref:`reportbug`)
+- :ref:`contrib`
 
 Dependencies
 
 * A C++11 compliant compiler
 
  * GCC >= 4.8
- * Visual Studio >= 2015 (>= 12.0)
+ * Visual Studio >= 2015 / 12.0
 
 * `EPICS Base <https://epics-controls.org/resources-and-support/base/>`_ >=3.15.1
-* `libevent <http://libevent.org/>`_ >=2.0.1
+* `libevent <http://libevent.org/>`_ >=2.0.1  (Optionally bundled)
 * (optional) `CMake <https://cmake.org/>`_ >=3.1, only needed when building bundled libevent
 
 See :ref:`building` for details.

@@ -1,7 +1,7 @@
 .. _clientapi:
 
-Client
-======
+Client API
+==========
 
 `pvxs::client::Context` represents a PVA protocol client. ::
 

@@ -3,8 +3,11 @@
 Release Notes
 =============
 
-0.3.1 (UNRELEASED)
-------------------
+0.3.1 (June 2022)
+-----------------
+
+* Fix ifaddrs::ifa_addr can be NULL
+* Limit beacon tracking by size as well as time
 
 0.3.0 (May 2022)
 ----------------

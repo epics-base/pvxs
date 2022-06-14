@@ -14,11 +14,11 @@ https://epics.anl.gov/
 What is PVAccess?
 ^^^^^^^^^^^^^^^^^
 
-The PVAccess network protocol is a hybrid supporting request/response,
+PVAccess is network protocol supporting both request/response,
 and publish/subscribe operations.
 
 PVA is closely related to the Channel Access (CA) protocol,
-which may work alongside, and is intended to supersede.
+which PVA may work alongside, and is intended to supersede.
 
 Four protocol operations are supported by PVXS.
 
@@ -33,26 +33,39 @@ Get, Put, Monitor, and RPC are to the PVA protocol what GET, PUT, POST are to th
 What is a PV?
 ^^^^^^^^^^^^^
 
-In the EPICS world a Process Variable (PV) refers to the idea of
-a globally addressed data structure.  An EPICS control system is
-composed of many PVs (in the millions for large facilities).  The present value of
-a PV is modified by a combination of remote operations via CA
-and/or PVA, and via local processing (eg. values read from local
-hardware).
+In the EPICS world a Process Variable (PV) refers to the idea of a globally addressed data structure.
+An EPICS control system is composed of many PVs.
+In the millions for large facilities.
+The present value of a PV is modified by a combination of remote operations via CA and/or PVA,
+and via local processing (eg. values read from local hardware).
 
 A common example of a PV is a measurement value, for example
-a temperature measured by a particular sensor.
-
+a temperature measured by a particular sensor (eg. ``mylab:temp1``).
 Another example would be an electromechanical relay, which may be opened or closed.
+(eg. ``mylab:valve2``)
 
-In this case a Get operation would poll the current open/closed state of the relay.
-A Monitor operation (subscription) would receive notification when the relay state changes.
+A PV name is needed when initiating any PVA operation.
+eg. with the ``pvx*`` utility executables. ::
+
+  ## fetch current value of both measurement and setting
+  $ pvxget mylab:temp1 mylab:valve2
+  ...
+  ## setup subscription of both.
+  $ pvxmonitor mylab:temp1 mylab:valve2
+  ...
+  Ctrl+c
+  ## Request setting change
+  $ pvxput mylab:valve2 1
+  ...
+
+In the case of the relay, a Get operation would poll the current open/closed state of the relay.
+A Monitor operation (subscription) would setup and receive notification when the relay state changes.
 A Put operation would be used to command the relay to open or close, or perhaps toggle (the precise meaning of a Put is context dependent).
 
 So the Get, Put, and Monitor operation on a given PV are conventionally operating on a common data structure.
 The RPC operation is more arbitrary, and need not have any relationship with a common data structure (eg. the open/closed state of the relay.)
 
-.. note:: In the context of the PVA or CA protocols, a **"PV name"** is an address string which uniquely identifies a Process Variable.
+.. note:: In the context of the PVA or CA protocols, a "PV name" is an address string which uniquely identifies a Process Variable.
           All PVA network operations begin with a "PV name" string.
 
 A "PV name" string is to the PVA and CA protocols what a URL is to the HTTP protocol.

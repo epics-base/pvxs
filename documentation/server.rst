@@ -1,7 +1,7 @@
 .. _serverapi:
 
-Server
-======
+Server API
+==========
 
 .. toctree::
    :maxdepth: 2
