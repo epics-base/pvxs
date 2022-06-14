@@ -214,7 +214,7 @@ decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
 
     try {
         for(const ifaddrs* ifa = addrs; ifa; ifa = ifa->ifa_next) {
-            const auto af = ifa->ifa_addr->sa_family;
+            const auto af = ifa->ifa_addr ? ifa->ifa_addr->sa_family : AF_UNSPEC;
             if((af!=AF_INET && af!=AF_INET6) || ifa->ifa_name[0]=='\0') {
                 log_debug_printf(logiface, "Ignoring interface '%s' address family=%d\n",
                                  ifa->ifa_name, af);
@@ -242,7 +242,7 @@ decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
             }
 
             // IFF_BROADCAST does not apply to IPv6
-            bool hasB = ifa->ifa_addr->sa_family==AF_INET && (ifa->ifa_flags&IFF_BROADCAST);
+            bool hasB = af==AF_INET && (ifa->ifa_flags&IFF_BROADCAST) && ifa->ifa_broadaddr;
 
             auto pair = it->second.addrs.emplace(SockAddr(ifa->ifa_addr),
                                                  SockAddr(hasB ? ifa->ifa_broadaddr : nullptr));
