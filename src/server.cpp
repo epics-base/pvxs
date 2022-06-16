@@ -605,7 +605,7 @@ void Server::Pvt::stop()
         // close current TCP connections
         auto conns = std::move(connections);
         for(auto& pair : conns) {
-            pair.second->bev.reset();
+            pair.second->disconnect();
             pair.second->cleanup();
         }
 

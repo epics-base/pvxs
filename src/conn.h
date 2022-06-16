@@ -21,9 +21,11 @@ constexpr size_t tcp_readahead = 0x1000u;
 
 struct ConnBase
 {
-    SockAddr peerAddr;
-    std::string peerName;
+    const SockAddr peerAddr;
+    const std::string peerName;
+protected:
     evbufferevent bev;
+public:
     TypeStore rxRegistry;
 
     const bool isClient;
@@ -37,6 +39,13 @@ struct ConnBase
 
     size_t statTx{}, statRx{};
 
+    enum {
+        Holdoff,
+        Connecting,
+        Connected,
+        Disconnected,
+    } state;
+
     ConnBase(bool isClient, bool sendBE, bufferevent* bev, const SockAddr& peerAddr);
     ConnBase(const ConnBase&) = delete;
     ConnBase& operator=(const ConnBase&) = delete;
@@ -45,6 +54,11 @@ struct ConnBase
     const char* peerLabel() const;
 
     size_t enqueueTxBody(pva_app_msg_t cmd);
+
+    bufferevent* connection() { return bev.get(); }
+
+    void connect(bufferevent* bev);
+    void disconnect();
 
 protected:
 #define CASE(Op) virtual void handle_##Op();

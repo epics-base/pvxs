@@ -32,7 +32,7 @@ struct ServerGPR : public ServerOp
         if(!ch)
             return;
         auto conn = ch->conn.lock();
-        if(!conn || !conn->bev)
+        if(!conn || conn->state==ConnBase::Disconnected)
             return;
 
         if(state==Dead || state==Idle) {

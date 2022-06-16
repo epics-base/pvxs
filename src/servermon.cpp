@@ -71,10 +71,10 @@ struct MonitorOp : public ServerOp,
                 if(!ch)
                     return;
                 auto conn(ch->conn.lock());
-                if(!conn)
+                if(!conn || conn->state==ConnBase::Disconnected)
                     return;
 
-                if(conn->bev && (bufferevent_get_enabled(conn->bev.get())&EV_READ)) {
+                if(conn->connection() && (bufferevent_get_enabled(conn->connection())&EV_READ)) {
                     op->doReply();
                 } else {
                     // connection TX queue is too full
@@ -92,7 +92,7 @@ struct MonitorOp : public ServerOp,
         if(!ch)
             return;
         auto conn = ch->conn.lock();
-        if(!conn || !conn->bev)
+        if(!conn || !conn->connection())
             return;
 
         Guard G(lock);

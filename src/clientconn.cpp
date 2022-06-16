@@ -14,23 +14,25 @@ namespace client {
 
 DEFINE_LOGGER(io, "pvxs.client.io");
 
-Connection::Connection(const std::shared_ptr<ContextImpl>& context, const SockAddr& peerAddr)
+Connection::Connection(const std::shared_ptr<ContextImpl>& context,
+                       const SockAddr& peerAddr,
+                       bool reconn)
     :ConnBase (true, context->effective.sendBE(),
-               bufferevent_socket_new(context->tcp_loop.base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS),
+               nullptr,
                peerAddr)
     ,context(context)
     ,echoTimer(event_new(context->tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &tickEchoS, this))
 {
-    bufferevent_setcb(bev.get(), &bevReadS, nullptr, &bevEventS, this);
+    if(reconn) {
+        log_debug_printf(io, "start holdoff timer for %s\n", peerName.c_str());
 
-    // shorter timeout until connect() ?
-    timeval tmo(totv(context->effective.tcpTimeout));
-    bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
+        constexpr timeval holdoff{2, 0};
+        if(event_add(echoTimer.get(), &holdoff))
+            log_err_printf(io, "Server %s error starting echoTimer as holdoff\n", peerName.c_str());
 
-    if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
-        throw std::runtime_error("Unable to begin connecting");
-
-    log_debug_printf(io, "Connecting to %s\n", peerName.c_str());
+    } else {
+        startConnecting();
+    }
 }
 
 Connection::~Connection()
@@ -40,14 +42,31 @@ Connection::~Connection()
 }
 
 std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
-                                              const SockAddr& serv)
+                                              const SockAddr& serv, bool reconn)
 {
     std::shared_ptr<Connection> ret;
     auto it = context->connByAddr.find(serv);
     if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
-        context->connByAddr[serv] = ret = std::make_shared<Connection>(context, serv);
+        context->connByAddr[serv] = ret = std::make_shared<Connection>(context, serv, reconn);
     }
     return ret;
+}
+
+void Connection::startConnecting()
+{
+    assert(!bev);
+
+    connect(bufferevent_socket_new(context->tcp_loop.base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
+
+    bufferevent_setcb(bev.get(), &bevReadS, nullptr, &bevEventS, this);
+
+    timeval tmo(totv(context->effective.tcpTimeout));
+    bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
+
+    if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
+        throw std::runtime_error("Unable to begin connecting");
+
+    log_debug_printf(io, "Connecting to %s\n", peerName.c_str());
 }
 
 void Connection::createChannels()
@@ -116,6 +135,8 @@ void Connection::bevEvent(short events)
         timeval tmo(totv(std::max(1.0, std::min(15.0, context->effective.tcpTimeout*3.0/8.0))));
         if(event_add(echoTimer.get(), &tmo))
             log_err_printf(io, "Server %s error starting echoTimer\n", peerName.c_str());
+
+        state = Connected;
     }
 }
 
@@ -397,19 +418,29 @@ void Connection::handle_DESTROY_CHANNEL()
 
 void Connection::tickEcho()
 {
-    log_debug_printf(io, "Server %s ping\n", peerName.c_str());
+    if(state==Holdoff) {
+        log_debug_printf(io, "Server %s holdoff expires\n", peerName.c_str());
 
-    if(!bev)
-        return;
+        if(event_del(echoTimer.get()))
+            log_err_printf(io, "Server %s error Disabling echoTimer\n", peerName.c_str());
 
-    auto tx = bufferevent_get_output(bev.get());
+        startConnecting();
 
-    to_evbuf(tx, Header{CMD_ECHO, 0u, 0u}, sendBE);
+    } else {
+        log_debug_printf(io, "Server %s ping\n", peerName.c_str());
 
-    // maybe help reduce latency
-    bufferevent_flush(bev.get(), EV_WRITE, BEV_FLUSH);
+        if(!bev)
+            return;
 
-    statTx += 8;
+        auto tx = bufferevent_get_output(bev.get());
+
+        to_evbuf(tx, Header{CMD_ECHO, 0u, 0u}, sendBE);
+
+        // maybe help reduce latency
+        bufferevent_flush(bev.get(), EV_WRITE, BEV_FLUSH);
+
+        statTx += 8;
+    }
 }
 
 void Connection::tickEchoS(evutil_socket_t fd, short evt, void *raw)

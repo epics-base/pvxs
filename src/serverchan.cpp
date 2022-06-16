@@ -158,11 +158,11 @@ void ServerChannelControl::close()
         if(!ch)
             return;
         auto conn = ch->conn.lock();
-        if(conn && ch->state==ServerChan::Active) {
+        if(conn && conn->connection() && ch->state==ServerChan::Active) {
             log_debug_printf(connio, "%s %s Send unsolicited Channel Destroy\n",
                              conn->peerName.c_str(), ch->name.c_str());
 
-            auto tx = bufferevent_get_output(conn->bev.get());
+            auto tx = bufferevent_get_output(conn->connection());
             EvOutBuf R(conn->sendBE, tx);
             to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
             to_wire(R, ch->sid);

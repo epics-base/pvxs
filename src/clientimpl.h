@@ -75,6 +75,8 @@ struct RequestInfo {
 struct Connection : public ConnBase, public std::enable_shared_from_this<Connection> {
     const std::shared_ptr<ContextImpl> context;
 
+    // While HoldOff, the time until re-connection
+    // While Connected, periodic Echo
     const evevent echoTimer;
 
     bool ready = false;
@@ -93,12 +95,19 @@ struct Connection : public ConnBase, public std::enable_shared_from_this<Connect
 
     INST_COUNTER(Connection);
 
-    Connection(const std::shared_ptr<ContextImpl>& context, const SockAddr &peerAddr);
+    Connection(const std::shared_ptr<ContextImpl>& context,
+               const SockAddr &peerAddr,
+               bool reconn);
     virtual ~Connection();
 
     static
     std::shared_ptr<Connection> build(const std::shared_ptr<ContextImpl>& context,
-                                      const SockAddr& serv);
+                                      const SockAddr& serv,
+                                      bool reconn=false);
+
+private:
+    void startConnecting();
+public:
 
     void createChannels();
 

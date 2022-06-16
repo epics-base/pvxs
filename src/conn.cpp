@@ -20,7 +20,6 @@ namespace impl {
 ConnBase::ConnBase(bool isClient, bool sendBE, bufferevent* bev, const SockAddr& peerAddr)
     :peerAddr(peerAddr)
     ,peerName(peerAddr.tostring())
-    ,bev(bev)
     ,isClient(isClient)
     ,sendBE(sendBE)
     ,peerBE(true) // arbitrary choice, default should be overwritten before use
@@ -28,9 +27,10 @@ ConnBase::ConnBase(bool isClient, bool sendBE, bufferevent* bev, const SockAddr&
     ,segCmd(0xff)
     ,segBuf(evbuffer_new())
     ,txBody(evbuffer_new())
+    ,state(Holdoff)
 {
-    // initially wait for at least a header
-    bufferevent_setwatermark(this->bev.get(), EV_READ, 8, tcp_readahead);
+    if(bev)
+        connect(bev);
 }
 
 ConnBase::~ConnBase() {}
@@ -38,6 +38,26 @@ ConnBase::~ConnBase() {}
 const char* ConnBase::peerLabel() const
 {
     return isClient ? "Server" : "Client";
+}
+
+void ConnBase::connect(bufferevent* bev)
+{
+    if(!bev)
+        throw std::bad_alloc();
+    assert(!this->bev && state==Holdoff);
+
+    this->bev.reset(bev);
+
+    state = isClient ? Connecting : Connected;
+
+    // initially wait for at least a header
+    bufferevent_setwatermark(this->bev.get(), EV_READ, 8, tcp_readahead);
+}
+
+void ConnBase::disconnect()
+{
+    bev.reset();
+    state = Disconnected;
 }
 
 size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
@@ -91,6 +111,7 @@ void ConnBase::bevEvent(short events)
         if(events&BEV_EVENT_TIMEOUT) {
             log_warn_printf(connio, "connection to %s %s timeout\n", peerLabel(), peerName.c_str());
         }
+        state = Disconnected;
         bev.reset();
     }
 

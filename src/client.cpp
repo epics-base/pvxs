@@ -140,7 +140,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
         break;
     }
 
-    if((state==Creating || state==Active) && current && current->bev) {
+    if((state==Creating || state==Active) && current && current->connection()) {
         {
             (void)evbuffer_drain(current->txBody.get(), evbuffer_get_length(current->txBody.get()));
 
@@ -182,9 +182,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
                          name.c_str());
 
     } else { // reconnect to specific server
-        // TODO: holdoff to prevent fast reconnect loop
-
-        conn = Connection::build(context, forcedServer);
+        conn = Connection::build(context, forcedServer, true);
 
         conn->pending[cid] = self;
         state = Connecting;
@@ -1098,10 +1096,10 @@ void ContextImpl::tickSearch(bool discover)
         for(auto& pair : nameServers) {
             auto& serv = pair.second;
 
-            if(!serv->ready || !serv->bev)
+            if(!serv->ready || !serv->connection())
                 continue;
 
-            auto tx = bufferevent_get_output(serv->bev.get());
+            auto tx = bufferevent_get_output(serv->connection());
 
             // arbitrarily skip searching if TX buffer is too full
             // TODO: configure limit?
@@ -1173,7 +1171,7 @@ void ContextImpl::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
 void ContextImpl::onNSCheck()
 {
     for(auto& ns : nameServers) {
-        if(ns.second && ns.second->bev) // connecting or connected
+        if(ns.second && ns.second->state != ConnBase::Disconnected) // hold-off, connecting, or connected
             continue;
 
         ns.second = Connection::build(shared_from_this(), ns.first);
