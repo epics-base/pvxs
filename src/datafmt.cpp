@@ -162,7 +162,7 @@ struct FmtTree {
         case StoreType::Integer:  if(fmt._showValue) { strm<<" = "<<store->as<int64_t>(); } strm<<"\n"; break;
         case StoreType::UInteger: if(fmt._showValue) { strm<<" = "<<store->as<uint64_t>(); } strm<<"\n"; break;
         case StoreType::Bool:     if(fmt._showValue) { strm<<" = "<<(store->as<bool>() ? "true" : "false"); } strm<<"\n"; break;
-        case StoreType::String:   if(fmt._showValue) { strm<<" = \""<<escape(store->as<std::string>()); } strm<<"\"\n"; break;
+        case StoreType::String:   if(fmt._showValue) { strm<<" = \""<<escape(store->as<std::string>())<<"\""; } strm<<"\n"; break;
         case StoreType::Compound: {
             auto& fld = store->as<Value>();
             if(fld.valid() && desc->code==TypeCode::Union) {
