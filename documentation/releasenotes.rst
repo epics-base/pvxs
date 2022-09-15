@@ -3,8 +3,12 @@
 Release Notes
 =============
 
-0.3.2 (UNRELEASED)
+1.0.0 (UNRELEASED)
 ------------------
+
+* Add `pvxs::client::ConnectBuilder::server`
+* Add hold-off timer when reconnecting to a specific server.
+* Fix missing closing quote when printing a ``String`` in tree format.
 
 0.3.1 (June 2022)
 -----------------
