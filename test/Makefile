@@ -125,6 +125,14 @@ TESTPROD_HOST += mcat
 mcat_SRCS += mcat.cpp
 # not a unittest
 
+TESTPROD_HOST += spam
+spam_SRCS += spam.cpp
+# not a unittest
+
+TESTPROD_HOST += eatspam
+eatspam_SRCS += eatspam.cpp
+# not a unittest
+
 TESTSCRIPTS_HOST += $(TESTS:%=%.t)
 ifdef BASE_3_15
 ifneq ($(filter $(T_A),$(CROSS_COMPILER_RUNTEST_ARCHS)),)

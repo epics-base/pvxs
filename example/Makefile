@@ -17,9 +17,6 @@ simplesrv_SRCS += simplesrv.cpp
 TESTPROD_HOST += mailbox
 mailbox_SRCS += mailbox.cpp
 
-TESTPROD_HOST += spam
-spam_SRCS += spam.cpp
-
 TESTPROD_HOST += ticker
 ticker_SRCS += ticker.cpp
 
