@@ -36,6 +36,8 @@ struct MonitorOp : public ServerOp,
     std::function<void(bool)> onStart;
     std::function<void()> onLowMark;
     std::function<void()> onHighMark;
+    bool lowMarkPending = false;
+    bool highMarkPending = false;
 
     // const after setup phase
     std::shared_ptr<const FieldDesc> type;
@@ -173,12 +175,12 @@ struct MonitorOp : public ServerOp,
         if(state==Executing && pipeline) {
             assert(window); // previously tested
 
-            bool before = window <= low;
             window--;
-            bool after = window <= low;
 
-            if(before && after && onLowMark) {
+            if(!lowMarkPending && window <= low && onLowMark) {
+                lowMarkPending = true;
                 conn->iface->server->acceptor_loop.dispatch([self]() {
+                    self->lowMarkPending = false;
                     if(self->onLowMark)
                         self->onLowMark();
                 });
@@ -530,19 +532,19 @@ void ServerConn::handle_MONITOR()
         // although it will accept destroy in any !INIT message.
         // We do accept ack+start/stop as there is no reason not to.
         if(subcmd&0x80 && op->pipeline) { // ack
-            log_debug_printf(connio, "Client %s IOID %u acks %u\n",
-                       peerName.c_str(), unsigned(ioid), unsigned(nack));
 
             Guard G(op->lock);
 
-            bool before = op->window > op->high;
+            log_debug_printf(connio, "Client %s IOID %u acks %u, %u/%u\n",
+                       peerName.c_str(), unsigned(ioid), unsigned(nack),
+                             unsigned(op->window), unsigned(op->high));
 
             op->window += nack;
 
-            bool after = op->window > op->high;
-
-            if(!before && after && op->onHighMark) {
+            if(!op->highMarkPending && op->window > op->high && op->onHighMark) {
+                op->highMarkPending = true;
                 iface->server->acceptor_loop.dispatch([op](){
+                    op->highMarkPending = false;
                     if(op->onHighMark)
                         op->onHighMark();
                 });
