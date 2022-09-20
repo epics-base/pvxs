@@ -47,7 +47,7 @@ void usage(const char* argv0)
             "\n"
             "  -h        Show this message.\n"
             "  -V        Print version and exit.\n"
-            "  -A        Active discovery mode (default).  Send broadcast pint, then continue\n"
+            "  -A        Active discovery mode (default).  Send broadcast ping, then continue\n"
             "            listening for Beacons.\n"
             "            Warning: Active discovery pings result in a lot of network traffic.\n"
             "  -p        Passive discovery mode.  Only listen for server Beacons.\n"
