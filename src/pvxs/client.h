@@ -309,6 +309,17 @@ public:
     //! effective config of running client
     const Config& config() const;
 
+    /** Force close the client.
+     *
+     * ~Context() will close() automatically.  So an explicit call is optional.
+     *
+     * Aborts/interrupts all in progress network operations.
+     * Blocks until any in-progress callbacks have completed.
+     *
+     * @since UNRELEASED
+     */
+    void close();
+
     /** Request the present value of a PV
      *
      * Simple blocking

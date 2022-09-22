@@ -312,6 +312,9 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
                                         const std::string& name,
                                         const std::string& server)
 {
+    if(context->state!=ContextImpl::Running)
+        throw std::logic_error("Context close()d");
+
     SockAddr forceServer;
     decltype (context->chanByName)::key_type namekey(name, server);
 
@@ -379,6 +382,14 @@ const Config& Context::config() const
         throw std::logic_error("NULL Context");
 
     return pvt->impl->effective;
+}
+
+void Context::close()
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+
+    pvt->impl->close();
 }
 
 void Context::hurryUp()
@@ -584,6 +595,8 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
         log_err_printf(setup, "Error enabling beacon clean timer on\n%s", "");
     if(event_add(cacheCleaner.get(), &channelCacheCleanInterval))
         log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
+
+    state = Running;
 }
 
 ContextImpl::~ContextImpl() {}
@@ -609,8 +622,14 @@ void ContextImpl::startNS()
 
 void ContextImpl::close()
 {
+    log_debug_printf(setup, "context %p close\n", this);
+
     // terminate all active connections
     tcp_loop.call([this]() {
+        if(state == Stopped)
+            return;
+        state = Stopped;
+
         (void)event_del(searchTimer.get());
         (void)event_del(searchRx4.get());
         (void)event_del(searchRx6.get());

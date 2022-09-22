@@ -239,6 +239,12 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     SockAttach attach;
     IfaceMap& ifmap;
 
+    enum state_t {
+        Init,
+        Running,
+        Stopped,
+    } state = Init;
+
     // "const" after ctor
     Config effective;
 
@@ -334,7 +340,7 @@ struct Context::Pvt {
 private:
     evbase loop;
 public:
-    std::shared_ptr<ContextImpl> impl;
+    const std::shared_ptr<ContextImpl> impl;
 
     INST_COUNTER(ClientPvt);
 
