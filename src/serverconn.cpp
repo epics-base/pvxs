@@ -15,8 +15,9 @@
 #include <pvxs/log.h>
 #include "serverconn.h"
 
-// limit on size of TX buffer above which we suspend RX
-static constexpr size_t tcp_tx_limit = 0x100000;
+// limit on size of TX buffer above which we suspend RX.
+// defined as multiple of OS socket TX buffer size
+static constexpr size_t tcp_tx_limit_mult = 2u;
 
 namespace pvxs {
 namespace server {
@@ -48,8 +49,10 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
               bufferevent_socket_new(iface->server->acceptor_loop.base, sock, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS),
               SockAddr(peer))
     ,iface(iface)
+    ,tcp_tx_limit(evsocket::get_buffer_size(sock, true) * tcp_tx_limit_mult)
 {
-    log_debug_printf(connio, "Client %s connects\n", peerName.c_str());
+    log_debug_printf(connio, "Client %s connects, RX readahead %zu TX limit %zu\n",
+                     peerName.c_str(), readahead, tcp_tx_limit);
 
     {
         auto cred(std::make_shared<server::ClientCredentials>());

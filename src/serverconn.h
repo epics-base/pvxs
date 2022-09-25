@@ -108,6 +108,7 @@ struct ServerChan
 struct ServerConn : public ConnBase, public std::enable_shared_from_this<ServerConn>
 {
     ServIface* const iface;
+    const size_t tcp_tx_limit;
 
     std::shared_ptr<const server::ClientCredentials> cred;
 

@@ -56,19 +56,21 @@ std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>
 
 void Connection::startConnecting()
 {
-    assert(!bev);
+    assert(!this->bev);
 
-    connect(bufferevent_socket_new(context->tcp_loop.base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
+    auto bev(bufferevent_socket_new(context->tcp_loop.base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
 
-    bufferevent_setcb(bev.get(), &bevReadS, nullptr, &bevEventS, this);
+    bufferevent_setcb(bev, &bevReadS, nullptr, &bevEventS, this);
 
     timeval tmo(totv(context->effective.tcpTimeout));
-    bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
+    bufferevent_set_timeouts(bev, &tmo, &tmo);
 
-    if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
+    if(bufferevent_socket_connect(bev, const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
         throw std::runtime_error("Unable to begin connecting");
 
-    log_debug_printf(io, "Connecting to %s\n", peerName.c_str());
+    connect(bev);
+
+    log_debug_printf(io, "Connecting to %s, RX readahead %zu\n", peerName.c_str(), readahead);
 }
 
 void Connection::createChannels()

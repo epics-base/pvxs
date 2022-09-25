@@ -98,6 +98,12 @@ void test_udp(int af)
 
     SockAddr bind_addr(SockAddr::loopback(af));
 
+    {
+        auto rxbuf = evsocket::get_buffer_size(A.sock, false);
+        auto txbuf = evsocket::get_buffer_size(A.sock, true);
+        testOk(rxbuf>0 && txbuf>0, "non-zero OS socket buffer sizes %zu, %zu\n", rxbuf, txbuf);
+    }
+
     A.enable_IP_PKTINFO();
     try{
         A.bind(bind_addr);
@@ -382,7 +388,7 @@ MAIN(testsock)
 {
     SockAttach attach;
     logger_config_env();
-    testPlan(66);
+    testPlan(68);
     testSetup();
     // check for behavior when binding ipv4 and ipv6 to the same socket
     // as a function of socket type and order.

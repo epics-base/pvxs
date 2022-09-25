@@ -248,6 +248,9 @@ struct PVXS_API evsocket
     std::vector<SockAddr> broadcasts(const SockAddr* match=nullptr) const;
 
     static
+    size_t get_buffer_size(evutil_socket_t sock, bool tx);
+
+    static
     bool canIPv6;
 
     static bool init_canIPv6();

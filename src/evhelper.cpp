@@ -635,6 +635,18 @@ std::vector<SockAddr> evsocket::broadcasts(const SockAddr* match) const
     return ret;
 }
 
+size_t evsocket::get_buffer_size(evutil_socket_t sock, bool tx)
+{
+    unsigned ret;
+    socklen_t len(sizeof(ret));
+    auto err = getsockopt(sock, SOL_SOCKET, tx ? SO_SNDBUF : SO_RCVBUF, (char*)&ret, &len);
+    if(err<0 || len!=sizeof(ret)) {
+        int err = evutil_socket_geterror(sock);
+        throw std::system_error(err, std::system_category());
+    }
+    return ret;
+}
+
 #if defined(_WIN32) && !defined(EAFNOSUPPORT)
 #  define EAFNOSUPPORT WSAESOCKTNOSUPPORT
 #endif

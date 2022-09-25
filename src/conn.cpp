@@ -17,6 +17,15 @@ DEFINE_LOGGER(connio, "pvxs.tcp.io");
 namespace pvxs {
 namespace impl {
 
+// Amount of following messages which we allow to be read while
+// processing the current message.  Avoids some extra recv() calls,
+// at the price of maybe extra copying.
+// Also bounds the loop in ConnBase::bevRead()
+//
+// Defined as a multiple of the OS RX socket buffer size.
+static
+constexpr size_t tcp_readahead_mult = 2u;
+
 ConnBase::ConnBase(bool isClient, bool sendBE, bufferevent* bev, const SockAddr& peerAddr)
     :peerAddr(peerAddr)
     ,peerName(peerAddr.tostring())
@@ -29,7 +38,7 @@ ConnBase::ConnBase(bool isClient, bool sendBE, bufferevent* bev, const SockAddr&
     ,txBody(evbuffer_new())
     ,state(Holdoff)
 {
-    if(bev)
+    if(bev) // true for server connection.  client will call connect() shortly
         connect(bev);
 }
 
@@ -48,10 +57,24 @@ void ConnBase::connect(bufferevent* bev)
 
     this->bev.reset(bev);
 
+    readahead = evsocket::get_buffer_size(bufferevent_getfd(bev), false);
+
+#if LIBEVENT_VERSION_NUMBER >= 0x02010000
+    // allow to drain OS socket buffer in a single read
+    (void)bufferevent_set_max_single_read(bev, readahead);
+#endif
+
+    readahead *= tcp_readahead_mult;
+
+#if LIBEVENT_VERSION_NUMBER >= 0x02010000
+    // allow attempt to write as much as is available
+    (void)bufferevent_set_max_single_write(bev, EV_SSIZE_MAX);
+#endif
+
     state = isClient ? Connecting : Connected;
 
     // initially wait for at least a header
-    bufferevent_setwatermark(this->bev.get(), EV_READ, 8, tcp_readahead);
+    bufferevent_setwatermark(this->bev.get(), EV_READ, 8, readahead);
 }
 
 void ConnBase::disconnect()
@@ -181,10 +204,10 @@ void ConnBase::bevRead()
         if(evbuffer_get_length(rx)-8 < len) {
             // wait for complete payload
             // and some additional if available
-            size_t readahead = len;
-            if(readahead < std::numeric_limits<size_t>::max()-tcp_readahead)
-                readahead += tcp_readahead;
-            bufferevent_setwatermark(bev.get(), EV_READ, len, readahead);
+            size_t newmax = len;
+            if(newmax < std::numeric_limits<size_t>::max()-readahead)
+                newmax += readahead;
+            bufferevent_setwatermark(bev.get(), EV_READ, len, newmax);
             bufferevent_enable(bev.get(), EV_READ);
             return;
         }
@@ -270,7 +293,7 @@ void ConnBase::bevRead()
         // incomplete body took earlier return
         assert(evbuffer_get_length(rx)<8);
         // wait for next header
-        bufferevent_setwatermark(bev.get(), EV_READ, 8, tcp_readahead);
+        bufferevent_setwatermark(bev.get(), EV_READ, 8, readahead);
         bufferevent_enable(bev.get(), EV_READ);
 
     } else {

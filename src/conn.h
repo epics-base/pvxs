@@ -13,12 +13,6 @@
 namespace pvxs {
 namespace impl {
 
-// Amount of following messages which we allow to be read while
-// processing the current message.  Avoids some extra recv() calls,
-// at the price of maybe extra copying.
-// Also bounds the loop in ConnBase::bevRead()
-constexpr size_t tcp_readahead = 0x1000u;
-
 struct ConnBase
 {
     const SockAddr peerAddr;
@@ -47,6 +41,7 @@ public:
     evbuf segBuf, txBody;
 
     size_t statTx{}, statRx{};
+    size_t readahead{};
 
     enum {
         Holdoff,
