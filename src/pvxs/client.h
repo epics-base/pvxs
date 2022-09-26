@@ -854,7 +854,7 @@ public:
         return _buildReq();
     }
 };
-RequestBuilder Context::request() { return RequestBuilder{}; }
+RequestBuilder Context::request() { return RequestBuilder(); }
 
 //! cf. Context::connect()
 //! @since 0.2.0
