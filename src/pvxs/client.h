@@ -561,7 +561,7 @@ protected:
     bool _autoexec = true;
     bool _syncCancel = true;
 
-    CommonBase() = default;
+    CommonBase() {}
     CommonBase(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : ctx(ctx), _name(name) {}
     ~CommonBase();
 
@@ -579,7 +579,7 @@ protected:
     struct Args;
     std::shared_ptr<Args> _args;
 
-    PRBase() = default;
+    PRBase() {}
     PRBase(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : CommonBase(ctx, name) {}
     ~PRBase();
 
@@ -592,7 +592,7 @@ protected:
 template<typename SubBuilder, typename Base>
 class CommonBuilder : public Base {
 protected:
-    CommonBuilder() = default;
+    CommonBuilder() {}
     constexpr CommonBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) : Base(ctx, name) {}
     inline SubBuilder& _sb() { return static_cast<SubBuilder&>(*this); }
 public:
@@ -663,7 +663,7 @@ class GetBuilder : public detail::CommonBuilder<GetBuilder, detail::CommonBase> 
     PVXS_API
     std::shared_ptr<Operation> _exec_get();
 public:
-    GetBuilder() = default;
+    GetBuilder() {}
     GetBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name, bool get) :CommonBuilder{ctx,name}, _get(get) {}
     //! Callback through which result Value or an error will be delivered.
     //! The functor is stored in the Operation returned by exec().
@@ -684,6 +684,7 @@ public:
     }
 
     friend struct Context::Pvt;
+    friend class Context;
 };
 GetBuilder Context::info(const std::string& name) { return GetBuilder{pvt, name, false}; }
 GetBuilder Context::get(const std::string& name) { return GetBuilder{pvt, name, true}; }
@@ -696,7 +697,7 @@ class PutBuilder : public detail::CommonBuilder<PutBuilder, detail::PRBase> {
     std::function<void(Result&&)> _result;
     bool _doGet = true;
 public:
-    PutBuilder() = default;
+    PutBuilder() {}
     PutBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
 
     /** If fetchPresent is true (the default).  Then the Value passed to
@@ -758,6 +759,7 @@ public:
     std::shared_ptr<Operation> exec();
 
     friend struct Context::Pvt;
+    friend class Context;
 };
 PutBuilder Context::put(const std::string& name) { return PutBuilder{pvt, name}; }
 
@@ -766,9 +768,8 @@ PutBuilder Context::put(const std::string& name) { return PutBuilder{pvt, name};
 class RPCBuilder : public detail::CommonBuilder<RPCBuilder, detail::PRBase> {
     Value _argument;
     std::function<void(Result&&)> _result;
-    friend class Context;
 public:
-    RPCBuilder() = default;
+    RPCBuilder() {}
     RPCBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
     //! Callback through which result Value or an error will be delivered.
     //! The functor is stored in the Operation returned by exec().
@@ -800,6 +801,7 @@ public:
     std::shared_ptr<Operation> exec();
 
     friend struct Context::Pvt;
+    friend class Context;
 };
 RPCBuilder Context::rpc(const std::string& name) { return RPCBuilder{pvt, name}; }
 RPCBuilder Context::rpc(const std::string& name, const Value &arg) {
@@ -816,7 +818,7 @@ class MonitorBuilder : public detail::CommonBuilder<MonitorBuilder, detail::Comm
     bool _maskConn = true;
     bool _maskDisconn = false;
 public:
-    MonitorBuilder() = default;
+    MonitorBuilder() {}
     MonitorBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& name) :CommonBuilder{ctx,name} {}
     /** Install FIFO not-empty event callback.
      *
@@ -843,12 +845,14 @@ public:
     std::shared_ptr<Subscription> exec();
 
     friend struct Context::Pvt;
+    friend class Context;
 };
 MonitorBuilder Context::monitor(const std::string& name) { return MonitorBuilder{pvt, name}; }
 
 class RequestBuilder : public detail::CommonBuilder<RequestBuilder, detail::CommonBase>
 {
 public:
+    RequestBuilder() {}
     //! Return composed pvRequest
     Value build() const {
         return _buildReq();
@@ -867,7 +871,7 @@ class ConnectBuilder
     std::function<void()> _onDis;
     bool _syncCancel = true;
 public:
-    ConnectBuilder() = default;
+    ConnectBuilder() {}
     ConnectBuilder(const std::shared_ptr<Context::Pvt>& ctx, const std::string& pvname)
         :ctx(ctx)
         ,_pvname(pvname)
