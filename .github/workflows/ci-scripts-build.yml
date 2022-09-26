@@ -50,6 +50,13 @@ jobs:
             extra: "CMD_CPPFLAGS=-Werror"
             doc: 1
 
+          - name: Native Linux (c++17)
+            os: ubuntu-20.04
+            cmp: gcc
+            configuration: default
+            base: "7.0"
+            extra: "CMD_CXXFLAGS=-std=c++17"
+
           - name: Cross mingw64 DLL
             os: ubuntu-20.04
             cmp: gcc
