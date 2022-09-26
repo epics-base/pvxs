@@ -221,14 +221,14 @@ void testTypeDef()
     {
         auto fld = val["arbitrary.sarr"];
         shared_array<Value> arr(3);
-        arr[0] = fld.allocMember();
+        arr[0] = fld.allocMember().update("value", 1.0);
         arr[1] = fld.allocMember();
-        // leave [2] as null
-        arr[0]["value"] = 1.0;
         arr[1]["value"] = 2.0;
+        // leave [2] as null
 
-        fld = arr.freeze().castTo<const void>();
+        fld = arr.freeze();
 
+        testEq(val["arbitrary.sarr[0].value"].as<double>(), 1.0);
         testEq(val["arbitrary.sarr[1].value"].as<double>(), 2.0);
     }
 
@@ -520,7 +520,7 @@ void testFormat()
 
 MAIN(testtype)
 {
-    testPlan(51);
+    testPlan(52);
     testSetup();
     showSize();
     testCode();
