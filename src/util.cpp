@@ -223,36 +223,112 @@ std::ostream& operator<<(std::ostream& strm, const ServerGUID& guid)
 #if !defined(__rtems__) && !defined(vxWorks)
 
 static
-std::atomic<SigInt*> thesig{nullptr};
+std::atomic<evutil_socket_t> onsig{evutil_socket_t(EVUTIL_INVALID_SOCKET)};
 
-void SigInt::_handle(int num)
+static
+void SigInt_handler(int signum);
+
+namespace {
+struct SocketPair {
+    evutil_socket_t s[2];
+    SocketPair() {
+#ifdef _WIN32
+        auto err = evutil_socketpair(AF_INET, SOCK_STREAM, 0, s);
+#else
+        auto err = evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, s);
+#endif
+        if(err)
+            throw std::bad_alloc();
+    }
+    ~SocketPair() {
+        epicsSocketDestroy(s[0]);
+        epicsSocketDestroy(s[1]);
+    }
+};
+
+} // namespace
+
+struct SigInt::Pvt : public epicsThreadRunable {
+    void (*prevINT)(int);
+    void (*prevTERM)(int);
+    const std::function<void()> handler;
+
+    // either pipe() or socketpair()
+    SocketPair wake;
+
+    epicsThread thr;
+
+    Pvt(const std::function<void ()> &&handler)
+        :handler(handler)
+        ,thr(*this, "SigInt",
+             epicsThreadGetStackSize(epicsThreadStackBig),
+             epicsThreadPriorityMax)
+    {
+        evutil_socket_t expect = EVUTIL_INVALID_SOCKET;
+        if(!onsig.compare_exchange_strong(expect, wake.s[1])) {
+            throw std::logic_error("Only one SigInt may exist in a process");
+        }
+
+        prevINT = signal(SIGINT, &SigInt_handler);
+        prevTERM = signal(SIGTERM, &SigInt_handler);
+
+        thr.start();
+    }
+
+    virtual ~Pvt() {
+        // disarm
+        signal(SIGINT, prevINT);
+        signal(SIGTERM, prevTERM);
+        // no new signals will be delivered.
+        // may be in-progress handlers on other threads.
+        // maybe handler() running in our thread.
+
+        char msg = 'I';
+        auto ret = send(wake.s[1], &msg, 1, 0);
+        assert(ret==1);
+        thr.exitWait();
+
+        evutil_socket_t expect;
+        while((expect=onsig) != wake.s[1] && !onsig.compare_exchange_strong(expect, EVUTIL_INVALID_SOCKET))
+        {
+            // signal handler in progress...
+            epicsThreadSleep(0.1);
+        }
+    }
+
+    virtual void run() override final {
+        char msg;
+        while(true) {
+            auto ret = recv(wake.s[0], &msg, 1, 0);
+            if(ret<0 && evutil_socket_geterror(wake.s[0])==SOCK_EINTR) {
+                continue; // interrupted by a signal handler, perhaps to notify me?
+
+            } else if(ret>=1) {
+                handler();
+            }
+            break;
+        }
+    }
+};
+
+static
+void SigInt_handler(int)
 {
-    auto sig = thesig.load();
-    if(!sig)
-        return;
-
-    sig->handler();
+    const evutil_socket_t inprog = EVUTIL_INVALID_SOCKET-1;
+    evutil_socket_t fd = onsig.load();
+    if(fd!=EVUTIL_INVALID_SOCKET && fd!=inprog && onsig.compare_exchange_strong(fd, inprog)) {
+        char msg = 'S';
+        auto ret = send(fd, &msg, 1, 0);
+        (void)ret; // no much can be done here if something goes wrong...
+        onsig = fd;
+    }
 }
 
-SigInt::SigInt(decltype (handler)&& handler)
-    :handler(std::move(handler))
-{
-    SigInt* expect = nullptr;
+SigInt::SigInt(const std::function<void ()> &&handler)
+    :pvt(std::make_shared<Pvt>(std::move(handler)))
+{}
 
-    if(!thesig.compare_exchange_strong(expect, this))
-        throw std::logic_error("Only one SigInt allowed");
-
-    prevINT = signal(SIGINT, &_handle);
-    prevTERM = signal(SIGTERM, &_handle);
-}
-
-SigInt::~SigInt()
-{
-    signal(SIGINT, prevINT);
-    signal(SIGTERM, prevTERM);
-
-    thesig.store(nullptr);
-}
+SigInt::~SigInt() {}
 
 #endif // !defined(__rtems__) && !defined(vxWorks)
 

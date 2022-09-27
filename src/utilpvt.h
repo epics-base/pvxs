@@ -33,6 +33,10 @@
 #include <pvxs/version.h>
 #include <pvxs/util.h>
 
+#ifndef EVUTIL_INVALID_SOCKET
+#  define EVUTIL_INVALID_SOCKET INVALID_SOCKET
+#endif
+
 #ifndef EPICS_ALWAYS_INLINE
 #  if __GNUC__
 #    define EPICS_ALWAYS_INLINE __inline__ __attribute__((always_inline))

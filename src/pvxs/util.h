@@ -83,7 +83,7 @@ std::ostream& operator<<(std::ostream&, const ServerGUID&);
 
 #if !defined(__rtems__) && !defined(vxWorks)
 
-/** Minimal portable process signal handling in CLI tools.
+/** Portable process signal handling in CLI tools.
  *
  * @code
  *     epicsEvent evt;
@@ -96,16 +96,21 @@ std::ostream& operator<<(std::ostream&, const ServerGUID&);
  * @endcode
  *
  * Saves existing handler, which are restored by dtor.
+ *
+ * @since UNRELEASED "handler" action runs in thread context.
+ *                   Safe to take locks etc.
+ *
+ * @until UNRELEASED handler action really runs in signal handler context.
  */
 class PVXS_API SigInt {
-    void (*prevINT)(int);
-    void (*prevTERM)(int);
-    const std::function<void()> handler;
-    static void _handle(int);
 public:
     //! Install signal handler.
-    SigInt(decltype (handler)&& handler);
+    SigInt(const std::function<void()>&& handler);
+    SigInt(const SigInt&) = delete;
     ~SigInt();
+    struct Pvt;
+private:
+    std::shared_ptr<Pvt> pvt;
 };
 
 #else // !defined(__rtems__) && !defined(vxWorks)
