@@ -144,12 +144,10 @@ void ConnBase::bevEvent(short events)
 
 void ConnBase::bevRead()
 {
-    // temporarily disable to bound the processing loop and ensure fairness with other connections
-    bufferevent_disable(bev.get(), EV_READ);
-
     auto rx = bufferevent_get_input(bev.get());
+    auto remaining = evbuffer_get_length(rx);
 
-    while(bev && evbuffer_get_length(rx)>=8) {
+    while(bev && remaining >= 8) {
         uint8_t header[8];
 
         auto ret = evbuffer_copyout(rx, header, sizeof(header));
@@ -188,6 +186,7 @@ void ConnBase::bevRead()
             // Control messages are not actually useful
             evbuffer_drain(rx, 8);
             statRx += 8u;
+            remaining -= 8u;
             continue;
         }
         // application message
@@ -201,14 +200,13 @@ void ConnBase::bevRead()
         from_wire(L, len);
         assert(L.good());
 
-        if(evbuffer_get_length(rx)-8 < len) {
+        if(remaining-8 < len) {
             // wait for complete payload
             // and some additional if available
-            size_t newmax = len;
+            size_t newmax = 8 + len;
             if(newmax < std::numeric_limits<size_t>::max()-readahead)
                 newmax += readahead;
-            bufferevent_setwatermark(bev.get(), EV_READ, len, newmax);
-            bufferevent_enable(bev.get(), EV_READ);
+            bufferevent_setwatermark(bev.get(), EV_READ, 8 + len, newmax);
             return;
         }
 
@@ -217,6 +215,7 @@ void ConnBase::bevRead()
             unsigned n = evbuffer_remove_buffer(rx, segBuf.get(), len);
             assert(n==len); // we know rx buf contains the entire body
         }
+        remaining -= 8u + len;
         statRx += 8u + len;
 
         // so far we do not use segmentation to support incremental processing
@@ -294,7 +293,6 @@ void ConnBase::bevRead()
         assert(evbuffer_get_length(rx)<8);
         // wait for next header
         bufferevent_setwatermark(bev.get(), EV_READ, 8, readahead);
-        bufferevent_enable(bev.get(), EV_READ);
 
     } else {
         cleanup();
