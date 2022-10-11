@@ -420,6 +420,7 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
         std::shared_ptr<ServerGPR> op;
         auto it = opByIOID.find(ioid);
         if(it==opByIOID.end() || it->second->state==ServerOp::Dead) {
+            rxRegistryDirty = true;
             log_debug_printf(connio, "Client %s Gets non-existent IOID %u\n",
                        peerName.c_str(), unsigned(ioid));
             return;

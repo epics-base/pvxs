@@ -412,19 +412,11 @@ void Connection::handle_MONITOR()
             info = &it->second;
 
         } else {
-            auto lvl = Level::Debug;
             if(!init) {
-                // We don't have enough information to decode the rest of the payload.
-                // This *may* leave rxRegistry out of sync (if it contains Variant Unions).
-                // We can't know whether this is the case.
-                // Failing soft here may lead to failures decoding future replies.
-                // We could force close the Connection here to be "safe".
-                // However, we assume the such usage of Variant is relatively rare
-
-                lvl = Level::Err;
+                rxRegistryDirty = true;
             }
 
-            log_printf(io, lvl,  "Server %s uses non-existent IOID %u.  Ignoring...\n",
+            log_debug_printf(io,  "Server %s uses non-existent IOID %u.  Ignoring...\n",
                        peerName.c_str(), unsigned(ioid));
             return;
         }

@@ -250,7 +250,9 @@ void ConnBase::bevRead()
     #undef CASE
                 }
             }catch(std::exception& e){
-                log_exc_printf(connio, "%s Error while processing cmd 0x%02x: %s\n", peerLabel(), segCmd, e.what());
+                log_exc_printf(connio, "%s Error while processing cmd 0x%02x%s: %s\n",
+                               peerLabel(), segCmd, rxRegistryDirty ? " cache may be dirty" : "" ,
+                               e.what());
                 bev.reset();
             }
             // handlers may have cleared bev to force disconnect

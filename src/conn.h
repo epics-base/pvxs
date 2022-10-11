@@ -27,6 +27,15 @@ protected:
     evbufferevent bev;
 public:
     TypeStore rxRegistry;
+    /* Flag if some received delta could not be decoded due to
+     * a non-existent IOID, which *may* leave this rxRegistry out
+     * of sync with the peer (if it contains Variant Unions).
+     * We can't know whether this is the case.
+     * Failing soft here may lead to failures decoding future replies.
+     * We could force close the Connection here to be "safe".
+     * However, we assume the such usage of Variant is relatively rare
+     */
+    bool rxRegistryDirty = false;
 
     const bool isClient;
     bool sendBE;

@@ -502,6 +502,7 @@ void ServerConn::handle_MONITOR()
             // since server destroy commands aren't acknowledged, we can race
             // with traffic sent by the client before processing our destroy.
             // so we can't fault hard, so just ignore and hope for the best.
+            rxRegistryDirty = true;
             log_debug_printf(connio, "Client %s MONITORs non-existent IOID %u\n",
                        peerName.c_str(), unsigned(ioid));
             return;
