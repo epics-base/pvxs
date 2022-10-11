@@ -341,8 +341,8 @@ Member TypeDef::as(const std::string& name) const
 
 std::shared_ptr<Member> TypeDef::_append_start()
 {
-    if(!top || (top->code!=TypeCode::Struct && top->code!=TypeCode::Union))
-        throw std::logic_error("May only append to Struct or Union");
+    if(!top || (top->code.scalarOf()!=TypeCode::Struct && top->code.scalarOf()!=TypeCode::Union))
+        throw std::logic_error("May only append to Struct, Union, StructA, or UnionA");
 
     std::shared_ptr<Member> edit;
     if(top.use_count()==1u) {

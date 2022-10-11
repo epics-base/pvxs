@@ -345,6 +345,40 @@ void testTypeDefDynamic()
                   "    double value = 0\n"
                   "}\n");
     }
+    {
+        TypeDef def(TypeCode::StructA, "simple_t", {});
+
+        def += mem;
+
+        auto val = def.create();
+        shared_array<Value> arr(1);
+        arr[0] = val.allocMember().update("value", 42);
+        val = arr.freeze();
+
+        testTrue(val.valid());
+        testStrEq(std::string(SB()<<val),
+                  "struct[] [\n"
+                  "    struct \"simple_t\" {\n"
+                  "        double value = 42\n"
+                  "    }\n"
+                  "]\n");
+    }
+    {
+        TypeDef def(TypeCode::UnionA, "simple_t", {});
+
+        def += mem;
+
+        auto val = def.create();
+        shared_array<Value> arr(1);
+        arr[0] = val.allocMember().update("->value", 42);
+        val = arr.freeze();
+
+        testTrue(val.valid());
+        testStrEq(std::string(SB()<<val),
+                  "union[] [\n"
+                  "    union \"simple_t\".value        double = 42\n"
+                  "]\n");
+    }
 }
 
 void testTypeDefAppend()
@@ -520,7 +554,7 @@ void testFormat()
 
 MAIN(testtype)
 {
-    testPlan(52);
+    testPlan(56);
     testSetup();
     showSize();
     testCode();
