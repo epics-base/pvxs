@@ -132,6 +132,8 @@ public:
     CASE(MONITOR);
     CASE(RPC);
     CASE(GET_FIELD);
+
+    CASE(MESSAGE);
 #undef CASE
 
     void handle_GPR(pva_app_msg_t cmd);

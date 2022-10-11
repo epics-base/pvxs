@@ -13,6 +13,8 @@ namespace pvxs {
 namespace client {
 
 DEFINE_LOGGER(io, "pvxs.client.io");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(remote, "pvxs.remote.log");
 
 Connection::Connection(const std::shared_ptr<ContextImpl>& context,
                        const SockAddr& peerAddr,
@@ -414,6 +416,40 @@ void Connection::handle_DESTROY_CHANNEL()
 
     log_debug_printf(io, "Server %s destroys channel '%s' %u:%u\n",
                      peerName.c_str(), chan->name.c_str(), unsigned(cid), unsigned(sid));
+}
+
+void Connection::handle_MESSAGE()
+{
+    EvInBuf M(peerBE, segBuf.get(), 16);
+
+    uint32_t ioid = 0;
+    uint8_t mtype = 0;
+    std::string msg;
+
+    from_wire(M, ioid);
+    from_wire(M, mtype);
+    from_wire(M, msg);
+
+    if(!M.good())
+        throw std::runtime_error(SB()<<M.file()<<':'<<M.line()<<" Decode error for Message");
+
+    auto it = opByIOID.find(ioid);
+    if(it==opByIOID.end()) {
+        log_debug_printf(connsetup, "Server %s Message on non-existent ioid\n", peerName.c_str());
+        return;
+    }
+    auto op = it->second.handle.lock();
+
+    Level lvl;
+    switch(mtype) {
+    case 0:  lvl = Level::Info; break;
+    case 1:  lvl = Level::Warn; break;
+    case 2:  lvl = Level::Err; break;
+    default: lvl = Level::Crit; break;
+    }
+
+    log_printf(remote, lvl, "%s : %s\n",
+               op && op->chan ? op->chan->name.c_str() : "<dead>", msg.c_str());
 }
 
 void Connection::tickEcho()

@@ -308,16 +308,14 @@ void ServerConn::handle_MESSAGE()
 
     Level lvl;
     switch(mtype) {
-    case 0: lvl = Level::Info;
-    case 1: lvl = Level::Warn;
-    case 2: lvl = Level::Err;
-    default:lvl = Level::Crit;
+    case 0:  lvl = Level::Info; break;
+    case 1:  lvl = Level::Warn; break;
+    case 2:  lvl = Level::Err; break;
+    default: lvl = Level::Crit; break;
     }
 
-    if(remote.test(lvl))
-        errlogPrintf("Client %s Channel %s Remote message: %s\n",
-                     peerName.c_str(), chan ? "<dead>" : chan->name.c_str(),
-                     msg.c_str());
+    log_printf(remote, lvl, "%s : %s\n",
+               chan ? chan->name.c_str() : "<dead>", msg.c_str());
 }
 
 std::shared_ptr<ConnBase> ServerConn::self_from_this()
