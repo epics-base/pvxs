@@ -3,6 +3,25 @@
 Release Notes
 =============
 
+1.1.1 (UNRELEASED)
+------------------
+
+1.1.0 (Nov 2022)
+----------------
+
+* Client Subscription yields "complete" Value to user code.
+  Unchanged fields will appear with the values most recently received,
+  kept in an internal cache.  As a consequence, array and union fields
+  will always be shared with this case, and can never be safety modified.
+* Change Server monitor watermark meaning from edge to level trigger.
+* `pvxs::SigInt` executes callback on worker thread instead of signal context.
+* Added API
+
+  * `pvxs::client::Subscription::stats` and `pvxs::server::MonitorControlOp::stats`
+  * `pvxs::client::Context::close()`
+  * `pvxs::TypeDef::as()` overload to change Struct -> StructA.
+  * `pvxs::Value::clear()`
+
 1.0.1 (Oct 2022)
 ----------------
 
