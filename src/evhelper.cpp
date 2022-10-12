@@ -1023,7 +1023,8 @@ bool Timer::cancel()
 
 Timer::Pvt::~Pvt() {
     log_debug_printf(logtimer, "Timer %p %s\n", this, __func__);
-    (void)cancel();
+    if(base.assertInRunningLoop())
+        (void)cancel();
 }
 
 bool Timer::Pvt::cancel()
@@ -1064,23 +1065,38 @@ Timer Timer::Pvt::buildOneShot(double delay, const evbase& base, std::function<v
     if(!cb)
         throw std::invalid_argument("NULL cb");
 
-    Timer ret;
-    ret.pvt = std::make_shared<Timer::Pvt>(base, std::move(cb));
+    auto internal(std::make_shared<Timer::Pvt>(base, std::move(cb)));
 
-    base.call([&ret, &base, delay](){
-        evevent timer(event_new(base.base, -1, EV_TIMEOUT, &expire_cb, ret.pvt.get()));
-        ret.pvt->timer = std::move(timer);
+    Timer ret;
+    ret.pvt = decltype (internal)(internal.get(), [internal](Timer::Pvt*) mutable {
+        // from user thread
+        auto temp(std::move(internal));
+        auto loop(temp->base);
+        // std::bind for lack of c++14 generalized capture
+        // to move internal ref to worker for dtor
+
+        loop.tryCall(std::bind([](std::shared_ptr<Timer::Pvt>& internal) {
+                         // on worker
+                         // ordering of dispatch()/call() ensures creation before destruction
+                         internal->cancel();
+                     }, std::move(temp)));
+    });
+
+    base.call([internal, delay](){
+        // on worker
+        evevent timer(event_new(internal->base.base, -1, EV_TIMEOUT, &expire_cb, internal.get()));
+        internal->timer = std::move(timer);
 
         auto timo(totv(delay));
 
-        if(event_add(ret.pvt->timer.get(), &timo))
+        if(event_add(internal->timer.get(), &timo))
             throw std::runtime_error("Unable to start oneshot timer");
 
         log_debug_printf(logtimer, "Create timer %p as %p with delay %f and %s\n",
-                         ret.pvt.get(),
-                         ret.pvt->timer.get(),
+                         internal.get(),
+                         internal->timer.get(),
                          delay,
-                         ret.pvt->cb.target_type().name());
+                         internal->cb.target_type().name());
     });
 
     return ret;

@@ -373,24 +373,27 @@ struct Tester {
     {
         testShow()<<__func__;
 
-        epicsEvent done;
-        Timer slowdown;
+        // ref'd by both put and timer functors
+        auto done(std::make_shared<epicsEvent>());
+        // ref'd by put functor
+        auto slowdown(std::make_shared<Timer>());
 
-        mbox.onPut([this, &done, &slowdown](server::SharedPV& pv, std::unique_ptr<server::ExecOp>&& rawop, Value&& rawval) {
+        mbox.onPut([this, done, slowdown](server::SharedPV& pv,
+                   std::unique_ptr<server::ExecOp>&& rawop, Value&& rawval) {
             // on server worker
             std::shared_ptr<server::ExecOp> op(std::move(rawop));
             auto val(std::move(rawval));
             testPass("In onPut");
 
-            slowdown = op->timerOneShot(0.01, [](){
+            *slowdown = op->timerOneShot(0.01, [](){
                 testFail("I should not run.");
             });
 
-            testTrue(slowdown.cancel());
+            testTrue(slowdown->cancel());
 
-            slowdown = op->timerOneShot(0.01, [this, &done, op, val](){
+            *slowdown = op->timerOneShot(0.01, [this, done, op, val](){
                 testPass("I should run");
-                done.signal();
+                done->signal();
                 mbox.post(val);
                 op->reply();
             });
