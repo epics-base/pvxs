@@ -64,9 +64,11 @@ struct SubscriptionImpl : public OperationBase, public Subscription
     // guarded by lock
 
     std::deque<Entry> queue;
-    uint32_t window =0u, unack =0u;
+    uint32_t window =0u; // flow control window.  number of updates server may send to us
+    uint32_t unack =0u;  // updates pop()'d, but not ack'd
     // user code has seen pop()==nullptr
     bool needNotify = true;
+    bool ackPending = false; // ackTick scheduled
 
     INST_COUNTER(SubscriptionImpl);
 
@@ -83,14 +85,23 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         return channelName;
     }
 
-    void notify()
+    // caller must hold lock
+    bool wantToNotify()
     {
         log_info_printf(monevt, "Server %s channel '%s' monitor %snotify\n",
                         chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
                         chan->name.c_str(), needNotify ? "" : "skip ");
-        if(needNotify && event) {
-            needNotify = false;
 
+        bool doit = needNotify;
+        needNotify = false;
+        return doit;
+    }
+
+    // caller must not hold lock
+    // call must be from worker
+    void doNotify()
+    {
+        if(event) {
             try {
                 event(*this);
             }catch(std::exception& e){
@@ -147,17 +158,23 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                     if(unack==0u && ackAt!=1u)
                         tick = timeval{1,0};
 
-                    if(unack==0u || unack>=ackAt) {
-                        if(event_add(ackTick.get(), &tick))
+                    if(!ackPending && unack>=ackAt) {
+                        if(event_add(ackTick.get(), &tick)) {
                             log_err_printf(io, "Monitor '%s' unable to schedule ack\n", channelName.c_str());
+                        } else {
+                            log_debug_printf(io, "Monitor '%s' sched ack %u/%u\n",
+                                             channelName.c_str(), unsigned(unack), unsigned(ackAt));
+                            ackPending = true;
+                        }
                     }
 
                     unack++;
                 }
 
-                log_info_printf(monevt, "channel '%s' monitor pop() %s\n",
+                log_info_printf(monevt, "channel '%s' monitor pop() %s %u,%u\n",
                                 channelName.c_str(),
-                                ent.exc ? "exception" : ent.val ? "data" : "null!");
+                                ent.exc ? "exception" : ent.val ? "data" : "null!",
+                                unsigned(window), unsigned(unack));
 
                 if(ent.exc)
                     std::rethrow_exception(ent.exc);
@@ -284,17 +301,18 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         }
         chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
 
-        log_debug_printf(io, "Server %s channel '%s' monitor INIT%s\n",
-                         conn->peerName.c_str(), chan->name.c_str(), pipeline?" pipeline":"");
+        log_debug_printf(io, "Server %s channel '%s' monitor INIT%s q=%u a=%u\n",
+                         conn->peerName.c_str(), chan->name.c_str(), pipeline?" pipeline":"",
+                         unsigned(queueSize), unsigned(ackAt));
 
         state = Creating;
 
-        bool empty = false;
+        bool notify = false;
         if(!maskConn || pipeline) {
             Guard G(lock);
 
             if(!maskConn) {
-                empty = queue.empty();
+                notify = queue.empty() && wantToNotify();
 
                 queue.emplace_back(std::make_exception_ptr(Connected(conn->peerName)));
 
@@ -306,8 +324,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                 window = queueSize;
         }
 
-        if(empty)
-            notify();
+        if(notify)
+            doNotify();
     }
 
     virtual void disconnected(const std::shared_ptr<OperationBase> &self) override final
@@ -327,10 +345,10 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         case Running:
             // return to pending
 
-            bool empty = false;
+            bool notify = false;
             if(!maskDiscon) {
                 Guard G(lock);
-                empty = queue.empty();
+                notify = queue.empty() && wantToNotify();
 
                 queue.emplace_back(std::make_exception_ptr(Disconnect()));
 
@@ -342,8 +360,8 @@ struct SubscriptionImpl : public OperationBase, public Subscription
             chan->pending.push_back(self);
             state = Connecting;
 
-            if(empty)
-                notify();
+            if(notify)
+                doNotify();
 
             break;
         }
@@ -351,10 +369,25 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
     void tickAck()
     {
-        if(((state==Idle) || (state==Running)) && pipeline && unack) {
-            log_debug_printf(io, "Server %s channel %s monitor ACK\n",
-                            chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
-                            chan->name.c_str());
+        uint32_t num2ack = 0;
+        {
+            Guard G(lock);
+
+            ackPending = false;
+
+            if(((state==Idle) || (state==Running)) && pipeline && unack) {
+                num2ack = unack;
+                window += unack;
+                unack = 0u;
+
+                log_debug_printf(io, "Server %s channel %s monitor ACK %u\n",
+                                chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
+                                chan->name.c_str(), unsigned(num2ack));
+            }
+
+        }
+
+        if(num2ack) {
 
             auto& conn = chan->conn;
             {
@@ -365,12 +398,9 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                 to_wire(R, chan->sid);
                 to_wire(R, ioid);
                 to_wire(R, uint8_t(0x80));
-                to_wire(R, uint32_t(unack));
+                to_wire(R, uint32_t(num2ack));
             }
             chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
-
-            window += unack;
-            unack = 0u;
         }
     }
     static
@@ -517,58 +547,67 @@ void Connection::handle_MONITOR()
     }
 
     bool notify = false;
-    if(init && !sts.isSuccess()) {
-        log_debug_printf(io, "Server %s channel %s monitor PUSH init error\n",
-                        peerName.c_str(),
-                        mon->chan->name.c_str());
-
+    {
         Guard G(mon->lock);
 
-        mon->queue.emplace_back(std::move(update));
-        notify = true;
-
-    } else if(!init) {
-        Guard G(mon->lock);
-
-        if(mon->pipeline) {
-            if(mon->window) {
-                mon->window--;
-            } else {
-                log_err_printf(io, "Server %s channel '%s' MONITOR exceeds window size\n",
-                                peerName.c_str(), mon->chan->name.c_str());
-            }
-        }
-
-        notify = mon->queue.empty();
-
-        if(update.exc || (mon->queue.size() < mon->queueSize) || mon->queue.back().exc) {
-            log_debug_printf(io, "Server %s channel %s monitor PUSH\n",
+        if(init && !sts.isSuccess()) {
+            log_debug_printf(io, "Server %s channel %s monitor PUSH init error\n",
                             peerName.c_str(),
                             mon->chan->name.c_str());
 
             mon->queue.emplace_back(std::move(update));
+            notify = true;
 
-        } else if(update.val) {
-            log_debug_printf(io, "Server %s channel %s monitor Squash\n",
-                            peerName.c_str(),
-                            mon->chan->name.c_str());
+        } else if(!init) {
 
-            mon->queue.back().val.assign(update.val);
+            if(mon->pipeline) {
+                if(mon->window) {
+                    mon->window--;
+
+                    if(!mon->window)
+                        log_debug_printf(io, "Server %s channel '%s' MONITOR zero window w/ %u\n",
+                                        peerName.c_str(), mon->chan->name.c_str(), unsigned(mon->unack));
+
+                } else {
+                    log_err_printf(io, "Server %s channel '%s' MONITOR exceeds window size\n",
+                                    peerName.c_str(), mon->chan->name.c_str());
+                }
+            }
+
+            notify = mon->queue.empty();
+
+            if(update.exc || (mon->queue.size() < mon->queueSize) || mon->queue.back().exc) {
+                log_debug_printf(io, "Server %s channel %s monitor PUSH\n",
+                                peerName.c_str(),
+                                mon->chan->name.c_str());
+
+                mon->queue.emplace_back(std::move(update));
+
+            } else if(update.val) {
+                log_debug_printf(io, "Server %s channel %s monitor Squash\n",
+                                peerName.c_str(),
+                                mon->chan->name.c_str());
+
+                mon->queue.back().val.assign(update.val);
+            }
+
+            if(final && !update.exc) {
+                log_debug_printf(io, "Server %s channel %s monitor FINISH\n",
+                                peerName.c_str(),
+                                mon->chan->name.c_str());
+
+                mon->queue.emplace_back(std::make_exception_ptr(Finished()));
+            }
+
+            if(mon->queue.empty()) {
+                log_err_printf(io, "Server %s channel '%s' monitor empty update!\n",
+                               peerName.c_str(), mon->chan->name.c_str());
+                notify = false;
+            }
         }
 
-        if(final && !update.exc) {
-            log_debug_printf(io, "Server %s channel %s monitor FINISH\n",
-                            peerName.c_str(),
-                            mon->chan->name.c_str());
-
-            mon->queue.emplace_back(std::make_exception_ptr(Finished()));
-        }
-
-        if(mon->queue.empty()) {
-            log_err_printf(io, "Server %s channel '%s' monitor empty update!\n",
-                           peerName.c_str(), mon->chan->name.c_str());
-            notify = false;
-        }
+        if(notify)
+            notify = mon->wantToNotify();
     }
 
     if(mon->state==SubscriptionImpl::Done || final) {
@@ -585,7 +624,7 @@ void Connection::handle_MONITOR()
     }
 
     if(notify)
-        mon->notify();
+        mon->doNotify();
 }
 
 
