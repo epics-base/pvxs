@@ -3,8 +3,21 @@
 Release Notes
 =============
 
-1.0.0 (UNRELEASED)
+1.0.1 (UNRELEASED)
 ------------------
+
+* Fix c++17 compilation issue
+* Allow TypeDef to append StructA and UnionA
+* Reduce "non-existent IOID" noise
+* Fix CMD_MESSAGE handling
+* Fix locking of client monitor during pop()
+* Calculate buffer sizes in terms of OS socket buffer limit
+* Fix low water mark calculation
+* Fix Timer ownership (expert API)
+* Avoid ``assert()`` when client asked to search for PV names longer than 1400 bytes.
+
+1.0.0 (Sept 2022)
+-----------------
 
 * Add `pvxs::client::ConnectBuilder::server`
 * Add hold-off timer when reconnecting to a specific server.
