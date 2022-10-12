@@ -35,6 +35,8 @@ ctags --version
 setupsrc() {
     mkdir "$2"
 
+    [ -f "compat_reports/libpvxs/$1.dump" ] && return 0
+
     git archive "$1" | tar -C "$2" -xv
     # would be nice to use clone, and get sub-modules.
     # but no such luck...
@@ -49,15 +51,15 @@ setupsrc() {
     #make -C "$2/bundle" libevent -j8
     make -C "$2" CROSS_COMPILER_TARGET_ARCHS= OPT_CFLAGS='-g -Og' OPT_CXXFLAGS='-g -Og' src -j8
 
-    nm -g "$2"/lib/linux-*/libpvxs.so.* |sed -e 's|^[0-9a-f]*\s*||' > "$TDIR/$1.nm"
+    nm -g "$2"/lib/linux-*/libpvxs.so.* |sed -e 's|^[0-9a-f]*\s*||' > "compat_reports/libpvxs/$1.nm"
 
-    abi-dumper "$2"/lib/linux-*/libpvxs.so.* -o "$TDIR/$1.dump" -public-headers "$2/include" -lver "$1"
+    abi-dumper "$2"/lib/linux-*/libpvxs.so.* -o "compat_reports/libpvxs/$1.dump" -public-headers "$2/include" -lver "$1"
 }
 
 setupsrc "$OLD" "$TDIR/old"
 setupsrc "$NEW" "$TDIR/new"
 
 # I don't totally trust abicc, so let's have a second opinion...
-diff -u "$TDIR/$OLD.nm" "$TDIR/$NEW.nm" || true
+diff -u "compat_reports/libpvxs/$OLD.nm" "compat_reports/libpvxs/$NEW.nm" || true
 
-abi-compliance-checker -l libpvxs -old "$TDIR/$OLD.dump" -new "$TDIR/$NEW.dump"
+abi-compliance-checker -l libpvxs -old "compat_reports/libpvxs/$OLD.dump" -new "compat_reports/libpvxs/$NEW.dump"
