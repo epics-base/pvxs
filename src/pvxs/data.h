@@ -421,6 +421,17 @@ public:
     //! Use this definition as a member (eg. sub-structure) in another definition.
     Member as(const std::string& name) const;
 
+    /** Use this definition as a member (eg. sub-structure) in another definition
+     *  with a (limited) type change.
+     *
+     *  A ``Kind::Compound`` type (eg. ``Struct``) may be changed to another
+     *  Compound type (eg. ``StructA``).  However. changes between Compound
+     *  and non-Compound are not allowed.
+     *
+     *  @since UNRELEASED
+     */
+    Member as(TypeCode code, const std::string& name) const;
+
 private:
     std::shared_ptr<Member> _append_start();
     static

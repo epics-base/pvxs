@@ -385,9 +385,10 @@ void testTypeDefAppend()
 {
     testDiag("%s()", __func__);
 
-    auto base = TypeDef(TypeCode::Struct, "epics:nt/NTDummy:0.0", {
-                            members::UInt32("A"),
-                        }).create();
+    TypeDef start(TypeCode::Struct, "epics:nt/NTDummy:0.0", {
+            members::UInt32("A"),
+    });
+    auto base = start.create();
 
     auto sub = TypeDef(base);
     sub += {
@@ -396,13 +397,47 @@ void testTypeDefAppend()
 
     auto amend = sub.create();
 
+    start += {
+            members::UInt32("C"),
+    };
+    auto extend = start.create();
+
     testEq(base.id(), "epics:nt/NTDummy:0.0");
     testEq(base["A"].type(), TypeCode::UInt32);
     testEq(base["B"].type(), TypeCode::Null);
+    testEq(base["C"].type(), TypeCode::Null);
 
     testEq(amend.id(), "epics:nt/NTDummy:0.0");
     testEq(amend["A"].type(), TypeCode::UInt32);
     testEq(amend["B"].type(), TypeCode::UInt32);
+    testEq(amend["C"].type(), TypeCode::Null);
+
+    testEq(extend.id(), "epics:nt/NTDummy:0.0");
+    testEq(extend["A"].type(), TypeCode::UInt32);
+    testEq(extend["B"].type(), TypeCode::Null);
+    testEq(extend["C"].type(), TypeCode::UInt32);
+}
+
+void testTypeDefAppendIncremental()
+{
+    testDiag("%s()", __func__);
+
+    TypeDef part(TypeCode::Struct, {
+                     members::UInt32("x"),
+                 });
+
+    TypeDef whole(TypeCode::Struct, {
+                      members::UInt32("a"),
+                      part.as(TypeCode::StructA, "b"),
+                  });
+
+    testStrEq(std::string(SB()<<whole),
+              "struct {\n"
+              "    uint32_t a\n"
+              "    struct[] {\n"
+              "        uint32_t x\n"
+              "    } b\n"
+              "}\n");
 }
 
 //! Returns the frankenstruct
@@ -554,7 +589,7 @@ void testFormat()
 
 MAIN(testtype)
 {
-    testPlan(56);
+    testPlan(63);
     testSetup();
     showSize();
     testCode();
@@ -562,6 +597,7 @@ MAIN(testtype)
     testTypeDef();
     testTypeDefDynamic();
     testTypeDefAppend();
+    testTypeDefAppendIncremental();
     testOp();
     testFormat();
     cleanup_for_valgrind();

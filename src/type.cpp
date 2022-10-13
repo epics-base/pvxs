@@ -336,6 +336,17 @@ Member TypeDef::as(const std::string& name) const
     return ret;
 }
 
+Member TypeDef::as(TypeCode code, const std::string& name) const
+{
+    Member ret(as(name));
+
+    if((code.kind()==Kind::Compound) ^ (ret.code.kind()==Kind::Compound))
+        throw std::logic_error("as() may change between Compound and non-Compound");
+
+    ret.code = code;
+    return ret;
+}
+
 std::shared_ptr<Member> TypeDef::_append_start()
 {
     if(!top || (top->code.scalarOf()!=TypeCode::Struct && top->code.scalarOf()!=TypeCode::Union))
