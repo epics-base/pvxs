@@ -1012,10 +1012,17 @@ void ContextImpl::tickSearch(bool discover)
                 continue;
 
             } else if(size_t(M.save() - searchMsg.data()) > maxSearchPayload) {
-                assert(payload); // must have something
-                // too large, defer
-                M.restore(save);
-                break;
+                if(payload) {
+                    // other names did fit, defer this one to the next packet
+                    M.restore(save);
+                    break;
+
+                } else {
+                    // some slightly less absurdly long PV name.
+                    // Less than the UDP packet limit, but longer
+                    // than typical MTU.  Try to send, probably
+                    // no choice but to fragment.
+                }
             }
 
             count++;
