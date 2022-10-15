@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.0.1 (UNRELEASED)
-------------------
+1.0.1 (Oct 2022)
+----------------
 
 * Fix c++17 compilation issue
 * Allow TypeDef to append StructA and UnionA
