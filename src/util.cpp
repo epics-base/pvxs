@@ -113,7 +113,6 @@ Indented::Indented(std::ostream& strm, int depth)
             idx = newidx;
         } else {
             // lost race.  no way to undo xalloc(), so just wasted...
-            idx = indentIndex.load();
         }
     }
     strm.iword(idx) += depth;
@@ -122,7 +121,7 @@ Indented::Indented(std::ostream& strm, int depth)
 Indented::~Indented()
 {
     if(strm)
-        strm->iword(indentIndex.load()) -= depth;
+        strm->iword(indentIndex.load(std::memory_order_relaxed)) -= depth;
 }
 
 // _assume_ only positive indices will be used
@@ -139,7 +138,6 @@ Detailed::Detailed(std::ostream& strm, int lvl)
             idx = newidx;
         } else {
             // lost race.  no way to undo xalloc(), so just wasted...
-            idx = detailIndex.load();
         }
     }
 
@@ -151,7 +149,7 @@ Detailed::Detailed(std::ostream& strm, int lvl)
 Detailed::~Detailed()
 {
     if(strm)
-        strm->iword(detailIndex.load()) = lvl;
+        strm->iword(detailIndex.load(std::memory_order_relaxed)) = lvl;
 }
 
 int Detailed::level(std::ostream &strm)
