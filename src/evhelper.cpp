@@ -531,7 +531,7 @@ void evsocket::mcast_leave(const MCastMembership &m) const
 void evsocket::mcast_prep_sendto(const SockEndpoint& ep) const
 {
     if(ep.addr.family()!=af)
-        throw std::logic_error("Inconsistent address family or not mcast");
+        throw std::logic_error("Inconsistent address family");
 
     else if(!ep.addr.isMCast())
         return;
