@@ -550,6 +550,15 @@ public:
     //! Use to allocate members for an array of Struct and array of Union
     Value allocMember();
 
+    /** Restore to newly allocated state.
+     *
+     * Free any allocation for array or string values, zero numeric values.
+     * unmark() all fields.
+     *
+     * @since UNRELEASED
+     */
+    void clear();
+
     //! Does this Value actually reference some underlying storage
     inline bool valid() const { return desc; }
     inline explicit operator bool() const { return desc; }

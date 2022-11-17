@@ -175,6 +175,41 @@ Value Value::allocMember()
     return Value::Helper::build(fld, *this);
 }
 
+void Value::clear()
+{
+    if(!desc)
+        return;
+
+    for(auto i : range(size_t(0u), desc->size())) {
+        auto& s = store.get()[i];
+        s.valid = false;
+
+        switch(s.code) {
+        case StoreType::Array:
+            s.as<shared_array<const void>>().clear();
+            break;
+        case StoreType::Compound:
+        {
+            auto& v = s.as<Value>();
+            v.desc = nullptr;
+            v.store.reset();
+        }
+            break;
+        case StoreType::String:
+            s.as<std::string>().clear();
+            break;
+        case StoreType::Null:
+            break; // nothing to do
+        case StoreType::Bool:
+        case StoreType::UInteger:
+        case StoreType::Integer:
+        case StoreType::Real:
+            memset(&s.store, 0, sizeof(s.store)); // just zero
+            break;
+        }
+    }
+}
+
 bool Value::isMarked(bool parents, bool children) const
 {
     if(!desc)

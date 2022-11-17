@@ -342,11 +342,44 @@ void testExtract()
     }
 }
 
+void testClear()
+{
+    testShow()<<__func__;
+
+    auto val = TypeDef(TypeCode::Struct, {
+                           members::UInt32("int"),
+                           members::String("string"),
+                           members::UInt32A("arr"),
+                           members::Any("any"),
+                       }).create();
+
+    val["int"] = 0x12345678;
+    val["string"] = "testing";
+    val["arr"] = shared_array<const uint32_t>({1,2,3});
+    val["any"].assign(nt::NTScalar{TypeCode::UInt32}.create());
+    val["any->value"] = 0x01020304;
+
+    testEq(val["int"].as<uint32_t>(), 0x12345678u);
+    testEq(val["string"].as<std::string>(), std::string("testing"));
+    testEq(val["arr"].as<shared_array<const void>>().size(), 3u);
+    testTrue(!!val["any->"]);
+    testEq(val["any->value"].as<uint32_t>(), 0x01020304u);
+    testTrue(val.isMarked(true, true));
+
+    val.clear();
+
+    testEq(val["int"].as<uint32_t>(), 0u);
+    testEq(val["string"].as<std::string>(), std::string(""));
+    testEq(val["arr"].as<shared_array<const void>>().size(), 0u);
+    testFalse(val["any->"]);
+    testFalse(val.isMarked(true, true));
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(116);
+    testPlan(127);
     testSetup();
     testTraverse();
     testAssign();
@@ -390,6 +423,7 @@ MAIN(testdata)
 
     testAssignSimilar();
     testExtract();
+    testClear();
     cleanup_for_valgrind();
     return testDone();
 }
