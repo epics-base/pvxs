@@ -62,12 +62,21 @@ struct OperationBase : public Operation
     virtual void interrupt() override final;
 };
 
+struct RequestFL {
+    const size_t limit;
+    epicsMutex lock;
+    std::vector<Value> unused;
+
+    explicit RequestFL(size_t limit) :limit(limit) {}
+};
+
 struct RequestInfo {
     const uint32_t sid, ioid;
     const Operation::operation_t op;
     const std::weak_ptr<OperationBase> handle;
 
     Value prototype;
+    std::shared_ptr<RequestFL> fl;
 
     RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationBase>& handle);
 };
