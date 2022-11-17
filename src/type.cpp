@@ -235,9 +235,7 @@ void Member::Helper::build_tree(std::vector<FieldDesc>& desc, const Member& node
     auto code = node.code;
     if(node.code==TypeCode::StructA || node.code==TypeCode::UnionA) {
 
-        desc.emplace_back();
-        auto& fld = desc.back();
-        fld.code = node.code;
+        desc.emplace_back(node.code);
         // struct/union array have no ID
 
         Member next{code.scalarOf(), node.name};
@@ -249,11 +247,10 @@ void Member::Helper::build_tree(std::vector<FieldDesc>& desc, const Member& node
     }
 
     const auto index = desc.size();
-    desc.emplace_back();
+    desc.emplace_back(code);
 
     {
         auto& fld = desc.back();
-        fld.code = code;
         fld.id = node.id;
     }
 

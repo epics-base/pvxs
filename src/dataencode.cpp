@@ -90,12 +90,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
             return;
 
         } else {
-            auto& entry = cache[key];
-            // copy new node, and any descendants into cache
-            entry.resize(descs.size()-index);
-            std::copy(descs.begin()+index,
-                      descs.end(),
-                      entry.begin());
+            cache.emplace(key, descs); // copies descs
 
             descs[index].parent_index = 0u; // our caller will set if actually is a parent.
         }
@@ -115,10 +110,9 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
 
         } else {
             // copy from cache
-            descs.resize(index+it->second.size());
-            std::copy(it->second.begin(),
-                      it->second.end(),
-                      descs.begin()+index);
+            descs.reserve(index+it->second.size());
+            for(const auto& d : it->second)
+                descs.emplace_back(d);
         }
 
     } else if(code.code!=0xff && code.code&0x10) {
@@ -128,12 +122,7 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
     } else {
         // actual field
 
-        descs.emplace_back();
-        {
-            auto& fld = descs.back();
-
-            fld.code = code;
-        }
+        descs.emplace_back(code);
 
         switch(code.code) {
         case TypeCode::StructA:

@@ -74,7 +74,9 @@ struct FieldDesc {
     // For UnionA/StructA containing a single Union/Struct
     std::vector<FieldDesc> members;
 
-    TypeCode code{TypeCode::Null};
+    const TypeCode code{TypeCode::Null};
+
+    explicit FieldDesc(TypeCode code) :code{code} {}
 
     // number of FieldDesc nodes which describe this node.  Inclusive.  always size()>=1
     inline size_t size() const { return 1u + (members.empty() ? mlookup.size() : 0u); }
