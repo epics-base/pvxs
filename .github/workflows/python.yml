@@ -102,7 +102,7 @@ jobs:
             piparch: win_amd64
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: true
       - name: Automatic core dumper analysis
@@ -111,7 +111,7 @@ jobs:
 
       - name: Setup native python
         if: matrix.python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
           #architecture: x64
@@ -151,7 +151,7 @@ jobs:
         run: ls dist/*
 
       - name: Save Artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: epicscorelibs
           path: dist/*
@@ -284,12 +284,12 @@ jobs:
             pre: linux32
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
 
       - name: Setup native python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python || '3.7' }}
           #architecture: x64
@@ -345,7 +345,7 @@ jobs:
         run: ls dist/*
 
       - name: Save Artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: epicscorelibs
           path: dist/*

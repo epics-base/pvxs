@@ -125,7 +125,7 @@ jobs:
             extra: "CMD_CXXFLAGS=-analysis"
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: "apt-get install"
@@ -157,7 +157,7 @@ jobs:
       if: runner.os == 'Linux'
     - name: Upload tapfiles Artifact
       if: ${{ always() }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: tapfiles ${{ matrix.name }}
         path: '**/O.*/*.tap'
@@ -218,7 +218,7 @@ jobs:
         # people would rather just break all existing scripts...
         [ -e /usr/bin/python ] || ln -sf /usr/bin/python3 /usr/bin/python
         python --version
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: Automatic core dumper analysis
@@ -237,7 +237,7 @@ jobs:
       run: ./.ci-local/cdt-check.sh
     - name: Upload tapfiles Artifact
       if: ${{ always() }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: tapfiles ${{ matrix.name }}
         path: '**/O.*/*.tap'
