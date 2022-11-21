@@ -549,6 +549,41 @@ void Connection::handle_MONITOR()
             }
             from_wire_valid(M, rxRegistry, data);
 
+            /* co-iterate data and prototype.
+             * copy   marked from data -> prototype
+             * copy unmarked from prototype -> data
+             */
+            {
+                auto delta = Value::Helper::store_ptr(data);
+                auto complete = Value::Helper::store_ptr(info->prototype);
+                auto N = Value::Helper::desc(info->prototype)->size();
+                for(size_t i=0u; i < N; i++, delta++, complete++)
+                {
+                    const auto src = delta->valid ? delta : complete;
+                    auto       dst = delta->valid ? complete : delta;
+
+                    switch(delta->code) {
+                    case StoreType::Null:
+                        break;
+                    case StoreType::Bool:
+                    case StoreType::UInteger:
+                    case StoreType::Integer:
+                    case StoreType::Real:
+                        memcpy(&dst->store, &src->store, sizeof(src->store));
+                        break;
+                    case StoreType::String:
+                        dst->as<std::string>() = src->as<std::string>();
+                        break;
+                    case StoreType::Array:
+                        dst->as<shared_array<const void>>() = src->as<shared_array<const void>>();
+                        break;
+                    case StoreType::Compound:
+                        dst->as<Value>().copyIn(&src->store, StoreType::Compound);
+                        break;
+                    }
+                }
+            }
+
             BitMask overrun;
             from_wire(M, overrun);
             for(auto i : range(overrun.wsize())) {

@@ -262,6 +262,36 @@ struct TestLifeCycle : public BasicTest
             testFail("Missing data update");
         }
     }
+
+    void testDelta()
+    {
+        testShow()<<__func__;
+
+        if(auto val = pop(sub, evt)) {
+            testEq(val["value"].as<int32_t>(), 42);
+            testEq(val["alarm.severity"].as<uint32_t>(), 0u);
+            testTrue(val["value"].isMarked(false));
+            testFalse(val["alarm.severity"].isMarked(false));
+        } else {
+            testFail("Missing data update");
+        }
+
+        // leave .value at 42
+        {
+            auto update(initial.cloneEmpty());
+            update["alarm.severity"] = 1;
+            mbox.post(update);
+        }
+
+        if(auto val = pop(sub, evt)) {
+            testEq(val["value"].as<int32_t>(), 42);
+            testEq(val["alarm.severity"].as<uint32_t>(), 1u);
+            testFalse(val["value"].isMarked(false));
+            testTrue(val["alarm.severity"].isMarked(false));
+        } else {
+            testFail("Missing data update");
+        }
+    }
 };
 
 struct TestReconn : public BasicTest
@@ -332,7 +362,7 @@ struct TestReconn : public BasicTest
 
 MAIN(testmon)
 {
-    testPlan(32);
+    testPlan(41);
     testSetup();
     logger_config_env();
     BasicTest().orphan();
@@ -342,6 +372,7 @@ MAIN(testmon)
     TestLifeCycle().testBasic(true);
     TestLifeCycle().testBasic(false);
     TestLifeCycle().testSecond();
+    TestLifeCycle().testDelta();
     TestReconn().testReconn(false);
     TestReconn().testReconn(true);
     cleanup_for_valgrind();
