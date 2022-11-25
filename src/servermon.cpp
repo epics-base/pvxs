@@ -54,6 +54,7 @@ struct MonitorOp : public ServerOp,
     bool finished=false;
     size_t window=0u, limit=1u;
     size_t low=0u, high=0u;
+    size_t maxQueue=0u;
 
     std::deque<Value> queue;
 
@@ -234,6 +235,9 @@ struct ServerMonitorControl : public server::MonitorControlOp
             if((mon->queue.size() < mon->limit) || force || !val) {
                 mon->queue.push_back(val);
 
+                if(mon->maxQueue < mon->queue.size())
+                    mon->maxQueue = mon->queue.size();
+
             } else if(!maybe) {
                 // squash
                 assert(mon->limit>0 && !mon->queue.empty());
@@ -252,7 +256,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
         return mon->queue.size() < mon->limit;
     }
 
-    virtual void stats(server::MonitorStat& stat) const override final
+    virtual void stats(server::MonitorStat& stat, bool reset) const override final
     {
         auto mon(op.lock());
         if(!mon)
@@ -265,8 +269,12 @@ struct ServerMonitorControl : public server::MonitorControlOp
         stat.pipeline = mon->pipeline;
 
         stat.nQueue = mon->queue.size();
+        stat.maxQueue = mon->maxQueue;
         stat.limitQueue = mon->limit;
         stat.window = mon->window;
+
+        if(reset)
+            stat.maxQueue = 0u;
     }
 
     virtual void setWatermarks(size_t low, size_t high) override final

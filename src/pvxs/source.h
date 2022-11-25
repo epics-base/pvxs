@@ -47,9 +47,14 @@ struct MonitorStat {
     //! Number of available elements in the output flow window.
     size_t window=0;
 
-    //! Number of un-sent updates in the local queue.  Doesn't count updates
+    //! Number of un-sent updates in the local queue.  Doesn't include updates
     //! serialized and in the TX buffer.
-    size_t nQueue=0, limitQueue=0;
+    size_t nQueue=0;
+    //! Highest value of nQueue seen
+    //! @since UNRELEASED
+    size_t maxQueue=0;
+    //! Negotiated limit on nQueue
+    size_t limitQueue=0;
 
     bool running=false;
     bool finished=false;
@@ -94,7 +99,9 @@ public:
         doPost(Value(), false, false);
     }
 
-    virtual void stats(MonitorStat&) const =0;
+    //! Poll information and statistics for this subscription.
+    //! @since UNRELEASED Added 'reset' argument.
+    virtual void stats(MonitorStat&, bool reset=false) const =0;
 
     /** Set flow control levels.
      *
