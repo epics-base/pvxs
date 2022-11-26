@@ -31,9 +31,7 @@ jobs:
       CMP: ${{ matrix.cmp }}
       BCFG: ${{ matrix.configuration }}
       BASE: ${{ matrix.base }}
-      WINE: ${{ matrix.wine }}
-      RTEMS: ${{ matrix.rtems }}
-      RTEMS_TARGET: ${{ matrix.rtems_target }}
+      CI_CROSS_TARGETS: ${{ matrix.cross }}
       LIBEVENT_TAG: ${{ matrix.libevent }}
       TEST: ${{ matrix.test }}
       EXTRA: ${{ matrix.extra }}
@@ -46,7 +44,7 @@ jobs:
             os: ubuntu-20.04
             cmp: gcc
             configuration: default
-            base: "7.0"
+            base: "R7.0.7"
             extra: "CMD_CPPFLAGS=-Werror"
             doc: 1
 
@@ -54,42 +52,41 @@ jobs:
             os: ubuntu-20.04
             cmp: gcc
             configuration: default
-            base: "7.0"
+            base: "R7.0.7"
             extra: "CMD_CXXFLAGS=-std=c++17"
 
           - name: Cross mingw64 DLL
             os: ubuntu-20.04
             cmp: gcc
             configuration: default
-            base: "7.0"
-            wine: "64"
+            base: "R7.0.7"
+            cross: "windows-x64-mingw"
 
           - name: Cross mingw64 static
             os: ubuntu-20.04
             cmp: gcc
             configuration: static
-            base: "7.0"
-            wine: "64"
+            base: "R7.0.7"
+            cross: "windows-x64-mingw"
 
           - name: RTEMS5
             os: ubuntu-20.04
             cmp: gcc
             configuration: default
-            base: "7.0"
-            rtems: "5"
-            rtems_target: RTEMS-pc686-qemu
+            base: "R7.0.7"
+            cross: "RTEMS-pc686-qemu@5"
  
           - name: Native Linux with clang
             os: ubuntu-20.04
             cmp: clang
             configuration: default
-            base: "7.0"
+            base: "R7.0.7"
 
           - name: Native Linux with libevent stable
             os: ubuntu-20.04
             cmp: gcc
             configuration: default
-            base: "7.0"
+            base: "R7.0.7"
             libevent: "release-2.0.22-stable"
 
           - name: Native Linux with 3.15
@@ -108,20 +105,20 @@ jobs:
             os: macos-latest
             cmp: clang
             configuration: default
-            base: "7.0"
+            base: "R7.0.7"
 
           - name: vs2019 DLL
             os: windows-2019
             cmp: vs2019
             configuration: debug
-            base: "7.0"
+            base: "R7.0.7"
             extra: "CMD_CXXFLAGS=-analysis"
 
           - name: vs2019 static
             os: windows-2019
             cmp: vs2019
             configuration: static-debug
-            base: "7.0"
+            base: "R7.0.7"
             extra: "CMD_CXXFLAGS=-analysis"
 
     steps:
@@ -171,7 +168,6 @@ jobs:
       CMP: ${{ matrix.cmp }}
       BCFG: ${{ matrix.configuration }}
       BASE: ${{ matrix.base }}
-      WINE: ${{ matrix.wine }}
       LIBEVENT_TAG: ${{ matrix.libevent }}
       EXTRA: ${{ matrix.extra }}
       VV: "1"
@@ -183,13 +179,13 @@ jobs:
             image: centos:7
             cmp: gcc
             configuration: default
-            base: "7.0"
+            base: "R7.0.7"
 
           - name: Linux fedora 34
             image: fedora:34
             cmp: gcc
             configuration: default
-            base: "7.0"
+            base: "R7.0.7"
 
     steps:
     - name: "Build newer Git"

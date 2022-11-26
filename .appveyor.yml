@@ -45,19 +45,19 @@ environment:
   - CMP: vs2019
     APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
     PATH: C:\Python37-x64;%PATH%
-    BASE: 7.0
+    BASE: R7.0.7
   - CMP: vs2017
     APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
     PATH: C:\Python35-x64;%PATH%
-    BASE: 7.0
+    BASE: R7.0.7
   - CMP: vs2015
     APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
     PATH: C:\Python35-x64;%PATH%
-    BASE: 7.0
+    BASE: R7.0.7
   - CMP: gcc
     APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
     PATH: C:\Python35-x64;%PATH%
-    BASE: 7.0
+    BASE: R7.0.7
 
 # Platform: architecture
 platform:
