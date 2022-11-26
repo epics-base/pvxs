@@ -58,23 +58,15 @@ if len(libevent_tag):
 
 check_call('make -C bundle libevent', shell=True, env=env)
 
-if os.environ.get('WINE')=='64':
-    print('Enable mingw64')
+for arch in os.environ.get('CI_CROSS_TARGETS', '').split(':'):
+    if not arch:
+        continue
+
+    arch, _sep, arch_ver = arch.partition('@')
+
+    print('Enable', arch, arch_ver)
+
     with open('configure/CONFIG_SITE.local', 'a') as F:
-        F.write('\nCROSS_COMPILER_TARGET_ARCHS+=windows-x64-mingw\n')
+        F.write('\nCROSS_COMPILER_TARGET_ARCHS+=%s\n'%arch)
 
-    check_call('make -C bundle libevent.windows-x64-mingw', shell=True, env=env)
-
-elif os.environ.get('WINE')=='32':
-    print('Enable mingw32')
-    with open('configure/CONFIG_SITE.local', 'a') as F:
-        F.write('\nCROSS_COMPILER_TARGET_ARCHS+=win32-x86-mingw\n')
-
-    check_call('make -C bundle libevent.win32-x86-mingw', shell=True, env=env)
-
-elif os.environ.get('RTEMS_TARGET'):
-    print('Enable RTEMS')
-    with open('configure/CONFIG_SITE.local', 'a') as F:
-        F.write('\nCROSS_COMPILER_TARGET_ARCHS+=%s\n'%os.environ['RTEMS_TARGET'])
-
-    check_call('make -C bundle libevent.'+os.environ['RTEMS_TARGET'], shell=True, env=env)
+    check_call('make -C bundle libevent.'+arch, shell=True, env=env)
