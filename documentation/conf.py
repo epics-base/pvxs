@@ -115,6 +115,8 @@ html_static_path = []
 #
 # html_sidebars = {}
 
+html_favicon = 'favicon.png'
+
 
 # -- Options for HTMLHelp output ---------------------------------------------
 
