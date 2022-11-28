@@ -220,6 +220,7 @@ class Expand(Command):
                             ('sys/resource.h', False),
                             ('sys/sysctl.h', False), # TODO !linux
                             ('sys/timerfd.h', False),
+                            ('sys/signalfd.h', False),
                             ('errno.h', False)]:
             if probe.check_include(hfile):
                 DEFS['EVENT__HAVE_'+hfile.upper().replace('/','_').replace('.','_')] = '1'
@@ -235,6 +236,7 @@ class Expand(Command):
                 'gettimeofday',
                 'kqueue',
                 'mmap',
+                'mmap64',
                 'pipe',
                 'pipe2',
                 'poll',
@@ -254,6 +256,7 @@ class Expand(Command):
                 'arc4random_buf',
                 'arc4random_addrandom',
                 'epoll_create1',
+                'epoll_pwait2',
                 'getegid',
                 'geteuid',
                 'getifaddrs',
@@ -291,6 +294,7 @@ class Expand(Command):
         DEFS['EVENT__HAVE___func__'] = '1' if probe.check_symbol('__func__') else None
 
         DEFS['EVENT__HAVE_EPOLL'] = DEFS['EVENT__HAVE_EPOLL_CREATE']
+        DEFS['EVENT__HAVE_SIGNALFD'] = DEFS['EVENT__HAVE_SYS_SIGNALFD_H']
         DEFS['EVENT__HAVE_DEVPOLL'] = DEFS['EVENT__HAVE_SYS_DEVPOLL_H']
 
         DEFS['EVENT__HAVE_TAILQFOREACH'] = '1' if probe.check_symbol('TAILQ_FOREACH', ['sys/queue.h']) else None
@@ -496,6 +500,9 @@ def define_DSOS(self):
 
     if DEFS['EVENT__HAVE_EVENT_PORTS']=='1':
         src_core += ['evport.c']
+
+    if DEFS['EVENT__HAVE_SIGNALFD']=='1':
+        src_core += ['signalfd.c']
 
     if OS_CLASS=='WIN32':
         src_core += [
