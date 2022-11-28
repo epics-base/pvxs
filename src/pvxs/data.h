@@ -428,7 +428,7 @@ public:
      *  Compound type (eg. ``StructA``).  However. changes between Compound
      *  and non-Compound are not allowed.
      *
-     *  @since UNRELEASED
+     *  @since 1.1.0
      */
     Member as(TypeCode code, const std::string& name) const;
 
@@ -555,7 +555,7 @@ public:
      * Free any allocation for array or string values, zero numeric values.
      * unmark() all fields.
      *
-     * @since UNRELEASED
+     * @since 1.1.0
      */
     void clear();
 

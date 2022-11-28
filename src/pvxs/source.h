@@ -51,7 +51,7 @@ struct MonitorStat {
     //! serialized and in the TX buffer.
     size_t nQueue=0;
     //! Highest value of nQueue seen
-    //! @since UNRELEASED
+    //! @since 1.1.0
     size_t maxQueue=0;
     //! Negotiated limit on nQueue
     size_t limitQueue=0;
@@ -100,7 +100,7 @@ public:
     }
 
     //! Poll information and statistics for this subscription.
-    //! @since UNRELEASED Added 'reset' argument.
+    //! @since 1.1.0 Added 'reset' argument.
     virtual void stats(MonitorStat&, bool reset=false) const =0;
 
     /** Set flow control levels.

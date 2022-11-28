@@ -235,14 +235,14 @@ public:
      *         false if the queue was emptied, and a further onEvent() callback may be awaited.
      * @throws the same exceptions as non-batch pop()
      *
-     * @since UNRELEASED Added
+     * @since 1.1.0 Added
      */
     inline bool pop(std::vector<Value>& out, size_t limit=0u)
     { return doPop(out, limit); }
 #endif
 
     //! Poll statistics
-    //! @since UNRELEASED
+    //! @since 1.1.0
     virtual void stats(SubscriptionStat&, bool reset = false) =0;
 
 protected:
@@ -316,7 +316,7 @@ public:
      * Aborts/interrupts all in progress network operations.
      * Blocks until any in-progress callbacks have completed.
      *
-     * @since UNRELEASED
+     * @since 1.1.0
      */
     void close();
 

@@ -97,10 +97,10 @@ std::ostream& operator<<(std::ostream&, const ServerGUID&);
  *
  * Saves existing handler, which are restored by dtor.
  *
- * @since UNRELEASED "handler" action runs in thread context.
+ * @since 1.1.0 "handler" action runs in thread context.
  *                   Safe to take locks etc.
  *
- * @until UNRELEASED handler action really runs in signal handler context.
+ * @until 1.1.0 handler action really runs in signal handler context.
  */
 class PVXS_API SigInt {
 public:
