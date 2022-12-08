@@ -109,12 +109,12 @@ public:
      *  be sent before a client ack. must be received.  By default both high and low levels are zero.
      *
      *  onLowMark callback is not currently implemented and the 'low' level is not used.
-     *  onHighMark callback will be invoked when a client ack. increases the window size above (>) 'high'.
+     *  onHighMark callback will be invoked when a client ack. is received and the window size is above (>) 'high'.
      */
     virtual void setWatermarks(size_t low, size_t high) =0;
 
     //! Callback when client resumes/pauses updates
-    virtual void onStart(std::function<void(bool)>&&) =0;
+    virtual void onStart(std::function<void(bool start)>&&) =0;
     virtual void onHighMark(std::function<void()>&&) =0;
     virtual void onLowMark(std::function<void()>&&) =0;
 };
@@ -130,6 +130,7 @@ public:
     //! The queue is initially stopped.
     //! @throws std::runtime_error if the client pvRequest() field mask does not select any fields of prototype.
     virtual std::unique_ptr<MonitorControlOp> connect(const Value& prototype) =0;
+
     //! Indicate that this operation can not be setup
     virtual void error(const std::string& msg) =0;
 
@@ -144,7 +145,7 @@ public:
 struct PVXS_API ChannelControl : public OpBase {
     virtual ~ChannelControl() =0;
 
-    //! Invoked when a new GET, PUT, or RPC Operation is requested through this Channel
+    //! Invoked when a new GET or PUT Operation is requested through this Channel
     virtual void onOp(std::function<void(std::unique_ptr<ConnectOp>&&)>&& ) =0;
     //! Invoked when the peer executes an RPC
     virtual void onRPC(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn)=0;
