@@ -12,6 +12,7 @@ include src/pvxs/*.h@
 include src/os/default/*.cpp
 include src/os/WIN32/*.cpp
 
+include bundle/libevent/LICENSE
 include bundle/libevent/cmake/VersionViaGit.cmake
 include bundle/libevent/*.h
 include bundle/libevent/*.h.cmake

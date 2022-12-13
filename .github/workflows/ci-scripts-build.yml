@@ -44,7 +44,7 @@ jobs:
             os: ubuntu-20.04
             cmp: gcc
             configuration: default
-            base: "R7.0.7"
+            base: "7.0"
             extra: "CMD_CPPFLAGS=-Werror"
             doc: 1
 
@@ -52,41 +52,41 @@ jobs:
             os: ubuntu-20.04
             cmp: gcc
             configuration: default
-            base: "R7.0.7"
+            base: "7.0"
             extra: "CMD_CXXFLAGS=-std=c++17"
 
           - name: Cross mingw64 DLL
             os: ubuntu-20.04
             cmp: gcc
             configuration: default
-            base: "R7.0.7"
+            base: "7.0"
             cross: "windows-x64-mingw"
 
           - name: Cross mingw64 static
             os: ubuntu-20.04
             cmp: gcc
             configuration: static
-            base: "R7.0.7"
+            base: "7.0"
             cross: "windows-x64-mingw"
 
           - name: RTEMS5
             os: ubuntu-20.04
             cmp: gcc
             configuration: default
-            base: "R7.0.7"
+            base: "7.0"
             cross: "RTEMS-pc686-qemu@5"
  
           - name: Native Linux with clang
             os: ubuntu-20.04
             cmp: clang
             configuration: default
-            base: "R7.0.7"
+            base: "7.0"
 
           - name: Native Linux with libevent stable
             os: ubuntu-20.04
             cmp: gcc
             configuration: default
-            base: "R7.0.7"
+            base: "7.0"
             libevent: "release-2.0.22-stable"
 
           - name: Native Linux with 3.15
@@ -105,20 +105,20 @@ jobs:
             os: macos-latest
             cmp: clang
             configuration: default
-            base: "R7.0.7"
+            base: "7.0"
 
           - name: vs2019 DLL
             os: windows-2019
             cmp: vs2019
             configuration: debug
-            base: "R7.0.7"
+            base: "7.0"
             extra: "CMD_CXXFLAGS=-analysis"
 
           - name: vs2019 static
             os: windows-2019
             cmp: vs2019
             configuration: static-debug
-            base: "R7.0.7"
+            base: "7.0"
             extra: "CMD_CXXFLAGS=-analysis"
 
     steps:
@@ -179,13 +179,13 @@ jobs:
             image: centos:7
             cmp: gcc
             configuration: default
-            base: "R7.0.7"
+            base: "7.0"
 
           - name: Linux fedora 34
             image: fedora:34
             cmp: gcc
             configuration: default
-            base: "R7.0.7"
+            base: "7.0"
 
     steps:
     - name: "Build newer Git"

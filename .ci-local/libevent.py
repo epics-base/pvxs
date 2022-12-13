@@ -56,7 +56,7 @@ if len(libevent_tag):
     check_call('git reset --hard '+libevent_tag+' --',
                shell=True, cwd='bundle/libevent')
 
-check_call('make -C bundle libevent', shell=True, env=env)
+check_call('make -C bundle libevent VERBOSE=1', shell=True, env=env)
 
 for arch in os.environ.get('CI_CROSS_TARGETS', '').split(':'):
     if not arch:
@@ -69,4 +69,4 @@ for arch in os.environ.get('CI_CROSS_TARGETS', '').split(':'):
     with open('configure/CONFIG_SITE.local', 'a') as F:
         F.write('\nCROSS_COMPILER_TARGET_ARCHS+=%s\n'%arch)
 
-    check_call('make -C bundle libevent.'+arch, shell=True, env=env)
+    check_call('make -C bundle libevent.'+arch+' VERBOSE=1', shell=True, env=env)
