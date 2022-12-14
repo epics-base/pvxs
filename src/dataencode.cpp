@@ -90,7 +90,9 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
             return;
 
         } else {
-            cache.emplace(key, descs); // copies descs
+            cache.emplace(std::piecewise_construct,
+                          std::make_tuple(key),
+                          std::make_tuple(descs.begin()+index, descs.end()));
 
             descs[index].parent_index = 0u; // our caller will set if actually is a parent.
         }
