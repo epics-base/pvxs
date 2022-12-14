@@ -6,6 +6,8 @@ Release Notes
 1.1.1 (UNRELEASED)
 ------------------
 
+* Fix protocol decoding error with TypeStore.
+
 1.1.0 (Nov 2022)
 ----------------
 
