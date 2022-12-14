@@ -822,12 +822,13 @@ uint64_t IfaceMap::index_of(const std::string& name)
     return ret;
 }
 
-bool IfaceMap::is_address(const SockAddr& addr)
+bool IfaceMap::is_iface(const SockAddr& addr)
 {
     Guard G(lock);
 
     return try_cache(*this, [this, addr]() {
-        return byAddr.find(addr)!=byAddr.end();
+        auto it(byAddr.find(addr));
+        return it!=byAddr.end() && !it->second.second;
     });
 }
 

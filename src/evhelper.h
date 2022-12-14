@@ -280,7 +280,7 @@ struct PVXS_API IfaceMap {
     // returns 0 if not found
     uint64_t index_of(const std::string& name);
     // is this a valid interface or broadcast address?
-    bool is_address(const SockAddr& addr);
+    bool is_iface(const SockAddr& addr);
     // is this a valid interface or broadcast address?
     bool is_broadcast(const SockAddr& addr);
     // look up interface address.  useful for IPV4.  returns AF_UNSPEC if not found

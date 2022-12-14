@@ -59,8 +59,8 @@ struct UDPCollector final : public UDPManager::Search,
     bool handle_one();
 
     enum origin_t {
-        Remote,    // received from interface other than loopback
-        Loopback,  // received through loopback
+        Remote,    // non-local sender
+        Local,     // sent from a local interface, including loopback
         OriginTag, // payload of CMD_ORIGIN_TAG
     };
 
@@ -261,7 +261,7 @@ bool UDPCollector::handle_one()
     log_hex_printf(logio, Level::Debug, rxbuf, nrx, "UDP Rx %d, %s -> %s @%u (%s)\n",
             nrx, src.tostring().c_str(), dest.tostring().c_str(), unsigned(rx.dstif), bind_addr.tostring().c_str());
 
-    origin_t origin = manager->ifmap.has_address(rx.dstif, lo_addr) ? Loopback : Remote;
+    origin_t origin = manager->ifmap.is_iface(src) ? Local : Remote;
 
     process_one(dest, rxbuf, nrx, origin);
     return true;
@@ -316,7 +316,10 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
         }
         server.setPort(port);
 
-        if(M.good() && origin==Loopback && (flags&pva_search_flags::Unicast) && dest.family()==AF_INET) {
+        if(!M.good() || !(flags&pva_search_flags::Unicast) || dest.family()!=AF_INET) {
+            // invalid, bcast, or not ipv4
+
+        } else if(dest.compare(lo_mcast_addr.addr,false)!=0) {
             assert(buf==&this->buf[cmd_origin_tag_size]);
             // clear unicast flag in forwarded message
             *save_flags &= ~pva_search_flags::Unicast;
@@ -328,6 +331,13 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
             }
             forwardM(dest, buf, nrx);
             return;
+
+        } else {
+            /* refuse to re-forward.  Also, if received via. localhost as
+             * some PVA implementations don't prefix forwarded messages with CMD_ORIGIN_TAG
+             */
+            log_debug_printf(logio, "Ignore as originated for %s\n",
+                             dest.tostring().c_str());
         }
 
         // so far, only "tcp" transport has ever been seen.
@@ -422,22 +432,21 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
         M.skip(head.len-16u, __FILE__, __LINE__);
 
         // only allow one CMD_ORIGIN_TAG message per packet
-        // only accept when sent to the mcast address from the loopback address
+        // only accept when sent to the mcast address through the loopback address
         //   since we only join the mcast group on loopback this will hopefully
         //   frustrate attempts to inject CMD_ORIGIN_TAG externally.
-        if(M.good() && origin==Loopback && dest.compare(lo_mcast_addr.addr,false)==0 && src.isLO()) {
+        if(M.good() && origin==Local && dest.compare(lo_mcast_addr.addr,false)==0) {
             originaddr.setPort(bind_addr.port());
 
             process_one(originaddr, M.save(), M.size(), OriginTag);
 
             return;
         }
-        log_debug_printf(logio, "Ignore originated from %s %c%c%c%c\n",
+        log_debug_printf(logio, "Ignore originated from %s %c%c%c\n",
                          originaddr.tostring().c_str(),
                          M.good() ? 'T' : 'F',
-                         origin==Loopback ? 'T' : 'F',
-                         dest.compare(lo_mcast_addr.addr,false)==0 ? 'T' : 'F',
-                         src.isLO() ? 'T' : 'F');
+                         origin==Local ? 'T' : 'F',
+                         dest.compare(lo_mcast_addr.addr,false)==0 ? 'T' : 'F');
 
         break;
     }
