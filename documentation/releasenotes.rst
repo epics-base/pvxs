@@ -3,8 +3,11 @@
 Release Notes
 =============
 
-1.1.1 (UNRELEASED)
+1.1.2 (UNRELEASED)
 ------------------
+
+1.1.1 (Dec 2022)
+----------------
 
 * Fix protocol decoding error with TypeStore.
 
