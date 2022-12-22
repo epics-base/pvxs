@@ -483,7 +483,11 @@ Value buildCAMethod()
 
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     :ifmap(IfaceMap::instance())
-    ,effective(conf)
+    ,effective([conf]() -> Config{
+        Config eff(conf);
+        eff.expand();
+        return eff;
+    }())
     ,caMethod(buildCAMethod())
     ,searchTx4(AF_INET, SOCK_DGRAM, 0)
     ,searchTx6(AF_INET6, SOCK_DGRAM, 0)
@@ -494,7 +498,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
                event_new(tcp_loop.base, searchTx6.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
     ,searchTimer(__FILE__, __LINE__,
                  event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::tickSearchS, this))
-    ,manager(UDPManager::instance())
+    ,manager(UDPManager::instance(effective.shareUDP()))
     ,beaconCleaner(__FILE__, __LINE__,
                    event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::tickBeaconCleanS, this))
     ,cacheCleaner(__FILE__, __LINE__,
@@ -502,8 +506,6 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     ,nsChecker(__FILE__, __LINE__,
                event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
 {
-    effective.expand();
-
     searchBuckets.resize(nBuckets);
 
     std::set<SockAddr, SockAddrOnlyLess> bcasts;

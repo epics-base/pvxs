@@ -254,8 +254,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
         Stopped,
     } state = Init;
 
-    // "const" after ctor
-    Config effective;
+    const Config effective;
 
     const Value caMethod;
 

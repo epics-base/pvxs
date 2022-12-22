@@ -28,7 +28,7 @@ struct PVXS_API UDPManager
     SockAttach attach;
 
     //! get process-wide singleton.
-    static UDPManager instance();
+    static UDPManager instance(bool share=true);
     static void cleanup();
     ~UDPManager();
 
@@ -81,7 +81,7 @@ struct PVXS_API UDPManager
 
     explicit operator bool() const { return !!pvt; }
 
-    UDPManager();
+    UDPManager() = default;
 
     struct Pvt;
 private:

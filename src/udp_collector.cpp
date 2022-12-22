@@ -524,18 +524,22 @@ void collector_init(void *unused)
 }
 } // namespace
 
-UDPManager UDPManager::instance()
+UDPManager UDPManager::instance(bool share)
 {
     threadOnce(&collector_once, &collector_init, nullptr);
     assert(udp_gbl);
 
     Guard G(udp_gbl->lock);
 
-    auto ret = udp_gbl->inst.lock();
+    std::shared_ptr<UDPManager::Pvt> ret;
+
+    if(share)
+        ret = udp_gbl->inst.lock();
 
     if(!ret) {
         ret.reset(new UDPManager::Pvt);
-        udp_gbl->inst = ret;
+        if(share)
+            udp_gbl->inst = ret;
     }
 
     return UDPManager(ret);
