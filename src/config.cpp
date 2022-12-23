@@ -268,7 +268,7 @@ std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs, 
     return ret;
 }
 
-void printAddresses(std::vector<std::string>& out, std::vector<SockEndpoint>& inp)
+void printAddresses(std::vector<std::string>& out, const std::vector<SockEndpoint>& inp)
 {
     std::vector<std::string> temp;
     temp.reserve(inp.size());
@@ -512,7 +512,7 @@ void Config::expand()
             } else if(evsocket::ipstack!=evsocket::Linsock) {
                 /* Other IP stacks allow binding different sockets.
                  * OSX has the added oddity of ordering dependence.
-                 * 0.0.0.0 and the :: is allowed, but not the reverse.
+                 * 0.0.0.0 and then :: is allowed, but not the reverse.
                  *
                  * So when possible, we always bind both in the allowed order.
                  */

@@ -339,7 +339,7 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
             from_wire(M, prot);
             if(prot=="tcp") {
                 protoTCP = true;
-            } else {
+            } else if(!prot.empty()) {
                 otherproto.push_back(prot);
             }
         }

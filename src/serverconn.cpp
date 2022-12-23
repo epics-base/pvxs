@@ -408,7 +408,10 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
                 fallback = false;
                 continue;
             }
-            log_err_printf(connsetup, "Bind to %s fails\n", bind_addr.tostring().c_str());
+            log_err_printf(connsetup, "Bind to %s fails%s with %d\n",
+                           bind_addr.tostring().c_str(),
+                           fallback ? "" : " after fallback",
+                           e.code().value());
             throw;
         }
         break;
