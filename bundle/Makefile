@@ -30,6 +30,8 @@ CMAKEFLAGS += -DEVENT__DISABLE_SAMPLES=ON
 CMAKEFLAGS += -DEVENT__DISABLE_TESTS=ON
 CMAKEFLAGS += -DEVENT__DISABLE_BENCHMARK=ON
 
+CMAKEFLAGS += -DCMAKE_MACOSX_RPATH=ON -DCMAKE_SKIP_INSTALL_RPATH=OFF
+
 # searched for toolchain files
 CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR="$(abspath $(TOP)/bundle/cmake)"
 
@@ -120,7 +122,7 @@ ifneq (,$(filter %mingw,$(T_A)))
 ifeq (NO,$(SHARED_LIBRARIES))
 	$(CP) $(LIBEVENT_$(T_A))/lib/libevent_core.a $(LIBEVENT_$(T_A))/lib/event_core.lib
 # HACK: when STATIC_BUILD=YES we (in configure/RULES_PVXS_MODULE) inject the event_core
-#       dependency via <target>_LIBS += event_core which requires end existance of
+#       dependency via <target>_LIBS += event_core which requires the existance of
 #       $(event_core_DIR)/event_core.lib however, cmake outputs the *nix style name
 #       libevent_core.a (probably because it can coexist with the dll import library
 #       named libevent_core.dll.a).

@@ -149,6 +149,9 @@ jobs:
       run: |
         sudo apt-get -y install doxygen python-is-python3 python3-breathe
         make -C documentation
+    - name: otool
+      if: runner.os == 'macOS'
+      run: otool -D -L bundle/usr/*/lib/*.dylib lib/*/*.dylib bin/*/pvxinfo
     - name: Host info
       run: python .ci/cue.py --add-path "{TOP}/bin/{EPICS_HOST_ARCH}" --add-path "{TOP}/bundle/usr/{EPICS_HOST_ARCH}/lib" exec pvxinfo -D
     - name: Run main module tests
