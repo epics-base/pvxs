@@ -932,6 +932,9 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
                 throw std::runtime_error(SB()<<"indexing syntax error or wrong field type (can't index scalar array) in '"<<expr<<"'");
         }
     }
+
+    if(!desc && dothrow)
+        throw NoField();
 }
 
 Value Value::operator[](const std::string& name)
