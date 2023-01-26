@@ -287,7 +287,7 @@ struct SigInt::Pvt : public epicsThreadRunable {
         thr.exitWait();
 
         evutil_socket_t expect;
-        while((expect=onsig) != wake.s[1] && !onsig.compare_exchange_strong(expect, EVUTIL_INVALID_SOCKET))
+        while((expect=onsig) == wake.s[1] && !onsig.compare_exchange_strong(expect, EVUTIL_INVALID_SOCKET))
         {
             // signal handler in progress...
             epicsThreadSleep(0.1);
