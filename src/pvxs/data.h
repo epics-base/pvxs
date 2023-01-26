@@ -734,7 +734,7 @@ public:
      *
      * @throws LookupError If the lookup can not be satisfied
      * @throws NoField If this Value is empty
-     * @until UNRELEASED An empty Value incorrectly returned an empty Value instead of throwing NoField
+     * @since UNRELEASED An empty Value correctly throws NoField instead of returning an empty Value
      */
     Value lookup(const std::string& name);
     const Value lookup(const std::string& name) const;

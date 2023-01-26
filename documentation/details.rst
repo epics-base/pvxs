@@ -131,7 +131,7 @@ When changing c++ code please do:
 * Indent with 4 spaces.  No hard tabs.  UNIX style EoL.
 * Try to maintain the style of surrounding code.
 * Include meaningful code comments where reasonable.
-* Add doxygen tags ``@since UNRELEASED`` or ``@until UNRELEASED`` when documenting additions/changes to public APIs.
+* Add doxygen tags ``@since UNRELEASED`` when documenting additions/changes to public APIs.
 
 but do not:
 
