@@ -558,7 +558,6 @@ void testFormat()
 
     testStrEq(std::string(SB()<<top.format().delta()),
         "struct \"top_t\"\n"
-        "scalar struct\n"
         "scalar.i32 int32_t = -42\n"
         "scalar.u32 uint32_t = 42\n"
         "scalar.b bool = true\n"
@@ -568,7 +567,6 @@ void testFormat()
         "scalar.wildcard-> string = \"simple\"\n"
         "scalar.choice union\n"
         "scalar.choice->one int32_t = 1024\n"
-        "array struct\n"
         "array.i32 int32_t[] = {4}[1, -1, 2, -3]\n"
         "array.s string[] = {3}[\"one\", \"two\", \"three\"]\n"
         "array.wildcard any[]\n"
@@ -581,7 +579,6 @@ void testFormat()
         "array.choice[2] union\n"
         "array.choice[2]->two struct\n"
         "array.choice[2]->two.ahalf int32_t = 2468\n"
-        "array.more struct[] = {\?}[]\n"
     );
 }
 

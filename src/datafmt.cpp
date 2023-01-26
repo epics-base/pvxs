@@ -16,7 +16,7 @@ struct FmtDelta {
 
     void field(const std::string& prefix, const Value& val, bool verytop)
     {
-        if(verytop && !val.isMarked())
+        if(verytop && !val.isMarked(false))
             return;
 
         strm<<indent{}<<prefix;
@@ -110,7 +110,7 @@ struct FmtDelta {
         field(prefix, val, verytop);
 
         if(val.type()==TypeCode::Struct) {
-            for(auto fld : val.iall()) {
+            for(auto fld : val.imarked()) {
                 std::string cprefix(prefix);
                 if(!verytop)
                     cprefix += '.';

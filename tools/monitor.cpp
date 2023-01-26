@@ -141,7 +141,9 @@ int main(int argc, char *argv[])
                 }
                 log_info_printf(app, "%s POP empty\n", name.c_str());
 
-                std::cout<<name<<"\n"<<update.format()
+                std::cout<<name<<"\n";
+                Indented I(std::cout);
+                std::cout<<update.format()
                            .format(format)
                            .arrayLimit(arrLimit);
 
