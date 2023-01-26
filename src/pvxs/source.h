@@ -32,6 +32,12 @@ public:
     //! Indicate that this operation can not be setup
     virtual void error(const std::string& msg) =0;
 
+    ConnectOp(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op,
+           const Value& pvRequest)
+        :OpBase(name, cred, op)
+        ,_pvRequest(pvRequest)
+    {}
     virtual ~ConnectOp();
 
     //! Handler invoked when a peer executes a request for data on a GET o PUT
@@ -63,6 +69,10 @@ struct MonitorStat {
 
 //! Handle for active subscription
 struct PVXS_API MonitorControlOp : public OpBase {
+    MonitorControlOp(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op)
+        :OpBase(name, cred, op)
+    {}
     virtual ~MonitorControlOp();
 
 protected:
@@ -134,6 +144,12 @@ public:
     //! Indicate that this operation can not be setup
     virtual void error(const std::string& msg) =0;
 
+    MonitorSetupOp(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op,
+           const Value& pvRequest)
+        :OpBase(name, cred, op)
+        ,_pvRequest(pvRequest)
+    {}
     virtual ~MonitorSetupOp();
 
     virtual void onClose(std::function<void(const std::string&)>&&) =0;
@@ -143,6 +159,10 @@ public:
  *
  */
 struct PVXS_API ChannelControl : public OpBase {
+    ChannelControl(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op)
+        :OpBase(name, cred, op)
+    {}
     virtual ~ChannelControl() =0;
 
     //! Invoked when a new GET or PUT Operation is requested through this Channel

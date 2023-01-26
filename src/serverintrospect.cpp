@@ -62,13 +62,10 @@ struct ServerIntrospectControl : public server::ConnectOp
     ServerIntrospectControl(ServerConn *conn, ServerChan *chan,
                             const std::weak_ptr<server::Server::Pvt>& server,
                             const std::weak_ptr<ServerIntrospect>& op)
-        :server(server)
+        :server::ConnectOp(chan->name, conn->cred, Info, Value()) // TODO: pvRequest?
+        ,server(server)
         ,op(op)
-    {
-        _op = Info;
-        _name = chan->name;
-        _cred = conn->cred;
-    }
+    {}
     virtual ~ServerIntrospectControl() {
         error("Implicit Cancel");
     }

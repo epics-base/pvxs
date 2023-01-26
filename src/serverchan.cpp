@@ -37,13 +37,10 @@ ServerChan::~ServerChan() {
 }
 
 ServerChannelControl::ServerChannelControl(const std::shared_ptr<ServerConn> &conn, const std::shared_ptr<ServerChan>& channel)
-    :server(conn->iface->server->internal_self)
+    :server::ChannelControl(channel->name, conn->cred, None)
+    ,server(conn->iface->server->internal_self)
     ,chan(channel)
-{
-    _op = None;
-    _name = channel->name;
-    _cred = conn->cred;
-}
+{}
 
 ServerChannelControl::~ServerChannelControl() {}
 

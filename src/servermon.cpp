@@ -338,14 +338,10 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
                      const std::string& name,
                      const Value& request,
                      const std::weak_ptr<MonitorOp>& op)
-        :server(server)
+        :MonitorSetupOp(name, conn->cred, Info, request)
+        ,server(server)
         ,op(op)
-    {
-        _op = Info;
-        _name = name;
-        _cred = conn->cred;
-        _pvRequest = request;
-    }
+    {}
     virtual ~ServerMonitorSetup() {
         error("Monitor Create implied error");
     }
@@ -415,13 +411,10 @@ ServerMonitorControl::ServerMonitorControl(ServerMonitorSetup* setup,
                                            const std::weak_ptr<server::Server::Pvt>& server,
                                            const std::string& name,
                                            const std::weak_ptr<MonitorOp>& op)
-    :server(server)
+    :server::MonitorControlOp(name, setup->credentials(), Info)
+    ,server(server)
     ,op(op)
-{
-    _op = Info;
-    _name = name;
-    _cred = setup->credentials();
-}
+{}
 
 } // namespace
 

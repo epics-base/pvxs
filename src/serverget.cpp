@@ -16,6 +16,15 @@ DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
 namespace {
+server::OpBase::op_t
+cmd2op(pva_app_msg_t cmd){
+    switch(cmd) {
+    case CMD_GET: return server::OpBase::Get; break;
+    case CMD_PUT: return server::OpBase::Put; break;
+    case CMD_RPC: return server::OpBase::RPC; break;
+    default: return server::OpBase::None; break; // should never be reached
+    }
+}
 
 // generalized Get/Put/RPC
 struct ServerGPR : public ServerOp
@@ -167,19 +176,10 @@ struct ServerGPRConnect : public server::ConnectOp
                      const std::string& name,
                      const Value& request,
                      const std::weak_ptr<ServerGPR>& op)
-        :server(server)
+        :server::ConnectOp(name, conn->cred, cmd2op(cmd), request)
+        ,server(server)
         ,op(op)
-    {
-        switch(cmd) {
-        case CMD_GET: _op = Get; break;
-        case CMD_PUT: _op = Put; break;
-        case CMD_RPC: _op = RPC; break;
-        default: _op = None; break; // should never be reached
-        }
-        _name = name;
-        _cred = conn->cred;
-        _pvRequest = request;
-    }
+    {}
     virtual ~ServerGPRConnect() {
         error("Op Create implied error");
     }
@@ -269,19 +269,10 @@ struct ServerGPRExec : public server::ExecOp
                   const std::string& name,
                   //const Value& request,
                   const std::shared_ptr<ServerGPR>& op)
-        :server(server)
+        :server::ExecOp(name, conn->cred, cmd2op(cmd), op->pvRequest)
+        ,server(server)
         ,op(op)
-    {
-        switch(cmd) {
-        case CMD_GET: _op = Get; break;
-        case CMD_PUT: _op = Put; break;
-        case CMD_RPC: _op = RPC; break;
-        default: _op = None; break; // should never be reached
-        }
-        _name = name;
-        _cred = conn->cred;
-        _pvRequest = op->pvRequest;
-    }
+    {}
     virtual ~ServerGPRExec() {}
 
     virtual void reply() override final

@@ -62,9 +62,9 @@ struct PVXS_API OpBase {
         RPC,  //!< A RPC operation
     };
 protected:
-    std::string _name;
-    std::shared_ptr<const ClientCredentials> _cred;
-    op_t _op;
+    const std::string _name;
+    const std::shared_ptr<const ClientCredentials> _cred;
+    const op_t _op;
 public:
     //! The Client endpoint address in "X.X.X.X:Y" format.
     const std::string& peerName() const { return _cred->peer; }
@@ -76,6 +76,12 @@ public:
     //! Operation type
     op_t op() const { return _op; }
 
+    OpBase(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op)
+        :_name(name)
+        ,_cred(cred)
+        ,_op(op)
+    {}
     virtual ~OpBase() =0;
 };
 
@@ -92,12 +98,18 @@ struct PVXS_API ExecOp : public OpBase {
     virtual void onCancel(std::function<void()>&&) =0;
 
 protected:
-    Value _pvRequest;
+    const Value _pvRequest;
 public:
     //! Access to pvRequest blob
     //! @since 0.2.0
     const Value& pvRequest() const { return _pvRequest; }
 
+    ExecOp(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op,
+           const Value& pvRequest)
+        :OpBase(name, cred, op)
+        ,_pvRequest(pvRequest)
+    {}
     virtual ~ExecOp();
 
 #ifdef PVXS_EXPERT_API_ENABLED
