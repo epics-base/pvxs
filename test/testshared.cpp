@@ -157,6 +157,65 @@ void testFreezeError()
     })<<"Attempt to freeze() non-unique";
 }
 
+void testThaw()
+{
+    testDiag("%s", __func__);
+
+    shared_array<const uint32_t> X({2, 5}), Y(X), Z({4, 5});
+    auto saveX = X.data();
+    auto saveZ = Z.data();
+
+    auto A(X.thaw()); // copies
+    auto B(Y.thaw()); // casts
+    auto C(Z.thaw()); // casts
+    testOk1(A.unique());
+    testOk1(B.unique());
+    testOk1(C.unique());
+    testEq(A.size(), 2u);
+    testEq(B.size(), 2u);
+    testEq(C.size(), 2u);
+    testEq(X.size(), 0u);
+    testEq(Y.size(), 0u);
+    testEq(Z.size(), 0u);
+    testNotEq(A.data(), saveX);
+    testEq   (B.data(), saveX);
+    testEq   (C.data(), saveZ);
+    testEq(A[0], 2u);
+    testEq(B[0], 2u);
+    testEq(C[0], 4u);
+}
+
+void testFreezeThawVoid()
+{
+    testDiag("%s", __func__);
+
+    shared_array<uint32_t> A(2, 5);
+    auto saveA = A.data();
+    auto vA(A.castTo<void>());
+    A.clear();
+    auto cvB(vA.freeze());
+    testEq(vA.size(), 0u);
+    testEq(cvB.size(), 2u);
+    testEq(cvB.original_type(), ArrayType::UInt32);
+    testTrue(cvB.unique());
+
+    auto cvC(cvB);
+    auto vB(cvB.thaw()); // copy
+    testTrue(cvC.unique());
+    auto vC(cvC.thaw()); // cast
+    testEq(cvB.size(), 0u);
+    testEq(cvC.size(), 0u);
+    testEq(vB.size(), 2u);
+    testEq(vC.size(), 2u);
+    testNotEq(vB.data(), saveA);
+    testEq   (vC.data(), saveA);
+
+    auto B(vB.castTo<uint32_t>());
+    auto C(vC.castTo<uint32_t>());
+    testEq(B[0], 5u);
+    testEq(C[0], 5u);
+}
+
 void testComplex()
 {
     testDiag("%s", __func__);
@@ -297,7 +356,7 @@ void testConvert()
 
 MAIN(testshared)
 {
-    testPlan(127);
+    testPlan(155);
     testSetup();
     testEmpty<void>();
     testEmpty<const void>();
@@ -311,6 +370,8 @@ MAIN(testshared)
     testVoidAssemble<const void, const uint32_t>();
     testFreeze();
     testFreezeError();
+    testThaw();
+    testFreezeThawVoid();
     testComplex();
     testValue();
     testCast();
