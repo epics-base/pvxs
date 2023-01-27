@@ -3,8 +3,17 @@
 Release Notes
 =============
 
-1.1.2 (UNRELEASED)
+1.1.3 (UNRELEASED)
 ------------------
+
+1.1.2 (Feb 2023)
+----------------
+
+* SigInt fix disarm
+* Value fix delta output format to actually show delta.
+* add `pvxs::shared_array::thaw()`
+* `pvxs::Value::lookup()` throw NoField
+* Require ``setuptools_dso>=2.7a1``.
 
 1.1.1 (Dec 2022)
 ----------------

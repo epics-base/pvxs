@@ -417,7 +417,7 @@ public:
 
     /** Return non-const (maybe) copy.  consuming this
      * @post empty()==true
-     * @since UNRELEASED
+     * @since 1.1.2
      *
      * If unique(), transforms this reference into the returned const reference.
      * If not unique(), returns a copy and clears this reference.
