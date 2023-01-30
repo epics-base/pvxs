@@ -396,11 +396,18 @@ Server::Pvt::Pvt(const Config &conf)
 
     const auto cb(std::bind(&Pvt::onSearch, this, std::placeholders::_1));
 
+    bool bindAny = false;
     std::vector<SockAddr> tcpifaces; // may have port zero
     for(const auto& iface : effective.interfaces) {
         SockEndpoint addr(iface.c_str());
-        if(!addr.addr.isMCast())
+
+        if(addr.addr.isAny()) {
+            bindAny = true;
+
+        } else if(!addr.addr.isMCast()) {
             tcpifaces.push_back(addr.addr);
+
+        }
 
         addr.addr.setPort(effective.udp_port);
 
@@ -409,12 +416,24 @@ Server::Pvt::Pvt(const Config &conf)
         // update to allow udp_port==0
         effective.udp_port = addr.addr.port();
 
+
+        if(addr.addr.isAny()) {
+            continue; // special case handling below
+        }
+
         if(addr.addr.family()==AF_INET && addr.addr.isAny()) {
             // if listening on 0.0.0.0, also listen on [::]
             auto any6(addr);
             any6.addr = SockAddr::any(AF_INET6);
 
             listeners.push_back(manager.onSearch(any6, cb));
+
+        } else if(addr.addr.family()==AF_INET6 && addr.addr.isAny()) {
+            // if listening on [::], also listen on 0.0.0.0
+            auto any4(addr);
+            any4.addr = SockAddr::any(AF_INET);
+
+            listeners.push_back(manager.onSearch(any4, cb));
         }
 
         if(evsocket::ipstack!=evsocket::Winsock
@@ -429,6 +448,28 @@ Server::Pvt::Pvt(const Config &conf)
                 bcast.setPort(addr.addr.port());
                 listeners.push_back(manager.onSearch(bcast, cb));
             }
+        }
+    }
+
+    if(bindAny) {
+        if(evsocket::canIPv6) {
+            if(evsocket::ipstack==evsocket::Linsock) {
+                /* Linux IP stack disallows binding both 0.0.0.0 and [::] for the same port.
+                 * so we must always bind [::]
+                 */
+                tcpifaces.emplace_back(AF_INET6);
+            } else {
+                /* Other IP stacks allow binding different sockets.
+                 * OSX has the added oddity of ordering dependence.
+                 * 0.0.0.0 and then :: is allowed, but not the reverse.
+                 *
+                 * Always bind both in the OSX allowed order.
+                 */
+                tcpifaces.emplace_back(AF_INET);
+                tcpifaces.emplace_back(AF_INET6);
+            }
+        } else {
+            tcpifaces.emplace_back(AF_INET);
         }
     }
 
