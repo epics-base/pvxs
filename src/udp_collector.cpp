@@ -378,6 +378,10 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
                     (L->searchCB)(*this);
                 }
             }
+
+        } else {
+            // not logged as CRIT to avoid error spam from malformed broadcast
+            log_debug_printf(logio, "Error decoding SEARCH%s", "\n");
         }
 
         break;

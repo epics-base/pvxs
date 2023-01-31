@@ -140,6 +140,7 @@ testCase& testCase::setPassMatch(const std::string& expr, const std::string& inp
 
 namespace detail {
 
+static
 size_t findNextLine(const std::string& s, size_t pos=0u)
 {
     size_t next = s.find_first_of('\n', pos);

@@ -31,7 +31,7 @@ make -C "$TDIR" -j8 \
  runtests
 
 OUTDIR="$PWD"
-cd "$TDIR"/src/O.linux-*
+cd "$TDIR"/src/O.*
 
 gcovr -v -r .. --html --html-details -o coverage.html
 
