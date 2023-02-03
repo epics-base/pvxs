@@ -6,6 +6,11 @@ Release Notes
 1.1.3 (UNRELEASED)
 ------------------
 
+* Fix `pvxs::Value::nmembers` which erroneously returned ``0`` for ``StructA`` and ``UnionA``.
+* Fix `pvxs::Value::unmark` where ``parent=true`` caused corruption.
+* Change to "magic" automatic ``Union`` member selection during assignment.
+* Fix `pvxs::shared_array::convertTo`` converting ``Float64`` to ``Float32`` caused corruption.
+
 1.1.2 (Feb 2023)
 ----------------
 
