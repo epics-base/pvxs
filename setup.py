@@ -661,7 +661,7 @@ setup(
     #setup_requires = ['setuptools_dso'],
     # also need at runtime for DSO filename lookup
     install_requires = [
-        'setuptools_dso>=2.1a3',
+        'setuptools_dso>=2.7a1',
         epicscorelibs.version.abi_requires(),
     ],
     packages=['pvxslibs', 'pvxslibs.lib', 'pvxslibs.test'],
