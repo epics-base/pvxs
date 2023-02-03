@@ -353,6 +353,13 @@ jobs:
       - name: Check wheels
         run: python -m twine check dist/pvxslibs-*.whl
 
+      - name: Check for impure wheel
+        shell: bash
+        run: |
+          python -m wheel unpack -d junk dist/pvxslibs-*.whl
+          ls junk/*/*.dist-info/WHEEL
+          ! ls junk/*/*/purelib
+
       - name: Upload wheels
         if: github.event_name=='push' && github.ref=='refs/heads/master'
         env:
