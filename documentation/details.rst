@@ -99,9 +99,11 @@ scheme of MAJOR.MINOR.PATCH with the following amendments.
 
 .. _pgpkey:
   
-Each release will be accompanied by a signed tag in the repository,
+Each release will be accompanied by a signed tag in the git repository,
 which may be verified with the author's GPG key
-`5C159E669D69E2D4C4E74E540C8E1C8347330CFB <http://keys.gnupg.net/pks/lookup?op=get&search=0x5C159E669D69E2D4C4E74E540C8E1C8347330CFB>`_.
+`5C159E669D69E2D4C4E74E540C8E1C8347330CFB <https://keys.openpgp.org/search?q=5C159E669D69E2D4C4E74E540C8E1C8347330CFB>`_
+`(alternate) <https://keyserver.ubuntu.com/pks/lookup?search=5C159E669D69E2D4C4E74E540C8E1C8347330CFB&fingerprint=on&op=index>`_
+.
 
 .. _expertapi:
 

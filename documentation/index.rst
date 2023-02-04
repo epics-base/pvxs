@@ -19,7 +19,8 @@ Dependencies
 * A C++11 compliant compiler
 
  * GCC >= 4.8
- * Visual Studio >= 2015 / 12.0
+ * Visual Studio >= 2015 / 12.0'
+ * clang
 
 * `EPICS Base <https://epics-controls.org/resources-and-support/base/>`_ >=3.15.1
 * `libevent <http://libevent.org/>`_ >=2.0.1  (Optionally bundled)
