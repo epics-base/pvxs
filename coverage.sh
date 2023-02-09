@@ -11,12 +11,19 @@ REV="${1:-HEAD}"
 TDIR=`mktemp -d`
 trap 'rm -rf "$TDIR"' EXIT INT QUIT TERM
 
-git archive "$REV" | tar -C "$TDIR" -xv
+git archive --format tar "$REV" | tar -C "$TDIR" -xv
 
-[ -f configure/RELEASE.local ] && cp configure/RELEASE.local "$TDIR/configure/"
-[ -f configure/CONFIG_SITE.local ] && cp configure/CONFIG_SITE.local "$TDIR/configure/"
+if [ -f configure/RELEASE.local ]
+then
+    sed -e "s|\$(TOP)|${PWD}|g" configure/RELEASE.local > "$TDIR/configure"/RELEASE.local
+else
+    sed -e "s|\$(TOP)|${PWD}|g" configure/RELEASE > "$TDIR/configure"/RELEASE.local
+fi
 
-sed -i -e "s|\$(TOP)|$(pwd)|g" -e 's|-Werror||g' "$TDIR/configure"/*.local
+if [ -f configure/CONFIG_SITE.local ]
+then
+    sed -e 's|-Werror||g' configure/CONFIG_SITE.local > "$TDIR/configure"/CONFIG_SITE.local
+fi
 
 make -C "$TDIR" -j8 \
  CROSS_COMPILER_TARGET_ARCHS= \
