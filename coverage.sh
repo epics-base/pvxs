@@ -43,3 +43,7 @@ cd "$TDIR"/src/O.*
 gcovr -v -r .. --html --html-details -o coverage.html
 
 tar -cavf "$OUTDIR"/coverage.tar.bz2 coverage*.html
+
+install -d "$OUTDIR/coverage"
+rm -f "$OUTDIR/coverage"/*
+tar -C "$OUTDIR/coverage" -xaf "$OUTDIR"/coverage.tar.bz2
