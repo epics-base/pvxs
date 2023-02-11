@@ -329,6 +329,27 @@ void testAssignSimilar()
     }
 }
 
+void testUnionMagicAssign()
+{
+    testShow()<<__func__;
+
+    using namespace members;
+    auto val(TypeDef(TypeCode::Union, {
+                         UInt16("x"),
+                         Float64("y"),
+                     }).create());
+
+    val = 5;
+    testEq(val.nameOf(val["->"]), "x");
+    testEq(val.as<std::string>(), "5");
+
+    val = unselect;
+
+    testThrows<NoConvert>([&val](){
+        val = "invalid";
+    });
+}
+
 void testExtract()
 {
     testShow()<<__func__;
@@ -395,7 +416,7 @@ void testClear()
 
 MAIN(testdata)
 {
-    testPlan(143);
+    testPlan(146);
     testSetup();
     testTraverse();
     testAssign();
@@ -444,6 +465,7 @@ MAIN(testdata)
     testConvertScalar2<int32_t, uint64_t, int64_t>(0, 0x100000000llu, -0);
 
     testAssignSimilar();
+    testUnionMagicAssign();
     testExtract();
     testClear();
     cleanup_for_valgrind();

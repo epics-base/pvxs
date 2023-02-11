@@ -696,6 +696,7 @@ void Value::copyIn(const void *ptr, StoreType type)
                         continue;
                     }
                     val = std::move(temp);
+                    break;
                 }
                 if(!val)
                     throw NoConvert("Unsupported assignment to unselected union");
