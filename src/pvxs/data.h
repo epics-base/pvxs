@@ -567,7 +567,8 @@ public:
     Value ifMarked(bool parents=true, bool children=false) const;
     //! Mark this field as valid/changed
     void mark(bool v=true);
-    //! Remove mark from this field
+    //! Remove mark from this field, and optionally parent and/or child fields.
+    //! \since UNRELEASED Correctly unmark parent fields
     void unmark(bool parents=false, bool children=true);
 
     //! Type of the referenced field (or Null)

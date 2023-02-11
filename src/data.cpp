@@ -291,8 +291,8 @@ void Value::unmark(bool parents, bool children)
         auto pdesc = desc;
         auto pstore = store.get();
         while(pdesc!=top->desc.get()) {
-            pdesc -= pdesc->parent_index;
             pstore -= pdesc->parent_index;
+            pdesc -= pdesc->parent_index;
 
             pstore->valid = false;
         }

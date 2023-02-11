@@ -160,6 +160,10 @@ void testIterStruct()
     val["timeStamp"].mark(); // 4 fields (struct node and 3x leaves)
 
     testMarked(6u)<<"mark multiple sub-struct";
+
+    val["timeStamp.nanoseconds"].unmark(true);
+
+    testMarked(2u)<<"mark multiple sub-struct";
 }
 
 void testIterUnion()
@@ -391,7 +395,7 @@ void testClear()
 
 MAIN(testdata)
 {
-    testPlan(132);
+    testPlan(133);
     testSetup();
     testTraverse();
     testAssign();
