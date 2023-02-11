@@ -183,6 +183,18 @@ void testIterUnion()
         testOk1(it==end);
     }
 
+    {
+        auto it = top.ichildren().begin();
+        auto end = top.ichildren().end();
+        if(testOk1(it!=end))
+            testEq(top.nameOf(*it), "A");
+        ++it;
+        if(testOk1(it!=end))
+            testEq(top.nameOf(*it), "B");
+        ++it;
+        testOk1(it==end);
+    }
+
     testOk(top.imarked().begin()==top.imarked().end(), "imarked() empty");
 
     top["->A"] = 42;
@@ -379,7 +391,7 @@ void testClear()
 
 MAIN(testdata)
 {
-    testPlan(127);
+    testPlan(132);
     testSetup();
     testTraverse();
     testAssign();
