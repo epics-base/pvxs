@@ -969,10 +969,11 @@ size_t Value::nmembers() const
 {
     switch(desc ? desc->code.code : TypeCode::Null) {
     case TypeCode::Struct:
-    case TypeCode::StructA:
     case TypeCode::Union:
-    case TypeCode::UnionA:
         return desc->miter.size();
+    case TypeCode::StructA:
+    case TypeCode::UnionA:
+        return desc->members[0].miter.size();
     default:
         return 0u;
     }

@@ -72,7 +72,7 @@ struct FieldDesc {
     size_t parent_index=0;
 
     // For Union, UnionA, StructA
-    // For Union, the choices concatenated together (members.size() !+ #choices)
+    // For Union, the choices concatenated together (members.size() != #choices)
     // For UnionA/StructA containing a single Union/Struct
     std::vector<FieldDesc> members;
 

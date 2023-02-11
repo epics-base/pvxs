@@ -741,6 +741,7 @@ public:
 
     //! Number of child fields.
     //! only Struct, StructA, Union, UnionA return non-zero
+    //! \since UNRELEASED correctly return non-zero for StructA and UnionA
     size_t nmembers() const;
 
     struct _IAll {};

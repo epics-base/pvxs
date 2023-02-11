@@ -207,6 +207,12 @@ void testTypeDef()
         "        [0] float  parent=[0]  [0:1)\n"
     );
 
+    testEq(val["value"].nmembers(), 0u);
+    testEq(val["arbitrary"].nmembers(), 1u);
+    testEq(val["arbitrary.sarr"].nmembers(), 1u);
+    testEq(val["choice"].nmembers(), 2u);
+    testEq(val["achoice"].nmembers(), 2u);
+
     // try to access all field Kinds
 
     // sub-struct and scalar
@@ -586,7 +592,7 @@ void testFormat()
 
 MAIN(testtype)
 {
-    testPlan(63);
+    testPlan(68);
     testSetup();
     showSize();
     testCode();
