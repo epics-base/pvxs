@@ -395,7 +395,7 @@ void testClear()
 
 MAIN(testdata)
 {
-    testPlan(133);
+    testPlan(143);
     testSetup();
     testTraverse();
     testAssign();
@@ -404,6 +404,12 @@ MAIN(testdata)
     testIterStruct();
     testIterUnion();
 
+    testConvertScalar<bool, bool>(true, true);
+    testConvertScalar<bool, uint32_t>(true, 1u);
+    testConvertScalar<bool, int32_t>(true, 1);
+    //testConvertScalar<bool, double>(true, 1.0); // TODO: define double -> bool
+    testConvertScalar<bool, std::string>(true, "true");
+    testConvertScalar<bool, std::string>(false, "false");
     testConvertScalar<double, bool>(1.0, true);
     testConvertScalar<double, bool>(0.0, false);
     testConvertScalar<double, uint32_t>(5.0, 5);
