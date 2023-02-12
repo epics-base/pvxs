@@ -11,6 +11,7 @@
 
 #include <pvxs/sharedArray.h>
 #include <pvxs/data.h>
+#include "utilpvt.h"
 
 #include <pvxs/unittest.h>
 #include <epicsUnitTest.h>
@@ -364,12 +365,44 @@ void testConvertTrunc()
                                       (TO)FROM(0),
                                       (TO)FROM(1),
                                       (TO)FROM(-1),
-                                      std::numeric_limits<TO>::min(),
-                                      std::numeric_limits<TO>::max(),
+                                      (TO)std::numeric_limits<FROM>::min(),
+                                      (TO)std::numeric_limits<FROM>::max(),
                                   });
     auto conv(inp.template convertTo<const TO>());
     testShow()<<"Input "<<inp;
     testArrEq(conv, expect)<<" "<<__func__<<"("<<typeid(FROM).name()<<" -> "<<typeid(TO).name()<<")";
+}
+
+template<typename T>
+void testToFromString()
+{
+    shared_array<const T> inp({
+                                  T(0),
+                                  T(1),
+                                  T(-1),
+                                  std::numeric_limits<T>::min(),
+                                  std::numeric_limits<T>::max(),
+                              });
+    shared_array<const std::string> expect({
+                                               (SB()<<promote_print<T>::op(T(0))).str(),
+                                               (SB()<<promote_print<T>::op(T(1))).str(),
+                                               (SB()<<promote_print<T>::op(T(-1))).str(),
+                                               (SB()<<promote_print<T>::op(std::numeric_limits<T>::min())).str(),
+                                               (SB()<<promote_print<T>::op(std::numeric_limits<T>::max())).str(),
+                                           });
+
+    testShow()<<"Input "<<inp;
+    try {
+        auto conv(inp.template convertTo<const std::string>());
+        testArrEq(conv, expect)<<" "<<__func__<<"("<<typeid(T).name()<<" -> str)";
+    }catch(std::exception& e){
+        testFail("%s(%s -> str) throws %s", __func__, typeid(T).name(), e.what());
+    }
+    try{
+        testArrEq(expect.template convertTo<const T>(), inp)<<" "<<__func__<<"("<<typeid(T).name()<<" <- str)";
+    }catch(std::exception& e){
+        testFail("%s(%s <- str) throws %s", __func__, typeid(T).name(), e.what());
+    }
 }
 
 void testConvert()
@@ -439,6 +472,22 @@ void testConvert()
     testConvertTrunc<uint64_t, uint16_t>();
     testConvertTrunc<uint64_t, uint32_t>();
 
+    testToFromString<uint8_t>();
+    testToFromString<uint16_t>();
+    testToFromString<uint32_t>();
+    testToFromString<uint64_t>();
+    testToFromString<int8_t>();
+    testToFromString<int16_t>();
+    testToFromString<int32_t>();
+    testToFromString<int64_t>();
+    testTodoBegin("problems parsing +-DBL/FLT_MIN/MAX");
+    testToFromString<float>();
+    testToFromString<double>();
+    testTodoEnd();
+
+    testArrEq(shared_array<bool>({true, false}).convertTo<std::string>(),
+              shared_array<std::string>({"true", "false"}));
+
     testArrEq(shared_array<uint32_t>({1u, 2u, 0xffffffffu}).convertTo<uint32_t>(),
               shared_array<uint32_t>({1u, 2u, 0xffffffffu}));
 
@@ -465,7 +514,7 @@ void testConvert()
 
 MAIN(testshared)
 {
-    testPlan(247);
+    testPlan(268);
     testSetup();
     testEmpty<void>();
     testEmpty<const void>();
