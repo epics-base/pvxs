@@ -122,6 +122,13 @@ struct test_print<std::vector<E>, typename std::enable_if<sizeof(E)==1>::type> {
         strm<<'"'<<escape((const char*)v.data(), v.size())<<'"';
     }
 };
+template <typename E>
+struct test_print<E, typename std::enable_if<std::is_same<E, char>::value||std::is_same<E, signed char>::value||std::is_same<E, unsigned char>::value>::type> {
+    template<class C>
+    static inline void op(C& strm, char v) {
+        strm<<int(v);
+    }
+};
 
 template<typename LHS, typename RHS>
 testCase testEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS& rhs)
@@ -180,7 +187,11 @@ testCase testArrEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS
     for(size_t i=0; i<lhs.size() && i<rhs.size(); i++) {
         if(lhs[i]!=rhs[i]) {
             eq = false;
-            ret<<" ["<<i<<"] -> "<<lhs[i]<<" != "<<rhs[i]<<"\n";
+            ret<<" ["<<i<<"] -> ";
+            test_print<typename std::decay<decltype (lhs[i])>::type>::op(ret, lhs[i]);
+            ret<<" != ";
+            test_print<typename std::decay<decltype (rhs[i])>::type>::op(ret, rhs[i]);
+            ret<<"\n";
         }
     }
     ret.setPass(eq);

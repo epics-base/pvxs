@@ -187,7 +187,7 @@ void convertToStr(const void *sbase, void *dbase, size_t count)
     auto S = static_cast<const Src*>(sbase);
     auto D = static_cast<std::string*>(dbase);
     for(auto i : range(count))
-        printValue(D[i], S[i]);
+        printValue(D[i], promote_print<Src>::op(S[i]));
 }
 
 void parseValue(bool& dest, const std::string& src)

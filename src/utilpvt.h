@@ -49,6 +49,13 @@
 
 namespace pvxs {namespace impl {
 
+template<typename T>
+struct promote_print { static T op(const T& v) { return v; }};
+template<>
+struct promote_print<int8_t> { static int op(const char& v) { return v; }};
+template<>
+struct promote_print<uint8_t> { static unsigned op(const char& v) { return v; }};
+
 //! in-line string builder (eg. for exception messages)
 //! eg. @code throw std::runtime_error(SB()<<"Some message"<<42); @endcode
 struct SB {
