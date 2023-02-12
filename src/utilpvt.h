@@ -55,6 +55,7 @@ struct SB {
     std::ostringstream strm;
     SB() {}
     operator std::string() const { return strm.str(); }
+    std::string str() const { return strm.str(); }
     template<typename T>
     SB& operator<<(const T& i) { strm<<i; return *this; }
 };

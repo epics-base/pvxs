@@ -698,9 +698,9 @@ double parseTo<double>(const std::string& s) {
     try {
         ret = std::stod(s, &idx);
     }catch(std::invalid_argument& e) {
-        throw NoConvert(SB()<<"Invalid input : \""<<escape(s)<<"\"");
+        throw NoConvert(SB()<<"Invalid input : \""<<escape(s)<<"\" : "<<e.what());
     }catch(std::out_of_range& e) {
-        throw NoConvert(SB()<<"Out of range : \""<<escape(s)<<"\"");
+        throw NoConvert(SB()<<"Out of range : \""<<escape(s)<<"\" : "<<e.what());
     }
     for(; idx<L && isspace(s[idx]); idx++) {}
     if(idx<L)
