@@ -98,6 +98,24 @@ void testAssignUnion()
     testTrue(val["->"].valid());
 }
 
+void testAssignAny()
+{
+    testDiag("%s", __func__);
+
+    auto val = TypeDef(TypeCode::Any).create();
+
+    // check the simple self assignment is an error.
+    testThrows<std::logic_error>([&val](){
+        val.from(val);
+    });
+
+    val = 42;
+
+    testThrows<std::logic_error>([&val](){
+        val.from(val);
+    });
+}
+
 void testName()
 {
     testDiag("%s", __func__);
@@ -416,11 +434,12 @@ void testClear()
 
 MAIN(testdata)
 {
-    testPlan(146);
+    testPlan(148);
     testSetup();
     testTraverse();
     testAssign();
     testAssignUnion();
+    testAssignAny();
     testName();
     testIterStruct();
     testIterUnion();

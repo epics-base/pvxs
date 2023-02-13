@@ -655,7 +655,10 @@ void Value::copyIn(const void *ptr, StoreType type)
             // assigning variant union.
             auto& val = store->as<Value>();
             if(type==StoreType::Compound) {
-                val = *reinterpret_cast<const Value*>(ptr);
+                auto& newval = *reinterpret_cast<const Value*>(ptr);
+                if(store == newval.store)
+                    throw std::logic_error("Any self-assignment would recurse.  Not allowed.");
+                val = newval;
                 break;
 
             } else {
