@@ -7,7 +7,7 @@ CLI utilities acting as PVAccess protocol client and/or server.
 PVXS is functionally equivalent to the
 `pvDataCPP <https://github.com/epics-base/pvDataCPP>`_ and
 `pvAccessCPP <https://github.com/epics-base/pvAccessCPP>`_ modules,
-which it hopes to eventually surplant (Ok, the author hopes).
+which it hopes to eventually supplant (Ok, the author hopes).
 
 - VCS: https://github.com/mdavidsaver/pvxs
 - Docs: https://mdavidsaver.github.io/pvxs

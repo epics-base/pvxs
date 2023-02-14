@@ -18,7 +18,7 @@ Build Base: ::
 
     make -C epics-base
 
-Alternateives to install or build libevent >=2.0 .
+Alternatives to install or build libevent >=2.0 .
 
 On RHEL7 and later. ::
 

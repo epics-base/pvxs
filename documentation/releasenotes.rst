@@ -10,6 +10,7 @@ Release Notes
 * Fix `pvxs::Value::unmark` where ``parent=true`` caused corruption.
 * Change to "magic" automatic ``Union`` member selection during assignment.
 * Fix `pvxs::shared_array::convertTo`` converting ``Float64`` to ``Float32`` caused corruption.
+* fix TypeDef(const Value& val) for Union/UnionA/StructA
 
 1.1.2 (Feb 2023)
 ----------------

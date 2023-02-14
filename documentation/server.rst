@@ -62,7 +62,7 @@ EPICS_PVAS_AUTO_BEACON_ADDR_LIST or EPICS_PVA_AUTO_ADDR_LIST
 EPICS_PVAS_SERVER_PORT or EPIC_PVAS_SERVER_PORT
     Single integer.
     Prefered TCP port to bind.
-    If already in use then a random port will be choosen.
+    If already in use then a random port will be chosen.
     Sets `pvxs::server::Config::tcp_port`
 
 EPICS_PVAS_BROADCAST_PORT or EPICS_PVA_BROADCAST_PORT
@@ -113,7 +113,7 @@ IOC shell
 The "pvxsIoc" library adds several IOC shell functions and variables.
 
 pvxsr(int level)
-    PVXS Server Report.  Shows information about server config (level==0)
+    PVXS Server Report.  Shows information about server configuration (level==0)
     or about connected clients (level>0).  Indirectly calls `pvxs::server::Source::show`.
 
 pvxsl(int level)

@@ -121,7 +121,7 @@ arbitrary Value which is passed to the server unaltered.
 Operation and Result
 ^^^^^^^^^^^^^^^^^^^^
 
-The exec() method of the \*Builder objects returns a shared_ptr
+The exec() method of the \*Builder objects returns a ``shared_ptr``
 to an `pvxs::client::Operation` handle, which represents the
 in-progress network operation.  The caller **must** retain this
 handle until completion, or the operation will be implicitly
@@ -213,9 +213,9 @@ Ownership
 ^^^^^^^^^
 
 User provided callbacks are in the form of std::function which may,
-directly or indirectly, store shared_ptr<> instances.
+directly or indirectly, store ``shared_ptr<>`` instances.
 The returned Operation and Subscription instances should be treated as
-storing the std::function instance(s) and thus any shared_ptr<> captured in them.
+storing the std::function instance(s) and thus any ``shared_ptr<>`` captured in them.
 
 Therefore, in order to avoid a resource leak,
 it is advisable to consider whether a returned Operation or Subscription

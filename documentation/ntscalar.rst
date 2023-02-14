@@ -4,7 +4,7 @@ NTScalar and NTScalarArray
 The "epics:nt/NTScalar:1.0" and related "epics:nt/NTScalarArray:1.0"
 definitions describe a primary 'value' and supporting meta-data.
 In the case of NTScalarArray the value is a 1-d array of primative type.
-In the case of NTScalar the value is a single primative value.
+In the case of NTScalar the value is a single primitive value.
 
 Both variants include time and alarm meta-data fields,
 and optionally display and control meta-data fields.
