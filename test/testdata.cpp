@@ -70,6 +70,17 @@ void testAssign()
     testEq(val["alarm.severity"].as<epicsAlarmSeverity>(), INVALID_ALARM);
 }
 
+void testAssignArray()
+{
+    testDiag("%s", __func__);
+
+    auto val = TypeDef(TypeCode::Int32A).create();
+
+    val = shared_array<const int32_t>({1, 2, 3});
+
+    val = shared_array<const int16_t>({4, 5, 6}); // with implied conversion
+}
+
 void testAssignUnion()
 {
     testDiag("%s", __func__);
@@ -438,6 +449,7 @@ MAIN(testdata)
     testSetup();
     testTraverse();
     testAssign();
+    testAssignArray();
     testAssignUnion();
     testAssignAny();
     testName();

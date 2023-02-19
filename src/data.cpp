@@ -635,8 +635,11 @@ void Value::copyIn(const void *ptr, StoreType type)
                 // assign array of scalar w/o convert
                 dest = src;
 
+            } else if(src.original_type()!=ArrayType::Value) {
+                // assign array of scalar w/ implicit conversion
+                dest = detail::copyAs(desc->code.arrayType(), src.original_type(), src.data(), src.size()).freeze();
+
             } else {
-                // TODO: alloc and convert
                 throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
             }
             break;
