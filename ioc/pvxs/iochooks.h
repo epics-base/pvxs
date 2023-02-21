@@ -54,7 +54,7 @@ namespace ioc {
  *         return;
  *
  *     server::SharedPV mypv(...);
- *     ioc::iocServer()
+ *     ioc::server()
  *           .addPV("my:pv:name", mypv);
  * }
  * static void myregistrar() {
@@ -66,7 +66,7 @@ namespace ioc {
  * @endcode
  */
 PVXS_IOC_API
-server::Server& server();
+server::Server server();
 
 /**
  * Load JSON group definition file.
@@ -74,12 +74,21 @@ server::Server& server();
  * at the appropriate time in the startup process.
  *
  * @param jsonFilename the json file containing the group definitions
+ * @param macros NULL, or a comma separated list of macro definitions.  eg. "KEY=VAL,OTHER=SECOND"
  * @return 0 for success, 1 for failure
  * @since UNRELEASED
  */
 PVXS_IOC_API
-long dbLoadGroup(const char* jsonFilename);
+long dbLoadGroup(const char* jsonFilename, const char* macros=nullptr);
 
-}
-} // namespace pvxs::ioc
+/** Call just before testIocShutdownOk()
+ *
+ *  Shutdown QSRV.  Only needed with Base <= 7.0.4 .
+ *  Since 7.0.4, QSRV shutdown occurs during testIocShutdownOk() .
+ *  @since UNRELEASED
+ */
+PVXS_IOC_API
+void testShutdown();
+
+}} // namespace pvxs::ioc
 #endif // PVXS_IOCHOOKS_H

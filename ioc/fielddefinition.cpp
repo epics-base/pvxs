@@ -9,6 +9,8 @@
 
 #include <string>
 
+#include <string.h>
+
 #include "fielddefinition.h"
 
 namespace pvxs {
@@ -22,13 +24,9 @@ namespace ioc {
  * @param fieldName the name of the field
  */
 FieldDefinition::FieldDefinition(const FieldConfig& fieldConfig, const std::string& fieldName)
-        :putOrder(0) {
-    channel = fieldConfig.channel;
-    name = fieldName;
-    structureId = fieldConfig.structureId;
-    putOrder = fieldConfig.putOrder;
-    type = fieldConfig.type;
-}
+        :FieldConfig(fieldConfig)
+        ,name(fieldName)
+{}
 
 }
 }

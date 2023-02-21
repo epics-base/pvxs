@@ -11,13 +11,14 @@
 #define PVXS_GROUPCONFIGPROCESSOR_H
 
 #include <string>
+#include <functional>
 
 #include <yajl_parse.h>
 
 #include "dbentry.h"
+#include "group.h"
 #include "groupconfig.h"
 #include "groupdefinition.h"
-#include "iocserver.h"
 
 namespace pvxs {
 namespace ioc {
@@ -31,36 +32,20 @@ class GroupProcessorContext;
  * and converting them to Groups.
  */
 class GroupConfigProcessor {
-    GroupDefinitionMap groupDefinitionMap;
-
-    /**
-     * These are the callbacks designated by yajl for its parser functions
-     * They must be defined in this order.
-     * Note that we don't use number, or arrays
-     */
-    yajl_callbacks yajlParserCallbacks{
-        &parserCallbackNull,
-                &parserCallbackBoolean,
-                &parserCallbackInteger,
-                &parserCallbackDouble,
-                nullptr,            // number
-                &parserCallbackString,
-                &parserCallbackStartBlock,
-                &parserCallbackKey,
-                &parserCallbackEndBlock,
-                nullptr,            // start_array,
-                nullptr,            // end_array,
-    };
+    // populated by defineGroups()
+    std::map<std::string, GroupDefinition> groupDefinitionMap;
 
 public:
-    GroupConfigMap groupConfigMap;
+    std::map<std::string, GroupConfig> groupConfigMap;
 
     // Group processing warning messages if not empty
     std::string groupProcessingWarnings;
 
-    GroupConfigProcessor() = default;
+    IOCGroupConfig& config;
 
-    static void checkForTrailingCommentsAtEnd(const std::string& line);
+    GroupConfigProcessor();
+
+    void validateGroups();
     void defineGroups();
     void createGroups();
     static const char* infoField(DBEntry& dbEntry, const char* key, const char* defaultValue = nullptr);
@@ -78,7 +63,6 @@ private:
     addTemplatesForDefinedFields(std::vector<Member>& groupMembers, Group& group,
                                  const GroupDefinition& groupDefinition);
     static void addMembersForAnyType(std::vector<Member>& groupMembers, const Field& groupField);
-    static void addMembersForId(std::vector<Member>& groupMembers, const Field& groupField);
     static void addMembersForMetaData(std::vector<Member>& groupMembers, const Field& groupField);
     static void addMembersForPlainType(std::vector<Member>& groupMembers, const Field& groupField,
                                        const dbChannel* pDbChannel);
@@ -94,14 +78,6 @@ private:
                                 const std::string& groupName);
     void defineFieldSortOrder();
     static void resolveSelfTriggerReferences(GroupDefinition& groupDefinition);
-    static int parserCallbackBoolean(void* parserContext, int booleanValue);
-    static int parserCallbackDouble(void* parserContext, double doubleVal);
-    static int parserCallbackEndBlock(void* parserContext);
-    static int parserCallbackInteger(void* parserContext, long long int integerVal);
-    static int parserCallbackKey(void* parserContext, const unsigned char* key, size_t keyLength);
-    static int parserCallbackNull(void* parserContext);
-    static int parserCallbackStartBlock(void* parserContext);
-    static int parserCallbackString(void* parserContext, const unsigned char* stringVal, size_t stringLen);
     void parseConfigString(const char* jsonGroupDefinition, const char* dbRecordName = nullptr);
     static void defineTriggers(GroupDefinition& groupDefinition, const FieldConfig& fieldConfig,
                                const std::string& fieldName);

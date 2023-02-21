@@ -13,7 +13,7 @@
 #include <dbStaticLib.h>
 #include <dbAccess.h>
 
-#include "dbentry.h"
+#include <pvxs/iochooks.h>
 
 namespace pvxs {
 namespace ioc {
@@ -27,6 +27,16 @@ public:
     DBEntry() {
         dbInitEntry(pdbbase, &ent);
     }
+    explicit DBEntry(dbCommon *prec) {
+#if EPICS_VERSION_INT >= VERSION_INT(3, 16, 1, 0)
+        dbInitEntryFromRecord(prec, &ent);
+#else
+        dbInitEntry(pdbbase, &ent);
+        (void)dbFindRecord(&ent, prec->name);
+#endif
+    }
+    DBEntry(const DBEntry&) = delete;
+    DBEntry(DBEntry&&) = delete;
 
     ~DBEntry() {
         dbFinishEntry(&ent);
@@ -40,6 +50,13 @@ public:
         return &ent;
     }
 
+    const char* info(const char *key) {
+        const char *ret = nullptr;
+        if(!dbFindInfo(&ent, key)) {
+            ret = ent.pinfonode->string;
+        }
+        return ret;
+    }
 };
 
 } // ioc

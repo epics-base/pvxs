@@ -11,38 +11,26 @@
 #include <vector>
 
 #include <initHooks.h>
+#include <dbServer.h>
 #include <epicsExport.h>
 
+#define PVXS_ENABLE_EXPERT_API
+
+#include <pvxs/util.h>
 #include <pvxs/source.h>
+#include <pvxs/server.h>
+#include <pvxs/iochooks.h>
 
 #include "iocshcommand.h"
 #include "singlesource.h"
 
-// must include after log.h has been included to avoid clash with printf macro
+// include last to avoid clash of #define printf with other headers
 #include <epicsStdio.h>
 
 namespace pvxs {
 namespace ioc {
-/**
- * List single db record/field names that are registered with the pvxs IOC server
- * With no arguments this will list all the single record names.
- * With the optional showDetails arguments it will additionally display detailed information.
- *
- * @param pShowDetails if "yes", "YES", "true","TRUE", "1" then show details, otherwise don't show details
- */
-void pvxsl(const char* pShowDetails) {
-    runOnPvxsServer([&pShowDetails](IOCServer* pPvxsServer) {
-        auto showDetails = false;
-
-        if (pShowDetails) {
-            std::string showDetailsValue(pShowDetails);
-            std::transform(showDetailsValue.begin(), showDetailsValue.end(), showDetailsValue.begin(),
-                    [](unsigned char c) { return std::tolower(c); });
-            if (showDetailsValue == "yes" || showDetailsValue == "true" || showDetailsValue == "1") {
-                showDetails = true;
-            }
-        }
-
+void pvxsl(int detail) {
+    runOnPvxsServer([detail](server::Server* pPvxsServer) {
         // For each registered source/IOID pair print a line of either detailed or regular information
         for (auto& pair: pPvxsServer->listSource()) {
             auto& record = pair.first;
@@ -58,14 +46,14 @@ void pvxsl(const char* pShowDetails) {
             auto list = source->onList();
 
             if (list.names && !list.names->empty()) {
-                if (showDetails) {
+                if (detail) {
                     printf("------------------\n");
                     printf("SOURCE: %s@%d%s\n", record.c_str(), pair.second, (list.dynamic ? " [dynamic]" : ""));
                     printf("------------------\n");
                     printf("RECORDS: \n");
                 }
                 for (auto& name: *list.names) {
-                    if (showDetails) {
+                    if (detail) {
                         printf("  ");
                     }
                     printf("%s\n", name.c_str());
@@ -78,9 +66,82 @@ void pvxsl(const char* pShowDetails) {
 }
 } // namespace pvxs::ioc
 
+using namespace pvxs;
 using namespace pvxs::ioc;
 
 namespace {
+
+void qReport(unsigned level) {
+    try{
+        runOnPvxsServer([level](server::Server* pPvxsServer) {
+            std::ostringstream strm;
+            Detailed D(strm, level);
+            strm << *pPvxsServer;
+            printf("%s", strm.str().c_str());
+        });
+    }catch(...){
+        // runOnPvxsServer has already logged
+    }
+}
+
+void qStats(unsigned *channels, unsigned *clients) {
+    try{
+        auto action([channels, clients](server::Server* pPvxsServer) {
+            auto report(pPvxsServer->report(false));
+            if(clients) {
+                *clients = report.connections.size();
+            }
+            if(channels) {
+                size_t nchan = 0u;
+                for(auto& conn : report.connections) {
+                    nchan += conn.channels.size();
+                }
+                *channels = nchan;
+            }
+        });
+        runOnPvxsServer(action);
+    }catch(...){
+        // runOnPvxsServer has already logged
+    }
+}
+
+int qClient(char *pBuf, size_t bufSize) {
+    try {
+        if(auto op = CurrentOp::current()) {
+            auto& peer(op->peerName());
+            const auto& cred(op->credentials());
+
+            if(cred->method=="ca") {
+                (void)epicsSnprintf(pBuf, bufSize, "q2:%s@%s",
+                                    cred->account.c_str(),
+                                    peer.c_str());
+            } else {
+                (void)epicsSnprintf(pBuf, bufSize, "q2:%s/%s@%s",
+                                    cred->method.c_str(),
+                                    cred->account.c_str(),
+                                    peer.c_str());
+            }
+            return 0;
+        }
+    }catch(std::exception& e){
+        // shouldn't really happen, but if it does once then it will probably
+        // happen a lot.  So limit noise.
+        static bool shown = false;
+        if(!shown) {
+            shown = true;
+            errlogPrintf("Unexpected exception in %s: %s\n", __func__, e.what());
+        }
+    }
+    return -1;
+}
+
+dbServer qsrv2Server = {
+    ELLNODE_INIT,
+    "qsrv2",
+    qReport,
+    qStats,
+    qClient,
+};
 
 /**
  * Initialise qsrv database single records by adding them as sources in our running pvxs server instance
@@ -88,8 +149,13 @@ namespace {
  * @param theInitHookState the initHook state - we only want to trigger on the initHookAfterIocBuilt state - ignore all others
  */
 void qsrvSingleSourceInit(initHookState theInitHookState) {
+    if(!IOCSource::enabled())
+        return;
+    if (theInitHookState == initHookAtBeginning) {
+        (void)dbRegisterServer(&qsrv2Server);
+    } else
     if (theInitHookState == initHookAfterIocBuilt) {
-        pvxs::ioc::iocServer().addSource("qsrvSingle", std::make_shared<pvxs::ioc::SingleSource>(), 0);
+        pvxs::ioc::server().addSource("qsrvSingle", std::make_shared<pvxs::ioc::SingleSource>(), 0);
     }
 }
 
@@ -107,9 +173,8 @@ void qsrvSingleSourceInit(initHookState theInitHookState) {
  */
 void pvxsSingleSourceRegistrar() {
     // Register commands to be available in the IOC shell
-    IOCShCommand<const char*>("pvxsl", "[show_detailed_information?]", "Single Sources list.\n"
-                                                                       "List record/field names.\n"
-                                                                       "If `show_detailed_information?` flag is `yes`, `true` or `1` then show detailed information.\n")
+    IOCShCommand<int>("pvxsl", "details",
+                      "List PV names.\n")
             .implementation<&pvxsl>();
 
     initHookRegister(&qsrvSingleSourceInit);

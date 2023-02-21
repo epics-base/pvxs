@@ -10,6 +10,7 @@
 #ifndef PVXS_FIELDNAME_H
 #define PVXS_FIELDNAME_H
 
+#include <ostream>
 #include <string>
 
 #include "fieldnamecomponent.h"
@@ -40,7 +41,7 @@ public:
  *
  * @param suffix the suffix to add to the field name, defaults to none
  */
-    void show(const std::string& suffix = {}) const {
+    void show(const std::string& suffix) const {
         printf("%s%s", to_string(PADDING_WIDTH - suffix.size()).c_str(), suffix.c_str());
     }
 
@@ -99,7 +100,10 @@ public:
         return fieldNameComponents[fieldNameComponents.size() - 1].name;
     }
 
+    friend std::ostream& operator<<(std::ostream&, const FieldName&);
 };
+
+std::ostream& operator<<(std::ostream&, const FieldName&);
 
 } // pvxs
 } // ioc

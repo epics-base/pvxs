@@ -11,34 +11,50 @@
 #define PVXS_SUBSCRIPTIONCTX_H
 
 #include <memory>
+#include <stdexcept>
 
-/**
- * Add a subscription event by calling db_add_event using the given subscriptionCtx
- * and selecting the correct elements based on the given type of event being added.
- * You need to specify the correct options that correspond to the event type.
- * Adds a deleter to clean up the subscription by calling db_cancel_event.
- *
- * @param _type the type of event being added.  `Value` or `Properties`
- * @param _eventContext the name of the dbEventCtx to use to add events
- * @param _subscriptionContext - The subscriptionCtx to use
- * @param _options the options. DBE_VALUE, DBE_ALARM, or DBE_PROPERTY or some combination
- */
-#define addSubscriptionEvent(_type, _eventContext, _subscriptionContext, _options) \
-    _subscriptionContext->p ## _type ## EventSubscription                          \
-    .reset(db_add_event((_eventContext) .get(),                                    \
-        (_subscriptionContext) ->p ## _type ## Channel.get(),                      \
-        subscription ## _type ## Callback,                                         \
-        (void*) (_subscriptionContext).get(),                                      \
-        _options                                                                   \
-    ),                                                                             \
-    [](dbEventSubscription pEventSubscription) {                                   \
-        if (pEventSubscription) {                                                  \
-            db_cancel_event(pEventSubscription);                                   \
-        }                                                                          \
-    })
+#include <dbEvent.h>
+
+#include "channel.h"
+#include "dbeventcontextdeleter.h"
 
 namespace pvxs {
 namespace ioc {
+
+class Subscription {
+    std::shared_ptr<void> sub; // holds void* returned by db_add_event()
+public:
+    /* Add a subscription event by calling db_add_event using the given subscriptionCtx
+     * and selecting the correct elements based on the given type of event being added.
+     * You need to specify the correct options that correspond to the event type.
+     * Adds a deleter to clean up the subscription by calling db_cancel_event.
+     */
+    void subscribe(void* context,
+                   const Channel& pChan,
+                   EVENTFUNC *user_sub, void *user_arg, unsigned select)
+    {
+        auto chan(pChan); // bind by value
+        sub.reset(db_add_event(context, chan,
+                               user_sub, user_arg, select),
+                  [chan](void* sub) mutable
+        {
+            db_cancel_event(sub);
+            chan = Channel(); // dbChannel* must outlive subscription
+        });
+        if(!sub)
+            throw std::runtime_error("Failed to create db subscription");
+    }
+    void enable() {
+        if(sub) {
+            db_event_enable(sub.get());
+            db_post_single_event(sub.get());
+        }
+    }
+    void disable() {
+        if(sub)
+            db_event_disable(sub.get());
+    }
+};
 
 /**
  * A subscription context
@@ -46,8 +62,8 @@ namespace ioc {
 class SubscriptionCtx {
 public:
 // For locking access to subscription context
-    std::shared_ptr<void> pValueEventSubscription{};
-    std::shared_ptr<void> pPropertiesEventSubscription{};
+    Subscription pValueEventSubscription;
+    Subscription pPropertiesEventSubscription;
     bool hadValueEvent = false;
     bool hadPropertyEvent = false;
 };

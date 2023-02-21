@@ -38,7 +38,7 @@ record(calc, "$(N)Phase:Q") {
 }
 
 record(waveform, "$(N)I") {
-    field(DTYP, "QSRV Demo")
+    field(DTYP, "QSRV2 Demo")
     field( INP, "$(N)Phase:I")
     field(FTVL, "DOUBLE")
     field(NELM, "500")
@@ -46,10 +46,11 @@ record(waveform, "$(N)I") {
     info(Q:group, {
         "$(N)iq":{"I": {+channel:"VAL"}}
     })
+    info(Q:form, "Engineering")
 }
 
 record(waveform, "$(N)Q") {
-    field(DTYP, "QSRV Demo")
+    field(DTYP, "QSRV2 Demo")
     field( INP, "$(N)Phase:Q")
     field(FTVL, "DOUBLE")
     field(NELM, "500")
@@ -57,6 +58,7 @@ record(waveform, "$(N)Q") {
     info(Q:group, {
         "$(N)iq":{"Q": {+channel:"VAL", +trigger:"*"}}
     })
+    info(Q:form, "Engineering")
 }
 
 record(calcout, "$(N)dly_") {

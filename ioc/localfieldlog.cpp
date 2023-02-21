@@ -14,7 +14,7 @@ namespace ioc {
 
 LocalFieldLog::LocalFieldLog(dbChannel* pDbChannel, db_field_log* existingFieldLog)
         :pFieldLog(existingFieldLog) {
-    if (!pFieldLog && (ellCount(&pDbChannel->pre_chain) != 0 || ellCount(&pDbChannel->pre_chain) == 0)) {
+    if (pDbChannel && !pFieldLog && (ellCount(&pDbChannel->pre_chain) != 0 || ellCount(&pDbChannel->pre_chain) == 0)) {
         pFieldLog = db_create_read_log(pDbChannel);
         if (pFieldLog) {
             pFieldLog = dbChannelRunPreChain(pDbChannel, pFieldLog);

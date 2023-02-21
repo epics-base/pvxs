@@ -10,9 +10,15 @@
 #ifndef PVXS_GROUP_H
 #define PVXS_GROUP_H
 
+#include <fstream>
 #include <map>
+#include <memory>
+#include <list>
+#include <stdexcept>
 
 #include <pvxs/data.h>
+
+#include <macLib.h>
 
 #include "dbmanylocker.h"
 #include "field.h"
@@ -30,34 +36,47 @@ public:
 class Group {
 private:
 public:
-    std::string name;
-    Fields fields;
-    bool atomicPutGet, atomicMonitor;
+    const std::string name;
+    const bool atomicPutGet;
+    std::vector<Field> fields;
     Value valueTemplate;
     ChannelLocks value;
     ChannelLocks properties;
 
-/**
- * Constructor for IOC group.
- * Set the atomic and monitor atomic flags
- */
-    Group()
-            :atomicPutGet(false), atomicMonitor(false) {
-    }
-
-/**
- * Destructor for IOC group
- */
-    virtual ~Group() = default;
-
-    virtual void show(int level) const;
+    void show(int level) const;
     Field& operator[](const std::string& fieldName);
 
+    Group(const std::string& name, bool atomicPutGet)
+        :name(name)
+        ,atomicPutGet(atomicPutGet)
+    {}
     Group(const Group&) = delete;
 };
 
-// A map of group name to Group
-typedef std::map<std::string, Group> GroupMap;
+struct IOCGroupConfig {
+    static
+    IOCGroupConfig& instance();
+
+    std::map<std::string, Group> groupMap;
+    struct JFile {
+        struct DeleteMac {
+            void operator()(MAC_HANDLE *handle) { (void)macDeleteHandle(handle); }
+        };
+
+        std::unique_ptr<std::ifstream> jf;
+        std::string fname;
+        std::string macros;
+        std::unique_ptr<MAC_HANDLE, DeleteMac> handle;
+        JFile(decltype(jf)&& jf, const std::string& fname, const std::string& macros,
+              decltype(handle)&& handle)
+            :jf(std::move(jf)), fname(fname), macros(macros), handle(std::move(handle))
+        {}
+    };
+    std::list<JFile> groupConfigFiles;
+
+    // For locking access to groupMap
+    epicsMutex groupMapMutex{};
+};
 
 } // pvxs
 } // ioc

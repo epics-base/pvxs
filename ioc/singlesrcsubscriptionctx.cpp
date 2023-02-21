@@ -8,6 +8,7 @@
  */
 
 #include "singlesrcsubscriptionctx.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace ioc {
@@ -17,15 +18,9 @@ namespace ioc {
  *
  * @param dbChannelSharedPtr pointer to the db channel to use to construct the single source subscription context
  */
-SingleSourceSubscriptionCtx::SingleSourceSubscriptionCtx(const std::shared_ptr<dbChannel>& dbChannelSharedPtr) {
-    pValueChannel = dbChannelSharedPtr;
-    pPropertiesChannel.reset(dbChannelCreate(dbChannelName(dbChannelSharedPtr)), [](dbChannel* ch) {
-        if (ch) dbChannelDelete(ch);
-    });
-    if (pPropertiesChannel && dbChannelOpen(pPropertiesChannel.get())) {
-        throw std::bad_alloc();
-    }
-
-}
+SingleSourceSubscriptionCtx::SingleSourceSubscriptionCtx(const std::shared_ptr<SingleInfo> &sInfo)
+    :pPropertiesChannel(dbChannelName(sInfo->chan))
+    ,info(sInfo)
+{}
 } // iocs
 } // pvxs

@@ -1,0 +1,9 @@
+record(ai, "$(P)dummy") {
+    info(Q:group, {
+        "$(P)const": {
+            "s.i": { +type:"const", +const:14 },
+            "s.d": { +type:"const", +const:1.5 },
+            "s.s": { +type:"const", +const:"hello" }
+        }
+    })
+}

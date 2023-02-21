@@ -11,29 +11,37 @@
 #include <utility>
 
 #include "field.h"
+#include "typeutils.h"
 
 namespace pvxs {
 namespace ioc {
 
-/**
- * Construct a Field from a field name and channel name
- *
- * @param stringFieldName the field name
- * @param stringChannelName the channel name
- */
-Field::Field(const std::string& stringFieldName, const std::string& stringChannelName, std::string id)
-        :id(std::move(id)), fieldName(stringFieldName), isMeta(false), allowProc(false), isArray(false),
-         value(stringChannelName),
-         properties(stringChannelName) {
-
+Field::Field(const FieldDefinition &def)
+    :id(def.structureId)
+    ,fieldName(def.name)
+    ,info(def.info)
+{
+    if(!def.channel.empty()) {
+        value = Channel(def.channel);
+        properties = Channel(def.channel);
+        info.updateNsecMask(dbChannelRecord(value));
+    }
     if (!fieldName.fieldNameComponents.empty()) {
         name = fieldName.fieldNameComponents[0].name;
-        fullName = std::string(fieldName.to_string());
+        fullName = fieldName.to_string();
 
         if (fieldName.fieldNameComponents[fieldName.fieldNameComponents.size() - 1].isArray()) {
             isArray = true;
         }
 
+    }
+    if(info.type == MappingInfo::Any) {
+        // pre-compute the type which will be stored in the Any field
+        auto type = fromDbrType(dbChannelFinalFieldType(value));
+        if (dbChannelFinalElements(value) != 1) {
+            type = type.arrayOf();
+        }
+        anyType = TypeDef(type).create();
     }
 }
 

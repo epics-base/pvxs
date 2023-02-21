@@ -20,24 +20,11 @@
 #include "dblocker.h"
 #include "channel.h"
 #include "dbmanylocker.h"
+#include "fielddefinition.h"
 #include "fieldname.h"
 
 namespace pvxs {
 namespace ioc {
-
-class Field;
-typedef std::vector<Field*> Triggers;
-
-class ChannelAndLock {
-public:
-    Channel channel;
-    std::vector<dbCommon*> references;
-    DBManyLock lock;
-
-    explicit ChannelAndLock(const std::string& stringChannelName)
-            :channel(stringChannelName) {
-    }
-};
 
 class Field {
 private:
@@ -46,17 +33,23 @@ public:
     std::string name;
     FieldName fieldName;
     std::string fullName;
-    bool isMeta, allowProc;
-    bool isArray;
-    ChannelAndLock value;
-    ChannelAndLock properties;
-    Triggers triggers;          // reference to the fields that are triggered by this field during subscriptions
+    MappingInfo info;
+    bool isArray = false;
+    Channel value;
+    Channel properties;
+    DBManyLock lock;
+    // reference to the fields that are triggered by this field during subscriptions
+    // points to storage in containing Group::fields
+    std::vector<Field*> triggers;
 
-    Field(const std::string& stringFieldName, const std::string& stringChannelName, std::string id);
+    // only for Meta mapping.  type infered from dbChannelFinalFieldType()
+    Value anyType;
+
+    Field(const FieldDefinition& def);
+    Field(const Field&) = delete;
+    Field(Field&&) = default;
     Value findIn(Value valueTarget) const;
 };
-
-typedef std::vector<Field> Fields;
 
 } // pvxs
 } // ioc

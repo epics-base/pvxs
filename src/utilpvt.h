@@ -244,6 +244,10 @@ timeval totv(double t)
     return ret;
 }
 
+namespace ioc {
+void IOCGroupConfigCleanup();
+}
+
 //! Scoped restore of std::ostream state (format flags, fill char, and field width)
 struct Restore {
     std::ostream& strm;

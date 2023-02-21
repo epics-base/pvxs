@@ -28,10 +28,17 @@
 #include "utilpvt.h"
 #include "yajlcallbackhandler.h"
 
+// include last to avoid clash of #define printf with other headers
+#include <epicsStdio.h>
+
 namespace pvxs {
 namespace ioc {
 
 DEFINE_LOGGER(_logname, "pvxs.ioc.group.processor");
+
+GroupConfigProcessor::GroupConfigProcessor()
+    :config(IOCGroupConfig::instance())
+{}
 
 /**
  * Parse group configuration that has been defined in db configuration files.
@@ -68,41 +75,92 @@ void GroupConfigProcessor::loadConfigFromDb() {
  * Get the list of group files configured on the iocServer and convert them to Group Configuration objects.
  */
 void GroupConfigProcessor::loadConfigFiles() {
-    runOnPvxsServer([this](IOCServer* pPvxsServer) {
-        // get list of group files to load
-        auto& groupConfigFiles = pPvxsServer->groupConfigFiles;
+    // take the list of group files to load
+    auto groupConfigFiles(std::move(config.groupConfigFiles));
 
-        // For each file load the configuration file
-        auto it = groupConfigFiles.begin();
-        while (it != groupConfigFiles.end()) {
-            std::string groupConfigFileName(*it);
-            groupConfigFiles.erase(it++);
+    // For each file load the configuration file
+    for(auto& jfile : groupConfigFiles) {
+        auto& groupConfigFileName = jfile.fname;
 
-            // Get contents of group definition file
-            std::ifstream jsonGroupConfigStream(groupConfigFileName, std::ifstream::in);
-            if (!jsonGroupConfigStream.is_open()) {
-                fprintf(stderr, "Error opening \"%s\"\n", groupConfigFileName.c_str());
-                continue;
-            }
-
-            std::stringstream buffer;
-            buffer << jsonGroupConfigStream.rdbuf();
-            auto jsonGroupConfig = buffer.str();
-
-            log_debug_printf(_logname, "Process dbGroup file \"%s\"\n", groupConfigFileName.c_str());
-
-            try {
-                parseConfigString(jsonGroupConfig.c_str());
-                if (!groupProcessingWarnings.empty()) {
-                    fprintf(stderr, "warning(s) from group definition file \"%s\"\n%s\n",
-                            groupConfigFileName.c_str(), groupProcessingWarnings.c_str());
+        std::ostringstream buffer;
+        std::string line;
+        size_t lineno = 0u;
+        while(std::getline(*jfile.jf, line)) {
+            lineno++;
+            if(jfile.handle) {
+                if(auto exp = macDefExpand(line.c_str(), jfile.handle.get())) {
+                    try{
+                        line = exp;
+                    }catch(...){
+                        free(exp);
+                        throw;
+                    }
+                    free(exp);
+                } else {
+                    fprintf(stderr, "Error reading \"%s\" line %zu too long\n",
+                            groupConfigFileName.c_str(), lineno);
+                    continue;
                 }
-            } catch (std::exception& e) {
-                throw std::runtime_error(
-                            SB() << "Error reading group definition file \"" << groupConfigFileName << "\"\n" << e.what());
             }
+            buffer<<line<<'\n';
         }
-    });
+
+        if(!jfile.jf->eof() || jfile.jf->bad()) {
+            fprintf(stderr, "Error reading \"%s\"\n", groupConfigFileName.c_str());
+            continue;
+        }
+
+        log_debug_printf(_logname, "Process dbGroup file \"%s\"\n", groupConfigFileName.c_str());
+
+        try {
+            parseConfigString(buffer.str().c_str());
+            if (!groupProcessingWarnings.empty()) {
+                fprintf(stderr, "warning(s) from group definition file \"%s\"\n%s\n",
+                        groupConfigFileName.c_str(), groupProcessingWarnings.c_str());
+            }
+        } catch (std::exception& e) {
+            throw std::runtime_error(
+                        SB() << "Error reading group definition file \"" << groupConfigFileName << "\"\n" << e.what());
+        }
+    }
+}
+
+void GroupConfigProcessor::validateGroups() {
+    assert(groupDefinitionMap.empty()); // not yet populated
+    auto groups(std::move(groupConfigMap));
+
+    for(auto& git : groups) {
+        try {
+            auto& group = git.second;
+
+            for(auto& fit : group.fieldConfigMap) {
+                auto& field = fit.second;
+                switch(field.info.type) {
+                case MappingInfo::Scalar:
+                case MappingInfo::Plain:
+                case MappingInfo::Any:
+                case MappingInfo::Meta:
+                case MappingInfo::Proc:
+                    if(field.channel.empty()) {
+                        throw std::runtime_error(SB()<<"field "<<fit.first<<" missing required +channel");
+                    }
+                    break;
+                case MappingInfo::Structure:
+                case MappingInfo::Const:
+                    if(!field.channel.empty()) {
+                        fprintf(stderr, "Warning: %s.%s ignores +channel:\"%s\"\n",
+                                git.first.c_str(), fit.first.c_str(), field.channel.c_str());
+                        field.channel.clear();
+                    }
+                    break;
+                }
+            }
+
+            groupConfigMap.emplace(git.first, std::move(git.second));
+        }catch(std::exception& e){
+            fprintf(stderr, "Error: ignoring invalid group %s : %s\n", git.first.c_str(), e.what());
+        }
+    }
 }
 
 /**
@@ -163,6 +221,12 @@ void GroupConfigProcessor::defineFields(GroupDefinition& groupDefinition, const 
         if (groupDefinition.fieldMap.count(fieldName)) {
             fprintf(stderr, "%s.%s Warning: ignoring duplicate mapping %s\n",
                     groupName.c_str(), fieldName.c_str(), fieldConfig.channel.c_str());
+            continue;
+        }
+
+        if(fieldName.empty() && fieldConfig.info.type!=MappingInfo::Meta) {
+            fprintf(stderr, "%s.%s Error: only +type:\"meta\" map be mapped at struct top\n",
+                    groupName.c_str(), fieldName.c_str());
             continue;
         }
 
@@ -235,10 +299,10 @@ void GroupConfigProcessor::defineTriggers(GroupDefinition& groupDefinition, cons
         groupDefinition.hasTriggers = true;
 
         while (std::getline(splitter, trigger, ',')) {
-            triggers.insert(trigger);
+            triggers.insert(std::move(trigger));
         }
     }
-    groupDefinition.fieldTriggerMap[fieldName] = triggers;
+    groupDefinition.fieldTriggerMap.emplace(fieldName, std::move(triggers));
 }
 
 /**
@@ -291,14 +355,15 @@ GroupConfigProcessor::resolveGroupTriggerReferences(GroupDefinition& groupDefini
         const std::string& fieldName = triggerMapEntry.first;
         const auto& targets = triggerMapEntry.second;
 
-        if (groupDefinition.fieldMap.count(fieldName) == 0) {
+        auto it(groupDefinition.fieldMap.find(fieldName));
+        if (it == groupDefinition.fieldMap.end()) {
             fprintf(stderr, "Error: Group \"%s\" defines triggers from nonexistent field \"%s\" \n",
                     groupName.c_str(), fieldName.c_str());
             continue;
         }
 
-        auto& index = groupDefinition.fieldMap[fieldName];
-        auto& fieldDefinition = groupDefinition.fields[index];
+        auto index = it->second;
+        auto& fieldDefinition = groupDefinition.fields.at(index);
 
         log_debug_printf(_logname, "  pvxs trigger '%s.%s'  -> ", groupName.c_str(), fieldName.c_str());
 
@@ -329,13 +394,14 @@ void GroupConfigProcessor::defineGroupTriggers(FieldDefinition& fieldDefinition,
             }
         } else {
             // otherwise map to the specific target if it exists
-            if (groupDefinition.fieldMap.count(triggerName) == 0) {
+            auto it(groupDefinition.fieldMap.find(triggerName));
+            if (it == groupDefinition.fieldMap.end()) {
                 fprintf(stderr, "Error: Group \"%s\" defines triggers to nonexistent field \"%s\" \n",
                         groupName.c_str(), triggerName.c_str());
                 continue;
             }
-            auto& index = ((FieldDefinitionMap&)groupDefinition.fieldMap)[triggerName];
-            auto& targetedField = groupDefinition.fields[index];
+            auto index = it->second;
+            auto& targetedField = groupDefinition.fields.at(index);
             assert(targetedField.name == triggerName);
 
             // And if it references a PV
@@ -358,50 +424,49 @@ void GroupConfigProcessor::defineGroupTriggers(FieldDefinition& fieldDefinition,
  * 3. Build the lockers for each group and field based on their triggers
  */
 void GroupConfigProcessor::createGroups() {
-    runOnPvxsServer([this](IOCServer* pPvxsServer) {
-        auto& groupMap = pPvxsServer->groupMap;
+    auto& groupMap = config.groupMap;
 
 
-        // First pass: Create groups and get array capacities
-        for (auto& groupDefinitionMapEntry: groupDefinitionMap) {
-            auto& groupName = groupDefinitionMapEntry.first;
-            auto& groupDefinition = groupDefinitionMapEntry.second;
-            try {
-                if (groupMap.count(groupName) != 0) {
-                    throw std::runtime_error("Group name already in use");
-                }
-                // Create group
-                auto& group = groupMap[groupName];
-
-                // Set basic group information
-                group.name = groupName;
-                group.atomicPutGet = groupDefinition.atomic != False;
-                group.atomicMonitor = groupDefinition.hasTriggers;
-
-                // Initialise the given group's fields from the given group definition
-                initialiseGroupFields(group, groupDefinition);
-            } catch (std::exception& e) {
-                fprintf(stderr, "%s: Error Group not created: %s\n", groupName.c_str(), e.what());
+    // First pass: Create groups and get array capacities
+    for (auto& groupDefinitionMapEntry: groupDefinitionMap) {
+        auto& groupName = groupDefinitionMapEntry.first;
+        auto& groupDefinition = groupDefinitionMapEntry.second;
+        try {
+            // Create group
+            auto pair = groupMap.emplace(std::piecewise_construct,
+                                         std::forward_as_tuple(groupName),
+                                         std::forward_as_tuple(groupName,
+                                                               groupDefinition.atomic != False));
+            if (!pair.second) {
+                throw std::runtime_error("Group name already in use");
             }
-        }
+            auto& group = pair.first->second;
 
-        // Second Pass: assemble group's PV structure definitions and db locker
-        for (auto& groupDefinitionMapEntry: groupDefinitionMap) {
-            auto& groupName = groupDefinitionMapEntry.first;
-            auto& groupDefinition = groupDefinitionMapEntry.second;
-            try {
-                auto& group = groupMap[groupName];
-                // Initialise the given group's db locks
-                initialiseDbLocker(group);
-                // Initialize the given group's triggers and associated db locks
-                initialiseTriggers(group, groupDefinition);
-                // Initialise the given group's value type
-                initialiseValueTemplate(group, groupDefinition);
-            } catch (std::exception& e) {
-                fprintf(stderr, "%s: Error Group not created: %s\n", groupName.c_str(), e.what());
-            }
+            // Initialise the given group's fields from the given group definition
+            initialiseGroupFields(group, groupDefinition);
+        } catch (std::exception& e) {
+            fprintf(stderr, "%s: Error Group not created: %s\n", groupName.c_str(), e.what());
         }
-    });
+    }
+
+    // Second Pass: assemble group's PV structure definitions and db locker
+    for (auto& groupDefinitionMapEntry: groupDefinitionMap) {
+        auto& groupName = groupDefinitionMapEntry.first;
+        auto& groupDefinition = groupDefinitionMapEntry.second;
+        try {
+            auto it(groupMap.find(groupName));
+            assert(it!=groupMap.end());
+            auto& group =it->second;
+            // Initialise the given group's db locks
+            initialiseDbLocker(group);
+            // Initialize the given group's triggers and associated db locks
+            initialiseTriggers(group, groupDefinition);
+            // Initialise the given group's value type
+            initialiseValueTemplate(group, groupDefinition);
+        } catch (std::exception& e) {
+            fprintf(stderr, "%s: Error Group not created: %s\n", groupName.c_str(), e.what());
+        }
+    }
 }
 
 /**
@@ -423,7 +488,7 @@ void GroupConfigProcessor::initialiseGroupFields(Group& group, const GroupDefini
 
     // for each field
     for (auto& fieldDefinition: groupDefinition.fields) {
-        group.fields.emplace_back(fieldDefinition.name, fieldDefinition.channel, fieldDefinition.structureId);
+        group.fields.emplace_back(fieldDefinition);
     }
 }
 
@@ -473,11 +538,13 @@ void GroupConfigProcessor::initialiseValueTemplate(Group& group, const GroupDefi
  * @param groupDefinition the group definition
  */
 void GroupConfigProcessor::initialiseTriggers(Group& group, const GroupDefinition& groupDefinition) {
+    std::vector<dbCommon*> references;
     // For all fields in the group
     for (auto& fieldDefinition: groupDefinition.fields) {
         // As long as it has a channel specified
         if (!fieldDefinition.channel.empty()) {
             auto& field = group[fieldDefinition.name];
+            references.clear();
             // Look at the fields that it triggers
             for (auto& referencedFieldName: fieldDefinition.triggerNames) {
                 auto referencedFieldIt = groupDefinition.fieldMap.find(referencedFieldName);
@@ -487,18 +554,14 @@ void GroupConfigProcessor::initialiseTriggers(Group& group, const GroupDefinitio
                     // Add new trigger reference
                     field.triggers.emplace_back(&referencedField);
                     // Add new lock record
-                    if (referencedField.value.channel) {
-                        field.value.references.emplace_back(referencedField.value.channel->addr.precord);
-                    }
-                    if (referencedField.properties.channel) {
-                        field.properties.references.emplace_back(referencedField.properties.channel->addr.precord);
+                    if (referencedField.value) {
+                        references.emplace_back(referencedField.value->addr.precord);
                     }
                 }
             }
 
             // Make the locks
-            field.value.lock = DBManyLock(field.value.references);
-            field.properties.lock = DBManyLock(field.properties.references);
+            field.lock = DBManyLock(references);
         }
     }
 }
@@ -514,31 +577,220 @@ void GroupConfigProcessor::addTemplatesForDefinedFields(std::vector<Member>& gro
                                                         const GroupDefinition& groupDefinition) {
     for (auto& fieldDefinition: groupDefinition.fields) {
         auto& field = group[fieldDefinition.name];
-        if (fieldDefinition.channel.empty()) {
-            addMembersForId(groupMembers, field);
-        } else {
-            auto& type = fieldDefinition.type;
-
-            dbChannel* pDbChannel = field.value.channel;
-            if (type == "meta") {
-                field.isMeta = true;
-                addMembersForMetaData(groupMembers, field);
-            } else if (type == "proc") {
-                field.allowProc = true;
-            } else if (type.empty() || type == "scalar") {
-                addMembersForScalarType(groupMembers, field, pDbChannel);
-            } else if (type == "plain") {
-                addMembersForPlainType(groupMembers, field, pDbChannel);
-            } else if (type == "any") {
-                addMembersForAnyType(groupMembers, field);
-            } else if (type == "structure") {
-                addMembersForStructureType(groupMembers, field);
+        dbChannel* pDbChannel = field.value;
+        switch(fieldDefinition.info.type) {
+        case MappingInfo::Scalar:
+            addMembersForScalarType(groupMembers, field, pDbChannel);
+            break;
+        case MappingInfo::Plain:
+            addMembersForPlainType(groupMembers, field, pDbChannel);
+            break;
+        case MappingInfo::Any:
+            addMembersForAnyType(groupMembers, field);
+            break;
+        case MappingInfo::Meta:
+            addMembersForMetaData(groupMembers, field);
+            break;
+        case MappingInfo::Proc: // nothing to do here
+            break;
+        case MappingInfo::Structure:
+            addMembersForStructureType(groupMembers, field);
+            break;
+        case MappingInfo::Const:
+        {
+            TypeDef def(field.info.cval);
+            if(field.fieldName.empty()) { // placing in root
+                throw std::logic_error("TODO: \"\":{+type:\"const\" ...} not currently supported");
             } else {
-                throw std::runtime_error(std::string("Unknown +type=") + type);
+                std::vector<Member> newMem({def.as(field.fieldName.leafFieldName())});
+                setFieldTypeDefinition(groupMembers, field.fieldName, newMem);
             }
+        }
+            break;
         }
     }
 }
+
+/**
+ * To process key part of json nodes.  This will be followed by a boolean, integer, block, or null
+ *
+ * @param parserContext the parser context
+ * @param key the key
+ * @param keyLength the length of the key
+ * @return non-zero if successful
+ */
+static
+int parserCallbackKey(void* parserContext, const unsigned char* key, const size_t keyLength) {
+    return GroupConfigProcessor::yajlProcess(parserContext, [&key, &keyLength](GroupProcessorContext* self) {
+        if (keyLength == 0 && self->depth != 2) {
+            throw std::runtime_error("empty group or key name not allowed");
+        }
+
+        std::string name((const char*)key, keyLength);
+
+        if (self->depth == 1) {
+            self->groupName.swap(name);
+        } else if (self->depth == 2) {
+            self->field.swap(name);
+        } else if (self->depth == 3) {
+            self->key.swap(name);
+        } else {
+            throw std::logic_error("Malformed json group definition: too many nesting levels");
+        }
+
+        return 1;
+    });
+}
+
+/**
+ * To process null json nodes
+ *
+ * @param parserContext the parser context
+ * @return non-zero if successful
+ */
+static
+int parserCallbackNull(void* parserContext) {
+    return GroupConfigProcessor::yajlProcess(parserContext, [](GroupProcessorContext* self) {
+        self->assign(Value());
+        return 1;
+    });
+}
+
+/**
+ * To process boolean json nodes
+ *
+ * @param parserContext the parser context
+ * @param booleanValue the boolean value
+ * @return non-zero if successful
+ */
+static
+int parserCallbackBoolean(void* parserContext, int booleanValue) {
+    return GroupConfigProcessor::yajlProcess(parserContext, [&booleanValue](GroupProcessorContext* self) {
+        auto value = pvxs::TypeDef(TypeCode::Bool).create();
+        value = booleanValue;
+        self->assign(value);
+        return 1;
+    });
+}
+
+/**
+ * To process integer json nodes
+ *
+ * @param parserContext the parser context
+ * @param integerVal the integer value
+ * @return non-zero if successful
+ */
+static
+int parserCallbackInteger(void* parserContext, long long integerVal) {
+    return GroupConfigProcessor::yajlProcess(parserContext, [&integerVal](GroupProcessorContext* self) {
+        auto value = pvxs::TypeDef(TypeCode::Int64).create();
+        value = (int64_t)integerVal;
+        self->assign(value);
+        return 1;
+    });
+}
+
+/**
+ * To process double json nodes
+ *
+ * @param parserContext the parser context
+ * @param doubleVal the double value
+ * @return non-zero if successful
+ */
+static
+int parserCallbackDouble(void* parserContext, double doubleVal) {
+    return GroupConfigProcessor::yajlProcess(parserContext, [&doubleVal](GroupProcessorContext* self) {
+        auto value = pvxs::TypeDef(TypeCode::Float64).create();
+        value = doubleVal;
+        self->assign(value);
+        return 1;
+    });
+}
+
+/**
+ * To process string json nodes
+ *
+ * @param parserContext the parser context
+ * @param stringVal the string value
+ * @param stringLen the string length
+ * @return non-zero if successful
+ */
+static
+int parserCallbackString(void* parserContext, const unsigned char* stringVal,
+                                               const size_t stringLen) {
+    return GroupConfigProcessor::yajlProcess(parserContext, [&stringVal, &stringLen](GroupProcessorContext* self) {
+        std::string val((const char*)stringVal, stringLen);
+        auto value = pvxs::TypeDef(TypeCode::String).create();
+        value = val;
+        self->assign(value);
+        return 1;
+    });
+}
+
+/**
+ * To start processing new json blocks
+ *
+ * @param parserContext the parser context
+ * @return non-zero if successful
+ */
+static
+int parserCallbackStartBlock(void* parserContext) {
+    return GroupConfigProcessor::yajlProcess(parserContext, [](GroupProcessorContext* self) {
+        self->depth++;
+        if (self->depth > 3) {
+            throw std::runtime_error("Group field def. can't contain Object (too deep)");
+        }
+        return 1;
+    });
+}
+
+/**
+ * To end processing the current json block
+ *
+ * @param parserContext the parser context
+ * @return non-zero if successful
+ */
+static
+int parserCallbackEndBlock(void* parserContext) {
+    return GroupConfigProcessor::yajlProcess(parserContext, [](GroupProcessorContext* self) {
+        assert(self->key.empty()); // cleared in assign()
+
+        if (self->depth == 3) {
+            self->key.clear();
+        } else if (self->depth == 2) {
+            self->field.clear();
+        } else if (self->depth == 1) {
+            self->groupName.clear();
+        } else {
+            throw std::logic_error("Internal error in json parser: invalid depth");
+        }
+        self->depth--;
+
+        return 1;
+    });
+}
+
+
+
+/**
+ * These are the callbacks designated by yajl for its parser functions
+ * They must be defined in this order.
+ * Note that we don't use number, or arrays
+ */
+static const
+yajl_callbacks yajlParserCallbacks{
+    &parserCallbackNull,
+    &parserCallbackBoolean,
+    &parserCallbackInteger,
+    &parserCallbackDouble,
+    nullptr,            // number
+    &parserCallbackString,
+    &parserCallbackStartBlock,
+    &parserCallbackKey,
+    &parserCallbackEndBlock,
+    nullptr,            // start_array,
+    nullptr,            // end_array,
+};
 
 /**
  * Parse the given json string as a group configuration part for the given dbRecord
@@ -586,157 +838,6 @@ void GroupConfigProcessor::parseConfigString(const char* jsonGroupDefinition, co
 }
 
 /**
- * To process key part of json nodes.  This will be followed by a boolean, integer, block, or null
- *
- * @param parserContext the parser context
- * @param key the key
- * @param keyLength the length of the key
- * @return non-zero if successful
- */
-int GroupConfigProcessor::parserCallbackKey(void* parserContext, const unsigned char* key, const size_t keyLength) {
-    return GroupConfigProcessor::yajlProcess(parserContext, [&key, &keyLength](GroupProcessorContext* self) {
-        if (keyLength == 0 && self->depth != 2) {
-            throw std::runtime_error("empty group or key name not allowed");
-        }
-
-        std::string name((const char*)key, keyLength);
-
-        if (self->depth == 1) {
-            self->groupName.swap(name);
-        } else if (self->depth == 2) {
-            self->field.swap(name);
-        } else if (self->depth == 3) {
-            self->key.swap(name);
-        } else {
-            throw std::logic_error("Malformed json group definition: too many nesting levels");
-        }
-
-        return 1;
-    });
-}
-
-/**
- * To process null json nodes
- *
- * @param parserContext the parser context
- * @return non-zero if successful
- */
-int GroupConfigProcessor::parserCallbackNull(void* parserContext) {
-    return GroupConfigProcessor::yajlProcess(parserContext, [](GroupProcessorContext* self) {
-        self->assign(Value());
-        return 1;
-    });
-}
-
-/**
- * To process boolean json nodes
- *
- * @param parserContext the parser context
- * @param booleanValue the boolean value
- * @return non-zero if successful
- */
-int GroupConfigProcessor::parserCallbackBoolean(void* parserContext, int booleanValue) {
-    return GroupConfigProcessor::yajlProcess(parserContext, [&booleanValue](GroupProcessorContext* self) {
-        auto value = pvxs::TypeDef(TypeCode::Bool).create();
-        value = booleanValue;
-        self->assign(value);
-        return 1;
-    });
-}
-
-/**
- * To process integer json nodes
- *
- * @param parserContext the parser context
- * @param integerVal the integer value
- * @return non-zero if successful
- */
-int GroupConfigProcessor::parserCallbackInteger(void* parserContext, long long integerVal) {
-    return GroupConfigProcessor::yajlProcess(parserContext, [&integerVal](GroupProcessorContext* self) {
-        auto value = pvxs::TypeDef(TypeCode::Int64).create();
-        value = (int64_t)integerVal;
-        self->assign(value);
-        return 1;
-    });
-}
-
-/**
- * To process double json nodes
- *
- * @param parserContext the parser context
- * @param doubleVal the double value
- * @return non-zero if successful
- */
-int GroupConfigProcessor::parserCallbackDouble(void* parserContext, double doubleVal) {
-    return GroupConfigProcessor::yajlProcess(parserContext, [&doubleVal](GroupProcessorContext* self) {
-        auto value = pvxs::TypeDef(TypeCode::Float64).create();
-        value = doubleVal;
-        self->assign(value);
-        return 1;
-    });
-}
-
-/**
- * To process string json nodes
- *
- * @param parserContext the parser context
- * @param stringVal the string value
- * @param stringLen the string length
- * @return non-zero if successful
- */
-int GroupConfigProcessor::parserCallbackString(void* parserContext, const unsigned char* stringVal,
-                                               const size_t stringLen) {
-    return GroupConfigProcessor::yajlProcess(parserContext, [&stringVal, &stringLen](GroupProcessorContext* self) {
-        std::string val((const char*)stringVal, stringLen);
-        auto value = pvxs::TypeDef(TypeCode::String).create();
-        value = val;
-        self->assign(value);
-        return 1;
-    });
-}
-
-/**
- * To start processing new json blocks
- *
- * @param parserContext the parser context
- * @return non-zero if successful
- */
-int GroupConfigProcessor::parserCallbackStartBlock(void* parserContext) {
-    return GroupConfigProcessor::yajlProcess(parserContext, [](GroupProcessorContext* self) {
-        self->depth++;
-        if (self->depth > 3) {
-            throw std::runtime_error("Group field def. can't contain Object (too deep)");
-        }
-        return 1;
-    });
-}
-
-/**
- * To end processing the current json block
- *
- * @param parserContext the parser context
- * @return non-zero if successful
- */
-int GroupConfigProcessor::parserCallbackEndBlock(void* parserContext) {
-    return GroupConfigProcessor::yajlProcess(parserContext, [](GroupProcessorContext* self) {
-        assert(self->key.empty()); // cleared in assign()
-
-        if (self->depth == 3) {
-            self->key.clear();
-        } else if (self->depth == 2) {
-            self->field.clear();
-        } else if (self->depth == 1) {
-            self->groupName.clear();
-        } else {
-            throw std::logic_error("Internal error in json parser: invalid depth");
-        }
-        self->depth--;
-
-        return 1;
-    });
-}
-
-/**
  * Get the info field string from the given dbEntry for the given key.
  * If the key is not found then return the given default value.
  *
@@ -753,20 +854,6 @@ const char* GroupConfigProcessor::infoField(DBEntry& dbEntry, const char* key, c
 
     // Otherwise return the info string
     return dbGetInfoString(dbEntry);
-}
-
-/**
- * Checks to see if there are trailing comments at the end of the line.
- * Throws an exception if there are
- *
- * @param line the line to check
- */
-void GroupConfigProcessor::checkForTrailingCommentsAtEnd(const std::string& line) {
-    size_t idx = line.find_first_not_of(" \t\n\r");
-    if (idx != std::string::npos) {
-        // trailing comments not allowed
-        throw std::runtime_error("Trailing comments are not allowed");
-    }
 }
 
 /**
@@ -840,27 +927,10 @@ void GroupConfigProcessor::addMembersForStructureType(std::vector<Member>& group
     using namespace pvxs::members;
 
     std::vector<Member> newIdMembers(
-                { groupField.isArray ? StructA("", groupField.id, {}) : Struct("", groupField.id, {}) });
+                { groupField.isArray ? StructA(groupField.name, groupField.id, {}) : Struct(groupField.name, groupField.id, {}) });
 
     // Add ID to the group members at the position determined by group field name
     setFieldTypeDefinition(groupMembers, groupField.fieldName, newIdMembers);
-}
-
-/**
- * Add metadata fields to the prescribed subfield (or top level) by adding the appropriate members to the
- * given members list.
- *
- * @param groupMembers the given group members to update
- * @param groupField the group field used to determine the members to add and how to create them
- */
-void GroupConfigProcessor::addMembersForId(std::vector<Member>& groupMembers, const Field& groupField) {
-    using namespace pvxs::members;
-    std::vector<Member> newMetaMembers({
-                                           Struct(groupField.name, groupField.id, {}),
-                                       });
-
-    // Add metadata to the group members at the position determined by group field name
-    setFieldTypeDefinition(groupMembers, groupField.fieldName, newMetaMembers);
 }
 
 /**
@@ -903,7 +973,7 @@ TypeDef GroupConfigProcessor::getTypeDefForChannel(const dbChannel* pDbChannel) 
         bool display = true;
         bool control = true;
         bool valueAlarm = (dbfType != DBF_STRING);
-        leaf = nt::NTScalar{ leafCode, display, control, valueAlarm }.build();
+        leaf = nt::NTScalar{ leafCode, display, control, valueAlarm, true }.build();
     }
     return leaf;
 }
@@ -932,6 +1002,8 @@ TypeDef GroupConfigProcessor::getTypeDefForChannel(const dbChannel* pDbChannel) 
  * @param groupMembers the group members to add new members to
  * @param fieldName The field name to use to determine how to create the members
  * @param leafMembers the leaf member or members to place at the leaf of the members tree
+ * @param isLeaf If true, leafMembers are added to the parent of the leaf.
+ *               If false, leafMembers are added as members of a Struct which is the leaf
  */
 void GroupConfigProcessor::setFieldTypeDefinition(std::vector<Member>& groupMembers, const FieldName& fieldName,
                                                   const std::vector<Member>& leafMembers, bool isLeaf) {
@@ -948,6 +1020,7 @@ void GroupConfigProcessor::setFieldTypeDefinition(std::vector<Member>& groupMemb
             childrenToAdd = leafMembers;
         }
 
+        // iterate name in reverse order.  rightmost -> leftmost, leaf -> root
         for (auto componentNumber = fieldName.size(); componentNumber > 0; componentNumber--) {
             const auto& component = fieldName[componentNumber - 1];
 
@@ -1020,7 +1093,12 @@ bool GroupConfigProcessor::yajlParseHelper(std::istream& jsonGroupDefinitionStre
             size_t consumed = yajl_get_bytes_consumed(handle);
 
             if (consumed < line.size()) {
-                checkForTrailingCommentsAtEnd(line.substr(consumed));
+                size_t idx = line.find_first_not_of(" \t\n\r", consumed);
+                if (idx != std::string::npos) {
+                    // TODO: detect the end of potentially multi-line comments...
+                    // for now trailing comments not allowed
+                    throw std::runtime_error("Trailing content after } are not allowed");
+                }
             }
 
 #ifndef EPICS_YAJL_VERSION
@@ -1089,8 +1167,8 @@ bool GroupConfigProcessor::yajlParseHelper(std::istream& jsonGroupDefinitionStre
  */
 void GroupConfigProcessor::initialiseDbLocker(Group& group) {
     for (auto& field: group.fields) {
-        dbChannel* pValueChannel = field.value.channel;
-        dbChannel* pPropertiesChannel = field.properties.channel;
+        dbChannel* pValueChannel = field.value;
+        dbChannel* pPropertiesChannel = field.properties;
         if (pValueChannel) {
             group.value.channels.emplace_back(pValueChannel->addr.precord);
         }

@@ -13,8 +13,32 @@
 #include <string>
 #include <map>
 
+#include <dbChannel.h>
+
+#include <pvxs/data.h>
+
 namespace pvxs {
 namespace ioc {
+
+struct MappingInfo {
+    enum type_t {
+        Scalar, // implied default
+        Plain,
+        Any,
+        Meta,
+        Proc,
+        Structure,
+        Const,
+    } type = Scalar;
+    static
+    const char *name(type_t t);
+
+    uint32_t nsecMask = 0u;
+
+    Value cval;
+
+    void updateNsecMask(dbCommon *prec);
+};
 
 /**
  * Class to read the group field configuration into during initialization.
@@ -22,11 +46,10 @@ namespace ioc {
  */
 class FieldConfig {
 public:
-    std::string type, channel, trigger, structureId;
-    int64_t putOrder;
+    std::string channel, trigger, structureId;
+    MappingInfo info;
+    int64_t putOrder = 0;
 };
-
-typedef std::map<std::string, FieldConfig> FieldConfigMap;
 
 } // pvxs
 } // ioc

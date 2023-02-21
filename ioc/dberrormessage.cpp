@@ -8,6 +8,7 @@
  */
 
 #include <errlog.h>
+#include <errMdef.h>
 #include <errSymTbl.h>
 
 #include "dberrormessage.h"

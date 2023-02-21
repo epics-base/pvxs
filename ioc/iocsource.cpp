@@ -9,10 +9,14 @@
 
 #include <string>
 #include <algorithm>
+#include <atomic>
 
 #include <special.h>
 #include <epicsTime.h>
+#include <epicsStdlib.h>
+#include <epicsString.h>
 
+#include "alarm.h"
 #include "iocsource.h"
 #include "dbentry.h"
 #include "dberrormessage.h"
@@ -20,258 +24,369 @@
 #include "credentials.h"
 #include "securityclient.h"
 #include "securitylogger.h"
+#include "utilpvt.h"
+
+// include last to avoid clash of #define printf with other headers
+#include <epicsStdio.h>
 
 namespace pvxs {
 namespace ioc {
 
-/**
- * IOC function that will get data from the database.  This will use the provided value prototype to determine the shape
- * of the data to be returned (if it has a `value` subfield, it is a structure).  The provided channel
- * is used to retrieve the data and the flags forValues and forProperties are used to determine whether to fetch
- * values, properties or both from the database.
- *
- * When the data has been retrieved the provided returnFn is called with the value, otherwise the an
- * exception is thrown
- *
- * @param pDbValueChannel the channel to get the value from
- * @param pDbPropertiesChannel the channel to get the properties from
- * @param valuePrototype the value prototype to use to determine the shape of the data
- * @param getOperationType for values, for properties or for metadata
- * @param pDbFieldLog the field log of changes if this comes from a subscription
- */
-void IOCSource::get(dbChannel* pDbValueChannel, dbChannel* pDbPropertiesChannel, Value& valuePrototype,
-        const GetOperationType getOperationType,
-        db_field_log* pDbFieldLog) {
-    // Assumes this is the leaf node in a group, or is a simple db record.field reference
-    Value value = valuePrototype; // The value that will be returned, if compound then metadata is set here
-    Value valueTarget = valuePrototype; // The part of value that will be retrieved from the database value field
-    bool isCompound = false;
-    if (getOperationType <= FOR_VALUE && value.type() == TypeCode::Any) {
-        auto type = fromDbrType(dbChannelFinalFieldType(pDbValueChannel));
-        if (dbChannelFinalElements(pDbValueChannel) != 1) {
-            type = type.arrayOf();
+
+bool IOCSource::enabled()
+{
+    /* -1 - disabled
+     *  0 - lazy init, check environment
+     *  1 - enabled
+     */
+    static std::atomic<int> ena{};
+
+    auto e = ena.load();
+    if(e==0) {
+        e = inUnitTest() ? 1 : -1; // default to disabled normally (not unittest)
+
+        auto env_dis = getenv("EPICS_IOC_IGNORE_SERVERS");
+        auto env_ena = getenv("PVXS_QSRV_ENABLE");
+
+        if(env_dis && strstr(env_dis, "qsrv2")) {
+            e = -1;
+
+        } else if(env_ena && epicsStrCaseCmp(env_ena, "YES")==0) {
+            e = 1;
+
+        } else if(env_ena && epicsStrCaseCmp(env_ena, "NO")==0) {
+            e = -1;
+
+        } else if(env_ena) {
+            // will be seen during initialization, print synchronously
+            fprintf(stderr, "ERROR: PVXS_QSRV_ENABLE=%s not YES/NO.  Defaulting to %s.\n",
+                    env_ena,
+                    e==1 ? "YES" : "NO");
         }
-        value = valueTarget = TypeDef(type).create();
-        valuePrototype.from(value);
-    } else if (auto targetCandidate = value["value"]) {
-        isCompound = true;
-        valueTarget = targetCandidate;
+        printf("INFO: PVXS QSRV2 is loaded and %s\n",
+               e==1 ? "ENABLED." : "disabled.\n"
+               "      To enable set: epicsEnvSet(\"PVXS_QSRV_ENABLE\",\"YES\")\n"
+               "      and ensure that $EPICS_IOC_IGNORE_SERVERS does not contain \"qsrv2\".");
+        ena = e;
     }
-
-    // options bit mask LSB to MSB
-    uint32_t options = 0;
-    if (isCompound && getOperationType <= FOR_METADATA) {
-        options = IOC_VALUE_OPTIONS;
-    }
-    if (isCompound && (getOperationType == FOR_VALUE_AND_PROPERTIES ||
-            getOperationType == FOR_PROPERTIES)) {
-        options |= IOC_PROPERTIES_OPTIONS;
-    }
-
-    if (dbChannelFinalElements(pDbValueChannel) == 1) {
-        getScalar(pDbValueChannel, pDbPropertiesChannel, value, valueTarget, options, getOperationType, pDbFieldLog);
-    } else {
-        getArray(pDbValueChannel, pDbPropertiesChannel, value, valueTarget, options, getOperationType, pDbFieldLog);
-    }
+    return e==1;
 }
 
-/**
- * Get a scalar value from the database
- * @param pDbValueChannel the database channel to get the value from
- * @param pDbPropertiesChannel the database channel to get the properties from
- * @param value the value to set including metadata if this is a compound value
- * @param valueTarget where to store the "value" part of the scalar within value
- * @param requestedOptions the options defining what metadata to get
- * @param getOperationType for values, for properties or for metadata
- * @param pDbFieldLog the field log of changes if this comes from a subscription
- */
-void IOCSource::getScalar(dbChannel* pDbValueChannel, dbChannel* pDbPropertiesChannel, Value& value, Value& valueTarget,
-        uint32_t& requestedOptions, const GetOperationType getOperationType, db_field_log* pDbFieldLog) {
-    ValueBuffer valueBuffer{}; // Enough for metadata and 1 scalar
-    void* pValueBuffer = &valueBuffer;
-    long nElements = (getOperationType <= FOR_VALUE) ? 1 : 0;
-    long actualOptions = requestedOptions;
+void IOCSource::initialize(Value& value, const MappingInfo &info, dbChannel *chan)
+{
+    if(info.type==MappingInfo::Scalar) {
+        if(auto fld = value["display.form.choices"]) {
+            shared_array<const std::string> choices({
+                                                        "Default",
+                                                        "String",
+                                                        "Binary",
+                                                        "Decimal",
+                                                        "Hex",
+                                                        "Exponential",
+                                                        "Engineering",
+                                                    });
+            fld = choices;
 
-    // Get metadata/properties and field value
-    // Note that metadata will precede the value in the buffer and will be laid out in the options order
-    DBErrorMessage dbErrorMessage;
-    if (getOperationType <= FOR_METADATA) {
-        dbErrorMessage =
-                dbChannelGet(pDbValueChannel, dbChannelFinalFieldType(pDbValueChannel), pValueBuffer, &actualOptions,
-                        &nElements,
-                        pDbFieldLog);
-    } else {
-        dbErrorMessage =
-                dbChannelGet(pDbPropertiesChannel, dbChannelFinalFieldType(pDbPropertiesChannel), pValueBuffer,
-                        &actualOptions,
-                        &nElements,
-                        pDbFieldLog);
-    }
+            if(dbIsValueField(dbChannelFldDes(chan))) { // only apply Q:form to VAL
+                DBEntry ent(dbChannelRecord(chan));
 
-    if (dbErrorMessage) {
-        throw std::runtime_error(dbErrorMessage.c_str());
-    }
-
-    // Get metadata/properties from buffer if any have been requested
-    getMetadata(value, pValueBuffer, requestedOptions, actualOptions);
-
-    // Get the value if it has been requested
-    if (getOperationType <= FOR_VALUE) {
-        if (dbChannelFinalFieldType(pDbValueChannel) == DBR_ENUM && valueTarget.type() == TypeCode::Struct) {
-            valueTarget["index"] = *(uint16_t*)(pValueBuffer);
-        } else {
-            getValueFromBuffer(valueTarget, pValueBuffer);
-        }
-    }
-}
-
-/**
- * Get an array value from the database
- *
- * @param pDbValueChannel the database channel to get the value from
- * @param pDbPropertiesChannel the database channel to get the properties from
- * @param value the value to set including metadata if this is a compound value
- * @param valueTarget where to store the "value" part of the array within value
- * @param requestedOptions the options defining what metadata to get
- * @param getOperationType for values, for properties or for metadata
- * @param pDbFieldLog the field log of changes if this comes from a subscription
- */
-void IOCSource::getArray(dbChannel* pDbValueChannel, dbChannel* pDbPropertiesChannel, Value& value, Value& valueTarget,
-        uint32_t& requestedOptions, const GetOperationType getOperationType, db_field_log* pDbFieldLog) {
-    // value buffer to store the field we will get from the database including metadata.
-    std::vector<char> valueBuffer;
-    auto nElements = (getOperationType <= FOR_VALUE) ? (long)dbChannelFinalElements(pDbValueChannel)
-                                                     : 0; // maximal number of elements
-    // Initialize the buffer to the maximal size including metadata and zero it out
-    valueBuffer.resize(nElements * pDbValueChannel->addr.field_size + MAX_METADATA_SIZE, '\0');
-    void* pValueBuffer = &valueBuffer[0];
-    long actualOptions = requestedOptions;
-
-    // Get the metadata/properties and value into this buffer
-    // Note that metadata will precede the array value in the buffer and will be laid out in the options order
-    DBErrorMessage dbErrorMessage;
-    if (getOperationType <= FOR_METADATA) {
-        dbErrorMessage =
-                dbChannelGet(pDbValueChannel, dbChannelFinalFieldType(pDbValueChannel), pValueBuffer, &actualOptions,
-                        &nElements,
-                        pDbFieldLog);
-    } else {
-        dbErrorMessage =
-                dbChannelGet(pDbPropertiesChannel, pDbPropertiesChannel->final_type, pValueBuffer, &actualOptions,
-                        &nElements,
-                        pDbFieldLog);
-    }
-
-    if (dbErrorMessage) {
-        throw std::runtime_error(dbErrorMessage.c_str());
-    }
-
-    // Get metadata/properties from buffer if any have been requested
-    getMetadata(value, pValueBuffer, requestedOptions, actualOptions);
-
-    // Get the value array if it has been requested
-    if (getOperationType <= FOR_VALUE) {
-        // Get the array value from the updated buffer pointer
-        // Note: nElements will have been updated with the number of actual elements in the array
-        if (dbChannelFinalFieldType(pDbValueChannel) == DBR_ENUM && valueTarget.type() == TypeCode::Struct) {
-            shared_array<uint16_t> values(nElements);
-            for (auto i = 0; i < nElements; i++) {
-                values[i] = ((uint16_t*)pValueBuffer)[i];
+                if(auto tag = ent.info("Q:form")) {
+                    for(auto i : range(choices.size())) {
+                        if(choices[i] == tag) {
+                            value["display.form.index"] = i;
+                            break;
+                        }
+                    }
+                }
             }
-            valueTarget["index"] = values.freeze();
+        }
+    }
+}
+
+static
+void getScalarValue(dbChannel* pChannel,
+                    db_field_log *pfl,
+                    Value& value)
+{
+    long nReq = 1;
+    union {
+        double _align;
+        char _size[MAX_STRING_SIZE];
+        char str[MAX_STRING_SIZE];
+    } buf;
+
+    DBErrorMessage dbErrorMessage(dbChannelGet(pChannel, dbChannelFinalFieldType(pChannel),
+                                               &buf, nullptr, &nReq, pfl));
+    if (dbErrorMessage) {
+        throw std::runtime_error(SB()<<dbChannelName(pChannel)<<" "<<__func__<<" ERROR : "<<dbErrorMessage.c_str());
+    } else if(nReq==0) {
+        // this was an actual max length 1 array, which has zero elements now.
+        memset(&buf, 0, sizeof(buf));
+    }
+
+    switch(value.type().code) {
+    case TypeCode::String:
+        buf.str[sizeof(buf.str)-1] = '\0';
+        value = buf.str;
+        break;
+#define CASE(ENUM, TYPE) \
+    case TypeCode::ENUM: value.from(*(const TYPE*)&buf); break
+        CASE(Int8, int8_t);
+        CASE(Int16, int16_t);
+        CASE(Int32, int32_t);
+        CASE(Int64, int64_t);
+        CASE(UInt8, uint8_t);
+        CASE(UInt16, uint16_t);
+        CASE(UInt32, uint32_t);
+        CASE(UInt64, uint64_t);
+        CASE(Float32, float);
+        CASE(Float64, double);
+#undef CASE
+    case TypeCode::Struct:
+        if(auto index = value["index"]) {
+            if(dbChannelFinalFieldType(pChannel)==DBR_ENUM) {
+                index.from(*(epicsEnum16*)&buf);
+                break;
+            }
+        }
+    default:
+        throw std::logic_error(SB()<<__func__<<" unsupported "<<value.type());
+    }
+}
+
+static
+void getArrayValue(dbChannel* pChannel,
+                         db_field_log *pfl,
+                         Value& value)
+{
+    auto final_type(dbChannelFinalFieldType(pChannel));
+    auto buf(std::make_shared<std::vector<char>>(dbChannelFinalElements(pChannel) * dbChannelFinalFieldSize(pChannel)));
+    long nReq = dbChannelFinalElements(pChannel);
+
+    DBErrorMessage dbErrorMessage(dbChannelGet(pChannel, final_type,
+                                               buf->data(), nullptr, &nReq, pfl));
+    if (dbErrorMessage) {
+        throw std::runtime_error(SB()<<dbChannelName(pChannel)<<" "<<__func__<<" ERROR : "<<dbErrorMessage.c_str());
+    }
+
+    if(final_type == DBR_CHAR && value.type()==TypeCode::String && buf->size() >= 1u) {
+        // long string
+        (*buf)[buf->size()-1u] = '\0'; // paranoia?
+        value = std::string(buf->data());
+
+    } else if(final_type == DBR_STRING) {
+        shared_array<std::string> arr(nReq);
+
+        for(long n = 0; n < nReq; n++) {
+            auto sval = &(*buf)[n*MAX_STRING_SIZE];
+            auto nlen = strnlen(sval, MAX_STRING_SIZE);
+            arr[n] = std::string(sval, nlen);
+        }
+
+        value.from(arr.freeze());
+    } else {
+        std::shared_ptr<char> cbuf(buf, buf->data());
+        buf.reset(); // TODO: c++14 adds aliasing ctor by move()
+        shared_array<void> arr(cbuf, nReq, value.type().arrayType());
+        cbuf.reset();
+
+        value.from(arr.freeze());
+    }
+}
+
+// update timeStamp.* and maybe alarm.*
+static
+void getTimeAlarm(dbChannel* pChannel,
+                  db_field_log *pfl,
+                  Value& node,
+                  const MappingInfo& info,
+                  UpdateType::type change)
+{
+    long nReq = 0;
+    long options = DBR_STATUS | DBR_AMSG | DBR_TIME | DBR_UTAG;
+    struct ValueTimeAlarm {
+        DBRstatus
+        DBRamsg
+        DBRtime
+        DBRutag
+    } meta;
+
+    DBErrorMessage dbErrorMessage(dbChannelGet(pChannel, dbChannelFinalFieldType(pChannel),
+                                               &meta, &options, &nReq, pfl));
+    if (dbErrorMessage) {
+        throw std::runtime_error(SB()<<dbChannelName(pChannel)<<" "<<__func__<<" ERROR : "<<dbErrorMessage.c_str());
+    }
+    // options may be updated.
+    // as of base 7.0.6 time/alarm meta-data is always available
+
+    if(change & UpdateType::Alarm) {
+        const char* stsmsg = nullptr;
+        if(options & DBR_STATUS) {
+            // PVA status != DB status
+            uint32_t status;
+            switch(meta.status) {
+            case NO_ALARM:
+                status = 0;
+                break;
+            case READ_ALARM:
+            case WRITE_ALARM:
+            case HIHI_ALARM:
+            case HIGH_ALARM:
+            case LOLO_ALARM:
+            case LOW_ALARM:
+            case STATE_ALARM:
+            case COS_ALARM:
+            case HW_LIMIT_ALARM:
+                status = 1; // DEVICE
+                break;
+            case COMM_ALARM:
+            case TIMEOUT_ALARM:
+            case UDF_ALARM:
+                status = 2; // DRIVER
+                break;
+            case CALC_ALARM:
+            case SCAN_ALARM:
+            case LINK_ALARM:
+            case SOFT_ALARM:
+            case BAD_SUB_ALARM:
+                status = 3; // RECORD
+                break;
+            case DISABLE_ALARM:
+            case SIMM_ALARM:
+            case READ_ACCESS_ALARM:
+            case WRITE_ACCESS_ALARM:
+                status = 4; // DB
+                break;
+            default:
+                status = 6; // UNDEFINED
+            }
+
+            if(meta.status < ALARM_NSTATUS)
+                stsmsg = epicsAlarmConditionStrings[meta.status];
+            node["alarm.status"] = status;
+            node["alarm.severity"] = meta.severity;
+        }
+#if DBR_AMSG
+        if((options & DBR_AMSG) && meta.amsg[0]) {
+            node["alarm.message"] = meta.amsg;
+        } else
+#endif
+        {
+            node["alarm.message"] = meta.status && stsmsg ? stsmsg : "";
+        }
+    } // DBE_ALARM
+    if(options & DBR_TIME) {
+        node["timeStamp.secondsPastEpoch"] = meta.time.secPastEpoch + POSIX_TIME_AT_EPICS_EPOCH;
+        node["timeStamp.nanoseconds"] = meta.time.nsec & ~info.nsecMask;
+    }
+#if DBR_UTAG
+    if(options & DBR_UTAG) {
+        auto utag = meta.utag;
+        if(info.nsecMask)
+            utag = meta.time.nsec & info.nsecMask;
+        node["timeStamp.userTag"] = utag;
+    }
+#endif
+}
+
+static
+void getProperties(dbChannel* pChannel, db_field_log *pfl, Value& node)
+{
+    struct PropertyMeta {
+        DBRunits
+        DBRprecision
+        DBRenumStrs
+        DBRgrDouble
+        DBRctrlDouble
+        DBRalDouble
+    } meta;
+    long options = DBR_UNITS | DBR_PRECISION | DBR_ENUM_STRS | DBR_GR_DOUBLE | DBR_CTRL_DOUBLE | DBR_AL_DOUBLE;
+    auto dbr_type = dbChannelFinalFieldType(pChannel);
+    long nReq = 0; // only meta.  (so DBF type ignored)
+
+    DBErrorMessage dbErrorMessage(dbChannelGet(pChannel, dbr_type,
+                                               &meta, &options, &nReq, pfl));
+    if (dbErrorMessage) {
+        throw std::runtime_error(SB()<<dbChannelName(pChannel)<<" "<<__func__<<" ERROR : "<<dbErrorMessage.c_str());
+    }
+    // options has been updated to reflect meta-data actually updated.
+    if(options & DBR_UNITS) {
+        if(auto units = node["display.units"])
+            units = meta.units;
+    }
+    if(options & DBR_PRECISION) {
+        // TODO: add in nt.cpp?
+    }
+    if(options & DBR_ENUM_STRS) {
+        if(auto choices = node["value.choices"]) {
+            shared_array<std::string> arr(meta.no_str);
+            for (epicsUInt32 i = 0; i < meta.no_str; i++) {
+                arr[i] = meta.strs[i];
+            }
+            choices.from(arr.freeze());
+        }
+    }
+    if(auto dlL = node["display.limitLow"]) { // if numeric
+        if(options & DBR_GR_DOUBLE) {
+            dlL = meta.lower_disp_limit;
+            node["display.limitHigh"] = meta.upper_disp_limit;
+        }
+        if(options & DBR_CTRL_DOUBLE) {
+            node["control.limitLow"] = meta.lower_ctrl_limit;
+            node["control.limitHigh"] = meta.upper_ctrl_limit;
+        }
+        if(options & DBR_AL_DOUBLE) {
+            node["valueAlarm.lowAlarmLimit"] = meta.lower_alarm_limit;
+            node["valueAlarm.lowWarningLimit"] = meta.lower_warning_limit;
+            node["valueAlarm.highWarningLimit"] = meta.upper_warning_limit;
+            node["valueAlarm.highAlarmLimit"] = meta.upper_alarm_limit;
+        }
+    }
+    if(true) { // cheating at the moment.  DESC is not marked DBE_PROPERTY
+        if(auto desc = node["display.description"])
+            desc = dbChannelRecord(pChannel)->desc;
+    }
+}
+
+void IOCSource::get(Value& node, // node within top level structure addressed by Field::fieldName
+                    const MappingInfo &info,
+                    const Value& anyType,
+                    UpdateType::type change,
+                    dbChannel *pChannel, // which type of event
+                    db_field_log* pDbFieldLog)
+{
+    if(info.type==MappingInfo::Proc || info.type==MappingInfo::Structure)
+        return;
+
+    if(info.type==MappingInfo::Const) {
+        node.assign(info.cval);
+        return;
+    }
+
+    if((change & UpdateType::Property) && info.type==MappingInfo::Scalar) {
+        getProperties(pChannel, pDbFieldLog, node);
+    }
+
+    if((info.type==MappingInfo::Scalar || info.type==MappingInfo::Meta) && (change & (UpdateType::Value | UpdateType::Alarm))) {
+        getTimeAlarm(pChannel, pDbFieldLog, node, info, change);
+    }
+
+    if((change & UpdateType::Value) && info.type!=MappingInfo::Meta) {
+        Value value;
+        if(info.type==MappingInfo::Scalar) {
+            value = node["value"];
+        } else if(info.type==MappingInfo::Any) {
+            value = anyType.cloneEmpty();
+            node.from(value);
         } else {
-            getValueFromBuffer(valueTarget, pValueBuffer, nElements);
+            value = node;
         }
-    }
-}
 
-/**
- * Put a given value to the specified channel.  Throw an exception if there are any errors.
- *
- * @param pDbChannel the channel to put the value into
- * @param value the value to put
- */
-void IOCSource::put(dbChannel* pDbChannel, const Value& value) {
-    Value valueSource = value;
-    // TODO may need to handle Array of and Union as special cases as well
-    if (value.type() == TypeCode::Any) {
-        valueSource = valueSource["->"];
-    } else if (auto sourceCandidate = value["value"]) {
-        valueSource = sourceCandidate;
-    }
-
-    if (dbChannelFinalElements(pDbChannel) == 1) {
-        putScalar(pDbChannel, valueSource);
-    } else {
-        putArray(pDbChannel, valueSource);
-    }
-}
-
-/**
- * Put a given scalar value to the specified channel.  Throw an exception if there are any errors.
- *
- * @param pDbChannel the channel to put the value into
- * @param value the scalar value to put
- */
-void IOCSource::putScalar(dbChannel* pDbChannel, const Value& value) {
-    ScalarValueBuffer valueBuffer{};
-    auto pValueBuffer = (char*)&valueBuffer;
-
-    if (dbChannelFinalFieldType(pDbChannel) == DBR_ENUM) {
-        *(uint16_t*)(pValueBuffer) = (value)["index"].as<uint16_t>();
-    } else {
-        setValueInBuffer(value, pValueBuffer, pDbChannel);
-    }
-
-    long status;
-    if (dbChannelFieldType(pDbChannel) >= DBF_INLINK && dbChannelFieldType(pDbChannel) <= DBF_FWDLINK) {
-        status = dbChannelPutField(pDbChannel, dbChannelFinalFieldType(pDbChannel), pValueBuffer, 1);
-    } else {
-        status = dbChannelPut(pDbChannel, dbChannelFinalFieldType(pDbChannel), pValueBuffer, 1);
-    }
-    DBErrorMessage dbErrorMessage(status);
-    if (dbErrorMessage) {
-        throw std::runtime_error(dbErrorMessage.c_str());
-    }
-}
-
-/**
- * Put a given array value to the specified channel.  Throw an exception if there are any errors.
- *
- * @param pDbChannel the channel to put the value into
- * @param value the array value to put
- */
-void IOCSource::putArray(dbChannel* pDbChannel, const Value& value) {
-    auto valueArray = value.as<shared_array<const void>>();
-
-    void* pValueBuffer;
-    long nElements = (long)valueArray.size();
-    std::vector<char> stringValueBuffer;
-
-    if (dbChannelFinalFieldType(pDbChannel) == DBR_STRING) {
-        stringValueBuffer.resize(MAX_STRING_SIZE * valueArray.size(), '\0');
-        char* pCurrent = stringValueBuffer.data();
-        auto stringArray = valueArray.castTo<const std::string>();
-        for (auto& element: stringArray) {
-            element.copy(pCurrent, MAX_STRING_SIZE - 1);
-            pCurrent += MAX_STRING_SIZE;
+        if(dbChannelFinalElements(pChannel)==1) {
+            getScalarValue(pChannel, pDbFieldLog, value);
+        } else {
+            getArrayValue(pChannel, pDbFieldLog, value);
         }
-        pValueBuffer = stringValueBuffer.data();
-    } else {
-        // Set the buffer to the internal value buffer as it's the same for the db records for non-string fields
-        pValueBuffer = (void*)valueArray.data();
-        setValueInBuffer(value, (char*)pValueBuffer, nElements);
-    }
-
-    long status;
-    if (dbChannelFieldType(pDbChannel) >= DBF_INLINK && dbChannelFieldType(pDbChannel) <= DBF_FWDLINK) {
-        status = dbChannelPutField(pDbChannel, dbChannelFinalFieldType(pDbChannel), pValueBuffer, nElements);
-    } else {
-        status = dbChannelPut(pDbChannel, dbChannelFinalFieldType(pDbChannel), pValueBuffer, nElements);
-    }
-    DBErrorMessage dbErrorMessage(status);
-    if (dbErrorMessage) {
-        throw std::runtime_error(dbErrorMessage.c_str());
     }
 }
 
@@ -335,10 +450,12 @@ void IOCSource::doPostProcessing(dbChannel* pDbChannel, TriState forceProcessing
                     dbChannelFinalFieldSize(pDbChannel) < DBR_PUT_ACKT &&
                     forceProcessing == Unset)) {
         if (pDbChannel->addr.precord->pact) {
+#if EPICS_VERSION_INT >= VERSION_INT(3, 16, 2, 0)
             if (dbAccessDebugPUTF && pDbChannel->addr.precord->tpro) {
                 printf("%s: single source onPut to Active '%s', setting RPRO=1\n",
                         epicsThreadGetNameSelf(), pDbChannel->addr.precord->name);
             }
+#endif
             pDbChannel->addr.precord->rpro = TRUE;
         } else {
             pDbChannel->addr.precord->putf = TRUE;
@@ -368,133 +485,163 @@ void IOCSource::setForceProcessingFlag(const Value& pvRequest,
             });
 }
 
-/**
- * Set a return value from the given database value buffer
- *
- * @param valueTarget the value to set
- * @param pValueBuffer pointer to the database value buffer
- */
-void IOCSource::getValueFromBuffer(Value& valueTarget, const void* pValueBuffer) {
-    auto valueType(valueTarget.type());
-
-    if (valueType == TypeCode::String) {
-        valueTarget = ((const char*)pValueBuffer);
+static
+void doDbPut(dbChannel* pDbChannel, short dbr, const void *pValueBuffer, size_t nElements)
+{
+    long status;
+    if (dbChannelFieldType(pDbChannel) >= DBF_INLINK && dbChannelFieldType(pDbChannel) <= DBF_FWDLINK) {
+        status = dbChannelPutField(pDbChannel, dbr, pValueBuffer, nElements);
     } else {
-        SwitchTypeCodeForTemplatedCall(valueType, getValueFromBuffer, (valueTarget, pValueBuffer));
+        status = dbChannelPut(pDbChannel, dbr, pValueBuffer, nElements);
+    }
+    DBErrorMessage dbErrorMessage(status);
+    if (dbErrorMessage) {
+        throw std::runtime_error(dbErrorMessage.c_str());
     }
 }
 
+static
+void putScalar(dbChannel* pDbChannel, const Value& value)
+{
+    union {
+        epicsUInt8 UCHAR;
+        epicsUInt16 USHORT;
+        epicsUInt32 ULONG;
+        epicsUInt64 UINT64;
+        epicsInt8 CHAR;
+        epicsInt16 SHORT;
+        epicsInt32 LONG;
+        epicsInt64 INT64;
+        float FLOAT;
+        double DOUBLE;
+        char STRING[MAX_STRING_SIZE];
+    } buf;
+
+    switch(dbChannelFinalFieldType(pDbChannel)) {
+#define CASE(DBR, CTYPE) case DBR_ ## DBR: buf.DBR = value.as<CTYPE>(); break
+    CASE(CHAR, int8_t);
+    case DBR_ENUM:
+    CASE(SHORT, int16_t);
+    CASE(LONG, int32_t);
+    CASE(UCHAR, uint8_t);
+    CASE(USHORT, uint16_t);
+    CASE(ULONG, uint32_t);
+#ifdef DBR_INT64
+    CASE(INT64, int64_t);
+    CASE(UINT64, uint64_t);
+#endif
+    CASE(FLOAT, float);
+    CASE(DOUBLE, double);
+#undef CASE
+    case DBR_STRING:
+    {
+        auto s(value.as<std::string>());
+        strncpy(buf.STRING, s.c_str(), MAX_STRING_SIZE-1u);
+        buf.STRING[MAX_STRING_SIZE-1u] = '\0';
+        break;
+    }
+    default:
+        throw std::logic_error(SB()<<__func__<<" unhandled case "<<dbChannelFinalFieldType(pDbChannel));
+    }
+
+    doDbPut(pDbChannel, dbChannelFinalFieldType(pDbChannel), &buf, 1u);
+}
+
+static
+void putLongString(dbChannel* pDbChannel, const Value& value)
+{
+    auto str(value.as<std::string>());
+    auto N = str.size()+1u; // include NIL
+
+    doDbPut(pDbChannel, DBR_CHAR, str.c_str(), N);
+}
+
+static
+void putStringArray(dbChannel* pDbChannel, const Value& value)
+{
+    auto arr = value.as<shared_array<const std::string>>();
+
+    std::vector<char> buf(MAX_STRING_SIZE * arr.size());
+
+    char* pCurrent = buf.data();
+    for (auto& element: arr) {
+        element.copy(pCurrent, MAX_STRING_SIZE - 1);
+        pCurrent += MAX_STRING_SIZE;
+    }
+
+    doDbPut(pDbChannel, DBR_STRING, buf.data(), arr.size());
+}
+
+static
+void putArray(dbChannel* pDbChannel, const Value& value)
+{
+    auto arr = value.as<shared_array<const void>>();
+
+    short dbr;
+    switch(arr.original_type()) {
+    case ArrayType::Null:
+        return;
+    case ArrayType::Bool:
+    case ArrayType::Value:
+    default:
+        throw std::runtime_error(SB()<<"Unsupported "<<__func__<<" from "<<arr.original_type());
+    case ArrayType::Int8:    dbr = DBR_CHAR; break;
+    case ArrayType::Int16:   dbr = DBR_SHORT; break;
+    case ArrayType::Int32:   dbr = DBR_LONG; break;
+    case ArrayType::UInt8:   dbr = DBR_UCHAR; break;
+    case ArrayType::UInt16:  dbr = DBR_USHORT; break;
+    case ArrayType::UInt32:  dbr = DBR_ULONG; break;
+#ifdef DBR_INT64
+    case ArrayType::Int64:   dbr = DBR_INT64; break;
+    case ArrayType::UInt64:  dbr = DBR_UINT64; break;
+#endif
+    case ArrayType::Float32: dbr = DBR_FLOAT; break;
+    case ArrayType::Float64: dbr = DBR_DOUBLE; break;
+    case ArrayType::String:
+        putStringArray(pDbChannel, value);
+        return;
+    }
+
+    doDbPut(pDbChannel, dbr, arr.data(), arr.size());
+}
+
 /**
- * Set a return value from the given database value buffer.  This is the array version of the function
+ * Put a given value to the specified channel.  Throw an exception if there are any errors.
  *
- * @param valueTarget the value to set
- * @param pValueBuffer the database value buffer
- * @param nElements the number of elements in the buffer
+ * @param pDbChannel the channel to put the value into
+ * @param value the value to put
  */
-void IOCSource::getValueFromBuffer(Value& valueTarget, const void* pValueBuffer, const long& nElements) {
-    auto valueType(valueTarget.type());
-    if (valueType == TypeCode::StringA) {
-        shared_array<std::string> values(nElements);
-        char stringBuffer[MAX_STRING_SIZE + 1]{ 0 }; // Need to do this because some strings may not be null terminated
-        for (auto i = 0; i < nElements; i++) {
-            auto pStringValue = (char*)&((const char*)pValueBuffer)[i * MAX_STRING_SIZE];
-            strncpy(stringBuffer, pStringValue, MAX_STRING_SIZE);
-            values[i] = (char*)&stringBuffer[0];
-        }
-        valueTarget = values.freeze().template castTo<const void>();
+void IOCSource::put(dbChannel* pDbChannel, const Value& node, MappingInfo info) {
+    Value value;
+    switch(info.type) {
+    case MappingInfo::Meta:
+    case MappingInfo::Proc:
+    case MappingInfo::Structure:
+        return; // can't write
+    case MappingInfo::Any:
+        value = node["->"]; // de-ref into Any
+        break;
+    case MappingInfo::Plain:
+        value = node;
+        break;
+    case MappingInfo::Scalar:
+        value = node["value"];
+        if(value.type()==TypeCode::Struct)
+            value = value["index"]; // NTEnum
+        break;
+    case MappingInfo::Const:
+        value = info.cval;
+        break;
+    }
+
+    if (dbChannelFinalElements(pDbChannel) == 1) {
+        putScalar(pDbChannel, value);
+    } else if(dbChannelFinalFieldType(pDbChannel) == DBR_CHAR && value.type()==TypeCode::String) {
+        putLongString(pDbChannel, value);
+    } else if(dbChannelFinalFieldType(pDbChannel) == DBR_STRING) {
+        putStringArray(pDbChannel, value);
     } else {
-        SwitchTypeCodeForTemplatedCall(valueType, getValueFromBuffer, (valueTarget, pValueBuffer, nElements));
-    }
-}
-
-/**
- * Set scalar value into given database buffer
- *
- * @param valueSource the value to put into the buffer
- * @param pValueBuffer the database buffer to put it in
- * @param pDbChannel the db channel
- */
-void IOCSource::setValueInBuffer(const Value& valueSource, char* pValueBuffer, dbChannel* pDbChannel) {
-    auto valueType(valueSource.type());
-    if (valueType == TypeCode::String) {
-        setStringValueInBuffer(valueSource, pValueBuffer);
-    } else if (valueType == TypeCode::Any || valueType == TypeCode::Union) {
-        SwitchTypeCodeForTemplatedCall(fromDbrType(dbChannelFinalFieldType(pDbChannel)), setValueInBuffer,
-                (valueSource, pValueBuffer));
-    } else {
-        SwitchTypeCodeForTemplatedCall(valueType, setValueInBuffer, (valueSource, pValueBuffer));
-    }
-}
-
-/**
- * Set an array value in the given buffer
- *
- * @param valueSource the value to put into the buffer
- * @param pValueBuffer the database buffer to put it in
- * @param nElements the number of elements to put into the buffer
- */
-void IOCSource::setValueInBuffer(const Value& valueSource, char* pValueBuffer, long nElements) {
-    auto valueType(valueSource.type());
-    if (valueType == TypeCode::StringA) {
-        auto sharedValueArray = valueSource.as<shared_array<const Value>>();
-        for (auto i = 0u; i < sharedValueArray.size(); i++, pValueBuffer += MAX_STRING_SIZE) {
-            setStringValueInBuffer(sharedValueArray[i], pValueBuffer);
-        }
-    } else {
-        SwitchTypeCodeForTemplatedCall(valueType, setValueInBuffer, (valueSource, pValueBuffer, nElements));
-    }
-}
-
-/**
- * Given a string value source, and a buffer, copy the string contents into the buffer up to the MAX_STRING_SIZE.
- * Null terminate the string before exiting.
- *
- * @param valueSource  the string value source
- * @param pValueBuffer  the buffer to copy the string contents to
- */
-void IOCSource::setStringValueInBuffer(const Value& valueSource, char* pValueBuffer) {
-    auto stringValue = valueSource.as<std::string>();
-    auto len = std::min(stringValue.length(), (size_t)MAX_STRING_SIZE - 1);
-    stringValue.copy(pValueBuffer, len);
-    pValueBuffer[len] = '\0';
-}
-
-/**
- * Set the value field of the given return value to an array of scalars pointed to by pValueBuffer
- * Supported types are:
- *   TypeCode::Int8 	TypeCode::UInt8
- *   TypeCode::Int16 	TypeCode::UInt16
- *   TypeCode::Int32 	TypeCode::UInt32
- *   TypeCode::Int64 	TypeCode::UInt64
- *   TypeCode::Float32 	TypeCode::Float64
- *
- * @tparam valueType the type of the scalars stored in this array.  One of the supported types
- * @param valueTarget the return value
- * @param pValueBuffer the pointer to the data containing the database data to store in the return value
- * @param nElements the number of elements in the array
- */
-template<typename valueType>
-void IOCSource::getValueFromBuffer(Value& valueTarget, const void* pValueBuffer, const long& nElements) {
-    shared_array<valueType> values(nElements);
-    for (auto i = 0; i < nElements; i++) {
-        values[i] = ((valueType*)pValueBuffer)[i];
-    }
-    valueTarget = values.freeze().template castTo<const void>();
-}
-
-/**
- * Get the value into the given database value buffer (templated)
- *
- * @tparam valueType the type of the scalars stored in this array.  One of the supported types
- * @param valueSource the value to put into the buffer
- * @param pValueBuffer the database buffer to put it in
- * @param nElements the number of elements to put into the buffer
- */
-template<typename valueType>
-void IOCSource::setValueInBuffer(const Value& valueSource, void* pValueBuffer, long nElements) {
-    auto valueArray = valueSource.as<shared_array<const valueType>>();
-    for (auto i = 0; i < nElements; i++) {
-        ((valueType*)pValueBuffer)[i] = valueArray[i];
+        putArray(pDbChannel, value);
     }
 }
 
@@ -505,177 +652,52 @@ void IOCSource::setValueInBuffer(const Value& valueSource, void* pValueBuffer, l
  * @param errOnLinks determines whether to throw an error on finding links, default no
  * @return the TypeCode that the channel is configured for
  */
-TypeCode IOCSource::getChannelValueType(const dbChannel* pDbChannel, const bool errOnLinks) {
-    auto dbChannel(pDbChannel);
-    short dbrType(dbChannelFinalFieldType(dbChannel));
-    auto nFinalElements(dbChannelFinalElements(dbChannel));
-    auto nElements(dbChannelElements(dbChannel));
+TypeCode IOCSource::getChannelValueType(const dbChannel* chan, const bool errOnLinks) {
+    /* for links, could check dbChannelFieldType().
+     * for long strings, dbChannelCreate() '$' handling overwrites dbAddr::field_type
+     *   (for some reason...)
+     */
+    if(!chan)
+        throw std::runtime_error("Missing required +channel");
+    auto field_type(dbChannelFldDes(chan)->field_type);
+    auto final_field_type(dbChannelFinalFieldType(chan));
 
-    TypeCode valueType;
+    if(errOnLinks && field_type >= DBF_INLINK && field_type <= DBF_OUTLINK)
+        throw std::runtime_error("Link fields not allowed in this context");
 
-    if (dbChannelFieldType(dbChannel) == DBF_STRING && nElements == 1 && dbrType && nFinalElements > 1) {
-        // single character long DBF_STRING being cast to DBF_CHAR array.
-        valueType = TypeCode::String;
+    bool isArray = dbChannelFinalElements(chan)!=1;
+    bool stringlike = (field_type >= DBF_INLINK && field_type <= DBF_OUTLINK) || field_type == DBF_STRING;
 
-    } else {
-        if (dbrType == DBF_INLINK || dbrType == DBF_OUTLINK || dbrType == DBF_FWDLINK) {
-            if (errOnLinks) {
-                throw std::runtime_error("Link fields not allowed in this context");
-            } else {
-                // Handle as chars and fail later
-                dbrType = DBF_CHAR;
-            }
-        }
+    // string-like field being treated as single char[].  aka. long string
+    if(stringlike && final_field_type==DBR_CHAR && isArray)
+        return TypeCode::String;
 
-        valueType = fromDbfType(dbfType(dbrType));
-        if (valueType != TypeCode::Null && nFinalElements != 1) {
-            valueType = valueType.arrayOf();
-        }
-    }
+    TypeCode valueType(fromDbrType(final_field_type));
+
+    if(isArray)
+        valueType = valueType.arrayOf();
+
     return valueType;
 }
 
-/**
- * Get Metadata from the given buffer into the provided value object.  The options parameter is used
- * to select the metadata to retrieve.  It must always be retrieved in the specified order
- * as it is laid out that way by the db subsystems on retrieval.
- *
- * @param value the value object to retrieve the metadata into
- * @param pValueBuffer the db value buffer retrieved from the db subsystem
- * @param options the options parameter used to select the metadata.
- */
-void IOCSource::getMetadata(Value& value, void*& pValueBuffer, const uint32_t& requestedOptions,
-        const uint32_t& actualOptions) {
-    if (requestedOptions) {
-        // Temporary variable to store metadata while retrieving it
-        Metadata metadata;
+static
+thread_local server::ExecOp* currentOp;
 
-        // Alarm
-        if (requestedOptions & DBR_STATUS) {
-            get4MetadataFields(pValueBuffer, uint16_t,
-                    metadata.metadata.status, metadata.metadata.severity,
-                    metadata.metadata.acks, metadata.metadata.ackt);
-            if (actualOptions & DBR_STATUS) {
-                checkedSetField(metadata.metadata.status, alarm.status);
-                checkedSetField(metadata.metadata.severity, alarm.severity);
-                checkedSetField(metadata.metadata.acks, alarm.acks);
-                checkedSetField(metadata.metadata.ackt, alarm.ackt);
-            }
-        }
+CurrentOp::CurrentOp(server::ExecOp *op)
+    :prev(currentOp)
+{
+    currentOp = op;
+}
 
-        // Alarm message
-        if (requestedOptions & DBR_AMSG) {
-            getMetadataString(pValueBuffer, metadata.metadata.amsg);
-            if (actualOptions & DBR_AMSG) {
-                checkedSetStringField(metadata.metadata.amsg, alarm.message);
-            }
-        }
+CurrentOp::~CurrentOp()
+{
+    currentOp = prev;
+}
 
-        // Units
-        if (requestedOptions & DBR_UNITS) {
-            getMetadataBuffer(pValueBuffer, const char, metadata.pUnits, DB_UNITS_SIZE);
-            if (actualOptions & DBR_UNITS && value["display"]) {
-                checkedSetStringField(metadata.pUnits, display.units);
-            }
-        }
-
-        // Precision
-        if (requestedOptions & DBR_PRECISION) {
-            getMetadataBuffer(pValueBuffer, const dbr_precision, metadata.pPrecision, dbr_precision_size);
-            if (actualOptions & DBR_PRECISION && value["display"]) {
-                checkedSetField(metadata.pPrecision->precision.dp, display.precision);
-            }
-        }
-
-        // Time
-        if (requestedOptions & DBR_TIME) {
-            get2MetadataFields(pValueBuffer, uint32_t, metadata.metadata.time.secPastEpoch,
-                    metadata.metadata.time.nsec);
-            if (actualOptions & DBR_TIME) {
-                checkedSetField(metadata.metadata.time.secPastEpoch + POSIX_TIME_AT_EPICS_EPOCH,
-                        timeStamp.secondsPastEpoch);
-                checkedSetField(metadata.metadata.time.nsec, timeStamp.nanoseconds);
-            }
-        }
-
-        // User tag
-        if (requestedOptions & DBR_UTAG) {
-            getMetadataField(pValueBuffer, uint64_t, metadata.metadata.utag);
-            if (actualOptions & DBR_UTAG) {
-                checkedSetField(metadata.metadata.utag, timeStamp.userTag);
-            }
-        }
-
-        // Enum strings
-        if (requestedOptions & DBR_ENUM_STRS) {
-            getMetadataBuffer(pValueBuffer, const dbr_enumStrs, metadata.enumStrings, dbr_enumStrs_size);
-            if (actualOptions & DBR_ENUM_STRS && value["value.choices"] && metadata.enumStrings) {
-                shared_array<std::string> choices(metadata.enumStrings->no_str);
-                for (epicsUInt32 i = 0; i < metadata.enumStrings->no_str; i++) {
-                    choices[i] = metadata.enumStrings->strs[i];
-                }
-                value["value.choices"] = choices.freeze().castTo<const void>();
-            }
-        }
-
-        // Display long
-        if (requestedOptions & DBR_GR_LONG) {
-            getMetadataBuffer(pValueBuffer, const struct dbr_grLong, metadata.graphicsLong, dbr_grLong_size);
-            if (actualOptions & DBR_GR_LONG && value["display"]) {
-                checkedSetLongField(metadata.graphicsLong->lower_disp_limit, display.limitLow);
-                checkedSetLongField(metadata.graphicsLong->upper_disp_limit, display.limitHigh);
-            }
-        }
-
-        // Display double
-        if (requestedOptions & DBR_GR_DOUBLE) {
-            getMetadataBuffer(pValueBuffer, const struct dbr_grDouble, metadata.graphicsDouble, dbr_grDouble_size);
-            if (actualOptions & DBR_GR_DOUBLE && value["display"]) {
-                checkedSetDoubleField(metadata.graphicsDouble->lower_disp_limit, display.limitLow);
-                checkedSetDoubleField(metadata.graphicsDouble->upper_disp_limit, display.limitHigh);
-            }
-        }
-
-        // Control long
-        if (requestedOptions & DBR_CTRL_LONG) {
-            getMetadataBuffer(pValueBuffer, const struct dbr_ctrlLong, metadata.controlLong, dbr_ctrlLong_size);
-            if (actualOptions & DBR_CTRL_LONG && value["control"]) {
-                checkedSetLongField(metadata.controlLong->lower_ctrl_limit, control.limitLow);
-                checkedSetLongField(metadata.controlLong->upper_ctrl_limit, control.limitHigh);
-            }
-        }
-
-        // Control double
-        if (requestedOptions & DBR_CTRL_DOUBLE) {
-            getMetadataBuffer(pValueBuffer, const struct dbr_ctrlDouble, metadata.controlDouble, dbr_ctrlDouble_size);
-            if (actualOptions & DBR_CTRL_DOUBLE && value["control"]) {
-                checkedSetDoubleField(metadata.controlDouble->lower_ctrl_limit, control.limitLow);
-                checkedSetDoubleField(metadata.controlDouble->upper_ctrl_limit, control.limitHigh);
-            }
-        }
-
-        // Alarm long
-        if (requestedOptions & DBR_AL_LONG) {
-            getMetadataBuffer(pValueBuffer, const struct dbr_alLong, metadata.alarmLong, dbr_alLong_size);
-            if (actualOptions & DBR_AL_LONG && value["valueAlarm"]) {
-                checkedSetLongField(metadata.alarmLong->lower_alarm_limit, valueAlarm.lowAlarmLimit);
-                checkedSetLongField(metadata.alarmLong->lower_warning_limit, valueAlarm.lowWarningLimit);
-                checkedSetLongField(metadata.alarmLong->upper_warning_limit, valueAlarm.highWarningLimit);
-                checkedSetLongField(metadata.alarmLong->upper_alarm_limit, valueAlarm.highAlarmLimit);
-            }
-        }
-
-        // Alarm double
-        if (requestedOptions & DBR_AL_DOUBLE) {
-            getMetadataBuffer(pValueBuffer, const struct dbr_alDouble, metadata.alarmDouble, dbr_alDouble_size);
-            if (actualOptions & DBR_AL_DOUBLE && value["valueAlarm"]) {
-                checkedSetDoubleField(metadata.alarmDouble->lower_alarm_limit, valueAlarm.lowAlarmLimit);
-                checkedSetDoubleField(metadata.alarmDouble->lower_warning_limit, valueAlarm.lowWarningLimit);
-                checkedSetDoubleField(metadata.alarmDouble->upper_warning_limit, valueAlarm.highWarningLimit);
-                checkedSetDoubleField(metadata.alarmDouble->upper_alarm_limit, valueAlarm.highAlarmLimit);
-            }
-        }
-    }
+server::ExecOp*
+CurrentOp::current()
+{
+    return currentOp;
 }
 
 } // pvxs

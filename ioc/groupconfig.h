@@ -25,14 +25,11 @@ class GroupConfig {
 public:
     bool atomic, atomicIsSet;
     std::string structureId;
-    FieldConfigMap fieldConfigMap;
+    std::map<std::string, FieldConfig> fieldConfigMap;
     GroupConfig()
             :atomic(true), atomicIsSet(false) {
     }
 };
-
-// A map of group name to GroupConfig
-typedef std::map<std::string, GroupConfig> GroupConfigMap;
 
 } // pvxs
 } // ioc

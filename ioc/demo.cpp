@@ -75,12 +75,12 @@ struct dset5 {
     long (* process)(REC*);
 };
 
-dset5<waveformRecord> devWfPDBDemo = { 5, 0, 0, &init_spin, 0, &process_spin };
-dset5<longinRecord> devLoPDBUTag = { 5, 0, 0, 0, 0, &process_utag };
+dset5<waveformRecord> devWfPDBQ2Demo = { 5, 0, 0, &init_spin, 0, &process_spin };
+dset5<longinRecord> devLoPDBQ2UTag = { 5, 0, 0, 0, 0, &process_utag };
 
 } // namespace
 
 extern "C" {
-epicsExportAddress(dset, devWfPDBDemo);
-epicsExportAddress(dset, devLoPDBUTag);
+epicsExportAddress(dset, devWfPDBQ2Demo);
+epicsExportAddress(dset, devLoPDBQ2UTag);
 }

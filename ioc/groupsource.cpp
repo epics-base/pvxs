@@ -39,33 +39,32 @@ DEFINE_LOGGER(_logname, "pvxs.ioc.group.source");
  */
 GroupSource::GroupSource()
         :eventContext(db_init_events()) // Initialise event context
+        ,config(IOCGroupConfig::instance())
 {
     // Get GroupPv configuration and register each pv name in the server
-    runOnPvxsServer([this](IOCServer* pPvxsServer) {
-        auto names(std::make_shared<std::set<std::string >>());
+    auto names(std::make_shared<std::set<std::string >>());
 
-        // Lock map and get names
-        {
-            epicsGuard<epicsMutex> G(pPvxsServer->groupMapMutex);
+    // Lock map and get names
+    {
+        epicsGuard<epicsMutex> G(config.groupMapMutex);
 
-            // For each defined group, add group name to the list of all records
-            for (auto& groupMapEntry: pPvxsServer->groupMap) {
-                auto& groupName = groupMapEntry.first;
-                names->insert(groupName);
-            }
+        // For each defined group, add group name to the list of all records
+        for (auto& groupMapEntry: config.groupMap) {
+            auto& groupName = groupMapEntry.first;
+            names->insert(groupName);
         }
+    }
 
-        allRecords.names = names;
+    allRecords.names = names;
 
-        // Start event pump
-        if (!eventContext) {
-            throw std::runtime_error("Group Source: Event Context failed to initialise: db_init_events()");
-        }
+    // Start event pump
+    if (!eventContext) {
+        throw std::runtime_error("Group Source: Event Context failed to initialise: db_init_events()");
+    }
 
-        if (db_start_events(eventContext.get(), "qsrvGroup", nullptr, nullptr, epicsThreadPriorityCAServerLow - 1)) {
-            throw std::runtime_error("Could not start event thread: db_start_events()");
-        }
-    });
+    if (db_start_events(eventContext.get(), "qsrvGroup", nullptr, nullptr, epicsThreadPriorityCAServerLow - 1)) {
+        throw std::runtime_error("Could not start event thread: db_start_events()");
+    }
 }
 
 /**
@@ -79,12 +78,22 @@ void GroupSource::onCreate(std::unique_ptr<server::ChannelControl>&& channelCont
     auto& sourceName = channelControl->name();
     log_debug_printf(_logname, "Accepting channel for '%s'\n", sourceName.c_str());
 
-    runOnPvxsServer([&](IOCServer* pPvxsServer) {
-        // Create callbacks for handling requests and group subscriptions
-        auto& group = pPvxsServer->groupMap[sourceName];
-        createRequestAndSubscriptionHandlers(channelControl, group);
-    });
+    // Create callbacks for handling requests and group subscriptions
+    auto it(config.groupMap.find(sourceName));
+    if(it != config.groupMap.end()) {
+        auto& group(it->second);
+        channelControl->onOp([&](std::unique_ptr<server::ConnectOp>&& channelConnectOperation) {
+            onOp(group, std::move(channelConnectOperation));
+        });
 
+        channelControl
+                ->onSubscribe([this, &group](std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) {
+                    // The group subscription must be kept alive
+                    // We accomplish this further on during the binding of the onStart()
+                    auto subscriptionContext(std::make_shared<GroupSourceSubscriptionCtx>(group));
+                    onSubscribe(subscriptionContext, std::move(subscriptionOperation));
+                });
+    }
 }
 
 /**
@@ -93,14 +102,12 @@ void GroupSource::onCreate(std::unique_ptr<server::ChannelControl>&& channelCont
  * @param searchOperation the search operation
  */
 void GroupSource::onSearch(Search& searchOperation) {
-    runOnPvxsServer([&](IOCServer* pPvxsServer) {
-        for (auto& pv: searchOperation) {
-            if (allRecords.names->count(pv.name()) == 1) {
-                pv.claim();
-                log_debug_printf(_logname, "Claiming '%s'\n", pv.name());
-            }
+    for (auto& pv: searchOperation) {
+        if (allRecords.names->count(pv.name()) == 1) {
+            pv.claim();
+            log_debug_printf(_logname, "Claiming '%s'\n", pv.name());
         }
-    });
+    }
 }
 
 /**
@@ -116,28 +123,6 @@ void GroupSource::show(std::ostream& outputStream) {
 }
 
 /**
- * Create request and subscription handlers for group record sources
- *
- * @param channelControl the control channel pointer that we got from onCreate
- * @param group the group that we're creating the request and subscription handlers for
- */
-void GroupSource::createRequestAndSubscriptionHandlers(std::unique_ptr<server::ChannelControl>& channelControl,
-        Group& group) {
-    // Get and Put requests
-    channelControl->onOp([&](std::unique_ptr<server::ConnectOp>&& channelConnectOperation) {
-        onOp(group, std::move(channelConnectOperation));
-    });
-
-    channelControl
-            ->onSubscribe([this, &group](std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) {
-                // The group subscription must be kept alive
-                // We accomplish this further on during the binding of the onStart()
-                auto subscriptionContext(std::make_shared<GroupSourceSubscriptionCtx>(group));
-                onSubscribe(subscriptionContext, std::move(subscriptionOperation));
-            });
-}
-
-/**
  * Called when a client pauses / stops a subscription it has been subscribed to.
  * This function loops over all fields event subscriptions the group subscription context and disables each of them.
  *
@@ -145,11 +130,10 @@ void GroupSource::createRequestAndSubscriptionHandlers(std::unique_ptr<server::C
  */
 void GroupSource::onDisableSubscription(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx) {
     for (auto& fieldSubscriptionCtx: groupSubscriptionCtx->fieldSubscriptionContexts) {
-        auto pValueEventSubscription = fieldSubscriptionCtx.pValueEventSubscription.get();
-        auto pPropertiesEventSubscription = fieldSubscriptionCtx.pPropertiesEventSubscription.get();
-        db_event_disable(pValueEventSubscription);
-        db_event_disable(pPropertiesEventSubscription);
+        fieldSubscriptionCtx.pValueEventSubscription.disable();
+        fieldSubscriptionCtx.pPropertiesEventSubscription.disable();
     }
+    groupSubscriptionCtx->eventsEnabled = false;
 }
 
 /**
@@ -185,9 +169,9 @@ void GroupSource::onOp(Group& group,
                     securityCache->credentials.reset(new Credentials(*putOperation->credentials()));
                     auto fieldIndex = 0u;
                     for (auto& field: group.fields) {
-                        if (field.value.channel) {
+                        if (field.value) {
                             securityCache->securityClients[fieldIndex]
-                                    .update(field.value.channel, *securityCache->credentials);
+                                    .update(field.value, *securityCache->credentials);
                         }
                         fieldIndex++;
                     }
@@ -216,6 +200,29 @@ void GroupSource::onStart(const std::shared_ptr<GroupSourceSubscriptionCtx>& gro
     }
 }
 
+static
+void subscriptionPost(GroupSourceSubscriptionCtx *pGroupCtx)
+{
+    // Make sure that the initial subscription update has occurred on all channels before replying
+    // As we make two initial updates when opening a new subscription, for each field,
+    // we need all updates for all fields to have completed before continuing
+    if (!pGroupCtx->eventsPrimed) {
+        for (auto& fieldCtx: pGroupCtx->fieldSubscriptionContexts) {
+            if (!fieldCtx.hadValueEvent || !fieldCtx.hadPropertyEvent) {
+                return;
+            }
+        }
+        pGroupCtx->eventsPrimed = true;
+    }
+
+    auto& currentValue = pGroupCtx->currentValue;
+
+    // If events have been primed then return the value to the subscriber,
+    // and unmark all accumulated changes
+    pGroupCtx->subscriptionControl->post(currentValue.clone());
+    currentValue.unmark();
+}
+
 /**
  * Called when a client starts a subscription it has subscribed to.  For each field in the subscription,
  * enable events and post a single event to both the values and properties event channels to kick things off.
@@ -223,13 +230,82 @@ void GroupSource::onStart(const std::shared_ptr<GroupSourceSubscriptionCtx>& gro
  * @param groupSubscriptionCtx the group subscription context containing the field event subscriptions to start
  */
 void GroupSource::onStartSubscription(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx) {
+    groupSubscriptionCtx->eventsEnabled = true;
     for (auto& fieldSubscriptionCtx: groupSubscriptionCtx->fieldSubscriptionContexts) {
-        auto pValueEventSubscription = fieldSubscriptionCtx.pValueEventSubscription.get();
-        auto pPropertiesEventSubscription = fieldSubscriptionCtx.pPropertiesEventSubscription.get();
-        db_event_enable(pValueEventSubscription);
-        db_event_enable(pPropertiesEventSubscription);
-        db_post_single_event(pValueEventSubscription);
-        db_post_single_event(pPropertiesEventSubscription);
+        fieldSubscriptionCtx.pValueEventSubscription.enable();
+        fieldSubscriptionCtx.pPropertiesEventSubscription.enable();
+    }
+    // maybe post initial here in pathological case with no +channel.  (eg. all const)
+    subscriptionPost(groupSubscriptionCtx.get());
+}
+
+/**
+ * This callback handles notifying of updates to subscribed-to pv values.
+ *
+ * @param userArg the user argument passed to the callback function from the framework: a FieldSubscriptionCtx
+ * @param pDbFieldLog the database field log containing the changes being notified
+ */
+static
+void subscriptionValueCallback(void* userArg, dbChannel* pChannel, int, struct db_field_log* pDbFieldLog) {
+    try {
+        auto fieldSubscriptionCtx = (FieldSubscriptionCtx*)userArg;
+        fieldSubscriptionCtx->hadValueEvent = true;
+
+        // Find the group subscription context from the field subscription context
+        auto& pGroupCtx = fieldSubscriptionCtx->pGroupCtx;
+        // Also find the field
+        auto& field = *fieldSubscriptionCtx->field;
+        auto currentValue = pGroupCtx->currentValue;
+
+        // lock all records to be triggered
+        DBManyLocker G(field.lock);
+
+        for (auto& pTriggeredField: field.triggers) {
+            auto leafNode = pTriggeredField->findIn(currentValue);
+            dbChannel *channelToUse = pTriggeredField->value;
+            bool isSelfTrig = channelToUse==pChannel;
+            auto change = UpdateType::type(UpdateType::Value | UpdateType::Alarm);
+#if EPICS_VERSION_INT >= VERSION_INT(7, 0, 6, 0)
+            if(isSelfTrig && pDbFieldLog) {
+                // when available, use DBE mask from db_field_log
+                change = UpdateType::type(pDbFieldLog->mask & UpdateType::Everything);
+            }
+#endif
+            LocalFieldLog localFieldLog(channelToUse, isSelfTrig ? pDbFieldLog : nullptr);
+            IOCSource::get(leafNode, pTriggeredField->info, pTriggeredField->anyType,
+                           change, channelToUse, localFieldLog.pFieldLog);
+        }
+
+        subscriptionPost(pGroupCtx);
+
+    } catch(std::exception& e) {
+        log_exc_printf(_logname, "Unhandled exception in %s\n", __func__);
+    }
+}
+
+static
+void subscriptionPropertiesCallback(void* userArg, dbChannel* pChannel, int, struct db_field_log* pDbFieldLog) {
+    try {
+        auto subscriptionContext = (FieldSubscriptionCtx*)userArg;
+        subscriptionContext->hadPropertyEvent = true;
+
+        auto& field(*subscriptionContext->field);
+
+        auto fieldValue(field.findIn(subscriptionContext->pGroupCtx->currentValue));
+
+        /* For a property update, we (may) only post changes to the field mapping
+         * in question.  But never the triggered fields.
+         */
+
+        DBLocker L(dbChannelRecord(pChannel));
+        LocalFieldLog localFieldLog(pChannel, pDbFieldLog);
+        IOCSource::get(fieldValue, field.info, field.anyType,
+                       UpdateType::Property, pChannel, pDbFieldLog);
+
+        subscriptionPost(subscriptionContext->pGroupCtx);
+
+    } catch(std::exception& e) {
+        log_exc_printf(_logname, "Unhandled exception in %s\n", __func__);
     }
 }
 
@@ -247,6 +323,12 @@ void GroupSource::onSubscribe(const std::shared_ptr<GroupSourceSubscriptionCtx>&
     groupSubscriptionCtx->subscriptionControl = subscriptionOperation
             ->connect(groupSubscriptionCtx->group.valueTemplate);
 
+    server::MonitorStat stats;
+    groupSubscriptionCtx->subscriptionControl->stats(stats);
+    // include actual negotiated queue size with initial update
+    groupSubscriptionCtx->currentValue["record._options.queueSize"] = stats.limitQueue;
+    groupSubscriptionCtx->currentValue["record._options.atomic"] = true;
+
     // Initialise the field subscription contexts.  One for each group field.
     // This is stored in the group context
     groupSubscriptionCtx->fieldSubscriptionContexts.reserve(groupSubscriptionCtx->group.fields.size());
@@ -254,16 +336,36 @@ void GroupSource::onSubscribe(const std::shared_ptr<GroupSourceSubscriptionCtx>&
         groupSubscriptionCtx->fieldSubscriptionContexts.emplace_back(field, groupSubscriptionCtx.get());
         auto& fieldSubscriptionContext = groupSubscriptionCtx->fieldSubscriptionContexts.back();
 
+        if(field.info.type == MappingInfo::Const) {
+            auto fld(field.findIn(groupSubscriptionCtx->currentValue));
+            // only populate const values once
+            fld.assign(field.info.cval);
+            continue; // nothing to subscribe
+
+        } else if(!field.value) {
+            continue; // no associated dbChannel
+        }
+
+        auto leafNode = field.findIn(groupSubscriptionCtx->currentValue);
+        IOCSource::initialize(leafNode, field.info, field.value);
+
         // Two subscription are made for each group channel for pvxs
-        if (field.isMeta) {
+        // one for value|alarm changes
+        if (field.info.type == MappingInfo::Meta) {
             fieldSubscriptionContext
                     .subscribeField(eventContext.get(), subscriptionValueCallback, DBE_ALARM);
         } else {
             fieldSubscriptionContext
                     .subscribeField(eventContext.get(), subscriptionValueCallback, DBE_VALUE | DBE_ALARM | DBE_ARCHIVE);
         }
-        fieldSubscriptionContext
-                .subscribeField(eventContext.get(), subscriptionPropertiesCallback, DBE_PROPERTY, false);
+        // one for property changes
+        if (field.info.type == MappingInfo::Meta || field.info.type == MappingInfo::Scalar) {
+            // only scalar and meta mappings include property metadata (display, control, ...)
+            fieldSubscriptionContext
+                    .subscribeField(eventContext.get(), subscriptionPropertiesCallback, DBE_PROPERTY, false);
+        } else {
+            fieldSubscriptionContext.hadPropertyEvent = true;
+        }
     }
 
     // If all goes well, set up handlers for start and stop monitoring events
@@ -273,53 +375,54 @@ void GroupSource::onSubscribe(const std::shared_ptr<GroupSourceSubscriptionCtx>&
     });
 }
 
+static
+bool getGroupField(const Field& field, Value valueTarget, const std::string& groupName,
+        const std::unique_ptr<server::ExecOp>& getOperation) {
+    try {
+        IOCSource::initialize(valueTarget, field.info, field.value);
+        LocalFieldLog localFieldLog(field.value);
+        IOCSource::get(valueTarget, field.info, field.anyType,
+                       UpdateType::Everything, field.value, localFieldLog.pFieldLog);
+    } catch (std::exception& e) {
+        std::stringstream errorString;
+        errorString << "Error retrieving value for pvName: " << groupName << (field.name.empty() ? "/" : ".")
+                    << field.fullName << " : "
+                    << e.what();
+        getOperation->error(errorString.str().c_str());
+        return false;
+    }
+    return true;
+}
+
 /**
  * Handle the get operation
  *
  * @param group the group to get
  * @param getOperation the current executing operation
  */
-void GroupSource::get(Group& group, std::unique_ptr<server::ExecOp>& getOperation) {
-    groupGet(group, [&getOperation](Value& value) {
-        getOperation->reply(value);
-    }, [&getOperation](const char* errorMessage) {
-        getOperation->error(errorMessage);
-    });
-}
-
-/**
- * Get each field and make up the whole group structure
- *
- * @param group group to base result on
- * @param returnFn function to call with the result
- * @param errorFn function to call on errors
- */
-void GroupSource::groupGet(Group& group, const std::function<void(Value&)>& returnFn,
-        const std::function<void(const char*)>& errorFn) {
+void GroupSource::get(Group& group, const std::unique_ptr<server::ExecOp>& getOperation) {
+    bool atomic = group.atomicPutGet;
+    getOperation->pvRequest()["record._options.atomic"].as(atomic);
 
     // Make an empty value to return
     auto returnValue(group.valueTemplate.cloneEmpty());
+    returnValue["record._options.atomic"] = atomic;
 
     // If the group is configured for an atomic get operation,
     // then we need to get all the fields at once, so we lock them all together
     // and do the operation in one go
-    if (group.atomicPutGet) {
+    if (atomic) {
         // Lock all the fields
         DBManyLocker G(group.value.lock);
         // Loop through all fields
         for (auto& field: group.fields) {
-            // ignore all zero length named fields that are not meta
-            if (field.name.empty() && !field.isMeta) {
+            if(field.info.type == MappingInfo::Proc || field.info.type==MappingInfo::Structure)
                 continue;
-            }
-
             // find the leaf node in which to set the value
             auto leafNode = field.findIn(returnValue);
 
-            if (leafNode) {
-                if (!getGroupField(field, leafNode, group.name, errorFn)) {
-                    return;
-                }
+            if (!getGroupField(field, leafNode, group.name, getOperation)) {
+                return;
             }
         }
 
@@ -331,19 +434,15 @@ void GroupSource::groupGet(Group& group, const std::function<void(Value&)>& retu
 
         // Loop through all fields
         for (auto& field: group.fields) {
-            // ignore all zero length fields that are not meta
-            if (field.name.empty() && !field.isMeta) {
-                continue;
-            }
+            dbChannel* pDbChannel = field.value;
 
             // find the leaf node in which to set the value
             auto leafNode = field.findIn(returnValue);
 
-            if (leafNode) {
+            if (pDbChannel && leafNode) {
                 // Lock this field
-                dbChannel* pDbChannel = field.value.channel;
                 DBLocker F(pDbChannel->addr.precord);
-                if (!getGroupField(field, leafNode, group.name, errorFn)) {
+                if (!getGroupField(field, leafNode, group.name, getOperation)) {
                     return;
                 }
             }
@@ -351,34 +450,7 @@ void GroupSource::groupGet(Group& group, const std::function<void(Value&)>& retu
     }
 
     // Send reply
-    returnFn(returnValue);
-}
-
-/**
- * Get a group field into the specified Value target object.  The group name is provided in case there are errors
- * to better identify the location of the error when the error function is called with the error text
- *
- * @param field the field to get
- * @param valueTarget the place to store the value retrieved
- * @param groupName the name of the group that the field is a part of
- * @param errorFn the function to call if errors occur
- * @return true if retrieved successfully, false otherwise
- */
-bool GroupSource::getGroupField(const Field& field, Value valueTarget, const std::string& groupName,
-        const std::function<void(const char*)>& errorFn) {
-    try {
-        LocalFieldLog localFieldLog(field.value.channel);
-        IOCSource::get(field.value.channel, nullptr, valueTarget,
-                field.isMeta ? FOR_METADATA : FOR_VALUE_AND_PROPERTIES, localFieldLog.pFieldLog);
-    } catch (std::exception& e) {
-        std::stringstream errorString;
-        errorString << "Error retrieving value for pvName: " << groupName << (field.name.empty() ? "/" : ".")
-                    << field.fullName << " : "
-                    << e.what();
-        errorFn(errorString.str().c_str());
-        return false;
-    }
-    return true;
+    getOperation->reply(returnValue);
 }
 
 /**
@@ -392,13 +464,17 @@ bool GroupSource::getGroupField(const Field& field, Value valueTarget, const std
 void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOperation, const Value& value,
         const GroupSecurityCache& groupSecurityCache) {
     try {
+        CurrentOp op(putOperation.get());
+
+        bool atomic = group.atomicPutGet;
+        putOperation->pvRequest()["record._options.atomic"].as(atomic);
+
         std::vector<SecurityLogger> securityLoggers(group.fields.size());
 
         // Prepare group put operation
         auto fieldIndex = 0;
         for (auto& field: group.fields) {
-            dbChannel* pDbChannel = field.value.channel;
-            if (pDbChannel) {
+            if (dbChannel* pDbChannel = field.value) {
                 IOCSource::doPreProcessing(pDbChannel,
                         securityLoggers[fieldIndex], *groupSecurityCache.credentials,
                         groupSecurityCache.securityClients[fieldIndex]);
@@ -416,7 +492,7 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
         // If the group is configured for an atomic put operation,
         // then we need to put all the fields at once, so we lock them all together
         // and do the operation in one go
-        if (group.atomicPutGet) {
+        if (atomic) {
             // Lock all the fields
             DBManyLocker G(group.value.lock);
             // Loop through all fields
@@ -424,7 +500,7 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
                 // Put the field
                 putGroupField(value, field, groupSecurityCache.securityClients[fieldIndex]);
                 // Do processing if required
-                IOCSource::doPostProcessing(field.value.channel, groupSecurityCache.forceProcessing);
+                IOCSource::doPostProcessing(field.value, groupSecurityCache.forceProcessing);
                 fieldIndex++;
             }
 
@@ -436,13 +512,15 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
 
             // Loop through all fields
             for (auto& field: group.fields) {
-                dbChannel* pDbChannel = field.value.channel;
+                dbChannel* pDbChannel = field.value;
+                if(!pDbChannel)
+                    continue;
                 // Lock this field
                 DBLocker F(pDbChannel->addr.precord);
                 // Put the field
                 putGroupField(value, field, groupSecurityCache.securityClients[fieldIndex]);
                 // Do processing if required
-                IOCSource::doPostProcessing(field.value.channel, groupSecurityCache.forceProcessing);
+                IOCSource::doPostProcessing(field.value, groupSecurityCache.forceProcessing);
                 // Unlock this field when locker goes out of scope
                 fieldIndex++;
             }
@@ -476,99 +554,8 @@ void GroupSource::putGroupField(const Value& value, const Field& field, const Se
 
     // If the field references a valid part of the given value then we can send it to the database
     if (leafNode && leafNode.isMarked()) {
-        SecurityLogger securityLogger;
         IOCSource::doFieldPreProcessing(securityClient); // pre-process field
-        IOCSource::put(field.value.channel, leafNode);
-    }
-}
-
-/**
- * Used by both value and property subscriptions, this function will get the database value and return it
- * to the monitor.  It is called whenever a field subscription event is received.
- *
- * @param fieldSubscriptionCtx the field subscription context
- * @param getOperationType the operation this callback serves
- * @param pDbFieldLog the database field log
- */
-void GroupSource::subscriptionCallback(FieldSubscriptionCtx* fieldSubscriptionCtx,
-        const GetOperationType getOperationType, struct db_field_log* pDbFieldLog) {
-
-    // Find the group subscription context from the field subscription context
-    auto& pGroupCtx = fieldSubscriptionCtx->pGroupCtx;
-    // Also find the field
-    auto field = fieldSubscriptionCtx->field;
-
-    // Get the current value of this group subscription
-    // We simply merge new field changes onto this value as events occur
-    auto currentValue = pGroupCtx->currentValue;
-
-    // Lock only fields triggered by this field
-    DBManyLocker G(getOperationType <= FOR_METADATA ? field->value.lock : field->properties.lock);
-
-    // for all triggered fields get the values.  Assumes that self has been added to triggered list
-    for (auto& pTriggeredField: field->triggers) {
-        // Find leaf node within the current value.  This will be a reference into the currentValue.
-        // So that if we assign the leafNode with the value we `get()` back, then currentValue will be updated
-        auto leafNode = pTriggeredField->findIn(currentValue);
-        if (leafNode) {
-            dbChannel* channelToUse = (getOperationType == FOR_PROPERTIES) ? pTriggeredField->properties.channel
-                                                                           : pTriggeredField->value.channel;
-            LocalFieldLog localFieldLog(channelToUse, (pTriggeredField == field) ? pDbFieldLog : nullptr);
-            IOCSource::get(pTriggeredField->value.channel, pTriggeredField->properties.channel,
-                    leafNode, getOperationType, localFieldLog.pFieldLog);
-        }
-    }
-
-    // Make sure that the initial subscription update has occurred on all channels before replying
-    // As we make two initial updates when opening a new subscription, for each field,
-    // we need all updates for all fields to have completed before continuing
-    if (!pGroupCtx->eventsPrimed) {
-        for (auto& fieldCtx: pGroupCtx->fieldSubscriptionContexts) {
-            if (!fieldCtx.hadValueEvent || !fieldCtx.hadPropertyEvent) {
-                return;
-            }
-        }
-        pGroupCtx->eventsPrimed = true;
-    }
-
-    // If events have been primed then return the value to the subscriber,
-    // and unmark all accumulated changes
-    pGroupCtx->subscriptionControl->post(currentValue.clone());
-    currentValue.unmark();
-
-    // Unlock fields in group when locker goes out of scope
-}
-
-/**
- * This callback handles notifying of updates to subscribed-to pv values.
- *
- * @param userArg the user argument passed to the callback function from the framework: a FieldSubscriptionCtx
- * @param pDbFieldLog the database field log containing the changes being notified
- */
-void GroupSource::subscriptionValueCallback(void* userArg, dbChannel*, int, struct db_field_log* pDbFieldLog) {
-    auto subscriptionContext = (FieldSubscriptionCtx*)userArg;
-    {
-        epicsGuard<epicsMutex> G((subscriptionContext->pGroupCtx)->eventLock);
-        subscriptionContext->hadValueEvent = true;
-    }
-    subscriptionCallback(subscriptionContext,
-            subscriptionContext->field->isMeta ? FOR_METADATA : FOR_VALUE, pDbFieldLog);
-}
-
-/**
- * This callback handles notifying of updates to subscribed-to pv properties.
- *
- * @param userArg the user argument passed to the callback function from the framework: a FieldSubscriptionCtx
- * @param pDbFieldLog the database field log containing the changes being notified
- */
-void GroupSource::subscriptionPropertiesCallback(void* userArg, dbChannel*, int, struct db_field_log* pDbFieldLog) {
-    auto subscriptionContext = (FieldSubscriptionCtx*)userArg;
-    {
-        epicsGuard<epicsMutex> G((subscriptionContext->pGroupCtx)->eventLock);
-        subscriptionContext->hadPropertyEvent = true;
-    }
-    if (!subscriptionContext->field->isMeta) {
-        subscriptionCallback(subscriptionContext, FOR_PROPERTIES, pDbFieldLog);
+        IOCSource::put(field.value, leafNode, field.info);
     }
 }
 

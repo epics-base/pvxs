@@ -17,6 +17,7 @@
 #include <stdexcept>
 
 #include <epicsExport.h>
+#include <epicsExit.h>
 #include <initHooks.h>
 #include <iocsh.h>
 
@@ -25,11 +26,10 @@
 #include <pvxs/server.h>
 #include <pvxs/source.h>
 
-#include "iocserver.h"
 #include "iocshcommand.h"
 #include "utilpvt.h"
 
-// must include after log.h has been included to avoid clash with printf macro
+// include last to avoid clash of #define printf with other headers
 #include <epicsStdio.h>
 
 #if EPICS_VERSION_INT >= VERSION_INT(7, 0, 4, 0)
@@ -42,52 +42,18 @@ namespace ioc {
 DEFINE_LOGGER(_logname, "pvxs.ioc");
 
 // The pvxs server singleton
-std::atomic<IOCServer*> pvxsServer{};
+std::atomic<server::Server*> pvxsServer{};
 
 /**
  * Get the plain pvxs server instance
  *
  * @return the pvxs server instance
  */
-server::Server& server() {
-    return iocServer();
-}
-
-/**
- * Get the pvxs server instance
- *
- * @return the pvxs server instance
- */
-IOCServer& iocServer() {
+server::Server server() {
     if (auto pPvxsServer = pvxsServer.load()) {
         return *pPvxsServer;
     } else {
         throw std::logic_error("No Instance");
-    }
-}
-
-/**
- * Get the pvxs server and execute the given function against it
- *
- * @param function the function to call
- * @param method the string method from which this is called.  Use the __func__ macro by default
- * @param context the activity being attempted when the error occurred
- */
-void
-runOnServer(const std::function<void(IOCServer*)>& function, const char* method, const char* context) {
-    try {
-        if (auto pPvxsServer = pvxsServer.load()) {
-            function(pPvxsServer);
-        }
-    } catch (std::exception& e) {
-        if (context) {
-            fprintf(stderr, "%s: ", context);
-        }
-        if (method) {
-            fprintf(stderr, "Error in %s: ", method);
-        }
-        fprintf(stderr, "%s\n", e.what());
-        throw e;
     }
 }
 
@@ -98,15 +64,24 @@ runOnServer(const std::function<void(IOCServer*)>& function, const char* method,
  *
  * @param pep - The pointer to the exit parameter list - unused
  */
-void pvxsAtExit(void* pep) {
-    runOnPvxsServerWhile_("In IOC exit event handler", [](IOCServer* pPvxsServer) {
+static
+void pvxsAtExit(void*) {
+    runOnPvxsServerWhile_("In IOC exit event handler", [](server::Server* pPvxsServer) {
         if (pvxsServer.compare_exchange_strong(pPvxsServer, nullptr)) {
             // take ownership
-            std::unique_ptr<IOCServer> serverInstance(pPvxsServer);
+            std::unique_ptr<server::Server> serverInstance(pPvxsServer);
             serverInstance->stop();
+            IOCGroupConfigCleanup();
             log_debug_printf(_logname, "Stopped Server%s", "\n");
         }
     });
+}
+
+void testShutdown()
+{
+#ifndef USE_DEINIT_HOOKS
+    pvxsAtExit(nullptr);
+#endif
 }
 
 ////////////////////////////////////
@@ -120,8 +95,9 @@ void pvxsAtExit(void* pep) {
  *
  * @param detail
  */
+static
 void pvxsr(int detail) {
-    runOnPvxsServer([&detail](IOCServer* pPvxsServer) {
+    runOnPvxsServer([&detail](server::Server* pPvxsServer) {
         std::ostringstream strm;
         Detailed D(strm, detail);
         strm << *pPvxsServer;
@@ -141,6 +117,7 @@ void pvxsr(int detail) {
  *    - thread count, and
  *  - EPICS PVA environment variable settings
  */
+static
 void pvxsi() {
     try {
         std::ostringstream capture;
@@ -160,35 +137,38 @@ void pvxsi() {
  *
  * @param theInitHookState the initHook state to respond to
  */
+static
 void pvxsInitHook(initHookState theInitHookState) {
-    // iocBuild()
-    if (theInitHookState == initHookAfterInitDatabase) {
+    switch(theInitHookState) {
+    case initHookAfterInitDatabase:
+        // when de-init hooks not available, register for later cleanup via atexit()
         // function to run before exitDatabase
 #ifndef USE_DEINIT_HOOKS
         epicsAtExit(&pvxsAtExit, nullptr);
 #endif
-    } else
-        // iocRun()
-    if (theInitHookState == initHookAfterCaServerRunning || theInitHookState == initHookAfterIocRunning) {
-        runOnPvxsServer([](IOCServer* pPvxsServer) {
+        break;
+    case initHookAfterCaServerRunning:
+    case initHookAfterIocRunning:
+        runOnPvxsServer([](server::Server* pPvxsServer) {
             pPvxsServer->start();
             log_debug_printf(_logname, "Started Server %p", pPvxsServer);
         });
-    } else
-        // iocPause()
-    if (theInitHookState == initHookAfterCaServerPaused) {
-        runOnPvxsServer([](IOCServer* pPvxsServer) {
+        break;
+    case initHookAfterCaServerPaused:
+        runOnPvxsServer([](server::Server* pPvxsServer) {
             pPvxsServer->stop();
             log_debug_printf(_logname, "Stopped Server %p", pPvxsServer);
         });
-    } else
-
+        break;
 #ifdef USE_DEINIT_HOOKS
-        // iocShutdown()  (called from exitDatabase() at exit, and testIocShutdownOk() )
-    if (theInitHookState == initHookAtShutdown) {
+    // use de-init hook when available
+    case initHookAtShutdown:
         pvxsAtExit(nullptr);
-    }
+        break;
 #endif
+    default:
+        break;
+    }
 }
 
 }
@@ -198,12 +178,6 @@ using namespace pvxs::ioc;
 
 namespace {
 
-// Initialise the pvxs server instance
-void initialisePvxsServer();
-
-// Register callback functions to be used in the IOC shell and also during initialization.
-void pvxsBaseRegistrar();
-
 /**
  * Create the pvxs server instance.  We use the global pvxsServer atomic
  */
@@ -212,7 +186,7 @@ void initialisePvxsServer() {
     auto serv = pvxsServer.load();
     if (!serv) {
         Config conf = ::pvxs::impl::inUnitTest() ? Config::isolated() : Config::from_env();
-        std::unique_ptr<IOCServer> temp(new IOCServer(conf));
+        std::unique_ptr<Server> temp(new Server(conf));
 
         if (pvxsServer.compare_exchange_strong(serv, temp.get())) {
             log_debug_printf(_logname, "Installing Server %p\n", temp.get());

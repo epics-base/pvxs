@@ -115,13 +115,30 @@ DBDDEPENDS_FILES += testioc.dbd$(DEP)
 testioc_DBD = base.dbd pvxsIoc.dbd
 TESTFILES += $(COMMON_DIR)/testioc.dbd
 
-TESTPROD_HOST += testioc
-testioc_SRCS += testioc.cpp
-testioc_SRCS += testioc_registerRecordDeviceDriver.cpp
-testioc_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
-TESTFILES += ../testioc.db ../testiocg.db ../image.db ../ntenum.db
-TESTFILES += ../testioc.json
-TESTS += testioc
+TESTPROD_HOST += testqsingle
+testqsingle_SRCS += testqsingle
+testqsingle_SRCS += testioc_registerRecordDeviceDriver.cpp
+testqsingle_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
+TESTFILES += ../testqsingle.db
+TESTFILES += ../testqsingle64.db
+TESTFILES += ../testioc.acf
+TESTS += testqsingle
+
+endif
+
+ifdef BASE_7_0
+
+TESTPROD_HOST += testqgroup
+testqgroup_SRCS += testqgroup
+testqgroup_SRCS += testioc_registerRecordDeviceDriver.cpp
+testqgroup_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
+TESTFILES += ../table.db
+TESTFILES += ../image.db
+TESTFILES += ../image.json
+TESTFILES += ../iq.db
+TESTFILES += ../ntenum.db
+TESTFILES += ../const.db
+TESTS += testqgroup
 
 PROD_SRCS_RTEMS += rtemsTestData.c
 

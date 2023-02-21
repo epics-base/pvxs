@@ -28,6 +28,7 @@ public:
     Group& group;
     epicsMutex eventLock{};
     bool eventsPrimed = false, firstEvent = true;
+    bool eventsEnabled = false;
     std::unique_ptr<server::MonitorControlOp> subscriptionControl{};
 
     // This is as a special case for storing the initial value prior to both initial subscription events returning
@@ -37,6 +38,9 @@ public:
     std::vector<FieldSubscriptionCtx> fieldSubscriptionContexts{};
     explicit GroupSourceSubscriptionCtx(Group& subscribedGroup)
             :group(subscribedGroup), currentValue(subscribedGroup.valueTemplate.cloneEmpty()) {
+    }
+    ~GroupSourceSubscriptionCtx() {
+        assert(!eventsEnabled); // check for mis-matched onStartSubscription()/onDisableSubscription()
     }
 
 };

@@ -32,8 +32,8 @@ class GroupSourceSubscriptionCtx;
  */
 class FieldSubscriptionCtx : public SubscriptionCtx {
 public:
-    GroupSourceSubscriptionCtx* pGroupCtx;
-    Field* field;
+    GroupSourceSubscriptionCtx* const pGroupCtx;
+    Field* const field;
 
     // Map channel to field index in group.fields
     void subscribeField(dbEventCtx pEventCtx, EVENTFUNC (* subscriptionCallback),
@@ -46,12 +46,15 @@ public:
  * @param groupSourceSubscriptionCtx the group subscription context this is a part of
  */
     explicit FieldSubscriptionCtx(Field& field, GroupSourceSubscriptionCtx* groupSourceSubscriptionCtx)
-            :pGroupCtx(groupSourceSubscriptionCtx), field(&field) {
+            :pGroupCtx(groupSourceSubscriptionCtx), field(&field)
+    {
+        if(!field.value) {
+            // no associated dbChannel, so nothing to wait for
+            hadValueEvent = hadPropertyEvent = true;
+        }
     };
 
     FieldSubscriptionCtx(FieldSubscriptionCtx&&) = default;
-
-    FieldSubscriptionCtx(const FieldSubscriptionCtx&) = delete;
 };
 
 } // pvcs

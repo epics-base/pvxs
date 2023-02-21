@@ -14,7 +14,6 @@
 #include <utility>
 
 #include "groupconfigprocessor.h"
-#include "iocserver.h"
 
 namespace pvxs {
 namespace ioc {

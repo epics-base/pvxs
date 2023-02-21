@@ -22,11 +22,6 @@ namespace pvxs {
 namespace ioc {
 
 /**
- * channel trigger map, maps field name to set of related field it is triggered by
- */
-typedef std::map<std::string, TriggerNames> FieldTriggerMap;
-
-/**
  * A Group PV
  * This class represents a group PV.  It contains a set of channels
  * `GroupPvChannels` that link the group to regular db channels.  Each of these channels
@@ -37,16 +32,12 @@ public:
     std::string structureId;            // The Normative Type structure ID or any other arbitrary string if not a normative type
     bool hasTriggers{ false };
     TriState atomic{ Unset };
-    FieldDefinitions fields;            // The group's fields
-    FieldDefinitionMap fieldMap;        // The field map, mapping field order
-    FieldTriggerMap fieldTriggerMap;    // The trigger map, mapping fields to related triggering fields
+    std::vector<FieldDefinition> fields;            // The group's fields
+    std::map<std::string, size_t> fieldMap;        // The field map, mapping field order
+    std::map<std::string, TriggerNames> fieldTriggerMap;    // The trigger map, mapping fields to related triggering fields
 
     GroupDefinition() = default;
-    virtual ~GroupDefinition() = default;
 };
-
-// A map of group name to GroupPv
-typedef std::map<std::string, GroupDefinition> GroupDefinitionMap;
 
 } // pvxs
 } // ioc

@@ -13,11 +13,10 @@
 #include <cstdlib>
 
 #include "fieldname.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace ioc {
-
-static void pad(std::string& stringToPad, size_t padLength);
 
 /**
  * Construct a Group field name from a field name string.  The string is a sequence of components separated by
@@ -30,7 +29,7 @@ static void pad(std::string& stringToPad, size_t padLength);
 FieldName::FieldName(const std::string& fieldName) {
     if (!fieldName.empty()) {
         // Split field name on periods
-        std::stringstream splitter(fieldName);
+        std::istringstream splitter(fieldName);
         std::string fieldNamePart;
         while (std::getline(splitter, fieldNamePart, '.')) {
             if (fieldNamePart.empty()) {
@@ -73,37 +72,37 @@ FieldName::FieldName(const std::string& fieldName) {
  * @param padLength the amount of padding to add, defaults to none
  */
 std::string FieldName::to_string(size_t padLength) const {
-    std::string fieldName;
-    if (fieldNameComponents.empty()) {
-        fieldName = "/";
+    std::ostringstream strm;
+    strm<<(*this);
+    auto sofar(strm.tellp());
+    if(sofar >=0 && size_t(sofar) < padLength) {
+        for(auto i : range(padLength - size_t(sofar))) {
+            (void)i;
+            strm.put(PADDING_CHARACTER);
+        }
+    }
+    return strm.str();
+}
+
+std::ostream& operator<<(std::ostream& strm, const FieldName& name)
+{
+    if (name.fieldNameComponents.empty()) {
+        strm<<"/";
     } else {
         bool first = true;
-        for (const auto& fieldNameComponent: fieldNameComponents) {
+        for (const auto& fieldNameComponent: name.fieldNameComponents) {
             if (!first) {
-                fieldName += ".";
+                strm.put('.');
             } else {
                 first = false;
             }
-            fieldName += fieldNameComponent.name;
+            strm<<fieldNameComponent.name;
             if (fieldNameComponent.isArray()) {
-                fieldName += "[" + std::to_string((unsigned)fieldNameComponent.index) + "]";
+                strm<<'['<<fieldNameComponent.index<<']';
             }
         }
     }
-    pad(fieldName, padLength);
-    return fieldName;
-}
-
-/**
- * Utility function to pad given string with spaces
- *
- * @param stringToPad the string to be padded
- * @param padLength the amount of spaces to pad with
- */
-static void pad(std::string& stringToPad, const size_t padLength) {
-    if (padLength > stringToPad.size()) {
-        stringToPad.insert(stringToPad.size(), padLength - stringToPad.size(), PADDING_CHARACTER);
-    }
+    return strm;
 }
 
 } // pvxs

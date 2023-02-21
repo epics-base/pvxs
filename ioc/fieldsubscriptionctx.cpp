@@ -24,23 +24,11 @@ namespace ioc {
  */
 void FieldSubscriptionCtx::subscribeField(dbEventCtx pEventCtx, EVENTFUNC (* subscriptionCallback),
         unsigned int selectOptions, bool forValues) {
-    auto& pDbChannel = (forValues ? field->value.channel : field->properties.channel).shared_ptr();
+    auto& pDbChannel = (forValues ? field->value : field->properties);
     auto& pEventSubscription = forValues ? pValueEventSubscription : pPropertiesEventSubscription;
-    pEventSubscription.reset(
-            db_add_event(
-                    pEventCtx,
-                    pDbChannel.get(),
-                    subscriptionCallback,
-                    this, selectOptions),
-            [](dbEventSubscription pEventSub) {
-                if (pEventSub) {
-                    db_cancel_event(pEventSub);
-                }
-            });
-
-    if (!pEventSubscription) {
-        throw std::runtime_error("Failed to create db subscription");
-    }
+    pEventSubscription.subscribe(pEventCtx, pDbChannel,
+                                 subscriptionCallback,
+                                 this, selectOptions);
 }
 
 } // pvcs

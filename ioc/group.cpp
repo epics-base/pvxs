@@ -10,10 +10,43 @@
 #include <string>
 #include <sstream>
 
+#include <epicsThread.h>
+#include <cantProceed.h>
+
 #include "group.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace ioc {
+
+static
+IOCGroupConfig* configInstance;
+
+static
+void onceConfigInstance(void*)
+{
+    try {
+        configInstance = new IOCGroupConfig;
+    } catch (std::exception& e) {
+        cantProceed("ERROR %s : %s\n", __func__, e.what());
+    }
+}
+
+static
+epicsThreadOnceId onceConfig = EPICS_THREAD_ONCE_INIT;
+
+IOCGroupConfig& IOCGroupConfig::instance()
+{
+    epicsThreadOnce(&onceConfig, &onceConfigInstance, nullptr);
+    return *configInstance;
+}
+
+void IOCGroupConfigCleanup()
+{
+    epicsGuard<epicsMutex> G(configInstance->groupMapMutex);
+    configInstance->groupMap.clear();
+    configInstance->groupConfigFiles.clear();
+}
 
 /**
  * Show details for this group.
@@ -28,35 +61,32 @@ void Group::show(int level) const {
     // no locking as we only print things which are const after initialization
 
     // Group field information
-    printf("  Atomic Get/Put:%s Atomic Monitor:%s Members:%ld\n",
+    printf("  Atomic Get/Put:%s Atomic Members:%ld\n",
             (atomicPutGet ? "yes" : "no"),
-            (atomicMonitor ? "yes" : "no"),
             fields.size());
 
     // If we need to show detailed information then iterate through all fields showing details
     if (level > 1) {
-        if (!fields.empty()) {
-            for (auto& field: fields) {
-                if (!field.id.empty()) {
-                    std::string suffix;
-                    printf("    ");
-                    suffix = "<id>";
-                    field.fieldName.show(suffix);
-                    printf(" <-> \"%s\"\n", field.id.c_str());
-                }
+        for (auto& field: fields) {
+            // "  grp.fld <meta> id=foo chan=pv:name.VAL\n"
+            printf("  %s\t<%s>%s%s%s%s%s\n",
+                   field.fieldName.to_string().c_str(),
+                   MappingInfo::name(field.info.type),
+                   field.id.empty() ? "" : " id=",
+                   field.id.empty() ? "" : field.id.c_str(),
+                   field.value ? " chan=" : "",
+                   field.value ? dbChannelName(field.value) : "",
+                   field.triggers.empty() ? "" : " has triggers");
 
-                if (field.value.channel) {
-                    printf("    ");
-                    std::string suffix;
-                    if (field.isMeta) {
-                        suffix = "<meta>";
-                    } else if (field.allowProc) {
-                        suffix = "<proc>";
+            if(level > 2) {
+                for(auto& trig : field.triggers) {
+                    bool found = false;
+                    for(auto& field2 : fields) {
+                        found |= &field2 == trig; // cross-check pointer validity
                     }
-                    field.fieldName.show(suffix);
-                    if (field.value.channel) {
-                        printf(" <-> %s\n", dbChannelName(field.value.channel));
-                    }
+                    if(!found)
+                        printf("ERROR inconsistent field triggers!!!\n");
+                    printf("    %s\n", trig->fieldName.to_string().c_str());
                 }
             }
         }
@@ -70,17 +100,11 @@ void Group::show(int level) const {
  * @return the de-referenced field from the set of fields
  */
 Field& Group::operator[](const std::string& fieldName) {
-    auto foundField = std::find_if(fields.begin(), fields.end(), [fieldName](Field& field) {
-        return fieldName == field.fullName;
-    });
-
-    if (foundField == fields.end()) {
-        std::ostringstream fileNameStream;
-        fileNameStream << "field not found in group: \"" << fieldName << "\"";
-        throw std::logic_error(fileNameStream.str());
-    };
-
-    return *foundField;
+    for(auto& field : fields) {
+        if(field.fullName == fieldName)
+            return field;
+    }
+    throw std::logic_error(SB()<<"field not found in group: \"" << fieldName << "\"");
 }
 
 } // pvxs

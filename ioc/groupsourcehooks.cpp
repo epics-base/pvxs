@@ -9,8 +9,11 @@
 
 #include <vector>
 
+#include <string.h>
+
 #include <epicsExport.h>
 #include <epicsString.h>
+#include <iocsh.h>
 
 #include <initHooks.h>
 
@@ -21,7 +24,11 @@
 #include "groupconfigprocessor.h"
 #include "iocshcommand.h"
 
-// must include after log.h has been included to avoid clash with printf macro
+#if EPICS_VERSION_INT < VERSION_INT(7, 0, 3, 1)
+#  define iocshSetError(ret) do { (void)ret; }while(0)
+#endif
+
+// include last to avoid clash of #define printf with other headers
 #include <epicsStdio.h>
 namespace pvxs {
 namespace ioc {
@@ -31,10 +38,10 @@ namespace ioc {
  *
  * @param jsonFileName
  */
-void dbLoadGroupCmd(const char* jsonFileName) {
-    (void)dbLoadGroup(jsonFileName);
-    auto gp = GroupConfigProcessor();
-    gp.loadConfigFiles();
+static
+void dbLoadGroupCmd(const char* jsonFileName, const char *macros) {
+    iocshSetError(dbLoadGroup(jsonFileName, macros));
+    GroupConfigProcessor().loadConfigFiles();
 }
 
 /**
@@ -44,70 +51,113 @@ void dbLoadGroupCmd(const char* jsonFileName) {
  * @param level optional depth to show details for
  * @param pattern optionally only show records matching the regex pattern
  */
+static
 void pvxsgl(int level, const char* pattern) {
-    runOnPvxsServer(([level, &pattern](IOCServer* pPvxsServer) {
-        try {
-            // Default pattern to match everything
-            if (!pattern) {
-                pattern = "";
-            }
+    try {
+        // Default pattern to match everything
+        if (!pattern) {
+            pattern = "";
+        }
 
-            {
-                epicsGuard<epicsMutex> G(pPvxsServer->groupMapMutex);
+        {
+            auto& config(IOCGroupConfig::instance());
+            epicsGuard<epicsMutex> G(config.groupMapMutex);
 
-                // For each group
-                for (auto& mapEntry: pPvxsServer->groupMap) {
-                    auto& groupName = mapEntry.first;
-                    auto& group = mapEntry.second;
-                    // if no pattern specified or the pattern matches
-                    if (!pattern[0] || !!epicsStrGlobMatch(groupName.c_str(), pattern)) {
-                        // Print the group name
-                        printf("%s\n", groupName.c_str());
-                        // print sub-levels if required
-                        if (level > 0) {
-                            group.show(level);
-                        }
+            // For each group
+            for (auto& mapEntry: config.groupMap) {
+                auto& groupName = mapEntry.first;
+                auto& group = mapEntry.second;
+                // if no pattern specified or the pattern matches
+                if (!pattern[0] || !!epicsStrGlobMatch(groupName.c_str(), pattern)) {
+                    // Print the group name
+                    printf("%s\n", groupName.c_str());
+                    // print sub-levels if required
+                    if (level > 0) {
+                        group.show(level);
                     }
                 }
             }
-        } catch (std::exception& e) {
-            fprintf(stderr, "%s\n", e.what());
         }
-    }));
+    } catch (std::exception& e) {
+        fprintf(stderr, "%s\n", e.what());
+    }
 }
 
-/**
- * Load JSON group definition file.
- * This function does not actually parse the given file, but adds it to the list of files to be loaded,
- * at the appropriate time in the startup process.
- *
-* @param jsonFilename the json file containing the group definitions.  If filename is a dash or a dash then star, the list of
- * files is cleared. If it starts with a dash followed by a filename then file is removed from the list.  Otherwise
- * the filename is added to the list of files to be loaded.
- * @return 0 for success, 1 for failure
- */
-long dbLoadGroup(const char* jsonFilename) {
+static
+const auto dbLoadGroupMsg =
+        "dbLoadGroup(\"file.json\")\n"
+        "dbLoadGroup(\"file.json\", \"MAC=value,...\")\n"
+        "\n"
+        "Load additional DB group definitions from file.\n"
+        "\n"
+        "dbLoadGroup(\"-*\")\n"
+        "dbLoadGroup(\"-file.json\")\n"
+        "dbLoadGroup(\"-file.json\", \"MAC=value,...\")\n"
+        "\n"
+        "Remove all, or one, previously added group definitions.\n"
+        ;
+
+long dbLoadGroup(const char* jsonFilename, const char* macros) {
     try {
         if (!jsonFilename || !jsonFilename[0]) {
-            printf("dbLoadGroup(\"file.json\")\n"
-                   "Load additional DB group definitions from file.\n");
-            fprintf(stderr, "Missing filename\n");
+            fprintf(stderr, "%s\n"
+                            "Error: Missing required JSON filename\n", dbLoadGroupMsg);
             return 1;
         }
+        if(!macros)
+            macros = "";
 
-        runOnPvxsServer([&jsonFilename](IOCServer* pPvxsServer) {
-            if (jsonFilename[0] == '-') {
-                jsonFilename++;
-                if (jsonFilename[0] == '*' && jsonFilename[1] == '\0') {
-                    pPvxsServer->groupConfigFiles.clear();
-                } else {
-                    pPvxsServer->groupConfigFiles.remove(jsonFilename);
-                }
-            } else {
-                pPvxsServer->groupConfigFiles.remove(jsonFilename);
-                pPvxsServer->groupConfigFiles.emplace_back(jsonFilename);
+        bool remove = jsonFilename[0] == '-';
+        if(remove)
+            jsonFilename++;
+
+        auto& config(IOCGroupConfig::instance());
+        auto& gCF = config.groupConfigFiles;
+
+        if(strcmp(jsonFilename, "*")==0) {
+            gCF.clear();
+            return 0;
+        }
+
+        decltype(IOCGroupConfig::JFile::jf) jfile;
+        decltype(IOCGroupConfig::JFile::handle) macs;
+        if(!remove) {
+            jfile.reset(new std::ifstream(jsonFilename));
+            if (!jfile->is_open()) {
+                fprintf(stderr, "Error opening \"%s\"\n", jsonFilename);
+                return 1;
             }
-        });
+
+            if(macros[0]!='\0') {
+                MAC_HANDLE* mac;
+                const char * env_pair[] = {"", "environ", NULL, NULL};
+                if(macCreateHandle(&mac, env_pair))
+                    throw std::bad_alloc();
+                macs.reset(mac);
+
+                char **pairs = nullptr;
+
+                auto noinstall = macParseDefns(mac, macros, &pairs)<0 || macInstallMacros(mac, pairs)<0;
+                free(pairs);
+                if(noinstall) {
+                    fprintf(stderr, "Error Invalid macros for \"%s\", \"%s\"\n",
+                            jsonFilename, macros);
+                    return 1;
+                }
+            }
+
+        }
+
+        for(auto next(gCF.begin()); next != gCF.end();)
+        {
+            auto it(next++);
+            if(it->fname==jsonFilename && it->macros==macros)
+                config.groupConfigFiles.erase(it);
+        }
+
+        if(!remove) {
+            gCF.emplace_back(std::move(jfile), jsonFilename, macros, std::move(macs));
+        }
         return 0;
     } catch (std::exception& e) {
         fprintf(stderr, "Error: %s\n", e.what());
@@ -129,25 +179,37 @@ using namespace pvxs;
  * @param theInitHookState the initHook state - we only want to trigger on the initHookAfterIocBuilt state - ignore all others
  */
 void qsrvGroupSourceInit(initHookState theInitHookState) {
-    if (theInitHookState == initHookAfterInitDatabase) {
-        GroupConfigProcessor processor;
-        // Parse all info(Q:Group... records to configure groups
-        processor.loadConfigFromDb();
+    try {
+        if(!IOCSource::enabled())
+            return;
+        if (theInitHookState == initHookAfterInitDatabase) {
+            GroupConfigProcessor processor;
+            epicsGuard<epicsMutex> G(processor.config.groupMapMutex);
 
-        // Load group configuration files
-        processor.loadConfigFiles();
+            // Parse all info(Q:Group... records to configure groups
+            processor.loadConfigFromDb();
 
-        // Configure groups
-        processor.defineGroups();
+            // Load group configuration files
+            processor.loadConfigFiles();
 
-        // Resolve triggers
-        processor.resolveTriggerReferences();
+            // checks on groupConfigMap
+            processor.validateGroups();
 
-        // Create Server Groups
-        processor.createGroups();
-    } else if (theInitHookState == initHookAfterIocBuilt) {
-        // Load group configuration from parsed groups in iocServer
-        pvxs::ioc::iocServer().addSource("qsrvGroup", std::make_shared<pvxs::ioc::GroupSource>(), 1);
+            // Configure groups
+            processor.defineGroups();
+
+            // Resolve triggers
+            processor.resolveTriggerReferences();
+
+            // Create Server Groups
+            processor.createGroups();
+        } else if (theInitHookState == initHookAfterIocBuilt) {
+            // Load group configuration from parsed groups in iocServer
+            pvxs::ioc::server().addSource("qsrvGroup", std::make_shared<pvxs::ioc::GroupSource>(), 1);
+        }
+    } catch(std::exception& e) {
+        fprintf(stderr, "ERROR: Unhandled exception in %s(%d): %s\n",
+                __func__, theInitHookState, e.what());
     }
 }
 
@@ -164,16 +226,15 @@ void qsrvGroupSourceInit(initHookState theInitHookState) {
  */
 void pvxsGroupSourceRegistrar() {
     // Register commands to be available in the IOC shell
-    IOCShCommand<int, const char*>("pvxsgl", "[level, [pattern]]", "Group Sources list.\n"
-                                                                   "List record/field names.\n"
-                                                                   "If `level` is set then show only down to that level.\n"
-                                                                   "If `pattern` is set then show records that match the pattern.")
+    IOCShCommand<int, const char*>("pvxgl", "[level, [pattern]]",
+                                   "Group Sources list.\n"
+                                   "List record/field names.\n"
+                                   "If `level` is set then show only down to that level.\n"
+                                   "If `pattern` is set then show records that match the pattern.")
             .implementation<&pvxsgl>();
 
-    IOCShCommand<const char*>("dbLoadGroup", "jsonDefinitionFile", "Load Group Record Definition from given file.\n"
-                                                                   "'-' or '-*' to remove previous files.\n"
-                                                                   "'-<jsonDefinitionFile>' to remove the file from the list.\n"
-                                                                   "otherwise add the file to the list of files to load.\n")
+    IOCShCommand<const char*, const char*>("dbLoadGroup",
+                                           "JSON file", "macros", dbLoadGroupMsg)
             .implementation<&dbLoadGroupCmd>();
 
     initHookRegister(&qsrvGroupSourceInit);

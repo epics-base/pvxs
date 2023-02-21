@@ -24,66 +24,24 @@ namespace ioc {
  * from string and dbChannel to make its use simpler.  It can be used wherever a dbChannel is used.
  * As a bonus when constructed with parameters it provides an already open dbChannel.
  */
-class Channel {
-private:
-    std::shared_ptr<dbChannel> pDbChannel;
-    void prepare();
-
+class Channel : public std::shared_ptr<dbChannel> {
 public:
+    Channel() = default;
+    Channel(const Channel&) = default;
+    Channel(Channel&&) = default;
     // This constructor calls dbChannelOpen()
-    explicit Channel(const std::string& name);
+    explicit Channel(const char* name);
+    inline
+    explicit Channel(const std::string& name)
+        :Channel(name.c_str())
+    {}
 
-/**
- * Destructor is default because pDbChannel cleans up after itself.
- */
-    ~Channel() = default;
+    Channel& operator=(const Channel&) = default;
+    Channel& operator=(Channel&&) = default;
 
-    /**
- * Cast as a shared pointer to a dbChannel.  This returns the pDbChannel member
- *
- * @return the pDbChannel member
- */
     operator dbChannel*() const {
-        return pDbChannel.get();
+        return get();
     }
-/**
- * Const pointer indirection operator
- * @return pointer to the dbChannel associated with this group channel
- */
-    const dbChannel* operator->() const {
-        return pDbChannel.get();
-    }
-
-    explicit operator bool() const {
-        return pDbChannel.operator bool();
-    }
-
-/**
- * Move constructor
- *
- * @param other other Channel
- */
-    Channel(Channel&& other) noexcept
-            :pDbChannel(std::move(other.pDbChannel)) {
-    }
-
-/**
- * Move assignment operator
- *
- * @param other the other channel
- * @return the moved channel
- */
-    Channel& operator=(Channel&& other) noexcept {
-        pDbChannel = std::move(other.pDbChannel);
-        other.pDbChannel = nullptr;
-        return *this;
-    }
-
-    // Disallowed methods.  Copy and move constructors
-    Channel(const Channel&) = delete;
-    const std::shared_ptr<dbChannel>& shared_ptr() const {
-        return pDbChannel;
-    };
 };
 
 } // pvxs

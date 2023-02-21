@@ -338,11 +338,11 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
         } else {
-            // If non-interactive then exit
+            // If non-interactive then spin forever
             if (dbIsLoaded || userScriptHasBeenExecuted) {
-                epicsExitCallAtExits();
-                epicsThreadSleep(0.1);
-                epicsThreadSuspendSelf();
+                while(true) {
+                    epicsThreadSleep(1000.0);
+                }
             } else {
                 // Indicate that there was probably an error if nothing was loaded or executed
                 std::cerr << "Nothing to do!\n";

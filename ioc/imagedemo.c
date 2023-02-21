@@ -19,7 +19,7 @@
  * VALA - pixel array (USHORT)
  */
 static
-long QSRV_image_demo(aSubRecord* prec) {
+long QSRV2_image_demo(aSubRecord* prec) {
     epicsUInt32 H = *(epicsUInt32*)prec->a,
             W = *(epicsUInt32*)prec->b;
     epicsUInt16* I = (epicsUInt16*)prec->vala;
@@ -43,4 +43,4 @@ long QSRV_image_demo(aSubRecord* prec) {
     return 0;
 }
 
-epicsRegisterFunction(QSRV_image_demo);
+epicsRegisterFunction(QSRV2_image_demo);

@@ -9,6 +9,7 @@
 #include <string>
 
 #include "groupprocessorcontext.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace ioc {
@@ -41,7 +42,26 @@ void GroupProcessorContext::assign(const Value& value) {
         auto& groupField = groupPvConfig.fieldConfigMap[field];
 
         if (key == "+type") {
-            groupField.type = value.as<std::string>();
+            auto tname = value.as<std::string>();
+            MappingInfo::type_t type = groupField.info.type;
+            if(tname == "scalar") {
+                type = MappingInfo::Scalar;
+            } else if(tname == "plain") {
+                type = MappingInfo::Plain;
+            } else if(tname == "any") {
+                type = MappingInfo::Any;
+            } else if(tname == "meta") {
+                type = MappingInfo::Meta;
+            } else if(tname == "proc") {
+                type = MappingInfo::Proc;
+            } else if(tname == "structure") {
+                type = MappingInfo::Structure;
+            } else if(tname == "const") {
+                type = MappingInfo::Const;
+            } else {
+                groupConfigProcessor->groupProcessingWarnings += SB()<<"Unknown mapping +type:\""<<tname<<"\" ignored";
+            }
+            groupField.info.type = type;
 
         } else if (key == "+channel") {
             groupField.channel = channelPrefix + value.as<std::string>();
@@ -54,6 +74,9 @@ void GroupProcessorContext::assign(const Value& value) {
 
         } else if (key == "+putorder") {
             groupField.putOrder = value.as<int64_t>();
+
+        } else if (key == "+const") {
+            groupField.info.cval = value;
 
         } else {
             groupConfigProcessor->groupProcessingWarnings += "Unknown group field option ";

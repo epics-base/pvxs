@@ -7,57 +7,18 @@
  *
  */
 
+#include <string.h>
+
 #include <pvxs/source.h>
 
 #include <dbStaticLib.h>
+#include <epicsStdlib.h>
 
+#include "dbentry.h"
+#include "fielddefinition.h"
 #include "typeutils.h"
 
 namespace pvxs {
-
-/**
- * Convert the given database field type code into a pvxs type code
- *
- * @param dbfType the database field type code
- * @return a pvxs type code
- *
- */
-TypeCode fromDbfType(dbfType dbfType) {
-    switch (dbfType) {
-    case DBF_CHAR:
-        return TypeCode::Int8;
-    case DBF_UCHAR:
-        return TypeCode::UInt8;
-    case DBF_SHORT:
-        return TypeCode::Int16;
-    case DBF_USHORT:
-        return TypeCode::UInt16;
-    case DBF_LONG:
-        return TypeCode::Int32;
-    case DBF_ULONG:
-        return TypeCode::UInt32;
-    case DBF_INT64:
-        return TypeCode::Int64;
-    case DBF_UINT64:
-        return TypeCode::UInt64;
-    case DBF_FLOAT:
-        return TypeCode::Float32;
-    case DBF_DOUBLE:
-        return TypeCode::Float64;
-    case DBF_ENUM:
-    case DBF_MENU:
-        return TypeCode::Struct;
-    case DBF_STRING:
-    case DBF_INLINK:
-    case DBF_OUTLINK:
-    case DBF_FWDLINK:
-        return TypeCode::String;
-    case DBF_DEVICE:
-    case DBF_NOACCESS:
-    default:
-        return TypeCode::Null;
-    }
-}
 
 /**
  * Convert the given database record type code into a pvxs type code
@@ -81,10 +42,12 @@ TypeCode fromDbrType(short dbrType) {
         return TypeCode::Int32;
     case DBR_ULONG:
         return TypeCode::UInt32;
+#ifdef DBR_INT64
     case DBR_INT64:
         return TypeCode::Int64;
     case DBR_UINT64:
         return TypeCode::UInt64;
+#endif
     case DBR_FLOAT:
         return TypeCode::Float32;
     case DBR_DOUBLE:
@@ -97,4 +60,33 @@ TypeCode fromDbrType(short dbrType) {
     }
 }
 
+
+namespace ioc {
+const char *MappingInfo::name(type_t t)
+{
+    switch(t) {
+    case Scalar: return "scalar";
+    case Plain: return "plain";
+    case Any: return "any";
+    case Meta: return "meta";
+    case Proc: return "proc";
+    case Structure: return "structure";
+    case Const: return "const";
+    }
+    return "<invalid>";
 }
+
+void MappingInfo::updateNsecMask(dbCommon *prec)
+{
+    assert(prec);
+    DBEntry ent(prec);
+    if(auto val = ent.info("Q:time:tag")) {
+        epicsInt32 dig = 0;
+        if(strncmp(val, "nsec:lsb:", 9)==0 && !epicsParseInt32(&val[9], &dig, 10, nullptr)) {
+            nsecMask = (uint64_t(1u)<<dig)-1u;
+        }
+    }
+}
+} // namespace ioc
+
+} // namespace pvxs

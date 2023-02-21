@@ -19,30 +19,19 @@ namespace ioc {
  *
  * @param name the db channel name
  */
-Channel::Channel(const std::string& name)
-        :pDbChannel(std::shared_ptr<dbChannel>(dbChannelCreate(name.c_str()),
+Channel::Channel(const char* name)
+        :std::shared_ptr<dbChannel>(std::shared_ptr<dbChannel>(dbChannelCreate(name),
         [](dbChannel* ch) {
             if (ch) {
                 dbChannelDelete(ch);
             }
-        })) {
-    if (pDbChannel) {
-        prepare();
-    }
+        }))
+{
+    if(!*this)
+        throw std::runtime_error(SB()<<"Invalid PV: "<<name);
+    if (dbChannelOpen(get()))
+        throw std::invalid_argument(SB() << "Failed dbChannelOpen(\"" << dbChannelName(get()) <<"\")");
 }
-
-/**
- * Internal function to prepare the dbChannel for operation by opening it
- */
-void Channel::prepare() {
-    if (!pDbChannel) {
-        throw std::invalid_argument(SB() << "NULL channel while opening group channel");
-    }
-    if (dbChannelOpen(pDbChannel.get())) {
-        throw std::invalid_argument(SB() << "Failed to open group channel " << dbChannelName(pDbChannel));
-    }
-}
-
 
 } // pvxs
 } // ioc

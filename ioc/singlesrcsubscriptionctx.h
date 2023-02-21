@@ -12,12 +12,20 @@
 
 #include <pvxs/source.h>
 
-#include <dbChannel.h>
-
+#include "channel.h"
+#include "fieldconfig.h"
 #include "subscriptionctx.h"
 
 namespace pvxs {
 namespace ioc {
+
+struct SingleInfo : public MappingInfo {
+    Channel chan;
+
+    explicit SingleInfo(Channel&& chan) :chan(std::move(chan)) {
+        updateNsecMask(dbChannelRecord(this->chan));
+    }
+};
 
 /**
  * A subscription context
@@ -25,16 +33,22 @@ namespace ioc {
 class SingleSourceSubscriptionCtx : public SubscriptionCtx {
 
 public:
-    explicit SingleSourceSubscriptionCtx(const std::shared_ptr<dbChannel>& dbChannelSharedPtr);
-// For locking access to subscription context
-    std::shared_ptr<dbChannel> pValueChannel;
-    std::shared_ptr<dbChannel> pPropertiesChannel;
+    explicit SingleSourceSubscriptionCtx(const std::shared_ptr<SingleInfo>& sInfo);
+
+    // extra dbChannel* to have a distinct state for any server side filters.  (eg. decimate)
+    const Channel pPropertiesChannel;
 
     // This is used to store the current value.  Each subscription event simply merges
     // new fields into this value
     Value currentValue{};
+    std::shared_ptr<SingleInfo> info;
     epicsMutex eventLock{};
     std::unique_ptr<server::MonitorControlOp> subscriptionControl{};
+    bool eventsEnabled = false;
+
+    ~SingleSourceSubscriptionCtx() {
+        assert(!eventsEnabled);
+    }
 };
 
 } // ioc

@@ -34,6 +34,8 @@ public:
             :lock(L) {
         dbScanLock(lock);
     }
+    DBLocker(const DBLocker&) = delete;
+    DBLocker(DBLocker&&) = delete;
 
     ~DBLocker() {
         dbScanUnlock(lock);
