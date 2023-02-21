@@ -27,6 +27,7 @@
 
 #include "iocserver.h"
 #include "iocshcommand.h"
+#include "utilpvt.h"
 
 // must include after log.h has been included to avoid clash with printf macro
 #include <epicsStdio.h>
@@ -210,7 +211,8 @@ void initialisePvxsServer() {
     using namespace pvxs::server;
     auto serv = pvxsServer.load();
     if (!serv) {
-        std::unique_ptr<IOCServer> temp(new IOCServer(Config::from_env()));
+        Config conf = ::pvxs::impl::inUnitTest() ? Config::isolated() : Config::from_env();
+        std::unique_ptr<IOCServer> temp(new IOCServer(conf));
 
         if (pvxsServer.compare_exchange_strong(serv, temp.get())) {
             log_debug_printf(_logname, "Installing Server %p\n", temp.get());

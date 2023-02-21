@@ -56,6 +56,9 @@ struct promote_print<int8_t> { static int op(const char& v) { return v; }};
 template<>
 struct promote_print<uint8_t> { static unsigned op(const char& v) { return v; }};
 
+PVXS_API
+bool inUnitTest();
+
 /* specialization of bad_alloc which notes the location from which
  * the exception originates.
  */

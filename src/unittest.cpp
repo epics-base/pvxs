@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <atomic>
+
 #include "pvxs/version.h"
 
 #if !defined(GCC_VERSION) || GCC_VERSION>VERSION_INT(4,9,0,0)
@@ -29,6 +31,8 @@
 
 namespace pvxs {
 
+static std::atomic<bool> thisIsATest{false};
+
 void testSetup()
 {
 #ifdef _WIN32
@@ -39,9 +43,15 @@ void testSetup()
     if(prev)
         testDiag("SetErrorMode() disables 0x%x\n", (unsigned)prev);
 #endif
+    thisIsATest = true;
 }
 
 namespace impl {
+bool inUnitTest()
+{
+    return thisIsATest;
+}
+
 loc_bad_alloc::loc_bad_alloc(const char *file, int line)
 {
     if(auto sep = strrchr(file, '/')) {
