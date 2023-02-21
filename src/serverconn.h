@@ -51,6 +51,7 @@ struct ServerOp
     ServerOp& operator=(const ServerOp&) = delete;
     virtual ~ServerOp() =0;
 
+    void cleanup();
     virtual void show(std::ostream& strm) const =0;
 };
 
@@ -103,6 +104,8 @@ struct ServerChan
     ServerChan(const ServerChan&) = delete;
     ServerChan& operator=(const ServerChan&) = delete;
     ~ServerChan();
+
+    void cleanup();
 };
 
 struct ServerConn : public ConnBase, public std::enable_shared_from_this<ServerConn>

@@ -119,21 +119,7 @@ struct ServerGPR : public ServerOp
         ch->statTx += conn->enqueueTxBody(cmd);
 
         if(state == ServerOp::Dead) {
-            ch->opByIOID.erase(ioid);
-            auto it = conn->opByIOID.find(ioid);
-            if(it!=conn->opByIOID.end()) {
-                auto self(it->second);
-                conn->opByIOID.erase(it);
-
-                if(self->onClose)
-                    conn->iface->server->acceptor_loop.dispatch([self](){
-                        self->onClose("");
-                    });
-
-            } else {
-                assert(false); // really shouldn't happen
-            }
-            conn->opByIOID.erase(ioid);
+            cleanup();
         }
     }
 

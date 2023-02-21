@@ -29,7 +29,17 @@ struct MonitorOp : public ServerOp,
 {
     MonitorOp(const std::shared_ptr<ServerChan>& chan, uint32_t ioid)
         :ServerOp(chan, ioid)
-    {}
+    {
+        // ServerOp::onCancel isn't exposed to users for MONITOR
+        // so we can (ab)use for internal cleanup.
+        onCancel = [this]() {
+            if(state == Executing) {
+                if(onStart)
+                    onStart(false);
+                state = Idle;
+            }
+        };
+    }
     virtual ~MonitorOp() {}
 
     // only access from accepter worker thread
@@ -153,21 +163,7 @@ struct MonitorOp : public ServerOp,
         ch->statTx += conn->enqueueTxBody(pva_app_msg_t::CMD_MONITOR);
 
         if(state == ServerOp::Dead) {
-            ch->opByIOID.erase(ioid);
-            auto it = conn->opByIOID.find(ioid);
-            if(it!=conn->opByIOID.end()) {
-                auto self(it->second);
-                conn->opByIOID.erase(it);
-
-                if(self->onClose)
-                    conn->iface->server->acceptor_loop.dispatch([self](){
-                        self->onClose("");
-                    });
-
-            } else {
-                assert(false); // really shouldn't happen
-            }
-            conn->opByIOID.erase(ioid);
+            cleanup();
             return;
         }
 
@@ -581,15 +577,12 @@ void ServerConn::handle_MONITOR()
                 auto self(it->second);
                 opByIOID.erase(it);
 
-                if(self->onClose) {
-                    iface->server->acceptor_loop.dispatch([self](){
-                        if(self->onClose)
-                            self->onClose("");
-                    });
-                }
+                iface->server->acceptor_loop.dispatch([self](){
+                    self->cleanup();
+                });
 
             } else {
-                assert(false); // really shouldn't happen
+                log_exc_printf(connsetup, "Logic error in %s w/ 0x%x\n", __func__, subcmd);
             }
             opByIOID.erase(ioid);
         }
