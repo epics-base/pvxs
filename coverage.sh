@@ -37,13 +37,14 @@ make -C "$TDIR" -j8 \
  CMD_LDFLAGS='-fprofile-arcs -ftest-coverage' \
  runtests
 
-OUTDIR="$PWD"
-cd "$TDIR"/src/O.*
+OUTDIR="$PWD"/coverage
+install -d "$OUTDIR"
 
-gcovr -v -r .. --html --html-details -o coverage.html
+cd "$TDIR"/src/O.linux-*
+gcovr -v -r .. --html --html-details -o "$OUTDIR"/coverage.html
 
-tar -cavf "$OUTDIR"/coverage.tar.bz2 coverage*.html
+cd "$TDIR"/ioc/O.linux-*
+gcovr -v -r .. --html --html-details -o "$OUTDIR"/coverage-ioc.html
 
-install -d "$OUTDIR/coverage"
-rm -f "$OUTDIR/coverage"/*
-tar -C "$OUTDIR/coverage" -xaf "$OUTDIR"/coverage.tar.bz2
+cd "$OUTDIR"
+tar -cavf coverage.tar.bz2 coverage*.html
