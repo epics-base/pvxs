@@ -107,7 +107,7 @@ struct ThreadEvent
     inline epicsEvent* operator->() { return get(); }
 };
 
-struct evbase::Pvt : public epicsThreadRunable
+struct evbase::Pvt final : public epicsThreadRunable
 {
     SockAttach attach;
 

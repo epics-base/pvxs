@@ -246,7 +246,7 @@ struct SocketPair {
 
 } // namespace
 
-struct SigInt::Pvt : public epicsThreadRunable {
+struct SigInt::Pvt final : private epicsThreadRunable {
     void (*prevINT)(int);
     void (*prevTERM)(int);
     const std::function<void()> handler;

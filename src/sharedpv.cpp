@@ -467,7 +467,7 @@ Value SharedPV::fetch() const
     }
 }
 
-struct StaticSource::Impl : public Source
+struct StaticSource::Impl final : public Source
 {
     mutable RWLock lock;
 

@@ -81,7 +81,7 @@ struct RequestInfo {
     RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationBase>& handle);
 };
 
-struct Connection : public ConnBase, public std::enable_shared_from_this<Connection> {
+struct Connection final : public ConnBase, public std::enable_shared_from_this<Connection> {
     const std::shared_ptr<ContextImpl> context;
 
     // While HoldOff, the time until re-connection
@@ -151,7 +151,7 @@ protected:
     static void tickEchoS(evutil_socket_t fd, short evt, void *raw);
 };
 
-struct ConnectImpl : public Connect
+struct ConnectImpl final : public Connect
 {
     const evbase loop;
     std::shared_ptr<Channel> chan;
@@ -223,7 +223,7 @@ struct Channel {
                                    const std::string& server);
 };
 
-struct Discovery : public OperationBase
+struct Discovery final : public OperationBase
 {
     const std::shared_ptr<ContextImpl> context;
     std::function<void(const Discovered &)> notify;

@@ -31,7 +31,7 @@ struct Entry {
 };
 }
 
-struct SubscriptionImpl : public OperationBase, public Subscription
+struct SubscriptionImpl final : public OperationBase, public Subscription
 {
     // for use in log messages, even after cancel()
     std::string channelName;
