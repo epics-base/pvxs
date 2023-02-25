@@ -259,7 +259,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
                     auto junk(std::move(strong));
                     // need to do cleanup on worker if running
                     auto loop(junk->loop);
-                    loop.tryCall(std::bind([](std::shared_ptr<SubscriptionImpl>& junk){
+                    loop.tryCall(std::bind([](std::shared_ptr<SubscriptionImpl>& junk) noexcept {
                          // really on worker
                          // cleanup here when worker is running
                          junk.reset();
