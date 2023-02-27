@@ -410,6 +410,9 @@ static std::initializer_list<void (*)()> tests = {
             subscription->cancel();
         },
         []() {
+            // Reset the link field to avoid double updates
+            testdbPutFieldOk("test:vectorExampleD2.FLNK", DBR_STRING, "");
+
             epicsEvent event;
 
             // Subscribe for changes to Group PV
@@ -423,6 +426,7 @@ static std::initializer_list<void (*)()> tests = {
             auto pvName = "test:tableExample";
             shared_array<const double> expectedA({ 4.1, 4.2, 4.3, 4.4, 4.5 });
             shared_array<const double> expectedB({ 5.1, 5.2, 5.3, 5.4, 5.5 });
+
             clientContext.put(pvName).build([&expectedA, &expectedB](Value&& prototype) -> Value {
                         auto putVal = prototype.cloneEmpty();
                         putVal["value.A"] = expectedA;
@@ -450,7 +454,7 @@ static std::initializer_list<void (*)()> tests = {
  */
 MAIN(testioc) {
     auto testNum = 0;
-    testPlan((int)tests.size() + 1);
+    testPlan((int)tests.size() + 2);
     testSetup();
     testdbPrepare();
 
