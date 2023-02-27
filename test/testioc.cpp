@@ -279,9 +279,9 @@ static std::initializer_list<void (*)()> tests = {
             auto subscription = subscribe(event, pvName);
 
             clientContext.hurryUp();
-            testThrows<client::Connected>([&subscription, &event]() {
-                waitForUpdate(subscription, event);
-            });
+
+            // Wait for initial update
+            waitForUpdate(subscription, event);
 
             uint64_t expectedValue = 10L;
             clientContext.put(pvName)
@@ -304,9 +304,8 @@ static std::initializer_list<void (*)()> tests = {
             auto subscription = subscribe(event, pvGroupName);
 
             clientContext.hurryUp();
-            testThrows<client::Connected>([&subscription, &event]() {
-                waitForUpdate(subscription, event);
-            });
+            waitForUpdate(subscription, event);
+            testDiag("Got Initial Update!");
 
             auto pvName = "test:longExample";
             uint64_t expectedValue = 12L;
@@ -314,6 +313,7 @@ static std::initializer_list<void (*)()> tests = {
                     .set("value", expectedValue)
                     .exec()
                     ->wait(5.0);
+            testDiag("Issued Put!");
 
             auto subFieldName = "sa[0].long.value";
             auto updatedValue = waitForUpdate(subscription, event);
@@ -332,9 +332,8 @@ static std::initializer_list<void (*)()> tests = {
             auto subscription = subscribe(event, pvGroupName);
 
             clientContext.hurryUp();
-            testThrows<client::Connected>([&subscription, &event]() {
-                waitForUpdate(subscription, event);
-            });
+            waitForUpdate(subscription, event);
+            testDiag("Got Initial Update!");
 
             auto pvName = "test:vectorExampleD2";
             shared_array<const double> expectedValue({ 3.1, 3.2, 3.3, 3.4, 3.5 });
@@ -345,6 +344,7 @@ static std::initializer_list<void (*)()> tests = {
                     })
                     .exec()->wait(5.0);
 
+            testDiag("Issued Put!");
             auto subFieldName = "value.B";
             auto updatedValue = waitForUpdate(subscription, event);
             if (updatedValue) {
@@ -361,18 +361,18 @@ static std::initializer_list<void (*)()> tests = {
             auto subscription = subscribe(event, pvGroupName);
 
             clientContext.hurryUp();
-            testThrows<client::Connected>([&subscription, &event]() {
-                waitForUpdate(subscription, event);
-            });
+            waitForUpdate(subscription, event);
+            testDiag("Got Initial Update!");
 
             auto pvName = "test:longExample";
-            uint64_t expectedValue = 12L;
+            uint64_t expectedValue = 13L;
             clientContext.put(pvName)
                     .set("value", expectedValue)
                     .exec()
                     ->wait(5.0);
+            testDiag("Issued Put!");
 
-            auto subFieldName = "sa[0].long.value";
+            auto subFieldName = "sa[0].any";
             auto updatedValue = waitForUpdate(subscription, event);
             if (updatedValue) {
                 auto actualValue = updatedValue[subFieldName].as<uint64_t>();
@@ -388,9 +388,8 @@ static std::initializer_list<void (*)()> tests = {
             auto subscription = subscribe(event, pvGroupName);
 
             clientContext.hurryUp();
-            testThrows<client::Connected>([&subscription, &event]() {
-                waitForUpdate(subscription, event);
-            });
+            waitForUpdate(subscription, event);
+            testDiag("Got Initial Update!");
 
             auto pvName = "test:vectorExampleD2";
             shared_array<const double> expectedValue({ 3.1, 3.2, 3.3, 3.4, 3.5 });
@@ -400,12 +399,45 @@ static std::initializer_list<void (*)()> tests = {
                         return putVal;
                     })
                     .exec()->wait(5.0);
+            testDiag("Issued Put!");
 
             auto subFieldName = "value.jB";
             auto updatedValue = waitForUpdate(subscription, event);
             if (updatedValue) {
                 auto actualValue = updatedValue[subFieldName].as<shared_array<const double>>();
                 testArrEq(expectedValue, actualValue);
+            }
+            subscription->cancel();
+        },
+        []() {
+            epicsEvent event;
+
+            // Subscribe for changes to Group PV
+            auto pvGroupName = "test:tableExample";
+            auto subscription = subscribe(event, pvGroupName);
+
+            clientContext.hurryUp();
+            waitForUpdate(subscription, event);
+            testDiag("Got Initial Update!");
+
+            auto pvName = "test:tableExample";
+            shared_array<const double> expectedA({ 4.1, 4.2, 4.3, 4.4, 4.5 });
+            shared_array<const double> expectedB({ 5.1, 5.2, 5.3, 5.4, 5.5 });
+            clientContext.put(pvName).build([&expectedA, &expectedB](Value&& prototype) -> Value {
+                        auto putVal = prototype.cloneEmpty();
+                        putVal["value.A"] = expectedA;
+                        putVal["value.B"] = expectedB;
+                        return putVal;
+                    })
+                    .exec()->wait(5.0);
+
+            testDiag("Issued Put!");
+            auto updatedValue = waitForUpdate(subscription, event);
+            if (updatedValue) {
+                auto actualAValue = updatedValue["value.A"].as<shared_array<const double>>();
+                auto actualBValue = updatedValue["value.B"].as<shared_array<const double>>();
+                testArrEq(expectedA, actualAValue);
+                testArrEq(expectedB, actualBValue);
             }
             subscription->cancel();
         },
@@ -418,8 +450,7 @@ static std::initializer_list<void (*)()> tests = {
  */
 MAIN(testioc) {
     auto testNum = 0;
-    auto nMonitorTests = 5;
-    testPlan((int)tests.size() + nMonitorTests);
+    testPlan((int)tests.size() + 1);
     testSetup();
     testdbPrepare();
 
@@ -460,8 +491,8 @@ static void boxLeft() {
  */
 static std::shared_ptr<pvxs::client::Subscription> subscribe(epicsEvent& event, const char* pvName) {
     return clientContext.monitor(pvName)
-            .maskConnected(false)
-            .maskDisconnected(false)
+            .maskConnected(true)
+            .maskDisconnected(true)
             .event([&event, pvName](client::Subscription& subscription) {
                 testDiag("%s update event occurred", pvName);
                 event.signal();

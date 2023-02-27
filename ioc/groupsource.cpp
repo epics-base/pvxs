@@ -128,9 +128,11 @@ void GroupSource::createRequestAndSubscriptionHandlers(std::unique_ptr<server::C
         onOp(group, std::move(channelConnectOperation));
     });
 
-    auto subscriptionContext(std::make_shared<GroupSourceSubscriptionCtx>(group));
     channelControl
-            ->onSubscribe([this, subscriptionContext](std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) {
+            ->onSubscribe([this, &group](std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) {
+                // The group subscription must be kept alive
+                // We accomplish this further on during the binding of the onStart()
+                auto subscriptionContext(std::make_shared<GroupSourceSubscriptionCtx>(group));
                 onSubscribe(subscriptionContext, std::move(subscriptionOperation));
             });
 }
@@ -265,6 +267,7 @@ void GroupSource::onSubscribe(const std::shared_ptr<GroupSourceSubscriptionCtx>&
     }
 
     // If all goes well, set up handlers for start and stop monitoring events
+    // The group subscription context is being kept alive because it is being bound into some internal storage by onStart
     groupSubscriptionCtx->subscriptionControl->onStart([groupSubscriptionCtx](bool isStarting) {
         onStart(groupSubscriptionCtx, isStarting);
     });

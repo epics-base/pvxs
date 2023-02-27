@@ -130,7 +130,6 @@ void SingleSource::show(std::ostream& outputStream) {
  */
 void SingleSource::createRequestAndSubscriptionHandlers(std::unique_ptr<server::ChannelControl>&& channelControl,
         const std::shared_ptr<dbChannel>& dbChannelSharedPtr) {
-    auto subscriptionContext(std::make_shared<SingleSourceSubscriptionCtx>(dbChannelSharedPtr));
 
     Value valuePrototype = getValuePrototype(dbChannelSharedPtr);
 
@@ -141,10 +140,13 @@ void SingleSource::createRequestAndSubscriptionHandlers(std::unique_ptr<server::
             });
 
     // Subscription requests
-    // Shared ptr for one of captured vars below
-    subscriptionContext->currentValue = valuePrototype;
     channelControl
-            ->onSubscribe([this, subscriptionContext](std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) {
+            ->onSubscribe([this, valuePrototype, dbChannelSharedPtr](
+                    std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) {
+                // The subscription must be kept alive
+                // We accomplish this further on during the binding of the onStart()
+                auto subscriptionContext(std::make_shared<SingleSourceSubscriptionCtx>(dbChannelSharedPtr));
+                subscriptionContext->currentValue = valuePrototype;
                 onSubscribe(subscriptionContext, std::move(subscriptionOperation));
             });
 }
@@ -391,7 +393,8 @@ void SingleSource::onSubscribe(const std::shared_ptr<SingleSourceSubscriptionCtx
     }
 
     // If all goes well, Set up handlers for start and stop monitoring events
-    subscriptionContext->subscriptionControl->onStart([&subscriptionContext](bool isStarting) {
+    // The subscription context is being kept alive because it is being bound into some internal storage by onStart
+    subscriptionContext->subscriptionControl->onStart([subscriptionContext](bool isStarting) {
         onStart(subscriptionContext, isStarting);
     });
 }
