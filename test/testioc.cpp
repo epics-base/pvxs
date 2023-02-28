@@ -77,6 +77,7 @@ static std::initializer_list<void (*)()> tests = {
             testdbGetArrFieldEqualB("test:arrayExample", DBR_DOUBLE, 3, expected.size(), expected.data());
         },
         []() { testdbGetFieldEqualB("test:longExample", DBR_LONG, 102042); },
+        []() { testdbGetFieldEqualB("test:longlongExample", DBR_INT64, 0x123456789); },
         []() { testdbGetFieldEqualB("test:enumExample", DBR_ENUM, 2); },
         []() {
             char expected[MAX_STRING_SIZE * 2]{ 0 };
@@ -146,8 +147,14 @@ static std::initializer_list<void (*)()> tests = {
         },
         []() {
             auto val = clientContext.get("test:longExample").exec()->wait(5.0);
-            auto longValue = val["value"].as<long>();
+            auto longValue = val["value"].as<int32_t>();
             auto expected = 102042;
+            testEqB(longValue, expected);
+        },
+        []() {
+            auto val = clientContext.get("test:longlongExample").exec()->wait(5.0);
+            auto longValue = val["value"].as<int64_t>();
+            auto expected = 0x123456789;
             testEqB(longValue, expected);
         },
         []() {
@@ -255,6 +262,10 @@ static std::initializer_list<void (*)()> tests = {
         []() {
             clientContext.put("test:slowmo.PROC").set("value", 0).pvRequest("record[block=true]").exec()->wait(5.0);
             testdbGetFieldEqualB("test:slowmo", DBR_DOUBLE, 1.0);
+        },
+        []() {
+            clientContext.put("test:longlongExample").set("value", 0x987654321ull).exec()->wait(5.0);
+            testdbGetFieldEqualB("test:longlongExample", DBR_UINT64, 0x987654321ull);
         },
         []() {
             clientContext.put("test:procCounter.HIGH").set("value", 0).pvRequest("record[process=true]").exec()

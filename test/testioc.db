@@ -86,6 +86,11 @@ record(longout, "$(user):structExampleSave") {
     field(MDEL, "-1") # ensure we always trigger group monitor
     field(TPRO, "1")
 }
+record(int64out, "$(user):longlongExample") {
+    field(VAL, "0x123456789")
+    field(MDEL, "-1")
+    field(TPRO, "1")
+}
 record(longin, "$(user):roLongExample") {
   field(VAL, "204084")
   field(SEVR, "1")
