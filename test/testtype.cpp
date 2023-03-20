@@ -588,11 +588,19 @@ void testFormat()
     );
 }
 
+void testAppendBig()
+{
+    auto orig(neckBolt());
+    TypeDef append(orig);
+    auto copy(append.create());
+    testTrue(orig.equalType(copy));
+}
+
 } // namespace
 
 MAIN(testtype)
 {
-    testPlan(68);
+    testPlan(69);
     testSetup();
     showSize();
     testCode();
@@ -603,6 +611,7 @@ MAIN(testtype)
     testTypeDefAppendIncremental();
     testOp();
     testFormat();
+    testAppendBig();
     cleanup_for_valgrind();
     return testDone();
 }
