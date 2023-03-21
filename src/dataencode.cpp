@@ -491,10 +491,10 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
     case StoreType::UInteger: {
         auto& fld = store->as<uint64_t>();
         switch(desc->code.code) {
-        case TypeCode::UInt8:  fld = from_wire_as<int8_t>(buf); return;
-        case TypeCode::UInt16: fld = from_wire_as<int16_t>(buf); return;
-        case TypeCode::UInt32: fld = from_wire_as<int32_t>(buf); return;
-        case TypeCode::UInt64: fld = from_wire_as<int64_t>(buf); return;
+        case TypeCode::UInt8:  fld = from_wire_as<uint8_t>(buf); return;
+        case TypeCode::UInt16: fld = from_wire_as<uint16_t>(buf); return;
+        case TypeCode::UInt32: fld = from_wire_as<uint32_t>(buf); return;
+        case TypeCode::UInt64: fld = from_wire_as<uint64_t>(buf); return;
         default: break;
         }
     }

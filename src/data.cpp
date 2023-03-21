@@ -565,7 +565,7 @@ void Value::copyIn(const void *ptr, StoreType type)
     case StoreType::UInteger: {
         if(!copyInScalar(store->as<uint64_t>(), ptr, type)) throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
         // truncate as if assigned to narrower type
-        int64_t orig = store->as<int64_t>();
+        uint64_t orig = store->as<uint64_t>();
         switch(desc->code.code) {
         case TypeCode::UInt8: orig = uint8_t(orig); break;
         case TypeCode::UInt16: orig = uint16_t(orig); break;
@@ -573,7 +573,7 @@ void Value::copyIn(const void *ptr, StoreType type)
         case TypeCode::UInt64: orig = uint64_t(orig); break;
         default: break;
         }
-        store->as<int64_t>() = orig;
+        store->as<uint64_t>() = orig;
         break;
     }
     case StoreType::Bool: {
