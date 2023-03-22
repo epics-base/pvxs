@@ -12,7 +12,7 @@ Release Notes
 * Fix `pvxs::Value::nmembers` which erroneously returned ``0`` for ``StructA`` and ``UnionA``.
 * Fix `pvxs::Value::unmark` where ``parent=true`` caused corruption.
 * Change to "magic" automatic ``Union`` member selection during assignment.
-* Fix `pvxs::shared_array::convertTo`` converting ``Float64`` to ``Float32`` caused corruption.
+* Fix `pvxs::shared_array::convertTo` converting ``Float64`` to ``Float32`` caused corruption.
 * Fix TypeDef(const Value& val) for Union/UnionA/StructA
 * Fix unsigned handling
 * server: rework cleanup of connection, channel, and operation
