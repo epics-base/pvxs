@@ -568,7 +568,7 @@ public:
     //! Mark this field as valid/changed
     void mark(bool v=true);
     //! Remove mark from this field, and optionally parent and/or child fields.
-    //! \since UNRELEASED Correctly unmark parent fields
+    //! \since 1.1.3 Correctly unmark parent fields
     void unmark(bool parents=false, bool children=true);
 
     //! Type of the referenced field (or Null)
@@ -740,7 +740,7 @@ public:
 
     //! Number of child fields.
     //! only Struct, StructA, Union, UnionA return non-zero
-    //! \since UNRELEASED correctly return non-zero for StructA and UnionA
+    //! \since 1.1.3 correctly return non-zero for StructA and UnionA
     size_t nmembers() const;
 
     struct _IAll {};
