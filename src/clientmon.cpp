@@ -554,9 +554,10 @@ void Connection::handle_MONITOR()
              * copy unmarked from prototype -> data
              */
             {
+                auto desc = Value::Helper::desc(info->prototype);
                 auto delta = Value::Helper::store_ptr(data);
                 auto complete = Value::Helper::store_ptr(info->prototype);
-                auto N = Value::Helper::desc(info->prototype)->size();
+                auto N = desc->size();
                 for(size_t i=0u; i < N; i++, delta++, complete++)
                 {
                     const auto src = delta->valid ? delta : complete;
@@ -578,7 +579,13 @@ void Connection::handle_MONITOR()
                         dst->as<shared_array<const void>>() = src->as<shared_array<const void>>();
                         break;
                     case StoreType::Compound:
-                        dst->as<Value>().copyIn(&src->store, StoreType::Compound);
+                    {
+                        std::shared_ptr<impl::FieldStorage> sstore(Value::Helper::store(data),
+                                                                  src);
+                        auto& dfld(dst->as<Value>());
+                        Value::Helper::set_desc(dfld, &desc[i]);
+                        Value::Helper::store(dfld) = std::move(sstore);
+                    }
                         break;
                     }
                 }
