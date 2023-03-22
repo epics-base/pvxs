@@ -1,261 +1,259 @@
-/**
+/*
  * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
+ *
+ * Author George S. McIntyre <george@level-n.com>, 2023
+ *
  */
 
+/**
+ * This source file defines the pvxs IOC server instance and also defines a few high level IOC shell commands from PVXS
+ * It does not register any database sources defined in any user DB file or user group file, that is
+ * handled in records.cpp and groups.cpp respectively.
+ */
 #include <atomic>
 #include <memory>
 #include <stdexcept>
-#include <sstream>
 
+#include <epicsExport.h>
+#include <initHooks.h>
+#include <iocsh.h>
+
+#include <pvxs/iochooks.h>
 #include <pvxs/log.h>
 #include <pvxs/server.h>
 #include <pvxs/source.h>
-#include <pvxs/iochooks.h>
 
-#include <iocsh.h>
-#include <initHooks.h>
+#include "iocserver.h"
+#include "iocshcommand.h"
+
+// must include after log.h has been included to avoid clash with printf macro
 #include <epicsStdio.h>
-#include <epicsExit.h>
-#include <epicsExport.h>
 
-using namespace pvxs;
-
-namespace {
-std::atomic<server::Server*> instance{};
-
-DEFINE_LOGGER(log, "pvxs.ioc");
-
-void pvxsl(int detail)
-{
-    try {
-        if(auto serv = instance.load()) {
-            for(auto& pair : serv->listSource()) {
-                auto src = serv->getSource(pair.first, pair.second);
-                if(!src)
-                    continue; // race?
-
-                auto list = src->onList();
-
-                if(detail>0)
-                    printf("# Source %s@%d%s\n",
-                           pair.first.c_str(), pair.second,
-                           list.dynamic ? " [dynamic]":"");
-
-                if(!list.names) {
-                    if(detail>0)
-                        printf("# no PVs\n");
-                } else {
-                    for(auto& name : *list.names) {
-                        printf("%s\n", name.c_str());
-                    }
-                }
-            }
-        }
-    } catch(std::exception& e) {
-        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
-    }
-}
-
-void pvxsr(int detail)
-{
-    try {
-        if(auto serv = instance.load()) {
-            std::ostringstream strm;
-            Detailed D(strm, detail);
-            strm<<*serv;
-            printf("%s", strm.str().c_str());
-        }
-    } catch(std::exception& e) {
-        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
-    }
-}
-
-void pvxs_target_info()
-{
-    try {
-        std::ostringstream capture;
-        target_information(capture);
-        printf("%s", capture.str().c_str());
-    } catch(std::exception& e) {
-        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
-    }
-}
-
-// index_sequence from:
-//http://stackoverflow.com/questions/17424477/implementation-c14-make-integer-sequence
-
-template< std::size_t ... I >
-struct index_sequence {
-    using type = index_sequence;
-    using value_type = std::size_t;
-    static constexpr std::size_t size() {
-        return sizeof ... (I);
-    }
-};
-
-template< typename Seq1, typename Seq2 >
-struct concat_sequence;
-
-template< std::size_t ... I1, std::size_t ... I2 >
-struct concat_sequence< index_sequence< I1 ... >, index_sequence< I2 ... > > : public index_sequence< I1 ..., (sizeof ... (I1)+I2) ... > {};
-
-template< std::size_t I >
-struct make_index_sequence : public concat_sequence< typename make_index_sequence< I/2 >::type,
-                                                     typename make_index_sequence< I-I/2 >::type > {};
-
-template<>
-struct make_index_sequence< 0 > : public index_sequence<> {};
-
-template<>
-struct make_index_sequence< 1 > : public index_sequence< 0 > {};
-
-template<typename E>
-struct Arg;
-
-template<>
-struct Arg<int> {
-    static constexpr iocshArgType code = iocshArgInt;
-    static int get(const iocshArgBuf& buf) { return buf.ival; }
-};
-
-template<>
-struct Arg<double> {
-    static constexpr iocshArgType code = iocshArgDouble;
-    static double get(const iocshArgBuf& buf) { return buf.dval; }
-};
-
-template<>
-struct Arg<const char*> {
-    static constexpr iocshArgType code = iocshArgString;
-    static const char* get(const iocshArgBuf& buf) { return buf.sval; }
-};
-
-template<typename T>
-struct ToStr { typedef const char* type; };
-
-template<typename ...Args>
-struct Reg {
-    const char* const name;
-    const char* const argnames[1+sizeof...(Args)];
-
-    constexpr explicit Reg(const char* name, typename ToStr<Args>::type... descs)
-        :name(name)
-        ,argnames{descs..., 0}
-    {}
-
-    template<void (*fn)(Args...), size_t... Idxs>
-    static
-    void call(const iocshArgBuf* args)
-    {
-        (*fn)(Arg<Args>::get(args[Idxs])...);
-    }
-
-    template<void (*fn)(Args...), size_t... Idxs>
-    void doit(index_sequence<Idxs...>)
-    {
-        static const iocshArg argstack[1+sizeof...(Args)] = {{argnames[Idxs], Arg<Args>::code}...};
-        static const iocshArg * const args[] = {&argstack[Idxs]..., 0};
-        static const iocshFuncDef def = {name, sizeof...(Args), args};
-
-        iocshRegister(&def, &call<fn, Idxs...>);
-    }
-
-    template<void (*fn)(Args...)>
-    void ister()
-    {
-        doit<fn>(make_index_sequence<sizeof...(Args)>{});
-    }
-};
-
-void pvxsAtExit(void* unused)
-{
-    try {
-        if(auto serv = instance.load()) {
-            if(instance.compare_exchange_strong(serv, nullptr)) {
-                // take ownership
-                std::unique_ptr<server::Server> trash(serv);
-                trash->stop();
-                log_debug_printf(log, "Stopped Server?%s", "\n");
-            }
-        }
-    } catch(std::exception& e) {
-        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
-    }
-}
-
-void pvxsInitHook(initHookState state)
-{
-    try {
-        // iocBuild()
-        if(state==initHookAfterInitDatabase) {
-            // we want to run before exitDatabase
-            epicsAtExit(&pvxsAtExit, nullptr);
-        }
-        // iocRun()/iocPause()
-        if(state==initHookAfterCaServerRunning) {
-            if(auto serv = instance.load()) {
-                serv->start();
-                log_debug_printf(log, "Started Server %p", serv);
-            }
-        }
-        if(state==initHookAfterCaServerPaused) {
-            if(auto serv = instance.load()) {
-                serv->stop();
-                log_debug_printf(log, "Stopped Server %p", serv);
-            }
-        }
-    } catch(std::exception& e) {
-        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
-    }
-}
-
-void pvxsRegistrar()
-{
-    try {
-        pvxs::logger_config_env();
-
-        Reg<int>("pvxsl", "detail").ister<&pvxsl>();
-        Reg<int>("pvxsr", "detail").ister<&pvxsr>();
-        Reg<>("pvxs_target_info").ister<&pvxs_target_info>();
-
-        auto serv = instance.load();
-        if(!serv) {
-            std::unique_ptr<server::Server> temp(new server::Server(server::Config::from_env()));
-
-            if(instance.compare_exchange_strong(serv, temp.get())) {
-                log_debug_printf(log, "Installing Server %p\n", temp.get());
-                temp.release();
-            } else {
-                log_crit_printf(log, "Race installing Server? %p\n", serv);
-            }
-        } else {
-            log_err_printf(log, "Stale Server? %p\n", serv);
-        }
-
-        initHookRegister(&pvxsInitHook);
-    } catch(std::exception& e) {
-        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
-    }
-}
-
-} // namespace
+#if EPICS_VERSION_INT >= VERSION_INT(7, 0, 4, 0)
+#  define USE_DEINIT_HOOKS
+#endif
 
 namespace pvxs {
 namespace ioc {
 
-server::Server server()
-{
-    if(auto serv = instance.load()) {
-        return *serv;
+DEFINE_LOGGER(_logname, "pvxs.ioc");
+
+// The pvxs server singleton
+std::atomic<IOCServer*> pvxsServer{};
+
+/**
+ * Get the plain pvxs server instance
+ *
+ * @return the pvxs server instance
+ */
+server::Server& server() {
+    return iocServer();
+}
+
+/**
+ * Get the pvxs server instance
+ *
+ * @return the pvxs server instance
+ */
+IOCServer& iocServer() {
+    if (auto pPvxsServer = pvxsServer.load()) {
+        return *pPvxsServer;
     } else {
         throw std::logic_error("No Instance");
     }
 }
 
-}} // namespace pvxs::ioc
+/**
+ * Get the pvxs server and execute the given function against it
+ *
+ * @param function the function to call
+ * @param method the string method from which this is called.  Use the __func__ macro by default
+ * @param context the activity being attempted when the error occurred
+ */
+void
+runOnServer(const std::function<void(IOCServer*)>& function, const char* method, const char* context) {
+    try {
+        if (auto pPvxsServer = pvxsServer.load()) {
+            function(pPvxsServer);
+        }
+    } catch (std::exception& e) {
+        if (context) {
+            fprintf(stderr, "%s: ", context);
+        }
+        if (method) {
+            fprintf(stderr, "Error in %s: ", method);
+        }
+        fprintf(stderr, "%s\n", e.what());
+        throw e;
+    }
+}
+
+/**
+ * The function to call when we exit the IOC process.  This is only installed as the callback function
+ * after the database has been initialized.  This function will stop the pvxs server instance and destroy the
+ * object.
+ *
+ * @param pep - The pointer to the exit parameter list - unused
+ */
+void pvxsAtExit(void* pep) {
+    runOnPvxsServerWhile_("In IOC exit event handler", [](IOCServer* pPvxsServer) {
+        if (pvxsServer.compare_exchange_strong(pPvxsServer, nullptr)) {
+            // take ownership
+            std::unique_ptr<IOCServer> serverInstance(pPvxsServer);
+            serverInstance->stop();
+            log_debug_printf(_logname, "Stopped Server%s", "\n");
+        }
+    });
+}
+
+////////////////////////////////////
+// Two ioc shell commands for pvxs
+////////////////////////////////////
+
+/**
+ * Show the PVXS server report.
+ * The server report is a short list of the EPICS PVA environment variables and
+ * a list of registered sources with their IOIDs.
+ *
+ * @param detail
+ */
+void pvxsr(int detail) {
+    runOnPvxsServer([&detail](IOCServer* pPvxsServer) {
+        std::ostringstream strm;
+        Detailed D(strm, detail);
+        strm << *pPvxsServer;
+        printf("%s", strm.str().c_str());
+    });
+}
+
+/**
+ * Show information about the PVXS host.
+ *
+ * Includes:
+ *  - OS,
+ *  - build toolchain,
+ *  - library versions,
+ *  - runtime environment information including:
+ *    - network address and
+ *    - thread count, and
+ *  - EPICS PVA environment variable settings
+ */
+void pvxsi() {
+    try {
+        std::ostringstream capture;
+        target_information(capture);
+        printf("%s", capture.str().c_str());
+    } catch (std::exception& e) {
+        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
+    }
+}
+
+/**
+ * Initialise and control state of pvxs ioc server instance in response to iocInitHook events.
+ * Installed on the initHookState hook this function will respond to the following events:
+ *  - initHookAfterInitDatabase: 		Set the exit callback only when we have initialized the database
+ *  - initHookAfterCaServerRunning: 	Start the pvxs server instance after the CA server starts running
+ *  - initHookAfterCaServerPaused: 		Pause the pvxs server instance if the CA server pauses
+ *
+ * @param theInitHookState the initHook state to respond to
+ */
+void pvxsInitHook(initHookState theInitHookState) {
+    // iocBuild()
+    if (theInitHookState == initHookAfterInitDatabase) {
+        // function to run before exitDatabase
+#ifndef USE_DEINIT_HOOKS
+        epicsAtExit(&pvxsAtExit, nullptr);
+#endif
+    } else
+        // iocRun()
+    if (theInitHookState == initHookAfterCaServerRunning || theInitHookState == initHookAfterIocRunning) {
+        runOnPvxsServer([](IOCServer* pPvxsServer) {
+            pPvxsServer->start();
+            log_debug_printf(_logname, "Started Server %p", pPvxsServer);
+        });
+    } else
+        // iocPause()
+    if (theInitHookState == initHookAfterCaServerPaused) {
+        runOnPvxsServer([](IOCServer* pPvxsServer) {
+            pPvxsServer->stop();
+            log_debug_printf(_logname, "Stopped Server %p", pPvxsServer);
+        });
+    } else
+
+#ifdef USE_DEINIT_HOOKS
+        // iocShutdown()  (called from exitDatabase() at exit, and testIocShutdownOk() )
+    if (theInitHookState == initHookAtShutdown) {
+        pvxsAtExit(nullptr);
+    }
+#endif
+}
+
+}
+} // namespace pvxs::ioc
+
+using namespace pvxs::ioc;
+
+namespace {
+
+// Initialise the pvxs server instance
+void initialisePvxsServer();
+
+// Register callback functions to be used in the IOC shell and also during initialization.
+void pvxsBaseRegistrar();
+
+/**
+ * Create the pvxs server instance.  We use the global pvxsServer atomic
+ */
+void initialisePvxsServer() {
+    using namespace pvxs::server;
+    auto serv = pvxsServer.load();
+    if (!serv) {
+        std::unique_ptr<IOCServer> temp(new IOCServer(Config::from_env()));
+
+        if (pvxsServer.compare_exchange_strong(serv, temp.get())) {
+            log_debug_printf(_logname, "Installing Server %p\n", temp.get());
+            (void)temp.release();
+        } else {
+            log_crit_printf(_logname, "Race installing Server? %p\n", serv);
+        }
+    } else {
+        log_err_printf(_logname, "Stale Server? %p\n", serv);
+    }
+}
+
+/**
+ * IOC pvxs base registrar.  This implements the required registrar function that is called by xxxx_registerRecordDeviceDriver,
+ * the auto-generated stub created for all IOC implementations.
+ *
+ * It is registered by using the `epicsExportRegistrar()` macro.
+ *
+ * 1. Specify here all of the commands that you want to be registered and available in the IOC shell.
+ * 2. Also make sure that you initialize your server implementation - PVXS in our case - so that it will be available for the shell.
+ * 3. Lastly register your hook handler to handle any state hooks that you want to implement
+ */
+void pvxsBaseRegistrar() {
+    try {
+        pvxs::logger_config_env();
+
+        IOCShCommand<int>("pvxsr", "[show_detailed_information?]", "PVXS Server Report.  "
+                                                                   "Shows information about server config (level==0)\n"
+                                                                   "or about connected clients (level>0).\n")
+                .implementation<&pvxsr>();
+        IOCShCommand<>("pvxsi", "Show detailed server information\n").implementation<&pvxsi>();
+
+        // Initialise the PVXS Server
+        initialisePvxsServer();
+
+        // Register our hook handler to intercept certain state changes
+        initHookRegister(&pvxsInitHook);
+    } catch (std::exception& e) {
+        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
+    }
+}
+} // namespace
 
 extern "C" {
-epicsExportRegistrar(pvxsRegistrar);
+epicsExportRegistrar(pvxsBaseRegistrar);
 }

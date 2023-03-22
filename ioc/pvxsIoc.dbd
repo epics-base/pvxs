@@ -1,1 +1,9 @@
-registrar(pvxsRegistrar)
+registrar(pvxsBaseRegistrar)
+registrar(pvxsSingleSourceRegistrar)
+registrar(pvxsGroupSourceRegistrar)
+
+# from demo.cpp
+device(waveform, CONSTANT, devWfPDBDemo, "QSRV Demo")
+device(longin, CONSTANT, devLoPDBUTag, "QSRV Set UTag")
+# from imagedemo.c
+function(QSRV_image_demo)

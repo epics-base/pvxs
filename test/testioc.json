@@ -1,0 +1,73 @@
+/*
+ * This file defines two groups equivalent to the groups defined in testiocg.db
+ * Dependencies: testioc.db
+ */
+
+/*
+ * Group test:tableExample2
+ * Use +id mapping: to present as a epics NTTable
+ * with two columns of doubles taken from $(user):vectorExampleD1 and $(user):vectorExampleD2
+ * Get metadata (alarms, etc) from $(user):vectorExampleD1
+ */
+{
+  "test:tableExample2": {
+    "+id": "epics:nt/NTTable:1.0",
+    "": {
+      "+type": "meta",
+      "+channel": "test:vectorExampleD1.VAL"
+    },
+    "labels": {
+      "+channel": "test:groupExampleAS.VAL",
+      "+type": "plain"
+    },
+    "value.jA": {
+      "+channel": "test:vectorExampleD1.VAL",
+      "+type": "plain",
+      "+putorder": 1
+    },
+    "value.jB": {
+      "+channel": "test:vectorExampleD2.VAL",
+      "+type": "plain",
+      "+putorder": 1
+    },
+    "_save": {
+      "+channel": "test:groupExampleSave.VAL",
+      "+type": "proc",
+      "+putorder": 2,
+      "+trigger": "*"
+    }
+  },
+  /*
+   * Group test:structExample2
+   * This is an example of a structure that does not correspond to an EPICS normative type
+   */
+  "test:structExample2": {
+    "+atomic": false,
+    "ai": {
+      "+channel": "test:aiExample.VAL",
+      "+putorder": 0
+    },
+    "calc": {
+      "+channel": "test:calcExample.VAL",
+      "+type": "plain",
+      "+putorder": 1
+    },
+    "string": {
+      "+channel": "test:stringExample.VAL",
+      "+putorder": 0
+    },
+    "array": {
+      "+channel": "test:arrayExample.VAL",
+      "+putorder": 0
+    },
+    "sa[0].any": {
+      "+channel": "test:longExample.VAL",
+      "+type": "any",
+      "+putorder": 1
+    },
+    "sa[1].enum": {
+      "+channel": "test:enumExample.VAL",
+      "+putorder": 0
+    }
+  }
+}

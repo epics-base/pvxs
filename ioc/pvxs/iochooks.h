@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
@@ -25,7 +25,6 @@
 #ifndef PVXS_IOC_API
 #  define PVXS_IOC_API
 #endif
-
 
 namespace pvxs {
 namespace server {
@@ -55,7 +54,7 @@ namespace ioc {
  *         return;
  *
  *     server::SharedPV mypv(...);
- *     ioc::server()
+ *     ioc::iocServer()
  *           .addPV("my:pv:name", mypv);
  * }
  * static void myregistrar() {
@@ -67,8 +66,20 @@ namespace ioc {
  * @endcode
  */
 PVXS_IOC_API
-server::Server server();
+server::Server& server();
 
-}} // namespace pvxs::ioc
+/**
+ * Load JSON group definition file.
+ * This function does not actually parse the given file, but adds it to the list of files to be loaded,
+ * at the appropriate time in the startup process.
+ *
+ * @param jsonFilename the json file containing the group definitions
+ * @return 0 for success, 1 for failure
+ * @since UNRELEASED
+ */
+PVXS_IOC_API
+long dbLoadGroup(const char* jsonFilename);
 
+}
+} // namespace pvxs::ioc
 #endif // PVXS_IOCHOOKS_H

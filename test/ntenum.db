@@ -1,0 +1,26 @@
+# Example of constructing an NTEnum with a longer choices list.
+
+record(longout, "$(P):ENUM:INDEX") {
+    field(VAL, "1")
+    field(PINI, "YES")
+    info(Q:group, {
+        "$(P):ENUM":{
+            +id:"epics:nt/NTEnum:1.0",
+            "value":{+type:"structure", +id:"enum_t"},
+            "value.index":{+type:"plain", +channel:"VAL"},
+            "":{+type:"meta", +channel:"VAL"}
+        }
+    })
+}
+
+record(aai, "$(P):ENUM:CHOICES") {
+    field(FTVL, "STRING")
+    field(NELM, "64")
+    field(INP , {const:["ZERO", "ONE"]})
+    info(Q:group, {
+        "$(P):ENUM":{
+            +id:"epics:nt/NTEnum:1.0",
+            "value.choices":{+type:"plain", +channel:"VAL"}
+        }
+    })
+}

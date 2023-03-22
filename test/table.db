@@ -1,0 +1,49 @@
+
+record(aai, "$(N)Labels_") {
+    field(FTVL, "STRING")
+    field(NELM, "2")
+    field(INP , {const:["Column A", "Column B"]})
+    info(Q:group, {
+        "$(N)Tbl":{
+            +id:"epics:nt/NTTable:1.0",
+            "labels":{+type:"plain", +channel:"VAL"}
+        }
+    })
+    field(TPRO, "1")
+}
+
+record(aao, "$(N)A") {
+    field(FTVL, "DOUBLE")
+    field(NELM, "10")
+    info(Q:group, {
+        "$(N)Tbl":{
+            "value.A":{+type:"plain", +channel:"VAL", +putorder:1}
+        }
+    })
+    field(TPRO, "1")
+}
+
+record(aao, "$(N)B") {
+    field(FTVL, "DOUBLE")
+    field(NELM, "10")
+    info(Q:group, {
+        "$(N)Tbl":{
+            "":{+type:"meta", +channel:"VAL"},
+            "value.B":{+type:"plain", +channel:"VAL", +putorder:1}
+        }
+    })
+    field(TPRO, "1")
+}
+
+record(longout, "$(N)Save") {
+    field(MDEL, "-1") # ensure we always trigger group monitor
+    field(TPRO, "1")
+    info(Q:group, {
+        "$(N)Tbl":{
+            "_save":{+type:"proc",
+                     +channel:"VAL",
+                     +putorder:2,
+                     +trigger:"*"}
+        }
+    })
+}
