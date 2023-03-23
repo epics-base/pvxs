@@ -41,7 +41,7 @@ jobs:
       matrix:
         include:
           - name: Native Linux (WError)
-            os: ubuntu-20.04
+            os: ubuntu-latest
             cmp: gcc
             configuration: default
             base: "7.0"
@@ -49,21 +49,21 @@ jobs:
             doc: 1
 
           - name: Native Linux (c++17)
-            os: ubuntu-20.04
+            os: ubuntu-latest
             cmp: gcc
             configuration: default
             base: "7.0"
             extra: "CMD_CXXFLAGS=-std=c++17"
 
           - name: Cross mingw64 DLL
-            os: ubuntu-20.04
+            os: ubuntu-latest
             cmp: gcc
             configuration: default
             base: "7.0"
             cross: "windows-x64-mingw"
 
           - name: Cross mingw64 static
-            os: ubuntu-20.04
+            os: ubuntu-latest
             cmp: gcc
             configuration: static
             base: "7.0"
@@ -77,26 +77,32 @@ jobs:
             cross: "RTEMS-pc686-qemu@5"
  
           - name: Native Linux with clang
-            os: ubuntu-20.04
+            os: ubuntu-latest
             cmp: clang
             configuration: default
             base: "7.0"
 
           - name: Native Linux with libevent stable
-            os: ubuntu-20.04
+            os: ubuntu-latest
             cmp: gcc
             configuration: default
             base: "7.0"
             libevent: "release-2.0.22-stable"
 
+          - name: Native Linux with 7.0.2
+            os: ubuntu-latest
+            cmp: gcc
+            configuration: default
+            base: "R7.0.2"
+
           - name: Native Linux with 3.15
-            os: ubuntu-20.04
+            os: ubuntu-latest
             cmp: gcc
             configuration: default
             base: "3.15"
 
           - name: Native Linux with 3.14
-            os: ubuntu-20.04
+            os: ubuntu-latest
             cmp: gcc
             configuration: default
             base: "3.14"
