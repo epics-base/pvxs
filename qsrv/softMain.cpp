@@ -15,7 +15,10 @@
 #include <list>
 #include <stdexcept>
 
+#include <event2/event.h>
+
 #include <epicsGetopt.h>
+#include <envDefs.h>
 #include "registryFunction.h"
 #include "epicsThread.h"
 #include "epicsExit.h"
@@ -30,7 +33,9 @@
 #include "osiFileName.h"
 #include "epicsInstallDir.h"
 
-extern "C" int softIoc_registerRecordDeviceDriver(struct dbBase *pdbbase);
+#include <pvxs/iochooks.h>
+
+extern "C" int softIocPVX_registerRecordDeviceDriver(struct dbBase *pdbbase);
 
 #ifndef EPICS_BASE
 // so IDEs knows EPICS_BASE is a string constant
@@ -38,8 +43,8 @@ extern "C" int softIoc_registerRecordDeviceDriver(struct dbBase *pdbbase);
 #  error -DEPICS_BASE required
 #endif
 
-#define DBD_BASE "dbd" OSI_PATH_SEPARATOR "softIoc.dbd"
-#define EXIT_BASE "db" OSI_PATH_SEPARATOR "softIocExit.db"
+#define DBD_BASE "dbd" OSI_PATH_SEPARATOR "softIocPVX.dbd"
+#define EXIT_BASE "db" OSI_PATH_SEPARATOR "softIocPVXExit.db"
 #define DBD_FILE_REL ".." OSI_PATH_SEPARATOR ".." OSI_PATH_SEPARATOR DBD_BASE
 #define EXIT_FILE_REL ".." OSI_PATH_SEPARATOR ".." OSI_PATH_SEPARATOR EXIT_BASE
 #define DBD_FILE EPICS_BASE OSI_PATH_SEPARATOR DBD_BASE
@@ -64,6 +69,8 @@ void usage(const char *arg0, const std::string& base_dbd) {
                "\n"
                "    -h  Print this mesage and exit.\n"
                "\n"
+               "    -V  Print version and exit.\n"
+               "\n"
                "    -S  Prevents an interactive shell being started.\n"
                "\n"
                "    -s  Previously caused a shell to be started.  Now accepted and ignored.\n"
@@ -81,6 +88,8 @@ void usage(const char *arg0, const std::string& base_dbd) {
                "\n"
                "    -x <prefix>  Load softIocExit.db.  Provides a record \"<prefix>:exit\".\n"
                "        Put 0 to exit with success, or non-zero to exit with an error.\n"
+               "\n"
+               "    -G <json>  DB Group definition file in JSON format.\n"
                "\n"
                "Any number of -m and -d arguments can be interspersed; the macros are applied\n"
                "to the following .db files.  Each later -m option causes earlier macros to be\n"
@@ -113,8 +122,8 @@ void lazy_dbd(const std::string& dbd_file) {
           std::string("Failed to load DBD file: ")+dbd_file);
 
     if (verbose)
-        std::cout<<"softIoc_registerRecordDeviceDriver(pdbbase)\n";
-    errIf(softIoc_registerRecordDeviceDriver(pdbbase),
+        std::cout<<"softIocPVX_registerRecordDeviceDriver(pdbbase)\n";
+    errIf(softIocPVX_registerRecordDeviceDriver(pdbbase),
           "Failed to initialize database");
     registryFunctionAdd("exit", (REGISTRYFUNCTION) exitSubroutine);
 }
@@ -132,6 +141,10 @@ int main(int argc, char *argv[])
         bool loadedDb = false;
         bool ranScript = false;
 
+        if(!getenv("PVXS_QSRV_ENABLE"))
+            epicsEnvSet("PVXS_QSRV_ENABLE","YES");
+
+#if EPICS_VERSION_INT >= VERSION_INT(7, 0, 3, 1)
         // attempt to compute relative paths
         {
             std::string prefix;
@@ -149,14 +162,20 @@ int main(int argc, char *argv[])
             dbd_file = prefix + DBD_FILE_REL;
             exit_file = prefix + EXIT_FILE_REL;
         }
+#endif
 
         int opt;
 
-        while ((opt = getopt(argc, argv, "ha:D:d:m:Ssx:v")) != -1) {
+        while ((opt = getopt(argc, argv, "hVa:D:d:m:Ssx:vG:")) != -1) {
             switch (opt) {
             case 'h':               /* Print usage */
                 usage(argv[0], dbd_file);
                 epicsExit(0);
+                return 0;
+            case 'V':
+                std::cout<<pvxs::version_str()<<"\n";
+                std::cout<<EPICS_VERSION_STRING<<"\n";
+                std::cout<<"libevent "<<event_get_version()<<"\n";
                 return 0;
             default:
                 usage(argv[0], dbd_file);
@@ -169,12 +188,12 @@ int main(int argc, char *argv[])
                     if (verbose)
                         std::cout<<"asSetSubstitutions(\""<<macros<<"\")\n";
                     if(asSetSubstitutions(macros.c_str()))
-                        throw std::bad_alloc();
+                        throw std::runtime_error("asSetSubstitutions");
                 }
                 if (verbose)
                     std::cout<<"asSetFilename(\""<<optarg<<"\")\n";
                 if(asSetFilename(optarg))
-                    throw std::bad_alloc();
+                    throw std::runtime_error("asSetFilename");
                 break;
             case 'D':
                 if(lazy_dbd_loaded) {
@@ -215,6 +234,9 @@ int main(int argc, char *argv[])
                 errIf(dbLoadRecords(exit_file.c_str(), xmacro.c_str()),
                       std::string("Failed to load: ")+exit_file);
                 loadedDb = true;
+                break;
+            case 'G':
+                pvxs::ioc::dbLoadGroup(optarg, macros.c_str());
                 break;
             }
         }
