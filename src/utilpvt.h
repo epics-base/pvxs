@@ -82,6 +82,10 @@ struct SB {
     SB& operator<<(const T& i) { strm<<i; return *this; }
 };
 
+PVXS_API
+void strDiff(std::ostream& out,
+             const char *lhs,
+             const char *rhs);
 
 void threadOnce(epicsThreadOnceId *id, EPICSTHREADFUNC fn, void *arg=nullptr);
 

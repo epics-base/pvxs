@@ -89,6 +89,13 @@ public:
         msg<<v;
         return *this;
     }
+
+    /** Access to underlying std::ostream used to accumulate notes.
+     *  When our operator<< isn't enough.
+     *  @since UNRELEASED
+     */
+    inline
+    std::ostream& stream() { return msg; }
 };
 
 namespace detail {

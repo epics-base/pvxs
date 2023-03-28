@@ -742,4 +742,81 @@ int64_t parseTo<int64_t>(const std::string& s) {
     return ret;
 }
 
+static
+std::vector<std::string>
+splitLines(const char *inp)
+{
+    std::vector<std::string> ret;
+    while(*inp) {
+        auto start = inp;
+        // find next EoL or nil
+        for(char c=*inp; c!='\0' && c!='\n' && c!='\r'; c=*++inp) {}
+        // inp points to EoL or nil
+        ret.emplace_back(start, inp); // copy line w/o EoL
+        // skip past one EoL ("\n", "\r\n", or "\n\r")
+        if(inp[0]=='\n' && inp[1]=='\r') inp+=2u;
+        else if(inp[0]=='\r' && inp[1]=='\n') inp+=2u;
+        else if(inp[0]=='\n') inp+=1u;
+    }
+    return ret;
+}
+
+void strDiff(std::ostream& out,
+             const char *lhs,
+             const char *rhs)
+{
+    if(!lhs)
+        lhs = "<null>";
+    if(!rhs)
+        rhs = "<null>";
+    auto l_lines(splitLines(lhs));
+    auto r_lines(splitLines(rhs));
+    size_t L, R;
+
+    for(L=0u, R=0u; L<l_lines.size() && R<r_lines.size();) {
+        // diagonal search out from current positions
+        for(size_t dist=0u; true; dist++) { // iterate out
+            for(size_t C=0u; C<=dist; C++) { // iterate across
+                size_t testL = L+C;
+                size_t testR = R+(dist-C);
+
+                if(testL>=l_lines.size() && testR>=r_lines.size()) {
+                    goto done;
+                }
+
+                if(testL>=l_lines.size() || testR>=r_lines.size()) {
+                    continue;
+                }
+
+                if(l_lines[testL]==r_lines[testR]) {
+                    // found matching line
+
+                    for(; L < testL; L++) {
+                        out<<"- \""<<escape(l_lines[L])<<"\"\n";
+                    }
+                    for(; R < testR; R++) {
+                        out<<"+ \""<<escape(r_lines[R])<<"\"\n";
+                    }
+                    out<<"  \""<<escape(l_lines[testL])<<"\"\n";
+
+                    L = testL+1u;
+                    R = testR+1u;
+                    goto next;
+                }
+            }
+        }
+next:
+        continue; // oh for lack of a "break N;"
+    }
+done:
+    // print trailing
+    for(; L < l_lines.size(); L++) {
+        out<<"- \""<<escape(l_lines[L])<<"\"\n";
+    }
+    for(; R < r_lines.size(); R++) {
+        out<<"+ \""<<escape(r_lines[R])<<"\"\n";
+    }
+    return;
+}
+
 }}
