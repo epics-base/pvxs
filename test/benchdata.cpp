@@ -109,7 +109,7 @@ void benchArraySerDes(bool be, const shared_array<const E>& arr)
 
     shared_array<const void> scratch;
 
-    evbuf ebuf(evbuffer_new());
+    evbuf ebuf(__FILE__, __LINE__, evbuffer_new());
 
     Sampler Tser, Tdes;
 

@@ -61,9 +61,9 @@ template<typename T>
 struct owned_ptr : public std::unique_ptr<T>
 {
     constexpr owned_ptr() {}
-    explicit owned_ptr(T* ptr) : std::unique_ptr<T>(ptr) {
+    explicit owned_ptr(const char* file, int line, T* ptr) : std::unique_ptr<T>(ptr) {
         if(!*this)
-            throw BAD_ALLOC();
+            throw loc_bad_alloc(file, line);
     }
 };
 

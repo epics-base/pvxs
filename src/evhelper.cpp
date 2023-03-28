@@ -167,7 +167,7 @@ struct evbase::Pvt final : public epicsThreadRunable
     {
         INST_COUNTER(evbaseRunning);
         try {
-            evconfig conf(event_config_new());
+            evconfig conf(__FILE__, __LINE__, event_config_new());
 #ifdef __rtems__
             /* with libbsd circa RTEMS 5.1
              * TCP peer close/reset notifications appear to be lost.
@@ -176,13 +176,15 @@ struct evbase::Pvt final : public epicsThreadRunable
              */
             event_config_avoid_method(conf.get(), "kqueue");
 #endif
-            decltype (base) tbase(event_base_new_with_config(conf.get()));
+            decltype (base) tbase(__FILE__, __LINE__, event_base_new_with_config(conf.get()));
             if(evthread_make_base_notifiable(tbase.get())) {
                 throw std::runtime_error("evthread_make_base_notifiable");
             }
 
-            evevent handle(event_new(tbase.get(), -1, EV_TIMEOUT, &doWorkS, this));
-            evevent ka(event_new(tbase.get(), -1, EV_TIMEOUT|EV_PERSIST, &evkeepalive, this));
+            evevent handle(__FILE__, __LINE__,
+                           event_new(tbase.get(), -1, EV_TIMEOUT, &doWorkS, this));
+            evevent ka(__FILE__, __LINE__,
+                       event_new(tbase.get(), -1, EV_TIMEOUT|EV_PERSIST, &evkeepalive, this));
 
             base = std::move(tbase);
             dowork = std::move(handle);
@@ -1096,7 +1098,8 @@ Timer Timer::Pvt::buildOneShot(double delay, const evbase& base, std::function<v
 
     base.call([internal, delay](){
         // on worker
-        evevent timer(event_new(internal->base.base, -1, EV_TIMEOUT, &expire_cb, internal.get()));
+        evevent timer(__FILE__, __LINE__,
+                      event_new(internal->base.base, -1, EV_TIMEOUT, &expire_cb, internal.get()));
         internal->timer = std::move(timer);
 
         auto timo(totv(delay));

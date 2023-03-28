@@ -34,8 +34,8 @@ ConnBase::ConnBase(bool isClient, bool sendBE, bufferevent* bev, const SockAddr&
     ,peerBE(true) // arbitrary choice, default should be overwritten before use
     ,expectSeg(false)
     ,segCmd(0xff)
-    ,segBuf(evbuffer_new())
-    ,txBody(evbuffer_new())
+    ,segBuf(__FILE__, __LINE__, evbuffer_new())
+    ,txBody(__FILE__, __LINE__, evbuffer_new())
     ,state(Holdoff)
 {
     if(bev) // true for server connection.  client will call connect() shortly

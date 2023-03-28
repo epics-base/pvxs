@@ -488,13 +488,19 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     ,searchTx4(AF_INET, SOCK_DGRAM, 0)
     ,searchTx6(AF_INET6, SOCK_DGRAM, 0)
     ,tcp_loop(tcp_loop)
-    ,searchRx4(event_new(tcp_loop.base, searchTx4.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
-    ,searchRx6(event_new(tcp_loop.base, searchTx6.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
-    ,searchTimer(event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::tickSearchS, this))
+    ,searchRx4(__FILE__, __LINE__,
+               event_new(tcp_loop.base, searchTx4.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
+    ,searchRx6(__FILE__, __LINE__,
+               event_new(tcp_loop.base, searchTx6.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
+    ,searchTimer(__FILE__, __LINE__,
+                 event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::tickSearchS, this))
     ,manager(UDPManager::instance())
-    ,beaconCleaner(event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::tickBeaconCleanS, this))
-    ,cacheCleaner(event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::cacheCleanS, this))
-    ,nsChecker(event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
+    ,beaconCleaner(__FILE__, __LINE__,
+                   event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::tickBeaconCleanS, this))
+    ,cacheCleaner(__FILE__, __LINE__,
+                  event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::cacheCleanS, this))
+    ,nsChecker(__FILE__, __LINE__,
+               event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
 {
     effective.expand();
 

@@ -102,7 +102,7 @@ void test_fill_evbuf()
 {
     testDiag("%s", __func__);
 
-    evbuf buf(evbuffer_new());
+    evbuf buf(__FILE__, __LINE__, evbuffer_new());
 
     {
         EvOutBuf M(true, buf.get());

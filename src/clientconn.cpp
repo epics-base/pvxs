@@ -23,7 +23,8 @@ Connection::Connection(const std::shared_ptr<ContextImpl>& context,
                nullptr,
                peerAddr)
     ,context(context)
-    ,echoTimer(event_new(context->tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &tickEchoS, this))
+    ,echoTimer(__FILE__, __LINE__,
+               event_new(context->tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &tickEchoS, this))
 {
     if(reconn) {
         log_debug_printf(io, "start holdoff timer for %s\n", peerName.c_str());

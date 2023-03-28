@@ -137,7 +137,8 @@ UDPCollector::UDPCollector(UDPManager::Pvt *manager, int af, uint16_t requested_
     ,lo_mcast_addr("224.0.0.128,1@127.0.0.1")
     ,lo_addr(SockAddr::loopback(bind_addr.family()))
     ,sock(af, SOCK_DGRAM, 0)
-    ,rx(event_new(manager->loop.base, sock.sock, EV_READ|EV_PERSIST, &handle_static, this))
+    ,rx(__FILE__, __LINE__,
+        event_new(manager->loop.base, sock.sock, EV_READ|EV_PERSIST, &handle_static, this))
     ,beaconMsg(src)
 {
     manager->loop.assertInLoop();

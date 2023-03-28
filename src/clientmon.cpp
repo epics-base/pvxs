@@ -77,7 +77,8 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
 
     SubscriptionImpl(const evbase& loop)
         :OperationBase (Operation::Monitor, loop)
-        ,ackTick(event_new(loop.base, -1, EV_TIMEOUT, &tickAckS, this))
+        ,ackTick(__FILE__, __LINE__,
+                 event_new(loop.base, -1, EV_TIMEOUT, &tickAckS, this))
     {}
     virtual ~SubscriptionImpl() {
         if(loop.assertInRunningLoop())
