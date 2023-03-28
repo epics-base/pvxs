@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
@@ -18,6 +18,10 @@
 #endif
 
 #include <epicsUnitTest.h>
+#include <epicsString.h>
+#define epicsStdioStdStreams
+#define epicsStdioStdPrintfEtc
+#include <epicsStdio.h>
 
 #include "pvxs/unittest.h"
 #include "utilpvt.h"
@@ -36,6 +40,29 @@ void testSetup()
         testDiag("SetErrorMode() disables 0x%x\n", (unsigned)prev);
 #endif
 }
+
+namespace impl {
+loc_bad_alloc::loc_bad_alloc(const char *file, int line)
+{
+    if(auto sep = strrchr(file, '/')) {
+        file = sep+1;
+    }
+#ifdef _WIN32
+    if(auto sep = strrchr(file, '\\')) {
+        file = sep+1;
+    }
+#endif
+    epicsSnprintf(msg, sizeof(msg)-1u, "bad_alloc %s:%d", file, line);
+}
+
+loc_bad_alloc::~loc_bad_alloc() {}
+
+const char* loc_bad_alloc::what() const noexcept
+{
+    return msg;
+}
+
+} // namespace impl
 
 void cleanup_for_valgrind()
 {

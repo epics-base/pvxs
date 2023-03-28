@@ -236,7 +236,7 @@ struct SocketPair {
         auto err = evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, s);
 #endif
         if(err)
-            throw std::bad_alloc();
+            throw BAD_ALLOC();
     }
     ~SocketPair() {
         epicsSocketDestroy(s[0]);

@@ -951,7 +951,7 @@ bool EvOutBuf::refill(size_t more)
     vec.iov_len  = base ? pos - base : 0u;
 
     if(base && evbuffer_commit_space(backing, &vec, 1))
-        throw std::bad_alloc(); // leak?
+        throw BAD_ALLOC(); // leak?
 
     limit = base = pos = nullptr;
 
@@ -975,7 +975,7 @@ bool EvInBuf::refill(size_t needed)
 
     // drain consumed
     if(base && evbuffer_drain(backing, pos-base))
-        throw std::bad_alloc();
+        throw BAD_ALLOC();
 
     limit = base = pos = nullptr;
 
@@ -1016,7 +1016,7 @@ void to_evbuf(evbuffer *buf, const Header& H, bool be)
     EvOutBuf M(be, buf, 8);
     to_wire(M, H);
     if(!M.good())
-        throw std::bad_alloc();
+        throw BAD_ALLOC();
 }
 
 } // namespace impl

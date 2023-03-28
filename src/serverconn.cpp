@@ -101,7 +101,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         assert(M.good() && H.good());
 
         if(evbuffer_add(tx, buf.data(), M.save()-buf.data()))
-            throw std::bad_alloc();
+            throw BAD_ALLOC();
 
         statTx += M.save()-buf.data();
     }

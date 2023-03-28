@@ -56,6 +56,21 @@ struct promote_print<int8_t> { static int op(const char& v) { return v; }};
 template<>
 struct promote_print<uint8_t> { static unsigned op(const char& v) { return v; }};
 
+/* specialization of bad_alloc which notes the location from which
+ * the exception originates.
+ */
+struct PVXS_API loc_bad_alloc final : public std::bad_alloc
+{
+    loc_bad_alloc(const char *file, int line);
+    virtual ~loc_bad_alloc();
+
+    virtual const char* what() const noexcept override final;
+
+private:
+    char msg[64];
+};
+#define BAD_ALLOC() ::pvxs::impl::loc_bad_alloc(__FILE__, __LINE__)
+
 //! in-line string builder (eg. for exception messages)
 //! eg. @code throw std::runtime_error(SB()<<"Some message"<<42); @endcode
 struct SB {

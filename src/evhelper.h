@@ -63,7 +63,7 @@ struct owned_ptr : public std::unique_ptr<T>
     constexpr owned_ptr() {}
     explicit owned_ptr(T* ptr) : std::unique_ptr<T>(ptr) {
         if(!*this)
-            throw std::bad_alloc();
+            throw BAD_ALLOC();
     }
 };
 

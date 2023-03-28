@@ -52,7 +52,7 @@ const char* ConnBase::peerLabel() const
 void ConnBase::connect(bufferevent* bev)
 {
     if(!bev)
-        throw std::bad_alloc();
+        throw BAD_ALLOC();
     assert(!this->bev && state==Holdoff);
 
     this->bev.reset(bev);
