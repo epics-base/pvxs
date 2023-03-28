@@ -234,7 +234,7 @@ testCase _testStrMatch(const char *spat, const std::string& pat, const char *sst
 {
     testCase ret;
     ret.setPassMatch(pat, str);
-    ret<<spat<<" (\""<<pat<<"\") match "<<str<<" (\""<<escape(str)<<"\")";
+    ret<<spat<<" (\""<<pat<<"\") match "<<sstr<<" (\""<<escape(str)<<"\")";
     return ret;
 }
 
