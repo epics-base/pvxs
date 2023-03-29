@@ -3,8 +3,13 @@
 Release Notes
 =============
 
-1.1.4 (UNRELEASED)
+1.1.4 (April 2023)
 ------------------
+
+* client: fix delta sync of Compound.  Regression in 1.1.0.
+* Add wrappers for some libevent socket manipulations as :ref:`expertapi`.
+* Improve diff output of `testStrEq`.
+* msvc build compat.  ``/wd*`` compiler flags sometimes interpreted as paths.
 
 1.1.3 (Mar 2023)
 ----------------

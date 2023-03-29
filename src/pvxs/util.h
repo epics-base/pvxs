@@ -323,12 +323,12 @@ private:
 };
 
 //! Allocate a pair of connected stream sockets
-//! \since UNRELEASED
+//! \since 1.1.4
 PVXS_API
 void compat_socketpair(SOCKET sock[2]);
 
 //! Setup socket for non-blocking I/O
-//! \since UNRELEASED
+//! \since 1.1.4
 PVXS_API
 void compat_make_socket_nonblocking(SOCKET sock);
 

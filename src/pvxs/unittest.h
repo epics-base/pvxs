@@ -92,7 +92,7 @@ public:
 
     /** Access to underlying std::ostream used to accumulate notes.
      *  When our operator<< isn't enough.
-     *  @since UNRELEASED
+     *  @since 1.1.4
      */
     inline
     std::ostream& stream() { return msg; }
