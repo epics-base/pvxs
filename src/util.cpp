@@ -4,6 +4,15 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <osiSock.h>
+
+#ifdef __has_include
+#  if defined(_WIN32) && __has_include(<afunix.h>)
+#    include <afunix.h>
+#    define WIN_HAS_AFUNIX
+#  endif
+#endif
+
 // for signal handling
 #include <signal.h>
 
@@ -228,15 +237,9 @@ void SigInt_handler(int signum);
 
 namespace {
 struct SocketPair {
-    evutil_socket_t s[2];
+    SOCKET s[2];
     SocketPair() {
-#ifdef _WIN32
-        auto err = evutil_socketpair(AF_INET, SOCK_STREAM, 0, s);
-#else
-        auto err = evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, s);
-#endif
-        if(err)
-            throw BAD_ALLOC();
+        compat_socketpair(s);
     }
     ~SocketPair() {
         epicsSocketDestroy(s[0]);
@@ -662,6 +665,28 @@ GetAddrInfo::~GetAddrInfo()
     if(info)
         evutil_freeaddrinfo(info);
 }
+
+void compat_socketpair(SOCKET sock[2])
+{
+    evutil_socket_t s[2];
+    int err = -1;
+#if !defined(_WIN32) || defined(WIN_HAS_AFUNIX)
+    err = evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, s);
+#endif
+    if(err)
+        err = evutil_socketpair(AF_INET, SOCK_STREAM, 0, s);
+    if(err)
+        throw std::runtime_error(SB()<<"ERROR: "<<__func__<<" "<<SOCKERRNO);
+    sock[0] = (SOCKET)s[0];
+    sock[1] = (SOCKET)s[1];
+}
+
+void compat_make_socket_nonblocking(SOCKET sock)
+{
+    if(evutil_make_socket_nonblocking(sock))
+        throw std::runtime_error(SB()<<"ERROR: "<<__func__<<" "<<SOCKERRNO);
+}
+
 
 } // namespace pvxs
 
