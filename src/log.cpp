@@ -172,6 +172,10 @@ struct logger_gbl_t {
     {
         event_set_log_callback(&evlog_handler);
     }
+    ~logger_gbl_t()
+    {
+        event_set_log_callback(nullptr);
+    }
 
     Level init(logger *logger)
     {
