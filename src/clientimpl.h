@@ -311,6 +311,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     evbase tcp_loop;
     const evevent searchRx4, searchRx6;
     const evevent searchTimer;
+    const evevent initialSearcher;
 
     // beacon handling done on UDP worker.
     // we keep a ref here as long as beaconCleaner is in use
@@ -344,6 +345,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     enum class SearchKind { discover, initial, check };
     void tickSearch(SearchKind kind);
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);
+    static void initialSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickBeaconClean();
     static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);
     void cacheClean(const std::string &name, Context::cacheAction force);
