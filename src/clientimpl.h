@@ -271,6 +271,10 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     epicsTimeStamp lastPoke{};
     bool poked = false;
 
+    // unlike `poke`, `scheduleInitialSearch` is only ever called from the
+    // tcp_loop so this does not need to be guarded by a mutex
+    bool initialSearchScheduled = false;
+
     // map: endpoint+proto -> Beaconer
     typedef std::pair<SockAddr, std::string> BeaconServer;
     struct BeaconInfo {
@@ -287,6 +291,9 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::vector<std::pair<SockEndpoint, bool>> searchDest;
 
     size_t currentBucket = 0u;
+    // Channels where we have yet to send out an initial search request
+    std::list<std::weak_ptr<Channel>> initialSearchBucket;
+    // Channels where we are waiting for a search response
     std::vector<std::list<std::weak_ptr<Channel>>> searchBuckets;
 
     std::list<std::unique_ptr<UDPListener> > beaconRx;
@@ -330,9 +337,12 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     void onBeacon(const UDPManager::Beacon& msg);
 
+    void scheduleInitialSearch();
+
     bool onSearch(evutil_socket_t fd);
     static void onSearchS(evutil_socket_t fd, short evt, void *raw);
-    void tickSearch(bool discover);
+    enum class SearchKind { discover, initial, check };
+    void tickSearch(SearchKind kind);
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickBeaconClean();
     static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);
