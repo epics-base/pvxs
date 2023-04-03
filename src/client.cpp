@@ -28,6 +28,7 @@ namespace pvxs {
 namespace client {
 
 constexpr timeval bucketInterval{1,0};
+constexpr timeval initialSearchDelay{0, 10000}; // 10 ms
 constexpr size_t nBuckets = 30u;
 
 // try not to fragment with usual MTU==1500
@@ -498,6 +499,8 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
                event_new(tcp_loop.base, searchTx6.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
     ,searchTimer(__FILE__, __LINE__,
                  event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::tickSearchS, this))
+    ,initialSearcher(__FILE__, __LINE__,
+                     event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::initialSearchS, this))
     ,manager(UDPManager::instance(effective.shareUDP()))
     ,beaconCleaner(__FILE__, __LINE__,
                    event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::tickBeaconCleanS, this))
@@ -698,12 +701,11 @@ void ContextImpl::scheduleInitialSearch()
 {
     if (!initialSearchScheduled)
     {
-        log_debug_printf(setup, "scheduleInitialSearch()%s\n", "");
+        log_debug_printf(setup, "%s()\n", __func__);
 
         initialSearchScheduled = true;
-        tcp_loop.dispatch([this]() {
-            tickSearch(SearchKind::initial);
-        });
+        if (event_add(initialSearcher.get(), &initialSearchDelay))
+            throw std::runtime_error("Unable to schedule initialSearcher");
     }
 }
 
@@ -1183,6 +1185,15 @@ void ContextImpl::tickSearchS(evutil_socket_t fd, short evt, void *raw)
         static_cast<ContextImpl*>(raw)->tickSearch(SearchKind::check);
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in search timer callback: %s\n", e.what());
+    }
+}
+
+void ContextImpl::initialSearchS(evutil_socket_t fd, short evt, void *raw)
+{
+    try {
+        static_cast<ContextImpl*>(raw)->tickSearch(SearchKind::initial);
+    }catch(std::exception& e){
+        log_exc_printf(io, "Unhandled error in initial search callback: %s\n", e.what());
     }
 }
 
