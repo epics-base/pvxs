@@ -62,7 +62,7 @@ struct MonitorOp : public ServerOp,
     bool scheduled=false;
     bool pipeline=false;
     bool finished=false;
-    size_t window=0u, limit=1u;
+    size_t window=0u, limit=4u;
     size_t low=0u, high=0u;
     size_t maxQueue=0u;
 
