@@ -155,6 +155,11 @@ int main(int argc, char *argv[])
 
             }catch(client::Connected& conn) {
                 std::cerr<<name.c_str()<<" Connected to "<<conn.peerName<<"\n";
+                if(app.test(Level::Debug)) {
+                    client::SubscriptionStat stats;
+                    mon->stats(stats);
+                    std::cerr<<name.c_str()<<" queueSize="<<stats.limitQueue<<"\n";
+                }
 
             }catch(client::Disconnect& conn) {
                 std::cerr<<name.c_str()<<" Disconnected\n";
