@@ -67,13 +67,19 @@ struct NTScalar {
     bool control;
     //! Include alarm (range) meta-data
     bool valueAlarm;
+    /** Include 'display.form' and 'display.precision' when 'value' is a numeric type
+     *  @pre requires display=true
+     *  @since UNRELEASED
+     */
+    bool form;
 
     constexpr
     NTScalar(TypeCode value = TypeCode::Float64,
              bool display = false,
              bool control = false,
-             bool valueAlarm = false)
-        :value(value), display(display), control(control), valueAlarm(valueAlarm)
+             bool valueAlarm = false,
+             bool form = false)
+        :value(value), display(display), control(control), valueAlarm(valueAlarm), form(form)
     {}
 
     //! A TypeDef which can be appended

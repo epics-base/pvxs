@@ -60,15 +60,24 @@ TypeDef NTScalar::build() const
                            Member(scalar, "limitLow"),
                            Member(scalar, "limitHigh"),
                            String("description"),
-                           //String("format"),
                            String("units"),
                        }),
         };
+        if(form) {
+            def += {
+                    Struct("display", {
+                           Int32("precision"),
+                           Struct("form", "enum_t", {
+                               Int32("index"),
+                               StringA("choices"),
+                           }),
+                    }),
+            };
+        }
     } else if(display && !isnumeric) {
             def += {
                     Struct("display", {
                                String("description"),
-                               //String("format"),
                                String("units"),
                            }),
             };
