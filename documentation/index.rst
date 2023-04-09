@@ -46,6 +46,7 @@ See :ref:`relpolicy` for details.
    value
    client
    server
+   ioc
    util
    details
    releasenotes

@@ -14,6 +14,7 @@ clean:
 gen: ../include/pvxs/version.h
 	doxygen
 	$(PYTHON) -m sphinx -j auto -b html . html
+	cp qsrv2-schema-0.json html/
 
 commit: gen
 	./commit-gh.sh documentation/html/ html/.nojekyll html/*.* html/_*/*.*

@@ -91,36 +91,3 @@ EPICS_PVA_CONN_TMO
 
 .. doxygenclass:: pvxs::server::Server
     :members:
-
-IOC Integration
----------------
-
-.. code-block:: c++
-
-    #include <pvxs/server.h>
-    namespace pvxs { namespace namespace ioc { ... } }
-
-The separate "pvxsIoc" library exists to run a PVXS server as part of an IOC.
-See also :ref:`includepvxs`.
-
-IOC Integration respects the **$PVXS_LOG** as well as **$EPICS_PVA\*** environment variables.
-Changes to this environment variable are possible prior to
-calling "\*_registerRecordDeviceDriver(pdbbase)".
-
-IOC shell
-^^^^^^^^^
-
-The "pvxsIoc" library adds several IOC shell functions and variables.
-
-pvxsr(int level)
-    PVXS Server Report.  Shows information about server configuration (level==0)
-    or about connected clients (level>0).  Indirectly calls `pvxs::server::Source::show`.
-
-pvxsl(int level)
-    PVXS Server List.  Lists attached Sources and PV names.
-    Indirectly calls `pvxs::server::Source::onList`.
-
-Adding PVs
-^^^^^^^^^^
-
-.. doxygenfunction:: pvxs::ioc::server
