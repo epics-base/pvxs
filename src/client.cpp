@@ -982,14 +982,6 @@ void ContextImpl::tickSearch(SearchKind kind)
     // If kind == SearchKind::initial we are sending the first search request
     // for the channels in initalSearchBucket, and not resending requests for
     // channels in the searchBuckets.
-    //
-    // If kind == SearchKind::check then we may have been poked.
-    if (kind == SearchKind::check) {
-        Guard G(pokeLock);
-        poked = false;
-    } else if (kind == SearchKind::initial) {
-        initialSearchScheduled = false;
-    }
 
     auto idx = currentBucket;
     if(kind == SearchKind::check)
@@ -1174,15 +1166,22 @@ void ContextImpl::tickSearch(SearchKind kind)
         if(kind == SearchKind::discover)
             break;
     }
-
-    if(kind != SearchKind::initial && event_add(searchTimer.get(), &bucketInterval))
-        log_err_printf(setup, "Error re-enabling search timer on\n%s", "");
 }
 
 void ContextImpl::tickSearchS(evutil_socket_t fd, short evt, void *raw)
 {
+    auto self(static_cast<ContextImpl*>(raw));
     try {
-        static_cast<ContextImpl*>(raw)->tickSearch(SearchKind::check);
+        {
+            Guard G(self->pokeLock);
+            self->poked = false;
+        }
+
+        self->tickSearch(SearchKind::check);
+
+        if(event_add(self->searchTimer.get(), &bucketInterval))
+            log_err_printf(setup, "Error re-enabling search timer on\n%s", "");
+
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in search timer callback: %s\n", e.what());
     }
@@ -1190,8 +1189,10 @@ void ContextImpl::tickSearchS(evutil_socket_t fd, short evt, void *raw)
 
 void ContextImpl::initialSearchS(evutil_socket_t fd, short evt, void *raw)
 {
+    auto self(static_cast<ContextImpl*>(raw));
     try {
-        static_cast<ContextImpl*>(raw)->tickSearch(SearchKind::initial);
+        self->initialSearchScheduled = false;
+        self->tickSearch(SearchKind::initial);
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in initial search callback: %s\n", e.what());
     }
