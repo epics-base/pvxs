@@ -269,7 +269,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     // poked and beaconSenders from both TCP and UDP workers
     epicsMutex pokeLock;
     epicsTimeStamp lastPoke{};
-    bool poked = false;
+    size_t nPoked = 0u;
 
     // unlike `poke`, `scheduleInitialSearch` is only ever called from the
     // tcp_loop so this does not need to be guarded by a mutex
@@ -332,7 +332,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     void close();
 
-    void poke(bool force);
+    void poke();
 
     void serverEvent(const Discovered &evt);
 
@@ -343,7 +343,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     bool onSearch(evutil_socket_t fd);
     static void onSearchS(evutil_socket_t fd, short evt, void *raw);
     enum class SearchKind { discover, initial, check };
-    void tickSearch(SearchKind kind);
+    void tickSearch(SearchKind kind, bool poked);
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);
     static void initialSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickBeaconClean();

@@ -310,7 +310,7 @@ void Connection::handle_CONNECTION_VALIDATED()
 
     if(nameserver) {
         log_info_printf(io, "(re)connected to nameserver %s\n", peerName.c_str());
-        context->poke(true);
+        context->poke();
     }
 }
 
