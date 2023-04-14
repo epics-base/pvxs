@@ -370,7 +370,7 @@ bool evbase::assertInRunningLoop() const
 bool evsocket::canIPv6;
 evsocket::ipstack_t evsocket::ipstack;
 
-evsocket::evsocket(int af, evutil_socket_t sock)
+evsocket::evsocket(int af, evutil_socket_t sock, bool blocking)
     :sock(sock)
     ,af(af)
 {
@@ -390,7 +390,7 @@ evsocket::evsocket(int af, evutil_socket_t sock)
 
     evutil_make_socket_closeonexec(sock);
 
-    if(evutil_make_socket_nonblocking(sock)) {
+    if(!blocking && evutil_make_socket_nonblocking(sock)) {
         evutil_closesocket(sock);
         throw std::runtime_error("Unable to make non-blocking socket");
     }
@@ -401,8 +401,8 @@ evsocket::evsocket(int af, evutil_socket_t sock)
 #  define SOCK_CLOEXEC 0
 #endif
 
-evsocket::evsocket(int af, int type, int proto)
-    :evsocket(af, socket(af, type | SOCK_CLOEXEC, proto))
+evsocket::evsocket(int af, int type, int proto, bool blocking)
+    :evsocket(af, socket(af, type | SOCK_CLOEXEC, proto), blocking)
 {
 #ifdef __linux__
 #  ifndef IP_MULTICAST_ALL

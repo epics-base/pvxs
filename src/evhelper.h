@@ -199,10 +199,10 @@ struct PVXS_API evsocket
     constexpr evsocket() noexcept :sock(-1), af(AF_UNSPEC) {}
 
     // construct from a valid (not -1) socket
-    explicit evsocket(int af, evutil_socket_t sock);
+    explicit evsocket(int af, evutil_socket_t sock, bool blocking=false);
 
     // create a new socket
-    evsocket(int, int, int);
+    evsocket(int af, int type, int proto, bool blocking=false);
 
     // movable
     evsocket(evsocket&& o) noexcept;
