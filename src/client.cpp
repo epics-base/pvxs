@@ -1073,7 +1073,9 @@ void ContextImpl::tickSearch(SearchKind kind)
 
             count++;
 
-            auto ninc = chan->nSearch = std::min(searchBuckets.size(), chan->nSearch+1u);
+            size_t ninc = 0u;
+            if(kind==SearchKind::check)
+                ninc = chan->nSearch = std::min(searchBuckets.size(), chan->nSearch+1u);
             auto next = (idx + ninc)%searchBuckets.size();
             auto nextnext = (next + 1u)%searchBuckets.size();
 
