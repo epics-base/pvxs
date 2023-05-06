@@ -12,6 +12,8 @@
 
 namespace pvxs {
 
+DEFINE_INST_COUNTER(StructTop);
+
 NoField::NoField()
     :std::runtime_error ("No such field")
 {}

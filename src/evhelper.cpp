@@ -107,6 +107,13 @@ struct ThreadEvent
     inline epicsEvent* operator->() { return get(); }
 };
 
+namespace {
+struct evbaseRunning {
+    INST_COUNTER(evbaseRunning);
+};
+DEFINE_INST_COUNTER(evbaseRunning);
+}
+
 struct evbase::Pvt final : public epicsThreadRunable
 {
     SockAttach attach;
@@ -165,7 +172,7 @@ struct evbase::Pvt final : public epicsThreadRunable
 
     virtual void run() override final
     {
-        INST_COUNTER(evbaseRunning);
+        evbaseRunning track;
         try {
             evconfig conf(__FILE__, __LINE__, event_config_new());
 #ifdef __rtems__
@@ -253,6 +260,7 @@ struct evbase::Pvt final : public epicsThreadRunable
     }
 
 };
+DEFINE_INST_COUNTER2(evbase::Pvt, evbase);
 
 evbase::evbase(const std::string &name, unsigned prio)
 {
@@ -1023,6 +1031,8 @@ void to_evbuf(evbuffer *buf, const Header& H, bool be)
 }
 
 } // namespace impl
+
+std::atomic<size_t> Timer::Pvt::cnt_Timer {0u};
 
 Timer::~Timer() {}
 

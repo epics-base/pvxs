@@ -383,6 +383,7 @@ struct GPROp : public OperationBase
         }
     }
 };
+DEFINE_INST_COUNTER(GPROp);
 
 } // namespace
 

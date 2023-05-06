@@ -27,6 +27,11 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
 namespace pvxs {
 namespace client {
 
+DEFINE_INST_COUNTER(Connection);
+DEFINE_INST_COUNTER(Channel);
+DEFINE_INST_COUNTER2(ContextImpl, ClientContextImpl);
+DEFINE_INST_COUNTER2(Context::Pvt, ClientPvt);
+
 namespace {
 /* "normal" tick interval for the search bucket ring, and "fast" interval
  * used for one revolution after a successful poke().

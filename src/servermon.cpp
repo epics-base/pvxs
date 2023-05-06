@@ -200,6 +200,7 @@ struct MonitorOp : public ServerOp,
         strm<<"MONITOR\n";
     }
 };
+DEFINE_INST_COUNTER(MonitorOp);
 
 struct ServerMonitorSetup;
 
@@ -326,6 +327,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
 
     INST_COUNTER(ServerMonitorControl);
 };
+DEFINE_INST_COUNTER(ServerMonitorControl);
 
 struct ServerMonitorSetup : public server::MonitorSetupOp
 {
@@ -401,6 +403,7 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
 
     INST_COUNTER(ServerMonitorSetup);
 };
+DEFINE_INST_COUNTER(ServerMonitorSetup);
 
 
 ServerMonitorControl::ServerMonitorControl(ServerMonitorSetup* setup,

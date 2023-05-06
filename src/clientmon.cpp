@@ -463,6 +463,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
         }
     }
 };
+DEFINE_INST_COUNTER(SubscriptionImpl);
 
 void Connection::handle_MONITOR()
 {

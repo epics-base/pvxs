@@ -31,6 +31,8 @@ namespace pvxs {namespace impl {
 DEFINE_LOGGER(logio, "pvxs.udp.io");
 DEFINE_LOGGER(logsetup, "pvxs.udp.setup");
 
+DEFINE_INST_COUNTER(UDPListener);
+
 struct UDPCollector final : public UDPManager::Search,
                             public std::enable_shared_from_this<UDPCollector>
 {

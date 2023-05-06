@@ -78,18 +78,48 @@ unsigned long version_abi_int()
     return PVXS_ABI_VERSION;
 }
 
+namespace {
+epicsThreadOnceId ICountOnce = EPICS_THREAD_ONCE_INIT;
+struct ICountGbl_t {
+    RWLock lock;
+    std::map<std::string, std::atomic<size_t>*> counters;
+} *ICountGbl;
 
-#define CASE(KLASS) std::atomic<size_t> cnt_ ## KLASS{}
-#include "instcounters.h"
-#undef CASE
+void ICountInit(void*)
+{
+    ICountGbl = new ICountGbl_t;
+}
+
+} // namespace
+
+void registerICount(const char *name, std::atomic<size_t>& Cnt)
+{
+    epicsThreadOnce(&ICountOnce, &ICountInit, nullptr);
+    auto& gbl = *ICountGbl;
+    try {
+        auto L(gbl.lock.lockWriter());
+        if(!gbl.counters.emplace(name, &Cnt).second) { // duplicate name
+            return;
+        }
+    } catch(std::exception& e) { // bad_alloc
+        return;
+    }
+    Cnt++; // bias by +1 to indicate initialization
+}
 
 std::map<std::string, size_t> instanceSnapshot()
 {
     std::map<std::string, size_t> ret;
 
-#define CASE(KLASS) ret[#KLASS] = cnt_ ## KLASS .load(std::memory_order_relaxed)
-#include "instcounters.h"
-#undef CASE
+    {
+        epicsThreadOnce(&ICountOnce, &ICountInit, nullptr);
+        auto& gbl = *ICountGbl;
+        auto L(gbl.lock.lockReader());
+        for(auto& pair : gbl.counters) {
+            // remove -1 bias for initialized counter
+            ret.emplace(pair.first, pair.second->load(std::memory_order_relaxed)-1u);
+        }
+    }
 
     return ret;
 }

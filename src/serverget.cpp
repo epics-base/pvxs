@@ -152,6 +152,7 @@ struct ServerGPR : public ServerOp
 
     INST_COUNTER(ServerGPR);
 };
+DEFINE_INST_COUNTER(ServerGPR);
 
 
 struct ServerGPRConnect : public server::ConnectOp
@@ -246,6 +247,7 @@ struct ServerGPRConnect : public server::ConnectOp
 
     INST_COUNTER(ServerGPRConnect);
 };
+DEFINE_INST_COUNTER(ServerGPRConnect);
 
 struct ServerGPRExec : public server::ExecOp
 {
@@ -317,6 +319,7 @@ struct ServerGPRExec : public server::ExecOp
 
     INST_COUNTER(ServerGPRExec);
 };
+DEFINE_INST_COUNTER(ServerGPRExec);
 
 } // namespace
 

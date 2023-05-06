@@ -108,6 +108,7 @@ struct InfoOp : public OperationBase
         }
     }
 };
+DEFINE_INST_COUNTER(InfoOp);
 
 } // namespace
 

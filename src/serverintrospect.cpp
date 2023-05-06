@@ -56,6 +56,7 @@ struct ServerIntrospect : public ServerOp
 
     INST_COUNTER(ServerIntrospect);
 };
+DEFINE_INST_COUNTER(ServerIntrospect);
 
 struct ServerIntrospectControl : public server::ConnectOp
 {
@@ -117,6 +118,7 @@ struct ServerIntrospectControl : public server::ConnectOp
 
     INST_COUNTER(ServerIntrospectControl);
 };
+DEFINE_INST_COUNTER(ServerIntrospectControl);
 } // namespace
 
 void ServerConn::handle_GET_FIELD()

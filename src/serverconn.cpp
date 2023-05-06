@@ -20,7 +20,16 @@
 static constexpr size_t tcp_tx_limit_mult = 2u;
 
 namespace pvxs {
+namespace impl {
+DEFINE_INST_COUNTER(ServerChannelControl);
+DEFINE_INST_COUNTER(ServerChan);
+DEFINE_INST_COUNTER(ServerConn);
+DEFINE_INST_COUNTER(ServerSource);
+}
 namespace server {
+
+DEFINE_INST_COUNTER2(Server::Pvt, ServerPvt);
+
 std::set<std::string> ClientCredentials::roles() const
 {
     std::set<std::string> ret;

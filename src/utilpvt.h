@@ -267,18 +267,27 @@ struct Restore {
     }
 };
 
-template<std::atomic<size_t>* Cnt>
-struct InstCounter
-{
-    InstCounter() {(*Cnt).fetch_add(1, std::memory_order_relaxed);}
-    ~InstCounter() {(*Cnt).fetch_sub(1, std::memory_order_relaxed);}
+PVXS_API
+void registerICount(const char* name, std::atomic<size_t>& Cnt);
+
+// Name and Cnt must have global lifetime
+template<std::atomic<size_t>& Cnt>
+struct InstCounter {
+    explicit InstCounter(const char* Name) {
+        if(0u==Cnt.fetch_add(1u, std::memory_order_relaxed)) { // first
+            registerICount(Name, Cnt);
+        }
+    }
+    ~InstCounter() {
+        Cnt.fetch_sub(1u, std::memory_order_relaxed);
+    }
 };
 
-#define INST_COUNTER(KLASS) InstCounter<&cnt_ ## KLASS> instances
-
-#define CASE(KLASS) PVXS_API extern std::atomic<size_t> cnt_ ## KLASS
-#include "instcounters.h"
-#undef CASE
+#define INST_COUNTER(KLASS) \
+                    static std::atomic<size_t> cnt_ ## KLASS; \
+                    InstCounter<cnt_ ## KLASS> instances{#KLASS}
+#define DEFINE_INST_COUNTER2(KLASS, NAME) std::atomic<size_t> KLASS::cnt_ ## NAME {0u}
+#define DEFINE_INST_COUNTER(KLASS) DEFINE_INST_COUNTER2(KLASS, KLASS)
 
 } // namespace pvxs
 
