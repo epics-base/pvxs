@@ -124,6 +124,9 @@ TypeDef NTEnum::build() const
                     }),
                     Alarm{}.build().as("alarm"),
                     TimeStamp{}.build().as("timeStamp"),
+                    Struct("display", {
+                        String("description"),
+                    }),
                 });
 
     return def;
