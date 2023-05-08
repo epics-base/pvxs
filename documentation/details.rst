@@ -96,6 +96,7 @@ scheme of MAJOR.MINOR.PATCH with the following amendments.
 * At this time only one version number is maintained, which is applied to both
   the main libpvxs.so and the auxiliary libpvxsIoc.so.
   Statements about API or ABI compatibility apply to both libraries as a group.
+* See :ref:`ntcompat` for ``NT*`` type construction helpers.
 
 .. _pgpkey:
   
