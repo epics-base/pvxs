@@ -34,6 +34,9 @@ namespace ioc {
 
 DEFINE_LOGGER(_logname, "pvxs.ioc.group.source");
 
+DEFINE_INST_COUNTER(GroupSourceSubscriptionCtx);
+DEFINE_INST_COUNTER(GroupSecurityCache);
+
 /**
  * Constructor for GroupSource registrar.
  */

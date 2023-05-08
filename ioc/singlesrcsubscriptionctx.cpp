@@ -13,6 +13,8 @@
 namespace pvxs {
 namespace ioc {
 
+DEFINE_INST_COUNTER(SingleSourceSubscriptionCtx);
+
 /**
  * Constructor for single source subscription context using a pointer to a db channel
  *

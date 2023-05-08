@@ -15,12 +15,14 @@
 #include "channel.h"
 #include "fieldconfig.h"
 #include "subscriptionctx.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace ioc {
 
 struct SingleInfo : public MappingInfo {
     Channel chan;
+    INST_COUNTER(SingleInfo);
 
     explicit SingleInfo(Channel&& chan) :chan(std::move(chan)) {
         updateNsecMask(dbChannelRecord(this->chan));
@@ -45,6 +47,7 @@ public:
     epicsMutex eventLock{};
     std::unique_ptr<server::MonitorControlOp> subscriptionControl{};
     bool eventsEnabled = false;
+    INST_COUNTER(SingleSourceSubscriptionCtx);
 
     ~SingleSourceSubscriptionCtx() {
         assert(!eventsEnabled);

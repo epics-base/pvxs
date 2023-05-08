@@ -39,6 +39,9 @@ namespace ioc {
 
 DEFINE_LOGGER(_logname, "pvxs.ioc.single.source");
 
+DEFINE_INST_COUNTER(PutOperationCache);
+DEFINE_INST_COUNTER(SingleInfo);
+
 namespace {
 
 void subscriptionCallback(SingleSourceSubscriptionCtx* subscriptionContext,

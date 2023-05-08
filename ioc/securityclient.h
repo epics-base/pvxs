@@ -17,6 +17,7 @@
 
 #include "credentials.h"
 #include "typeutils.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace ioc {
@@ -45,6 +46,7 @@ class GroupSecurityCache : public SecurityControlObject {
 public:
 	std::vector<SecurityClient> securityClients;
 	std::unique_ptr<Credentials> credentials;
+    INST_COUNTER(GroupSecurityCache);
 };
 
 /**
@@ -65,6 +67,7 @@ struct PutOperationCache : public SingleSecurityCache {
 	processNotify notify{};
 	Value valueToSet;
 	std::unique_ptr<server::ExecOp> putOperation;
+    INST_COUNTER(PutOperationCache);
 	~PutOperationCache();
 };
 

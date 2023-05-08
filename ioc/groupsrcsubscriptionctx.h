@@ -19,6 +19,7 @@
 #include "fieldsubscriptionctx.h"
 #include "group.h"
 #include "subscriptionctx.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace ioc {
@@ -30,6 +31,7 @@ public:
     bool eventsPrimed = false, firstEvent = true;
     bool eventsEnabled = false;
     std::unique_ptr<server::MonitorControlOp> subscriptionControl{};
+    INST_COUNTER(GroupSourceSubscriptionCtx);
 
     // This is as a special case for storing the initial value prior to both initial subscription events returning
     // This is so that we can merge this with the subsequent values that come in before all initial events are in
