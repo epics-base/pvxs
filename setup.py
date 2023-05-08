@@ -458,6 +458,10 @@ class InstallHeaders(Command):
             self.copy_file(header,
                            os.path.join(self.build_lib, 'pvxslibs', 'include', os.path.relpath(header, 'src')))
 
+        for header in glob('ioc/pvxs/*.h'):
+            self.copy_file(header,
+                           os.path.join(self.build_lib, 'pvxslibs', 'include', os.path.relpath(header, 'ioc')))
+
 
 @logexc
 def define_DSOS(self):
@@ -563,6 +567,30 @@ def define_DSOS(self):
     if OS_CLASS=='WIN32':
         event_libs = ['ws2_32','shell32','advapi32','bcrypt','iphlpapi']
 
+    src_pvxsIoc = [
+        "ioc/channel.cpp",
+        "ioc/credentials.cpp",
+        "ioc/dberrormessage.cpp",
+        "ioc/demo.cpp",
+        "ioc/field.cpp",
+        "ioc/fielddefinition.cpp",
+        "ioc/fieldname.cpp",
+        "ioc/fieldsubscriptionctx.cpp",
+        "ioc/groupconfigprocessor.cpp",
+        "ioc/group.cpp",
+        "ioc/groupprocessorcontext.cpp",
+        "ioc/groupsource.cpp",
+        "ioc/groupsourcehooks.cpp",
+        "ioc/iochooks.cpp",
+        "ioc/iocsource.cpp",
+        "ioc/localfieldlog.cpp",
+        "ioc/securityclient.cpp",
+        "ioc/singlesource.cpp",
+        "ioc/singlesourcehooks.cpp",
+        "ioc/singlesrcsubscriptionctx.cpp",
+        "ioc/typeutils.cpp",
+    ]
+
     probe = ProbeToolchain()
 
     cxx11_flags = []
@@ -618,6 +646,29 @@ def define_DSOS(self):
             extra_link_args = cxx11_flags + get_config_var('LDFLAGS'),
             soversion = pvxs_abi,
             dsos = dsos_pvxs,
+            libraries = get_config_var('LDADD') + event_libs,
+        ),
+        DSO('pvxslibs.lib.pvxsIoc', src_pvxsIoc,
+            define_macros = [('PVXS_IOC_API_BUILDING', None), ('PVXS_ENABLE_EXPERT_API', None)] + get_config_var('CPPFLAGS'),
+            include_dirs=[
+                'bundle/libevent/include',
+                'src',
+                'ioc',
+                '.', # generated headers under build/tmp
+                'pvxslibs/include', # generated headers under build/lib
+                epicscorelibs.path.include_path
+                ],
+            extra_compile_args = cxx11_flags + get_config_var('CXXFLAGS'),
+            extra_link_args = cxx11_flags + get_config_var('LDFLAGS'),
+            soversion = pvxs_abi,
+            dsos = [
+                'pvxslibs.lib.pvxs',
+                'pvxslibs.lib.event_core',
+                'epicscorelibs.lib.dbRecStd',
+                'epicscorelibs.lib.dbCore',
+                #'epicscorelibs.lib.ca',
+                'epicscorelibs.lib.Com',
+            ],
             libraries = get_config_var('LDADD') + event_libs,
         )
     ]
