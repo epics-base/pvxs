@@ -653,6 +653,12 @@ void Server::Pvt::stop()
 
         state = Stopped;
     });
+
+    /* Cycle through once more to ensure any callbacks queue during the previous call have completed.
+     * TODO: this is partly a crutch as eg. SharedPV::attach() binds strong self references
+     *       into on*() lambdas, which indirectly hold references keeping acceptor_loop alive.
+     */
+    acceptor_loop.sync();
 }
 
 void Server::Pvt::onSearch(const UDPManager::Search& msg)
