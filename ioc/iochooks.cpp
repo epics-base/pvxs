@@ -41,6 +41,11 @@ namespace ioc {
 
 DEFINE_LOGGER(_logname, "pvxs.ioc");
 
+void printIOCShError(const std::exception& e)
+{
+    fprintf(stderr, "Error: %s\n", e.what());
+}
+
 // The pvxs server singleton
 std::atomic<server::Server*> pvxsServer{};
 
@@ -65,16 +70,20 @@ server::Server server() {
  * @param pep - The pointer to the exit parameter list - unused
  */
 static
-void pvxsAtExit(void*) {
-    runOnPvxsServerWhile_("In IOC exit event handler", [](server::Server* pPvxsServer) {
-        if (pvxsServer.compare_exchange_strong(pPvxsServer, nullptr)) {
-            // take ownership
-            std::unique_ptr<server::Server> serverInstance(pPvxsServer);
-            serverInstance->stop();
-            IOCGroupConfigCleanup();
-            log_debug_printf(_logname, "Stopped Server%s", "\n");
+void pvxsAtExit(void*) noexcept {
+    try {
+        if (auto pPvxsServer = pvxsServer.load()) {
+            if (pvxsServer.compare_exchange_strong(pPvxsServer, nullptr)) {
+                // take ownership
+                std::unique_ptr<server::Server> serverInstance(pPvxsServer);
+                serverInstance->stop();
+                IOCGroupConfigCleanup();
+                log_debug_printf(_logname, "Stopped Server%s", "\n");
+            }
         }
-    });
+    } catch(std::exception& e) {
+        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
+    }
 }
 
 void testShutdown()
@@ -97,12 +106,12 @@ void testShutdown()
  */
 static
 void pvxsr(int detail) {
-    runOnPvxsServer([&detail](server::Server* pPvxsServer) {
+    if (auto pPvxsServer = pvxsServer.load()) {
         std::ostringstream strm;
         Detailed D(strm, detail);
         strm << *pPvxsServer;
         printf("%s", strm.str().c_str());
-    });
+    }
 }
 
 /**
@@ -119,13 +128,9 @@ void pvxsr(int detail) {
  */
 static
 void pvxsi() {
-    try {
-        std::ostringstream capture;
-        target_information(capture);
-        printf("%s", capture.str().c_str());
-    } catch (std::exception& e) {
-        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
-    }
+    std::ostringstream capture;
+    target_information(capture);
+    printf("%s", capture.str().c_str());
 }
 
 namespace {
@@ -212,6 +217,7 @@ void pvxrefdiff() {
  */
 static
 void pvxsInitHook(initHookState theInitHookState) {
+    auto pPvxsServer = pvxsServer.load();
     switch(theInitHookState) {
     case initHookAfterInitDatabase:
         // when de-init hooks not available, register for later cleanup via atexit()
@@ -222,16 +228,16 @@ void pvxsInitHook(initHookState theInitHookState) {
         break;
     case initHookAfterCaServerRunning:
     case initHookAfterIocRunning:
-        runOnPvxsServer([](server::Server* pPvxsServer) {
+        if(pPvxsServer) {
             pPvxsServer->start();
             log_debug_printf(_logname, "Started Server %p", pPvxsServer);
-        });
+        }
         break;
     case initHookAfterCaServerPaused:
-        runOnPvxsServer([](server::Server* pPvxsServer) {
+        if(pPvxsServer) {
             pPvxsServer->stop();
             log_debug_printf(_logname, "Stopped Server %p", pPvxsServer);
-        });
+        }
         break;
 #ifdef USE_DEINIT_HOOKS
     // use de-init hook when available

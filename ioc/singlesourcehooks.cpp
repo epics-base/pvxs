@@ -30,7 +30,7 @@
 namespace pvxs {
 namespace ioc {
 void pvxsl(int detail) {
-    runOnPvxsServer([detail](server::Server* pPvxsServer) {
+    if (auto pPvxsServer = pvxsServer.load()) {
         // For each registered source/IOID pair print a line of either detailed or regular information
         for (auto& pair: pPvxsServer->listSource()) {
             auto& record = pair.first;
@@ -60,7 +60,7 @@ void pvxsl(int detail) {
                 }
             }
         }
-    });
+    }
 }
 
 }
@@ -71,22 +71,22 @@ using namespace pvxs::ioc;
 
 namespace {
 
-void qReport(unsigned level) {
+void qReport(unsigned level) noexcept {
     try{
-        runOnPvxsServer([level](server::Server* pPvxsServer) {
+        if (auto pPvxsServer = pvxsServer.load()) {
             std::ostringstream strm;
             Detailed D(strm, level);
             strm << *pPvxsServer;
             printf("%s", strm.str().c_str());
-        });
-    }catch(...){
-        // runOnPvxsServer has already logged
+        }
+    }catch(std::exception& e){
+        fprintf(stderr, "Error in %s: %s\n", __func__, e.what());
     }
 }
 
-void qStats(unsigned *channels, unsigned *clients) {
+void qStats(unsigned *channels, unsigned *clients) noexcept {
     try{
-        auto action([channels, clients](server::Server* pPvxsServer) {
+        if (auto pPvxsServer = pvxsServer.load()) {
             auto report(pPvxsServer->report(false));
             if(clients) {
                 *clients = report.connections.size();
@@ -98,14 +98,13 @@ void qStats(unsigned *channels, unsigned *clients) {
                 }
                 *channels = nchan;
             }
-        });
-        runOnPvxsServer(action);
-    }catch(...){
-        // runOnPvxsServer has already logged
+        }
+    }catch(std::exception& e){
+        fprintf(stderr, "Error in %s: %s\n", __func__, e.what());
     }
 }
 
-int qClient(char *pBuf, size_t bufSize) {
+int qClient(char *pBuf, size_t bufSize) noexcept {
     try {
         if(auto op = CurrentOp::current()) {
             auto& peer(op->peerName());

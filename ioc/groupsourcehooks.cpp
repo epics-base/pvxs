@@ -53,33 +53,29 @@ void dbLoadGroupCmd(const char* jsonFileName, const char *macros) {
  */
 static
 void pvxsgl(int level, const char* pattern) {
-    try {
-        // Default pattern to match everything
-        if (!pattern) {
-            pattern = "";
-        }
+    // Default pattern to match everything
+    if (!pattern) {
+        pattern = "";
+    }
 
-        {
-            auto& config(IOCGroupConfig::instance());
-            epicsGuard<epicsMutex> G(config.groupMapMutex);
+    {
+        auto& config(IOCGroupConfig::instance());
+        epicsGuard<epicsMutex> G(config.groupMapMutex);
 
-            // For each group
-            for (auto& mapEntry: config.groupMap) {
-                auto& groupName = mapEntry.first;
-                auto& group = mapEntry.second;
-                // if no pattern specified or the pattern matches
-                if (!pattern[0] || !!epicsStrGlobMatch(groupName.c_str(), pattern)) {
-                    // Print the group name
-                    printf("%s\n", groupName.c_str());
-                    // print sub-levels if required
-                    if (level > 0) {
-                        group.show(level);
-                    }
+        // For each group
+        for (auto& mapEntry: config.groupMap) {
+            auto& groupName = mapEntry.first;
+            auto& group = mapEntry.second;
+            // if no pattern specified or the pattern matches
+            if (!pattern[0] || !!epicsStrGlobMatch(groupName.c_str(), pattern)) {
+                // Print the group name
+                printf("%s\n", groupName.c_str());
+                // print sub-levels if required
+                if (level > 0) {
+                    group.show(level);
                 }
             }
         }
-    } catch (std::exception& e) {
-        fprintf(stderr, "%s\n", e.what());
     }
 }
 

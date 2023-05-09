@@ -17,6 +17,7 @@
 
 #include <iocsh.h>
 
+#include <pvxs/iochooks.h>
 #include "iocshargument.h"
 #include "iocshindex.h"
 
@@ -26,6 +27,10 @@ namespace ioc {
 // All shell commands return void and take a variable number of arguments of any supported type
 template<typename ...IOCShFunctionArgumentTypes>
 using IOCShFunction = void (*)(IOCShFunctionArgumentTypes...);
+
+// messy to include epicsStdio.h from a header
+PVXS_IOC_API
+void printIOCShError(const std::exception& e);
 
 /**
  * Class that encapsulates an IOC command.
@@ -85,37 +90,19 @@ public:
 // declared registration template types
 // by calling the appropriate get methods on the templated Arg(s)
     template<IOCShFunction<IOCShFunctionArgumentTypes ...> function, size_t... Idxs>
-    static void call(const iocshArgBuf* iocShArgumentsBuffer) {
-        (*function)(IOCShFunctionArgument<IOCShFunctionArgumentTypes>::get(iocShArgumentsBuffer[Idxs])...);
+    static void call(const iocshArgBuf* iocShArgumentsBuffer) noexcept {
+        try {
+            (*function)(IOCShFunctionArgument<IOCShFunctionArgumentTypes>::get(iocShArgumentsBuffer[Idxs])...);
+        } catch(std::exception& e) {
+            printIOCShError(e);
+#if EPICS_VERSION_INT >= VERSION_INT(7, 0, 3, 1)
+        iocshSetError(1);
+#endif
+        }
     }
 };
 
 extern std::atomic<server::Server*> pvxsServer;
-
-/**
- * Get the pvxs server and execute the given function against it
- *
- * @param function the function to call
- * @param method the string method from which this is called.  Use the __func__ macro by default
- * @param context the activity being attempted when the error occurred
- */
-template<typename FN>
-void
-runOnServer(FN&& function, const char* method, const char* context = nullptr) {
-    try {
-        if (auto pPvxsServer = pvxsServer.load()) {
-            function(pPvxsServer);
-        }
-    } catch (std::exception& e) {
-        fprintf(stderr, "%s%sError in %s: %s\n",
-                context ? context : "",
-                context ? ": " : "",
-                method,
-                e.what());
-        throw e;
-    }
-}
-
 
 } // pvxs
 } // ioc
@@ -126,10 +113,4 @@ runOnServer(FN&& function, const char* method, const char* context = nullptr) {
  */
 #define runOnPvxsServer(_lambda) runOnServer(_lambda, __func__)
 
-/**
- * Run given lambda function against the provided pvxs server instance with the given context string
- * @param _context the context string, used in error reporting.  e.g. "Updating tables"
- * @param _lambda the lambda function to run against the provided pvxs server instance
- */
-#define runOnPvxsServerWhile_(_context, _lambda) runOnServer(_lambda, __func__, _context)
 #endif //PVXS_IOCSHCOMMAND_H
