@@ -160,11 +160,11 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
     {
         {
             if(!queue.empty()) {
-                auto ent(std::move(queue.front()));
 
-                if(!canthrow && ent.exc)
+                if(!canthrow && queue.front().exc)
                     return;
 
+                auto ent(std::move(queue.front()));
                 queue.pop_front();
 
                 if(pipeline) {
