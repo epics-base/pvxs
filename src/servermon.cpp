@@ -61,9 +61,11 @@ struct MonitorOp : public ServerOp,
     // is doReply() scheduled to run
     bool scheduled=false;
     bool pipeline=false;
+    // finish() called
     bool finished=false;
     size_t window=0u, limit=4u;
     size_t low=0u, high=0u;
+    size_t ackAt=1u;
     size_t maxQueue=0u;
 
     std::deque<Value> queue;
@@ -96,6 +98,8 @@ struct MonitorOp : public ServerOp,
             });
 
             op->scheduled = true;
+        } else {
+            log_debug_printf(connio, "Skip reply%s", "\n");
         }
     }
 
@@ -111,6 +115,8 @@ struct MonitorOp : public ServerOp,
         Guard G(lock);
         scheduled = false;
 
+        log_debug_printf(connio, "%s state=%d\n", __func__, state);
+
         if(state==Dead)
             return;
 
@@ -120,13 +126,16 @@ struct MonitorOp : public ServerOp,
             state = type ? Idle : Dead;
 
         } else if(state==Executing) {
-            if(queue.empty() || (pipeline && !window)) {
+            if(queue.empty() || (pipeline && !window && !finished)) {
+                log_debug_printf(connio, "Client %s IOID %u done reply\n",
+                                 conn->peerName.c_str(), unsigned(ioid));
                 return; // nothing to do
 
             } else if(!queue.front()) {
-                finished = true;
                 subcmd = 0x10;
                 state = Dead;
+                log_debug_printf(connio, "Client %s IOID %u finishes\n",
+                                 conn->peerName.c_str(), unsigned(ioid));
             }
         }
 
@@ -169,22 +178,26 @@ struct MonitorOp : public ServerOp,
 
         auto self(shared_from_this());
 
-        if(state==Executing && pipeline) {
-            assert(window); // previously tested
+        if(state==Executing && pipeline && window) {
 
             window--;
 
             if(!lowMarkPending && window <= low && onLowMark) {
                 lowMarkPending = true;
                 conn->iface->server->acceptor_loop.dispatch([self]() {
-                    self->lowMarkPending = false;
-                    if(self->onLowMark)
-                        self->onLowMark();
+                    decltype (self->onLowMark) fn;
+                    {
+                        Guard G(self->lock);
+                        self->lowMarkPending = false;
+                        fn = self->onLowMark;
+                    }
+                    if(fn)
+                        fn();
                 });
             }
         }
 
-        if(state==Executing && !queue.empty() && (!pipeline || window)) {
+        if(state==Executing && !queue.empty() && (!pipeline || window || finished)) {
             // reschedule myself
             assert(!scheduled); // we've been holding the lock, so this should not have changed
 
@@ -227,9 +240,14 @@ struct ServerMonitorControl : public server::MonitorControlOp
         bool real = testmask(val, mon->pvMask);
 
         Guard G(mon->lock);
-        if(real) {
+        if(mon->finished)
+            throw std::logic_error("Already finish()'d"); // TODO fail soft
+
+        if(real || !val) {
 
             if((mon->queue.size() < mon->limit) || force || !val) {
+
+                mon->finished = !val;
                 mon->queue.push_back(val);
 
                 if(mon->maxQueue < mon->queue.size())
@@ -285,8 +303,9 @@ struct ServerMonitorControl : public server::MonitorControlOp
         serv->acceptor_loop.call([this, low, high](){
             if(auto oper = op.lock()) {
                 Guard G(oper->lock);
-                oper->low = low;
-                oper->high = high;
+                oper->low = std::min(low, oper->ackAt-1u);
+                oper->high = std::min(high, oper->ackAt-1u);
+                log_debug_printf(connsetup, "setWatermarks(%zu, %zu)", oper->low, oper->high);
                 // TODO handle change of levels after start
             }
         });
@@ -468,6 +487,34 @@ void ServerConn::handle_MONITOR()
         if(op->limit < op->window)
             op->limit = op->window;
 
+        auto ackAny = pvRequest["record._options.ackAny"];
+        if(ackAny.type()==TypeCode::String) {
+            auto sval = ackAny.as<std::string>();
+            if(sval.size()>1 && sval.back()=='%') {
+                try {
+                    auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
+                    op->ackAt = std::max(0.0, std::min(percent, 100.0)) * op->limit;
+                }catch(std::exception&){
+                    log_warn_printf(connio, "Error parsing as percent ackAny: \"%s\"\n", sval.c_str());
+                }
+            }
+
+        }
+
+        if(op->ackAt==0u){
+            uint32_t count=0u;
+
+            if(ackAny.as(count)) {
+                op->ackAt = count;
+            }
+        }
+
+        if(op->ackAt==0u){
+            op->ackAt = op->limit/2u;
+        }
+
+        op->ackAt = std::max<size_t>(1u, std::min(op->ackAt, op->limit));
+
         std::unique_ptr<ServerMonitorSetup> ctrl(new ServerMonitorSetup(this, iface->server->internal_self, chan->name, pvRequest, op));
 
         op->state = ServerOp::Creating;
@@ -531,22 +578,30 @@ void ServerConn::handle_MONITOR()
         // pvAccessCPP won't accept ack and start/stop in the same message,
         // although it will accept destroy in any !INIT message.
         // We do accept ack+start/stop as there is no reason not to.
-        if(subcmd&0x80 && op->pipeline) { // ack
+        if((subcmd&0x80) && op->pipeline) { // ack
 
             Guard G(op->lock);
 
-            log_debug_printf(connio, "Client %s IOID %u acks %u, %u/%u\n",
+            log_debug_printf(connio, "Client %s IOID %u acks %u, %u/%u%s%s\n",
                        peerName.c_str(), unsigned(ioid), unsigned(nack),
-                             unsigned(op->window), unsigned(op->high));
+                             unsigned(op->window), unsigned(op->high),
+                             op->highMarkPending ? " pend" : "",
+                             op->finished ? " fin" : "");
 
             op->window += nack;
 
-            if(!op->highMarkPending && op->window > op->high && op->onHighMark) {
+            if(!op->highMarkPending && op->window > op->high && op->onHighMark && !op->finished) {
                 op->highMarkPending = true;
                 iface->server->acceptor_loop.dispatch([op](){
-                    op->highMarkPending = false;
-                    if(op->onHighMark)
-                        op->onHighMark();
+                    decltype(op->onHighMark) fn;
+                    {
+                        Guard G(op->lock);
+                        op->highMarkPending = false;
+                        if(!op->finished)
+                            fn = op->onHighMark;
+                    }
+                    if(fn)
+                        fn();
                 });
             }
         }

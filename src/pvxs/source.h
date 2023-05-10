@@ -106,7 +106,7 @@ public:
     //! Signal to subscriber that this subscription will not yield any further events.
     //! This is not an error.  Client should not retry.
     void finish() {
-        doPost(Value(), false, false);
+        doPost(Value(), false, true);
     }
 
     //! Poll information and statistics for this subscription.
