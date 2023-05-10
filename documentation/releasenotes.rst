@@ -3,6 +3,19 @@
 Release Notes
 =============
 
+1.2.0 (UNRELEASED)
+------------------
+
+* server: fix default monitor queueSize to 4
+* improve localhost multicast forwarding
+* server: bind both wildcard for UDP
+* update bundled libevent
+* Add `pvxs::nt::NTScalar::form`.
+* NTEnum add ``display.description``
+* client: schedule initial search use separate event from the generic work queue.  (Thomas Ives)
+* client: re-define the meaning of poke()
+* Add *feature preview* of :ref:`qsrv2` IOC server functionality.
+
 1.1.4 (April 2023)
 ------------------
 

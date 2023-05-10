@@ -39,14 +39,16 @@ Adding custom PVs to Server
 
 .. doxygenfunction:: pvxs::ioc::server
 
+.. _qsrv2:
 
 QSRV 2
 ######
 
 Beginning with PVXS UNRELEASED the functionality of `QSRV <https://epics-base.github.io/pva2pva>`_
 is replicated in the ``pvxsIoc`` library.
-Currently this is considered **alpha** level, with missing functionality.
-So users must **opt in** by setting **$PVXS_QSRV_ENABLE=YES** before ``iocInit()``. ::
+Currently this feature preview is considered **alpha** level, with missing functionality.
+In addition to linking in ``libpvxsIoc``,
+users must **opt in** at runtime by setting ``$PVXS_QSRV_ENABLE=YES`` before ``iocInit()``. ::
 
     epicsEnvSet("PVXS_QSRV_ENABLE", "YES")
     iocInit()
