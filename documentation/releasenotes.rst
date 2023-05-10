@@ -14,6 +14,12 @@ Release Notes
 * NTEnum add ``display.description``
 * client: schedule initial search use separate event from the generic work queue.  (Thomas Ives)
 * client: re-define the meaning of poke()
+* server: fix ``stats(reset=true)``
+* prevent simple ``Any`` self-assignment
+* ``Value::copyIn()`` (also ``from()`` and ``operator =``) add ``Array`` -> ``Array`` w/ implied alloc+convert
+* client: fix batch pop() of exception
+* fix monitor pipeline and ``finish()``
+* server: add MonitorStat::nSquash
 * Add *feature preview* of :ref:`qsrv2` IOC server functionality.
 
 1.1.4 (April 2023)
