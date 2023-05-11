@@ -271,7 +271,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
         stat.window = mon->window;
 
         if(reset)
-            stat.maxQueue = 0u;
+            mon->maxQueue = 0u;
     }
 
     virtual void setWatermarks(size_t low, size_t high) override final
