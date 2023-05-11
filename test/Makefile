@@ -94,6 +94,11 @@ TESTPROD_HOST += testrpc
 testrpc_SRCS += testrpc.cpp
 TESTS += testrpc
 
+TESTPROD_HOST += testdiscover
+testdiscover_SRCS += testdiscover.cpp
+# very slow and dependent on host network config.
+#TESTS += testdiscover
+
 TESTPROD_HOST += testnamesrv
 testnamesrv_SRCS += testnamesrv.cpp
 TESTS += testnamesrv
