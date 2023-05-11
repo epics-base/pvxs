@@ -686,6 +686,8 @@ void ContextImpl::close()
 
         conns.clear();
         chans.clear();
+        // breaks a ref. loop between Connection and ClientContextImpl
+        nameServers.clear();
 
         // internal_self.use_count() may be >1 if
         // we are orphaning some Operations
