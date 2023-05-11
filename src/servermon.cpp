@@ -67,6 +67,7 @@ struct MonitorOp : public ServerOp,
     size_t low=0u, high=0u;
     size_t ackAt=1u;
     size_t maxQueue=0u;
+    size_t nSquash=0u;
 
     std::deque<Value> queue;
 
@@ -258,7 +259,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
                 assert(mon->limit>0 && !mon->queue.empty());
 
                 mon->queue.back().assign(val);
-                // TODO track overrun
+                mon->nSquash++;
 
             } else {
                 // nope
@@ -287,9 +288,10 @@ struct ServerMonitorControl : public server::MonitorControlOp
         stat.maxQueue = mon->maxQueue;
         stat.limitQueue = mon->limit;
         stat.window = mon->window;
+        stat.nQueue = mon->nSquash;
 
         if(reset)
-            mon->maxQueue = 0u;
+            mon->maxQueue = mon->nSquash = 0u;
     }
 
     virtual void setWatermarks(size_t low, size_t high) override final
@@ -479,13 +481,15 @@ void ServerConn::handle_MONITOR()
         op->window = nack;
         (void)pvRequest["record._options.pipeline"].as(op->pipeline);
 
-        pvRequest["record._options.queueSize"].as<size_t>([&op](size_t qSize){
-            if(qSize>1)
-                op->limit = qSize;
+        pvRequest["record._options.queueSize"].as<uint32_t>([&op](size_t qSize){
+            op->limit = qSize;
         });
 
         if(op->limit < op->window)
             op->limit = op->window;
+
+        if(!op->limit)
+            op->limit = 1u;
 
         auto ackAny = pvRequest["record._options.ackAny"];
         if(ackAny.type()==TypeCode::String) {
