@@ -7,6 +7,7 @@
 #define PVXS_ENABLE_EXPERT_API
 
 #include <atomic>
+#include <sstream>
 
 #include <testMain.h>
 
@@ -21,6 +22,7 @@
 #include <pvxs/sharedpv.h>
 #include <pvxs/source.h>
 #include <pvxs/nt.h>
+#include "utilpvt.h"
 
 namespace {
 using namespace pvxs;
@@ -236,13 +238,45 @@ struct Tester {
         cli = client::Context();
         op.reset();
     }
+
+    void serversrc()
+    {
+        using namespace pvxs::members;
+        testShow()<<__func__;
+
+        serv.start();
+
+        std::string servaddr = SB()<<"127.0.0.1:"<<serv.config().tcp_port;
+
+        auto uri(nt::NTURI({
+                               String("op"),
+                           }));
+
+        {
+            Value query = nt::NTURI({}).call();
+            auto result(cli.rpc("server", uri.call("channels"))
+                        .server(servaddr).exec()->wait(5.0));
+
+            shared_array<const std::string> channels({"mailbox"});
+            testArrEq(result["value"].as<shared_array<const std::string>>(), channels);
+        }
+
+        {
+            Value query = nt::NTURI({}).call();
+            auto result(cli.rpc("server", uri.call("info"))
+                        .server(servaddr).exec()->wait(5.0));
+
+            testEq(result["implLang"].as<std::string>(), "cpp");
+            testStrMatch("PVXS.*", result["version"].as<std::string>());
+        }
+    }
 };
 
 } // namespace
 
 MAIN(testrpc)
 {
-    testPlan(20);
+    testPlan(23);
     testSetup();
     Tester().echo();
     Tester().lazy();
@@ -252,6 +286,7 @@ MAIN(testrpc)
     Tester().error();
     Tester().builder();
     Tester().orphan();
+    Tester().serversrc();
     cleanup_for_valgrind();
     return testDone();
 }
