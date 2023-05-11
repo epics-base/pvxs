@@ -351,6 +351,20 @@ struct Tester {
             done.signal();
         });
         testOk1(done.wait(5.0));
+
+        serv.stop();
+        serv.start();
+        // TODO: should reExec* while disconnected be queued?
+        testOk1(initd.wait(5.0));
+
+        testDiag("reExec() 3");
+        op->reExecGet([&done](client::Result&& result) {
+            testTrue(!!result());
+            testDiag("result() 3");
+            done.signal();
+        });
+
+        testOk1(done.wait(5.0));
     }
 
     void badRequest()
@@ -502,7 +516,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(59);
+    testPlan(62);
     testSetup();
     logger_config_env();
     const bool canIPv6 = pvxs::impl::evsocket::canIPv6;
