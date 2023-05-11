@@ -207,7 +207,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
                          current ? current->peerName.c_str() : "<disconnected>",
                          name.c_str());
 
-    } else { // reconnect to specific server
+    } else if(context->state==ContextImpl::Running) { // reconnect to specific server
         conn = Connection::build(context, forcedServer, true);
 
         conn->pending[cid] = self;
