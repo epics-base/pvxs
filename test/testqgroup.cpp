@@ -447,8 +447,8 @@ void testIQ()
     TestClient ctxt;
 
     auto val(ctxt.get("iq:iq").exec()->wait(5.0));
-    checkUTAG(val, 4, "I.timeStamp.userTag");
-    checkUTAG(val, 4, "Q.timeStamp.userTag");
+    checkUTAG(val, 1, "I.timeStamp.userTag");
+    checkUTAG(val, 1, "Q.timeStamp.userTag");
     testStrEq(std::string(SB()<<val.format().arrayLimit(5u)),
               "struct {\n"
               "    struct {\n"
@@ -458,14 +458,14 @@ void testIQ()
               "        } _options\n"
               "    } record\n"
               "    struct \"epics:nt/NTScalarArray:1.0\" {\n"
-              "        double[] value = {500}[0.0697565, 0.132256, 0.194234, 0.255446, 0.315649, 0.374607, ...]\n"
+              "        double[] value = {500}[0.0174524, 0.0801989, 0.142629, 0.204496, 0.265556, 0.325568, ...]\n"
               "        struct \"alarm_t\" {\n"
               "            int32_t severity = 0\n"
               "            int32_t status = 0\n"
               "            string message = \"\"\n"
               "        } alarm\n"
               "        struct \"time_t\" {\n"
-              "            int64_t secondsPastEpoch = 643497681\n"
+              "            int64_t secondsPastEpoch = 643497678\n"
               "            int32_t nanoseconds = 102030\n"
               "            int32_t userTag = 0\n"
               "        } timeStamp\n"
@@ -499,14 +499,14 @@ void testIQ()
               "        } valueAlarm\n"
               "    } I\n"
               "    struct \"epics:nt/NTScalarArray:1.0\" {\n"
-              "        double[] value = {500}[0.0697565, 0.132256, 0.194234, 0.255446, 0.315649, 0.374607, ...]\n"
+              "        double[] value = {500}[0.0174524, 0.0801989, 0.142629, 0.204496, 0.265556, 0.325568, ...]\n"
               "        struct \"alarm_t\" {\n"
               "            int32_t severity = 0\n"
               "            int32_t status = 0\n"
               "            string message = \"\"\n"
               "        } alarm\n"
               "        struct \"time_t\" {\n"
-              "            int64_t secondsPastEpoch = 643497681\n"
+              "            int64_t secondsPastEpoch = 643497678\n"
               "            int32_t nanoseconds = 102030\n"
               "            int32_t userTag = 0\n"
               "        } timeStamp\n"
@@ -540,18 +540,18 @@ void testIQ()
               "        } valueAlarm\n"
               "    } Q\n"
               "    struct {\n"
-              "        double i = 4\n"
-              "        double q = 4\n"
+              "        double i = 1\n"
+              "        double q = 1\n"
               "    } phas\n"
               "}\n"
               );
     testStrEq(std::string(SB()<<val.format().delta().arrayLimit(5u)),
               "record._options.atomic bool = true\n"
-              "I.value double[] = {500}[0.0697565, 0.132256, 0.194234, 0.255446, 0.315649, 0.374607, ...]\n"
+              "I.value double[] = {500}[0.0174524, 0.0801989, 0.142629, 0.204496, 0.265556, 0.325568, ...]\n"
               "I.alarm.severity int32_t = 0\n"
               "I.alarm.status int32_t = 0\n"
               "I.alarm.message string = \"\"\n"
-              "I.timeStamp.secondsPastEpoch int64_t = 643497681\n"
+              "I.timeStamp.secondsPastEpoch int64_t = 643497678\n"
               "I.timeStamp.nanoseconds int32_t = 102030\n"
               "I.display.limitLow double = 0\n"
               "I.display.limitHigh double = 0\n"
@@ -561,11 +561,11 @@ void testIQ()
               "I.display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", ...]\n"
               "I.control.limitLow double = 0\n"
               "I.control.limitHigh double = 0\n"
-              "Q.value double[] = {500}[0.0697565, 0.132256, 0.194234, 0.255446, 0.315649, 0.374607, ...]\n"
+              "Q.value double[] = {500}[0.0174524, 0.0801989, 0.142629, 0.204496, 0.265556, 0.325568, ...]\n"
               "Q.alarm.severity int32_t = 0\n"
               "Q.alarm.status int32_t = 0\n"
               "Q.alarm.message string = \"\"\n"
-              "Q.timeStamp.secondsPastEpoch int64_t = 643497681\n"
+              "Q.timeStamp.secondsPastEpoch int64_t = 643497678\n"
               "Q.timeStamp.nanoseconds int32_t = 102030\n"
               "Q.display.limitLow double = 0\n"
               "Q.display.limitHigh double = 0\n"
@@ -575,21 +575,21 @@ void testIQ()
               "Q.display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", ...]\n"
               "Q.control.limitLow double = 0\n"
               "Q.control.limitHigh double = 0\n"
-              "phas.i double = 4\n"
-              "phas.q double = 4\n");
+              "phas.i double = 1\n"
+              "phas.q double = 1\n");
 
     TestSubscription sub(ctxt.monitor("iq:iq"));
     val = sub.waitForUpdate();
-    checkUTAG(val, 4, "I.timeStamp.userTag");
-    checkUTAG(val, 4, "Q.timeStamp.userTag");
+    checkUTAG(val, 1, "I.timeStamp.userTag");
+    checkUTAG(val, 1, "Q.timeStamp.userTag");
     testStrEq(std::string(SB()<<val.format().delta().arrayLimit(5u)),
               "record._options.queueSize int32_t = 4\n"
               "record._options.atomic bool = true\n"
-              "I.value double[] = {500}[0.0697565, 0.132256, 0.194234, 0.255446, 0.315649, 0.374607, ...]\n"
+              "I.value double[] = {500}[0.0174524, 0.0801989, 0.142629, 0.204496, 0.265556, 0.325568, ...]\n"
               "I.alarm.severity int32_t = 0\n"
               "I.alarm.status int32_t = 0\n"
               "I.alarm.message string = \"\"\n"
-              "I.timeStamp.secondsPastEpoch int64_t = 643497681\n"
+              "I.timeStamp.secondsPastEpoch int64_t = 643497678\n"
               "I.timeStamp.nanoseconds int32_t = 102030\n"
               "I.display.limitLow double = 0\n"
               "I.display.limitHigh double = 0\n"
@@ -599,11 +599,11 @@ void testIQ()
               "I.display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", ...]\n"
               "I.control.limitLow double = 0\n"
               "I.control.limitHigh double = 0\n"
-              "Q.value double[] = {500}[0.0697565, 0.132256, 0.194234, 0.255446, 0.315649, 0.374607, ...]\n"
+              "Q.value double[] = {500}[0.0174524, 0.0801989, 0.142629, 0.204496, 0.265556, 0.325568, ...]\n"
               "Q.alarm.severity int32_t = 0\n"
               "Q.alarm.status int32_t = 0\n"
               "Q.alarm.message string = \"\"\n"
-              "Q.timeStamp.secondsPastEpoch int64_t = 643497681\n"
+              "Q.timeStamp.secondsPastEpoch int64_t = 643497678\n"
               "Q.timeStamp.nanoseconds int32_t = 102030\n"
               "Q.display.limitLow double = 0\n"
               "Q.display.limitHigh double = 0\n"
@@ -613,23 +613,25 @@ void testIQ()
               "Q.display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", ...]\n"
               "Q.control.limitLow double = 0\n"
               "Q.control.limitHigh double = 0\n"
-              "phas.i double = 4\n"
-              "phas.q double = 4\n");
+              "phas.i double = 1\n"
+              "phas.q double = 1\n");
+
+    sub.testEmpty();
 
     testTimeSec++;
     testdbPutFieldOk("iq:Phase:I.PROC", DBR_LONG, 0);
 
     val = sub.waitForUpdate();
-    checkUTAG(val, 5, "I.timeStamp.userTag");
-    checkUTAG(val, 5, "Q.timeStamp.userTag");
+    checkUTAG(val, 2, "I.timeStamp.userTag");
+    checkUTAG(val, 2, "Q.timeStamp.userTag");
     {
-        auto expected = "I.value double[] = {500}[0.0871557, 0.149535, 0.211325, 0.27228, 0.332161, 0.390731, ...]\n"
+        auto expected = "I.value double[] = {500}[0.0348995, 0.0975829, 0.159881, 0.221548, 0.282341, 0.34202, ...]\n"
                         "I.alarm.severity int32_t = 0\n"
                         "I.alarm.status int32_t = 0\n"
                         "I.alarm.message string = \"\"\n"
                         "I.timeStamp.secondsPastEpoch int64_t = 643497682\n"
                         "I.timeStamp.nanoseconds int32_t = 102030\n"
-                        "Q.value double[] = {500}[0.0871557, 0.149535, 0.211325, 0.27228, 0.332161, 0.390731, ...]\n"
+                        "Q.value double[] = {500}[0.0348995, 0.0975829, 0.159881, 0.221548, 0.282341, 0.34202, ...]\n"
 #if EPICS_VERSION_INT < VERSION_INT(7, 0, 6, 0)
                         "Q.alarm.severity int32_t = 0\n"
                         "Q.alarm.status int32_t = 0\n"
@@ -637,10 +639,12 @@ void testIQ()
 #endif
                         "Q.timeStamp.secondsPastEpoch int64_t = 643497682\n"
                         "Q.timeStamp.nanoseconds int32_t = 102030\n"
-                        "phas.i double = 5\n"
-                        "phas.q double = 5\n";
+                        "phas.i double = 2\n"
+                        "phas.q double = 2\n";
         testStrEq(std::string(SB()<<val.format().delta().arrayLimit(5u)), expected);
     }
+
+    sub.testEmpty();
 }
 
 void testConst()
@@ -685,7 +689,7 @@ void testConst()
 
 MAIN(testqgroup)
 {
-    testPlan(31);
+    testPlan(33);
     testSetup();
     {
         TestIOC ioc;

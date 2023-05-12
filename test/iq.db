@@ -1,11 +1,3 @@
-record(ao, "$(N)Rate") {
-    field(VAL, "1.0")
-    field(PINI, "YES")
-    field(PREC, "3")
-    field(DRVH, "2.0")
-    field(DRVL, "0.000000000001")
-    field( OUT, "$(N)dly_.ODLY NPP")
-}
 
 record(ao, "$(N)Delta") {
     field(VAL, "0.0")
@@ -54,14 +46,8 @@ record(waveform, "$(N)Q") {
     field( INP, "$(N)Phase:Q")
     field(FTVL, "DOUBLE")
     field(NELM, "500")
-    field(FLNK, "$(N)dly_")
     info(Q:group, {
         "$(N)iq":{"Q": {+channel:"VAL", +trigger:"*"}}
     })
     info(Q:form, "Engineering")
-}
-
-record(calcout, "$(N)dly_") {
-    field(ODLY, "1.0")
-    field(OUT , "$(N)Phase:I.PROC CA")
 }
