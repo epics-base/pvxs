@@ -69,7 +69,7 @@ struct NTScalar {
     bool valueAlarm;
     /** Include 'display.form' and 'display.precision' when 'value' is a numeric type
      *  @pre requires display=true
-     *  @since UNRELEASED
+     *  @since 1.2.0
      */
     bool form;
 

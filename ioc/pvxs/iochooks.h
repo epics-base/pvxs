@@ -76,7 +76,7 @@ server::Server server();
  * @param jsonFilename the json file containing the group definitions
  * @param macros NULL, or a comma separated list of macro definitions.  eg. "KEY=VAL,OTHER=SECOND"
  * @return 0 for success, 1 for failure
- * @since UNRELEASED
+ * @since 1.2.0
  */
 PVXS_IOC_API
 long dbLoadGroup(const char* jsonFilename, const char* macros=nullptr);
@@ -85,7 +85,7 @@ long dbLoadGroup(const char* jsonFilename, const char* macros=nullptr);
  *
  *  Shutdown QSRV.  Only needed with Base <= 7.0.4 .
  *  Since 7.0.4, QSRV shutdown occurs during testIocShutdownOk() .
- *  @since UNRELEASED
+ *  @since 1.2.0
  */
 PVXS_IOC_API
 void testShutdown();

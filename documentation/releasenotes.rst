@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.2.0 (UNRELEASED)
-------------------
+1.2.0 (May 2023)
+----------------
 
 * server: fix default monitor queueSize to 4
 * improve localhost multicast forwarding

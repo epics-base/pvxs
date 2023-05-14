@@ -44,7 +44,7 @@ Adding custom PVs to Server
 QSRV 2
 ######
 
-Beginning with PVXS UNRELEASED the functionality of `QSRV <https://epics-base.github.io/pva2pva>`_
+Beginning with PVXS 1.2.0 the functionality of `QSRV <https://epics-base.github.io/pva2pva>`_
 is replicated in the ``pvxsIoc`` library.
 Currently this feature preview is considered **alpha** level, with missing functionality.
 In addition to linking in ``libpvxsIoc``,

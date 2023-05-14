@@ -23,8 +23,8 @@
 namespace pvxs {
 
 /** Prepare for testing.  Call after testPlan()
- * @since UNRELEASED If linked with pvxsIoc library, PVA server started
- *                   by ``iocInit()`` will use "isolated" configuration.
+ * @since 1.2.0 If linked with pvxsIoc library, PVA server started
+ *              by ``iocInit()`` will use "isolated" configuration.
  */
 PVXS_API
 void testSetup();
