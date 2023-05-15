@@ -710,7 +710,7 @@ void Connection::handle_MONITOR()
                         log_debug_printf(io, "Server %s channel '%s' MONITOR zero window w/ %u\n",
                                         peerName.c_str(), mon->chan->name.c_str(), unsigned(mon->unack));
 
-                } else {
+                } else if(!final) {
                     log_err_printf(io, "Server %s channel '%s' MONITOR exceeds window size\n",
                                     peerName.c_str(), mon->chan->name.c_str());
                 }
