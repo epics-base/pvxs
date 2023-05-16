@@ -61,9 +61,9 @@ struct SpamSource : public server::Source
 
             std::shared_ptr<server::MonitorControlOp> sub(setup->connect(initial));
 
-            uint32_t counter = 0;
+            auto counter(std::make_shared<uint32_t>(0u));
 
-            auto fill = [this, sub, counter]() mutable {
+            auto fill = [this, sub, counter]() {
                 Value update;
                 size_t nposted = 0;
                 server::MonitorStat stats{};
@@ -71,7 +71,7 @@ struct SpamSource : public server::Source
                 sub->stats(stats);
 
                 do {
-                    auto cnt = counter++;
+                    auto cnt = (*counter)++;
                     update = initial.cloneEmpty();
                     auto value = update["value"];
                     if(value.type().isarray()) {
@@ -90,12 +90,15 @@ struct SpamSource : public server::Source
                 log_debug_printf(app, "%s %s counted %zu, %zu, %zu/%zu -> %u\n",
                                  sub->peerName().c_str(), sub->name().c_str(),
                                  nposted, stats.window, stats.nQueue, stats.limitQueue,
-                                 unsigned(counter));
+                                 unsigned(*counter));
             };
 
+            server::MonitorStat stats;
+            sub->stats(stats);
+            sub->setWatermarks(0, stats.limitQueue);
             sub->onHighMark(fill);
 
-            sub->onStart([fill](bool start) mutable {
+            sub->onStart([fill](bool start) {
                 if(start)
                     fill();
             });
