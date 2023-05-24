@@ -111,6 +111,7 @@ class Expand(Command):
         log.info("In Expand")
         self.mkpath(os.path.join(self.build_temp, 'event2'))
         self.mkpath(os.path.join(self.build_lib, 'pvxslibs', 'include', 'pvxs'))
+        self.mkpath(os.path.join(self.build_lib, 'pvxslibs', 'dbd'))
 
         OS_CLASS = get_config_var('OS_CLASS')
 
@@ -452,7 +453,6 @@ class InstallHeaders(Command):
                                   )
     def run(self):
         log.info("In InstallHeaders")
-        self.mkpath(os.path.join(self.build_lib, 'pvxs'))
 
         for header in glob('src/pvxs/*.h'):
             self.copy_file(header,
@@ -462,6 +462,9 @@ class InstallHeaders(Command):
             self.copy_file(header,
                            os.path.join(self.build_lib, 'pvxslibs', 'include', os.path.relpath(header, 'ioc')))
 
+        for dbd in glob('ioc/*.dbd'):
+            self.copy_file(dbd,
+                           os.path.join(self.build_lib, 'pvxslibs', 'dbd', os.path.relpath(dbd, 'ioc')))
 
 @logexc
 def define_DSOS(self):
@@ -581,6 +584,7 @@ def define_DSOS(self):
         "ioc/groupprocessorcontext.cpp",
         "ioc/groupsource.cpp",
         "ioc/groupsourcehooks.cpp",
+        "ioc/imagedemo.c",
         "ioc/iochooks.cpp",
         "ioc/iocsource.cpp",
         "ioc/localfieldlog.cpp",
@@ -642,7 +646,10 @@ def define_DSOS(self):
                 'pvxslibs/include', # generated headers under build/lib
                 epicscorelibs.path.include_path
                 ],
-            extra_compile_args = cxx11_flags + get_config_var('CXXFLAGS'),
+            lang_compile_args = {
+                'c': get_config_var('CFLAGS'),
+                'c++': cxx11_flags + get_config_var('CXXFLAGS'),
+            },
             extra_link_args = cxx11_flags + get_config_var('LDFLAGS'),
             soversion = pvxs_abi,
             dsos = dsos_pvxs,
@@ -658,7 +665,10 @@ def define_DSOS(self):
                 'pvxslibs/include', # generated headers under build/lib
                 epicscorelibs.path.include_path
                 ],
-            extra_compile_args = cxx11_flags + get_config_var('CXXFLAGS'),
+            lang_compile_args = {
+                'c': get_config_var('CFLAGS'),
+                'c++': cxx11_flags + get_config_var('CXXFLAGS'),
+            },
             extra_link_args = cxx11_flags + get_config_var('LDFLAGS'),
             soversion = pvxs_abi,
             dsos = [
