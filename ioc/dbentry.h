@@ -50,8 +50,8 @@ public:
         return &ent;
     }
 
-    const char* info(const char *key) {
-        const char *ret = nullptr;
+    const char* info(const char *key, const char* defval=nullptr) {
+        const char *ret = defval;
         if(!dbFindInfo(&ent, key)) {
             ret = ent.pinfonode->string;
         }
