@@ -22,6 +22,11 @@ record(ai, "test:this:is:a:really:really:long:record:name") {}
 record(ai, "test:src") {
     field(INP , "test:this:is:a:really:really:long:record:name NPP")
 }
+record(waveform, "test:long:str:wf") {
+    field(FTVL, "CHAR")
+    field(NELM, "128")
+    info(Q:form, "String")
+}
 record(bo, "test:bo") {
     field(ZNAM, "Zero")
     field(ONAM, "One")

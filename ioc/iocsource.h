@@ -45,7 +45,7 @@ class IOCSource {
 public:
     static bool enabled();
 
-    static void initialize(Value& value, const MappingInfo &info, dbChannel *chan);
+    static void initialize(Value& value, const MappingInfo &info, const Channel &chan);
 
     static void get(Value& valuePrototype,
                     const MappingInfo& info, const Value &anyType,
@@ -62,7 +62,7 @@ public:
     // Common Utils
     //////////////////////////////
     // Utility function to get the TypeCode that the given database channel is configured for
-    static TypeCode getChannelValueType(const dbChannel* pDbChannel, bool errOnLinks = false);
+    static TypeCode getChannelValueType(const Channel &pDbChannel, bool errOnLinks = false);
     static void
     setForceProcessingFlag(const Value& pvRequest, const std::shared_ptr<SecurityControlObject>& securityControlObject);
 };

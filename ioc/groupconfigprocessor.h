@@ -65,9 +65,9 @@ private:
     static void addMembersForAnyType(std::vector<Member>& groupMembers, const Field& groupField);
     static void addMembersForMetaData(std::vector<Member>& groupMembers, const Field& groupField);
     static void addMembersForPlainType(std::vector<Member>& groupMembers, const Field& groupField,
-                                       const dbChannel* pDbChannel);
+                                       const Channel& pDbChannel);
     static void addMembersForScalarType(std::vector<Member>& groupMembers, const Field& groupField,
-                                        const dbChannel* pDbChannel);
+                                        const Channel &pDbChannel);
     static void addMembersForStructureType(std::vector<Member>& groupMembers, const Field& groupField);
     static void defineGroupTriggers(FieldDefinition& fieldDefinition, const GroupDefinition& groupDefinition,
                                     const TriggerNames& triggerNames, const std::string& groupName);
@@ -84,7 +84,7 @@ private:
     static bool yajlParseHelper(std::istream& jsonGroupDefinitionStream, yajl_handle handle);
     static void initialiseDbLocker(Group& group);
     static void initialiseTriggers(Group& group, const GroupDefinition& groupDefinition);
-    static TypeDef getTypeDefForChannel(const dbChannel* pDbChannel);
+    static TypeDef getTypeDefForChannel(const Channel &pDbChannel);
 };
 
 } // ioc

@@ -72,7 +72,7 @@ bool IOCSource::enabled()
     return e==1;
 }
 
-void IOCSource::initialize(Value& value, const MappingInfo &info, dbChannel *chan)
+void IOCSource::initialize(Value& value, const MappingInfo &info, const Channel& chan)
 {
     if(info.type==MappingInfo::Scalar) {
         if(auto fld = value["display.form.choices"]) {
@@ -88,14 +88,11 @@ void IOCSource::initialize(Value& value, const MappingInfo &info, dbChannel *cha
             fld = choices;
 
             if(dbIsValueField(dbChannelFldDes(chan))) { // only apply Q:form to VAL
-                DBEntry ent(dbChannelRecord(chan));
-
-                if(auto tag = ent.info("Q:form")) {
-                    for(auto i : range(choices.size())) {
-                        if(choices[i] == tag) {
-                            value["display.form.index"] = i;
-                            break;
-                        }
+                auto tag(chan.format());
+                for(auto i : range(choices.size())) {
+                    if(choices[i] == tag) {
+                        value["display.form.index"] = i;
+                        break;
                     }
                 }
             }
@@ -652,7 +649,7 @@ void IOCSource::put(dbChannel* pDbChannel, const Value& node, const MappingInfo 
  * @param errOnLinks determines whether to throw an error on finding links, default no
  * @return the TypeCode that the channel is configured for
  */
-TypeCode IOCSource::getChannelValueType(const dbChannel* chan, const bool errOnLinks) {
+TypeCode IOCSource::getChannelValueType(const Channel& chan, const bool errOnLinks) {
     /* for links, could check dbChannelFieldType().
      * for long strings, dbChannelCreate() '$' handling overwrites dbAddr::field_type
      *   (for some reason...)
@@ -666,10 +663,9 @@ TypeCode IOCSource::getChannelValueType(const dbChannel* chan, const bool errOnL
         throw std::runtime_error("Link fields not allowed in this context");
 
     bool isArray = dbChannelFinalElements(chan)!=1;
-    bool stringlike = (field_type >= DBF_INLINK && field_type <= DBF_OUTLINK) || field_type == DBF_STRING;
 
     // string-like field being treated as single char[].  aka. long string
-    if(stringlike && final_field_type==DBR_CHAR && isArray)
+    if(final_field_type==DBR_CHAR && isArray && strcmp(chan.format(), "String")==0)
         return TypeCode::String;
 
     TypeCode valueType(fromDbrType(final_field_type));

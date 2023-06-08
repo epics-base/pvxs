@@ -20,6 +20,10 @@
 #include "testioc.h"
 #include "utilpvt.h"
 
+#if EPICS_VERSION_INT >= VERSION_INT(3, 15, 0, 2)
+#  define HAVE_lsi
+#endif
+
 extern "C" {
 extern int testioc_registerRecordDeviceDriver(struct dbBase*);
 }
@@ -251,14 +255,14 @@ void testGetScalar()
               "    } display\n"
               "}\n");
 
-    testFldEq<std::string>(ctxt.get("test:this:is:a:really:really:long:record:name.NAME").exec()->wait(5.0),
-                           "value", "test:this:is:a:really:really:long:recor");
+    testFldEq<std::string>(ctxt.get("test:this:is:a:really:really:long:record:name.NAME").exec()->wait(5000.0),
+                           "value", "test:this:is:a:really:really:long:record:name");
 
     testFldEq<std::string>(ctxt.get("test:this:is:a:really:really:long:record:name.NAME$").exec()->wait(5.0),
                            "value", "test:this:is:a:really:really:long:record:name");
 
     testFldEq<std::string>(ctxt.get("test:src.INP").exec()->wait(5.0),
-                           "value", "test:this:is:a:really:really:long:recor");
+                           "value", "test:this:is:a:really:really:long:record:name NPP NMS");
 
     testFldEq<std::string>(ctxt.get("test:src.INP$").exec()->wait(5.0),
                            "value", "test:this:is:a:really:really:long:record:name NPP NMS");
@@ -284,6 +288,7 @@ void testGetScalar()
               "display.limitHigh int32_t = 0\n"
               "display.description string = \"\"\n"
               "display.units string = \"\"\n"
+              "display.form.index int32_t = 0\n"
               "display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", \"Engineering\"]\n"
               "control.limitLow int32_t = 0\n"
               "control.limitHigh int32_t = 0\n"
@@ -293,6 +298,30 @@ void testGetScalar()
               "valueAlarm.highAlarmLimit int32_t = 0\n");
 }
 
+void testLongString()
+{
+    testDiag("%s", __func__);
+    TestClient ctxt;
+
+    ctxt.put("test:long:str:wf")
+            .set("value", "test:this:is:a:really:really:long:string:value")
+            .exec()->wait(5.0);
+
+    auto val(ctxt.get("test:long:str:wf").exec()->wait(5.0));
+    testEq(val["value"].as<std::string>(), "test:this:is:a:really:really:long:string:value");
+
+#ifdef HAVE_lsi
+    ctxt.put("test:long:str:lsi.VAL")
+            .set("value", "test:this:is:a:really:really:long:string:value")
+            .exec()->wait(5.0);
+
+    val = ctxt.get("test:long:str:lsi.VAL").exec()->wait(5.0);
+    testEq(val["value"].as<std::string>(), "test:this:is:a:really:really:long:string:value");
+
+#else
+    testSkip(1, "No lsiRecord");
+#endif
+}
 
 void testGetArray()
 {
@@ -373,6 +402,7 @@ void testGetArray()
               "display.limitHigh int32_t = 0\n"
               "display.description string = \"\"\n"
               "display.units string = \"\"\n"
+              "display.form.index int32_t = 0\n"
               "display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", \"Engineering\"]\n"
               "control.limitLow int32_t = 0\n"
               "control.limitHigh int32_t = 0\n");
@@ -503,6 +533,7 @@ void testGetPut64()
               "display.limitHigh uint64_t = 0\n"
               "display.description string = \"\"\n"
               "display.units string = \"\"\n"
+              "display.form.index int32_t = 0\n"
               "display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", \"Engineering\"]\n"
               "control.limitLow uint64_t = 0\n"
               "control.limitHigh uint64_t = 0\n");
@@ -835,7 +866,7 @@ void testMonitorAIFilt(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(82);
+    testPlan(84);
     testSetup();
     pvxs::logger_config_env();
     {
@@ -845,11 +876,15 @@ MAIN(testqsingle)
         testdbReadDatabase("testioc.dbd", nullptr, nullptr);
         testOk1(!testioc_registerRecordDeviceDriver(pdbbase));
         testdbReadDatabase("testqsingle.db", nullptr, nullptr);
+#ifdef HAVE_lsi
+        testdbReadDatabase("testqsinglelsi.db", nullptr, nullptr);
+#endif
 #ifdef DBR_UINT64
         testdbReadDatabase("testqsingle64.db", nullptr, nullptr);
 #endif
         ioc.init();
         testGetScalar();
+        testLongString();
         testGetArray();
         testPut();
         testGetPut64();

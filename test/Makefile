@@ -134,6 +134,7 @@ testqsingle_SRCS += testioc_registerRecordDeviceDriver.cpp
 testqsingle_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTFILES += ../testqsingle.db
 TESTFILES += ../testqsingle64.db
+TESTFILES += ../testqsinglelsi.db
 TESTFILES += ../testioc.acf
 TESTS += testqsingle
 

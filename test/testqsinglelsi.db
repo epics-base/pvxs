@@ -1,0 +1,4 @@
+record(lsi, "test:long:str:lsi")
+{
+    field(SIZV, 128)
+}

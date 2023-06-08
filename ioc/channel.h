@@ -24,7 +24,21 @@ namespace ioc {
  * from string and dbChannel to make its use simpler.  It can be used wherever a dbChannel is used.
  * As a bonus when constructed with parameters it provides an already open dbChannel.
  */
-class Channel : public std::shared_ptr<dbChannel> {
+class Channel {
+    std::shared_ptr<dbChannel> chan;
+    /* Whenever chan!=nullptr, 'form' points to a string which will out-live
+     * the associated dbChannel*.  eg. either statically allocated, or an
+     * info() tag.  Value should be one of:
+     *      "Default",
+     *      "String",
+     *      "Binary",
+     *      "Decimal",
+     *      "Hex",
+     *      "Exponential",
+     *      "Engineering",
+     * (although it could be anything...)
+     */
+    const char *form = nullptr;
 public:
     Channel() = default;
     Channel(const Channel&) = default;
@@ -40,8 +54,14 @@ public:
     Channel& operator=(Channel&&) = default;
 
     operator dbChannel*() const {
-        return get();
+        return chan.get();
     }
+    dbChannel* operator->() const { return chan.get(); }
+
+    dbChannel* get() const { return chan.get(); }
+    const char* format() const { return form; }
+
+    explicit operator bool() const { return chan.operator bool(); }
 };
 
 } // pvxs

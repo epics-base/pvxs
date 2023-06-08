@@ -577,7 +577,7 @@ void GroupConfigProcessor::addTemplatesForDefinedFields(std::vector<Member>& gro
                                                         const GroupDefinition& groupDefinition) {
     for (auto& fieldDefinition: groupDefinition.fields) {
         auto& field = group[fieldDefinition.name];
-        dbChannel* pDbChannel = field.value;
+        auto& pDbChannel(field.value);
         switch(fieldDefinition.info.type) {
         case MappingInfo::Scalar:
             addMembersForScalarType(groupMembers, field, pDbChannel);
@@ -868,7 +868,7 @@ const char* GroupConfigProcessor::infoField(DBEntry& dbEntry, const char* key, c
  * @param pDbChannel the db channel to get information on what scalar type to create
  */
 void GroupConfigProcessor::addMembersForScalarType(std::vector<Member>& groupMembers, const Field& groupField,
-                                                   const dbChannel* pDbChannel) {
+                                                   const Channel& pDbChannel) {
     using namespace pvxs::members;
     assert(!groupField.fieldName.empty()); // Must not call with empty field name
 
@@ -887,7 +887,7 @@ void GroupConfigProcessor::addMembersForScalarType(std::vector<Member>& groupMem
  * @param pDbChannel the channel used to get the type of the leaf member
  */
 void GroupConfigProcessor::addMembersForPlainType(std::vector<Member>& groupMembers, const Field& groupField,
-                                                  const dbChannel* pDbChannel) {
+                                                  const Channel &pDbChannel) {
     assert(!groupField.fieldName.empty()); // Must not call with empty field name
 
     // Get the type for the leaf
@@ -960,7 +960,7 @@ void GroupConfigProcessor::addMembersForMetaData(std::vector<Member>& groupMembe
  * @param pDbChannel the channel to define the type definition for
  * @return the TypeDef for the channel
  */
-TypeDef GroupConfigProcessor::getTypeDefForChannel(const dbChannel* pDbChannel) {
+TypeDef GroupConfigProcessor::getTypeDefForChannel(const Channel& pDbChannel) {
     // Get the type for the leaf
     auto leafCode(IOCSource::getChannelValueType(pDbChannel, true));
     TypeDef leaf;

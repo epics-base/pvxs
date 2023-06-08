@@ -146,7 +146,7 @@ void onSubscribe(const std::shared_ptr<SingleSourceSubscriptionCtx>& subscriptio
  * @return a value prototype for the given channel
  */
 Value getValuePrototype(const std::shared_ptr<SingleInfo>& sinfo) {
-    dbChannel* chan(sinfo->chan);
+    auto& chan(sinfo->chan);
     short dbrType(dbChannelFinalFieldType(chan));
     auto valueType(IOCSource::getChannelValueType(chan));
 
@@ -237,7 +237,7 @@ void doneCallback(struct processNotify* notify) {
 void singleGet(const SingleInfo& info,
                std::unique_ptr<server::ExecOp>& getOperation,
                const Value& valuePrototype) {
-    dbChannel* pDbChannel(info.chan);
+    auto& pDbChannel(info.chan);
     try {
         auto returnValue = valuePrototype.cloneEmpty();
         // TODO: MappingInfo::nsecMask
