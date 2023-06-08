@@ -166,7 +166,7 @@ endif
 CONFIGUREFLAGS_SHARED_NO += --disable-shared --enable-static
 CONFIGUREFLAGS += $(CONFIGUREFLAGS_SHARED_$(SHARED_LIBRARIES))
 
-libevent.%: ../libevent/configuration
+libevent.%: ../libevent/configure
 	[ -f Makefile ] || ../libevent/configure --prefix=$(abspath $(LIBEVENT_$(T_A))) $(CONFIGUREFLAGS)
 	$(MAKE) install
 
