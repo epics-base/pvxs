@@ -52,7 +52,7 @@ public:
                     UpdateType::type change,
                     dbChannel *pChannel,
                     db_field_log* pDbFieldLog);
-    static void put(dbChannel* pDbChannel, const Value& value, MappingInfo info);
+    static void put(dbChannel* pDbChannel, const Value& value, const MappingInfo& info);
     static void doPostProcessing(dbChannel* pDbChannel, TriState forceProcessing);
     static void doPreProcessing(dbChannel* pDbChannel, SecurityLogger& securityLogger, const Credentials& credentials,
             const SecurityClient& securityClient);

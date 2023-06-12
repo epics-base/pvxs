@@ -17,7 +17,6 @@ DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 // related to low level send/recv
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
-DEFINE_LOGGER(serversetup, "pvxs.server.setup");
 DEFINE_LOGGER(serversearch, "pvxs.server.search");
 
 ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,

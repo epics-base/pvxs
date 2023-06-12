@@ -169,7 +169,7 @@ void getArrayValue(dbChannel* pChannel,
         throw std::runtime_error(SB()<<dbChannelName(pChannel)<<" "<<__func__<<" ERROR : "<<dbErrorMessage.c_str());
     }
 
-    if(final_type == DBR_CHAR && value.type()==TypeCode::String && buf->size() >= 1u) {
+    if(final_type == DBR_CHAR && value.type()==TypeCode::String && !buf->empty()) {
         // long string
         (*buf)[buf->size()-1u] = '\0'; // paranoia?
         value = std::string(buf->data());
@@ -611,7 +611,7 @@ void putArray(dbChannel* pDbChannel, const Value& value)
  * @param pDbChannel the channel to put the value into
  * @param value the value to put
  */
-void IOCSource::put(dbChannel* pDbChannel, const Value& node, MappingInfo info) {
+void IOCSource::put(dbChannel* pDbChannel, const Value& node, const MappingInfo &info) {
     Value value;
     switch(info.type) {
     case MappingInfo::Meta:

@@ -49,8 +49,6 @@ unsigned long pvxs_version_abi_int()
 
 namespace pvxs {
 
-DEFINE_LOGGER(log, "pvxs.util");
-
 #define stringifyX(X) #X
 #define stringify(X) stringifyX(X)
 
@@ -198,7 +196,7 @@ int Detailed::level(std::ostream &strm)
     if(idx==INT_MIN) {
         strm<<"Hint: Wrap with pvxs::Detailed()\n";
     } else {
-        ret = strm.iword(idx);
+        ret = (int)strm.iword(idx);
     }
     return ret;
 }
@@ -871,7 +869,6 @@ done:
     for(; R < r_lines.size(); R++) {
         out<<"+ \""<<escape(r_lines[R])<<"\"\n";
     }
-    return;
 }
 
 }}

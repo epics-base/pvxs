@@ -136,7 +136,7 @@ namespace {
 void evlog_handler(int severity, const char *msg)
 {
     const char *sevr = "<\?\?\?>";
-    Level lvl = Level::Crit;
+    Level lvl;
     switch(severity) {
 #define CASE(EVLVL, PLVL) case EVENT_LOG_##EVLVL : lvl = Level::PLVL; sevr = #PLVL; break
     CASE(DEBUG, Debug);
@@ -144,6 +144,7 @@ void evlog_handler(int severity, const char *msg)
     CASE(WARN, Warn);
     CASE(ERR, Err);
 #undef CASE
+    default: lvl = Level::Crit; break;
     }
     if(logerr.test(lvl))
         errlogPrintf("libevent %s: %s\n", sevr, msg);
@@ -289,7 +290,7 @@ void xerrlogHexPrintf(const void *buf, size_t buflen)
         // printed line (4 groups of 4 bytes)
         // addr : AAAAAAAA BBBBBBBB CCCCCCCC DDDDDDDD
         char buf[4][9] = {"","","",""};
-        const unsigned addr = unsigned(pos);
+        const auto addr = unsigned(pos);
 
         for(unsigned grp=0; grp<4 && pos<buflen ; grp++)
         {

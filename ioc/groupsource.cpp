@@ -391,7 +391,7 @@ bool getGroupField(const Field& field, Value valueTarget, const std::string& gro
         errorString << "Error retrieving value for pvName: " << groupName << (field.name.empty() ? "/" : ".")
                     << field.fullName << " : "
                     << e.what();
-        getOperation->error(errorString.str().c_str());
+        getOperation->error(errorString.str());
         return false;
     }
     return true;

@@ -110,7 +110,7 @@ struct FmtDelta {
         field(prefix, val, verytop);
 
         if(val.type()==TypeCode::Struct) {
-            for(auto fld : val.imarked()) {
+            for(const auto& fld : val.imarked()) {
                 std::string cprefix(prefix);
                 if(!verytop)
                     cprefix += '.';

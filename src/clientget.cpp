@@ -564,8 +564,8 @@ void Connection::handle_RPC() { handle_GPR(CMD_RPC); }
 
 static
 std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context,
-                                     std::string name, // need to capture by value
-                                     std::string server,
+                                     const std::string& name,
+                                     const std::string& server,
                                      std::shared_ptr<GPROp>&& op,
                                      bool syncCancel)
 {

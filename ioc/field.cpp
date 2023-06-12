@@ -59,7 +59,7 @@ Value Field::findIn(Value valueTarget) const {
             if (component.isArray()) {
                 // Get required array capacity
                 auto index = component.index;
-                shared_array<const Value> constValueArray = valueTarget.as<shared_array<const Value>>();
+                auto constValueArray = valueTarget.as<shared_array<const Value>>();
                 valueTarget = shared_array<const Value>();
                 shared_array<Value> valueArray(constValueArray.thaw());
                 auto size = valueArray.size();

@@ -33,6 +33,7 @@ ConnBase::ConnBase(bool isClient, bool sendBE, bufferevent* bev, const SockAddr&
     ,sendBE(sendBE)
     ,peerBE(true) // arbitrary choice, default should be overwritten before use
     ,expectSeg(false)
+    ,peerVersion(0)
     ,segCmd(0xff)
     ,segBuf(__FILE__, __LINE__, evbuffer_new())
     ,txBody(__FILE__, __LINE__, evbuffer_new())

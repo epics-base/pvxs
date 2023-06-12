@@ -197,7 +197,7 @@ struct Channel {
     size_t nSearch = 0u;
 
     // GUID of last positive reply when state!=Searching
-    ServerGUID guid;
+    ServerGUID guid{};
     SockAddr replyAddr;
 
     std::list<std::weak_ptr<OperationBase>> pending;

@@ -71,11 +71,10 @@ void subscriptionCallback(SingleSourceSubscriptionCtx* subscriptionContext,
     }
 }
 
-static
 void subscriptionValueCallback(void* userArg, struct dbChannel* pChannel, int, struct db_field_log* pDbFieldLog) {
     auto subscriptionContext = (SingleSourceSubscriptionCtx*)userArg;
     subscriptionContext->hadValueEvent = true;
-    UpdateType::type change = UpdateType::type(UpdateType::Value | UpdateType::Alarm);
+    auto change = UpdateType::type(UpdateType::Value | UpdateType::Alarm);
 #if EPICS_VERSION_INT >= VERSION_INT(7, 0, 6, 0)
     if(pDbFieldLog) {
         // when available, use DBE mask from db_field_log
@@ -85,7 +84,6 @@ void subscriptionValueCallback(void* userArg, struct dbChannel* pChannel, int, s
     subscriptionCallback(subscriptionContext, change, pChannel, pDbFieldLog);
 }
 
-static
 void subscriptionPropertiesCallback(void* userArg, struct dbChannel* pChannel, int,
         struct db_field_log* pDbFieldLog) {
     auto subscriptionContext = (SingleSourceSubscriptionCtx*)userArg;

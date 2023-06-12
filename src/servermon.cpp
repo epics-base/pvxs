@@ -94,7 +94,7 @@ struct MonitorOp : public ServerOp,
                     op->doReply();
                 } else {
                     // connection TX queue is too full
-                    conn->backlog.push_back(std::bind(&MonitorOp::doReply, op));
+                    conn->backlog.emplace_back([op]() { op->doReply(); });
                 }
             });
 

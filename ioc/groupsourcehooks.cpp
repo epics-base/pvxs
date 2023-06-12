@@ -40,7 +40,7 @@ namespace ioc {
  */
 static
 void dbLoadGroupCmd(const char* jsonFileName, const char *macros) {
-    iocshSetError(dbLoadGroup(jsonFileName, macros));
+    iocshSetError(!!dbLoadGroup(jsonFileName, macros));
     GroupConfigProcessor().loadConfigFiles();
 }
 

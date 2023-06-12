@@ -75,7 +75,7 @@ void qReport(unsigned level) noexcept {
     try{
         if (auto pPvxsServer = pvxsServer.load()) {
             std::ostringstream strm;
-            Detailed D(strm, level);
+            Detailed D(strm, (int)level);
             strm << *pPvxsServer;
             printf("%s", strm.str().c_str());
         }
