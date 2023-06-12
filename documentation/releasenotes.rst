@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.2.1 (May 2023)
-----------------
+1.2.1 (June 2023)
+-----------------
 
 * Quiet erroneous MONITOR exceeds window size warning message on ``finish()``.
 * Fix incomplete py build
