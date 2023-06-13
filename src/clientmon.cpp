@@ -736,7 +736,7 @@ void Connection::handle_MONITOR()
 
             }
 
-            if(final && !update.exc) {
+            if(final) {
                 log_debug_printf(io, "Server %s channel %s monitor FINISH\n",
                                 peerName.c_str(),
                                 mon->chan->name.c_str());
