@@ -759,7 +759,7 @@ double parseTo<double>(const std::string& s) {
     }
     for(; idx<L && isspace(s[idx]); idx++) {}
     if(idx<L)
-        NoConvert(SB()<<"Extraneous characters after double: \""<<escape(s)<<"\"");
+        throw NoConvert(SB()<<"Extraneous characters after double: \""<<escape(s)<<"\"");
     return ret;
 }
 

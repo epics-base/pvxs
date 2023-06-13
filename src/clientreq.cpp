@@ -216,7 +216,7 @@ struct PVRParser
                 // short-hand for field(name)
 
                 if(lexval=="field" || lexval=="record")
-                    std::logic_error("pvReq regex alternative order logic error");
+                    throw std::logic_error("pvReq regex alternative order logic error");
 
                 target._field(lexval);
 

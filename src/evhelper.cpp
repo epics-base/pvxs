@@ -459,7 +459,7 @@ SockAddr evsocket::sockname() const
     SockAddr addr;
     socklen_t slen = addr.size();
     if(getsockname(sock, &addr->sa, &slen))
-        std::logic_error("Unable to fetch address of newly bound socket");
+        throw std::logic_error("Unable to fetch address of newly bound socket");
     return addr;
 }
 
