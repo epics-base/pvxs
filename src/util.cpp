@@ -289,6 +289,7 @@ struct SigInt::Pvt final : private epicsThreadRunable {
 
     epicsThread thr;
 
+    explicit
     Pvt(const std::function<void ()> &&handler)
         :handler(handler)
         ,thr(*this, "SigInt",

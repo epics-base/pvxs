@@ -138,8 +138,8 @@ struct ServerGPR : public ServerOp
         }
     }
 
-    pva_app_msg_t cmd;
-    uint8_t subcmd; // valid when state==Executing or Creating
+    pva_app_msg_t cmd = pva_app_msg_t(-1); //spoil
+    uint8_t subcmd = 0u; // valid when state==Executing or Creating
     bool lastRequest=false;
 
     std::shared_ptr<const FieldDesc> type;
