@@ -26,8 +26,8 @@ struct Entry {
     Value val;
     std::exception_ptr exc;
     Entry() = default;
-    Entry(Value&& v) :val(std::move(v)) {}
-    Entry(const std::exception_ptr& e) :exc(e) {}
+    explicit Entry(Value&& v) :val(std::move(v)) {}
+    explicit Entry(const std::exception_ptr& e) :exc(e) {}
 };
 }
 
@@ -75,7 +75,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
 
     INST_COUNTER(SubscriptionImpl);
 
-    SubscriptionImpl(const evbase& loop)
+    explicit SubscriptionImpl(const evbase& loop)
         :OperationBase (Operation::Monitor, loop)
         ,ackTick(__FILE__, __LINE__,
                  event_new(loop.base, -1, EV_TIMEOUT, &tickAckS, this))

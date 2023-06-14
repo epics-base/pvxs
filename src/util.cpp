@@ -269,6 +269,8 @@ struct SocketPair {
     SocketPair() {
         compat_socketpair(s);
     }
+    SocketPair(const SocketPair&) = delete;
+    SocketPair& operator=(const SocketPair&) = delete;
     ~SocketPair() {
         epicsSocketDestroy(s[0]);
         epicsSocketDestroy(s[1]);

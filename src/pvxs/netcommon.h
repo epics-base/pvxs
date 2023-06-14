@@ -63,6 +63,9 @@ struct Report {
 };
 
 struct PVXS_API ReportInfo {
+    ReportInfo() = default;
+    ReportInfo(const ReportInfo&) = delete;
+    ReportInfo& operator=(const ReportInfo&) = delete;
     virtual ~ReportInfo();
 };
 

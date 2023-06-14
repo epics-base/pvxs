@@ -82,6 +82,8 @@ public:
         ,_cred(cred)
         ,_op(op)
     {}
+    OpBase(const OpBase&) = delete;
+    OpBase& operator=(const OpBase&) = delete;
     virtual ~OpBase() =0;
 };
 
@@ -110,6 +112,8 @@ public:
         :OpBase(name, cred, op)
         ,_pvRequest(pvRequest)
     {}
+    ExecOp(const ExecOp&) = delete;
+    ExecOp& operator=(const ExecOp&) = delete;
     virtual ~ExecOp();
 
 #ifdef PVXS_EXPERT_API_ENABLED

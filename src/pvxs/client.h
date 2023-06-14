@@ -174,6 +174,9 @@ struct SubscriptionStat {
 
 //! Handle for monitor subscription
 struct PVXS_API Subscription {
+    Subscription() = default;
+    Subscription(const Subscription&) = delete;
+    Subscription& operator=(const Subscription&) = delete;
     virtual ~Subscription() =0;
 
 protected:

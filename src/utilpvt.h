@@ -260,6 +260,8 @@ struct Restore {
         ,pfill(strm.fill())
         ,pwidth(strm.width())
     {}
+    Restore(const Restore&) = delete;
+    Restore& operator=(const Restore&) = delete;
     ~Restore() {
         strm.flags(pflags);
         strm.fill(pfill);
@@ -278,6 +280,8 @@ struct InstCounter {
             registerICount(Name, Cnt);
         }
     }
+    InstCounter(const InstCounter&) = delete;
+    InstCounter& operator=(const InstCounter&) = delete;
     ~InstCounter() {
         Cnt.fetch_sub(1u, std::memory_order_relaxed);
     }

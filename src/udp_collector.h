@@ -66,6 +66,9 @@ struct PVXS_API UDPManager
         decltype (names)::const_iterator end() const   { return names.end(); }
 
         virtual bool reply(const void *msg, size_t msglen) const =0;
+        Search() = default;
+        Search(const Search&) = delete;
+        Search& operator=(const Search&) = delete;
         virtual ~Search();
     };
     //! Create subscription for Search messages.

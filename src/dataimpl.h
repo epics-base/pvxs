@@ -118,6 +118,9 @@ struct FieldStorage {
 
     void init(StoreType code);
     void deinit();
+    FieldStorage() = default;
+    FieldStorage(const FieldStorage&) = delete;
+    FieldStorage& operator=(const FieldStorage&) = delete;
     ~FieldStorage();
 
     size_t index() const;

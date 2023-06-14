@@ -47,6 +47,8 @@ protected:
     constexpr Buffer(bool be, uint8_t* buf, size_t n) :pos(buf), limit(buf+n), be(be) {}
     virtual ~Buffer() {}
 public:
+    Buffer(const Buffer&) = delete;
+    Buffer& operator=(const Buffer&) = delete;
     bool be;
 
     // all sub-classes define

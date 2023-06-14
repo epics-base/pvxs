@@ -88,14 +88,16 @@ struct owned_ptr : public std::unique_ptr<T>
  */
 namespace mdetail {
 struct PVXS_API VFunctor0 {
+    VFunctor0() = default;
+    VFunctor0(VFunctor0&) = delete;
+    VFunctor0(const VFunctor0&) = delete;
+    VFunctor0& operator=(const VFunctor0&) = delete;
     virtual ~VFunctor0() =0;
     virtual void invoke() =0;
 };
 template<typename Fn>
 struct Functor0 : public VFunctor0 {
     Functor0() = default;
-    Functor0(const Functor0&) = delete;
-    Functor0(Functor0&&) = default;
     Functor0(Fn&& fn) : fn(std::move(fn)) {}
     virtual ~Functor0() {}
 
