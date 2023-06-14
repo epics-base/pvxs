@@ -142,6 +142,11 @@ struct StructTop {
     // empty, or the field of a structure which encloses this.
     std::weak_ptr<FieldStorage> enclosing;
 
+    StructTop(const std::shared_ptr<const FieldDesc>& desc)
+        :desc(desc)
+        ,members(desc->size())
+    {}
+
     INST_COUNTER(StructTop);
 };
 

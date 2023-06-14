@@ -99,10 +99,8 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
     if(!desc)
         return;
 
-    auto top = std::make_shared<StructTop>();
+    auto top = std::make_shared<StructTop>(desc);
 
-    top->desc = desc;
-    top->members.resize(desc->size());
     {
         auto& root = top->members[0];
         root.init(desc->code.storedAs());
