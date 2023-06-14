@@ -398,6 +398,8 @@ Server::Pvt::Pvt(const Config &conf)
 
     bool bindAny = false;
     std::vector<SockAddr> tcpifaces; // may have port zero
+    tcpifaces.reserve(effective.interfaces.size());
+
     for(const auto& iface : effective.interfaces) {
         SockEndpoint addr(iface.c_str());
 
@@ -406,7 +408,6 @@ Server::Pvt::Pvt(const Config &conf)
 
         } else if(!addr.addr.isMCast()) {
             tcpifaces.push_back(addr.addr);
-
         }
 
         addr.addr.setPort(effective.udp_port);
@@ -477,6 +478,7 @@ Server::Pvt::Pvt(const Config &conf)
         log_err_printf(serversetup, "Server Unreachable.  Interface address list includes not TCP interfaces.%s", "\n");
     }
 
+    ignoreList.reserve(effective.ignoreAddrs.size());
     for(const auto& addr : effective.ignoreAddrs) {
         SockAddr temp(addr.c_str());
         ignoreList.push_back(temp);
