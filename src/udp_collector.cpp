@@ -93,6 +93,7 @@ public:
 
 
 struct UDPManager::Pvt {
+    SockAttach attach;
 
     evbase loop;
     IfaceMap& ifmap;

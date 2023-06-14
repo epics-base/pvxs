@@ -32,6 +32,8 @@ void osiSockAttachExt();
 
 struct SockAttach {
     SockAttach() { osiSockAttachExt(); }
+    SockAttach(const SockAttach&) = delete;
+    SockAttach& operator=(const SockAttach&) = delete;
     ~SockAttach() { osiSockRelease(); }
 };
 

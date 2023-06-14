@@ -25,8 +25,6 @@ struct UDPManager;
 //! Manage reception, fanout, and reply of UDP PVA on the well known port.
 struct PVXS_API UDPManager
 {
-    SockAttach attach;
-
     //! get process-wide singleton.
     static UDPManager instance(bool share=true);
     static void cleanup();
