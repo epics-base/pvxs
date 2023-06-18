@@ -83,7 +83,7 @@ void testBasic()
         testOk1(!!val.isMarked());
     }
 
-    testEq(std::string(SB()<<top),
+    testStrEq(std::string(SB()<<top),
            "struct \"simple_t\" {\n"
            "    double value = 4.2\n"
            "}\n");
@@ -292,7 +292,7 @@ void testTypeDef()
            "        uint32_t nanoseconds = 0\n"
            "    } timeStamp\n"
            "    struct {\n"
-           "        struct[] sarr [\n"
+           "        struct[] sarr = {3}[\n"
            "            struct {\n"
            "                double value = 1\n"
            "            }\n"
@@ -302,18 +302,18 @@ void testTypeDef()
            "            null\n"
            "        ]\n"
            "    } arbitrary\n"
-           "    any any        uint32_t = 42\n"
-           "    any[] anya [\n"
+           "    any any uint32_t = 42\n"
+           "    any[] anya = {3}[\n"
            "        uint32_t = 123\n"
            "        struct {\n"
            "            string q = \"theq\"\n"
            "        }\n"
            "        null\n"
            "    ]\n"
-           "    union choice.b        string = \"test\"\n"
-           "    union[] achoice [\n"
-           "        union.x            float = 4\n"
-           "        union.y            float = 5\n"
+           "    union choice.b string = \"test\"\n"
+           "    union[] achoice = {3}[\n"
+           "        union.x float = 4\n"
+           "        union.y float = 5\n"
            "        null\n"
            "    ]\n"
            "}\n");
@@ -363,7 +363,7 @@ void testTypeDefDynamic()
 
         testTrue(val.valid());
         testStrEq(std::string(SB()<<val),
-                  "struct[] [\n"
+                  "struct[] = {1}[\n"
                   "    struct \"simple_t\" {\n"
                   "        double value = 42\n"
                   "    }\n"
@@ -381,8 +381,8 @@ void testTypeDefDynamic()
 
         testTrue(val.valid());
         testStrEq(std::string(SB()<<val),
-                  "union[] [\n"
-                  "    union \"simple_t\".value        double = 42\n"
+                  "union[] = {1}[\n"
+                  "    union \"simple_t\".value double = 42\n"
                   "]\n");
     }
 }
@@ -538,24 +538,87 @@ void testFormat()
         "        bool b = true\n"
         "        double f64 = 123.5\n"
         "        string s = \"a \\\"test\\\"\"\n"
-        "        any wildcard            string = \"simple\"\n"
-        "        union choice.one            int32_t = 1024\n"
+        "        any wildcard string = \"simple\"\n"
+        "        union choice.one int32_t = 1024\n"
         "    } scalar\n"
         "    struct {\n"
         "        int32_t[] i32 = {4}[1, -1, 2, -3]\n"
         "        string[] s = {3}[\"one\", \"two\", \"three\"]\n"
-        "        any[] wildcard [\n"
+        "        any[] wildcard = {2}[\n"
         "            string = \"simple\"\n"
         "            null\n"
         "        ]\n"
-        "        union[] choice [\n"
-        "            union.one                int32_t = 1357\n"
+        "        union[] choice = {3}[\n"
+        "            union.one int32_t = 1357\n"
         "            null\n"
-        "            union.two                struct {\n"
-        "                    int32_t ahalf = 2468\n"
-        "                }\n"
+        "            union.two struct {\n"
+        "                int32_t ahalf = 2468\n"
+        "            }\n"
         "        ]\n"
-        "        struct[] more = {\?}[]\n"
+        "        struct[] more = {0}[]\n"
+        "    } array\n"
+        "}\n"
+    );
+
+    testStrEq(std::string(SB()<<top.format().arrayLimit(1u)),
+        "struct \"top_t\" {\n"
+        "    struct {\n"
+        "        int32_t i32 = -42\n"
+        "        uint32_t u32 = 42\n"
+        "        bool b = true\n"
+        "        double f64 = 123.5\n"
+        "        string s = \"a \\\"test\\\"\"\n"
+        "        any wildcard string = \"simple\"\n"
+        "        union choice.one int32_t = 1024\n"
+        "    } scalar\n"
+        "    struct {\n"
+        "        int32_t[] i32 = {4}[1, -1, ...]\n"
+        "        string[] s = {3}[\"one\", \"two\", ...]\n"
+        "        any[] wildcard = {2}[\n"
+        "            string = \"simple\"\n"
+        "            ...\n"
+        "        ]\n"
+        "        union[] choice = {3}[\n"
+        "            union.one int32_t = 1357\n"
+        "            ...\n"
+        "        ]\n"
+        "        struct[] more = {0}[]\n"
+        "    } array\n"
+        "}\n"
+    );
+
+    testStrEq(std::string(SB()<<top.format().showValue(false)),
+        "struct \"top_t\" {\n"
+        "    struct {\n"
+        "        int32_t i32\n"
+        "        uint32_t u32\n"
+        "        bool b\n"
+        "        double f64\n"
+        "        string s\n"
+        "        any wildcard\n"
+        "        union {\n"
+        "            int32_t one\n"
+        "            struct {\n"
+        "                int32_t ahalf\n"
+        "            } two\n"
+        "        } choice\n"
+        "    } scalar\n"
+        "    struct {\n"
+        "        int32_t[] i32\n"
+        "        string[] s\n"
+        "        any[] wildcard\n"
+        "        union[] {\n"
+        "            int32_t one\n"
+        "            struct {\n"
+        "                int32_t ahalf\n"
+        "            } two\n"
+        "        } choice\n"
+        "        struct[] {\n"
+        "            int32_t one\n"
+        "            struct {\n"
+        "                int32_t ahalf\n"
+        "            } two\n"
+        "        } more\n"
         "    } array\n"
         "}\n"
     );
@@ -600,7 +663,7 @@ void testAppendBig()
 
 MAIN(testtype)
 {
-    testPlan(69);
+    testPlan(71);
     testSetup();
     showSize();
     testCode();
