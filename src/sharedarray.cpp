@@ -114,7 +114,7 @@ void showArr(std::ostream& strm, const void* raw, size_t count, size_t limit)
     for(auto i : range(count)) {
         if(i!=0)
             strm<<", ";
-        if(i>limit) {
+        if(i>=limit) {
             strm<<"...";
             break;
         }
