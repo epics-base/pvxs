@@ -34,11 +34,6 @@ jobs:
             source: true
 
           # OSX py builds
-          - name: osx 2.7 intel
-            os: macos-latest
-            python: "2.7"
-            piparch: macosx_10_9_intel
-
           - name: osx 3.6 intel
             os: macos-latest
             python: "3.6"
@@ -117,7 +112,6 @@ jobs:
           submodules: true
       - name: Automatic core dumper analysis
         uses: mdavidsaver/ci-core-dumper@master
-
 
       - name: Setup native python
         if: matrix.python
@@ -298,7 +292,22 @@ jobs:
             manylinux: manylinux2010
             arch: i686
             pre: linux32
+            platform: linux/386
 
+          # Linux py builds aarch64
+          - name: linux 3.10 aarch64
+            os: ubuntu-latest
+            pyver: cp310-cp310
+            manylinux: manylinux2014
+            arch: aarch64
+            platform: linux/arm64
+
+          - name: linux 3.11 aarch64
+            os: ubuntu-latest
+            pyver: cp311-cp311
+            manylinux: manylinux2014
+            arch: aarch64
+            platform: linux/arm64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -327,6 +336,11 @@ jobs:
           python setup.py sdist --formats=gztar
           ls dist/*
 
+      - name: Set up QEMU
+        if: matrix.platform
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: 'arm64'
       - name: Docker PY build
         if: matrix.pyver && !matrix.source
         run: |
@@ -355,7 +369,7 @@ jobs:
           cat runit.sh
           chmod +x runit.sh
           docker pull quay.io/pypa/${{ matrix.manylinux }}_${{ matrix.arch }}
-          docker run --rm -v `pwd`:/io quay.io/pypa/${{ matrix.manylinux }}_${{ matrix.arch }} ${{ matrix.pre }} /io/runit.sh
+          docker run --platform ${{ matrix.platform || 'linux/amd64' }} --rm -v `pwd`:/io quay.io/pypa/${{ matrix.manylinux }}_${{ matrix.arch }} ${{ matrix.pre }} /io/runit.sh 
 
       - name: List Artifacts
         run: ls dist/*
