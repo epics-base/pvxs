@@ -34,11 +34,6 @@ jobs:
             source: true
 
           # OSX py builds
-          - name: osx 2.7 intel
-            os: macos-latest
-            python: "2.7"
-            piparch: macosx_10_9_intel
-
           - name: osx 3.6 intel
             os: macos-latest
             python: "3.6"
