@@ -88,8 +88,10 @@ in the IOC (aka. RSRV).
 
 So ``caget pv:name`` and ``pvxget pv:name`` should be functionally equivalent.
 
-Additionally, adding a ``$`` suffix when addressing a ``DBF_STRING`` or ``DBF_*LINK`` field
-will make it visible as a PVA string.
+Beginning with UNRELEASED, long string detection is automatic in some cases.
+eg. ``.NAME`` and ``.INP``.
+In some situations adding a ``$`` suffix is still necessary when addressing
+a ``DBF_STRING`` or ``DBF_*LINK`` field to make it visible as a PVA string.
 It will not be necessary for clients to interpret a ``char[]`` as a "long string". ::
 
     # eg.
@@ -102,6 +104,14 @@ which is used by some OPI clients. ::
     record(longin, "my:bits") {
         field(VAL, "0x1234")
         info(Q:form, "Hex") # hint to clients to render as hexadecimal
+    }
+
+or: ::
+
+    record(waveform, "my:long:string") {
+        field(FTVL, "CHAR")
+        field(NELM, "1024")
+        info(Q:form, "String") # hint to QSRV to expose char[] as string
     }
 
 Currently supported format hints are:
