@@ -36,6 +36,42 @@ Additional information which may be relevant:
 If the module has built successfully, then running ``pvxinfo -D`` will
 report much of this information.
 
+Stack Trace with GDB
+--------------------
+
+When troubleshooting a crash or hung process, one important piece of information is a stack trace.
+On a Linux host, this is commonly acquired with `GDB <https://www.sourceware.org/gdb/>`_.
+Three scenarios are common:
+
+Running the process in GDB.  eg. ::
+
+    $ gdb --args ./bin/linux-x86_64/myioc st.cmd
+
+Alternately, if a crash has produced a core dump file. ::
+
+    $ gdb ./bin/linux-x86_64/myioc core
+
+Or to attach to a running process. ::
+
+    $ pgrep -l myioc
+    12345
+    $ gdb -p 12345
+
+All three scenarios should leave you at the GDB shell. ::
+
+    (gdb)
+
+One useful sequence of commands to run at the GDB shell is: ::
+
+    (gdb) set pagination 0
+    (gdb) thread apply all backtrace
+
+In fact this can be combined with one of the three preceding incantations by
+prepending the following arguments: ::
+
+    $ gdb --nx --nw --batch -ex "set pagination 0" \
+      -ex 'thread apply all bt' ...
+
 Packet Capture
 --------------
 
