@@ -257,6 +257,12 @@ std::ostream& operator<<(std::ostream& strm, const ServerGUID& guid)
 
 #if !defined(__rtems__) && !defined(vxWorks)
 
+/* Initially EVUTIL_INVALID_SOCKET
+ * Set to a valid socket when "armed"
+ * Temporarily set to EVUTIL_INVALID_SOCKET-1 (aka -2) while handler in progress
+ * Restored to a valid socket when the handler is finished
+ * Reset to EVUTIL_INVALID_SOCKET when "disarmed"
+ */
 static
 std::atomic<evutil_socket_t> onsig{evutil_socket_t(EVUTIL_INVALID_SOCKET)};
 

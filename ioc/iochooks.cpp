@@ -72,14 +72,12 @@ server::Server server() {
 static
 void pvxsAtExit(void*) noexcept {
     try {
-        if (auto pPvxsServer = pvxsServer.load()) {
-            if (pvxsServer.compare_exchange_strong(pPvxsServer, nullptr)) {
-                // take ownership
-                std::unique_ptr<server::Server> serverInstance(pPvxsServer);
-                serverInstance->stop();
-                IOCGroupConfigCleanup();
-                log_debug_printf(_logname, "Stopped Server%s", "\n");
-            }
+        if (auto pPvxsServer = pvxsServer.exchange(nullptr)) {
+            // take ownership
+            std::unique_ptr<server::Server> serverInstance(pPvxsServer);
+            serverInstance->stop();
+            IOCGroupConfigCleanup();
+            log_debug_printf(_logname, "Stopped Server%s", "\n");
         }
     } catch(std::exception& e) {
         fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
@@ -271,7 +269,7 @@ void initialisePvxsServer() {
             log_debug_printf(_logname, "Installing Server %p\n", temp.get());
             (void)temp.release();
         } else {
-            log_crit_printf(_logname, "Race installing Server? %p\n", serv);
+            log_err_printf(_logname, "Race installing Server? %p\n", serv);
         }
     } else {
         log_err_printf(_logname, "Stale Server? %p\n", serv);
