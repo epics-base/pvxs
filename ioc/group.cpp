@@ -43,9 +43,11 @@ IOCGroupConfig& IOCGroupConfig::instance()
 
 void IOCGroupConfigCleanup()
 {
-    epicsGuard<epicsMutex> G(configInstance->groupMapMutex);
-    configInstance->groupMap.clear();
-    configInstance->groupConfigFiles.clear();
+    if(configInstance) {
+        epicsGuard<epicsMutex> G(configInstance->groupMapMutex);
+        configInstance->groupMap.clear();
+        configInstance->groupConfigFiles.clear();
+    }
 }
 
 /**
