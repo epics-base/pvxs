@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.2.2 (UNRELEASED)
-------------------
+1.2.2 (June 2023)
+-----------------
 
 * IOC: improve long string detection.
 * Changes to Tree output format for ``Value``.
