@@ -203,7 +203,8 @@ struct ServerGPRConnect : public server::ConnectOp
         auto serv = server.lock();
         if(!serv)
             return;
-        serv->acceptor_loop.call([this, &msg](){
+        auto op(this->op);
+        serv->acceptor_loop.dispatch([op, msg](){
             if(auto oper = op.lock()) {
                 if(oper->state==ServerOp::Creating)
                     oper->doReply(Value(), msg);
@@ -273,7 +274,8 @@ struct ServerGPRExec : public server::ExecOp
         auto serv = server.lock();
         if(!serv)
             return;
-        serv->acceptor_loop.call([this, &val](){
+        auto op(this->op);
+        serv->acceptor_loop.dispatch([op, val](){
             if(auto oper = op.lock()) {
                 oper->doReply(val, std::string());
             }
@@ -287,7 +289,8 @@ struct ServerGPRExec : public server::ExecOp
         auto serv = server.lock();
         if(!serv)
             return;
-        serv->acceptor_loop.call([this, &msg](){
+        auto op(this->op);
+        serv->acceptor_loop.dispatch([op, msg](){
             if(auto oper = op.lock()) {
                 oper->doReply(Value(), msg);
             }

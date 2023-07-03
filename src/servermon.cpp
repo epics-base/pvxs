@@ -399,10 +399,11 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
         auto serv = server.lock();
         if(!serv)
             return;
-        serv->acceptor_loop.call([this, &msg](){
+        auto op(this->op);
+        serv->acceptor_loop.dispatch([op, msg]() mutable {
             if(auto oper = op.lock()) {
                 if(oper->state==ServerOp::Creating) {
-                    oper->msg = msg;
+                    oper->msg = std::move(msg);
                     oper->doReply();
                 }
             }

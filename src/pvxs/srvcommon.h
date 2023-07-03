@@ -94,6 +94,7 @@ struct PVXS_API ExecOp : public OpBase {
     //! Issue a reply with data.  For a GET or RPC  (or PUT/Get)
     virtual void reply(const Value& val) =0;
     //! Indicate the request has resulted in an error.
+    //! @since UNRELEASED Does not block
     virtual void error(const std::string& msg) =0;
 
     //! Callback invoked if the peer cancels the operation before reply() or error() is called.
