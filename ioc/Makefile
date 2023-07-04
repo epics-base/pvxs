@@ -9,10 +9,6 @@
 TOP=..
 
 include $(TOP)/configure/CONFIG
-# cfg/ sometimes isn't correctly included due to an issue in epics-base
-# so we do here (maybe again) as workaround
-include $(TOP)/configure/CONFIG_PVXS_MODULE
-include $(TOP)/configure/CONFIG_PVXS_VERSION
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
@@ -85,7 +81,6 @@ LIB_LIBS += $(EPICS_BASE_IOC_LIBS)
 #===========================
 
 include $(TOP)/configure/RULES
-include $(TOP)/configure/RULES_PVXS_MODULE
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
