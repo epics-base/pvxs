@@ -3,8 +3,7 @@ TOP=..
 include $(TOP)/configure/CONFIG
 # cfg/ sometimes isn't correctly included due to a Base bug
 # so we do here (maybe again) as workaround
-include $(TOP)/configure/CONFIG_PVXS_MODULE
-include $(TOP)/configure/CONFIG_PVXS_VERSION
+-include $(wildcard $(TOP)/cfg/CONFIG*))
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
@@ -14,7 +13,7 @@ USR_CPPFLAGS += -DPVXS_ENABLE_EXPERT_API
 
 ifdef T_A
 ifneq ($(CONFIG_LOADED),YES)
-$(error Toolchain inspection failed $(MAKEFILE_LIST))
+$(warning Toolchain inspection failed $(MAKEFILE_LIST))
 endif
 endif
 
@@ -111,7 +110,7 @@ LIB_SRCS += clientdiscover.cpp
 LIB_LIBS += Com
 
 # special case matching configure/RULES_PVXS_MODULE
-ifeq (,$(LIBEVENT))
+ifeq (,$(LIBEVENT_PREFIX))
 LIB_SYS_LIBS += $(LIBEVENT_BUNDLE_LIBS)
 else
 LIB_LIBS += $(LIBEVENT_BUNDLE_LIBS)
@@ -122,7 +121,7 @@ LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
 #===========================
 
 include $(TOP)/configure/RULES
-include $(TOP)/configure/RULES_PVXS_MODULE
+-include $(wildcard $(TOP)/cfg/RULES*))
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
