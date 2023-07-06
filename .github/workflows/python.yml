@@ -329,6 +329,7 @@ jobs:
           cat <<EOF > runit.sh
           #!/bin/sh
           set -e -x
+          yum -y install gdb
           cd /io
           [ -d dist ]
           ls dist/*
