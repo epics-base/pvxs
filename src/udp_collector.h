@@ -53,7 +53,7 @@ struct PVXS_API UDPManager
         SockAddr server;
         uint32_t searchID;
         uint8_t peerVersion;
-        bool protoTCP; // included protocol "tcp"
+        bool protoTCP = false; // included protocol "tcp"
         bool mustReply;
         struct Name {
             const char *name;
