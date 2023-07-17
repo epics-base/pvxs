@@ -218,14 +218,27 @@ void testFreezeThawVoid()
     testEq(C[0], 5u);
 }
 
+struct ImMobile {
+    int v = 0;
+    ImMobile() = default;
+
+    void store(int x) { v=x; }
+    int load() const { return v; }
+
+    ImMobile(const ImMobile&) = delete;
+    ImMobile(ImMobile&&) = delete;
+    ImMobile& operator=(const ImMobile&) = delete;
+    ImMobile& operator=(ImMobile&&) = delete;
+};
+
 void testComplex()
 {
     testDiag("%s", __func__);
 
-    shared_array<std::unique_ptr<uint32_t>> X(2, nullptr);
+    shared_array<ImMobile> X(2);
 
-    X[0] = decltype (X)::value_type{new uint32_t(4u)};
-    testEq(*X[0], 4u);
+    X[0].store(4);
+    testEq(X[0].load(), 4);
 }
 
 void testValue()
