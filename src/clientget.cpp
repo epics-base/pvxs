@@ -220,7 +220,7 @@ struct GPROp : public OperationBase
                 self->arg = std::move(a);
 
             } else if(put && self->op==Put) {
-                self->builder = [a](Value&&) -> Value {
+                self->builder = [a](Value&&) noexcept -> Value {
                     // caller should be passing a Value of the correct prototype
                     // given through onInit().
                     return a;
