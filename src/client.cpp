@@ -152,9 +152,15 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
     assert(!self || this==self.get());
     auto current(std::move(conn));
 
+    size_t holdoff = 0u;
     switch(state) {
     case Channel::Connecting:
         current->pending.erase(cid);
+        /* disconnect/timeout while before CREATE_CHANNEL sent,
+         * likely lower level networking issue.  Try to slow
+         * down reconnect loop.
+         */
+        holdoff = 10u; // arbitrary
         break;
     case Channel::Creating:
         current->creatingByCID.erase(cid);
@@ -201,7 +207,9 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
 
     } else if(forcedServer.family()==AF_UNSPEC) { // begin search
 
-        context->searchBuckets[context->currentBucket].push_back(self);
+        auto next = (context->currentBucket + holdoff) % nBuckets;
+
+        context->searchBuckets[next].push_back(self);
 
         log_debug_printf(io, "Server %s detach channel '%s' to re-search\n",
                          current ? current->peerName.c_str() : "<disconnected>",
