@@ -21,6 +21,7 @@
 #include <osiSock.h>
 
 #include <pvxs/log.h>
+#include <pvxs/util.h>
 
 #include <udp_collector.h>
 #include <utilpvt.h>
@@ -133,9 +134,7 @@ int main(int argc, char *argv[])
                     usage(argv[0]);
                     return 0;
                 case 'V':
-                    std::cout<<pva::version_str()<<"\n";
-                    std::cout<<EPICS_VERSION_STRING<<"\n";
-                    std::cout<<"libevent "<<event_get_version()<<"\n";
+                    std::cout<<pvxs::version_information;
                     return 0;
                 default:
                     usage(argv[0]);

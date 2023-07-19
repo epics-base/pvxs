@@ -132,4 +132,12 @@ std::ostream& target_information(std::ostream& strm)
     return strm;
 }
 
+std::ostream& version_information(std::ostream& strm)
+{
+    strm<<version_str()<<"\n";
+    strm<<EPICS_VERSION_STRING<<"\n";
+    strm<<"libevent "<<event_get_version()<<"\n";
+    return strm;
+}
+
 } // namespace pvxs

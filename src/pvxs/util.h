@@ -179,6 +179,17 @@ private:
 PVXS_API
 std::ostream& target_information(std::ostream&);
 
+/** Print version information for PVXS library and dependencies
+ *
+ * As shown by eg. ``pvxget -V``
+ *
+ * @returns The same ostream passed as argument.
+ *
+ * @since UNRELEASED
+ */
+PVXS_API
+std::ostream& version_information(std::ostream&);
+
 /** Thread-safe, bounded, multi-producer, multi-consumer FIFO queue.
  *
  * Queue value_type must be movable.  If T is also copy constructable,
