@@ -159,8 +159,11 @@ jobs:
         sudo apt-get -y install doxygen python-is-python3 python3-breathe
         make -C documentation
     - name: otool
-      if: runner.os == 'macOS'
-      run: otool -D -L bundle/usr/*/lib/*.dylib lib/*/*.dylib bin/*/pvxinfo
+      if: ${{ always() && runner.os == 'macOS' }}
+      run: otool -D -L -l bundle/usr/*/lib/*.dylib lib/*/*.dylib bin/*/pvxinfo
+    - name: readelf
+      if: ${{ always() && runner.os == 'Linux' }}
+      run: find bundle/usr lib -name '*.so' -print0 | xargs -0 readelf -d bin/linux-*/pvxinfo
     - name: Host info
       run: python .ci/cue.py --add-path "{TOP}/bin/{EPICS_HOST_ARCH}" --add-path "{TOP}/bundle/usr/{EPICS_HOST_ARCH}/lib" exec pvxinfo -D
     - name: Run main module tests
@@ -170,6 +173,10 @@ jobs:
     - name: CDT Check
       run: ./.ci-local/cdt-check.sh
       if: runner.os == 'Linux'
+    - name: Troubleshoot
+      if: ${{ always() }}
+      shell: bash
+      run: grep . cfg/*
     - name: Upload tapfiles Artifact
       if: ${{ always() }}
       uses: actions/upload-artifact@v3
