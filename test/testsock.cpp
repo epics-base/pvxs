@@ -34,6 +34,64 @@ using namespace pvxs;
 #  endif
 #endif
 
+void testEndPoint()
+{
+    testDiag("Enter %s", __func__);
+
+    {
+        SockEndpoint ep("127.0.0.1");
+        testEq(ep.addr.tostring(), "127.0.0.1");
+        testEq(ep.iface, "");
+        testEq(ep.ttl, -1);
+    }
+    {
+        SockEndpoint ep("127.0.0.1:12");
+        testEq(ep.addr.tostring(), "127.0.0.1:12");
+        testEq(ep.iface, "");
+        testEq(ep.ttl, -1);
+    }
+    {
+        SockEndpoint ep("127.0.0.1,1");
+        testEq(ep.addr.tostring(), "127.0.0.1");
+        testEq(ep.iface, "");
+        testEq(ep.ttl, 1);
+    }
+    {
+        SockEndpoint ep("127.0.0.1@ifname");
+        testEq(ep.addr.tostring(), "127.0.0.1");
+        testEq(ep.iface, "ifname");
+        testEq(ep.ttl, -1);
+    }
+    {
+        SockEndpoint ep("127.0.0.1,1@ifname");
+        testEq(ep.addr.tostring(), "127.0.0.1");
+        testEq(ep.iface, "ifname");
+        testEq(ep.ttl, 1);
+    }
+    {
+        SockEndpoint ep("127.0.0.1:12,1@ifname");
+        testEq(ep.addr.tostring(), "127.0.0.1:12");
+        testEq(ep.iface, "ifname");
+        testEq(ep.ttl, 1);
+    }
+
+    std::vector<std::string> bad({
+        "127.0.0.",
+        "127.0.0.1:foo",
+        "127.0.0.1:",
+        "127.0.0.1:12,foo",
+        //"127.0.0.1:12@", // should fail...
+        "127.0.0.1:12,@",
+        "127.0,0.1,1@ifname",
+    });
+    for(const auto& inp : bad) {
+        testThrows<std::runtime_error>([&inp](){
+            SockEndpoint x(inp);
+            (void)x;
+        })<<" "<<inp;
+    }
+}
+
 bool waitReadable(const evsocket& sock, double timeout=5.0)
 {
     pollfd pfd{};
@@ -436,8 +494,9 @@ MAIN(testsock)
 {
     SockAttach attach;
     logger_config_env();
-    testPlan(68);
+    testPlan(92);
     testSetup();
+    testEndPoint();
     // check for behavior when binding ipv4 and ipv6 to the same socket
     // as a function of socket type and order.
     if(evsocket::canIPv6) {
