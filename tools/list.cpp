@@ -43,7 +43,7 @@ void usage(const char* argv0)
             "   "<<argv0<<" -w 0 -v\n"
             "\n"
             "  List all PV names.  (Warning: high network load)\n"
-            "   "<<argv0<<" -w 5 | "<<argv0<<"\n"
+            "   "<<argv0<<" $("<<argv0<<" -w 5)\n"
             "\n"
             "  -h        Show this message.\n"
             "  -V        Print version and exit.\n"
