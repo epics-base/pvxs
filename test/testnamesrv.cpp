@@ -38,7 +38,10 @@ void testNameServer()
     testShow()<<"Server config\n"<<serv.config();
 
     auto cliconf(serv.clientConfig());
-    cliconf.nameServers = std::move(cliconf.addressList);
+    for(auto& addr : cliconf.addressList)
+        cliconf.nameServers.push_back(SB()<<addr<<':'<<cliconf.tcp_port);
+    cliconf.autoAddrList = false;
+    cliconf.addressList.clear();
 
     auto cli(cliconf.build());
 
