@@ -31,6 +31,13 @@
 #include "evhelper.h"
 #include "utilpvt.h"
 
+#ifndef ANSI_MAGENTA
+#  define ANSI_MAGENTA(MSG) MSG
+#  define ANSI_RED(MSG) MSG
+#  define ANSI_BLUE(MSG) MSG
+#endif
+
+
 #if EPICS_VERSION_INT>=VERSION_INT(3,15,0,0)
 #    include <epicsStackTrace.h>
 #else
@@ -68,10 +75,10 @@ const char* log_prep(logger& log, unsigned rawlvl)
 
     const char *lname;
     switch(lvl) {
-    case Level::Crit:  lname = "CRIT"; break;
-    case Level::Err:   lname = "ERR"; break;
-    case Level::Warn:  lname = "WARN"; break;
-    case Level::Info:  lname = "INFO"; break;
+    case Level::Crit:  lname = ANSI_RED("CRIT"); break;
+    case Level::Err:   lname = ANSI_RED("ERR"); break;
+    case Level::Warn:  lname = ANSI_MAGENTA("WARN"); break;
+    case Level::Info:  lname = ANSI_BLUE("INFO"); break;
     case Level::Debug: lname = "DEBUG"; break;
     default:           lname = "<\?\?\?>"; break;
     }
