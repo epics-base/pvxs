@@ -57,10 +57,16 @@ pvxsIoc_SRCS += groupconfigprocessor.cpp
 pvxsIoc_SRCS += groupprocessorcontext.cpp
 pvxsIoc_SRCS += groupsource.cpp
 pvxsIoc_SRCS += groupsourcehooks.cpp
+pvxsIoc_SRCS += pvalink.cpp
+pvxsIoc_SRCS += pvalink_channel.cpp
+pvxsIoc_SRCS += pvalink_jlif.cpp
+pvxsIoc_SRCS += pvalink_link.cpp
+pvxsIoc_SRCS += pvalink_lset.cpp
 
 else # BASE_7_0
 
 pvxsIoc_SRCS += dummygroup.cpp
+pvxsIoc_SRCS += pvalink_null.cpp
 
 endif # BASE_7_0
 
