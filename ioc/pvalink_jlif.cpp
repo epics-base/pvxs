@@ -1,28 +1,21 @@
+/*
+ * Copyright - See the COPYRIGHT that is included with this distribution.
+ * pvxs is distributed subject to a Software License Agreement found
+ * in file LICENSE that is included with this distribution.
+ */
+
 #include <sstream>
 
 #include <epicsStdio.h> // redirects stdout/stderr
 
 #include "pvalink.h"
 
-namespace pvalink {
-pvaLinkConfig::pvaLinkConfig()
-    :queueSize(4)
-    ,pp(Default)
-    ,ms(NMS)
-    ,defer(false)
-    ,pipeline(false)
-    ,time(false)
-    ,retry(false)
-    ,local(false)
-    ,always(false)
-    ,monorder(0)
-{}
+#include <epicsExport.h>
+
+namespace pvxlink {
 pvaLinkConfig::~pvaLinkConfig() {}
-}
 
 namespace {
-
-using namespace pvalink;
 
 /* link options.
  *
@@ -44,10 +37,9 @@ using namespace pvalink;
  * }
  */
 
-jlink* pva_alloc_jlink(short dbr)
+jlink* pva_alloc_jlink(short)
 {
     try {
-        TRACE();
         return new pvaLink;
 
     }catch(std::exception& e){
@@ -64,7 +56,6 @@ jlink* pva_alloc_jlink(short dbr)
 void pva_free_jlink(jlink *pjlink)
 {
     TRY {
-        TRACE();
         delete pvt;
     }catch(std::exception& e){
         errlogPrintf("Error freeing pva link: %s\n", e.what());
@@ -74,7 +65,6 @@ void pva_free_jlink(jlink *pjlink)
 jlif_result pva_parse_null(jlink *pjlink)
 {
     TRY {
-        TRACE(<<pvt->jkey<<" ");
         if(pvt->parseDepth!=1) {
             // ignore
         } else if(pvt->jkey == "proc") {
@@ -96,7 +86,7 @@ jlif_result pva_parse_null(jlink *pjlink)
 jlif_result pva_parse_bool(jlink *pjlink, int val)
 {
     TRY {
-        TRACE(<<pvt->jkey<<" "<<(val?"true":"false"));
+//        TRACE(<<pvt->jkey<<" "<<(val?"true":"false"));
         if(pvt->parseDepth!=1) {
             // ignore
         } else if(pvt->jkey == "proc") {
@@ -128,7 +118,6 @@ jlif_result pva_parse_bool(jlink *pjlink, int val)
 jlif_result pva_parse_integer(jlink *pjlink, long long val)
 {
     TRY {
-        TRACE(<<pvt->jkey<<" "<<val);
         if(pvt->parseDepth!=1) {
             // ignore
         } else if(pvt->jkey == "Q") {
@@ -149,7 +138,6 @@ jlif_result pva_parse_string(jlink *pjlink, const char *val, size_t len)
 {
     TRY{
         std::string sval(val, len);
-        TRACE(<<pvt->jkey<<" "<<sval);
         if(pvt->parseDepth==0 || (pvt->parseDepth==1 && pvt->jkey=="pv")) {
             pvt->channelName = sval;
 
@@ -205,7 +193,6 @@ jlif_result pva_parse_string(jlink *pjlink, const char *val, size_t len)
 jlif_key_result pva_parse_start_map(jlink *pjlink)
 {
     TRY {
-        TRACE();
         return jlif_key_continue;
     }CATCH(jlif_key_stop)
 }
@@ -214,7 +201,6 @@ jlif_result pva_parse_key_map(jlink *pjlink, const char *key, size_t len)
 {
     TRY {
         std::string sval(key, len);
-        TRACE(<<sval);
         pvt->jkey = sval;
 
         return jlif_continue;
@@ -224,14 +210,12 @@ jlif_result pva_parse_key_map(jlink *pjlink, const char *key, size_t len)
 jlif_result pva_parse_end_map(jlink *pjlink)
 {
     TRY {
-        TRACE();
         return jlif_continue;
     }CATCH(jlif_stop)
 }
 
 struct lset* pva_get_lset(const jlink *pjlink)
 {
-    TRACE();
     return &pva_lset;
 }
 
@@ -271,7 +255,7 @@ void pva_report(const jlink *rpjlink, int lvl, int indent)
             Guard G(pval->lchan->lock);
 
             printf(" conn=%c", pval->lchan->connected ? 'T' : 'F');
-            if(pval->lchan->op_put.valid()) {
+            if(pval->lchan->op_put) {
                 printf(" Put");
             }
 
@@ -282,11 +266,11 @@ void pva_report(const jlink *rpjlink, int lvl, int indent)
                 printf(" inprog=%c",
                        pval->lchan->queued?'T':'F');
             }
-            if(lvl>5) {
-                std::ostringstream strm;
-                pval->lchan->chan.show(strm);
-                printf("\n%*s   CH: %s", indent, "", strm.str().c_str());
-            }
+//            if(lvl>5) {
+//                std::ostringstream strm;
+//                pval->lchan->chan.show(strm);
+//                printf("\n%*s   CH: %s", indent, "", strm.str().c_str());
+//            }
         } else {
             printf(" No Channel");
         }
@@ -295,8 +279,6 @@ void pva_report(const jlink *rpjlink, int lvl, int indent)
 }
 
 } //namespace
-
-namespace pvalink {
 
 jlif lsetPVA = {
     "pva",
@@ -319,3 +301,8 @@ jlif lsetPVA = {
 };
 
 } //namespace pvalink
+
+extern "C" {
+using pvxlink::lsetPVA;
+epicsExportAddress(jlif, lsetPVA);
+}

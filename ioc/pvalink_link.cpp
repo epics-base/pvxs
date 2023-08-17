@@ -1,23 +1,19 @@
-#include <pv/reftrack.h>
+/*
+ * Copyright - See the COPYRIGHT that is included with this distribution.
+ * pvxs is distributed subject to a Software License Agreement found
+ * in file LICENSE that is included with this distribution.
+ */
+
+#include <string.h>
+
 #include <alarm.h>
 
 #include "pvalink.h"
 
-namespace pvalink {
+namespace pvxlink {
 
 pvaLink::pvaLink()
-    :alive(true)
-    ,type((dbfType)-1)
-    ,plink(0)
-    ,used_scratch(false)
-    ,used_queue(false)
 {
-    REFTRACE_INCREMENT(num_instances);
-
-    snap_severity = INVALID_ALARM;
-    snap_time.secPastEpoch = 0;
-    snap_time.nsec = 0;
-
     //TODO: valgrind tells me these aren't initialized by Base, but probably should be.
     parseDepth = 0;
     parent = 0;
@@ -46,60 +42,55 @@ pvaLink::~pvaLink()
 
         lchan->debug = new_debug;
     }
-
-    REFTRACE_DECREMENT(num_instances);
 }
 
-static
-pvd::StructureConstPtr monitorRequestType = pvd::getFieldCreate()->createFieldBuilder()
-        ->addNestedStructure("field")
-        ->endNested()
-        ->addNestedStructure("record")
-            ->addNestedStructure("_options")
-                ->add("pipeline", pvd::pvBoolean)
-                ->add("atomic", pvd::pvBoolean)
-                ->add("queueSize", pvd::pvUInt)
-            ->endNested()
-        ->endNested()
-        ->createStructure();
-
-pvd::PVStructurePtr pvaLink::makeRequest()
+Value pvaLink::makeRequest()
 {
-    pvd::PVStructurePtr ret(pvd::getPVDataCreate()->createPVStructure(monitorRequestType));
-    ret->getSubFieldT<pvd::PVBoolean>("record._options.pipeline")->put(pipeline);
-    ret->getSubFieldT<pvd::PVBoolean>("record._options.atomic")->put(true);
-    ret->getSubFieldT<pvd::PVUInt>("record._options.queueSize")->put(queueSize);
-    return ret;
+    // TODO: cache TypeDef in global
+    using namespace pvxs::members;
+    return TypeDef(TypeCode::Struct, {
+                       Struct("field", {}),
+                       Struct("record", {
+                           Struct("_options", {
+                               Bool("pipeline"),
+                               Bool("atomic"),
+                               UInt32("queueSize"),
+                           }),
+                       }),
+                   }).create()
+            .update("record._options.pipeline", pipeline)
+            .update("record._options.atomic", true)
+            .update("record._options.queueSize", uint32_t(queueSize));
 }
 
 // caller must lock lchan->lock
 bool pvaLink::valid() const
 {
-    return lchan->connected_latched && lchan->op_mon.root;
+    return lchan->connected_latched && lchan->root;
 }
 
 // caller must lock lchan->lock
-pvd::PVField::const_shared_pointer pvaLink::getSubField(const char *name)
+Value pvaLink::getSubField(const char *name)
 {
-    pvd::PVField::const_shared_pointer ret;
+    Value ret;
     if(valid()) {
         if(fieldName.empty()) {
             // we access the top level struct
-            ret = lchan->op_mon.root->getSubField(name);
+            ret = lchan->root[name];
 
         } else {
             // we access a sub-struct
-            ret = lchan->op_mon.root->getSubField(fieldName);
+            ret = lchan->root[fieldName];
             if(!ret) {
                 // noop
-            } else if(ret->getField()->getType()!=pvd::structure) {
+            } else if(ret.type()!=TypeCode::Struct) {
                 // addressed sub-field isn't a sub-structure
                 if(strcmp(name, "value")!=0) {
                     // unless we are trying to fetch the "value", we fail here
-                    ret.reset();
+                    ret = Value();
                 }
             } else {
-                ret = static_cast<const pvd::PVStructure*>(ret.get())->getSubField(name);
+                ret = ret[name];
             }
         }
     }
@@ -109,7 +100,7 @@ pvd::PVField::const_shared_pointer pvaLink::getSubField(const char *name)
 // call with channel lock held
 void pvaLink::onDisconnect()
 {
-    DEBUG(this,<<plink->precord->name<<" disconnect");
+//    DEBUG(this,<<plink->precord->name<<" disconnect");
     // TODO: option to remain queue'd while disconnected
 
     used_queue = used_scratch = false;
@@ -117,40 +108,38 @@ void pvaLink::onDisconnect()
 
 void pvaLink::onTypeChange()
 {
-    DEBUG(this,<<plink->precord->name<<" type change");
+//    DEBUG(this,<<plink->precord->name<<" type change");
 
-    assert(lchan->connected_latched && !!lchan->op_mon.root); // we should only be called when connected
+    assert(lchan->connected_latched && !!lchan->root); // we should only be called when connected
 
     fld_value = getSubField("value");
-    fld_seconds = std::tr1::dynamic_pointer_cast<const pvd::PVScalar>(getSubField("timeStamp.secondsPastEpoch"));
-    fld_nanoseconds = std::tr1::dynamic_pointer_cast<const pvd::PVScalar>(getSubField("timeStamp.nanoseconds"));
-    fld_severity = std::tr1::dynamic_pointer_cast<const pvd::PVScalar>(getSubField("alarm.severity"));
-    fld_display = std::tr1::dynamic_pointer_cast<const pvd::PVStructure>(getSubField("display"));
-    fld_control = std::tr1::dynamic_pointer_cast<const pvd::PVStructure>(getSubField("control"));
-    fld_valueAlarm = std::tr1::dynamic_pointer_cast<const pvd::PVStructure>(getSubField("valueAlarm"));
-
-    proc_changed.clear();
+    fld_seconds = getSubField("timeStamp.secondsPastEpoch");
+    fld_nanoseconds = getSubField("timeStamp.nanoseconds");
+    fld_severity = getSubField("alarm.severity");
+    fld_display = getSubField("display");
+    fld_control = getSubField("control");
+    fld_valueAlarm = getSubField("valueAlarm");
 
     // build mask of all "changed" bits associated with our .value
     // CP/CPP input links will process this link only for updates where
     // the changed mask and proc_changed share at least one set bit.
-    if(fld_value) {
-        // bit for this field
-        proc_changed.set(fld_value->getFieldOffset());
+//    if(fld_value) {
+//        // bit for this field
+//        proc_changed.set(fld_value->getFieldOffset());
 
-        // bits of all parent fields
-        for(const pvd::PVStructure* parent = fld_value->getParent(); parent; parent = parent->getParent()) {
-            proc_changed.set(parent->getFieldOffset());
-        }
+//        // bits of all parent fields
+//        for(const pvd::PVStructure* parent = fld_value->getParent(); parent; parent = parent->getParent()) {
+//            proc_changed.set(parent->getFieldOffset());
+//        }
 
-        if(fld_value->getField()->getType()==pvd::structure)
-        {
-            // bits of all child fields
-            const pvd::PVStructure *val = static_cast<const pvd::PVStructure*>(fld_value.get());
-            for(size_t i=val->getFieldOffset(), N=val->getNextFieldOffset(); i<N; i++)
-                proc_changed.set(i);
-        }
-    }
+//        if(fld_value->getField()->getType()==pvd::structure)
+//        {
+//            // bits of all child fields
+//            const pvd::PVStructure *val = static_cast<const pvd::PVStructure*>(fld_value.get());
+//            for(size_t i=val->getFieldOffset(), N=val->getNextFieldOffset(); i<N; i++)
+//                proc_changed.set(i);
+//        }
+//    }
 }
 
 } // namespace pvalink

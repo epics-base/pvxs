@@ -1,6 +1,13 @@
+/*
+ * Copyright - See the COPYRIGHT that is included with this distribution.
+ * pvxs is distributed subject to a Software License Agreement found
+ * in file LICENSE that is included with this distribution.
+ */
 
 #include <set>
 #include <map>
+
+#include <string.h>
 
 #define EPICS_DBCA_PRIVATE_API
 #include <epicsGuard.h>
@@ -20,16 +27,10 @@
 
 #include <epicsStdio.h> /* redirects stdout/stderr */
 
-#include <pv/pvAccess.h>
-#include <pv/clientFactory.h>
-#include <pv/iocshelper.h>
-#include <pv/reftrack.h>
-#include <pva/client.h>
-
-#include "pv/qsrv.h"
-#include "helper.h"
-#include "pvif.h"
 #include "pvalink.h"
+#include "dblocker.h"
+#include "dbentry.h"
+#include "iocshcommand.h"
 
 #include <epicsExport.h> /* defines epicsExportSharedSymbols */
 
@@ -40,7 +41,9 @@
 int pvaLinkDebug;
 int pvaLinkIsolate;
 
-using namespace pvalink;
+namespace pvxs { namespace ioc {
+
+using namespace pvxlink;
 
 namespace {
 
@@ -123,10 +126,8 @@ void initPVALink(initHookState state)
 #endif
 
         } else if(state==initHookAfterInitDatabase) {
-            pvac::ClientProvider local("server:QSRV"),
-                                 remote("pva");
-            pvaGlobal->provider_local = local;
-            pvaGlobal->provider_remote = remote;
+            // TODO "local" provider
+            pvaGlobal->provider_remote = client::Config().build();
 
         } else if(state==initHookAfterIocBuilt) {
             // after epicsExit(exitDatabase)
@@ -142,7 +143,7 @@ void initPVALink(initHookState state)
             for(pvaGlobal_t::channels_t::iterator it(pvaGlobal->channels.begin()), end(pvaGlobal->channels.end());
                 it != end; ++it)
             {
-                std::tr1::shared_ptr<pvaLinkChannel> chan(it->second.lock());
+                std::shared_ptr<pvaLinkChannel> chan(it->second.lock());
                 if(!chan) continue;
 
                 chan->open();
@@ -183,9 +184,9 @@ void testqsrvCleanup(void)
 
 void testqsrvWaitForLinkEvent(struct link *plink)
 {
-    std::tr1::shared_ptr<pvaLinkChannel> lchan;
+    std::shared_ptr<pvaLinkChannel> lchan;
     {
-        DBScanLocker lock(plink->precord);
+        DBLocker lock(plink->precord);
 
         if(plink->type!=JSON_LINK || !plink->value.json.jlink || plink->value.json.jlink->pif!=&lsetPVA) {
             testAbort("Not a PVA link");
@@ -225,7 +226,7 @@ void dbpvar(const char *precordname, int level)
         for(pvaGlobal_t::channels_t::const_iterator it(channels.begin()), end(channels.end());
             it != end; ++it)
         {
-            std::tr1::shared_ptr<pvaLinkChannel> chan(it->second.lock());
+            std::shared_ptr<pvaLinkChannel> chan(it->second.lock());
             if(!chan) continue;
 
             Guard G(chan->lock);
@@ -268,7 +269,7 @@ void dbpvar(const char *precordname, int level)
                        chan->connected_latched?'T':'F',
                        chan->num_disconnect,
                        chan->num_type_change);
-                if(chan->op_put.valid()) {
+                if(chan->op_put) {
                     printf(" Put");
                 }
 
@@ -290,11 +291,11 @@ void dbpvar(const char *precordname, int level)
                             continue;
 
                         const char *fldname = "???";
-                        pdbRecordIterator rec(pval->plink->precord);
-                        for(bool done = !!dbFirstField(&rec.ent, 0); !done; done = !!dbNextField(&rec.ent, 0))
+                        ioc::DBEntry rec(pval->plink->precord);
+                        for(bool done = !!dbFirstField(rec, 0); !done; done = !!dbNextField(rec, 0))
                         {
-                            if(rec.ent.pfield == (void*)pval->plink) {
-                                fldname = rec.ent.pflddes->name;
+                            if(rec->pfield == (void*)pval->plink) {
+                                fldname = rec->pflddes->name;
                                 break;
                             }
                         }
@@ -339,14 +340,17 @@ static
 void installPVAAddLinkHook()
 {
     initHookRegister(&initPVALink);
-    epics::iocshRegister<const char*, int, &dbpvar>("dbpvar", "record name", "level");
-    epics::registerRefCounter("pvaLinkChannel", &pvaLinkChannel::num_instances);
-    epics::registerRefCounter("pvaLink", &pvaLink::num_instances);
+    IOCShCommand<const char*, int>("dbpvar", "dbpvar", "record name", "level")
+            .implementation<&dbpvar>();
+//    epics::registerRefCounter("pvaLinkChannel", &pvaLinkChannel::num_instances);
+//    epics::registerRefCounter("pvaLink", &pvaLink::num_instances);
 }
 
+}} // namespace pvxs::ioc
+
 extern "C" {
+    using pvxs::ioc::installPVAAddLinkHook;
     epicsExportRegistrar(installPVAAddLinkHook);
-    epicsExportAddress(jlif, lsetPVA);
     epicsExportAddress(int, pvaLinkDebug);
     epicsExportAddress(int, pvaLinkNWorkers);
 }

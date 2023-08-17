@@ -1,28 +1,60 @@
+/*
+ * Copyright - See the COPYRIGHT that is included with this distribution.
+ * pvxs is distributed subject to a Software License Agreement found
+ * in file LICENSE that is included with this distribution.
+ */
 
 #include <alarm.h>
 
-#include <pv/reftrack.h>
-
 #include "pvalink.h"
+#include "dblocker.h"
+#include "dbmanylocker.h"
 
 int pvaLinkNWorkers = 1;
 
-namespace pvalink {
+namespace pvxlink {
+using namespace pvxs;
 
 pvaGlobal_t *pvaGlobal;
 
 
 pvaGlobal_t::pvaGlobal_t()
-    :create(pvd::getPVDataCreate())
-    ,queue("PVAL")
+    :queue()
     ,running(false)
+    ,worker(*this,
+            "pvxlink",
+            epicsThreadGetStackSize(epicsThreadStackBig),
+            // worker should be above PVA worker priority?
+            epicsThreadPriorityMedium)
 {
-    // worker should be above PVA worker priority?
-    queue.start(std::max(1, pvaLinkNWorkers), epicsThreadPriorityMedium);
+    // TODO respect pvaLinkNWorkers?
+    worker.start();
 }
 
 pvaGlobal_t::~pvaGlobal_t()
 {
+    {
+        Guard G(lock);
+        workerStop = true;
+    }
+    queue.push(std::weak_ptr<epicsThreadRunable>());
+    worker.exitWait();
+}
+
+void pvaGlobal_t::run()
+{
+    while(1) {
+        auto w = queue.pop();
+        if(auto chan = w.lock()) {
+            chan->run();
+        }
+        {
+            Guard G(lock);
+            if(workerStop)
+                break;
+        }
+    }
+
 }
 
 size_t pvaLinkChannel::num_instances;
@@ -36,17 +68,9 @@ bool pvaLinkChannel::LinkSort::operator()(const pvaLink *L, const pvaLink *R) co
 }
 
 // being called with pvaGlobal::lock held
-pvaLinkChannel::pvaLinkChannel(const pvaGlobal_t::channels_key_t &key, const pvd::PVStructure::const_shared_pointer& pvRequest)
+pvaLinkChannel::pvaLinkChannel(const pvaGlobal_t::channels_key_t &key, const Value& pvRequest)
     :key(key)
     ,pvRequest(pvRequest)
-    ,num_disconnect(0u)
-    ,num_type_change(0u)
-    ,connected(false)
-    ,connected_latched(false)
-    ,isatomic(false)
-    ,queued(false)
-    ,debug(false)
-    ,links_changed(false)
     ,AP(new AfterPut)
 {}
 
@@ -59,52 +83,121 @@ pvaLinkChannel::~pvaLinkChannel() {
     Guard G(lock);
 
     assert(links.empty());
-    REFTRACE_DECREMENT(num_instances);
 }
 
 void pvaLinkChannel::open()
 {
     Guard G(lock);
 
-    try {
-        chan = pvaGlobal->provider_local.connect(key.first);
-        DEBUG(this, <<key.first<<" OPEN Local");
-        providerName = pvaGlobal->provider_local.name();
-    } catch(std::exception& e){
-        // The PDBProvider doesn't have a way to communicate to us
-        // whether this is an invalid record or group name,
-        // or if this is some sort of internal error.
-        // So we are forced to assume it is an invalid name.
-        DEBUG(this, <<key.first<<" OPEN Not local "<<e.what());
-    }
-    if(!pvaLinkIsolate && !chan) {
-        chan = pvaGlobal->provider_remote.connect(key.first);
-        DEBUG(this, <<key.first<<" OPEN Remote ");
-        providerName = pvaGlobal->provider_remote.name();
-    }
-
-    op_mon = chan.monitor(this, pvRequest);
-
-    REFTRACE_INCREMENT(num_instances);
+    op_mon = pvaGlobal->provider_remote.monitor(key.first)
+            .maskConnected(false)
+            .maskDisconnected(false)
+            .rawRequest(pvRequest)
+            .event([this](const client::Subscription&)
+    {
+        Guard G(lock);
+        if(!queued) {
+            pvaGlobal->queue.push(shared_from_this());
+            queued = true;
+        }
+    })
+            .exec();
+    providerName = "remote";
 }
 
 static
-pvd::StructureConstPtr putRequestType = pvd::getFieldCreate()->createFieldBuilder()
-        ->addNestedStructure("field")
-        ->endNested()
-        ->addNestedStructure("record")
-            ->addNestedStructure("_options")
-                ->add("block", pvd::pvBoolean)
-                ->add("process", pvd::pvString) // "true", "false", or "passive"
-            ->endNested()
-        ->endNested()
-        ->createStructure();
+Value linkBuildPut(pvaLinkChannel *self, Value&& prototype)
+{
+    Guard G(self->lock);
+
+    auto top(std::move(prototype));
+
+    for(auto link : self->links)
+    {
+        if(!link->used_queue) continue;
+        link->used_queue = false; // clear early so unexpected exception won't get us in a retry loop
+
+        auto value(link->fieldName.empty() ? top : top[link->fieldName]);
+        if(value.type()==TypeCode::Struct) {
+            // maybe drill into NTScalar et al.
+            if(auto sub = value["value"])
+                value = std::move(sub);
+        }
+
+        if(!value) continue; // TODO: how to signal error?
+
+        auto tosend(std::move(link->put_queue));
+
+        if(value.type().isarray()) {
+            value = tosend;
+
+        } else if(value.type()==TypeCode::Struct && value.id()=="enum_t") {
+
+            if(tosend.empty())
+                continue; // TODO: signal error
+
+            if(tosend.original_type()==ArrayType::String) {
+                auto sarr(tosend.castTo<const std::string>());
+                // TODO: choices...
+                value["index"] = sarr[0];
+
+            } else {
+                auto iarr(tosend.castTo<const uint16_t>());
+                value["index"] = iarr[0];
+            }
+
+        } else { // assume scalar
+        }
+    }
+//    DEBUG(this, <<key.first<<" Put built");
+
+    return top;
+}
+
+void linkPutDone(pvaLinkChannel *self, client::Result&& result)
+{
+    bool ok = false;
+    try {
+        result();
+        ok = true;
+    }catch(std::exception& e){
+        errlogPrintf("%s PVA link put ERROR: %s\n", self->key.first.c_str(), e.what());
+    }
+
+    bool needscans;
+    {
+        Guard G(self->lock);
+
+//        DEBUG(this, <<key.first<<" Put result "<<evt.event);
+
+        needscans = !self->after_put.empty();
+        self->op_put.reset();
+
+        if(ok) {
+            // see if we need start a queue'd put
+            self->put();
+        }
+    }
+
+    if(needscans) {
+        pvaGlobal->queue.push(self->AP);
+    }
+}
 
 // call with channel lock held
 void pvaLinkChannel::put(bool force)
 {
-    pvd::PVStructurePtr pvReq(pvd::getPVDataCreate()->createPVStructure(putRequestType));
-    pvReq->getSubFieldT<pvd::PVBoolean>("record._options.block")->put(!after_put.empty());
+    // TODO cache TypeDef in global
+    using namespace pvxs::members;
+    auto pvReq(TypeDef(TypeCode::Struct, {
+                           Struct("field", {}),
+                           Struct("record", {
+                               Struct("_options", {
+                                   Bool("block"),
+                                   String("process"),
+                               }),
+                           }),                       }).create()
+               .update("record._options.block", !after_put.empty()));
 
     unsigned reqProcess = 0;
     bool doit = force;
@@ -114,7 +207,7 @@ void pvaLinkChannel::put(bool force)
 
         if(!link->used_scratch) continue;
 
-        pvd::shared_vector<const void> temp;
+        shared_array<const void> temp;
         temp.swap(link->put_scratch);
         link->used_scratch = false;
         temp.swap(link->put_queue);
@@ -148,91 +241,28 @@ void pvaLinkChannel::put(bool force)
     } else if(reqProcess&1) {
         proc = "false";
     }
-    pvReq->getSubFieldT<pvd::PVString>("record._options.process")->put(proc);
+    pvReq["record._options.process"] = proc;
 
-    DEBUG(this, <<key.first<<"Start put "<<doit);
+//    DEBUG(this, <<key.first<<"Start put "<<doit);
     if(doit) {
         // start net Put, cancels in-progress put
-        op_put = chan.put(this, pvReq);
-    }
-}
-
-void pvaLinkChannel::putBuild(const epics::pvData::StructureConstPtr& build, pvac::ClientChannel::PutCallback::Args& args)
-{
-    Guard G(lock);
-
-    pvd::PVStructurePtr top(pvaGlobal->create->createPVStructure(build));
-
-    for(links_t::iterator it(links.begin()), end(links.end()); it!=end; ++it)
-    {
-        pvaLink *link = *it;
-
-        if(!link->used_queue) continue;
-        link->used_queue = false; // clear early so unexpected exception won't get us in a retry loop
-
-        pvd::PVFieldPtr value(link->fieldName.empty() ? pvd::PVFieldPtr(top) : top->getSubField(link->fieldName));
-        if(value && value->getField()->getType()==pvd::structure) {
-            // maybe drill into NTScalar et al.
-            pvd::PVFieldPtr sub(static_cast<pvd::PVStructure*>(value.get())->getSubField("value"));
-            if(sub)
-                value.swap(sub);
-        }
-
-        if(!value) continue; // TODO: how to signal error?
-
-        pvd::PVStringArray::const_svector choices; // TODO populate from op_mon
-
-        DEBUG(this, <<key.first<<" <- "<<value->getFullName());
-        copyDBF2PVD(link->put_queue, value, args.tosend, choices);
-
-        link->put_queue.clear();
-    }
-    DEBUG(this, <<key.first<<" Put built");
-
-    args.root = top;
-}
-
-namespace {
-// soo much easier with c++11 std::shared_ptr...
-struct AFLinker {
-    std::tr1::shared_ptr<pvaLinkChannel> chan;
-    AFLinker(const std::tr1::shared_ptr<pvaLinkChannel>& chan) :chan(chan) {}
-    void operator()(pvaLinkChannel::AfterPut *) {
-        chan.reset();
-    }
-};
-} // namespace
-
-void pvaLinkChannel::putDone(const pvac::PutEvent& evt)
-{
-    if(evt.event==pvac::PutEvent::Fail) {
-        errlogPrintf("%s PVA link put ERROR: %s\n", key.first.c_str(), evt.message.c_str());
-    }
-
-    bool needscans;
-    {
-        Guard G(lock);
-
-        DEBUG(this, <<key.first<<" Put result "<<evt.event);
-
-        needscans = !after_put.empty();
-        op_put = pvac::Operation();
-
-        if(evt.event==pvac::PutEvent::Success) {
-            // see if we need start a queue'd put
-            put();
-        }
-    }
-
-    if(needscans) {
-        pvaGlobal->queue.add(AP);
+        op_put = pvaGlobal->provider_remote.put(key.first)
+                .build([this](Value&& prototype) -> Value
+        {
+                return linkBuildPut(this, std::move(prototype)); // TODO
+        })
+                .result([this](client::Result&& result)
+        {
+            linkPutDone(this, std::move(result));
+        })
+                .exec();
     }
 }
 
 void pvaLinkChannel::AfterPut::run()
 {
     std::set<dbCommon*> toscan;
-    std::tr1::shared_ptr<pvaLinkChannel> link(lc.lock());
+    std::shared_ptr<pvaLinkChannel> link(lc.lock());
     if(!link)
         return;
 
@@ -256,40 +286,6 @@ void pvaLinkChannel::AfterPut::run()
         dbScanUnlock(prec);
     }
 
-}
-
-void pvaLinkChannel::monitorEvent(const pvac::MonitorEvent& evt)
-{
-    bool queue = false;
-
-    {
-        DEBUG(this, <<key.first<<" EVENT "<<evt.event);
-        Guard G(lock);
-
-        switch(evt.event) {
-        case pvac::MonitorEvent::Disconnect:
-        case pvac::MonitorEvent::Data:
-            connected = evt.event == pvac::MonitorEvent::Data;
-            queue = true;
-            break;
-        case pvac::MonitorEvent::Cancel:
-            break; // no-op
-        case pvac::MonitorEvent::Fail:
-            connected = false;
-            queue = true;
-            errlogPrintf("%s: PVA link monitor ERROR: %s\n", chan.name().c_str(), evt.message.c_str());
-            break;
-        }
-
-        if(queued)
-            return; // already scheduled
-
-        queued = queue;
-    }
-
-    if(queue) {
-        pvaGlobal->queue.add(shared_from_this());
-    }
 }
 
 // the work in calling dbProcess() which is common to
@@ -323,25 +319,24 @@ void pvaLinkChannel::run()
 
         queued = false;
 
-        connected_latched = connected;
+        Value top;
+        try {
+            top = op_mon->pop();
+            if(!top) {
+                run_done.signal();
+                return;
+            }
 
-        // pop next update from monitor queue.
-        // still under lock to safeguard concurrent calls to lset functions
-        if(connected && !op_mon.poll()) {
-            DEBUG(this, <<key.first<<" RUN "<<"empty");
-            run_done.signal();
-            return; // monitor queue is empty, nothing more to do here
-        }
+        } catch(client::Connected&) {
+            state = Connecting;
 
-        DEBUG(this, <<key.first<<" RUN "<<(connected_latched?"connected":"disconnected"));
+        } catch(client::Disconnect&) {
+            state = Disconnected;
 
-        assert(!connected || !!op_mon.root);
-
-        if(!connected) {
             num_disconnect++;
 
             // cancel pending put operations
-            op_put = pvac::Operation();
+            op_put.reset();
 
             for(links_t::iterator it(links.begin()), end(links.end()); it!=end; ++it)
             {
@@ -353,21 +348,9 @@ void pvaLinkChannel::run()
             // We will usually re-connect with the same type,
             // and may get back the same PVStructure.
 
-        } else if(previous_root.get() != (const void*)op_mon.root.get()) {
-            num_type_change++;
-
-            for(links_t::iterator it(links.begin()), end(links.end()); it!=end; ++it)
-            {
-                pvaLink *link = *it;
-                link->onTypeChange();
-            }
-
-            previous_root = std::tr1::static_pointer_cast<const void>(op_mon.root);
+        } catch(std::exception& e) {
+            // TODO: log
         }
-
-        // at this point we know we will re-queue, but not immediately
-        // so an expected error won't get us stuck in a tight loop.
-        requeue = queued = connected_latched;
 
         if(links_changed) {
             // a link has been added or removed since the last update.
@@ -375,7 +358,6 @@ void pvaLinkChannel::run()
 
             scan_records.clear();
             scan_check_passive.clear();
-            scan_changed.clear();
 
             for(links_t::iterator it(links.begin()), end(links.end()); it!=end; ++it)
             {
@@ -396,14 +378,46 @@ void pvaLinkChannel::run()
 
                 scan_records.push_back(link->plink->precord);
                 scan_check_passive.push_back(link->pp != pvaLink::CP);
-                scan_changed.push_back(link->proc_changed);
             }
 
-            DBManyLock ML(scan_records);
-
-            atomic_lock.swap(ML);
+            atomic_lock = ioc::DBManyLock(scan_records);
 
             links_changed = false;
+
+            state = Connected;
+        }
+
+        // handle next update from monitor queue.
+        // still under lock to safeguard concurrent calls to lset functions
+        if(connected && root) {
+//            DEBUG(this, <<key.first<<" RUN "<<"empty");
+            run_done.signal();
+            return; // monitor queue is empty, nothing more to do here
+        }
+
+//        DEBUG(this, <<key.first<<" RUN "<<(connected_latched?"connected":"disconnected"));
+
+        assert(!connected || !!op_mon.root);
+
+        if(!connected) {
+
+        } else if(previous_root.equalType(root)) {
+            num_type_change++;
+
+            for(links_t::iterator it(links.begin()), end(links.end()); it!=end; ++it)
+            {
+                pvaLink *link = *it;
+                link->onTypeChange();
+            }
+
+            previous_root = root;
+        }
+
+        // at this point we know we will re-queue, but not immediately
+        // so an expected error won't get us stuck in a tight loop.
+        requeue = queued = connected_latched;
+
+        if(links_changed) {
         }
     }
 
@@ -411,7 +425,7 @@ void pvaLinkChannel::run()
         // Nothing to do, so don't bother locking
 
     } else if(isatomic && scan_records.size() > 1u) {
-        DBManyLocker L(atomic_lock);
+        ioc::DBManyLocker L(atomic_lock);
 
         for(size_t i=0, N=scan_records.size(); i<N; i++) {
             run_dbProcess(i);
@@ -419,7 +433,7 @@ void pvaLinkChannel::run()
 
     } else {
         for(size_t i=0, N=scan_records.size(); i<N; i++) {
-            DBScanLocker L(scan_records[i]);
+            ioc::DBLocker L(scan_records[i]);
             run_dbProcess(i);
         }
     }
