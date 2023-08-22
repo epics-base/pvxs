@@ -1,6 +1,7 @@
 record(ai, "test:ai") {
     field(DESC, "Analog input")
     field(EGU , "arb")
+    field(PREC, "1")
     field(HHSV, "INVALID")
     field(HSV, "MAJOR")
     field(HIHI, "100")
