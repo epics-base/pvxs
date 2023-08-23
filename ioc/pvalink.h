@@ -34,7 +34,17 @@
 #include <epicsVersion.h>
 
 #include <pvxs/client.h>
+#include "utilpvt.h"
 #include "dbmanylocker.h"
+
+
+#if EPICS_VERSION_INT<VERSION_INT(7,0,6,0)
+typedef epicsUInt64     epicsUTag;
+#endif
+
+#ifndef DBR_AMSG
+#  define recGblSetSevrMsg(PREC, STAT, SEVR, ...) recGblSetSevr(PREC, STAT, SEVR)
+#endif
 
 extern "C" {
     extern int pvaLinkNWorkers;
@@ -81,15 +91,19 @@ struct pvaLinkConfig : public jlink
     bool retry = false;
     bool local = false;
     bool always = false;
+    bool atomic = false;
     int monorder = 0;
 
     // internals used by jlif parsing
     std::string jkey;
 
+    pvaLinkConfig() = default;
+    pvaLinkConfig(const pvaLinkConfig&) = delete;
+    pvaLinkConfig& operator=(const pvaLinkConfig&) = delete;
     virtual ~pvaLinkConfig();
 };
 
-struct pvaGlobal_t : private epicsThreadRunable {
+struct pvaGlobal_t final : private epicsThreadRunable {
     client::Context provider_remote;
 
     MPMCFIFO<std::weak_ptr<epicsThreadRunable>> queue;
@@ -105,6 +119,9 @@ struct pvaGlobal_t : private epicsThreadRunable {
     // Cache of active Channels (really about caching Monitor)
     channels_t channels;
 
+    // pvRequest used with PUT
+    const Value putReq;
+
 private:
     epicsThread worker;
     bool workerStop = false;
@@ -112,37 +129,36 @@ private:
 public:
 
     pvaGlobal_t();
+    pvaGlobal_t(const pvaGlobal_t&) = delete;
+    pvaGlobal_t& operator=(const pvaGlobal_t&) = delete;
     virtual ~pvaGlobal_t();
     void close();
 };
 extern pvaGlobal_t *pvaGlobal;
 
-struct pvaLinkChannel : public epicsThreadRunable
+struct pvaLinkChannel final : public epicsThreadRunable
         ,public std::enable_shared_from_this<pvaLinkChannel>
 {
     const pvaGlobal_t::channels_key_t key; // tuple of (channelName, pvRequest key)
     const Value pvRequest; // used with monitor
 
-    static size_t num_instances;
+    INST_COUNTER(pvaLinkChannel);
 
+    // locker order: record lock(s) -> channel lock
     epicsMutex lock;
-    epicsEvent run_done; // used by testing code
+    epicsEvent update_evt; // used by testing code
 
-//    std::shared_ptr<client::Connect> chan;
     std::shared_ptr<client::Subscription> op_mon;
     std::shared_ptr<client::Operation> op_put;
     Value root;
 
-    std::string providerName;
     size_t num_disconnect = 0u, num_type_change = 0u;
-    enum state_t {
-        Disconnected,
-        Connecting,
-        Connected,
-    } state = Disconnected;
 
-    bool isatomic = false;
+    bool connected = false;
     bool debug = false; // set if any jlink::debug is set
+
+    unsigned update_seq = 0u; // used by testing code
+
     typedef std::set<dbCommon*> after_put_t;
     after_put_t after_put;
 
@@ -165,27 +181,38 @@ struct pvaLinkChannel : public epicsThreadRunable
     void open();
     void put(bool force=false); // begin Put op.
 
-    struct AfterPut : public epicsThreadRunable {
+    struct AfterPut final : public epicsThreadRunable {
         std::weak_ptr<pvaLinkChannel> lc;
-        virtual ~AfterPut() {}
+        AfterPut() = default;
+        AfterPut(const AfterPut&) = delete;
+        AfterPut& operator=(const AfterPut&) = delete;
+        virtual ~AfterPut() = default;
         virtual void run() override final;
     };
-    std::shared_ptr<AfterPut> AP;
+    const std::shared_ptr<AfterPut> AP;
 private:
     virtual void run() override final;
-    void run_dbProcess(size_t idx); // idx is index in scan_records
 
     // ==== Treat remaining as local to run()
 
-    std::vector<dbCommon*> scan_records;
-    std::vector<bool> scan_check_passive;
+    struct ScanTrack {
+        dbCommon *prec = nullptr;
+        // if true, only scan if prec->scan==0
+        bool check_passive = false;
+
+        ScanTrack() = default;
+        ScanTrack(dbCommon *prec, bool check_passive) :prec(prec), check_passive(check_passive) {}
+        void scan();
+    };
+    std::vector<ScanTrack> nonatomic_records,
+                           atomic_records;
 
     ioc::DBManyLock atomic_lock;
 };
 
 struct pvaLink final : public pvaLinkConfig
 {
-    static size_t num_instances;
+    INST_COUNTER(pvaLink);
 
     bool alive = true; // attempt to catch some use after free
     dbfType type = (dbfType)-1;
@@ -200,19 +227,21 @@ struct pvaLink final : public pvaLinkConfig
 
     // cached fields from channel op_mon
     // updated in onTypeChange()
-    Value fld_value;
-    Value fld_severity,
+    Value fld_value,
+          fld_severity,
+          fld_message,
           fld_seconds,
-          fld_nanoseconds;
-    Value fld_display,
-          fld_control,
-          fld_valueAlarm;
+          fld_nanoseconds,
+          fld_usertag,
+          fld_meta;
 
     // cached snapshot of alarm and  timestamp
     // captured in pvaGetValue().
     // we choose not to ensure consistency with display/control meta-data
     epicsTimeStamp snap_time = {};
+    epicsUTag snap_tag = 0;
     short snap_severity = INVALID_ALARM;
+    std::string snap_message;
 
     pvaLink();
     virtual ~pvaLink();
@@ -222,11 +251,14 @@ struct pvaLink final : public pvaLinkConfig
 
     bool valid() const;
 
-    // fetch a sub-sub-field of the top monitored field.
-    Value getSubField(const char *name);
-
     void onDisconnect();
     void onTypeChange();
+    enum scanOnUpdate_t {
+        scanOnUpdateNo = -1,
+        scanOnUpdatePassive = 0,
+        scanOnUpdateYes = 1,
+    };
+    scanOnUpdate_t scanOnUpdate() const;
 };
 
 

@@ -20,13 +20,17 @@
 #include <alarm.h>
 #include <epicsExit.h>
 #include <epicsAtomic.h>
+#include <errlog.h>
 #include <link.h>
 #include <dbJLink.h>
 #include <epicsUnitTest.h>
 #include <epicsString.h>
 
+#define PVXS_ENABLE_EXPERT_API
+
 #include <pvxs/server.h>
 
+#include "channel.h"
 #include "pvalink.h"
 #include "dblocker.h"
 #include "dbentry.h"
@@ -63,10 +67,8 @@ static void shutdownStep2()
 
     {
         Guard G(pvaGlobal->lock);
-        if(pvaGlobal->channels.size()) {
-            fprintf(stderr, "pvaLink leaves %zu channels open\n",
-                    pvaGlobal->channels.size());
-        }
+        assert(pvaLink::cnt_pvaLink<=1u); // dbRemoveLink() already called
+        assert(pvaGlobal->channels.empty());
     }
 
     delete pvaGlobal;
@@ -185,20 +187,85 @@ void testqsrvCleanup(void)
     }
 }
 
-void testqsrvWaitForLinkEvent(struct link *plink)
+static
+std::shared_ptr<pvaLinkChannel> testGetPVALink(struct link *plink)
 {
-    std::shared_ptr<pvaLinkChannel> lchan;
-    {
-        DBLocker lock(plink->precord);
+    DBLocker lock(plink->precord);
 
-        if(plink->type!=JSON_LINK || !plink->value.json.jlink || plink->value.json.jlink->pif!=&lsetPVA) {
-            testAbort("Not a PVA link");
-        }
-        pvaLink *pval = static_cast<pvaLink*>(plink->value.json.jlink);
-        lchan = pval->lchan;
+    if(plink->type!=JSON_LINK || !plink->value.json.jlink || plink->value.json.jlink->pif!=&lsetPVA) {
+        testAbort("Not a PVA link");
     }
-    if(lchan) {
-        lchan->run_done.wait();
+    pvaLink *pval = static_cast<pvaLink*>(plink->value.json.jlink);
+    if(!pval->lchan)
+        testAbort("PVA link w/o channel?");
+    return pval->lchan;
+}
+
+static
+DBLINK* testGetLink(const char *pv)
+{
+    Channel chan(pv);
+    switch(dbChannelFieldType(chan)) {
+    case DBF_INLINK:
+    case DBF_OUTLINK:
+    case DBF_FWDLINK:
+        break;
+    default:
+        testAbort("%s : not a link field", pv);
+    }
+    return static_cast<struct link*>(dbChannelField(chan));
+}
+
+void testqsrvWaitForLinkConnected(struct link *plink, bool conn)
+{
+    if(conn)
+        pvaGlobal->provider_remote.hurryUp();
+    std::shared_ptr<pvaLinkChannel> lchan(testGetPVALink(plink));
+    Guard G(lchan->lock);
+    while(lchan->connected!=conn) {
+        testDiag("%s(\"%s\", %c) sleep", __func__, plink->precord->name, conn?'C':'D');
+        UnGuard U(G);
+        if(!lchan->update_evt.wait(10.0))
+            testAbort("%s(\"%s\") timeout", __func__, plink->precord->name);
+        errlogFlush();
+        testDiag("%s(\"%s\") wakeup", __func__, plink->precord->name);
+    }
+    errlogFlush();
+}
+
+void testqsrvWaitForLinkConnected(const char* pv, bool conn)
+{
+    testqsrvWaitForLinkConnected(testGetLink(pv), conn);
+}
+
+QSrvWaitForLinkUpdate::QSrvWaitForLinkUpdate(struct link *plink)
+    :plink(plink)
+{
+    std::shared_ptr<pvaLinkChannel> lchan(testGetPVALink(plink));
+    Guard G(lchan->lock);
+    seq = lchan->update_seq;
+    testDiag("%s(\"%s\") arm at %u", __func__, plink->precord->name, seq);
+}
+
+QSrvWaitForLinkUpdate::QSrvWaitForLinkUpdate(const char *pv)
+    :QSrvWaitForLinkUpdate(testGetLink(pv))
+{}
+
+QSrvWaitForLinkUpdate::~QSrvWaitForLinkUpdate()
+{
+    std::shared_ptr<pvaLinkChannel> lchan(testGetPVALink(plink));
+    Guard G(lchan->lock);
+    while(seq == lchan->update_seq) {
+        testDiag("%s(\"%s\") wait for end of %u", __func__, plink->precord->name, seq);
+        bool ok;
+        {
+            UnGuard U(G);
+            ok = lchan->update_evt.wait(5.0);
+        }
+        if(!ok)
+            testAbort("%s(\"%s\") timeout at %u", __func__, plink->precord->name, seq);
+        errlogFlush();
+        testDiag("%s(\"%s\") wake at %u", __func__, plink->precord->name, seq);
     }
 }
 
@@ -252,7 +319,7 @@ void dbpvar(const char *precordname, int level)
             }
 
             nchans++;
-            if(chan->state == pvaLinkChannel::Connected)
+            if(chan->connected)
                 nconn++;
 
             if(!precordname)
@@ -261,7 +328,7 @@ void dbpvar(const char *precordname, int level)
             if(level<=0)
                 continue;
 
-            if(level>=2 || (chan->state != pvaLinkChannel::Connected && level==1)) {
+            if(level>=2 || (!chan->connected && level==1)) {
                 if(chan->key.first.size()<=28) {
                     printf("%28s ", chan->key.first.c_str());
                 } else {
@@ -269,16 +336,13 @@ void dbpvar(const char *precordname, int level)
                 }
 
                 printf("conn=%c %zu disconnects, %zu type changes",
-                       chan->state == pvaLinkChannel::Connected?'T':'F',
+                       chan->connected?'T':'F',
                        chan->num_disconnect,
                        chan->num_type_change);
                 if(chan->op_put) {
                     printf(" Put");
                 }
 
-                if(level>=3) {
-                    printf(", provider '%s'", chan->providerName.c_str());
-                }
                 printf("\n");
                 // level 4 reserved for channel/provider details
 
@@ -345,8 +409,6 @@ void installPVAAddLinkHook()
     initHookRegister(&initPVALink);
     IOCShCommand<const char*, int>("dbpvar", "dbpvar", "record name", "level")
             .implementation<&dbpvar>();
-//    epics::registerRefCounter("pvaLinkChannel", &pvaLinkChannel::num_instances);
-//    epics::registerRefCounter("pvaLink", &pvaLink::num_instances);
 }
 
 }} // namespace pvxs::ioc

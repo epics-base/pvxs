@@ -102,6 +102,33 @@ void onSubscribe(const std::shared_ptr<SingleSourceSubscriptionCtx>& subscriptio
                  const DBEventContext& eventContext,
                  std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation)
 {
+    auto pvReq(subscriptionOperation->pvRequest());
+    unsigned dbe = 0;
+    if(auto fld = pvReq["record._options.DBE"].ifMarked()) {
+        switch(fld.type().kind()) {
+        case Kind::String: {
+            auto mask(fld.as<std::string>());
+            // name and sloppy parsing a la. caProvider...
+#define CASE(EVENT) if(mask.find(#EVENT)!=mask.npos) dbe |= DBE_ ## EVENT
+            CASE(VALUE);
+            CASE(ARCHIVE);
+            CASE(ALARM);
+//            CASE(PROPERTY); // handled as special case
+#undef CASE
+            break;
+        }
+        case Kind::Integer:
+        case Kind::Real:
+            dbe = fld.as<uint8_t>();
+            break;
+        default:
+            break;
+        }
+    }
+    dbe &= (DBE_VALUE | DBE_ARCHIVE | DBE_ALARM);
+    if(!dbe)
+        dbe = DBE_VALUE | DBE_ALARM;
+
     // inform peer of data type and acquire control of the subscription queue
     subscriptionContext->subscriptionControl = subscriptionOperation->connect(subscriptionContext->currentValue);
 
@@ -115,7 +142,7 @@ void onSubscribe(const std::shared_ptr<SingleSourceSubscriptionCtx>& subscriptio
                                                            subscriptionContext->info->chan,
                                                            subscriptionValueCallback,
                                                            subscriptionContext.get(),
-                                                           DBE_VALUE | DBE_ALARM | DBE_ARCHIVE
+                                                           dbe
                                                            );
     // second subscription is for Property changes
     subscriptionContext->pPropertiesEventSubscription.subscribe(eventContext.get(),

@@ -63,6 +63,10 @@ pvxsIoc_SRCS += pvalink_jlif.cpp
 pvxsIoc_SRCS += pvalink_link.cpp
 pvxsIoc_SRCS += pvalink_lset.cpp
 
+else
+
+pvxsIoc_SRCS += dummygroup.cpp
+
 endif # BASE_7_0
 
 pvxsIoc_LIBS += $(EPICS_BASE_IOC_LIBS)

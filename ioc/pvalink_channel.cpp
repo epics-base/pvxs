@@ -9,11 +9,13 @@
 
 #include <pvxs/log.h>
 
+#include "utilpvt.h"
 #include "pvalink.h"
 #include "dblocker.h"
 #include "dbmanylocker.h"
 
-DEFINE_LOGGER(_logger, "ioc.pvalink.channel");
+DEFINE_LOGGER(_logger, "pvxs.ioc.link.channel");
+DEFINE_LOGGER(_logupdate, "pvxs.ioc.link.channel.update");
 
 int pvaLinkNWorkers = 1;
 
@@ -26,6 +28,14 @@ pvaGlobal_t *pvaGlobal;
 pvaGlobal_t::pvaGlobal_t()
     :queue()
     ,running(false)
+    ,putReq(TypeDef(TypeCode::Struct, {
+                        members::Struct("field", {}),
+                        members::Struct("record", {
+                            members::Struct("_options", {
+                                members::Bool("block"),
+                                members::String("process"),
+                            }),
+                        }),                       }).create())
     ,worker(*this,
             "pvxlink",
             epicsThreadGetStackSize(epicsThreadStackBig),
@@ -66,9 +76,8 @@ void pvaGlobal_t::close()
     worker.exitWait();
 }
 
-size_t pvaLinkChannel::num_instances;
-size_t pvaLink::num_instances;
-
+DEFINE_INST_COUNTER(pvaLinkChannel);
+DEFINE_INST_COUNTER(pvaLink);
 
 bool pvaLinkChannel::LinkSort::operator()(const pvaLink *L, const pvaLink *R) const {
     if(L->monorder==R->monorder)
@@ -104,11 +113,14 @@ void pvaLinkChannel::open()
             .rawRequest(pvRequest)
             .event([this](const client::Subscription&)
     {
-        log_debug_printf(_logger, "Received message: %s %s\n", key.first.c_str(), key.second.c_str());
-        pvaGlobal->queue.push(shared_from_this());
+        log_debug_printf(_logger, "Monitor %s wakeup\n", key.first.c_str());
+        try {
+            pvaGlobal->queue.push(shared_from_this());
+        }catch(std::bad_weak_ptr&){
+            log_err_printf(_logger, "channel '%s' open during dtor?", key.first.c_str());
+        }
     })
             .exec();
-    providerName = "remote";
 }
 
 static
@@ -138,7 +150,7 @@ Value linkBuildPut(pvaLinkChannel *self, Value&& prototype)
             value = tosend;
         } else {
             if (tosend.empty())
-                continue; // TODO: Signal error
+                continue; // TODO: can't write empty array to scalar field Signal error
 
             if (value.type() == TypeCode::Struct && value.id() == "enum_t") {
                 value = value["index"]; // We want to assign to the index for enum types
@@ -179,6 +191,7 @@ void linkPutDone(pvaLinkChannel *self, client::Result&& result)
         ok = true;
     }catch(std::exception& e){
         errlogPrintf("%s PVA link put ERROR: %s\n", self->key.first.c_str(), e.what());
+        // TODO: signal INVALID_ALARM ?
     }
 
     bool needscans;
@@ -206,24 +219,13 @@ void linkPutDone(pvaLinkChannel *self, client::Result&& result)
 // call with channel lock held
 void pvaLinkChannel::put(bool force)
 {
-    // TODO cache TypeDef in global
-    using namespace pvxs::members;
-    auto pvReq(TypeDef(TypeCode::Struct, {
-                           Struct("field", {}),
-                           Struct("record", {
-                               Struct("_options", {
-                                   Bool("block"),
-                                   String("process"),
-                               }),
-                           }),                       }).create()
+    auto pvReq(pvaGlobal->putReq.cloneEmpty()
                .update("record._options.block", !after_put.empty()));
 
     unsigned reqProcess = 0;
     bool doit = force;
-    for(links_t::iterator it(links.begin()), end(links.end()); it!=end; ++it)
+    for(auto& link : links)
     {
-        pvaLink *link = *it;
-
         if(!link->used_scratch) continue;
 
         link->put_queue = std::move(link->put_scratch);
@@ -264,6 +266,7 @@ void pvaLinkChannel::put(bool force)
     if(doit) {
         // start net Put, cancels in-progress put
         op_put = pvaGlobal->provider_remote.put(key.first)
+                .rawRequest(pvReq)
                 .build([this](Value&& prototype) -> Value
         {
                 return linkBuildPut(this, std::move(prototype)); // TODO
@@ -306,160 +309,131 @@ void pvaLinkChannel::AfterPut::run()
 
 }
 
-// the work in calling dbProcess() which is common to
-// both dbScanLock() and dbScanLockMany()
-void pvaLinkChannel::run_dbProcess(size_t idx)
+// caller has locked record
+void pvaLinkChannel::ScanTrack::scan()
 {
-    dbCommon *precord = scan_records[idx];
+    if(check_passive && prec->scan!=0) {
 
-    if(scan_check_passive[idx] && precord->scan!=0) {
-        return;
+    } else if (prec->pact) {
+        if (prec->tpro)
+            printf("%s: Active %s\n", epicsThreadGetNameSelf(), prec->name);
+        prec->rpro = TRUE;
 
-    // TODO: This relates to caching of the individual links and comparing it to
-    //       the posted monitor. This is, as I understand it, an optimisation and
-    //       we can sort of ignore it for now.
-    //} else if(state_latched == Connected && !op_mon.changed.logical_and(scan_changed[idx])) {
-    //    return;
-
-    } else if (precord->pact) {
-        if (precord->tpro)
-            printf("%s: Active %s\n",
-                epicsThreadGetNameSelf(), precord->name);
-        precord->rpro = TRUE;
-
+    } else {
+        (void)dbProcess(prec);
     }
-    dbProcess(precord);
 }
 
 // Running from global WorkQueue thread
 void pvaLinkChannel::run()
 {
-    bool requeue = false;
     {
         Guard G(lock);
 
-        log_debug_printf(_logger,"Running task %s\n", this->key.first.c_str());
+        log_debug_printf(_logger,"Monitor %s work\n", this->key.first.c_str());
 
         Value top;
         try {
             top = op_mon->pop();
             if(!top) {
-                log_debug_printf(_logger, "Queue empty %s\n", this->key.first.c_str());
-                run_done.signal();
+                log_debug_printf(_logger, "Monitor %s empty\n", this->key.first.c_str());
                 return;
             }
-            state = Connected;
-        } catch(client::Disconnect&) {
-            log_debug_printf(_logger, "PVA link %s received disonnection event\n", this->key.first.c_str());
+            if(!connected) {
+                // (re)connect implies type change
+                log_debug_printf(_logger, "Monitor %s reconnect\n", this->key.first.c_str());
+
+                root = top; // re-create cache
+                connected = true;
+                num_type_change++;
+
+                for(auto link : links) {
+                    link->onTypeChange();
+                }
+
+            } else { // update cache
+                root.assign(top);
+            }
+            log_debug_printf(_logupdate, "Monitor %s value %s\n", this->key.first.c_str(),
+                             std::string(SB()<<root.format().delta().arrayLimit(5u)).c_str());
+
+        } catch(client::Disconnect& e) {
+            log_debug_printf(_logger, "Monitor %s disconnect\n", this->key.first.c_str());
             
-            state = Disconnected;
+            connected = false;
 
             num_disconnect++;
 
             // cancel pending put operations
             op_put.reset();
 
-            for(links_t::iterator it(links.begin()), end(links.end()); it!=end; ++it)
-            {
-                pvaLink *link = *it;
+            for(auto link : links) {
                 link->onDisconnect();
+                link->snap_time = e.time;
             }
 
             // Don't clear previous_root on disconnect.
-            // We will usually re-connect with the same type,
-            // and may get back the same PVStructure.
+            // while disconnected, we will provide the most recent value w/ LINK_ALARM
 
         } catch(std::exception& e) {
-            errlogPrintf("pvalinkChannel::run: Unexpected exception while reading from monitor queue: %s\n", e.what());
+            log_exc_printf(_logger, "pvalinkChannel::run: Unexpected exception: %s\n", e.what());
         }
-
-        if (state == Connected) {
-            // Fetch the data from the incoming monitor
-            if (root.equalType(top))
-            {
-                log_debug_printf(_logger, "pvalinkChannel update value %s\n", this->key.first.c_str());
-
-                root.assign(top);
-            }
-            else
-            {
-                log_debug_printf(_logger, "pvalinkChannel %s update type\n", this->key.first.c_str());
-                root = top;
-                num_type_change++;
-
-                for (links_t::iterator it(links.begin()), end(links.end()); it != end; ++it)
-                {
-                    pvaLink *link = *it;
-                    link->onTypeChange();
-                }
-            }
-
-            requeue = true;
-        } 
 
         if(links_changed) {
             // a link has been added or removed since the last update.
             // rebuild our cached list of records to (maybe) process.
 
-            scan_records.clear();
-            scan_check_passive.clear();
+            decltype(atomic_records) atomic, nonatomic;
+            std::vector<dbCommon*> atomicrecs;
 
-            for(links_t::iterator it(links.begin()), end(links.end()); it!=end; ++it)
-            {
-                pvaLink *link = *it;
+            for(auto link : links) {
                 assert(link && link->alive);
 
-                if(!link->plink) continue;
-
-                // only scan on monitor update for input links
-                if(link->type!=DBF_INLINK)
+                auto sou(link->scanOnUpdate());
+                if(sou==pvaLink::scanOnUpdateNo)
                     continue;
 
-                // NPP and none/Default don't scan
-                // PP, CP, and CPP do scan
-                // PP and CPP only if SCAN=Passive
-                if(link->proc != pvaLink::PP && link->proc != pvaLink::CPP && link->proc != pvaLink::CP)
-                    continue;
+                bool check_passive = sou==pvaLink::scanOnUpdatePassive;
 
-                scan_records.push_back(link->plink->precord);
-                scan_check_passive.push_back(link->proc != pvaLink::CP);
+                if(link->atomic) {
+                    atomicrecs.push_back(link->plink->precord);
+                    atomic.emplace_back(link->plink->precord, check_passive);
+                } else {
+                    nonatomic.emplace_back(link->plink->precord, check_passive);
+                }
             }
 
-            log_debug_printf(_logger, "Links changed, scan_records size = %lu\n", scan_records.size());
+            log_debug_printf(_logger, "Links changed, %zu with %zu atomic, %zu nonatomic\n",
+                             links.size(), atomic.size(), nonatomic.size());
 
-            atomic_lock = ioc::DBManyLock(scan_records);
+            atomic_lock = ioc::DBManyLock(atomicrecs);
+            atomic_records = std::move(atomic);
+            nonatomic_records = std::move(nonatomic);
 
             links_changed = false;
         }
+
+        update_seq++;
+        update_evt.signal();
+        log_debug_printf(_logger, "%s Sequence point %u\n", key.first.c_str(), update_seq);
     }
+    // unlock link
 
-    if(scan_records.empty()) {
-        // Nothing to do, so don't bother locking
-
-    } else if(isatomic && scan_records.size() > 1u) {
+    if(!atomic_records.empty()) {
         ioc::DBManyLocker L(atomic_lock);
-
-        for(size_t i=0, N=scan_records.size(); i<N; i++) {
-            run_dbProcess(i);
-        }
-
-    } else {
-        for(size_t i=0, N=scan_records.size(); i<N; i++) {
-            log_debug_printf(_logger, "Processing %s\n", scan_records[i]->name);
-
-            ioc::DBLocker L(scan_records[i]);
-            run_dbProcess(i);
+        for(auto& trac : atomic_records) {
+            trac.scan();
         }
     }
 
-    if(requeue) {
-        log_debug_printf(_logger, "Requeueing %s\n", key.first.c_str());
-        // re-queue until monitor queue is empty
-        pvaGlobal->queue.push(shared_from_this());
-    } else {
-        log_debug_printf(_logger, "Run done instead of requeue %s\n", key.first.c_str());
-        run_done.signal();
+    for(auto& trac : nonatomic_records) {
+        ioc::DBLocker L(trac.prec);
+        trac.scan();
     }
+
+    log_debug_printf(_logger, "Requeueing %s\n", key.first.c_str());
+    // re-queue until monitor queue is empty
+    pvaGlobal->queue.push(shared_from_this());
 }
 
 } // namespace pvalink

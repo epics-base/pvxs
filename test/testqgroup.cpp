@@ -13,6 +13,7 @@
 #include <dbAccess.h>
 #include <dbLock.h>
 #include <epicsTime.h>
+#include <epicsExit.h>
 #include <generalTimeSup.h>
 
 #include "testioc.h"
@@ -740,6 +741,8 @@ MAIN(testqgroup)
         testIQ();
         testConst();
     }
+    // call epics atexits explicitly to handle older base w/o de-init hooks
+    epicsExitCallAtExits();
     cleanup_for_valgrind();
     return testDone();
 }

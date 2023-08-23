@@ -6,10 +6,9 @@
 
 #include <sstream>
 
-#include <epicsStdio.h> // redirects stdout/stderr
-
 #include "pvalink.h"
 
+#include <epicsStdio.h> // redirects stdout/stderr
 #include <epicsExport.h>
 
 namespace pvxlink {
@@ -105,6 +104,8 @@ jlif_result pva_parse_bool(jlink *pjlink, int val)
             pvt->local = !!val;
         } else if(pvt->jkey == "always") {
             pvt->always = !!val;
+        } else if(pvt->jkey == "atomic") {
+            pvt->atomic = !!val;
         } else if(pvt->debug) {
             printf("pva link parsing unknown integer depth=%u key=\"%s\" value=%s\n",
                    pvt->parseDepth, pvt->jkey.c_str(), val ? "true" : "false");
@@ -241,12 +242,13 @@ void pva_report(const jlink *rpjlink, int lvl, int indent)
         case pvaLinkConfig::MSI: printf(" MSI"); break;
         }
         if(lvl>0) {
-            printf(" Q=%u pipe=%c defer=%c time=%c retry=%c morder=%d",
+            printf(" Q=%u pipe=%c defer=%c time=%c retry=%c atomic=%c morder=%d",
                    unsigned(pval->queueSize),
                    pval->pipeline ? 'T' : 'F',
                    pval->defer ? 'T' : 'F',
                    pval->time ? 'T' : 'F',
                    pval->retry ? 'T' : 'F',
+                   pval->atomic ? 'T' : 'F',
                    pval->monorder);
         }
 
@@ -254,13 +256,13 @@ void pva_report(const jlink *rpjlink, int lvl, int indent)
             // after open()
             Guard G(pval->lchan->lock);
 
-            printf(" conn=%c", pval->lchan->state == pvaLinkChannel::Connected ? 'T' : 'F');
+            printf(" conn=%c", pval->lchan->connected ? 'T' : 'F');
             if(pval->lchan->op_put) {
                 printf(" Put");
             }
 
             if(lvl>0) {
-                printf(" #disconn=%zu prov=%s", pval->lchan->num_disconnect, pval->lchan->providerName.c_str());
+                printf(" #disconn=%zu", pval->lchan->num_disconnect);
             }
 //            if(lvl>5) {
 //                std::ostringstream strm;

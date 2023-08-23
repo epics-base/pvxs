@@ -39,7 +39,8 @@ public:
                                user_sub, user_arg, select),
                   [chan](dbEventSubscription sub) mutable
         {
-            db_cancel_event(sub);
+            if(sub)
+                db_cancel_event(sub);
             chan = Channel(); // dbChannel* must outlive subscription
         });
         if(!sub)

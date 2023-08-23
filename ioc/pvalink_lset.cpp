@@ -15,7 +15,7 @@
 
 #include <epicsStdio.h> // redirect stdout/stderr; include after libevent/util.h
 
-DEFINE_LOGGER(_logger, "pvxs.pvalink.lset");
+DEFINE_LOGGER(_logger, "pvxs.ioc.link.lset");
 
 namespace pvxlink {
 namespace {
@@ -45,6 +45,14 @@ void pvaOpenLink(DBLINK *plink)
         pvaLink* self((pvaLink*)plink->value.json.jlink);
         self->type = getLinkType(plink);
 
+        if(self->local && dbChannelTest(self->channelName.c_str())!=0) {
+            // TODO: only print duing iocInit()?
+            fprintf(stderr, "%s Error: local:true link to '%s' can't be fulfilled\n",
+                   plink->precord->name, self->channelName.c_str());
+            plink->lset = NULL;
+            return;
+        }
+
         // workaround for Base not propagating info(base:lsetDebug to us
         {
             ioc::DBEntry rec(plink->precord);
@@ -54,7 +62,9 @@ void pvaOpenLink(DBLINK *plink)
             }
         }
 
-        log_debug_printf(_logger, "%s OPEN %s\n", plink->precord->name, self->channelName.c_str());
+        log_debug_printf(_logger, "%s OPEN %s sevr=%d\n",
+                         plink->precord->name, self->channelName.c_str(),
+                         self->sevr);
 
         // still single threaded at this point.
         // also, no pvaLinkChannel::lock yet
@@ -82,10 +92,17 @@ void pvaOpenLink(DBLINK *plink)
             if(!chan) {
                 // open new channel
 
+                log_debug_printf(_logger, "%s CREATE %s\n",
+                                 plink->precord->name, self->channelName.c_str());
+
                 chan.reset(new pvaLinkChannel(key, pvRequest));
                 chan->AP->lc = chan;
                 pvaGlobal->channels.insert(std::make_pair(key, chan));
                 doOpen = true;
+
+            } else {
+                log_debug_printf(_logger, "%s REUSE %s\n",
+                                 plink->precord->name, self->channelName.c_str());
             }
 
             doOpen &= pvaGlobal->running; // if not running, then open from initHook
@@ -95,20 +112,36 @@ void pvaOpenLink(DBLINK *plink)
             chan->open(); // start subscription
         }
 
-        if(!self->local || chan->providerName=="QSRV"){
+        bool scanInit = false;
+        {
             Guard G(chan->lock);
 
             chan->links.insert(self);
             chan->links_changed = true;
 
-            self->lchan.swap(chan); // we are now attached
+            self->lchan = std::move(chan); // we are now attached
 
             self->lchan->debug |= !!self->debug;
-        } else {
-            // TODO: only print duing iocInit()?
-            fprintf(stderr, "%s Error: local:true link to '%s' can't be fulfilled\n",
-                   plink->precord->name, self->channelName.c_str());
-            plink->lset = NULL;
+
+            if(self->lchan->connected) {
+                self->onTypeChange();
+                auto sou(self->scanOnUpdate());
+                switch(sou) {
+                case pvaLink::scanOnUpdateNo:
+                    break;
+                case pvaLink::scanOnUpdatePassive:
+                    // record is locked
+                    scanInit = plink->precord->scan==menuScanPassive;
+                    break;
+                case pvaLink::scanOnUpdateYes:
+                    scanInit = true;
+                    break;
+                }
+            }
+        }
+        if(scanInit) {
+            // TODO: initial scan on linkGlobal worker?
+            scanOnce(plink->precord);
         }
 
         return;
@@ -119,6 +152,7 @@ void pvaOpenLink(DBLINK *plink)
 
 void pvaRemoveLink(struct dbLocker *locker, DBLINK *plink)
 {
+    (void)locker;
     try {
         std::unique_ptr<pvaLink> self((pvaLink*)plink->value.json.jlink);
         log_debug_printf(_logger, "%s: %s %s\n", __func__, plink->precord->name, self->channelName.c_str());
@@ -151,8 +185,8 @@ int pvaGetDBFtype(const DBLINK *plink)
         //    if sub-field is struct, use sub-struct .value
         //    if sub-field not struct, treat as value
 
-        auto value(self->getSubField("value"));
-        auto vtype(value.type());
+        auto& value(self->fld_value);
+        auto vtype(self->fld_value.type());
         if(vtype.isarray())
             vtype = vtype.scalarOf();
 
@@ -208,15 +242,11 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
 
         if(!self->valid()) {
             // disconnected
-            if(self->sevr != pvaLink::NMS) {
-                recGblSetSevr(plink->precord, LINK_ALARM, self->snap_severity);
-            }
-            // TODO: better capture of disconnect time
-            epicsTimeGetCurrent(&self->snap_time);
+            (void)recGblSetSevr(plink->precord, LINK_ALARM, INVALID_ALARM);
             if(self->time) {
                 plink->precord->time = self->snap_time;
             }
-            log_debug_printf(_logger, "%s: %s not valid", __func__, self->channelName.c_str());
+            log_debug_printf(_logger, "%s: %s not valid\n", __func__, self->channelName.c_str());
             return -1;
         }
 
@@ -228,7 +258,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
 
         if(nReq <= 0 || !value) {
             if(!pnRequest) {
-                // TODO: fill in dummy scalar
+                memset(pbuffer, 0, dbValueSize(dbrType));
                 nReq = 1;
             }
 
@@ -238,19 +268,15 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
             if(size_t(nReq) > arr.size())
                 nReq = arr.size();
 
-            if(arr.original_type()==ArrayType::String) {
-                auto sarr(arr.castTo<const std::string>());
+            if(dbrType==DBR_STRING) {
+                auto sarr(arr.castTo<const std::string>()); // may copy+convert
 
-                if(dbrType==DBR_STRING) {
-                    auto cbuf(reinterpret_cast<char*>(pbuffer));
-                    for(size_t i : range(size_t(nReq))) {
-                        strncpy(cbuf + i*MAX_STRING_SIZE,
-                                sarr[i].c_str(),
-                                MAX_STRING_SIZE-1u);
-                        cbuf[i*MAX_STRING_SIZE + MAX_STRING_SIZE-1] = '\0';
-                    }
-                } else {
-                    return S_db_badDbrtype; // TODO: allow implicit parse?
+                auto cbuf(reinterpret_cast<char*>(pbuffer));
+                for(size_t i : range(size_t(nReq))) {
+                    strncpy(cbuf + i*MAX_STRING_SIZE,
+                            sarr[i].c_str(),
+                            MAX_STRING_SIZE-1u);
+                    cbuf[i*MAX_STRING_SIZE + MAX_STRING_SIZE-1] = '\0';
                 }
 
             } else {
@@ -267,6 +293,8 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
                 case DBR_FLOAT: dtype = ArrayType::Float32; break;
                 case DBR_DOUBLE: dtype = ArrayType::Float64; break;
                 default:
+                    log_debug_printf(_logger, "%s: %s unsupported array conversion\n",
+                                     __func__, plink->precord->name);
                     return S_db_badDbrtype;
                 }
 
@@ -305,6 +333,8 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
                     break;
                 }
                 default:
+                    log_debug_printf(_logger, "%s: %s unsupported enum conversion\n",
+                                     __func__, plink->precord->name);
                     return S_db_badDbrtype;
                 }
 
@@ -328,6 +358,8 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
                     break;
                 }
                 default:
+                    log_debug_printf(_logger, "%s: %s unsupported scalar conversion\n",
+                                     __func__, plink->precord->name);
                     return S_db_badDbrtype;
                 }
             }
@@ -355,9 +387,17 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
             self->snap_severity = NO_ALARM;
         }
 
+        if(self->fld_message && self->snap_severity!=0) {
+            self->snap_message = self->fld_message.as<std::string>();
+        } else {
+            self->snap_message.clear();
+        }
+
         if((self->snap_severity!=NO_ALARM && self->sevr == pvaLink::MS) ||
            (self->snap_severity==INVALID_ALARM && self->sevr == pvaLink::MSI))
         {
+            log_debug_printf(_logger, "%s: %s recGblSetSevr %d\n", __func__, plink->precord->name,
+                             self->snap_severity);
             recGblSetSevr(plink->precord, LINK_ALARM, self->snap_severity);
         }
 
@@ -365,7 +405,8 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
             plink->precord->time = self->snap_time;
         }
 
-        log_debug_printf(_logger, "%s: %s %s OK\n", __func__, plink->precord->name, self->channelName.c_str());
+        log_debug_printf(_logger, "%s: %s %s snapsevr=%d OK\n", __func__, plink->precord->name,
+                         self->channelName.c_str(), self->snap_severity);
         return 0;
     }CATCH()
     return -1;
@@ -377,19 +418,11 @@ long pvaGetControlLimits(const DBLINK *plink, double *lo, double *hi)
         Guard G(self->lchan->lock);
         CHECK_VALID();
 
-        if(self->fld_control) {
-            Value value;
-            if(lo) {
-                if(!self->fld_control["limitLow"].as<double>(*lo))
-                    *lo = 0.0;
-            }
-            if(hi) {
-                if(!self->fld_control["limitHigh"].as<double>(*hi))
-                    *hi = 0.0;
-            }
-        } else {
-            *lo = *hi = 0.0;
-        }
+        if(lo)
+            (void)self->fld_meta["control.limitLow"].as(*lo);
+        if(hi)
+            (void)self->fld_meta["control.limitHigh"].as(*hi);
+
         log_debug_printf(_logger, "%s: %s %s %f %f\n",
             __func__, plink->precord->name, self->channelName.c_str(), lo ? *lo : 0, hi ? *hi : 0);
         return 0;
@@ -403,19 +436,11 @@ long pvaGetGraphicLimits(const DBLINK *plink, double *lo, double *hi)
         Guard G(self->lchan->lock);
         CHECK_VALID();
 
-        if(self->fld_display) {
-            Value value;
-            if(lo) {
-                if(!self->fld_display["limitLow"].as<double>(*lo))
-                    *lo = 0.0;
-            }
-            if(hi) {
-                if(!self->fld_display["limitHigh"].as<double>(*hi))
-                    *hi = 0.0;
-            }
-        } else {
-            *lo = *hi = 0.0;
-        }
+        if(lo)
+            (void)self->fld_meta["display.limitLow"].as(*lo);
+        if(hi)
+            (void)self->fld_meta["display.limitHigh"].as(*hi);
+
         log_debug_printf(_logger, "%s: %s %s %f %f\n",
             __func__, plink->precord->name, self->channelName.c_str(), lo ? *lo : 0, hi ? *hi : 0);
         return 0;
@@ -427,9 +452,19 @@ long pvaGetAlarmLimits(const DBLINK *plink, double *lolo, double *lo,
         double *hi, double *hihi)
 {
     TRY {
-        //Guard G(self->lchan->lock);
-        //CHECK_VALID();
-        *lolo = *lo = *hi = *hihi = 0.0;
+        Guard G(self->lchan->lock);
+        CHECK_VALID();
+
+        if(lolo)
+            (void)self->fld_meta["valueAlarm.lowAlarmLimit"].as(*lolo);
+        if(lo)
+            (void)self->fld_meta["valueAlarm.lowWarningLimit"].as(*lo);
+        if(hi)
+            (void)self->fld_meta["valueAlarm.highWarningLimit"].as(*hi);
+        if(hihi)
+            (void)self->fld_meta["valueAlarm.highAlarmLimit"].as(*hihi);
+
+
         log_debug_printf(_logger, "%s: %s %s %f %f %f %f\n",
             __func__, plink->precord->name, self->channelName.c_str(),
             lo ? *lo : 0, lolo ? *lolo : 0, hi ? *hi : 0, hihi ? *hihi : 0);
@@ -441,12 +476,15 @@ long pvaGetAlarmLimits(const DBLINK *plink, double *lolo, double *lo,
 long pvaGetPrecision(const DBLINK *plink, short *precision)
 {
     TRY {
-        //Guard G(self->lchan->lock);
-        //CHECK_VALID();
+        Guard G(self->lchan->lock);
+        CHECK_VALID();
 
-        // No sane way to recover precision from display.format string.
-        *precision = 0;
-        log_debug_printf(_logger, "%s: %s %s %i\n", __func__, plink->precord->name, self->channelName.c_str(), *precision);
+        uint16_t prec = 0;
+        (void)self->fld_meta["display.precision"].as(prec);
+        if(precision)
+            *precision = prec;
+
+        log_debug_printf(_logger, "%s: %s %s %i\n", __func__, plink->precord->name, self->channelName.c_str(), prec);
         return 0;
     }CATCH()
     return -1;
@@ -458,24 +496,23 @@ long pvaGetUnits(const DBLINK *plink, char *units, int unitsSize)
         Guard G(self->lchan->lock);
         CHECK_VALID();
 
-        if(unitsSize==0) return 0;
+        if(!units || unitsSize==0) return 0;
+
 
         std::string egu;
-        if(units && self->fld_display.as<std::string>(egu)) {
-            strncpy(units, egu.c_str(), unitsSize-1u);
-            units[unitsSize-1u] = '\0';
-        } else if(units) {
-            units[0] = '\0';
-        }
+        (void)self->fld_meta["display.units"].as<std::string>(egu);
+        strncpy(units, egu.c_str(), unitsSize-1);
         units[unitsSize-1] = '\0';
+
         log_debug_printf(_logger, "%s: %s %s %s\n", __func__, plink->precord->name, self->channelName.c_str(), units);
         return 0;
     }CATCH()
     return -1;
 }
 
-long pvaGetAlarm(const DBLINK *plink, epicsEnum16 *status,
-        epicsEnum16 *severity)
+long pvaGetAlarmMsg(const DBLINK *plink,
+                    epicsEnum16 *status, epicsEnum16 *severity,
+                    char *msgbuf, size_t msgbuflen)
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -487,6 +524,14 @@ long pvaGetAlarm(const DBLINK *plink, epicsEnum16 *status,
         if(status) {
             *status = self->snap_severity ? LINK_ALARM : NO_ALARM;
         }
+        if(msgbuf && msgbuflen) {
+            if(self->snap_message.empty()) {
+                msgbuf[0] = '\0';
+            } else {
+                epicsSnprintf(msgbuf, msgbuflen-1u, "%s", self->snap_message.c_str());
+                msgbuf[msgbuflen-1u] = '\0';
+            }
+        }
         log_debug_printf(_logger, "%s: %s %s %i %i\n",
                          __func__, plink->precord->name, self->channelName.c_str(), severity ? *severity : 0, status ? *status : 0);
         return 0;
@@ -494,7 +539,13 @@ long pvaGetAlarm(const DBLINK *plink, epicsEnum16 *status,
     return -1;
 }
 
-long pvaGetTimeStamp(const DBLINK *plink, epicsTimeStamp *pstamp)
+long pvaGetAlarm(const DBLINK *plink, epicsEnum16 *status,
+        epicsEnum16 *severity)
+{
+    return pvaGetAlarmMsg(plink, status, severity, nullptr, 0);
+}
+
+long pvaGetTimeStampTag(const DBLINK *plink, epicsTimeStamp *pstamp, epicsUTag *ptag)
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -503,10 +554,18 @@ long pvaGetTimeStamp(const DBLINK *plink, epicsTimeStamp *pstamp)
         if(pstamp) {
             *pstamp = self->snap_time;
         }
+        if(ptag) {
+            *ptag = self->snap_tag;
+        }
         log_debug_printf(_logger, "%s: %s %s %i %i\n", __func__, plink->precord->name, self->channelName.c_str(), pstamp ? pstamp->secPastEpoch : 0, pstamp ? pstamp->nsec : 0);
         return 0;
     }CATCH()
     return -1;
+}
+
+long pvaGetTimeStamp(const DBLINK *plink, epicsTimeStamp *pstamp)
+{
+    return pvaGetTimeStampTag(plink, pstamp, nullptr);
 }
 
 long pvaPutValueX(DBLINK *plink, short dbrType,
@@ -559,10 +618,8 @@ long pvaPutValueX(DBLINK *plink, short dbrType,
 
         self->used_scratch = true;
 
-#ifdef USE_MULTILOCK
         if(wait)
             self->lchan->after_put.insert(plink->precord);
-#endif
 
         if(!self->defer) self->lchan->put();
 
@@ -591,6 +648,7 @@ void pvaScanForward(DBLINK *plink)
         Guard G(self->lchan->lock);
 
         if(!self->retry && !self->valid()) {
+            (void)recGblSetSevrMsg(plink->precord, LINK_ALARM, INVALID_ALARM, "Disconn");
             return;
         }
 
@@ -601,6 +659,17 @@ void pvaScanForward(DBLINK *plink)
             __func__, plink->precord->name, self->channelName.c_str(), self->lchan->root.valid() ? "valid": "not valid");
     }CATCH()
 }
+
+#if EPICS_VERSION_INT>=VERSION_INT(3,16,1,0)
+long pvaDoLocked(struct link *plink, dbLinkUserCallback rtn, void *priv)
+{
+    TRY {
+        Guard G(self->lchan->lock);
+        return (*rtn)(plink, priv);
+    }CATCH()
+    return 1;
+}
+#endif // >= 3.16.1
 
 #undef TRY
 #undef CATCH
@@ -625,8 +694,14 @@ lset pva_lset = {
     &pvaGetTimeStamp,
     &pvaPutValue,
     &pvaPutValueAsync,
-    &pvaScanForward
-    //&pvaReportLink,
+    &pvaScanForward,
+#if EPICS_VERSION_INT>=VERSION_INT(3,16,1,0)
+    &pvaDoLocked,
+#endif
+#if EPICS_VERSION_INT>=VERSION_INT(7,0,6,0)
+    &pvaGetAlarmMsg,
+    &pvaGetTimeStampTag,
+#endif
 };
 
 } // namespace pvxlink

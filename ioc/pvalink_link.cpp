@@ -12,7 +12,7 @@
 
 #include "pvalink.h"
 
-DEFINE_LOGGER(_logger, "ioc.pvalink.link");
+DEFINE_LOGGER(_logger, "pvxs.ioc.link.link");
 
 namespace pvxlink {
 
@@ -34,10 +34,7 @@ pvaLink::~pvaLink()
         lchan->links_changed = true;
 
         bool new_debug = false;
-        for(pvaLinkChannel::links_t::const_iterator it(lchan->links.begin()), end(lchan->links.end())
-            ; it!=end; ++it)
-        {
-            const pvaLink *pval = *it;
+        for(auto pval : lchan->links) {
             if(pval->debug) {
                 new_debug = true;
                 break;
@@ -70,35 +67,7 @@ Value pvaLink::makeRequest()
 // caller must lock lchan->lock
 bool pvaLink::valid() const
 {
-    return lchan->state == pvaLinkChannel::Connected && lchan->root;
-}
-
-// caller must lock lchan->lock
-Value pvaLink::getSubField(const char *name)
-{
-    Value ret;
-    if(valid()) {
-        if(fieldName.empty()) {
-            // we access the top level struct
-            ret = lchan->root[name];
-
-        } else {
-            // we access a sub-struct
-            ret = lchan->root[fieldName];
-            if(!ret) {
-                // noop
-            } else if(ret.type()!=TypeCode::Struct) {
-                // addressed sub-field isn't a sub-structure
-                if(strcmp(name, "value")!=0) {
-                    // unless we are trying to fetch the "value", we fail here
-                    ret = Value();
-                }
-            } else {
-                ret = ret[name];
-            }
-        }
-    }
-    return ret;
+    return lchan->connected && lchan->root;
 }
 
 // call with channel lock held
@@ -112,38 +81,54 @@ void pvaLink::onDisconnect()
 
 void pvaLink::onTypeChange()
 {
-    log_debug_printf(_logger, "%s type change\n", plink->precord->name);
+    assert(lchan->connected && lchan->root); // we should only be called when connected
 
-    assert(lchan->state == pvaLinkChannel::Connected && lchan->root); // we should only be called when connected
+    fld_value = fld_severity = fld_nanoseconds = fld_usertag
+            = fld_message = fld_severity = fld_meta = Value();
 
-    fld_value = getSubField("value");
-    fld_seconds = getSubField("timeStamp.secondsPastEpoch");
-    fld_nanoseconds = getSubField("timeStamp.nanoseconds");
-    fld_severity = getSubField("alarm.severity");
-    fld_display = getSubField("display");
-    fld_control = getSubField("control");
-    fld_valueAlarm = getSubField("valueAlarm");
+    Value root;
+    if(fieldName.empty()) {
+        root = lchan->root;
+    } else {
+        root = lchan->root[fieldName];
+    }
+    if(!root) {
+        log_warn_printf(_logger, "%s has no %s\n", lchan->key.first.c_str(), fieldName.c_str());
 
-    // build mask of all "changed" bits associated with our .value
-    // CP/CPP input links will process this link only for updates where
-    // the changed mask and proc_changed share at least one set bit.
-//    if(fld_value) {
-//        // bit for this field
-//        proc_changed.set(fld_value->getFieldOffset());
+    } else if(root.type()!=TypeCode::Struct) {
+        log_debug_printf(_logger, "%s has no meta\n", lchan->key.first.c_str());
+        fld_value = root;
 
-//        // bits of all parent fields
-//        for(const pvd::PVStructure* parent = fld_value->getParent(); parent; parent = parent->getParent()) {
-//            proc_changed.set(parent->getFieldOffset());
-//        }
+    } else {
+        fld_value = root["value"];
+        fld_seconds = root["timeStamp.secondsPastEpoch"];
+        fld_nanoseconds = root["timeStamp.nanoseconds"];
+        fld_usertag = root["timeStamp.userTag"];
+        fld_severity = root["alarm.severity"];
+        fld_message = root["alarm.message"];
+        fld_meta = std::move(root);
+    }
 
-//        if(fld_value->getField()->getType()==pvd::structure)
-//        {
-//            // bits of all child fields
-//            const pvd::PVStructure *val = static_cast<const pvd::PVStructure*>(fld_value.get());
-//            for(size_t i=val->getFieldOffset(), N=val->getNextFieldOffset(); i<N; i++)
-//                proc_changed.set(i);
-//        }
-//    }
+    log_debug_printf(_logger, "%s type change V=%c S=%c N=%c S=%c M=%c\n",
+                     plink->precord->name,
+                     fld_value ? 'Y' : 'N',
+                     fld_seconds ? 'Y' : 'N',
+                     fld_nanoseconds ? 'Y' : 'N',
+                     fld_severity ? 'Y' : 'N',
+                     fld_meta ? 'Y' : 'N');
+}
+
+pvaLink::scanOnUpdate_t pvaLink::scanOnUpdate() const
+{
+    if(!plink)
+        return scanOnUpdateNo;
+    if(type!=DBF_INLINK)
+        return scanOnUpdateNo;
+    if(proc == pvaLink::CP)
+        return scanOnUpdateYes;
+    if(proc == pvaLink::CPP)
+        return scanOnUpdatePassive;
+    return scanOnUpdateNo;
 }
 
 } // namespace pvalink

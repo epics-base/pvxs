@@ -100,14 +100,27 @@ void testPrepare();
 PVXS_IOC_API
 void testShutdown();
 
+#ifdef PVXS_EXPERT_API_ENABLED
 PVXS_IOC_API
-void testqsrvWaitForLinkEvent(struct link *plink);
+void testqsrvWaitForLinkConnected(struct link *plink, bool conn=true);
+PVXS_IOC_API
+void testqsrvWaitForLinkConnected(const char* pv, bool conn=true);
+
+class PVXS_IOC_API QSrvWaitForLinkUpdate final {
+    struct link * const plink;
+    unsigned seq;
+public:
+    QSrvWaitForLinkUpdate(struct link *plink);
+    QSrvWaitForLinkUpdate(const char* pv);
+    ~QSrvWaitForLinkUpdate();
+};
 
 PVXS_IOC_API
 void testqsrvShutdownOk(void);
 
 PVXS_IOC_API
 void testqsrvCleanup(void);
+#endif // PVXS_EXPERT_API_ENABLED
 
 }} // namespace pvxs::ioc
 #endif // PVXS_IOCHOOKS_H

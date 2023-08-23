@@ -593,6 +593,11 @@ def define_DSOS(self):
         "ioc/singlesourcehooks.cpp",
         "ioc/singlesrcsubscriptionctx.cpp",
         "ioc/typeutils.cpp",
+        "ioc/pvalink_channel.cpp",
+        "ioc/pvalink.cpp",
+        "ioc/pvalink_jlif.cpp",
+        "ioc/pvalink_link.cpp",
+        "ioc/pvalink_lset.cpp",
     ]
 
     probe = ProbeToolchain()

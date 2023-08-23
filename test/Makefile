@@ -126,6 +126,7 @@ testpvalink_SRCS += testpvalink.cpp
 testpvalink_SRCS += testioc_registerRecordDeviceDriver.cpp
 testpvalink_LIBS += pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTS += testpvalink
+TESTFILES += ../testpvalink.db
 
 endif
 

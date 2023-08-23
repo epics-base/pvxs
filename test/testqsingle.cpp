@@ -14,6 +14,7 @@
 #include <dbAccess.h>
 #include <dbLock.h>
 #include <epicsTime.h>
+#include <epicsExit.h>
 #include <asTrapWrite.h>
 #include <generalTimeSup.h>
 
@@ -910,6 +911,8 @@ MAIN(testqsingle)
         timeSim = false;
         testPutBlock();
     }
+    // call epics atexits explicitly to handle older base w/o de-init hooks
+    epicsExitCallAtExits();
     cleanup_for_valgrind();
     return testDone();
 }
