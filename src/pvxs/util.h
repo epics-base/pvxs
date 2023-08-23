@@ -246,7 +246,7 @@ public:
      */
     template<typename ...Args>
     void emplace(Args&&... args) {
-        bool wakeup;
+        bool wakeupR, wakeupW;
         {
             Guard G(lock);
             // while full, wait for reader to consume an entry
@@ -259,11 +259,15 @@ public:
                 nwriters--;
             }
             // notify reader when queue becomes not empty
-            wakeup = Q.empty() && nreaders;
+            wakeupR = Q.empty() && nreaders;
             Q.emplace_back(std::forward<Args>(args)...);
+            // wakeup next writer if there is still space
+            wakeupW = nwriters && Q.size()<nlimit;
         }
-        if(wakeup)
+        if(wakeupR)
             notifyR.signal();
+        if(wakeupW)
+            notifyW.signal();
     }
 
     //! Move a new element to the queue
