@@ -829,8 +829,13 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
                 // no such member
                 store.reset();
                 desc = nullptr;
-                if(dothrow)
-                    throw LookupError(SB()<<"no such member '"<<name<<"' in '"<<expr<<"'");
+                if(dothrow) {
+                    SB msg;
+                    msg<<"no such member field '"<<name<<"'";
+                    if(name!=expr)
+                        msg<<" in expression '"<<expr<<"'";
+                    throw LookupError(msg);
+                }
             }
 
         } else if(desc->code.code==TypeCode::Union || desc->code.code==TypeCode::Any) {
