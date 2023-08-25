@@ -378,7 +378,7 @@ struct Tester {
                 .field("invalid")
                 .exec();
 
-        testThrowsMatch<std::runtime_error>("Empty field selection", [&op]() {
+        testThrowsMatch<std::runtime_error>("pvRequest must select at least one field", [&op]() {
             testShow()<<op->wait(4.0);
         })<<" pvRequest selects no fields";
     }

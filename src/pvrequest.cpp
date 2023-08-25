@@ -59,7 +59,7 @@ BitMask request2mask(const FieldDesc* desc, const Value& pvRequest)
     }
 
     if(!foundrequested)
-        throw std::runtime_error("Empty field selection");
+        throw std::runtime_error("pvRequest must select at least one field");
 
     if(ret.findSet(1)==ret.size()) {
         // empty mask is wildcard
