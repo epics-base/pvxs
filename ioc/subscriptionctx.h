@@ -12,6 +12,7 @@
 
 #include <memory>
 #include <stdexcept>
+#include <type_traits>
 
 #include <dbEvent.h>
 
@@ -22,21 +23,21 @@ namespace pvxs {
 namespace ioc {
 
 class Subscription {
-    std::shared_ptr<void> sub; // holds void* returned by db_add_event()
+    std::shared_ptr<std::remove_pointer<dbEventSubscription>::type> sub; // holds void* returned by db_add_event()
 public:
     /* Add a subscription event by calling db_add_event using the given subscriptionCtx
      * and selecting the correct elements based on the given type of event being added.
      * You need to specify the correct options that correspond to the event type.
      * Adds a deleter to clean up the subscription by calling db_cancel_event.
      */
-    void subscribe(void* context,
+    void subscribe(dbEventCtx context,
                    const Channel& pChan,
                    EVENTFUNC *user_sub, void *user_arg, unsigned select)
     {
         auto chan(pChan); // bind by value
         sub.reset(db_add_event(context, chan,
                                user_sub, user_arg, select),
-                  [chan](void* sub) mutable
+                  [chan](dbEventSubscription sub) mutable
         {
             db_cancel_event(sub);
             chan = Channel(); // dbChannel* must outlive subscription
