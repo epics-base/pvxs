@@ -255,7 +255,7 @@ struct PVXS_API evsocket
     static
     bool canIPv6;
 
-    static bool init_canIPv6();
+    static bool init_canIPv6() noexcept;
 
     enum ipstack_t {
         Linsock,
@@ -302,6 +302,7 @@ struct PVXS_API IfaceMap {
         Iface(const std::string& name, uint64_t index, bool isLO) :name(name), index(index), isLO(isLO) {}
     };
 
+    SockAttach attach;
     epicsMutex lock;
     std::map<uint64_t, Iface> byIndex;
     std::map<std::string, Iface*> byName;

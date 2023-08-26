@@ -21,6 +21,7 @@
 
 #include <errlog.h>
 #include <epicsEvent.h>
+#include <epicsString.h>
 #include <epicsThread.h>
 #include <epicsExit.h>
 #include <epicsMutex.h>
@@ -661,9 +662,19 @@ size_t evsocket::get_buffer_size(evutil_socket_t sock, bool tx)
 #  define EAFNOSUPPORT WSAESOCKTNOSUPPORT
 #endif
 
-bool evsocket::init_canIPv6()
+bool evsocket::init_canIPv6() noexcept
 {
     try {
+        if(auto ena6 = getenv("PVXS_ENABLE_IPV6")) {
+            if(epicsStrCaseCmp(ena6, "NO")==0) {
+                log_info_printf(logsock, "IPv6 support disabled%s", "\n");
+                return false;
+            } else if(epicsStrCaseCmp(ena6, "YES")!=0) {
+                log_warn_printf(logsock, "PVXS_ENABLE_IPV6=%s ignoring unrecognized\n",
+                                ena6);
+            }
+        }
+
         evsocket sock(AF_INET6, SOCK_DGRAM, 0);
         auto addr(SockAddr::loopback(AF_INET6));
         sock.bind(addr);
