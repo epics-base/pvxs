@@ -39,6 +39,9 @@
 namespace pvxs {
 namespace ioc {
 
+typedef epicsGuard<epicsMutex> Guard;
+typedef epicsGuardRelease<epicsMutex> UnGuard;
+
 DEFINE_LOGGER(_logname, "pvxs.ioc");
 
 void printIOCShError(const std::exception& e)
@@ -46,8 +49,19 @@ void printIOCShError(const std::exception& e)
     fprintf(stderr, "Error: %s\n", e.what());
 }
 
+namespace {
 // The pvxs server singleton
-std::atomic<server::Server*> pvxsServer{};
+struct pvxServer_t {
+    epicsMutex lock;
+    server::Server srv;
+} *pvxServer;
+
+epicsThreadOnceId pvxServerID = EPICS_THREAD_ONCE_INIT;
+
+void pvxServerInit(void*) {
+    pvxServer = new pvxServer_t();
+}
+} // namespace
 
 /**
  * Get the plain pvxs server instance
@@ -55,11 +69,27 @@ std::atomic<server::Server*> pvxsServer{};
  * @return the pvxs server instance
  */
 server::Server server() {
-    if (auto pPvxsServer = pvxsServer.load()) {
-        return *pPvxsServer;
-    } else {
+    threadOnce(&pvxServerID, &pvxServerInit);
+    Guard (pvxServer->lock);
+    if(pvxServer->srv)
+        return pvxServer->srv;
+    else
         throw std::logic_error("No Instance");
-    }
+}
+
+static
+void initialisePvxsServer() {
+    using namespace pvxs::server;
+
+    Config conf = ::pvxs::impl::inUnitTest() ? Config::isolated() : Config::from_env();
+    Server newsrv(conf);
+
+    threadOnce(&pvxServerID, &pvxServerInit);
+    Guard G(pvxServer->lock);
+    if(pvxServer->srv)
+        throw std::logic_error(SB()<<__func__<<" found existing server?!?");
+
+    pvxServer->srv = std::move(newsrv);
 }
 
 /**
@@ -72,10 +102,10 @@ server::Server server() {
 static
 void pvxsAtExit(void*) noexcept {
     try {
-        if (auto pPvxsServer = pvxsServer.exchange(nullptr)) {
-            // take ownership
-            std::unique_ptr<server::Server> serverInstance(pPvxsServer);
-            serverInstance->stop();
+        Guard (pvxServer->lock);
+        if(auto srv = std::move(pvxServer->srv)) {
+            pvxServer->srv = server::Server();
+            srv.stop();
             IOCGroupConfigCleanup();
             log_debug_printf(_logname, "Stopped Server%s", "\n");
         }
@@ -104,10 +134,10 @@ void testShutdown()
  */
 static
 void pvxsr(int detail) {
-    if (auto pPvxsServer = pvxsServer.load()) {
+    if (auto srv = server()) {
         std::ostringstream strm;
         Detailed D(strm, detail);
-        strm << *pPvxsServer;
+        strm << srv;
         printf("%s", strm.str().c_str());
     }
 }
@@ -215,7 +245,6 @@ void pvxrefdiff() {
  */
 static
 void pvxsInitHook(initHookState theInitHookState) {
-    auto pPvxsServer = pvxsServer.load();
     switch(theInitHookState) {
     case initHookAfterInitDatabase:
         // when de-init hooks not available, register for later cleanup via atexit()
@@ -226,15 +255,15 @@ void pvxsInitHook(initHookState theInitHookState) {
         break;
     case initHookAfterCaServerRunning:
     case initHookAfterIocRunning:
-        if(pPvxsServer) {
-            pPvxsServer->start();
-            log_debug_printf(_logname, "Started Server %p", pPvxsServer);
+        if(auto srv = server()) {
+            srv.start();
+            log_debug_printf(_logname, "Started Server%s", "\n");
         }
         break;
     case initHookAfterCaServerPaused:
-        if(pPvxsServer) {
-            pPvxsServer->stop();
-            log_debug_printf(_logname, "Stopped Server %p", pPvxsServer);
+        if(auto srv = server()) {
+            srv.stop();
+            log_debug_printf(_logname, "Stopped Server%s", "\n");
         }
         break;
 #ifdef USE_DEINIT_HOOKS
@@ -256,27 +285,6 @@ using namespace pvxs::ioc;
 namespace {
 
 /**
- * Create the pvxs server instance.  We use the global pvxsServer atomic
- */
-void initialisePvxsServer() {
-    using namespace pvxs::server;
-    auto serv = pvxsServer.load();
-    if (!serv) {
-        Config conf = ::pvxs::impl::inUnitTest() ? Config::isolated() : Config::from_env();
-        std::unique_ptr<Server> temp(new Server(conf));
-
-        if (pvxsServer.compare_exchange_strong(serv, temp.get())) {
-            log_debug_printf(_logname, "Installing Server %p\n", temp.get());
-            (void)temp.release();
-        } else {
-            log_err_printf(_logname, "Race installing Server? %p\n", serv);
-        }
-    } else {
-        log_err_printf(_logname, "Stale Server? %p\n", serv);
-    }
-}
-
-/**
  * IOC pvxs base registrar.  This implements the required registrar function that is called by xxxx_registerRecordDeviceDriver,
  * the auto-generated stub created for all IOC implementations.
  *
@@ -289,6 +297,8 @@ void initialisePvxsServer() {
 void pvxsBaseRegistrar() {
     try {
         pvxs::logger_config_env();
+
+        pvxServer = new pvxServer_t();
 
         IOCShCommand<int>("pvxsr", "[show_detailed_information?]", "PVXS Server Report.  "
                                                                    "Shows information about server config (level==0)\n"

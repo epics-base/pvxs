@@ -30,13 +30,13 @@
 namespace pvxs {
 namespace ioc {
 void pvxsl(int detail) {
-    if (auto pPvxsServer = pvxsServer.load()) {
+    if (auto srv = ioc::server()) {
         // For each registered source/IOID pair print a line of either detailed or regular information
-        for (auto& pair: pPvxsServer->listSource()) {
+        for (auto& pair: srv.listSource()) {
             auto& record = pair.first;
             auto& ioId = pair.second;
 
-            auto source = pPvxsServer->getSource(record, ioId);
+            auto source = srv.getSource(record, ioId);
             if (!source) {
                 // if the source is not yet available in the server then we're in a race condition
                 // silently skip source
@@ -73,10 +73,10 @@ namespace {
 
 void qReport(unsigned level) noexcept {
     try{
-        if (auto pPvxsServer = pvxsServer.load()) {
+        if (auto srv = ioc::server()) {
             std::ostringstream strm;
             Detailed D(strm, (int)level);
-            strm << *pPvxsServer;
+            strm << srv;
             printf("%s", strm.str().c_str());
         }
     }catch(std::exception& e){
@@ -86,8 +86,8 @@ void qReport(unsigned level) noexcept {
 
 void qStats(unsigned *channels, unsigned *clients) noexcept {
     try{
-        if (auto pPvxsServer = pvxsServer.load()) {
-            auto report(pPvxsServer->report(false));
+        if (auto srv = ioc::server()) {
+            auto report(srv.report(false));
             if(clients) {
                 *clients = report.connections.size();
             }

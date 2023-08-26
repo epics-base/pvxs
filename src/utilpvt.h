@@ -90,6 +90,7 @@ void strDiff(std::ostream& out,
              const char *lhs,
              const char *rhs);
 
+PVXS_API
 void threadOnce(epicsThreadOnceId *id, EPICSTHREADFUNC fn, void *arg=nullptr);
 
 namespace idetail {

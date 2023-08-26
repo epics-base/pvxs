@@ -102,8 +102,6 @@ public:
     }
 };
 
-extern std::atomic<server::Server*> pvxsServer;
-
 } // pvxs
 } // ioc
 
