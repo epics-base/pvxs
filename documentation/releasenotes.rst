@@ -3,6 +3,17 @@
 Release Notes
 =============
 
+1.2.3 (UNRELEASED)
+------------------
+
+* Add ``$PVXS_ENABLE_IPV6`` environment variable.  Set ``PVXS_ENABLE_IPV6=NO`` to disable usage of IPv6.
+* IOC: A warning is printed if a group definition includes no ``+trigger`` mappings.
+       This is likely a mis-configuration by omission which will produce more monitor updates than expected.
+* `pvxs::server::ConnectOp::error` no longer blocks.
+* Add `pvxs::target_information`.
+* IOC: fill in ``display.precision``.
+* Add :ref:`understandinggroups` section.
+
 1.2.2 (June 2023)
 -----------------
 

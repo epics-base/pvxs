@@ -61,7 +61,8 @@ namespace ioc {
  *     initHookRegister(&myinitHook);
  * }
  * extern "C" {
- *     epicsExportRegistrar(myregistrar); // needs matching entry in .dbd
+ *      // needs matching "registrar(myregistrar)" in .dbd
+ *     epicsExportRegistrar(myregistrar);
  * }
  * @endcode
  */

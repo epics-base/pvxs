@@ -40,10 +40,10 @@ Configuration
 -------------
 
 The recommended starting point when configuring a Server is `pvxs::server::Config::fromEnv`
-which will use the following environment variables when set.
+which will use the following :ref:`environ` when set.
 
-Entries naming multiple environment variables will prefer the left most which is set.
-eg. *EPICS_PVA_ADDR_LIST* is only checked if *EPICS_PVAS_BEACON_ADDR_LIST* is unset.
+Entries naming multiple :ref:`environ` will prefer the left most which is set.
+eg. ``EPICS_PVA_ADDR_LIST`` is only checked if ``EPICS_PVAS_BEACON_ADDR_LIST`` is unset.
 
 EPICS_PVAS_INTF_ADDR_LIST
     Space seperated list of local interface addresses to which the server will bind.
@@ -84,7 +84,7 @@ EPICS_PVA_CONN_TMO
    All ***_ADDR_LIST** may contain IPv4 multicast, and IPv6 uni/multicast addresses.
 
 .. versionadded:: 0.2.0
-    Prior to 0.2.0 *EPICS_PVA_CONN_TMO* was ignored.
+    Prior to 0.2.0 ``EPICS_PVA_CONN_TMO`` was ignored.
 
 .. doxygenstruct:: pvxs::server::Config
     :members:

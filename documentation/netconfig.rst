@@ -3,9 +3,6 @@
 PVA Network Configuration
 =========================
 
-Also see Client :ref:`clientconf` and Server :ref:`serverconf`
-for full lists of **EPICS_PVA*** environment varables.
-
 Big Picture
 -----------
 
@@ -38,6 +35,47 @@ or when `pvxs::client::Context::hurryUp` is called.
 
 Server beacon destinations are by default configured using the client configuration.
 This may be overridden with **EPICS_PVAS_BEACON_ADDR_LIST** and **EPICS_PVAS_AUTO_BEACON_ADDR_LIST**.
+
+.. _environ:
+
+Environment variables
+---------------------
+
+This table lists all of the ``$EPICS_PVA*`` environment variables understood by PVXS.
+See Client :ref:`clientconf` and Server :ref:`serverconf` for detailed explanations.
+
++----------------------------------+--------+--------+
+|             Variable             | Client | Server |
++==================================+========+========+
+|       EPICS_PVA_ADDR_LIST        |   x    |   x    |
++----------------------------------+--------+--------+
+|   EPICS_PVAS_BEACON_ADDR_LIST    |        |   x    |
++----------------------------------+--------+--------+
+|     EPICS_PVA_AUTO_ADDR_LIST     |   x    |   x    |
++----------------------------------+--------+--------+
+| EPICS_PVAS_AUTO_BEACON_ADDR_LIST |        |   x    |
++----------------------------------+--------+--------+
+|    EPICS_PVAS_INTF_ADDR_LIST     |        |   x    |
++----------------------------------+--------+--------+
+|      EPICS_PVA_SERVER_PORT       |   x    |   x    |
++----------------------------------+--------+--------+
+|      EPICS_PVAS_SERVER_PORT      |        |   x    |
++----------------------------------+--------+--------+
+|     EPICS_PVA_BROADCAST_PORT     |   x    |   x    |
++----------------------------------+--------+--------+
+|    EPICS_PVAS_BROADCAST_PORT     |        |   x    |
++----------------------------------+--------+--------+
+|   EPICS_PVAS_IGNORE_ADDR_LIST    |        |   x    |
++----------------------------------+--------+--------+
+|        EPICS_PVA_CONN_TMO        |        |   x    |
++----------------------------------+--------+--------+
+|      EPICS_PVA_NAME_SERVERS      |   x    |        |
++----------------------------------+--------+--------+
+|     EPICS_PVA_BROADCAST_PORT     |   x    |        |
++----------------------------------+--------+--------+
+|        EPICS_PVA_CONN_TMO        |   x    |        |
++----------------------------------+--------+--------+
+
 
 .. _addrspec:
 
@@ -72,38 +110,3 @@ Examples include:
     IPv6 multicast address, with Time To Live set to 1 (roughly equivalent to IPv4 broadcast).
     Send via the network interface named ``br0``.
     Use default port number.
-
-Environment variables
----------------------
-
-+----------------------------------+--------+--------+
-|             Variable             | Client | Server |
-+==================================+========+========+
-|       EPICS_PVA_ADDR_LIST        |   x    |   x    |
-+----------------------------------+--------+--------+
-|   EPICS_PVAS_BEACON_ADDR_LIST    |        |   x    |
-+----------------------------------+--------+--------+
-|     EPICS_PVA_AUTO_ADDR_LIST     |   x    |   x    |
-+----------------------------------+--------+--------+
-| EPICS_PVAS_AUTO_BEACON_ADDR_LIST |        |   x    |
-+----------------------------------+--------+--------+
-|    EPICS_PVAS_INTF_ADDR_LIST     |        |   x    |
-+----------------------------------+--------+--------+
-|      EPICS_PVA_SERVER_PORT       |   x    |   x    |
-+----------------------------------+--------+--------+
-|      EPICS_PVAS_SERVER_PORT      |        |   x    |
-+----------------------------------+--------+--------+
-|     EPICS_PVA_BROADCAST_PORT     |   x    |   x    |
-+----------------------------------+--------+--------+
-|    EPICS_PVAS_BROADCAST_PORT     |        |   x    |
-+----------------------------------+--------+--------+
-|   EPICS_PVAS_IGNORE_ADDR_LIST    |        |   x    |
-+----------------------------------+--------+--------+
-|        EPICS_PVA_CONN_TMO        |        |   x    |
-+----------------------------------+--------+--------+
-|      EPICS_PVA_NAME_SERVERS      |   x    |        |
-+----------------------------------+--------+--------+
-|     EPICS_PVA_BROADCAST_PORT     |   x    |        |
-+----------------------------------+--------+--------+
-|        EPICS_PVA_CONN_TMO        |   x    |        |
-+----------------------------------+--------+--------+

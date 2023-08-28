@@ -53,6 +53,9 @@ Commonly used sub-structure to represent a time
 **"nanoseconds"**
     Number of nanoseconds since the start of the second.
 
+**"timeStamp.userTag"**
+    Extra site-specific information which may provide context for the seconds/nanoseconds value.
+
 .. _alarm_t:
 
 alarm_t

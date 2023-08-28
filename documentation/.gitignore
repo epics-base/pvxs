@@ -1,5 +1,7 @@
 pvxs.tag
 /xml/
 /html/
-/_build
+/_build/
+/_image/
 *.tmp
+*.inv
