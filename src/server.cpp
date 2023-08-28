@@ -317,6 +317,10 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
             CASE(Stopping);
 #undef CASE
             }
+            if(!serv.pvt->interfaces.empty()) {
+                auto& first = serv.pvt->interfaces.front();
+                strm<<" TCP_Port: "<<first.bind_addr.port();
+            }
             strm<<"\n";
 
             Indented I(strm);
