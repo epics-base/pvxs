@@ -59,7 +59,7 @@ EPICS_PVAS_AUTO_BEACON_ADDR_LIST or EPICS_PVA_AUTO_ADDR_LIST
     YES or NO.
     Sets `pvxs::server::Config::auto_beacon`
 
-EPICS_PVAS_SERVER_PORT or EPIC_PVAS_SERVER_PORT
+EPICS_PVAS_SERVER_PORT or EPICS_PVA_SERVER_PORT
     Single integer.
     Prefered TCP port to bind.
     If already in use then a random port will be chosen.
