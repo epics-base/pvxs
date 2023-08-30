@@ -77,7 +77,6 @@ private:
     static void defineAtomicity(GroupDefinition& groupDefinition, const GroupConfig& groupConfig,
                                 const std::string& groupName);
     void defineFieldSortOrder();
-    static void resolveSelfTriggerReferences(GroupDefinition& groupDefinition);
     void parseConfigString(const char* jsonGroupDefinition, const char* dbRecordName = nullptr);
     static void defineTriggers(GroupDefinition& groupDefinition, const FieldConfig& fieldConfig,
                                const std::string& fieldName);

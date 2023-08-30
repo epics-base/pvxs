@@ -322,22 +322,15 @@ void GroupConfigProcessor::resolveTriggerReferences() {
             resolveGroupTriggerReferences(groupDefinition, groupName);
         } else {
             // If no trigger specified for this group then set all fields to trigger themselves
-            log_debug_printf(_logname, "  pvxs default triggers for '%s'\n", groupName.c_str());
-            resolveSelfTriggerReferences(groupDefinition);
-        }
-    }
-}
+            log_warn_printf(_logname, "Group %s defines no +trigger mappings."
+                            "  Default to individual/split monitor updates.\n",
+                            groupName.c_str());
 
-/**
- * When triggers are unspecified for a group, call this function to configure all its fields to
- * trigger themselves
- *
- * @param groupDefinition the group to define triggers for
- */
-void GroupConfigProcessor::resolveSelfTriggerReferences(GroupDefinition& groupDefinition) {
-    for (auto&& field: groupDefinition.fields) {
-        if (!field.channel.empty()) {
-            field.triggerNames.insert(field.name);  // default is self trigger
+            for (auto&& field: groupDefinition.fields) {
+                if (!field.channel.empty()) {
+                    field.triggerNames.insert(field.name);  // default is self trigger
+                }
+            }
         }
     }
 }
