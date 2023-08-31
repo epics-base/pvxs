@@ -5,6 +5,7 @@
  */
 
 #include <pvxs/nt.h>
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace nt {
@@ -130,6 +131,66 @@ TypeDef NTEnum::build() const
                 });
 
     return def;
+}
+
+struct NTTable::Pvt {
+    struct Col {
+        TypeCode code;
+        std::string name, label;
+    };
+    std::vector<Col> cols;
+};
+
+NTTable::NTTable()
+    :pvt(std::make_shared<Pvt>())
+{}
+
+NTTable::~NTTable() {}
+
+NTTable& NTTable::add_column(TypeCode code,
+                             const char *name,
+                             const char *label)
+{
+    if(!code.valid() || code.isarray())
+        throw std::logic_error(SB()<<"NTTable column "<<name<<" type must be scalar");
+    Pvt::Col col{code.arrayOf(), name, label ? label : name};
+    pvt->cols.emplace_back(std::move(col));
+    return *this;
+}
+
+TypeDef NTTable::build() const
+{
+    std::vector<Member> columns;
+    columns.reserve(pvt->cols.size());
+
+    for(const auto& col : pvt->cols) {
+        columns.emplace_back(col.code, col.name);
+    }
+
+    TypeDef def(TypeCode::Struct, "", {
+                    members::StringA("labels"),
+                    members::Struct("value", columns),
+                    members::String("descriptor"), // ???
+                    Alarm{}.build().as("alarm"),
+                    TimeStamp{}.build().as("timeStamp"),
+                });
+
+    return def;
+}
+
+Value NTTable::create() const
+{
+    Value ret(build().create());
+    shared_array<std::string> labels;
+    labels.resize(pvt->cols.size());
+
+    size_t i=0;
+    for(const auto& col : pvt->cols) {
+        labels[i++] = col.label;
+    }
+    ret["labels"] = labels.freeze();
+
+    return ret;
 }
 
 TypeDef NTNDArray::build() const

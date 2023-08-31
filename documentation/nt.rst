@@ -95,6 +95,14 @@ Container for image data used by areaDetector.
 .. doxygenstruct:: pvxs::nt::NTNDArray
     :members:
 
+NTTable
+-------
+
+Container for tabular data.
+
+.. doxygenstruct:: pvxs::nt::NTTable
+    :members:
+
 NTURI
 -----
 

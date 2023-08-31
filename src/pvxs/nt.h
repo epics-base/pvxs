@@ -6,6 +6,8 @@
 #ifndef PVXS_NT_H
 #define PVXS_NT_H
 
+#include <memory>
+
 #include <pvxs/version.h>
 #include <pvxs/data.h>
 
@@ -103,6 +105,44 @@ struct NTEnum {
     inline Value create() const {
         return build().create();
     }
+};
+
+/** Columnar data.
+ *
+ *  Unlike other NT* builders.  This create() method returns a Value
+ *  with the labels field set, and marked.  While suitable for an
+ *  initial value, repeated create() could result in re-sending
+ *  the same labels array with every update.  User could should
+ *  create() once, and then Value::cloneEmpty() or unmark() for
+ *  subsequent updates.
+ *
+ *  @since UNRELEASED
+ */
+struct PVXS_API NTTable final {
+
+    NTTable();
+    ~NTTable();
+
+    /** Append a column
+     *
+     *  @param code Value type of column
+     *  @param name Field name of column
+     *  @param label Display label of column.  (defaults to field name)
+     *         Only used in create().
+     *  @returns this
+     */
+    NTTable& add_column(TypeCode code,
+                        const char *name,
+                        const char *label=nullptr);
+
+    //! A TypeDef which can be appended
+    TypeDef build() const;
+    //! Instantiate.  Also populates labels list.
+    Value create() const;
+
+    struct Pvt;
+private:
+    std::shared_ptr<Pvt> pvt;
 };
 
 /** The areaDetector inspired N-dimension array/image container.

@@ -82,13 +82,29 @@ void testNTEnum()
     testTrue(top.idStartsWith("epics:nt/NTEnum:"))<<"\n"<<top;
 }
 
+void testNTTable()
+{
+    testDiag("In %s", __func__);
+
+    auto top = nt::NTTable{}
+            .add_column(TypeCode::Int32, "A", "Col A")
+            .add_column(TypeCode::String, "B", "Col B")
+            .create();
+
+    shared_array<const std::string> labels({"Col A", "Col B"});
+    testArrEq(top["labels"].as<shared_array<const std::string>>(), labels);
+    testTrue(top["value.A"].type()==TypeCode::Int32A);
+    testTrue(top["value.B"].type()==TypeCode::StringA);
+}
+
 } // namespace
 
 MAIN(testnt) {
-    testPlan(18);
+    testPlan(21);
     testNTScalar();
     testNTNDArray();
     testNTURI();
     testNTEnum();
+    testNTTable();
     return testDone();
 }
