@@ -131,7 +131,7 @@ struct evbase::Pvt final : public epicsThreadRunable
     };
     std::deque<Work> actions;
 
-    owned_ptr<event_base> base;
+    evbaseptr base;
     evevent keepalive;
     evevent dowork;
     epicsEvent start_sync;

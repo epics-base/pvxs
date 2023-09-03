@@ -56,15 +56,47 @@ struct default_delete<evbuffer> {
 
 namespace pvxs {namespace impl {
 
-//! unique_ptr which is never constructed with NULL
 template<typename T>
-struct owned_ptr : public std::unique_ptr<T>
+struct ev_delete;
+#define DEFINE_DELETE(TYPE) \
+template<> struct ev_delete<TYPE> { \
+    inline void operator()(TYPE* ev) { TYPE ## _free(ev); } \
+}
+DEFINE_DELETE(event_config);
+DEFINE_DELETE(event_base);
+DEFINE_DELETE(event);
+DEFINE_DELETE(evconnlistener);
+DEFINE_DELETE(bufferevent);
+DEFINE_DELETE(evbuffer);
+#undef DEFINE_DELETE
+
+//! unique_ptr which is never constructed with NULL
+template<typename T, typename D>
+struct owned_ptr : public std::unique_ptr<T, D>
 {
+    typedef std::unique_ptr<T, D> base_t;
     constexpr owned_ptr() {}
-    explicit owned_ptr(const char* file, int line, T* ptr) : std::unique_ptr<T>(ptr) {
+    constexpr owned_ptr(std::nullptr_t np) : base_t(np) {}
+    explicit owned_ptr(const char* file, int line, T* ptr) : base_t(ptr) {
         if(!*this)
             throw loc_bad_alloc(file, line);
     }
+
+    // for functions which return a pointer in an argument
+    //   int some(T** presult); // store *presult = output
+    // use like
+    //   owned_ptr<T> x;
+    //   some(x.acquire());
+    struct acquisition {
+        base_t* o;
+        T* ptr = nullptr;
+        operator T** () { return &ptr; }
+        constexpr acquisition(base_t* o) :o(o) {}
+        ~acquisition() {
+            o->reset(ptr);
+        }
+    };
+    acquisition acquire() { return acquisition{this}; }
 };
 
 /* It seems that std::function<void()>(Fn&&) from gcc (circa 8.3) and clang (circa 7.0)
@@ -180,11 +212,14 @@ public:
     event_base* base = nullptr;
 };
 
-typedef owned_ptr<event_config> evconfig;
-typedef owned_ptr<event> evevent;
-typedef owned_ptr<evconnlistener> evlisten;
-typedef owned_ptr<bufferevent> evbufferevent;
-typedef owned_ptr<evbuffer> evbuf;
+template<typename T>
+using ev_owned_ptr = owned_ptr<T, ev_delete<T>>;
+typedef ev_owned_ptr<event_config> evconfig;
+typedef ev_owned_ptr<event_base> evbaseptr;
+typedef ev_owned_ptr<event> evevent;
+typedef ev_owned_ptr<evconnlistener> evlisten;
+typedef ev_owned_ptr<bufferevent> evbufferevent;
+typedef ev_owned_ptr<evbuffer> evbuf;
 
 PVXS_API
 void to_wire(Buffer& buf, const SockAddr& val);
