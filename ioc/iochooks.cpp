@@ -114,6 +114,12 @@ void pvxsAtExit(void*) noexcept {
     }
 }
 
+void testPrepare()
+{
+    if(pvxServer)
+        initialisePvxsServer(); // re-create server for next test cycle
+}
+
 void testShutdown()
 {
 #ifndef USE_DEINIT_HOOKS

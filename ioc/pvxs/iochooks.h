@@ -82,6 +82,15 @@ server::Server server();
 PVXS_IOC_API
 long dbLoadGroup(const char* jsonFilename, const char* macros=nullptr);
 
+/** Call just after testdbPrepare()
+ *
+ *  Prepare QSRV for re-test.  Optional if testdbPrepare() called only once.
+ *  Required after subsequent calls.
+ *  @since UNRELEASED
+ */
+PVXS_IOC_API
+void testPrepare();
+
 /** Call just before testIocShutdownOk()
  *
  *  Shutdown QSRV.  Only needed with Base <= 7.0.4 .

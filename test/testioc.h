@@ -21,6 +21,7 @@ class TestIOC {
 public:
     TestIOC() {
         testdbPrepare();
+        pvxs::ioc::testPrepare();
     }
     void init() {
         if(!running) {
