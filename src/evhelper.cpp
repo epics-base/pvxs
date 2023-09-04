@@ -52,10 +52,7 @@ VFunctor0::~VFunctor0() {}
 }
 
 static
-epicsThreadOnceId evthread_once = EPICS_THREAD_ONCE_INIT;
-
-static
-void evthread_init(void* unused)
+void evthread_init()
 {
 #if defined(EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED)
     evthread_use_windows_threads();
@@ -147,7 +144,7 @@ struct evbase::Pvt final : public epicsThreadRunable
                 epicsThreadGetStackSize(epicsThreadStackBig),
                 prio)
     {
-        threadOnce(&evthread_once, &evthread_init, nullptr);
+        threadOnce<&evthread_init>();
 
         worker.start();
         start_sync.wait();
@@ -699,19 +696,17 @@ bool evsocket::init_canIPv6() noexcept
 #  define getMonotonic getCurrent
 #endif
 
-static epicsThreadOnceId mapOnce = EPICS_THREAD_ONCE_INIT;
-
 static IfaceMap* theinstance;
 
 static
-void mapInit(void*)
+void mapInit()
 {
     theinstance = new IfaceMap();
 }
 
 IfaceMap& IfaceMap::instance()
 {
-    threadOnce(&mapOnce, &mapInit);
+    threadOnce<&mapInit>();
     assert(theinstance);
     return *theinstance;
 }

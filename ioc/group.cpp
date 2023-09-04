@@ -23,7 +23,7 @@ static
 IOCGroupConfig* configInstance;
 
 static
-void onceConfigInstance(void*)
+void onceConfigInstance()
 {
     try {
         configInstance = new IOCGroupConfig;
@@ -32,12 +32,9 @@ void onceConfigInstance(void*)
     }
 }
 
-static
-epicsThreadOnceId onceConfig = EPICS_THREAD_ONCE_INIT;
-
 IOCGroupConfig& IOCGroupConfig::instance()
 {
-    epicsThreadOnce(&onceConfig, &onceConfigInstance, nullptr);
+    threadOnce<&onceConfigInstance>();
     return *configInstance;
 }
 

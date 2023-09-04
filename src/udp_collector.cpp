@@ -519,17 +519,15 @@ evbase& UDPManager::loop()
 }
 
 namespace {
-epicsThreadOnceId collector_once = EPICS_THREAD_ONCE_INIT;
-void collector_init(void *unused)
+void collector_init()
 {
-    (void)unused;
     udp_gbl = new udp_gbl_t;
 }
 } // namespace
 
 UDPManager UDPManager::instance(bool share)
 {
-    threadOnce(&collector_once, &collector_init, nullptr);
+    threadOnce<&collector_init>();
     assert(udp_gbl);
 
     Guard G(udp_gbl->lock);

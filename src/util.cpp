@@ -77,13 +77,12 @@ unsigned long version_abi_int()
 }
 
 namespace {
-epicsThreadOnceId ICountOnce = EPICS_THREAD_ONCE_INIT;
 struct ICountGbl_t {
     RWLock lock;
     std::map<std::string, std::atomic<size_t>*> counters;
 } *ICountGbl;
 
-void ICountInit(void*)
+void ICountInit()
 {
     ICountGbl = new ICountGbl_t;
 }
@@ -92,7 +91,7 @@ void ICountInit(void*)
 
 void registerICount(const char *name, std::atomic<size_t>& Cnt)
 {
-    epicsThreadOnce(&ICountOnce, &ICountInit, nullptr);
+    threadOnce<&ICountInit>();
     auto& gbl = *ICountGbl;
     try {
         auto L(gbl.lock.lockWriter());
@@ -110,7 +109,7 @@ std::map<std::string, size_t> instanceSnapshot()
     std::map<std::string, size_t> ret;
 
     {
-        epicsThreadOnce(&ICountOnce, &ICountInit, nullptr);
+        threadOnce<&ICountInit>();
         auto& gbl = *ICountGbl;
         auto L(gbl.lock.lockReader());
         for(auto& pair : gbl.counters) {
@@ -729,28 +728,31 @@ void compat_make_socket_nonblocking(SOCKET sock)
 
 namespace pvxs {namespace impl {
 struct onceArgs {
-    EPICSTHREADFUNC fn;
-    void *arg;
+    threadOnceInfo *info;
     std::exception_ptr err;
 };
 
 static
-void onceWrapper(void *raw)
+void onceWrapper(void *raw) noexcept
 {
     auto args = static_cast<onceArgs*>(raw);
     try {
-        args->fn(args->arg);
+        args->info->fn();
+        args->info->ok = true;
     }catch(...){
         args->err = std::current_exception();
+        args->info->ok = false;
     }
 }
 
-void threadOnce(epicsThreadOnceId *id, EPICSTHREADFUNC fn, void *arg)
+void threadOnce_(threadOnceInfo *info)
 {
-    onceArgs args{fn, arg};
-    epicsThreadOnce(id, &onceWrapper, &args);
+    onceArgs args{info};
+    epicsThreadOnce(&info->id, &onceWrapper, &args);
     if(args.err)
         std::rethrow_exception(args.err);
+    if(!info->ok)
+        throw std::logic_error("threadOnce() : Previous failure");
 }
 
 template<>

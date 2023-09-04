@@ -267,11 +267,31 @@ void testStrDiff()
           "+ \" yyy\"\n");
 }
 
+size_t onceCount[2];
+
+template<size_t I>
+void onceInc() {
+    onceCount[I]++;
+}
+
+void testOnce()
+{
+    testShow()<<__func__;
+
+    threadOnce<onceInc<0>>();
+    threadOnce<onceInc<1>>();
+    threadOnce<onceInc<0>>();
+    threadOnce<onceInc<1>>();
+
+    testEq(onceCount[0], 1u);
+    testEq(onceCount[1], 1u);
+}
+
 } // namespace
 
 MAIN(testutil)
 {
-    testPlan(33);
+    testPlan(35);
     testTrue(version_abi_check())<<" 0x"<<std::hex<<PVXS_VERSION<<" ~= 0x"<<std::hex<<PVXS_ABI_VERSION;
     testServerGUID();
     testFill();
@@ -280,5 +300,6 @@ MAIN(testutil)
     testAccount();
     testTestEq();
     testStrDiff();
+    testOnce();
     return testDone();
 }

@@ -29,6 +29,7 @@
 #include <event2/util.h>
 
 #include <compilerDependencies.h>
+#include <epicsThread.h>
 
 #include <pvxs/version.h>
 #include <pvxs/util.h>
@@ -90,8 +91,23 @@ void strDiff(std::ostream& out,
              const char *lhs,
              const char *rhs);
 
+struct threadOnceInfo {
+    epicsThreadOnceId id = EPICS_THREAD_ONCE_INIT;
+    void (* const fn)();
+    bool ok = false;
+    explicit constexpr threadOnceInfo(void (*fn)()) :fn(fn) {}
+};
+
 PVXS_API
-void threadOnce(epicsThreadOnceId *id, EPICSTHREADFUNC fn, void *arg=nullptr);
+void threadOnce_(threadOnceInfo *info) ;
+
+template<void (*onceFn)()>
+void threadOnce() noexcept {
+    // global name qualified by onceFn address.
+    // effectively replicated for each onceFn
+    static threadOnceInfo info{onceFn};
+    threadOnce_(&info);
+}
 
 namespace idetail {
 template <typename I>

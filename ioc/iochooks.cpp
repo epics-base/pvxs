@@ -56,9 +56,7 @@ struct pvxServer_t {
     server::Server srv;
 } *pvxServer;
 
-epicsThreadOnceId pvxServerID = EPICS_THREAD_ONCE_INIT;
-
-void pvxServerInit(void*) {
+void pvxServerInit() {
     pvxServer = new pvxServer_t();
 }
 } // namespace
@@ -69,7 +67,7 @@ void pvxServerInit(void*) {
  * @return the pvxs server instance
  */
 server::Server server() {
-    threadOnce(&pvxServerID, &pvxServerInit);
+    threadOnce<&pvxServerInit>();
     Guard (pvxServer->lock);
     if(pvxServer->srv)
         return pvxServer->srv;
@@ -84,7 +82,7 @@ void initialisePvxsServer() {
     Config conf = ::pvxs::impl::inUnitTest() ? Config::isolated() : Config::from_env();
     Server newsrv(conf);
 
-    threadOnce(&pvxServerID, &pvxServerInit);
+    threadOnce<&pvxServerInit>();
     Guard G(pvxServer->lock);
     if(pvxServer->srv)
         throw std::logic_error(SB()<<__func__<<" found existing server?!?");
@@ -182,14 +180,12 @@ struct RefTrack {
     std::map<std::string, size_t> refs;
 } *refTrack;
 
-epicsThreadOnceId refSavedOnce = EPICS_THREAD_ONCE_INIT;
-
-void refSavedInit(void *) {
+void refSavedInit() {
     refTrack = new RefTrack();
 }
 
 void pvxrefsave() {
-    epicsThreadOnce(&refSavedOnce, &refSavedInit, nullptr);
+    threadOnce<&refSavedInit>();
     epicsGuard<epicsMutex> G(refTrack->lock);
     refTrack->refs = instanceSnapshot();
 }
@@ -198,7 +194,7 @@ void pvxrefdiff() {
     auto cur(instanceSnapshot());
     std::map<std::string, int64_t> diff;
 
-    epicsThreadOnce(&refSavedOnce, &refSavedInit, nullptr);
+    threadOnce<&refSavedInit>();
     {
         epicsGuard<epicsMutex> G(refTrack->lock);
 
