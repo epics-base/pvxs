@@ -167,7 +167,7 @@ TypeDef NTTable::build() const
         columns.emplace_back(col.code, col.name);
     }
 
-    TypeDef def(TypeCode::Struct, "", {
+    TypeDef def(TypeCode::Struct, "epics:nt/NTTable:1.0", {
                     members::StringA("labels"),
                     members::Struct("value", columns),
                     members::String("descriptor"), // ???
