@@ -848,8 +848,8 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
                            // on worker
 
                            // ordering of dispatch()/call() ensures creation before destruction
-                           assert(op->chan);
-                           op->_cancel(true);
+                           if(op->chan)
+                               op->_cancel(true);
                        }, std::move(temp)));
     });
 
