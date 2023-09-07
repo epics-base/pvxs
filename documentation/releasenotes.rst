@@ -13,6 +13,9 @@ Release Notes
 * Add `pvxs::target_information`.
 * IOC: fill in ``display.precision``.
 * Add :ref:`understandinggroups` section.
+* Add `pvxs::nt::NTTable` helper.
+* Clarify some exception messages.
+* Add `pvxs::ioc::testPrepare`.
 
 1.2.2 (June 2023)
 -----------------
