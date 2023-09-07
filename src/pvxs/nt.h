@@ -112,11 +112,11 @@ struct NTEnum {
  *  Unlike other NT* builders.  This create() method returns a Value
  *  with the labels field set, and marked.  While suitable for an
  *  initial value, repeated create() could result in re-sending
- *  the same labels array with every update.  User could should
- *  create() once, and then Value::cloneEmpty() or unmark() for
+ *  the same labels array with every update.  Users should
+ *  create() once, and then Value::cloneEmpty() or Value::unmark() for
  *  subsequent updates.
  *
- *  @since UNRELEASED
+ *  @since 1.2.3
  */
 struct PVXS_API NTTable final {
 

@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.2.3 (UNRELEASED)
-------------------
+1.2.3 (Sept 2023)
+-----------------
 
 * Add ``$PVXS_ENABLE_IPV6`` environment variable.  Set ``PVXS_ENABLE_IPV6=NO`` to disable usage of IPv6.
 * IOC: A warning is printed if a group definition includes no ``+trigger`` mappings.

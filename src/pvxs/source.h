@@ -30,7 +30,7 @@ public:
     //! @throws std::runtime_error if the client pvRequest() field mask does not select any fields of prototype.
     virtual void connect(const Value& prototype) =0;
     //! Indicate that this operation can not be setup
-    //! @since UNRELEASED Does not block
+    //! @since 1.2.3 Does not block
     virtual void error(const std::string& msg) =0;
 
     ConnectOp(const std::string& name,
@@ -146,7 +146,7 @@ public:
     virtual std::unique_ptr<MonitorControlOp> connect(const Value& prototype) =0;
 
     //! Indicate that this operation can not be setup
-    //! @since UNRELEASED Does not block
+    //! @since 1.2.3 Does not block
     virtual void error(const std::string& msg) =0;
 
     MonitorSetupOp(const std::string& name,

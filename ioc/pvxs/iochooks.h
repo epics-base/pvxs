@@ -86,7 +86,7 @@ long dbLoadGroup(const char* jsonFilename, const char* macros=nullptr);
  *
  *  Prepare QSRV for re-test.  Optional if testdbPrepare() called only once.
  *  Required after subsequent calls.
- *  @since UNRELEASED
+ *  @since 1.2.3
  */
 PVXS_IOC_API
 void testPrepare();

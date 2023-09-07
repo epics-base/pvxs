@@ -185,7 +185,7 @@ std::ostream& target_information(std::ostream&);
  *
  * @returns The same ostream passed as argument.
  *
- * @since UNRELEASED
+ * @since 1.2.3
  */
 PVXS_API
 std::ostream& version_information(std::ostream&);

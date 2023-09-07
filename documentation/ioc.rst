@@ -88,7 +88,7 @@ in the IOC (aka. RSRV).
 
 So ``caget pv:name`` and ``pvxget pv:name`` should be functionally equivalent.
 
-Beginning with UNRELEASED, long string detection is automatic in some cases.
+Beginning with 1.2.3, long string detection is automatic in some cases.
 eg. ``.NAME`` and ``.INP``.
 In some situations adding a ``$`` suffix is still necessary when addressing
 a ``DBF_STRING`` or ``DBF_*LINK`` field to make it visible as a PVA string.
