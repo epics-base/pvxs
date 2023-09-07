@@ -41,10 +41,10 @@ OUTDIR="$PWD"/coverage
 install -d "$OUTDIR"
 
 cd "$TDIR"/src/O.linux-*
-gcovr -v -r .. --html --html-details -o "$OUTDIR"/coverage.html
+gcovr --gcov-ignore-parse-errors -v -r .. --html --html-details -o "$OUTDIR"/coverage.html
 
 cd "$TDIR"/ioc/O.linux-*
-gcovr -v -r .. --html --html-details -o "$OUTDIR"/coverage-ioc.html
+gcovr --gcov-ignore-parse-errors -v -r .. --html --html-details -o "$OUTDIR"/coverage-ioc.html
 
 cd "$OUTDIR"
 tar -cavf coverage.tar.bz2 coverage*.html
