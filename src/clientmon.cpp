@@ -857,10 +857,18 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     context->tcp_loop.dispatch([op, context, server]() {
         // on worker
 
-        op->chan = Channel::build(context, op->channelName, server);
+        try {
+            op->chan = Channel::build(context, op->channelName, server);
 
-        op->chan->pending.push_back(op);
-        op->chan->createOperations();
+            op->chan->pending.push_back(op);
+            op->chan->createOperations();
+        }catch(...){
+            // nothing else has happened, so the queue will be empty
+            assert(op->queue.empty());
+            op->queue.emplace_back();
+            op->queue.back().exc = std::current_exception();
+            op->doNotify();
+        }
     });
 
     return external;

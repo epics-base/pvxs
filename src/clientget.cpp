@@ -590,10 +590,15 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
     context->tcp_loop.dispatch([internal, context, name, server]() {
         // on worker
 
-        internal->chan = Channel::build(context, name, server);
+        try {
+            internal->chan = Channel::build(context, name, server);
 
-        internal->chan->pending.push_back(internal);
-        internal->chan->createOperations();
+            internal->chan->pending.push_back(internal);
+            internal->chan->createOperations();
+        }catch(...){
+            internal->result = Result(std::current_exception());
+            internal->notify();
+        }
     });
 
     return external;
