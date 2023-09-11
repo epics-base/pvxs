@@ -334,7 +334,8 @@ public:
 
     inline void reserve(size_t i) {}
 
-    //! Extend size.  Implies make_unique()
+    //! Extend size.  Implies make_unique().
+    //! @post unique()==true
     void resize(size_t i) {
         if(!this->unique() || i!=this->_count) {
             shared_array o(i);
@@ -343,7 +344,8 @@ public:
         }
     }
 
-    //! Ensure exclusive ownership of array data
+    //! Ensure exclusive ownership of array data by making a copy if necessary.
+    //! @post unique()==true
     inline void make_unique() {
         this->resize(this->size());
     }

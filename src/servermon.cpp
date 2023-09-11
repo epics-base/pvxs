@@ -54,13 +54,12 @@ struct MonitorOp : public ServerOp,
     BitMask pvMask;
     std::string msg;
 
-    // Further members can only be changed from the accepter worker thread with this lock held.
-    // They may be read from the worker, or if this lock is held.
+    // Further members guarded by this lock (except as noted)
     mutable epicsMutex lock;
 
     // is doReply() scheduled to run
     bool scheduled=false;
-    bool pipeline=false;
+    bool pipeline=false; // const after setup
     // finish() called
     bool finished=false;
     size_t window=0u, limit=4u;
