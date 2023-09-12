@@ -37,6 +37,7 @@ public:
     // This is so that we can merge this with the subsequent values that come in before all initial events are in
     Value currentValue;
 
+    // must db_cancel_event() before ~MonitorControlOp
     std::vector<FieldSubscriptionCtx> fieldSubscriptionContexts{};
     explicit GroupSourceSubscriptionCtx(Group& subscribedGroup)
             :group(subscribedGroup), currentValue(subscribedGroup.valueTemplate.cloneEmpty()) {

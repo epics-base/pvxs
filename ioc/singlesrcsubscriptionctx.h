@@ -51,6 +51,8 @@ public:
 
     ~SingleSourceSubscriptionCtx() {
         assert(!eventsEnabled);
+        // must db_cancel_event() before ~MonitorControlOp
+        cancel();
     }
 };
 

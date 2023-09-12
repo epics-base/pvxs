@@ -45,6 +45,9 @@ public:
         if(!sub)
             throw std::runtime_error("Failed to create db subscription");
     }
+    void cancel() {
+        sub.reset();
+    }
     void enable() {
         if(sub) {
             db_event_enable(sub.get());
@@ -67,6 +70,10 @@ public:
     Subscription pPropertiesEventSubscription;
     bool hadValueEvent = false;
     bool hadPropertyEvent = false;
+    void cancel() {
+        pValueEventSubscription.cancel();
+        pPropertiesEventSubscription.cancel();
+    }
 };
 
 } // ioc
