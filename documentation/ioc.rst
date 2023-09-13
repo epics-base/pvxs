@@ -48,9 +48,9 @@ Beginning with PVXS 1.2.0 the functionality of `QSRV <https://epics-base.github.
 is replicated in the ``pvxsIoc`` library.
 Currently this feature preview is considered **alpha** level, with missing functionality.
 In addition to linking in ``libpvxsIoc``,
-users must **opt in** at runtime by setting ``$PVXS_QSRV_ENABLE=YES`` before ``iocInit()``. ::
+users may **opt out** at runtime by setting ``$PVXS_QSRV_ENABLE=NO`` before ``iocInit()``. ::
 
-    epicsEnvSet("PVXS_QSRV_ENABLE", "YES")
+    epicsEnvSet("PVXS_QSRV_ENABLE", "NO")
     iocInit()
 
 Functionality

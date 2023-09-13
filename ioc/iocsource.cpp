@@ -43,7 +43,7 @@ bool IOCSource::enabled()
 
     auto e = ena.load();
     if(e==0) {
-        e = inUnitTest() ? 1 : -1; // default to disabled normally (not unittest)
+        e = 1; // default to enabled normally
 
         auto env_dis = getenv("EPICS_IOC_IGNORE_SERVERS");
         auto env_ena = getenv("PVXS_QSRV_ENABLE");
