@@ -11,6 +11,7 @@ include $(TOP)/configure/CONFIG_PVXS_VERSION
 
 # access to private headers
 USR_CPPFLAGS += -I$(TOP)/src
+USR_CPPFLAGS += -I$(TOP)/ioc
 
 PROD_LIBS = pvxs Com
 
@@ -119,6 +120,12 @@ ifdef BASE_7_0
 
 TESTPROD_HOST += benchdata
 benchdata_SRCS += benchdata.cpp
+
+TESTPROD_HOST += testpvalink
+testpvalink_SRCS += testpvalink.cpp
+testpvalink_SRCS += testioc_registerRecordDeviceDriver.cpp
+testpvalink_LIBS += pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
+TESTS += testpvalink
 
 endif
 

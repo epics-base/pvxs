@@ -37,8 +37,6 @@
 #include "dbmanylocker.h"
 
 extern "C" {
-    extern int pvaLinkDebug;
-    extern int pvaLinkIsolate;
     extern int pvaLinkNWorkers;
 }
 
@@ -70,12 +68,12 @@ struct pvaLinkConfig : public jlink
         PP,      // for put() only,  For monitor, treated as NPP
         CP,      // for monitor only, put treats as pp
         CPP,     // for monitor only, put treats as pp
-    } pp = Default;
+    } proc = Default;
     enum ms_t {
         NMS,
         MS,
         MSI,
-    } ms = NMS;
+    } sevr = NMS;
 
     bool defer = false;
     bool pipeline = false;
@@ -115,6 +113,7 @@ public:
 
     pvaGlobal_t();
     virtual ~pvaGlobal_t();
+    void close();
 };
 extern pvaGlobal_t *pvaGlobal;
 
@@ -140,11 +139,9 @@ struct pvaLinkChannel : public epicsThreadRunable
         Disconnected,
         Connecting,
         Connected,
-    } state = Disconnected,
-      state_latched = Disconnected;
+    } state = Disconnected;
 
     bool isatomic = false;
-    bool queued = false; // added to WorkQueue
     bool debug = false; // set if any jlink::debug is set
     typedef std::set<dbCommon*> after_put_t;
     after_put_t after_put;

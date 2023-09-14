@@ -63,11 +63,6 @@ pvxsIoc_SRCS += pvalink_jlif.cpp
 pvxsIoc_SRCS += pvalink_link.cpp
 pvxsIoc_SRCS += pvalink_lset.cpp
 
-else # BASE_7_0
-
-pvxsIoc_SRCS += dummygroup.cpp
-pvxsIoc_SRCS += pvalink_null.cpp
-
 endif # BASE_7_0
 
 pvxsIoc_LIBS += $(EPICS_BASE_IOC_LIBS)
@@ -90,3 +85,10 @@ include $(TOP)/configure/RULES_PVXS_MODULE
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
+ifdef BASE_7_0
+../O.Common/pvxsIoc.dbd: ../pvxs7x.dbd
+	$(CP) $< $@
+else
+../O.Common/pvxsIoc.dbd: ../pvxs3x.dbd
+	$(CP) $< $@
+endif

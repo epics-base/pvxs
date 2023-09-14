@@ -7,14 +7,15 @@
 #include <epicsString.h>
 #include <alarm.h>
 #include <recGbl.h>
-#include <epicsStdio.h> // redirect stdout/stderr
 
 #include <pvxs/log.h>
 #include "dbentry.h"
 #include "pvalink.h"
 #include "utilpvt.h"
 
-DEFINE_LOGGER(loglset, "pvxs.pvalink.lset");
+#include <epicsStdio.h> // redirect stdout/stderr; include after libevent/util.h
+
+DEFINE_LOGGER(_logger, "pvxs.pvalink.lset");
 
 namespace pvxlink {
 namespace {
@@ -25,11 +26,10 @@ using namespace pvxs;
     errlogPrintf("pvaLink %s fails %s: %s\n", __func__, plink->precord->name, e.what()); \
 }
 
-#define CHECK_VALID() if(!self->valid()) { /*DEBUG(self, <<__func__<<" "<<self->channelName<<" !valid");*/ return -1;}
+#define CHECK_VALID() if(!self->valid()) { log_debug_printf(_logger, "%s: %s not valid\n", __func__, self->channelName.c_str()); return -1;}
 
 dbfType getLinkType(DBLINK *plink)
 {
-    dbCommon *prec = plink->precord;
     ioc::DBEntry ent(plink->precord);
 
     for(long status = dbFirstField(ent, 0); !status; status = dbNextField(ent, 0)) {
@@ -54,7 +54,7 @@ void pvaOpenLink(DBLINK *plink)
             }
         }
 
-//        DEBUG(self, <<plink->precord->name<<" OPEN "<<self->channelName);
+        log_debug_printf(_logger, "%s OPEN %s\n", plink->precord->name, self->channelName.c_str());
 
         // still single threaded at this point.
         // also, no pvaLinkChannel::lock yet
@@ -65,7 +65,7 @@ void pvaOpenLink(DBLINK *plink)
             return; // nothing to do...
 
         auto pvRequest(self->makeRequest());
-        pvaGlobal_t::channels_key_t key = std::make_pair(self->channelName, SB()<<pvRequest.format());
+        pvaGlobal_t::channels_key_t key = std::make_pair(self->channelName, std::string(SB()<<pvRequest.format()));
 
         std::shared_ptr<pvaLinkChannel> chan;
         bool doOpen = false;
@@ -121,7 +121,7 @@ void pvaRemoveLink(struct dbLocker *locker, DBLINK *plink)
 {
     try {
         std::unique_ptr<pvaLink> self((pvaLink*)plink->value.json.jlink);
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName);
+        log_debug_printf(_logger, "%s: %s %s\n", __func__, plink->precord->name, self->channelName.c_str());
         assert(self->alive);
 
     }CATCH()
@@ -133,7 +133,7 @@ int pvaIsConnected(const DBLINK *plink)
         Guard G(self->lchan->lock);
 
         bool ret = self->valid();
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" "<<ret);
+        log_debug_printf(_logger, "%s: %s %s\n", __func__, plink->precord->name, self->channelName.c_str());
         return ret;
 
     }CATCH()
@@ -208,7 +208,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
 
         if(!self->valid()) {
             // disconnected
-            if(self->ms != pvaLink::NMS) {
+            if(self->sevr != pvaLink::NMS) {
                 recGblSetSevr(plink->precord, LINK_ALARM, self->snap_severity);
             }
             // TODO: better capture of disconnect time
@@ -216,7 +216,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
             if(self->time) {
                 plink->precord->time = self->snap_time;
             }
-//            DEBUG(self, <<__func__<<" "<<self->channelName<<" !valid");
+            log_debug_printf(_logger, "%s: %s not valid", __func__, self->channelName.c_str());
             return -1;
         }
 
@@ -235,7 +235,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
         } else if(value.type().isarray()) {
             auto arr(value.as<shared_array<const void>>());
 
-            if(size_t(nReq) < arr.size())
+            if(size_t(nReq) > arr.size())
                 nReq = arr.size();
 
             if(arr.original_type()==ArrayType::String) {
@@ -325,6 +325,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
                     auto sval(value.as<std::string>());
                     strncpy(cbuf, sval.c_str(), MAX_STRING_SIZE-1u);
                     cbuf[MAX_STRING_SIZE-1u] = '\0';
+                    break;
                 }
                 default:
                     return S_db_badDbrtype;
@@ -354,8 +355,8 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
             self->snap_severity = NO_ALARM;
         }
 
-        if((self->snap_severity!=NO_ALARM && self->ms == pvaLink::MS) ||
-           (self->snap_severity==INVALID_ALARM && self->ms == pvaLink::MSI))
+        if((self->snap_severity!=NO_ALARM && self->sevr == pvaLink::MS) ||
+           (self->snap_severity==INVALID_ALARM && self->sevr == pvaLink::MSI))
         {
             recGblSetSevr(plink->precord, LINK_ALARM, self->snap_severity);
         }
@@ -364,7 +365,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
             plink->precord->time = self->snap_time;
         }
 
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" OK");
+        log_debug_printf(_logger, "%s: %s %s OK\n", __func__, plink->precord->name, self->channelName.c_str());
         return 0;
     }CATCH()
     return -1;
@@ -389,7 +390,8 @@ long pvaGetControlLimits(const DBLINK *plink, double *lo, double *hi)
         } else {
             *lo = *hi = 0.0;
         }
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" "<<(lo ? *lo : 0)<<" "<<(hi ? *hi : 0));
+        log_debug_printf(_logger, "%s: %s %s %f %f\n",
+            __func__, plink->precord->name, self->channelName.c_str(), lo ? *lo : 0, hi ? *hi : 0);
         return 0;
     }CATCH()
     return -1;
@@ -414,7 +416,8 @@ long pvaGetGraphicLimits(const DBLINK *plink, double *lo, double *hi)
         } else {
             *lo = *hi = 0.0;
         }
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" "<<(lo ? *lo : 0)<<" "<<(hi ? *hi : 0));
+        log_debug_printf(_logger, "%s: %s %s %f %f\n",
+            __func__, plink->precord->name, self->channelName.c_str(), lo ? *lo : 0, hi ? *hi : 0);
         return 0;
     }CATCH()
     return -1;
@@ -427,7 +430,9 @@ long pvaGetAlarmLimits(const DBLINK *plink, double *lolo, double *lo,
         //Guard G(self->lchan->lock);
         //CHECK_VALID();
         *lolo = *lo = *hi = *hihi = 0.0;
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" "<<(lolo ? *lolo : 0)<<" "<<(lo ? *lo : 0)<<" "<<(hi ? *hi : 0)<<" "<<(hihi ? *hihi : 0));
+        log_debug_printf(_logger, "%s: %s %s %f %f %f %f\n",
+            __func__, plink->precord->name, self->channelName.c_str(),
+            lo ? *lo : 0, lolo ? *lolo : 0, hi ? *hi : 0, hihi ? *hihi : 0);
         return 0;
     }CATCH()
     return -1;
@@ -441,7 +446,7 @@ long pvaGetPrecision(const DBLINK *plink, short *precision)
 
         // No sane way to recover precision from display.format string.
         *precision = 0;
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" "<<precision);
+        log_debug_printf(_logger, "%s: %s %s %i\n", __func__, plink->precord->name, self->channelName.c_str(), *precision);
         return 0;
     }CATCH()
     return -1;
@@ -463,7 +468,7 @@ long pvaGetUnits(const DBLINK *plink, char *units, int unitsSize)
             units[0] = '\0';
         }
         units[unitsSize-1] = '\0';
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" "<<units);
+        log_debug_printf(_logger, "%s: %s %s %s\n", __func__, plink->precord->name, self->channelName.c_str(), units);
         return 0;
     }CATCH()
     return -1;
@@ -482,8 +487,8 @@ long pvaGetAlarm(const DBLINK *plink, epicsEnum16 *status,
         if(status) {
             *status = self->snap_severity ? LINK_ALARM : NO_ALARM;
         }
-
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" "<<(severity ? *severity : 0)<<" "<<(status ? *status : 0));
+        log_debug_printf(_logger, "%s: %s %s %i %i\n",
+                         __func__, plink->precord->name, self->channelName.c_str(), severity ? *severity : 0, status ? *status : 0);
         return 0;
     }CATCH()
     return -1;
@@ -498,8 +503,7 @@ long pvaGetTimeStamp(const DBLINK *plink, epicsTimeStamp *pstamp)
         if(pstamp) {
             *pstamp = self->snap_time;
         }
-
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" "<<(pstamp ? pstamp->secPastEpoch : 0)<<":"<<(pstamp ? pstamp->nsec: 0));
+        log_debug_printf(_logger, "%s: %s %s %i %i\n", __func__, plink->precord->name, self->channelName.c_str(), pstamp ? pstamp->secPastEpoch : 0, pstamp ? pstamp->nsec : 0);
         return 0;
     }CATCH()
     return -1;
@@ -515,7 +519,7 @@ long pvaPutValueX(DBLINK *plink, short dbrType,
         if(nRequest < 0) return -1;
 
         if(!self->retry && !self->valid()) {
-//            DEBUG(self, <<__func__<<" "<<self->channelName<<" !valid");
+            log_debug_printf(_logger, "%s: %s not valid\n", __func__, self->channelName.c_str());
             return -1;
         }
 
@@ -562,7 +566,8 @@ long pvaPutValueX(DBLINK *plink, short dbrType,
 
         if(!self->defer) self->lchan->put();
 
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" "<<self->lchan->op_put.valid());
+        log_debug_printf(_logger, "%s: %s %s %s\n", __func__, plink->precord->name, self->channelName.c_str(), self->lchan->root.valid() ? "valid": "not valid");
+        
         return 0;
     }CATCH()
     return -1;
@@ -592,7 +597,8 @@ void pvaScanForward(DBLINK *plink)
         // FWD_LINK is never deferred, and always results in a Put
         self->lchan->put(true);
 
-//        DEBUG(self, <<plink->precord->name<<" "<<__func__<<" "<<self->channelName<<" "<<self->lchan->op_put.valid());
+        log_debug_printf(_logger, "%s: %s %s %s\n",
+            __func__, plink->precord->name, self->channelName.c_str(), self->lchan->root.valid() ? "valid": "not valid");
     }CATCH()
 }
 
@@ -600,8 +606,6 @@ void pvaScanForward(DBLINK *plink)
 #undef CATCH
 
 } //namespace
-
-namespace pvalink {
 
 lset pva_lset = {
     0, 1, // non-const, volatile
@@ -625,5 +629,4 @@ lset pva_lset = {
     //&pvaReportLink,
 };
 
-} //namespace pvalink
 } // namespace pvxlink

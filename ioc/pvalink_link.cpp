@@ -8,7 +8,11 @@
 
 #include <alarm.h>
 
+#include <pvxs/log.h>
+
 #include "pvalink.h"
+
+DEFINE_LOGGER(_logger, "ioc.pvalink.link");
 
 namespace pvxlink {
 
@@ -66,7 +70,7 @@ Value pvaLink::makeRequest()
 // caller must lock lchan->lock
 bool pvaLink::valid() const
 {
-    return lchan->connected_latched && lchan->root;
+    return lchan->state == pvaLinkChannel::Connected && lchan->root;
 }
 
 // caller must lock lchan->lock
@@ -100,7 +104,7 @@ Value pvaLink::getSubField(const char *name)
 // call with channel lock held
 void pvaLink::onDisconnect()
 {
-//    DEBUG(this,<<plink->precord->name<<" disconnect");
+    log_debug_printf(_logger, "%s disconnect\n", plink->precord->name);
     // TODO: option to remain queue'd while disconnected
 
     used_queue = used_scratch = false;
@@ -108,9 +112,9 @@ void pvaLink::onDisconnect()
 
 void pvaLink::onTypeChange()
 {
-//    DEBUG(this,<<plink->precord->name<<" type change");
+    log_debug_printf(_logger, "%s type change\n", plink->precord->name);
 
-    assert(lchan->connected_latched && !!lchan->root); // we should only be called when connected
+    assert(lchan->state == pvaLinkChannel::Connected && lchan->root); // we should only be called when connected
 
     fld_value = getSubField("value");
     fld_seconds = getSubField("timeStamp.secondsPastEpoch");

@@ -100,5 +100,14 @@ void testPrepare();
 PVXS_IOC_API
 void testShutdown();
 
+PVXS_IOC_API
+void testqsrvWaitForLinkEvent(struct link *plink);
+
+PVXS_IOC_API
+void testqsrvShutdownOk(void);
+
+PVXS_IOC_API
+void testqsrvCleanup(void);
+
 }} // namespace pvxs::ioc
 #endif // PVXS_IOCHOOKS_H

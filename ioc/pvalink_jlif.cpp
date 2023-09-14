@@ -68,9 +68,9 @@ jlif_result pva_parse_null(jlink *pjlink)
         if(pvt->parseDepth!=1) {
             // ignore
         } else if(pvt->jkey == "proc") {
-            pvt->pp = pvaLinkConfig::Default;
+            pvt->proc = pvaLinkConfig::Default;
         } else if(pvt->jkey == "sevr") {
-            pvt->ms = pvaLinkConfig::NMS;
+            pvt->sevr = pvaLinkConfig::NMS;
         } else if(pvt->jkey == "local") {
             pvt->local = false; // alias for local:false
         } else if(pvt->debug) {
@@ -90,9 +90,9 @@ jlif_result pva_parse_bool(jlink *pjlink, int val)
         if(pvt->parseDepth!=1) {
             // ignore
         } else if(pvt->jkey == "proc") {
-            pvt->pp = val ? pvaLinkConfig::PP : pvaLinkConfig::NPP;
+            pvt->proc = val ? pvaLinkConfig::PP : pvaLinkConfig::NPP;
         } else if(pvt->jkey == "sevr") {
-            pvt->ms = val ? pvaLinkConfig::MS : pvaLinkConfig::NMS;
+            pvt->sevr = val ? pvaLinkConfig::MS : pvaLinkConfig::NMS;
         } else if(pvt->jkey == "defer") {
             pvt->defer = !!val;
         } else if(pvt->jkey == "pipeline") {
@@ -149,15 +149,15 @@ jlif_result pva_parse_string(jlink *pjlink, const char *val, size_t len)
 
         } else if(pvt->jkey=="proc") {
             if(sval.empty()) {
-                pvt->pp = pvaLinkConfig::Default;
+                pvt->proc = pvaLinkConfig::Default;
             } else if(sval=="CP") {
-                pvt->pp = pvaLinkConfig::CP;
+                pvt->proc = pvaLinkConfig::CP;
             } else if(sval=="CPP") {
-                pvt->pp = pvaLinkConfig::CPP;
+                pvt->proc = pvaLinkConfig::CPP;
             } else if(sval=="PP") {
-                pvt->pp = pvaLinkConfig::PP;
+                pvt->proc = pvaLinkConfig::PP;
             } else if(sval=="NPP") {
-                pvt->pp = pvaLinkConfig::NPP;
+                pvt->proc = pvaLinkConfig::NPP;
             } else if(pvt->debug) {
                 printf("pva link parsing unknown proc depth=%u key=\"%s\" value=\"%s\"\n",
                        pvt->parseDepth, pvt->jkey.c_str(), sval.c_str());
@@ -165,16 +165,16 @@ jlif_result pva_parse_string(jlink *pjlink, const char *val, size_t len)
 
         } else if(pvt->jkey=="sevr") {
             if(sval=="NMS") {
-                pvt->ms = pvaLinkConfig::NMS;
+                pvt->sevr = pvaLinkConfig::NMS;
             } else if(sval=="MS") {
-                pvt->ms = pvaLinkConfig::MS;
+                pvt->sevr = pvaLinkConfig::MS;
             } else if(sval=="MSI") {
-                pvt->ms = pvaLinkConfig::MSI;
+                pvt->sevr = pvaLinkConfig::MSI;
             } else if(sval=="MSS") {
                 // not sure how to handle mapping severity for MSS.
                 // leave room for this to happen compatibly later by
                 // handling as alias for MS until then.
-                pvt->ms = pvaLinkConfig::MS;
+                pvt->sevr = pvaLinkConfig::MS;
             } else if(pvt->debug) {
                 printf("pva link parsing unknown sevr depth=%u key=\"%s\" value=\"%s\"\n",
                        pvt->parseDepth, pvt->jkey.c_str(), sval.c_str());
@@ -228,14 +228,14 @@ void pva_report(const jlink *rpjlink, int lvl, int indent)
         if(!pval->fieldName.empty())
             printf("|.%s", pval->fieldName.c_str());
 
-        switch(pval->pp) {
+        switch(pval->proc) {
         case pvaLinkConfig::NPP: printf(" NPP"); break;
         case pvaLinkConfig::Default: printf(" Def"); break;
         case pvaLinkConfig::PP: printf(" PP"); break;
         case pvaLinkConfig::CP: printf(" CP"); break;
         case pvaLinkConfig::CPP: printf(" CPP"); break;
         }
-        switch(pval->ms) {
+        switch(pval->sevr) {
         case pvaLinkConfig::NMS: printf(" NMS"); break;
         case pvaLinkConfig::MS:  printf(" MS"); break;
         case pvaLinkConfig::MSI: printf(" MSI"); break;
@@ -254,17 +254,13 @@ void pva_report(const jlink *rpjlink, int lvl, int indent)
             // after open()
             Guard G(pval->lchan->lock);
 
-            printf(" conn=%c", pval->lchan->connected ? 'T' : 'F');
+            printf(" conn=%c", pval->lchan->state == pvaLinkChannel::Connected ? 'T' : 'F');
             if(pval->lchan->op_put) {
                 printf(" Put");
             }
 
             if(lvl>0) {
                 printf(" #disconn=%zu prov=%s", pval->lchan->num_disconnect, pval->lchan->providerName.c_str());
-            }
-            if(lvl>1) {
-                printf(" inprog=%c",
-                       pval->lchan->queued?'T':'F');
             }
 //            if(lvl>5) {
 //                std::ostringstream strm;

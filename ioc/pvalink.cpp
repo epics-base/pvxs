@@ -25,21 +25,20 @@
 #include <epicsUnitTest.h>
 #include <epicsString.h>
 
-#include <epicsStdio.h> /* redirects stdout/stderr */
+#include <pvxs/server.h>
 
 #include "pvalink.h"
 #include "dblocker.h"
 #include "dbentry.h"
 #include "iocshcommand.h"
+#include "utilpvt.h"
 
+#include <epicsStdio.h>  /* redirects stdout/stderr; include after util.h from libevent */
 #include <epicsExport.h> /* defines epicsExportSharedSymbols */
 
 #if EPICS_VERSION_INT>=VERSION_INT(7,0,6,0)
 #  define HAVE_SHUTDOWN_HOOKS
 #endif
-
-int pvaLinkDebug;
-int pvaLinkIsolate;
 
 namespace pvxs { namespace ioc {
 
@@ -53,7 +52,7 @@ static void shutdownStep1()
     // no locking here as we assume that shutdown doesn't race startup
     if(!pvaGlobal) return;
 
-    pvaGlobal->queue.close();
+    pvaGlobal->close();
 }
 
 // Cleanup pvaGlobal, including PVA client and QSRV providers ahead of PDB cleanup
@@ -127,7 +126,11 @@ void initPVALink(initHookState state)
 
         } else if(state==initHookAfterInitDatabase) {
             // TODO "local" provider
-            pvaGlobal->provider_remote = client::Config().build();
+            if (inUnitTest()) {
+                pvaGlobal->provider_remote = ioc::server().clientConfig().build();
+            } else {
+                pvaGlobal->provider_remote = client::Config().build();
+            }
 
         } else if(state==initHookAfterIocBuilt) {
             // after epicsExit(exitDatabase)
@@ -249,7 +252,7 @@ void dbpvar(const char *precordname, int level)
             }
 
             nchans++;
-            if(chan->connected_latched)
+            if(chan->state == pvaLinkChannel::Connected)
                 nconn++;
 
             if(!precordname)
@@ -258,7 +261,7 @@ void dbpvar(const char *precordname, int level)
             if(level<=0)
                 continue;
 
-            if(level>=2 || (!chan->connected_latched && level==1)) {
+            if(level>=2 || (chan->state != pvaLinkChannel::Connected && level==1)) {
                 if(chan->key.first.size()<=28) {
                     printf("%28s ", chan->key.first.c_str());
                 } else {
@@ -266,7 +269,7 @@ void dbpvar(const char *precordname, int level)
                 }
 
                 printf("conn=%c %zu disconnects, %zu type changes",
-                       chan->connected_latched?'T':'F',
+                       chan->state == pvaLinkChannel::Connected?'T':'F',
                        chan->num_disconnect,
                        chan->num_type_change);
                 if(chan->op_put) {
@@ -302,14 +305,14 @@ void dbpvar(const char *precordname, int level)
 
                         printf("%*s%s.%s", 30, "", pval->plink ? pval->plink->precord->name : "<NULL>", fldname);
 
-                        switch(pval->pp) {
+                        switch(pval->proc) {
                         case pvaLinkConfig::NPP: printf(" NPP"); break;
                         case pvaLinkConfig::Default: printf(" Def"); break;
                         case pvaLinkConfig::PP: printf(" PP"); break;
                         case pvaLinkConfig::CP: printf(" CP"); break;
                         case pvaLinkConfig::CPP: printf(" CPP"); break;
                         }
-                        switch(pval->ms) {
+                        switch(pval->sevr) {
                         case pvaLinkConfig::NMS: printf(" NMS"); break;
                         case pvaLinkConfig::MS:  printf(" MS"); break;
                         case pvaLinkConfig::MSI: printf(" MSI"); break;
@@ -351,6 +354,5 @@ void installPVAAddLinkHook()
 extern "C" {
     using pvxs::ioc::installPVAAddLinkHook;
     epicsExportRegistrar(installPVAAddLinkHook);
-    epicsExportAddress(int, pvaLinkDebug);
     epicsExportAddress(int, pvaLinkNWorkers);
 }

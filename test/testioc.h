@@ -33,6 +33,7 @@ public:
         if(running) {
             pvxs::ioc::testShutdown();
             testIocShutdownOk();
+            running = false;
         }
     }
     ~TestIOC() {
