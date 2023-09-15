@@ -44,6 +44,11 @@ Environment variables
 This table lists all of the ``$EPICS_PVA*`` environment variables understood by PVXS.
 See Client :ref:`clientconf` and Server :ref:`serverconf` for detailed explanations.
 
+Many variables come in pairs of ``$EPICS_PVA_*`` and ``$EPICS_PVAS_*``.
+A Client will look at only ``$EPICS_PVA_*``.
+A server will prefer ``$EPICS_PVAS_*`` if set,
+or fallback to use the associated ``$EPICS_PVA_*`` if set.
+
 +----------------------------------+--------+--------+
 |             Variable             | Client | Server |
 +==================================+========+========+
@@ -67,13 +72,9 @@ See Client :ref:`clientconf` and Server :ref:`serverconf` for detailed explanati
 +----------------------------------+--------+--------+
 |   EPICS_PVAS_IGNORE_ADDR_LIST    |        |   x    |
 +----------------------------------+--------+--------+
-|        EPICS_PVA_CONN_TMO        |        |   x    |
+|        EPICS_PVA_CONN_TMO        |   x    |   x    |
 +----------------------------------+--------+--------+
 |      EPICS_PVA_NAME_SERVERS      |   x    |        |
-+----------------------------------+--------+--------+
-|     EPICS_PVA_BROADCAST_PORT     |   x    |        |
-+----------------------------------+--------+--------+
-|        EPICS_PVA_CONN_TMO        |   x    |        |
 +----------------------------------+--------+--------+
 
 
