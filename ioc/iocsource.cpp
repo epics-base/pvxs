@@ -445,7 +445,7 @@ void IOCSource::doPostProcessing(dbChannel* pDbChannel, TriState forceProcessing
             (forceProcessing == True) ||
             (pDbChannel->addr.pfldDes->process_passive &&
                     pDbChannel->addr.precord->scan == 0 &&
-                    dbChannelFinalFieldSize(pDbChannel) < DBR_PUT_ACKT &&
+                    dbChannelFinalFieldType(pDbChannel) < DBR_PUT_ACKT &&
                     forceProcessing == Unset)) {
         if (pDbChannel->addr.precord->pact) {
 #if EPICS_VERSION_INT >= VERSION_INT(3, 16, 2, 0)
