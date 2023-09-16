@@ -117,6 +117,7 @@ void testTable()
               "value.A double[] = {0}[]\n"
               "value.B double[] = {0}[]\n");
 
+    testDiag("Update tbl:Tbl");
     shared_array<const double> colA({1.0, 2.0, 3.0});
     shared_array<const double> colB({4.0, 5.0, 6.0});
     testTimeSec++;

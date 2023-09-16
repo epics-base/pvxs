@@ -218,6 +218,8 @@ void subscriptionPost(GroupSourceSubscriptionCtx *pGroupCtx)
         pGroupCtx->eventsPrimed = true;
     }
 
+    log_debug_printf(_logname, "%s : %s\n", __func__, pGroupCtx->group.name.c_str());
+
     auto& currentValue = pGroupCtx->currentValue;
 
     // If events have been primed then return the value to the subscriber,
@@ -472,6 +474,37 @@ void GroupSource::get(Group& group, const std::unique_ptr<server::ExecOp>& getOp
 }
 
 /**
+ * Called by putGroup() to perform the actual put of the given value into the group field specified.
+ * The value will be the whole value template that the group represents but only the fields passed in by
+ * the client will be set.  So we simply check to see whether the parts of value that are referenced by the
+ * provided field parameter are included in the given value, and if so, we pull them out and do a low level
+ * database put.
+ *
+ * @param value the sparsely populated value to put into the group's field
+ * @param field the group field to check against
+ * @param securityClient the security client to use to authorise the operation
+ */
+static
+void putGroupField(const Value& value,
+                   const Field& field,
+                   const SecurityClient& securityClient,
+                   const GroupSecurityCache& groupSecurityCache) {
+    // find the leaf node that the field refers to in the given value
+    auto leafNode = field.findIn(value);
+    bool marked = leafNode.isMarked() && field.value;
+
+    // If the field references a valid part of the given value then we can send it to the database
+    if (marked) {
+        IOCSource::doFieldPreProcessing(securityClient); // pre-process field
+        IOCSource::put(field.value, leafNode, field.info);
+    }
+    if (marked || field.info.type==MappingInfo::Proc) {
+        // Do processing if required
+        IOCSource::doPostProcessing(field.value, groupSecurityCache.forceProcessing);
+    }
+}
+
+/**
  * Handler invoked when a peer sends data on a PUT
  *
  * @param group the group to which the data is posted
@@ -518,9 +551,9 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
             // Loop through all fields
             for (auto& field: group.fields) {
                 // Put the field
-                putGroupField(value, field, groupSecurityCache.securityClients[fieldIndex]);
-                // Do processing if required
-                IOCSource::doPostProcessing(field.value, groupSecurityCache.forceProcessing);
+                putGroupField(value, field,
+                              groupSecurityCache.securityClients[fieldIndex],
+                              groupSecurityCache);
                 fieldIndex++;
             }
 
@@ -538,11 +571,11 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
                 // Lock this field
                 DBLocker F(pDbChannel->addr.precord);
                 // Put the field
-                putGroupField(value, field, groupSecurityCache.securityClients[fieldIndex]);
-                // Do processing if required
-                IOCSource::doPostProcessing(field.value, groupSecurityCache.forceProcessing);
-                // Unlock this field when locker goes out of scope
+                putGroupField(value, field,
+                              groupSecurityCache.securityClients[fieldIndex],
+                              groupSecurityCache);
                 fieldIndex++;
+                // Unlock this field when locker goes out of scope
             }
         }
 
@@ -557,28 +590,6 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
 
     // If all went ok then let the client know
     putOperation->reply();
-}
-
-/**
- * Called by putGroup() to perform the actual put of the given value into the group field specified.
- * The value will be the whole value template that the group represents but only the fields passed in by
- * the client will be set.  So we simply check to see whether the parts of value that are referenced by the
- * provided field parameter are included in the given value, and if so, we pull them out and do a low level
- * database put.
- *
- * @param value the sparsely populated value to put into the group's field
- * @param field the group field to check against
- * @param securityClient the security client to use to authorise the operation
- */
-void GroupSource::putGroupField(const Value& value, const Field& field, const SecurityClient& securityClient) {
-    // find the leaf node that the field refers to in the given value
-    auto leafNode = field.findIn(value);
-
-    // If the field references a valid part of the given value then we can send it to the database
-    if (leafNode && leafNode.isMarked()) {
-        IOCSource::doFieldPreProcessing(securityClient); // pre-process field
-        IOCSource::put(field.value, leafNode, field.info);
-    }
 }
 
 } // ioc

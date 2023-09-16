@@ -66,7 +66,6 @@ private:
 	void onSubscribe(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx,
 			std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) const;
     static void onStart(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx, bool isStarting);
-    static void putGroupField(const Value& value, const Field& field, const SecurityClient& securityClient);
 };
 
 } // ioc
