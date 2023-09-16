@@ -252,13 +252,19 @@ static
 void subscriptionValueCallback(void* userArg, dbChannel* pChannel, int, struct db_field_log* pDbFieldLog) {
     try {
         auto fieldSubscriptionCtx = (FieldSubscriptionCtx*)userArg;
+        auto first = !fieldSubscriptionCtx->hadValueEvent;
         fieldSubscriptionCtx->hadValueEvent = true;
 
         // Find the group subscription context from the field subscription context
         auto& pGroupCtx = fieldSubscriptionCtx->pGroupCtx;
         // Also find the field
         auto& field = *fieldSubscriptionCtx->field;
-        auto currentValue = pGroupCtx->currentValue;
+        auto& currentValue = pGroupCtx->currentValue;
+
+        log_debug_printf(_logname, "%s%s %s %s.%s\n", __func__,
+                         first ? " first" : "",
+                         pChannel ? pChannel->name : "<null>",
+                         pGroupCtx->group.name.c_str(), field.fullName.c_str());
 
         // lock all records to be triggered
         DBManyLocker G(field.lock);
@@ -274,6 +280,10 @@ void subscriptionValueCallback(void* userArg, dbChannel* pChannel, int, struct d
                 change = UpdateType::type(pDbFieldLog->mask & UpdateType::Everything);
             }
 #endif
+            log_debug_printf(_logname, "%s trig %s %s.%s\n", __func__,
+                             pTriggeredField->value ? pTriggeredField->value->name : "<null>",
+                             pGroupCtx->group.name.c_str(), pTriggeredField->fullName.c_str());
+
             LocalFieldLog localFieldLog(channelToUse, isSelfTrig ? pDbFieldLog : nullptr);
             IOCSource::get(leafNode, pTriggeredField->info, pTriggeredField->anyType,
                            change, channelToUse, localFieldLog.pFieldLog);
@@ -290,11 +300,16 @@ static
 void subscriptionPropertiesCallback(void* userArg, dbChannel* pChannel, int, struct db_field_log* pDbFieldLog) {
     try {
         auto subscriptionContext = (FieldSubscriptionCtx*)userArg;
+        bool first = subscriptionContext->hadPropertyEvent;
         subscriptionContext->hadPropertyEvent = true;
 
         auto& field(*subscriptionContext->field);
 
         auto fieldValue(field.findIn(subscriptionContext->pGroupCtx->currentValue));
+
+        log_debug_printf(_logname, "%s%s %s %s.%s\n", __func__, first ? " first" : "",
+                         pChannel ? pChannel->name : "<null>",
+                         subscriptionContext->pGroupCtx->group.name.c_str(), field.fullName.c_str());
 
         /* For a property update, we (may) only post changes to the field mapping
          * in question.  But never the triggered fields.
@@ -472,6 +487,8 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
         bool atomic = group.atomicPutGet;
         putOperation->pvRequest()["record._options.atomic"].as(atomic);
 
+        log_debug_printf(_logname, "%s %s\n", __func__, group.name.c_str());
+
         std::vector<SecurityLogger> securityLoggers(group.fields.size());
 
         // Prepare group put operation
@@ -530,6 +547,8 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
         }
 
     } catch (std::exception& e) {
+        log_debug_printf(_logname, "%s %s remote error: %s\n",
+                         __func__, group.name.c_str(), e.what());
         // Unlock all locked fields when lockers go out of scope
         // Post error message to put operation object
         putOperation->error(e.what());

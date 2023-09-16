@@ -209,6 +209,7 @@ void testEnum()
               "value.index int32_t = 1\n");
 
     testTimeSec++;
+    testDiag("Change enm:ENUM to ZERO");
     ctxt.put("enm:ENUM").record("atomic", false).set("value.index", 0).exec()->wait(5.0);
     testdbGetFieldEqual("enm:ENUM:INDEX", DBR_LONG, 0);
 

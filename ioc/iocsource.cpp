@@ -16,6 +16,8 @@
 #include <epicsStdlib.h>
 #include <epicsString.h>
 
+#include <pvxs/log.h>
+
 #include "alarm.h"
 #include "iocsource.h"
 #include "dbentry.h"
@@ -28,6 +30,8 @@
 
 // include last to avoid clash of #define printf with other headers
 #include <epicsStdio.h>
+
+DEFINE_LOGGER(_log, "pvxs.ioc.db");
 
 namespace pvxs {
 namespace ioc {
@@ -457,6 +461,7 @@ void IOCSource::doPostProcessing(dbChannel* pDbChannel, TriState forceProcessing
             pDbChannel->addr.precord->rpro = TRUE;
         } else {
             pDbChannel->addr.precord->putf = TRUE;
+            log_debug_printf(_log, "dbProcess %s\n", pDbChannel->name);
             DBErrorMessage dbErrorMessage(dbProcess(pDbChannel->addr.precord));
             if (dbErrorMessage) {
                 throw std::runtime_error(dbErrorMessage.c_str());
@@ -631,6 +636,8 @@ void IOCSource::put(dbChannel* pDbChannel, const Value& node, const MappingInfo 
         value = info.cval;
         break;
     }
+
+    log_debug_printf(_log, "dbPut %s\n", pDbChannel->name);
 
     if (dbChannelFinalElements(pDbChannel) == 1) {
         putScalar(pDbChannel, value);
