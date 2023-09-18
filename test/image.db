@@ -41,6 +41,7 @@ record(waveform, "$(N):ArrayData") {
             +id:"epics:nt/NTNDArray:1.0",
             "value":{+type:"any",
                      +channel:"VAL",
+                     +putorder:0,
                      +trigger:"*"},
             "":{+type:"meta", +channel:"SEVR"},
             "x":{+type:"meta", +channel:"SEVR"}

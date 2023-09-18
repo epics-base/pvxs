@@ -33,9 +33,7 @@ public:
 
     FieldDefinition(const FieldConfig& fieldConfig, const std::string& fieldName);
 
-    bool operator<(const FieldDefinition& o) const {
-        return putOrder < o.putOrder;
-    }
+    bool operator<(const FieldDefinition& o) const = delete;
 };
 
 } // pvxs

@@ -491,7 +491,7 @@ void putGroupField(const Value& value,
                    const GroupSecurityCache& groupSecurityCache) {
     // find the leaf node that the field refers to in the given value
     auto leafNode = field.findIn(value);
-    bool marked = leafNode.isMarked() && field.value;
+    bool marked = leafNode.isMarked() && field.value && field.info.putOrder!=std::numeric_limits<int64_t>::min();
 
     // If the field references a valid part of the given value then we can send it to the database
     if (marked) {

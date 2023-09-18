@@ -250,7 +250,11 @@ void GroupConfigProcessor::defineFields(GroupDefinition& groupDefinition, const 
 void GroupConfigProcessor::defineFieldSortOrder() {
     for (auto&& groupDefinitionMapEntry: groupDefinitionMap) {
         auto& groupDefinition = groupDefinitionMapEntry.second;
-        std::sort(groupDefinition.fields.begin(), groupDefinition.fields.end());
+        std::stable_sort(groupDefinition.fields.begin(), groupDefinition.fields.end(),
+                  [](const FieldDefinition& l, const FieldDefinition& r) -> bool
+        {
+            return l.info.putOrder < r.info.putOrder;
+        });
         groupDefinition.fieldMap.clear();
 
         auto groupFieldIndex = 0;

@@ -279,15 +279,6 @@ void testImage()
               "            } timeStamp\n"
               "        }\n"
               "    ]\n"
-              "    struct[] dimension = {2}[\n"
-              "        struct {\n"
-              "            int32_t size = 100\n"
-              "        }\n"
-              "        struct {\n"
-              "            int32_t size = 100\n"
-              "        }\n"
-              "    ]\n"
-              "    any value uint16_t[] = {10000}[0, 655, 1310, 1966, 2621, ...]\n"
               "    struct {\n"
               "        struct \"alarm_t\" {\n"
               "            int32_t severity = 0\n"
@@ -300,6 +291,15 @@ void testImage()
               "            int32_t userTag = 0\n"
               "        } timeStamp\n"
               "    } x\n"
+              "    struct[] dimension = {2}[\n"
+              "        struct {\n"
+              "            int32_t size = 100\n"
+              "        }\n"
+              "        struct {\n"
+              "            int32_t size = 100\n"
+              "        }\n"
+              "    ]\n"
+              "    any value uint16_t[] = {10000}[0, 655, 1310, 1966, 2621, ...]\n"
               "}\n");
     testStrEq(std::string(SB()<<val.format().delta().arrayLimit(5u)),
               "record._options.atomic bool = true\n"
@@ -329,18 +329,18 @@ void testImage()
               "attribute[1].timeStamp.secondsPastEpoch int64_t = 631152000\n"
               "attribute[1].timeStamp.nanoseconds int32_t = 0\n"
               "attribute[1].timeStamp.userTag int32_t = 0\n"
+              "x.alarm.severity int32_t = 0\n"
+              "x.alarm.status int32_t = 0\n"
+              "x.alarm.message string = \"\"\n"
+              "x.timeStamp.secondsPastEpoch int64_t = 643497678\n"
+              "x.timeStamp.nanoseconds int32_t = 102030\n"
               "dimension struct[]\n"
               "dimension[0] struct\n"
               "dimension[0].size int32_t = 100\n"
               "dimension[1] struct\n"
               "dimension[1].size int32_t = 100\n"
               "value any\n"
-              "value-> uint16_t[] = {10000}[0, 655, 1310, 1966, 2621, ...]\n"
-              "x.alarm.severity int32_t = 0\n"
-              "x.alarm.status int32_t = 0\n"
-              "x.alarm.message string = \"\"\n"
-              "x.timeStamp.secondsPastEpoch int64_t = 643497678\n"
-              "x.timeStamp.nanoseconds int32_t = 102030\n");
+              "value-> uint16_t[] = {10000}[0, 655, 1310, 1966, 2621, ...]\n");
 
     TestSubscription sub(ctxt.monitor("img:Array2"));
     val = sub.waitForUpdate();
@@ -375,18 +375,18 @@ void testImage()
               "attribute[1].timeStamp.secondsPastEpoch int64_t = 631152000\n"
               "attribute[1].timeStamp.nanoseconds int32_t = 0\n"
               "attribute[1].timeStamp.userTag int32_t = 0\n"
-              "dimension struct[]\n"
-              "dimension[0] struct\n"
-              "dimension[0].size int32_t = 100\n"
-              "dimension[1] struct\n"
-              "dimension[1].size int32_t = 100\n"
               "value any\n"
               "value-> uint16_t[] = {10000}[0, 655, 1310, 1966, 2621, ...]\n"
               "x.alarm.severity int32_t = 0\n"
               "x.alarm.status int32_t = 0\n"
               "x.alarm.message string = \"\"\n"
               "x.timeStamp.secondsPastEpoch int64_t = 643497678\n"
-              "x.timeStamp.nanoseconds int32_t = 102030\n");
+              "x.timeStamp.nanoseconds int32_t = 102030\n"
+              "dimension struct[]\n"
+              "dimension[0] struct\n"
+              "dimension[0].size int32_t = 100\n"
+              "dimension[1] struct\n"
+              "dimension[1].size int32_t = 100\n");
 
     testTimeSec++;
     testdbPutFieldOk("img:ArrayData_.PROC", DBR_LONG, 0);
@@ -421,18 +421,18 @@ void testImage()
               "attribute[1].timeStamp.secondsPastEpoch int64_t = 631152000\n"
               "attribute[1].timeStamp.nanoseconds int32_t = 0\n"
               "attribute[1].timeStamp.userTag int32_t = 0\n"
-              "dimension struct[]\n"
-              "dimension[0] struct\n"
-              "dimension[0].size int32_t = 100\n"
-              "dimension[1] struct\n"
-              "dimension[1].size int32_t = 100\n"
               "value any\n"
               "value-> uint16_t[] = {10000}[0, 655, 1310, 1966, 2621, ...]\n"
               "x.alarm.severity int32_t = 0\n"
               "x.alarm.status int32_t = 0\n"
               "x.alarm.message string = \"\"\n"
               "x.timeStamp.secondsPastEpoch int64_t = 643497681\n"
-              "x.timeStamp.nanoseconds int32_t = 102030\n");
+              "x.timeStamp.nanoseconds int32_t = 102030\n"
+              "dimension struct[]\n"
+              "dimension[0] struct\n"
+              "dimension[0].size int32_t = 100\n"
+              "dimension[1] struct\n"
+              "dimension[1].size int32_t = 100\n");
 
     sub.testEmpty();
 

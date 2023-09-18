@@ -73,7 +73,10 @@ void GroupProcessorContext::assign(const Value& value) {
             groupField.trigger = value.as<std::string>();
 
         } else if (key == "+putorder") {
-            groupField.putOrder = value.as<int64_t>();
+            auto po(value.as<int64_t>());
+            if(po==std::numeric_limits<int64_t>::min())
+                po += 1;
+            groupField.info.putOrder = po;
 
         } else if (key == "+const") {
             groupField.info.cval = value;

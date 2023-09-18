@@ -7,7 +7,7 @@ record(longout, "$(P):ENUM:INDEX") {
         "$(P):ENUM":{
             +id:"epics:nt/NTEnum:1.0",
             "value":{+type:"structure", +id:"enum_t"},
-            "value.index":{+type:"plain", +channel:"VAL"},
+            "value.index":{+type:"plain", +channel:"VAL", +putorder:0},
             "":{+type:"meta", +channel:"VAL"}
         }
     })

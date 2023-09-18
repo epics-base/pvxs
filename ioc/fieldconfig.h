@@ -12,6 +12,7 @@
 
 #include <string>
 #include <map>
+#include <limits>
 
 #include <dbChannel.h>
 
@@ -33,6 +34,8 @@ struct MappingInfo {
     static
     const char *name(type_t t);
 
+    int64_t putOrder = std::numeric_limits<int64_t>::min();
+
     uint32_t nsecMask = 0u;
 
     Value cval;
@@ -48,7 +51,6 @@ class FieldConfig {
 public:
     std::string channel, trigger, structureId;
     MappingInfo info;
-    int64_t putOrder = 0;
 };
 
 } // pvxs
