@@ -315,8 +315,8 @@ void onOp(const std::shared_ptr<SingleInfo>& sInfo, const Value& valuePrototype,
                         putOperationCache->valueToSet = value;
                         // TODO prevent concurrent put with callbacks (notifyBusy)
 
-                        putOperationCache->notify.requestType = value["value"].isMarked() ? putProcessRequest
-                                                                                          : processRequest;
+                        putOperationCache->notify.requestType = value["value"].isMarked(true, true)
+                                ? putProcessRequest : processRequest;
                         putOperationCache->putOperation = std::move(putOperation);
                         dbProcessNotify(&putOperationCache->notify);
                         return;
