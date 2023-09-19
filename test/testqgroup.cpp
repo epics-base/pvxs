@@ -220,6 +220,29 @@ void testEnum()
     testStrEq(std::string(SB()<<val.format().delta()),
               "value.index int32_t = 0\n");
 
+    testDiag("attempt to write unwritable choices list");
+    {
+        testThrows<client::RemoteError>([&ctxt]{
+            shared_array<const std::string> choices({"foo"});
+            ctxt.put("enm:ENUM").set("value.choices", choices).exec()->wait(5.0);
+        });
+        const char expect[2][MAX_STRING_SIZE] = {"ZERO", "ONE"};
+        testdbGetArrFieldEqual("enm:ENUM:CHOICES", DBR_STRING, 2, 2, expect);
+    }
+
+    testDiag("attempt to write both index and choices list");
+    {
+        shared_array<const std::string> choices({"foo"});
+        ctxt.put("enm:ENUM")
+                .record("process", false) // no update posted
+                .set("value.index", 1)
+                .set("value.choices", choices)
+                .exec()->wait(5.0);
+        const char expect[2][MAX_STRING_SIZE] = {"ZERO", "ONE"};
+        testdbGetArrFieldEqual("enm:ENUM:CHOICES", DBR_STRING, 2, 2, expect);
+        testdbGetFieldEqual("enm:ENUM:INDEX", DBR_LONG, 1);
+    }
+
     sub.testEmpty();
 }
 
@@ -695,7 +718,7 @@ void testConst()
 
 MAIN(testqgroup)
 {
-    testPlan(33);
+    testPlan(37);
     testSetup();
     {
         TestIOC ioc;

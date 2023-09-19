@@ -485,7 +485,7 @@ void GroupSource::get(Group& group, const std::unique_ptr<server::ExecOp>& getOp
  * @param securityClient the security client to use to authorise the operation
  */
 static
-void putGroupField(const Value& value,
+bool putGroupField(const Value& value,
                    const Field& field,
                    const SecurityClient& securityClient,
                    const GroupSecurityCache& groupSecurityCache) {
@@ -501,7 +501,9 @@ void putGroupField(const Value& value,
     if (marked || field.info.type==MappingInfo::Proc) {
         // Do processing if required
         IOCSource::doPostProcessing(field.value, groupSecurityCache.forceProcessing);
+        return true;
     }
+    return false;
 }
 
 /**
@@ -542,6 +544,8 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
         // Reset index for subsequent loops
         fieldIndex = 0;
 
+        bool didSomething = false;
+
         // If the group is configured for an atomic put operation,
         // then we need to put all the fields at once, so we lock them all together
         // and do the operation in one go
@@ -551,9 +555,9 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
             // Loop through all fields
             for (auto& field: group.fields) {
                 // Put the field
-                putGroupField(value, field,
-                              groupSecurityCache.securityClients[fieldIndex],
-                              groupSecurityCache);
+                didSomething |= putGroupField(value, field,
+                                              groupSecurityCache.securityClients[fieldIndex],
+                                              groupSecurityCache);
                 fieldIndex++;
             }
 
@@ -571,12 +575,17 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
                 // Lock this field
                 DBLocker F(pDbChannel->addr.precord);
                 // Put the field
-                putGroupField(value, field,
-                              groupSecurityCache.securityClients[fieldIndex],
-                              groupSecurityCache);
+                didSomething |= putGroupField(value, field,
+                                              groupSecurityCache.securityClients[fieldIndex],
+                                              groupSecurityCache);
                 fieldIndex++;
                 // Unlock this field when locker goes out of scope
             }
+        }
+
+        if(!didSomething && value.isMarked(true, true)) {
+            // not fields actually changed, but client intended to change something.
+            throw std::runtime_error("No fields changed");
         }
 
     } catch (std::exception& e) {
