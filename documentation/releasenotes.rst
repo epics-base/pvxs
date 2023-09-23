@@ -3,6 +3,19 @@
 Release Notes
 =============
 
+1.2.4 (UNRELEASED)
+------------------
+
+* client: avoid assert() with invalid forced server name.
+* client: propagate exception during early op. setup.
+* ioc: ensure db_cancel_event() before ~MonitorControlOp
+  * QSRV also effected by bug in [db_cancel_event()](https://github.com/epics-base/epics-base/issues/423).
+* ioc: Fix typo preventing processing of DBR_STRING fields.
+* ioc: fix group put always `dbProcess()`.
+* ioc: fix block=true to DBF_ENUM.
+* ioc: actually require +putorder to PUT.
+* ioc: group put w/o effect is an error.
+
 1.2.3 (Sept 2023)
 -----------------
 
