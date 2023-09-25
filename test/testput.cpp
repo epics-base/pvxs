@@ -55,10 +55,10 @@ struct Tester : public TesterBase
         auto op = cli.put("mailbox")
                 .fetchPresent(get)
                 .build([get](Value&& prototype) -> Value {
-                    if(get)
+                    if(get) {
                         testEq(prototype["value"].as<int32_t>(), 1);
-                    else
-                        testOk1(!prototype["value"].isMarked());
+                    }
+                    testOk1(get == prototype["value"].isMarked());
 
                     auto val = prototype.cloneEmpty();
                     val["value"] = 2;
@@ -411,7 +411,7 @@ void testError()
 
 MAIN(testput)
 {
-    testPlan(39);
+    testPlan(40);
     testSetup();
     logger_config_env();
     Tester().loopback(false);

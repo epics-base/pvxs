@@ -115,6 +115,8 @@ struct GPROp : public OperationBase
     std::function<void(Result&&)> done;
     std::function<void (const Value&)> onInit;
     Value pvRequest;
+    // For RPC, the user provided argument Value
+    // For GET, PUT a duplicate of RequestInfo::prototype
     Value arg;
     Result result;
     bool getOput = false;
@@ -444,8 +446,10 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
             // GET reply
 
             data = info->prototype.cloneEmpty();
-            if(data)
+            if(data) {
                 from_wire_valid(M, rxRegistry, data);
+                cache_sync(info->prototype, data);
+            }
         }
     }
 
@@ -503,7 +507,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
 
         gpr->state = GPROp::Idle;
         if(cmd==CMD_PUT || cmd==CMD_GET)
-            gpr->arg = data; // save for later use in sendReply()
+            gpr->arg = data; // save for later use in sendReply() when RequestInfo not available
 
         try {
             if(gpr->onInit)
@@ -522,6 +526,9 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
         return;
 
     } else if(gpr->state==GPROp::GetOPut) {
+
+        gpr->arg.assign(data);
+
         if(gpr->autoExec) {
             // proceed to execute put
             gpr->state = GPROp::BuildPut;
@@ -533,8 +540,6 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
             gpr->notify();
             return;
         }
-
-        info->prototype.assign(data);
 
     } else if(gpr->state==GPROp::Exec) {
         // data always empty for CMD_PUT
