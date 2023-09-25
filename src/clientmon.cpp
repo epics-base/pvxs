@@ -547,47 +547,7 @@ void Connection::handle_MONITOR()
             }
             from_wire_valid(M, rxRegistry, data);
 
-            /* co-iterate data and prototype.
-             * copy   marked from data -> prototype
-             * copy unmarked from prototype -> data
-             */
-            {
-                auto desc = Value::Helper::desc(info->prototype);
-                auto delta = Value::Helper::store_ptr(data);
-                auto complete = Value::Helper::store_ptr(info->prototype);
-                auto N = desc->size();
-                for(size_t i=0u; i < N; i++, delta++, complete++)
-                {
-                    const auto src = delta->valid ? delta : complete;
-                    auto       dst = delta->valid ? complete : delta;
-
-                    switch(delta->code) {
-                    case StoreType::Null:
-                        break;
-                    case StoreType::Bool:
-                    case StoreType::UInteger:
-                    case StoreType::Integer:
-                    case StoreType::Real:
-                        memcpy(&dst->store, &src->store, sizeof(src->store));
-                        break;
-                    case StoreType::String:
-                        dst->as<std::string>() = src->as<std::string>();
-                        break;
-                    case StoreType::Array:
-                        dst->as<shared_array<const void>>() = src->as<shared_array<const void>>();
-                        break;
-                    case StoreType::Compound:
-                    {
-                        std::shared_ptr<impl::FieldStorage> sstore(Value::Helper::store(data),
-                                                                  src);
-                        auto& dfld(dst->as<Value>());
-                        Value::Helper::set_desc(dfld, &desc[i]);
-                        Value::Helper::store(dfld) = std::move(sstore);
-                    }
-                        break;
-                    }
-                }
-            }
+            cache_sync(info->prototype, data);
 
             BitMask overrun;
             from_wire(M, overrun);

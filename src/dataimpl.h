@@ -41,6 +41,14 @@ struct Value::Helper {
     static std::shared_ptr<const impl::FieldDesc> type(const Value& v);
 };
 
+/* Refresh cache from delta, and populate delta with previous.
+ * Requires matching types.
+ *
+ * copy   marked from delta -> cache
+ * copy unmarked from cache -> delta
+ */
+void cache_sync(Value& cache, Value& delta);
+
 namespace impl {
 struct Buffer;
 

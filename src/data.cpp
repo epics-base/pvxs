@@ -1184,6 +1184,52 @@ Value::_Iterator<Value::_IMarked>::operator++() noexcept
     return *this;
 }
 
+void cache_sync(Value& cache, Value& dlt)
+{
+    if(!cache.equalType(dlt))
+        throw std::logic_error(SB()<<__func__<<" requires matching types");
+
+    /* co-iterate data and prototype.
+     * copy   marked from data -> prototype
+     * copy unmarked from prototype -> data
+     */
+    auto desc = Value::Helper::desc(cache);
+    auto delta = Value::Helper::store_ptr(dlt);
+    auto complete = Value::Helper::store_ptr(cache);
+    auto N = desc->size();
+    for(size_t i=0u; i < N; i++, delta++, complete++)
+    {
+        const auto src = delta->valid ? delta : complete;
+        auto       dst = delta->valid ? complete : delta;
+
+        switch(delta->code) {
+        case StoreType::Null:
+            break;
+        case StoreType::Bool:
+        case StoreType::UInteger:
+        case StoreType::Integer:
+        case StoreType::Real:
+            memcpy(&dst->store, &src->store, sizeof(src->store));
+            break;
+        case StoreType::String:
+            dst->as<std::string>() = src->as<std::string>();
+            break;
+        case StoreType::Array:
+            dst->as<shared_array<const void>>() = src->as<shared_array<const void>>();
+            break;
+        case StoreType::Compound:
+        {
+            std::shared_ptr<impl::FieldStorage> sstore(Value::Helper::store(dlt),
+                                                      src);
+            auto& dfld(dst->as<Value>());
+            Value::Helper::set_desc(dfld, &desc[i]);
+            Value::Helper::store(dfld) = std::move(sstore);
+        }
+            break;
+        }
+    }
+}
+
 namespace impl {
 
 void FieldStorage::init(StoreType code)
