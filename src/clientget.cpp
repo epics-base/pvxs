@@ -243,7 +243,7 @@ struct GPROp : public OperationBase
     }
     void _reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final
     {
-        if(op!=Get && op!=Put) {
+        if(op!=Put) {
             throw std::logic_error("reExecPut() only meaningful for .put()");
 
         } else if(!arg) {
