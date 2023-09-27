@@ -167,7 +167,7 @@ jobs:
     - name: Host info
       run: python .ci/cue.py --add-path "{TOP}/bin/{EPICS_HOST_ARCH}" --add-path "{TOP}/bundle/usr/{EPICS_HOST_ARCH}/lib" exec pvxinfo -D
     - name: Run main module tests
-      run: python -m ci_core_dumper exec python .ci/cue.py --add-path "{TOP}/bundle/usr/{EPICS_HOST_ARCH}/lib" test
+      run: python -m ci_core_dumper exec python .ci/cue.py -T 5M --add-path "{TOP}/bundle/usr/{EPICS_HOST_ARCH}/lib" test
     - name: Collect and show test results
       run: python .ci/cue.py test-results
     - name: CDT Check
