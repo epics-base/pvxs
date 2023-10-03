@@ -457,7 +457,12 @@ void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, s
     }
 }
 
-ServerOp::~ServerOp() {}
+ServerOp::~ServerOp()
+{
+    // cleanup() should have happened already (from tcp worker)
+    // this check may run from any thread, but at this point it should not matter.
+    assert(state==Dead);
+}
 
 /* reached from:
  * 1. connection close
@@ -478,10 +483,8 @@ void ServerOp::cleanup()
 
     state = ServerOp::Dead;
 
-    decltype (onClose) closer;
-    if(onClose) {
-        closer = std::move(onClose);
-    }
+    onCancel = nullptr;
+    auto closer(std::move(onClose));
     bool notify = closer.operator bool();
 
     if(auto ch = chan.lock()) {

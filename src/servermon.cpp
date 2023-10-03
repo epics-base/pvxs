@@ -24,7 +24,7 @@ namespace {
 
 typedef epicsGuard<epicsMutex> Guard;
 
-struct MonitorOp : public ServerOp
+struct MonitorOp final : public ServerOp
 {
     MonitorOp(const std::shared_ptr<ServerChan>& chan, uint32_t ioid)
         :ServerOp(chan, ioid)
@@ -205,6 +205,15 @@ struct MonitorOp : public ServerOp
             });
             self->scheduled = true;
         }
+    }
+
+    void cleanup() override final
+    {
+        ServerOp::cleanup(); // calls onCancel()
+        // release any bound variables
+        onHighMark = nullptr;
+        onLowMark = nullptr;
+        onStart = nullptr;
     }
 
     void show(std::ostream& strm) const override final

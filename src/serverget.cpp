@@ -27,7 +27,7 @@ cmd2op(pva_app_msg_t cmd){
 }
 
 // generalized Get/Put/RPC
-struct ServerGPR : public ServerOp
+struct ServerGPR final : public ServerOp
 {
     ServerGPR(const std::shared_ptr<ServerChan>& chan, uint32_t ioid)
         :ServerOp(chan, ioid)
@@ -121,6 +121,13 @@ struct ServerGPR : public ServerOp
         if(state == ServerOp::Dead) {
             cleanup();
         }
+    }
+
+    void cleanup() override final
+    {
+        ServerOp::cleanup();
+        onPut = nullptr;
+        onGet = nullptr;
     }
 
     void show(std::ostream& strm) const override final

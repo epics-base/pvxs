@@ -51,7 +51,9 @@ struct ServerOp
     ServerOp& operator=(const ServerOp&) = delete;
     virtual ~ServerOp() =0;
 
-    void cleanup();
+    // called from tcp worker.
+    // do any cleanup which must be done from that worker.
+    virtual void cleanup();
     virtual void show(std::ostream& strm) const =0;
 };
 

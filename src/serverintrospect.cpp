@@ -14,7 +14,7 @@ namespace pvxs { namespace impl {
 DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 
 namespace {
-struct ServerIntrospect : public ServerOp
+struct ServerIntrospect final : public ServerOp
 {
     ServerIntrospect(const std::shared_ptr<ServerChan>& chan, uint32_t ioid)
         :ServerOp(chan, ioid)
