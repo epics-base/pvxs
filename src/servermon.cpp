@@ -24,8 +24,7 @@ namespace {
 
 typedef epicsGuard<epicsMutex> Guard;
 
-struct MonitorOp : public ServerOp,
-                   public std::enable_shared_from_this<MonitorOp>
+struct MonitorOp : public ServerOp
 {
     MonitorOp(const std::shared_ptr<ServerChan>& chan, uint32_t ioid)
         :ServerOp(chan, ioid)
@@ -90,10 +89,10 @@ struct MonitorOp : public ServerOp,
                     return;
 
                 if(conn->connection() && (bufferevent_get_enabled(conn->connection())&EV_READ)) {
-                    op->doReply();
+                    doReply(op);
                 } else {
                     // connection TX queue is too full
-                    conn->backlog.emplace_back([op]() { op->doReply(); });
+                    conn->backlog.emplace_back([op]() { doReply(op); });
                 }
             });
 
@@ -103,39 +102,40 @@ struct MonitorOp : public ServerOp,
         }
     }
 
-    void doReply()
+    static
+    void doReply(const std::shared_ptr<MonitorOp>& self)
     {
-        auto ch = chan.lock();
+        auto ch = self->chan.lock();
         if(!ch)
             return;
         auto conn = ch->conn.lock();
         if(!conn || !conn->connection())
             return;
 
-        Guard G(lock);
-        scheduled = false;
+        Guard G(self->lock);
+        self->scheduled = false;
 
-        log_debug_printf(connio, "%s state=%d\n", __func__, state);
+        log_debug_printf(connio, "%s state=%d\n", __func__, self->state);
 
-        if(state==Dead)
+        if(self->state==Dead)
             return;
 
         uint8_t subcmd = 0u;
-        if(state==Creating) {
+        if(self->state==Creating) {
             subcmd = 0x08;
-            state = type ? Idle : Dead;
+            self->state = self->type ? Idle : Dead;
 
-        } else if(state==Executing) {
-            if(queue.empty() || (pipeline && !window && !finished)) {
+        } else if(self->state==Executing) {
+            if(self->queue.empty() || (self->pipeline && !self->window && !self->finished)) {
                 log_debug_printf(connio, "Client %s IOID %u done reply\n",
-                                 conn->peerName.c_str(), unsigned(ioid));
+                                 conn->peerName.c_str(), unsigned(self->ioid));
                 return; // nothing to do
 
-            } else if(!queue.front()) {
+            } else if(!self->queue.front()) {
                 subcmd = 0x10;
-                state = Dead;
+                self->state = Dead;
                 log_debug_printf(connio, "Client %s IOID %u finishes\n",
-                                 conn->peerName.c_str(), unsigned(ioid));
+                                 conn->peerName.c_str(), unsigned(self->ioid));
             }
         }
 
@@ -143,21 +143,21 @@ struct MonitorOp : public ServerOp,
             (void)evbuffer_drain(conn->txBody.get(), evbuffer_get_length(conn->txBody.get()));
 
             EvOutBuf R(conn->sendBE, conn->txBody.get());
-            to_wire(R, uint32_t(ioid));
+            to_wire(R, uint32_t(self->ioid));
             to_wire(R, subcmd);
             if(subcmd&0x08) {
-                if(!msg.empty() || !type) {
-                    to_wire(R, Status::error(msg));
+                if(!self->msg.empty() || !self->type) {
+                    to_wire(R, Status::error(self->msg));
 
                 } else {
                     to_wire(R, Status{});
-                    to_wire(R, type.get());
+                    to_wire(R, self->type.get());
                 }
 
-            } else if(!queue.empty()) {
-                auto& ent = queue.front();
+            } else if(!self->queue.empty()) {
+                auto& ent = self->queue.front();
                 if(ent) {
-                    to_wire_valid(R, ent, &pvMask);
+                    to_wire_valid(R, ent, &self->pvMask);
                     // TODO: placeholder for overrun mask
                     to_wire(R, uint8_t(0u));
 
@@ -165,25 +165,23 @@ struct MonitorOp : public ServerOp,
                     to_wire(R, Status{});
                 }
 
-                queue.pop_front();
+                self->queue.pop_front();
             }
         }
 
         ch->statTx += conn->enqueueTxBody(pva_app_msg_t::CMD_MONITOR);
 
-        if(state == ServerOp::Dead) {
-            cleanup();
+        if(self->state == ServerOp::Dead) {
+            self->cleanup();
             return;
         }
 
-        auto self(shared_from_this());
+        if(self->state==Executing && self->pipeline && self->window) {
 
-        if(state==Executing && pipeline && window) {
+            self->window--;
 
-            window--;
-
-            if(!lowMarkPending && window <= low && onLowMark) {
-                lowMarkPending = true;
+            if(!self->lowMarkPending && self->window <= self->low && self->onLowMark) {
+                self->lowMarkPending = true;
                 conn->iface->server->acceptor_loop.dispatch([self]() {
                     decltype (self->onLowMark) fn;
                     {
@@ -197,14 +195,15 @@ struct MonitorOp : public ServerOp,
             }
         }
 
-        if(state==Executing && !queue.empty() && (!pipeline || window || finished)) {
+        if(self->state==Executing && !self->queue.empty()
+                && (!self->pipeline || self->window || self->finished)) {
             // reschedule myself
-            assert(!scheduled); // we've been holding the lock, so this should not have changed
+            assert(!self->scheduled); // we've been holding the lock, so this should not have changed
 
             conn->iface->server->acceptor_loop.dispatch([self]() {
-                self->doReply();
+                doReply(self);
             });
-            scheduled = true;
+            self->scheduled = true;
         }
     }
 
@@ -383,7 +382,7 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
                 oper->type = type;
                 oper->pvMask = std::move(mask);
                 ret.reset(new ServerMonitorControl(this, server, _name, oper));
-                oper->doReply();
+                MonitorOp::doReply(oper);
             }
         });
         if(!ret)
@@ -403,7 +402,7 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
             if(auto oper = op.lock()) {
                 if(oper->state==ServerOp::Creating) {
                     oper->msg = std::move(msg);
-                    oper->doReply();
+                    MonitorOp::doReply(oper);
                 }
             }
         });
