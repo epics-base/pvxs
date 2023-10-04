@@ -6,9 +6,13 @@ Release Notes
 1.2.4 (UNRELEASED)
 ------------------
 
+* data: Relax when assigning struct[] or union[] of similar types.
 * client: avoid assert() with invalid forced server name.
 * client: propagate exception during early op. setup.
 * client: GET yield complete updates after first.
+* server: Ensure that variables bound into operation callback ``std::function<>`` are
+  released promptly when that operation is ended.
+* server: relax post() after finish().  Return false instead of throwing ``std::logic_error``.
 * ioc: ensure db_cancel_event() before ~MonitorControlOp
   * QSRV also effected by bug in [db_cancel_event()](https://github.com/epics-base/epics-base/issues/423).
 * ioc: Fix typo preventing processing of DBR_STRING fields.
