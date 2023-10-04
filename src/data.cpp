@@ -619,15 +619,28 @@ void Value::copyIn(const void *ptr, StoreType type)
                 // assign array of Struct/Union/Any
                 auto tsrc  = src.castTo<const Value>();
 
+                bool convert = false;
                 if(desc->code!=TypeCode::AnyA) {
                     // enforce member type for Struct[] and Union[]
                     for(auto& val : tsrc) {
                         if(val.desc && val.desc!=desc->members.data()) {
-                            throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
+                            convert = true;
+                            break;
                         }
                     }
+                    if(convert) {
+                        shared_array<Value> scratch(tsrc.size());
+                        for(auto i : range(tsrc.size())) {
+                            if(tsrc[i]) {
+                                scratch[i] = allocMember();
+                                scratch[i].assign(tsrc[i]);
+                            }
+                        }
+                        dest = scratch.freeze().castTo<const void>();
+                    }
                 }
-                dest = src;
+                if(!convert)
+                    dest = src;
 
             } else if(src.original_type()!=ArrayType::Value && uint8_t(desc->code.code)==uint8_t(src.original_type())) {
                 // assign array of scalar w/o convert
@@ -676,7 +689,7 @@ void Value::copyIn(const void *ptr, StoreType type)
                 for(auto i : range(desc->miter.size())) {
                     auto idx(desc->miter[i].second);
 
-                    if(src.desc!=&desc->members[idx])
+                    if(!_equal(src.desc, &desc->members[idx]))
                         continue;
 
                     std::shared_ptr<const FieldDesc> udesc(store->top->desc, &desc->members[idx]);

@@ -358,6 +358,56 @@ void testAssignSimilar()
     }
 }
 
+void testAssignSimilarNDArray()
+{
+    testShow()<<__func__;
+
+    Value val1, val2;
+    using namespace pvxs::members;
+    {
+        auto def(nt::NTNDArray{}.build());
+        def += {
+                StructA("dimensions", {
+                            Int32("val1"),
+                        }),
+        };
+        val1 = def.create();
+    }
+    {
+        auto def(nt::NTNDArray{}.build());
+        def += {
+                StructA("dimensions", {
+                            Int32("val2"),
+                        }),
+        };
+        val2 = def.create();
+    }
+
+    testFalse(val1.equalType(val2));
+    testTrue(val1["dimension"].equalType(val2["dimension"]));
+
+    val1.from(val2); // nothing marked, so a no-op
+
+    shared_array<const uint8_t> pixels({1,2,3,4,5,6});
+    val1["value->ubyteValue"] = pixels;
+    shared_array<Value> dims;//(2);
+    dims.resize(2);
+    dims[0] = val1["dimension"].allocMember()
+            .update("size", 12);
+    dims[1] = dims[0].cloneEmpty()
+            .update("size", 34);
+    val1["dimension"] = dims.freeze();
+
+    val2.from(val1);
+
+    testTrue(val2["value"].isMarked(false,false));
+    testTrue(val2["dimension"].isMarked(false,false));
+    testFalse(val2["timeStamp"].isMarked(true, true));
+    testArrEq(pixels, val2["value"].as<shared_array<const uint8_t>>());
+    testEq(val2["dimension[0].size"].as<uint32_t>(), 12u);
+    testEq(val2["dimension[1].size"].as<uint32_t>(), 34u);
+}
+
 void testUnionMagicAssign()
 {
     testShow()<<__func__;
@@ -445,7 +495,7 @@ void testClear()
 
 MAIN(testdata)
 {
-    testPlan(148);
+    testPlan(156);
     testSetup();
     testTraverse();
     testAssign();
@@ -496,6 +546,7 @@ MAIN(testdata)
     testConvertScalar2<int32_t, uint64_t, int64_t>(0, 0x100000000llu, -0);
 
     testAssignSimilar();
+    testAssignSimilarNDArray();
     testUnionMagicAssign();
     testExtract();
     testClear();
