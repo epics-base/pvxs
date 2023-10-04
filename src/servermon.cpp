@@ -249,7 +249,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
 
         Guard G(mon->lock);
         if(mon->finished)
-            throw std::logic_error("Already finish()'d"); // TODO fail soft
+            return false;
 
         if(real || !val) {
 
