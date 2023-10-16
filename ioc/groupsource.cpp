@@ -209,18 +209,26 @@ void subscriptionPost(GroupSourceSubscriptionCtx *pGroupCtx)
     // Make sure that the initial subscription update has occurred on all channels before replying
     // As we make two initial updates when opening a new subscription, for each field,
     // we need all updates for all fields to have completed before continuing
+    bool first = false;
     if (!pGroupCtx->eventsPrimed) {
         for (auto& fieldCtx: pGroupCtx->fieldSubscriptionContexts) {
             if (!fieldCtx.hadValueEvent || !fieldCtx.hadPropertyEvent) {
                 return;
             }
         }
-        pGroupCtx->eventsPrimed = true;
+        pGroupCtx->eventsPrimed = first = true;
     }
 
-    log_debug_printf(_logname, "%s : %s\n", __func__, pGroupCtx->group.name.c_str());
-
     auto& currentValue = pGroupCtx->currentValue;
+
+    bool empty(!currentValue.isMarked(false, true));
+
+    Level lvl = first && empty ? Level::Warn : Level::Debug;
+    log_printf(_logname, lvl, "%s%s%s : %s\n", __func__,
+               first ? " first" : "", empty ? " empty" : "",
+               pGroupCtx->group.name.c_str());
+    if(empty && !first)
+        return;
 
     // If events have been primed then return the value to the subscriber,
     // and unmark all accumulated changes
