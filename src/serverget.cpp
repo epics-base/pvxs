@@ -464,7 +464,8 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             op->subcmd = subcmd;
             op->state = ServerOp::Executing;
 
-            log_debug_printf(connsetup, "Client %s op%x executing\n", peerName.c_str(), cmd);
+            log_debug_printf(connsetup, "Client %s op%x executing %s\n",
+                             peerName.c_str(), cmd, chan->name.c_str());
 
             try {
                 if(cmd==CMD_RPC && isput) {
