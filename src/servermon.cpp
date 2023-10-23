@@ -98,7 +98,12 @@ struct MonitorOp final : public ServerOp
 
             op->scheduled = true;
         } else {
-            log_debug_printf(connio, "Skip reply%s", "\n");
+            log_debug_printf(connio, "Skip reply sch=%c st=%u q=%zu p=%c w=%zu\n",
+                             op->scheduled ? 'Y' : 'N',
+                             op->state,
+                             op->queue.size(),
+                             op->pipeline ? 'Y' : 'N',
+                             op->window);
         }
     }
 
