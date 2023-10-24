@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.2.4 (UNRELEASED)
-------------------
+1.2.4 (Oct 2023)
+----------------
 
 * data: Relax when assigning struct[] or union[] of similar types.
 * client: avoid assert() with invalid forced server name.
@@ -14,12 +14,14 @@ Release Notes
   released promptly when that operation is ended.
 * server: relax post() after finish().  Return false instead of throwing ``std::logic_error``.
 * ioc: ensure db_cancel_event() before ~MonitorControlOp
-  * QSRV also effected by bug in [db_cancel_event()](https://github.com/epics-base/epics-base/issues/423).
+  * Workaround for [db_cancel_event()](https://github.com/epics-base/epics-base/issues/423) bug.
 * ioc: Fix typo preventing processing of DBR_STRING fields.
 * ioc: fix group put always `dbProcess()`.
 * ioc: fix block=true to DBF_ENUM.
 * ioc: actually require +putorder to PUT.
 * ioc: group put w/o effect is an error.
+* ioc: accept record._options.process as bool
+* ioc: group avoid post() empty events
 
 1.2.3 (Sept 2023)
 -----------------
