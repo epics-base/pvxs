@@ -722,9 +722,9 @@ MAIN(testqgroup)
     testPlan(37);
     testSetup();
     {
-        TestIOC ioc;
-        asSetFilename("../testioc.acf");
         generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
+        ioc::TestIOC ioc;
+        asSetFilename("../testioc.acf");
         testdbReadDatabase("testioc.dbd", nullptr, nullptr);
         testOk1(!testioc_registerRecordDeviceDriver(pdbbase));
         testdbReadDatabase("image.db", nullptr, "N=img");

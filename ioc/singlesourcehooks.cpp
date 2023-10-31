@@ -21,6 +21,7 @@
 #include <pvxs/server.h>
 #include <pvxs/iochooks.h>
 
+#include "qsrvpvt.h"
 #include "iocshcommand.h"
 #include "singlesource.h"
 
@@ -142,48 +143,29 @@ dbServer qsrv2Server = {
     qClient,
 };
 
-/**
- * Initialise qsrv database single records by adding them as sources in our running pvxs server instance
- *
- * @param theInitHookState the initHook state - we only want to trigger on the initHookAfterIocBuilt state - ignore all others
- */
-void qsrvSingleSourceInit(initHookState theInitHookState) {
-    if(!IOCSource::enabled())
-        return;
-    if (theInitHookState == initHookAtBeginning) {
-        (void)dbRegisterServer(&qsrv2Server);
-    } else
-    if (theInitHookState == initHookAfterIocBuilt) {
-        pvxs::ioc::server().addSource("qsrvSingle", std::make_shared<pvxs::ioc::SingleSource>(), 0);
-    }
+} // namespace
+
+namespace pvxs {
+namespace ioc {
+
+void dbRegisterQSRV2()
+{
+    (void)dbRegisterServer(&qsrv2Server);
 }
 
-/**
- * IOC pvxs Single Source registrar.  This implements the required registrar function that is called by xxxx_registerRecordDeviceDriver,
- * the auto-generated stub created for all IOC implementations.
- *
- * It is registered by using the `epicsExportRegistrar()` macro.
- *
- * 1. Specify here all of the commands that you want to be registered and available in the IOC shell.
- * 2. Register your hook handler to handle any state hooks that you want to implement.  Here we install
- * an `initHookState` handler connected to the `initHookAfterIocBuilt` state.  It  will add all of the
- * single record type sources defined so far.  Note that you can define sources up until the `iocInit()` call,
- * after which point the `initHookAfterIocBuilt` handlers are called and will register all the defined records.
- */
-void pvxsSingleSourceRegistrar() {
+void addSingleSrc()
+{
+    pvxs::ioc::server()
+            .addSource("qsrvSingle", std::make_shared<pvxs::ioc::SingleSource>(), 0);
+}
+
+void single_enable() {
     // Register commands to be available in the IOC shell
     IOCShCommand<int>("pvxsl", "details",
                       "List PV names.\n")
             .implementation<&pvxsl>();
-
-    initHookRegister(&qsrvSingleSourceInit);
 }
 
-} // namespace
+}} // namespace pvxs::ioc
 
-// in .dbd file
-//registrar(pvxsSingleSourceRegistrar)
-extern "C" {
-epicsExportRegistrar(pvxsSingleSourceRegistrar);
-}
 

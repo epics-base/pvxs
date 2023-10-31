@@ -36,46 +36,6 @@ DEFINE_LOGGER(_log, "pvxs.ioc.db");
 namespace pvxs {
 namespace ioc {
 
-
-bool IOCSource::enabled()
-{
-    /* -1 - disabled
-     *  0 - lazy init, check environment
-     *  1 - enabled
-     */
-    static std::atomic<int> ena{};
-
-    auto e = ena.load();
-    if(e==0) {
-        e = inUnitTest() ? 1 : -1; // default to disabled normally (not unittest)
-
-        auto env_dis = getenv("EPICS_IOC_IGNORE_SERVERS");
-        auto env_ena = getenv("PVXS_QSRV_ENABLE");
-
-        if(env_dis && strstr(env_dis, "qsrv2")) {
-            e = -1;
-
-        } else if(env_ena && epicsStrCaseCmp(env_ena, "YES")==0) {
-            e = 1;
-
-        } else if(env_ena && epicsStrCaseCmp(env_ena, "NO")==0) {
-            e = -1;
-
-        } else if(env_ena) {
-            // will be seen during initialization, print synchronously
-            fprintf(stderr, "ERROR: PVXS_QSRV_ENABLE=%s not YES/NO.  Defaulting to %s.\n",
-                    env_ena,
-                    e==1 ? "YES" : "NO");
-        }
-        printf("INFO: PVXS QSRV2 is loaded and %s\n",
-               e==1 ? "ENABLED." : "disabled.\n"
-               "      To enable set: epicsEnvSet(\"PVXS_QSRV_ENABLE\",\"YES\")\n"
-               "      and ensure that $EPICS_IOC_IGNORE_SERVERS does not contain \"qsrv2\".");
-        ena = e;
-    }
-    return e==1;
-}
-
 void IOCSource::initialize(Value& value, const MappingInfo &info, const Channel& chan)
 {
     if(info.type==MappingInfo::Scalar) {

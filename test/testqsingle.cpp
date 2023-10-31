@@ -878,13 +878,27 @@ void testMonitorAIFilt(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(87);
+    testPlan(88);
     testSetup();
     pvxs::logger_config_env();
+    generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
+#if EPICS_VERSION_INT>=VERSION_INT(7, 0, 0, 0)
+    // start up once to check shutdown and re-start
     {
-        TestIOC ioc;
+        ioc::TestIOC ioc;
+        testdbReadDatabase("testioc.dbd", nullptr, nullptr);
+        testOk1(!testioc_registerRecordDeviceDriver(pdbbase));
+        testdbReadDatabase("testqsingle.db", nullptr, nullptr);
+        ioc.init();
+    }
+#else
+    // eg. arrInitialize() had a local "firstTime" flag
+    testSkip(1, "test ioc reinit did not work yet...");
+#endif
+    {
+        ioc::TestIOC ioc;
+        // https://github.com/epics-base/epics-base/issues/438
         asSetFilename("../testioc.acf");
-        generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
         testdbReadDatabase("testioc.dbd", nullptr, nullptr);
         testOk1(!testioc_registerRecordDeviceDriver(pdbbase));
         testdbReadDatabase("testqsingle.db", nullptr, nullptr);

@@ -11,7 +11,8 @@
 #include <epicsStdio.h> // redirects stdout/stderr
 #include <epicsExport.h>
 
-namespace pvxlink {
+namespace pvxs {
+namespace ioc {
 pvaLinkConfig::~pvaLinkConfig() {}
 
 namespace {
@@ -298,9 +299,9 @@ jlif lsetPVA = {
     NULL
 };
 
-} //namespace pvalink
+}} //namespace pvxs::ioc
 
 extern "C" {
-using pvxlink::lsetPVA;
+using pvxs::ioc::lsetPVA;
 epicsExportAddress(jlif, lsetPVA);
 }

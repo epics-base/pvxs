@@ -100,27 +100,71 @@ void testPrepare();
 PVXS_IOC_API
 void testShutdown();
 
-#ifdef PVXS_EXPERT_API_ENABLED
+/** Call just after testIocShutdownOk()
+ *  @since UNRELEASED
+ */
 PVXS_IOC_API
-void testqsrvWaitForLinkConnected(struct link *plink, bool conn=true);
-PVXS_IOC_API
-void testqsrvWaitForLinkConnected(const char* pv, bool conn=true);
+void testAfterShutdown();
 
-class PVXS_IOC_API QSrvWaitForLinkUpdate final {
-    struct link * const plink;
-    unsigned seq;
+/** Call just before testdbCleanup()
+ *  @since UNRELEASED
+ */
+PVXS_IOC_API
+void testCleanupPrepare();
+
+#if EPICS_VERSION_INT >= VERSION_INT(3, 15, 0 ,0)
+
+/** Manage Test IOC life-cycle calls.
+ *
+ *  Makes necessary calls to dbUnitTest.h API
+ *  as well as any added calls needed by PVXS components.
+ *
+ @code
+ *  MAIN(mytest) {
+ *      testPlan(0);
+ *      pvxs::testSetup();
+ *      pvxs::logger_config_env(); // (optional)
+ *      {
+ *          TestIOC ioc; // testdbPrepare()
+ *
+ *          // mytestioc.dbd must include pvxsIoc.dbd
+ *          testdbReadDatabase("mytestioc.dbd", NULL, NULL);
+ *          mytestioc_registerRecordDeviceDriver(pdbbase);
+ *          testdbReadDatabase("sometest.db", NULL, NULL);
+ *
+ *          // tests before iocInit()
+ *
+ *          ioc.init();
+ *
+ *          // tests after iocInit()
+ *
+ *          ioc.shutdown(); // (optional) in ~TestIOC if omitted
+ *      }
+ *      {
+ *          ... repeat ...
+ *      }
+ *      epicsExitCallAtExits();
+ *      cleanup_for_valgrind();
+ *  }
+ @endcode
+ *
+ *  @since UNRELEASED
+ */
+class PVXS_IOC_API TestIOC final {
+    bool isRunning = false;
 public:
-    QSrvWaitForLinkUpdate(struct link *plink);
-    QSrvWaitForLinkUpdate(const char* pv);
-    ~QSrvWaitForLinkUpdate();
+    TestIOC();
+    ~TestIOC();
+    //! iocInit()
+    void init();
+    //! iocShutdown()
+    void shutdown();
+    //! between iocInit() and iocShutdown() ?
+    inline
+    bool running() const { return isRunning; }
 };
 
-PVXS_IOC_API
-void testqsrvShutdownOk(void);
-
-PVXS_IOC_API
-void testqsrvCleanup(void);
-#endif // PVXS_EXPERT_API_ENABLED
+#endif // base >= 3.15
 
 }} // namespace pvxs::ioc
 #endif // PVXS_IOCHOOKS_H

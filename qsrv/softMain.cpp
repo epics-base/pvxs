@@ -141,9 +141,6 @@ int main(int argc, char *argv[])
         bool loadedDb = false;
         bool ranScript = false;
 
-        if(!getenv("PVXS_QSRV_ENABLE"))
-            epicsEnvSet("PVXS_QSRV_ENABLE","YES");
-
 #if EPICS_VERSION_INT >= VERSION_INT(7, 0, 3, 1)
         // attempt to compute relative paths
         {

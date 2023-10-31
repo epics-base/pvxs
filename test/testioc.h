@@ -16,32 +16,6 @@
 #include <dbUnitTest.h>
 #include <dbChannel.h>
 
-class TestIOC {
-    bool running = false;
-public:
-    TestIOC() {
-        testdbPrepare();
-        pvxs::ioc::testPrepare();
-    }
-    void init() {
-        if(!running) {
-            testIocInitOk();
-            running = true;
-        }
-    }
-    void shutdown() {
-        if(running) {
-            pvxs::ioc::testShutdown();
-            testIocShutdownOk();
-            running = false;
-        }
-    }
-    ~TestIOC() {
-        this->shutdown();
-        testdbCleanup();
-    }
-};
-
 struct TestClient : pvxs::client::Context
 {
     TestClient() : pvxs::client::Context(pvxs::ioc::server().clientConfig().build()) {}

@@ -1,7 +1,4 @@
 registrar(pvxsBaseRegistrar)
-registrar(pvxsSingleSourceRegistrar)
-registrar(pvxsGroupSourceRegistrar)
-registrar(installPVAAddLinkHook)
 link("pva", "lsetPVA")
 
 # from demo.cpp

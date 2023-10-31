@@ -19,13 +19,13 @@ DEFINE_LOGGER(_logupdate, "pvxs.ioc.link.channel.update");
 
 int pvaLinkNWorkers = 1;
 
-namespace pvxlink {
-using namespace pvxs;
+namespace pvxs {
+namespace ioc {
 
-pvaGlobal_t *pvaGlobal;
+linkGlobal_t *linkGlobal;
 
 
-pvaGlobal_t::pvaGlobal_t()
+linkGlobal_t::linkGlobal_t()
     :queue()
     ,running(false)
     ,putReq(TypeDef(TypeCode::Struct, {
@@ -46,11 +46,11 @@ pvaGlobal_t::pvaGlobal_t()
     worker.start();
 }
 
-pvaGlobal_t::~pvaGlobal_t()
+linkGlobal_t::~linkGlobal_t()
 {
 }
 
-void pvaGlobal_t::run()
+void linkGlobal_t::run()
 {
     while(1) {
         auto w = queue.pop();
@@ -66,7 +66,7 @@ void pvaGlobal_t::run()
 
 }
 
-void pvaGlobal_t::close()
+void linkGlobal_t::close()
 {
     {
         Guard G(lock);
@@ -85,8 +85,8 @@ bool pvaLinkChannel::LinkSort::operator()(const pvaLink *L, const pvaLink *R) co
     return L->monorder < R->monorder;
 }
 
-// being called with pvaGlobal::lock held
-pvaLinkChannel::pvaLinkChannel(const pvaGlobal_t::channels_key_t &key, const Value& pvRequest)
+// being called with linkGlobal::lock held
+pvaLinkChannel::pvaLinkChannel(const linkGlobal_t::channels_key_t &key, const Value& pvRequest)
     :key(key)
     ,pvRequest(pvRequest)
     ,AP(new AfterPut)
@@ -94,8 +94,8 @@ pvaLinkChannel::pvaLinkChannel(const pvaGlobal_t::channels_key_t &key, const Val
 
 pvaLinkChannel::~pvaLinkChannel() {
     {
-        Guard G(pvaGlobal->lock);
-        pvaGlobal->channels.erase(key);
+        Guard G(linkGlobal->lock);
+        linkGlobal->channels.erase(key);
     }
 
     Guard G(lock);
@@ -107,7 +107,7 @@ void pvaLinkChannel::open()
 {
     Guard G(lock);
 
-    op_mon = pvaGlobal->provider_remote.monitor(key.first)
+    op_mon = linkGlobal->provider_remote.monitor(key.first)
             .maskConnected(true)
             .maskDisconnected(false)
             .rawRequest(pvRequest)
@@ -115,7 +115,7 @@ void pvaLinkChannel::open()
     {
         log_debug_printf(_logger, "Monitor %s wakeup\n", key.first.c_str());
         try {
-            pvaGlobal->queue.push(shared_from_this());
+            linkGlobal->queue.push(shared_from_this());
         }catch(std::bad_weak_ptr&){
             log_err_printf(_logger, "channel '%s' open during dtor?", key.first.c_str());
         }
@@ -212,14 +212,14 @@ void linkPutDone(pvaLinkChannel *self, client::Result&& result)
     log_debug_printf(_logger, "linkPutDone: %s, needscans = %i\n", self->key.first.c_str(), needscans);
 
     if(needscans) {
-        pvaGlobal->queue.push(self->AP);
+        linkGlobal->queue.push(self->AP);
     }
 }
 
 // call with channel lock held
 void pvaLinkChannel::put(bool force)
 {
-    auto pvReq(pvaGlobal->putReq.cloneEmpty()
+    auto pvReq(linkGlobal->putReq.cloneEmpty()
                .update("record._options.block", !after_put.empty()));
 
     unsigned reqProcess = 0;
@@ -265,7 +265,7 @@ void pvaLinkChannel::put(bool force)
     log_debug_printf(_logger, "%s Start put %s\n", key.first.c_str(), doit ? "true": "false");
     if(doit) {
         // start net Put, cancels in-progress put
-        op_put = pvaGlobal->provider_remote.put(key.first)
+        op_put = linkGlobal->provider_remote.put(key.first)
                 .rawRequest(pvReq)
                 .build([this](Value&& prototype) -> Value
         {
@@ -433,7 +433,7 @@ void pvaLinkChannel::run()
 
     log_debug_printf(_logger, "Requeueing %s\n", key.first.c_str());
     // re-queue until monitor queue is empty
-    pvaGlobal->queue.push(shared_from_this());
+    linkGlobal->queue.push(shared_from_this());
 }
 
-} // namespace pvalink
+}} // namespace pvxs::ioc

@@ -18,8 +18,12 @@
 
 #include <epicsExport.h>
 #include <epicsExit.h>
+#include <epicsString.h>
 #include <initHooks.h>
 #include <iocsh.h>
+#include <dbAccess.h>
+#include <dbStaticLib.h>
+#include <registryDeviceSupport.h>
 
 #include <pvxs/iochooks.h>
 #include <pvxs/log.h>
@@ -28,13 +32,17 @@
 
 #include "iocshcommand.h"
 #include "utilpvt.h"
+#include "qsrvpvt.h"
+
+#ifdef USE_QSRV_SINGLE
+#  include <dbUnitTest.h>
+#endif
+#ifdef USE_PVA_LINKS
+#  include "pvalink.h"
+#endif
 
 // include last to avoid clash of #define printf with other headers
 #include <epicsStdio.h>
-
-#if EPICS_VERSION_INT >= VERSION_INT(7, 0, 4, 0)
-#  define USE_DEINIT_HOOKS
-#endif
 
 namespace pvxs {
 namespace ioc {
@@ -80,29 +88,24 @@ void initialisePvxsServer() {
     using namespace pvxs::server;
 
     Config conf = ::pvxs::impl::inUnitTest() ? Config::isolated() : Config::from_env();
-    Server newsrv(conf);
 
     threadOnce<&pvxServerInit>();
     Guard G(pvxServer->lock);
-    if(pvxServer->srv)
-        throw std::logic_error(SB()<<__func__<<" found existing server?!?");
-
-    pvxServer->srv = std::move(newsrv);
+    if(!pvxServer->srv) {
+        pvxServer->srv = Server(conf);
+    }
 }
 
-/**
- * The function to call when we exit the IOC process.  This is only installed as the callback function
- * after the database has been initialized.  This function will stop the pvxs server instance and destroy the
- * object.
- *
- * @param pep - The pointer to the exit parameter list - unused
- */
 static
-void pvxsAtExit(void*) noexcept {
+void pvxsExitBeforeIocShutdown(void*) noexcept
+{
     try {
+#ifdef USE_PVA_LINKS
+        linkGlobal_t::deinit();
+#endif
         Guard (pvxServer->lock);
         if(auto srv = std::move(pvxServer->srv)) {
-            pvxServer->srv = server::Server();
+            assert(!pvxServer->srv);
             srv.stop();
             IOCGroupConfigCleanup();
             log_debug_printf(_logname, "Stopped Server%s", "\n");
@@ -112,17 +115,54 @@ void pvxsAtExit(void*) noexcept {
     }
 }
 
+static
+void pvxsExitAfterIocShutdown(void*) noexcept
+{
+    try {
+#ifdef USE_PVA_LINKS
+        linkGlobal_t::dtor();
+#endif
+
+    } catch(std::exception& e) {
+        fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
+    }
+}
+
+static
+void testPrepareImpl()
+{
+    initialisePvxsServer(); // re-create server for next test cycle
+}
+
 void testPrepare()
 {
-    if(pvxServer)
-        initialisePvxsServer(); // re-create server for next test cycle
+#ifndef USE_PREPARE_CLEANUP_HOOKS
+    testPrepareImpl();
+#endif
 }
 
 void testShutdown()
 {
 #ifndef USE_DEINIT_HOOKS
-    pvxsAtExit(nullptr);
+    pvxsExitBeforeIocShutdown(nullptr);
 #endif
+}
+
+void testAfterShutdown()
+{
+#ifndef USE_DEINIT_HOOKS
+    pvxsExitAfterIocShutdown(nullptr);
+#endif
+}
+
+void testCleanupPrepare()
+{
+    server::Server trash;
+    {
+        Guard G(pvxServer->lock);
+        trash = std::move(pvxServer->srv);
+    }
+    resetGroups();
 }
 
 ////////////////////////////////////
@@ -164,6 +204,35 @@ void pvxsi() {
     target_information(capture);
     printf("%s", capture.str().c_str());
 }
+
+#ifdef USE_QSRV_SINGLE
+TestIOC::TestIOC() {
+    testdbPrepare();
+    testPrepare();
+}
+
+void TestIOC::init() {
+    if(!isRunning) {
+        testIocInitOk();
+        isRunning = true;
+    }
+}
+
+void TestIOC::shutdown() {
+    if(isRunning) {
+        isRunning = false;
+        testShutdown();
+        testIocShutdownOk();
+        testAfterShutdown();
+    }
+}
+
+TestIOC::~TestIOC() {
+    shutdown();
+    testCleanupPrepare();
+    testdbCleanup();
+}
+#endif // USE_QSRV_SINGLE
 
 namespace {
 
@@ -236,26 +305,53 @@ void pvxrefdiff() {
 
 } // namespace
 
-/**
- * Initialise and control state of pvxs ioc server instance in response to iocInitHook events.
- * Installed on the initHookState hook this function will respond to the following events:
- *  - initHookAfterInitDatabase: 		Set the exit callback only when we have initialized the database
- *  - initHookAfterCaServerRunning: 	Start the pvxs server instance after the CA server starts running
- *  - initHookAfterCaServerPaused: 		Pause the pvxs server instance if the CA server pauses
- *
- * @param theInitHookState the initHook state to respond to
- */
 static
-void pvxsInitHook(initHookState theInitHookState) {
+void pvxsInitHook(initHookState theInitHookState) noexcept {
     switch(theInitHookState) {
-    case initHookAfterInitDatabase:
-        // when de-init hooks not available, register for later cleanup via atexit()
-        // function to run before exitDatabase
+#ifdef USE_PREPARE_CLEANUP_HOOKS
+    case initHookAfterPrepareDatabase: // test only
+        testPrepareImpl();
+        break;
+#endif
+    case initHookAtBeginning:
+        dbRegisterQSRV2();
+        break;
+    case initHookAfterCaLinkInit:
+#ifdef USE_PVA_LINKS
+        linkGlobal_t::alloc();
+#endif
 #ifndef USE_DEINIT_HOOKS
-        epicsAtExit(&pvxsAtExit, nullptr);
+        // before epicsExit(exitDatabase),
+        // so hook registered here will be run after iocShutdown()
+    {
+        static bool installed = false;
+        if(!installed) {
+            epicsAtExit(&pvxsExitAfterIocShutdown, nullptr);
+            installed = true;
+        }
+    }
 #endif
         break;
-    case initHookAfterCaServerRunning:
+    case initHookAfterInitDatabase:
+        processGroups();
+#ifndef USE_DEINIT_HOOKS
+        // register for later cleanup before iocShutdown()
+    {
+        static bool installed = false;
+        if(!installed) {
+            epicsAtExit(&pvxsExitBeforeIocShutdown, nullptr);
+            installed = true;
+        }
+    }
+#endif
+        break;
+    case initHookAfterIocBuilt:
+#ifdef USE_PVA_LINKS
+        linkGlobal_t::init();
+#endif
+        addSingleSrc();
+        addGroupSrc();
+        break;
     case initHookAfterIocRunning:
         if(auto srv = server()) {
             srv.start();
@@ -271,7 +367,15 @@ void pvxsInitHook(initHookState theInitHookState) {
 #ifdef USE_DEINIT_HOOKS
     // use de-init hook when available
     case initHookAtShutdown:
-        pvxsAtExit(nullptr);
+        pvxsExitBeforeIocShutdown(nullptr);
+        break;
+    case initHookAfterShutdown:
+        pvxsExitAfterIocShutdown(nullptr);
+        break;
+#endif
+#ifdef USE_PREPARE_CLEANUP_HOOKS
+    case initHookBeforeCleanupDatabase: // test only
+        testCleanupPrepare();
         break;
 #endif
     default:
@@ -286,6 +390,56 @@ using namespace pvxs::ioc;
 
 namespace {
 
+bool enable2() {
+    // detect if also linked with qsrv.dbd
+    const bool permit = !registryDeviceSupportFind("devWfPDBDemo");
+    bool request = permit;
+    bool quiet = false;
+
+    auto env_dis = getenv("EPICS_IOC_IGNORE_SERVERS");
+    auto env_ena = getenv("PVXS_QSRV_ENABLE");
+
+    if(env_dis && strstr(env_dis, "qsrv2")) {
+        request = false;
+        quiet = true;
+
+    } else if(env_ena && epicsStrCaseCmp(env_ena, "YES")==0) {
+        request = true;
+
+    } else if(env_ena && epicsStrCaseCmp(env_ena, "NO")==0) {
+        request = false;
+        quiet = true;
+
+    } else if(env_ena) {
+        // will be seen during initialization, print synchronously
+        fprintf(stderr, "ERROR: PVXS_QSRV_ENABLE=%s not YES/NO.  Defaulting to %s.\n",
+                env_ena,
+                request ? "YES" : "NO");
+    }
+
+    const bool enable = permit && request;
+
+    if(quiet) {
+        // shut up, I know what I'm doing...
+    } else if(request && !permit) {
+        fprintf(stderr,
+                "WARNING: QSRV1 detected, disabling QSRV2.\n"
+                "         If not intended, omit qsrv.dbd when including pvxsIoc.dbd\n");
+
+    } else {
+        printf("INFO: PVXS QSRV2 is loaded, %spermitted, and %s.\n",
+               permit ? "" : "NOT ",
+               enable ? "ENABLED" : "disabled");
+
+        if(!permit) {
+            printf("      Not permitted due to confict with QSRV1.\n"
+                   "      Remove qsrv.dbd from IOC.\n");
+        }
+    }
+
+    return enable;
+}
+
 /**
  * IOC pvxs base registrar.  This implements the required registrar function that is called by xxxx_registerRecordDeviceDriver,
  * the auto-generated stub created for all IOC implementations.
@@ -296,11 +450,11 @@ namespace {
  * 2. Also make sure that you initialize your server implementation - PVXS in our case - so that it will be available for the shell.
  * 3. Lastly register your hook handler to handle any state hooks that you want to implement
  */
-void pvxsBaseRegistrar() {
+void pvxsBaseRegistrar() noexcept {
     try {
         pvxs::logger_config_env();
 
-        pvxServer = new pvxServer_t();
+        bool enableQ = enable2();
 
         IOCShCommand<int>("pvxsr", "[show_detailed_information?]", "PVXS Server Report.  "
                                                                    "Shows information about server config (level==0)\n"
@@ -320,6 +474,12 @@ void pvxsBaseRegistrar() {
 
         // Register our hook handler to intercept certain state changes
         initHookRegister(&pvxsInitHook);
+
+        if(enableQ) {
+            single_enable();
+            group_enable();
+            pvalink_enable();
+        }
     } catch (std::exception& e) {
         fprintf(stderr, "Error in %s : %s\n", __func__, e.what());
     }

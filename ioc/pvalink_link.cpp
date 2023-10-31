@@ -14,7 +14,8 @@
 
 DEFINE_LOGGER(_logger, "pvxs.ioc.link.link");
 
-namespace pvxlink {
+namespace pvxs {
+namespace ioc {
 
 pvaLink::pvaLink()
 {
@@ -131,4 +132,4 @@ pvaLink::scanOnUpdate_t pvaLink::scanOnUpdate() const
     return scanOnUpdateNo;
 }
 
-} // namespace pvalink
+}} // namespace pvxs::ioc

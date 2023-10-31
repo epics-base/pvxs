@@ -43,8 +43,6 @@ enum type {
 
 class IOCSource {
 public:
-    static bool enabled();
-
     static void initialize(Value& value, const MappingInfo &info, const Channel &chan);
 
     static void get(Value& valuePrototype,

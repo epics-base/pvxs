@@ -36,6 +36,7 @@
 #include "dbentry.h"
 #include "iocshcommand.h"
 #include "utilpvt.h"
+#include "qsrvpvt.h"
 
 #include <epicsStdio.h>  /* redirects stdout/stderr; include after util.h from libevent */
 #include <epicsExport.h> /* defines epicsExportSharedSymbols */
@@ -44,147 +45,58 @@
 #  define HAVE_SHUTDOWN_HOOKS
 #endif
 
-namespace pvxs { namespace ioc {
+namespace pvxs {
+namespace ioc {
 
-using namespace pvxlink;
+void linkGlobal_t::alloc()
+{
+    if(linkGlobal) {
+        cantProceed("# Missing call to testqsrvShutdownOk() and/or testqsrvCleanup()");
+    }
+    linkGlobal = new linkGlobal_t;
 
-namespace {
+    // TODO "local" provider
+    if (inUnitTest()) {
+        linkGlobal->provider_remote = ioc::server().clientConfig().build();
+    } else {
+        linkGlobal->provider_remote = client::Config().build();
+    }
+}
 
-// halt, and clear, scan workers before dbCloseLinks()  (cf. iocShutdown())
-static void shutdownStep1()
+void linkGlobal_t::init()
+{
+    Guard G(linkGlobal->lock);
+    linkGlobal->running = true;
+
+    for(linkGlobal_t::channels_t::iterator it(linkGlobal->channels.begin()), end(linkGlobal->channels.end());
+        it != end; ++it)
+    {
+        std::shared_ptr<pvaLinkChannel> chan(it->second.lock());
+        if(!chan) continue;
+
+        chan->open();
+    }
+}
+
+void linkGlobal_t::deinit()
 {
     // no locking here as we assume that shutdown doesn't race startup
-    if(!pvaGlobal) return;
+    if(!linkGlobal) return;
 
-    pvaGlobal->close();
+    linkGlobal->close();
 }
 
-// Cleanup pvaGlobal, including PVA client and QSRV providers ahead of PDB cleanup
-// specifically QSRV provider must be free'd prior to db_cleanup_events()
-static void shutdownStep2()
+void linkGlobal_t::dtor()
 {
-    if(!pvaGlobal) return;
-
+    if(!linkGlobal) return;
     {
-        Guard G(pvaGlobal->lock);
+        Guard G(linkGlobal->lock);
         assert(pvaLink::cnt_pvaLink<=1u); // dbRemoveLink() already called
-        assert(pvaGlobal->channels.empty());
+        assert(linkGlobal->channels.empty());
     }
 
-    delete pvaGlobal;
-    pvaGlobal = NULL;
-}
-
-#ifndef HAVE_SHUTDOWN_HOOKS
-static void stopPVAPool(void*)
-{
-    try {
-        shutdownStep1();
-    }catch(std::exception& e){
-        fprintf(stderr, "Error while stopping PVA link pool : %s\n", e.what());
-    }
-}
-
-static void finalizePVA(void*)
-{
-    try {
-        shutdownStep2();
-    }catch(std::exception& e){
-        fprintf(stderr, "Error initializing pva link handling : %s\n", e.what());
-    }
-}
-#endif
-
-/* The Initialization game...
- *
- * #   Parse links during dbPutString()  (calls our jlif*)
- * # announce initHookAfterCaLinkInit
- * #   dbChannelInit() (needed for QSRV to work)
- * #   Re-parse links (calls to our jlif*)
- * #   Open links.  Calls jlif::get_lset() and then lset::openLink()
- * # announce initHookAfterInitDatabase
- * #   ... scan threads start ...
- * # announce initHookAfterIocBuilt
- */
-void initPVALink(initHookState state)
-{
-    try {
-        if(state==initHookAfterCaLinkInit) {
-            // before epicsExit(exitDatabase),
-            // so hook registered here will be run after iocShutdown()
-            // which closes links
-            if(pvaGlobal) {
-                cantProceed("# Missing call to testqsrvShutdownOk() and/or testqsrvCleanup()");
-            }
-            pvaGlobal = new pvaGlobal_t;
-
-#ifndef HAVE_SHUTDOWN_HOOKS
-            static bool atexitInstalled;
-            if(!atexitInstalled) {
-                epicsAtExit(finalizePVA, NULL);
-                atexitInstalled = true;
-            }
-#endif
-
-        } else if(state==initHookAfterInitDatabase) {
-            // TODO "local" provider
-            if (inUnitTest()) {
-                pvaGlobal->provider_remote = ioc::server().clientConfig().build();
-            } else {
-                pvaGlobal->provider_remote = client::Config().build();
-            }
-
-        } else if(state==initHookAfterIocBuilt) {
-            // after epicsExit(exitDatabase)
-            // so hook registered here will be run before iocShutdown()
-
-#ifndef HAVE_SHUTDOWN_HOOKS
-            epicsAtExit(stopPVAPool, NULL);
-#endif
-
-            Guard G(pvaGlobal->lock);
-            pvaGlobal->running = true;
-
-            for(pvaGlobal_t::channels_t::iterator it(pvaGlobal->channels.begin()), end(pvaGlobal->channels.end());
-                it != end; ++it)
-            {
-                std::shared_ptr<pvaLinkChannel> chan(it->second.lock());
-                if(!chan) continue;
-
-                chan->open();
-            }
-#ifdef HAVE_SHUTDOWN_HOOKS
-        } else if(state==initHookAtShutdown) {
-            shutdownStep1();
-
-        } else if(state==initHookAfterShutdown) {
-            shutdownStep2();
-#endif
-        }
-    }catch(std::exception& e){
-        cantProceed("Error initializing pva link handling : %s\n", e.what());
-    }
-}
-
-} // namespace
-
-// halt, and clear, scan workers before dbCloseLinks()  (cf. iocShutdown())
-void testqsrvShutdownOk(void)
-{
-    try {
-        shutdownStep1();
-    }catch(std::exception& e){
-        testAbort("Error while stopping PVA link pool : %s\n", e.what());
-    }
-}
-
-void testqsrvCleanup(void)
-{
-    try {
-        shutdownStep2();
-    }catch(std::exception& e){
-        testAbort("Error initializing pva link handling : %s\n", e.what());
-    }
+    delete linkGlobal;
+    linkGlobal = NULL;
 }
 
 static
@@ -219,7 +131,7 @@ DBLINK* testGetLink(const char *pv)
 void testqsrvWaitForLinkConnected(struct link *plink, bool conn)
 {
     if(conn)
-        pvaGlobal->provider_remote.hurryUp();
+        linkGlobal->provider_remote.hurryUp();
     std::shared_ptr<pvaLinkChannel> lchan(testGetPVALink(plink));
     Guard G(lchan->lock);
     while(lchan->connected!=conn) {
@@ -273,7 +185,7 @@ extern "C"
 void dbpvar(const char *precordname, int level)
 {
     try {
-        if(!pvaGlobal) {
+        if(!linkGlobal) {
             printf("PVA links not initialized\n");
             return;
         }
@@ -287,13 +199,13 @@ void dbpvar(const char *precordname, int level)
 
         size_t nchans = 0, nlinks = 0, nconn = 0;
 
-        pvaGlobal_t::channels_t channels;
+        linkGlobal_t::channels_t channels;
         {
-            Guard G(pvaGlobal->lock);
-            channels = pvaGlobal->channels; // copy snapshot
+            Guard G(linkGlobal->lock);
+            channels = linkGlobal->channels; // copy snapshot
         }
 
-        for(pvaGlobal_t::channels_t::const_iterator it(channels.begin()), end(channels.end());
+        for(linkGlobal_t::channels_t::const_iterator it(channels.begin()), end(channels.end());
             it != end; ++it)
         {
             std::shared_ptr<pvaLinkChannel> chan(it->second.lock());
@@ -404,17 +316,21 @@ void dbpvar(const char *precordname, int level)
 }
 
 static
-void installPVAAddLinkHook()
+const iocshVarDef pvaLinkNWorkersDef[] = {
+    {
+        "pvaLinkNWorkers",
+        iocshArgInt,
+        &pvaLinkNWorkers
+    },
+    {0, iocshArgInt, 0}
+};
+
+void pvalink_enable()
 {
-    initHookRegister(&initPVALink);
     IOCShCommand<const char*, int>("dbpvar", "dbpvar", "record name", "level")
             .implementation<&dbpvar>();
+    iocshRegisterVariable(pvaLinkNWorkersDef);
+
 }
 
 }} // namespace pvxs::ioc
-
-extern "C" {
-    using pvxs::ioc::installPVAAddLinkHook;
-    epicsExportRegistrar(installPVAAddLinkHook);
-    epicsExportAddress(int, pvaLinkNWorkers);
-}

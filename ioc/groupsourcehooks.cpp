@@ -20,6 +20,7 @@
 #include <pvxs/source.h>
 #include <pvxs/iochooks.h>
 
+#include "qsrvpvt.h"
 #include "groupsource.h"
 #include "groupconfigprocessor.h"
 #include "iocshcommand.h"
@@ -161,66 +162,49 @@ long dbLoadGroup(const char* jsonFilename, const char* macros) {
     }
 }
 
-}
-} // namespace pvxs::ioc
 
-using namespace pvxs::ioc;
+void processGroups()
+{
+    GroupConfigProcessor processor;
+    epicsGuard<epicsMutex> G(processor.config.groupMapMutex);
 
-namespace {
-using namespace pvxs;
+    // Parse all info(Q:Group... records to configure groups
+    processor.loadConfigFromDb();
 
-/**
- * Initialise qsrv database group records by adding them as sources in our running pvxs server instance
- *
- * @param theInitHookState the initHook state - we only want to trigger on the initHookAfterIocBuilt state - ignore all others
- */
-void qsrvGroupSourceInit(initHookState theInitHookState) {
-    try {
-        if(!IOCSource::enabled())
-            return;
-        if (theInitHookState == initHookAfterInitDatabase) {
-            GroupConfigProcessor processor;
-            epicsGuard<epicsMutex> G(processor.config.groupMapMutex);
+    // Load group configuration files
+    processor.loadConfigFiles();
 
-            // Parse all info(Q:Group... records to configure groups
-            processor.loadConfigFromDb();
+    // checks on groupConfigMap
+    processor.validateGroups();
 
-            // Load group configuration files
-            processor.loadConfigFiles();
+    // Configure groups
+    processor.defineGroups();
 
-            // checks on groupConfigMap
-            processor.validateGroups();
+    // Resolve triggers
+    processor.resolveTriggerReferences();
 
-            // Configure groups
-            processor.defineGroups();
-
-            // Resolve triggers
-            processor.resolveTriggerReferences();
-
-            // Create Server Groups
-            processor.createGroups();
-        } else if (theInitHookState == initHookAfterIocBuilt) {
-            // Load group configuration from parsed groups in iocServer
-            pvxs::ioc::server().addSource("qsrvGroup", std::make_shared<pvxs::ioc::GroupSource>(), 1);
-        }
-    } catch(std::exception& e) {
-        fprintf(stderr, "ERROR: Unhandled exception in %s(%d): %s\n",
-                __func__, theInitHookState, e.what());
-    }
+    // Create Server Groups
+    processor.createGroups();
 }
 
-/**
- * IOC pvxs Group Source registrar.  This implements the required registrar function that is called by xxxx_registerRecordDeviceDriver,
- * the auto-generated stub created for all IOC implementations.
- *<p>
- * It is registered by using the `epicsExportRegistrar()` macro.
- *<p>
- * 1. Register your hook handler to handle any state hooks that you want to implement.  Here we install
- * an `initHookState` handler connected to the `initHookAfterIocBuilt` state.  It  will add all of the
- * group record type sources defined so far.  Note that you can define sources up until the `iocInit()` call,
- * after which point the `initHookAfterIocBuilt` handlers are called and will register all the defined records.
- */
-void pvxsGroupSourceRegistrar() {
+void addGroupSrc()
+{
+    pvxs::ioc::server()
+            .addSource("qsrvGroup", std::make_shared<pvxs::ioc::GroupSource>(), 1);
+}
+
+void resetGroups()
+{
+    auto& config(IOCGroupConfig::instance());
+
+    // server stopped at this point, but lock anyway
+    epicsGuard<epicsMutex> G(config.groupMapMutex);
+
+    config.groupMap.clear();
+    config.groupConfigFiles.clear();
+}
+
+void group_enable() {
     // Register commands to be available in the IOC shell
     IOCShCommand<int, const char*>("pvxgl", "[level, [pattern]]",
                                    "Group Sources list.\n"
@@ -232,14 +216,6 @@ void pvxsGroupSourceRegistrar() {
     IOCShCommand<const char*, const char*>("dbLoadGroup",
                                            "JSON file", "macros", dbLoadGroupMsg)
             .implementation<&dbLoadGroupCmd>();
-
-    initHookRegister(&qsrvGroupSourceInit);
 }
 
-} // namespace
-
-// in .dbd file
-//registrar(pvxsGroupSourceRegistrar)
-extern "C" {
-epicsExportRegistrar(pvxsGroupSourceRegistrar);
-}
+}} // namespace pvxs::ioc

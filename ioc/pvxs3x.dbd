@@ -1,6 +1,4 @@
 registrar(pvxsBaseRegistrar)
-registrar(pvxsSingleSourceRegistrar)
-registrar(pvxsGroupSourceRegistrar)
 
 # from demo.cpp
 device(waveform, CONSTANT, devWfPDBQ2Demo, "QSRV2 Demo")

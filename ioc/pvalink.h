@@ -50,8 +50,8 @@ extern "C" {
     extern int pvaLinkNWorkers;
 }
 
-namespace pvxlink {
-using namespace pvxs;
+namespace pvxs {
+namespace ioc {
 
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
@@ -103,7 +103,7 @@ struct pvaLinkConfig : public jlink
     virtual ~pvaLinkConfig();
 };
 
-struct pvaGlobal_t final : private epicsThreadRunable {
+struct linkGlobal_t final : private epicsThreadRunable {
     client::Context provider_remote;
 
     MPMCFIFO<std::weak_ptr<epicsThreadRunable>> queue;
@@ -128,18 +128,24 @@ private:
     virtual void run() override final;
 public:
 
-    pvaGlobal_t();
-    pvaGlobal_t(const pvaGlobal_t&) = delete;
-    pvaGlobal_t& operator=(const pvaGlobal_t&) = delete;
-    virtual ~pvaGlobal_t();
+    linkGlobal_t();
+    linkGlobal_t(const linkGlobal_t&) = delete;
+    linkGlobal_t& operator=(const linkGlobal_t&) = delete;
+    virtual ~linkGlobal_t();
     void close();
+
+    // IOC lifecycle hooks
+    static void alloc();
+    static void init();
+    static void deinit();
+    static void dtor();
 };
-extern pvaGlobal_t *pvaGlobal;
+extern linkGlobal_t *linkGlobal;
 
 struct pvaLinkChannel final : public epicsThreadRunable
         ,public std::enable_shared_from_this<pvaLinkChannel>
 {
-    const pvaGlobal_t::channels_key_t key; // tuple of (channelName, pvRequest key)
+    const linkGlobal_t::channels_key_t key; // tuple of (channelName, pvRequest key)
     const Value pvRequest; // used with monitor
 
     INST_COUNTER(pvaLinkChannel);
@@ -175,7 +181,7 @@ struct pvaLinkChannel final : public epicsThreadRunable
     // set when 'links' is modified to trigger re-compute of record scan list
     bool links_changed = false;
 
-    pvaLinkChannel(const pvaGlobal_t::channels_key_t& key, const Value &pvRequest);
+    pvaLinkChannel(const linkGlobal_t::channels_key_t& key, const Value &pvRequest);
     virtual ~pvaLinkChannel();
 
     void open();
@@ -262,6 +268,6 @@ struct pvaLink final : public pvaLinkConfig
 };
 
 
-} // namespace pvalink
+}} // namespace pvxs::ioc
 
 #endif // PVALINK_H

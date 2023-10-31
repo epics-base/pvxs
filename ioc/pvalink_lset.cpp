@@ -17,9 +17,9 @@
 
 DEFINE_LOGGER(_logger, "pvxs.ioc.link.lset");
 
-namespace pvxlink {
+namespace pvxs {
+namespace ioc {
 namespace {
-using namespace pvxs;
 
 #define TRY pvaLink *self = static_cast<pvaLink*>(plink->value.json.jlink); assert(self->alive); try
 #define CATCH() catch(std::exception& e) { \
@@ -75,16 +75,16 @@ void pvaOpenLink(DBLINK *plink)
             return; // nothing to do...
 
         auto pvRequest(self->makeRequest());
-        pvaGlobal_t::channels_key_t key = std::make_pair(self->channelName, std::string(SB()<<pvRequest.format()));
+        linkGlobal_t::channels_key_t key = std::make_pair(self->channelName, std::string(SB()<<pvRequest.format()));
 
         std::shared_ptr<pvaLinkChannel> chan;
         bool doOpen = false;
         {
-            Guard G(pvaGlobal->lock);
+            Guard G(linkGlobal->lock);
 
-            pvaGlobal_t::channels_t::iterator it(pvaGlobal->channels.find(key));
+            linkGlobal_t::channels_t::iterator it(linkGlobal->channels.find(key));
 
-            if(it!=pvaGlobal->channels.end()) {
+            if(it!=linkGlobal->channels.end()) {
                 // re-use existing channel
                 chan = it->second.lock();
             }
@@ -97,7 +97,7 @@ void pvaOpenLink(DBLINK *plink)
 
                 chan.reset(new pvaLinkChannel(key, pvRequest));
                 chan->AP->lc = chan;
-                pvaGlobal->channels.insert(std::make_pair(key, chan));
+                linkGlobal->channels.insert(std::make_pair(key, chan));
                 doOpen = true;
 
             } else {
@@ -105,7 +105,7 @@ void pvaOpenLink(DBLINK *plink)
                                  plink->precord->name, self->channelName.c_str());
             }
 
-            doOpen &= pvaGlobal->running; // if not running, then open from initHook
+            doOpen &= linkGlobal->running; // if not running, then open from initHook
         }
 
         if(doOpen) {
@@ -704,4 +704,4 @@ lset pva_lset = {
 #endif
 };
 
-} // namespace pvxlink
+}} // namespace pvxs::ioc

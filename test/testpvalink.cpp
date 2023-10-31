@@ -8,6 +8,7 @@
 #include <epicsExit.h>
 #include <dbLock.h>
 #include <dbLink.h>
+#include <dbUnitTest.h>
 #include <aiRecord.h>
 #include <aaoRecord.h>
 #include <aaiRecord.h>
@@ -19,16 +20,17 @@
 
 #define PVXS_ENABLE_EXPERT_API
 
-//#include <pv/qsrv.h>
-//#include "utilities.h"
-#include "dblocker.h"
+#include <pvxs/log.h>
 #include <pvxs/client.h>
-#include "pvxs/iochooks.h"
+#include <pvxs/server.h>
+#include <pvxs/iochooks.h>
+#include <pvxs/unittest.h>
 #include <pvxs/nt.h>
 #include <pvxs/sharedpv.h>
+
+#include "dblocker.h"
+#include "qsrvpvt.h"
 #include "pvalink.h"
-#include "testioc.h"
-//#include "pv/qsrv.h"
 
 using namespace pvxs::ioc;
 using namespace pvxs;
@@ -494,6 +496,7 @@ MAIN(testpvalink)
         testdbReadDatabase("testpvalink.db", NULL, NULL);
 
         IOC.init();
+
         testGet();
         testFieldLinks();
         testProc();
@@ -509,9 +512,6 @@ MAIN(testpvalink)
         testFwd();
         testAtomic();
         testEnum();
-        testqsrvShutdownOk();
-        IOC.shutdown();
-        testqsrvCleanup();
     }
     catch (std::exception &e)
     {
