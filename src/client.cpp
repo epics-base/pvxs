@@ -88,15 +88,21 @@ RemoteError::~RemoteError() {}
 
 Finished::~Finished() {}
 
-Connected::Connected(const std::string &peerName)
-    :Connected(peerName, epicsTime::getCurrent()) // legacy
-{}
+static
+std::shared_ptr<ServerCredentials>
+buildAnon() {
+    auto cred(std::make_shared<ServerCredentials>());
+    cred->method = cred->account = "anonymous";
+    return cred;
+}
 
 Connected::Connected(const std::string& peerName,
-                     const epicsTime& time)
+                     const epicsTime& time,
+                     const std::shared_ptr<const pvxs::client::ServerCredentials> &cred)
     :std::runtime_error("Connected")
     ,peerName(peerName)
     ,time(time)
+    ,cred(cred ? cred : buildAnon())
 {}
 
 Connected::~Connected() {}
@@ -212,7 +218,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
     if(!self) { // in ~Channel
         // searchBuckets cleaned in tickSearch()
 
-    } else if(forcedServer.family()==AF_UNSPEC) { // begin search
+    } else if(forcedServer.addr.family()==AF_UNSPEC) { // begin search
 
         auto next = (context->currentBucket + holdoff) % nBuckets;
 
@@ -223,7 +229,8 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
                          name.c_str());
 
     } else if(context->state==ContextImpl::Running) { // reconnect to specific server
-        conn = Connection::build(context, forcedServer, true);
+        conn = Connection::build(context, forcedServer.addr, true,
+                                 forcedServer.scheme==SockEndpoint::TLS);
 
         conn->pending[cid] = self;
         state = Connecting;
@@ -291,7 +298,7 @@ std::shared_ptr<Connect> ConnectBuilder::exec()
         bool cur = op->_connected = op->chan->state==Channel::Active;
         if(cur && op->_onConn) {
             auto& conn = op->chan->conn;
-            Connected evt(conn->peerName, conn->connTime);
+            Connected evt(conn->peerName, conn->connTime, conn->cred);
             op->_onConn(evt);
         } else if(!cur && op->_onDis) {
             op->_onDis(Disconnect());
@@ -369,11 +376,14 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
     if(context->state!=ContextImpl::Running)
         throw std::logic_error("Context close()d");
 
-    SockAddr forceServer;
+    SockEndpoint forceServer;
     decltype (context->chanByName)::key_type namekey(name, server);
 
     if(!server.empty()) {
-        forceServer.setAddress(server.c_str(), context->effective.tcp_port);
+        SockEndpoint temp(server.c_str(), &context->effective);
+        if(!temp.iface.empty() || temp.ttl!=-1)
+            throw std::runtime_error(SB()<<"interface or TTL restriction not supported for .server(): "<<server);
+        forceServer = std::move(temp);
     }
 
     std::shared_ptr<Channel> chan;
@@ -400,7 +410,8 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
 
         } else { // bypass search and connect so a specific server
             chan->forcedServer = forceServer;
-            chan->conn = Connection::build(context, forceServer);
+            chan->conn = Connection::build(context, forceServer.addr, false,
+                                           forceServer.scheme==SockEndpoint::TLS);
 
             chan->conn->pending[chan->cid] = chan;
             chan->state = Connecting;
@@ -429,6 +440,39 @@ Context::Context(const Config& conf)
 }
 
 Context::~Context() {}
+
+void Context::reconfigure(const Config& newconf)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Context");
+
+#ifdef PVXS_ENABLE_OPENSSL
+
+    ossl::SSLContext new_context;
+    if(!newconf.tls_keychain_file.empty()) {
+        new_context = ossl::SSLContext::for_client(newconf);
+    }
+
+    pvt->impl->manager.loop().call([this, &new_context](){
+
+        log_debug_printf(setup, "Client reconfigure%s", "\n");
+
+        auto conns(std::move(pvt->impl->connByAddr));
+
+        for(auto& pair : conns) {
+            auto conn = pair.second.lock();
+            conn->cleanup();
+        }
+
+        conns.clear();
+
+        pvt->impl->tls_context = new_context;
+    });
+
+#else
+    pvt->impl->manager.loop().sync();
+#endif
+}
 
 const Config& Context::config() const
 {
@@ -583,6 +627,16 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     ,nsChecker(__FILE__, __LINE__,
                event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
 {
+#ifdef PVXS_ENABLE_OPENSSL
+    if(!effective.tls_keychain_file.empty()) {
+        try {
+            tls_context = ossl::SSLContext::for_client(effective);
+        }catch(std::exception& e){
+            log_err_printf(setup, "Unable to setup TLS.  Disabled for client : %s\n", e.what());
+        }
+    }
+#endif
+
     searchBuckets.resize(nBuckets);
 
     std::set<SockAddr, SockAddrOnlyLess> bcasts;
@@ -619,7 +673,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     for(auto& addr : effective.addressList) {
         SockEndpoint ep;
         try {
-            ep = SockEndpoint(addr, effective.udp_port);
+            ep = SockEndpoint(addr, nullptr, effective.udp_port);
         }catch(std::exception& e){
             log_warn_printf(setup, "%s  Ignoring malformed address %s\n", e.what(), addr.c_str());
             continue;
@@ -637,14 +691,17 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     }
 
     for(auto& addr : effective.nameServers) {
-        SockAddr saddr;
+        SockEndpoint saddr;
         try {
-            saddr.setAddress(addr.c_str(), effective.tcp_port);
+            SockEndpoint temp(addr.c_str(), &effective);
+            if(!temp.iface.empty() || temp.ttl!=-1)
+                throw std::runtime_error(SB()<<"interface or TTL restriction not supported for nameserver: "<<addr);
+            saddr = std::move(temp);
         }catch(std::runtime_error& e) {
             log_err_printf(setup, "%s  Ignoring...\n", e.what());
         }
 
-        log_info_printf(io, "Searching to TCP %s\n", saddr.tostring().c_str());
+        log_info_printf(io, "Searching to TCP %s\n", std::string(SB()<<saddr).c_str());
         nameServers.emplace_back(saddr, nullptr);
     }
 
@@ -656,7 +713,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     });
 
     for(auto& iface : effective.interfaces) {
-        SockEndpoint addr(iface.c_str(), effective.udp_port);
+        SockEndpoint addr(iface.c_str(), nullptr, effective.udp_port);
         beaconRx.push_back(manager.onBeacon(addr, cb));
         log_info_printf(io, "Listening for beacons on %s\n", addr.addr.tostring().c_str());
 
@@ -698,9 +755,11 @@ void ContextImpl::startNS()
         // start connections to name servers
         for(auto& ns : nameServers) {
             const auto& serv = ns.first;
-            ns.second = Connection::build(shared_from_this(), serv);
+            ns.second = Connection::build(shared_from_this(), serv.addr, false,
+                                          serv.scheme==SockEndpoint::TLS);
             ns.second->nameserver = true;
-            log_debug_printf(io, "Connecting to nameserver %s\n", ns.second->peerName.c_str());
+            log_debug_printf(io, "Connecting to nameserver %s%s\n",
+                             ns.second->peerName.c_str(), ns.second->isTLS ? " TLS" : "");
         }
 
         if(event_add(nsChecker.get(), &tcpNSCheckInterval))
@@ -917,7 +976,16 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
         self.onBeacon(fakebeacon);
     }
 
-    if(!found || proto!="tcp")
+    bool isTCP = proto=="tcp";
+
+#ifdef PVXS_ENABLE_OPENSSL
+    bool isTLS = proto=="tls";
+    if(!self.tls_context && isTLS)
+        return;
+#else
+    const bool isTLS = false;
+#endif
+    if(!found || !(isTCP || isTLS))
         return;
 
     for(auto n : range(nSearch)) {
@@ -945,7 +1013,7 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
             chan->guid = guid;
             chan->replyAddr = serv;
 
-            chan->conn = Connection::build(self.shared_from_this(), serv);
+            chan->conn = Connection::build(self.shared_from_this(), serv, false, isTLS);
 
             chan->conn->pending[chan->cid] = chan;
             chan->nSearch = 0u;
@@ -1108,6 +1176,13 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
 
         if(kind == SearchKind::discover) {
             to_wire(M, uint8_t(0u));
+
+#ifdef PVXS_ENABLE_OPENSSL
+        } else if(tls_context) {
+            to_wire(M, uint8_t(2u));
+            to_wire(M, "tls");
+            to_wire(M, "tcp");
+#endif
 
         } else {
             to_wire(M, uint8_t(1u));
@@ -1339,7 +1414,8 @@ void ContextImpl::onNSCheck()
         if(ns.second && ns.second->state != ConnBase::Disconnected) // hold-off, connecting, or connected
             continue;
 
-        ns.second = Connection::build(shared_from_this(), ns.first);
+        ns.second = Connection::build(shared_from_this(), ns.first.addr, false,
+                                      ns.first.scheme==SockEndpoint::TLS);
         ns.second->nameserver = true;
         log_debug_printf(io, "Reconnecting nameserver %s\n", ns.second->peerName.c_str());
     }

@@ -363,7 +363,8 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
                 notify = queue.empty() && wantToNotify();
 
                 queue.emplace_back(std::make_exception_ptr(Connected(conn->peerName,
-                                                                     conn->connTime)));
+                                                                     conn->connTime,
+                                                                     conn->cred)));
 
                 log_debug_printf(io, "Server %s channel %s monitor PUSH Connected\n",
                                  chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
