@@ -62,6 +62,13 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 {
     log_debug_printf(connio, "Client %s connects, RX readahead %zu TX limit %zu\n",
                      peerName.c_str(), readahead, tcp_tx_limit);
+    {
+        int opt = 1;
+        if(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
+            auto err(SOCKERRNO);
+            log_warn_printf(connio, "Unable to TCP_NODELAY: %d on %d\n", err, sock);
+        }
+    }
 
     {
         auto cred(std::make_shared<server::ClientCredentials>());

@@ -71,6 +71,14 @@ void Connection::startConnecting()
 
     if(bufferevent_socket_connect(bev, const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
         throw std::runtime_error("Unable to begin connecting");
+    {
+        auto fd(bufferevent_getfd(bev));
+        int opt = 1;
+        if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
+            auto err(SOCKERRNO);
+            log_warn_printf(io, "Unable to TCP_NODELAY: %d on %d\n", err, fd);
+        }
+    }
 
     connect(bev);
 
