@@ -29,6 +29,12 @@ namespace client {
 class Context;
 struct Config;
 
+//! Identity of a server.
+//!
+//! See pvxs::PeerCredentials
+//! @since UNRELEASED
+typedef PeerCredentials ServerCredentials;
+
 //! Operation failed because of connection to server was lost
 struct PVXS_API Disconnect : public std::runtime_error
 {
@@ -57,15 +63,21 @@ struct PVXS_API Finished : public Disconnect
 //! Indication of connection to a server
 struct PVXS_API Connected : public std::runtime_error
 {
-    Connected(const std::string& peerName);
+    Connected(const std::string& peerName) // legacy
+        :Connected(peerName, epicsTime::getCurrent(), nullptr)
+    {}
     Connected(const std::string& peerName,
-              const epicsTime& time);
+              const epicsTime& time,
+              const std::shared_ptr<const ServerCredentials>& cred = nullptr);
     virtual ~Connected();
 
     //! Server IP address
     const std::string peerName;
     //! Local time of connection
     const epicsTime time;
+    //! Identity of server.
+    //! @since UNRELEASED
+    const std::shared_ptr<const ServerCredentials> cred;
 };
 
 //! Operation::interrupt() called
@@ -325,7 +337,17 @@ public:
     static
     Context fromEnv();
 
+    /** Apply (in part) updated configuration
+     *
+     * Currently, only updates TLS configuration.  Causes all in-progress
+     * Operations to be disconnected.
+     *
+     * @since UNRELEASED
+     */
+    void reconfigure(const Config&);
+
     //! effective config of running client
+    //! @since UNRELEASED Reference invalidated by a call to reconfigure()
     const Config& config() const;
 
     /** Force close the client.
