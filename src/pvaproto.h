@@ -282,7 +282,7 @@ void to_wire(Buffer& buf, const Size& size)
 }
 
 inline
-void from_wire(Buffer& buf, Size& size)
+void from_wire(Buffer& buf, Size& size, bool allow_null=false)
 {
     if(!buf.ensure(1)) {
         buf.fault(__FILE__, __LINE__);
@@ -292,17 +292,16 @@ void from_wire(Buffer& buf, Size& size)
     if(s<254) {
         size.size = s;
 
-    } else if(s==255) {
-        // special "null"  used to encode empty Union
-        size.size = size_t(-1);
-
     } else if(s==254) {
         uint32_t ls = 0;
         from_wire(buf, ls);
         size.size = ls;
 
+    } else if(s==255 && allow_null) {
+        // special "null"  used to encode empty Union and (sometimes) empty string
+        size.size = size_t(-1);
+
     } else {
-        // unreachable (64-bit size so far not used)
         buf.fault(__FILE__, __LINE__);
     }
 }
@@ -331,7 +330,7 @@ inline
 void from_wire(Buffer& buf, std::string& s)
 {
     Size len{0};
-    from_wire(buf, len);
+    from_wire(buf, len, true);
     if(len.size==size_t(-1)) {
         s.clear();
 

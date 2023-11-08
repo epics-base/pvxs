@@ -520,7 +520,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         switch (desc->code.code) {
         case TypeCode::Union: {
             Size select{};
-            from_wire(buf, select);
+            from_wire(buf, select, true);
             if(select.size==size_t(-1)) {
                 fld = Value();
                 return;
@@ -627,7 +627,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
             for(auto& elem : arr) {
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
                     Size select{};
-                    from_wire(buf, select);
+                    from_wire(buf, select, true);
 
                     if(select.size==size_t(-1)) {
                         // null element.  treated the same as 0 case (which is what actually happens)

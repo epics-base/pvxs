@@ -1161,6 +1161,20 @@ void testRegressCNEN()
     testTrue(prototype2.equalType(prototypeE))<<" "<<prototype2<<"\n"<<prototypeE;
 }
 
+void testRegressBadBitMask()
+{
+    testDiag("%s", __func__);
+
+    {
+        // "null" bitmask not allowed
+        uint8_t input[] = "\xff";
+        FixedBuf buf(false, input);
+        BitMask mask;
+        from_wire(buf, mask);
+        testFalse(buf.good())<<" at"<<buf.file()<<":"<<buf.line();
+    }
+}
+
 // test the common case for a pvRequest of caching an empty Struct
 void testEmptyRequest()
 {
@@ -1204,7 +1218,7 @@ void testEmptyRequest()
 
 MAIN(testxcode)
 {
-    testPlan(142);
+    testPlan(143);
     testSetup();
     testDeserializeString();
     testSerialize1();
@@ -1219,6 +1233,7 @@ MAIN(testxcode)
     testXCodeNTNDArray();
     testRegressRedundantBitMask();
     testRegressCNEN();
+    testRegressBadBitMask();
     testBadFieldName();
     testEmptyRequest();
     return testDone();
