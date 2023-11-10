@@ -362,23 +362,29 @@ void from_wire(Buffer& buf, Selector& sel)
 }
 
 inline
-void to_wire(Buffer& buf, const char *s)
+void to_wire_str(Buffer& buf, const char *s, size_t cnt)
 {
-    Size len{s ? strlen(s) : 0};
+    Size len{cnt};
     to_wire(buf, len);
     if(!buf.ensure(len.size)) {
         buf.fault(__FILE__, __LINE__);
 
     } else {
-        for(size_t i=0; i<len.size; i++)
-            buf.push(s[i]);
+        memcpy(buf.save(), s, len.size);
+        buf._skip(len.size);
     }
 
 }
 
+inline
+void to_wire(Buffer& buf, const char *s)
+{
+    to_wire_str(buf, s, s ? strlen(s) : 0);
+}
+
 inline void to_wire(Buffer& buf, const std::string& s)
 {
-    to_wire(buf, s.c_str());
+    to_wire_str(buf, s.c_str(), s.size());
 }
 
 inline
