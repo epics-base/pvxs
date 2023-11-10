@@ -152,6 +152,8 @@ void from_wire(Buffer& buf, BitMask& mask)
     Size nbytes{0u};
 
     from_wire(buf, nbytes);
+    if(!buf.good() || nbytes.size > size_t(-1)/8u)
+        return;
     mask.resize(8u*nbytes.size);
 
     size_t nwords = nbytes.size / 8u;

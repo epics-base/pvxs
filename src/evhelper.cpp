@@ -14,6 +14,7 @@
 #include <cstring>
 #include <system_error>
 #include <deque>
+#include <limits>
 #include <algorithm>
 
 #include <event2/event.h>
@@ -997,11 +998,17 @@ bool EvInBuf::refill(size_t needed)
     limit = base = pos = nullptr;
 
     if(needed) {
+        // prevent overflow when calling evbuffer_pullup()
+        // probably paranoia.  will evbuffer_get_length() ever return out of signed range?
+        constexpr size_t max_req = std::numeric_limits<ev_ssize_t>::max();
+
         // expand request in an attempt to reduce the number of refill()s
         // but limit to actual backing buffer length, or pullup() will error
-        size_t requesting = std::min(std::max(needed, size_t(min_slice_size)),
-                                     evbuffer_get_length(backing));
-
+        size_t requesting = std::min(
+                    std::min(
+                        std::max(needed, size_t(min_slice_size)),
+                        evbuffer_get_length(backing)),
+                    max_req);
 
         // ensure new segment contains at least the requested size (one element)
         // (we hope this is mostly a no-op)
