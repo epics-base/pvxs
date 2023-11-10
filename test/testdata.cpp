@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <limits>
+
 #include <testMain.h>
 
 #include <epicsUnitTest.h>
@@ -495,7 +497,7 @@ void testClear()
 
 MAIN(testdata)
 {
-    testPlan(156);
+    testPlan(172);
     testSetup();
     testTraverse();
     testAssign();
@@ -544,6 +546,35 @@ MAIN(testdata)
     testConvertScalar2<int32_t, uint64_t, int64_t>(-2147483648, 0x80000000, -2147483648);
     testTodoEnd();
     testConvertScalar2<int32_t, uint64_t, int64_t>(0, 0x100000000llu, -0);
+    testTodoBegin("UB");
+    // test non-finite -> integer casts
+    // copy in
+    testConvertScalar2<int64_t, double, int32_t>(0,
+                                                 std::numeric_limits<double>::quiet_NaN(),
+                                                 0);
+    testConvertScalar2<int64_t, double, int32_t>(0x7fffffffffffffff,
+                                                 std::numeric_limits<double>::infinity(),
+                                                 0x7fffffff);
+    testConvertScalar2<int64_t, double, int32_t>(0x8000000000000000,
+                                                 -std::numeric_limits<double>::infinity(),
+                                                 0x80000000);
+    testConvertScalar2<uint64_t, double, uint32_t>(0xffffffffffffffff,
+                                                 std::numeric_limits<double>::infinity(),
+                                                 0xffffffff);
+    // copy out
+    testConvertScalar2<double, double, int32_t>(std::numeric_limits<double>::quiet_NaN(),
+                                                 std::numeric_limits<double>::quiet_NaN(),
+                                                 0);
+    testConvertScalar2<double, double, int32_t>(std::numeric_limits<double>::infinity(),
+                                                 std::numeric_limits<double>::infinity(),
+                                                 0x7fffffff);
+    testConvertScalar2<double, double, int32_t>(-std::numeric_limits<double>::infinity(),
+                                                 -std::numeric_limits<double>::infinity(),
+                                                 0x80000000);
+    testConvertScalar2<double, double, uint32_t>(std::numeric_limits<double>::infinity(),
+                                                 std::numeric_limits<double>::infinity(),
+                                                 0xffffffff);
+    testTodoEnd();
 
     testAssignSimilar();
     testAssignSimilarNDArray();
