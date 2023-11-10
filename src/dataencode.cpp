@@ -532,6 +532,9 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
 
                 from_wire_full(buf, ctxt, fld);
                 return;
+
+            } else { // invalid selection
+                buf.fault(__FILE__, __LINE__);
             }
         }
             break;
