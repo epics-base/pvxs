@@ -59,6 +59,10 @@ public:
     constexpr Server() = default;
     //! Create/allocate, but do not start, a new server with the provided config.
     explicit Server(const Config&);
+    Server(const Server&) = default;
+    Server(Server&& o) = default;
+    Server& operator=(const Server&) = default;
+    Server& operator=(Server&& o) = default;
     ~Server();
 
     /** Create new server based on configuration from $EPICS_PVA* environment variables.
