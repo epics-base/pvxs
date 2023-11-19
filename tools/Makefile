@@ -5,6 +5,8 @@ include $(TOP)/configure/CONFIG
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
 
+ifdef BASE_3_15
+
 # access to private headers
 USR_CPPFLAGS += -I$(TOP)/src
 
@@ -33,6 +35,8 @@ pvxlist_SRCS += list.cpp
 
 PROD += pvxmshim
 pvxmshim_SRCS += mshim.cpp
+
+endif # BASE_3_15
 
 #===========================
 

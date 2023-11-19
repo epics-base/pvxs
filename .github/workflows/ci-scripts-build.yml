@@ -177,9 +177,10 @@ jobs:
       if: ${{ always() && runner.os == 'macOS' }}
       run: otool -D -L -l bundle/usr/*/lib/*.dylib lib/*/*.dylib bin/*/pvxinfo
     - name: readelf
-      if: ${{ always() && runner.os == 'Linux' }}
+      if: ${{ always() && runner.os == 'Linux' && matrix.base != '3.14' }}
       run: find bundle/usr lib -name '*.so' -print0 | xargs -0 readelf -d bin/linux-*/pvxinfo
     - name: Host info
+      if: ${{ matrix.base != '3.14' }}
       run: python .ci/cue.py --add-path "{TOP}/bin/{EPICS_HOST_ARCH}" --add-path "{TOP}/bundle/usr/{EPICS_HOST_ARCH}/lib" exec pvxinfo -D
     - name: Test env setup
       run: echo "UBSAN_OPTIONS=log_path=$PWD/UBSAN:suppressions=$PWD/.ci-local/ubsan.supp:report_error_type=1:print_stacktrace=1" >> $GITHUB_ENV
