@@ -179,3 +179,18 @@ of the underlying array prior to using `pvxs::shared_array::castTo`.
     :members:
 
 .. doxygenenum:: pvxs::ArrayType
+
+.. _jsonparse:
+
+JSON Parsing
+------------
+
+The `json::Parse` interface may be used to assign `Value` from a JSON string.
+
+.. code-block:: c++
+
+    #include <pvxs/json.h>
+    namespace pvxs { namespace json { ... } }
+
+.. doxygenstruct:: pvxs::json::Parse
+    :members:
