@@ -14,6 +14,10 @@
 
 #include <pvxs/version.h>
 
+#if EPICS_VERSION_INT < VERSION_INT(3, 15, 0, 0)
+#  error JSON support requires Base 3.15 or later
+#endif
+
 #ifdef PVXS_EXPERT_API_ENABLED
 
 namespace pvxs {
