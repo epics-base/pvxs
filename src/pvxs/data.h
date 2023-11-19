@@ -721,6 +721,10 @@ public:
      * * "dimension[0]size"
      * * "value->booleanValue"
      *
+     * @since UNRELEASED A leading "->" may be omitted when indirecting
+     *        into a Union.  eg. "->booleanValue" may be replaced with
+     *        "booleanValue".
+     *
      * @returns A valid() Value if the descendant field exists, otherwise an invalid Value.
      */
     Value operator[](const std::string& name);

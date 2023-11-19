@@ -94,6 +94,8 @@ void testAssignUnion()
 
     val["->u16"] = 42;
     testEq(val.as<std::string>(), "42");
+    val["u16"] = 43;
+    testEq(val.as<uint16_t>(), 43);
     val["->s"] = "test";
     testEq(val.as<std::string>(), "test");
 
@@ -562,7 +564,7 @@ void test_cache_sync()
 
 MAIN(testdata)
 {
-    testPlan(195);
+    testPlan(196);
     testSetup();
     testTraverse();
     testAssign();
