@@ -51,6 +51,12 @@ TESTPROD_HOST += testdata
 testdata_SRCS += testdata.cpp
 TESTS += testdata
 
+ifdef BASE_3_15
+TESTPROD_HOST += testjson
+testjson_SRCS += testjson.cpp
+TESTS += testjson
+endif
+
 TESTPROD_HOST += testnt
 testnt_SRCS += testnt.cpp
 TESTS += testnt
