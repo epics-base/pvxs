@@ -908,61 +908,64 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
             // attempt to traverse to (and maybe select) member
             // expect: ->[0-9a-zA-Z_]+[.\[-$]
 
-            maybedot = false;
-
             if(expr.size()-pos >= 2 && expr[pos]=='-' && expr[pos+1]=='>') {
                 pos += 2; // skip past "->"
 
-                if(desc->code.code==TypeCode::Any) {
-                    // select member of Any (may be Null)
-                    *this = store->as<Value>();
-
-                } else {
-                    // select member of Union
-                    size_t sep = expr.find_first_of("<[-.", pos);
-
-                    decltype (desc->mlookup)::const_iterator it;
-                    auto& fld = store->as<Value>();
-
-                    if(sep>0 && (it=desc->mlookup.find(expr.substr(pos, sep-pos)))!=desc->mlookup.end()) {
-                        // found it.
-
-                        if(modify || fld.desc==&desc->members[it->second]) {
-                            // will select, or already selected
-                            if(fld.desc!=&desc->members[it->second]) {
-                                // select
-                                std::shared_ptr<const FieldDesc> mtype(store->top->desc, &desc->members[it->second]);
-                                fld = Value(mtype, *this);
-                            }
-                            pos = sep;
-                            *this = fld;
-                            maybedot = true;
-
-                        } else {
-                            // traversing const Value, can't select Union
-                            store.reset();
-                            desc = nullptr;
-                            if(dothrow)
-                                throw LookupError(SB()<<"traversing const Value, can't select Union in '"<<expr<<"'");
-                        }
-
-                    } else if(fld.desc) {
-                        // deref selected
-                        *this = fld;
-
-                    } else {
-                        store.reset();
-                        desc = nullptr;
-                        if(dothrow)
-                            throw LookupError(SB()<<"can't deref. empty Union '"<<expr<<"'");
-                    }
-                }
-            } else {
+            } else if(pos>0u || desc->code.code!=TypeCode::Union) {
                 // expected "->"
+                // allow omission at the beginning of an expression when starting from a Union
                 store.reset();
                 desc = nullptr;
                 if(dothrow)
                     throw LookupError(SB()<<"expected -> in '"<<expr<<"'");
+                break;
+            }
+
+            maybedot = false;
+
+            if(desc->code.code==TypeCode::Any) {
+                // select member of Any (may be Null)
+                *this = store->as<Value>();
+
+            } else {
+                // select member of Union
+                size_t sep = expr.find_first_of("<[-.", pos);
+
+                decltype (desc->mlookup)::const_iterator it;
+                auto& fld = store->as<Value>();
+
+                if(sep>0 && (it=desc->mlookup.find(expr.substr(pos, sep-pos)))!=desc->mlookup.end()) {
+                    // found it.
+
+                    if(modify || fld.desc==&desc->members[it->second]) {
+                        // will select, or already selected
+                        if(fld.desc!=&desc->members[it->second]) {
+                            // select
+                            std::shared_ptr<const FieldDesc> mtype(store->top->desc, &desc->members[it->second]);
+                            fld = Value(mtype, *this);
+                        }
+                        pos = sep;
+                        *this = fld;
+                        maybedot = true;
+
+                    } else {
+                        // traversing const Value, can't select Union
+                        store.reset();
+                        desc = nullptr;
+                        if(dothrow)
+                            throw LookupError(SB()<<"traversing const Value, can't select Union in '"<<expr<<"'");
+                    }
+
+                } else if(fld.desc) {
+                    // deref selected
+                    *this = fld;
+
+                } else {
+                    store.reset();
+                    desc = nullptr;
+                    if(dothrow)
+                        throw LookupError(SB()<<"can't deref. empty Union '"<<expr<<"'");
+                }
             }
 
         } else if(desc->code.isarray() && desc->code.kind()==Kind::Compound) {
