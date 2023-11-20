@@ -315,9 +315,6 @@ void getProperties(dbChannel* pChannel, db_field_log *pfl, Value& node)
         if(auto units = node["display.units"])
             units = meta.units;
     }
-    if(options & DBR_PRECISION) {
-        // TODO: add in nt.cpp?
-    }
     if(options & DBR_ENUM_STRS) {
         if(auto choices = node["value.choices"]) {
             shared_array<std::string> arr(meta.no_str);
@@ -331,7 +328,9 @@ void getProperties(dbChannel* pChannel, db_field_log *pfl, Value& node)
         if(options & DBR_GR_DOUBLE) {
             dlL = meta.lower_disp_limit;
             node["display.limitHigh"] = meta.upper_disp_limit;
-            node["display.precision"] = meta.precision.dp;
+            if(options & DBR_PRECISION) {
+                node["display.precision"] = int32_t(meta.precision.dp);
+            }
         }
         if(options & DBR_CTRL_DOUBLE) {
             node["control.limitLow"] = meta.lower_ctrl_limit;
