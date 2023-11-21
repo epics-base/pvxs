@@ -77,7 +77,7 @@ unsigned long version_abi_int();
 
 /** Runtime ABI check.
  *
- * This test is only meaningful if it is preformed prior to any
+ * This test is only meaningful if it is performed prior to any
  * other library calls.
  *
  * It is guaranteed that the library has no global constructors.

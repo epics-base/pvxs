@@ -54,7 +54,7 @@ struct PRBase::Args
         for(auto& name : names) {
             auto it = values.find(name);
             if(it==values.end())
-                throw std::logic_error("uriArgs() names vs. values mis-match");
+                throw std::logic_error("uriArgs() names vs. values mismatch");
 
             auto& value = it->second.first;
 

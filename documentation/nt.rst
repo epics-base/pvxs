@@ -69,7 +69,7 @@ alarm_t
 
     The meaning of Minor and Major are contextual and may be different for each PV.
     An Invalid alarm severity means that the value field should not be taken as
-    a meaningful represention of eg. the quantity being measured.  Typically,
+    a meaningful representation of eg. the quantity being measured.  Typically,
     it reflects the most recent valid value.
 
     A UI client may change the state of a widget displaying a value which is alarming

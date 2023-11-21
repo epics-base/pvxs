@@ -252,7 +252,7 @@ Secondly, to provide certain well-known options to modify the operation.
 The pvRequest conditions may be specified in three ways through the methods of `pvxs::client::detail::CommonBuilder`
 exposed through the individual \*Builder types.
 
-Programatic
+Programmatic
     The field() and record() methods.
 
 Textual

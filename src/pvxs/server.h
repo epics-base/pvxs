@@ -162,7 +162,7 @@ struct PVXS_API Config {
     std::vector<std::string> ignoreAddrs;
     //! Addresses (**not** host names) to which (UDP) beacons message will be sent.
     //! May include broadcast and/or unicast addresses.
-    //! Supplemented iif auto_beacon==true
+    //! Supplemented only if auto_beacon==true
     std::vector<std::string> beaconDestinations;
     //! TCP port to bind.  Default is 5075.  May be zero.
     unsigned short tcp_port = 5075;

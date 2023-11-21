@@ -172,7 +172,7 @@ inline void _to_wire(Buffer& buf, const uint8_t *mem, bool reverse, const char *
         return;
 
     } else if(reverse) {
-        // byte order mis-match
+        // byte order mismatch
         for(unsigned i=0; i<N; i++) {
             buf[N-1-i] = mem[i];
         }
@@ -192,7 +192,7 @@ inline void _from_wire(Buffer& buf, uint8_t *mem, bool reverse, const char *fnam
         return;
 
     } else if(reverse) {
-        // byte order mis-match
+        // byte order mismatch
         for(unsigned i=0; i<N; i++) {
             mem[i] = buf[N-1-i];
         }

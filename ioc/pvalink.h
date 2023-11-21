@@ -114,7 +114,7 @@ struct linkGlobal_t final : private epicsThreadRunable {
 
     // a tuple of channel name and printed pvRequest (or Monitor)
     typedef std::pair<std::string, std::string> channels_key_t;
-    // pvaLinkChannel dtor prunes dead entires
+    // pvaLinkChannel dtor prunes dead entries
     typedef std::map<channels_key_t, std::weak_ptr<pvaLinkChannel> > channels_t;
     // Cache of active Channels (really about caching Monitor)
     channels_t channels;

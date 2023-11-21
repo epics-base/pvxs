@@ -61,7 +61,7 @@ BitAnd<BitBase<Lhs>, BitBase<Rhs>>
 operator &(const BitBase<Lhs>& lhs, const BitBase<Rhs>& rhs)
 {
     if(lhs.size()!=rhs.size())
-        throw std::logic_error("op size mis-match"); // this sucks, need to figure out a way to handle different size input
+        throw std::logic_error("op size mismatch"); // this sucks, need to figure out a way to handle different size input
     return BitAnd<BitBase<Lhs>, BitBase<Rhs>>{lhs, rhs};
 }
 
@@ -82,7 +82,7 @@ BitOr<BitBase<Lhs>, BitBase<Rhs>>
 operator |(const BitBase<Lhs>& lhs, const BitBase<Rhs>& rhs)
 {
     if(lhs.size()!=rhs.size())
-        throw std::logic_error("op size mis-match");
+        throw std::logic_error("op size mismatch");
     return BitOr<BitBase<Lhs>, BitBase<Rhs>>{lhs, rhs};
 }
 

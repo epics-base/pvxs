@@ -285,8 +285,8 @@ Level logger::init()
 void xerrlogHexPrintf(const void *buf, size_t buflen)
 {
     const auto cbuf = static_cast<const uint8_t*>(buf);
-    bool elipsis = buflen > 64u;
-    if(elipsis)
+    bool ellipsis = buflen > 64u;
+    if(ellipsis)
         buflen = 64u;
 
     // whole buffer
@@ -318,7 +318,7 @@ void xerrlogHexPrintf(const void *buf, size_t buflen)
 
         errlogPrintf("%04x : %s %s %s %s\n", addr, buf[0], buf[1], buf[2], buf[3]);
     }
-    if(elipsis)
+    if(ellipsis)
         errlogPrintf("...\n");
 }
 

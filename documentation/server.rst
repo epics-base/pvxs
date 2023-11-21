@@ -46,12 +46,12 @@ Entries naming multiple :ref:`environ` will prefer the left most which is set.
 eg. ``EPICS_PVA_ADDR_LIST`` is only checked if ``EPICS_PVAS_BEACON_ADDR_LIST`` is unset.
 
 EPICS_PVAS_INTF_ADDR_LIST
-    Space seperated list of local interface addresses to which the server will bind.
+    Space separated list of local interface addresses to which the server will bind.
     Port numbers are parsed and ignore.
     Sets `pvxs::server::Config::interfaces`
 
 EPICS_PVAS_BEACON_ADDR_LIST or EPICS_PVA_ADDR_LIST
-    Space seperated list of unicast or broadcast addresses.
+    Space separated list of unicast or broadcast addresses.
     This list is supplimented all local broadcast addresses if auto-beacon is YES.
     Sets `pvxs::server::Config::beaconDestinations`
 
@@ -61,7 +61,7 @@ EPICS_PVAS_AUTO_BEACON_ADDR_LIST or EPICS_PVA_AUTO_ADDR_LIST
 
 EPICS_PVAS_SERVER_PORT or EPICS_PVA_SERVER_PORT
     Single integer.
-    Prefered TCP port to bind.
+    Preferred TCP port to bind.
     If already in use then a random port will be chosen.
     Sets `pvxs::server::Config::tcp_port`
 
@@ -72,7 +72,7 @@ EPICS_PVAS_BROADCAST_PORT or EPICS_PVA_BROADCAST_PORT
     Sets `pvxs::server::Config::udp_port`
 
 EPICS_PVAS_IGNORE_ADDR_LIST
-    Space seperated list of addresses with optional port.
+    Space separated list of addresses with optional port.
     Port zero is treated as a wildcard to match any port.
     UDP traffic from matched addresses will be ignored with no further processing.
 

@@ -32,7 +32,7 @@ through the environment variable **$PVXS_LOG** by calling `pvxs::logger_config_e
 
 .. doxygenfunction:: pvxs::logger_config_env()
 
-If this is undesireable, logger levels may be (reset) manually.
+If this is undesirable, logger levels may be (reset) manually.
 
 .. doxygenfunction:: pvxs::logger_level_set(const char *, Level)
 

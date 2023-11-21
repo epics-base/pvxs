@@ -432,7 +432,7 @@ bool enable2() {
                enable ? "ENABLED" : "disabled");
 
         if(!permit) {
-            printf("      Not permitted due to confict with QSRV1.\n"
+            printf("      Not permitted due to conflict with QSRV1.\n"
                    "      Remove qsrv.dbd from IOC.\n");
         }
     }

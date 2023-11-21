@@ -13,7 +13,7 @@ as well as arrays of either.
 The `pvxs::TypeCode::code_t` enum is an exhaustive list of all valid types,
 as well as Null.
 
-Any valid type may be instanciate directly.
+Any valid type may be instantiate directly.
 
 .. code-block:: c++
 

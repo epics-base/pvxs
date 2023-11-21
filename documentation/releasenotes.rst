@@ -154,7 +154,7 @@ Release Notes
 * PVXS now attempts to fanout unicast searches through the loopback interface, and
   to handle ``CMD_ORIGIN_TAG`` messages (aka. the local multicast hack).
 * Add `pvxs::client::Context::discover` to enumerate and track PVA Servers.
-* ``pvxlist`` add "continous" mode.  (eg. ``pvxlist -v -w 0``)
+* ``pvxlist`` add "continuous" mode.  (eg. ``pvxlist -v -w 0``)
   To immediately Discover new servers, then continue listening for Beacons to detect
   as server go up and down (like ``casw``).
   Also, to be gentler on your network, add ``-P`` to skip initial Discovery ping,

@@ -42,7 +42,7 @@ public:
     // points to storage in containing Group::fields
     std::vector<Field*> triggers;
 
-    // only for Meta mapping.  type infered from dbChannelFinalFieldType()
+    // only for Meta mapping.  type inferred from dbChannelFinalFieldType()
     Value anyType;
 
     Field(const FieldDefinition& def);

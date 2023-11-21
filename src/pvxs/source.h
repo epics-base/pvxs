@@ -62,7 +62,7 @@ struct MonitorStat {
     size_t maxQueue=0;
     //! Negotiated limit on nQueue
     size_t limitQueue=0;
-    //! Number of updates squashed during post() calss
+    //! Number of updates squashed during post() calls
     //! @since 1.2.0
     size_t nSquash=0;
 

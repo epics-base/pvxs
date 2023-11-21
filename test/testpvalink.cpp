@@ -473,7 +473,7 @@ namespace {
         testdbGetFieldEqual("enum:tgt:s", DBR_STRING, "one");
         // not clear how to handle this case, where a string is
         // read as DBR_USHORT, which is actually as DBF_ENUM
-        testTodoBegin("Not yet implimented");
+        testTodoBegin("Not yet implemented");
         testdbGetFieldEqual("enum:tgt:b", DBR_STRING, "one");
         testTodoEnd();
     }
