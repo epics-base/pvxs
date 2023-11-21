@@ -46,10 +46,14 @@ QSRV 2
 
 Beginning with PVXS 1.2.0 the functionality of `QSRV <https://epics-base.github.io/pva2pva>`_
 is replicated in the ``pvxsIoc`` library.
-Currently this feature preview is considered **alpha** level, with missing functionality.
-In addition to linking in ``libpvxsIoc``,
-users must **opt in** at runtime by setting ``$PVXS_QSRV_ENABLE=YES`` before ``iocInit()``. ::
+Currently this feature preview is considered **beta** level with equivalent functionality.
 
+It is recommended not to load both ``pvxsIoc.dbd`` and ``qsrv.dbd`` in the same IOC process.
+However, if this is done.  Users may opt out at runtime by setting
+``$PVXS_QSRV_ENABLE=NO`` before ``iocInit()``. ::
+
+    # Default with PVXS >= 1.3.0
+    # Needed with PVXS 1.2.x
     epicsEnvSet("PVXS_QSRV_ENABLE", "YES")
     iocInit()
 
@@ -162,4 +166,20 @@ and is a member of the "op" group (supported on POSIX targets and Windows).
 PVAccess Links
 ^^^^^^^^^^^^^^
 
-TODO...
+Since PVXS UNRELEASED.
+
+When built against Base >= 7.0.1, support is enabled for PVAccess links
+using JSON link support syntax. ::
+
+    record(longin, "tgt") {}
+    record(longin, "src") {
+        field(INP, {pva:{pv:"tgt"}})
+    }
+
+.. note: The "dbjlr" and "dbpvar" IOC shell command provide information about PVA links in a running IOC.
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   pvalink

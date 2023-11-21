@@ -16,7 +16,7 @@ clean:
 gen: ../include/pvxs/version.h
 	doxygen
 	$(PYTHON) -m sphinx -j auto -b html . html
-	cp qsrv2-schema-0.json html/
+	cp pvalink-schema-0.json qsrv2-schema-0.json html/
 
 gen: _image/nt_table1.svg
 gen: _image/nt_table2.svg
