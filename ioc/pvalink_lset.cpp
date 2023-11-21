@@ -39,7 +39,7 @@ dbfType getLinkType(DBLINK *plink)
     throw std::logic_error("DBLINK* corrupt");
 }
 
-void pvaOpenLink(DBLINK *plink)
+void pvaOpenLink(DBLINK *plink) noexcept
 {
     try {
         pvaLink* self((pvaLink*)plink->value.json.jlink);
@@ -150,7 +150,7 @@ void pvaOpenLink(DBLINK *plink)
     plink->lset = NULL;
 }
 
-void pvaRemoveLink(struct dbLocker *locker, DBLINK *plink)
+void pvaRemoveLink(struct dbLocker *locker, DBLINK *plink) noexcept
 {
     (void)locker;
     try {
@@ -161,7 +161,7 @@ void pvaRemoveLink(struct dbLocker *locker, DBLINK *plink)
     }CATCH()
 }
 
-int pvaIsConnected(const DBLINK *plink)
+int pvaIsConnected(const DBLINK *plink) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -174,7 +174,7 @@ int pvaIsConnected(const DBLINK *plink)
     return 0;
 }
 
-int pvaGetDBFtype(const DBLINK *plink)
+int pvaGetDBFtype(const DBLINK *plink) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -217,7 +217,7 @@ int pvaGetDBFtype(const DBLINK *plink)
     return -1;
 }
 
-long pvaGetElements(const DBLINK *plink, long *nelements)
+long pvaGetElements(const DBLINK *plink, long *nelements) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -234,8 +234,7 @@ long pvaGetElements(const DBLINK *plink, long *nelements)
     return -1;
 }
 
-long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
-        long *pnRequest)
+long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -412,7 +411,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer,
     return -1;
 }
 
-long pvaGetControlLimits(const DBLINK *plink, double *lo, double *hi)
+long pvaGetControlLimits(const DBLINK *plink, double *lo, double *hi) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -430,7 +429,7 @@ long pvaGetControlLimits(const DBLINK *plink, double *lo, double *hi)
     return -1;
 }
 
-long pvaGetGraphicLimits(const DBLINK *plink, double *lo, double *hi)
+long pvaGetGraphicLimits(const DBLINK *plink, double *lo, double *hi) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -449,7 +448,7 @@ long pvaGetGraphicLimits(const DBLINK *plink, double *lo, double *hi)
 }
 
 long pvaGetAlarmLimits(const DBLINK *plink, double *lolo, double *lo,
-        double *hi, double *hihi)
+                       double *hi, double *hihi) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -473,7 +472,7 @@ long pvaGetAlarmLimits(const DBLINK *plink, double *lolo, double *lo,
     return -1;
 }
 
-long pvaGetPrecision(const DBLINK *plink, short *precision)
+long pvaGetPrecision(const DBLINK *plink, short *precision) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -490,7 +489,7 @@ long pvaGetPrecision(const DBLINK *plink, short *precision)
     return -1;
 }
 
-long pvaGetUnits(const DBLINK *plink, char *units, int unitsSize)
+long pvaGetUnits(const DBLINK *plink, char *units, int unitsSize) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -512,7 +511,7 @@ long pvaGetUnits(const DBLINK *plink, char *units, int unitsSize)
 
 long pvaGetAlarmMsg(const DBLINK *plink,
                     epicsEnum16 *status, epicsEnum16 *severity,
-                    char *msgbuf, size_t msgbuflen)
+                    char *msgbuf, size_t msgbuflen) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -540,12 +539,12 @@ long pvaGetAlarmMsg(const DBLINK *plink,
 }
 
 long pvaGetAlarm(const DBLINK *plink, epicsEnum16 *status,
-        epicsEnum16 *severity)
+                 epicsEnum16 *severity) noexcept
 {
     return pvaGetAlarmMsg(plink, status, severity, nullptr, 0);
 }
 
-long pvaGetTimeStampTag(const DBLINK *plink, epicsTimeStamp *pstamp, epicsUTag *ptag)
+long pvaGetTimeStampTag(const DBLINK *plink, epicsTimeStamp *pstamp, epicsUTag *ptag) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -563,13 +562,13 @@ long pvaGetTimeStampTag(const DBLINK *plink, epicsTimeStamp *pstamp, epicsUTag *
     return -1;
 }
 
-long pvaGetTimeStamp(const DBLINK *plink, epicsTimeStamp *pstamp)
+long pvaGetTimeStamp(const DBLINK *plink, epicsTimeStamp *pstamp) noexcept
 {
     return pvaGetTimeStampTag(plink, pstamp, nullptr);
 }
 
 long pvaPutValueX(DBLINK *plink, short dbrType,
-                  const void *pbuffer, long nRequest, bool wait)
+                  const void *pbuffer, long nRequest, bool wait) noexcept
 {
     TRY {
         (void)self;
@@ -630,19 +629,17 @@ long pvaPutValueX(DBLINK *plink, short dbrType,
     return -1;
 }
 
-long pvaPutValue(DBLINK *plink, short dbrType,
-        const void *pbuffer, long nRequest)
+long pvaPutValue(DBLINK *plink, short dbrType, const void *pbuffer, long nRequest) noexcept
 {
     return pvaPutValueX(plink, dbrType, pbuffer, nRequest, false);
 }
 
-long pvaPutValueAsync(DBLINK *plink, short dbrType,
-        const void *pbuffer, long nRequest)
+long pvaPutValueAsync(DBLINK *plink, short dbrType, const void *pbuffer, long nRequest) noexcept
 {
     return pvaPutValueX(plink, dbrType, pbuffer, nRequest, true);
 }
 
-void pvaScanForward(DBLINK *plink)
+void pvaScanForward(DBLINK *plink) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);
@@ -661,7 +658,7 @@ void pvaScanForward(DBLINK *plink)
 }
 
 #if EPICS_VERSION_INT>=VERSION_INT(3,16,1,0)
-long pvaDoLocked(struct link *plink, dbLinkUserCallback rtn, void *priv)
+long pvaDoLocked(struct link *plink, dbLinkUserCallback rtn, void *priv) noexcept
 {
     TRY {
         Guard G(self->lchan->lock);

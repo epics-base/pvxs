@@ -37,7 +37,7 @@ namespace {
  * }
  */
 
-jlink* pva_alloc_jlink(short)
+jlink* pva_alloc_jlink(short) noexcept
 {
     try {
         return new pvaLink;
@@ -53,7 +53,7 @@ jlink* pva_alloc_jlink(short)
     errlogPrintf("Error in %s link: %s\n", __FUNCTION__, e.what()); \
     return RET; }
 
-void pva_free_jlink(jlink *pjlink)
+void pva_free_jlink(jlink *pjlink) noexcept
 {
     TRY {
         delete pvt;
@@ -62,7 +62,7 @@ void pva_free_jlink(jlink *pjlink)
     }
 }
 
-jlif_result pva_parse_null(jlink *pjlink)
+jlif_result pva_parse_null(jlink *pjlink) noexcept
 {
     TRY {
         if(pvt->parseDepth!=1) {
@@ -83,7 +83,7 @@ jlif_result pva_parse_null(jlink *pjlink)
     }CATCH(jlif_stop)
 }
 
-jlif_result pva_parse_bool(jlink *pjlink, int val)
+jlif_result pva_parse_bool(jlink *pjlink, int val) noexcept
 {
     TRY {
 //        TRACE(<<pvt->jkey<<" "<<(val?"true":"false"));
@@ -117,7 +117,7 @@ jlif_result pva_parse_bool(jlink *pjlink, int val)
     }CATCH(jlif_stop)
 }
 
-jlif_result pva_parse_integer(jlink *pjlink, long long val)
+jlif_result pva_parse_integer(jlink *pjlink, long long val) noexcept
 {
     TRY {
         if(pvt->parseDepth!=1) {
@@ -136,7 +136,7 @@ jlif_result pva_parse_integer(jlink *pjlink, long long val)
     }CATCH(jlif_stop)
 }
 
-jlif_result pva_parse_string(jlink *pjlink, const char *val, size_t len)
+jlif_result pva_parse_string(jlink *pjlink, const char *val, size_t len) noexcept
 {
     TRY{
         std::string sval(val, len);
@@ -192,14 +192,14 @@ jlif_result pva_parse_string(jlink *pjlink, const char *val, size_t len)
     }CATCH(jlif_stop)
 }
 
-jlif_key_result pva_parse_start_map(jlink *pjlink)
+jlif_key_result pva_parse_start_map(jlink *pjlink) noexcept
 {
     TRY {
         return jlif_key_continue;
     }CATCH(jlif_key_stop)
 }
 
-jlif_result pva_parse_key_map(jlink *pjlink, const char *key, size_t len)
+jlif_result pva_parse_key_map(jlink *pjlink, const char *key, size_t len) noexcept
 {
     TRY {
         std::string sval(key, len);
@@ -209,19 +209,19 @@ jlif_result pva_parse_key_map(jlink *pjlink, const char *key, size_t len)
     }CATCH(jlif_stop)
 }
 
-jlif_result pva_parse_end_map(jlink *pjlink)
+jlif_result pva_parse_end_map(jlink *pjlink) noexcept
 {
     TRY {
         return jlif_continue;
     }CATCH(jlif_stop)
 }
 
-struct lset* pva_get_lset(const jlink *pjlink)
+struct lset* pva_get_lset(const jlink *pjlink) noexcept
 {
     return &pva_lset;
 }
 
-void pva_report(const jlink *rpjlink, int lvl, int indent)
+void pva_report(const jlink *rpjlink, int lvl, int indent) noexcept
 {
     const pvaLink *pval = static_cast<const pvaLink*>(rpjlink);
     try {

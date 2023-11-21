@@ -47,7 +47,7 @@ namespace {
 void subscriptionCallback(SingleSourceSubscriptionCtx* subscriptionContext,
                           UpdateType::type change,
                           dbChannel* pChannel,
-                          struct db_field_log* pDbFieldLog) {
+                          struct db_field_log* pDbFieldLog) noexcept {
     try {
         // Get the current value of this subscription
         // We simply merge new field changes onto this value as events occur
@@ -71,7 +71,8 @@ void subscriptionCallback(SingleSourceSubscriptionCtx* subscriptionContext,
     }
 }
 
-void subscriptionValueCallback(void* userArg, struct dbChannel* pChannel, int, struct db_field_log* pDbFieldLog) {
+void subscriptionValueCallback(void* userArg, struct dbChannel* pChannel,
+                               int, struct db_field_log* pDbFieldLog) noexcept {
     auto subscriptionContext = (SingleSourceSubscriptionCtx*)userArg;
     subscriptionContext->hadValueEvent = true;
     auto change = UpdateType::type(UpdateType::Value | UpdateType::Alarm);
@@ -85,7 +86,7 @@ void subscriptionValueCallback(void* userArg, struct dbChannel* pChannel, int, s
 }
 
 void subscriptionPropertiesCallback(void* userArg, struct dbChannel* pChannel, int,
-        struct db_field_log* pDbFieldLog) {
+                                    struct db_field_log* pDbFieldLog) noexcept {
     auto subscriptionContext = (SingleSourceSubscriptionCtx*)userArg;
     subscriptionContext->hadPropertyEvent = true;
     subscriptionCallback(subscriptionContext, UpdateType::Property, pChannel, pDbFieldLog);

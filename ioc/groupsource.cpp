@@ -259,7 +259,8 @@ void GroupSource::onStartSubscription(const std::shared_ptr<GroupSourceSubscript
  * @param pDbFieldLog the database field log containing the changes being notified
  */
 static
-void subscriptionValueCallback(void* userArg, dbChannel* pChannel, int, struct db_field_log* pDbFieldLog) {
+void subscriptionValueCallback(void* userArg, dbChannel* pChannel,
+                               int, struct db_field_log* pDbFieldLog) noexcept {
     try {
         auto fieldSubscriptionCtx = (FieldSubscriptionCtx*)userArg;
         auto first = !fieldSubscriptionCtx->hadValueEvent;
@@ -307,7 +308,8 @@ void subscriptionValueCallback(void* userArg, dbChannel* pChannel, int, struct d
 }
 
 static
-void subscriptionPropertiesCallback(void* userArg, dbChannel* pChannel, int, struct db_field_log* pDbFieldLog) {
+void subscriptionPropertiesCallback(void* userArg, dbChannel* pChannel,
+                                    int, struct db_field_log* pDbFieldLog) noexcept {
     try {
         auto subscriptionContext = (FieldSubscriptionCtx*)userArg;
         bool first = subscriptionContext->hadPropertyEvent;
