@@ -3,6 +3,16 @@
 Release Notes
 =============
 
+1.3.0 (UNRELEASED)
+------------------
+
+* Set TCP_NODELAY on client and server sockets.
+* Disambiguate Size from Selector when decoding messages.
+* QSRV
+  * :ref:`qsrv2` now considered "feature complete".
+  * Avoid sending 0 precision w/ integer value.
+  * Add PVA link support.
+
 1.2.4 (Oct 2023)
 ----------------
 
