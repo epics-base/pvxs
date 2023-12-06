@@ -3,7 +3,7 @@
 PVA Links
 #########
 
-Since UNRELEASED
+Since 1.3.0
 
 JSON Reference
 ==============

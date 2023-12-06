@@ -133,6 +133,20 @@ which may be used as a `std::ostream` to append text describing a test. eg. ::
 .. doxygenclass:: pvxs::testCase
     :members:
 
+IOC Testing
+^^^^^^^^^^^
+
+Additional helpers for testing IOC applications. ::
+
+    #include <pvxs/iochooks.h>
+    namespace pvxs { namespace ioc { ... } }
+
+When possible, use of the ``TestIOC`` class is recommended for both
+forward and backward compatibility with EPICS Base (>= 3.15.0.1).
+
+.. doxygenclass:: pvxs::ioc::TestIOC
+
+
 Utilities
 ---------
 

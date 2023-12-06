@@ -101,18 +101,18 @@ PVXS_IOC_API
 void testShutdown();
 
 /** Call just after testIocShutdownOk()
- *  @since UNRELEASED
+ *  @since 1.3.0
  */
 PVXS_IOC_API
 void testAfterShutdown();
 
 /** Call just before testdbCleanup()
- *  @since UNRELEASED
+ *  @since 1.3.0
  */
 PVXS_IOC_API
 void testCleanupPrepare();
 
-#if EPICS_VERSION_INT >= VERSION_INT(3, 15, 0 ,0)
+#if _DOXYGEN_ || EPICS_VERSION_INT >= VERSION_INT(3, 15, 0 ,0)
 
 /** Manage Test IOC life-cycle calls.
  *
@@ -121,7 +121,7 @@ void testCleanupPrepare();
  *
  @code
  *  MAIN(mytest) {
- *      testPlan(0);
+ *      testPlan(0); // TODO: Set actual number of tests
  *      pvxs::testSetup();
  *      pvxs::logger_config_env(); // (optional)
  *      {
@@ -144,11 +144,11 @@ void testCleanupPrepare();
  *          ... repeat ...
  *      }
  *      epicsExitCallAtExits();
- *      cleanup_for_valgrind();
+ *      pvxs::cleanup_for_valgrind();
  *  }
  @endcode
  *
- *  @since UNRELEASED
+ *  @since 1.3.0
  */
 class PVXS_IOC_API TestIOC final {
     bool isRunning = false;

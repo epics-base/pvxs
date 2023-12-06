@@ -46,7 +46,7 @@ QSRV 2
 
 Beginning with PVXS 1.2.0 the functionality of `QSRV <https://epics-base.github.io/pva2pva>`_
 is replicated in the ``pvxsIoc`` library.
-Currently this feature preview is considered **beta** level with equivalent functionality.
+As of 1.3.0 this feature preview is considered **beta** level with equivalent functionality.
 
 It is recommended not to load both ``pvxsIoc.dbd`` and ``qsrv.dbd`` in the same IOC process.
 However, if this is done.  Users may opt out at runtime by setting
@@ -166,7 +166,7 @@ and is a member of the "op" group (supported on POSIX targets and Windows).
 PVAccess Links
 ^^^^^^^^^^^^^^
 
-Since PVXS UNRELEASED.
+Since PVXS 1.3.0.
 
 When built against Base >= 7.0.1, support is enabled for PVAccess links
 using JSON link support syntax. ::
