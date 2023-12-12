@@ -146,6 +146,37 @@ When committing changes please do:
 * Break up changes into multiple commits where reasonable
 * Include whitespace only changes as separate commits
 
+.. _contributors:
+
+Contributors
+------------
+
+Who did the [work](https://github.com/mdavidsaver/pvxs/graphs/contributors) to make PVXS what it is.
+
+.. comment: git log --format=format:%aN|sort -u|while read aa; do echo "* $aa"; done
+
+* Alexander Wells
+* Basil Aljamal
+* Bruno Martins
+* Érico Nogueira
+* George McIntyre
+* Henrique Silva
+* karlosp
+* Klemen Vodopivec
+* Michael Davidsaver
+* Peter Milne
+* Simon Rose
+* Thomas Ives
+
+Those who supported this work.
+
+* [ALS-U](https://als.lbl.gov/als-u/overview/) project at [Berkeley Lab](https://www.lbl.gov/)
+* [Diamond Light Source](https://www.diamond.ac.uk/)
+* [European Spallation Source](https://europeanspallationsource.se/)
+* [Fermilab](https://fnal.gov/)
+* [SLAC National Accelerator Laboratory](https://www6.slac.stanford.edu/)
+* [SNS](https://neutrons.ornl.gov/sns) at [Oak Ridge National Lab](https://www.ornl.gov/)
+
 Implementation Notes
 ====================
 
