@@ -462,9 +462,8 @@ class InstallHeaders(Command):
             self.copy_file(header,
                            os.path.join(self.build_lib, 'pvxslibs', 'include', os.path.relpath(header, 'ioc')))
 
-        for dbd in glob('ioc/*.dbd'):
-            self.copy_file(dbd,
-                           os.path.join(self.build_lib, 'pvxslibs', 'dbd', os.path.relpath(dbd, 'ioc')))
+        self.copy_file('ioc/pvxs7x.dbd',
+                       os.path.join(self.build_lib, 'pvxslibs/dbd/pvxsIoc.dbd'))
 
 @logexc
 def define_DSOS(self):
