@@ -3,6 +3,12 @@
 Release Notes
 =============
 
+1.3.1 (Dec 2023)
+----------------
+
+* Install pvxsIoc.dbd with the correct name in python build.
+* No change to Makefile build.
+
 1.3.0 (Dec 2023)
 ----------------
 
