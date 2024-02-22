@@ -62,17 +62,19 @@ void Connection::startConnecting()
 {
     assert(!this->bev);
 
-    auto bev(bufferevent_socket_new(context->tcp_loop.base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
+    decltype(this->bev) bev(__FILE__, __LINE__,
+                bufferevent_socket_new(context->tcp_loop.base, -1,
+                                       BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
 
-    bufferevent_setcb(bev, &bevReadS, nullptr, &bevEventS, this);
+    bufferevent_setcb(bev.get(), &bevReadS, nullptr, &bevEventS, this);
 
     timeval tmo(totv(context->effective.tcpTimeout));
-    bufferevent_set_timeouts(bev, &tmo, &tmo);
+    bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
-    if(bufferevent_socket_connect(bev, const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
+    if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
         throw std::runtime_error("Unable to begin connecting");
     {
-        auto fd(bufferevent_getfd(bev));
+        auto fd(bufferevent_getfd(bev.get()));
         int opt = 1;
         if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
             auto err(SOCKERRNO);
@@ -80,7 +82,7 @@ void Connection::startConnecting()
         }
     }
 
-    connect(bev);
+    connect(std::move(bev));
 
     log_debug_printf(io, "Connecting to %s, RX readahead %zu\n", peerName.c_str(), readahead);
 }
