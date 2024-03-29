@@ -141,10 +141,10 @@ bool operator==(const SockEndpoint& lhs, const SockEndpoint& rhs)
 
 namespace {
 
-/* Historically pvAccessCPP used $EPICS_PVA_CONN_TMO as the period
- * between sending CMD_ECHO.  *::Config::tcpTimeout is the actual
- * inactivity timeout period.  Apply a scaling factor to add a
- * go from one to the other.
+/* Historically pvAccessJava used $EPICS_PVA_CONN_TMO as the period
+ * between sending CMD_ECHO.  To avoid meta-stability apply a scaling
+ * factor.
+ * https://github.com/epics-base/pvAccessCPP/issues/171
  */
 constexpr double tmoScale = 4.0/3.0; // 40 second idle timeout / 30 configured
 
