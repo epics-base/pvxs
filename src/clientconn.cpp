@@ -73,14 +73,6 @@ void Connection::startConnecting()
 
     if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
         throw std::runtime_error("Unable to begin connecting");
-    {
-        auto fd(bufferevent_getfd(bev.get()));
-        int opt = 1;
-        if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
-            auto err(SOCKERRNO);
-            log_warn_printf(io, "Unable to TCP_NODELAY: %d on %d\n", err, fd);
-        }
-    }
 
     connect(std::move(bev));
 
@@ -143,6 +135,16 @@ void Connection::bevEvent(short events)
 
     if(bev && (events&BEV_EVENT_CONNECTED)) {
         log_debug_printf(io, "Connected to %s\n", peerName.c_str());
+
+        {
+            // after async connect() to avoid winsock specific race.
+            auto fd(bufferevent_getfd(bev.get()));
+            int opt = 1;
+            if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
+                auto err(SOCKERRNO);
+                log_warn_printf(io, "Unable to TCP_NODELAY: %d on %d\n", err, fd);
+            }
+        }
 
         if(bufferevent_enable(bev.get(), EV_READ|EV_WRITE))
             throw std::logic_error("Unable to enable BEV");
