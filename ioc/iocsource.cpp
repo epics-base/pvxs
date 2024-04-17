@@ -368,16 +368,7 @@ IOCSource::doPreProcessing(dbChannel* pDbChannel, SecurityLogger& securityLogger
         throw std::runtime_error("Unable to put value: Field Disabled: S_db_putDisabled");
     }
 
-    SecurityLogger asWritePvt(
-            asTrapWriteWithData((securityClient.cli)[0], // The user is the first element
-                    credentials.cred[0].c_str(),         // The user is the first element
-                    credentials.host.c_str(),
-                    pDbChannel,
-                    dbChannelFinalFieldType(pDbChannel),
-                    dbChannelFinalElements(pDbChannel),
-                    nullptr
-            )
-    );
+    SecurityLogger asWritePvt(pDbChannel, credentials, securityClient);
 
     securityLogger.swap(asWritePvt);
 
