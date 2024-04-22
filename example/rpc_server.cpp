@@ -17,6 +17,7 @@
 #include <iostream>
 
 #include <epicsTime.h>
+#include <alarm.h>
 
 #include <pvxs/sharedpv.h>
 #include <pvxs/server.h>
@@ -48,14 +49,21 @@ int main(int argc, char* argv[])
                 std::unique_ptr<server::ExecOp>&& op,
                 Value&& top)
     {
-        // Callback
-
-        // assume arguments encoded NTURI
-        auto rhs = top["query.rhs"].as<double>();
-        auto lhs = top["query.lhs"].as<double>();
+        // Callback on PVXS worker thread
 
         auto reply(nt::NTScalar{TypeCode::Float64}.create());
-        reply["value"] = lhs + rhs;
+
+        try {
+            // assume arguments encoded NTURI
+            auto rhs = top["query.rhs"].as<double>();
+            auto lhs = top["query.lhs"].as<double>();
+
+            reply["value"] = lhs + rhs;
+
+        } catch(std::exception& e){
+            reply["alarm.severity"] = INVALID_ALARM;
+            reply["alarm.message"] = e.what();
+        }
 
         op->reply(reply);
         // Scale-able applications may reply outside of this callback,
