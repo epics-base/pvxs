@@ -101,7 +101,7 @@ Interrupted::Interrupted()
 Interrupted::~Interrupted() {}
 
 Timeout::Timeout()
-    :std::runtime_error ("Interrupted")
+    :std::runtime_error ("Timeout")
 {}
 Timeout::~Timeout() {}
 
