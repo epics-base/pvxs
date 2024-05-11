@@ -4,6 +4,15 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <osiSock.h>
+
+#ifdef __has_include
+#  if defined(_WIN32) && __has_include(<afunix.h>)
+#    include <afunix.h>
+#    define WIN_HAS_AFUNIX
+#  endif
+#endif
+
 // for signal handling
 #include <signal.h>
 
@@ -40,8 +49,6 @@ unsigned long pvxs_version_abi_int()
 
 namespace pvxs {
 
-DEFINE_LOGGER(log, "pvxs.util");
-
 #define stringifyX(X) #X
 #define stringify(X) stringifyX(X)
 
@@ -69,18 +76,47 @@ unsigned long version_abi_int()
     return PVXS_ABI_VERSION;
 }
 
+namespace {
+struct ICountGbl_t {
+    RWLock lock;
+    std::map<std::string, std::atomic<size_t>*> counters;
+} *ICountGbl;
 
-#define CASE(KLASS) std::atomic<size_t> cnt_ ## KLASS{}
-#include "instcounters.h"
-#undef CASE
+void ICountInit()
+{
+    ICountGbl = new ICountGbl_t;
+}
+
+} // namespace
+
+void registerICount(const char *name, std::atomic<size_t>& Cnt)
+{
+    threadOnce<&ICountInit>();
+    auto& gbl = *ICountGbl;
+    try {
+        auto L(gbl.lock.lockWriter());
+        if(!gbl.counters.emplace(name, &Cnt).second) { // duplicate name
+            return;
+        }
+    } catch(std::exception& e) { // bad_alloc
+        return;
+    }
+    Cnt++; // bias by +1 to indicate initialization
+}
 
 std::map<std::string, size_t> instanceSnapshot()
 {
     std::map<std::string, size_t> ret;
 
-#define CASE(KLASS) ret[#KLASS] = cnt_ ## KLASS .load(std::memory_order_relaxed)
-#include "instcounters.h"
-#undef CASE
+    {
+        threadOnce<&ICountInit>();
+        auto& gbl = *ICountGbl;
+        auto L(gbl.lock.lockReader());
+        for(auto& pair : gbl.counters) {
+            // remove -1 bias for initialized counter
+            ret.emplace(pair.first, pair.second->load(std::memory_order_relaxed)-1u);
+        }
+    }
 
     return ret;
 }
@@ -159,7 +195,7 @@ int Detailed::level(std::ostream &strm)
     if(idx==INT_MIN) {
         strm<<"Hint: Wrap with pvxs::Detailed()\n";
     } else {
-        ret = strm.iword(idx);
+        ret = (int)strm.iword(idx);
     }
     return ret;
 }
@@ -220,6 +256,12 @@ std::ostream& operator<<(std::ostream& strm, const ServerGUID& guid)
 
 #if !defined(__rtems__) && !defined(vxWorks)
 
+/* Initially EVUTIL_INVALID_SOCKET
+ * Set to a valid socket when "armed"
+ * Temporarily set to EVUTIL_INVALID_SOCKET-1 (aka -2) while handler in progress
+ * Restored to a valid socket when the handler is finished
+ * Reset to EVUTIL_INVALID_SOCKET when "disarmed"
+ */
 static
 std::atomic<evutil_socket_t> onsig{evutil_socket_t(EVUTIL_INVALID_SOCKET)};
 
@@ -228,16 +270,12 @@ void SigInt_handler(int signum);
 
 namespace {
 struct SocketPair {
-    evutil_socket_t s[2];
+    SOCKET s[2];
     SocketPair() {
-#ifdef _WIN32
-        auto err = evutil_socketpair(AF_INET, SOCK_STREAM, 0, s);
-#else
-        auto err = evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, s);
-#endif
-        if(err)
-            throw std::bad_alloc();
+        compat_socketpair(s);
     }
+    SocketPair(const SocketPair&) = delete;
+    SocketPair& operator=(const SocketPair&) = delete;
     ~SocketPair() {
         epicsSocketDestroy(s[0]);
         epicsSocketDestroy(s[1]);
@@ -246,7 +284,7 @@ struct SocketPair {
 
 } // namespace
 
-struct SigInt::Pvt : public epicsThreadRunable {
+struct SigInt::Pvt final : private epicsThreadRunable {
     void (*prevINT)(int);
     void (*prevTERM)(int);
     const std::function<void()> handler;
@@ -256,6 +294,7 @@ struct SigInt::Pvt : public epicsThreadRunable {
 
     epicsThread thr;
 
+    explicit
     Pvt(const std::function<void ()> &&handler)
         :handler(handler)
         ,thr(*this, "SigInt",
@@ -663,32 +702,57 @@ GetAddrInfo::~GetAddrInfo()
         evutil_freeaddrinfo(info);
 }
 
+void compat_socketpair(SOCKET sock[2])
+{
+    evutil_socket_t s[2];
+    int err = -1;
+#if !defined(_WIN32) || defined(WIN_HAS_AFUNIX)
+    err = evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, s);
+#endif
+    if(err)
+        err = evutil_socketpair(AF_INET, SOCK_STREAM, 0, s);
+    if(err)
+        throw std::runtime_error(SB()<<"ERROR: "<<__func__<<" "<<SOCKERRNO);
+    sock[0] = (SOCKET)s[0];
+    sock[1] = (SOCKET)s[1];
+}
+
+void compat_make_socket_nonblocking(SOCKET sock)
+{
+    if(evutil_make_socket_nonblocking(sock))
+        throw std::runtime_error(SB()<<"ERROR: "<<__func__<<" "<<SOCKERRNO);
+}
+
+
 } // namespace pvxs
 
 namespace pvxs {namespace impl {
 struct onceArgs {
-    EPICSTHREADFUNC fn;
-    void *arg;
+    threadOnceInfo *info;
     std::exception_ptr err;
 };
 
 static
-void onceWrapper(void *raw)
+void onceWrapper(void *raw) noexcept
 {
     auto args = static_cast<onceArgs*>(raw);
     try {
-        args->fn(args->arg);
+        args->info->fn();
+        args->info->ok = true;
     }catch(...){
         args->err = std::current_exception();
+        args->info->ok = false;
     }
 }
 
-void threadOnce(epicsThreadOnceId *id, EPICSTHREADFUNC fn, void *arg)
+void threadOnce_(threadOnceInfo *info)
 {
-    onceArgs args{fn, arg};
-    epicsThreadOnce(id, &onceWrapper, &args);
+    onceArgs args{info};
+    epicsThreadOnce(&info->id, &onceWrapper, &args);
     if(args.err)
         std::rethrow_exception(args.err);
+    if(!info->ok)
+        throw std::logic_error("threadOnce() : Previous failure");
 }
 
 template<>
@@ -698,13 +762,13 @@ double parseTo<double>(const std::string& s) {
     try {
         ret = std::stod(s, &idx);
     }catch(std::invalid_argument& e) {
-        throw NoConvert(SB()<<"Invalid input : \""<<escape(s)<<"\"");
+        throw NoConvert(SB()<<"Invalid input : \""<<escape(s)<<"\" : "<<e.what());
     }catch(std::out_of_range& e) {
-        throw NoConvert(SB()<<"Out of range : \""<<escape(s)<<"\"");
+        throw NoConvert(SB()<<"Out of range : \""<<escape(s)<<"\" : "<<e.what());
     }
     for(; idx<L && isspace(s[idx]); idx++) {}
     if(idx<L)
-        NoConvert(SB()<<"Extraneous characters after double: \""<<escape(s)<<"\"");
+        throw NoConvert(SB()<<"Extraneous characters after double: \""<<escape(s)<<"\"");
     return ret;
 }
 
@@ -740,6 +804,82 @@ int64_t parseTo<int64_t>(const std::string& s) {
     if(idx<L)
         throw NoConvert(SB()<<"Extraneous characters after unsigned: \""<<escape(s)<<"\"");
     return ret;
+}
+
+static
+std::vector<std::string>
+splitLines(const char *inp)
+{
+    std::vector<std::string> ret;
+    while(*inp) {
+        auto start = inp;
+        // find next EoL or nil
+        for(char c=*inp; c!='\0' && c!='\n' && c!='\r'; c=*++inp) {}
+        // inp points to EoL or nil
+        ret.emplace_back(start, inp); // copy line w/o EoL
+        // skip past one EoL ("\n", "\r\n", or "\n\r")
+        if(inp[0]=='\n' && inp[1]=='\r') inp+=2u;
+        else if(inp[0]=='\r' && inp[1]=='\n') inp+=2u;
+        else if(inp[0]=='\n') inp+=1u;
+    }
+    return ret;
+}
+
+void strDiff(std::ostream& out,
+             const char *lhs,
+             const char *rhs)
+{
+    if(!lhs)
+        lhs = "<null>";
+    if(!rhs)
+        rhs = "<null>";
+    auto l_lines(splitLines(lhs));
+    auto r_lines(splitLines(rhs));
+    size_t L, R;
+
+    for(L=0u, R=0u; L<l_lines.size() && R<r_lines.size();) {
+        // diagonal search out from current positions
+        for(size_t dist=0u; true; dist++) { // iterate out
+            for(size_t C=0u; C<=dist; C++) { // iterate across
+                size_t testL = L+C;
+                size_t testR = R+(dist-C);
+
+                if(testL>=l_lines.size() && testR>=r_lines.size()) {
+                    goto done;
+                }
+
+                if(testL>=l_lines.size() || testR>=r_lines.size()) {
+                    continue;
+                }
+
+                if(l_lines[testL]==r_lines[testR]) {
+                    // found matching line
+
+                    for(; L < testL; L++) {
+                        out<<"- \""<<escape(l_lines[L])<<"\"\n";
+                    }
+                    for(; R < testR; R++) {
+                        out<<"+ \""<<escape(r_lines[R])<<"\"\n";
+                    }
+                    out<<"  \""<<escape(l_lines[testL])<<"\"\n";
+
+                    L = testL+1u;
+                    R = testR+1u;
+                    goto next;
+                }
+            }
+        }
+next:
+        continue; // oh for lack of a "break N;"
+    }
+done:
+    // print trailing
+    for(; L < l_lines.size(); L++) {
+        out<<"- \""<<escape(l_lines[L])<<"\"\n";
+    }
+    for(; R < r_lines.size(); R++) {
+        out<<"+ \""<<escape(r_lines[R])<<"\"\n";
+    }
 }
 
 }}

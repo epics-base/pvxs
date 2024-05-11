@@ -47,6 +47,8 @@ protected:
     constexpr Buffer(bool be, uint8_t* buf, size_t n) :pos(buf), limit(buf+n), be(be) {}
     virtual ~Buffer() {}
 public:
+    Buffer(const Buffer&) = delete;
+    Buffer& operator=(const Buffer&) = delete;
     bool be;
 
     // all sub-classes define
@@ -55,8 +57,10 @@ public:
     // would be nice to use GCC specific __builtin_FILE() and __builtin_LINE() here,
     // but MSVC has nothing equivalent :(
     EPICS_ALWAYS_INLINE void fault(const char *fname, int lineno) {
-        err = fname;
-        errline = lineno;
+        if(!err) {
+            err = fname;
+            errline = lineno;
+        }
     }
     EPICS_ALWAYS_INLINE bool good() const { return !err; }
     inline const char* file() const { return err ? err : "(null)"; }
@@ -168,7 +172,7 @@ inline void _to_wire(Buffer& buf, const uint8_t *mem, bool reverse, const char *
         return;
 
     } else if(reverse) {
-        // byte order mis-match
+        // byte order mismatch
         for(unsigned i=0; i<N; i++) {
             buf[N-1-i] = mem[i];
         }
@@ -188,7 +192,7 @@ inline void _from_wire(Buffer& buf, uint8_t *mem, bool reverse, const char *fnam
         return;
 
     } else if(reverse) {
-        // byte order mis-match
+        // byte order mismatch
         for(unsigned i=0; i<N; i++) {
             mem[i] = buf[N-1-i];
         }
@@ -270,17 +274,13 @@ void to_wire(Buffer& buf, const Size& size)
         buf.push(254);
         to_wire(buf, uint32_t(size.size));
 
-    } else if(size.size==size_t(-1)) {
-        // special "null"  used to encode empty Union
-        buf.push(255);
-
     } else {
         buf.fault(__FILE__, __LINE__);
     }
 }
 
 inline
-void from_wire(Buffer& buf, Size& size)
+void from_wire(Buffer& buf, Size& size, bool allow_null=false)
 {
     if(!buf.ensure(1)) {
         buf.fault(__FILE__, __LINE__);
@@ -290,47 +290,109 @@ void from_wire(Buffer& buf, Size& size)
     if(s<254) {
         size.size = s;
 
-    } else if(s==255) {
-        // special "null"  used to encode empty Union
-        size.size = size_t(-1);
-
     } else if(s==254) {
         uint32_t ls = 0;
         from_wire(buf, ls);
         size.size = ls;
 
+    } else if(s==255 && allow_null) {
+        // special "null" which is used (maybe by pvDataJava?) for an empty string
+        size.size = size_t(-1);
+
     } else {
-        // unreachable (64-bit size so far not used)
+        buf.fault(__FILE__, __LINE__);
+    }
+}
+
+// Encoded the same as Size, with the added special -1 to represent a "null" value.
+// should never by < -1
+struct Selector {
+    ev_ssize_t select;
+    // should always be >= -1, but check < -1 from paranoia
+    bool isnull() const { return select<=-1; }
+    size_t index() const { return size_t(select); }
+};
+
+inline
+void to_wire(Buffer& buf, const Selector& sel)
+{
+    if(!buf.ensure(1)) {
+        buf.fault(__FILE__, __LINE__);
+
+    } else if(sel.select<=-1) { // should never be < -1, but paranoia...
+        // special "null"  used to encode empty Union
+        buf.push(255);
+
+    } else if(sel.select<254) {
+        buf.push(uint8_t(sel.select));
+
+    } else if(sel.select<=ev_ssize_t(0xffffffff)) {
+        buf.push(254);
+        to_wire(buf, uint32_t(sel.select));
+
+    } else {
         buf.fault(__FILE__, __LINE__);
     }
 }
 
 inline
-void to_wire(Buffer& buf, const char *s)
+void from_wire(Buffer& buf, Selector& sel)
 {
-    Size len{s ? strlen(s) : 0};
+    if(!buf.ensure(1)) {
+        buf.fault(__FILE__, __LINE__);
+        return;
+    }
+    uint8_t s=buf.pop();
+    if(s<254) {
+        sel.select = s;
+
+    } else if(s==254) {
+        uint32_t ls = 0;
+        from_wire(buf, ls);
+        sel.select = ls;
+
+    } else if(s==255) {
+        // special "null" used to encode empty Union
+        sel.select = -1;
+
+    } else {
+        buf.fault(__FILE__, __LINE__);
+    }
+    // assert(sel.select>=-1);
+}
+
+inline
+void to_wire_str(Buffer& buf, const char *s, size_t cnt)
+{
+    Size len{cnt};
     to_wire(buf, len);
     if(!buf.ensure(len.size)) {
         buf.fault(__FILE__, __LINE__);
 
     } else {
-        for(size_t i=0; i<len.size; i++)
-            buf.push(s[i]);
+        memcpy(buf.save(), s, len.size);
+        buf._skip(len.size);
     }
 
 }
 
+inline
+void to_wire(Buffer& buf, const char *s)
+{
+    to_wire_str(buf, s, s ? strlen(s) : 0);
+}
+
 inline void to_wire(Buffer& buf, const std::string& s)
 {
-    to_wire(buf, s.c_str());
+    to_wire_str(buf, s.c_str(), s.size());
 }
 
 inline
 void from_wire(Buffer& buf, std::string& s)
 {
     Size len{0};
-    from_wire(buf, len);
-    if(len.size==size_t(-1)) {
+    from_wire(buf, len, true);
+    if(len.size==size_t(-1)) { // pvAccessJava will serialize null differently than ""
         s.clear();
 
     } else if(!buf.ensure(len.size)) {

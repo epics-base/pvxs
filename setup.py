@@ -111,6 +111,7 @@ class Expand(Command):
         log.info("In Expand")
         self.mkpath(os.path.join(self.build_temp, 'event2'))
         self.mkpath(os.path.join(self.build_lib, 'pvxslibs', 'include', 'pvxs'))
+        self.mkpath(os.path.join(self.build_lib, 'pvxslibs', 'dbd'))
 
         OS_CLASS = get_config_var('OS_CLASS')
 
@@ -220,6 +221,7 @@ class Expand(Command):
                             ('sys/resource.h', False),
                             ('sys/sysctl.h', False), # TODO !linux
                             ('sys/timerfd.h', False),
+                            ('sys/signalfd.h', False),
                             ('errno.h', False)]:
             if probe.check_include(hfile):
                 DEFS['EVENT__HAVE_'+hfile.upper().replace('/','_').replace('.','_')] = '1'
@@ -235,6 +237,7 @@ class Expand(Command):
                 'gettimeofday',
                 'kqueue',
                 'mmap',
+                'mmap64',
                 'pipe',
                 'pipe2',
                 'poll',
@@ -254,6 +257,7 @@ class Expand(Command):
                 'arc4random_buf',
                 'arc4random_addrandom',
                 'epoll_create1',
+                'epoll_pwait2',
                 'getegid',
                 'geteuid',
                 'getifaddrs',
@@ -291,6 +295,7 @@ class Expand(Command):
         DEFS['EVENT__HAVE___func__'] = '1' if probe.check_symbol('__func__') else None
 
         DEFS['EVENT__HAVE_EPOLL'] = DEFS['EVENT__HAVE_EPOLL_CREATE']
+        DEFS['EVENT__HAVE_SIGNALFD'] = DEFS['EVENT__HAVE_SYS_SIGNALFD_H']
         DEFS['EVENT__HAVE_DEVPOLL'] = DEFS['EVENT__HAVE_SYS_DEVPOLL_H']
 
         DEFS['EVENT__HAVE_TAILQFOREACH'] = '1' if probe.check_symbol('TAILQ_FOREACH', ['sys/queue.h']) else None
@@ -448,12 +453,17 @@ class InstallHeaders(Command):
                                   )
     def run(self):
         log.info("In InstallHeaders")
-        self.mkpath(os.path.join(self.build_lib, 'pvxs'))
 
         for header in glob('src/pvxs/*.h'):
             self.copy_file(header,
                            os.path.join(self.build_lib, 'pvxslibs', 'include', os.path.relpath(header, 'src')))
 
+        for header in glob('ioc/pvxs/*.h'):
+            self.copy_file(header,
+                           os.path.join(self.build_lib, 'pvxslibs', 'include', os.path.relpath(header, 'ioc')))
+
+        self.copy_file('ioc/pvxs7x.dbd',
+                       os.path.join(self.build_lib, 'pvxslibs/dbd/pvxsIoc.dbd'))
 
 @logexc
 def define_DSOS(self):
@@ -496,6 +506,9 @@ def define_DSOS(self):
 
     if DEFS['EVENT__HAVE_EVENT_PORTS']=='1':
         src_core += ['evport.c']
+
+    if DEFS['EVENT__HAVE_SIGNALFD']=='1':
+        src_core += ['signalfd.c']
 
     if OS_CLASS=='WIN32':
         src_core += [
@@ -556,6 +569,36 @@ def define_DSOS(self):
     if OS_CLASS=='WIN32':
         event_libs = ['ws2_32','shell32','advapi32','bcrypt','iphlpapi']
 
+    src_pvxsIoc = [
+        "ioc/channel.cpp",
+        "ioc/credentials.cpp",
+        "ioc/dberrormessage.cpp",
+        "ioc/demo.cpp",
+        "ioc/field.cpp",
+        "ioc/fielddefinition.cpp",
+        "ioc/fieldname.cpp",
+        "ioc/fieldsubscriptionctx.cpp",
+        "ioc/groupconfigprocessor.cpp",
+        "ioc/group.cpp",
+        "ioc/groupprocessorcontext.cpp",
+        "ioc/groupsource.cpp",
+        "ioc/groupsourcehooks.cpp",
+        "ioc/imagedemo.c",
+        "ioc/iochooks.cpp",
+        "ioc/iocsource.cpp",
+        "ioc/localfieldlog.cpp",
+        "ioc/securityclient.cpp",
+        "ioc/singlesource.cpp",
+        "ioc/singlesourcehooks.cpp",
+        "ioc/singlesrcsubscriptionctx.cpp",
+        "ioc/typeutils.cpp",
+        "ioc/pvalink_channel.cpp",
+        "ioc/pvalink.cpp",
+        "ioc/pvalink_jlif.cpp",
+        "ioc/pvalink_link.cpp",
+        "ioc/pvalink_lset.cpp",
+    ]
+
     probe = ProbeToolchain()
 
     cxx11_flags = []
@@ -607,10 +650,39 @@ def define_DSOS(self):
                 'pvxslibs/include', # generated headers under build/lib
                 epicscorelibs.path.include_path
                 ],
-            extra_compile_args = cxx11_flags + get_config_var('CXXFLAGS'),
+            lang_compile_args = {
+                'c': get_config_var('CFLAGS'),
+                'c++': cxx11_flags + get_config_var('CXXFLAGS'),
+            },
             extra_link_args = cxx11_flags + get_config_var('LDFLAGS'),
             soversion = pvxs_abi,
             dsos = dsos_pvxs,
+            libraries = get_config_var('LDADD') + event_libs,
+        ),
+        DSO('pvxslibs.lib.pvxsIoc', src_pvxsIoc,
+            define_macros = [('PVXS_IOC_API_BUILDING', None), ('PVXS_ENABLE_EXPERT_API', None)] + get_config_var('CPPFLAGS'),
+            include_dirs=[
+                'bundle/libevent/include',
+                'src',
+                'ioc',
+                '.', # generated headers under build/tmp
+                'pvxslibs/include', # generated headers under build/lib
+                epicscorelibs.path.include_path
+                ],
+            lang_compile_args = {
+                'c': get_config_var('CFLAGS'),
+                'c++': cxx11_flags + get_config_var('CXXFLAGS'),
+            },
+            extra_link_args = cxx11_flags + get_config_var('LDFLAGS'),
+            soversion = pvxs_abi,
+            dsos = [
+                'pvxslibs.lib.pvxs',
+                'pvxslibs.lib.event_core',
+                'epicscorelibs.lib.dbRecStd',
+                'epicscorelibs.lib.dbCore',
+                #'epicscorelibs.lib.ca',
+                'epicscorelibs.lib.Com',
+            ],
             libraries = get_config_var('LDADD') + event_libs,
         )
     ]
@@ -661,7 +733,7 @@ setup(
     #setup_requires = ['setuptools_dso'],
     # also need at runtime for DSO filename lookup
     install_requires = [
-        'setuptools_dso>=2.1a3',
+        'setuptools_dso>=2.7a1',
         epicscorelibs.version.abi_requires(),
     ],
     packages=['pvxslibs', 'pvxslibs.lib', 'pvxslibs.test'],

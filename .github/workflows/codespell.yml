@@ -1,0 +1,30 @@
+name: Spell Check
+
+on:
+  push:
+    paths-ignore:
+      - test
+      - bundle
+      - .ci
+      - "**/.db"
+  pull_request:
+    paths-ignore:
+      - test
+      - bundle
+      - .ci
+      - "**/.db"
+  workflow_dispatch:
+
+jobs:
+  codespell:
+    name: Spell Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Apt
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install codespell
+    - name: codespell
+      run: git ls-files | grep -vE 'test|bundle|.ci|.\db' | xargs codespell -I .ci-local/codespell.dic

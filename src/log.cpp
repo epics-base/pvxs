@@ -31,6 +31,13 @@
 #include "evhelper.h"
 #include "utilpvt.h"
 
+#ifndef ANSI_MAGENTA
+#  define ANSI_MAGENTA(MSG) MSG
+#  define ANSI_RED(MSG) MSG
+#  define ANSI_BLUE(MSG) MSG
+#endif
+
+
 #if EPICS_VERSION_INT>=VERSION_INT(3,15,0,0)
 #    include <epicsStackTrace.h>
 #else
@@ -68,10 +75,10 @@ const char* log_prep(logger& log, unsigned rawlvl)
 
     const char *lname;
     switch(lvl) {
-    case Level::Crit:  lname = "CRIT"; break;
-    case Level::Err:   lname = "ERR"; break;
-    case Level::Warn:  lname = "WARN"; break;
-    case Level::Info:  lname = "INFO"; break;
+    case Level::Crit:  lname = ANSI_RED("CRIT"); break;
+    case Level::Err:   lname = ANSI_RED("ERR"); break;
+    case Level::Warn:  lname = ANSI_MAGENTA("WARN"); break;
+    case Level::Info:  lname = ANSI_BLUE("INFO"); break;
     case Level::Debug: lname = "DEBUG"; break;
     default:           lname = "<\?\?\?>"; break;
     }
@@ -136,7 +143,7 @@ namespace {
 void evlog_handler(int severity, const char *msg)
 {
     const char *sevr = "<\?\?\?>";
-    Level lvl = Level::Crit;
+    Level lvl;
     switch(severity) {
 #define CASE(EVLVL, PLVL) case EVENT_LOG_##EVLVL : lvl = Level::PLVL; sevr = #PLVL; break
     CASE(DEBUG, Debug);
@@ -144,6 +151,7 @@ void evlog_handler(int severity, const char *msg)
     CASE(WARN, Warn);
     CASE(ERR, Err);
 #undef CASE
+    default: lvl = Level::Crit; break;
     }
     if(logerr.test(lvl))
         errlogPrintf("libevent %s: %s\n", sevr, msg);
@@ -171,6 +179,10 @@ struct logger_gbl_t {
     logger_gbl_t()
     {
         event_set_log_callback(&evlog_handler);
+    }
+    ~logger_gbl_t()
+    {
+        event_set_log_callback(nullptr);
     }
 
     Level init(logger *logger)
@@ -235,7 +247,7 @@ struct logger_gbl_t {
     }
 } *logger_gbl;
 
-void logger_prepare(void *unused)
+void logger_prepare()
 {
     logger_gbl = new logger_gbl_t;
 
@@ -247,8 +259,6 @@ void logger_prepare(void *unused)
         }
     }
 }
-
-epicsThreadOnceId logger_once = EPICS_THREAD_ONCE_INIT;
 
 } // namespace
 
@@ -262,7 +272,7 @@ Level logger::init()
         if(this->lvl.compare_exchange_strong(lvl, Level::Warn)) {
             // logger now has default config of Level::Err
             // we will fully initialize
-            threadOnce(&logger_once, &logger_prepare, nullptr);
+            threadOnce<&logger_prepare>();
             assert(logger_gbl);
 
             Guard G(logger_gbl->lock);
@@ -275,8 +285,8 @@ Level logger::init()
 void xerrlogHexPrintf(const void *buf, size_t buflen)
 {
     const auto cbuf = static_cast<const uint8_t*>(buf);
-    bool elipsis = buflen > 64u;
-    if(elipsis)
+    bool ellipsis = buflen > 64u;
+    if(ellipsis)
         buflen = 64u;
 
     // whole buffer
@@ -285,7 +295,7 @@ void xerrlogHexPrintf(const void *buf, size_t buflen)
         // printed line (4 groups of 4 bytes)
         // addr : AAAAAAAA BBBBBBBB CCCCCCCC DDDDDDDD
         char buf[4][9] = {"","","",""};
-        const unsigned addr = unsigned(pos);
+        const auto addr = unsigned(pos);
 
         for(unsigned grp=0; grp<4 && pos<buflen ; grp++)
         {
@@ -308,13 +318,13 @@ void xerrlogHexPrintf(const void *buf, size_t buflen)
 
         errlogPrintf("%04x : %s %s %s %s\n", addr, buf[0], buf[1], buf[2], buf[3]);
     }
-    if(elipsis)
+    if(ellipsis)
         errlogPrintf("...\n");
 }
 
 void logger_level_set(const char *name, int lvl)
 {
-    threadOnce(&logger_once, &logger_prepare, nullptr);
+    threadOnce<&logger_prepare>();
     assert(logger_gbl);
 
     Guard G(logger_gbl->lock);
@@ -323,7 +333,7 @@ void logger_level_set(const char *name, int lvl)
 
 void logger_level_clear()
 {
-    threadOnce(&logger_once, &logger_prepare, nullptr);
+    threadOnce<&logger_prepare>();
     assert(logger_gbl);
 
     Guard G(logger_gbl->lock);
@@ -336,7 +346,7 @@ void logger_config_env()
     if(!env || !*env)
         return;
 
-    threadOnce(&logger_once, &logger_prepare, nullptr);
+    threadOnce<&logger_prepare>();
 
     Guard G(logger_gbl->lock);
 
@@ -385,7 +395,7 @@ namespace pvxs {namespace impl {
 
 void logger_shutdown()
 {
-    threadOnce(&logger_once, &logger_prepare, nullptr);
+    threadOnce<&logger_prepare>();
 
     errlogFlush();
 

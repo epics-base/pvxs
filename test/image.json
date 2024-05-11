@@ -1,0 +1,20 @@
+/* demonstrate a definition equivalent to the info(Q:group, ...) tags in image.dbd */
+{
+    "$(N):Array2":{
+        "+id":"epics:nt/NTNDArray:1.0",
+        "value":{"+type":"any",
+                    "+channel":"$(N):ArrayData.VAL",
+                    "+trigger":"*"},
+        "":{"+type":"meta", "+channel":"$(N):ArrayData.SEVR"},
+        "x":{"+type":"meta", "+channel":"$(N):ArrayData.SEVR"},
+        "dimension[0].size":{"+channel":"$(N):ArraySize0_RBV.VAL", "+type":"plain", "+putorder":0},
+        "dimension[1].size":{"+channel":"$(N):ArraySize1_RBV.VAL", "+type":"plain", "+putorder":0},
+        "attribute[0].name":{"+type":"plain", "+channel":"$(N):ColorMode_.VAL"},
+        "attribute[0].value":{"+type":"any", "+channel":"$(N):ColorMode.VAL"},
+        "attribute[1].value":{"+type":"any",
+                                "+channel":"$(N):extra.VAL",
+                                "+putorder":0,
+                                "+trigger":"attribute[1].value"},
+        "attribute[1]":{"+type":"meta", "+channel":"$(N):extra:alias.SEVR"},
+    }
+}

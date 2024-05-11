@@ -297,12 +297,20 @@ void Member::Helper::copy_tree(const FieldDesc* desc, Member& node)
 {
     node.code = desc->code;
     node.id = desc->id;
-    node.children.reserve(desc->miter.size());
-    for(auto& pair : desc->miter) {
-        auto cdesc = desc+pair.second;
-        node.children.emplace_back(cdesc->code, pair.first);
-        node.children.back().id = cdesc->id;
-        copy_tree(cdesc, node.children.back());
+    if(desc->code==TypeCode::Struct || desc->code==TypeCode::Union) {
+        auto cbase = desc->code==TypeCode::Struct ? desc : desc->members.data();
+        node.children.reserve(desc->miter.size());
+        for(auto& pair : desc->miter) {
+            auto cdesc = cbase+pair.second;
+            assert(desc!=cdesc);
+            node.children.emplace_back(cdesc->code, pair.first);
+            node.children.back().id = cdesc->id;
+            copy_tree(cdesc, node.children.back());
+        }
+
+    } else if(desc->code==TypeCode::StructA || desc->code==TypeCode::UnionA) {
+        copy_tree(&desc->members[0], node);
+        node.code = node.code.arrayOf();
     }
 }
 

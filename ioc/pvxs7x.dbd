@@ -1,0 +1,8 @@
+registrar(pvxsBaseRegistrar)
+link("pva", "lsetPVA")
+
+# from demo.cpp
+device(waveform, CONSTANT, devWfPDBQ2Demo, "QSRV2 Demo")
+device(longin, CONSTANT, devLoPDBQ2UTag, "QSRV2 Set UTag")
+# from imagedemo.c
+function(QSRV2_image_demo)

@@ -60,9 +60,7 @@ int main(int argc, char *argv[])
                     usage(argv[0]);
                     return 0;
                 case 'V':
-                    std::cout<<version_str()<<"\n";
-                    std::cout<<EPICS_VERSION_STRING<<"\n";
-                    std::cout<<"libevent "<<event_get_version()<<"\n";
+                    std::cout<<pvxs::version_information;
                     return 0;
                 case 'v':
                     verbose = true;
@@ -141,7 +139,9 @@ int main(int argc, char *argv[])
                 }
                 log_info_printf(app, "%s POP empty\n", name.c_str());
 
-                std::cout<<name<<"\n"<<update.format()
+                std::cout<<name<<"\n";
+                Indented I(std::cout);
+                std::cout<<update.format()
                            .format(format)
                            .arrayLimit(arrLimit);
 
@@ -153,6 +153,11 @@ int main(int argc, char *argv[])
 
             }catch(client::Connected& conn) {
                 std::cerr<<name.c_str()<<" Connected to "<<conn.peerName<<"\n";
+                if(app.test(Level::Debug)) {
+                    client::SubscriptionStat stats;
+                    mon->stats(stats);
+                    std::cerr<<name.c_str()<<" queueSize="<<stats.limitQueue<<"\n";
+                }
 
             }catch(client::Disconnect& conn) {
                 std::cerr<<name.c_str()<<" Disconnected\n";

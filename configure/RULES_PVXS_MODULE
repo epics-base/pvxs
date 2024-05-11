@@ -12,6 +12,7 @@ endif
 _PVXS_CHECK_VARS := PROD TESTPROD LIB $(PROD) $(TESTPROD) $(LIBRARY)
 
 ifeq (,$(LIBEVENT))
+# libevent in default search path
 
 # $(1) is PROD or LIBRARY name
 define _PVXS_ADD_LIBEVENT
@@ -20,11 +21,13 @@ $(1)_SYS_LIBS := $$($(1)_SYS_LIBS) $$(if $$(filter pvxs,$$($(1)_LIBS)),$$(LIBEVE
 endef
 
 else
+# libevent in specific location
 
 # $(1) is PROD or LIBRARY name
 define _PVXS_ADD_LIBEVENT
 $(1)_LIBS     := $$($(1)_LIBS)     $$(if $$(filter pvxs,$$($(1)_LIBS)),$$(LIBEVENT_BUNDLE_LIBS))
 $(1)_SYS_LIBS := $$($(1)_SYS_LIBS) $$(if $$(filter pvxs,$$($(1)_LIBS)),$$(LIBEVENT_SYS_LIBS))
+$(1)_LDFLAGS  := $$($(1)_LDFLAGS)  $$(if $$(filter pvxs,$$($(1)_LIBS)),$$(LIBEVENT_BUNDLE_LDFLAGS))
 endef
 
 endif

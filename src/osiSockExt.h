@@ -32,6 +32,8 @@ void osiSockAttachExt();
 
 struct SockAttach {
     SockAttach() { osiSockAttachExt(); }
+    SockAttach(const SockAttach&) = delete;
+    SockAttach& operator=(const SockAttach&) = delete;
     ~SockAttach() { osiSockRelease(); }
 };
 
@@ -120,9 +122,9 @@ struct MCastMembership {
     bool operator<(const MCastMembership& o) const {
         if(af==o.af) {
             if(af==AF_INET)
-                return memcmp(&req.in, &o.req.in, sizeof(o.req.in));
+                return memcmp(&req.in, &o.req.in, sizeof(o.req.in))<0;
             else
-                return memcmp(&req.in6, &o.req.in6, sizeof(o.req.in6));
+                return memcmp(&req.in6, &o.req.in6, sizeof(o.req.in6))<0;
         }
         return af<o.af;
     }

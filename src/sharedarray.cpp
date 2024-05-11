@@ -114,7 +114,7 @@ void showArr(std::ostream& strm, const void* raw, size_t count, size_t limit)
     for(auto i : range(count)) {
         if(i!=0)
             strm<<", ";
-        if(i>limit) {
+        if(i>=limit) {
             strm<<"...";
             break;
         }
@@ -187,7 +187,7 @@ void convertToStr(const void *sbase, void *dbase, size_t count)
     auto S = static_cast<const Src*>(sbase);
     auto D = static_cast<std::string*>(dbase);
     for(auto i : range(count))
-        printValue(D[i], S[i]);
+        printValue(D[i], promote_print<Src>::op(S[i]));
 }
 
 void parseValue(bool& dest, const std::string& src)
@@ -263,13 +263,14 @@ void convertArr(ArrayType dtype,       void *dbase,
         case ArrayType::Bool:   convertCast<int8_t, bool>(sbase, dbase, count); return;
         case ArrayType::Int8:
         case ArrayType::UInt8:  memcpy(dbase, sbase, count*sizeof(int8_t)); return;
-            // cast sint -> *int always sign extends
-        case ArrayType::Int16:
-        case ArrayType::UInt16: convertCast<int8_t, int16_t>(sbase, dbase, count); return;
-        case ArrayType::Int32:
-        case ArrayType::UInt32: convertCast<int8_t, int32_t>(sbase, dbase, count); return;
-        case ArrayType::Int64:
-        case ArrayType::UInt64: convertCast<int8_t, int64_t>(sbase, dbase, count); return;
+            // cast sint -> sint extends sign
+        case ArrayType::Int16:  convertCast<int8_t, int16_t>(sbase, dbase, count); return;
+            // cast sint -> uint does not extend sign
+        case ArrayType::UInt16: convertCast<int8_t, uint16_t>(sbase, dbase, count); return;
+        case ArrayType::Int32:  convertCast<int8_t, int32_t>(sbase, dbase, count); return;
+        case ArrayType::UInt32: convertCast<int8_t, uint32_t>(sbase, dbase, count); return;
+        case ArrayType::Int64:  convertCast<int8_t, int64_t>(sbase, dbase, count); return;
+        case ArrayType::UInt64: convertCast<int8_t, uint64_t>(sbase, dbase, count); return;
         case ArrayType::Float32:convertCast<int8_t, float>(sbase, dbase, count); return;
         case ArrayType::Float64:convertCast<int8_t, double>(sbase, dbase, count); return;
         case ArrayType::String: convertToStr<int8_t>(sbase, dbase, count); return;
@@ -281,13 +282,13 @@ void convertArr(ArrayType dtype,       void *dbase,
         switch(dtype) {
         case ArrayType::Bool:   convertCast<int16_t, bool>(sbase, dbase, count); return;
         case ArrayType::Int8:
-        case ArrayType::UInt8:  convertCast<int16_t, int8_t>(sbase, dbase, count); return;
+        case ArrayType::UInt8:  convertCast<uint16_t, uint8_t>(sbase, dbase, count); return;
         case ArrayType::Int16:
         case ArrayType::UInt16: memcpy(dbase, sbase, count*sizeof(int16_t)); return;
-        case ArrayType::Int32:
-        case ArrayType::UInt32: convertCast<int16_t, int32_t>(sbase, dbase, count); return;
-        case ArrayType::Int64:
-        case ArrayType::UInt64: convertCast<int16_t, int64_t>(sbase, dbase, count); return;
+        case ArrayType::Int32:  convertCast<int16_t, int32_t>(sbase, dbase, count); return;
+        case ArrayType::UInt32: convertCast<int16_t, uint32_t>(sbase, dbase, count); return;
+        case ArrayType::Int64:  convertCast<int16_t, int64_t>(sbase, dbase, count); return;
+        case ArrayType::UInt64: convertCast<int16_t, uint64_t>(sbase, dbase, count); return;
         case ArrayType::Float32:convertCast<int16_t, float>(sbase, dbase, count); return;
         case ArrayType::Float64:convertCast<int16_t, double>(sbase, dbase, count); return;
         case ArrayType::String: convertToStr<int16_t>(sbase, dbase, count); return;
@@ -299,13 +300,13 @@ void convertArr(ArrayType dtype,       void *dbase,
         switch(dtype) {
         case ArrayType::Bool:   convertCast<int32_t, bool>(sbase, dbase, count); return;
         case ArrayType::Int8:
-        case ArrayType::UInt8:  convertCast<int32_t, int8_t>(sbase, dbase, count); return;
+        case ArrayType::UInt8:  convertCast<uint32_t, uint8_t>(sbase, dbase, count); return;
         case ArrayType::Int16:
-        case ArrayType::UInt16: convertCast<int32_t, int16_t>(sbase, dbase, count); return;
+        case ArrayType::UInt16: convertCast<uint32_t, uint16_t>(sbase, dbase, count); return;
         case ArrayType::Int32:
         case ArrayType::UInt32: memcpy(dbase, sbase, count*sizeof(int32_t)); return;
-        case ArrayType::Int64:
-        case ArrayType::UInt64: convertCast<int32_t, int64_t>(sbase, dbase, count); return;
+        case ArrayType::Int64:  convertCast<int32_t, int64_t>(sbase, dbase, count); return;
+        case ArrayType::UInt64: convertCast<int32_t, uint64_t>(sbase, dbase, count); return;
         case ArrayType::Float32:convertCast<int32_t, float>(sbase, dbase, count); return;
         case ArrayType::Float64:convertCast<int32_t, double>(sbase, dbase, count); return;
         case ArrayType::String: convertToStr<int32_t>(sbase, dbase, count); return;
@@ -407,14 +408,14 @@ void convertArr(ArrayType dtype,       void *dbase,
     case ArrayType::Float32:
         switch(dtype) {
         case ArrayType::Bool:   convertCast<float, bool>(sbase, dbase, count); return;
-        case ArrayType::Int8:
-        case ArrayType::UInt8:  convertCast<float, int8_t>(sbase, dbase, count); return;
-        case ArrayType::Int16:
-        case ArrayType::UInt16: convertCast<float, int16_t>(sbase, dbase, count); return;
-        case ArrayType::Int32:
-        case ArrayType::UInt32: convertCast<float, int32_t>(sbase, dbase, count); return;
-        case ArrayType::Int64:
-        case ArrayType::UInt64: convertCast<float, int64_t>(sbase, dbase, count); return;
+        case ArrayType::Int8:   convertCast<float, int8_t>(sbase, dbase, count); return;
+        case ArrayType::UInt8:  convertCast<float, uint8_t>(sbase, dbase, count); return;
+        case ArrayType::Int16:  convertCast<float, int16_t>(sbase, dbase, count); return;
+        case ArrayType::UInt16: convertCast<float, uint16_t>(sbase, dbase, count); return;
+        case ArrayType::Int32:  convertCast<float, int32_t>(sbase, dbase, count); return;
+        case ArrayType::UInt32: convertCast<float, uint32_t>(sbase, dbase, count); return;
+        case ArrayType::Int64:  convertCast<float, int64_t>(sbase, dbase, count); return;
+        case ArrayType::UInt64: convertCast<float, uint64_t>(sbase, dbase, count); return;
         case ArrayType::Float32:memcpy(dbase, sbase, count*sizeof(float)); return;
         case ArrayType::Float64:convertCast<float, double>(sbase, dbase, count); return;
         case ArrayType::String: convertToStr<float>(sbase, dbase, count); return;
@@ -425,16 +426,16 @@ void convertArr(ArrayType dtype,       void *dbase,
     case ArrayType::Float64:
         switch(dtype) {
         case ArrayType::Bool:   convertCast<double, bool>(sbase, dbase, count); return;
-        case ArrayType::Int8:
-        case ArrayType::UInt8:  convertCast<double, int8_t>(sbase, dbase, count); return;
-        case ArrayType::Int16:
-        case ArrayType::UInt16: convertCast<double, int16_t>(sbase, dbase, count); return;
-        case ArrayType::Int32:
-        case ArrayType::UInt32: convertCast<double, int32_t>(sbase, dbase, count); return;
-        case ArrayType::Int64:
-        case ArrayType::UInt64: convertCast<double, int64_t>(sbase, dbase, count); return;
-        case ArrayType::Float32:memcpy(dbase, sbase, count*sizeof(double)); return;
-        case ArrayType::Float64:convertCast<double, double>(sbase, dbase, count); return;
+        case ArrayType::Int8:   convertCast<double, int8_t>(sbase, dbase, count); return;
+        case ArrayType::UInt8:  convertCast<double, uint8_t>(sbase, dbase, count); return;
+        case ArrayType::Int16:  convertCast<double, int16_t>(sbase, dbase, count); return;
+        case ArrayType::UInt16: convertCast<double, uint16_t>(sbase, dbase, count); return;
+        case ArrayType::Int32:  convertCast<double, int32_t>(sbase, dbase, count); return;
+        case ArrayType::UInt32: convertCast<double, uint32_t>(sbase, dbase, count); return;
+        case ArrayType::Int64:  convertCast<double, int64_t>(sbase, dbase, count); return;
+        case ArrayType::UInt64: convertCast<double, uint64_t>(sbase, dbase, count); return;
+        case ArrayType::Float32:convertCast<double, float>(sbase, dbase, count); return;
+        case ArrayType::Float64:memcpy(dbase, sbase, count*sizeof(double)); return;
         case ArrayType::String: convertToStr<double>(sbase, dbase, count); return;
         case ArrayType::Value:
         case ArrayType::Null: break; // no convert

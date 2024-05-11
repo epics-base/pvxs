@@ -8,7 +8,7 @@ Begin be fetching all needed source. ::
     git clone --recursive https://github.com/mdavidsaver/pvxs.git
     git clone --branch 7.0 https://github.com/epics-base/epics-base.git
 
-Prepare the PVXS source tree: ::
+Prepare the PVXS source tree with the location of epics-base: ::
 
     cat <<EOF > pvxs/configure/RELEASE.local
     EPICS_BASE=\$(TOP)/../epics-base
@@ -18,7 +18,7 @@ Build Base: ::
 
     make -C epics-base
 
-Install or build libevent >=2.0
+Alternatives to install or build libevent >=2.0 .
 
 On RHEL7 and later. ::
 
@@ -40,7 +40,7 @@ For additional archs: eg. ::
 
     make -C pvxs/bundle libevent.linux-x86_64-debug
 
-Build PVXS: ::
+Finally, build PVXS: ::
 
     make -C pvxs
 

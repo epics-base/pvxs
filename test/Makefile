@@ -11,6 +11,7 @@ include $(TOP)/configure/CONFIG_PVXS_VERSION
 
 # access to private headers
 USR_CPPFLAGS += -I$(TOP)/src
+USR_CPPFLAGS += -I$(TOP)/ioc
 
 PROD_LIBS = pvxs Com
 
@@ -82,6 +83,10 @@ TESTPROD_HOST += testmon
 testmon_SRCS += testmon.cpp
 TESTS += testmon
 
+TESTPROD_HOST += testmonpipe
+testmonpipe_SRCS += testmonpipe.cpp
+TESTS += testmonpipe
+
 TESTPROD_HOST += testput
 testput_SRCS += testput.cpp
 TESTS += testput
@@ -89,6 +94,15 @@ TESTS += testput
 TESTPROD_HOST += testrpc
 testrpc_SRCS += testrpc.cpp
 TESTS += testrpc
+
+TESTPROD_HOST += testdiscover
+testdiscover_SRCS += testdiscover.cpp
+# very slow and dependent on host network config.
+#TESTS += testdiscover
+
+TESTPROD_HOST += testnamesrv
+testnamesrv_SRCS += testnamesrv.cpp
+TESTS += testnamesrv
 
 TESTPROD_HOST += test1000
 test1000_SRCS += test1000.cpp
@@ -98,10 +112,21 @@ TESTPROD_HOST += testendian
 testendian_SRCS += testendian.cpp
 TESTS += testendian
 
+TESTPROD_HOST += testudpfwd
+testudpfwd_SRCS += testudpfwd.cpp
+TESTS += testudpfwd
+
 ifdef BASE_7_0
 
 TESTPROD_HOST += benchdata
 benchdata_SRCS += benchdata.cpp
+
+TESTPROD_HOST += testpvalink
+testpvalink_SRCS += testpvalink.cpp
+testpvalink_SRCS += testioc_registerRecordDeviceDriver.cpp
+testpvalink_LIBS += pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
+TESTS += testpvalink
+TESTFILES += ../testpvalink.db
 
 endif
 
@@ -111,11 +136,31 @@ DBDDEPENDS_FILES += testioc.dbd$(DEP)
 testioc_DBD = base.dbd pvxsIoc.dbd
 TESTFILES += $(COMMON_DIR)/testioc.dbd
 
-TESTPROD_HOST += testioc
-testioc_SRCS += testioc.cpp
-testioc_SRCS += testioc_registerRecordDeviceDriver.cpp
-testioc_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
-TESTS += testioc
+TESTPROD_HOST += testqsingle
+testqsingle_SRCS += testqsingle
+testqsingle_SRCS += testioc_registerRecordDeviceDriver.cpp
+testqsingle_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
+TESTFILES += ../testqsingle.db
+TESTFILES += ../testqsingle64.db
+TESTFILES += ../testqsinglelsi.db
+TESTFILES += ../testioc.acf
+TESTS += testqsingle
+
+endif
+
+ifdef BASE_7_0
+
+TESTPROD_HOST += testqgroup
+testqgroup_SRCS += testqgroup
+testqgroup_SRCS += testioc_registerRecordDeviceDriver.cpp
+testqgroup_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
+TESTFILES += ../table.db
+TESTFILES += ../image.db
+TESTFILES += ../image.json
+TESTFILES += ../iq.db
+TESTFILES += ../ntenum.db
+TESTFILES += ../const.db
+TESTS += testqgroup
 
 PROD_SRCS_RTEMS += rtemsTestData.c
 

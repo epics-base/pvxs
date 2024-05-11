@@ -7,9 +7,11 @@
 #include <typeinfo>
 #include <vector>
 #include <string>
+#include <limits>
 
 #include <pvxs/sharedArray.h>
 #include <pvxs/data.h>
+#include "utilpvt.h"
 
 #include <pvxs/unittest.h>
 #include <epicsUnitTest.h>
@@ -216,14 +218,27 @@ void testFreezeThawVoid()
     testEq(C[0], 5u);
 }
 
+struct ImMobile {
+    int v = 0;
+    ImMobile() = default;
+
+    void store(int x) { v=x; }
+    int load() const { return v; }
+
+    ImMobile(const ImMobile&) = delete;
+    ImMobile(ImMobile&&) = delete;
+    ImMobile& operator=(const ImMobile&) = delete;
+    ImMobile& operator=(ImMobile&&) = delete;
+};
+
 void testComplex()
 {
     testDiag("%s", __func__);
 
-    shared_array<std::unique_ptr<uint32_t>> X(2, nullptr);
+    shared_array<ImMobile> X(2);
 
-    X[0] = decltype (X)::value_type{new uint32_t(4u)};
-    testEq(*X[0], 4u);
+    X[0].store(4);
+    testEq(X[0].load(), 4);
 }
 
 void testValue()
@@ -324,11 +339,167 @@ void testElemAlloc()
     testEq(varr.original_type(), ArrayType::UInt32);
 }
 
+// round trip conversion when TO can exactly represent all possible values of FROM
+template<typename FROM, typename TO>
+void testConvertExact()
+{
+    shared_array<const FROM> inp({
+                                     FROM(0),
+                                     FROM(1),
+                                     FROM(-1),
+                                     std::numeric_limits<FROM>::min(),
+                                     std::numeric_limits<FROM>::max(),
+                                 });
+    shared_array<const TO> expect({
+                                      (TO)FROM(0),
+                                      (TO)FROM(1),
+                                      (TO)FROM(-1),
+                                      (TO)std::numeric_limits<FROM>::min(),
+                                      (TO)std::numeric_limits<FROM>::max(),
+                                  });
+    auto conv(inp.template convertTo<const TO>());
+    testShow()<<"Input "<<inp;
+    testArrEq(conv, expect)<<" "<<__func__<<"("<<typeid(FROM).name()<<" -> "<<typeid(TO).name()<<")";
+    testArrEq(expect.template convertTo<const FROM>(), inp)<<" "<<__func__<<"("<<typeid(FROM).name()<<" <- "<<typeid(TO).name()<<")";
+}
+
+// conversion based on truncation of unsigned integer
+template<typename FROM, typename TO>
+void testConvertTrunc()
+{
+    shared_array<const FROM> inp({
+                                     FROM(0),
+                                     FROM(1),
+                                     FROM(-1),
+                                     std::numeric_limits<FROM>::min(),
+                                     std::numeric_limits<FROM>::max(),
+                                 });
+    shared_array<const TO> expect({
+                                      (TO)FROM(0),
+                                      (TO)FROM(1),
+                                      (TO)FROM(-1),
+                                      (TO)std::numeric_limits<FROM>::min(),
+                                      (TO)std::numeric_limits<FROM>::max(),
+                                  });
+    auto conv(inp.template convertTo<const TO>());
+    testShow()<<"Input "<<inp;
+    testArrEq(conv, expect)<<" "<<__func__<<"("<<typeid(FROM).name()<<" -> "<<typeid(TO).name()<<")";
+}
+
+template<typename T>
+void testToFromString()
+{
+    shared_array<const T> inp({
+                                  T(0),
+                                  T(1),
+                                  T(-1),
+                                  std::numeric_limits<T>::min(),
+                                  std::numeric_limits<T>::max(),
+                              });
+    shared_array<const std::string> expect({
+                                               (SB()<<promote_print<T>::op(T(0))).str(),
+                                               (SB()<<promote_print<T>::op(T(1))).str(),
+                                               (SB()<<promote_print<T>::op(T(-1))).str(),
+                                               (SB()<<promote_print<T>::op(std::numeric_limits<T>::min())).str(),
+                                               (SB()<<promote_print<T>::op(std::numeric_limits<T>::max())).str(),
+                                           });
+
+    testShow()<<"Input "<<inp;
+    try {
+        auto conv(inp.template convertTo<const std::string>());
+        testArrEq(conv, expect)<<" "<<__func__<<"("<<typeid(T).name()<<" -> str)";
+    }catch(std::exception& e){
+        testFail("%s(%s -> str) throws %s", __func__, typeid(T).name(), e.what());
+    }
+    try{
+        testArrEq(expect.template convertTo<const T>(), inp)<<" "<<__func__<<"("<<typeid(T).name()<<" <- str)";
+    }catch(std::exception& e){
+        testFail("%s(%s <- str) throws %s", __func__, typeid(T).name(), e.what());
+    }
+}
+
 void testConvert()
 {
     testDiag("%s", __func__);
 
     static_assert (detail::CaptureCode<uint32_t>::code!=detail::CaptureCode<uint16_t>::code, "");
+
+    testDiag("reversible conversions");
+    testConvertExact<uint8_t, uint8_t>();
+    testConvertExact<uint8_t, int16_t>();
+    testConvertExact<uint8_t, uint16_t>();
+    testConvertExact<uint8_t, int32_t>();
+    testConvertExact<uint8_t, uint32_t>();
+    testConvertExact<uint8_t, int64_t>();
+    testConvertExact<uint8_t, uint64_t>();
+    testConvertExact<uint8_t, float>();
+    testConvertExact<uint8_t, double>();
+
+    testConvertExact<int8_t, int8_t>();
+    testConvertExact<int8_t, int16_t>();
+    testConvertExact<int8_t, uint16_t>();
+    testConvertExact<int8_t, int32_t>();
+    testConvertExact<int8_t, uint32_t>();
+    testConvertExact<int8_t, int64_t>();
+    testConvertExact<int8_t, uint64_t>();
+    testConvertExact<int8_t, float>();
+    testConvertExact<int8_t, double>();
+
+    testConvertExact<uint16_t, uint16_t>();
+    testConvertExact<uint16_t, int32_t>();
+    testConvertExact<uint16_t, uint32_t>();
+    testConvertExact<uint16_t, int64_t>();
+    testConvertExact<uint16_t, uint64_t>();
+    testConvertExact<uint16_t, float>();
+    testConvertExact<uint16_t, double>();
+
+    testConvertExact<int16_t, int16_t>();
+    testConvertExact<int16_t, int32_t>();
+    testConvertExact<int16_t, uint32_t>();
+    testConvertExact<int16_t, int64_t>();
+    testConvertExact<int16_t, uint64_t>();
+    testConvertExact<int16_t, float>();
+    testConvertExact<int16_t, double>();
+
+    testConvertExact<uint32_t, uint32_t>();
+    testConvertExact<uint32_t, int64_t>();
+    testConvertExact<uint32_t, uint64_t>();
+    testConvertExact<uint32_t, double>();
+
+    testConvertExact<int32_t, int32_t>();
+    testConvertExact<int32_t, int64_t>();
+    testConvertExact<int32_t, uint64_t>();
+    testConvertExact<int32_t, double>();
+
+    testConvertExact<uint64_t, uint64_t>();
+
+    testConvertExact<int64_t, int64_t>();
+
+    testConvertExact<float, double>();
+
+    testDiag("integer truncation");
+    testConvertTrunc<uint16_t, uint8_t>();
+    testConvertTrunc<uint32_t, uint8_t>();
+    testConvertTrunc<uint64_t, uint8_t>();
+    testConvertTrunc<uint32_t, uint16_t>();
+    testConvertTrunc<uint64_t, uint16_t>();
+    testConvertTrunc<uint64_t, uint32_t>();
+
+    testToFromString<uint8_t>();
+    testToFromString<uint16_t>();
+    testToFromString<uint32_t>();
+    testToFromString<uint64_t>();
+    testToFromString<int8_t>();
+    testToFromString<int16_t>();
+    testToFromString<int32_t>();
+    testToFromString<int64_t>();
+    testTodoBegin("problems parsing +-DBL/FLT_MIN/MAX");
+    testToFromString<float>();
+    testToFromString<double>();
+    testTodoEnd();
+
+    testArrEq(shared_array<bool>({true, false}).convertTo<std::string>(),
+              shared_array<std::string>({"true", "false"}));
 
     testArrEq(shared_array<uint32_t>({1u, 2u, 0xffffffffu}).convertTo<uint32_t>(),
               shared_array<uint32_t>({1u, 2u, 0xffffffffu}));
@@ -356,7 +527,7 @@ void testConvert()
 
 MAIN(testshared)
 {
-    testPlan(155);
+    testPlan(268);
     testSetup();
     testEmpty<void>();
     testEmpty<const void>();

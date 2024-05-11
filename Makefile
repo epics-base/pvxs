@@ -14,6 +14,11 @@ tools_DEPEND_DIRS = src
 DIRS += ioc
 ioc_DEPEND_DIRS = src
 
+ifdef BASE_3_15
+DIRS += qsrv
+qsrv_DEPEND_DIRS = src ioc
+endif
+
 DIRS += test
 test_DEPEND_DIRS = src ioc
 

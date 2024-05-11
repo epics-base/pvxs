@@ -14,7 +14,7 @@ namespace pvxs { namespace impl {
 DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 
 namespace {
-struct ServerIntrospect : public ServerOp
+struct ServerIntrospect final : public ServerOp
 {
     ServerIntrospect(const std::shared_ptr<ServerChan>& chan, uint32_t ioid)
         :ServerOp(chan, ioid)
@@ -56,19 +56,17 @@ struct ServerIntrospect : public ServerOp
 
     INST_COUNTER(ServerIntrospect);
 };
+DEFINE_INST_COUNTER(ServerIntrospect);
 
 struct ServerIntrospectControl : public server::ConnectOp
 {
     ServerIntrospectControl(ServerConn *conn, ServerChan *chan,
                             const std::weak_ptr<server::Server::Pvt>& server,
                             const std::weak_ptr<ServerIntrospect>& op)
-        :server(server)
+        :server::ConnectOp(chan->name, conn->cred, Info, Value()) // TODO: pvRequest?
+        ,server(server)
         ,op(op)
-    {
-        _op = Info;
-        _name = chan->name;
-        _cred = conn->cred;
-    }
+    {}
     virtual ~ServerIntrospectControl() {
         error("Implicit Cancel");
     }
@@ -120,6 +118,7 @@ struct ServerIntrospectControl : public server::ConnectOp
 
     INST_COUNTER(ServerIntrospectControl);
 };
+DEFINE_INST_COUNTER(ServerIntrospectControl);
 } // namespace
 
 void ServerConn::handle_GET_FIELD()

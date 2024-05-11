@@ -30,6 +30,8 @@ CMAKEFLAGS += -DEVENT__DISABLE_SAMPLES=ON
 CMAKEFLAGS += -DEVENT__DISABLE_TESTS=ON
 CMAKEFLAGS += -DEVENT__DISABLE_BENCHMARK=ON
 
+CMAKEFLAGS += -DCMAKE_MACOSX_RPATH=ON -DCMAKE_SKIP_INSTALL_RPATH=OFF
+
 # searched for toolchain files
 CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR="$(abspath $(TOP)/bundle/cmake)"
 
@@ -39,7 +41,7 @@ CMAKEFLAGS += -DCMAKE_MAKE_PROGRAM="$(MAKE)"
 IS_OPT = $($(BUILD_CLASS)_OPT)
 # cmake build types: DEBUG RELEASE RELWITHDEBINFO MINSIZEREL
 CMAKEFLAGS_DEBUG_YES += -DCMAKE_BUILD_TYPE=RELEASE
-CMAKEFLAGS_DEBUG_NO += -DCMAKE_BUILD_TYPE=DEBUG
+CMAKEFLAGS_DEBUG_NO += -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_DEBUG_POSTFIX:STRING=
 CMAKEFLAGS += $(CMAKEFLAGS_DEBUG_$(IS_OPT))
 
 ifeq ($(OS_CLASS),WIN32)
@@ -120,7 +122,7 @@ ifneq (,$(filter %mingw,$(T_A)))
 ifeq (NO,$(SHARED_LIBRARIES))
 	$(CP) $(LIBEVENT_$(T_A))/lib/libevent_core.a $(LIBEVENT_$(T_A))/lib/event_core.lib
 # HACK: when STATIC_BUILD=YES we (in configure/RULES_PVXS_MODULE) inject the event_core
-#       dependency via <target>_LIBS += event_core which requires end existance of
+#       dependency via <target>_LIBS += event_core which requires the existance of
 #       $(event_core_DIR)/event_core.lib however, cmake outputs the *nix style name
 #       libevent_core.a (probably because it can coexist with the dll import library
 #       named libevent_core.dll.a).
@@ -164,11 +166,11 @@ endif
 CONFIGUREFLAGS_SHARED_NO += --disable-shared --enable-static
 CONFIGUREFLAGS += $(CONFIGUREFLAGS_SHARED_$(SHARED_LIBRARIES))
 
-libevent.%: ../libevent/configuration
+libevent.%: ../libevent/configure
 	[ -f Makefile ] || ../libevent/configure --prefix=$(abspath $(LIBEVENT_$(T_A))) $(CONFIGUREFLAGS)
 	$(MAKE) install
 
-../libevent/configuration:
+../libevent/configure:
 	(cd ../libevent && autoreconf -ivf)
 
 endif

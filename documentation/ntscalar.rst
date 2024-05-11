@@ -1,10 +1,13 @@
+
+.. _ntscalar:
+
 NTScalar and NTScalarArray
 ==========================
 
-The "epics:nt/NTScalar:1.0" and related "epics:nt/NTScalarArray:1.0"
+The ``epics:nt/NTScalar:1.0`` and related ``epics:nt/NTScalarArray:1.0``
 definitions describe a primary 'value' and supporting meta-data.
-In the case of NTScalarArray the value is a 1-d array of primative type.
-In the case of NTScalar the value is a single primative value.
+In the case of NTScalarArray the value is a 1-d array of primitive type.
+In the case of NTScalar the value is a single primitive value.
 
 Both variants include time and alarm meta-data fields,
 and optionally display and control meta-data fields.
@@ -13,32 +16,65 @@ and optionally display and control meta-data fields.
 
     using namespace pvxs;
 
-    // integer scalar
-    auto iscalar = nt::NTScalar{TypeCode::Int64}.create();
-
-    // real array
-    auto farray = nt::NTScalar{TypeCode::Float64A}.create();
+    // single integer
+    Value iscalar = nt::NTScalar{TypeCode::Int64}.create();
 
     // eg. access "value" field
     iscalar["value"] = 42;
+
+.. code-block:: c++
+
+    // Functionally equivalent pseudo-C++
+    struct NTScalar_Int64 {
+        int64_t value;
+        struct alarm_t {
+            int64_t secondsPastEpoch;
+            int32_t nanoseconds;
+            int32_t userTag
+        } alarm;
+        struct time_t {
+            int32_t severity;
+            int32_t status;
+            std::string message
+        } timeStamp;
+        // if NTScalar::display
+        struct display_t {
+            int64_t limitLow, limitHigh;
+            std::string description, units;
+            // if NTScalar::form
+            int32_t precision;
+            struct enum_t {
+                int32_t index;
+                std::vector<std::string> choices;
+            } form;
+        } display;
+        // if NTScalar::control
+        struct control_t {
+            int64_t limitLow, limitHigh;
+        } control;
+        // ...
+    };
+
+    auto iscalar = new NTScalar_Int64(); // not safe!
+    iscalar->value = 42;
 
 Fields
 ------
 
 **"value"**
-    The primary field.  May be any pvxs::TypeCode other than Struct, Union, StructA, UnionA, or Null.
+    The primary field.  May be any `pvxs::TypeCode` other than ``Struct``, ``Union``, ``StructA``, ``UnionA``, or ``Null``.
 
-**"timeStamp.secondsPastEpoch"**
+**"timeStamp.secondsPastEpoch"**,
+**"timeStamp.nanoseconds"**,
+**"timeStamp.userTag"**
 
-**"timeStamp.nanoseconds"**
-    Time associated with the value.  Typically time of measurement.  See `time_t`
+    See common :ref:`time_t`.
 
-**"alarm.severity"**
-
-**"alarm.status"**
-
+**"alarm.severity"**,
+**"alarm.status"**,
 **"alarm.message"**
-    Alarm state associated with value.  See `alarm_t`
+
+    See common :ref:`alarm_t`.
 
 **"display.description"**
     Text providing some context about what this value/PV represents.
@@ -60,9 +96,6 @@ Meta-data for numeric types.
     Hints for clients on the inclusive range of values which may reasonably be written to this PV.
     Ignore unless limitLow < limitHigh
     Not authoritative.
-
-**"control.minStep"**
-    Hint for client of a useful minimum increment for setting.
 
 **"valueAlarm.lowAlarmLimit"**
 

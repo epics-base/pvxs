@@ -3,9 +3,6 @@
 PVA Network Configuration
 =========================
 
-Also see Client :ref:`clientconf` and Server :ref:`serverconf`
-for full lists of **EPICS_PVA*** environment varables.
-
 Big Picture
 -----------
 
@@ -38,6 +35,48 @@ or when `pvxs::client::Context::hurryUp` is called.
 
 Server beacon destinations are by default configured using the client configuration.
 This may be overridden with **EPICS_PVAS_BEACON_ADDR_LIST** and **EPICS_PVAS_AUTO_BEACON_ADDR_LIST**.
+
+.. _environ:
+
+Environment variables
+---------------------
+
+This table lists all of the ``$EPICS_PVA*`` environment variables understood by PVXS.
+See Client :ref:`clientconf` and Server :ref:`serverconf` for detailed explanations.
+
+Many variables come in pairs of ``$EPICS_PVA_*`` and ``$EPICS_PVAS_*``.
+A Client will look at only ``$EPICS_PVA_*``.
+A server will prefer ``$EPICS_PVAS_*`` if set,
+or fallback to use the associated ``$EPICS_PVA_*`` if set.
+
++----------------------------------+--------+--------+
+|             Variable             | Client | Server |
++==================================+========+========+
+|       EPICS_PVA_ADDR_LIST        |   x    |   x    |
++----------------------------------+--------+--------+
+|   EPICS_PVAS_BEACON_ADDR_LIST    |        |   x    |
++----------------------------------+--------+--------+
+|     EPICS_PVA_AUTO_ADDR_LIST     |   x    |   x    |
++----------------------------------+--------+--------+
+| EPICS_PVAS_AUTO_BEACON_ADDR_LIST |        |   x    |
++----------------------------------+--------+--------+
+|    EPICS_PVAS_INTF_ADDR_LIST     |        |   x    |
++----------------------------------+--------+--------+
+|      EPICS_PVA_SERVER_PORT       |   x    |   x    |
++----------------------------------+--------+--------+
+|      EPICS_PVAS_SERVER_PORT      |        |   x    |
++----------------------------------+--------+--------+
+|     EPICS_PVA_BROADCAST_PORT     |   x    |   x    |
++----------------------------------+--------+--------+
+|    EPICS_PVAS_BROADCAST_PORT     |        |   x    |
++----------------------------------+--------+--------+
+|   EPICS_PVAS_IGNORE_ADDR_LIST    |        |   x    |
++----------------------------------+--------+--------+
+|        EPICS_PVA_CONN_TMO        |   x    |   x    |
++----------------------------------+--------+--------+
+|      EPICS_PVA_NAME_SERVERS      |   x    |        |
++----------------------------------+--------+--------+
+
 
 .. _addrspec:
 

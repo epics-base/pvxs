@@ -38,5 +38,5 @@ USR_LDFLAGS += -Wl,--compress-debug-sections=zlib
 #endif /* __GNUC__ */
 
 #ifdef _MSC_VER
-USR_CPPFLAGS += /wd4800 /wd4275
+USR_CPPFLAGS += -wd4800 -wd4275
 #endif

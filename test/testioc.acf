@@ -1,0 +1,17 @@
+UAG(MYSELF) {
+    "$(user)"
+}
+
+ASG(DEFAULT) {
+    RULE(1,WRITE,TRAPWRITE)
+}
+
+ASG(SPECIAL) {
+    RULE(1,WRITE,TRAPWRITE) {
+        UAG(MYSELF)
+    }
+}
+
+ASG(RO) {
+    RULE(1, READ)
+}

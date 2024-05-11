@@ -5,19 +5,19 @@ A basic set of command line tools are currently provided to facilitate testing a
 End users should prefer the CLI tools from the `pvAccessCPP <https://github.com/epics-base/pvAccessCPP>`_ module
 for day to day use.
 
-* pvxcall - analogous to pvcall
-* pvxget - analogous to pvget
-* pvxinfo - analogous to pvinfo
-* pvxmonitor - analogous to pvmonitor or "pvget -m"
-* pvxput - analogous to pvput
-* pvxvct - UDP search/beacon Troubleshooting tool.
+* ``pvxcall`` - analogous to ``pvcall``
+* ``pvxget`` - analogous to ``pvget``
+* ``pvxinfo`` - analogous to ``pvinfo``
+* ``pvxmonitor`` - analogous to ``pvmonitor`` or ``pvget -m``
+* ``pvxput`` - analogous to ``pvput``
+* ``pvxvct`` - UDP search/beacon Troubleshooting tool.
 
 Troubleshooting with Virtual Cable Tester
 -----------------------------------------
 
-The "pvxvct" executable is capable of listening for UDP searches from PVA clients,
+The ``pvxvct`` executable is capable of listening for UDP searches from PVA clients,
 and/or UDP beacons from PVA servers.
-Together with "pvxget" they can be used to investigate communications issues.
+Together with ``pvxget`` they can be used to investigate communications issues.
 
 On the host with the PVA server (IOC or otherwise),
 run the following to listen for searches. ::
@@ -37,14 +37,14 @@ as search requests are received. eg. ::
     2020-04-09T19:37:01.146442772 INFO pvxvct   "my:random:test:pvname"
     ...
 
-Note that pvxvct does not use the **$EPICS_PVA*** environment variables
-and by default listens on "0.0.0.0:5076".  Sites using a non-default
-port will need to add "-B 0.0.0.0:<port>".
+Note that pvxvct does not use the ``$EPICS_PVA*`` environment variables
+and by default listens on ``0.0.0.0:5076``.  Sites using a non-default
+port will need to add ``-B 0.0.0.0:<port>``.
 
 If searches are not seen, then investigate client :ref:`clientconf`
-(**$EPICS_PVA*** environment variables), and firewall settings.
+(``$EPICS_PVA*`` environment variables), and firewall settings.
 
-If searches are seen, then switch to "pvxget -d ..." and a real PV name.
+If searches are seen, then switch to ``pvxget -d ...`` and a real PV name.
 The output will be very verbose.  Look for lines like the following: ::
 
     $ pvxget -d my:real:pv:name
@@ -56,7 +56,7 @@ The output will be very verbose.  Look for lines like the following: ::
     ...
     2020-04-09T19:44:46.067255960 DEBUG pvxs.client.io Server 192.168.1.1:5075 accepts auth
 
-Repeat with "pvxinfo" in place of "pvxget".
+Repeat with ``pvxinfo`` in place of ``pvxget``.
 
-If the "accepts auth" line is seen, but no subsequent error message,
-then see :ref:`reportbug` and attach the output of "pvxget -d ...".
+If the ``...accepts auth...`` line is seen, but no subsequent error message,
+then see :ref:`reportbug` and attach the output of ``pvxget -d ...``.

@@ -8,12 +8,12 @@ Interface through which type definitions are created and extended for use with `
     #include <pvxs/data.h>
     namespace pvxs { ... }
 
-The type system of the PVA protocol consists of a number of primative and compound types,
+The type system of the PVA protocol consists of a number of primitive and compound types,
 as well as arrays of either.
 The `pvxs::TypeCode::code_t` enum is an exhaustive list of all valid types,
 as well as Null.
 
-Any valid type may be instanciate directly.
+Any valid type may be instantiate directly.
 
 .. code-block:: c++
 

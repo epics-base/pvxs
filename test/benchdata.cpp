@@ -83,7 +83,7 @@ void benchAllocNTScalar()
 
     constexpr size_t niter = 1000u;
 
-    const Value protoype(nt::NTScalar{TypeCode::UInt64, true, true, true}.create());
+    const Value prototype(nt::NTScalar{TypeCode::UInt64, true, true, true}.create());
 
     std::vector<Value> can(niter);
 
@@ -93,7 +93,7 @@ void benchAllocNTScalar()
         StopWatch W;
 
         (void)W.click();
-        can[n] = protoype.cloneEmpty();
+        can[n] = prototype.cloneEmpty();
         S.sample(W.click());
     }
 
@@ -109,7 +109,7 @@ void benchArraySerDes(bool be, const shared_array<const E>& arr)
 
     shared_array<const void> scratch;
 
-    evbuf ebuf(evbuffer_new());
+    evbuf ebuf(__FILE__, __LINE__, evbuffer_new());
 
     Sampler Tser, Tdes;
 

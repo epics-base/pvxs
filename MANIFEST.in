@@ -11,6 +11,11 @@ include src/pvxs/*.h
 include src/pvxs/*.h@
 include src/os/default/*.cpp
 include src/os/WIN32/*.cpp
+include ioc/*.h
+include ioc/*.c
+include ioc/*.cpp
+include ioc/*.dbd
+include ioc/pvxs/*.h
 
 include bundle/libevent/LICENSE
 include bundle/libevent/cmake/VersionViaGit.cmake

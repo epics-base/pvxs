@@ -23,6 +23,8 @@
 namespace pvxs {
 
 /** Prepare for testing.  Call after testPlan()
+ * @since 1.2.0 If linked with pvxsIoc library, PVA server started
+ *              by ``iocInit()`` will use "isolated" configuration.
  */
 PVXS_API
 void testSetup();
@@ -89,6 +91,13 @@ public:
         msg<<v;
         return *this;
     }
+
+    /** Access to underlying std::ostream used to accumulate notes.
+     *  When our operator<< isn't enough.
+     *  @since 1.1.4
+     */
+    inline
+    std::ostream& stream() { return msg; }
 };
 
 namespace detail {
@@ -120,6 +129,13 @@ struct test_print<std::vector<E>, typename std::enable_if<sizeof(E)==1>::type> {
     template<class C>
     static inline void op(C& strm, const std::vector<E>& v) {
         strm<<'"'<<escape((const char*)v.data(), v.size())<<'"';
+    }
+};
+template <typename E>
+struct test_print<E, typename std::enable_if<std::is_same<E, char>::value||std::is_same<E, signed char>::value||std::is_same<E, unsigned char>::value>::type> {
+    template<class C>
+    static inline void op(C& strm, char v) {
+        strm<<int(v);
     }
 };
 
@@ -180,7 +196,11 @@ testCase testArrEq(const char *sLHS, const LHS& lhs, const char *sRHS, const RHS
     for(size_t i=0; i<lhs.size() && i<rhs.size(); i++) {
         if(lhs[i]!=rhs[i]) {
             eq = false;
-            ret<<" ["<<i<<"] -> "<<lhs[i]<<" != "<<rhs[i]<<"\n";
+            ret<<" ["<<i<<"] -> ";
+            test_print<typename std::decay<decltype (lhs[i])>::type>::op(ret, lhs[i]);
+            ret<<" != ";
+            test_print<typename std::decay<decltype (rhs[i])>::type>::op(ret, rhs[i]);
+            ret<<"\n";
         }
     }
     ret.setPass(eq);

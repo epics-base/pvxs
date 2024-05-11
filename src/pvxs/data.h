@@ -147,8 +147,6 @@ enum struct Kind : uint8_t {
     Null     = 0xe0,
 };
 
-enum class ArrayType : uint8_t;
-
 /** Possible Field types.
  *
  * eg. String is scalar string, StringA is array of strings.
@@ -569,7 +567,8 @@ public:
     Value ifMarked(bool parents=true, bool children=false) const;
     //! Mark this field as valid/changed
     void mark(bool v=true);
-    //! Remove mark from this field
+    //! Remove mark from this field, and optionally parent and/or child fields.
+    //! \since 1.1.3 Correctly unmark parent fields
     void unmark(bool parents=false, bool children=true);
 
     //! Type of the referenced field (or Null)
@@ -734,13 +733,14 @@ public:
      *
      * @throws LookupError If the lookup can not be satisfied
      * @throws NoField If this Value is empty
-     * @since UNRELEASED An empty Value correctly throws NoField instead of returning an empty Value
+     * @since 1.1.2 An empty Value correctly throws NoField instead of returning an empty Value
      */
     Value lookup(const std::string& name);
     const Value lookup(const std::string& name) const;
 
     //! Number of child fields.
     //! only Struct, StructA, Union, UnionA return non-zero
+    //! \since 1.1.3 correctly return non-zero for StructA and UnionA
     size_t nmembers() const;
 
     struct _IAll {};

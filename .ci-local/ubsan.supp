@@ -1,0 +1,46 @@
+# type conversions have no special handling of non-finite during real -> integer cast
+float-cast-overflow:data.cpp
+float-cast-overflow:sharedarray.cpp
+
+# ubsan suppression names extracted from
+#   https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/ubsan/ubsan_checks.inc
+#
+# #include <stdio.h>
+# #define UBSAN_CHECK(X, Y, Z) printf("#%s:\n", Z);
+# int main() {
+# #include "ubsan_checks.inc"
+#     return 0;
+# }
+#
+#undefined:
+#null:
+#nullability-assign:
+#pointer-overflow:
+#alignment:
+#object-size:
+#signed-integer-overflow:
+#unsigned-integer-overflow:
+#integer-divide-by-zero:
+#float-divide-by-zero:
+#invalid-builtin-use:
+#invalid-objc-cast:
+#implicit-unsigned-integer-truncation:
+#implicit-signed-integer-truncation:
+#implicit-integer-sign-change:
+#implicit-signed-integer-truncation,implicit-integer-sign-change:
+#shift-base:
+#shift-exponent:
+#bounds:
+#unreachable:
+#return:
+#vla-bound:
+#float-cast-overflow:
+#bool:
+#enum:
+#function:
+#returns-nonnull-attribute:
+#nullability-return:
+#nonnull-attribute:
+#nullability-arg:
+#vptr:
+#cfi:

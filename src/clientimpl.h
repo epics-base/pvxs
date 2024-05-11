@@ -81,7 +81,7 @@ struct RequestInfo {
     RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationBase>& handle);
 };
 
-struct Connection : public ConnBase, public std::enable_shared_from_this<Connection> {
+struct Connection final : public ConnBase, public std::enable_shared_from_this<Connection> {
     const std::shared_ptr<ContextImpl> context;
 
     // While HoldOff, the time until re-connection
@@ -151,7 +151,7 @@ protected:
     static void tickEchoS(evutil_socket_t fd, short evt, void *raw);
 };
 
-struct ConnectImpl : public Connect
+struct ConnectImpl final : public Connect
 {
     const evbase loop;
     std::shared_ptr<Channel> chan;
@@ -197,7 +197,7 @@ struct Channel {
     size_t nSearch = 0u;
 
     // GUID of last positive reply when state!=Searching
-    ServerGUID guid;
+    ServerGUID guid{};
     SockAddr replyAddr;
 
     std::list<std::weak_ptr<OperationBase>> pending;
@@ -223,7 +223,7 @@ struct Channel {
                                    const std::string& server);
 };
 
-struct Discovery : public OperationBase
+struct Discovery final : public OperationBase
 {
     const std::shared_ptr<ContextImpl> context;
     std::function<void(const Discovered &)> notify;
@@ -254,8 +254,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
         Stopped,
     } state = Init;
 
-    // "const" after ctor
-    Config effective;
+    const Config effective;
 
     const Value caMethod;
 
@@ -270,7 +269,11 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     // poked and beaconSenders from both TCP and UDP workers
     epicsMutex pokeLock;
     epicsTimeStamp lastPoke{};
-    bool poked = false;
+    size_t nPoked = 0u;
+
+    // unlike `poke`, `scheduleInitialSearch` is only ever called from the
+    // tcp_loop so this does not need to be guarded by a mutex
+    bool initialSearchScheduled = false;
 
     // map: endpoint+proto -> Beaconer
     typedef std::pair<SockAddr, std::string> BeaconServer;
@@ -288,6 +291,9 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::vector<std::pair<SockEndpoint, bool>> searchDest;
 
     size_t currentBucket = 0u;
+    // Channels where we have yet to send out an initial search request
+    std::list<std::weak_ptr<Channel>> initialSearchBucket;
+    // Channels where we are waiting for a search response
     std::vector<std::list<std::weak_ptr<Channel>>> searchBuckets;
 
     std::list<std::unique_ptr<UDPListener> > beaconRx;
@@ -305,6 +311,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     evbase tcp_loop;
     const evevent searchRx4, searchRx6;
     const evevent searchTimer;
+    const evevent initialSearcher;
 
     // beacon handling done on UDP worker.
     // we keep a ref here as long as beaconCleaner is in use
@@ -325,16 +332,20 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     void close();
 
-    void poke(bool force);
+    void poke();
 
     void serverEvent(const Discovered &evt);
 
     void onBeacon(const UDPManager::Beacon& msg);
 
+    void scheduleInitialSearch();
+
     bool onSearch(evutil_socket_t fd);
     static void onSearchS(evutil_socket_t fd, short evt, void *raw);
-    void tickSearch(bool discover);
+    enum class SearchKind { discover, initial, check };
+    void tickSearch(SearchKind kind, bool poked);
     static void tickSearchS(evutil_socket_t fd, short evt, void *raw);
+    static void initialSearchS(evutil_socket_t fd, short evt, void *raw);
     void tickBeaconClean();
     static void tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw);
     void cacheClean(const std::string &name, Context::cacheAction force);

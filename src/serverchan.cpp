@@ -17,7 +17,6 @@ DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 // related to low level send/recv
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
-DEFINE_LOGGER(serversetup, "pvxs.server.setup");
 DEFINE_LOGGER(serversearch, "pvxs.server.search");
 
 ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
@@ -36,14 +35,35 @@ ServerChan::~ServerChan() {
     assert(!onClose);
 }
 
-ServerChannelControl::ServerChannelControl(const std::shared_ptr<ServerConn> &conn, const std::shared_ptr<ServerChan>& channel)
-    :server(conn->iface->server->internal_self)
-    ,chan(channel)
+/* reached from:
+ * 1. connection close
+ * 2. DESTROY_CHANNEL
+ * 3. local user calls ServerChannelControl::close()
+ */
+void ServerChan::cleanup()
 {
-    _op = None;
-    _name = channel->name;
-    _cred = conn->cred;
+    if(state==ServerChan::Destroy)
+        return;
+    state = ServerChan::Destroy;
+
+    {
+        auto ops(std::move(opByIOID));
+        for(auto& op : ops) {
+            // removes from conn->opByIOID
+            op.second->cleanup();
+        }
+    }
+
+    auto fn(std::move(onClose));
+    if(fn)
+        fn("");
 }
+
+ServerChannelControl::ServerChannelControl(const std::shared_ptr<ServerConn> &conn, const std::shared_ptr<ServerChan>& channel)
+    :server::ChannelControl(channel->name, conn->cred, None)
+    ,server(conn->iface->server->internal_self)
+    ,chan(channel)
+{}
 
 ServerChannelControl::~ServerChannelControl() {}
 
@@ -107,45 +127,6 @@ void ServerChannelControl::onClose(std::function<void(const std::string&)>&& fn)
     });
 }
 
-static
-void ServerChannel_shutdown(const std::shared_ptr<ServerChan>& chan)
-{
-    if(chan->state==ServerChan::Destroy)
-        return;
-
-    chan->state = ServerChan::Destroy;
-
-    if(auto conn = chan->conn.lock()) {
-
-        conn->chanBySID.erase(chan->sid);
-
-        for(auto& pair : chan->opByIOID) {
-            auto op = pair.second;
-            if(op->state==ServerOp::Dead)
-                continue;
-
-            if(op->state==ServerOp::Executing && op->onCancel)
-                op->onCancel();
-
-            op->state = ServerOp::Dead;
-
-            if(op->onClose) {
-                auto fn(std::move(op->onClose));
-                fn("");
-            }
-
-            conn->opByIOID.erase(op->ioid);
-        }
-    }
-
-    chan->opByIOID.clear();
-
-    if(chan->onClose) {
-        auto fn(std::move(chan->onClose));
-        fn("");
-    }
-}
-
 void ServerChannelControl::close()
 {
     // fail soft if server stopped, or channel/connection already closed
@@ -170,7 +151,8 @@ void ServerChannelControl::close()
             conn->statTx += 16u;
             ch->statTx += 16u;
         }
-        ServerChannel_shutdown(ch);
+
+        ch->cleanup();
     });
 }
 
@@ -410,10 +392,7 @@ void ServerConn::handle_DESTROY_CHANNEL()
                    unsigned(sid), unsigned(chan->cid), unsigned(cid), chan->name.c_str());
     }
 
-    ServerChannel_shutdown(chan);
-
-    assert(chan.use_count()==1); // we only take transient refs on this thread
-    // ServerChannel is delete'd
+    chan->cleanup();
 
     {
         auto tx = bufferevent_get_output(bev.get());

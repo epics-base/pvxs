@@ -6,6 +6,10 @@
 
 #include <osiSockExt.h>
 
+#ifndef _WIN32
+#  include <poll.h>
+#endif
+
 #include <cstring>
 #include <system_error>
 #include <sstream>
@@ -13,6 +17,7 @@
 #include <epicsUnitTest.h>
 #include <testMain.h>
 #include <epicsThread.h>
+#include <epicsTime.h>
 #include <osiSock.h>
 
 #include <evhelper.h>
@@ -22,6 +27,100 @@
 namespace {
 using namespace pvxs;
 
+#ifdef _WIN32
+#  define poll WSAPoll
+#  ifndef POLLIN
+#    define POLLIN POLLRDNORM
+#  endif
+#endif
+
+void testEndPoint()
+{
+    testDiag("Enter %s", __func__);
+
+    {
+        SockEndpoint ep("127.0.0.1");
+        testEq(ep.addr.tostring(), "127.0.0.1");
+        testEq(ep.iface, "");
+        testEq(ep.ttl, -1);
+    }
+    {
+        SockEndpoint ep("127.0.0.1:12");
+        testEq(ep.addr.tostring(), "127.0.0.1:12");
+        testEq(ep.iface, "");
+        testEq(ep.ttl, -1);
+    }
+    {
+        SockEndpoint ep("127.0.0.1,1");
+        testEq(ep.addr.tostring(), "127.0.0.1");
+        testEq(ep.iface, "");
+        testEq(ep.ttl, 1);
+    }
+    {
+        SockEndpoint ep("127.0.0.1@ifname");
+        testEq(ep.addr.tostring(), "127.0.0.1");
+        testEq(ep.iface, "ifname");
+        testEq(ep.ttl, -1);
+    }
+    {
+        SockEndpoint ep("127.0.0.1,1@ifname");
+        testEq(ep.addr.tostring(), "127.0.0.1");
+        testEq(ep.iface, "ifname");
+        testEq(ep.ttl, 1);
+    }
+    {
+        SockEndpoint ep("127.0.0.1:12,1@ifname");
+        testEq(ep.addr.tostring(), "127.0.0.1:12");
+        testEq(ep.iface, "ifname");
+        testEq(ep.ttl, 1);
+    }
+
+    std::vector<std::string> bad({
+        "127.0.0.",
+        "127.0.0.1:foo",
+        "127.0.0.1:",
+        "127.0.0.1:12,foo",
+        //"127.0.0.1:12@", // should fail...
+        "127.0.0.1:12,@",
+        "127.0,0.1,1@ifname",
+    });
+    for(const auto& inp : bad) {
+        testThrows<std::runtime_error>([&inp](){
+            SockEndpoint x(inp);
+            (void)x;
+        })<<" "<<inp;
+    }
+}
+
+bool waitReadable(const evsocket& sock, double timeout=5.0)
+{
+    pollfd pfd{};
+
+    pfd.fd = sock.sock;
+    pfd.events = POLLIN;
+
+    auto expire(epicsTime::getCurrent() + timeout);
+    while(true) {
+        auto remaining = expire - epicsTime::getCurrent();
+        int msleft = remaining*1000.0;
+        if(msleft <= 0)
+            return false;
+
+        testDiag("%s waiting for %d ms", __func__, msleft);
+        auto ret = poll(&pfd, 1u, msleft);
+        if(ret < 0) {
+            auto err(SOCKERRNO);
+            if(err == SOCK_EINTR)
+                continue;
+            testFail("%s fails with %d after %f", __func__, err, remaining);
+            return false;
+        }
+
+        if(ret == 1 && (pfd.revents & POLLIN))
+            return true;
+    }
+}
+
 void test_bind46(const char* saddr1, const char* saddr2, int type, int expect)
 {
     const std::string label = SB()<<__func__<<"("<<saddr1<<", "<<saddr2<<", "<<(type==SOCK_STREAM?"tcp":"udp")<<", "<<expect<<")";
@@ -30,8 +129,8 @@ void test_bind46(const char* saddr1, const char* saddr2, int type, int expect)
     SockAddr addr1(saddr1);
     SockAddr addr2(saddr2);
 
-    evsocket s1(addr1.family(), type, 0),
-             s2(addr2.family(), type, 0);
+    evsocket s1(addr1.family(), type, 0, true),
+             s2(addr2.family(), type, 0, true);
 
     try {
         s1.bind(addr1);
@@ -93,8 +192,8 @@ void test_udp(int af)
 {
     testDiag("Enter %s(%d)", __func__, af);
 
-    evsocket A(af, SOCK_DGRAM, 0),
-             B(af, SOCK_DGRAM, 0);
+    evsocket A(af, SOCK_DGRAM, 0, true),
+             B(af, SOCK_DGRAM, 0, true);
 
     SockAddr bind_addr(SockAddr::loopback(af));
 
@@ -148,8 +247,8 @@ void test_local_mcast()
 
     IfaceMap ifinfo;
 
-    evsocket A(AF_INET, SOCK_DGRAM, 0),
-             B(AF_INET, SOCK_DGRAM, 0);
+    evsocket A(AF_INET, SOCK_DGRAM, 0, true),
+             B(AF_INET, SOCK_DGRAM, 0, true);
 
     SockEndpoint mcast_addr("224.0.0.128,1@127.0.0.1");
 
@@ -203,11 +302,11 @@ void test_mcast_scope()
     auto lo(SockAddr::loopback(AF_INET));
     auto sender(SockAddr::loopback(AF_INET));
 
-    evsocket TX (AF_INET, SOCK_DGRAM, 0),
-             RX1(AF_INET, SOCK_DGRAM, 0),
-             RX2(AF_INET, SOCK_DGRAM, 0),
-             RX3(AF_INET, SOCK_DGRAM, 0),
-             RX4(AF_INET, SOCK_DGRAM, 0);
+    evsocket TX (AF_INET, SOCK_DGRAM, 0, true),
+             RX1(AF_INET, SOCK_DGRAM, 0, true),
+             RX2(AF_INET, SOCK_DGRAM, 0, true),
+             RX3(AF_INET, SOCK_DGRAM, 0, true),
+             RX4(AF_INET, SOCK_DGRAM, 0, true);
 
     epicsSocketEnableAddressUseForDatagramFanout(RX1.sock);
     epicsSocketEnableAddressUseForDatagramFanout(RX2.sock);
@@ -245,13 +344,20 @@ void test_mcast_scope()
     auto ret = sendto(TX.sock, msg, msglen, 0, &mcast_addr.addr->sa, mcast_addr.addr.size());
     testEq(ret, int(msglen))<<" sendto("<<sender<<" -> "<<mcast_addr<<") err="<<EVUTIL_SOCKET_ERROR();
 
-    auto doRX = [&lo, &msg, msglen](unsigned idx, evsocket& sock, bool expectrx) {
+    auto doRX = [&lo, &msg, msglen](unsigned idx, const evsocket& sock, bool expectrx) {
         testShow()<<"RX"<<idx<<" expect "<<(expectrx ? "success" : "failure");
         char buf[sizeof(msg)-1u+2u];
         SockAddr src, dest;
         recvfromx rx{sock.sock, buf, sizeof(buf), &src, &dest};
 
-        auto ret = rx.call();
+        int ret = -1;
+        if(waitReadable(sock)) {
+            ret = rx.call();
+        } else {
+            ret = -1;
+            EVUTIL_SET_SOCKET_ERROR(SOCK_EWOULDBLOCK);
+        }
+
         if(expectrx) {
             testEq(ret, int(msglen))<<" recvfrom() RX"<<idx<<" err="<<EVUTIL_SOCKET_ERROR()<<" src="<<src;
             testTrue(lo.compare(src))<<" RX"<<idx<<" from "<<src;
@@ -388,8 +494,9 @@ MAIN(testsock)
 {
     SockAttach attach;
     logger_config_env();
-    testPlan(68);
+    testPlan(92);
     testSetup();
+    testEndPoint();
     // check for behavior when binding ipv4 and ipv6 to the same socket
     // as a function of socket type and order.
     if(evsocket::canIPv6) {

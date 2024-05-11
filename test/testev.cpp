@@ -67,7 +67,7 @@ void test_call()
         testDiag("Demonstrate exclusive ownership transfer");
         bool called = false;
         std::unique_ptr<int> ival{new int(42)};
-        base.call(std::bind([&called](std::unique_ptr<int>& ival) {
+        base.call(std::bind([&called](std::unique_ptr<int>& ival) noexcept {
                       auto trash(std::move(ival));
                       called = true;
                   }, std::move(ival)));
@@ -102,7 +102,7 @@ void test_fill_evbuf()
 {
     testDiag("%s", __func__);
 
-    evbuf buf(evbuffer_new());
+    evbuf buf(__FILE__, __LINE__, evbuffer_new());
 
     {
         EvOutBuf M(true, buf.get());

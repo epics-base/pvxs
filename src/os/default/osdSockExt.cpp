@@ -38,10 +38,7 @@ DEFINE_LOGGER(log, "pvxs.util");
 DEFINE_LOGGER(logiface, "pvxs.iface");
 
 static
-epicsThreadOnceId oseOnce = EPICS_THREAD_ONCE_INIT;
-
-static
-void oseDoOnce(void*)
+void oseDoOnce()
 {
     evsocket::canIPv6 = evsocket::init_canIPv6();
 #ifdef __linux__
@@ -54,7 +51,7 @@ void oseDoOnce(void*)
 
 void osiSockAttachExt() {
     osiSockAttach();
-    epicsThreadOnce(&oseOnce, &oseDoOnce, nullptr);
+    threadOnce<&oseDoOnce>();
 }
 
 void evsocket::enable_SO_RXQ_OVFL() const

@@ -1,0 +1,7 @@
+record(int64in, "test:i64") {
+    field(VAL, "12345678901234")
+}
+record(waveform, "test:wf:u64") {
+    field(FTVL, "UINT64")
+    field(NELM, "10")
+}

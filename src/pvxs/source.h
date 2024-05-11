@@ -30,8 +30,15 @@ public:
     //! @throws std::runtime_error if the client pvRequest() field mask does not select any fields of prototype.
     virtual void connect(const Value& prototype) =0;
     //! Indicate that this operation can not be setup
+    //! @since 1.2.3 Does not block
     virtual void error(const std::string& msg) =0;
 
+    ConnectOp(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op,
+           const Value& pvRequest)
+        :OpBase(name, cred, op)
+        ,_pvRequest(pvRequest)
+    {}
     virtual ~ConnectOp();
 
     //! Handler invoked when a peer executes a request for data on a GET o PUT
@@ -55,6 +62,9 @@ struct MonitorStat {
     size_t maxQueue=0;
     //! Negotiated limit on nQueue
     size_t limitQueue=0;
+    //! Number of updates squashed during post() calls
+    //! @since 1.2.0
+    size_t nSquash=0;
 
     bool running=false;
     bool finished=false;
@@ -63,6 +73,10 @@ struct MonitorStat {
 
 //! Handle for active subscription
 struct PVXS_API MonitorControlOp : public OpBase {
+    MonitorControlOp(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op)
+        :OpBase(name, cred, op)
+    {}
     virtual ~MonitorControlOp();
 
 protected:
@@ -96,7 +110,7 @@ public:
     //! Signal to subscriber that this subscription will not yield any further events.
     //! This is not an error.  Client should not retry.
     void finish() {
-        doPost(Value(), false, false);
+        doPost(Value(), false, true);
     }
 
     //! Poll information and statistics for this subscription.
@@ -132,8 +146,15 @@ public:
     virtual std::unique_ptr<MonitorControlOp> connect(const Value& prototype) =0;
 
     //! Indicate that this operation can not be setup
+    //! @since 1.2.3 Does not block
     virtual void error(const std::string& msg) =0;
 
+    MonitorSetupOp(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op,
+           const Value& pvRequest)
+        :OpBase(name, cred, op)
+        ,_pvRequest(pvRequest)
+    {}
     virtual ~MonitorSetupOp();
 
     virtual void onClose(std::function<void(const std::string&)>&&) =0;
@@ -143,6 +164,10 @@ public:
  *
  */
 struct PVXS_API ChannelControl : public OpBase {
+    ChannelControl(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op)
+        :OpBase(name, cred, op)
+    {}
     virtual ~ChannelControl() =0;
 
     //! Invoked when a new GET or PUT Operation is requested through this Channel

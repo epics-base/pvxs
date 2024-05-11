@@ -6,6 +6,8 @@
 #ifndef PVXS_NT_H
 #define PVXS_NT_H
 
+#include <memory>
+
 #include <pvxs/version.h>
 #include <pvxs/data.h>
 
@@ -67,13 +69,19 @@ struct NTScalar {
     bool control;
     //! Include alarm (range) meta-data
     bool valueAlarm;
+    /** Include 'display.form' and 'display.precision' when 'value' is a numeric type
+     *  @pre requires display=true
+     *  @since 1.2.0
+     */
+    bool form;
 
     constexpr
     NTScalar(TypeCode value = TypeCode::Float64,
              bool display = false,
              bool control = false,
-             bool valueAlarm = false)
-        :value(value), display(display), control(control), valueAlarm(valueAlarm)
+             bool valueAlarm = false,
+             bool form = false)
+        :value(value), display(display), control(control), valueAlarm(valueAlarm), form(form)
     {}
 
     //! A TypeDef which can be appended
@@ -97,6 +105,44 @@ struct NTEnum {
     inline Value create() const {
         return build().create();
     }
+};
+
+/** Columnar data.
+ *
+ *  Unlike other NT* builders.  This create() method returns a Value
+ *  with the labels field set, and marked.  While suitable for an
+ *  initial value, repeated create() could result in re-sending
+ *  the same labels array with every update.  Users should
+ *  create() once, and then Value::cloneEmpty() or Value::unmark() for
+ *  subsequent updates.
+ *
+ *  @since 1.2.3
+ */
+struct PVXS_API NTTable final {
+
+    NTTable();
+    ~NTTable();
+
+    /** Append a column
+     *
+     *  @param code Value type of column
+     *  @param name Field name of column
+     *  @param label Display label of column.  (defaults to field name)
+     *         Only used in create().
+     *  @returns this
+     */
+    NTTable& add_column(TypeCode code,
+                        const char *name,
+                        const char *label=nullptr);
+
+    //! A TypeDef which can be appended
+    TypeDef build() const;
+    //! Instantiate.  Also populates labels list.
+    Value create() const;
+
+    struct Pvt;
+private:
+    std::shared_ptr<Pvt> pvt;
 };
 
 /** The areaDetector inspired N-dimension array/image container.

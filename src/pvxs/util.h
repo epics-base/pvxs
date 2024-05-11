@@ -179,6 +179,17 @@ private:
 PVXS_API
 std::ostream& target_information(std::ostream&);
 
+/** Print version information for PVXS library and dependencies
+ *
+ * As shown by eg. ``pvxget -V``
+ *
+ * @returns The same ostream passed as argument.
+ *
+ * @since 1.2.3
+ */
+PVXS_API
+std::ostream& version_information(std::ostream&);
+
 /** Thread-safe, bounded, multi-producer, multi-consumer FIFO queue.
  *
  * Queue value_type must be movable.  If T is also copy constructable,
@@ -235,7 +246,7 @@ public:
      */
     template<typename ...Args>
     void emplace(Args&&... args) {
-        bool wakeup;
+        bool wakeupR, wakeupW;
         {
             Guard G(lock);
             // while full, wait for reader to consume an entry
@@ -248,11 +259,15 @@ public:
                 nwriters--;
             }
             // notify reader when queue becomes not empty
-            wakeup = Q.empty() && nreaders;
+            wakeupR = Q.empty() && nreaders;
             Q.emplace_back(std::forward<Args>(args)...);
+            // wakeup next writer if there is still space
+            wakeupW = nwriters && Q.size()<nlimit;
         }
-        if(wakeup)
+        if(wakeupR)
             notifyR.signal();
+        if(wakeupW)
+            notifyW.signal();
     }
 
     //! Move a new element to the queue
@@ -321,6 +336,16 @@ private:
     std::shared_ptr<Pvt> pvt;
     friend struct Pvt;
 };
+
+//! Allocate a pair of connected stream sockets
+//! \since 1.1.4
+PVXS_API
+void compat_socketpair(SOCKET sock[2]);
+
+//! Setup socket for non-blocking I/O
+//! \since 1.1.4
+PVXS_API
+void compat_make_socket_nonblocking(SOCKET sock);
 
 #endif // PVXS_EXPERT_API_ENABLED
 

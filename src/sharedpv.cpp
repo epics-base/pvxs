@@ -101,6 +101,7 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
         }
     }
 };
+DEFINE_INST_COUNTER2(SharedPV::Impl, SharedPVImpl);
 
 SharedPV SharedPV::buildMailbox()
 {
@@ -467,7 +468,7 @@ Value SharedPV::fetch() const
     }
 }
 
-struct StaticSource::Impl : public Source
+struct StaticSource::Impl final : public Source
 {
     mutable RWLock lock;
 

@@ -93,7 +93,7 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
         if(first && ping) {
             log_debug_printf(setup, "Starting Discover%s", "\n");
 
-            context->tickSearch(true);
+            context->tickSearch(ContextImpl::SearchKind::discover, false);
         }
     });
 

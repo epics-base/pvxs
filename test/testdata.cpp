@@ -70,6 +70,17 @@ void testAssign()
     testEq(val["alarm.severity"].as<epicsAlarmSeverity>(), INVALID_ALARM);
 }
 
+void testAssignArray()
+{
+    testDiag("%s", __func__);
+
+    auto val = TypeDef(TypeCode::Int32A).create();
+
+    val = shared_array<const int32_t>({1, 2, 3});
+
+    val = shared_array<const int16_t>({4, 5, 6}); // with implied conversion
+}
+
 void testAssignUnion()
 {
     testDiag("%s", __func__);
@@ -96,6 +107,24 @@ void testAssignUnion()
 
     // previous selection succeeds, but assignment fails
     testTrue(val["->"].valid());
+}
+
+void testAssignAny()
+{
+    testDiag("%s", __func__);
+
+    auto val = TypeDef(TypeCode::Any).create();
+
+    // check the simple self assignment is an error.
+    testThrows<std::logic_error>([&val](){
+        val.from(val);
+    });
+
+    val = 42;
+
+    testThrows<std::logic_error>([&val](){
+        val.from(val);
+    });
 }
 
 void testName()
@@ -160,6 +189,10 @@ void testIterStruct()
     val["timeStamp"].mark(); // 4 fields (struct node and 3x leaves)
 
     testMarked(6u)<<"mark multiple sub-struct";
+
+    val["timeStamp.nanoseconds"].unmark(true);
+
+    testMarked(2u)<<"mark multiple sub-struct";
 }
 
 void testIterUnion()
@@ -174,6 +207,18 @@ void testIterUnion()
     {
         auto it = top.iall().begin();
         auto end = top.iall().end();
+        if(testOk1(it!=end))
+            testEq(top.nameOf(*it), "A");
+        ++it;
+        if(testOk1(it!=end))
+            testEq(top.nameOf(*it), "B");
+        ++it;
+        testOk1(it==end);
+    }
+
+    {
+        auto it = top.ichildren().begin();
+        auto end = top.ichildren().end();
         if(testOk1(it!=end))
             testEq(top.nameOf(*it), "A");
         ++it;
@@ -313,6 +358,77 @@ void testAssignSimilar()
     }
 }
 
+void testAssignSimilarNDArray()
+{
+    testShow()<<__func__;
+
+    Value val1, val2;
+    using namespace pvxs::members;
+    {
+        auto def(nt::NTNDArray{}.build());
+        def += {
+                StructA("dimensions", {
+                            Int32("val1"),
+                        }),
+        };
+        val1 = def.create();
+    }
+    {
+        auto def(nt::NTNDArray{}.build());
+        def += {
+                StructA("dimensions", {
+                            Int32("val2"),
+                        }),
+        };
+        val2 = def.create();
+    }
+
+    testFalse(val1.equalType(val2));
+    testTrue(val1["dimension"].equalType(val2["dimension"]));
+
+    val1.from(val2); // nothing marked, so a no-op
+
+    shared_array<const uint8_t> pixels({1,2,3,4,5,6});
+    val1["value->ubyteValue"] = pixels;
+    shared_array<Value> dims;//(2);
+    dims.resize(2);
+    dims[0] = val1["dimension"].allocMember()
+            .update("size", 12);
+    dims[1] = dims[0].cloneEmpty()
+            .update("size", 34);
+    val1["dimension"] = dims.freeze();
+
+    val2.from(val1);
+
+    testTrue(val2["value"].isMarked(false,false));
+    testTrue(val2["dimension"].isMarked(false,false));
+    testFalse(val2["timeStamp"].isMarked(true, true));
+    testArrEq(pixels, val2["value"].as<shared_array<const uint8_t>>());
+    testEq(val2["dimension[0].size"].as<uint32_t>(), 12u);
+    testEq(val2["dimension[1].size"].as<uint32_t>(), 34u);
+}
+
+void testUnionMagicAssign()
+{
+    testShow()<<__func__;
+
+    using namespace members;
+    auto val(TypeDef(TypeCode::Union, {
+                         UInt16("x"),
+                         Float64("y"),
+                     }).create());
+
+    val = 5;
+    testEq(val.nameOf(val["->"]), "x");
+    testEq(val.as<std::string>(), "5");
+
+    val = unselect;
+
+    testThrows<NoConvert>([&val](){
+        val = "invalid";
+    });
+}
+
 void testExtract()
 {
     testShow()<<__func__;
@@ -379,15 +495,23 @@ void testClear()
 
 MAIN(testdata)
 {
-    testPlan(127);
+    testPlan(156);
     testSetup();
     testTraverse();
     testAssign();
+    testAssignArray();
     testAssignUnion();
+    testAssignAny();
     testName();
     testIterStruct();
     testIterUnion();
 
+    testConvertScalar<bool, bool>(true, true);
+    testConvertScalar<bool, uint32_t>(true, 1u);
+    testConvertScalar<bool, int32_t>(true, 1);
+    //testConvertScalar<bool, double>(true, 1.0); // TODO: define double -> bool
+    testConvertScalar<bool, std::string>(true, "true");
+    testConvertScalar<bool, std::string>(false, "false");
     testConvertScalar<double, bool>(1.0, true);
     testConvertScalar<double, bool>(0.0, false);
     testConvertScalar<double, uint32_t>(5.0, 5);
@@ -422,6 +546,8 @@ MAIN(testdata)
     testConvertScalar2<int32_t, uint64_t, int64_t>(0, 0x100000000llu, -0);
 
     testAssignSimilar();
+    testAssignSimilarNDArray();
+    testUnionMagicAssign();
     testExtract();
     testClear();
     cleanup_for_valgrind();

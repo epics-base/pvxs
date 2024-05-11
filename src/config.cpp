@@ -141,10 +141,10 @@ bool operator==(const SockEndpoint& lhs, const SockEndpoint& rhs)
 
 namespace {
 
-/* Historically pvAccessCPP used $EPICS_PVA_CONN_TMO as the period
- * between sending CMD_ECHO.  *::Config::tcpTimeout is the actual
- * inactivity timeout period.  Apply a scaling factor to add a
- * go from one to the other.
+/* Historically pvAccessJava used $EPICS_PVA_CONN_TMO as the period
+ * between sending CMD_ECHO.  To avoid meta-stability apply a scaling
+ * factor.
+ * https://github.com/epics-base/pvAccessCPP/issues/171
  */
 constexpr double tmoScale = 4.0/3.0; // 40 second idle timeout / 30 configured
 
@@ -483,9 +483,6 @@ void Config::updateDefs(defs_t& defs) const
 
 void Config::expand()
 {
-    if(tcp_port==0)
-        tcp_port = 5075;
-
     auto ifaces(parseAddresses(interfaces));
     auto bdest(parseAddresses(beaconDestinations));
 
@@ -500,29 +497,7 @@ void Config::expand()
     for(size_t i=0; i<ifaces.size(); i++) {
         auto& ep = ifaces[i];
 
-        if(evsocket::canIPv6 && ep.addr.isAny()) {
-            // special handling for IP4/6 wildcard addresses
-
-            if(evsocket::ipstack==evsocket::Linsock && ep.addr.family()==AF_INET) {
-                // Linux IP stack disallows binding both 0.0.0.0 and [::] for the same port.
-                // so promote to IPv6 when possible
-                ep.addr = SockAddr::any(AF_INET6, ep.addr.port());
-                log_debug_printf(serversetup, "Promote 0.0.0.0 -> [::]%s", "\n");
-
-            } else if(evsocket::ipstack!=evsocket::Linsock) {
-                /* Other IP stacks allow binding different sockets.
-                 * OSX has the added oddity of ordering dependence.
-                 * 0.0.0.0 and then :: is allowed, but not the reverse.
-                 *
-                 * So when possible, we always bind both in the allowed order.
-                 */
-                ep.addr = SockAddr::any(AF_INET, ep.addr.port());
-                ifaces.emplace(ifaces.begin()+i+1u,
-                               SockAddr::any(AF_INET6, ep.addr.port()));
-                i++; // continue after newly inserted EP
-            }
-
-        } else if(!ep.addr.isMCast()) {
+        if(!ep.addr.isMCast()) {
             // no-op
 
         } else if(!ep.iface.empty()) {
@@ -554,31 +529,17 @@ void Config::expand()
 
 std::ostream& operator<<(std::ostream& strm, const Config& conf)
 {
-    auto showAddrs = [&strm](const char* var, const std::vector<std::string>& addrs) {
-        strm<<indent{}<<var<<"=\"";
-        bool first = true;
-        for(auto& iface : addrs) {
-            if(first)
-                first = false;
-            else
-                strm<<' ';
-            strm<<iface;
-        }
-        strm<<"\"\n";
-    };
+    Config::defs_t defs;
+    conf.updateDefs(defs);
 
-    showAddrs("EPICS_PVAS_INTF_ADDR_LIST", conf.interfaces);
-    showAddrs("EPICS_PVAS_BEACON_ADDR_LIST", conf.beaconDestinations);
-    showAddrs("EPICS_PVAS_IGNORE_ADDR_LIST", conf.ignoreAddrs);
-
-    strm<<indent{}<<"EPICS_PVAS_AUTO_BEACON_ADDR_LIST="<<(conf.auto_beacon?"YES":"NO")<<'\n';
-
-    strm<<indent{}<<"EPICS_PVAS_SERVER_PORT="<<conf.tcp_port<<'\n';
-
-    strm<<indent{}<<"EPICS_PVAS_BROADCAST_PORT="<<conf.udp_port<<'\n';
-
-    strm<<indent{}<<"EPICS_PVA_CONN_TMO="<<conf.tcpTimeout/tmoScale<<'\n';
-
+    for(const auto& pair : defs) {
+        // only print the server variant
+        static const char prefix[] = "EPICS_PVAS_";
+        if(pair.first.size() >= sizeof(prefix)-1u && strncmp(pair.first.c_str(),
+                                                             prefix,
+                                                             sizeof(prefix)-1u)==0)
+            strm<<indent{}<<pair.first<<'='<<pair.second<<'\n';
+    }
     return strm;
 }
 
@@ -656,6 +617,7 @@ void Config::updateDefs(defs_t& defs) const
     defs["EPICS_PVA_ADDR_LIST"] = join_addr(addressList);
     defs["EPICS_PVA_INTF_ADDR_LIST"] = join_addr(interfaces);
     defs["EPICS_PVA_CONN_TMO"] = SB()<<tcpTimeout/tmoScale;
+    defs["EPICS_PVA_NAME_SERVERS"] = join_addr(nameServers);
 }
 
 void Config::expand()
@@ -687,26 +649,12 @@ void Config::expand()
 
 std::ostream& operator<<(std::ostream& strm, const Config& conf)
 {
-    bool first;
+    Config::defs_t defs;
+    conf.updateDefs(defs);
 
-    strm<<indent{}<<"EPICS_PVA_ADDR_LIST=\"";
-    first = true;
-    for(auto& iface : conf.addressList) {
-        if(first)
-            first = false;
-        else
-            strm<<' ';
-        strm<<iface;
+    for(const auto& pair : defs) {
+        strm<<indent{}<<pair.first<<'='<<pair.second<<'\n';
     }
-    strm<<"\"\n";
-
-    strm<<indent{}<<"EPICS_PVA_AUTO_ADDR_LIST="<<(conf.autoAddrList?"YES":"NO")<<'\n';
-
-    strm<<indent{}<<"EPICS_PVA_BROADCAST_PORT="<<conf.udp_port<<'\n';
-
-    strm<<indent{}<<"EPICS_PVA_SERVER_PORT="<<conf.tcp_port<<'\n';
-
-    strm<<indent{}<<"EPICS_PVA_CONN_TMO="<<conf.tcpTimeout/tmoScale<<'\n';
 
     return strm;
 }

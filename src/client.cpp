@@ -27,24 +27,50 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
 namespace pvxs {
 namespace client {
 
+DEFINE_INST_COUNTER(Connection);
+DEFINE_INST_COUNTER(Channel);
+DEFINE_INST_COUNTER2(ContextImpl, ClientContextImpl);
+DEFINE_INST_COUNTER2(Context::Pvt, ClientPvt);
+
+namespace {
+/* "normal" tick interval for the search bucket ring, and "fast" interval
+ * used for one revolution after a successful poke().
+ */
 constexpr timeval bucketInterval{1,0};
+constexpr timeval bucketIntervalFast{0,200000};
+// coalescence time for first search for a batch of newly created Channels
+constexpr timeval initialSearchDelay{0, 10000}; // 10 ms
+// number of buckets in the search ring
 constexpr size_t nBuckets = 30u;
 
-// try not to fragment with usual MTU==1500
+/* our limit for UDP packet payload.
+ * try not to fragment with usual MTU==1500 allowing for some overhead
+ * by transport protocols.  Ethernet+ip+udp headers add >= 42 bytes.
+ * May be more with eg. IP header options, VLAN tag, etc.
+ */
 constexpr size_t maxSearchPayload = 1400;
 
+/* Interval between checks for Channels which are no longer used by any operation.
+ * Channels will be discarded if found to be unused by two consecutive checks.
+ */
 constexpr timeval channelCacheCleanInterval{10,0};
+
+// time to wait before allowing another hurryUp().
+constexpr double pokeHoldoff = 30.0;
 
 // limit on the number of GUIDs * protocols * addresses we will track
 constexpr size_t beaconTrackLimit{20000};
 
+// interval between checks to discard servers which have stopped sending beacons
 constexpr timeval beaconCleanInterval{180, 0};
 
+// special interval to attempt to reconnect to disconnected name servers
 constexpr timeval tcpNSCheckInterval{10, 0};
 
 // searchSequenceID in CMD_SEARCH is redundant.
 // So we use a static value and instead rely on IDs for individual PVs
 constexpr uint32_t search_seq{0x66696e64}; // "find"
+} // namespace
 
 Disconnect::Disconnect()
     :std::runtime_error("Disconnected")
@@ -126,9 +152,15 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
     assert(!self || this==self.get());
     auto current(std::move(conn));
 
+    size_t holdoff = 0u;
     switch(state) {
     case Channel::Connecting:
         current->pending.erase(cid);
+        /* disconnect/timeout while before CREATE_CHANNEL sent,
+         * likely lower level networking issue.  Try to slow
+         * down reconnect loop.
+         */
+        holdoff = 10u; // arbitrary
         break;
     case Channel::Creating:
         current->creatingByCID.erase(cid);
@@ -175,13 +207,15 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
 
     } else if(forcedServer.family()==AF_UNSPEC) { // begin search
 
-        context->searchBuckets[context->currentBucket].push_back(self);
+        auto next = (context->currentBucket + holdoff) % nBuckets;
+
+        context->searchBuckets[next].push_back(self);
 
         log_debug_printf(io, "Server %s detach channel '%s' to re-search\n",
                          current ? current->peerName.c_str() : "<disconnected>",
                          name.c_str());
 
-    } else { // reconnect to specific server
+    } else if(context->state==ContextImpl::Running) { // reconnect to specific server
         conn = Connection::build(context, forcedServer, true);
 
         conn->pending[cid] = self;
@@ -340,9 +374,9 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
         context->chanByName[namekey] = chan;
 
         if(server.empty()) {
-            context->searchBuckets[context->currentBucket].push_back(chan);
+            context->initialSearchBucket.push_back(chan);
 
-            context->poke(true);
+            context->scheduleInitialSearch();
 
         } else { // bypass search and connect so a specific server
             chan->forcedServer = forceServer;
@@ -398,7 +432,7 @@ void Context::hurryUp()
         throw std::logic_error("NULL Context");
 
     pvt->impl->manager.loop().call([this](){
-        pvt->impl->poke(true);
+        pvt->impl->poke();
     });
 }
 
@@ -483,21 +517,31 @@ Value buildCAMethod()
 
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     :ifmap(IfaceMap::instance())
-    ,effective(conf)
+    ,effective([conf]() -> Config{
+        Config eff(conf);
+        eff.expand();
+        return eff;
+    }())
     ,caMethod(buildCAMethod())
     ,searchTx4(AF_INET, SOCK_DGRAM, 0)
     ,searchTx6(AF_INET6, SOCK_DGRAM, 0)
     ,tcp_loop(tcp_loop)
-    ,searchRx4(event_new(tcp_loop.base, searchTx4.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
-    ,searchRx6(event_new(tcp_loop.base, searchTx6.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
-    ,searchTimer(event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::tickSearchS, this))
-    ,manager(UDPManager::instance())
-    ,beaconCleaner(event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::tickBeaconCleanS, this))
-    ,cacheCleaner(event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::cacheCleanS, this))
-    ,nsChecker(event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
+    ,searchRx4(__FILE__, __LINE__,
+               event_new(tcp_loop.base, searchTx4.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
+    ,searchRx6(__FILE__, __LINE__,
+               event_new(tcp_loop.base, searchTx6.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
+    ,searchTimer(__FILE__, __LINE__,
+                 event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::tickSearchS, this))
+    ,initialSearcher(__FILE__, __LINE__,
+                     event_new(tcp_loop.base, -1, EV_TIMEOUT, &ContextImpl::initialSearchS, this))
+    ,manager(UDPManager::instance(effective.shareUDP()))
+    ,beaconCleaner(__FILE__, __LINE__,
+                   event_new(manager.loop().base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::tickBeaconCleanS, this))
+    ,cacheCleaner(__FILE__, __LINE__,
+                  event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::cacheCleanS, this))
+    ,nsChecker(__FILE__, __LINE__,
+               event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
 {
-    effective.expand();
-
     searchBuckets.resize(nBuckets);
 
     std::set<SockAddr, SockAddrOnlyLess> bcasts;
@@ -650,6 +694,8 @@ void ContextImpl::close()
 
         conns.clear();
         chans.clear();
+        // breaks a ref. loop between Connection and ClientContextImpl
+        nameServers.clear();
 
         // internal_self.use_count() may be >1 if
         // we are orphaning some Operations
@@ -661,22 +707,22 @@ void ContextImpl::close()
     manager.sync();
 }
 
-void ContextImpl::poke(bool force)
+void ContextImpl::poke()
 {
     {
         Guard G(pokeLock);
-        if(poked)
+        if(nPoked)
             return;
 
         epicsTimeStamp now{};
 
         double age = -1.0;
-        if(!force && (epicsTimeGetCurrent(&now) || (age=epicsTimeDiffInSeconds(&now, &lastPoke))<30.0)) {
+        if(epicsTimeGetCurrent(&now) || (age=epicsTimeDiffInSeconds(&now, &lastPoke))<pokeHoldoff) {
             log_debug_printf(setup, "Ignoring hurryUp() age=%.1f sec\n", age);
             return;
         }
         lastPoke = now;
-        poked = true;
+        nPoked = nBuckets;
     }
 
     log_debug_printf(setup, "hurryUp()%s\n", "");
@@ -684,6 +730,18 @@ void ContextImpl::poke(bool force)
     timeval immediate{0,0};
     if(event_add(searchTimer.get(), &immediate))
         throw std::runtime_error("Unable to schedule searchTimer");
+}
+
+void ContextImpl::scheduleInitialSearch()
+{
+    if (!initialSearchScheduled)
+    {
+        log_debug_printf(setup, "%s()\n", __func__);
+
+        initialSearchScheduled = true;
+        if (event_add(initialSearcher.get(), &initialSearchDelay))
+            throw std::runtime_error("Unable to schedule initialSearcher");
+    }
 }
 
 void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
@@ -759,7 +817,7 @@ void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
                                now
                     });
 
-        poke(false);
+        poke();
     }
 }
 
@@ -950,27 +1008,30 @@ void ContextImpl::onSearchS(evutil_socket_t fd, short evt, void *raw)
     }
 }
 
-void ContextImpl::tickSearch(bool discover)
+void ContextImpl::tickSearch(SearchKind kind, bool poked)
 {
-    // If !discover, then this is a discovery ping.
+    // If kind == SearchKind::discover, then this is a discovery ping.
     // these are really empty searches with must-reply set.
     // So if !discover, then we should not be modifying any internal state
-    {
-        Guard G(pokeLock);
-        poked = false;
-    }
+    //
+    // If kind == SearchKind::initial we are sending the first search request
+    // for the channels in initalSearchBucket, and not resending requests for
+    // channels in the searchBuckets.
 
     auto idx = currentBucket;
-    if(!discover)
+    if(kind == SearchKind::check)
         currentBucket = (currentBucket+1u)%searchBuckets.size();
 
     log_debug_printf(io, "Search tick %zu\n", idx);
 
     decltype (searchBuckets)::value_type bucket;
-    if(!discover)
+    if (kind == SearchKind::initial) {
+        initialSearchBucket.swap(bucket);
+    } else if(kind == SearchKind::check) {
         searchBuckets[idx].swap(bucket);
+    }
 
-    while(!bucket.empty() || discover) {
+    while(!bucket.empty() || kind == SearchKind::discover) {
         // when 'discover' we only loop once
 
         searchMsg.resize(0x10000);
@@ -983,7 +1044,8 @@ void ContextImpl::tickSearch(bool discover)
         // flags and reserved.
         // initially flags[7] is cleared (bcast)
         auto pflags = M.save();
-        to_wire(M, uint8_t(discover ? pva_search_flags::MustReply : 0u)); // must-reply to discovery, ignore regular negative search
+        to_wire(M, uint8_t(kind == SearchKind::discover ?
+                           pva_search_flags::MustReply : 0u)); // must-reply to discovery, ignore regular negative search
         to_wire(M, uint8_t(0u));
         to_wire(M, uint16_t(0u));
 
@@ -996,7 +1058,7 @@ void ContextImpl::tickSearch(bool discover)
         auto pport = M.save();
         to_wire(M, uint16_t(searchRxPort));
 
-        if(discover) {
+        if(kind == SearchKind::discover) {
             to_wire(M, uint8_t(0u));
 
         } else {
@@ -1011,7 +1073,7 @@ void ContextImpl::tickSearch(bool discover)
 
         bool payload = false;
         while(!bucket.empty()) {
-            assert(!discover);
+            assert(kind != SearchKind::discover);
 
             auto chan = bucket.front().lock();
             if(!chan || chan->state!=Channel::Searching) {
@@ -1046,7 +1108,9 @@ void ContextImpl::tickSearch(bool discover)
 
             count++;
 
-            auto ninc = chan->nSearch = std::min(searchBuckets.size(), chan->nSearch+1u);
+            size_t ninc = 0u;
+            if(kind==SearchKind::check && !poked)
+                ninc = chan->nSearch = std::min(searchBuckets.size(), chan->nSearch+1u);
             auto next = (idx + ninc)%searchBuckets.size();
             auto nextnext = (next + 1u)%searchBuckets.size();
 
@@ -1068,7 +1132,7 @@ void ContextImpl::tickSearch(bool discover)
         }
         assert(M.good());
 
-        if(!payload && !discover)
+        if(!payload && kind != SearchKind::discover)
             break;
 
         {
@@ -1136,20 +1200,42 @@ void ContextImpl::tickSearch(bool discover)
             // fail silently, will retry
         }
 
-        if(discover)
+        if(kind == SearchKind::discover)
             break;
     }
-
-    if(event_add(searchTimer.get(), &bucketInterval))
-        log_err_printf(setup, "Error re-enabling search timer on\n%s", "");
 }
 
 void ContextImpl::tickSearchS(evutil_socket_t fd, short evt, void *raw)
 {
+    auto self(static_cast<ContextImpl*>(raw));
     try {
-        static_cast<ContextImpl*>(raw)->tickSearch(false);
+        bool poke = false;
+        {
+            Guard G(self->pokeLock);
+            if(self->nPoked) {
+                poke = true;
+                self->nPoked--;
+            }
+        }
+
+        self->tickSearch(SearchKind::check, poke);
+
+        if(event_add(self->searchTimer.get(), poke ? &bucketIntervalFast : &bucketInterval))
+            log_err_printf(setup, "Error re-enabling search timer on\n%s", "");
+
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in search timer callback: %s\n", e.what());
+    }
+}
+
+void ContextImpl::initialSearchS(evutil_socket_t fd, short evt, void *raw)
+{
+    auto self(static_cast<ContextImpl*>(raw));
+    try {
+        self->initialSearchScheduled = false;
+        self->tickSearch(SearchKind::initial, false);
+    }catch(std::exception& e){
+        log_exc_printf(io, "Unhandled error in initial search callback: %s\n", e.what());
     }
 }
 

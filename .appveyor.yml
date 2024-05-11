@@ -10,18 +10,6 @@ init:
 
 clone_depth: 50
 
-# Skipping commits affecting only specific files
-skip_commits:
-  files:
-    - 'documentation/*'
-    - '**/*.rst'
-    - '**/*.md'
-    - '.github/*'
-    - 'setup.py'
-    - 'pyproject.toml'
-    - 'MANIFEST.in'
-    - 'python/*'
-
 #---------------------------------#
 #   build matrix configuration    #
 #---------------------------------#
@@ -42,6 +30,10 @@ environment:
   PVXS_LOG: pvxs.*=WARN
 
   matrix:
+  - CMP: vs2022
+    APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+    PATH: C:\Python311-x64;%PATH%
+    BASE: R7.0.7
   - CMP: vs2019
     APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
     PATH: C:\Python37-x64;%PATH%

@@ -6,6 +6,7 @@
 #define PVXS_ENABLE_EXPERT_API
 
 #include <atomic>
+#include <typeinfo>
 
 #include <testMain.h>
 
@@ -80,8 +81,7 @@ struct BasicTest {
                 return ret;
 
             } else if (!evt.wait(5.0)) {
-                testFail("timeout waiting for event");
-                return Value();
+                testAbort("timeout waiting for event");
             }
         }
     }
@@ -307,7 +307,8 @@ struct TestReconn : public BasicTest
         cli.hurryUp();
 
         testThrows<client::Connected>([this](){
-            pop(sub, evt);
+            auto val(pop(sub, evt));
+            testTrue(false)<<" unexpected\n"<<val.format();
         });
 
         if(auto val = pop(sub, evt)) {
@@ -364,17 +365,22 @@ MAIN(testmon)
 {
     testPlan(41);
     testSetup();
-    logger_config_env();
-    BasicTest().orphan();
-    BasicTest().cancel();
-    BasicTest().asyncCancel();
-    BasicTest().badRequest();
-    TestLifeCycle().testBasic(true);
-    TestLifeCycle().testBasic(false);
-    TestLifeCycle().testSecond();
-    TestLifeCycle().testDelta();
-    TestReconn().testReconn(false);
-    TestReconn().testReconn(true);
+    try{
+        logger_config_env();
+        BasicTest().orphan();
+        BasicTest().cancel();
+        BasicTest().asyncCancel();
+        BasicTest().badRequest();
+        TestLifeCycle().testBasic(true);
+        TestLifeCycle().testBasic(false);
+        TestLifeCycle().testSecond();
+        TestLifeCycle().testDelta();
+        TestReconn().testReconn(false);
+        TestReconn().testReconn(true);
+    }catch(std::exception& e) {
+        testFail("Unhandled exception %s : %s", typeid(e).name(), e.what());
+        throw;
+    }
     cleanup_for_valgrind();
     return testDone();
 }

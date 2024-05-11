@@ -41,6 +41,14 @@ struct Value::Helper {
     static std::shared_ptr<const impl::FieldDesc> type(const Value& v);
 };
 
+/* Refresh cache from delta, and populate delta with previous.
+ * Requires matching types.
+ *
+ * copy   marked from delta -> cache
+ * copy unmarked from cache -> delta
+ */
+void cache_sync(Value& cache, Value& delta);
+
 namespace impl {
 struct Buffer;
 
@@ -72,7 +80,7 @@ struct FieldDesc {
     size_t parent_index=0;
 
     // For Union, UnionA, StructA
-    // For Union, the choices concatenated together (members.size() !+ #choices)
+    // For Union, the choices concatenated together (members.size() != #choices)
     // For UnionA/StructA containing a single Union/Struct
     std::vector<FieldDesc> members;
 
@@ -118,6 +126,9 @@ struct FieldStorage {
 
     void init(StoreType code);
     void deinit();
+    FieldStorage() = default;
+    FieldStorage(const FieldStorage&) = delete;
+    FieldStorage& operator=(const FieldStorage&) = delete;
     ~FieldStorage();
 
     size_t index() const;
@@ -141,6 +152,11 @@ struct StructTop {
 
     // empty, or the field of a structure which encloses this.
     std::weak_ptr<FieldStorage> enclosing;
+
+    StructTop(const std::shared_ptr<const FieldDesc>& desc)
+        :desc(desc)
+        ,members(desc->size())
+    {}
 
     INST_COUNTER(StructTop);
 };

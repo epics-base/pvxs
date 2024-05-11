@@ -1,0 +1,94 @@
+
+
+record(longout, "$(N):ArraySize0_RBV") {
+    field(VAL, "100")
+    info(Q:group, {
+        "$(N):Array":{
+            "+atomic":true,
+            "dimension[0].size":{+channel:"VAL", +type:"plain", +putorder:0}
+        }
+    })
+    field(FLNK, "$(N):ArraySize1_RBV")
+}
+
+record(longout, "$(N):ArraySize1_RBV") {
+    field(VAL, "100")
+    info(Q:group, {
+        "$(N):Array":{
+            "dimension[1].size":{+channel:"VAL", +type:"plain", +putorder:0}
+        }
+    })
+    field(FLNK, "$(N):ArrayData_")
+}
+
+record(aSub, "$(N):ArrayData_") {
+    field(SNAM, "QSRV2_image_demo")
+    field(PINI, "YES")
+    field(FTA, "ULONG")
+    field(FTB, "ULONG")
+    field(FTVA, "USHORT")
+    field(NOVA, "262144") # eg. 512x512
+    field(INPA, "$(N):ArraySize0_RBV NPP MSI")
+    field(INPB, "$(N):ArraySize1_RBV NPP MSI")
+    field(OUTA, "$(N):ArrayData PP MSI")
+}
+
+record(waveform, "$(N):ArrayData") {
+    field(FTVL, "USHORT")
+    field(NELM, "262144")
+    info(Q:group, {
+        "$(N):Array":{
+            +id:"epics:nt/NTNDArray:1.0",
+            "value":{+type:"any",
+                     +channel:"VAL",
+                     +putorder:0,
+                     +trigger:"*"},
+            "":{+type:"meta", +channel:"SEVR"},
+            "x":{+type:"meta", +channel:"SEVR"}
+        }
+    })
+}
+
+
+record(stringin, "$(N):ColorMode_") {
+    field(VAL, "ColorMode")
+    field(PINI, "YES")
+    info(Q:group, {
+        "$(N):Array":{
+            "attribute[0].name":{+type:"plain", +channel:"VAL"}
+        }
+    })
+}
+
+record(mbbi, "$(N):ColorMode") {
+    field(ZRST, "Mono")
+    field(ONST, "Bayer")
+    field(TWST, "RGB1")
+    field(THST, "RGB2")
+    field(FRST, "RGB3")
+    field(FVST, "YUV444")
+    field(SXST, "YUV422")
+    field(SVST, "YUV411")
+    field(VAL, "0") # Gray
+    field(PINI, "YES")
+    info(Q:group, {
+        "$(N):Array":{
+            "attribute[0].value":{+type:"any", +channel:"VAL"}
+        }
+    })
+}
+
+record(bo, "$(N):extra") {
+    field(ZNAM, "foo")
+    field(ONAM, "bar")
+    info(Q:group, {
+        "$(N):Array":{
+            "attribute[1].value":{+type:"any",
+                                  +channel:"VAL",
+                                  +putorder:0,
+                                  +trigger:"attribute[1].value"},
+            "attribute[1]":{+type:"meta", +channel:"SEVR"}
+        }
+    })
+    alias("$(N):extra:alias")
+}

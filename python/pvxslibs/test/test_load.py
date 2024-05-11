@@ -16,6 +16,11 @@ class TestLoad(unittest.TestCase):
 
         self.assertNotEqual(0, pvxs_version_int())
 
+        libIoc = ctypes.CDLL(find_dso('...lib.pvxsIoc'), ctypes.RTLD_GLOBAL)
+
+        # load original QSRV to ensure no symbol conflicts
+        p2p = ctypes.CDLL(find_dso('epicscorelibs.lib.qsrv'), ctypes.RTLD_GLOBAL)
+
 class TestVersion(unittest.TestCase):
     def test_ver(self):
         from ..version import version_info, abi_requires

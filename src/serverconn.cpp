@@ -20,7 +20,16 @@
 static constexpr size_t tcp_tx_limit_mult = 2u;
 
 namespace pvxs {
+namespace impl {
+DEFINE_INST_COUNTER(ServerChannelControl);
+DEFINE_INST_COUNTER(ServerChan);
+DEFINE_INST_COUNTER(ServerConn);
+DEFINE_INST_COUNTER(ServerSource);
+}
 namespace server {
+
+DEFINE_INST_COUNTER2(Server::Pvt, ServerPvt);
+
 std::set<std::string> ClientCredentials::roles() const
 {
     std::set<std::string> ret;
@@ -53,6 +62,13 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 {
     log_debug_printf(connio, "Client %s connects, RX readahead %zu TX limit %zu\n",
                      peerName.c_str(), readahead, tcp_tx_limit);
+    {
+        int opt = 1;
+        if(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
+            auto err(SOCKERRNO);
+            log_warn_printf(connio, "Unable to TCP_NODELAY: %d on %d\n", err, sock);
+        }
+    }
 
     {
         auto cred(std::make_shared<server::ClientCredentials>());
@@ -101,7 +117,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         assert(M.good() && H.good());
 
         if(evbuffer_add(tx, buf.data(), M.save()-buf.data()))
-            throw std::bad_alloc();
+            throw BAD_ALLOC();
 
         statTx += M.save()-buf.data();
     }
@@ -280,10 +296,7 @@ void ServerConn::handle_DESTROY_REQUEST()
     if(it!=opByIOID.end()) {
         auto op = it->second;
         opByIOID.erase(it);
-        op->state = ServerOp::Dead;
-
-        if(op->onClose)
-            op->onClose("");
+        op->cleanup();
     }
 }
 
@@ -326,22 +339,25 @@ std::shared_ptr<ConnBase> ServerConn::self_from_this()
     return shared_from_this();
 }
 
+// see also ServerChannel_shutdown()
+/* reached from:
+ * 1. connection close
+ */
 void ServerConn::cleanup()
 {
     log_debug_printf(connsetup, "Client %s Cleanup TCP Connection\n", peerName.c_str());
 
     iface->server->connections.erase(this);
 
-    for(auto& pair : opByIOID) {
-        if(pair.second->onClose)
-            pair.second->onClose("");
+    // grab maps before cleanup()s would modify
+    auto ops(std::move(opByIOID));
+    auto chans(std::move(chanBySID));
+
+    for(auto& op : ops) {
+        op.second->cleanup();
     }
-    for(auto& pair : chanBySID) {
-        pair.second->state = ServerChan::Destroy;
-        if(pair.second->onClose) {
-            auto fn(std::move(pair.second->onClose));
-            fn("");
-        }
+    for(auto& pair : chans) {
+        pair.second->cleanup();
     }
 }
 
@@ -429,7 +445,8 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
 #endif
 
     const int backlog = 4;
-    listener = evlisten(evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
+    listener = evlisten(__FILE__, __LINE__,
+                        evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
 
     if(!LEV_OPT_DISABLED)
         evconnlistener_disable(listener.get());
@@ -447,6 +464,53 @@ void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, s
     }
 }
 
-ServerOp::~ServerOp() {}
+ServerOp::~ServerOp()
+{
+    // cleanup() should have happened already (from tcp worker)
+    // this check may run from any thread, but at this point it should not matter.
+    assert(state==Dead);
+}
+
+/* reached from:
+ * 1. connection close
+ * 2. DESTROY_CHANNEL
+ * 3. DESTROY_REQUEST
+ * 4. individual op DESTROY
+ * 5. local user calls ServerChannelControl::close()
+ */
+void ServerOp::cleanup()
+{
+    if(state==ServerOp::Dead)
+        return;
+
+    if(state==ServerOp::Executing && onCancel) {
+        auto fn(std::move(onCancel));
+        fn();
+    }
+
+    state = ServerOp::Dead;
+
+    onCancel = nullptr;
+    auto closer(std::move(onClose));
+    bool notify = closer.operator bool();
+
+    if(auto ch = chan.lock()) {
+        ch->opByIOID.erase(ioid);
+
+        if(auto conn = ch->conn.lock()) {
+            conn->opByIOID.erase(ioid);
+
+            if(notify) {
+                conn->iface->server->acceptor_loop.dispatch([closer](){
+                    closer("");
+                });
+                notify = false;
+            }
+        }
+    }
+
+    if(notify)
+        closer("");
+}
 
 }} // namespace pvxs::impl

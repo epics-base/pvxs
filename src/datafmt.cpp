@@ -16,7 +16,7 @@ struct FmtDelta {
 
     void field(const std::string& prefix, const Value& val, bool verytop)
     {
-        if(verytop && !val.isMarked())
+        if(verytop && !val.isMarked(false))
             return;
 
         strm<<indent{}<<prefix;
@@ -110,7 +110,7 @@ struct FmtDelta {
         field(prefix, val, verytop);
 
         if(val.type()==TypeCode::Struct) {
-            for(auto fld : val.iall()) {
+            for(const auto& fld : val.imarked()) {
                 std::string cprefix(prefix);
                 if(!verytop)
                     cprefix += '.';
@@ -125,82 +125,181 @@ struct FmtTree {
     std::ostream& strm;
     const Value::Fmt& fmt;
 
-    void top(const std::string& member,
-             const FieldDesc *desc,
-             const FieldStorage* store)
-    {
-        strm<<indent{};
-        if(!desc) {
+    void show_value(const Value& fld) {
+        const auto type(fld.type());
+        assert(type.kind()!=Kind::Compound);
+
+        switch(type.code) {
+        case TypeCode::Bool:
+            strm<<(fld.as<bool>() ? "true" : "false");
+            return;
+#define CASE(ENUM, TYPE) \
+        case TypeCode::ENUM : strm<<fld.as<TYPE>(); return
+            CASE(Int8, int8_t);
+            CASE(Int16, int16_t);
+            CASE(Int32, int32_t);
+            CASE(Int64, int64_t);
+            CASE(UInt8, uint8_t);
+            CASE(UInt16, uint16_t);
+            CASE(UInt32, uint32_t);
+            CASE(UInt64, uint64_t);
+            CASE(Float32, float);
+            CASE(Float64, double);
+#undef CASE
+        case TypeCode::String:
+            strm<<"\""<<escape(fld.as<std::string>())<<"\"";
+            return;
+        case TypeCode::BoolA:
+        case TypeCode::Int8A:
+        case TypeCode::Int16A:
+        case TypeCode::Int32A:
+        case TypeCode::Int64A:
+        case TypeCode::UInt8A:
+        case TypeCode::UInt16A:
+        case TypeCode::UInt32A:
+        case TypeCode::UInt64A:
+        case TypeCode::Float32A:
+        case TypeCode::Float64A:
+        case TypeCode::StringA:
+        {
+            auto varr = fld.as<shared_array<const void>>();
+            strm<<varr.format().limit(fmt._limit);
+        }
+            return;
+        case TypeCode::Any:
+        case TypeCode::Struct:
+        case TypeCode::Union:
+        case TypeCode::StructA:
+        case TypeCode::UnionA:
+        case TypeCode::AnyA:
+            assert(false);
+            break;
+        default:
+            strm<<"!!Invalid TypeCode!! "<<int(type.code)<<"\n";
+            return;
+        }
+    }
+
+    // each invocation emits at least one complete line
+    void show(const Value& fld, const std::string& member) {
+        // caller should indent{}
+        if(!fld) {
             strm<<"null\n";
             return;
         }
 
-        strm<<desc->code;
-        if(!desc->id.empty())
-            strm<<" \""<<desc->id<<"\"";
-        if(!member.empty() && desc->code!=TypeCode::Struct)
-            strm<<" "<<member;
+        const auto type(fld.type());
 
-        switch(store->code) {
-        case StoreType::Null:
-            if(desc->code==TypeCode::Struct) {
-                strm<<" {\n";
-                for(auto& pair : desc->miter) {
-                    auto cdesc = desc + pair.second;
-                    Indented I(strm);
-                    top(pair.first, cdesc, store + pair.second);
-                }
-                strm<<indent{}<<"}";
-                if(!member.empty())
-                    strm<<" "<<member;
-                strm<<"\n";
+        strm<<type;
+        {
+            auto id(fld.id());
+            if(!id.empty())
+                strm<<" \""<<id<<"\"";
+        }
+
+        if(type.kind()!=Kind::Compound) {
+            if(!member.empty())
+                strm<<' '<<member;
+            if(fmt._showValue) {
+                strm<<" = ";
+                show_value(fld);
+            }
+            strm<<"\n";
+            return;
+        }
+
+        if(type==TypeCode::Any
+                || (!fmt._showValue && type==TypeCode::AnyA)
+                || (fmt._showValue && type==TypeCode::Union)) {
+            // any NAME = VAL
+            // union NAME.MEM TYPE = VAL
+
+            Value val;
+            if(fmt._showValue)
+                val = fld.as<Value>();
+
+            if(!member.empty())
+                strm<<' '<<member;
+
+            if(type==TypeCode::Union && val) { // implied _showValue
+                auto mem(fld.nameOf(val));
+                strm<<'.'<<mem;
+            }
+            if(fmt._showValue) {
+                strm<<" ";
+                show(val, std::string());
             } else {
                 strm<<"\n";
             }
-            break;
-        case StoreType::Real:     if(fmt._showValue) { strm<<" = "<<store->as<double>(); } strm<<"\n"; break;
-        case StoreType::Integer:  if(fmt._showValue) { strm<<" = "<<store->as<int64_t>(); } strm<<"\n"; break;
-        case StoreType::UInteger: if(fmt._showValue) { strm<<" = "<<store->as<uint64_t>(); } strm<<"\n"; break;
-        case StoreType::Bool:     if(fmt._showValue) { strm<<" = "<<(store->as<bool>() ? "true" : "false"); } strm<<"\n"; break;
-        case StoreType::String:   if(fmt._showValue) { strm<<" = \""<<escape(store->as<std::string>())<<"\""; } strm<<"\n"; break;
-        case StoreType::Compound: {
-            auto& fld = store->as<Value>();
-            if(fld.valid() && desc->code==TypeCode::Union) {
-                for(auto& pair : desc->miter) {
-                    if(&desc->members[pair.second] == Value::Helper::desc(fld)) {
-                        strm<<"."<<pair.first;
+            return;
+
+        } else if(type==TypeCode::Struct
+                  || type==TypeCode::Union // && !_showValue
+                  || (!fmt._showValue && type==TypeCode::StructA)
+                  || (!fmt._showValue && type==TypeCode::UnionA))
+        {
+            // struct "id" { ... } NAME
+
+            Value def;
+            if(!type.isarray()) {
+                def = fld;
+            } else { // StructA, UnionA
+                //def = fld.allocMember(); // can't call directly due to const
+                auto desc(Value::Helper::desc(fld));
+                auto store(Value::Helper::store(fld));
+                decltype (store->top->desc) fld(store->top->desc, desc->members.data());
+                def = Value::Helper::build(fld); // not connection to fld (not parent)
+            }
+
+            strm<<" {";
+            bool first = true;
+            {
+                Indented I(strm);
+                for(auto mem : def.ichildren()) {
+                    auto mname(def.nameOf(mem));
+                    if(first)
+                        strm<<'\n';
+                    strm<<indent{};
+                    show(mem, mname);
+                    first = false;
+                }
+            }
+            if(!first)
+                strm<<indent{};
+            strm<<'}';
+
+            if(!member.empty())
+                strm<<' '<<member;
+            strm<<"\n";
+
+        } else {
+            // struct[] NAME = [ ... ]
+
+            if(!member.empty())
+                strm<<' '<<member;
+
+            auto arr(fld.as<shared_array<const Value>>());
+            strm<<" = {"<<arr.size()<<"}[";
+            size_t shown = 0u;
+            {
+                Indented I(strm);
+
+                for(auto& elem : arr) {
+                    if(!shown)
+                        strm<<'\n';
+                    strm<<indent{};
+                    if(fmt._limit && shown>=fmt._limit) {
+                        strm<<"...\n";
                         break;
                     }
+                    show(elem, std::string());
+                    shown++;
                 }
             }
-            Indented I(strm);
-            top(std::string(),
-                Value::Helper::desc(fld),
-                Value::Helper::store_ptr(fld));
-        }
-            break;
-        case StoreType::Array: {
-            auto& varr = store->as<shared_array<const void>>();
-            if(!fmt._showValue) {
-                strm<<"\n";
-            } else if(varr.original_type()!=ArrayType::Value) {
-                strm<<" = "<<varr.format().limit(fmt._limit)<<"\n";
-            } else {
-                auto arr = varr.castTo<const Value>();
-                strm<<" [\n";
-                for(auto& val : arr) {
-                    Indented I(strm);
-                    top(std::string(),
-                        Value::Helper::desc(val),
-                        Value::Helper::store_ptr(val));
-                }
-                strm<<indent{}<<"]\n";
-            }
-        }
-            break;
-        default:
-            strm<<"!!Invalid StoreType!! "<<int(store->code)<<"\n";
-            break;
+
+            if(shown)
+                strm<<indent{};
+            strm<<"]\n";
         }
     }
 };
@@ -211,9 +310,8 @@ std::ostream& operator<<(std::ostream& strm, const Value::Fmt& fmt)
 {
     switch (fmt._format) {
     case Value::Fmt::Tree:
-        FmtTree{strm, fmt}.top("",
-                                 Value::Helper::desc(*fmt.top),
-                                 Value::Helper::store_ptr(*fmt.top));
+        strm<<indent{};
+        FmtTree{strm, fmt}.show(*fmt.top, std::string());
         break;
     case Value::Fmt::Delta:
         FmtDelta{strm, fmt}.top("", *fmt.top, true);

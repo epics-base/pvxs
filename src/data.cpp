@@ -12,6 +12,8 @@
 
 namespace pvxs {
 
+DEFINE_INST_COUNTER(StructTop);
+
 NoField::NoField()
     :std::runtime_error ("No such field")
 {}
@@ -97,10 +99,8 @@ Value::Value(const std::shared_ptr<const impl::FieldDesc>& desc)
     if(!desc)
         return;
 
-    auto top = std::make_shared<StructTop>();
+    auto top = std::make_shared<StructTop>(desc);
 
-    top->desc = desc;
-    top->members.resize(desc->size());
     {
         auto& root = top->members[0];
         root.init(desc->code.storedAs());
@@ -291,8 +291,8 @@ void Value::unmark(bool parents, bool children)
         auto pdesc = desc;
         auto pstore = store.get();
         while(pdesc!=top->desc.get()) {
-            pdesc -= pdesc->parent_index;
             pstore -= pdesc->parent_index;
+            pdesc -= pdesc->parent_index;
 
             pstore->valid = false;
         }
@@ -565,7 +565,7 @@ void Value::copyIn(const void *ptr, StoreType type)
     case StoreType::UInteger: {
         if(!copyInScalar(store->as<uint64_t>(), ptr, type)) throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
         // truncate as if assigned to narrower type
-        int64_t orig = store->as<int64_t>();
+        uint64_t orig = store->as<uint64_t>();
         switch(desc->code.code) {
         case TypeCode::UInt8: orig = uint8_t(orig); break;
         case TypeCode::UInt16: orig = uint16_t(orig); break;
@@ -573,7 +573,7 @@ void Value::copyIn(const void *ptr, StoreType type)
         case TypeCode::UInt64: orig = uint64_t(orig); break;
         default: break;
         }
-        store->as<int64_t>() = orig;
+        store->as<uint64_t>() = orig;
         break;
     }
     case StoreType::Bool: {
@@ -619,22 +619,38 @@ void Value::copyIn(const void *ptr, StoreType type)
                 // assign array of Struct/Union/Any
                 auto tsrc  = src.castTo<const Value>();
 
+                bool convert = false;
                 if(desc->code!=TypeCode::AnyA) {
                     // enforce member type for Struct[] and Union[]
                     for(auto& val : tsrc) {
                         if(val.desc && val.desc!=desc->members.data()) {
-                            throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
+                            convert = true;
+                            break;
                         }
                     }
+                    if(convert) {
+                        shared_array<Value> scratch(tsrc.size());
+                        for(auto i : range(tsrc.size())) {
+                            if(tsrc[i]) {
+                                scratch[i] = allocMember();
+                                scratch[i].assign(tsrc[i]);
+                            }
+                        }
+                        dest = scratch.freeze().castTo<const void>();
+                    }
                 }
-                dest = src;
+                if(!convert)
+                    dest = src;
 
             } else if(src.original_type()!=ArrayType::Value && uint8_t(desc->code.code)==uint8_t(src.original_type())) {
                 // assign array of scalar w/o convert
                 dest = src;
 
+            } else if(src.original_type()!=ArrayType::Value) {
+                // assign array of scalar w/ implicit conversion
+                dest = detail::copyAs(desc->code.arrayType(), src.original_type(), src.data(), src.size()).freeze();
+
             } else {
-                // TODO: alloc and convert
                 throw NoConvert(SB()<<"Unable to assign "<<desc->code<<" with "<<type);
             }
             break;
@@ -653,7 +669,10 @@ void Value::copyIn(const void *ptr, StoreType type)
             // assigning variant union.
             auto& val = store->as<Value>();
             if(type==StoreType::Compound) {
-                val = *reinterpret_cast<const Value*>(ptr);
+                auto& newval = *reinterpret_cast<const Value*>(ptr);
+                if(store == newval.store)
+                    throw std::logic_error("Any self-assignment would recurse.  Not allowed.");
+                val = newval;
                 break;
 
             } else {
@@ -670,7 +689,7 @@ void Value::copyIn(const void *ptr, StoreType type)
                 for(auto i : range(desc->miter.size())) {
                     auto idx(desc->miter[i].second);
 
-                    if(src.desc!=&desc->members[idx])
+                    if(!_equal(src.desc, &desc->members[idx]))
                         continue;
 
                     std::shared_ptr<const FieldDesc> udesc(store->top->desc, &desc->members[idx]);
@@ -696,6 +715,7 @@ void Value::copyIn(const void *ptr, StoreType type)
                         continue;
                     }
                     val = std::move(temp);
+                    break;
                 }
                 if(!val)
                     throw NoConvert("Unsupported assignment to unselected union");
@@ -822,8 +842,13 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
                 // no such member
                 store.reset();
                 desc = nullptr;
-                if(dothrow)
-                    throw LookupError(SB()<<"no such member '"<<name<<"' in '"<<expr<<"'");
+                if(dothrow) {
+                    SB msg;
+                    msg<<"no such member field '"<<name<<"'";
+                    if(name!=expr)
+                        msg<<" in expression '"<<expr<<"'";
+                    throw LookupError(msg);
+                }
             }
 
         } else if(desc->code.code==TypeCode::Union || desc->code.code==TypeCode::Any) {
@@ -969,10 +994,11 @@ size_t Value::nmembers() const
 {
     switch(desc ? desc->code.code : TypeCode::Null) {
     case TypeCode::Struct:
-    case TypeCode::StructA:
     case TypeCode::Union:
-    case TypeCode::UnionA:
         return desc->miter.size();
+    case TypeCode::StructA:
+    case TypeCode::UnionA:
+        return desc->members[0].miter.size();
     default:
         return 0u;
     }
@@ -1169,6 +1195,52 @@ Value::_Iterator<Value::_IMarked>::operator++() noexcept
     pos++;
     _next_marked(val, pos, nextcheck);
     return *this;
+}
+
+void cache_sync(Value& cache, Value& dlt)
+{
+    if(!cache.equalType(dlt))
+        throw std::logic_error(SB()<<__func__<<" requires matching types");
+
+    /* co-iterate data and prototype.
+     * copy   marked from data -> prototype
+     * copy unmarked from prototype -> data
+     */
+    auto desc = Value::Helper::desc(cache);
+    auto delta = Value::Helper::store_ptr(dlt);
+    auto complete = Value::Helper::store_ptr(cache);
+    auto N = desc->size();
+    for(size_t i=0u; i < N; i++, delta++, complete++)
+    {
+        const auto src = delta->valid ? delta : complete;
+        auto       dst = delta->valid ? complete : delta;
+
+        switch(delta->code) {
+        case StoreType::Null:
+            break;
+        case StoreType::Bool:
+        case StoreType::UInteger:
+        case StoreType::Integer:
+        case StoreType::Real:
+            memcpy(&dst->store, &src->store, sizeof(src->store));
+            break;
+        case StoreType::String:
+            dst->as<std::string>() = src->as<std::string>();
+            break;
+        case StoreType::Array:
+            dst->as<shared_array<const void>>() = src->as<shared_array<const void>>();
+            break;
+        case StoreType::Compound:
+        {
+            std::shared_ptr<impl::FieldStorage> sstore(Value::Helper::store(dlt),
+                                                      src);
+            auto& dfld(dst->as<Value>());
+            Value::Helper::set_desc(dfld, &desc[i]);
+            Value::Helper::store(dfld) = std::move(sstore);
+        }
+            break;
+        }
+    }
 }
 
 namespace impl {

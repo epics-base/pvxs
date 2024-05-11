@@ -59,6 +59,10 @@ public:
     constexpr Server() = default;
     //! Create/allocate, but do not start, a new server with the provided config.
     explicit Server(const Config&);
+    Server(const Server&) = default;
+    Server(Server&& o) = default;
+    Server& operator=(const Server&) = default;
+    Server& operator=(Server&& o) = default;
     ~Server();
 
     /** Create new server based on configuration from $EPICS_PVA* environment variables.
@@ -158,7 +162,7 @@ struct PVXS_API Config {
     std::vector<std::string> ignoreAddrs;
     //! Addresses (**not** host names) to which (UDP) beacons message will be sent.
     //! May include broadcast and/or unicast addresses.
-    //! Supplemented iif auto_beacon==true
+    //! Supplemented only if auto_beacon==true
     std::vector<std::string> beaconDestinations;
     //! TCP port to bind.  Default is 5075.  May be zero.
     unsigned short tcp_port = 5075;
@@ -176,6 +180,7 @@ struct PVXS_API Config {
 
 private:
     bool BE = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
+    bool UDP = true;
 public:
 
     // compat
@@ -220,6 +225,8 @@ public:
     // for protocol compatibility testing
     inline Config& overrideSendBE(bool be) { BE = be; return *this; }
     inline bool sendBE() const { return BE; }
+    inline Config& overrideShareUDP(bool share) { UDP = share; return *this; }
+    inline bool shareUDP() const { return UDP; }
 #endif
 };
 

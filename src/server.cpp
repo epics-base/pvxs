@@ -317,6 +317,10 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
             CASE(Stopping);
 #undef CASE
             }
+            if(!serv.pvt->interfaces.empty()) {
+                auto& first = serv.pvt->interfaces.front();
+                strm<<" TCP_Port: "<<first.bind_addr.port();
+            }
             strm<<"\n";
 
             Indented I(strm);
@@ -380,7 +384,8 @@ Server::Pvt::Pvt(const Config &conf)
     ,acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow-2)
     ,beaconSender4(AF_INET, SOCK_DGRAM, 0)
     ,beaconSender6(AF_INET6, SOCK_DGRAM, 0)
-    ,beaconTimer(event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this))
+    ,beaconTimer(__FILE__, __LINE__,
+                 event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this))
     ,searchReply(0x10000)
     ,builtinsrc(StaticSource::build())
     ,state(Stopped)
@@ -389,17 +394,25 @@ Server::Pvt::Pvt(const Config &conf)
 
     beaconSender4.set_broadcast(true);
 
-    auto manager = UDPManager::instance();
+    auto manager = UDPManager::instance(effective.shareUDP());
 
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
 
     const auto cb(std::bind(&Pvt::onSearch, this, std::placeholders::_1));
 
+    bool bindAny = false;
     std::vector<SockAddr> tcpifaces; // may have port zero
+    tcpifaces.reserve(effective.interfaces.size());
+
     for(const auto& iface : effective.interfaces) {
         SockEndpoint addr(iface.c_str());
-        if(!addr.addr.isMCast())
+
+        if(addr.addr.isAny()) {
+            bindAny = true;
+
+        } else if(!addr.addr.isMCast()) {
             tcpifaces.push_back(addr.addr);
+        }
 
         addr.addr.setPort(effective.udp_port);
 
@@ -408,12 +421,24 @@ Server::Pvt::Pvt(const Config &conf)
         // update to allow udp_port==0
         effective.udp_port = addr.addr.port();
 
+
+        if(addr.addr.isAny()) {
+            continue; // special case handling below
+        }
+
         if(addr.addr.family()==AF_INET && addr.addr.isAny()) {
             // if listening on 0.0.0.0, also listen on [::]
             auto any6(addr);
             any6.addr = SockAddr::any(AF_INET6);
 
             listeners.push_back(manager.onSearch(any6, cb));
+
+        } else if(addr.addr.family()==AF_INET6 && addr.addr.isAny()) {
+            // if listening on [::], also listen on 0.0.0.0
+            auto any4(addr);
+            any4.addr = SockAddr::any(AF_INET);
+
+            listeners.push_back(manager.onSearch(any4, cb));
         }
 
         if(evsocket::ipstack!=evsocket::Winsock
@@ -431,10 +456,33 @@ Server::Pvt::Pvt(const Config &conf)
         }
     }
 
+    if(bindAny) {
+        if(evsocket::canIPv6) {
+            if(evsocket::ipstack==evsocket::Linsock) {
+                /* Linux IP stack disallows binding both 0.0.0.0 and [::] for the same port.
+                 * so we must always bind [::]
+                 */
+                tcpifaces.emplace_back(AF_INET6);
+            } else {
+                /* Other IP stacks allow binding different sockets.
+                 * OSX has the added oddity of ordering dependence.
+                 * 0.0.0.0 and then :: is allowed, but not the reverse.
+                 *
+                 * Always bind both in the OSX allowed order.
+                 */
+                tcpifaces.emplace_back(AF_INET);
+                tcpifaces.emplace_back(AF_INET6);
+            }
+        } else {
+            tcpifaces.emplace_back(AF_INET);
+        }
+    }
+
     if(tcpifaces.empty()) {
         log_err_printf(serversetup, "Server Unreachable.  Interface address list includes not TCP interfaces.%s", "\n");
     }
 
+    ignoreList.reserve(effective.ignoreAddrs.size());
     for(const auto& addr : effective.ignoreAddrs) {
         SockAddr temp(addr.c_str());
         ignoreList.push_back(temp);
@@ -611,6 +659,12 @@ void Server::Pvt::stop()
 
         state = Stopped;
     });
+
+    /* Cycle through once more to ensure any callbacks queue during the previous call have completed.
+     * TODO: this is partly a crutch as eg. SharedPV::attach() binds strong self references
+     *       into on*() lambdas, which indirectly hold references keeping acceptor_loop alive.
+     */
+    acceptor_loop.sync();
 }
 
 void Server::Pvt::onSearch(const UDPManager::Search& msg)

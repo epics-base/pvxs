@@ -38,10 +38,7 @@ static
 LPFN_WSARECVMSG WSARecvMsg;
 
 static
-epicsThreadOnceId oseOnce = EPICS_THREAD_ONCE_INIT;
-
-static
-void oseDoOnce(void*)
+void oseDoOnce()
 {
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
     GUID guid      = WSAID_WSARECVMSG;
@@ -64,7 +61,7 @@ void oseDoOnce(void*)
 void osiSockAttachExt()
 {
     osiSockAttach();
-    epicsThreadOnce(&oseOnce, &oseDoOnce, nullptr);
+    threadOnce<&oseDoOnce>();
 }
 
 void evsocket::enable_SO_RXQ_OVFL() const {}

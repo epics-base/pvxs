@@ -1,0 +1,206 @@
+
+# used by testGet(), testFieldLinks, testProc, testSevr
+record(longin, "target:i") {
+    field(VAL, "42")
+}
+record(ai, "target:ai") {
+    field(VAL, "4.0")
+    field(FLNK, "target:mbbi")
+    field(PREC, "2")
+}
+
+record(longin, "src:i1") {
+    field(INP, {"pva":"target:i"})
+    field(MDEL, "-1")
+    field(TPRO, "1")
+}
+
+record(mbbi, "target:mbbi") {
+    field(INP,  "target:ai")
+    field(ZRSV, "NO_ALARM")
+    field(ONSV, "INVALID")
+}
+
+# used by testPut()
+record(longin, "target:i2") {
+    field(VAL, "43")
+}
+
+record(longout, "src:o2") {
+    field(OUT, {"pva":"target:i2"})
+}
+
+# used by testPutAsync()
+record(calc, "async:seq") {
+    field(CALC, "VAL+1")
+    field(VAL , "0")
+    field(TPRO, "1")
+}
+
+record(stringin, "target:str1") {
+    field(INP,  {pva: "src:str"})
+    field(VAL, "foo")
+}
+
+record(stringin, "target:str2") {
+    field(VAL, "baz")
+}
+
+record(stringout, "src:str") {
+    field(VAL, "bar")
+}
+
+record(longout, "testToFromString:src") {
+    field(VAL , "42")
+    field(OUT , {pva:"testToFromString:str1"})
+}
+record(stringin, "testToFromString:str1") {
+}
+record(aai, "testToFromString:str2") {
+    field(FTVL, "STRING")
+    field(NELM, "5")
+    field(INP , {pva:{pv:"testToFromString:str1", "proc":"CPP"}})
+}
+record(longin, "testToFromString:out") {
+    field(INP , {pva:{pv:"testToFromString:str2", "proc":"CPP"}})
+}
+
+record(calc, "async:seq") {
+    field(CALC, "VAL+1")
+}
+
+record(longout, "async:trig") {
+    field(DTYP, "Async Soft Channel")
+    field(OUT , {"pva":{"pv":"async:target", "proc":true}})
+    field(FLNK, "async:next")
+}
+
+record(longin, "async:target") {
+    field(INP , "async:seq PP MS")
+}
+
+record(longin, "async:next") {
+    field(INP , "async:seq PP MS")
+}
+
+record(aao, "source:aao") {
+    field(OUT,  {pva: "target:aai_out"})
+    field(NELM, "5")
+    field(FTVL, "FLOAT")
+}
+
+record(aai, "target:aai_inp") {
+    field(INP,  {pva: "source:aao"})
+    field(NELM, "10")
+    field(FTVL, "SHORT")
+}
+
+record(aai, "target:aai_out") {
+    field(NELM, "2")
+    field(FTVL, "ULONG")
+}
+
+record(ai, "target:aai_inp_first") {
+    field(INP,  {pva: "source:aao"})
+}
+
+record(longin, "disconnected") {
+    field(INP, {pva: "special:pv"})
+    field(VAL, "42")
+}
+
+record(ao, "meta:src") {
+    field(DRVH, "10")
+    field(HOPR, "9")
+    field(HIHI, "8")
+    field(HIGH, "7")
+    field(LOW , "-7")
+    field(LOLO, "-8")
+    field(LOPR, "-9")
+    field(DRVL, "-10")
+    field(HHSV, "MAJOR")
+    field(HSV , "MINOR")
+    field(LSV , "MINOR")
+    field(LLSV, "MAJOR")
+    field(PREC, "2")
+    field(EGU , "arb")
+}
+
+record(ai, "meta:inp") {
+    field(INP, {pva:{pv:"meta:src", sevr:"MS"}})
+}
+
+record(longout, "flnk:src") {
+    field(FLNK, {pva:"flnk:tgt"})
+}
+
+record(calc, "flnk:tgt") {
+    field(CALC, "VAL+1")
+}
+
+
+record(calcout, "atomic:src:1") {
+    field(CALC, "RNDM*255")
+    field(OUT , "atomic:src:2.A PP")
+    info(Q:group, {
+        "atomic:src":{
+            "a": {+channel:"VAL"}
+        }
+    })
+}
+record(calc, "atomic:src:2") {
+    field(CALC, "A<<8")
+    info(Q:group, {
+        "atomic:src":{
+            "b": {+channel:"VAL", +trigger:"*"}
+        }
+    })
+}
+
+record(longin, "atomic:lnk:1") {
+    field(INP , {
+        pva:{pv:"atomic:src", field:"a", atomic:true, monorder:0, proc:"CP"}
+    })
+}
+record(longin, "atomic:lnk:2") {
+    field(INP , {
+        pva:{pv:"atomic:src", field:"b", atomic:true, monorder:1, proc:"CP"}
+    })
+    field(FLNK, "atomic:lnk:out")
+}
+record(calc, "atomic:lnk:out") {
+    field(INPA, "atomic:lnk:1 NPP MS")
+    field(INPB, "atomic:lnk:2 NPP MS")
+    field(CALC, "A|B")
+}
+
+record(bo, "enum:src:b") {
+    field(OUT , {pva:{pv:"enum:tgt", proc:"PP"}})
+    field(ZNAM, "zero")
+    field(ONAM, "one")
+}
+record(stringout, "enum:src:s") {
+    field(OUT , {pva:{pv:"enum:tgt", proc:"PP"}})
+}
+record(bi, "enum:tgt") {
+    field(ZNAM, "zero")
+    field(ONAM, "one")
+}
+record(stringin, "enum:tgt:s") {
+    field(INP , {pva:{pv:"enum:tgt", proc:"CP"}})
+}
+record(bi, "enum:tgt:b") {
+    field(INP , {pva:{pv:"enum:tgt:s", proc:"CP"}})
+    field(ZNAM, "zero")
+    field(ONAM, "one")
+}
+
+record(waveform, "sarr:src") {
+    field(FTVL, "STRING")
+    field(NELM, "16")
+}
+record(waveform, "sarr:inp") {
+    field(INP , {pva:"sarr:src"})
+    field(FTVL, "STRING")
+    field(NELM, "16")
+}

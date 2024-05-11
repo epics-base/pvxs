@@ -1,0 +1,53 @@
+
+record(ao, "$(N)Delta") {
+    field(VAL, "0.0")
+    field(PINI, "YES")
+}
+
+record(calc, "$(N)Phase:I") {
+    field(PINI, "RUNNING")
+    field(INPA, "$(N)Phase:I")
+    field(CALC, "A+1")
+    field( EGU, "rad")
+    field(PREC, "3")
+    field(FLNK, "$(N)Phase:Q")
+    info(Q:group, {
+        "$(N)iq":{"phas.i": {+type:"plain", +channel:"VAL"}}
+    })
+    #field(TPRO, "1")
+}
+
+record(calc, "$(N)Phase:Q") {
+    field(INPA, "$(N)Phase:I")
+    field(INPB, "$(N)Delta NPP")
+    field(CALC, "A+B")
+    field( EGU, "rad")
+    field(PREC, "3")
+    field(FLNK, "$(N)I")
+    info(Q:group, {
+        "$(N)iq":{"phas.q": {+type:"plain", +channel:"VAL"}}
+    })
+}
+
+record(waveform, "$(N)I") {
+    field(DTYP, "QSRV2 Demo")
+    field( INP, "$(N)Phase:I")
+    field(FTVL, "DOUBLE")
+    field(NELM, "500")
+    field(FLNK, "$(N)Q")
+    info(Q:group, {
+        "$(N)iq":{"I": {+channel:"VAL"}}
+    })
+    info(Q:form, "Engineering")
+}
+
+record(waveform, "$(N)Q") {
+    field(DTYP, "QSRV2 Demo")
+    field( INP, "$(N)Phase:Q")
+    field(FTVL, "DOUBLE")
+    field(NELM, "500")
+    info(Q:group, {
+        "$(N)iq":{"Q": {+channel:"VAL", +trigger:"*"}}
+    })
+    info(Q:form, "Engineering")
+}

@@ -96,12 +96,15 @@ scheme of MAJOR.MINOR.PATCH with the following amendments.
 * At this time only one version number is maintained, which is applied to both
   the main libpvxs.so and the auxiliary libpvxsIoc.so.
   Statements about API or ABI compatibility apply to both libraries as a group.
+* See :ref:`ntcompat` for ``NT*`` type construction helpers.
 
 .. _pgpkey:
   
-Each release will be accompanied by a signed tag in the repository,
+Each release will be accompanied by a signed tag in the git repository,
 which may be verified with the author's GPG key
-`5C159E669D69E2D4C4E74E540C8E1C8347330CFB <http://keys.gnupg.net/pks/lookup?op=get&search=0x5C159E669D69E2D4C4E74E540C8E1C8347330CFB>`_.
+`5C159E669D69E2D4C4E74E540C8E1C8347330CFB <https://keys.openpgp.org/search?q=5C159E669D69E2D4C4E74E540C8E1C8347330CFB>`_
+`(alternate) <https://keyserver.ubuntu.com/pks/lookup?search=5C159E669D69E2D4C4E74E540C8E1C8347330CFB&fingerprint=on&op=index>`_
+.
 
 .. _expertapi:
 
@@ -142,6 +145,37 @@ When committing changes please do:
 * Include a commit message
 * Break up changes into multiple commits where reasonable
 * Include whitespace only changes as separate commits
+
+.. _contributors:
+
+Contributors
+------------
+
+Who did the [work](https://github.com/mdavidsaver/pvxs/graphs/contributors) to make PVXS what it is.
+
+.. comment: git log --format=format:%aN|sort -u|while read aa; do echo "* $aa"; done
+
+* Alexander Wells
+* Basil Aljamal
+* Bruno Martins
+* Érico Nogueira
+* George McIntyre
+* Henrique Silva
+* karlosp
+* Klemen Vodopivec
+* Michael Davidsaver
+* Peter Milne
+* Simon Rose
+* Thomas Ives
+
+Those who supported this work.
+
+* [ALS-U](https://als.lbl.gov/als-u/overview/) project at [Berkeley Lab](https://www.lbl.gov/)
+* [Diamond Light Source](https://www.diamond.ac.uk/)
+* [European Spallation Source](https://europeanspallationsource.se/)
+* [Fermilab](https://fnal.gov/)
+* [SLAC National Accelerator Laboratory](https://www6.slac.stanford.edu/)
+* [SNS](https://neutrons.ornl.gov/sns) at [Oak Ridge National Lab](https://www.ornl.gov/)
 
 Implementation Notes
 ====================

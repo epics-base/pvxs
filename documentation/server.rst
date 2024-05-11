@@ -40,18 +40,18 @@ Configuration
 -------------
 
 The recommended starting point when configuring a Server is `pvxs::server::Config::fromEnv`
-which will use the following environment variables when set.
+which will use the following :ref:`environ` when set.
 
-Entries naming multiple environment variables will prefer the left most which is set.
-eg. *EPICS_PVA_ADDR_LIST* is only checked if *EPICS_PVAS_BEACON_ADDR_LIST* is unset.
+Entries naming multiple :ref:`environ` will prefer the left most which is set.
+eg. ``EPICS_PVA_ADDR_LIST`` is only checked if ``EPICS_PVAS_BEACON_ADDR_LIST`` is unset.
 
 EPICS_PVAS_INTF_ADDR_LIST
-    Space seperated list of local interface addresses to which the server will bind.
+    Space separated list of local interface addresses to which the server will bind.
     Port numbers are parsed and ignore.
     Sets `pvxs::server::Config::interfaces`
 
 EPICS_PVAS_BEACON_ADDR_LIST or EPICS_PVA_ADDR_LIST
-    Space seperated list of unicast or broadcast addresses.
+    Space separated list of unicast or broadcast addresses.
     This list is supplimented all local broadcast addresses if auto-beacon is YES.
     Sets `pvxs::server::Config::beaconDestinations`
 
@@ -59,10 +59,10 @@ EPICS_PVAS_AUTO_BEACON_ADDR_LIST or EPICS_PVA_AUTO_ADDR_LIST
     YES or NO.
     Sets `pvxs::server::Config::auto_beacon`
 
-EPICS_PVAS_SERVER_PORT or EPIC_PVAS_SERVER_PORT
+EPICS_PVAS_SERVER_PORT or EPICS_PVA_SERVER_PORT
     Single integer.
-    Prefered TCP port to bind.
-    If already in use then a random port will be choosen.
+    Preferred TCP port to bind.
+    If already in use then a random port will be chosen.
     Sets `pvxs::server::Config::tcp_port`
 
 EPICS_PVAS_BROADCAST_PORT or EPICS_PVA_BROADCAST_PORT
@@ -72,7 +72,7 @@ EPICS_PVAS_BROADCAST_PORT or EPICS_PVA_BROADCAST_PORT
     Sets `pvxs::server::Config::udp_port`
 
 EPICS_PVAS_IGNORE_ADDR_LIST
-    Space seperated list of addresses with optional port.
+    Space separated list of addresses with optional port.
     Port zero is treated as a wildcard to match any port.
     UDP traffic from matched addresses will be ignored with no further processing.
 
@@ -84,43 +84,10 @@ EPICS_PVA_CONN_TMO
    All ***_ADDR_LIST** may contain IPv4 multicast, and IPv6 uni/multicast addresses.
 
 .. versionadded:: 0.2.0
-    Prior to 0.2.0 *EPICS_PVA_CONN_TMO* was ignored.
+    Prior to 0.2.0 ``EPICS_PVA_CONN_TMO`` was ignored.
 
 .. doxygenstruct:: pvxs::server::Config
     :members:
 
 .. doxygenclass:: pvxs::server::Server
     :members:
-
-IOC Integration
----------------
-
-.. code-block:: c++
-
-    #include <pvxs/server.h>
-    namespace pvxs { namespace namespace ioc { ... } }
-
-The separate "pvxsIoc" library exists to run a PVXS server as part of an IOC.
-See also :ref:`includepvxs`.
-
-IOC Integration respects the **$PVXS_LOG** as well as **$EPICS_PVA\*** environment variables.
-Changes to this environment variable are possible prior to
-calling "\*_registerRecordDeviceDriver(pdbbase)".
-
-IOC shell
-^^^^^^^^^
-
-The "pvxsIoc" library adds several IOC shell functions and variables.
-
-pvxsr(int level)
-    PVXS Server Report.  Shows information about server config (level==0)
-    or about connected clients (level>0).  Indirectly calls `pvxs::server::Source::show`.
-
-pvxsl(int level)
-    PVXS Server List.  Lists attached Sources and PV names.
-    Indirectly calls `pvxs::server::Source::onList`.
-
-Adding PVs
-^^^^^^^^^^
-
-.. doxygenfunction:: pvxs::ioc::server

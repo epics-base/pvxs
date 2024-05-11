@@ -26,12 +26,12 @@ struct Entry {
     Value val;
     std::exception_ptr exc;
     Entry() = default;
-    Entry(Value&& v) :val(std::move(v)) {}
-    Entry(const std::exception_ptr& e) :exc(e) {}
+    explicit Entry(Value&& v) :val(std::move(v)) {}
+    explicit Entry(const std::exception_ptr& e) :exc(e) {}
 };
 }
 
-struct SubscriptionImpl : public OperationBase, public Subscription
+struct SubscriptionImpl final : public OperationBase, public Subscription
 {
     // for use in log messages, even after cancel()
     std::string channelName;
@@ -75,9 +75,10 @@ struct SubscriptionImpl : public OperationBase, public Subscription
 
     INST_COUNTER(SubscriptionImpl);
 
-    SubscriptionImpl(const evbase& loop)
+    explicit SubscriptionImpl(const evbase& loop)
         :OperationBase (Operation::Monitor, loop)
-        ,ackTick(event_new(loop.base, -1, EV_TIMEOUT, &tickAckS, this))
+        ,ackTick(__FILE__, __LINE__,
+                 event_new(loop.base, -1, EV_TIMEOUT, &tickAckS, this))
     {}
     virtual ~SubscriptionImpl() {
         if(loop.assertInRunningLoop())
@@ -159,20 +160,17 @@ struct SubscriptionImpl : public OperationBase, public Subscription
     {
         {
             if(!queue.empty()) {
-                auto ent(std::move(queue.front()));
 
-                if(!canthrow && ent.exc)
+                if(!canthrow && queue.front().exc)
                     return;
 
+                auto ent(std::move(queue.front()));
                 queue.pop_front();
 
                 if(pipeline) {
                     timeval tick{}; // immediate ACK
 
-                    // schedule delayed ack while below threshold.
-                    // avoid overhead of re-scheduling when unack in range [1, ackAt)
-                    if(unack==0u && ackAt!=1u)
-                        tick = timeval{1,0};
+                    unack++;
 
                     if(!ackPending && unack>=ackAt) {
                         if(event_add(ackTick.get(), &tick)) {
@@ -183,13 +181,12 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                             ackPending = true;
                         }
                     }
-
-                    unack++;
                 }
-                log_info_printf(monevt, "channel '%s' monitor pop() %s %u,%u\n",
-                                channelName.c_str(),
-                                ent.exc ? "exception" : ent.val ? "data" : "null!",
-                                unsigned(window), unsigned(unack));
+                log_printf(monevt, ent.exc || ent.val ? Level::Info : Level::Err,
+                           "channel '%s' monitor pop() %s %u,%u\n",
+                           channelName.c_str(),
+                           ent.exc ? "exception" : ent.val ? "data" : "null!",
+                           unsigned(window), unsigned(unack));
 
                 if(ent.exc)
                     std::rethrow_exception(ent.exc);
@@ -259,7 +256,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
                     auto junk(std::move(strong));
                     // need to do cleanup on worker if running
                     auto loop(junk->loop);
-                    loop.tryCall(std::bind([](std::shared_ptr<SubscriptionImpl>& junk){
+                    loop.tryCall(std::bind([](std::shared_ptr<SubscriptionImpl>& junk) noexcept {
                          // really on worker
                          // cleanup here when worker is running
                          junk.reset();
@@ -462,6 +459,7 @@ struct SubscriptionImpl : public OperationBase, public Subscription
         }
     }
 };
+DEFINE_INST_COUNTER(SubscriptionImpl);
 
 void Connection::handle_MONITOR()
 {
@@ -549,40 +547,7 @@ void Connection::handle_MONITOR()
             }
             from_wire_valid(M, rxRegistry, data);
 
-            /* co-iterate data and prototype.
-             * copy   marked from data -> prototype
-             * copy unmarked from prototype -> data
-             */
-            {
-                auto delta = Value::Helper::store_ptr(data);
-                auto complete = Value::Helper::store_ptr(info->prototype);
-                auto N = Value::Helper::desc(info->prototype)->size();
-                for(size_t i=0u; i < N; i++, delta++, complete++)
-                {
-                    const auto src = delta->valid ? delta : complete;
-                    auto       dst = delta->valid ? complete : delta;
-
-                    switch(delta->code) {
-                    case StoreType::Null:
-                        break;
-                    case StoreType::Bool:
-                    case StoreType::UInteger:
-                    case StoreType::Integer:
-                    case StoreType::Real:
-                        memcpy(&dst->store, &src->store, sizeof(src->store));
-                        break;
-                    case StoreType::String:
-                        dst->as<std::string>() = src->as<std::string>();
-                        break;
-                    case StoreType::Array:
-                        dst->as<shared_array<const void>>() = src->as<shared_array<const void>>();
-                        break;
-                    case StoreType::Compound:
-                        dst->as<Value>().copyIn(&src->store, StoreType::Compound);
-                        break;
-                    }
-                }
-            }
+            cache_sync(info->prototype, data);
 
             BitMask overrun;
             from_wire(M, overrun);
@@ -705,7 +670,7 @@ void Connection::handle_MONITOR()
                         log_debug_printf(io, "Server %s channel '%s' MONITOR zero window w/ %u\n",
                                         peerName.c_str(), mon->chan->name.c_str(), unsigned(mon->unack));
 
-                } else {
+                } else if(!final) {
                     log_err_printf(io, "Server %s channel '%s' MONITOR exceeds window size\n",
                                     peerName.c_str(), mon->chan->name.c_str());
                 }
@@ -713,23 +678,25 @@ void Connection::handle_MONITOR()
 
             notify = mon->queue.empty();
 
-            if(update.exc || (mon->queue.size() < mon->queueSize) || mon->queue.back().exc) {
+            assert(mon->queueSize >= 1u);
+            if(update.val && mon->queue.size() >= mon->queueSize && mon->queue.back().val && !mon->pipeline) {
+                log_debug_printf(io, "Server %s channel %s monitor Squash\n",
+                                 peerName.c_str(),
+                                 mon->chan->name.c_str());
+
+                mon->queue.back().val.assign(update.val);
+                mon->nCliSquash++;
+
+            } else if(update.exc || update.val) {
                 log_debug_printf(io, "Server %s channel %s monitor PUSH\n",
                                 peerName.c_str(),
                                 mon->chan->name.c_str());
 
                 mon->queue.emplace_back(std::move(update));
 
-            } else if(update.val) {
-                log_debug_printf(io, "Server %s channel %s monitor Squash\n",
-                                peerName.c_str(),
-                                mon->chan->name.c_str());
-
-                mon->queue.back().val.assign(update.val);
-                mon->nCliSquash++;
             }
 
-            if(final && !update.exc) {
+            if(final) {
                 log_debug_printf(io, "Server %s channel %s monitor FINISH\n",
                                 peerName.c_str(),
                                 mon->chan->name.c_str());
@@ -803,7 +770,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
         auto sval = ackAny.as<std::string>();
         if(sval.size()>1 && sval.back()=='%') {
             try {
-                auto percent = parseTo<double>(sval);
+                auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
                 if(percent>0.0 && percent<=100.0) {
                     op->ackAt = uint32_t(percent * op->queueSize);
                 } else {
@@ -841,8 +808,8 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
                            // on worker
 
                            // ordering of dispatch()/call() ensures creation before destruction
-                           assert(op->chan);
-                           op->_cancel(true);
+                           if(op->chan)
+                               op->_cancel(true);
                        }, std::move(temp)));
     });
 
@@ -850,10 +817,18 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     context->tcp_loop.dispatch([op, context, server]() {
         // on worker
 
-        op->chan = Channel::build(context, op->channelName, server);
+        try {
+            op->chan = Channel::build(context, op->channelName, server);
 
-        op->chan->pending.push_back(op);
-        op->chan->createOperations();
+            op->chan->pending.push_back(op);
+            op->chan->createOperations();
+        }catch(...){
+            // nothing else has happened, so the queue will be empty
+            assert(op->queue.empty());
+            op->queue.emplace_back();
+            op->queue.back().exc = std::current_exception();
+            op->doNotify();
+        }
     });
 
     return external;

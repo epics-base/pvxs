@@ -3,8 +3,116 @@
 Release Notes
 =============
 
-1.1.2 (UNRELEASED)
+1.3.1 (Dec 2023)
+----------------
+
+* Install pvxsIoc.dbd with the correct name in python build.
+* No change to Makefile build.
+
+1.3.0 (Dec 2023)
+----------------
+
+* Set TCP_NODELAY on client and server sockets.
+* Disambiguate Size from Selector when decoding messages.
+* QSRV
+   * :ref:`qsrv2` now considered "feature complete".
+   * Avoid sending 0 precision w/ integer value.
+   * Add :ref:`pvalink`.
+
+1.2.4 (Oct 2023)
+----------------
+
+* data: Relax when assigning struct[] or union[] of similar types.
+* client: avoid assert() with invalid forced server name.
+* client: propagate exception during early op. setup.
+* client: GET yield complete updates after first.
+* server: Ensure that variables bound into operation callback ``std::function<>`` are
+  released promptly when that operation is ended.
+* server: relax post() after finish().  Return false instead of throwing ``std::logic_error``.
+* ioc: ensure db_cancel_event() before ~MonitorControlOp
+   * Workaround for [db_cancel_event()](https://github.com/epics-base/epics-base/issues/423) bug.
+* ioc: Fix typo preventing processing of DBR_STRING fields.
+* ioc: fix group put always `dbProcess()`.
+* ioc: fix block=true to DBF_ENUM.
+* ioc: actually require +putorder to PUT.
+* ioc: group put w/o effect is an error.
+* ioc: accept record._options.process as bool
+* ioc: group avoid post() empty events
+
+1.2.3 (Sept 2023)
+-----------------
+
+* Add ``$PVXS_ENABLE_IPV6`` environment variable.  Set ``PVXS_ENABLE_IPV6=NO`` to disable usage of IPv6.
+* IOC: A warning is printed if a group definition includes no ``+trigger`` mappings.
+       This is likely a mis-configuration by omission which will produce more monitor updates than expected.
+* `pvxs::server::ConnectOp::error` no longer blocks.
+* Add `pvxs::target_information`.
+* IOC: fill in ``display.precision``.
+* Add :ref:`understandinggroups` section.
+* Add `pvxs::nt::NTTable` helper.
+* Clarify some exception messages.
+* Add `pvxs::ioc::testPrepare`.
+
+1.2.2 (June 2023)
+-----------------
+
+* IOC: improve long string detection.
+* Changes to Tree output format for ``Value``.
+* Applied various bug fixes for issued detected by static analysis.  All believed to be minor.
+
+1.2.1 (June 2023)
+-----------------
+
+* Quiet erroneous MONITOR exceeds window size warning message on ``finish()``.
+* Fix incomplete py build
+* Add Python 3.11 builds (Alex Wells)
+
+1.2.0 (May 2023)
+----------------
+
+* server: fix default monitor queueSize to 4
+* improve localhost multicast forwarding
+* server: bind both wildcard for UDP
+* update bundled libevent
+* Add `pvxs::nt::NTScalar::form`.
+* NTEnum add ``display.description``
+* client: schedule initial search use separate event from the generic work queue.  (Thomas Ives)
+* client: re-define the meaning of poke()
+* server: fix ``stats(reset=true)``
+* prevent simple ``Any`` self-assignment
+* ``Value::copyIn()`` (also ``from()`` and ``operator =``) add ``Array`` -> ``Array`` w/ implied alloc+convert
+* client: fix batch pop() of exception
+* fix monitor pipeline and ``finish()``
+* server: add MonitorStat::nSquash
+* Add *feature preview* of :ref:`qsrv2` IOC server functionality.
+
+1.1.4 (April 2023)
 ------------------
+
+* client: fix delta sync of Compound.  Regression in 1.1.0.
+* Add wrappers for some libevent socket manipulations as :ref:`expertapi`.
+* Improve diff output of `testStrEq`.
+* msvc build compat.  ``/wd*`` compiler flags sometimes interpreted as paths.
+
+1.1.3 (Mar 2023)
+----------------
+
+* Fix `pvxs::Value::nmembers` which erroneously returned ``0`` for ``StructA`` and ``UnionA``.
+* Fix `pvxs::Value::unmark` where ``parent=true`` caused corruption.
+* Change to "magic" automatic ``Union`` member selection during assignment.
+* Fix `pvxs::shared_array::convertTo` converting ``Float64`` to ``Float32`` caused corruption.
+* Fix TypeDef(const Value& val) for Union/UnionA/StructA
+* Fix unsigned handling
+* server: rework cleanup of connection, channel, and operation
+
+1.1.2 (Feb 2023)
+----------------
+
+* SigInt fix disarm
+* Value fix delta output format to actually show delta.
+* add `pvxs::shared_array::thaw()`
+* `pvxs::Value::lookup()` throw NoField
+* Require ``setuptools_dso>=2.7a1``.
 
 1.1.1 (Dec 2022)
 ----------------
@@ -62,7 +170,7 @@ Release Notes
 * PVXS now attempts to fanout unicast searches through the loopback interface, and
   to handle ``CMD_ORIGIN_TAG`` messages (aka. the local multicast hack).
 * Add `pvxs::client::Context::discover` to enumerate and track PVA Servers.
-* ``pvxlist`` add "continous" mode.  (eg. ``pvxlist -v -w 0``)
+* ``pvxlist`` add "continuous" mode.  (eg. ``pvxlist -v -w 0``)
   To immediately Discover new servers, then continue listening for Beacons to detect
   as server go up and down (like ``casw``).
   Also, to be gentler on your network, add ``-P`` to skip initial Discovery ping,

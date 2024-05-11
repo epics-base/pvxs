@@ -174,6 +174,9 @@ struct SubscriptionStat {
 
 //! Handle for monitor subscription
 struct PVXS_API Subscription {
+    Subscription() = default;
+    Subscription(const Subscription&) = delete;
+    Subscription& operator=(const Subscription&) = delete;
     virtual ~Subscription() =0;
 
 protected:
@@ -1033,6 +1036,7 @@ struct PVXS_API Config {
 
 private:
     bool BE = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
+    bool UDP = true;
 public:
 
     // compat
@@ -1073,6 +1077,8 @@ public:
     // for protocol compatibility testing
     inline Config& overrideSendBE(bool be) { BE = be; return *this; }
     inline bool sendBE() const { return BE; }
+    inline Config& overrideShareUDP(bool share) { UDP = share; return *this; }
+    inline bool shareUDP() const { return UDP; }
 #endif
 };
 

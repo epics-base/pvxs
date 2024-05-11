@@ -54,7 +54,7 @@ struct PRBase::Args
         for(auto& name : names) {
             auto it = values.find(name);
             if(it==values.end())
-                throw std::logic_error("uriArgs() names vs. values mis-match");
+                throw std::logic_error("uriArgs() names vs. values mismatch");
 
             auto& value = it->second.first;
 
@@ -115,6 +115,8 @@ struct GPROp : public OperationBase
     std::function<void(Result&&)> done;
     std::function<void (const Value&)> onInit;
     Value pvRequest;
+    // For RPC, the user provided argument Value
+    // For GET, PUT a duplicate of RequestInfo::prototype
     Value arg;
     Result result;
     bool getOput = false;
@@ -220,7 +222,7 @@ struct GPROp : public OperationBase
                 self->arg = std::move(a);
 
             } else if(put && self->op==Put) {
-                self->builder = [a](Value&&) -> Value {
+                self->builder = [a](Value&&) noexcept -> Value {
                     // caller should be passing a Value of the correct prototype
                     // given through onInit().
                     return a;
@@ -241,7 +243,7 @@ struct GPROp : public OperationBase
     }
     void _reExecPut(const Value& arg, std::function<void(client::Result&&)>&& resultcb) override final
     {
-        if(op!=Get && op!=Put) {
+        if(op!=Put) {
             throw std::logic_error("reExecPut() only meaningful for .put()");
 
         } else if(!arg) {
@@ -383,6 +385,7 @@ struct GPROp : public OperationBase
         }
     }
 };
+DEFINE_INST_COUNTER(GPROp);
 
 } // namespace
 
@@ -443,8 +446,10 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
             // GET reply
 
             data = info->prototype.cloneEmpty();
-            if(data)
+            if(data) {
                 from_wire_valid(M, rxRegistry, data);
+                cache_sync(info->prototype, data);
+            }
         }
     }
 
@@ -502,7 +507,7 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
 
         gpr->state = GPROp::Idle;
         if(cmd==CMD_PUT || cmd==CMD_GET)
-            gpr->arg = data; // save for later use in sendReply()
+            gpr->arg = data; // save for later use in sendReply() when RequestInfo not available
 
         try {
             if(gpr->onInit)
@@ -521,6 +526,9 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
         return;
 
     } else if(gpr->state==GPROp::GetOPut) {
+
+        gpr->arg.assign(data);
+
         if(gpr->autoExec) {
             // proceed to execute put
             gpr->state = GPROp::BuildPut;
@@ -532,8 +540,6 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
             gpr->notify();
             return;
         }
-
-        info->prototype.assign(data);
 
     } else if(gpr->state==GPROp::Exec) {
         // data always empty for CMD_PUT
@@ -563,8 +569,8 @@ void Connection::handle_RPC() { handle_GPR(CMD_RPC); }
 
 static
 std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context,
-                                     std::string name, // need to capture by value
-                                     std::string server,
+                                     const std::string& name,
+                                     const std::string& server,
                                      std::shared_ptr<GPROp>&& op,
                                      bool syncCancel)
 {
@@ -581,18 +587,23 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
                            // on worker
 
                            // ordering of dispatch()/call() ensures creation before destruction
-                           assert(op->chan);
-                           op->_cancel(true);
+                           if(op->chan)
+                               op->_cancel(true);
                        }, std::move(temp)));
     });
 
     context->tcp_loop.dispatch([internal, context, name, server]() {
         // on worker
 
-        internal->chan = Channel::build(context, name, server);
+        try {
+            internal->chan = Channel::build(context, name, server);
 
-        internal->chan->pending.push_back(internal);
-        internal->chan->createOperations();
+            internal->chan->pending.push_back(internal);
+            internal->chan->createOperations();
+        }catch(...){
+            internal->result = Result(std::current_exception());
+            internal->notify();
+        }
     });
 
     return external;

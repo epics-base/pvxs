@@ -16,9 +16,18 @@ DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
 namespace {
+server::OpBase::op_t
+cmd2op(pva_app_msg_t cmd){
+    switch(cmd) {
+    case CMD_GET: return server::OpBase::Get; break;
+    case CMD_PUT: return server::OpBase::Put; break;
+    case CMD_RPC: return server::OpBase::RPC; break;
+    default: return server::OpBase::None; break; // should never be reached
+    }
+}
 
 // generalized Get/Put/RPC
-struct ServerGPR : public ServerOp
+struct ServerGPR final : public ServerOp
 {
     ServerGPR(const std::shared_ptr<ServerChan>& chan, uint32_t ioid)
         :ServerOp(chan, ioid)
@@ -110,22 +119,15 @@ struct ServerGPR : public ServerOp
         ch->statTx += conn->enqueueTxBody(cmd);
 
         if(state == ServerOp::Dead) {
-            ch->opByIOID.erase(ioid);
-            auto it = conn->opByIOID.find(ioid);
-            if(it!=conn->opByIOID.end()) {
-                auto self(it->second);
-                conn->opByIOID.erase(it);
-
-                if(self->onClose)
-                    conn->iface->server->acceptor_loop.dispatch([self](){
-                        self->onClose("");
-                    });
-
-            } else {
-                assert(false); // really shouldn't happen
-            }
-            conn->opByIOID.erase(ioid);
+            cleanup();
         }
+    }
+
+    void cleanup() override final
+    {
+        ServerOp::cleanup();
+        onPut = nullptr;
+        onGet = nullptr;
     }
 
     void show(std::ostream& strm) const override final
@@ -143,8 +145,8 @@ struct ServerGPR : public ServerOp
         }
     }
 
-    pva_app_msg_t cmd;
-    uint8_t subcmd; // valid when state==Executing or Creating
+    pva_app_msg_t cmd = pva_app_msg_t(-1); //spoil
+    uint8_t subcmd = 0u; // valid when state==Executing or Creating
     bool lastRequest=false;
 
     std::shared_ptr<const FieldDesc> type;
@@ -157,6 +159,7 @@ struct ServerGPR : public ServerOp
 
     INST_COUNTER(ServerGPR);
 };
+DEFINE_INST_COUNTER(ServerGPR);
 
 
 struct ServerGPRConnect : public server::ConnectOp
@@ -167,19 +170,10 @@ struct ServerGPRConnect : public server::ConnectOp
                      const std::string& name,
                      const Value& request,
                      const std::weak_ptr<ServerGPR>& op)
-        :server(server)
+        :server::ConnectOp(name, conn->cred, cmd2op(cmd), request)
+        ,server(server)
         ,op(op)
-    {
-        switch(cmd) {
-        case CMD_GET: _op = Get; break;
-        case CMD_PUT: _op = Put; break;
-        case CMD_RPC: _op = RPC; break;
-        default: _op = None; break; // should never be reached
-        }
-        _name = name;
-        _cred = conn->cred;
-        _pvRequest = request;
-    }
+    {}
     virtual ~ServerGPRConnect() {
         error("Op Create implied error");
     }
@@ -216,7 +210,8 @@ struct ServerGPRConnect : public server::ConnectOp
         auto serv = server.lock();
         if(!serv)
             return;
-        serv->acceptor_loop.call([this, &msg](){
+        auto op(this->op);
+        serv->acceptor_loop.dispatch([op, msg](){
             if(auto oper = op.lock()) {
                 if(oper->state==ServerOp::Creating)
                     oper->doReply(Value(), msg);
@@ -260,6 +255,7 @@ struct ServerGPRConnect : public server::ConnectOp
 
     INST_COUNTER(ServerGPRConnect);
 };
+DEFINE_INST_COUNTER(ServerGPRConnect);
 
 struct ServerGPRExec : public server::ExecOp
 {
@@ -269,19 +265,10 @@ struct ServerGPRExec : public server::ExecOp
                   const std::string& name,
                   //const Value& request,
                   const std::shared_ptr<ServerGPR>& op)
-        :server(server)
+        :server::ExecOp(name, conn->cred, cmd2op(cmd), op->pvRequest)
+        ,server(server)
         ,op(op)
-    {
-        switch(cmd) {
-        case CMD_GET: _op = Get; break;
-        case CMD_PUT: _op = Put; break;
-        case CMD_RPC: _op = RPC; break;
-        default: _op = None; break; // should never be reached
-        }
-        _name = name;
-        _cred = conn->cred;
-        _pvRequest = op->pvRequest;
-    }
+    {}
     virtual ~ServerGPRExec() {}
 
     virtual void reply() override final
@@ -294,7 +281,8 @@ struct ServerGPRExec : public server::ExecOp
         auto serv = server.lock();
         if(!serv)
             return;
-        serv->acceptor_loop.call([this, &val](){
+        auto op(this->op);
+        serv->acceptor_loop.dispatch([op, val](){
             if(auto oper = op.lock()) {
                 oper->doReply(val, std::string());
             }
@@ -308,7 +296,8 @@ struct ServerGPRExec : public server::ExecOp
         auto serv = server.lock();
         if(!serv)
             return;
-        serv->acceptor_loop.call([this, &msg](){
+        auto op(this->op);
+        serv->acceptor_loop.dispatch([op, msg](){
             if(auto oper = op.lock()) {
                 oper->doReply(Value(), msg);
             }
@@ -340,6 +329,7 @@ struct ServerGPRExec : public server::ExecOp
 
     INST_COUNTER(ServerGPRExec);
 };
+DEFINE_INST_COUNTER(ServerGPRExec);
 
 } // namespace
 
@@ -474,7 +464,8 @@ void ServerConn::handle_GPR(pva_app_msg_t cmd)
             op->subcmd = subcmd;
             op->state = ServerOp::Executing;
 
-            log_debug_printf(connsetup, "Client %s op%x executing\n", peerName.c_str(), cmd);
+            log_debug_printf(connsetup, "Client %s op%x executing %s\n",
+                             peerName.c_str(), cmd, chan->name.c_str());
 
             try {
                 if(cmd==CMD_RPC && isput) {

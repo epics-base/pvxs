@@ -242,8 +242,8 @@ int main(int argc, char *argv[])
         auto manager(UDPManager::instance());
         std::vector<std::unique_ptr<UDPListener>> listeners;
 
-        auto onS = [&app](const UDPManager::Search& msg) {app.onSearch(msg);};
-        auto onB = [&app](const UDPManager::Beacon& msg) {app.onBeacon(msg);};
+        auto onSearch = [&app](const UDPManager::Search& msg) {app.onSearch(msg);};
+        auto onBeacon = [&app](const UDPManager::Beacon& msg) {app.onBeacon(msg);};
 
         {
             int opt;
@@ -252,8 +252,8 @@ int main(int argc, char *argv[])
                 case 'L':
                 {
                     SockEndpoint ep(parseEP(optarg, conf));
-                    listeners.push_back(manager.onSearch(ep, onS));
-                    listeners.push_back(manager.onBeacon(ep, onB));
+                    listeners.push_back(manager.onSearch(ep, onSearch));
+                    listeners.push_back(manager.onBeacon(ep, onBeacon));
                     break;
                 }
                 case 'F':
@@ -266,9 +266,7 @@ int main(int argc, char *argv[])
                     usage(argv[0]);
                     return 0;
                 case 'V':
-                    std::cout<<version_str()<<"\n";
-                    std::cout<<EPICS_VERSION_STRING<<"\n";
-                    std::cout<<"libevent "<<event_get_version()<<std::endl;
+                    std::cout<<pvxs::version_information;
                     return 0;
                 default:
                     usage(argv[0]);

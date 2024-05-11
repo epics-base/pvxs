@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <ostream>
+#include <sstream>
 
 #include <epicsUnitTest.h>
 #include <testMain.h>
@@ -204,11 +205,93 @@ void testTestEq()
     testStrMatch("[Hh]ello [Ww]orld", "hello world");
 }
 
+void testStrDiff()
+{
+    testShow()<<__func__;
+
+    const auto testD = [](const char *lhs, const char *rhs, const char *expect) -> bool {
+        std::ostringstream strm;
+        strDiff(strm, lhs, rhs);
+        auto actual(strm.str());
+        return testEq(expect, actual).operator bool();
+    };
+
+    testD("", "", "");
+    testD("one", "one", "  \"one\"\n");
+    testD("one\n",
+          "one\n",
+          "  \"one\"\n");
+    testD("one\n",
+          "two\n",
+          "- \"one\"\n"
+          "+ \"two\"\n");
+    testD("one\n"
+          " aaa\n"
+          "two\n",
+          "one\n"
+          " bbb\n"
+          "two\n",
+          "  \"one\"\n"
+          "- \" aaa\"\n"
+          "+ \" bbb\"\n"
+          "  \"two\"\n");
+    testD("one\n"
+          " aaa\n"
+          "two\n",
+          "one\n"
+          "two\n",
+          "  \"one\"\n"
+          "- \" aaa\"\n"
+          "  \"two\"\n");
+    testD("one\n"
+          "two\n",
+          "one\n"
+          " bbb\n"
+          "two\n",
+          "  \"one\"\n"
+          "+ \" bbb\"\n"
+          "  \"two\"\n");
+    testD("one\n"
+          " aaa\n"
+          "two\n"
+          " xxx\n",
+          "one\n"
+          " bbb\n"
+          "two\n"
+          " yyy\n",
+          "  \"one\"\n"
+          "- \" aaa\"\n"
+          "+ \" bbb\"\n"
+          "  \"two\"\n"
+          "- \" xxx\"\n"
+          "+ \" yyy\"\n");
+}
+
+size_t onceCount[2];
+
+template<size_t I>
+void onceInc() {
+    onceCount[I]++;
+}
+
+void testOnce()
+{
+    testShow()<<__func__;
+
+    threadOnce<onceInc<0>>();
+    threadOnce<onceInc<1>>();
+    threadOnce<onceInc<0>>();
+    threadOnce<onceInc<1>>();
+
+    testEq(onceCount[0], 1u);
+    testEq(onceCount[1], 1u);
+}
+
 } // namespace
 
 MAIN(testutil)
 {
-    testPlan(25);
+    testPlan(35);
     testTrue(version_abi_check())<<" 0x"<<std::hex<<PVXS_VERSION<<" ~= 0x"<<std::hex<<PVXS_ABI_VERSION;
     testServerGUID();
     testFill();
@@ -216,5 +299,7 @@ MAIN(testutil)
     testSpamMany();
     testAccount();
     testTestEq();
+    testStrDiff();
+    testOnce();
     return testDone();
 }

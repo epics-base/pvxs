@@ -1,0 +1,67 @@
+record(ai, "test:ai") {
+    field(DESC, "Analog input")
+    field(EGU , "arb")
+    field(PREC, "1")
+    field(HHSV, "INVALID")
+    field(HSV, "MAJOR")
+    field(HIHI, "100")
+    field(HIGH, "6")
+    field(LOW, "4")
+    field(LOLO, "0")
+    field(LSV, "MINOR")
+    field(LLSV, "MAJOR")
+    field(HOPR, "100")
+    field(LOPR, "0")
+    field(VAL, "42.2")
+    field(RVAL, "123")
+    info(Q:form, "Engineering")
+}
+record(ai, "test:ai2") {
+    field(INP , "test:ai NPP")
+}
+record(ai, "test:this:is:a:really:really:long:record:name") {}
+record(ai, "test:src") {
+    field(INP , "test:this:is:a:really:really:long:record:name NPP")
+}
+record(waveform, "test:long:str:wf") {
+    field(FTVL, "CHAR")
+    field(NELM, "128")
+    info(Q:form, "String")
+}
+record(bo, "test:bo") {
+    field(ZNAM, "Zero")
+    field(ONAM, "One")
+}
+record(bo, "test:log") {
+    field(ZNAM, "Something")
+    field(ONAM, "Else")
+}
+record(waveform, "test:wf:f64") {
+    field(FTVL, "DOUBLE")
+    field(NELM, "10")
+}
+record(waveform, "test:wf:i32") {
+    field(FTVL, "LONG")
+    field(NELM, "10")
+}
+record(waveform, "test:wf:s") {
+    field(FTVL, "STRING")
+    field(NELM, "10")
+}
+record(calc, "test:counter") {
+    field(CALC, "VAL+1")
+}
+record(calcout, "test:slowmo") {
+    field(ODLY, "1")
+    field(CALC, "VAL+1")
+}
+record(longout, "test:ro") {
+    field(ASG, "RO")
+}
+record(longout, "test:disp") {
+    field(DISP, "1")
+}
+record(longin, "test:nsec") {
+    field(VAL , "100")
+    info(Q:time:tag, "nsec:lsb:8")
+}

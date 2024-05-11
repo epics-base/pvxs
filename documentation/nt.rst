@@ -15,7 +15,25 @@ Library of common type definitions. ::
    ntscalar
 
 .. note::
-    The nt::* factories are expensive.  Avoid repeated use with `pvxs::Value::cloneEmpty`.
+    The nt::* factories are relatively expensive.
+    Call them once, then use `pvxs::Value::cloneEmpty` on the result.
+
+.. _ntcompat:
+
+Forward Compatibility
+---------------------
+
+The `Value` objects returned by the ``NT*`` type builders are considered part of the API
+for the purposes of the :ref:`relpolicy`.
+Addition of a field is considered a compatible change.
+An incompatible change being:
+
+- Removal of a structure field
+- A field type change which restricts allowed assignments.
+  eg. changing ``int32_t`` -> ``string`` would be compatible, but ``string`` -> ``int32_t`` would not.
+
+The status of change to a struct ID string are currently undefined with respect to compatibility
+as the consequences have not yet been explored in practice.
 
 .. _time_t:
 
@@ -35,6 +53,9 @@ Commonly used sub-structure to represent a time
 **"nanoseconds"**
     Number of nanoseconds since the start of the second.
 
+**"timeStamp.userTag"**
+    Extra site-specific information which may provide context for the seconds/nanoseconds value.
+
 .. _alarm_t:
 
 alarm_t
@@ -48,7 +69,7 @@ alarm_t
 
     The meaning of Minor and Major are contextual and may be different for each PV.
     An Invalid alarm severity means that the value field should not be taken as
-    a meaningful represention of eg. the quantity being measured.  Typically,
+    a meaningful representation of eg. the quantity being measured.  Typically,
     it reflects the most recent valid value.
 
     A UI client may change the state of a widget displaying a value which is alarming
@@ -75,6 +96,14 @@ NTNDArray
 Container for image data used by areaDetector.
 
 .. doxygenstruct:: pvxs::nt::NTNDArray
+    :members:
+
+NTTable
+-------
+
+Container for tabular data.
+
+.. doxygenstruct:: pvxs::nt::NTTable
     :members:
 
 NTURI

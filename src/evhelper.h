@@ -56,15 +56,47 @@ struct default_delete<evbuffer> {
 
 namespace pvxs {namespace impl {
 
-//! unique_ptr which is never constructed with NULL
 template<typename T>
-struct owned_ptr : public std::unique_ptr<T>
+struct ev_delete;
+#define DEFINE_DELETE(TYPE) \
+template<> struct ev_delete<TYPE> { \
+    inline void operator()(TYPE* ev) { TYPE ## _free(ev); } \
+}
+DEFINE_DELETE(event_config);
+DEFINE_DELETE(event_base);
+DEFINE_DELETE(event);
+DEFINE_DELETE(evconnlistener);
+DEFINE_DELETE(bufferevent);
+DEFINE_DELETE(evbuffer);
+#undef DEFINE_DELETE
+
+//! unique_ptr which is never constructed with NULL
+template<typename T, typename D>
+struct owned_ptr : public std::unique_ptr<T, D>
 {
+    typedef std::unique_ptr<T, D> base_t;
     constexpr owned_ptr() {}
-    explicit owned_ptr(T* ptr) : std::unique_ptr<T>(ptr) {
+    constexpr owned_ptr(std::nullptr_t np) : base_t(np) {}
+    explicit owned_ptr(const char* file, int line, T* ptr) : base_t(ptr) {
         if(!*this)
-            throw std::bad_alloc();
+            throw loc_bad_alloc(file, line);
     }
+
+    // for functions which return a pointer in an argument
+    //   int some(T** presult); // store *presult = output
+    // use like
+    //   owned_ptr<T> x;
+    //   some(x.acquire());
+    struct acquisition {
+        base_t* o;
+        T* ptr = nullptr;
+        operator T** () { return &ptr; }
+        constexpr acquisition(base_t* o) :o(o) {}
+        ~acquisition() {
+            o->reset(ptr);
+        }
+    };
+    acquisition acquire() { return acquisition{this}; }
 };
 
 /* It seems that std::function<void()>(Fn&&) from gcc (circa 8.3) and clang (circa 7.0)
@@ -88,14 +120,16 @@ struct owned_ptr : public std::unique_ptr<T>
  */
 namespace mdetail {
 struct PVXS_API VFunctor0 {
+    VFunctor0() = default;
+    VFunctor0(VFunctor0&) = delete;
+    VFunctor0(const VFunctor0&) = delete;
+    VFunctor0& operator=(const VFunctor0&) = delete;
     virtual ~VFunctor0() =0;
     virtual void invoke() =0;
 };
 template<typename Fn>
-struct Functor0 : public VFunctor0 {
+struct Functor0 final : public VFunctor0 {
     Functor0() = default;
-    Functor0(const Functor0&) = delete;
-    Functor0(Functor0&&) = default;
     Functor0(Fn&& fn) : fn(std::move(fn)) {}
     virtual ~Functor0() {}
 
@@ -178,11 +212,14 @@ public:
     event_base* base = nullptr;
 };
 
-typedef owned_ptr<event_config> evconfig;
-typedef owned_ptr<event> evevent;
-typedef owned_ptr<evconnlistener> evlisten;
-typedef owned_ptr<bufferevent> evbufferevent;
-typedef owned_ptr<evbuffer> evbuf;
+template<typename T>
+using ev_owned_ptr = owned_ptr<T, ev_delete<T>>;
+typedef ev_owned_ptr<event_config> evconfig;
+typedef ev_owned_ptr<event_base> evbaseptr;
+typedef ev_owned_ptr<event> evevent;
+typedef ev_owned_ptr<evconnlistener> evlisten;
+typedef ev_owned_ptr<bufferevent> evbufferevent;
+typedef ev_owned_ptr<evbuffer> evbuf;
 
 PVXS_API
 void to_wire(Buffer& buf, const SockAddr& val);
@@ -199,10 +236,10 @@ struct PVXS_API evsocket
     constexpr evsocket() noexcept :sock(-1), af(AF_UNSPEC) {}
 
     // construct from a valid (not -1) socket
-    explicit evsocket(int af, evutil_socket_t sock);
+    explicit evsocket(int af, evutil_socket_t sock, bool blocking=false);
 
     // create a new socket
-    evsocket(int, int, int);
+    evsocket(int af, int type, int proto, bool blocking=false);
 
     // movable
     evsocket(evsocket&& o) noexcept;
@@ -253,7 +290,7 @@ struct PVXS_API evsocket
     static
     bool canIPv6;
 
-    static bool init_canIPv6();
+    static bool init_canIPv6() noexcept;
 
     enum ipstack_t {
         Linsock,
@@ -280,7 +317,7 @@ struct PVXS_API IfaceMap {
     // returns 0 if not found
     uint64_t index_of(const std::string& name);
     // is this a valid interface or broadcast address?
-    bool is_address(const SockAddr& addr);
+    bool is_iface(const SockAddr& addr);
     // is this a valid interface or broadcast address?
     bool is_broadcast(const SockAddr& addr);
     // look up interface address.  useful for IPV4.  returns AF_UNSPEC if not found
@@ -300,6 +337,7 @@ struct PVXS_API IfaceMap {
         Iface(const std::string& name, uint64_t index, bool isLO) :name(name), index(index), isLO(isLO) {}
     };
 
+    SockAttach attach;
     epicsMutex lock;
     std::map<uint64_t, Iface> byIndex;
     std::map<std::string, Iface*> byName;

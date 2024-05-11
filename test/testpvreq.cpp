@@ -160,8 +160,7 @@ void testEmpty()
     testShow()<<req;
     testStrEq(std::string(SB()<<req),
         "struct {\n"
-        "    struct {\n"
-        "    } field\n"
+        "    struct {} field\n"
         "}\n"
     );
 }
@@ -181,11 +180,9 @@ void testAssemble()
     testStrEq(std::string(SB()<<req),
         "struct {\n"
         "    struct {\n"
+        "        struct {} foo\n"
         "        struct {\n"
-        "        } foo\n"
-        "        struct {\n"
-        "            struct {\n"
-        "            } baz\n"
+        "            struct {} baz\n"
         "        } bar\n"
         "    } field\n"
         "    struct {\n"
@@ -209,8 +206,7 @@ void testParseEmpty()
     testShow()<<req;
     testStrEq(std::string(SB()<<req),
         "struct {\n"
-        "    struct {\n"
-        "    } field\n"
+        "    struct {} field\n"
         "}\n"
     );
 }
@@ -227,8 +223,7 @@ void testParseValue()
     testStrEq(std::string(SB()<<req),
         "struct {\n"
         "    struct {\n"
-        "        struct {\n"
-        "        } value\n"
+        "        struct {} value\n"
         "    } field\n"
         "}\n"
     );
@@ -246,11 +241,9 @@ void testParse1()
     testStrEq(std::string(SB()<<req),
         "struct {\n"
         "    struct {\n"
+        "        struct {} foo\n"
         "        struct {\n"
-        "        } foo\n"
-        "        struct {\n"
-        "            struct {\n"
-        "            } baz\n"
+        "            struct {} baz\n"
         "        } bar\n"
         "    } field\n"
         "    struct {\n"
@@ -275,11 +268,9 @@ void testParse2()
     testStrEq(std::string(SB()<<req),
         "struct {\n"
         "    struct {\n"
+        "        struct {} foo\n"
         "        struct {\n"
-        "        } foo\n"
-        "        struct {\n"
-        "            struct {\n"
-        "            } baz\n"
+        "            struct {} baz\n"
         "        } bar\n"
         "    } field\n"
         "    struct {\n"

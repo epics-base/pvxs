@@ -283,7 +283,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
         case TypeCode::Union:
             if(!fld) {
                 // implied NULL Union member
-                to_wire(buf, Size{size_t(-1)});
+                to_wire(buf, Selector{-1});
 
             } else {
                 size_t index = 0u;
@@ -294,7 +294,7 @@ void to_wire_field(Buffer& buf, const FieldDesc* desc, const std::shared_ptr<con
                 }
                 if(index>=desc->miter.size())
                     throw std::logic_error("Union contains non-member type");
-                to_wire(buf, Size{index});
+                to_wire(buf, Selector{ev_ssize_t(index)});
                 to_wire_full(buf, fld);
             }
             return;
@@ -491,10 +491,10 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
     case StoreType::UInteger: {
         auto& fld = store->as<uint64_t>();
         switch(desc->code.code) {
-        case TypeCode::UInt8:  fld = from_wire_as<int8_t>(buf); return;
-        case TypeCode::UInt16: fld = from_wire_as<int16_t>(buf); return;
-        case TypeCode::UInt32: fld = from_wire_as<int32_t>(buf); return;
-        case TypeCode::UInt64: fld = from_wire_as<int64_t>(buf); return;
+        case TypeCode::UInt8:  fld = from_wire_as<uint8_t>(buf); return;
+        case TypeCode::UInt16: fld = from_wire_as<uint16_t>(buf); return;
+        case TypeCode::UInt32: fld = from_wire_as<uint32_t>(buf); return;
+        case TypeCode::UInt64: fld = from_wire_as<uint64_t>(buf); return;
         default: break;
         }
     }
@@ -519,19 +519,22 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         auto& fld = store->as<Value>();
         switch (desc->code.code) {
         case TypeCode::Union: {
-            Size select{};
+            Selector select{};
             from_wire(buf, select);
-            if(select.size==size_t(-1)) {
+            if(select.isnull()) {
                 fld = Value();
                 return;
 
-            } else if(select.size < desc->miter.size()) {
+            } else if(select.index() < desc->miter.size()) {
                 std::shared_ptr<const FieldDesc> stype(store->top->desc,
-                                                       &desc->members[desc->miter[select.size].second]); // alias
+                                                       &desc->members[desc->miter[select.index()].second]); // alias
                 fld = Value::Helper::build(stype, store, desc);
 
                 from_wire_full(buf, ctxt, fld);
                 return;
+
+            } else { // invalid selection
+                buf.fault(__FILE__, __LINE__);
             }
         }
             break;
@@ -626,15 +629,15 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
 
             for(auto& elem : arr) {
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
-                    Size select{};
+                    Selector select{};
                     from_wire(buf, select);
 
-                    if(select.size==size_t(-1)) {
+                    if(select.isnull()) {
                         // null element.  treated the same as 0 case (which is what actually happens)
 
-                    } else if(select.size < cdesc->miter.size()) {
+                    } else if(select.index() < cdesc->miter.size()) {
                         std::shared_ptr<const FieldDesc> stype(store->top->desc,
-                                                               &cdesc->members[cdesc->miter[select.size].second]); // alias
+                                                               &cdesc->members[cdesc->miter[select.index()].second]); // alias
                         elem = Value::Helper::build(stype, store, desc);
 
                         from_wire_full(buf, ctxt, elem);

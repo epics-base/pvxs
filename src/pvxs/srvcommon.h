@@ -1,3 +1,8 @@
+/**
+ * Copyright - See the COPYRIGHT that is included with this distribution.
+ * pvxs is distributed subject to a Software License Agreement found
+ * in file LICENSE that is included with this distribution.
+ */
 #ifndef PVXS_SRVCOMMON_H
 #define PVXS_SRVCOMMON_H
 
@@ -62,9 +67,9 @@ struct PVXS_API OpBase {
         RPC,  //!< A RPC operation
     };
 protected:
-    std::string _name;
-    std::shared_ptr<const ClientCredentials> _cred;
-    op_t _op;
+    const std::string _name;
+    const std::shared_ptr<const ClientCredentials> _cred;
+    const op_t _op;
 public:
     //! The Client endpoint address in "X.X.X.X:Y" format.
     const std::string& peerName() const { return _cred->peer; }
@@ -76,6 +81,14 @@ public:
     //! Operation type
     op_t op() const { return _op; }
 
+    OpBase(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op)
+        :_name(name)
+        ,_cred(cred)
+        ,_op(op)
+    {}
+    OpBase(const OpBase&) = delete;
+    OpBase& operator=(const OpBase&) = delete;
     virtual ~OpBase() =0;
 };
 
@@ -86,18 +99,27 @@ struct PVXS_API ExecOp : public OpBase {
     //! Issue a reply with data.  For a GET or RPC  (or PUT/Get)
     virtual void reply(const Value& val) =0;
     //! Indicate the request has resulted in an error.
+    //! @since 1.2.3 Does not block
     virtual void error(const std::string& msg) =0;
 
     //! Callback invoked if the peer cancels the operation before reply() or error() is called.
     virtual void onCancel(std::function<void()>&&) =0;
 
 protected:
-    Value _pvRequest;
+    const Value _pvRequest;
 public:
     //! Access to pvRequest blob
     //! @since 0.2.0
     const Value& pvRequest() const { return _pvRequest; }
 
+    ExecOp(const std::string& name,
+           const std::shared_ptr<const ClientCredentials>& cred, op_t op,
+           const Value& pvRequest)
+        :OpBase(name, cred, op)
+        ,_pvRequest(pvRequest)
+    {}
+    ExecOp(const ExecOp&) = delete;
+    ExecOp& operator=(const ExecOp&) = delete;
     virtual ~ExecOp();
 
 #ifdef PVXS_EXPERT_API_ENABLED

@@ -1,8 +1,10 @@
-﻿/**
+/**
  * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
+
+#include <atomic>
 
 #include "pvxs/version.h"
 
@@ -18,12 +20,18 @@
 #endif
 
 #include <epicsUnitTest.h>
+#include <epicsString.h>
+#define epicsStdioStdStreams
+#define epicsStdioStdPrintfEtc
+#include <epicsStdio.h>
 
 #include "pvxs/unittest.h"
 #include "utilpvt.h"
 #include "udp_collector.h"
 
 namespace pvxs {
+
+static std::atomic<bool> thisIsATest{false};
 
 void testSetup()
 {
@@ -35,7 +43,36 @@ void testSetup()
     if(prev)
         testDiag("SetErrorMode() disables 0x%x\n", (unsigned)prev);
 #endif
+    thisIsATest = true;
 }
+
+namespace impl {
+bool inUnitTest()
+{
+    return thisIsATest;
+}
+
+loc_bad_alloc::loc_bad_alloc(const char *file, int line)
+{
+    if(auto sep = strrchr(file, '/')) {
+        file = sep+1;
+    }
+#ifdef _WIN32
+    if(auto sep = strrchr(file, '\\')) {
+        file = sep+1;
+    }
+#endif
+    epicsSnprintf(msg, sizeof(msg)-1u, "bad_alloc %s:%d", file, line);
+}
+
+loc_bad_alloc::~loc_bad_alloc() {}
+
+const char* loc_bad_alloc::what() const noexcept
+{
+    return msg;
+}
+
+} // namespace impl
 
 void cleanup_for_valgrind()
 {
@@ -140,14 +177,6 @@ testCase& testCase::setPassMatch(const std::string& expr, const std::string& inp
 
 namespace detail {
 
-size_t findNextLine(const std::string& s, size_t pos=0u)
-{
-    size_t next = s.find_first_of('\n', pos);
-    if(next!=std::string::npos)
-        next++;
-    return next;
-}
-
 testCase _testStrTest(unsigned op, const char *sLHS, const char* rlhs, const char *sRHS, const char* rrhs)
 {
     bool eq;
@@ -159,45 +188,7 @@ testCase _testStrTest(unsigned op, const char *sLHS, const char* rlhs, const cha
         eq = strcmp(rlhs, rrhs)==0;
     testCase ret(eq==op);
     ret<<sLHS<<(op ? " == " : " != ")<<sRHS<<"\n";
-
-    std::string lhs(rlhs ? rlhs : "<null>");
-    std::string rhs(rrhs ? rrhs : "<null>");
-
-    size_t posL=0u, posR=0u;
-
-    while(posL<lhs.size() && posR<rhs.size()) {
-        size_t eolL = findNextLine(lhs, posL);
-        size_t eolR = findNextLine(rhs, posR);
-
-        auto L = lhs.substr(posL, eolL-posL);
-        auto R = rhs.substr(posR, eolR-posR);
-
-        if(L==R) {
-            ret<<"  \""<<escape(L)<<"\"\n";
-        } else {
-            ret<<"+ \""<<escape(R)<<"\"\n";
-            ret<<"- \""<<escape(L)<<"\"\n";
-        }
-
-        posL = eolL;
-        posR = eolR;
-    }
-
-    while(posR<rhs.size()) {
-        size_t eol = findNextLine(rhs, posR);
-        auto line = rhs.substr(posR, eol-posR);
-        ret<<"+ \""<<escape(line)<<"\"\n";
-
-        posR = eol;
-    }
-
-    while(posL<lhs.size()) {
-        size_t eol = findNextLine(lhs, posL);
-        auto line = lhs.substr(posL, eol-posL);
-        ret<<"- \""<<escape(line)<<"\"\n";
-
-        posL = eol;
-    }
+    strDiff(ret.stream(), rlhs, rrhs);
 
     return ret;
 }
@@ -206,7 +197,7 @@ testCase _testStrMatch(const char *spat, const std::string& pat, const char *sst
 {
     testCase ret;
     ret.setPassMatch(pat, str);
-    ret<<spat<<" (\""<<pat<<"\") match "<<str<<" (\""<<escape(str)<<"\")";
+    ret<<spat<<" (\""<<pat<<"\") match "<<sstr<<" (\""<<escape(str)<<"\")";
     return ret;
 }
 

@@ -31,8 +31,10 @@ namespace pvxs {namespace impl {
 DEFINE_LOGGER(logio, "pvxs.udp.io");
 DEFINE_LOGGER(logsetup, "pvxs.udp.setup");
 
-struct UDPCollector : public UDPManager::Search,
-                      public std::enable_shared_from_this<UDPCollector>
+DEFINE_INST_COUNTER(UDPListener);
+
+struct UDPCollector final : public UDPManager::Search,
+                            public std::enable_shared_from_this<UDPCollector>
 {
     UDPManager::Pvt* const manager;
     SockAddr bind_addr; // address our socket is bound to
@@ -59,8 +61,8 @@ struct UDPCollector : public UDPManager::Search,
     bool handle_one();
 
     enum origin_t {
-        Remote,    // received from interface other than loopback
-        Loopback,  // received through loopback
+        Remote,    // non-local sender
+        Local,     // sent from a local interface, including loopback
         OriginTag, // payload of CMD_ORIGIN_TAG
     };
 
@@ -91,6 +93,7 @@ public:
 
 
 struct UDPManager::Pvt {
+    SockAttach attach;
 
     evbase loop;
     IfaceMap& ifmap;
@@ -137,7 +140,8 @@ UDPCollector::UDPCollector(UDPManager::Pvt *manager, int af, uint16_t requested_
     ,lo_mcast_addr("224.0.0.128,1@127.0.0.1")
     ,lo_addr(SockAddr::loopback(bind_addr.family()))
     ,sock(af, SOCK_DGRAM, 0)
-    ,rx(event_new(manager->loop.base, sock.sock, EV_READ|EV_PERSIST, &handle_static, this))
+    ,rx(__FILE__, __LINE__,
+        event_new(manager->loop.base, sock.sock, EV_READ|EV_PERSIST, &handle_static, this))
     ,beaconMsg(src)
 {
     manager->loop.assertInLoop();
@@ -260,7 +264,7 @@ bool UDPCollector::handle_one()
     log_hex_printf(logio, Level::Debug, rxbuf, nrx, "UDP Rx %d, %s -> %s @%u (%s)\n",
             nrx, src.tostring().c_str(), dest.tostring().c_str(), unsigned(rx.dstif), bind_addr.tostring().c_str());
 
-    origin_t origin = manager->ifmap.has_address(rx.dstif, lo_addr) ? Loopback : Remote;
+    origin_t origin = manager->ifmap.is_iface(src) ? Local : Remote;
 
     process_one(dest, rxbuf, nrx, origin);
     return true;
@@ -315,7 +319,10 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
         }
         server.setPort(port);
 
-        if(M.good() && origin==Loopback && (flags&pva_search_flags::Unicast) && dest.family()==AF_INET) {
+        if(!M.good() || !(flags&pva_search_flags::Unicast) || dest.family()!=AF_INET) {
+            // invalid, bcast, or not ipv4
+
+        } else if(dest.compare(lo_mcast_addr.addr,false)!=0) {
             assert(buf==&this->buf[cmd_origin_tag_size]);
             // clear unicast flag in forwarded message
             *save_flags &= ~pva_search_flags::Unicast;
@@ -327,6 +334,13 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
             }
             forwardM(dest, buf, nrx);
             return;
+
+        } else {
+            /* refuse to re-forward.  Also, if received via. localhost as
+             * some PVA implementations don't prefix forwarded messages with CMD_ORIGIN_TAG
+             */
+            log_debug_printf(logio, "Ignore as originated for %s\n",
+                             dest.tostring().c_str());
         }
 
         // so far, only "tcp" transport has ever been seen.
@@ -378,6 +392,10 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
                     (L->searchCB)(*this);
                 }
             }
+
+        } else {
+            // not logged as CRIT to avoid error spam from malformed broadcast
+            log_debug_printf(logio, "Error decoding SEARCH%s", "\n");
         }
 
         break;
@@ -417,22 +435,21 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
         M.skip(head.len-16u, __FILE__, __LINE__);
 
         // only allow one CMD_ORIGIN_TAG message per packet
-        // only accept when sent to the mcast address from the loopback address
+        // only accept when sent to the mcast address through the loopback address
         //   since we only join the mcast group on loopback this will hopefully
         //   frustrate attempts to inject CMD_ORIGIN_TAG externally.
-        if(M.good() && origin==Loopback && dest.compare(lo_mcast_addr.addr,false)==0 && src.isLO()) {
+        if(M.good() && origin==Local && dest.compare(lo_mcast_addr.addr,false)==0) {
             originaddr.setPort(bind_addr.port());
 
             process_one(originaddr, M.save(), M.size(), OriginTag);
 
             return;
         }
-        log_debug_printf(logio, "Ignore originated from %s %c%c%c%c\n",
+        log_debug_printf(logio, "Ignore originated from %s %c%c%c\n",
                          originaddr.tostring().c_str(),
                          M.good() ? 'T' : 'F',
-                         origin==Loopback ? 'T' : 'F',
-                         dest.compare(lo_mcast_addr.addr,false)==0 ? 'T' : 'F',
-                         src.isLO() ? 'T' : 'F');
+                         origin==Local ? 'T' : 'F',
+                         dest.compare(lo_mcast_addr.addr,false)==0 ? 'T' : 'F');
 
         break;
     }
@@ -502,26 +519,28 @@ evbase& UDPManager::loop()
 }
 
 namespace {
-epicsThreadOnceId collector_once = EPICS_THREAD_ONCE_INIT;
-void collector_init(void *unused)
+void collector_init()
 {
-    (void)unused;
     udp_gbl = new udp_gbl_t;
 }
 } // namespace
 
-UDPManager UDPManager::instance()
+UDPManager UDPManager::instance(bool share)
 {
-    threadOnce(&collector_once, &collector_init, nullptr);
+    threadOnce<&collector_init>();
     assert(udp_gbl);
 
     Guard G(udp_gbl->lock);
 
-    auto ret = udp_gbl->inst.lock();
+    std::shared_ptr<UDPManager::Pvt> ret;
+
+    if(share)
+        ret = udp_gbl->inst.lock();
 
     if(!ret) {
         ret.reset(new UDPManager::Pvt);
-        udp_gbl->inst = ret;
+        if(share)
+            udp_gbl->inst = ret;
     }
 
     return UDPManager(ret);

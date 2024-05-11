@@ -32,7 +32,7 @@ through the environment variable **$PVXS_LOG** by calling `pvxs::logger_config_e
 
 .. doxygenfunction:: pvxs::logger_config_env()
 
-If this is undesireable, logger levels may be (reset) manually.
+If this is undesirable, logger levels may be (reset) manually.
 
 .. doxygenfunction:: pvxs::logger_level_set(const char *, Level)
 
@@ -132,6 +132,20 @@ which may be used as a `std::ostream` to append text describing a test. eg. ::
 
 .. doxygenclass:: pvxs::testCase
     :members:
+
+IOC Testing
+^^^^^^^^^^^
+
+Additional helpers for testing IOC applications. ::
+
+    #include <pvxs/iochooks.h>
+    namespace pvxs { namespace ioc { ... } }
+
+When possible, use of the ``TestIOC`` class is recommended for both
+forward and backward compatibility with EPICS Base (>= 3.15.0.1).
+
+.. doxygenclass:: pvxs::ioc::TestIOC
+
 
 Utilities
 ---------

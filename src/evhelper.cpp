@@ -14,6 +14,7 @@
 #include <cstring>
 #include <system_error>
 #include <deque>
+#include <limits>
 #include <algorithm>
 
 #include <event2/event.h>
@@ -21,6 +22,7 @@
 
 #include <errlog.h>
 #include <epicsEvent.h>
+#include <epicsString.h>
 #include <epicsThread.h>
 #include <epicsExit.h>
 #include <epicsMutex.h>
@@ -51,10 +53,7 @@ VFunctor0::~VFunctor0() {}
 }
 
 static
-epicsThreadOnceId evthread_once = EPICS_THREAD_ONCE_INIT;
-
-static
-void evthread_init(void* unused)
+void evthread_init()
 {
 #if defined(EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED)
     evthread_use_windows_threads();
@@ -107,7 +106,14 @@ struct ThreadEvent
     inline epicsEvent* operator->() { return get(); }
 };
 
-struct evbase::Pvt : public epicsThreadRunable
+namespace {
+struct evbaseRunning {
+    INST_COUNTER(evbaseRunning);
+};
+DEFINE_INST_COUNTER(evbaseRunning);
+}
+
+struct evbase::Pvt final : public epicsThreadRunable
 {
     SockAttach attach;
 
@@ -123,7 +129,7 @@ struct evbase::Pvt : public epicsThreadRunable
     };
     std::deque<Work> actions;
 
-    owned_ptr<event_base> base;
+    evbaseptr base;
     evevent keepalive;
     evevent dowork;
     epicsEvent start_sync;
@@ -139,7 +145,7 @@ struct evbase::Pvt : public epicsThreadRunable
                 epicsThreadGetStackSize(epicsThreadStackBig),
                 prio)
     {
-        threadOnce(&evthread_once, &evthread_init, nullptr);
+        threadOnce<&evthread_init>();
 
         worker.start();
         start_sync.wait();
@@ -165,9 +171,9 @@ struct evbase::Pvt : public epicsThreadRunable
 
     virtual void run() override final
     {
-        INST_COUNTER(evbaseRunning);
+        evbaseRunning track;
         try {
-            evconfig conf(event_config_new());
+            evconfig conf(__FILE__, __LINE__, event_config_new());
 #ifdef __rtems__
             /* with libbsd circa RTEMS 5.1
              * TCP peer close/reset notifications appear to be lost.
@@ -176,13 +182,15 @@ struct evbase::Pvt : public epicsThreadRunable
              */
             event_config_avoid_method(conf.get(), "kqueue");
 #endif
-            decltype (base) tbase(event_base_new_with_config(conf.get()));
+            decltype (base) tbase(__FILE__, __LINE__, event_base_new_with_config(conf.get()));
             if(evthread_make_base_notifiable(tbase.get())) {
                 throw std::runtime_error("evthread_make_base_notifiable");
             }
 
-            evevent handle(event_new(tbase.get(), -1, EV_TIMEOUT, &doWorkS, this));
-            evevent ka(event_new(tbase.get(), -1, EV_TIMEOUT|EV_PERSIST, &evkeepalive, this));
+            evevent handle(__FILE__, __LINE__,
+                           event_new(tbase.get(), -1, EV_TIMEOUT, &doWorkS, this));
+            evevent ka(__FILE__, __LINE__,
+                       event_new(tbase.get(), -1, EV_TIMEOUT|EV_PERSIST, &evkeepalive, this));
 
             base = std::move(tbase);
             dowork = std::move(handle);
@@ -251,6 +259,7 @@ struct evbase::Pvt : public epicsThreadRunable
     }
 
 };
+DEFINE_INST_COUNTER2(evbase::Pvt, evbase);
 
 evbase::evbase(const std::string &name, unsigned prio)
 {
@@ -368,7 +377,7 @@ bool evbase::assertInRunningLoop() const
 bool evsocket::canIPv6;
 evsocket::ipstack_t evsocket::ipstack;
 
-evsocket::evsocket(int af, evutil_socket_t sock)
+evsocket::evsocket(int af, evutil_socket_t sock, bool blocking)
     :sock(sock)
     ,af(af)
 {
@@ -388,7 +397,7 @@ evsocket::evsocket(int af, evutil_socket_t sock)
 
     evutil_make_socket_closeonexec(sock);
 
-    if(evutil_make_socket_nonblocking(sock)) {
+    if(!blocking && evutil_make_socket_nonblocking(sock)) {
         evutil_closesocket(sock);
         throw std::runtime_error("Unable to make non-blocking socket");
     }
@@ -399,8 +408,8 @@ evsocket::evsocket(int af, evutil_socket_t sock)
 #  define SOCK_CLOEXEC 0
 #endif
 
-evsocket::evsocket(int af, int type, int proto)
-    :evsocket(af, socket(af, type | SOCK_CLOEXEC, proto))
+evsocket::evsocket(int af, int type, int proto, bool blocking)
+    :evsocket(af, socket(af, type | SOCK_CLOEXEC, proto), blocking)
 {
 #ifdef __linux__
 #  ifndef IP_MULTICAST_ALL
@@ -449,7 +458,7 @@ SockAddr evsocket::sockname() const
     SockAddr addr;
     socklen_t slen = addr.size();
     if(getsockname(sock, &addr->sa, &slen))
-        std::logic_error("Unable to fetch address of newly bound socket");
+        throw std::logic_error("Unable to fetch address of newly bound socket");
     return addr;
 }
 
@@ -651,9 +660,19 @@ size_t evsocket::get_buffer_size(evutil_socket_t sock, bool tx)
 #  define EAFNOSUPPORT WSAESOCKTNOSUPPORT
 #endif
 
-bool evsocket::init_canIPv6()
+bool evsocket::init_canIPv6() noexcept
 {
     try {
+        if(auto ena6 = getenv("PVXS_ENABLE_IPV6")) {
+            if(epicsStrCaseCmp(ena6, "NO")==0) {
+                log_info_printf(logsock, "IPv6 support disabled%s", "\n");
+                return false;
+            } else if(epicsStrCaseCmp(ena6, "YES")!=0) {
+                log_warn_printf(logsock, "PVXS_ENABLE_IPV6=%s ignoring unrecognized\n",
+                                ena6);
+            }
+        }
+
         evsocket sock(AF_INET6, SOCK_DGRAM, 0);
         auto addr(SockAddr::loopback(AF_INET6));
         sock.bind(addr);
@@ -678,19 +697,17 @@ bool evsocket::init_canIPv6()
 #  define getMonotonic getCurrent
 #endif
 
-static epicsThreadOnceId mapOnce = EPICS_THREAD_ONCE_INIT;
-
 static IfaceMap* theinstance;
 
 static
-void mapInit(void*)
+void mapInit()
 {
     theinstance = new IfaceMap();
 }
 
 IfaceMap& IfaceMap::instance()
 {
-    threadOnce(&mapOnce, &mapInit);
+    threadOnce<&mapInit>();
     assert(theinstance);
     return *theinstance;
 }
@@ -820,12 +837,13 @@ uint64_t IfaceMap::index_of(const std::string& name)
     return ret;
 }
 
-bool IfaceMap::is_address(const SockAddr& addr)
+bool IfaceMap::is_iface(const SockAddr& addr)
 {
     Guard G(lock);
 
     return try_cache(*this, [this, addr]() {
-        return byAddr.find(addr)!=byAddr.end();
+        auto it(byAddr.find(addr));
+        return it!=byAddr.end() && !it->second.second;
     });
 }
 
@@ -951,7 +969,7 @@ bool EvOutBuf::refill(size_t more)
     vec.iov_len  = base ? pos - base : 0u;
 
     if(base && evbuffer_commit_space(backing, &vec, 1))
-        throw std::bad_alloc(); // leak?
+        throw BAD_ALLOC(); // leak?
 
     limit = base = pos = nullptr;
 
@@ -975,16 +993,22 @@ bool EvInBuf::refill(size_t needed)
 
     // drain consumed
     if(base && evbuffer_drain(backing, pos-base))
-        throw std::bad_alloc();
+        throw BAD_ALLOC();
 
     limit = base = pos = nullptr;
 
     if(needed) {
+        // prevent overflow when calling evbuffer_pullup()
+        // probably paranoia.  will evbuffer_get_length() ever return out of signed range?
+        constexpr size_t max_req = std::numeric_limits<ev_ssize_t>::max();
+
         // expand request in an attempt to reduce the number of refill()s
         // but limit to actual backing buffer length, or pullup() will error
-        size_t requesting = std::min(std::max(needed, size_t(min_slice_size)),
-                                     evbuffer_get_length(backing));
-
+        size_t requesting = std::min(
+                    std::min(
+                        std::max(needed, size_t(min_slice_size)),
+                        evbuffer_get_length(backing)),
+                    max_req);
 
         // ensure new segment contains at least the requested size (one element)
         // (we hope this is mostly a no-op)
@@ -1016,10 +1040,12 @@ void to_evbuf(evbuffer *buf, const Header& H, bool be)
     EvOutBuf M(be, buf, 8);
     to_wire(M, H);
     if(!M.good())
-        throw std::bad_alloc();
+        throw BAD_ALLOC();
 }
 
 } // namespace impl
+
+std::atomic<size_t> Timer::Pvt::cnt_Timer {0u};
 
 Timer::~Timer() {}
 
@@ -1096,7 +1122,8 @@ Timer Timer::Pvt::buildOneShot(double delay, const evbase& base, std::function<v
 
     base.call([internal, delay](){
         // on worker
-        evevent timer(event_new(internal->base.base, -1, EV_TIMEOUT, &expire_cb, internal.get()));
+        evevent timer(__FILE__, __LINE__,
+                      event_new(internal->base.base, -1, EV_TIMEOUT, &expire_cb, internal.get()));
         internal->timer = std::move(timer);
 
         auto timo(totv(delay));

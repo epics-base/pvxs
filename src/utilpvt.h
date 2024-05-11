@@ -29,6 +29,7 @@
 #include <event2/util.h>
 
 #include <compilerDependencies.h>
+#include <epicsThread.h>
 
 #include <pvxs/version.h>
 #include <pvxs/util.h>
@@ -49,18 +50,64 @@
 
 namespace pvxs {namespace impl {
 
+template<typename T>
+struct promote_print { static T op(const T& v) { return v; }};
+template<>
+struct promote_print<int8_t> { static int op(const char& v) { return v; }};
+template<>
+struct promote_print<uint8_t> { static unsigned op(const char& v) { return v; }};
+
+PVXS_API
+bool inUnitTest();
+
+/* specialization of bad_alloc which notes the location from which
+ * the exception originates.
+ */
+struct PVXS_API loc_bad_alloc final : public std::bad_alloc
+{
+    loc_bad_alloc(const char *file, int line);
+    virtual ~loc_bad_alloc();
+
+    virtual const char* what() const noexcept override final;
+
+private:
+    char msg[64];
+};
+#define BAD_ALLOC() ::pvxs::impl::loc_bad_alloc(__FILE__, __LINE__)
+
 //! in-line string builder (eg. for exception messages)
 //! eg. @code throw std::runtime_error(SB()<<"Some message"<<42); @endcode
 struct SB {
     std::ostringstream strm;
     SB() {}
     operator std::string() const { return strm.str(); }
+    std::string str() const { return strm.str(); }
     template<typename T>
     SB& operator<<(const T& i) { strm<<i; return *this; }
 };
 
+PVXS_API
+void strDiff(std::ostream& out,
+             const char *lhs,
+             const char *rhs);
 
-void threadOnce(epicsThreadOnceId *id, EPICSTHREADFUNC fn, void *arg=nullptr);
+struct threadOnceInfo {
+    epicsThreadOnceId id = EPICS_THREAD_ONCE_INIT;
+    void (* const fn)();
+    bool ok = false;
+    explicit constexpr threadOnceInfo(void (*fn)()) :fn(fn) {}
+};
+
+PVXS_API
+void threadOnce_(threadOnceInfo *info) ;
+
+template<void (*onceFn)()>
+void threadOnce() noexcept {
+    // global name qualified by onceFn address.
+    // effectively replicated for each onceFn
+    static threadOnceInfo info{onceFn};
+    threadOnce_(&info);
+}
 
 namespace idetail {
 template <typename I>
@@ -214,6 +261,10 @@ timeval totv(double t)
     return ret;
 }
 
+namespace ioc {
+void IOCGroupConfigCleanup();
+}
+
 //! Scoped restore of std::ostream state (format flags, fill char, and field width)
 struct Restore {
     std::ostream& strm;
@@ -226,6 +277,8 @@ struct Restore {
         ,pfill(strm.fill())
         ,pwidth(strm.width())
     {}
+    Restore(const Restore&) = delete;
+    Restore& operator=(const Restore&) = delete;
     ~Restore() {
         strm.flags(pflags);
         strm.fill(pfill);
@@ -233,18 +286,29 @@ struct Restore {
     }
 };
 
-template<std::atomic<size_t>* Cnt>
-struct InstCounter
-{
-    InstCounter() {(*Cnt).fetch_add(1, std::memory_order_relaxed);}
-    ~InstCounter() {(*Cnt).fetch_sub(1, std::memory_order_relaxed);}
+PVXS_API
+void registerICount(const char* name, std::atomic<size_t>& Cnt);
+
+// Name and Cnt must have global lifetime
+template<std::atomic<size_t>& Cnt>
+struct InstCounter {
+    explicit InstCounter(const char* Name) {
+        if(0u==Cnt.fetch_add(1u, std::memory_order_relaxed)) { // first
+            registerICount(Name, Cnt);
+        }
+    }
+    InstCounter(const InstCounter&) = delete;
+    InstCounter& operator=(const InstCounter&) = delete;
+    ~InstCounter() {
+        Cnt.fetch_sub(1u, std::memory_order_relaxed);
+    }
 };
 
-#define INST_COUNTER(KLASS) InstCounter<&cnt_ ## KLASS> instances
-
-#define CASE(KLASS) PVXS_API extern std::atomic<size_t> cnt_ ## KLASS
-#include "instcounters.h"
-#undef CASE
+#define INST_COUNTER(KLASS) \
+                    static std::atomic<size_t> cnt_ ## KLASS; \
+                    InstCounter<cnt_ ## KLASS> instances{#KLASS}
+#define DEFINE_INST_COUNTER2(KLASS, NAME) std::atomic<size_t> KLASS::cnt_ ## NAME {0u}
+#define DEFINE_INST_COUNTER(KLASS) DEFINE_INST_COUNTER2(KLASS, KLASS)
 
 } // namespace pvxs
 

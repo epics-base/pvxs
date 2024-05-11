@@ -108,6 +108,7 @@ struct InfoOp : public OperationBase
         }
     }
 };
+DEFINE_INST_COUNTER(InfoOp);
 
 } // namespace
 
@@ -207,8 +208,8 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
                            // on worker
 
                            // ordering of dispatch()/call() ensures creation before destruction
-                           assert(op->chan);
-                           op->_cancel(true);
+                           if(op->chan)
+                               op->_cancel(true);
                        }, std::move(temp)));
     });
 
@@ -217,10 +218,22 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
     context->tcp_loop.dispatch([op, context, name, server]() {
         // on worker
 
-        op->chan = Channel::build(context, name, server);
+        try {
+            op->chan = Channel::build(context, name, server);
 
-        op->chan->pending.push_back(op);
-        op->chan->createOperations();
+            op->chan->pending.push_back(op);
+            op->chan->createOperations();
+        }catch(...){
+            try {
+                Result res(std::current_exception());
+                if(op->done)
+                    op->done(std::move(res));
+                else
+                    res(); // rethrow to log...
+            }catch(std::exception& e){
+                log_exc_printf(setup, "Unhandled exception %s in Info result() callback: %s\n", typeid (e).name(), e.what());
+            }
+        }
     });
 
     return external;
