@@ -259,6 +259,8 @@ struct CertCreator {
     int keytype = EVP_PKEY_RSA;
     size_t keylen = 2048;
     const EVP_MD* sig = EVP_sha256();
+    // special extensions
+    std::vector<std::pair<std::string, std::string>> exts;
 
     std::tuple<owned_ptr<EVP_PKEY>, owned_ptr<X509>> create()
     {
@@ -338,6 +340,17 @@ struct CertCreator {
         if(extended_key_usage)
             add_extension(cert.get(), NID_ext_key_usage, extended_key_usage);
 
+        for(const auto& pair : exts) {
+            owned_ptr<ASN1_OBJECT> id(OBJ_txt2obj(pair.first.c_str(), 1));
+            owned_ptr<ASN1_OCTET_STRING> val(ASN1_OCTET_STRING_new());
+            ASN1_OCTET_STRING_set(val.get(),
+                                  reinterpret_cast<const unsigned char*>(pair.second.c_str()),
+                                  pair.second.size());
+            owned_ptr<X509_EXTENSION> ext(X509_EXTENSION_create_by_OBJ(nullptr, id.get(), 0, val.get()));
+
+            MUST(1, X509_add_ext(cert.get(), ext.get(), -1));
+        }
+
         auto nbytes(X509_sign(cert.get(), ikey, sig));
         if(nbytes==0)
             throw SSLError("Failed to sign cert");
@@ -400,6 +413,9 @@ int main(int argc, char *argv[])
             cc.serial = serial++;
             cc.isCA = true;
             cc.key_usage = "cRLSign,keyCertSign";
+            // not useful, just testing...
+            cc.exts.push_back(std::make_pair("1.3.6.1.4.1.20566.42.42",
+                                             std::string("hello\0 world",12)));
 
             std::tie(root_key, root_cert) = cc.create();
 
