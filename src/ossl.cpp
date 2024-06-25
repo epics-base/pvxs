@@ -32,31 +32,24 @@ template<>
 struct ssl_delete<FILE> {
     inline void operator()(FILE* fp) { if(fp) fclose(fp); }
 };
-template<>
-struct ssl_delete<OSSL_LIB_CTX> {
-    inline void operator()(OSSL_LIB_CTX* fp) { if(fp) OSSL_LIB_CTX_free(fp); }
-};
-template<>
-struct ssl_delete<BIO> {
-    inline void operator()(BIO* fp) { if(fp) BIO_free(fp); }
-};
-template<>
-struct ssl_delete<PKCS12> {
-    inline void operator()(PKCS12* fp) { if(fp) PKCS12_free(fp); }
-};
-template<>
-struct ssl_delete<EVP_PKEY> {
-    inline void operator()(EVP_PKEY* fp) { if(fp) EVP_PKEY_free(fp); }
-};
-template<>
-struct ssl_delete<X509> {
-    inline void operator()(X509* fp) { if(fp) X509_free(fp); }
-};
-template<>
-struct ssl_delete<STACK_OF(X509)> {
-    inline void operator()(STACK_OF(X509)* fp) { if(fp) sk_X509_free(fp); }
-};
-
+#define DEFINE_DELETE(TYPE) \
+    template<> \
+    struct ssl_delete<TYPE> { \
+        inline void operator()(TYPE* fp) { if(fp) TYPE ## _free(fp); } \
+    }
+DEFINE_DELETE(OSSL_LIB_CTX);
+DEFINE_DELETE(BIO);
+DEFINE_DELETE(PKCS12);
+DEFINE_DELETE(EVP_PKEY);
+DEFINE_DELETE(X509);
+#undef DEFINE_DELETE
+#define DEFINE_SK_DELETE(TYPE) \
+    template<> \
+    struct ssl_delete<STACK_OF(TYPE)> { \
+        inline void operator()(STACK_OF(TYPE)* fp) { if(fp) sk_ ## TYPE ## _free(fp); } \
+    }
+DEFINE_SK_DELETE(X509);
+#undef DEFINE_SK_DELETE
 namespace {
 
 template<typename T>
