@@ -10,12 +10,14 @@
 #include "ossl.h"
 #include <openssl/conf.h>
 #include <openssl/pkcs12.h>
+#include <openssl/ocsp.h>
 #include <openssl/err.h>
 
 #include <pvxs/log.h>
 #include "evhelper.h"
 #include "utilpvt.h"
 
+#include <cantProceed.h>
 #include <epicsExit.h>
 
 #ifndef TLS1_3_VERSION
@@ -28,31 +30,27 @@ DEFINE_LOGGER(_io, "pvxs.ossl.io");
 namespace pvxs {
 namespace ossl {
 
-template<>
-struct ssl_delete<OSSL_LIB_CTX> {
-    inline void operator()(OSSL_LIB_CTX* fp) { if(fp) OSSL_LIB_CTX_free(fp); }
-};
-template<>
-struct ssl_delete<BIO> {
-    inline void operator()(BIO* fp) { if(fp) BIO_free(fp); }
-};
-template<>
-struct ssl_delete<PKCS12> {
-    inline void operator()(PKCS12* fp) { if(fp) PKCS12_free(fp); }
-};
-template<>
-struct ssl_delete<EVP_PKEY> {
-    inline void operator()(EVP_PKEY* fp) { if(fp) EVP_PKEY_free(fp); }
-};
-template<>
-struct ssl_delete<X509> {
-    inline void operator()(X509* fp) { if(fp) X509_free(fp); }
-};
-template<>
-struct ssl_delete<STACK_OF(X509)> {
-    inline void operator()(STACK_OF(X509)* fp) { if(fp) sk_X509_free(fp); }
-};
-
+#define DEFINE_DELETE(TYPE) \
+    template<> \
+    struct ssl_delete<TYPE> { \
+        inline void operator()(TYPE* fp) { if(fp) TYPE ## _free(fp); } \
+    }
+DEFINE_DELETE(OSSL_LIB_CTX);
+DEFINE_DELETE(BIO);
+DEFINE_DELETE(PKCS12);
+DEFINE_DELETE(EVP_PKEY);
+DEFINE_DELETE(X509);
+DEFINE_DELETE(OCSP_RESPONSE);
+DEFINE_DELETE(OCSP_BASICRESP);
+DEFINE_DELETE(OCSP_CERTID);
+#undef DEFINE_DELETE
+#define DEFINE_SK_DELETE(TYPE) \
+    template<> \
+    struct ssl_delete<STACK_OF(TYPE)> { \
+        inline void operator()(STACK_OF(TYPE)* fp) { if(fp) sk_ ## TYPE ## _free(fp); } \
+    }
+DEFINE_SK_DELETE(X509);
+#undef DEFINE_SK_DELETE
 namespace {
 
 template<typename T>
@@ -66,6 +64,7 @@ const unsigned char pva_alpn[] = "\x05pva/1";
 struct OSSLGbl {
     ossl_ptr<OSSL_LIB_CTX> libctx;
     int SSL_CTX_ex_idx;
+    int SSL_ex_idx;
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
     std::ofstream keylog;
     epicsMutex keylock;
@@ -114,10 +113,43 @@ struct SSL_CTX_sidecar {
     ossl_ptr<X509> cert;
 };
 
-void free_SSL_CTX_sidecar(void *parent, void *ptr, CRYPTO_EX_DATA *ad,
-                          int idx, long argl, void *argp) noexcept
+void free_SSL_CTX_sidecar(void *, void *ptr, CRYPTO_EX_DATA *,
+                          int, long, void *) noexcept
 {
     auto car = static_cast<SSL_CTX_sidecar*>(ptr);
+    delete car;
+}
+
+struct SSL_sidecar {
+    // TODO: is valid, and valid time range
+};
+
+void new_SSL_sidecar(void *parent, void *ptr, CRYPTO_EX_DATA *ad,
+                     int idx, long, void *) noexcept
+{
+    auto ctx = static_cast<SSL*>(parent);
+    (void)ctx; // not needed.  enough to update *ad
+    if(!ptr
+            && !!(ptr = new (std::nothrow) SSL_sidecar())
+            && 1!=CRYPTO_set_ex_data(ad, idx, ptr)
+            )
+    {
+        log_err_printf(_setup, "SSL_sidecar allocation fails?!%s", "\n");
+    }
+}
+
+int dup_SSL_sidecar(CRYPTO_EX_DATA *, const CRYPTO_EX_DATA *,
+                     void **, int, long, void *)
+{
+    // We never duplicate SSL* so this function should never be called.
+    log_crit_printf(_setup, "%s not implemented", __func__);
+    return 0; // cause the dup. to fail
+}
+
+void free_SSL_sidecar(void *, void *ptr, CRYPTO_EX_DATA *,
+                          int, long, void *) noexcept
+{
+    auto car = static_cast<SSL_sidecar*>(ptr);
     delete car;
 }
 
@@ -133,6 +165,10 @@ void OSSLGbl_init()
                                                    nullptr,
                                                    nullptr,
                                                    free_SSL_CTX_sidecar);
+    gbl->SSL_ex_idx = SSL_get_ex_new_index(0, nullptr,
+                                           new_SSL_sidecar,
+                                           dup_SSL_sidecar,
+                                           free_SSL_sidecar);
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
     if(auto env = getenv("SSLKEYLOGFILE")) {
         epicsGuard<epicsMutex> G(gbl->keylock);
@@ -186,6 +222,130 @@ int ossl_alpn_select(SSL *,
         log_err_printf(_io, "TLS ALPN reject%s", "\n");
         return SSL_TLSEXT_ERR_ALERT_FATAL; // could fail soft w/ SSL_TLSEXT_ERR_NOACK
     }
+}
+
+int ossl_ocsp_client_stapled(SSL *s, void *) noexcept
+{
+    // note: failing (return 0) will start/continue a reconnect loop...
+    try {
+        auto dat = static_cast<SSL_sidecar*>(SSL_get_ex_data(s, ossl_gbl->SSL_ex_idx));
+        if(!dat)
+            return 1; // earlier allocation failed (and logged).  continue without OCSP
+
+        unsigned char *ocsp = nullptr;
+        auto ocsplen = SSL_get_tlsext_status_ocsp_resp(s, &ocsp);
+        if(ocsplen < 0) {
+            // no OCSP data provided
+            log_debug_printf(_io, "%s: Connection provides no OCSP\n", __func__); // TODO: context for logging...
+            return 1;
+        }
+
+        const unsigned char *x = ocsp;
+        ossl_ptr<OCSP_RESPONSE> resp(__FILE__, __LINE__, d2i_OCSP_RESPONSE(NULL, &x, ocsplen));
+        static_assert(OCSP_RESPONSE_STATUS_SUCCESSFUL==0);
+        if(auto code = OCSP_response_status(resp.get())) {
+            // why has this server stapled an unsuccessful response?
+            // treat this as a logic error by the peer
+            auto msg = OCSP_response_status_str(code);
+            log_err_printf(_io, "%s: OCSP response (%d) %s\n", __func__, code, msg);
+            return 0; // fail the connection
+        }
+
+        ossl_ptr<OCSP_BASICRESP> basic(__FILE__, __LINE__, OCSP_response_get1_basic(resp.get()));
+
+        // validate response...
+
+        // use CAs included in peer chain, also any untrusted from OCSP response
+        auto ctx = SSL_get_SSL_CTX(s);
+        auto trusted = SSL_CTX_get_cert_store(ctx);
+        auto untrusted = SSL_get_peer_cert_chain(s); // for clients, this includes the peer
+        if(1!=OCSP_basic_verify(basic.get(), untrusted, trusted, 0)) {
+            // server stapled a reply we can't verify.
+            log_err_printf(_io, "%s: can't verify OCSP response\n", __func__);
+            return 0; // fail the connection
+        }
+
+        // find attentation for our cert
+        auto cert = SSL_get0_peer_certificate(s);
+        auto issuer = cert;
+        if(sk_X509_num(untrusted)>=2) {
+            // issuer of EE will be after EE (index 0 for a client SSL*)
+            issuer = sk_X509_value(untrusted, 1);
+        }
+
+        auto sn = X509_get_serialNumber(cert);
+
+        bool found = false;
+        for(int i=0, N=OCSP_resp_count(basic.get()); i<N; i++) {
+            auto resp = OCSP_resp_get0(basic.get(), i);
+            auto cand = OCSP_SINGLERESP_get0_id(resp);
+
+            // decompose certificate ID, all borrowed references
+            // need to find which digest algo. to use.
+            const ASN1_OBJECT *cand_md = nullptr;
+            const ASN1_INTEGER *cand_sn;
+            OCSP_id_get0_info(nullptr,
+                              const_cast<ASN1_OBJECT**>(&cand_md),
+                              nullptr,
+                              const_cast<ASN1_INTEGER**>(&cand_sn),
+                              const_cast<OCSP_CERTID*>(cand));
+
+            // if the S/N does not match, then no point in going to the
+            // trouble of digesting issuer..
+            if(ASN1_INTEGER_cmp(sn, cand_sn)!=0)
+                continue;
+
+            if(!cand_md)
+                continue; // can this happen?
+
+            // TODO: check for use of "weak" digest algo.
+            auto algo = EVP_get_digestbyobj(cand_md);
+            if(!algo)
+                continue; // attester used unsupported algo.  Continue in case there is another as fallback.
+
+            ossl_ptr<OCSP_CERTID> cid(__FILE__, __LINE__, OCSP_cert_to_id(algo, cert, issuer));
+
+            if(OCSP_id_cmp(cand, cid.get())!=0)
+                continue;
+
+            // found matching attestation
+            found = true;
+
+            // decompose single reply, all borrowed references
+            int rev_reason = 0; // CRL_REASON_*
+            ASN1_GENERALIZEDTIME *rev_time{}, *thistime{}, *nexttime{};
+            auto status = OCSP_single_get0_status(resp, &rev_reason, &rev_time, &thistime, &nexttime);
+
+            if(status==V_OCSP_CERTSTATUS_GOOD){
+                // TODO: note valid time range
+
+            } else if(status==V_OCSP_CERTSTATUS_REVOKED) {
+                // peer provided a negative attestation.
+                log_warn_printf(_io, "%s: OCSP peer certificate revoked\n", __func__);
+                return 0;
+            } else { // UNKNOWN
+                // TODO: treat as always out of time range (like GOOD with zero length time window)
+            }
+        }
+
+        if(!found) {
+            // reply did not attest to the peer certificate
+            log_err_printf(_io, "%s: OCSP response does not attest peer certificate...\n", __func__);
+        } else {
+            return 1; // success
+        }
+
+    }catch(std::exception& e){
+        log_crit_printf(_setup, "%s: Unhandled %s\n", __func__, e.what());
+    }
+    return 0; // will fail the connection...
+}
+
+int ossl_ocsp_server_stapled(SSL *s, void *) noexcept
+{
+    log_debug_printf(_io, "OCSP stapling requested by client%s", "\n");
+    //TODO: SSL_set_tlsext_status_ocsp_resp()
+    return SSL_TLSEXT_ERR_NOACK;
 }
 
 SSLContext
@@ -422,6 +582,13 @@ SSLContext SSLContext::for_client(const impl::ConfigCommon &conf)
     if(0!=SSL_CTX_set_alpn_protos(ctx.ctx, pva_alpn, sizeof(pva_alpn)-1))
         throw SSLError("oops");
 
+    {
+        if(!SSL_CTX_set_tlsext_status_type(ctx.ctx, TLSEXT_STATUSTYPE_ocsp)
+                ||!SSL_CTX_set_tlsext_status_cb(ctx.ctx, &ossl_ocsp_client_stapled)
+                ||!SSL_CTX_set_tlsext_status_arg(ctx.ctx, nullptr))
+            throw SSLError("OCSP stapling setup");
+    }
+
     return ctx;
 }
 
@@ -430,6 +597,12 @@ SSLContext SSLContext::for_server(const impl::ConfigCommon &conf)
     auto ctx(ossl_setup_common(TLS_server_method(), false, conf));
 
     SSL_CTX_set_alpn_select_cb(ctx.ctx, &ossl_alpn_select, nullptr);
+
+    {
+        if(!SSL_CTX_set_tlsext_status_cb(ctx.ctx, &ossl_ocsp_server_stapled)
+           ||!SSL_CTX_set_tlsext_status_arg(ctx.ctx, nullptr))
+            throw SSLError("OCSP stapling setup");
+    }
 
     return ctx;
 }
