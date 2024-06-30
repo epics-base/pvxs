@@ -36,13 +36,17 @@ int main(int argc, char* argv[])
     // Create a client context
     auto ctxt(client::Context::fromEnv());
 
-    auto reply(ctxt.rpc(argv[1])
-                   .arg("lhs", argv[2])
-                   .arg("rhs", argv[3])
-                   .exec()
-                   ->wait(5.0));
+    try {
+        auto reply(ctxt.rpc(argv[1])
+                       .arg("lhs", argv[2])
+                       .arg("rhs", argv[3])
+                       .exec()
+                       ->wait(5.0));
 
-    std::cout<<"Reply\n"<<reply;
-
-    return 0;
+        std::cout<<"Reply\n"<<reply;
+        return 0;
+    } catch(std::exception& e){
+        std::cerr<<"Error: "<<e.what()<<"\n";
+        return 1;
+    }
 }
