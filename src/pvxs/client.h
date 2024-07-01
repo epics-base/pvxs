@@ -323,8 +323,10 @@ public:
      * Shorthand for @code Config::fromEnv().build() @endcode.
      * @since 0.2.1
      */
-    static
-    Context fromEnv();
+    static Context fromEnv(const bool tls_disabled = false);
+#ifdef PVXS_ENABLE_JWT_AUTH
+    static Context fromEnvWithJwt(const std::string &token);
+#endif
 
     /** Apply (in part) updated configuration
      *
@@ -1066,13 +1068,22 @@ private:
 public:
 
     // compat
-    static inline Config from_env() { return Config{}.applyEnv(); }
+    static inline Config from_env(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
+#ifdef PVXS_ENABLE_JWT_AUTH
+    static inline Config from_env_with_jwt(const std::string &token, const ConfigTarget target = CLIENT) { return Config{}.applyEnvWithJwt(token, target); }
+#endif
 
     //! Default configuration using process environment
-    static inline Config fromEnv()  { return Config{}.applyEnv(); }
-
+    static inline Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
+#ifdef PVXS_ENABLE_JWT_AUTH
+    static inline Config fromEnvWithJwt(const std::string &token, const ConfigTarget target = CLIENT) { return Config{}.applyEnvWithJwt(token, target); }
+#endif
     //! update using defined EPICS_PVA* environment variables
-    Config& applyEnv();
+    Config &applyEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT);
+    Config &applyEnv(const bool tls_disabled = false);
+#ifdef PVXS_ENABLE_JWT_AUTH
+    Config &applyEnvWithJwt(const std::string &token, const ConfigTarget target = CLIENT);
+#endif
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables

@@ -77,7 +77,6 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         }
     }
 
-#ifdef PVXS_ENABLE_OPENSSL
     if(iface->isTLS) {
         assert(iface->server->tls_context);
         auto ctx(SSL_new(iface->server->tls_context.ctx));
@@ -98,7 +97,6 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         // deprecated, but not yet removed
         bufferevent_openssl_set_allow_dirty_shutdown(bev.get(), 1);
     }
-#endif
     {
         auto cred(std::make_shared<server::ClientCredentials>());
         cred->peer = peerName;
@@ -238,13 +236,11 @@ void ServerConn::handle_CONNECTION_VALIDATION()
                     C->account = user;
                 });
             }
-#ifdef PVXS_ENABLE_OPENSSL
             else if(iface->isTLS && selected=="x509" && bev) {
                 auto ctx = bufferevent_openssl_get_ssl(bev.get());
                 assert(ctx);
                 ossl::SSLContext::fill_credentials(*C, ctx);
             }
-#endif
             if(C->method.empty()) {
                 C->account = C->method = "anonymous";
             }
@@ -403,14 +399,12 @@ void ServerConn::cleanup()
 
 void ServerConn::bevEvent(short events)
 {
-#ifdef PVXS_ENABLE_OPENSSL
     if((events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) && iface->isTLS && bev) {
         while(auto err = bufferevent_get_openssl_error(bev.get())) {
             log_err_printf(connio, "TLS Error (0x%lx) %s\n",
                            err, ERR_reason_error_string(err));
         }
     }
-#endif
     ConnBase::bevEvent(events);
 }
 
@@ -502,8 +496,11 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
     listener = evlisten(__FILE__, __LINE__,
                         evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtautological-constant-compare"
     if(!LEV_OPT_DISABLED)
         evconnlistener_disable(listener.get());
+#pragma GCC diagnostic pop
 }
 
 void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw)

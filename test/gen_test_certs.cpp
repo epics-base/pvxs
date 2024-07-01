@@ -22,44 +22,9 @@
 
 #include <epicsGetopt.h>
 
+#include "ownedptr.h"
+
 namespace {
-// cleanup hooks for use with std::unique_ptr
-template<typename T>
-struct ssl_delete;
-#define DEFINE_DELETE(TYPE) \
-    template<> \
-    struct ssl_delete<TYPE> { \
-        inline void operator()(TYPE* fp) { if(fp) TYPE ## _free(fp); } \
-    }
-DEFINE_DELETE(BIO);
-DEFINE_DELETE(ASN1_OBJECT);
-DEFINE_DELETE(ASN1_INTEGER);
-static_assert(std::is_same<ASN1_INTEGER, ASN1_TIME>::value, "");
-static_assert(std::is_same<ASN1_INTEGER, ASN1_OCTET_STRING>::value, "");
-DEFINE_DELETE(AUTHORITY_KEYID);
-DEFINE_DELETE(BASIC_CONSTRAINTS);
-DEFINE_DELETE(PKCS12);
-DEFINE_DELETE(EVP_PKEY_CTX);
-DEFINE_DELETE(EVP_PKEY);
-DEFINE_DELETE(X509);
-DEFINE_DELETE(X509_NAME);
-DEFINE_DELETE(X509_PUBKEY);
-DEFINE_DELETE(X509_EXTENSION);
-DEFINE_DELETE(X509_ATTRIBUTE);
-DEFINE_DELETE(GENERAL_NAME);
-DEFINE_DELETE(GENERAL_NAMES);
-template<>
-struct ssl_delete<FILE> {
-    inline void operator()(FILE* fp) { if(fp) fclose(fp); }
-};
-#define DEFINE_SK_DELETE(TYPE) \
-    template<> \
-    struct ssl_delete<STACK_OF(TYPE)> { \
-        inline void operator()(STACK_OF(TYPE)* fp) { if(fp) sk_ ## TYPE ## _free(fp); } \
-    }
-DEFINE_SK_DELETE(X509);
-DEFINE_SK_DELETE(X509_ATTRIBUTE);
-#undef DEFINE_DELETE
 
 struct SSLError : public std::runtime_error {
     explicit
@@ -92,34 +57,6 @@ struct SB {
     SB& operator<<(const T& i) { strm<<i; return *this; }
 };
 
-// ~= std::unique_ptr with a NULL check in the ctor
-template<typename T>
-struct owned_ptr : public std::unique_ptr<T, ssl_delete<T>>
-{
-    constexpr owned_ptr() {}
-    constexpr owned_ptr(std::nullptr_t np) : std::unique_ptr<T, ssl_delete<T>>(np) {}
-    explicit owned_ptr(T* ptr) : std::unique_ptr<T, ssl_delete<T>>(ptr) {
-        if(!*this)
-            throw SSLError(SB()<<"Can't alloc "<<typeid(ptr).name());
-    }
-
-    // for functions which return a pointer in an argument
-    //   int some(T** presult); // store *presult = output
-    // use like
-    //   owned_ptr<T> x;
-    //   some(x.acquire());
-    struct acquisition {
-        owned_ptr<T>* o;
-        T* ptr = nullptr;
-        operator T** () { return &ptr; }
-        constexpr acquisition(owned_ptr<T>* o) :o(o) {}
-        ~acquisition() {
-            o->reset(ptr);
-        }
-    };
-    acquisition acquire() { return acquisition{this}; }
-};
-
 // many openssl calls return 1 (or sometimes zero) on success.
 void _must_equal(int expect, int actual, const char *expr)
 {
@@ -143,12 +80,12 @@ static int jdk_trust(PKCS12_SAFEBAG *bag, void *cbarg) noexcept {
 
         auto curattrs(PKCS12_SAFEBAG_get0_attrs(bag));
         // PKCS12_SAFEBAG_get0_attrs() returns const.  Make a paranoia copy.
-        owned_ptr<STACK_OF(X509_ATTRIBUTE)> newattrs(sk_X509_ATTRIBUTE_deep_copy(curattrs,
+        pvxs::ossl_ptr<STACK_OF(X509_ATTRIBUTE)> newattrs(sk_X509_ATTRIBUTE_deep_copy(curattrs,
                                                                                  &X509_ATTRIBUTE_dup,
                                                                                  &X509_ATTRIBUTE_free));
 
-        owned_ptr<ASN1_OBJECT> trust(OBJ_txt2obj("anyExtendedKeyUsage", 0));
-        owned_ptr<X509_ATTRIBUTE> attr(X509_ATTRIBUTE_create(NID_oracle_jdk_trustedkeyusage,
+        pvxs::ossl_ptr<ASN1_OBJECT> trust(OBJ_txt2obj("anyExtendedKeyUsage", 0));
+        pvxs::ossl_ptr<X509_ATTRIBUTE> attr(X509_ATTRIBUTE_create(NID_oracle_jdk_trustedkeyusage,
                                                              V_ASN1_OBJECT, trust.get()));
 
         MUST(1, sk_X509_ATTRIBUTE_push(newattrs.get(), attr.get()));
@@ -200,7 +137,7 @@ void add_extension(X509* cert, int nid, const char *expr,
     X509V3_set_ctx_nodb(&xctx);
     X509V3_set_ctx(&xctx, const_cast<X509*>(issuer), const_cast<X509*>(subject), nullptr, nullptr, 0);
 
-    owned_ptr<X509_EXTENSION> ext(X509V3_EXT_conf_nid(nullptr, &xctx, nid,
+    pvxs::ossl_ptr<X509_EXTENSION> ext(X509V3_EXT_conf_nid(nullptr, &xctx, nid,
                                                       expr));
     MUST(1, X509_add_ext(cert, ext.get(), -1));
 }
@@ -211,7 +148,7 @@ struct PKCS12Writer {
     const char* friendlyName = nullptr;
     EVP_PKEY* key = nullptr;
     X509* cert = nullptr;
-    owned_ptr<STACK_OF(X509)> cacerts;
+    pvxs::ossl_ptr<STACK_OF(X509)> cacerts;
 
     explicit PKCS12Writer(const std::string& outdir)
         :outdir(outdir)
@@ -220,7 +157,7 @@ struct PKCS12Writer {
 
     void write(const char* fname,
                const char *passwd = "") const {
-        owned_ptr<PKCS12> p12(PKCS12_create_ex2(passwd,
+        pvxs::ossl_ptr<PKCS12> p12(PKCS12_create_ex2(passwd,
                                                 friendlyName,
                                                 key,
                                                 cert,
@@ -230,7 +167,7 @@ struct PKCS12Writer {
                                                 &jdk_trust, nullptr));
 
         std::string outpath(SB()<<outdir<<fname);
-        std::unique_ptr<FILE, ssl_delete<FILE>> out(fopen(outpath.c_str(), "wb"));
+        pvxs::file_ptr out(fopen(outpath.c_str(), "wb"));
         if(!out) {
             auto err = errno;
             throw std::runtime_error(SB()<<"Error opening for write : "<<outpath<<" : "<<strerror(err));
@@ -260,19 +197,19 @@ struct CertCreator {
     size_t keylen = 2048;
     const EVP_MD* sig = EVP_sha256();
 
-    std::tuple<owned_ptr<EVP_PKEY>, owned_ptr<X509>> create()
+    std::tuple<pvxs::ossl_ptr<EVP_PKEY>, pvxs::ossl_ptr<X509>> create()
     {
         // generate public/private key pair
-        owned_ptr<EVP_PKEY> key;
+        pvxs::ossl_ptr<EVP_PKEY> key;
         {
-            owned_ptr<EVP_PKEY_CTX> kctx(EVP_PKEY_CTX_new_id(keytype, NULL));
+            pvxs::ossl_ptr<EVP_PKEY_CTX> kctx(EVP_PKEY_CTX_new_id(keytype, NULL));
             MUST(1, EVP_PKEY_keygen_init(kctx.get()));
             MUST(1, EVP_PKEY_CTX_set_rsa_keygen_bits(kctx.get(), keylen));
             MUST(1, EVP_PKEY_keygen(kctx.get(), key.acquire()));
         }
 
         // start assembling certificate
-        owned_ptr<X509> cert(X509_new());
+        pvxs::ossl_ptr<X509> cert(X509_new());
         MUST(1, X509_set_version(cert.get(), 2));
 
         MUST(1, X509_set_pubkey(cert.get(), key.get()));
@@ -284,6 +221,15 @@ struct CertCreator {
             if(CN)
                 MUST(1, X509_NAME_add_entry_by_txt(sub, "CN", MBSTRING_ASC,
                                                    reinterpret_cast<const unsigned char*>(CN),
+                                                   -1, -1, 0));
+                MUST(1, X509_NAME_add_entry_by_txt(sub, "C", MBSTRING_ASC,
+                                                   reinterpret_cast<const unsigned char*>("US"),
+                                                   -1, -1, 0));
+                MUST(1, X509_NAME_add_entry_by_txt(sub, "O", MBSTRING_ASC,
+                                                   reinterpret_cast<const unsigned char *>("ca.epics.org"),
+                                                   -1, -1, 0));
+                MUST(1, X509_NAME_add_entry_by_txt(sub, "OU", MBSTRING_ASC,
+                                                   reinterpret_cast<const unsigned char*>("epics.org Certificate Authority"),
                                                    -1, -1, 0));
         }
         if(!issuer) {
@@ -300,15 +246,15 @@ struct CertCreator {
         // set valid time range
         {
             time_t now(time(nullptr));
-            owned_ptr<ASN1_TIME> before(ASN1_TIME_adj(nullptr, now, 0, -1));
-            owned_ptr<ASN1_TIME> after(ASN1_TIME_adj(nullptr, now, expire_days, 0));
+            pvxs::ossl_ptr<ASN1_TIME> before(ASN1_TIME_adj(nullptr, now, 0, -1));
+            pvxs::ossl_ptr<ASN1_TIME> after(ASN1_TIME_adj(nullptr, now, expire_days, 0));
             MUST(1, X509_set1_notBefore(cert.get(), before.get()));
             MUST(1, X509_set1_notAfter(cert.get(), after.get()));
         }
 
         // issuer serial number
         if(serial) {
-            owned_ptr<ASN1_INTEGER> sn(ASN1_INTEGER_new());
+            pvxs::ossl_ptr<ASN1_INTEGER> sn(ASN1_INTEGER_new());
             MUST(1, ASN1_INTEGER_set_uint64(sn.get(), serial));
             MUST(1, X509_set_serialNumber(cert.get(), sn.get()));
         }
@@ -392,11 +338,11 @@ int main(int argc, char *argv[])
         unsigned serial = 0;
 
         // The root certificate authority
-        owned_ptr<X509> root_cert;
-        owned_ptr<EVP_PKEY> root_key;
+        pvxs::ossl_ptr<X509> root_cert;
+        pvxs::ossl_ptr<EVP_PKEY> root_key;
         {
             CertCreator cc;
-            cc.CN = "rootCA";
+            cc.CN = "epics.org Root CA";
             cc.serial = serial++;
             cc.isCA = true;
             cc.key_usage = "cRLSign,keyCertSign";
@@ -420,8 +366,8 @@ int main(int argc, char *argv[])
             cc.issuer = root_cert.get();
             cc.ikey = root_key.get();
 
-            owned_ptr<X509> cert;
-            owned_ptr<EVP_PKEY> key;
+            pvxs::ossl_ptr<X509> cert;
+            pvxs::ossl_ptr<EVP_PKEY> key;
             std::tie(key, cert) = cc.create();
 
             PKCS12Writer p12(outdir);
@@ -433,8 +379,8 @@ int main(int argc, char *argv[])
         }
 
         // a chain/intermediate certificate authority
-        owned_ptr<X509> i_cert;
-        owned_ptr<EVP_PKEY> i_key;
+        pvxs::ossl_ptr<X509> i_cert;
+        pvxs::ossl_ptr<EVP_PKEY> i_key;
         {
             CertCreator cc;
             cc.CN = "intermediateCA";
@@ -456,7 +402,7 @@ int main(int argc, char *argv[])
             p12.write("intermediateCA.p12");
         }
 
-        // from this point, the rootCA key is no longer needed.
+        // from this point, the epics.org Root CA key is no longer needed.
         root_key.reset();
 
         // remaining certificates issued by intermediate.
@@ -475,8 +421,8 @@ int main(int argc, char *argv[])
             cc.issuer = i_cert.get();
             cc.ikey = i_key.get();
 
-            owned_ptr<X509> cert;
-            owned_ptr<EVP_PKEY> key;
+            pvxs::ossl_ptr<X509> cert;
+            pvxs::ossl_ptr<EVP_PKEY> key;
             std::tie(key, cert) = cc.create();
 
             PKCS12Writer p12(outdir);

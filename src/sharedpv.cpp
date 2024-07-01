@@ -475,14 +475,58 @@ struct StaticSource::Impl final : public Source
     list_t pvs;
     decltype (List::names) list;
 
+    /**
+     * @brief Claims all the searched names specified in a search operation for
+     * this static source.
+     *
+     * This method will iterate over the list of searched names contained in the
+     * search operation.
+     *
+     * In each iteration it will first ignore all names that contain wild card
+     * characters '*' and '?'
+     *
+     * Then it will try to directly match the searched name with one of the
+     * names associated with this static source.
+     *
+     * If it finds a match it will claim the searched name so that processing,
+     * and optionally a response, can take place.
+     *
+     * If no direct match is found then it will try an enhanced match
+     * implementing the wildcard matches in epics-base. e.g. `pattern`
+     * "pv:name:*" will match with `searched_name` "pv:name:123Abc" and
+     * `pattern` "pv:name:????" will match with `searched_name` "pv:name:12Ab".
+     *
+     * Again, if a match is found the searched
+     * name will be claimed .
+     *
+     * @param op The 'Search' object that contains the searched names to
+     * be matched.
+     *
+     * @return void, but claims all searched names that match either directly or
+     * against patterns
+     */
     virtual void onSearch(Search &op) override
     {
         auto G(lock.lockReader());
+
         for(auto& name : op) {
-            auto it(pvs.find(name.name()));
-            if(it!=pvs.end()) {
+            const auto searched_name = std::string(name.name());
+
+            // Don't allow `searched_name`s containing EPICS wildcard characters
+            if (std::find_first_of(
+                        searched_name.begin(), searched_name.end(),
+                        kEpicsWildcardChars.begin(), kEpicsWildcardChars.end()
+                    ) != searched_name.end()) {
+                continue;
+            }
+
+            // Try a direct match of the `searched_name` in `pvs` map
+            if(pvs.find(searched_name)!=pvs.end()) {
                 name.claim();
-                log_debug_printf(logsource, "%p claim '%s'\n", this, name.name());
+                log_debug_printf(logsource, "%p claim '%s'\n", this, searched_name.c_str());
+            } else {
+                // If that failed then try a wildcard match
+                wildcardMatch(name, searched_name);
             }
         }
     }
@@ -533,7 +577,66 @@ struct StaticSource::Impl final : public Source
             // TODO: details for SharedPV
         }
     }
+
+  private:
+    static const std::string kEpicsWildcardChars;
+
+    /**
+     * @brief Enhanced wildcard search
+     *
+     * Enhanced search will try to match `searched_name` based on
+     * EPICS wildcard matches (as in epics-base)
+     * `pattern` "pv:name:*" => `searched_name` "pv:name:123Abc"
+     * `pattern` "pv:name:????" => `searched_name` "pv:name:12Ab"
+     *
+     * @param pv_name the PV name definition to check
+     * @param searched_name the name presented to the server in the search message
+     */
+    void wildcardMatch(Search::Name &pv_name, const std::basic_string<char> &searched_name) {
+        static const std::regex kRegexSpecialChars{R"([-[\]{}()+.,\^$|#\s])"};
+        static const std::regex kWildcardStarPattern("\\*");
+        static const char kWildcardQueryCharacter = '?';
+
+        // Consider only PVs containing EPICS wildcard characters (others already checked)
+        std::vector<std::pair<std::string, SharedPV>> wildcard_pv_names;
+        std::copy_if(pvs.begin(), pvs.end(), std::back_inserter(wildcard_pv_names), containsEpicsWildcard);
+
+        for (const auto &pattern_shared_pv_pair: wildcard_pv_names) {
+            // 1. Prepare PV regex pattern converting from the EPICS wildcard-style patterns to regex syntax
+            std::string pv_pattern = pattern_shared_pv_pair.first;
+
+            // 1.1 Escape all regex special characters in original PV pattern
+            pv_pattern =
+              std::__1::regex_replace(pv_pattern, kRegexSpecialChars, R"(\\$&)");
+
+            // 1.2 Replace Query and Star EPICS wildcard characters with their regex equivalents
+            std::replace(pv_pattern.begin(), pv_pattern.end(), kWildcardQueryCharacter, '.');
+            pv_pattern = std::__1::regex_replace(pv_pattern, kWildcardStarPattern, ".*");
+
+            // 2. Compare the PV regex pattern with the `searched_name`
+            std::regex pv_regex_pattern(pv_pattern);
+            if (std::regex_match(searched_name, pv_regex_pattern)) {
+                pv_name.claim();
+                log_debug_printf(logsource, "%p claim '%s'\n", this,
+                                 searched_name.c_str());
+            }
+        }
+    }
+
+    /**
+     * Given a pattern / source pair return true if the pattern contains any EPICS wildcard characters
+     * Suitable for use as `std::copy_if()` predicate
+     */
+    static bool containsEpicsWildcard(const std::pair<std::string, SharedPV>& pv_pattern_source) {
+        const std::string &pv_pattern = pv_pattern_source.first;
+        return std::find_first_of(
+          pv_pattern.begin(), pv_pattern.end(),
+          kEpicsWildcardChars.begin(), kEpicsWildcardChars.end()
+        ) != pv_pattern.end();
+    }
 };
+
+const std::string StaticSource::Impl::kEpicsWildcardChars = "*?";
 
 StaticSource StaticSource::build()
 {

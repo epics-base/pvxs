@@ -4,33 +4,28 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#ifndef OSSL_H
-#define OSSL_H
+#ifndef PVXS_OPENSSL_H
+#define PVXS_OPENSSL_H
 
 #include <list>
 #include <memory>
-#include <string>
 #include <stdexcept>
-
-#include <openssl/ssl.h>
-#include <openssl/x509.h>
-#include <openssl/x509v3.h>
-#include <openssl/err.h>
+#include <string>
 
 #include <epicsAssert.h>
 
-#include "pvxs/client.h"
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
+
+#include <pvxs/client.h>
+
+#include "ownedptr.h"
 
 namespace pvxs {
 struct PeerCredentials;
 namespace ossl {
-
-template<typename T>
-struct ssl_delete;
-template<>
-struct ssl_delete<SSL> {
-    inline void operator()(SSL* fp) { if(fp) SSL_free(fp); }
-};
 
 struct SSLError : public std::runtime_error {
     explicit
@@ -103,4 +98,4 @@ struct SSLContext {
 } // namespace ossl
 } // namespace pvxs
 
-#endif // OSSL_H
+#endif  // PVXS_OPENSSL_H

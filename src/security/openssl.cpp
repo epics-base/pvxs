@@ -4,19 +4,25 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include <stdexcept>
+#include "openssl.h"
+
 #include <fstream>
-
-#include "ossl.h"
-#include <openssl/conf.h>
-#include <openssl/pkcs12.h>
-#include <openssl/err.h>
-
-#include <pvxs/log.h>
-#include "evhelper.h"
-#include "utilpvt.h"
+#include <stdexcept>
+#include <tuple>
 
 #include <epicsExit.h>
+
+#include <openssl/conf.h>
+#include <openssl/err.h>
+#include <openssl/pkcs12.h>
+
+#include <pvxs/log.h>
+
+#include "certfactory.h"
+#include "evhelper.h"
+#include "keychainfactory.h"
+#include "ownedptr.h"
+#include "utilpvt.h"
 
 #ifndef TLS1_3_VERSION
 #  error TLS 1.3 support required.  Upgrade to openssl >= 1.1.0
@@ -28,35 +34,7 @@ DEFINE_LOGGER(_io, "pvxs.ossl.io");
 namespace pvxs {
 namespace ossl {
 
-template<>
-struct ssl_delete<OSSL_LIB_CTX> {
-    inline void operator()(OSSL_LIB_CTX* fp) { if(fp) OSSL_LIB_CTX_free(fp); }
-};
-template<>
-struct ssl_delete<BIO> {
-    inline void operator()(BIO* fp) { if(fp) BIO_free(fp); }
-};
-template<>
-struct ssl_delete<PKCS12> {
-    inline void operator()(PKCS12* fp) { if(fp) PKCS12_free(fp); }
-};
-template<>
-struct ssl_delete<EVP_PKEY> {
-    inline void operator()(EVP_PKEY* fp) { if(fp) EVP_PKEY_free(fp); }
-};
-template<>
-struct ssl_delete<X509> {
-    inline void operator()(X509* fp) { if(fp) X509_free(fp); }
-};
-template<>
-struct ssl_delete<STACK_OF(X509)> {
-    inline void operator()(STACK_OF(X509)* fp) { if(fp) sk_X509_free(fp); }
-};
-
 namespace {
-
-template<typename T>
-using ossl_ptr = owned_ptr<T, ssl_delete<T>>;
 
 constexpr int ossl_verify_depth = 5;
 
@@ -139,9 +117,9 @@ void OSSLGbl_init()
         gbl->keylog.open(env);
         if(gbl->keylog.is_open()) {
             epicsAtExit(sslkeylogfile_exit, nullptr);
-            fprintf(stderr, "NOTICE: debug logging TLS SECRETS to SSLKEYLOGFILE=%s\n", env);
+            fprintf(stderr, "⚠ Warning:  TLS Debug Enabled: logging TLS secrets to %s\n", env);
         } else {
-            fprintf(stderr, "Warning: Unable to open.  SSLKEYLOGFILE disabled : %s\n", env);
+            fprintf(stderr, "✘ Error: TLS Debug Disabled: Unable to open SSL key log file: %s\n", env);
         }
     }
 #endif // PVXS_ENABLE_SSLKEYLOGFILE
@@ -155,9 +133,9 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx)
 //        X509_STORE_CTX_print_verify_cb(preverify_ok, x509_ctx);
         auto err = X509_STORE_CTX_get_error(x509_ctx);
         auto cert = X509_STORE_CTX_get_current_cert(x509_ctx);
-        log_err_printf(_io, "Unable to verify peer cert %s : %s\n",
-                       std::string(SB()<<ShowX509{cert}).c_str(),
-                       X509_verify_cert_error_string(err));
+        log_err_printf(_io, "Unable to verify peer cert: %s : %s\n",
+                       X509_verify_cert_error_string(err),
+                       std::string(SB() << ShowX509{cert}).c_str());
     }
     if(preverify_ok) { // cert passed initial inspection
 
@@ -188,6 +166,186 @@ int ossl_alpn_select(SSL *,
     }
 }
 
+/**
+ * @brief Get a certificate from the given file or provision a new one using
+ * the configuration.
+ *
+ * This function reads a certificate from the provided file and returns it as a
+ * PKCS12 object.
+ *
+ * If the file does not exist or the certificate can't be read then
+ * this function provisions a new certificate using the provided configuration.
+ *
+ * @param fp The file pointer of the certificate file.
+ * @param p12 The PKCS12 object where the certificate will be stored.
+ * @param conf The configuration object containing common settings.
+ * @param ssl_client True if the request came from a client, false from a server
+ * @param keychain_filename The filename of the keychain to use for provisioning
+ * @param password The password to use for provisioning the certificate.
+ *
+ * @return security::GenStatus::CERT_EXISTS if the certs file already exists and
+ *         can be opened
+ * @return security::GenStatus::NOT_OK if the certificate was not able to be
+ *         generated and the request was from a client
+ * @return security::GenStatus::OK if the certificate was successfully
+ *         provisioned
+ *
+ * @throws std::runtime_error("Root Certificate has been installed") for clients
+ *         if a certificate has been created but it is signed by a root CA that
+ *         has not yet been trusted by this host.  The process should stop for
+ *         the user to manually trust the root CA.
+ *
+ * @throws std::runtime_error("No certificate found and no credentials ...") if
+ *        we fail to provision a new certificate and it if for a server
+ *
+ * @throws std::runtime_error("Unable to [open|read] certificates file ...") if
+ * we successfully created a certificate but it is illegible.
+ */
+security::GenStatus getOrProvisionCertificate(file_ptr &fp, ossl_ptr<PKCS12> &p12, const impl::ConfigCommon &conf,
+                                              const uint16_t &usage, const std::string &keychain_filename,
+                                              const std::string &password) {
+    // Return certificate if it exists and is readable
+    if (fp && d2i_PKCS12_fp(fp.get(), p12.acquire())) return security::CERT_EXISTS;
+
+    // If file not found or unreadable, create new certificate if auto
+    // provision is on
+    auto gen_status = security::OK;
+    if (conf.cert_auto_provision
+        && (gen_status = security::KeychainFactory::generateNewKeychainFile(conf, usage)) == security::OK) {
+        log_debug_printf(_setup, "New keychain file (PKCS12) %s%s\n", keychain_filename.c_str(),
+                         password.empty() ? "" : " w/ password");
+
+        fp.reset(fopen(keychain_filename.c_str(), "rb"));
+    } else {
+        if (usage & security::kForClient) {
+            if (gen_status == security::ROOT_CERT_INSTALLED) {
+                throw std::runtime_error(SB() << "Root Certificate has been installed.  "
+                                              << "Please trust it and try again");
+            }
+            // Client can create SSL session even though it has no
+            // certificate as long as the server allows it
+            return security::NOT_OK;
+        } else {
+            // TODO pass the reason for the failure back - perhaps using an
+            // exception
+            throw std::runtime_error(SB() << "Invalid, Untrusted, or Nonexistent certificate at [" << keychain_filename
+                                          << "]"
+                                          << (conf.cert_auto_provision ? "and no credentials could be acquired" : ""));
+        }
+    }
+
+    // We successfully created a new certificate.  Try to use it
+    if (!fp) {
+        auto err = errno;
+        throw std::runtime_error(SB() << "Unable to open certificates file: \"" << keychain_filename
+                                      << "\" : " << strerror(err));
+    } else if (!d2i_PKCS12_fp(fp.get(), p12.acquire())) {
+        throw SSLError(SB() << "Unable to read certificates from: \"" << keychain_filename << "\"");
+    }
+    return security::OK;
+}
+
+/**
+ * @brief Verifies the key usage of a given certificate.
+ *
+ * This function checks the key usage extension of the specified certificate
+ * and verifies that the key usage flags match the intended purpose.
+ * If ssl_client is set to true, it will verify that the key usage includes
+ * the key encipherment flag.
+ *
+ * If ssl_client is set to false, it will verify
+ * that the key usage includes the digital signature flag.
+ *
+ * @param cert The X509 certificate to verify key usage for.
+ * @param ssl_client A flag indicating whether the certificate is for SSL
+ * client.
+ * @return Don't throw if the key usage is valid for the intended purpose,
+ * throw an exception otherwise.
+ */
+void verifyKeyUsage(const ossl_ptr<X509> &cert,
+                    bool ssl_client) {  // some early sanity checks
+    auto flags(X509_get_extension_flags(cert.get()));
+    auto kusage(X509_get_extended_key_usage(cert.get()));
+
+    if(flags & EXFLAG_CA)
+        throw std::runtime_error(SB()<<"Found CA Certificate when End Entity expected");
+
+    if((ssl_client && !(kusage & XKU_SSL_CLIENT)) || (!ssl_client && !(kusage & XKU_SSL_SERVER)))
+        throw std::runtime_error(SB()<<"Extended Key Usage does not permit usage as a Secure PVAccesss "
+                                      <<(ssl_client ? "Client" : "Server"));
+
+    log_debug_printf(_setup, "Using%s cert %s\n",
+                     (flags & EXFLAG_SS) ? " self-signed" : "",
+                     std::string(SB()<<ShowX509{cert.get()}).c_str());
+}
+
+/**
+ * @brief Extracts the certificate authorities from the provided CAs and
+ * adds them to the given context.
+ *
+ * java keytool adds an extra attribute to indicate that a certificate
+ * is trusted.  However, PKCS12_parse() circa 3.1 does not know about
+ * this, and gives us all the certs. in one blob for us to sort through.
+ *
+ * We _assume_ that any root CA included in a PKCS#12 file is meant to
+ * be trusted.  Otherwise, such a cert. could never appear in a valid
+ * chain.
+ *
+ * @param ctx the context to add the CAs to
+ * @param CAs the stack of X509 CA certificates
+ */
+void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
+    for(int i=0, N=sk_X509_num(CAs.get()); i<N; i++) {
+        auto ca = sk_X509_value(CAs.get(), i);
+
+        auto canSign(X509_check_ca(ca));
+        auto flags(X509_get_extension_flags(ca));
+
+        if(canSign==0) {
+            log_warn_printf(_setup, "Ignore non-CA certificate %s in PKCS#12 chain\n",
+                            std::string(SB()<<ShowX509{ca}).c_str());
+            continue;
+        }
+
+        if(flags & EXFLAG_SS) { // self-signed (aka. root)
+            assert(flags & EXFLAG_SI); // circa OpenSSL, self-signed implies self-issued
+
+            log_debug_printf(_setup, "Trusting root CA %s\n", std::string(SB()<<ShowX509{ca}).c_str());
+
+            // populate SSL_CTX::cert_store
+            auto trusted = SSL_CTX_get_cert_store(ctx.ctx);
+            assert(trusted);
+            if(!X509_STORE_add_cert(trusted, ca))
+                throw SSLError("X509_STORE_add_cert");
+
+        } else { // signed by another CA
+            log_debug_printf(_setup, "Using untrusted/chain CA cert %s\n",
+                             std::string(SB()<<ShowX509{ca}).c_str());
+
+            // note: chain certs added this way are ignored unless SSL_BUILD_CHAIN_FLAG_UNTRUSTED
+            //       passed below.
+            // appends SSL_CTX::cert::chain
+            if(!SSL_CTX_add0_chain_cert(ctx.ctx, ca))
+                throw SSLError("SSL_CTX_add0_chain_cert");
+        }
+    }
+}
+
+/**
+ * @brief Common setup for OpenSSL SSL context
+ *
+ * This function sets up the OpenSSL SSL context used for SSL/TLS communication.
+ * It configures the SSL method, whether it is for a client or a server, and the
+ * common configuration options.
+ *
+ * @param method The SSL_METHOD object representing the SSL method to use.
+ * @param ssl_client A boolean indicating whether the setup is for a client or a
+ * server.
+ * @param conf The common configuration object.
+ *
+ * @return SSLContext initialised appropriately - clients can have an empty
+ * context so that they can connect to ssl servers without having a certificate
+ */
 SSLContext
 ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const impl::ConfigCommon &conf)
 {
@@ -216,55 +374,37 @@ ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const impl::ConfigC
     (void)SSL_CTX_set_min_proto_version(ctx.ctx, TLS1_3_VERSION);
     (void)SSL_CTX_set_max_proto_version(ctx.ctx, 0); // up to max.
 
-    if(!conf.tls_keychain_file.empty()) {
-        std::string keychain, password;
-        {
-            auto sep(conf.tls_keychain_file.find_first_of(';'));
-            keychain = conf.tls_keychain_file.substr(0, sep);
-            if(sep!=std::string::npos)
-                password = conf.tls_keychain_file.substr(sep+1);
-        }
-        log_debug_printf(_setup, "Read keychain (PKCS12) %s%s\n",
-                         keychain.c_str(), password.empty() ? "" : " w/ password");
+    if(ssl_client && conf.tls_disabled) {
+        // For clients if tls is disabled then allow server to make a tls
+        // connection if it can but disable client side
+        return ctx;
+    }
 
-        std::unique_ptr<FILE> fp(fopen(keychain.c_str(), "rb"));
-        if(!fp) {
-            auto err = errno;
-            throw std::runtime_error(SB()<<"Unable to open \""<<keychain<<"\" : "<<strerror(err));
-        }
+    if(conf.isTlsConfigured()) {
+        const std::string &keychain_filename = conf.tls_keychain_filename, &password = conf.tls_keychain_password;
+        log_debug_printf(_setup, "keychain_filename (PKCS12) %s;%s\n", keychain_filename.c_str(),
+                         password.empty() ? "" : " w/ password");
 
+        file_ptr fp(fopen(keychain_filename.c_str(), "rb"), false);
         ossl_ptr<PKCS12> p12;
-        {
-            if(!d2i_PKCS12_fp(fp.get(), p12.acquire()))
-                throw SSLError(SB()<<"Unable to read \""<<keychain<<"\"");
 
-            if(!p12)
-                throw std::logic_error("d2i_PKCS12_fp() success without success?!?");
-        }
+        // Try to open the certificate file or provision a new one,
+        security::GenStatus gen_status =
+            getOrProvisionCertificate(fp, p12, conf, (ssl_client ? security::kForClient : security::kForServer), keychain_filename, password);
+        if (gen_status == security::NOT_OK)
+            // If this is a client, and we are unable to provision a new certificate then continue without cert
+            return ctx;
 
         ossl_ptr<EVP_PKEY> key;
         ossl_ptr<X509> cert;
         ossl_ptr<STACK_OF(X509)> CAs(__FILE__, __LINE__, sk_X509_new_null());
 
         if(!PKCS12_parse(p12.get(), password.c_str(), key.acquire(), cert.acquire(), CAs.acquire()))
-            throw SSLError(SB()<<"Unable to process \""<<keychain<<"\"");
+            throw SSLError(SB()<<"Unable to process \""<<keychain_filename<<"\"");
 
         if(cert) {
             // some early sanity checks
-            auto flags(X509_get_extension_flags(cert.get()));
-            auto kusage(X509_get_extended_key_usage(cert.get()));
-
-            if(flags & EXFLAG_CA)
-                throw std::runtime_error(SB()<<"Found CA Certificate when End Entity expected");
-
-            if((ssl_client && !(kusage & XKU_SSL_CLIENT))
-                    || (!ssl_client && !(kusage & XKU_SSL_SERVER)))
-                throw std::runtime_error(SB()<<"extendedKeyUsage does not permit usage by "
-                                         <<(ssl_client ? "SSL Client" : "SSL Server"));
-
-            log_debug_printf(_setup, "Using%s cert %s\n",
-                             (flags & EXFLAG_SS) ? " self-signed" : "",
-                             std::string(SB()<<ShowX509{cert.get()}).c_str());
+            verifyKeyUsage(cert, ssl_client);
         }
 
         // the following is ~= SSL_CTX_use_cert_and_key()
@@ -285,40 +425,7 @@ ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const impl::ConfigC
          */
 
         // extract CAs (intermediate and root) from PKCS12 bag
-        for(int i=0, N=sk_X509_num(CAs.get()); i<N; i++) {
-            auto ca = sk_X509_value(CAs.get(), i);
-
-            auto canSign(X509_check_ca(ca));
-            auto flags(X509_get_extension_flags(ca));
-
-            if(canSign==0) {
-                log_warn_printf(_setup, "Ignore non-CA certificate %s in PKCS#12 chain\n",
-                                std::string(SB()<<ShowX509{ca}).c_str());
-                continue;
-            }
-
-            if(flags & EXFLAG_SS) { // self-signed (aka. root)
-                assert(flags & EXFLAG_SI); // circa OpenSSL, self-signed implies self-issued
-
-                log_debug_printf(_setup, "Trusting root CA %s\n", std::string(SB()<<ShowX509{ca}).c_str());
-
-                // populate SSL_CTX::cert_store
-                auto trusted = SSL_CTX_get_cert_store(ctx.ctx);
-                assert(trusted);
-                if(!X509_STORE_add_cert(trusted, ca))
-                    throw SSLError("X509_STORE_add_cert");
-
-            } else { // signed by another CA
-                log_debug_printf(_setup, "Using untrusted/chain CA cert %s\n",
-                                 std::string(SB()<<ShowX509{ca}).c_str());
-
-                // note: chain certs added this way are ignored unless SSL_BUILD_CHAIN_FLAG_UNTRUSTED
-                //       passed below.
-                // appends SSL_CTX::cert::chain
-                if(!SSL_CTX_add0_chain_cert(ctx.ctx, ca))
-                    throw SSLError("SSL_CTX_add0_chain_cert");
-            }
-        }
+        extractCAs(ctx, CAs);
 
         if(key && !SSL_CTX_check_private_key(ctx.ctx))
             throw SSLError("invalid private key");
@@ -341,9 +448,9 @@ ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const impl::ConfigC
          *   when new certs. loaded.
          */
         int mode = SSL_VERIFY_PEER|SSL_VERIFY_CLIENT_ONCE;
-        if(!ssl_client && conf.tls_client_cert==ConfigCommon::Require) {
+        if(!ssl_client && conf.tls_client_cert_required==ConfigCommon::Require) {
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-            log_debug_printf(_setup, "Server will require TLS client cert%s", "\n");
+            log_debug_printf(_setup, "This Secure PVAccess Server requires an X.509 client certificate%s", "\n");
         }
         SSL_CTX_set_verify(ctx.ctx, mode, &ossl_verify);
         SSL_CTX_set_verify_depth(ctx.ctx, ossl_verify_depth);
@@ -420,7 +527,7 @@ SSLContext SSLContext::for_client(const impl::ConfigCommon &conf)
     auto ctx(ossl_setup_common(TLS_client_method(), true, conf));
 
     if(0!=SSL_CTX_set_alpn_protos(ctx.ctx, pva_alpn, sizeof(pva_alpn)-1))
-        throw SSLError("oops");
+        throw SSLError("Unable to agree on Application Layer Protocol to use: Both sides should use pva/1");
 
     return ctx;
 }

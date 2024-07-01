@@ -329,9 +329,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent cacheCleaner;
     const evevent nsChecker;
 
-#ifdef PVXS_ENABLE_OPENSSL
     ossl::SSLContext tls_context;
-#endif
 
     INST_COUNTER(ClientContextImpl);
 

@@ -10,6 +10,7 @@ include $(TOP)/configure/CONFIG
 
 # access to private headers
 USR_CPPFLAGS += -I$(TOP)/src
+USR_CPPFLAGS += -I$(TOP)/src/security
 
 PROD_LIBS += pvxs Com
 
@@ -37,8 +38,14 @@ pvxlist_SRCS += list.cpp
 PROD += pvxmshim
 pvxmshim_SRCS += mshim.cpp
 
-#===========================
+PROD += pvacms
+pvacms_SRCS += pvacms.cpp
+pvacms_LDFLAGS += -lsqlite3
 
+PROD += ocsppva
+pvaocsp_SRCS += ocsppva.cpp
+
+#===========================
 include $(TOP)/configure/RULES
 -include $(wildcard $(TOP)/cfg/RULES*))
 #----------------------------------------

@@ -408,10 +408,14 @@ Operation::~Operation() {}
 
 Subscription::~Subscription() {}
 
-Context Context::fromEnv()
+Context Context::fromEnv(const bool tls_disabled)
 {
-    return Config::fromEnv().build();
+    return Config::fromEnv(tls_disabled).build();
 }
+
+#ifdef PVXS_ENABLE_JWT_AUTH
+Context Context::fromEnvWithJwt(const std::string &token) { return Config::fromEnvWithJwt(token).build(); }
+#endif
 
 Context::Context(const Config& conf)
     :pvt(std::make_shared<Pvt>(conf))
@@ -426,10 +430,8 @@ void Context::reconfigure(const Config& newconf)
     if(!pvt)
         throw std::logic_error("NULL Context");
 
-#ifdef PVXS_ENABLE_OPENSSL
-
     ossl::SSLContext new_context;
-    if(!newconf.tls_keychain_file.empty()) {
+    if(newconf.isTlsConfigured()) {
         new_context = ossl::SSLContext::for_client(newconf);
     }
 
@@ -448,10 +450,6 @@ void Context::reconfigure(const Config& newconf)
 
         pvt->impl->tls_context = new_context;
     });
-
-#else
-    pvt->impl->manager.loop().sync();
-#endif
 }
 
 const Config& Context::config() const
@@ -586,15 +584,13 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     ,nsChecker(__FILE__, __LINE__,
                event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
 {
-#ifdef PVXS_ENABLE_OPENSSL
-    if(!effective.tls_keychain_file.empty()) {
+    if(conf.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_client(effective);
         }catch(std::exception& e){
-            log_err_printf(setup, "Unable to setup TLS.  Disabled for client : %s\n", e.what());
+            log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
         }
     }
-#endif
 
     searchBuckets.resize(nBuckets);
 
@@ -934,13 +930,9 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
 
     bool isTCP = proto=="tcp";
 
-#ifdef PVXS_ENABLE_OPENSSL
     bool isTLS = proto=="tls";
     if(!self.tls_context && isTLS)
         return;
-#else
-    const bool isTLS = false;
-#endif
     if(!found || !(isTCP || isTLS))
         return;
 
@@ -1128,14 +1120,10 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
 
         if(kind == SearchKind::discover) {
             to_wire(M, uint8_t(0u));
-
-#ifdef PVXS_ENABLE_OPENSSL
         } else if(tls_context) {
             to_wire(M, uint8_t(2u));
             to_wire(M, "tls");
             to_wire(M, "tcp");
-#endif
-
         } else {
             to_wire(M, uint8_t(1u));
             to_wire(M, "tcp");

@@ -9,6 +9,9 @@
 #include <atomic>
 
 #include <cstring>
+#include <fstream>
+#include <sstream>
+#include <string>
 
 #include <epicsVersion.h>
 #include <epicsGetopt.h>
@@ -25,42 +28,72 @@ namespace {
 
 void usage(const char* argv0)
 {
-    std::cerr<<"Usage: "<<argv0<<" <opts> [pvname ...]\n"
-               "\n"
-               "  -h        Show this message.\n"
-               "  -V        Print version and exit.\n"
-               "  -r <req>  pvRequest condition.\n"
-               "  -v        Make more noise.\n"
-               "  -d        Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.\n"
-               "  -w <sec>  Operation timeout in seconds.  default 5 sec.\n"
-               "  -# <cnt>  Maximum number of elements to print for each array field.\n"
-               "            Set to zero 0 for unlimited.\n"
-               "            Default: 20\n"
-               "  -F <fmt>  Output format mode: delta, tree\n"
-               ;
+    std::cerr<<"Usage: "<<argv0
+              <<" <opts> [pvname ...]\n"
+                "\n"
+                "  -h        Show this message.\n"
+                "  -V        Print version and exit.\n"
+                "  -r <request>  pvRequest condition.\n"
+                "  -v        Make more noise.\n"
+                "  -d        Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make "
+                "a lot of noise.\n"
+                "  -w <sec>  Operation timeout in seconds.  default 5 sec.\n"
+                "  -# <cnt>  Maximum number of elements to print for each "
+                "array field.\n"
+                "            Set to zero 0 for unlimited.\n"
+                "            Default: 20\n"
+                "  -F <fmt>  Output format mode: delta, tree\n"
+#ifdef PVXS_ENABLE_JWT_AUTH
+                 "  -t <token_file>  JWT token file e.g. ~/.jwt/token\n"
+#endif
+        ;
 }
 
-}
+#ifdef PVXS_ENABLE_JWT_AUTH
+std::string getFileContents(const std::string& filename) {
+    std::ifstream fileStream(filename);
+    if (!fileStream) {
+        std::cerr << "Token file could not be opened: " << filename << std::endl;
+        return std::string();
+    }
 
-int main(int argc, char *argv[])
-{
+    std::stringstream stringStream;
+    stringStream << fileStream.rdbuf();
+
+    std::string str = stringStream.str();
+    str.erase(std::remove_if(str.begin(), str.end(), [](unsigned char c) { return std::isspace(c); }), str.end());
+
+    return str;
+}
+#endif
+
+}  // namespace
+
+int main(int argc, char* argv[]) {
     try {
-        logger_config_env(); // from $PVXS_LOG
+        logger_config_env();  // from $PVXS_LOG
         double timeout = 5.0;
         bool verbose = false;
         std::string request;
         Value::Fmt::format_t format = Value::Fmt::Delta;
         auto arrLimit = uint64_t(-1);
 
+        std::string options;
+#ifdef PVXS_ENABLE_JWT_AUTH
+        std::string jwt_token;
+        options = "hVvdw:r:#:F:t:";
+#else
+        options = "hVvdw:r:#:F:";
+#endif
         {
             int opt;
-            while ((opt = getopt(argc, argv, "hVvdw:r:#:F:")) != -1) {
-                switch(opt) {
+            while ((opt = getopt(argc, argv, options.c_str())) != -1) {
+                switch (opt) {
                 case 'h':
                     usage(argv[0]);
                     return 0;
                 case 'V':
-                    std::cout<<pvxs::version_information;
+                    std::cout << pvxs::version_information;
                     return 0;
                 case 'v':
                     verbose = true;
@@ -78,14 +111,22 @@ int main(int argc, char *argv[])
                     arrLimit = parseTo<uint64_t>(optarg);
                     break;
                 case 'F':
-                    if(std::strcmp(optarg, "tree")==0) {
+                    if (std::strcmp(optarg, "tree") == 0) {
                         format = Value::Fmt::Tree;
-                    } else if(std::strcmp(optarg, "delta")==0) {
+                    } else if (std::strcmp(optarg, "delta") == 0) {
                         format = Value::Fmt::Delta;
                     } else {
-                        std::cerr<<"Warning: ignoring unknown format '"<<optarg<<"'\n";
+                        std::cerr << "Warning: ignoring unknown format '" << optarg << "'\n";
                     }
                     break;
+#ifdef PVXS_ENABLE_JWT_AUTH
+                case 't':
+                    jwt_token = getFileContents(optarg);
+                    if (jwt_token.empty()) {
+                        return 2;
+                    }
+                    break;
+#endif
                 default:
                     usage(argv[0]);
                     std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
@@ -94,7 +135,13 @@ int main(int argc, char *argv[])
             }
         }
 
-        auto ctxt(client::Context::fromEnv());
+        client::Context ctxt;
+#ifdef PVXS_ENABLE_JWT_AUTH
+        if (!jwt_token.empty())
+            ctxt = client::Context::fromEnvWithJwt(jwt_token);
+        else
+#endif
+            ctxt = client::Context::fromEnv();
 
         if(verbose)
             std::cout<<"Effective config\n"<<ctxt.config();

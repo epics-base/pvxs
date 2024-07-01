@@ -68,7 +68,8 @@ pvxsIoc_SRCS += dummygroup.cpp
 
 endif # BASE_7_0
 
-pvxsIoc_LIBS += $(EPICS_BASE_IOC_LIBS)
+# LIB_LIB already includes EPICS_BASE_IOC_LIBS: unnecessary here
+#pvxsIoc_LIBS += $(EPICS_BASE_IOC_LIBS)
 
 else # BASE_3_15
 

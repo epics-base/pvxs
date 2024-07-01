@@ -7,13 +7,12 @@ include $(TOP)/configure/CONFIG
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
+SECURITY = $(TOP)/src/security
+
+USR_CPPFLAGS += -I$(TOP)/src/pvxs
 
 USR_CPPFLAGS += -DPVXS_API_BUILDING
 USR_CPPFLAGS += -DPVXS_ENABLE_EXPERT_API
-
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
-USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
-endif
 
 # set to NO to disable handling of $SSLKEYLOGFILE
 PVXS_ENABLE_SSLKEYLOGFILE ?= YES
@@ -58,64 +57,58 @@ GENVERSIONMACRO = PVXS_VCS_VERSION
 
 SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION)
 
-INC += pvxs/version.h
-INC += pvxs/versionNum.h
-INC += pvxs/log.h
-INC += pvxs/unittest.h
-INC += pvxs/util.h
-INC += pvxs/sharedArray.h
+
+INC += pvxs/client.h
+INC += pvxs/config.h
 INC += pvxs/data.h
-INC += pvxs/nt.h
+INC += pvxs/log.h
 INC += pvxs/netcommon.h
+INC += pvxs/nt.h
 INC += pvxs/server.h
-INC += pvxs/srvcommon.h
+INC += pvxs/sharedArray.h
 INC += pvxs/sharedpv.h
 INC += pvxs/source.h
-INC += pvxs/client.h
+INC += pvxs/srvcommon.h
+INC += pvxs/unittest.h
+INC += pvxs/util.h
+INC += pvxs/version.h
+INC += pvxs/versionNum.h
 
 LIBRARY = pvxs
 
-LIB_SRCS += describe.cpp
-LIB_SRCS += log.cpp
-LIB_SRCS += unittest.cpp
-LIB_SRCS += util.cpp
-LIB_SRCS += osgroups.cpp
-LIB_SRCS += sharedarray.cpp
 LIB_SRCS += bitmask.cpp
-LIB_SRCS += type.cpp
-LIB_SRCS += data.cpp
-LIB_SRCS += datafmt.cpp
-LIB_SRCS += pvrequest.cpp
-LIB_SRCS += dataencode.cpp
-LIB_SRCS += nt.cpp
-LIB_SRCS += evhelper.cpp
-LIB_SRCS += udp_collector.cpp
-
-LIB_SRCS += osdSockExt.cpp
-
+LIB_SRCS += client.cpp
+LIB_SRCS += clientconn.cpp
+LIB_SRCS += clientdiscover.cpp
+LIB_SRCS += clientget.cpp
+LIB_SRCS += clientintrospect.cpp
+LIB_SRCS += clientmon.cpp
+LIB_SRCS += clientreq.cpp
 LIB_SRCS += config.cpp
 LIB_SRCS += conn.cpp
-
+LIB_SRCS += data.cpp
+LIB_SRCS += dataencode.cpp
+LIB_SRCS += datafmt.cpp
+LIB_SRCS += describe.cpp
+LIB_SRCS += evhelper.cpp
+LIB_SRCS += log.cpp
+LIB_SRCS += nt.cpp
+LIB_SRCS += osdSockExt.cpp
+LIB_SRCS += osgroups.cpp
+LIB_SRCS += pvrequest.cpp
 LIB_SRCS += server.cpp
-LIB_SRCS += serverconn.cpp
 LIB_SRCS += serverchan.cpp
-LIB_SRCS += serverintrospect.cpp
+LIB_SRCS += serverconn.cpp
 LIB_SRCS += serverget.cpp
+LIB_SRCS += serverintrospect.cpp
 LIB_SRCS += servermon.cpp
 LIB_SRCS += serversource.cpp
+LIB_SRCS += sharedarray.cpp
 LIB_SRCS += sharedpv.cpp
-
-LIB_SRCS += client.cpp
-LIB_SRCS += clientreq.cpp
-LIB_SRCS += clientconn.cpp
-LIB_SRCS += clientintrospect.cpp
-LIB_SRCS += clientget.cpp
-LIB_SRCS += clientmon.cpp
-LIB_SRCS += clientdiscover.cpp
-
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
-LIB_SRCS += ossl.cpp
-endif
+LIB_SRCS += type.cpp
+LIB_SRCS += udp_collector.cpp
+LIB_SRCS += unittest.cpp
+LIB_SRCS += util.cpp
 
 LIB_LIBS += Com
 
@@ -127,6 +120,8 @@ LIB_LIBS += $(LIBEVENT_BUNDLE_LIBS)
 endif
 
 LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
+
+include $(SECURITY)/Makefile
 
 #===========================
 

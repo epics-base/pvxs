@@ -10,12 +10,13 @@
 #  error Do not include netcommon.h directly
 #endif
 
-#include <string>
-#include <set>
 #include <list>
 #include <memory>
+#include <set>
+#include <string>
 #include <vector>
 
+#include <pvxs/config.h>
 #include <pvxs/version.h>
 
 namespace pvxs {
@@ -122,49 +123,6 @@ struct PVXS_API ReportInfo {
 };
 
 #endif // PVXS_EXPERT_API_ENABLED
-
-struct PVXS_API ConfigCommon {
-    virtual ~ConfigCommon() =0;
-
-    //! TCP port to bind.  Default is 5075.  May be zero.
-    unsigned short tcp_port = 5075;
-    //! TCP port to bind for TLS traffic.  Default is 5076
-    //! @since UNRELEASED
-    unsigned short tls_port = 5076;
-    //! UDP port to bind.  Default is 5076.  May be zero, cf. Server::config() to find allocated port.
-    unsigned short udp_port = 5076;
-
-    //! Inactivity timeout interval for TCP connections.  (seconds)
-    //! @since 0.2.0
-    double tcpTimeout = 40.0;
-
-    /** Path to PKCS#12 file containing key and/or certificates.
-     *  @since UNRELEASED
-     */
-    std::string tls_keychain_file;
-
-    /** Client certificate request during TLS handshake.
-     *
-     *  - Default.   Currently equivalent to Optional
-     *  - Optional.  Server will ask for a client cert.  But will continue if none is provided.
-     *               If a client cert. is provided, then it is validated.  An invalid cert.
-     *               will fail the handshake.
-     *  - Require.   Server will require a valid client cert. or the TLS handshake will fail.
-     *
-     *  @since UNRELEASED
-     */
-    enum tls_client_cert_t {
-        Default,
-        Optional,
-        Require,
-    } tls_client_cert = Default;
-
-    /** Is TLS support available?
-     *  @since UNRELEASED
-     */
-    static
-    bool has_tls_support();
-};
 
 } // namespace impl
 } // namespace pvxs

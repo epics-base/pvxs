@@ -252,9 +252,7 @@ struct Server::Pvt
         Stopping,
     } state;
 
-#ifdef PVXS_ENABLE_OPENSSL
     ossl::SSLContext tls_context;
-#endif
 
     INST_COUNTER(ServerPvt);
 

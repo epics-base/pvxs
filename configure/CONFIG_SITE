@@ -35,6 +35,11 @@ CHECK_RELEASE = YES
 #HOST_OPT = NO
 #CROSS_OPT = NO
 
+# Uncomment the appropriate line or include in your private CONFIG_SITE.local
+# PVXS_ENABLE_KERBEROS_AUTH = YES
+# PVXS_ENABLE_JWT_AUTH = YES
+# PVXS_ENABLE_LDAP_AUTH = YES
+
 # These allow developers to override the CONFIG_SITE variable
 # settings without having to modify the configure/CONFIG_SITE
 # file itself.
@@ -45,3 +50,19 @@ CHECK_RELEASE = YES
 USR_CPPFLAGS_WIN32 += -DNOMINMAX -D_WIN32_WINNT=_WIN32_WINNT_VISTA
 
 USR_CPPFLAGS += -DUSE_TYPED_RSET
+
+# If you've configured your site for JWT Authentication then we configure the build appropriately
+ifeq ($(PVXS_ENABLE_JWT_AUTH),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_JWT_AUTH
+PVXS_JWT_AUTH_ENABLED=YES
+endif
+# If you've configured your site for Kerberos Authentication then we configure the build appropriately
+ifeq ($(PVXS_ENABLE_KERBEROS_AUTH),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_KERBEROS_AUTH
+PVXS_KERBEROS_AUTH_ENABLED=YES
+endif
+# If you've configured your site for LDAP Authentication then we configure the build appropriately
+ifeq ($(PVXS_ENABLE_LDAP_AUTH),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_LDAP_AUTH
+PVXS_LDAP_AUTH_ENABLED=YES
+endif

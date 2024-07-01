@@ -69,7 +69,7 @@ void Connection::startConnecting()
                 bufferevent_socket_new(context->tcp_loop.base, -1,
                                        BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
 
-#ifdef PVXS_ENABLE_OPENSSL
+
     if(isTLS) {
         auto ctx(SSL_new(context->tls_context.ctx));
         if(!ctx)
@@ -88,7 +88,6 @@ void Connection::startConnecting()
         bufferevent_openssl_set_allow_dirty_shutdown(bev.get(), 1);
 
     } else
-#endif
     {
         bev.reset(bufferevent_socket_new(context->tcp_loop.base,
                                          -1,
@@ -160,14 +159,12 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
 
 void Connection::bevEvent(short events)
 {
-#ifdef PVXS_ENABLE_OPENSSL
     if((events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) && isTLS && bev) {
         while(auto err = bufferevent_get_openssl_error(bev.get())) {
             log_err_printf(io, "TLS Error (0x%lx) %s\n",
                            err, ERR_reason_error_string(err));
         }
     }
-#endif
     ConnBase::bevEvent(events);
     // called Connection::cleanup()
 
@@ -179,13 +176,11 @@ void Connection::bevEvent(short events)
         peerCred->peer = peerName;
         peerCred->isTLS = isTLS;
 
-#ifdef PVXS_ENABLE_OPENSSL
         if(isTLS) {
             auto ctx = bufferevent_openssl_get_ssl(bev.get());
             assert(ctx);
             ossl::SSLContext::fill_credentials(*peerCred, ctx);
         } else
-#endif
         {
             peerCred->method = "anonymous";
         }
@@ -287,10 +282,8 @@ void Connection::handle_CONNECTION_VALIDATION()
 
         if(method=="ca" || (method=="anonymous" && selected!="ca"))
             selected = method;
-#ifdef PVXS_ENABLE_OPENSSL
         else if(isTLS && method=="x509" && context->tls_context.have_certificate())
             selected = method;
-#endif
     }
 
     if(!M.good()) {

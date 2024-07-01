@@ -191,10 +191,8 @@ void ServerConn::handle_SEARCH()
         from_wire(M, proto);
         if(proto=="tcp")
             foundtcp = true;
-#ifdef PVXS_ENABLE_OPENSSL
         else if(proto=="tls" && iface->server->tls_context && iface->server->effective.tls_port)
             foundtls = true;
-#endif
     }
 
     uint16_t nchan=0;

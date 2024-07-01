@@ -34,13 +34,13 @@ void testGetSuper() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = "superserver1.p12";
+    serv_conf.tls_keychain_filename = "superserver1.p12";
 
     auto serv(serv_conf.build()
               .addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = "ca.p12";
+    cli_conf.tls_keychain_filename = "ca.p12";
 
     auto cli(cli_conf.build());
 
@@ -55,6 +55,7 @@ void testGetSuper() {
 
     auto reply(cli.get("mailbox").exec()->wait(5.0));
     testEq(reply["value"].as<int32_t>(), 42);
+    conn.reset();
 }
 
 void testGetIntermediate() {
@@ -64,13 +65,13 @@ void testGetIntermediate() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = "server1.p12";
+    serv_conf.tls_keychain_filename = "server1.p12";
 
     auto serv(serv_conf.build()
               .addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = "ca.p12";
+    cli_conf.tls_keychain_filename = "ca.p12";
 
     auto cli(cli_conf.build());
 
@@ -85,6 +86,7 @@ void testGetIntermediate() {
 
     auto reply(cli.get("mailbox").exec()->wait(5.0));
     testEq(reply["value"].as<int32_t>(), 42);
+    conn.reset();
 }
 
 void testGetNameServer() {
@@ -94,13 +96,13 @@ void testGetNameServer() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = "server1.p12";
+    serv_conf.tls_keychain_filename = "server1.p12";
 
     auto serv(serv_conf.build()
               .addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = "ca.p12";
+    cli_conf.tls_keychain_filename = "ca.p12";
     for(auto& addr : cli_conf.addressList)
         cli_conf.nameServers.push_back(SB()<<"pvas://"<<addr/*<<':'<<cli_conf.tls_port*/);
     cli_conf.autoAddrList = false;
@@ -184,13 +186,13 @@ void testClientReconfig() {
     testShow()<<__func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = "ioc1.p12";
+    serv_conf.tls_keychain_filename = "ioc1.p12";
 
     auto serv(serv_conf.build()
               .addSource("whoami", std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = "client1.p12";
+    cli_conf.tls_keychain_filename = "client1.p12";
 
     auto cli(cli_conf.build());
 
@@ -220,7 +222,8 @@ void testClientReconfig() {
     testEq(update["value"].as<std::string>(), "x509/client1");
 
     cli_conf = cli.config();
-    cli_conf.tls_keychain_file = "client2.p12;oraclesucks";
+    cli_conf.tls_keychain_filename = "client2.p12";
+    cli_conf.tls_keychain_password = "oraclesucks";
     testDiag("cli.reconfigure()");
     cli.reconfigure(cli_conf);
 
@@ -247,13 +250,13 @@ void testServerReconfig() {
     testShow()<<__func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = "server1.p12";
+    serv_conf.tls_keychain_filename = "server1.p12";
 
     auto serv(serv_conf.build()
               .addSource("whoami", std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = "ioc1.p12";
+    cli_conf.tls_keychain_filename = "ioc1.p12";
 
     auto cli(cli_conf.build());
 
@@ -283,7 +286,7 @@ void testServerReconfig() {
     testEq(update["value"].as<std::string>(), "x509/ioc1");
 
     serv_conf = serv.config();
-    serv_conf.tls_keychain_file = "ioc1.p12";
+    serv_conf.tls_keychain_filename = "ioc1.p12";
     testDiag("serv.reconfigure()");
     serv.reconfigure(serv_conf);
 

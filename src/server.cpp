@@ -23,6 +23,7 @@
 
 #include <pvxs/server.h>
 #include <pvxs/client.h>
+#include <pvxs/config.h>
 #include <pvxs/log.h>
 #include "evhelper.h"
 #include "serverconn.h"
@@ -45,9 +46,9 @@ DEFINE_LOGGER(serversearch, "pvxs.server.search");
 static constexpr timeval beaconIntervalShort{15, 0};
 static constexpr timeval beaconIntervalLong{180, 0};
 
-Server Server::fromEnv()
+Server Server::fromEnv(const bool tls_disabled, const ConfigCommon::ConfigTarget target)
 {
-    return Config::fromEnv().build();
+    return Config::fromEnv(tls_disabled, target).build();
 }
 
 Server::Server(const Config& conf)
@@ -378,7 +379,6 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
             }
             strm<<"\n";
 
-#ifdef PVXS_ENABLE_OPENSSL
             if(serv.pvt->tls_context) {
                 auto cert(serv.pvt->tls_context.certificate0());
                 assert(cert);
@@ -386,9 +386,6 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
             } else {
                 strm<<indent{}<<"TLS Cert. not loaded\n";
             }
-#else
-            strm<<indent{}<<"TLS Support not enabled\n";
-#endif
 
             Indented I(strm);
 
@@ -408,14 +405,12 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                 Indented I(strm);
 
                 strm<<indent{}<<"Cred: "<<*conn->cred<<"\n";
-#ifdef PVXS_ENABLE_OPENSSL
                 if(conn->iface->isTLS && conn->connection()) {
                     auto ctx = bufferevent_openssl_get_ssl(conn->connection());
                     assert(ctx);
                     if(auto cert = SSL_get0_peer_certificate(ctx))
                         strm<<indent{}<<"Cert: "<<ossl::ShowX509{cert}<<"\n";
                 }
-#endif
 
                 for(auto& pair : conn->chanBySID) {
                     auto& chan = pair.second;
@@ -469,15 +464,18 @@ Server::Pvt::Pvt(const Config &conf)
 {
     effective.expand();
 
-#ifdef PVXS_ENABLE_OPENSSL
-    if(!effective.tls_keychain_file.empty()) {
+    if(effective.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_server(effective);
         }catch(std::exception& e){
-            log_err_printf(serversetup, "Unable to setup TLS.  Disabled for server : %s\n", e.what());
+            if (effective.tls_stop_if_no_cert) {
+                log_err_printf(serversetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
+                exit(1);
+            } else {
+                log_err_printf(serversetup, "TLS disabled for server: %s\n", e.what());
+            }
         }
     }
-#endif
 
     beaconSender4.set_broadcast(true);
 
@@ -579,9 +577,7 @@ Server::Pvt::Pvt(const Config &conf)
     acceptor_loop.call([this, &tcpifaces](){
         // from accepter worker
 
-#ifdef PVXS_ENABLE_OPENSSL
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
-#endif
 
         bool firstiface = true;
         for(auto& addr : tcpifaces) {
@@ -595,7 +591,6 @@ Server::Pvt::Pvt(const Config &conf)
             firstiface = false;
         }
 
-#ifdef PVXS_ENABLE_OPENSSL
         if(tls_context) {
             firstiface = true;
             for(auto& addr : tlsifaces) {
@@ -609,7 +604,6 @@ Server::Pvt::Pvt(const Config &conf)
                 firstiface = false;
             }
         }
-#endif
 
         for(const auto& addr : effective.beaconDestinations) {
             beaconDest.emplace_back(addr.c_str(), &effective);
@@ -834,12 +828,10 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     _to_wire<12>(M, effective.guid.data(), false, __FILE__, __LINE__);
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
-#ifdef PVXS_ENABLE_OPENSSL
     if(msg.protoTLS && tls_context && effective.tls_port) {
         to_wire(M, uint16_t(effective.tls_port));
         to_wire(M, "tls");
     } else
-#endif
     { // protoTCP
         to_wire(M, uint16_t(effective.tcp_port));
         to_wire(M, "tcp");

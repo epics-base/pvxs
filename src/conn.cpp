@@ -51,7 +51,7 @@ const char* ConnBase::peerLabel() const
     return isClient ? "Server" : "Client";
 }
 
-void ConnBase::connect(evbufferevent&& bev)
+void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
 {
     if(!bev)
         throw BAD_ALLOC();
