@@ -46,10 +46,17 @@ DEFINE_LOGGER(serversearch, "pvxs.server.search");
 static constexpr timeval beaconIntervalShort{15, 0};
 static constexpr timeval beaconIntervalLong{180, 0};
 
+#ifndef PVXS_ENABLE_OPENSSL
+Server Server::fromEnv()
+{
+    return Config::fromEnv().build();
+}
+#else
 Server Server::fromEnv(const bool tls_disabled, const ConfigCommon::ConfigTarget target)
 {
     return Config::fromEnv(tls_disabled, target).build();
 }
+#endif
 
 Server::Server(const Config& conf)
 {
@@ -149,6 +156,7 @@ std::vector<std::pair<std::string, int> > Server::listSource()
     return names;
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
 void Server::reconfigure(const Config& inconf)
 {
     if(!pvt)
@@ -201,6 +209,7 @@ void Server::reconfigure(const Config& inconf)
         log_info_printf(serversetup, "Resume%s", "\n");
     }
 }
+#endif
 
 const Config& Server::config() const
 {
@@ -219,10 +228,13 @@ client::Config Server::clientConfig() const
     // do not copy tls_keychain_file
     ret.udp_port = pvt->effective.udp_port;
     ret.tcp_port = pvt->effective.tcp_port;
-    ret.tls_port = pvt->effective.tls_port;
     ret.interfaces = pvt->effective.interfaces;
     ret.addressList = pvt->effective.interfaces;
     ret.autoAddrList = false;
+
+#ifdef PVXS_ENABLE_OPENSSL
+    ret.tls_port = pvt->effective.tls_port;
+#endif
 
     return ret;
 }
@@ -379,6 +391,7 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
             }
             strm<<"\n";
 
+#ifdef PVXS_ENABLE_OPENSSL
             if(serv.pvt->tls_context) {
                 auto cert(serv.pvt->tls_context.certificate0());
                 assert(cert);
@@ -386,6 +399,9 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
             } else {
                 strm<<indent{}<<"TLS Cert. not loaded\n";
             }
+#else
+            strm<<indent{}<<"TLS Support not enabled\n";
+#endif
 
             Indented I(strm);
 
@@ -396,7 +412,9 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                     <<" backlog="<<conn->backlog.size()
                     <<" TX="<<conn->statTx<<" RX="<<conn->statRx
                     <<" auth="<<conn->cred->method
-                    <<(conn->iface->isTLS ? " TLS" : "")
+#ifdef PVXS_ENABLE_OPENSSL
+                  <<(conn->iface->isTLS ? " TLS" : "")
+#endif
                     <<"\n";
 
                 if(detail<=2)
@@ -405,12 +423,14 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                 Indented I(strm);
 
                 strm<<indent{}<<"Cred: "<<*conn->cred<<"\n";
+#ifdef PVXS_ENABLE_OPENSSL
                 if(conn->iface->isTLS && conn->connection()) {
                     auto ctx = bufferevent_openssl_get_ssl(conn->connection());
                     assert(ctx);
                     if(auto cert = SSL_get0_peer_certificate(ctx))
                         strm<<indent{}<<"Cert: "<<ossl::ShowX509{cert}<<"\n";
                 }
+#endif
 
                 for(auto& pair : conn->chanBySID) {
                     auto& chan = pair.second;
@@ -464,6 +484,7 @@ Server::Pvt::Pvt(const Config &conf)
 {
     effective.expand();
 
+#ifdef PVXS_ENABLE_OPENSSL
     if(effective.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_server(effective);
@@ -476,6 +497,7 @@ Server::Pvt::Pvt(const Config &conf)
             }
         }
     }
+#endif
 
     beaconSender4.set_broadcast(true);
 
@@ -577,7 +599,9 @@ Server::Pvt::Pvt(const Config &conf)
     acceptor_loop.call([this, &tcpifaces](){
         // from accepter worker
 
+#ifdef PVXS_ENABLE_OPENSSL
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
+#endif
 
         bool firstiface = true;
         for(auto& addr : tcpifaces) {
@@ -591,6 +615,7 @@ Server::Pvt::Pvt(const Config &conf)
             firstiface = false;
         }
 
+#ifdef PVXS_ENABLE_OPENSSL
         if(tls_context) {
             firstiface = true;
             for(auto& addr : tlsifaces) {
@@ -604,6 +629,7 @@ Server::Pvt::Pvt(const Config &conf)
                 firstiface = false;
             }
         }
+#endif
 
         for(const auto& addr : effective.beaconDestinations) {
             beaconDest.emplace_back(addr.c_str(), &effective);
@@ -691,7 +717,10 @@ void Server::Pvt::start()
                 log_err_printf(serversetup, "Error enabling listener on %s\n", iface.name.c_str());
             }
             log_debug_printf(serversetup, "Server enabled%s listener on %s\n",
-                             iface.isTLS ? " TLS" : "", iface.name.c_str());
+#ifdef PVXS_ENABLE_OPENSSL
+                               iface.isTLS ? " TLS" :
+#endif
+                              "", iface.name.c_str());
         }
     });
     if(prev_state!=Stopped)
@@ -828,10 +857,12 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     _to_wire<12>(M, effective.guid.data(), false, __FILE__, __LINE__);
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
+#ifdef PVXS_ENABLE_OPENSSL
     if(msg.protoTLS && tls_context && effective.tls_port) {
         to_wire(M, uint16_t(effective.tls_port));
         to_wire(M, "tls");
     } else
+#endif
     { // protoTCP
         to_wire(M, uint16_t(effective.tcp_port));
         to_wire(M, "tcp");

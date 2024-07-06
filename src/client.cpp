@@ -219,8 +219,11 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
                          name.c_str());
 
     } else if(context->state==ContextImpl::Running) { // reconnect to specific server
-        conn = Connection::build(context, forcedServer.addr, true,
-                                 forcedServer.scheme==SockEndpoint::TLS);
+        conn = Connection::build(context, forcedServer.addr, true
+#ifdef PVXS_ENABLE_OPENSSL
+          , forcedServer.scheme==SockEndpoint::TLS
+#endif
+                                 );
 
         conn->pending[cid] = self;
         state = Connecting;
@@ -390,8 +393,11 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
 
         } else { // bypass search and connect so a specific server
             chan->forcedServer = forceServer;
-            chan->conn = Connection::build(context, forceServer.addr, false,
-                                           forceServer.scheme==SockEndpoint::TLS);
+            chan->conn = Connection::build(context, forceServer.addr, false
+#ifdef PVXS_ENABLE_OPENSSL
+              , forceServer.scheme==SockEndpoint::TLS
+#endif
+                                           );
 
             chan->conn->pending[chan->cid] = chan;
             chan->state = Connecting;
@@ -408,6 +414,12 @@ Operation::~Operation() {}
 
 Subscription::~Subscription() {}
 
+#ifndef PVXS_ENABLE_OPENSSL
+Context Context::fromEnv()
+{
+    return Config::fromEnv().build();
+}
+#else
 Context Context::fromEnv(const bool tls_disabled)
 {
     return Config::fromEnv(tls_disabled).build();
@@ -416,6 +428,7 @@ Context Context::fromEnv(const bool tls_disabled)
 #ifdef PVXS_ENABLE_JWT_AUTH
 Context Context::fromEnvWithJwt(const std::string &token) { return Config::fromEnvWithJwt(token).build(); }
 #endif
+#endif // PVXS_ENABLE_OPENSSL
 
 Context::Context(const Config& conf)
     :pvt(std::make_shared<Pvt>(conf))
@@ -425,6 +438,7 @@ Context::Context(const Config& conf)
 
 Context::~Context() {}
 
+#ifdef PVXS_ENABLE_OPENSSL
 void Context::reconfigure(const Config& newconf)
 {
     if(!pvt)
@@ -451,6 +465,7 @@ void Context::reconfigure(const Config& newconf)
         pvt->impl->tls_context = new_context;
     });
 }
+#endif
 
 const Config& Context::config() const
 {
@@ -584,6 +599,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     ,nsChecker(__FILE__, __LINE__,
                event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
 {
+#ifdef PVXS_ENABLE_OPENSSL
     if(conf.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_client(effective);
@@ -591,6 +607,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
             log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
         }
     }
+#endif
 
     searchBuckets.resize(nBuckets);
 
@@ -707,11 +724,19 @@ void ContextImpl::startNS()
         // start connections to name servers
         for(auto& ns : nameServers) {
             const auto& serv = ns.first;
-            ns.second = Connection::build(shared_from_this(), serv.addr, false,
-                                          serv.scheme==SockEndpoint::TLS);
+            ns.second = Connection::build(shared_from_this(), serv.addr, false
+#ifdef PVXS_ENABLE_OPENSSL
+              , serv.scheme==SockEndpoint::TLS
+#endif
+                                          );
             ns.second->nameserver = true;
+#ifdef PVXS_ENABLE_OPENSSL
             log_debug_printf(io, "Connecting to nameserver %s%s\n",
                              ns.second->peerName.c_str(), ns.second->isTLS ? " TLS" : "");
+#else
+            log_debug_printf(io, "Connecting to nameserver %s\n",
+                             ns.second->peerName.c_str());
+#endif
         }
 
         if(event_add(nsChecker.get(), &tcpNSCheckInterval))
@@ -930,10 +955,14 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
 
     bool isTCP = proto=="tcp";
 
+#ifdef PVXS_ENABLE_OPENSSL
     bool isTLS = proto=="tls";
     if(!self.tls_context && isTLS)
         return;
     if(!found || !(isTCP || isTLS))
+#else
+    if(!found || !isTCP )
+#endif
         return;
 
     for(auto n : range(nSearch)) {
@@ -961,7 +990,11 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
             chan->guid = guid;
             chan->replyAddr = serv;
 
+#ifdef PVXS_ENABLE_OPENSSL
             chan->conn = Connection::build(self.shared_from_this(), serv, false, isTLS);
+#else
+            chan->conn = Connection::build(self.shared_from_this(), serv, false);
+#endif
 
             chan->conn->pending[chan->cid] = chan;
             chan->state = Channel::Connecting;
@@ -1120,10 +1153,14 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
 
         if(kind == SearchKind::discover) {
             to_wire(M, uint8_t(0u));
+
+#ifdef PVXS_ENABLE_OPENSSL
         } else if(tls_context) {
             to_wire(M, uint8_t(2u));
             to_wire(M, "tls");
             to_wire(M, "tcp");
+#endif
+
         } else {
             to_wire(M, uint8_t(1u));
             to_wire(M, "tcp");
@@ -1349,8 +1386,11 @@ void ContextImpl::onNSCheck()
         if(ns.second && ns.second->state != ConnBase::Disconnected) // hold-off, connecting, or connected
             continue;
 
-        ns.second = Connection::build(shared_from_this(), ns.first.addr, false,
-                                      ns.first.scheme==SockEndpoint::TLS);
+        ns.second = Connection::build(shared_from_this(), ns.first.addr, false
+#ifdef PVXS_ENABLE_OPENSSL
+          , ns.first.scheme==SockEndpoint::TLS
+#endif
+                                      );
         ns.second->nameserver = true;
         log_debug_printf(io, "Reconnecting nameserver %s\n", ns.second->peerName.c_str());
     }

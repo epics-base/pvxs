@@ -45,10 +45,10 @@ DEFINE_LOGGER(auth_registry, "pvxs.security.auth.registry");
  *
  * Inclusion of authenticator source in the dependencies depends on specific
  * macros that enable each authenticator. The following Makefile macros are
- * used: `PVXS_KERBEROS_AUTH_ENABLED`, `PVXS_JWT_AUTH_ENABLED`, and
- * `PVXS_LDAP_AUTH_ENABLED`
+ * used: `PVXS_ENABLE_KRB_AUTH`, `PVXS_ENABLE_JWT_AUTH`, and
+ * `PVXS_ENABLE_LDAP_AUTH`
  * and the following compile time macros:
- * `PVXS_ENABLE_KERBEROS_AUTH`, `PVXS_ENABLE_JWT_AUTH`, and
+ * `PVXS_ENABLE_KRB_AUTH`, `PVXS_ENABLE_JWT_AUTH`, and
  * `PVXS_ENABLE_LDAP_AUTH`
  */
 class AuthRegistry {

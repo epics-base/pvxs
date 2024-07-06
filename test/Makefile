@@ -3,7 +3,7 @@ TOP=..
 include $(TOP)/configure/CONFIG
 # cfg/ sometimes isn't correctly included due to a Base bug
 # so we do here (maybe again) as workaround
--include $(wildcard $(TOP)/cfg/CONFIG*))
+-include $(wildcard $(TOP)/cfg/CONFIG*)
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
@@ -116,7 +116,8 @@ testudpfwd_SRCS += testudpfwd.cpp
 TESTS += testudpfwd
 
 ifdef BASE_3_15
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 TESTPROD_HOST += gen_test_certs
 gen_test_certs += gen_test_certs.cpp
 
@@ -124,7 +125,7 @@ TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp
 TESTS += testtls
 TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
-endif
+endif # EVENT2_HAS_OPENSSL
 endif
 
 ifdef BASE_7_0
@@ -200,7 +201,7 @@ endif
 #===========================
 
 include $(TOP)/configure/RULES
--include $(wildcard $(TOP)/cfg/RULES*))
+-include $(wildcard $(TOP)/cfg/RULES*)
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
@@ -208,7 +209,7 @@ ifdef BASE_3_15
 rtemsTestData.c : $(TESTFILES) $(TOOLS)/epicsMakeMemFs.pl
 	$(PERL) $(TOOLS)/epicsMakeMemFs.pl $@ epicsRtemsFSImage $(TESTFILES)
 
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
 testtls$(EXE): | ca.p12
 
 # generate test certs only with EPICS_HOST_ARCH

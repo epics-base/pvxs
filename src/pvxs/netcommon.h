@@ -56,10 +56,13 @@ struct PVXS_API PeerCredentials {
      * On other targets, an empty list is returned.
      */
     std::set<std::string> roles() const;
+
+#ifdef PVXS_ENABLE_OPENSSL
     /** Operation over secure transport
      * @since UNRELEASED
      */
     bool isTLS = false;
+#endif
 };
 
 PVXS_API

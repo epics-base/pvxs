@@ -28,25 +28,22 @@ namespace {
 
 void usage(const char* argv0)
 {
-    std::cerr<<"Usage: "<<argv0
-              <<" <opts> [pvname ...]\n"
-                "\n"
-                "  -h        Show this message.\n"
-                "  -V        Print version and exit.\n"
-                "  -r <request>  pvRequest condition.\n"
-                "  -v        Make more noise.\n"
-                "  -d        Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make "
-                "a lot of noise.\n"
-                "  -w <sec>  Operation timeout in seconds.  default 5 sec.\n"
-                "  -# <cnt>  Maximum number of elements to print for each "
-                "array field.\n"
-                "            Set to zero 0 for unlimited.\n"
-                "            Default: 20\n"
-                "  -F <fmt>  Output format mode: delta, tree\n"
+    std::cerr<<"Usage: "<<argv0<<" <opts> [pvname ...]\n"
+               "\n"
+               "  -h        Show this message.\n"
+               "  -V        Print version and exit.\n"
+               "  -r <req>  pvRequest condition.\n"
+               "  -v        Make more noise.\n"
+               "  -d        Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.\n"
+               "  -w <sec>  Operation timeout in seconds.  default 5 sec.\n"
+               "  -# <cnt>  Maximum number of elements to print for each array field.\n"
+               "            Set to zero 0 for unlimited.\n"
+               "            Default: 20\n"
+               "  -F <fmt>  Output format mode: delta, tree\n"
 #ifdef PVXS_ENABLE_JWT_AUTH
-                 "  -t <token_file>  JWT token file e.g. ~/.jwt/token\n"
+               "  -t <file> JWT token file e.g. ~/.jwt/token\n"
 #endif
-        ;
+               ;
 }
 
 #ifdef PVXS_ENABLE_JWT_AUTH
@@ -69,9 +66,10 @@ std::string getFileContents(const std::string& filename) {
 
 }  // namespace
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[])
+{
     try {
-        logger_config_env();  // from $PVXS_LOG
+        logger_config_env(); // from $PVXS_LOG
         double timeout = 5.0;
         bool verbose = false;
         std::string request;
@@ -88,12 +86,12 @@ int main(int argc, char* argv[]) {
         {
             int opt;
             while ((opt = getopt(argc, argv, options.c_str())) != -1) {
-                switch (opt) {
+                switch(opt) {
                 case 'h':
                     usage(argv[0]);
                     return 0;
                 case 'V':
-                    std::cout << pvxs::version_information;
+                    std::cout<<pvxs::version_information;
                     return 0;
                 case 'v':
                     verbose = true;
@@ -111,12 +109,12 @@ int main(int argc, char* argv[]) {
                     arrLimit = parseTo<uint64_t>(optarg);
                     break;
                 case 'F':
-                    if (std::strcmp(optarg, "tree") == 0) {
+                    if(std::strcmp(optarg, "tree")==0) {
                         format = Value::Fmt::Tree;
-                    } else if (std::strcmp(optarg, "delta") == 0) {
+                    } else if(std::strcmp(optarg, "delta")==0) {
                         format = Value::Fmt::Delta;
                     } else {
-                        std::cerr << "Warning: ignoring unknown format '" << optarg << "'\n";
+                        std::cerr<<"Warning: ignoring unknown format '"<<optarg<<"'\n";
                     }
                     break;
 #ifdef PVXS_ENABLE_JWT_AUTH

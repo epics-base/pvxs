@@ -27,7 +27,7 @@ ifeq ($(PVXS_ENABLE_JWT_AUTH),YES)
 include $(SECURITY)/authjwt/Makefile
 endif
 
-ifeq ($(PVXS_ENABLE_KERBEROS_AUTH),YES)
+ifeq ($(PVXS_ENABLE_KRB_AUTH),YES)
 include $(SECURITY)/authkrb/Makefile
 endif
 

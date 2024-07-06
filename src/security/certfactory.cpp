@@ -252,7 +252,7 @@ void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) {
         usage = "digitalSignature,cRLSign,keyCertSign";
     } else if (IS_USED_FOR_(usage_, kForCa)) {
         usage = "cRLSign,keyCertSign";
-    } else if (IS_USED_FOR_(usage_, kForServer)) {
+    } else if (IS_FOR_A_SERVER_(usage_)) {
         usage = "digitalSignature,keyEncipherment";
     } else {
         usage = "digitalSignature";
@@ -263,16 +263,16 @@ void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) {
 
     // Extended Key Usage: conditionally set based on `usage_`
     std::string extended_usage;
-    if (IS_USED_FOR_(usage_, kForIntermediateCa)) {
-        extended_usage = "serverAuth,clientAuth,OCSPSigning";
-    } else if (IS_USED_FOR_(usage_, kForClientAndServer)) {
+    if (IS_USED_FOR_(usage_, kForClientAndServer)) {
         extended_usage = "clientAuth,serverAuth";
-    } else if (IS_USED_FOR_(usage_, kForCa)) {
-        extended_usage = "OCSPSigning";
-    } else if (IS_USED_FOR_(usage_, kForServer)) {
-        extended_usage = "serverAuth";
     } else if (IS_USED_FOR_(usage_, kForClient)) {
         extended_usage = "clientAuth";
+    } else if (IS_USED_FOR_(usage_, kForServer)) {
+        extended_usage = "serverAuth";
+    } else if (IS_USED_FOR_(usage_, kForIntermediateCa)) {
+        extended_usage = "serverAuth,clientAuth,OCSPSigning";
+    } else if (IS_USED_FOR_(usage_, kForCMS)) {
+        extended_usage = "serverAuth,OCSPSigning";
     }
     if ( !extended_usage.empty()) {
         addExtension(certificate, NID_ext_key_usage, extended_usage.c_str());

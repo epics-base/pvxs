@@ -6,6 +6,7 @@
 #ifndef PVXS_OWNED_PTR_H_
 #define PVXS_OWNED_PTR_H_
 
+#ifdef PVXS_ENABLE_OPENSSL
 #include <openssl/conf.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
@@ -19,10 +20,12 @@
 #include <openssl/x509v3.h>
 
 #include "sqlite3.h"
+#endif
 #include "utilpvt.h"
 
 namespace pvxs {
 
+#ifdef PVXS_ENABLE_OPENSSL
 template <typename T>
 struct ssl_delete;
 
@@ -30,11 +33,21 @@ template <typename T>
 struct ssl_delete_all;
 
 template <typename T>
-struct file_delete;
+struct sqlite_delete;
+#endif
 
 template <typename T>
-struct sqlite_delete;
+struct file_delete;
 
+#define DEFINE_FILE_DELETER_FOR_(TYPE)               \
+    template <>                                      \
+    struct file_delete<TYPE> {                       \
+        inline void operator()(TYPE *base_pointer) { \
+            if (base_pointer) fclose(base_pointer);  \
+        }                                            \
+    }
+
+#ifdef PVXS_ENABLE_OPENSSL
 #define DEFINE_SSL_DELETER_FOR_(TYPE)                    \
     template <>                                          \
     struct ssl_delete<TYPE> {                            \
@@ -49,14 +62,6 @@ struct sqlite_delete;
         inline void operator()(TYPE *base_pointer) {         \
             if (base_pointer) TYPE##_free_all(base_pointer); \
         }                                                    \
-    }
-
-#define DEFINE_FILE_DELETER_FOR_(TYPE)               \
-    template <>                                      \
-    struct file_delete<TYPE> {                       \
-        inline void operator()(TYPE *base_pointer) { \
-            if (base_pointer) fclose(base_pointer);  \
-        }                                            \
     }
 
 #define DEFINE_SQLITE_DELETER_FOR_(TYPE)                   \
@@ -90,8 +95,11 @@ struct sqlite_delete;
             if (base_pointer) OPENSSL_free(base_pointer); \
         }                                                 \
     }
+#endif
 
 DEFINE_FILE_DELETER_FOR_(FILE);
+
+#ifdef PVXS_ENABLE_OPENSSL
 DEFINE_SQLITE_DELETER_FOR_(sqlite3);
 DEFINE_OPENSSL_DELETER_FOR_(char);
 DEFINE_SSL_DELETER_FOR_(ASN1_OBJECT);
@@ -117,10 +125,16 @@ DEFINE_SSL_DELETER_FOR_(X509_STORE_CTX);
 DEFINE_SSL_INFO_STACK_DELETER_FOR_(X509_INFO);
 DEFINE_SSL_STACK_DELETER_FOR_(X509);
 DEFINE_SSL_STACK_DELETER_FOR_(X509_ATTRIBUTE);
+#endif
 
 #undef DEFINE_FILE_DELETER_FOR_
+#ifdef PVXS_ENABLE_OPENSSL
 #undef DEFINE_SSL_DELETER_FOR_
+#undef DEFINE_SSL_DELETER_ALL_FOR_
+#undef DEFINE_SQLITE_DELETER_FOR_
 #undef DEFINE_SSL_STACK_DELETER_FOR_
+#undef DEFINE_OPENSSL_DELETER_FOR_
+#endif
 
 /**
  * @class OwnedPtr
@@ -167,7 +181,7 @@ struct OwnedPtr : public std::unique_ptr<T, D> {
 
         operator T **() { return &ptr; }
         constexpr Acquisition(base_t *o) : o(o) {}
-        constexpr Acquisition(OwnedPtr<T, ssl_delete<T>> *o) : o(o) {}
+        constexpr Acquisition(OwnedPtr<T, D> *o) : o(o) {}
         ~Acquisition() { o->reset(ptr); }
     };
 
@@ -176,13 +190,14 @@ struct OwnedPtr : public std::unique_ptr<T, D> {
 
 // Use OwnedPtr to define a manager for a SSL object with all the custom SSL
 // deleters defined above
+using file_ptr = OwnedPtr<FILE, file_delete<FILE>>;
+
+#ifdef PVXS_ENABLE_OPENSSL
 template <typename T>
 using ossl_ptr = OwnedPtr<T, ssl_delete<T>>;
 
 template <typename T>
 using ossl_ptr_all = OwnedPtr<T, ssl_delete_all<T>>;
-
-using file_ptr = OwnedPtr<FILE, file_delete<FILE>>;
 
 using sql_ptr = OwnedPtr<sqlite3, sqlite_delete<sqlite3>>;
 
@@ -222,6 +237,7 @@ class ossl_shared_ptr : public std::shared_ptr<T> {
         if (!*this) throw loc_bad_alloc(__FILE__, __LINE__);
     }
 };
+#endif
 
 }  // namespace pvxs
 #endif  // PVXS_OWNED_PTR_H_

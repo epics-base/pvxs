@@ -3,7 +3,7 @@ TOP=..
 include $(TOP)/configure/CONFIG
 # cfg/ sometimes isn't correctly included due to a Base bug
 # so we do here (maybe again) as workaround
--include $(wildcard $(TOP)/cfg/CONFIG*))
+-include $(wildcard $(TOP)/cfg/CONFIG*)
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
@@ -30,9 +30,13 @@ FINAL_LOCATION ?= $(shell $(PERL) $(TOOLS)/fullPathName.pl $(INSTALL_LOCATION))
 #===========================
 
 include $(TOP)/configure/RULES
--include $(wildcard $(TOP)/cfg/RULES*))
+-include $(wildcard $(TOP)/cfg/RULES*)
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
+
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+endif
 
 softMain$(DEP): epicsInstallDir.h
 

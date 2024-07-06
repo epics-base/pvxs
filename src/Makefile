@@ -3,13 +3,28 @@ TOP=..
 include $(TOP)/configure/CONFIG
 # cfg/ sometimes isn't correctly included due to a Base bug
 # so we do here (maybe again) as workaround
--include $(wildcard $(TOP)/cfg/CONFIG*))
+-include $(wildcard $(TOP)/cfg/CONFIG*)
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
-SECURITY = $(TOP)/src/security
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 
+ifeq ($(PVXS_ENABLE_JWT_AUTH),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_JWT_AUTH
+endif
+
+ifeq ($(PVXS_ENABLE_KRB_AUTH),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_KRB_AUTH
+endif
+
+ifeq ($(PVXS_ENABLE_LDAP_AUTH),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_LDAP_AUTH
+endif
+
+SECURITY = $(TOP)/src/security
 USR_CPPFLAGS += -I$(TOP)/src/pvxs
+endif # EVENT2_HAS_OPENSSL
 
 USR_CPPFLAGS += -DPVXS_API_BUILDING
 USR_CPPFLAGS += -DPVXS_ENABLE_EXPERT_API
@@ -56,7 +71,6 @@ GENVERSION = pvxsVCS.h
 GENVERSIONMACRO = PVXS_VCS_VERSION
 
 SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION)
-
 
 INC += pvxs/client.h
 INC += pvxs/config.h
@@ -121,12 +135,14 @@ endif
 
 LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
 
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
 include $(SECURITY)/Makefile
+endif
 
 #===========================
 
 include $(TOP)/configure/RULES
--include $(wildcard $(TOP)/cfg/RULES*))
+-include $(wildcard $(TOP)/cfg/RULES*)
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 

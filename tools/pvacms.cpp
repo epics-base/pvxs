@@ -461,8 +461,9 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, pvxs::security::CertFactory &ce
                            : (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForClientAndServer) ? "CLIENT & SERVER"
                            : (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForClient) ? "CLIENT"
                            : (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForServer) ? "SERVER"
+                           : (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForCMS) ? "PVACMS"
                            : (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForCa) ? "CA"
-                           : "STRANGE")))))
+                           : "STRANGE"))))))
               << " certificate \n"
               << "NAME: " << certificate_factory.name_ << "\n"
               << "ORGANIZATION: " << certificate_factory.org_ << "\n"
@@ -697,7 +698,7 @@ void createServerCertificate(const server::Config &config, sql_ptr &ca_db, ossl_
       serial, key_pair, PVXS_SERVICE_NAME, getCountryCode(),
       pvacms_org_name, PVXS_SERVICE_ORG_UNIT_NAME,
       getNotBeforeTimeFromCert(ca_cert.get()), getNotAfterTimeFromCert(ca_cert.get()),
-      pvxs::security::kForServer, ca_cert.get(), ca_pkey.get(), ca_chain.get());
+      pvxs::security::kForCMS, ca_cert.get(), ca_pkey.get(), ca_chain.get());
 
     auto cert = createCertificate(ca_db, certificate_factory);
 

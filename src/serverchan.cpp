@@ -183,7 +183,9 @@ void ServerConn::handle_SEARCH()
     M.skip(3 + 16 + 2, __FILE__, __LINE__); // unused and replyAddr (we always and only reply to TCP peer)
 
     bool foundtcp = false;
+#ifdef PVXS_ENABLE_OPENSSL
     bool foundtls = false;
+#endif
     Size nproto{0};
     from_wire(M, nproto);
     for(size_t i=0; i<nproto.size && !foundtcp && M.good(); i++) {
@@ -191,8 +193,10 @@ void ServerConn::handle_SEARCH()
         from_wire(M, proto);
         if(proto=="tcp")
             foundtcp = true;
+#ifdef PVXS_ENABLE_OPENSSL
         else if(proto=="tls" && iface->server->tls_context && iface->server->effective.tls_port)
             foundtls = true;
+#endif
     }
 
     uint16_t nchan=0;
@@ -231,7 +235,10 @@ void ServerConn::handle_SEARCH()
             nreply++;
     }
 
-    if(nreply==0 && !mustReply && !foundtcp && !foundtls)
+    if(nreply==0 && !mustReply && !foundtcp )
+#ifdef PVXS_ENABLE_OPENSSL
+      if (!foundtls)
+#endif
         return;
 
     {
@@ -242,11 +249,14 @@ void ServerConn::handle_SEARCH()
         _to_wire<12>(R, iface->server->effective.guid.data(), false, __FILE__, __LINE__);
         to_wire(R, searchID);
         to_wire(R, SockAddr::any(AF_INET));
+#ifdef PVXS_ENABLE_OPENSSL
         if(foundtls) {
             to_wire(R, iface->server->effective.tls_port);
             to_wire(R, "tls"); // prefer TLS
 
-        } else if(foundtcp) {
+        } else
+#endif
+        if(foundtcp) {
             to_wire(R, iface->server->effective.tcp_port);
             to_wire(R, "tcp");
         }

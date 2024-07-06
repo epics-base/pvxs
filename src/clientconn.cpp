@@ -18,13 +18,18 @@ DEFINE_LOGGER(remote, "pvxs.remote.log");
 
 Connection::Connection(const std::shared_ptr<ContextImpl>& context,
                        const SockAddr& peerAddr,
-                       bool reconn,
-                       bool isTLS)
+                       bool reconn
+#ifdef PVXS_ENABLE_OPENSSL
+                     , bool isTLS
+#endif
+                       )
     :ConnBase (true, context->effective.sendBE(),
                nullptr,
                peerAddr)
     ,context(context)
+#ifdef PVXS_ENABLE_OPENSSL
     ,isTLS(isTLS)
+#endif
     ,echoTimer(__FILE__, __LINE__,
                event_new(context->tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &tickEchoS, this))
 {
@@ -46,18 +51,31 @@ Connection::~Connection()
     cleanup();
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
 std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
                                               const SockAddr& serv, bool reconn, bool tls)
+#else
+std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
+                                              const SockAddr& serv, bool reconn)
+#endif
 {
     if(context->state!=ContextImpl::Running)
         throw std::logic_error("Context close()d");
 
+#ifdef PVXS_ENABLE_OPENSSL
     auto pair(std::make_pair(serv, tls));
     std::shared_ptr<Connection> ret;
     auto it = context->connByAddr.find(pair);
     if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
         context->connByAddr[pair] = ret = std::make_shared<Connection>(context, serv, reconn, tls);
     }
+#else
+    std::shared_ptr<Connection> ret;
+    auto it = context->connByAddr.find(serv);
+    if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
+        context->connByAddr[serv] = ret = std::make_shared<Connection>(context, serv, reconn);
+    }
+#endif
     return ret;
 }
 
@@ -69,7 +87,7 @@ void Connection::startConnecting()
                 bufferevent_socket_new(context->tcp_loop.base, -1,
                                        BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
 
-
+#ifdef PVXS_ENABLE_OPENSSL
     if(isTLS) {
         auto ctx(SSL_new(context->tls_context.ctx));
         if(!ctx)
@@ -88,6 +106,7 @@ void Connection::startConnecting()
         bufferevent_openssl_set_allow_dirty_shutdown(bev.get(), 1);
 
     } else
+#endif
     {
         bev.reset(bufferevent_socket_new(context->tcp_loop.base,
                                          -1,
@@ -104,8 +123,13 @@ void Connection::startConnecting()
 
     connect(std::move(bev));
 
+#ifdef PVXS_ENABLE_OPENSSL
     log_debug_printf(io, "Connecting to %s, RX readahead %zu%s\n",
                      peerName.c_str(), readahead, isTLS ? " TLS" : "");
+#else
+    log_debug_printf(io, "Connecting to %s, RX readahead %zu\n",
+                     peerName.c_str(), readahead);
+#endif
 }
 
 void Connection::createChannels()
@@ -159,12 +183,14 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
 
 void Connection::bevEvent(short events)
 {
+#ifdef PVXS_ENABLE_OPENSSL
     if((events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) && isTLS && bev) {
         while(auto err = bufferevent_get_openssl_error(bev.get())) {
             log_err_printf(io, "TLS Error (0x%lx) %s\n",
                            err, ERR_reason_error_string(err));
         }
     }
+#endif
     ConnBase::bevEvent(events);
     // called Connection::cleanup()
 
@@ -174,6 +200,7 @@ void Connection::bevEvent(short events)
 
         auto peerCred(std::make_shared<ServerCredentials>());
         peerCred->peer = peerName;
+#ifdef PVXS_ENABLE_OPENSSL
         peerCred->isTLS = isTLS;
 
         if(isTLS) {
@@ -181,6 +208,7 @@ void Connection::bevEvent(short events)
             assert(ctx);
             ossl::SSLContext::fill_credentials(*peerCred, ctx);
         } else
+#endif
         {
             peerCred->method = "anonymous";
         }
@@ -219,7 +247,11 @@ void Connection::cleanup()
 {
     ready = false;
 
+#ifdef PVXS_ENABLE_OPENSSL
     context->connByAddr.erase(std::make_pair(peerAddr, isTLS));
+#else
+    context->connByAddr.erase(peerAddr);
+#endif
 
     if(bev)
         bev.reset();
@@ -282,8 +314,10 @@ void Connection::handle_CONNECTION_VALIDATION()
 
         if(method=="ca" || (method=="anonymous" && selected!="ca"))
             selected = method;
+#ifdef PVXS_ENABLE_OPENSSL
         else if(isTLS && method=="x509" && context->tls_context.have_certificate())
             selected = method;
+#endif
     }
 
     if(!M.good()) {

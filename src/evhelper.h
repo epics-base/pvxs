@@ -19,7 +19,9 @@
 #include <event2/listener.h>
 #include <event2/bufferevent.h>
 
-#include <event2/bufferevent_ssl.h>
+#ifdef PVXS_ENABLE_OPENSSL
+#  include <event2/bufferevent_ssl.h>
+#endif
 
 #include <pvxs/version.h>
 #include <utilpvt.h>
@@ -27,7 +29,11 @@
 #include <epicsTime.h>
 
 #include "pvaproto.h"
+#include "ownedptr.h"
+
+#ifdef PVXS_ENABLE_OPENSSL
 #include "openssl.h"
+#endif
 
 namespace pvxs {namespace impl {
 

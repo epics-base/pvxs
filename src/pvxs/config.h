@@ -46,6 +46,7 @@ struct PVXS_API ConfigCommon {
 
     virtual ~ConfigCommon() = 0;
 
+#ifdef PVXS_ENABLE_OPENSSL
     /**
      * @brief Convert given path to expand tilde, dot and dot-dot at beginning
      * @param path the containing tilde, dot and/or dot-dot
@@ -110,6 +111,7 @@ struct PVXS_API ConfigCommon {
             }
         }
     }
+#endif // EVENT2_HAS_OPENSSL
 
     //! TCP port to bind.  Default is 5075.  May be zero.
     unsigned short tcp_port = 5075;
@@ -121,6 +123,7 @@ struct PVXS_API ConfigCommon {
     //! @since 0.2.0
     double tcpTimeout = 40.0;
 
+#ifdef PVXS_ENABLE_OPENSSL
     //////////////
     // SECURITY //
     //////////////
@@ -233,7 +236,7 @@ struct PVXS_API ConfigCommon {
     std::string jwt_token;
 #endif
 
-#ifdef PVXS_ENABLE_KERBEROS_AUTH
+#ifdef PVXS_ENABLE_KRB_AUTH
     /**
      * @brief This is the string to which PVACMS/CLUSTER is prepended to
      * create the service principal to be added to the Kerberos KDC to
@@ -264,6 +267,7 @@ struct PVXS_API ConfigCommon {
      * false otherwise
      */
     inline bool isTlsConfigured() const { return !tls_keychain_filename.empty(); }
+#endif // PVXS_ENABLE_OPENSSL
 
     inline std::string getFileContents(const std::string &file_name) {
         std::ifstream ifs(file_name);

@@ -51,9 +51,11 @@ SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon *conf, uint1
         auto schemeLen = sep-ep;
         if(!conf) {
             throw std::runtime_error("URI unsupported in this context");
+#ifdef PVXS_ENABLE_OPENSSL
         } else if(schemeLen==4u && strncmp(ep, "pvas", 4)==0) {
             scheme = TLS;
             defport = conf ? conf->tls_port : defdefport;
+#endif
         } else if(schemeLen==3u && strncmp(ep, "pva", 3)==0) {
             scheme = Plain;
         } else {
@@ -431,6 +433,7 @@ void enforceTimeout(double& tmo)
         tmo = 2.0;
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
 void parseTLSOptions(ConfigCommon& conf, const std::string& options)
 {
     std::vector<std::string> opts;
@@ -480,6 +483,7 @@ std::string printTLSOptions(const ConfigCommon& conf)
     }
     return join_addr(opts);
 }
+#endif
 
 } // namespace
 
@@ -529,6 +533,7 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
         parse_timeout(self.tcpTimeout, pickone.name, pickone.val);
     }
 
+#ifdef PVXS_ENABLE_OPENSSL
     //////////////
     // SECURITY //
     //////////////
@@ -559,7 +564,7 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 #endif
 
-#ifdef PVXS_ENABLE_KERBEROS_AUTH
+#ifdef PVXS_ENABLE_KRB_AUTH
     // EPICS_AUTH_KRB_KEYTAB
     if (pickone({"EPICS_AUTH_KRB_KEYTAB"})) {
         self.krb_keytab = pickone.val;
@@ -769,14 +774,22 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
             : pickone({"EPICS_PVAS_TLS_STOP_IF_NO_CERT"})) {
         self.tls_stop_if_no_cert = parseTo<bool>(pickone.val);
     }
+#endif
 }
+#ifndef PVXS_ENABLE_OPENSSL
+
+Config& Config::applyEnv()
+{
+#else
 Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
     this->tls_disabled = tls_disabled;
     this->config_target = target;
+#endif
     _fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
 Config &Config::applyEnv(const bool tls_disabled) { return applyEnv(tls_disabled, SERVER); }
 
 #ifdef PVXS_ENABLE_JWT_AUTH
@@ -787,6 +800,7 @@ Config &Config::applyEnvWithJwt(const std::string &token, const ConfigTarget tar
     return *this;
 }
 #endif
+#endif // PVXS_ENABLE_OPENSSL
 
 Config Config::isolated(int family)
 {
@@ -830,6 +844,7 @@ void Config::updateDefs(defs_t& defs) const
     if (!ignoreAddrs.empty()) defs["EPICS_PVAS_IGNORE_ADDR_LIST"] = join_addr(ignoreAddrs);
     defs["EPICS_PVA_CONN_TMO"] = SB() << tcpTimeout / tmoScale;
 
+#ifdef PVXS_ENABLE_OPENSSL
     //////////////
     // SECURITY //
     //////////////
@@ -851,9 +866,9 @@ void Config::updateDefs(defs_t& defs) const
         // EPICS_AUTH_JWT_USE_RESPONSE_CODE
         defs["EPICS_AUTH_JWT_USE_RESPONSE_CODE"] = jwt_use_response_code ? "YES" : "NO";
     }
-#endif
+#endif // PVXS_ENABLE_JWT_AUTH
 
-#ifdef PVXS_ENABLE_KERBEROS_AUTH
+#ifdef PVXS_ENABLE_KRB_AUTH
     if (config_target == PVACMS) {
         // EPICS_AUTH_KRB_KEYTAB
         if (!krb_keytab.empty()) defs["EPICS_AUTH_KRB_KEYTAB"] = krb_keytab;
@@ -861,7 +876,7 @@ void Config::updateDefs(defs_t& defs) const
         // EPICS_AUTH_KRB_REALM
         if (!krb_realm.empty()) defs["EPICS_AUTH_KRB_REALM"] = krb_realm;
     }
-#endif
+#endif // PVXS_ENABLE_KRB_AUTH
 
 #ifdef PVXS_ENABLE_LDAP_AUTH
     if (config_target == PVACMS) {
@@ -880,7 +895,7 @@ void Config::updateDefs(defs_t& defs) const
         // EPICS_AUTH_LDAP_SEARCH_ROOT
         if (!ldap_search_root.empty()) defs["EPICS_AUTH_LDAP_SEARCH_ROOT"] = ldap_search_root;
     }
-#endif
+#endif // PVXS_ENABLE_LDAP_AUTH
 
     if (config_target == PVACMS) {
         // EPICS_CA_ACF
@@ -968,6 +983,7 @@ void Config::updateDefs(defs_t& defs) const
     // EPICS_PVACMS_TLS_STOP_IF_NO_CERT
     defs[config_target == PVACMS ? "EPICS_PVACMS_TLS_STOP_IF_NO_CERT" : "EPICS_PVAS_TLS_STOP_IF_NO_CERT"] =
         tls_stop_if_no_cert ? "YES" : "NO";
+#endif // PVXS_ENABLE_OPENSSL
 }
 
 void Config::expand()
@@ -1078,7 +1094,8 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
-        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, nullptr, self.tcp_port);
+        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val,
+                        &self, 0);
     }
 
     if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
@@ -1086,18 +1103,19 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVA_INTF_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, nullptr, 0);
+        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val,
+                        nullptr, 0);
     }
 
     if(pickone({"EPICS_PVA_CONN_TMO"})) {
         parse_timeout(self.tcpTimeout, pickone.name, pickone.val);
     }
 
+#ifdef PVXS_ENABLE_OPENSSL
     //////////////
     // SECURITY //
     //////////////
-
-#ifdef PVXS_ENABLE_KERBEROS_AUTH
+#ifdef PVXS_ENABLE_KRB_AUTH
     // EPICS_AUTH_KRB_REALM
     if (pickone({"EPICS_AUTH_KRB_REALM"})) {
         self.krb_realm = pickone.val;
@@ -1162,14 +1180,22 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
             log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
+#endif // PVXS_ENABLE_OPENSSL
 }
 
+#ifndef PVXS_ENABLE_OPENSSL
+Config& Config::applyEnv() {
+#else
 Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
+
     this->tls_disabled = tls_disabled;
     this->config_target = target;
+#endif
     _fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
+
+#ifdef PVXS_ENABLE_OPENSSL
 Config &Config::applyEnv(const bool tls_disabled) { return applyEnv(tls_disabled, CLIENT); }
 
 #ifdef PVXS_ENABLE_JWT_AUTH
@@ -1180,6 +1206,7 @@ Config &Config::applyEnvWithJwt(const std::string &token, const ConfigTarget tar
     return *this;
 }
 #endif
+#endif // PVXS_ENABLE_OPENSSL
 
 Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
 {
@@ -1197,6 +1224,7 @@ void Config::updateDefs(defs_t& defs) const
     defs["EPICS_PVA_CONN_TMO"] = SB()<<tcpTimeout/tmoScale;
     if (!nameServers.empty()) defs["EPICS_PVA_NAME_SERVERS"] = join_addr(nameServers);
 
+#ifdef PVXS_ENABLE_OPENSSL
     //////////////
     // SECURITY //
     //////////////
@@ -1228,6 +1256,7 @@ void Config::updateDefs(defs_t& defs) const
 
     // EPICS_PVA_TLS_PORT
     defs["EPICS_PVA_TLS_PORT"] = SB() << tls_port;
+#endif // PVXS_ENABLE_OPENSSL
 }
 
 void Config::expand()

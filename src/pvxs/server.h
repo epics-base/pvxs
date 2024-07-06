@@ -70,11 +70,15 @@ public:
      * @since 0.2.1
      */
     static
+#ifndef PVXS_ENABLE_OPENSSL
+    Server fromEnv();
+#else
     Server fromEnv(bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
 #ifdef PVXS_ENABLE_JWT_AUTH
     static
     Server fromEnvWithJwt(const std::string& token);
 #endif
+#endif // PVXS_ENABLE_OPENSSL
 
     //! Begin serving.  Does not block.
     Server& start();
@@ -94,6 +98,7 @@ public:
     //! Queue a request to break run()
     Server& interrupt();
 
+#ifdef PVXS_ENABLE_OPENSSL
     /** Apply (in part) updated configuration
      *
      * Currently, only updates TLS configuration.  Causes all in-progress
@@ -102,6 +107,7 @@ public:
      * @since UNRELEASED
      */
     void reconfigure(const Config&);
+#endif
 
     //! effective config
     //! @since UNRELEASED Reference invalidated by a call to reconfigure()
@@ -180,6 +186,7 @@ struct PVXS_API Config : public impl::ConfigCommon {
     //! Whether to populate the beacon address list automatically.  (recommended)
     bool auto_beacon = true;
 
+#ifdef PVXS_ENABLE_OPENSSL
     //////////////
     // SECURITY //
     //////////////
@@ -489,9 +496,9 @@ struct PVXS_API Config : public impl::ConfigCommon {
         // Response is not valid if it does not match the specified format
         return false;
     }
-#endif
+#endif // PVXS_ENABLE_JWT_AUTH
 
-#ifdef PVXS_ENABLE_KERBEROS_AUTH
+#ifdef PVXS_ENABLE_KRB_AUTH
     /**
      * @brief PVACMS only: This string is the fully qualified
      * path to the location of the keytab file.
@@ -500,7 +507,7 @@ struct PVXS_API Config : public impl::ConfigCommon {
      * messages destined for a Kerberos service
      */
     std::string krb_keytab;
-#endif
+#endif // PVXS_ENABLE_KRB_AUTH
 
 #ifdef PVXS_ENABLE_LDAP_AUTH
     /**
@@ -538,7 +545,8 @@ struct PVXS_API Config : public impl::ConfigCommon {
      * e.g. "cn=slac,dc=stanford,dc=edu"
      */
     std::string ldap_search_root;
-#endif
+#endif //PVXS_ENABLE_LDAP_AUTH
+#endif // PVXS_ENABLE_OPENSSL
 
     //! Server unique ID.  Only meaningful in readback via Server::config()
     ServerGUID guid{};
@@ -549,6 +557,9 @@ private:
 public:
 
     // compat
+#ifndef PVXS_ENABLE_OPENSSL
+    static inline Config from_env() { return Config{}.applyEnv(); }
+#else
     static inline Config from_env(const bool tls_disabled = false, const ConfigTarget target = SERVER) {
         return Config{}.applyEnv(tls_disabled, target);
     }
@@ -557,8 +568,12 @@ public:
         return Config{}.applyEnvWithJwt(token, target);
     }
 #endif
+#endif
 
     //! Default configuration using process environment
+#ifndef PVXS_ENABLE_OPENSSL
+    static inline Config fromEnv()  { return Config{}.applyEnv(); }
+#else
     static inline Config fromEnv(const bool tls_disabled = false,
                                  const ConfigTarget target = SERVER) {
         auto config = Config{}.applyEnv(tls_disabled, target);
@@ -573,6 +588,7 @@ public:
         return Config{}.applyEnvWithJwt(token, target);
     }
 #endif
+#endif
 
     //! Configuration limited to the local loopback interface on a randomly chosen port.
     //! Suitable for use in self-contained unit-tests.
@@ -580,11 +596,14 @@ public:
     static Config isolated(int family=AF_INET);
 
     //! update using defined EPICS_PVA* environment variables
+#ifndef PVXS_ENABLE_OPENSSL
+    Config& applyEnv();
+#else
     Config& applyEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER);
     Config& applyEnv(const bool tls_disabled = false);
 #ifdef PVXS_ENABLE_JWT_AUTH
-
     Config& applyEnvWithJwt(const std::string& token, const ConfigTarget target = SERVER);
+#endif
 #endif
 
     typedef std::map<std::string, std::string> defs_t;

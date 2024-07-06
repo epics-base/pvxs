@@ -323,6 +323,9 @@ public:
      * Shorthand for @code Config::fromEnv().build() @endcode.
      * @since 0.2.1
      */
+#ifndef PVXS_ENABLE_OPENSSL
+    static Context fromEnv();
+#else
     static Context fromEnv(const bool tls_disabled = false);
 #ifdef PVXS_ENABLE_JWT_AUTH
     static Context fromEnvWithJwt(const std::string &token);
@@ -336,6 +339,7 @@ public:
      * @since UNRELEASED
      */
     void reconfigure(const Config&);
+#endif // PVXS_ENABLE_OPENSSL
 
     //! effective config of running client
     //! @since UNRELEASED Reference invalidated by a call to reconfigure()
@@ -1067,23 +1071,24 @@ private:
     bool UDP = true;
 public:
 
+#ifndef PVXS_ENABLE_OPENSSL
     // compat
-    static inline Config from_env(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
-#ifdef PVXS_ENABLE_JWT_AUTH
-    static inline Config from_env_with_jwt(const std::string &token, const ConfigTarget target = CLIENT) { return Config{}.applyEnvWithJwt(token, target); }
-#endif
-
+    static inline Config from_env() { return Config{}.applyEnv(); }
     //! Default configuration using process environment
-    static inline Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
-#ifdef PVXS_ENABLE_JWT_AUTH
-    static inline Config fromEnvWithJwt(const std::string &token, const ConfigTarget target = CLIENT) { return Config{}.applyEnvWithJwt(token, target); }
-#endif
+    static inline Config fromEnv() { return Config{}.applyEnv(); }
     //! update using defined EPICS_PVA* environment variables
+    Config &applyEnv();
+#else
+    static inline Config from_env(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
+    static inline Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
     Config &applyEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT);
     Config &applyEnv(const bool tls_disabled = false);
 #ifdef PVXS_ENABLE_JWT_AUTH
+    static inline Config from_env_with_jwt(const std::string &token, const ConfigTarget target = CLIENT) { return Config{}.applyEnvWithJwt(token, target); }
+    static inline Config fromEnvWithJwt(const std::string &token, const ConfigTarget target = CLIENT) { return Config{}.applyEnvWithJwt(token, target); }
     Config &applyEnvWithJwt(const std::string &token, const ConfigTarget target = CLIENT);
 #endif
+#endif // PVXS_ENABLE_OPENSSL
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables

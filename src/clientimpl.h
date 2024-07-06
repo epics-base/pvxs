@@ -14,11 +14,12 @@
 
 #include <pvxs/client.h>
 
-#include "evhelper.h"
-#include "dataimpl.h"
-#include "utilpvt.h"
-#include "udp_collector.h"
 #include "conn.h"
+#include "dataimpl.h"
+#include "evhelper.h"
+#include "ownedptr.h"
+#include "udp_collector.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace client {
@@ -83,7 +84,9 @@ struct RequestInfo {
 
 struct Connection final : public ConnBase, public std::enable_shared_from_this<Connection> {
     const std::shared_ptr<ContextImpl> context;
+#ifdef PVXS_ENABLE_OPENSSL
     const bool isTLS;
+#endif
 
     // While HoldOff, the time until re-connection
     // While Connected, periodic Echo
@@ -110,14 +113,21 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 
     Connection(const std::shared_ptr<ContextImpl>& context,
                const SockAddr &peerAddr,
-               bool reconn, bool isTLS);
+               bool reconn
+#ifdef PVXS_ENABLE_OPENSSL
+      , bool isTLS
+#endif
+               );
     virtual ~Connection();
 
     static
     std::shared_ptr<Connection> build(const std::shared_ptr<ContextImpl>& context,
                                       const SockAddr& serv,
-                                      bool reconn,
-                                      bool isTLS);
+                                      bool reconn
+#ifdef PVXS_ENABLE_OPENSSL
+                                    , bool isTLS
+#endif
+                                      );
 
 private:
     void startConnecting();
@@ -309,8 +319,12 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     // chanByName key'd by (pv, forceServer)
     std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
 
+#ifdef PVXS_ENABLE_OPENSSL
     // pair (addr, useTLS)
     std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
+#else
+    std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
+#endif
 
     std::vector<std::pair<SockEndpoint, std::shared_ptr<Connection>>> nameServers;
 
@@ -329,7 +343,9 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent cacheCleaner;
     const evevent nsChecker;
 
+#ifdef PVXS_ENABLE_OPENSSL
     ossl::SSLContext tls_context;
+#endif
 
     INST_COUNTER(ClientContextImpl);
 
