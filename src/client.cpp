@@ -425,9 +425,6 @@ Context Context::fromEnv(const bool tls_disabled)
     return Config::fromEnv(tls_disabled).build();
 }
 
-#ifdef PVXS_ENABLE_JWT_AUTH
-Context Context::fromEnvWithJwt(const std::string &token) { return Config::fromEnvWithJwt(token).build(); }
-#endif
 #endif // PVXS_ENABLE_OPENSSL
 
 Context::Context(const Config& conf)

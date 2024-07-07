@@ -23,18 +23,17 @@
 #include <pvxs/config.h>
 #include <pvxs/log.h>
 
-#include "auth.h"
-#include "authdefault.h"
 #include "authregistry.h"
+#include "openssl.h"
 #include "osiFileName.h"
 #include "ownedptr.h"
 #include "security.h"
-#include "../utilpvt.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace security {
 
-DEFINE_LOGGER(certs, "pvxs.security.certs");
+DEFINE_LOGGER(certs, "pvxs.certs");
 
 /**
  * Creates a new X.509 certificate from scratch.  It uses the provided public

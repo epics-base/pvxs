@@ -534,205 +534,12 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    //////////////
-    // SECURITY //
-    //////////////
-#ifdef PVXS_ENABLE_JWT_AUTH
-    // EPICS_AUTH_JWT_REQUEST_FORMAT
-    if (pickone({"EPICS_AUTH_JWT_REQUEST_FORMAT"})) {
-        self.jwt_request_format = pickone.val;
-    }
-
-    // EPICS_AUTH_JWT_REQUEST_METHOD
-    if (pickone({"EPICS_AUTH_JWT_REQUEST_METHOD"})) {
-        self.jwt_request_method = pickone.val == "POST" ? Config::POST : Config::GET;
-    }
-
-    // EPICS_AUTH_JWT_RESPONSE_FORMAT
-    if (pickone({"EPICS_AUTH_JWT_RESPONSE_FORMAT"})) {
-        self.jwt_response_format = pickone.val;
-    }
-
-    // EPICS_AUTH_JWT_TRUSTED_URI
-    if (pickone({"EPICS_AUTH_JWT_TRUSTED_URI"})) {
-        self.jwt_trusted_uri = pickone.val;
-    }
-
-    // EPICS_AUTH_JWT_USE_RESPONSE_CODE
-    if (pickone({"EPICS_AUTH_JWT_USE_RESPONSE_CODE"})) {
-        self.jwt_use_response_code = parseTo<bool>(pickone.val);
-    }
-#endif
-
-#ifdef PVXS_ENABLE_KRB_AUTH
-    // EPICS_AUTH_KRB_KEYTAB
-    if (pickone({"EPICS_AUTH_KRB_KEYTAB"})) {
-        self.krb_keytab = pickone.val;
-    }
-
-    // EPICS_AUTH_KRB_REALM
-    if (pickone({"EPICS_AUTH_KRB_REALM"})) {
-        self.krb_realm = pickone.val;
-    }
-#endif
-
-#ifdef PVXS_ENABLE_LDAP_AUTH
-    // EPICS_AUTH_LDAP_ACCOUNT
-    if (pickone({"EPICS_AUTH_LDAP_ACCOUNT"})) {
-        self.ldap_account = pickone.val;
-    }
-
-    // EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE
-    if (pickone({"EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE"})) {
-        auto filepath = pickone.val;
-        self.ensureDirectoryExists(filepath);
-        try {
-            self.ldap_account_password = self.getFileContents(filepath);
-        } catch (std::exception &e) {
-            log_err_printf(serversetup, "error reading password file: %s. %s", filepath.c_str(), e.what());
-        }
-    }
-
-    // EPICS_AUTH_LDAP_HOST
-    if (pickone({"EPICS_AUTH_LDAP_HOST"})) {
-        self.ldap_host = pickone.val;
-    }
-
-    // EPICS_AUTH_LDAP_PORT
-    if (pickone({"EPICS_AUTH_LDAP_PORT"})) {
-        try {
-            self.ldap_port = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception &e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
-        }
-    }
-
-    // EPICS_AUTH_LDAP_SEARCH_ROOT
-    if (pickone({"EPICS_AUTH_LDAP_SEARCH_ROOT"})) {
-        self.ldap_search_root = pickone.val;
-    }
-#endif
-
-    // EPICS_CA_ACF
-    if (pickone({"EPICS_CA_ACF"})) {
-        self.ensureDirectoryExists(self.ca_acf_filename = pickone.val);
-    }
-
-    // EPICS_CA_DB
-    if (pickone({"EPICS_CA_DB"})) {
-        self.ensureDirectoryExists(self.ca_db_filename = pickone.val);
-    }
-
-    // EPICS_CA_KEYCHAIN
-    if (pickone({"EPICS_CA_KEYCHAIN", "EPICS_PVACMS_TLS_KEYCHAIN", "EPICS_PVAS_TLS_KEYCHAIN"})) {
-        self.ensureDirectoryExists(self.ca_keychain_filename = pickone.val);
-
-        // EPICS_CA_KEYCHAIN_PWD_FILE
-        std::string password_filename;
-        if (pickone.name == "EPICS_CA_KEYCHAIN") {
-            pickone({"EPICS_CA_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
-        } else if (pickone.name == "EPICS_PVACMS_KEYCHAIN") {
-            pickone({"EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
-        } else if (pickone.name == "EPICS_PVAS_KEYCHAIN") {
-            pickone({"EPICS_PVACS_TLS_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
-        }
-        self.ensureDirectoryExists(password_filename);
-        try {
-            self.ca_keychain_password = self.getFileContents(password_filename);
-        } catch (std::exception &e) {
-            log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
-        }
-    }
-
-    // EPICS_CA_NAME
-    if (pickone({"EPICS_CA_NAME"})) {
-        self.ca_name = pickone.val;
-    }
-
-    // EPICS_CA_ORGANIZATION
-    if (pickone({"EPICS_CA_ORGANIZATION"})) {
-        self.ca_organization = pickone.val;
-    }
-
-    // EPICS_CA_ORGANIZATIONAL_UNIT
-    if (pickone({"EPICS_CA_ORGANIZATIONAL_UNIT"})) {
-        self.ca_organizational_unit = pickone.val;
-    }
-
-    // EPICS_OCSP_PORT
-    if (pickone({"EPICS_OCSP_PORT"})) {
-        try {
-            self.ocsp_port = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception &e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
-        }
-    }
-
-    // EPICS_PVAS_CERT_VALIDITY_MINS
-    if (pickone({"EPICS_PVAS_CERT_VALIDITY_MINS", "EPICS_PVA_CERT_VALIDITY_MINS"})) {
-        try {
-            self.cert_validity_mins = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception &e) {
-            log_err_printf(serversetup, "%s invalid validity minutes : %s", pickone.name.c_str(), e.what());
-        }
-    }
-
-    // EPICS_PVACMS_PRE_EXPIRY_MINS
-    if (pickone({"EPICS_PVACMS_PRE_EXPIRY_MINS"})) {
-        try {
-            self.cert_pre_expiry_mins = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception &e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
-        }
-    }
-
-    // EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL
-    if (pickone({"EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"})) {
-        self.cert_client_require_approval = parseTo<bool>(pickone.val);
-    }
-
-    // EPICS_PVACMS_REQUIRE_SERVER_APPROVAL
-    if (pickone({"EPICS_PVACMS_REQUIRE_SERVER_APPROVAL"})) {
-        self.cert_server_require_approval = parseTo<bool>(pickone.val);
-    }
-
-    // EPICS_PVAS_AUTH_DEVICE_NAME
-    if (pickone({"EPICS_PVAS_AUTH_DEVICE_NAME", "EPICS_PVA_AUTH_DEVICE_NAME"})) {
-        self.device_name = pickone.val;
-    }
-
-    // EPICS_PVAS_AUTH_PROCESS_NAME
-    if (pickone({"EPICS_PVAS_AUTH_PROCESS_NAME", "EPICS_PVA_AUTH_PROCESS_NAME"})) {
-        self.process_name = pickone.val;
-    }
-
-    // EPICS_PVAS_AUTH_USE_PROCESS_NAME
-    if (pickone({"EPICS_PVAS_AUTH_USE_PROCESS_NAME", "EPICS_PVA_AUTH_USE_PROCESS_NAME"})) {
-        self.use_process_name = parseTo<bool>(pickone.val);
-    }
-
-    // EPICS_PVAS_AUTH_AUTO_CERT
-    if (pickone({"EPICS_PVAS_AUTO_CERT", "EPICS_PVA_AUTO_CERT"})) {
-        self.cert_auto_provision = parseTo<bool>(pickone.val);
-    }
-
     // EPICS_PVAS_TLS_KEYCHAIN
-    // EPICS_PVACMS_TLS_KEYCHAIN
-
-    if (self.config_target == impl::ConfigCommon::PVACMS
-            ? pickone({"EPICS_PVACMS_TLS_KEYCHAIN", "EPICS_PVAS_TLS_KEYCHAIN", "EPICS_PVA_TLS_KEYCHAIN"})
-            : pickone({"EPICS_PVAS_TLS_KEYCHAIN", "EPICS_PVA_TLS_KEYCHAIN"})) {
+    if (pickone({"EPICS_PVAS_TLS_KEYCHAIN", "EPICS_PVA_TLS_KEYCHAIN"})) {
         self.ensureDirectoryExists(self.tls_keychain_filename = pickone.val);
         // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
-        // EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE
         std::string password_filename;
-        if (pickone.name == "EPICS_PVACMS_TLS_KEYCHAIN") {
-            pickone({"EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
-        } else if (pickone.name == "EPICS_PVAS_TLS_KEYCHAIN") {
+        if (pickone.name == "EPICS_PVAS_TLS_KEYCHAIN") {
             pickone({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"});
             password_filename = pickone.val;
         } else {
@@ -748,18 +555,12 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     // EPICS_PVAS_TLS_OPTIONS
-    // EPICS_PVACMS_TLS_OPTIONS
-    if (self.config_target == impl::ConfigCommon::PVACMS
-            ? pickone({"EPICS_PVACMS_TLS_OPTIONS", "EPICS_PVAS_TLS_OPTIONS", "EPICS_PVA_TLS_OPTIONS"})
-            : pickone({"EPICS_PVAS_TLS_OPTIONS", "EPICS_PVA_TLS_OPTIONS"})) {
+    if (pickone({"EPICS_PVAS_TLS_OPTIONS", "EPICS_PVA_TLS_OPTIONS"})) {
         parseTLSOptions(self, pickone.val);
     }
 
     // EPICS_PVAS_TLS_PORT
-    // EPICS_PVACMS_TLS_PORT
-    if (self.config_target == impl::ConfigCommon::PVACMS
-            ? pickone({"EPICS_PVACMS_TLS_PORT", "EPICS_PVAS_TLS_PORT", "EPICS_PVA_TLS_PORT"})
-            : pickone({"EPICS_PVAS_TLS_PORT", "EPICS_PVA_TLS_PORT"})) {
+    if (pickone({"EPICS_PVAS_TLS_PORT", "EPICS_PVA_TLS_PORT"})) {
         try {
             self.tls_port = parseTo<uint64_t>(pickone.val);
         } catch (std::exception &e) {
@@ -768,10 +569,7 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     // EPICS_PVAS_TLS_STOP_IF_NO_CERT
-    // EPICS_PVACMS_TLS_STOP_IF_NO_CERT
-    if (self.config_target == impl::ConfigCommon::PVACMS
-            ? pickone({"EPICS_PVACMS_TLS_PORT", "EPICS_PVAS_TLS_PORT", "EPICS_PVA_TLS_PORT"})
-            : pickone({"EPICS_PVAS_TLS_STOP_IF_NO_CERT"})) {
+    if (pickone({"EPICS_PVAS_TLS_STOP_IF_NO_CERT"})) {
         self.tls_stop_if_no_cert = parseTo<bool>(pickone.val);
     }
 #endif
@@ -791,15 +589,6 @@ Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
 
 #ifdef PVXS_ENABLE_OPENSSL
 Config &Config::applyEnv(const bool tls_disabled) { return applyEnv(tls_disabled, SERVER); }
-
-#ifdef PVXS_ENABLE_JWT_AUTH
-Config &Config::applyEnvWithJwt(const std::string &token, const ConfigTarget target) {
-    this->jwt_token = token;
-    this->config_target = target;
-    _fromDefs(*this, std::map<std::string, std::string>(), true);
-    return *this;
-}
-#endif
 #endif // PVXS_ENABLE_OPENSSL
 
 Config Config::isolated(int family)
@@ -845,144 +634,22 @@ void Config::updateDefs(defs_t& defs) const
     defs["EPICS_PVA_CONN_TMO"] = SB() << tcpTimeout / tmoScale;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    //////////////
-    // SECURITY //
-    //////////////
-
-#ifdef PVXS_ENABLE_JWT_AUTH
-    if (config_target == PVACMS) {
-        // EPICS_AUTH_JWT_REQUEST_FORMAT
-        if (!jwt_request_format.empty()) defs["EPICS_AUTH_JWT_REQUEST_FORMAT"] = jwt_request_format;
-
-        // EPICS_AUTH_JWT_REQUEST_METHOD
-        defs["EPICS_AUTH_JWT_REQUEST_METHOD"] = jwt_request_method == Config::POST ? "POST" : "GET";
-
-        // EPICS_AUTH_JWT_RESPONSE_FORMAT
-        if (!jwt_response_format.empty()) defs["EPICS_AUTH_JWT_RESPONSE_FORMAT"] = jwt_response_format;
-
-        // EPICS_AUTH_JWT_TRUSTED_URI
-        if (!jwt_trusted_uri.empty()) defs["EPICS_AUTH_JWT_TRUSTED_URI"] = jwt_trusted_uri;
-
-        // EPICS_AUTH_JWT_USE_RESPONSE_CODE
-        defs["EPICS_AUTH_JWT_USE_RESPONSE_CODE"] = jwt_use_response_code ? "YES" : "NO";
-    }
-#endif // PVXS_ENABLE_JWT_AUTH
-
-#ifdef PVXS_ENABLE_KRB_AUTH
-    if (config_target == PVACMS) {
-        // EPICS_AUTH_KRB_KEYTAB
-        if (!krb_keytab.empty()) defs["EPICS_AUTH_KRB_KEYTAB"] = krb_keytab;
-
-        // EPICS_AUTH_KRB_REALM
-        if (!krb_realm.empty()) defs["EPICS_AUTH_KRB_REALM"] = krb_realm;
-    }
-#endif // PVXS_ENABLE_KRB_AUTH
-
-#ifdef PVXS_ENABLE_LDAP_AUTH
-    if (config_target == PVACMS) {
-        // EPICS_AUTH_LDAP_ACCOUNT
-        if (!ldap_account.empty()) defs["EPICS_AUTH_LDAP_ACCOUNT"] = ldap_account;
-
-        // EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE
-        if (!ldap_account_password.empty()) defs["EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE"] = "<password read>";
-
-        // EPICS_AUTH_LDAP_HOST
-        if (!ldap_host.empty()) defs["EPICS_AUTH_LDAP_HOST"] = ldap_host;
-
-        // EPICS_AUTH_LDAP_PORT
-        defs["EPICS_AUTH_LDAP_PORT"] = SB() << ldap_port;
-
-        // EPICS_AUTH_LDAP_SEARCH_ROOT
-        if (!ldap_search_root.empty()) defs["EPICS_AUTH_LDAP_SEARCH_ROOT"] = ldap_search_root;
-    }
-#endif // PVXS_ENABLE_LDAP_AUTH
-
-    if (config_target == PVACMS) {
-        // EPICS_CA_ACF
-        if (!ca_acf_filename.empty()) defs["EPICS_CA_ACF"] = ca_acf_filename;
-
-        // EPICS_CA_DB
-        if (!ca_db_filename.empty()) defs["EPICS_CA_DB"] = ca_db_filename;
-    }
-
-    if (config_target == PVACMS || config_target == OCSPPVA) {
-        // EPICS_CA_KEYCHAIN
-        if (!ca_keychain_filename.empty()) defs["EPICS_CA_KEYCHAIN"] = ca_keychain_filename;
-
-        // EPICS_CA_KEYCHAIN_PWD_FILE
-        if (!ca_keychain_password.empty()) defs["EPICS_CA_KEYCHAIN_PWD_FILE"] = "<password read>";
-    }
-
-    if (config_target == PVACMS) {
-        // EPICS_CA_NAME
-        if (!ca_name.empty()) defs["EPICS_CA_NAME"] = ca_name;
-
-        // EPICS_CA_ORGANIZATION
-        if (!ca_organization.empty()) defs["EPICS_CA_ORGANIZATION"] = ca_organization;
-
-        // EPICS_CA_ORGANIZATIONAL_UNIT
-        if (!ca_organizational_unit.empty()) defs["EPICS_CA_ORGANIZATIONAL_UNIT"] = ca_organizational_unit;
-    }
-
-    if (config_target == OCSPPVA) {
-        // EPICS_OCSP_PORT
-        defs["EPICS_OCSP_PORT"] = SB() << ocsp_port;
-    }
-
-    if (config_target != PVACMS) {
-        // EPICS_PVAS_CERT_VALIDITY_MINS
-        defs["EPICS_PVAS_CERT_VALIDITY_MINS"] = SB() << cert_validity_mins;
-    }
-
-    if (config_target == PVACMS) {
-        // EPICS_PVACMS_PRE_EXPIRY_MINS
-        defs["EPICS_PVACMS_PRE_EXPIRY_MINS"] = SB() << cert_pre_expiry_mins;
-
-        // EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL
-        defs["EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"] = cert_client_require_approval ? "YES" : "NO";
-
-        // EPICS_PVACMS_REQUIRE_SERVER_APPROVAL
-        defs["EPICS_PVACMS_REQUIRE_SERVER_APPROVAL"] = cert_server_require_approval ? "YES" : "NO";
-    }
-
-    if (config_target != PVACMS) {
-        // EPICS_PVAS_AUTH_DEVICE_NAME
-        if (!device_name.empty()) defs["EPICS_PVAS_AUTH_DEVICE_NAME"] = device_name;
-
-        // EPICS_PVAS_AUTH_PROCESS_NAME
-        if (use_process_name) defs["EPICS_PVAS_AUTH_PROCESS_NAME"] = process_name;
-
-        // EPICS_PVAS_AUTH_USE_PROCESS_NAME
-        defs["EPICS_PVAS_AUTH_USE_PROCESS_NAME"] = use_process_name ? "YES" : "NO";
-
-        // EPICS_PVAS_AUTH_AUTO_CERT
-        defs["EPICS_PVAS_AUTO_CERT"] = cert_auto_provision ? "YES" : "NO";
-    }
-
     // EPICS_PVAS_TLS_KEYCHAIN
-    // EPICS_PVACMS_TLS_KEYCHAIN
     if (!tls_keychain_filename.empty())
-        defs[config_target == PVACMS ? "EPICS_PVACMS_TLS_KEYCHAIN" : "EPICS_PVAS_TLS_KEYCHAIN"] = tls_keychain_filename;
+        defs["EPICS_PVAS_TLS_KEYCHAIN"] = tls_keychain_filename;
 
     // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
-    // EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE
     if (!tls_keychain_password.empty())
-        defs[config_target == PVACMS ? "EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE" : "EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] =
-            "<password read>";
+        defs["EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
 
     // EPICS_PVAS_TLS_OPTIONS
-    // EPICS_PVACMS_TLS_OPTIONS
-    defs[config_target == PVACMS ? "EPICS_PVACMS_TLS_OPTIONS" : "EPICS_PVAS_TLS_OPTIONS"] = printTLSOptions(*this);
+    defs["EPICS_PVAS_TLS_OPTIONS"] = printTLSOptions(*this);
 
     // EPICS_PVAS_TLS_PORT
-    // EPICS_PVACMS_TLS_PORT
-    defs["EPICS_PVA_TLS_PORT"] = defs[config_target == PVACMS ? "EPICS_PVACMS_TLS_PORT" : "EPICS_PVAS_TLS_PORT"] =
-        SB() << tls_port;
+    defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = SB() << tls_port;
 
     // EPICS_PVAS_TLS_STOP_IF_NO_CERT
-    // EPICS_PVACMS_TLS_STOP_IF_NO_CERT
-    defs[config_target == PVACMS ? "EPICS_PVACMS_TLS_STOP_IF_NO_CERT" : "EPICS_PVAS_TLS_STOP_IF_NO_CERT"] =
-        tls_stop_if_no_cert ? "YES" : "NO";
+    defs["EPICS_PVAS_TLS_STOP_IF_NO_CERT"] = tls_stop_if_no_cert ? "YES" : "NO";
 #endif // PVXS_ENABLE_OPENSSL
 }
 
@@ -1112,45 +779,6 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    //////////////
-    // SECURITY //
-    //////////////
-#ifdef PVXS_ENABLE_KRB_AUTH
-    // EPICS_AUTH_KRB_REALM
-    if (pickone({"EPICS_AUTH_KRB_REALM"})) {
-        self.krb_realm = pickone.val;
-    }
-#endif
-
-    // EPICS_PVA_CERT_VALIDITY_MINS
-    if (pickone({"EPICS_PVA_CERT_VALIDITY_MINS"})) {
-        try {
-            self.cert_validity_mins = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception &e) {
-            log_err_printf(serversetup, "%s invalid validity minutes : %s", pickone.name.c_str(), e.what());
-        }
-    }
-
-    // EPICS_PVA_AUTH_DEVICE_NAME
-    if (pickone({"EPICS_PVA_AUTH_DEVICE_NAME"})) {
-        self.device_name = pickone.val;
-    }
-
-    // EPICS_PVA_AUTH_PROCESS_NAME
-    if (pickone({"EPICS_PVA_AUTH_PROCESS_NAME"})) {
-        self.process_name = pickone.val;
-    }
-
-    // EPICS_PVA_AUTH_USE_PROCESS_NAME
-    if (pickone({"EPICS_PVA_AUTH_USE_PROCESS_NAME"})) {
-        self.use_process_name = parseTo<bool>(pickone.val);
-    }
-
-    // EPICS_PVA_AUTH_AUTO_CERT
-    if (pickone({"EPICS_PVA_AUTO_CERT"})) {
-        self.cert_auto_provision = parseTo<bool>(pickone.val);
-    }
-
     // EPICS_PVA_TLS_KEYCHAIN
     if (pickone({"EPICS_PVA_TLS_KEYCHAIN"})) {
         self.ensureDirectoryExists(self.tls_keychain_filename = pickone.val);
@@ -1198,14 +826,6 @@ Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
 #ifdef PVXS_ENABLE_OPENSSL
 Config &Config::applyEnv(const bool tls_disabled) { return applyEnv(tls_disabled, CLIENT); }
 
-#ifdef PVXS_ENABLE_JWT_AUTH
-Config &Config::applyEnvWithJwt(const std::string &token, const ConfigTarget target) {
-    this->jwt_token = token;
-    this->config_target = target;
-    _fromDefs(*this, std::map<std::string, std::string>(), true);
-    return *this;
-}
-#endif
 #endif // PVXS_ENABLE_OPENSSL
 
 Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
@@ -1225,26 +845,6 @@ void Config::updateDefs(defs_t& defs) const
     if (!nameServers.empty()) defs["EPICS_PVA_NAME_SERVERS"] = join_addr(nameServers);
 
 #ifdef PVXS_ENABLE_OPENSSL
-    //////////////
-    // SECURITY //
-    //////////////
-
-    ///////////////////
-    // EPICS_PVA_CERT_VALIDITY_MINS
-    defs["EPICS_PVA_CERT_VALIDITY_MINS"] = SB() << cert_validity_mins;
-
-    // EPICS_PVA_AUTH_DEVICE_NAME
-    if (!device_name.empty()) defs["EPICS_PVA_AUTH_DEVICE_NAME"] = device_name;
-
-    // EPICS_PVA_AUTH_PROCESS_NAME
-    if (use_process_name && !process_name.empty()) defs["EPICS_PVA_AUTH_PROCESS_NAME"] = process_name;
-
-    // EPICS_PVA_AUTH_USE_PROCESS_NAME
-    defs["EPICS_PVA_AUTH_USE_PROCESS_NAME"] = use_process_name ? "YES" : "NO";
-
-    // EPICS_PVA_AUTO_CERT
-    defs["EPICS_PVA_AUTO_CERT"] = cert_auto_provision ? "YES" : "NO";
-
     // EPICS_PVA_TLS_KEYCHAIN
     if (!tls_keychain_filename.empty()) defs["EPICS_PVA_TLS_KEYCHAIN"] = tls_keychain_filename;
 

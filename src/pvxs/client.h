@@ -327,9 +327,6 @@ public:
     static Context fromEnv();
 #else
     static Context fromEnv(const bool tls_disabled = false);
-#ifdef PVXS_ENABLE_JWT_AUTH
-    static Context fromEnvWithJwt(const std::string &token);
-#endif
 
     /** Apply (in part) updated configuration
      *
@@ -1083,11 +1080,6 @@ public:
     static inline Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
     Config &applyEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT);
     Config &applyEnv(const bool tls_disabled = false);
-#ifdef PVXS_ENABLE_JWT_AUTH
-    static inline Config from_env_with_jwt(const std::string &token, const ConfigTarget target = CLIENT) { return Config{}.applyEnvWithJwt(token, target); }
-    static inline Config fromEnvWithJwt(const std::string &token, const ConfigTarget target = CLIENT) { return Config{}.applyEnvWithJwt(token, target); }
-    Config &applyEnvWithJwt(const std::string &token, const ConfigTarget target = CLIENT);
-#endif
 #endif // PVXS_ENABLE_OPENSSL
 
     typedef std::map<std::string, std::string> defs_t;

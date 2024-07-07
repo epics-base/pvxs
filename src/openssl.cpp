@@ -18,9 +18,7 @@
 
 #include <pvxs/log.h>
 
-#include "certfactory.h"
 #include "evhelper.h"
-#include "keychainfactory.h"
 #include "ownedptr.h"
 #include "utilpvt.h"
 
@@ -185,64 +183,29 @@ int ossl_alpn_select(SSL *,
  *
  * @return security::GenStatus::CERT_EXISTS if the certs file already exists and
  *         can be opened
- * @return security::GenStatus::NOT_OK if the certificate was not able to be
- *         generated and the request was from a client
- * @return security::GenStatus::OK if the certificate was successfully
- *         provisioned
+ * @return security::GenStatus::NOT_OK if the certificate does not exist or
+ *         is invalid and the request was from a client
  *
- * @throws std::runtime_error("Root Certificate has been installed") for clients
- *         if a certificate has been created but it is signed by a root CA that
- *         has not yet been trusted by this host.  The process should stop for
- *         the user to manually trust the root CA.
- *
- * @throws std::runtime_error("No certificate found and no credentials ...") if
- *        we fail to provision a new certificate and it if for a server
- *
- * @throws std::runtime_error("Unable to [open|read] certificates file ...") if
- * we successfully created a certificate but it is illegible.
+ * @throws std::runtime_error("Invalid, Untrusted, or Nonexistent certificate ...")
+ *         if certificate not found or invalid and it if for a server
  */
-security::GenStatus getOrProvisionCertificate(file_ptr &fp, ossl_ptr<PKCS12> &p12, const impl::ConfigCommon &conf,
-                                              const uint16_t &usage, const std::string &keychain_filename,
-                                              const std::string &password) {
+bool getCertificate(file_ptr &fp, ossl_ptr<PKCS12> &p12, const impl::ConfigCommon &conf,
+                                          const uint16_t &usage, const std::string &keychain_filename,
+                                          const std::string &password) {
     // Return certificate if it exists and is readable
-    if (fp && d2i_PKCS12_fp(fp.get(), p12.acquire())) return security::CERT_EXISTS;
+    if (fp && d2i_PKCS12_fp(fp.get(), p12.acquire()))
+        return true;
 
-    // If file not found or unreadable, create new certificate if auto
-    // provision is on
-    auto gen_status = security::OK;
-    if (conf.cert_auto_provision
-        && (gen_status = security::KeychainFactory::generateNewKeychainFile(conf, usage)) == security::OK) {
-        log_debug_printf(_setup, "New keychain file (PKCS12) %s%s\n", keychain_filename.c_str(),
-                         password.empty() ? "" : " w/ password");
-
-        fp.reset(fopen(keychain_filename.c_str(), "rb"));
+    // If file not found or unreadable
+    if (usage == security::kForClient) {
+        // Client ONLY can create SSL session even though it has no
+        // certificate as long as the server allows it
+        return false;
     } else {
-        if (usage & security::kForClient) {
-            if (gen_status == security::ROOT_CERT_INSTALLED) {
-                throw std::runtime_error(SB() << "Root Certificate has been installed.  "
-                                              << "Please trust it and try again");
-            }
-            // Client can create SSL session even though it has no
-            // certificate as long as the server allows it
-            return security::NOT_OK;
-        } else {
-            // TODO pass the reason for the failure back - perhaps using an
-            // exception
-            throw std::runtime_error(SB() << "Invalid, Untrusted, or Nonexistent certificate at [" << keychain_filename
-                                          << "]"
-                                          << (conf.cert_auto_provision ? "and no credentials could be acquired" : ""));
-        }
+        throw std::runtime_error(SB() << "Invalid, Untrusted, or Nonexistent certificate at ["
+                                      << keychain_filename
+                                      << "]");
     }
-
-    // We successfully created a new certificate.  Try to use it
-    if (!fp) {
-        auto err = errno;
-        throw std::runtime_error(SB() << "Unable to open certificates file: \"" << keychain_filename
-                                      << "\" : " << strerror(err));
-    } else if (!d2i_PKCS12_fp(fp.get(), p12.acquire())) {
-        throw SSLError(SB() << "Unable to read certificates from: \"" << keychain_filename << "\"");
-    }
-    return security::OK;
 }
 
 /**
@@ -388,11 +351,13 @@ ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const impl::ConfigC
         file_ptr fp(fopen(keychain_filename.c_str(), "rb"), false);
         ossl_ptr<PKCS12> p12;
 
-        // Try to open the certificate file or provision a new one,
-        security::GenStatus gen_status =
-            getOrProvisionCertificate(fp, p12, conf, (ssl_client ? security::kForClient : security::kForServer), keychain_filename, password);
-        if (gen_status == security::NOT_OK)
-            // If this is a client, and we are unable to provision a new certificate then continue without cert
+        // Try to open the certificate file
+        if (!getCertificate(fp, p12, conf, (ssl_client
+                             ? security::kForClient
+                             : security::kForServer),
+                            keychain_filename,
+                            password))
+            // If this is a client then continue without cert
             return ctx;
 
         ossl_ptr<EVP_PKEY> key;

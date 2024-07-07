@@ -116,7 +116,7 @@ std::shared_ptr<KeyPair> KeychainFactory::createKeyPair() {
  * @param config The configuration to read from
  * @param usage certificate usage
  */
-GenStatus KeychainFactory::generateNewKeychainFile(const impl::ConfigCommon &config, const uint16_t &usage) {
+CertAvailability KeychainFactory::generateNewKeychainFile(const impl::ConfigCommon &config, const uint16_t &usage) {
     // First check if we are to use process name or device name then
     // skip immediately to default credentials
     if (!config.use_process_name && config.device_name.empty()) {
@@ -125,8 +125,8 @@ GenStatus KeychainFactory::generateNewKeychainFile(const impl::ConfigCommon &con
             const auto &authenticator = authenticator_pair.second;
             // Try to create a new certificate. If it succeeds, return
             // immediately.
-            GenStatus gen_status = genNewKeychainFileForAuthMethod(config, usage, *authenticator);
-            if (gen_status != GenStatus::NOT_OK) {
+            CertAvailability gen_status = genNewKeychainFileForAuthMethod(config, usage, *authenticator);
+            if (gen_status != CertAvailability::NOT_AVAILABLE) {
                 log_debug_printf(certs,
                                  "Error Creating Keychain file for: %s "
                                  "authentication type\n",
@@ -192,7 +192,7 @@ KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keycha
  * @return bool True if the keychain file was successfully created, false
  * otherwise.
  */
-GenStatus KeychainFactory::genNewKeychainFileForAuthMethod(const impl::ConfigCommon &config, const uint16_t &usage, const Auth &authenticator) {
+CertAvailability KeychainFactory::genNewKeychainFileForAuthMethod(const impl::ConfigCommon &config, const uint16_t &usage, const Auth &authenticator) {
     auto retrieved_credentials(false);
     try {
         // Try to retrieve credentials from the authenticator
@@ -245,9 +245,9 @@ GenStatus KeychainFactory::genNewKeychainFileForAuthMethod(const impl::ConfigCom
                 // Create the root certificate if it is not already there so
                 // that the user can trust it
                 if (keychain_factory.writeRootPemFile(p12PemString)) {
-                    return GenStatus::OK;
+                    return CertAvailability::OK;
                 } else {
-                    return GenStatus::ROOT_CERT_INSTALLED;
+                    return CertAvailability::ROOT_CERT_INSTALLED;
                 }
             }
         }
@@ -258,7 +258,7 @@ GenStatus KeychainFactory::genNewKeychainFileForAuthMethod(const impl::ConfigCom
 
     // If credentials retrieval or certificate creation failed,
     // return false indicating the certificate could not be created
-    return GenStatus::NOT_OK;
+    return CertAvailability::NOT_AVAILABLE;
 }
 
 /**

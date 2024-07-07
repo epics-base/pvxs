@@ -42,7 +42,7 @@ namespace pvxs {
 namespace impl {
 
 struct PVXS_API ConfigCommon {
-    enum ConfigTarget { CLIENT, SERVER, PVACMS, PVANOTIFY, GATEWAY, OCSPPVA } config_target = CLIENT;
+    enum ConfigTarget { CLIENT, SERVER, GATEWAY} config_target = CLIENT;
 
     virtual ~ConfigCommon() = 0;
 
@@ -124,10 +124,6 @@ struct PVXS_API ConfigCommon {
     double tcpTimeout = 40.0;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    //////////////
-    // SECURITY //
-    //////////////
-
     //! TCP port to bind for TLS traffic.  Default is 5076
     //! @since UNRELEASED
     unsigned short tls_port = 5076;
@@ -179,84 +175,6 @@ struct PVXS_API ConfigCommon {
         Shutdown,
         Standby,
     } expiration_behaviour = FallbackToTCP;
-
-    /**
-     * @brief true will enable the client or server respectively to
-     * automatically provision a certificate if one is not available.
-     *
-     * It will contact the PVACMS after determining the credentials using
-     * the supported authentication methods and creating a CCR.
-     *
-     * The PVACMS will create the certificate and will install it as well as
-     * the root certificate in the requesting EPICS agent.
-     */
-    bool cert_auto_provision;
-
-    /**
-     * @brief EPICS agents using default credentials only: The number of minutes
-     * from now after which the new certificate being created should expire.
-     *
-     * Use this to set the default validity for certificates
-     * generated from basic credentials.
-     */
-    uint32_t cert_validity_mins = 43200;
-
-    /**
-     * @brief Value will be used as the device name when an EPICS agent
-     * is determining basic credentials instead of the hostname as
-     * the principal
-     */
-    std::string device_name;
-
-    /**
-     * @brief Value will be used as the process name when an EPICS agent
-     * is determining basic credentials instead of the logged-on
-     * user as the principal.
-     */
-#ifdef __linux__
-    std::string process_name = program_invocation_short_name;
-#elif defined(__APPLE__) || defined(__FreeBSD__)
-    std::string process_name = getprogname();
-#else
-    // alternative
-    std::string process_name;
-#endif
-    /**
-     * @brief true will mean that when an EPICS agent is determining
-     * basic credentials it will use the process name instead
-     * of the logged-on user as the principal
-     */
-    bool use_process_name = false;
-
-#ifdef PVXS_ENABLE_JWT_AUTH
-    /**
-     * @brief except PVACMS: The JWT token that was used to authenticate this
-     * session
-     */
-    std::string jwt_token;
-#endif
-
-#ifdef PVXS_ENABLE_KRB_AUTH
-    /**
-     * @brief This is the string to which PVACMS/CLUSTER is prepended to
-     * create the service principal to be added to the Kerberos KDC to
-     * enable Kerberos ticket verification by the PVACMS.
-     *
-     * It is used in an EPICS agent when creating a GSSAPI context to
-     * create a token to send to the PVACMS to be validated, and used by
-     * the PVACMS to create another GSSAPI context to decode the token
-     * and validate the CCR.
-     *
-     * There is no default so this value *must* be
-     * specified if Kerberos support is configured.
-     *
-     * The KDC will share a keytab file containing the secret key
-     * for the PVACMS/CLUSTER service and it will be made available to
-     * all members of the cluster but protected so no other processes
-     * or users can access it.
-     */
-    std::string krb_realm;
-#endif
 
     /**
      * True if the environment is configured for TLS.  All this means is that

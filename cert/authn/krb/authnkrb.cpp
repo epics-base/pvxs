@@ -4,7 +4,7 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include "authkrb.h"
+#include "authnkrb.h"
 
 #include <cstring>
 #include <memory>

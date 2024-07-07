@@ -9,16 +9,10 @@ include $(TOP)/configure/CONFIG
 #=============================
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
-
-SECURITY = $(TOP)/src/security
-USR_CPPFLAGS += -I$(TOP)/src/pvxs
 endif # EVENT2_HAS_OPENSSL
 
 USR_CPPFLAGS += -DPVXS_API_BUILDING
 USR_CPPFLAGS += -DPVXS_ENABLE_EXPERT_API
-
-# set to NO to disable handling of $SSLKEYLOGFILE
-PVXS_ENABLE_SSLKEYLOGFILE ?= YES
 
 PVXS_ENABLE_SSLKEYLOGFILE_YES = -DPVXS_ENABLE_SSLKEYLOGFILE
 USR_CPPFLAGS += $(PVXS_ENABLE_SSLKEYLOGFILE_$(PVXS_ENABLE_SSLKEYLOGFILE))
@@ -95,6 +89,7 @@ LIB_SRCS += describe.cpp
 LIB_SRCS += evhelper.cpp
 LIB_SRCS += log.cpp
 LIB_SRCS += nt.cpp
+LIB_SRCS += openssl.cpp
 LIB_SRCS += osdSockExt.cpp
 LIB_SRCS += osgroups.cpp
 LIB_SRCS += pvrequest.cpp
@@ -123,9 +118,9 @@ endif
 
 LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
 
-ifeq ($(EVENT2_HAS_OPENSSL),YES)
-include $(SECURITY)/Makefile
-endif
+#ifeq ($(EVENT2_HAS_OPENSSL),YES)
+#include $(SECURITY)/Makefile
+#endif
 
 #===========================
 

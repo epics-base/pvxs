@@ -24,7 +24,7 @@
 #include <pvxs/log.h>
 
 #include "auth.h"
-#include "authdefault.h"
+#include "authnstd.h"
 #include "security.h"
 #include "../utilpvt.h"
 

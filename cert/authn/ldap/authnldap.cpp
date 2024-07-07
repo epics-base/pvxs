@@ -4,7 +4,7 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include "authldap.h"
+#include "authnldap.h"
 
 #include <memory>
 #include <string>

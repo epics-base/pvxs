@@ -4,7 +4,7 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include "authjwt.h"
+#include "authnjwt.h"
 
 #include <iostream>
 #include <memory>

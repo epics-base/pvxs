@@ -74,10 +74,6 @@ public:
     Server fromEnv();
 #else
     Server fromEnv(bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
-#ifdef PVXS_ENABLE_JWT_AUTH
-    static
-    Server fromEnvWithJwt(const std::string& token);
-#endif
 #endif // PVXS_ENABLE_OPENSSL
 
     //! Begin serving.  Does not block.
@@ -187,365 +183,12 @@ struct PVXS_API Config : public impl::ConfigCommon {
     bool auto_beacon = true;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    //////////////
-    // SECURITY //
-    //////////////
-
     /**
      * @brief true if server should stop if no cert can is available or can be
      * comissioned
      */
     bool tls_stop_if_no_cert = false;
 
-    /**
-     * @brief PVACMS only: Minutes before expiry that `EXPIRY_IMMINENT`
-     * status should be set on a certificate status.
-     *
-     * When a server or client receives such a status it will try to
-     * renew the cert but will keep a backup and if it fails to renew
-     * it will continue to use the original one.
-     */
-    uint32_t cert_pre_expiry_mins = 1440;
-
-    /**
-     * @brief PVACMS only: When basic credentials are used then set to true to
-     * request administrator approval to issue client certificates.
-     *
-     * This will mean that clients will have to keep retrying connections
-     * until the certificate request is approved by an administrator.
-     *
-     * All other auth methods will never require administrator approval.
-     */
-    bool cert_client_require_approval = false;
-
-    /**
-     * @brief PVACMS only: When basic credentials are used then set to true
-     * to request administrator approval to issue server certificates.
-     * This will mean that servers will have to keep retrying connections
-     * until the certificate request is approved by an administrator.
-     *
-     * All other auth methods will never require administrator approval.
-     */
-    bool cert_server_require_approval = true;
-
-    /**
-     * @brief OCSP-PVA only: The port for the OCSP server to listen on.
-     */
-    unsigned short ocsp_port = 8080;
-
-    /**
-     * @brief PVACMS only: This is the string that determines the fully
-     * qualified path to a file that will be used as the sqlite PVACMS
-     * certificate database for a PVACMS process.
-     *
-     * The default is the current directory in a file called certs.db
-     */
-    std::string ca_db_filename = "certs.db";
-
-    /**
-     * @brief PVACMS and OCSP-PVA only: This is the string that determines
-     * the fully qualified path to the PKCS#12 keychain file that contains
-     * the CA certificate, and public and private keys.
-     *
-     * This is used to sign certificates being created in the PVACMS or
-     * sign certificate status responses being delivered by OCSP-PVA.
-     * If this is not specified it defaults to the TLS_KEYCHAIN file.
-     *
-     * Note: This certificate needs to be trusted by all EPICS agents.
-     */
-    std::string ca_keychain_filename;
-
-    /**
-     * @brief PVACMS and OCSP-PVA only: This is the string that determines
-     * the fully qualified path to a file that contains the password that
-     * unlocks the `ca_keychain_filename`.
-     *
-     * This is optional.  If not specified, the `ca_keychain_filename`
-     * contents will not be encrypted.
-     */
-    std::string ca_keychain_password;
-
-    /**
-     * @brief PVACMS only: This is the string that determines the
-     * fully qualified path to a file that will be used as the
-     * ACF file that configures the permissions that are accorded
-     * to validated peers of the PVACMS.
-     *
-     * This will specify administrators that have the right to revoke
-     * certificates, and the default read permissions for certificate statuses.
-     * There is no default so it must be specified on the command line or
-     * as an environment variable.
-     *
-     * e.g.
-     * @code
-     *      AG(ADMINS) {
-     *       "ed@slac.stanford.edu",
-     *       "greg@slac.stanford.edu"
-     *      }
-     *
-     *      SG(SPECIAL) {
-     *       RULE(1,WRITE,TRAPWRITE) {
-     *         UAG(ADMINS)
-     *      }
-     *
-     * @endcode
-     *
-     */
-    std::string ca_acf_filename;
-
-    /**
-     * @brief PVACMS only: If a CA root certificate has not been established
-     * prior to the first time that the PVACMS starts up, then one
-     * will be created automatically.
-     *
-     * To provide the name (CN) to be used in the subject of the
-     * CA certificate we can use this environment variable.
-     */
-    std::string ca_name = "EPICS Root CA";
-
-    /**
-     * @brief PVACMS only: If a CA root certificate has not been established
-     * prior to the first time that the PVACMS starts up, then one will be
-     * created automatically.
-     *
-     * To provide the organization (O) to be used in the subject of
-     * the CA certificate we can use this environment variable.
-     */
-    std::string ca_organization = "ca.epics.org";
-
-    /**
-     * @brief PVACMS only: If a CA root certificate has not been
-     * established prior to the first time that the PVACMS starts up,
-     * then one will be created automatically.
-     *
-     * To provide the organizational unit (OU) to be used in the
-     * subject of the CA certificate we can use this environment variable.
-     */
-    std::string ca_organizational_unit = "EPICS Certificate Authority";
-
-#ifdef PVXS_ENABLE_JWT_AUTH
-    /**
-     * @brief PVACMS only: For Servers this is the trusted URI of the JWT
-     * verifier.
-     */
-    std::string jwt_trusted_uri;
-
-    /**
-     * @brief PVACMS only: This is the request format for the JWT verifier.
-     *
-     * PVACMS only: A string that is used verbatim as the payload
-     * for the verification request while substituting the string
-     * #token# for the token value, and #kid# for the key id.
-     * This is used when the verification server requires a formatted.
-     *
-     * If the string is #token# (default) then the verification endpoint
-     * is called with the raw token as the payload.
-     */
-    std::string jwt_request_format = "#token#";
-
-    /**
-     * @brief PVACMS only: format for JWT verification response value
-     *
-     * PVACMS only: A pattern string that we can use to decode
-     * the response from a verification endpoint if the response
-     * is formatted text.  All white space is removed in the given
-     * string and in the response.  Then all the text prior to
-     * #response# is matched and removed from the response and
-     * all the text after the response is likewise removed, what
-     * remains is the response value.  An asterisk in the string
-     * matches any sequence of characters in the response.  It
-     * is converted to lowercase and interpreted as valid if it
-     * equals valid, ok, true, t, yes, y, or 1.
-     *
-     * If the string is #response# (default) then the response
-     * is raw and is converted to lowercase and compared without
-     * removing any formatting.
-     */
-    std::string jwt_response_format = "#response#";
-
-    /**
-     * @brief PVACMS only: Determines whether the JWT verification endpoint will
-     * be called with HTTP GET or POST
-     *
-     * If called with POST, then the payload is exactly what is defined
-     * by the REQUEST_FORMAT variable.
-     *
-     * If called with GET, then the token is passed in the
-     * Authorization header of the HTTP GET request.
-     */
-    enum JwtRequestMethod {
-        POST,
-        GET,
-    } jwt_request_method = POST;
-
-    /**
-     * @brief PVACMS only: If set this tells PVACMS that when it receives a
-     * 200 HTTP-response code from the HTTP request then the
-     * token is valid, and invalid for any other response code.
-     */
-    bool jwt_use_response_code = false;
-
-    /**
-     * @brief PVACMS only: Get the request string based on the configured
-     * request format
-     * @param token the token to insert into the request format
-     * @param key_id the key id to insert into the request format
-     * @return the formatted request string
-     */
-    inline std::string getJwtRequest(const std::string& token,
-                                     const std::string& key_id) const {
-        static const std::string kTokenPlaceholder = "#token#";
-        static const std::string kKeyIDPlaceholder = "#kid#";
-
-        std::string request = jwt_request_format;
-
-        size_t token_pos = request.find(kTokenPlaceholder);
-        if (token_pos != std::string::npos) {
-            request.replace(token_pos, kTokenPlaceholder.length(), token);
-        }
-
-        size_t key_id_pos = request.find(kKeyIDPlaceholder);
-        if (key_id_pos != std::string::npos) {
-            request.replace(key_id_pos, kKeyIDPlaceholder.length(), key_id);
-        }
-
-        return request;
-    }
-
-    /**
-     * PVACMS only: Match a given response against the response format
-     */
-    inline bool isJwtResponseValid(std::string response) const noexcept {
-        // Escape braces in response format string
-        auto jwt_clean_response_format = jwt_response_format;
-        std::regex open_braces("\\{");
-        jwt_clean_response_format =
-            std::regex_replace(jwt_clean_response_format, open_braces, "\\{");
-
-        std::regex close_braces("\\}");
-        jwt_clean_response_format =
-            std::regex_replace(jwt_clean_response_format, close_braces, "\\}");
-
-        // Remove whitespace from the input strings
-        response.erase(
-            std::remove_if(response.begin(), response.end(), ::isspace),
-            response.end());
-        jwt_clean_response_format.erase(
-            std::remove_if(jwt_clean_response_format.begin(),
-                           jwt_clean_response_format.end(), ::isspace),
-            jwt_clean_response_format.end());
-
-        // Convert response format to regex but remember where the #response# is
-        // located by first creating a placeholders position map with the
-        // placeholder and the position it will need to be inserted into the
-        // given response format string when all prior placeholders are
-        // already replaced by the regex equivalent.
-        int index_of_response = 0;
-        static const char* kPlaceholderRegex = "(.*)";
-        size_t position = 0, position_adjust = 0;
-        std::string placeholders[] = {"*", "#response#"};
-        std::map<size_t, std::string> placeholder_positions;
-
-        // Fill placeholders position map with all occurrences of placeholders
-        for (const auto& placeholder : placeholders) {
-            position = 0;
-            while ((position = jwt_clean_response_format.find(
-                        placeholder, position)) != std::string::npos) {
-                placeholder_positions[position + position_adjust] = placeholder;
-                position += placeholder.size();
-
-                // diff between placeholder len and len of placeholder regex
-                position_adjust +=
-                    (strlen(kPlaceholderRegex) - placeholder.length());
-            }
-        }
-
-        // Replace all occurrences in order of appearance
-        int counter = 1;
-        for (auto& placeholder_position : placeholder_positions) {
-            if (placeholder_position.second == "#response#") {
-                index_of_response = counter;
-            }
-            jwt_clean_response_format.replace(
-                placeholder_position.first, placeholder_position.second.size(),
-                kPlaceholderRegex);
-            counter++;
-        }
-
-        // Make a regex from the converted response format
-        std::regex pattern(jwt_clean_response_format);
-        std::smatch match;
-        if (std::regex_search(response, match, pattern) &&
-            static_cast<int>(match.size()) > index_of_response) {
-            // If the response matches the format
-            // Then extract the response match
-            std::string response_value = match[index_of_response];
-
-            // Convert the response match to lower case
-            std::transform(response_value.begin(), response_value.end(),
-                           response_value.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-
-            // Check if it matches any of the valid responses
-            return (response_value == "valid" || response_value == "ok" ||
-                    response_value == "true" || response_value == "t" ||
-                    response_value == "yes" || response_value == "y" ||
-                    response_value == "1");
-        }
-
-        // Response is not valid if it does not match the specified format
-        return false;
-    }
-#endif // PVXS_ENABLE_JWT_AUTH
-
-#ifdef PVXS_ENABLE_KRB_AUTH
-    /**
-     * @brief PVACMS only: This string is the fully qualified
-     * path to the location of the keytab file.
-     *
-     * It is used to retrieve the secret key used to decode
-     * messages destined for a Kerberos service
-     */
-    std::string krb_keytab;
-#endif // PVXS_ENABLE_KRB_AUTH
-
-#ifdef PVXS_ENABLE_LDAP_AUTH
-    /**
-     * @brief PVACMS only: distinguished name for an account with
-     * sufficient permissions to query the LDAP directory
-     *
-     * e.g. "cn=admin,dc=slac,dc=stanford,dc=edu"
-     */
-    std::string ldap_account;
-
-    /**
-     * @brief PVACMS only: The password for the configured LDAP account
-     */
-    std::string ldap_account_password;
-
-    /**
-     * @brief PVACMS only: hostname or IP address of the LDAP server.
-     *
-     * This server will be queried to determine if the principal
-     * obtained by GSS-API comes from the directory store.
-     *
-     * This must be specified for the LDAP authentication method
-     */
-    std::string ldap_host;
-
-    /**
-     * @brief PVACMS only: this is the port number to contact the LDAP service
-     */
-    unsigned short ldap_port;
-
-    /**
-     * @brief PVACMS only: distinguished name for location within LDAP
-     * directory to start search
-     *
-     * e.g. "cn=slac,dc=stanford,dc=edu"
-     */
-    std::string ldap_search_root;
-#endif //PVXS_ENABLE_LDAP_AUTH
 #endif // PVXS_ENABLE_OPENSSL
 
     //! Server unique ID.  Only meaningful in readback via Server::config()
@@ -563,11 +206,6 @@ public:
     static inline Config from_env(const bool tls_disabled = false, const ConfigTarget target = SERVER) {
         return Config{}.applyEnv(tls_disabled, target);
     }
-#ifdef PVXS_ENABLE_JWT_AUTH
-    static inline Config from_env_with_jwt(const std::string& token, const ConfigTarget target) {
-        return Config{}.applyEnvWithJwt(token, target);
-    }
-#endif
 #endif
 
     //! Default configuration using process environment
@@ -576,18 +214,8 @@ public:
 #else
     static inline Config fromEnv(const bool tls_disabled = false,
                                  const ConfigTarget target = SERVER) {
-        auto config = Config{}.applyEnv(tls_disabled, target);
-        if (target == PVACMS) {
-            config.tls_stop_if_no_cert = true;
-            config.cert_auto_provision = false;
-        }
-        return config;
+        return Config{}.applyEnv(tls_disabled, target);
     }
-#ifdef PVXS_ENABLE_JWT_AUTH
-    static inline Config fromEnvWithJwt(const std::string& token, const ConfigTarget target) {
-        return Config{}.applyEnvWithJwt(token, target);
-    }
-#endif
 #endif
 
     //! Configuration limited to the local loopback interface on a randomly chosen port.
@@ -601,9 +229,6 @@ public:
 #else
     Config& applyEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER);
     Config& applyEnv(const bool tls_disabled = false);
-#ifdef PVXS_ENABLE_JWT_AUTH
-    Config& applyEnvWithJwt(const std::string& token, const ConfigTarget target = SERVER);
-#endif
 #endif
 
     typedef std::map<std::string, std::string> defs_t;

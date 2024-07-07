@@ -8,38 +8,35 @@ include $(TOP)/configure/CONFIG
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
 
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+AUTHN = $(TOP)/cert/authn
+
 # access to private headers
 USR_CPPFLAGS += -I$(TOP)/src
 
-ifeq ($(EVENT2_HAS_OPENSSL),YES)
-USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+# Access to API for targets that link with pvxs lib
+USR_CPPFLAGS += -I$(TOP)/src/pvxs
+
+INC += certconfig.h
+INC += security.h
+
+#LIB_LIBS += Com
+
+#PROD += pvacms
+#pvacms_SRCS += pvacms.cpp
+#pvacms_SRCS += configcms.cpp
+#pvacms_SRCS += certfactory.cpp
+#pvacms_SRCS += keychainfactory.cpp
+#pvacms_LDFLAGS += -lsqlite3 -lssl -lcrypto -lpvxs
+
+#PROD += ocsppva
+#pvaocsp_SRCS += ocsppva.cpp
+#pvaocsp_SRCS += configocsp.cpp
+
+include $(AUTHN)/Makefile
+
 endif # EVENT2_HAS_OPENSSL
-
-PROD_LIBS += pvxs Com
-
-PROD += pvxvct
-pvxvct_SRCS += pvxvct.cpp
-
-PROD += pvxinfo
-pvxinfo_SRCS += info.cpp
-
-PROD += pvxget
-pvxget_SRCS += get.cpp
-
-PROD += pvxmonitor
-pvxmonitor_SRCS += monitor.cpp
-
-PROD += pvxput
-pvxput_SRCS += put.cpp
-
-PROD += pvxcall
-pvxcall_SRCS += call.cpp
-
-PROD += pvxlist
-pvxlist_SRCS += list.cpp
-
-PROD += pvxmshim
-pvxmshim_SRCS += mshim.cpp
 
 #===========================
 
@@ -47,4 +44,3 @@ include $(TOP)/configure/RULES
 -include $(wildcard $(TOP)/cfg/RULES*)
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
-
