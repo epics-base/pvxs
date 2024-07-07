@@ -36,11 +36,11 @@ struct KeyChainData {
         : pkey(std::move(newPkey)), cert(std::move(newCert)), ca(newCa) {}
 };
 
-enum GenStatus {
+enum CertAvailability {
     OK,
-    NOT_OK,
+    NOT_AVAILABLE,
     ROOT_CERT_INSTALLED,
-    CERT_EXISTS,  // Certificate file already exists
+    AVAILABLE,  // Certificate file already exists
 };
 
 /**
@@ -63,7 +63,7 @@ class KeychainFactory {
                     const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p_12_ptr)
         : keychain_filename_(keychain_filename), password_(password), key_pair_(key_pair), p12_ptr_(p_12_ptr) {}
 
-    static GenStatus generateNewKeychainFile(const impl::ConfigCommon &config, const uint16_t &usage);
+    static CertAvailability generateNewKeychainFile(const impl::ConfigCommon &config, const uint16_t &usage);
 
     static KeyChainData PVXS_API getKeychainDataFromKeychainFile(std::string keychain_filename, std::string password);
     ;
@@ -94,7 +94,7 @@ class KeychainFactory {
 
     static void backupKeychainFileIfExists(std::string keychain_filename);
 
-    static GenStatus genNewKeychainFileForAuthMethod(const impl::ConfigCommon &config, const uint16_t &usage, const Auth &authenticator);
+    static CertAvailability genNewKeychainFileForAuthMethod(const impl::ConfigCommon &config, const uint16_t &usage, const Auth &authenticator);
 
     static void chainFromRootCertPtr(STACK_OF(X509) * &chain, X509 *root_cert_ptr);
 
