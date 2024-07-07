@@ -167,8 +167,7 @@ struct PVXS_API ConfigCommon {
      *  - FallbackToTCP.  Only for clients, this will reinitialise the
      * connection but in server-only authentication mode.
      *  - Shutdown.       This will stop the process immediately
-     *  - Standby.        For servers, this will keep the server running but
-     * will reject all connections until the certificate has been renewed.
+     *  - Standby.        For servers, this will keep the server running but will reject all connections until the certificate has been renewed.
      */
     enum OnExpirationBehaviour {
         FallbackToTCP,

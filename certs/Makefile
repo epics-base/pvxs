@@ -10,7 +10,7 @@ include $(TOP)/configure/CONFIG
 
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
-AUTHN = $(TOP)/cert/authn
+AUTHN = $(TOP)/certs/authn
 
 # access to private headers
 USR_CPPFLAGS += -I$(TOP)/src

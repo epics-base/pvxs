@@ -25,7 +25,7 @@ endif
 DIRS += test
 test_DEPEND_DIRS = src ioc
 
-DIRS += cert
+DIRS += certs
 cert_DEPEND_DIRS = src
 
 DIRS += example

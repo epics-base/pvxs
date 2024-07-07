@@ -165,26 +165,20 @@ int ossl_alpn_select(SSL *,
 }
 
 /**
- * @brief Get a certificate from the given file or provision a new one using
- * the configuration.
+ * @brief Get a certificate from the given file
  *
  * This function reads a certificate from the provided file and returns it as a
  * PKCS12 object.
  *
- * If the file does not exist or the certificate can't be read then
- * this function provisions a new certificate using the provided configuration.
- *
  * @param fp The file pointer of the certificate file.
- * @param p12 The PKCS12 object where the certificate will be stored.
+ * @param p12 The PKCS12 object where the certificate is stored
  * @param conf The configuration object containing common settings.
  * @param ssl_client True if the request came from a client, false from a server
- * @param keychain_filename The filename of the keychain to use for provisioning
- * @param password The password to use for provisioning the certificate.
+ * @param keychain_filename The filename of the keychain to use
+ * @param password The password if specified
  *
- * @return security::GenStatus::CERT_EXISTS if the certs file already exists and
- *         can be opened
- * @return security::GenStatus::NOT_OK if the certificate does not exist or
- *         is invalid and the request was from a client
+ * @return true if the certs file exists and can be read
+ * @return false if the certificate does not exist or is invalid and the request was from a client
  *
  * @throws std::runtime_error("Invalid, Untrusted, or Nonexistent certificate ...")
  *         if certificate not found or invalid and it if for a server
@@ -198,13 +192,10 @@ bool getCertificate(file_ptr &fp, ossl_ptr<PKCS12> &p12, const impl::ConfigCommo
 
     // If file not found or unreadable
     if (usage == security::kForClient) {
-        // Client ONLY can create SSL session even though it has no
-        // certificate as long as the server allows it
+        // Client ONLY can create SSL session even though it has no certificate as long as the server allows it
         return false;
     } else {
-        throw std::runtime_error(SB() << "Invalid, Untrusted, or Nonexistent certificate at ["
-                                      << keychain_filename
-                                      << "]");
+        throw std::runtime_error(SB() << "Invalid, Untrusted, or Nonexistent certificate at [" << keychain_filename << "]");
     }
 }
 
