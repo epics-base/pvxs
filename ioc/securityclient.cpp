@@ -40,7 +40,7 @@ SecurityClient::~SecurityClient() {
 }
 
 bool SecurityClient::canWrite() const {
-    return std::all_of(cli.begin(), cli.end(), [](ASCLIENTPVT asc) {
+    return std::any_of(cli.begin(), cli.end(), [](ASCLIENTPVT asc) {
         return asCheckPut(asc);
     });
 }
