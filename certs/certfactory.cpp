@@ -23,7 +23,6 @@
 #include <pvxs/config.h>
 #include <pvxs/log.h>
 
-#include "authregistry.h"
 #include "openssl.h"
 #include "osiFileName.h"
 #include "ownedptr.h"
@@ -31,9 +30,9 @@
 #include "utilpvt.h"
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
-DEFINE_LOGGER(certs, "pvxs.certs");
+DEFINE_LOGGER(certs, "pvxs.certs.certfactory");
 
 /**
  * Creates a new X.509 certificate from scratch.  It uses the provided public
@@ -242,14 +241,14 @@ void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) {
     addExtension(certificate, NID_subject_key_identifier, "hash", certificate.get());
 
     // Basic Constraints
-    auto basic_constraint((IS_USED_FOR_(usage_, kForCa) ? "critical,CA:TRUE" : "CA:FALSE"));
+    auto basic_constraint((IS_USED_FOR_(usage_, ssl::kForCa) ? "critical,CA:TRUE" : "CA:FALSE"));
     addExtension(certificate, NID_basic_constraints, basic_constraint);
 
     // Key usage
     std::string usage;
-    if (IS_USED_FOR_(usage_, kForIntermediateCa)) {
+    if (IS_USED_FOR_(usage_, ssl::kForIntermediateCa)) {
         usage = "digitalSignature,cRLSign,keyCertSign";
-    } else if (IS_USED_FOR_(usage_, kForCa)) {
+    } else if (IS_USED_FOR_(usage_, ssl::kForCa)) {
         usage = "cRLSign,keyCertSign";
     } else if (IS_FOR_A_SERVER_(usage_)) {
         usage = "digitalSignature,keyEncipherment";
@@ -262,15 +261,15 @@ void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) {
 
     // Extended Key Usage: conditionally set based on `usage_`
     std::string extended_usage;
-    if (IS_USED_FOR_(usage_, kForClientAndServer)) {
+    if (IS_USED_FOR_(usage_, ssl::kForClientAndServer)) {
         extended_usage = "clientAuth,serverAuth";
-    } else if (IS_USED_FOR_(usage_, kForClient)) {
+    } else if (IS_USED_FOR_(usage_, ssl::kForClient)) {
         extended_usage = "clientAuth";
-    } else if (IS_USED_FOR_(usage_, kForServer)) {
+    } else if (IS_USED_FOR_(usage_, ssl::kForServer)) {
         extended_usage = "serverAuth";
-    } else if (IS_USED_FOR_(usage_, kForIntermediateCa)) {
+    } else if (IS_USED_FOR_(usage_, ssl::kForIntermediateCa)) {
         extended_usage = "serverAuth,clientAuth,OCSPSigning";
-    } else if (IS_USED_FOR_(usage_, kForCMS)) {
+    } else if (IS_USED_FOR_(usage_, ssl::kForCMS)) {
         extended_usage = "serverAuth,OCSPSigning";
     }
     if ( !extended_usage.empty()) {
@@ -497,5 +496,5 @@ std::string CertFactory::certAndCasToPemString(const ossl_ptr<X509> &cert, const
     return bioToString(bio);
 }
 
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs

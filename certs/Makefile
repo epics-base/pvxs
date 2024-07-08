@@ -12,29 +12,26 @@ ifeq ($(EVENT2_HAS_OPENSSL),YES)
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 AUTHN = $(TOP)/certs/authn
 
-# access to private headers
+PROD_LIBS = pvxs Com
+
+# access to API and private headers
+USR_CPPFLAGS += -I$(TOP)/src/pvxs
 USR_CPPFLAGS += -I$(TOP)/src
 
-# Access to API for targets that link with pvxs lib
-USR_CPPFLAGS += -I$(TOP)/src/pvxs
-
-INC += certconfig.h
 INC += security.h
 
-#LIB_LIBS += Com
-
-#PROD += pvacms
-#pvacms_SRCS += pvacms.cpp
-#pvacms_SRCS += configcms.cpp
-#pvacms_SRCS += certfactory.cpp
-#pvacms_SRCS += keychainfactory.cpp
-#pvacms_LDFLAGS += -lsqlite3 -lssl -lcrypto -lpvxs
+PROD += pvacms
+pvacms_SRCS += pvacms.cpp
+pvacms_SRCS += configcms.cpp
+pvacms_SRCS += certfactory.cpp
+pvacms_SRCS += keychainfactory.cpp
+pvacms_LDFLAGS += -lsqlite3 -lssl -lcrypto
 
 #PROD += ocsppva
 #pvaocsp_SRCS += ocsppva.cpp
 #pvaocsp_SRCS += configocsp.cpp
 
-include $(AUTHN)/Makefile
+#include $(AUTHN)/Makefile
 
 endif # EVENT2_HAS_OPENSSL
 

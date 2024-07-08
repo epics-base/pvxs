@@ -24,7 +24,7 @@
 #include "security.h"
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
 #define PVXS_DEFAULT_AUTH_TYPE "x509"
 
@@ -163,7 +163,7 @@ class PVXS_API CertFactory {
     static std::string rootCertToString(ossl_ptr<PKCS12> &p12, std::string password);
 };
 
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs
 
 #endif  // PVXS_CERT_FACTORY_H

@@ -9,14 +9,29 @@
 
 #include <memory>
 
+#include <pvxs/config.h>
+#include <pvxs/server.h>
+
 #include "ownedptr.h"
 
-#include "certconfig.h"
+namespace pvxs {
+namespace certs {
 
-class ConfigCms : public Config {
+  class ConfigCms : public pvxs::server::Config {
   public:
+      ConfigCms& applyEnv() {
+          pvxs::server::Config::applyEnv();
+          return *this;
+      }
+
+      static inline ConfigCms fromEnv() {
+          auto config = ConfigCms{}.applyEnv();
+          config.fromCmsEnv(std::map<std::string, std::string>());
+          return  config;
+      }
+
     /**
-     * @brief PVACMS only: Minutes before expiry that `EXPIRY_IMMINENT`
+     * @brief Minutes before expiry that `EXPIRY_IMMINENT`
      * status should be set on a certificate status.
      *
      * When a server or client receives such a status it will try to
@@ -26,7 +41,7 @@ class ConfigCms : public Config {
     uint32_t cert_pre_expiry_mins = 1440;
 
     /**
-     * @brief PVACMS only: When basic credentials are used then set to true to
+     * @brief When basic credentials are used then set to true to
      * request administrator approval to issue client certificates.
      *
      * This will mean that clients will have to keep retrying connections
@@ -37,7 +52,7 @@ class ConfigCms : public Config {
     bool cert_client_require_approval = false;
 
     /**
-     * @brief PVACMS only: When basic credentials are used then set to true
+     * @brief When basic credentials are used then set to true
      * to request administrator approval to issue server certificates.
      * This will mean that servers will have to keep retrying connections
      * until the certificate request is approved by an administrator.
@@ -47,7 +62,7 @@ class ConfigCms : public Config {
     bool cert_server_require_approval = true;
 
     /**
-     * @brief PVACMS only: This is the string that determines the fully
+     * @brief This is the string that determines the fully
      * qualified path to a file that will be used as the sqlite PVACMS
      * certificate database for a PVACMS process.
      *
@@ -56,7 +71,7 @@ class ConfigCms : public Config {
     std::string ca_db_filename = "certs.db";
 
     /**
-     * @brief PVACMS and OCSP-PVA only: This is the string that determines
+     * @brief This is the string that determines
      * the fully qualified path to the PKCS#12 keychain file that contains
      * the CA certificate, and public and private keys.
      *
@@ -69,7 +84,7 @@ class ConfigCms : public Config {
     std::string ca_keychain_filename;
 
     /**
-     * @brief PVACMS and OCSP-PVA only: This is the string that determines
+     * @brief This is the string that determines
      * the fully qualified path to a file that contains the password that
      * unlocks the `ca_keychain_filename`.
      *
@@ -79,7 +94,7 @@ class ConfigCms : public Config {
     std::string ca_keychain_password;
 
     /**
-     * @brief PVACMS only: This is the string that determines the
+     * @brief This is the string that determines the
      * fully qualified path to a file that will be used as the
      * ACF file that configures the permissions that are accorded
      * to validated peers of the PVACMS.
@@ -107,7 +122,7 @@ class ConfigCms : public Config {
     std::string ca_acf_filename;
 
     /**
-     * @brief PVACMS only: If a CA root certificate has not been established
+     * @brief If a CA root certificate has not been established
      * prior to the first time that the PVACMS starts up, then one
      * will be created automatically.
      *
@@ -117,7 +132,7 @@ class ConfigCms : public Config {
     std::string ca_name = "EPICS Root CA";
 
     /**
-     * @brief PVACMS only: If a CA root certificate has not been established
+     * @brief If a CA root certificate has not been established
      * prior to the first time that the PVACMS starts up, then one will be
      * created automatically.
      *
@@ -127,7 +142,7 @@ class ConfigCms : public Config {
     std::string ca_organization = "ca.epics.org";
 
     /**
-     * @brief PVACMS only: If a CA root certificate has not been
+     * @brief If a CA root certificate has not been
      * established prior to the first time that the PVACMS starts up,
      * then one will be created automatically.
      *
@@ -136,13 +151,9 @@ class ConfigCms : public Config {
      */
     std::string ca_organizational_unit = "EPICS Certificate Authority";
 
+    void fromCmsEnv(const std::map<std::string, std::string>& defs);
 };
 
-class ConfigCmsFactory : public ConfigFactoryInterface {
-  public:
-    std::unique_ptr<Config> create() override {
-        return std::make_unique<ConfigCms>();
-    }
-};
-
+} // certs
+} // pvxs
 #endif //PVXS_CONFIGCMS_H_

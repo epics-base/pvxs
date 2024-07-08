@@ -1114,6 +1114,8 @@ public:
     inline Config& overrideShareUDP(bool share) { UDP = share; return *this; }
     inline bool shareUDP() const { return UDP; }
 #endif
+
+    void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);
 };
 
 PVXS_API

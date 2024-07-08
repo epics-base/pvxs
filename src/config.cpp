@@ -305,34 +305,6 @@ void parse_timeout(double& dest, const std::string& name, const std::string& val
     }
 }
 
-struct PickOne {
-    const std::map<std::string, std::string>& defs;
-    bool useenv;
-
-    std::string name, val;
-
-    bool operator()(std::initializer_list<const char*> names) {
-        for(auto candidate : names) {
-            if(useenv) {
-                if(auto eval = getenv(candidate)) {
-                    name = candidate;
-                    val = eval;
-                    return true;
-                }
-
-            } else {
-                auto it = defs.find(candidate);
-                if(it!=defs.end()) {
-                    name = candidate;
-                    val = it->second;
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-};
-
 std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs)
 {
     std::vector<SockEndpoint> ret;
@@ -489,8 +461,7 @@ std::string printTLSOptions(const ConfigCommon& conf)
 
 namespace server {
 
-static
-void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv)
+void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv)
 {
     PickOne pickone{defs, useenv};
 
@@ -583,13 +554,9 @@ Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
     this->tls_disabled = tls_disabled;
     this->config_target = target;
 #endif
-    _fromDefs(*this, std::map<std::string, std::string>(), true);
+    fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
-
-#ifdef PVXS_ENABLE_OPENSSL
-Config &Config::applyEnv(const bool tls_disabled) { return applyEnv(tls_disabled, SERVER); }
-#endif // PVXS_ENABLE_OPENSSL
 
 Config Config::isolated(int family)
 {
@@ -616,7 +583,7 @@ Config Config::isolated(int family)
 
 Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
 {
-    _fromDefs(*this, defs, false);
+    fromDefs(*this, defs, false);
     return *this;
 }
 
@@ -726,8 +693,7 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf)
 
 namespace client {
 
-static
-void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv)
+void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv)
 {
     PickOne pickone{defs, useenv};
 
@@ -819,7 +785,7 @@ Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
     this->tls_disabled = tls_disabled;
     this->config_target = target;
 #endif
-    _fromDefs(*this, std::map<std::string, std::string>(), true);
+    fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
 
@@ -830,7 +796,7 @@ Config &Config::applyEnv(const bool tls_disabled) { return applyEnv(tls_disabled
 
 Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
 {
-    _fromDefs(*this, defs, false);
+    fromDefs(*this, defs, false);
     return *this;
 }
 

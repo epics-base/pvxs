@@ -14,7 +14,7 @@
 // TODO Missing includes
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
 /**
  * @class Credentials
@@ -116,7 +116,7 @@ struct KeyPair final {
     }
 };
 
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs
 
 #endif  // PVXS_SEC_SECURITY_H

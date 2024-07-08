@@ -34,9 +34,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "auth.h"
-#include "authdefault.h"
-#include "authregistry.h"
 #include "certfactory.h"
 #include "keychainfactory.h"
 #include "osiFileName.h"
@@ -46,9 +43,9 @@
 #include "utilpvt.h"
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
-DEFINE_LOGGER(certs, "pvxs.security.certs");
+DEFINE_LOGGER(certs, "pvxs.certs.keychainfactory");
 
 /**
  * @brief Creates a key pair.
@@ -106,41 +103,6 @@ std::shared_ptr<KeyPair> KeychainFactory::createKeyPair() {
     return key_pair;
 };
 
-/**
- * @brief Creates a new keychain file from whichever authenticator can
- * retrieve valid credentials.
- *
- * It loops through all of the installed authenticators and finds one that
- * returns valid credentials.  If none are found then it falls back to the
- * default.  It returns false if no keychain file can be created.
- * @param config The configuration to read from
- * @param usage certificate usage
- */
-CertAvailability KeychainFactory::generateNewKeychainFile(const impl::ConfigCommon &config, const uint16_t &usage) {
-    // First check if we are to use process name or device name then
-    // skip immediately to default credentials
-    if (!config.use_process_name && config.device_name.empty()) {
-        // Iterate over all registered authenticators
-        for (const auto &authenticator_pair : AuthRegistry::auths_) {
-            const auto &authenticator = authenticator_pair.second;
-            // Try to create a new certificate. If it succeeds, return
-            // immediately.
-            CertAvailability gen_status = genNewKeychainFileForAuthMethod(config, usage, *authenticator);
-            if (gen_status != CertAvailability::NOT_AVAILABLE) {
-                log_debug_printf(certs,
-                                 "Error Creating Keychain file for: %s "
-                                 "authentication type\n",
-                                 authenticator_pair.first.c_str());
-                return gen_status;
-            }
-        }
-    }
-
-    // If none of the registered authenticators could create a certificate,
-    // try to create a new certificate using the default authenticator
-    return (genNewKeychainFileForAuthMethod(config, usage, DefaultAuth()));
-}
-
 KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keychain_filename, std::string password) {
     ossl_ptr<EVP_PKEY> pkey;
     ossl_ptr<X509> cert;
@@ -172,94 +134,6 @@ KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keycha
     return key_chain_data;
 }
 
-/**
- * @brief Attempts to create a new certificate using the provided Auth.
- *
- * This method tries to create a new certificate using the credentials obtained
- * from the provided Auth. It follows these steps:
- * 1. Obtains the credentials from the Auth.
- * 2. Creates a public-private key pair.
- * 3. Creates a certificate creation request using the obtained credentials and
- * the key pair.
- * 4. Attempts to create a certificate using the certificate creation request.
- * 5. If the certificate is successfully created, it writes the certificate and
- *    the private key into a PKCS#12 file protected by the configured password.
- *
- * @param config The configuration to read from
- * @param usage certificate usage
- * @param authenticator Reference to the Authenticator to be used for obtaining
- * credentials.
- * @return bool True if the keychain file was successfully created, false
- * otherwise.
- */
-CertAvailability KeychainFactory::genNewKeychainFileForAuthMethod(const impl::ConfigCommon &config, const uint16_t &usage, const Auth &authenticator) {
-    auto retrieved_credentials(false);
-    try {
-        // Try to retrieve credentials from the authenticator
-        if (auto credentials = authenticator.getCredentials(config)) {
-            log_debug_printf(certs, "Credentials retrieved for: %s authenticator\n", authenticator.type_.c_str());
-            retrieved_credentials = true;
-
-            // If credentials were successfully retrieved,
-            // create a key pair
-            auto key_pair = createKeyPair();
-
-            // Create a certificate creation request using the credentials and
-            // key pair
-            auto cert_creation_request =
-                authenticator.createCertCreationRequest(credentials, key_pair, usage);
-
-            log_debug_printf(certs, "CCR created for: %s authentication type\n", authenticator.type_.c_str());
-
-            // add auth-issuer-verified signature if required
-            auto &ccr = cert_creation_request->ccr;
-            std::string signature;
-            if (authenticator.signCcrPayloadIfNeeded(ccr, signature) && !signature.empty()) {
-                ccr["verifier.signature"].from<std::string>(signature);
-                log_debug_printf(certs, "CCR payload signed for: %s authentication type: %s\n",
-                                 authenticator.type_.c_str(), signature.c_str());
-            }
-
-            // Attempt to create a certificate with the certificate creation
-            // request
-            auto p12PemString = authenticator.processCertificateCreationRequest(cert_creation_request);
-
-            // If the certificate was created successfully,
-            if (!p12PemString.empty()) {
-                log_debug_printf(certs, "Cert generated by PVACMS and successfully received: %s\n",
-                                 p12PemString.c_str());
-
-                // Attempt to write the certificate and private key
-                // to a PKCS#12 file protected by the configured password
-                security::KeychainFactory keychain_factory(config.tls_keychain_filename, config.tls_keychain_password,
-                                                           key_pair, p12PemString);
-
-                keychain_factory.writePKCS12File();
-
-                log_info_printf(certs, "New Keychain File created using %s: %s\n",
-                                METHOD_STRING(authenticator.type_).c_str(), config.tls_keychain_filename.c_str());
-                std::cout << "Certificate created with "
-                    << ((authenticator.type_ == PVXS_DEFAULT_AUTH_TYPE) ? "basic" : authenticator.type_)
-                    << " credentials and stored in:" << config.tls_keychain_filename << "\n";
-
-                // Create the root certificate if it is not already there so
-                // that the user can trust it
-                if (keychain_factory.writeRootPemFile(p12PemString)) {
-                    return CertAvailability::OK;
-                } else {
-                    return CertAvailability::ROOT_CERT_INSTALLED;
-                }
-            }
-        }
-    } catch (std::exception &e) {
-        if ( retrieved_credentials )
-            log_warn_printf(certs, "%s\n", e.what());
-    }
-
-    // If credentials retrieval or certificate creation failed,
-    // return false indicating the certificate could not be created
-    return CertAvailability::NOT_AVAILABLE;
-}
 
 /**
  * @brief Backup the given keychain file
@@ -299,6 +173,8 @@ void KeychainFactory::backupKeychainFileIfExists(std::string keychain_filename) 
 }
 
 bool KeychainFactory::createRootPemFile(const std::string &p12PemString, bool overwrite) {
+    static constexpr auto kMaxAuthnNameLen = 256;
+
     ossl_ptr<BIO> bio(BIO_new_mem_buf(p12PemString.data(), p12PemString.size()));
 
     // Create a stack for the certs
@@ -311,7 +187,7 @@ bool KeychainFactory::createRootPemFile(const std::string &p12PemString, bool ov
     // Build filename based on the CA certificate's CN field
     ossl_ptr<X509_NAME> name(X509_get_subject_name(xi->x509));  // get the subject name from the certificate
 
-    char cn[MAX_AUTH_NAME_LEN];  // buffer to hold the CN
+    char cn[kMaxAuthnNameLen];  // buffer to hold the CN
     X509_NAME_get_text_by_NID(name.get(), NID_commonName, cn,
                               sizeof(cn));  // get the CN
     std::string fileName(cn);               // create a std::string
@@ -504,5 +380,5 @@ void KeychainFactory::writePKCS12File() {
 bool KeychainFactory::writeRootPemFile(const std::string &pem_string, const bool overwrite) {
     return createRootPemFile(pem_string, overwrite);
 }
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs

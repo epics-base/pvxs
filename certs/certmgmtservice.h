@@ -13,7 +13,7 @@
 #include "security.h"
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
 // Certificate management
 #define RPC_CERT_CREATE "CERT:CREATE"

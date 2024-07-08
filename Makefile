@@ -26,7 +26,7 @@ DIRS += test
 test_DEPEND_DIRS = src ioc
 
 DIRS += certs
-cert_DEPEND_DIRS = src
+certs_DEPEND_DIRS = src
 
 DIRS += example
 example_DEPEND_DIRS = src

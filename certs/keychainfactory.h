@@ -20,13 +20,11 @@
 #include <pvxs/log.h>
 #include <pvxs/version.h>
 
-#include "auth.h"
-#include "authregistry.h"
 #include "ownedptr.h"
 #include "security.h"
 
 namespace pvxs {
-namespace security {
+namespace certs {
 struct KeyChainData {
     ossl_ptr<EVP_PKEY> pkey;
     ossl_ptr<X509> cert;
@@ -68,7 +66,7 @@ class KeychainFactory {
     static KeyChainData PVXS_API getKeychainDataFromKeychainFile(std::string keychain_filename, std::string password);
     ;
 
-    static inline const std::unique_ptr<Auth> &getAuth(const std::string &type) { return AuthRegistry::getAuth(type); }
+//    static inline const std::unique_ptr<Auth> &getAuth(const std::string &type) { return AuthRegistry::getAuth(type); }
 
     static std::shared_ptr<KeyPair> PVXS_API createKeyPair();
 
@@ -93,8 +91,6 @@ class KeychainFactory {
                                   STACK_OF(X509) *cert_chain_ptr = nullptr);
 
     static void backupKeychainFileIfExists(std::string keychain_filename);
-
-    static CertAvailability genNewKeychainFileForAuthMethod(const impl::ConfigCommon &config, const uint16_t &usage, const Auth &authenticator);
 
     static void chainFromRootCertPtr(STACK_OF(X509) * &chain, X509 *root_cert_ptr);
 
@@ -144,7 +140,7 @@ class KeychainFactory {
 #endif
 };
 
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs
 
 #endif  // PVXS_KEYCHAIN_FACTORY_H

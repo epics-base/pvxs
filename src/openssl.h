@@ -25,7 +25,7 @@
 
 namespace pvxs {
 
-namespace security {
+namespace ssl {
 constexpr uint16_t kForClient = 0x01;
 constexpr uint16_t kForServer = 0x02;
 constexpr uint16_t kForIntermediateCa = 0x04;
@@ -36,8 +36,8 @@ constexpr uint16_t kForClientAndServer = kForClient | kForServer;
 constexpr uint16_t kAnyServer = kForCMS | kForServer;
 
 #define IS_USED_FOR_(USED,USAGE) ((USED & (USAGE)) == USAGE)
-#define IS_FOR_A_SERVER_(USED) ((USED & (kAnyServer)) != 0x00)
-} // security
+#define IS_FOR_A_SERVER_(USED) ((USED & (ssl::kAnyServer)) != 0x00)
+} // ssl
 
 struct PeerCredentials;
 namespace ossl {

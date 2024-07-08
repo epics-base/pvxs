@@ -44,24 +44,27 @@
 
 #include <pvxs/client.h>
 #include <pvxs/config.h>
-#include "keychainfactory.h"
 #include <pvxs/log.h>
 #include <pvxs/nt.h>
 #include <pvxs/server.h>
 #include <pvxs/sharedpv.h>
 
-#include "certfactory.h"
 #include "evhelper.h"
 #include "sqlite3.h"
 #include "sqlite3ext.h"
+
 #include "ownedptr.h"
 #include "utilpvt.h"
 
-using namespace pvxs;
+#include "certfactory.h"
+#include "certmgmtservice.h"
+#include "configcms.h"
+#include "keychainfactory.h"
 
-DEFINE_LOGGER(pvacms, "pvxs.pvacms");
+DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
 
-namespace {
+namespace pvxs {
+namespace certs {
 
 const uint64_t k64BitOffset = 1ULL << 63;  // This is 2^63
 
@@ -78,19 +81,19 @@ std::string pvacms_org_name;
 // Forward decls
 time_t ASN1_TIME_to_time_t(ASN1_TIME *time);
 
-void createServerCertificate(const server::Config &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
+void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
                              ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
-void createCaCertificate(server::Config &config, sql_ptr &ca_db);
+void createCaCertificate(ConfigCms &config, sql_ptr &ca_db);
 
-std::string createCertificatePemString(sql_ptr &ca_db, pvxs::security::CertFactory &cert_factory);
+std::string createCertificatePemString(sql_ptr &ca_db, certs::CertFactory &cert_factory);
 
-ossl_ptr<X509> createCertificate(sql_ptr &ca_db, pvxs::security::CertFactory &cert_factory);
+ossl_ptr<X509> createCertificate(sql_ptr &ca_db, certs::CertFactory &cert_factory);
 
-void ensureServerCertificateExists(server::Config config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
+void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
                                    ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
-void ensureValidityCompatible(pvxs::security::CertFactory &cert_factory);
+void ensureValidityCompatible(certs::CertFactory &cert_factory);
 
 uint64_t generateSerial();
 
@@ -98,7 +101,7 @@ int getCertificateStatus(sql_ptr &ca_db, uint64_t serial);
 
 std::string getCountryCode();
 
-void getOrCreateCaCertificate(server::Config &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
+void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
                               ossl_ptr<EVP_PKEY> &ca_pkey, ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
 Value getCreatePrototype();
@@ -121,13 +124,13 @@ Value getStatusPrototype();
 
 void initCertsDatabase(sql_ptr &ca_db, std::string &db_file);
 
-int readOptions(server::Config &config, int argc, char *argv[], bool &verbose);
+int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose);
 
 void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&operation, Value &&args,
                 const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key,
                 const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
-void storeCertificate(sql_ptr &ca_db, pvxs::security::CertFactory &cert_factory);
+void storeCertificate(sql_ptr &ca_db, certs::CertFactory &cert_factory);
 
 void usage(const char *argv0);
 
@@ -148,7 +151,7 @@ void usage(const char *argv0);
  * @return 0 if successful, 1 if successful but need to exit immediately on
  * return, >1 if there is any error.
  */
-int readOptions(server::Config &config, int argc, char *argv[], bool &verbose) {
+int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose) {
     int opt;
     while ((opt = getopt(argc, argv, "a:c:d:hk:n:m:o:p:s:u:vV")) != -1) {
         switch (opt) {
@@ -225,7 +228,6 @@ int readOptions(server::Config &config, int argc, char *argv[], bool &verbose) {
     // Override some PVACMS mandatory settings
     config.tls_stop_if_no_cert = true;
     config.tls_client_cert_required = ConfigCommon::Optional;
-    config.cert_auto_provision = false;
 
     return 0;
 }
@@ -402,7 +404,7 @@ time_t ASN1_TIME_to_time_t(ASN1_TIME *time) {
  * @throws std::runtime_error If failed to create the certificate in the
  * database
  */
-void storeCertificate(sql_ptr &ca_db, pvxs::security::CertFactory &cert_factory) {
+void storeCertificate(sql_ptr &ca_db, certs::CertFactory &cert_factory) {
     auto db_serial = (int64_t)(cert_factory.serial_ - k64BitOffset);  // db stores as signed int so convert to and from
 
     sqlite3_stmt *sql_statement;
@@ -439,7 +441,7 @@ void storeCertificate(sql_ptr &ca_db, pvxs::security::CertFactory &cert_factory)
  *
  * @return the PEM string that contains the Cert, its chain and the root cert
  */
-ossl_ptr<X509> createCertificate(sql_ptr &ca_db, pvxs::security::CertFactory &certificate_factory) {
+ossl_ptr<X509> createCertificate(sql_ptr &ca_db, certs::CertFactory &certificate_factory) {
     // Verify if there is an outstanding un-revoked certificate out there
     //    ensureCertificateDoesntAlreadyExist(name, country, organization,
     //    organization_unit);
@@ -457,12 +459,12 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, pvxs::security::CertFactory &ce
     std::string from = std::ctime(&certificate_factory.not_before_);
     std::string to = std::ctime(&certificate_factory.not_after_);
     std::cout << "--------------------------------------\n"
-              << "X.509 " << (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForIntermediateCa) ? "INTERMEDIATE CA"
-                           : (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForClientAndServer) ? "CLIENT & SERVER"
-                           : (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForClient) ? "CLIENT"
-                           : (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForServer) ? "SERVER"
-                           : (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForCMS) ? "PVACMS"
-                           : (IS_USED_FOR_(certificate_factory.usage_, pvxs::security::kForCa) ? "CA"
+              << "X.509 " << (IS_USED_FOR_(certificate_factory.usage_, ssl::kForIntermediateCa) ? "INTERMEDIATE CA"
+                           : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForClientAndServer) ? "CLIENT & SERVER"
+                           : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForClient) ? "CLIENT"
+                           : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForServer) ? "SERVER"
+                           : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCMS) ? "PVACMS"
+                           : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCa) ? "CA"
                            : "STRANGE"))))))
               << " certificate \n"
               << "NAME: " << certificate_factory.name_ << "\n"
@@ -474,13 +476,13 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, pvxs::security::CertFactory &ce
     return certificate;
 }
 
-std::string createCertificatePemString(sql_ptr &ca_db, pvxs::security::CertFactory &cert_factory) {
+std::string createCertificatePemString(sql_ptr &ca_db, certs::CertFactory &cert_factory) {
     ossl_ptr<X509> cert;
 
     cert = createCertificate(ca_db, cert_factory);
 
     // Write out as PEM string for return to client
-    return security::CertFactory::certAndCasToPemString(cert, cert_factory.certificate_chain_.get());
+    return certs::CertFactory::certAndCasToPemString(cert, cert_factory.certificate_chain_.get());
 }
 
 /**
@@ -504,24 +506,25 @@ void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<serv
     auto organization = ccr["organization"].as<const std::string>();
 
     try {
+/*
         // Call the authenticator specific verifier if not the default type
         if (type.compare(PVXS_DEFAULT_AUTH_TYPE) != 0) {
-            const auto &authenticator = ::security::KeychainFactory::getAuth(type);
+            const auto &authenticator = KeychainFactory::getAuth(type);
             if (!authenticator->verify(ccr, [&ca_pub_key](const std::string &data, const std::string &signature) {
-                    return ::security::CertFactory::verifySignature(ca_pub_key, data, signature);
+                    return certs::CertFactory::verifySignature(ca_pub_key, data, signature);
                 })) {
                 throw std::runtime_error("CCR claims are invalid");
             }
         }
-
+*/
         // Make Certificate
-        const std::shared_ptr<security::KeyPair> key_pair(
-            new security::KeyPair(ccr["pub_key"].as<const std::string>()));
+        const std::shared_ptr<certs::KeyPair> key_pair(
+            new certs::KeyPair(ccr["pub_key"].as<const std::string>()));
 
         // Generate a new serial number
         auto serial = generateSerial();
 
-        auto certificate_factory = pvxs::security::CertFactory(
+        auto certificate_factory = certs::CertFactory(
             serial, key_pair, name, ccr["country"].as<const std::string>(),
             organization, ccr["organization_unit"].as<const std::string>(),
             ccr["not_before"].as<time_t>(), ccr["not_after"].as<time_t>(),
@@ -558,11 +561,11 @@ void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<serv
  * @param ca_pkey the reference to the private key of the returned certificate
  * @param ca_chain reference to the certificate chain of the returned cert
  */
-void getOrCreateCaCertificate(server::Config &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
+void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
                               ossl_ptr<EVP_PKEY> &ca_pkey, ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     try {
         // Check if the CA certificates exist
-        auto keychain_data = security::KeychainFactory::getKeychainDataFromKeychainFile(config.ca_keychain_filename,
+        auto keychain_data = certs::KeychainFactory::getKeychainDataFromKeychainFile(config.ca_keychain_filename,
                                                                                         config.ca_keychain_password);
         ca_pkey = std::move(keychain_data.pkey);
         ca_cert = std::move(keychain_data.cert);
@@ -573,7 +576,7 @@ void getOrCreateCaCertificate(server::Config &config, sql_ptr &ca_db, ossl_ptr<X
         try {
             log_warn_printf(pvacms, "%s\n", e.what());
             createCaCertificate(config, ca_db);
-            auto keychain_data = security::KeychainFactory::getKeychainDataFromKeychainFile(config.ca_keychain_filename,
+            auto keychain_data = certs::KeychainFactory::getKeychainDataFromKeychainFile(config.ca_keychain_filename,
                                                                                             config.ca_keychain_password);
             ca_pkey = std::move(keychain_data.pkey);
             ca_cert = std::move(keychain_data.cert);
@@ -604,7 +607,7 @@ void getOrCreateCaCertificate(server::Config &config, sql_ptr &ca_db, ossl_ptr<X
  * @param ca_pkey the CA certificate's private key used to sign the new
  * certificate if necessary
  */
-void ensureServerCertificateExists(server::Config config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
+void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
                                    ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     // Get location of keychain file and password if any
     const std::string &keychain_filename = config.tls_keychain_filename, &password = config.tls_keychain_password;
@@ -649,9 +652,9 @@ void ensureServerCertificateExists(server::Config config, sql_ptr &ca_db, ossl_p
  * @param config the configuration to use to get CA creation parameters
  * @param ca_db the reference to the certificate database to write the CA to
  */
-void createCaCertificate(server::Config &config, sql_ptr &ca_db) {
+void createCaCertificate(ConfigCms &config, sql_ptr &ca_db) {
     // Generate a key pair for this cert
-    const auto key_pair(security::KeychainFactory::createKeyPair());
+    const auto key_pair(certs::KeychainFactory::createKeyPair());
 
     // Set validity to 4 yrs
     time_t not_before(time(nullptr));
@@ -660,16 +663,16 @@ void createCaCertificate(server::Config &config, sql_ptr &ca_db) {
     // Generate a new serial number
     auto serial = generateSerial();
 
-    auto certificate_factory = pvxs::security::CertFactory(
+    auto certificate_factory = certs::CertFactory(
       serial, key_pair, config.ca_name, getCountryCode(),
       config.ca_organization, config.ca_organizational_unit,
       not_before, not_after,
-      pvxs::security::kForCa);
+      ssl::kForCa);
 
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
     // Create PKCS#12 file containing certs, private key and null chain
-    security::KeychainFactory keychain_factory(config.ca_keychain_filename, config.ca_keychain_password, key_pair,
+    certs::KeychainFactory keychain_factory(config.ca_keychain_filename, config.ca_keychain_password, key_pair,
                                                pem_string);
 
     keychain_factory.writePKCS12File();
@@ -686,24 +689,24 @@ void createCaCertificate(server::Config &config, sql_ptr &ca_db) {
  * @param ca_pkey the CA's private key to sign the certificate
  * @param ca_cert the CA certificate
  */
-void createServerCertificate(const server::Config &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
+void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
                              ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     // Create a key pair
-    const auto key_pair(security::KeychainFactory::createKeyPair());
+    const auto key_pair(certs::KeychainFactory::createKeyPair());
 
     // Generate a new serial number
     auto serial = generateSerial();
 
-    auto certificate_factory = pvxs::security::CertFactory(
+    auto certificate_factory = certs::CertFactory(
       serial, key_pair, PVXS_SERVICE_NAME, getCountryCode(),
       pvacms_org_name, PVXS_SERVICE_ORG_UNIT_NAME,
       getNotBeforeTimeFromCert(ca_cert.get()), getNotAfterTimeFromCert(ca_cert.get()),
-      pvxs::security::kForCMS, ca_cert.get(), ca_pkey.get(), ca_chain.get());
+      ssl::kForCMS, ca_cert.get(), ca_pkey.get(), ca_chain.get());
 
     auto cert = createCertificate(ca_db, certificate_factory);
 
     // Create PKCS#12 file containing certs, private key and null chain
-    security::KeychainFactory keychain_factory(config.tls_keychain_filename, config.tls_keychain_password, key_pair,
+    certs::KeychainFactory keychain_factory(config.tls_keychain_filename, config.tls_keychain_password, key_pair,
                                                cert.get(), certificate_factory.certificate_chain_.get());
 
     keychain_factory.writePKCS12File();
@@ -714,7 +717,7 @@ void createServerCertificate(const server::Config &config, sql_ptr &ca_db, ossl_
  *
  * @param cert_factory the cert factory to check
  */
-void ensureValidityCompatible(pvxs::security::CertFactory &cert_factory) {
+void ensureValidityCompatible(certs::CertFactory &cert_factory) {
     time_t ca_not_before = getNotBeforeTimeFromCert(cert_factory.issuer_certificate_ptr_);
     time_t ca_not_after = getNotAfterTimeFromCert(cert_factory.issuer_certificate_ptr_);
 
@@ -875,18 +878,22 @@ void usage(const char *argv0) {
                  " -V                   Print version and exit.\n";
 }
 
-}  // namespace
+}  // certs
+}  // pvxs
 
 int main(int argc, char *argv[]) {
+    using namespace pvxs::certs;
+    using namespace pvxs::server;
+
     try {
         // Logger config from environment
-        logger_config_env();
+        pvxs::logger_config_env();
 
         bool verbose = false;
-        sql_ptr ca_db;
+        pvxs::sql_ptr ca_db;
 
         // Get config
-        auto config = server::Config::fromEnv(false, ConfigCommon::PVACMS);
+        auto config = ConfigCms::fromEnv();
 
         // Read commandline options
         int exit_status;
@@ -898,9 +905,9 @@ int main(int argc, char *argv[]) {
         initCertsDatabase(ca_db, config.ca_db_filename);
 
         // Get the CA Certificate
-        ossl_ptr<EVP_PKEY> ca_pkey;
-        ossl_ptr<X509> ca_cert;
-        ossl_shared_ptr<STACK_OF(X509)> ca_chain;
+        pvxs::ossl_ptr<EVP_PKEY> ca_pkey;
+        pvxs::ossl_ptr<X509> ca_cert;
+        pvxs::ossl_shared_ptr<STACK_OF(X509)> ca_chain;
 
         // Get or create CA certificate
         getOrCreateCaCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain);
@@ -909,28 +916,28 @@ int main(int argc, char *argv[]) {
         ensureServerCertificateExists(config, ca_db, ca_cert, ca_pkey, ca_chain);
 
         // Create the PVs
-        server::SharedPV create_pv(server::SharedPV::buildReadonly());
-        server::SharedPV revoke_pv(server::SharedPV::buildReadonly());
-        server::SharedPV status_pv(server::SharedPV::buildReadonly());
-        server::SharedPV partition_pv(server::SharedPV::buildMailbox());
-        server::SharedPV partition_scale_up_pv(server::SharedPV::buildReadonly());
-        server::SharedPV partition_scaled_up_pv(server::SharedPV::buildReadonly());
-        server::SharedPV partition_scale_down_pv(server::SharedPV::buildReadonly());
-        server::SharedPV partition_scaled_down_pv(server::SharedPV::buildReadonly());
+        SharedPV create_pv(SharedPV::buildReadonly());
+        SharedPV revoke_pv(SharedPV::buildReadonly());
+        SharedPV status_pv(SharedPV::buildReadonly());
+        SharedPV partition_pv(SharedPV::buildMailbox());
+        SharedPV partition_scale_up_pv(SharedPV::buildReadonly());
+        SharedPV partition_scaled_up_pv(SharedPV::buildReadonly());
+        SharedPV partition_scale_down_pv(SharedPV::buildReadonly());
+        SharedPV partition_scaled_down_pv(SharedPV::buildReadonly());
 
         // RPC handlers
         // Create Certificate: args: ccr (certificate creation request)
         // Get public key of ca certificate
-        ossl_ptr<EVP_PKEY> ca_pub_key(X509_get_pubkey(ca_cert.get()));
+        pvxs::ossl_ptr<EVP_PKEY> ca_pub_key(X509_get_pubkey(ca_cert.get()));
         create_pv.onRPC([&ca_db, &ca_pkey, &ca_cert, &ca_pub_key, &ca_chain](
-                            const server::SharedPV &create_pv, std::unique_ptr<server::ExecOp> &&operation,
-                            Value &&args) {
+                            const SharedPV &create_pv, std::unique_ptr<ExecOp> &&operation,
+                            pvxs::Value &&args) {
             rpcHandler(ca_db, create_pv, std::move(operation), std::move(args), ca_pkey, ca_cert, ca_pub_key, ca_chain);
         });
 
         // Revoke Certificate: args: crr (certificate revocation request)
         revoke_pv.onRPC(
-            [&ca_db](const server::SharedPV &revoke_pv, std::unique_ptr<server::ExecOp> &&operation, Value &&args) {});
+            [&ca_db](const SharedPV &revoke_pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
         // Certificate Status: CERT:STATUS:*
         // where * is any valid certificate serial number,
@@ -951,28 +958,28 @@ int main(int argc, char *argv[]) {
         //         status_pv.open(initial_partition_set);
         //     });
         status_pv.onLastDisconnect(
-            [&ca_db, &status_pv](const server::SharedPV &partition_scale_up_pv) { status_pv.close(); });
+            [&ca_db, &status_pv](const SharedPV &partition_scale_up_pv) { status_pv.close(); });
 
-        partition_pv.onFirstConnect([&ca_db](const server::SharedPV &partition_scale_up_pv) {});
-        partition_scale_up_pv.onRPC([&ca_db](const server::SharedPV &partition_scale_up_pv,
-                                             std::unique_ptr<server::ExecOp> &&operation, Value &&args) {});
-        partition_scale_up_pv.onRPC([&ca_db](const server::SharedPV &partition_scale_up_pv,
-                                             std::unique_ptr<server::ExecOp> &&operation, Value &&args) {});
+        partition_pv.onFirstConnect([&ca_db](const SharedPV &partition_scale_up_pv) {});
+        partition_scale_up_pv.onRPC([&ca_db](const SharedPV &partition_scale_up_pv,
+                                             std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
+        partition_scale_up_pv.onRPC([&ca_db](const SharedPV &partition_scale_up_pv,
+                                             std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
-        partition_scaled_up_pv.onRPC([&ca_db](const server::SharedPV &partition_scaled_up_pv,
-                                              std::unique_ptr<server::ExecOp> &&operation, Value &&args) {});
+        partition_scaled_up_pv.onRPC([&ca_db](const SharedPV &partition_scaled_up_pv,
+                                              std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
-        partition_scale_down_pv.onRPC([&ca_db](const server::SharedPV &partition_scale_down_pv,
-                                               std::unique_ptr<server::ExecOp> &&operation, Value &&args) {});
+        partition_scale_down_pv.onRPC([&ca_db](const SharedPV &partition_scale_down_pv,
+                                               std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
-        partition_scaled_down_pv.onRPC([&ca_db](const server::SharedPV &partition_scaled_down_pv,
-                                                std::unique_ptr<server::ExecOp> &&operation, Value &&args) {});
+        partition_scaled_down_pv.onRPC([&ca_db](const SharedPV &partition_scaled_down_pv,
+                                                std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
         // Data type for the PV.
         create_pv.open(getCreatePrototype());
 
         // Build server which will serve this PV
-        server::Server pva_server = pvxs::server::Server(config)
+        Server pva_server = Server(config)
                                            .addPV(RPC_CERT_CREATE, create_pv)
                                            .addPV(RPC_CERT_REVOKE, revoke_pv)
                                            .addPV(GET_CERT_STATUS, status_pv)

@@ -191,7 +191,7 @@ bool getCertificate(file_ptr &fp, ossl_ptr<PKCS12> &p12, const impl::ConfigCommo
         return true;
 
     // If file not found or unreadable
-    if (usage == security::kForClient) {
+    if (usage == ssl::kForClient) {
         // Client ONLY can create SSL session even though it has no certificate as long as the server allows it
         return false;
     } else {
@@ -344,8 +344,8 @@ ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const impl::ConfigC
 
         // Try to open the certificate file
         if (!getCertificate(fp, p12, conf, (ssl_client
-                             ? security::kForClient
-                             : security::kForServer),
+                             ? ssl::kForClient
+                             : ssl::kForServer),
                             keychain_filename,
                             password))
             // If this is a client then continue without cert

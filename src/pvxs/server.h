@@ -199,37 +199,26 @@ private:
     bool UDP = true;
 public:
 
-    // compat
 #ifndef PVXS_ENABLE_OPENSSL
+    // compat
     static inline Config from_env() { return Config{}.applyEnv(); }
+    //! Default configuration using process environment
+    static inline Config fromEnv()  { return Config{}.applyEnv(); }
+    //! update using defined EPICS_PVA* environment variables
+    Config& applyEnv();
 #else
     static inline Config from_env(const bool tls_disabled = false, const ConfigTarget target = SERVER) {
         return Config{}.applyEnv(tls_disabled, target);
     }
-#endif
-
-    //! Default configuration using process environment
-#ifndef PVXS_ENABLE_OPENSSL
-    static inline Config fromEnv()  { return Config{}.applyEnv(); }
-#else
-    static inline Config fromEnv(const bool tls_disabled = false,
-                                 const ConfigTarget target = SERVER) {
-        return Config{}.applyEnv(tls_disabled, target);
-    }
+    static inline Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER) { return Config{}.applyEnv(tls_disabled, target); }
+    Config &applyEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER);
+//    Config &applyEnv(const bool tls_disabled = false);
 #endif
 
     //! Configuration limited to the local loopback interface on a randomly chosen port.
     //! Suitable for use in self-contained unit-tests.
     //! @since 0.3.0 Address family argument added.
     static Config isolated(int family=AF_INET);
-
-    //! update using defined EPICS_PVA* environment variables
-#ifndef PVXS_ENABLE_OPENSSL
-    Config& applyEnv();
-#else
-    Config& applyEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER);
-    Config& applyEnv(const bool tls_disabled = false);
-#endif
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables.
@@ -262,6 +251,7 @@ public:
     inline Config& overrideShareUDP(bool share) { UDP = share; return *this; }
     inline bool shareUDP() const { return UDP; }
 #endif
+    void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);
 };
 
 PVXS_API

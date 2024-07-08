@@ -3,8 +3,9 @@
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
-
 #include <iostream>
+
+#include <epicsGetopt.h>
 
 namespace {
 void usage(const char *argv0) {
@@ -32,6 +33,7 @@ int readOptions(int argc, char *argv[], bool &verbose) {
 
 int main(int argc, char *argv[]) {
     bool verbose = false;
+    auto config = ConfigStd::fromEnv();
 
     // Read commandline options
     int exit_status;
