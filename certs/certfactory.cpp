@@ -7,12 +7,15 @@
 #include "certfactory.h"
 
 #include <cstdio>
+#include <ctime>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <string>
 #include <type_traits>
 #include <unordered_set>
 
+#include <openssl/asn1.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -90,7 +93,12 @@ ossl_ptr<X509> CertFactory::create() {
     // 10. Set the authority key identifier appropriately
     addExtension(certificate, NID_authority_key_identifier, "keyid:always,issuer:always");
 
-    // 11. Create cert chain from issuer's chain and issuer's cert
+    // 11. Add EPICS validTillRevoked extension, if required
+    if ( valid_until_revoked_) {
+        addBooleanExtensionByNid(certificate, NID_validTillRevoked, valid_until_revoked_);
+    }
+
+    // 12. Create cert chain from issuer's chain and issuer's cert
     if ( issuer_chain_ptr_ ) {
         // Fill with issuer chain certificates if supplied
         int num_certs = sk_X509_num(issuer_chain_ptr_);
@@ -107,7 +115,7 @@ ossl_ptr<X509> CertFactory::create() {
     } else
         log_debug_printf(certs, "Creating %s Certificate Chain\n", "*EMPTY*");
 
-    // 12. Sign the certificate with the private key of the issuer
+    // 13. Sign the certificate with the private key of the issuer
     if (!X509_sign(certificate.get(), issuer_pkey_ptr_, EVP_sha256())) {
         throw std::runtime_error(SB() << "Failed to sign the certificate");
     }
@@ -116,6 +124,7 @@ ossl_ptr<X509> CertFactory::create() {
     return certificate;
 }
 
+/*
 std::string CertFactory::sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data) {
     ossl_ptr<EVP_MD_CTX> message_digest_context(EVP_MD_CTX_new());
     assert(message_digest_context.get() != nullptr);
@@ -136,7 +145,9 @@ std::string CertFactory::sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string 
 
     return signature;
 }
+*/
 
+/*
 bool CertFactory::verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data,
                                   const std::string &signature) {
     const ossl_ptr<EVP_MD_CTX> message_digest_context(EVP_MD_CTX_new());
@@ -155,6 +166,7 @@ bool CertFactory::verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::str
         return false;
     }
 }
+*/
 
 /**
  * Set the subject of the provided certificate.
@@ -198,7 +210,11 @@ void CertFactory::setSubject(const ossl_ptr<X509> &certificate) {
  */
 void CertFactory::setValidity(const ossl_ptr<X509> &certificate) const {
     ossl_ptr<ASN1_TIME> before(ASN1_TIME_adj(nullptr, not_before_, 0, -1));
-    ossl_ptr<ASN1_TIME> after(ASN1_TIME_adj(nullptr, not_after_, 0, 0));
+    // If valid until revoked then use 32 bit time_t max as expiration date
+    ossl_ptr<ASN1_TIME> after(ASN1_TIME_adj(nullptr,
+                                            (valid_until_revoked_
+                                            ? ((2038-1970)*365*24*60*60)
+                                            : not_after_), 0, 0));
 
     if (X509_set1_notBefore(certificate.get(), before.get()) != 1) {
         throw std::runtime_error("Failed to set validity start time in certificate.");
@@ -305,6 +321,27 @@ void CertFactory::addExtension(const ossl_ptr<X509> &certificate, int nid, const
         throw std::runtime_error("Failed to set certificate extension");
     }
     log_debug_printf(certs, "Extension [%*d]: %-*s = \"%s\"\n", 3, nid, 32, nid2String(nid),  value);
+}
+
+/**
+ * Add a boolean extension by NID to certificate.
+ *
+ */
+void CertFactory::addBooleanExtensionByNid(const ossl_ptr<X509> &certificate, int nid, bool value) {
+    ossl_ptr<ASN1_OCTET_STRING> os(ASN1_OCTET_STRING_new());
+    if (!os) {
+        throw std::runtime_error("Failed to create ASN1_OCTET_STRING.");
+    }
+    auto val = static_cast<unsigned char>(value ? 0xFF : 0x00);
+    ASN1_OCTET_STRING_set(os.get(), &val, sizeof(val));
+
+    ossl_ptr<X509_EXTENSION> ext(X509_EXTENSION_create_by_NID(NULL, nid, 0, os.get()));
+    if (!ext) {
+        throw std::runtime_error("Failed to create extension.");
+    }
+    if (!X509_add_ext(certificate.get(), ext.get(), -1)) {
+        throw std::runtime_error("Failed to add cetificate extension.");
+    }
 }
 
 /**
