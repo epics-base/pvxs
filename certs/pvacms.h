@@ -48,6 +48,7 @@ enum CertificateStatus { PENDING_VALIDATION, VALID, EXPIRED, REVOKED };
     "BEGIN TRANSACTION;"                \
     "CREATE TABLE IF NOT EXISTS certs(" \
     "     serial INTEGER,"              \
+    "     skid TEXT,"                   \
     "     CN TEXT,"                     \
     "     O TEXT,"                      \
     "     OU TEXT,"                     \
@@ -61,7 +62,7 @@ enum CertificateStatus { PENDING_VALIDATION, VALID, EXPIRED, REVOKED };
 
 #define SQL_CREATE_CERT  \
     "INSERT INTO certs " \
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
 #define SQL_CERT_STATUS \
     "SELECT status "    \
@@ -70,7 +71,9 @@ enum CertificateStatus { PENDING_VALIDATION, VALID, EXPIRED, REVOKED };
 
 namespace pvxs {
 namespace certs {
-time_t ASN1_TIME_to_time_t(ASN1_TIME *time);
+time_t tmToTimeTUTC(std::tm &tm);
+
+time_t ASN1_TIMEToTimeT(ASN1_TIME *time);
 
 void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
                              ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);

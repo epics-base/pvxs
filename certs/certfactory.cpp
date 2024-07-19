@@ -37,6 +37,8 @@ namespace certs {
 
 DEFINE_LOGGER(certs, "pvxs.certs.certfactory");
 
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "LocalValueEscapesScope"
 /**
  * Creates a new X.509 certificate from scratch.  It uses the provided public
  * key from the key pair and sets all the appropriate fields based on usage.
@@ -121,8 +123,12 @@ ossl_ptr<X509> CertFactory::create() {
     }
     log_debug_printf(certs, "Certificate: %s\n", "<SIGNED>");
 
+    // Set the subject key identifier field
+    set_skid(certificate);
+
     return certificate;
 }
+#pragma clang diagnostic pop
 
 /*
 std::string CertFactory::sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data) {
@@ -532,6 +538,26 @@ std::string CertFactory::certAndCasToPemString(const ossl_ptr<X509> &cert, const
 
     return bioToString(bio);
 }
+
+void CertFactory::set_skid(ossl_ptr<X509> &certificate) {
+    int pos = -1;
+    std::stringstream skid_ss;
+
+    pos = X509_get_ext_by_NID(certificate.get(), NID_subject_key_identifier, pos);
+    X509_EXTENSION* ex = X509_get_ext(certificate.get(), pos);
+
+    ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING*>(X509V3_EXT_d2i(ex)));
+
+    if(skid != NULL) {
+        // Convert to hexadecimal string
+        for(int i = 0; i < skid->length; i++) {
+            skid_ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(skid->data[i]);
+        }
+    }
+
+    skid_ =  skid_ss.str();
+}
+
 
 }  // namespace certs
 }  // namespace pvxs

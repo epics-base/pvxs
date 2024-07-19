@@ -82,6 +82,7 @@ class PVXS_API CertFactory {
     STACK_OF(X509) *issuer_chain_ptr_; // issuer cert chain
     const ossl_shared_ptr<STACK_OF(X509)> certificate_chain_;
     bool valid_until_revoked_;
+    std::string skid_;
 
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name,
                 const std::string &country, const std::string &org, const std::string &org_unit,
@@ -172,6 +173,8 @@ class PVXS_API CertFactory {
     static std::string p12ToPemString(ossl_ptr<PKCS12> &p12, std::string password);
 
     static std::string rootCertToString(ossl_ptr<PKCS12> &p12, std::string password);
+
+    void set_skid(ossl_ptr<X509> &certificate);
 };
 
 }  // namespace certs
