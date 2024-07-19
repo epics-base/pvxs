@@ -183,6 +183,8 @@ Value getCreatePrototype() {
                        Member(TypeCode::UInt64, "serial"),
                        Member(TypeCode::String, "issuer"),
                        Member(TypeCode::String, "certid"),
+                       Member(TypeCode::String, "statuspv"),
+                       Member(TypeCode::String, "revokepv"),
                        Member(TypeCode::String, "cert"),
                        Struct("alarm", "alarm_t",
                               {
@@ -460,6 +462,15 @@ std::string getIssuerId(const ossl_ptr<X509> &ca_cert) {
     return ss.str();
 }
 
+template <typename T>
+T getStructureValue(const Value & src, const std::string &field) {
+    auto value = src[field];
+    if ( !value) {
+        throw std::runtime_error(SB() << field << " field not provided");
+    }
+    return value.as<T>();
+}
+
 /**
  * @brief CERT:CREATE Handles the creation of a certificate.
  *
@@ -476,9 +487,10 @@ void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<serv
                 const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key,
                 const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     auto ccr = args["query"];
-    auto type = ccr["type"].as<const std::string>();
-    auto name = ccr["name"].as<const std::string>();
-    auto organization = ccr["organization"].as<const std::string>();
+
+    auto type =  getStructureValue<const std::string>(ccr, "type");
+    auto name =  getStructureValue<const std::string>(ccr, "name");
+    auto organization =  getStructureValue<const std::string>(ccr, "organization");
 
     try {
         /*
@@ -498,18 +510,18 @@ void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<serv
         ///////////////////
 
         // Get Public Key to use
-        auto public_key = ccr["pub_key"].as<const std::string>();
+        auto public_key =  getStructureValue<const std::string>(ccr, "pub_key");
         const std::shared_ptr<KeyPair> key_pair(new KeyPair(public_key));
 
         // Generate a new serial number
         auto serial = generateSerial();
 
         // Get other certificate parameters from request
-        auto country = ccr["country"].as<const std::string>();
-        auto organization_unit = ccr["organization_unit"].as<const std::string>();
-        auto not_before = ccr["not_before"].as<time_t>();
-        auto not_after = ccr["not_after"].as<time_t>();
-        auto usage = ccr["usage"].as<uint16_t>();
+        auto country =  getStructureValue<const std::string>(ccr, "country");
+        auto organization_unit =  getStructureValue<const std::string>(ccr, "organization_unit");
+        auto not_before =  getStructureValue<time_t>(ccr, "not_before");
+        auto not_after =  getStructureValue<time_t>(ccr, "not_after");
+        auto usage =  getStructureValue<uint16_t>(ccr, "usage");
 
         // Create a certificate factory
         auto certificate_factory =
@@ -521,10 +533,15 @@ void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<serv
 
         // Construct and return the reply
         auto issuer_id = getIssuerId(ca_cert);
+        auto cert_id = (SB() << issuer_id << ":" << serial).str();
+        auto status_pv = (SB() << GET_SERVER_STATUS_ROOT << ":" << cert_id).str();
+        auto revoke_pv = (SB() << RPC_SERVER_REVOKE_ROOT << ":" << cert_id).str();
         auto reply(getCreatePrototype());
         reply["serial"] = serial;
         reply["issuer"] = issuer_id;
-        reply["certid"] = (SB() << issuer_id << ":" << serial).str();
+        reply["certid"] = cert_id;
+        reply["statuspv"] = status_pv;
+        reply["revokepv"] = revoke_pv;
         reply["cert"] = pem_string;
         operation->reply(reply);
     } catch (std::exception &e) {
