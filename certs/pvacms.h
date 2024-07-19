@@ -60,9 +60,47 @@ enum CertificateStatus { PENDING_VALIDATION, VALID, EXPIRED, REVOKED };
     ");"                                \
     "COMMIT;"
 
-#define SQL_CREATE_CERT  \
-    "INSERT INTO certs " \
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+#define SQL_CREATE_CERT                 \
+    "INSERT INTO certs ( "              \
+    "     serial,"                      \
+    "     skid,"                        \
+    "     CN,"                          \
+    "     O,"                           \
+    "     OU,"                          \
+    "     C,"                           \
+    "     not_before,"                  \
+    "     not_after,"                   \
+    "     status,"                      \
+    "     status_date"                  \
+    ") "                                \
+    "VALUES ("                          \
+    "     :serial,"                     \
+    "     :skid,"                       \
+    "     :CN,"                         \
+    "     :O,"                          \
+    "     :OU,"                         \
+    "     :C,"                          \
+    "     :not_before,"                 \
+    "     :not_after,"                  \
+    "     :status,"                     \
+    "     :status_date"                 \
+    ")"
+
+
+#define SQL_DUPS_SUBJECT \
+    "SELECT COUNT(*) "   \
+    "FROM certs "        \
+    "WHERE CN = :CN "     \
+    "  AND O = :O "      \
+    "  AND OU = :OU "     \
+    "  AND C = :C "      \
+    "  AND status = :status"
+
+#define SQL_DUPS_SUBJECT_KEY_IDENTIFIER \
+    "SELECT COUNT(*) "   \
+    "FROM certs "        \
+    "WHERE skid = :skid "   \
+    "  AND status = :status"
 
 #define SQL_CERT_STATUS \
     "SELECT status "    \
@@ -127,6 +165,8 @@ void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<serv
 std::string getIssuerId(const ossl_ptr<X509> &ca_cert);
 
 void storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
+
+void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory);
 
 void usage(const char *argv0);
 }  // namespace certs

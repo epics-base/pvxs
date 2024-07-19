@@ -17,13 +17,13 @@ usage=$3
 not_before=$(date +%s)
 not_after=$((not_before + 86400))
 
-if [ ! -f ~/.epics/${name}_public_key.pem ]
+if [ ! -f ~/.epics/public_key.pem ]
 then
-  openssl genrsa -out ~/.epics/${name}_private_key.pem 2048
-  openssl rsa -in ~/.epics/${name}_private_key.pem -pubout -outform PEM -out ~/.epics/${name}_public_key.pem 2>/dev/null
-  chmod 400 ~/.epics/${name}_private_key.pem ~/.epics/${name}_public_key.pem
+  openssl genrsa -out ~/.epics/private_key.pem 2048
+  openssl rsa -in ~/.epics/private_key.pem -pubout -outform PEM -out ~/.epics/public_key.pem 2>/dev/null
+  chmod 400 ~/.epics/private_key.pem ~/.epics/public_key.pem
 fi
-pub_key=$(cat ~/.epics/${name}_public_key.pem)
+pub_key=$(cat ~/.epics/public_key.pem)
 
-echo pvxcall "CERT:CREATE" type="x509" name="$name" country="US" organization="$org" organization_unit=""  not_before=$not_before not_after=$not_after usage=$usage pub_key="****"
+echo pvxcall "CERT:CREATE" type="x509" name="$name" country="US" organization="$org" organization_unit=""  not_before=$not_before not_after=$not_after usage=$usage
 pvxcall "CERT:CREATE" type="x509" name="$name" country="US" organization="$org" organization_unit=""  not_before=$not_before not_after=$not_after usage=$usage pub_key="${pub_key}"
