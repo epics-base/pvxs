@@ -12,6 +12,13 @@
 #ifndef PVXS_PVACMS_H
 #define PVXS_PVACMS_H
 
+#include <ctime>
+
+#include <pvxs/sharedpv.h>
+
+#include "certfactory.h"
+#include "configcms.h"
+
 #define DEFAULT_KEYCHAIN_FILE "server.p12"
 #define DEFAULT_CA_KEYCHAIN_FILE "ca.p12"
 #define DEFAULT_ACF_FILE "pvacms.acf"
@@ -58,5 +65,66 @@ enum CertificateStatus { PENDING_VALIDATION, VALID, EXPIRED, REVOKED };
     "SELECT status "    \
     "FROM certs "       \
     "WHERE serial = ?"
+
+namespace pvxs {
+namespace certs {
+time_t ASN1_TIME_to_time_t(ASN1_TIME *time);
+
+void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
+                             ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+
+void createCaCertificate(ConfigCms &config, sql_ptr &ca_db);
+
+std::string createCertificatePemString(sql_ptr &ca_db, CertFactory &cert_factory);
+
+ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
+
+void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
+                                   ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+
+void ensureValidityCompatible(CertFactory &cert_factory);
+
+uint64_t generateSerial();
+
+int getCertificateStatus(sql_ptr &ca_db, uint64_t serial);
+
+std::string getCountryCode();
+
+void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
+                              ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+
+Value getCreatePrototype();
+
+std::string getIPAddress();
+
+time_t getNotAfterTimeFromCert(const X509 *cert);
+
+time_t getNotBeforeTimeFromCert(const X509 *cert);
+
+Value getPartitionPrototype();
+
+Value getRevokePrototype();
+
+Value getScaleDownPrototype();
+
+Value getScaleUpPrototype();
+
+Value getStatusPrototype();
+
+void initCertsDatabase(sql_ptr &ca_db, std::string &db_file);
+
+int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose);
+
+void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&operation, Value &&args,
+                const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key,
+                const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+
+std::string getIssuerId(const ossl_ptr<X509> &ca_cert);
+
+void storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
+
+void usage(const char *argv0);
+}  // namespace certs
+}  // namespace pvxs
 
 #endif  // PVXS_PVACMS_H
