@@ -64,6 +64,19 @@ DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
 namespace pvxs {
 namespace certs {
 
+/**
+ * @brief These are the cumulative total days in a year at the start of each month,
+ *
+ * for example:
+ * January 1st is the 0th day of the year (month_start_days[0] = 0)
+ * February 1st is the 31st day of the year (month_start_days[1] = 31)
+ * March 1st is the 59th (month_start_days[2] = 59)
+ * and so on.
+ *
+ * This array does not consider leap years
+ */
+static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+
 const uint64_t k64BitOffset = 1ULL << 63;  // This is 2^63
 
 // The current partition number
@@ -265,13 +278,13 @@ void initCertsDatabase(sql_ptr &ca_db, std::string &db_file) {
  * @throw std::runtime_error If there is an error preparing the SQL statement or
  * retrieving the certificate status.
  */
-int getCertificateStatus(sql_ptr &ca_db, uint64_t serial) {
+CertificateStatus getCertificateStatus(sql_ptr &ca_db, uint64_t serial) {
     int cert_status;
     uint64_t db_serial = serial - k64BitOffset;
     sqlite3_stmt *sql_statement;
     int sql_status;
     if ((sql_status = sqlite3_prepare_v2(ca_db.get(), SQL_CERT_STATUS, -1, &sql_statement, 0)) == SQLITE_OK) {
-        sqlite3_bind_int64(sql_statement, 1, db_serial);
+        sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":serial"), db_serial);
 
         if ((sql_status = sqlite3_step(sql_statement)) == SQLITE_ROW) {
             cert_status = sqlite3_column_int(sql_statement, 0);
@@ -283,7 +296,7 @@ int getCertificateStatus(sql_ptr &ca_db, uint64_t serial) {
         throw std::runtime_error(SB() << "Failed to get cert status: " << sqlite3_errmsg(ca_db.get()));
     }
 
-    return cert_status;
+    return (CertificateStatus)cert_status;
 }
 
 /**
@@ -308,36 +321,38 @@ uint64_t generateSerial() {
 }
 
 /**
+ * @brief  Manual calculation of time since epoch
+ *
+ * Gets round problematic timezone issues by relying on tm being in UTC beforehand
+ *
+ * @param tm tm struct in UTC
+ * @return time_t seconds since epoch
+ */
+time_t tmToTimeTUTC(std::tm &tm) {
+    int year = 1900 + tm.tm_year;
+    time_t days = (year - 1970) * 365;
+    days += (year - 1969) / 4;
+    days -= (year - 1901) / 100;
+    days += (year - 1601) / 400;
+    if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) && tm.tm_mon < 2) {
+        days--;
+    }
+    days += tm.tm_mday - 1;
+    days += kMonthStartDays[tm.tm_mon];  // month_start_days should be an array list with amount of days since beginning
+                                         // of year for each month
+    return ((days * 24 + tm.tm_hour) * 60 + tm.tm_min) * 60 + tm.tm_sec;
+}
+
+/**
  * @brief Convert from ASN1_TIME found in certificates to time_t format
  * @param time the ASN1_TIME to convert
  *
  * @return the time_t representation of the given ASN1_TIME value
  */
-time_t ASN1_TIME_to_time_t(ASN1_TIME *time) {
-    BIO *bio;
-    char read_time[256];
-    struct tm tm;
-
-    // Create a memory buffer BIO
-    bio = BIO_new(BIO_s_mem());
-    if (!bio) throw std::runtime_error("Failed to create a BIO");
-
-    // Convert the time to readable form
-    ASN1_TIME_print(bio, time);
-    memset(read_time, 0, sizeof(read_time));
-
-    // Read from BIO to string
-    BIO_gets(bio, read_time, sizeof(read_time) - 1);
-    BIO_free(bio);
-
-    // Parse the string (e.g., "Feb 13 09:14:07 2019 GMT") to tm
-    char *to_return = strptime(read_time, "%b %d %H:%M:%S %Y", &tm);
-    if (to_return == NULL) {
-        throw std::runtime_error("Failed to parse time from ASN1_TIME");
-    }
-
-    // Convert tm to time_t
-    return mktime(&tm);
+time_t ASN1_TIMEToTimeT(ASN1_TIME *time) {
+    std::tm t{};
+    ASN1_TIME_to_tm(time, &t);
+    return tmToTimeTUTC(t);
 }
 
 /**
@@ -354,19 +369,22 @@ time_t ASN1_TIME_to_time_t(ASN1_TIME *time) {
 void storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory) {
     auto db_serial = (int64_t)(cert_factory.serial_ - k64BitOffset);  // db stores as signed int so convert to and from
 
+    checkForDuplicates(ca_db, cert_factory);
+
     sqlite3_stmt *sql_statement;
     auto current_time = std::time(nullptr);
     auto sql_status = sqlite3_prepare_v2(ca_db.get(), SQL_CREATE_CERT, -1, &sql_statement, NULL);
     if (sql_status == SQLITE_OK) {
-        sqlite3_bind_int64(sql_statement, 1, db_serial);
-        sqlite3_bind_text(sql_statement, 2, cert_factory.name_.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(sql_statement, 3, cert_factory.country_.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(sql_statement, 4, cert_factory.org_.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(sql_statement, 5, cert_factory.org_unit_.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sql_statement, 6, (int)cert_factory.not_before_);
-        sqlite3_bind_int(sql_statement, 7, (int)cert_factory.not_after_);
-        sqlite3_bind_int(sql_statement, 8, VALID);
-        sqlite3_bind_int(sql_statement, 9, (int)current_time);
+        sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":serial"), db_serial);
+        sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":skid"), cert_factory.skid_.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":CN"), cert_factory.name_.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":O"), cert_factory.org_.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":OU"), cert_factory.org_unit_.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":C"), cert_factory.country_.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":not_before"), (int)cert_factory.not_before_);
+        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":not_after"), (int)cert_factory.not_after_);
+        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), VALID);
+        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status_date"), (int)current_time);
 
         sql_status = sqlite3_step(sql_statement);
     }
@@ -375,6 +393,39 @@ void storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory) {
 
     if (sql_status != SQLITE_OK && sql_status != SQLITE_DONE) {
         throw std::runtime_error(SB() << "Failed to create certificate: " << sqlite3_errmsg(ca_db.get()));
+    }
+}
+
+void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory) {
+    // Prepare SQL statements
+    sqlite3_stmt *sql_statement;
+
+    // Check for duplicate subject
+    if (sqlite3_prepare_v2(ca_db.get(), SQL_DUPS_SUBJECT, -1, &sql_statement, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare statement");
+    }
+    sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":CN"), cert_factory.name_.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":O"), cert_factory.org_.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":OU"), cert_factory.org_unit_.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":C"), cert_factory.country_.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), VALID);
+    auto subject_dup_status = sqlite3_step(sql_statement) == SQLITE_ROW && sqlite3_column_int(sql_statement, 0) > 0;
+    sqlite3_finalize(sql_statement);
+    if (subject_dup_status) {
+        throw std::runtime_error(SB() << "Duplicate Certificate Subject: cn=" << cert_factory.name_ << ", o=" << cert_factory.org_
+                                      << ", ou=" << cert_factory.org_unit_ << ", c=" << cert_factory.country_);
+    }
+
+    // Check for duplicate SKID
+    if (sqlite3_prepare_v2(ca_db.get(), SQL_DUPS_SUBJECT_KEY_IDENTIFIER, -1, &sql_statement, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare statement");
+    }
+    sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":skid"), cert_factory.skid_.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), VALID);
+    auto skid_dup_status = sqlite3_step(sql_statement) == SQLITE_ROW && sqlite3_column_int(sql_statement, 0) > 0;
+    sqlite3_finalize(sql_statement);
+    if (skid_dup_status) {
+        throw std::runtime_error("Duplicate Certificate Subject Key Identifier.  Use a distinct Key-Pair for each certificate");
     }
 }
 
@@ -404,27 +455,26 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factor
     // Print info about certificate creation
     std::string from = std::ctime(&certificate_factory.not_before_);
     std::string to = std::ctime(&certificate_factory.not_after_);
-    std::cout
-        << "--------------------------------------\n"
-        << "X.509 "
-        << (IS_USED_FOR_(certificate_factory.usage_, ssl::kForIntermediateCa)
-                ? "INTERMEDIATE CA"
-                : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForClientAndServer)
-                       ? "CLIENT & SERVER"
-                       : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForClient)
-                              ? "CLIENT"
-                              : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForServer)
-                                     ? "SERVER"
-                                     : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCMS)
-                                            ? "PVACMS"
-                                            : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCa) ? "CA"
-                                                                                                     : "STRANGE"))))))
-        << " certificate \n"
-        << "NAME: " << certificate_factory.name_ << "\n"
-        << "ORGANIZATION: " << certificate_factory.org_ << "\n"
-        << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_ << "\n"
-        << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1) << "\n"
-        << "--------------------------------------\n\n";
+    std::cout << "--------------------------------------\n"
+              << "X.509 "
+              << (IS_USED_FOR_(certificate_factory.usage_, ssl::kForIntermediateCa)
+                      ? "INTERMEDIATE CA"
+                      : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForClientAndServer)
+                             ? "CLIENT & SERVER"
+                             : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForClient)
+                                    ? "CLIENT"
+                                    : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForServer)
+                                           ? "SERVER"
+                                           : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCMS)
+                                                  ? "PVACMS"
+                                                  : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCa) ? "CA" : "STRANGE"))))))
+              << " certificate \n"
+              << "CERT_ID: " << getIssuerId(certificate_factory.issuer_certificate_ptr_) << ":" << certificate_factory.serial_ << "\n"
+              << "NAME: " << certificate_factory.name_ << "\n"
+              << "ORGANIZATION: " << certificate_factory.org_ << "\n"
+              << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_ << "\n"
+              << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1) << "\n"
+              << "--------------------------------------\n\n";
 
     return certificate;
 }
@@ -441,19 +491,21 @@ std::string createCertificatePemString(sql_ptr &ca_db, CertFactory &cert_factory
 /**
  * @brief  Get the issuer ID which is the first 8 hex digits of the hex SKI
  *
- * Note that the given cert must contain the ski extension in the first place
+ * Note that the given cert must contain the skid extension in the first place
  *
  * @param ca_cert  the cert from which to get the subject key identifier extension
  * @return first 8 hex digits of the hex SKI
  */
-std::string getIssuerId(const ossl_ptr<X509> &ca_cert) {
-    ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING*>(X509_get_ext_d2i(ca_cert.get(), NID_subject_key_identifier, nullptr, nullptr)));
-    if(!skid.get()) {
+std::string getIssuerId(const ossl_ptr<X509> &ca_cert) { return getIssuerId(ca_cert.get()); }
+
+std::string getIssuerId(X509 *ca_cert_ptr) {
+    ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING *>(X509_get_ext_d2i(ca_cert_ptr, NID_subject_key_identifier, nullptr, nullptr)));
+    if (!skid.get()) {
         throw std::runtime_error("Failed to get Subject Key Identifier.");
     }
 
     // Convert first 8 chars to hex
-    auto buf = const_cast<unsigned char*>(skid->data);
+    auto buf = const_cast<unsigned char *>(skid->data);
     std::stringstream ss;
     for (int i = 0; i < skid->length && ss.tellp() < 8; i++) {
         ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buf[i]);
@@ -463,9 +515,9 @@ std::string getIssuerId(const ossl_ptr<X509> &ca_cert) {
 }
 
 template <typename T>
-T getStructureValue(const Value & src, const std::string &field) {
+T getStructureValue(const Value &src, const std::string &field) {
     auto value = src[field];
-    if ( !value) {
+    if (!value) {
         throw std::runtime_error(SB() << field << " field not provided");
     }
     return value.as<T>();
@@ -480,17 +532,17 @@ T getStructureValue(const Value & src, const std::string &field) {
  * back to the client.
  *
  * @param pv The shared PV object.
- * @param operation The unique pointer to the execution operation.
+ * @param op The unique pointer to the execution operation.
  * @param ccr The certificate creation request (input) value.
  */
-void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&operation, Value &&args,
-                const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key,
-                const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
+void onCreateCertificate(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&op, Value &&args, const ossl_ptr<EVP_PKEY> &ca_pkey,
+                         const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain,
+                         std::string issuer_id) {
     auto ccr = args["query"];
 
-    auto type =  getStructureValue<const std::string>(ccr, "type");
-    auto name =  getStructureValue<const std::string>(ccr, "name");
-    auto organization =  getStructureValue<const std::string>(ccr, "organization");
+    auto type = getStructureValue<const std::string>(ccr, "type");
+    auto name = getStructureValue<const std::string>(ccr, "name");
+    auto organization = getStructureValue<const std::string>(ccr, "organization");
 
     try {
         /*
@@ -510,32 +562,30 @@ void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<serv
         ///////////////////
 
         // Get Public Key to use
-        auto public_key =  getStructureValue<const std::string>(ccr, "pub_key");
+        auto public_key = getStructureValue<const std::string>(ccr, "pub_key");
         const std::shared_ptr<KeyPair> key_pair(new KeyPair(public_key));
 
         // Generate a new serial number
         auto serial = generateSerial();
 
         // Get other certificate parameters from request
-        auto country =  getStructureValue<const std::string>(ccr, "country");
-        auto organization_unit =  getStructureValue<const std::string>(ccr, "organization_unit");
-        auto not_before =  getStructureValue<time_t>(ccr, "not_before");
-        auto not_after =  getStructureValue<time_t>(ccr, "not_after");
-        auto usage =  getStructureValue<uint16_t>(ccr, "usage");
+        auto country = getStructureValue<const std::string>(ccr, "country");
+        auto organization_unit = getStructureValue<const std::string>(ccr, "organization_unit");
+        auto not_before = getStructureValue<time_t>(ccr, "not_before");
+        auto not_after = getStructureValue<time_t>(ccr, "not_after");
+        auto usage = getStructureValue<uint16_t>(ccr, "usage");
 
         // Create a certificate factory
-        auto certificate_factory =
-            CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, usage,
-                        ca_cert.get(), ca_pkey.get(), ca_chain.get());
+        auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, usage, ca_cert.get(),
+                                               ca_pkey.get(), ca_chain.get());
 
         // Create the certificate using the certificate factory, store it in the database and return the PEM string
         auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
         // Construct and return the reply
-        auto issuer_id = getIssuerId(ca_cert);
         auto cert_id = (SB() << issuer_id << ":" << serial).str();
-        auto status_pv = (SB() << GET_SERVER_STATUS_ROOT << ":" << cert_id).str();
-        auto revoke_pv = (SB() << RPC_SERVER_REVOKE_ROOT << ":" << cert_id).str();
+        auto status_pv = (SB() << GET_CERT_STATUS_ROOT << ":" << cert_id).str();
+        auto revoke_pv = (SB() << RPC_CERT_REVOKE_ROOT << ":" << cert_id).str();
         auto reply(getCreatePrototype());
         reply["serial"] = serial;
         reply["issuer"] = issuer_id;
@@ -543,11 +593,46 @@ void rpcHandler(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<serv
         reply["statuspv"] = status_pv;
         reply["revokepv"] = revoke_pv;
         reply["cert"] = pem_string;
-        operation->reply(reply);
+        op->reply(reply);
     } catch (std::exception &e) {
         // For any type of error return an error to the caller
-        operation->error(SB() << "Failed to create certificate for " << NAME_STRING(name, organization) << ": "
-                              << e.what());
+        op->error(SB() << "Failed to create certificate for " << NAME_STRING(name, organization) << ": " << e.what());
+    }
+}
+
+void onGetStatus(pvxs::sql_ptr &ca_db, const std::string &our_issuer_id, pvxs::server::SharedPV &status_pv, std::list<std::string> &parameters) {
+    pvxs::Value status_value(pvxs::certs::getStatusPrototype());
+    try {
+        // get serial and issuer from called pv
+        auto it = parameters.begin();
+        const std::string &issuer_id = *it;
+        if (our_issuer_id != issuer_id) {
+            throw std::runtime_error(pvxs::SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
+        }
+
+        const std::string &serial_string = *++it;
+        uint64_t serial = 0;
+        try {
+            serial = std::stoull(serial_string);
+        } catch (const std::invalid_argument &e) {
+            throw std::runtime_error(pvxs::SB() << "Conversion error: Invalid argument. Serial in PV name is not a number: " << serial_string);
+        } catch (const std::out_of_range &e) {
+            throw std::runtime_error(pvxs::SB() << "Conversion error: Out of range. Serial is too large: " << serial_string);
+        }
+
+        // get status value
+        auto status = pvxs::certs::getCertificateStatus(ca_db, serial);
+        status_value["value"] = status;
+        status_value["serial"] = serial;
+
+        // Publish status
+        status_pv.open(status_value);
+    } catch (std::exception &e) {
+        log_err_printf(pvacms, "PVACMS Error getting status: %s\n", e.what());
+        status_value["alarm.status"] = 1;
+        status_value["alarm.severity"] = 1;
+        status_value["alarm.message"] = (pvxs::SB() << "Error getting status: " << e.what()).str();
+        status_pv.open(status_value);
     }
 }
 
@@ -575,8 +660,7 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
                               ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     try {
         // Check if the CA certificates exist
-        auto keychain_data =
-            KeychainFactory::getKeychainDataFromKeychainFile(config.ca_keychain_filename, config.ca_keychain_password);
+        auto keychain_data = KeychainFactory::getKeychainDataFromKeychainFile(config.ca_keychain_filename, config.ca_keychain_password);
         ca_pkey = std::move(keychain_data.pkey);
         ca_cert = std::move(keychain_data.cert);
         ca_chain = keychain_data.ca;
@@ -586,8 +670,7 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
         try {
             log_warn_printf(pvacms, "%s\n", e.what());
             createCaCertificate(config, ca_db);
-            auto keychain_data = KeychainFactory::getKeychainDataFromKeychainFile(config.ca_keychain_filename,
-                                                                                  config.ca_keychain_password);
+            auto keychain_data = KeychainFactory::getKeychainDataFromKeychainFile(config.ca_keychain_filename, config.ca_keychain_password);
             ca_pkey = std::move(keychain_data.pkey);
             ca_cert = std::move(keychain_data.cert);
             ca_chain = keychain_data.ca;
@@ -617,12 +700,11 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
  * @param ca_pkey the CA certificate's private key used to sign the new
  * certificate if necessary
  */
-void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
-                                   ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
+void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
+                                   const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     // Get location of keychain file and password if any
     const std::string &keychain_filename = config.tls_keychain_filename, &password = config.tls_keychain_password;
-    log_debug_printf(pvacms, "keychain_filename (PKCS12) %s;%s\n", keychain_filename.c_str(),
-                     password.empty() ? "" : " w/ password");
+    log_debug_printf(pvacms, "keychain_filename (PKCS12) %s;%s\n", keychain_filename.c_str(), password.empty() ? "" : " w/ password");
 
     // Get variable to test the keychain file validity
     file_ptr fp(fopen(keychain_filename.c_str(), "rb"), false);
@@ -673,8 +755,8 @@ void createCaCertificate(ConfigCms &config, sql_ptr &ca_db) {
     // Generate a new serial number
     auto serial = generateSerial();
 
-    auto certificate_factory = CertFactory(serial, key_pair, config.ca_name, getCountryCode(), config.ca_organization,
-                                           config.ca_organizational_unit, not_before, not_after, ssl::kForCa);
+    auto certificate_factory = CertFactory(serial, key_pair, config.ca_name, getCountryCode(), config.ca_organization, config.ca_organizational_unit,
+                                           not_before, not_after, ssl::kForCa);
 
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
@@ -695,8 +777,8 @@ void createCaCertificate(ConfigCms &config, sql_ptr &ca_db) {
  * @param ca_pkey the CA's private key to sign the certificate
  * @param ca_cert the CA certificate
  */
-void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert,
-                             ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
+void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
+                             const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     // Create a key pair
     const auto key_pair(KeychainFactory::createKeyPair());
 
@@ -704,9 +786,8 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
     auto serial = generateSerial();
 
     auto certificate_factory =
-        CertFactory(serial, key_pair, PVXS_SERVICE_NAME, getCountryCode(), pvacms_org_name, PVXS_SERVICE_ORG_UNIT_NAME,
-                    getNotBeforeTimeFromCert(ca_cert.get()), getNotAfterTimeFromCert(ca_cert.get()), ssl::kForCMS,
-                    ca_cert.get(), ca_pkey.get(), ca_chain.get());
+        CertFactory(serial, key_pair, PVXS_SERVICE_NAME, getCountryCode(), pvacms_org_name, PVXS_SERVICE_ORG_UNIT_NAME, getNotBeforeTimeFromCert(ca_cert.get()),
+                    getNotAfterTimeFromCert(ca_cert.get()), ssl::kForCMS, ca_cert.get(), ca_pkey.get(), ca_chain.get());
 
     auto cert = createCertificate(ca_db, certificate_factory);
 
@@ -758,7 +839,7 @@ std::string getCountryCode() {
  */
 time_t getNotAfterTimeFromCert(const X509 *cert) {
     ASN1_TIME *cert_not_after = X509_get_notAfter(cert);
-    time_t not_after = ASN1_TIME_to_time_t(cert_not_after);
+    time_t not_after = ASN1_TIMEToTimeT(cert_not_after);
     return not_after;
 }
 
@@ -770,7 +851,7 @@ time_t getNotAfterTimeFromCert(const X509 *cert) {
  */
 time_t getNotBeforeTimeFromCert(const X509 *cert) {
     ASN1_TIME *cert_not_before = X509_get_notBefore(cert);
-    time_t not_before = ASN1_TIME_to_time_t(cert_not_before);
+    time_t not_before = ASN1_TIMEToTimeT(cert_not_before);
     return not_before;
 }
 
@@ -916,6 +997,7 @@ int main(int argc, char *argv[]) {
 
         // Get or create CA certificate
         getOrCreateCaCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain);
+        auto our_issuer_id = getIssuerId(ca_cert);
 
         // Create this PVACMS server's certificate if it does not already exist
         ensureServerCertificateExists(config, ca_db, ca_cert, ca_pkey, ca_chain);
@@ -934,49 +1016,34 @@ int main(int argc, char *argv[]) {
         // Create Certificate: args: ccr (certificate creation request)
         // Get public key of ca certificate
         pvxs::ossl_ptr<EVP_PKEY> ca_pub_key(X509_get_pubkey(ca_cert.get()));
-        create_pv.onRPC([&ca_db, &ca_pkey, &ca_cert, &ca_pub_key, &ca_chain](
-                            const SharedPV &create_pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {
-            rpcHandler(ca_db, create_pv, std::move(operation), std::move(args), ca_pkey, ca_cert, ca_pub_key, ca_chain);
-        });
+        create_pv.onRPC(
+            [&ca_db, &ca_pkey, &ca_cert, &ca_pub_key, &ca_chain, &our_issuer_id](const SharedPV &pv, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
+                onCreateCertificate(ca_db, pv, std::move(op), std::move(args), ca_pkey, ca_cert, ca_pub_key, ca_chain, our_issuer_id);
+            });
 
         // Revoke Certificate: args: crr (certificate revocation request)
-        revoke_pv.onRPC(
-            [&ca_db](const SharedPV &revoke_pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
+        revoke_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
+            // get serial and issuer from pv name
 
-        // Certificate Status: CERT:STATUS:*
-        // where * is any valid certificate serial number,
-        // e.g. CERT:STATUS:123456789
-        // First connect - set up initial value and
-        // status_pv.onFirstConnect(
-        //     [&ca_db, &status_pv](const server::SharedPV&
-        //     partition_scale_up_pv) {
-        //         // Work out what partition was called by examining the pv
-        //         called
-        //         // TODO don't know how to do this!!!! Assumes wildcard
-        //            functionality in epics-base uint16_t partition_number
+            // set the revoke status
+            (void)ca_db;
+        });
 
-        //         // Calculate the
-        //         Value initial_partition_set;  // = getPartition
+        status_pv.onFirstWildcardConnect([&ca_db, &status_pv, &our_issuer_id](const SharedPV &pv, std::list<std::string> &parameters) {
+            onGetStatus(ca_db, our_issuer_id, status_pv, parameters);
+        });
 
-        //         // Notify listening clients
-        //         status_pv.open(initial_partition_set);
-        //     });
-        status_pv.onLastDisconnect([&ca_db, &status_pv](const SharedPV &partition_scale_up_pv) { status_pv.close(); });
+        status_pv.onLastDisconnect([&ca_db, &status_pv](const SharedPV &pv) { status_pv.close(); });
 
-        partition_pv.onFirstConnect([&ca_db](const SharedPV &partition_scale_up_pv) {});
-        partition_scale_up_pv.onRPC([&ca_db](const SharedPV &partition_scale_up_pv, std::unique_ptr<ExecOp> &&operation,
-                                             pvxs::Value &&args) {});
-        partition_scale_up_pv.onRPC([&ca_db](const SharedPV &partition_scale_up_pv, std::unique_ptr<ExecOp> &&operation,
-                                             pvxs::Value &&args) {});
+        partition_pv.onFirstConnect([&ca_db](const SharedPV &pv) {});
+        partition_scale_up_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
+        partition_scale_up_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
-        partition_scaled_up_pv.onRPC([&ca_db](const SharedPV &partition_scaled_up_pv,
-                                              std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
+        partition_scaled_up_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
-        partition_scale_down_pv.onRPC([&ca_db](const SharedPV &partition_scale_down_pv,
-                                               std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
+        partition_scale_down_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
-        partition_scaled_down_pv.onRPC([&ca_db](const SharedPV &partition_scaled_down_pv,
-                                                std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
+        partition_scaled_down_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
         // Data type for the PV.
         create_pv.open(getCreatePrototype());
@@ -984,8 +1051,8 @@ int main(int argc, char *argv[]) {
         // Build server which will serve this PV
         Server pva_server = Server(config)
                                 .addPV(RPC_CERT_CREATE, create_pv)
-                                .addPV(RPC_CERT_REVOKE, revoke_pv)
-                                .addPV(GET_CERT_STATUS, status_pv)
+                                .addPV(RPC_CERT_REVOKE_PV, revoke_pv)
+                                .addPV(GET_CERT_STATUS_PV, status_pv)
                                 .addPV(GET_PARTITION, partition_pv)
                                 .addPV(RPC_PARTITION_SCALEUP, partition_scale_up_pv)
                                 .addPV(RPC_PARTITION_SCALEDUP, partition_scaled_up_pv)

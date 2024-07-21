@@ -39,6 +39,7 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
     std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)> onPut;
     std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)> onRPC;
     std::function<void(SharedPV&)> onFirstConnect;
+    std::function<void(SharedPV&, std::list<std::string>&)> onFirstWildcardConnect;
     std::function<void(SharedPV&)> onLastDisconnect;
 
     ptr_set<std::weak_ptr<ChannelControl>> channels;
@@ -311,6 +312,14 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
         pv.impl = self;
         cb(pv);
     }
+
+    if(first && self->onFirstWildcardConnect) {
+        auto cb(self->onFirstWildcardConnect);
+        UnGuard U(G);
+        SharedPV pv;
+        pv.impl = self;
+        cb(pv, wildcard_parameters_map[ctrl->name()]);
+    }
 }
 
 void SharedPV::onFirstConnect(std::function<void(SharedPV&)>&& fn)
@@ -319,6 +328,14 @@ void SharedPV::onFirstConnect(std::function<void(SharedPV&)>&& fn)
         throw std::logic_error("Empty SharedPV");
     Guard G(impl->lock);
     impl->onFirstConnect = std::move(fn);
+}
+
+void SharedPV::onFirstWildcardConnect(std::function<void(SharedPV&, std::list<std::string>&)>&& fn)
+{
+    if(!impl)
+        throw std::logic_error("Empty SharedPV");
+    Guard G(impl->lock);
+    impl->onFirstWildcardConnect = std::move(fn);
 }
 
 void SharedPV::onLastDisconnect(std::function<void(SharedPV&)>&& fn)
@@ -520,13 +537,11 @@ struct StaticSource::Impl final : public Source
                 continue;
             }
 
-            // Try a direct match of the `searched_name` in `pvs` map
-            if(pvs.find(searched_name)!=pvs.end()) {
+            // Try a direct match of the `searched_name` in `pvs` map or a wildcard match if that fails
+            SharedPV pv;
+            if(simpleMatch(searched_name, pv) || !wildcardMatch(searched_name, pv).empty()) {
                 name.claim();
                 log_debug_printf(logsource, "%p claim '%s'\n", this, searched_name.c_str());
-            } else {
-                // If that failed then try a wildcard match
-                wildcardMatch(name, searched_name);
             }
         }
     }
@@ -536,13 +551,18 @@ struct StaticSource::Impl final : public Source
         SharedPV pv;
         {
             auto G(lock.lockReader());
-            auto it(pvs.find(op->name()));
-            bool found = it!=pvs.end();
-            log_debug_printf(logsource, "%p %screate '%s'\n",
-                             this, found ? "":"can't ", op->name().c_str());
-            if(!found)
+            const auto searched_name = op->name();
+
+            std::string pv_name;
+            if(simpleMatch(searched_name, pv)) {
+                log_debug_printf(logsource, "%p create '%s'\n", this, searched_name.c_str());
+            } else if(!(pv_name = wildcardMatch(searched_name, pv)).empty()) {
+                pv.set_wildcard_parameters(searched_name, pv_name);
+                log_debug_printf(logsource, "%p create '%s'\n", this, searched_name.c_str());
+            } else {
+                log_debug_printf(logsource, "%p can't create '%s'\n", this, searched_name.c_str());
                 return; // not mine
-            pv = it->second;
+            }
         }
 
         pv.attach(std::move(op));
@@ -581,6 +601,15 @@ struct StaticSource::Impl final : public Source
   private:
     static const std::string kEpicsWildcardChars;
 
+    bool simpleMatch(const std::string &searched_name, SharedPV &pv) {
+        auto it(pvs.find(searched_name));
+        if((it)!=pvs.end()) {
+            pv = it->second;
+            return true;
+        }
+        return false;
+    };
+
     /**
      * @brief Enhanced wildcard search
      *
@@ -589,10 +618,10 @@ struct StaticSource::Impl final : public Source
      * `pattern` "pv:name:*" => `searched_name` "pv:name:123Abc"
      * `pattern` "pv:name:????" => `searched_name` "pv:name:12Ab"
      *
-     * @param pv_name the PV name definition to check
      * @param searched_name the name presented to the server in the search message
+     * @return pv that matched if a match is found empty string otherwise
      */
-    void wildcardMatch(Search::Name &pv_name, const std::basic_string<char> &searched_name) {
+    std::string wildcardMatch(const std::string &searched_name, SharedPV &pv) {
         static const std::regex kRegexSpecialChars{R"([-[\]{}()+.,\^$|#\s])"};
         static const std::regex kWildcardStarPattern("\\*");
         static const char kWildcardQueryCharacter = '?';
@@ -616,11 +645,11 @@ struct StaticSource::Impl final : public Source
             // 2. Compare the PV regex pattern with the `searched_name`
             std::regex pv_regex_pattern(pv_pattern);
             if (std::regex_match(searched_name, pv_regex_pattern)) {
-                pv_name.claim();
-                log_debug_printf(logsource, "%p claim '%s'\n", this,
-                                 searched_name.c_str());
+                pv = pattern_shared_pv_pair.second;
+                return pattern_shared_pv_pair.first;
             }
         }
+        return "";
     }
 
     /**

@@ -16,9 +16,13 @@ namespace pvxs {
 namespace certs {
 
 // Certificate management
+// Certificate management
 #define RPC_CERT_CREATE "CERT:CREATE"
-#define RPC_CERT_REVOKE "CERT:REVOKE:*"
-#define GET_CERT_STATUS "CERT:STATUS:*"
+#define RPC_CERT_REVOKE_ROOT "CERT:REVOKE"
+#define RPC_CERT_REVOKE_PV (RPC_CERT_REVOKE_ROOT ":????????:*")
+#define GET_CERT_STATUS_ROOT "CERT:STATUS"
+#define GET_CERT_STATUS_PV (GET_CERT_STATUS_ROOT ":????????:*")
+
 
 // Partition Management
 #define GET_PARTITION "CERT:PARTITION:*"
