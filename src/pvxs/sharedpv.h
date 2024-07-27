@@ -56,7 +56,7 @@ struct PVXS_API SharedPV {
     //! Callback when the number of attach()d clients becomes non-zero.
     void onFirstConnect(std::function<void(SharedPV&)>&& fn);
     //! Callback when the number of attach()d clients becomes non-zero for wildcard PVs.
-    void onFirstWildcardConnect(std::function<void(SharedPV &, std::list<std::string> &)> &&fn);
+    void onFirstWildcardConnect(std::function<void(SharedPV &, std::shared_ptr<std::list<std::string>>)> &&fn);
     //! Callback when the number of attach()d clients becomes zero.
     void onLastDisconnect(std::function<void(SharedPV&)>&& fn);
     //! Callback when a client executes a new Put operation.
@@ -64,6 +64,8 @@ struct PVXS_API SharedPV {
     //! Callback when a client executes an RPC operation.
     //! @note RPC operations are allowed even when the SharedPV is not opened (isOpen()==false)
     void onRPC(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)>&& fn);
+    //! Callback when a client executes an RPC operation for wildcard PVs.
+    void onWildcardRPC(std::function<void(SharedPV&, std::shared_ptr<std::list<std::string>>, std::unique_ptr<ExecOp>&&, Value&&)>&& fn);
 
     /** Provide data type and initial value.  Allows clients to begin connecting.
      * @pre !isOpen()
@@ -83,12 +85,15 @@ struct PVXS_API SharedPV {
     Value fetch() const;
 
     struct Impl;
-    std::map<std::string, std::list<std::string>> wildcard_parameters_map;
+    std::map<std::string, std::shared_ptr<std::list<std::string>>> wildcard_parameters_map;
     inline void set_wildcard_parameters(const std::string& pv_name,
                                         const std::string& format) noexcept {
-        std::list<std::string>& wildcard_parameters = wildcard_parameters_map[pv_name];
-        if (!wildcard_parameters.empty())
+        auto& wildcard_parameters = wildcard_parameters_map[pv_name];
+        if (!wildcard_parameters) {
+            wildcard_parameters = std::make_shared<std::list<std::string>>();
+        } else if (!wildcard_parameters->empty()) {
             return;
+        }
 
         size_t name_pos = 0;
         size_t format_pos = 0;
@@ -101,7 +106,7 @@ struct PVXS_API SharedPV {
                     format_pos++;
                     name_pos++;
                 }
-                wildcard_parameters.push_back(pv_name.substr(start, name_pos - start));
+                wildcard_parameters->push_back(pv_name.substr(start, name_pos - start));
             } else if (format[format_pos] == '*') {
                 // Extract the sequence of '*' matched characters
                 size_t start = name_pos;
@@ -111,15 +116,15 @@ struct PVXS_API SharedPV {
                     char next_char = format[format_pos];
                     name_pos = pv_name.find(next_char, name_pos);
                     if (name_pos != std::string::npos) {
-                        wildcard_parameters.push_back(pv_name.substr(start, name_pos - start));
+                        wildcard_parameters->push_back(pv_name.substr(start, name_pos - start));
                     } else {
                         // This condition should not happen in a valid input where the non '*' and '?' match correctly
-                        wildcard_parameters.push_back(pv_name.substr(start));
+                        wildcard_parameters->push_back(pv_name.substr(start));
                         return;
                     }
                 } else {
                     // '*' is the last character in format, extract till the end of pv_name
-                    wildcard_parameters.push_back(pv_name.substr(start));
+                    wildcard_parameters->push_back(pv_name.substr(start));
                     return;
                 }
             } else {

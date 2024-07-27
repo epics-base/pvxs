@@ -39,8 +39,10 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
     std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)> onPut;
     std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)> onRPC;
     std::function<void(SharedPV&)> onFirstConnect;
-    std::function<void(SharedPV&, std::list<std::string>&)> onFirstWildcardConnect;
     std::function<void(SharedPV&)> onLastDisconnect;
+    std::function<void(SharedPV&, std::shared_ptr<std::list<std::string>>, std::unique_ptr<ExecOp>&&, Value&&)> onWildcardPut;
+    std::function<void(SharedPV&, std::shared_ptr<std::list<std::string>>, std::unique_ptr<ExecOp>&&, Value&&)> onWildcardRPC;
+    std::function<void(SharedPV&, std::shared_ptr<std::list<std::string>>)> onFirstWildcardConnect;
 
     ptr_set<std::weak_ptr<ChannelControl>> channels;
 
@@ -157,17 +159,18 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
     auto self(impl); // to be captured
 
     std::shared_ptr<ChannelControl> ctrl(std::move(ctrlop));
+    auto wildcard_parameters(wildcard_parameters_map[ctrl->name()]);  // to be captured
 
     log_debug_printf(logshared, "%s on %s Chan setup\n", ctrl->peerName().c_str(), ctrl->name().c_str());
 
-    ctrl->onRPC([self](std::unique_ptr<ExecOp>&& op, Value&& arg) {
+    ctrl->onRPC([self, wildcard_parameters](std::unique_ptr<ExecOp>&& op, Value&& arg) {
         // on server worker
 
         log_debug_printf(logshared, "%s on %s RPC\n", op->peerName().c_str(), op->name().c_str());
 
         Guard G(self->lock);
-        auto cb(self->onRPC);
-        if(cb) {
+        if (self->onRPC) {
+            auto cb(self->onRPC);
             SharedPV pv;
             pv.impl = self;
             try {
@@ -176,12 +179,22 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
             }catch(std::exception& e){
                 log_err_printf(logshared, "error in RPC cb: %s\n", e.what());
             }
+        } else if (self->onWildcardRPC) {
+            auto cb(self->onWildcardRPC);
+            SharedPV pv;
+            try {
+                UnGuard U(G);
+                pv.impl = self;
+                cb(pv, wildcard_parameters, std::move(op), std::move(arg));
+            }catch(std::exception& e){
+                log_err_printf(logshared, "error in RPC cb: %s\n", e.what());
+            }
         } else {
             op->error("RPC not implemented by this PV");
         }
     });
 
-    ctrl->onOp([self](std::unique_ptr<ConnectOp>&& op) {
+    ctrl->onOp([self, wildcard_parameters](std::unique_ptr<ConnectOp>&& op) {
         // on server worker
 
         std::shared_ptr<ConnectOp> conn(std::move(op));
@@ -207,14 +220,14 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
 
         });
 
-        conn->onPut([self](std::unique_ptr<ExecOp>&& op, Value&& val) {
+        conn->onPut([self, wildcard_parameters](std::unique_ptr<ExecOp>&& op, Value&& val) {
             // on server worker
 
             log_debug_printf(logshared, "%s on %s RPC\n", op->peerName().c_str(), op->name().c_str());
 
             Guard G(self->lock);
-            auto cb(self->onPut);
-            if(cb) {
+            if ( self->onPut) {
+                auto cb(self->onPut);
                 try {
                     SharedPV pv;
                     pv.impl = self;
@@ -223,10 +236,19 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
                 }catch(std::exception& e){
                     log_err_printf(logshared, "error in Put cb: %s\n", e.what());
                 }
+            } else if (self->onWildcardPut) {
+                auto cb(self->onWildcardPut);
+                try {
+                    SharedPV pv;
+                    pv.impl = self;
+                    UnGuard U(G);
+                    cb(pv, wildcard_parameters, std::move(op), std::move(val));
+                }catch(std::exception& e){
+                    log_err_printf(logshared, "error in Put cb: %s\n", e.what());
+                }
             } else {
-                op->error("RPC not implemented by this PV");
+                op->error("Put not implemented by this PV");
             }
-
         });
 
         conn->onClose([self, conn](const std::string&) {
@@ -318,7 +340,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
         UnGuard U(G);
         SharedPV pv;
         pv.impl = self;
-        cb(pv, wildcard_parameters_map[ctrl->name()]);
+        cb(pv, wildcard_parameters);
     }
 }
 
@@ -330,7 +352,7 @@ void SharedPV::onFirstConnect(std::function<void(SharedPV&)>&& fn)
     impl->onFirstConnect = std::move(fn);
 }
 
-void SharedPV::onFirstWildcardConnect(std::function<void(SharedPV&, std::list<std::string>&)>&& fn)
+void SharedPV::onFirstWildcardConnect(std::function<void(SharedPV&, std::shared_ptr<std::list<std::string>>)>&& fn)
 {
     if(!impl)
         throw std::logic_error("Empty SharedPV");
@@ -360,6 +382,14 @@ void SharedPV::onRPC(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Va
         throw std::logic_error("Empty SharedPV");
     Guard G(impl->lock);
     impl->onRPC = std::move(fn);
+}
+
+void SharedPV::onWildcardRPC(std::function<void(SharedPV&, std::shared_ptr<std::list<std::string>>, std::unique_ptr<ExecOp>&&, Value&&)>&& fn)
+{
+    if(!impl)
+        throw std::logic_error("Empty SharedPV");
+    Guard G(impl->lock);
+    impl->onWildcardRPC = std::move(fn);
 }
 
 void SharedPV::open(const Value& initial)
@@ -539,8 +569,13 @@ struct StaticSource::Impl final : public Source
 
             // Try a direct match of the `searched_name` in `pvs` map or a wildcard match if that fails
             SharedPV pv;
-            if(simpleMatch(searched_name, pv) || !wildcardMatch(searched_name, pv).empty()) {
+            std::string pv_name;
+            if(simpleMatch(searched_name, pv)) {
                 name.claim();
+                log_debug_printf(logsource, "%p claim '%s'\n", this, searched_name.c_str());
+            } else if(!(pv_name = wildcardMatch(searched_name, pv)).empty()) {
+                name.claim();
+                pv.set_wildcard_parameters(searched_name, pv_name);
                 log_debug_printf(logsource, "%p claim '%s'\n", this, searched_name.c_str());
             }
         }

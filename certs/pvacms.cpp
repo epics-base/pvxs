@@ -198,6 +198,7 @@ Value getCreatePrototype() {
                        Member(TypeCode::String, "certid"),
                        Member(TypeCode::String, "statuspv"),
                        Member(TypeCode::String, "revokepv"),
+                       Member(TypeCode::String, "rotatepv"),
                        Member(TypeCode::String, "cert"),
                        Struct("alarm", "alarm_t",
                               {
@@ -297,6 +298,24 @@ CertificateStatus getCertificateStatus(sql_ptr &ca_db, uint64_t serial) {
     }
 
     return (CertificateStatus)cert_status;
+}
+
+void setCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertificateStatus cert_status) {
+    uint64_t db_serial = serial - k64BitOffset;
+    sqlite3_stmt *sql_statement;
+    int sql_status;
+    if ((sql_status = sqlite3_prepare_v2(ca_db.get(), SQL_CERT_SET_STATUS, -1, &sql_statement, 0)) == SQLITE_OK) {
+        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), cert_status);
+        sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":serial"), db_serial);
+        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":valid_status"), VALID);
+
+        sql_status = sqlite3_step(sql_statement);
+    }
+    sqlite3_finalize(sql_statement);
+
+    if (sql_status != SQLITE_DONE) {
+        throw std::runtime_error(SB() << "Failed to set cert status: " << sqlite3_errmsg(ca_db.get()));
+    }
 }
 
 /**
@@ -584,14 +603,16 @@ void onCreateCertificate(sql_ptr &ca_db, const server::SharedPV &pv, std::unique
 
         // Construct and return the reply
         auto cert_id = (SB() << issuer_id << ":" << serial).str();
-        auto status_pv = (SB() << GET_CERT_STATUS_ROOT << ":" << cert_id).str();
+        auto status_pv = (SB() << GET_MONITOR_CERT_STATUS_ROOT << ":" << cert_id).str();
         auto revoke_pv = (SB() << RPC_CERT_REVOKE_ROOT << ":" << cert_id).str();
+        auto rotate_pv = RPC_CERT_ROTATE_PV;
         auto reply(getCreatePrototype());
         reply["serial"] = serial;
         reply["issuer"] = issuer_id;
         reply["certid"] = cert_id;
         reply["statuspv"] = status_pv;
         reply["revokepv"] = revoke_pv;
+        reply["rotatepv"] = rotate_pv;
         reply["cert"] = pem_string;
         op->reply(reply);
     } catch (std::exception &e) {
@@ -600,14 +621,14 @@ void onCreateCertificate(sql_ptr &ca_db, const server::SharedPV &pv, std::unique
     }
 }
 
-void onGetStatus(pvxs::sql_ptr &ca_db, const std::string &our_issuer_id, pvxs::server::SharedPV &status_pv, std::list<std::string> &parameters) {
-    pvxs::Value status_value(pvxs::certs::getStatusPrototype());
+void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedPV &status_pv, std::shared_ptr<std::list<std::string>> &&parameters) {
+    Value status_value(certs::getStatusPrototype());
     try {
         // get serial and issuer from called pv
-        auto it = parameters.begin();
+        auto it = parameters->begin();
         const std::string &issuer_id = *it;
         if (our_issuer_id != issuer_id) {
-            throw std::runtime_error(pvxs::SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
+            throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
         }
 
         const std::string &serial_string = *++it;
@@ -615,13 +636,13 @@ void onGetStatus(pvxs::sql_ptr &ca_db, const std::string &our_issuer_id, pvxs::s
         try {
             serial = std::stoull(serial_string);
         } catch (const std::invalid_argument &e) {
-            throw std::runtime_error(pvxs::SB() << "Conversion error: Invalid argument. Serial in PV name is not a number: " << serial_string);
+            throw std::runtime_error(SB() << "Conversion error: Invalid argument. Serial in PV name is not a number: " << serial_string);
         } catch (const std::out_of_range &e) {
-            throw std::runtime_error(pvxs::SB() << "Conversion error: Out of range. Serial is too large: " << serial_string);
+            throw std::runtime_error(SB() << "Conversion error: Out of range. Serial is too large: " << serial_string);
         }
 
         // get status value
-        auto status = pvxs::certs::getCertificateStatus(ca_db, serial);
+        auto status = certs::getCertificateStatus(ca_db, serial);
         status_value["value"] = status;
         status_value["serial"] = serial;
 
@@ -631,8 +652,45 @@ void onGetStatus(pvxs::sql_ptr &ca_db, const std::string &our_issuer_id, pvxs::s
         log_err_printf(pvacms, "PVACMS Error getting status: %s\n", e.what());
         status_value["alarm.status"] = 1;
         status_value["alarm.severity"] = 1;
-        status_value["alarm.message"] = (pvxs::SB() << "Error getting status: " << e.what()).str();
+        status_value["alarm.message"] = (SB() << "Error getting status: " << e.what()).str();
         status_pv.open(status_value);
+    }
+}
+
+void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedPV &status_pv, std::shared_ptr<std::list<std::string>>&&parameters, std::unique_ptr<server::ExecOp> &&op, pvxs::Value &&args) {
+    Value status_value(certs::getStatusPrototype());
+    try {
+        // get serial and issuer from called pv
+        auto it = parameters.get()->begin();
+        const std::string &issuer_id = *it;
+        if (our_issuer_id != issuer_id) {
+            throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
+        }
+
+        const std::string &serial_string = *++it;
+        uint64_t serial = 0;
+        try {
+            serial = std::stoull(serial_string);
+        } catch (const std::invalid_argument &e) {
+            throw std::runtime_error(SB() << "Conversion error: Invalid argument. Serial in PV name is not a number: " << serial_string);
+        } catch (const std::out_of_range &e) {
+            throw std::runtime_error(SB() << "Conversion error: Out of range. Serial is too large: " << serial_string);
+        }
+
+        // get status value
+        certs::setCertificateStatus(ca_db, serial, REVOKED);
+        status_value["value"] = REVOKED;
+        status_value["serial"] = serial;
+
+        // update the SharedPV cache and send update to any subscribers
+        // TODO sort out multiple values for a single SharedPV and multiple subs
+//        status_pv.post(serial, status_value);
+
+        // Required.  Inform client that PUT operation is complete.
+        op->reply();
+    } catch (std::exception &e) {
+        log_err_printf(pvacms, "PVACMS Error revoking certificate: %s\n", e.what());
+        op->error(SB() << "Error revoking certificate: " << e.what());
     }
 }
 
@@ -1022,26 +1080,24 @@ int main(int argc, char *argv[]) {
             });
 
         // Revoke Certificate: args: crr (certificate revocation request)
-        revoke_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
-            // get serial and issuer from pv name
-
-            // set the revoke status
-            (void)ca_db;
+        revoke_pv.onWildcardRPC(
+          [&ca_db, &our_issuer_id,  &status_pv](const SharedPV &pv, std::shared_ptr<std::list<std::string>> parameters, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
+            onRevoke(ca_db, our_issuer_id, status_pv, std::move(parameters), std::move(op), std::move(args));
         });
 
-        status_pv.onFirstWildcardConnect([&ca_db, &status_pv, &our_issuer_id](const SharedPV &pv, std::list<std::string> &parameters) {
-            onGetStatus(ca_db, our_issuer_id, status_pv, parameters);
+        status_pv.onFirstWildcardConnect([&ca_db, &our_issuer_id, &status_pv](const SharedPV &pv, std::shared_ptr<std::list<std::string>> parameters) {
+            onGetStatus(ca_db, our_issuer_id, status_pv, std::move(parameters));
         });
 
-        status_pv.onLastDisconnect([&ca_db, &status_pv](const SharedPV &pv) { status_pv.close(); });
+        status_pv.onLastDisconnect([ &status_pv](const SharedPV &pv) { status_pv.close(); });
 
-        partition_pv.onFirstConnect([&ca_db](const SharedPV &pv) {});
-        partition_scale_up_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
-        partition_scale_up_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
+        partition_pv.onFirstConnect([](const SharedPV &pv) {});
+        partition_scale_up_pv.onRPC([](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
+        partition_scale_up_pv.onRPC([](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
-        partition_scaled_up_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
+        partition_scaled_up_pv.onRPC([](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
-        partition_scale_down_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
+        partition_scale_down_pv.onRPC([](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
         partition_scaled_down_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
 
@@ -1049,15 +1105,21 @@ int main(int argc, char *argv[]) {
         create_pv.open(getCreatePrototype());
 
         // Build server which will serve this PV
-        Server pva_server = Server(config)
-                                .addPV(RPC_CERT_CREATE, create_pv)
-                                .addPV(RPC_CERT_REVOKE_PV, revoke_pv)
-                                .addPV(GET_CERT_STATUS_PV, status_pv)
-                                .addPV(GET_PARTITION, partition_pv)
-                                .addPV(RPC_PARTITION_SCALEUP, partition_scale_up_pv)
-                                .addPV(RPC_PARTITION_SCALEDUP, partition_scaled_up_pv)
-                                .addPV(RPC_PARTITION_SCALEDOWN, partition_scale_down_pv)
-                                .addPV(RPC_PARTITION_SCALEDDOWN, partition_scaled_down_pv);
+        Server pva_server = Server(config);
+
+        // Add functional PVs
+        pva_server
+            .addPV(RPC_CERT_CREATE, create_pv)
+            .addPV(RPC_CERT_REVOKE_PV, revoke_pv)
+            .addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
+
+        // Add administrative PVs
+        pva_server
+            .addPV(GET_MONITOR_PARTITION_PV, partition_pv)
+            .addPV(RPC_PARTITION_SCALEUP_PV, partition_scale_up_pv)
+            .addPV(RPC_PARTITION_SCALEDUP_PV, partition_scaled_up_pv)
+            .addPV(RPC_PARTITION_SCALEDOWN_PV, partition_scale_down_pv)
+            .addPV(RPC_PARTITION_SCALEDDOWN_PV, partition_scaled_down_pv);
 
         if (verbose)
             // Print the configuration this server is using
