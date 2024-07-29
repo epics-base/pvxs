@@ -253,7 +253,7 @@ void SharedWildcardPV::attach(std::unique_ptr<ChannelControl>&& ctrlop, const st
 
         Guard G(self->lock);
 
-        if(!self->current_vals[op->name()]) {
+        if(!self->current_vals[conn->name()]) {
             // no type
 
             // this onClose will be later replaced if/when the monitor is open()'d
