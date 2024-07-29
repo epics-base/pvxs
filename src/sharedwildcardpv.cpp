@@ -154,7 +154,7 @@ void SharedWildcardPV::attach(std::unique_ptr<ChannelControl>&& ctrlop, const st
 
     log_debug_printf(logshared, "%s on %s Chan setup\n", ctrl->peerName().c_str(), ctrl->name().c_str());
 
-    ctrl->onRPC([self, &parameters](std::unique_ptr<ExecOp>&& op, Value&& arg) {
+    ctrl->onRPC([self, parameters](std::unique_ptr<ExecOp>&& op, Value&& arg) {
         // on server worker
 
         log_debug_printf(logshared, "%s on %s RPC\n", op->peerName().c_str(), op->name().c_str());
@@ -175,7 +175,7 @@ void SharedWildcardPV::attach(std::unique_ptr<ChannelControl>&& ctrlop, const st
         }
     });
 
-    ctrl->onOp([self,&parameters](std::unique_ptr<ConnectOp>&& op) {
+    ctrl->onOp([self,parameters](std::unique_ptr<ConnectOp>&& op) {
         // on server worker
 
         std::shared_ptr<ConnectOp> conn(std::move(op));
@@ -201,7 +201,7 @@ void SharedWildcardPV::attach(std::unique_ptr<ChannelControl>&& ctrlop, const st
 
         });
 
-        conn->onPut([self,&parameters](std::unique_ptr<ExecOp>&& op, Value&& val) {
+        conn->onPut([self,parameters](std::unique_ptr<ExecOp>&& op, Value&& val) {
             // on server worker
 
             log_debug_printf(logshared, "%s on %s RPC\n", op->peerName().c_str(), op->name().c_str());
@@ -270,7 +270,7 @@ void SharedWildcardPV::attach(std::unique_ptr<ChannelControl>&& ctrlop, const st
         }
     });
 
-    ctrl->onClose([self, ctrl, &parameters](const std::string& msg) {
+    ctrl->onClose([self, ctrl, parameters](const std::string& msg) {
         // on server worker
 
         log_debug_printf(logshared, "%s on %s Chan close\n", ctrl->peerName().c_str(), ctrl->name().c_str());
@@ -279,10 +279,10 @@ void SharedWildcardPV::attach(std::unique_ptr<ChannelControl>&& ctrlop, const st
 
         self->channels[ctrl->name()].erase(ctrl);
 
-        if(self->channels.empty())
+        if(self->channels[ctrl->name()].empty())
             log_debug_printf(logshared, "%s on %s onLastDisconnect()\n", ctrl->peerName().c_str(), ctrl->name().c_str());
 
-        if(self->channels.empty() && self->onLastDisconnect) {
+        if(self->channels[ctrl->name()].empty() && self->onLastDisconnect) {
             auto cb(self->onLastDisconnect);
             UnGuard U(G);
             SharedWildcardPV pv;
@@ -293,7 +293,7 @@ void SharedWildcardPV::attach(std::unique_ptr<ChannelControl>&& ctrlop, const st
 
     Guard G(self->lock);
 
-    bool first = impl->channels.empty();
+    bool first = impl->channels[ctrl->name()].empty();
     impl->channels[ctrl->name()].insert(ctrl);
 
     if(first)

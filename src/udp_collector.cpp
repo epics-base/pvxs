@@ -256,7 +256,7 @@ bool UDPCollector::handle_one()
         dest.setPort(bind_addr.port());
 
     if(src.isMCast()) {
-        // should never happen.  It it does, we won't be tricked into amplifying a DDoS.
+        // should never happen.  If it does, we won't be tricked into amplifying a DDoS.
         log_debug_printf(logio, "Ignoring UDP with mcast source %s.\n", src.tostring().c_str());
         return true;
     }
