@@ -77,8 +77,10 @@ namespace certs {
  * This array does not consider leap years
  */
 static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
-
-const uint64_t k64BitOffset = 1ULL << 63;  // This is 2^63
+static const uint64_t k64BitOffset = 1ULL << 63;  // This is 2^63
+static const std::string kCertRevokePrefix("CERT:REVOKE");
+static const std::string kCertStatusPrefix("CERT:STATUS");
+static Value kStatusPrototype(certs::getStatusPrototype());
 
 // The current partition number
 uint16_t partition_number = 0;
@@ -604,7 +606,7 @@ void onCreateCertificate(sql_ptr &ca_db, const server::SharedPV &pv, std::unique
 }
 
 void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name, const std::list<std::string>& parameters) {
-    Value status_value(certs::getStatusPrototype());
+    Value status_value(kStatusPrototype.cloneEmpty());
     try {
         // get serial and issuer from called pv
         auto it = parameters.begin();
@@ -640,7 +642,7 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
 }
 
 void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string>& parameters, pvxs::Value &&args) {
-    Value status_value(certs::getStatusPrototype());
+    Value status_value(kStatusPrototype.cloneEmpty());
     try {
         // get serial and issuer from called pv
         auto it = parameters.begin();
@@ -1059,23 +1061,15 @@ int main(int argc, char *argv[]) {
 
         // Revoke Certificate
         revoke_pv.onRPC(
-          [&ca_db, &our_issuer_id](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, pvxs::Value &&args) {
-              try {
-                  onRevoke(ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, std::move(args));
-              } catch (const std::bad_cast& e) {
-                  // Should never happen
-                  throw std::runtime_error("Status PV handler error: dynamic cast failure");
-              }
+          [&ca_db, &our_issuer_id, &status_pv](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &revoke_pv_name, const std::list<std::string> &parameters, pvxs::Value &&args) {
+              auto status_pv_name(revoke_pv_name);
+              status_pv_name.replace(0, kCertRevokePrefix.length(), kCertStatusPrefix);
+              onRevoke(ca_db, our_issuer_id, status_pv, std::move(op), status_pv_name, parameters, std::move(args));
         });
 
         // Status PV
         status_pv.onFirstConnect([&ca_db, &our_issuer_id](SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string>& parameters) {
-            try {
-                onGetStatus(ca_db, our_issuer_id, pv, pv_name, parameters);
-            } catch (const std::bad_cast& e) {
-                // Should never happen
-                log_err_printf(pvacms, "Status PV handler error: dynamic cast failure: %s\n", e.what());
-            }
+            onGetStatus(ca_db, our_issuer_id, pv, pv_name, parameters);
         });
 
         status_pv.onLastDisconnect([](SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string>& parameters) {

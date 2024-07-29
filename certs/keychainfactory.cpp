@@ -214,42 +214,7 @@ bool KeychainFactory::createRootPemFile(const std::string &p12PemString, bool ov
 
     PEM_write_X509(fp.get(), xi->x509);
 
-    // Print out instructions to the user on how to trust the certificate
-    log_warn_printf(certs,
-                    "The root certificate has been installed.  Follow the "
-                    "instructions below to trust it%s",
-                    "\n");
-#ifdef WIN32
-    std::cout << "Open Microsoft Management Console (MMC), you can type mmc in "
-                 "start menu to find it.\n";
-    std::cout << "Go to File -> Add/Remove Snap-in.\n";
-    std::cout << "In the Add or Remove Snap-ins window, select Certificates "
-                 "and click Add.\n";
-    std::cout << "Select Computer Account and click Next.\n";
-    std::cout << "Select Local Computer and click Finish.\n";
-    std::cout << "Click OK.\n";
-    std::cout << "Expand the Certificates (Local Computer) node.\n";
-    std::cout << "Expand the Trusted Root Certification Authorities node.\n";
-    std::cout << "Right-click on Certificates and select All Tasks -> Import.\n";
-    std::cout << "In the Certificate Import Wizard, click Next.\n";
-    std::cout << "Click Browse, navigate to " << certs_file
-              << "  --> Click Next --> "
-                 "Click Next --> Click Finish.\n";
-#elif __linux__
-    std::string linux_certs_dir("/usr/local/share/ca-certificates/");
-    if (!fileName.compare(0, linux_certs_dir.size(), linux_certs_dir) == 0) {
-        std::cout << "sudo cp " << certs_file << " /usr/local/share/ca-certificates/\n";
-    }
-    std::cout << "sudo update-ca-certificates\n";
-#elif __APPLE__
-    std::cout << "sudo security add-trusted-cert -d -r trustRoot -k "
-                 "/Library/Keychains/System.keychain "
-              << certs_file << "\n";
-#else
-    std::cout << "Consult your operating system and language reference manuals "
-                 "for how to trust "
-              << certs_file << "\n";
-#endif
+    log_warn_printf(certs, "The root certificate has been installed.%s", "\n");
     return false;
 }
 
