@@ -20,6 +20,7 @@
 #include <osiSock.h>
 
 #include <pvxs/data.h>
+#include <pvxs/sharedwildcardpv.h>
 #include <pvxs/netcommon.h>
 #include <pvxs/util.h>
 #include <pvxs/version.h>
@@ -115,6 +116,7 @@ public:
 
     //! Add a SharedPV to the "__builtin" StaticSource
     Server& addPV(const std::string& name, const SharedPV& pv);
+    Server& addPV(const std::string& name, const SharedWildcardPV& pv);
     //! Remove a SharedPV from the "__builtin" StaticSource
     Server& removePV(const std::string& name);
 

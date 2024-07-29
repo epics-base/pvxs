@@ -48,6 +48,7 @@
 #include <pvxs/nt.h>
 #include <pvxs/server.h>
 #include <pvxs/sharedpv.h>
+#include <pvxs/sharedwildcardpv.h>
 
 #include "certfactory.h"
 #include "certmgmtservice.h"
@@ -225,25 +226,6 @@ Value getStatusPrototype() {
                    })
         .create();
 }
-
-Value getRevokePrototype() { return nt::NTScalar{TypeCode::Bool}.create(); }
-
-Value getPartitionPrototype() {
-    return nt::NTTable{}
-        .add_column(TypeCode::UInt64, "serial", "Serial Number")
-        .add_column(TypeCode::String, "C", "Country")
-        .add_column(TypeCode::String, "O", "Organization")
-        .add_column(TypeCode::String, "OU", "Organizational Unit")
-        .add_column(TypeCode::UInt32, "not_before", "Not Valid Before")
-        .add_column(TypeCode::UInt32, "not_after", "Not Valid After")
-        .add_column(TypeCode::UInt8, "status", "Status")
-        .add_column(TypeCode::UInt32, "status_date", "Status Date")
-        .create();
-}
-
-Value getScaleUpPrototype() { return nt::NTScalar{TypeCode::UInt16}.create(); }
-
-Value getScaleDownPrototype() { return nt::NTScalar{TypeCode::UInt16}.create(); }
 
 /**
  * @brief Initializes the certificates database by opening the specified
@@ -621,11 +603,11 @@ void onCreateCertificate(sql_ptr &ca_db, const server::SharedPV &pv, std::unique
     }
 }
 
-void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedPV &status_pv, std::shared_ptr<std::list<std::string>> &&parameters) {
+void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name, const std::list<std::string>& parameters) {
     Value status_value(certs::getStatusPrototype());
     try {
         // get serial and issuer from called pv
-        auto it = parameters->begin();
+        auto it = parameters.begin();
         const std::string &issuer_id = *it;
         if (our_issuer_id != issuer_id) {
             throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
@@ -647,21 +629,21 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
         status_value["serial"] = serial;
 
         // Publish status
-        status_pv.open(status_value);
+        status_pv.open(pv_name, status_value);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error getting status: %s\n", e.what());
         status_value["alarm.status"] = 1;
         status_value["alarm.severity"] = 1;
         status_value["alarm.message"] = (SB() << "Error getting status: " << e.what()).str();
-        status_pv.open(status_value);
+        status_pv.open(pv_name, status_value);
     }
 }
 
-void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedPV &status_pv, std::shared_ptr<std::list<std::string>>&&parameters, std::unique_ptr<server::ExecOp> &&op, pvxs::Value &&args) {
+void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string>& parameters, pvxs::Value &&args) {
     Value status_value(certs::getStatusPrototype());
     try {
         // get serial and issuer from called pv
-        auto it = parameters.get()->begin();
+        auto it = parameters.begin();
         const std::string &issuer_id = *it;
         if (our_issuer_id != issuer_id) {
             throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
@@ -683,11 +665,8 @@ void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedPV
         status_value["serial"] = serial;
 
         // update the SharedPV cache and send update to any subscribers
-        // TODO sort out multiple values for a single SharedPV and multiple subs
-//        status_pv.post(serial, status_value);
-
-        // Required.  Inform client that PUT operation is complete.
-        op->reply();
+        status_pv.post(pv_name, status_value);
+        op->reply(status_value);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error revoking certificate: %s\n", e.what());
         op->error(SB() << "Error revoking certificate: " << e.what());
@@ -1062,13 +1041,8 @@ int main(int argc, char *argv[]) {
 
         // Create the PVs
         SharedPV create_pv(SharedPV::buildReadonly());
-        SharedPV revoke_pv(SharedPV::buildReadonly());
-        SharedPV status_pv(SharedPV::buildReadonly());
-        SharedPV partition_pv(SharedPV::buildMailbox());
-        SharedPV partition_scale_up_pv(SharedPV::buildReadonly());
-        SharedPV partition_scaled_up_pv(SharedPV::buildReadonly());
-        SharedPV partition_scale_down_pv(SharedPV::buildReadonly());
-        SharedPV partition_scaled_down_pv(SharedPV::buildReadonly());
+        SharedWildcardPV revoke_pv(SharedWildcardPV::buildMailbox());
+        SharedWildcardPV status_pv(SharedWildcardPV::buildReadonly());
 
         // RPC handlers
         // Create Certificate: args: ccr (certificate creation request)
@@ -1079,30 +1053,30 @@ int main(int argc, char *argv[]) {
                 onCreateCertificate(ca_db, pv, std::move(op), std::move(args), ca_pkey, ca_cert, ca_pub_key, ca_chain, our_issuer_id);
             });
 
-        // Revoke Certificate: args: crr (certificate revocation request)
-        revoke_pv.onWildcardRPC(
-          [&ca_db, &our_issuer_id,  &status_pv](const SharedPV &pv, std::shared_ptr<std::list<std::string>> parameters, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
-            onRevoke(ca_db, our_issuer_id, status_pv, std::move(parameters), std::move(op), std::move(args));
+        // Revoke Certificate
+        revoke_pv.onRPC(
+          [&ca_db, &our_issuer_id](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, pvxs::Value &&args) {
+              try {
+                  onRevoke(ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, std::move(args));
+              } catch (const std::bad_cast& e) {
+                  // Should never happen
+                  throw std::runtime_error("Status PV handler error: dynamic cast failure");
+              }
         });
 
-        status_pv.onFirstWildcardConnect([&ca_db, &our_issuer_id, &status_pv](const SharedPV &pv, std::shared_ptr<std::list<std::string>> parameters) {
-            onGetStatus(ca_db, our_issuer_id, status_pv, std::move(parameters));
+        // Status PV
+        status_pv.onFirstConnect([&ca_db, &our_issuer_id](SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string>& parameters) {
+            try {
+                onGetStatus(ca_db, our_issuer_id, pv, pv_name, parameters);
+            } catch (const std::bad_cast& e) {
+                // Should never happen
+                log_err_printf(pvacms, "Status PV handler error: dynamic cast failure: %s\n", e.what());
+            }
         });
 
-        status_pv.onLastDisconnect([ &status_pv](const SharedPV &pv) { status_pv.close(); });
-
-        partition_pv.onFirstConnect([](const SharedPV &pv) {});
-        partition_scale_up_pv.onRPC([](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
-        partition_scale_up_pv.onRPC([](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
-
-        partition_scaled_up_pv.onRPC([](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
-
-        partition_scale_down_pv.onRPC([](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
-
-        partition_scaled_down_pv.onRPC([&ca_db](const SharedPV &pv, std::unique_ptr<ExecOp> &&operation, pvxs::Value &&args) {});
-
-        // Data type for the PV.
-        create_pv.open(getCreatePrototype());
+        status_pv.onLastDisconnect([](SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string>& parameters) {
+            pv.close(pv_name);
+        });
 
         // Build server which will serve this PV
         Server pva_server = Server(config);
@@ -1112,14 +1086,6 @@ int main(int argc, char *argv[]) {
             .addPV(RPC_CERT_CREATE, create_pv)
             .addPV(RPC_CERT_REVOKE_PV, revoke_pv)
             .addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
-
-        // Add administrative PVs
-        pva_server
-            .addPV(GET_MONITOR_PARTITION_PV, partition_pv)
-            .addPV(RPC_PARTITION_SCALEUP_PV, partition_scale_up_pv)
-            .addPV(RPC_PARTITION_SCALEDUP_PV, partition_scaled_up_pv)
-            .addPV(RPC_PARTITION_SCALEDOWN_PV, partition_scale_down_pv)
-            .addPV(RPC_PARTITION_SCALEDDOWN_PV, partition_scaled_down_pv);
 
         if (verbose)
             // Print the configuration this server is using

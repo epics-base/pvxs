@@ -317,6 +317,7 @@ void ServerConn::handle_CREATE_CHANNEL()
 
             for(auto& pair : iface->server->sources) {
                 try {
+                    auto source = pair.second;
                     pair.second->onCreate(std::move(op));
                     const char* msg = nullptr;
 

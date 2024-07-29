@@ -44,7 +44,7 @@ struct PVXS_API SharedPV {
     //! Create a new SharedPV with a Put handler which rejects any client provided Value.
     static SharedPV buildReadonly();
 
-    ~SharedPV();
+    virtual ~SharedPV();
 
     inline explicit operator bool() const { return !!impl; }
 
@@ -55,8 +55,6 @@ struct PVXS_API SharedPV {
 
     //! Callback when the number of attach()d clients becomes non-zero.
     void onFirstConnect(std::function<void(SharedPV&)>&& fn);
-    //! Callback when the number of attach()d clients becomes non-zero for wildcard PVs.
-    void onFirstWildcardConnect(std::function<void(SharedPV &, std::shared_ptr<std::list<std::string>>)> &&fn);
     //! Callback when the number of attach()d clients becomes zero.
     void onLastDisconnect(std::function<void(SharedPV&)>&& fn);
     //! Callback when a client executes a new Put operation.
@@ -64,8 +62,6 @@ struct PVXS_API SharedPV {
     //! Callback when a client executes an RPC operation.
     //! @note RPC operations are allowed even when the SharedPV is not opened (isOpen()==false)
     void onRPC(std::function<void(SharedPV&, std::unique_ptr<ExecOp>&&, Value&&)>&& fn);
-    //! Callback when a client executes an RPC operation for wildcard PVs.
-    void onWildcardRPC(std::function<void(SharedPV&, std::shared_ptr<std::list<std::string>>, std::unique_ptr<ExecOp>&&, Value&&)>&& fn);
 
     /** Provide data type and initial value.  Allows clients to begin connecting.
      * @pre !isOpen()
@@ -85,59 +81,11 @@ struct PVXS_API SharedPV {
     Value fetch() const;
 
     struct Impl;
-    std::map<std::string, std::shared_ptr<std::list<std::string>>> wildcard_parameters_map;
-    inline void set_wildcard_parameters(const std::string& pv_name,
-                                        const std::string& format) noexcept {
-        auto& wildcard_parameters = wildcard_parameters_map[pv_name];
-        if (!wildcard_parameters) {
-            wildcard_parameters = std::make_shared<std::list<std::string>>();
-        } else if (!wildcard_parameters->empty()) {
-            return;
-        }
-
-        size_t name_pos = 0;
-        size_t format_pos = 0;
-
-        while (format_pos < format.length() && name_pos < pv_name.length()) {
-            if (format[format_pos] == '?') {
-                // Extract the sequence of '?' matched characters
-                size_t start = name_pos;
-                while (format_pos < format.length() && format[format_pos] == '?') {
-                    format_pos++;
-                    name_pos++;
-                }
-                wildcard_parameters->push_back(pv_name.substr(start, name_pos - start));
-            } else if (format[format_pos] == '*') {
-                // Extract the sequence of '*' matched characters
-                size_t start = name_pos;
-                format_pos++;
-                if (format_pos < format.length()) {
-                    // There are more characters in format after '*', find the next part
-                    char next_char = format[format_pos];
-                    name_pos = pv_name.find(next_char, name_pos);
-                    if (name_pos != std::string::npos) {
-                        wildcard_parameters->push_back(pv_name.substr(start, name_pos - start));
-                    } else {
-                        // This condition should not happen in a valid input where the non '*' and '?' match correctly
-                        wildcard_parameters->push_back(pv_name.substr(start));
-                        return;
-                    }
-                } else {
-                    // '*' is the last character in format, extract till the end of pv_name
-                    wildcard_parameters->push_back(pv_name.substr(start));
-                    return;
-                }
-            } else {
-                // Skip the non '?' and '*' characters in the format
-                format_pos++;
-                name_pos++;
-            }
-        }
-    }
-
   private:
     std::shared_ptr<Impl> impl;
 };
+
+struct SharedWildcardPV;
 
 /** Allow clients to find (through a Server) SharedPV instances by name.
  *
@@ -160,9 +108,12 @@ struct PVXS_API StaticSource
 
     //! Add a new name through which a SharedPV may be addressed.
     StaticSource& add(const std::string& name, const SharedPV& pv);
+    StaticSource& add(const std::string& name, const SharedWildcardPV& pv);
+
     //! Remove a single name
     StaticSource& remove(const std::string& name);
 
+    typedef std::map<std::string, std::shared_ptr<SharedPV>> pv_list_t;
     typedef std::map<std::string, SharedPV> list_t;
     list_t list() const;
 

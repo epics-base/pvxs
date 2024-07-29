@@ -15,6 +15,7 @@
 #include <ctime>
 
 #include <pvxs/sharedpv.h>
+#include <pvxs/sharedwildcardpv.h>
 
 #include "certfactory.h"
 #include "certmgmtservice.h"
@@ -26,13 +27,6 @@
 
 #define GET_MONITOR_CERT_STATUS_ROOT "CERT:STATUS"
 #define RPC_CERT_REVOKE_ROOT "CERT:REVOKE"
-
-// Partition Management
-#define GET_MONITOR_PARTITION_PV "CERT:PARTITION:*"
-#define RPC_PARTITION_SCALEUP_PV "CERT:PARTITION:SCALE_UP"
-#define RPC_PARTITION_SCALEDUP_PV "CERT:PARTITION:SCALED_UP:*"
-#define RPC_PARTITION_SCALEDOWN_PV "CERT:PARTITION:SCALE_DOWN:*"
-#define RPC_PARTITION_SCALEDDOWN_PV "CERT:PARTITION:SCALED_DOWN:*"
 
 #define PVXS_HOSTNAME_MAX 1024
 #define PVXS_ORG_UNIT_MAME "Certificate Authority"
@@ -147,14 +141,6 @@ time_t getNotAfterTimeFromCert(const X509 *cert);
 
 time_t getNotBeforeTimeFromCert(const X509 *cert);
 
-Value getPartitionPrototype();
-
-Value getRevokePrototype();
-
-Value getScaleDownPrototype();
-
-Value getScaleUpPrototype();
-
 Value getStatusPrototype();
 
 void initCertsDatabase(sql_ptr &ca_db, std::string &db_file);
@@ -165,9 +151,9 @@ void onCreateCertificate(sql_ptr &ca_db, const server::SharedPV &pv, std::unique
                          const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain,
                          std::string issuer_id);
 
-void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedPV &status_pv, std::shared_ptr<std::list<std::string>> &&parameters);
+void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name, const std::list<std::string>& parameters);
 
-void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedPV &status_pv, std::shared_ptr<std::list<std::string>>&&parameters, std::unique_ptr<server::ExecOp> &&op, Value &&args);
+void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string>& parameters, pvxs::Value &&args);
 
 std::string getIssuerId(const ossl_ptr<X509> &ca_cert);
 

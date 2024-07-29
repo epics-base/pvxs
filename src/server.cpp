@@ -22,6 +22,8 @@
 #include <epicsString.h>
 
 #include <pvxs/server.h>
+#include <pvxs/sharedpv.h>
+#include <pvxs/sharedwildcardpv.h>
 #include <pvxs/client.h>
 #include <pvxs/config.h>
 #include <pvxs/log.h>
@@ -240,6 +242,15 @@ client::Config Server::clientConfig() const
 }
 
 Server& Server::addPV(const std::string& name, const SharedPV& pv)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    pvt->builtinsrc.add(name, pv);
+    pvt->beaconChange++;
+    return *this;
+}
+
+Server& Server::addPV(const std::string& name, const SharedWildcardPV& pv)
 {
     if(!pvt)
         throw std::logic_error("NULL Server");
