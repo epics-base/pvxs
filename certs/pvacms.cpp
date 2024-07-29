@@ -215,7 +215,7 @@ Value getStatusPrototype() {
     using namespace members;
     return TypeDef(TypeCode::Struct,
                    {
-                       Member(TypeCode::UInt8, "value"),
+                       Member(TypeCode::String, "value"),
                        Member(TypeCode::UInt64, "serial"),
                        Struct("alarm", "alarm_t",
                               {
@@ -625,7 +625,7 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
 
         // get status value
         auto status = certs::getCertificateStatus(ca_db, serial);
-        status_value["value"] = status;
+        status_value["value"] = certificateStatusToString(status);
         status_value["serial"] = serial;
 
         // Publish status
@@ -661,11 +661,15 @@ void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWi
 
         // get status value
         certs::setCertificateStatus(ca_db, serial, REVOKED);
-        status_value["value"] = REVOKED;
+        status_value["value"] = certificateStatusToString(REVOKED);
         status_value["serial"] = serial;
 
         // update the SharedPV cache and send update to any subscribers
-        status_pv.post(pv_name, status_value);
+        if (status_pv.isOpen(pv_name)) {
+            status_pv.post(pv_name, status_value);
+        } else {
+            status_pv.open(pv_name, status_value);
+        }
         op->reply(status_value);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error revoking certificate: %s\n", e.what());

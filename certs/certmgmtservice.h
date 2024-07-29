@@ -22,7 +22,15 @@ namespace certs {
 #define GET_MONITOR_CERT_STATUS_PV "CERT:STATUS:????????:*"
 
 enum CertificateStatus { PENDING_VALIDATION, VALID, EXPIRED, REVOKED };
-
+const char* certificateStatusToString(CertificateStatus status) {
+    switch (status) {
+        case PENDING_VALIDATION: return "PENDING VALIDATION";
+        case VALID: return "VALID";
+        case EXPIRED: return "EXPIRED";
+        case REVOKED: return "REVOKED";
+        default: return "UNKNOWN";
+    }
+}
 #define RPC_SERVER_TIMEOUT 3
 
 /**
