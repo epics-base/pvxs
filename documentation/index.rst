@@ -9,9 +9,9 @@ PVXS is functionally equivalent to the
 `pvAccessCPP <https://github.com/epics-base/pvAccessCPP>`_ modules,
 which it hopes to eventually supplant (Ok, the author hopes).
 
-- VCS: https://github.com/mdavidsaver/pvxs
-- Docs: https://mdavidsaver.github.io/pvxs
-- `Issues <https://github.com/mdavidsaver/pvxs/issues>`_ (see :ref:`reportbug`)
+- VCS: https://github.com/epics-base/pvxs
+- Docs: https://epics-base.github.io/pvxs
+- `Issues <https://github.com/epics-base/pvxs/issues>`_ (see :ref:`reportbug`)
 - :ref:`contrib`
 
 Dependencies
@@ -31,7 +31,7 @@ See :ref:`building` for details.
 Download
 --------
 
-Releases are published to https://github.com/mdavidsaver/pvxs/releases.
+Releases are published to https://github.com/epics-base/pvxs/releases.
 See :ref:`relpolicy` for details.
 
 .. toctree::
