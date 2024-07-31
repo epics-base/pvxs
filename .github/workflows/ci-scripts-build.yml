@@ -240,7 +240,12 @@ jobs:
       # actions/checkout@v2 wants git >=2.18
       # centos:7 has 1.8
       if: matrix.image=='centos:7'
+      # By default, Centos 7 uses mirrorlist.centos.org for yum
+      # mirrorlist.centos.org no longer exists (as of 1st July 2024), so need to update repolist
       run: |
+        sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
+        sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
+        sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
         yum -y install curl make gcc curl-devel expat-devel gettext-devel openssl-devel zlib-devel perl-ExtUtils-MakeMaker
         curl https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.29.0.tar.gz | tar -xz
         cd git-*
@@ -265,6 +270,11 @@ jobs:
     - uses: actions/checkout@v3
       with:
         submodules: true
+      env:
+        # For some reason the Node version was updated to Node20, which breaks stuff
+        # This allows the use of the "insecure" Node20
+        # THIS IS VERY MUCH A TEMPORARY FIX
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     - name: Automatic core dumper analysis
       uses: mdavidsaver/ci-core-dumper@master
       if: matrix.image!='centos:7'
