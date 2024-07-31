@@ -37,8 +37,6 @@ namespace certs {
 
 DEFINE_LOGGER(certs, "pvxs.certs.certfactory");
 
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "LocalValueEscapesScope"
 /**
  * Creates a new X.509 certificate from scratch.  It uses the provided public
  * key from the key pair and sets all the appropriate fields based on usage.
@@ -128,7 +126,6 @@ ossl_ptr<X509> CertFactory::create() {
 
     return certificate;
 }
-#pragma clang diagnostic pop
 
 /*
 std::string CertFactory::sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data) {

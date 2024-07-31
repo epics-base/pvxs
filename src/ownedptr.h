@@ -100,18 +100,19 @@ struct file_delete;
 DEFINE_FILE_DELETER_FOR_(FILE);
 
 #ifdef PVXS_ENABLE_OPENSSL
-DEFINE_SQLITE_DELETER_FOR_(sqlite3);
 DEFINE_OPENSSL_DELETER_FOR_(char);
+DEFINE_SQLITE_DELETER_FOR_(sqlite3);
+DEFINE_SSL_DELETER_ALL_FOR_(BIO);
 DEFINE_SSL_DELETER_FOR_(ASN1_OBJECT);
 DEFINE_SSL_DELETER_FOR_(ASN1_TIME);
 DEFINE_SSL_DELETER_FOR_(BIO);
-DEFINE_SSL_DELETER_ALL_FOR_(BIO);
 DEFINE_SSL_DELETER_FOR_(EVP_MD_CTX);
 DEFINE_SSL_DELETER_FOR_(EVP_PKEY);
 DEFINE_SSL_DELETER_FOR_(EVP_PKEY_CTX);
+DEFINE_SSL_DELETER_FOR_(OCSP_BASICRESP);
+DEFINE_SSL_DELETER_FOR_(OCSP_CERTID);
 DEFINE_SSL_DELETER_FOR_(OCSP_REQUEST);
 DEFINE_SSL_DELETER_FOR_(OCSP_RESPONSE);
-DEFINE_SSL_DELETER_FOR_(OCSP_BASICRESP);
 DEFINE_SSL_DELETER_FOR_(OSSL_LIB_CTX);
 DEFINE_SSL_DELETER_FOR_(PKCS12);
 DEFINE_SSL_DELETER_FOR_(SSL);
@@ -156,9 +157,8 @@ template <typename T, typename D>
 struct OwnedPtr : public std::unique_ptr<T, D> {
     typedef std::unique_ptr<T, D> base_t;
 
-    constexpr OwnedPtr() {}
-
-    constexpr OwnedPtr(std::nullptr_t np) : base_t(np) {}
+    constexpr OwnedPtr() noexcept {}
+    constexpr OwnedPtr(std::nullptr_t) noexcept : base_t(nullptr) {}
     explicit OwnedPtr(const char *file, int line, T *ptr) : base_t(ptr) {
         if (!*this) throw loc_bad_alloc(file, line);
     }
@@ -176,13 +176,13 @@ struct OwnedPtr : public std::unique_ptr<T, D> {
     //   OwnedPtr<T> x;
     //   someFunction(x.acquire());
     struct Acquisition {
-        base_t *o;
+        base_t *owned;
         T *ptr = nullptr;
 
         operator T **() { return &ptr; }
-        constexpr Acquisition(base_t *o) : o(o) {}
-        constexpr Acquisition(OwnedPtr<T, D> *o) : o(o) {}
-        ~Acquisition() { o->reset(ptr); }
+        constexpr Acquisition(base_t *owned) : owned(owned) {}
+        constexpr Acquisition(OwnedPtr<T, D> *owned) : owned(owned) {}
+        ~Acquisition() { owned->reset(ptr); }
     };
 
     Acquisition acquire() { return Acquisition{this}; }
