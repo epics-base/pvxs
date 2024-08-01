@@ -493,11 +493,64 @@ void testClear()
     testFalse(val.isMarked(true, true));
 }
 
+void test_cache_sync()
+{
+    testShow()<<__func__;
+
+    auto cache(TypeDef(TypeCode::Struct, {
+                           members::UInt32("int"),
+                           members::String("string"),
+                           members::UInt32A("arr"),
+                           members::Any("any"),
+                           Member(TypeCode::Union, "choice", {
+                               Member(TypeCode::Float32, "a"),
+                               Member(TypeCode::String, "b"),
+                           }),
+                       }).create());
+    auto delta(cache.cloneEmpty());
+
+    delta["int"] = 42;
+    delta["string"] = "hello";
+    delta["arr"] = shared_array<const uint32_t>({1, 2, 3});
+    delta["any"] = 5;
+    delta["choice->a"] = 6;
+
+    // updates cache <- delta
+    cache_sync(cache, delta);
+
+    testEq(delta["int"].as<uint32_t>(), 42u);
+    testEq(delta["string"].as<std::string>(), "hello");
+    testArrEq(delta["arr"].as<shared_array<const uint32_t>>(), shared_array<const uint32_t>({1, 2, 3}));
+    testEq(delta["any"].as<uint32_t>(), 5u);
+    testEq(delta["choice"].as<uint32_t>(), 6u);
+
+    testEq(cache["int"].as<uint32_t>(), 42u);
+    testEq(cache["string"].as<std::string>(), "hello");
+    testArrEq(cache["arr"].as<shared_array<const uint32_t>>(), shared_array<const uint32_t>({1, 2, 3}));
+    testEq(cache["any"].as<uint32_t>(), 5u);
+    testEq(cache["choice"].as<uint32_t>(), 6u);
+
+    delta = cache.cloneEmpty();
+
+    // updates cache -> delta
+    cache_sync(cache, delta);
+
+    testEq(delta["int"].as<uint32_t>(), 42u);
+    testEq(delta["string"].as<std::string>(), "hello");
+    testArrEq(delta["arr"].as<shared_array<const uint32_t>>(), shared_array<const uint32_t>({1, 2, 3}));
+    testEq(delta["any"].as<uint32_t>(), 5u);
+    testEq(delta["choice"].as<uint32_t>(), 6u);
+
+    // Any/Union should be copied to allow consumer of delta to modify
+    testFalse(delta["any"].as<Value>().equalInst(cache["any"].as<Value>()));
+    testFalse(delta["choice"].as<Value>().equalInst(cache["choice"].as<Value>()));
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(172);
+    testPlan(189);
     testSetup();
     testTraverse();
     testAssign();
@@ -581,6 +634,7 @@ MAIN(testdata)
     testUnionMagicAssign();
     testExtract();
     testClear();
+    test_cache_sync();
     cleanup_for_valgrind();
     return testDone();
 }

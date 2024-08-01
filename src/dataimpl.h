@@ -47,6 +47,7 @@ struct Value::Helper {
  * copy   marked from delta -> cache
  * copy unmarked from cache -> delta
  */
+PVXS_API
 void cache_sync(Value& cache, Value& delta);
 
 namespace impl {

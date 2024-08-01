@@ -168,6 +168,7 @@ void testDeserialize1()
 
 }
 
+const
 TypeDef simpledef(TypeCode::Struct, "simple_t", {
                 Member(TypeCode::UInt64A, "value"),
                 Member(TypeCode::Struct, "timeStamp", "time_t", {

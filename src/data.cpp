@@ -1231,13 +1231,7 @@ void cache_sync(Value& cache, Value& dlt)
             dst->as<shared_array<const void>>() = src->as<shared_array<const void>>();
             break;
         case StoreType::Compound:
-        {
-            std::shared_ptr<impl::FieldStorage> sstore(Value::Helper::store(dlt),
-                                                      src);
-            auto& dfld(dst->as<Value>());
-            Value::Helper::set_desc(dfld, &desc[i]);
-            Value::Helper::store(dfld) = std::move(sstore);
-        }
+            dst->as<Value>() = src->as<Value>().clone();
             break;
         }
     }
@@ -1264,7 +1258,7 @@ void FieldStorage::init(StoreType code)
         new(&store) std::string();
         return;
     case StoreType::Compound:
-        new(&store) std::shared_ptr<FieldStorage>();
+        new(&store) Value();
         return;
     case StoreType::Array:
         new(&store) shared_array<void>();
