@@ -7,12 +7,12 @@ Details
 Reporting a Bug
 ===============
 
-Before reporting a bug, please check to see if this issue has already been `reported <https://github.com/mdavidsaver/pvxs/issues>`_.
+Before reporting a bug, please check to see if this issue has already been `reported <https://github.com/epics-base/pvxs/issues>`_.
 
 When composing a new report, please run the included automatic tests "make runtests" and mention the results.
 It is enough to mention "All tests successful." if this is so.  (see `runtests`)
 
-`Bug reports <https://github.com/mdavidsaver/pvxs/issues>`_ should always include:
+`Bug reports <https://github.com/epics-base/pvxs/issues>`_ should always include:
 
 * EPICS Base version or VCS commit
 * PVXS module version or VCS commit
@@ -127,7 +127,7 @@ Elements of the Expert API may be "promoted" to regular/full API status if warra
 Contributing
 ============
 
-The recommended path for including changes is through `Pull Request <https://github.com/mdavidsaver/pvxs/pulls>`_.
+The recommended path for including changes is through `Pull Request <https://github.com/epics-base/pvxs/pulls>`_.
 
 When changing c++ code please do:
 
@@ -151,7 +151,7 @@ When committing changes please do:
 Contributors
 ------------
 
-Who did the [work](https://github.com/mdavidsaver/pvxs/graphs/contributors) to make PVXS what it is.
+Who did the [work](https://github.com/epics-base/pvxs/graphs/contributors) to make PVXS what it is.
 
 .. comment: git log --format=format:%aN|sort -u|while read aa; do echo "* $aa"; done
 

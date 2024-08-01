@@ -707,7 +707,7 @@ setup(
     description="PVXS libraries packaged for python",
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://mdavidsaver.github.io/pvxs',
+    url='https://epics-base.github.io/pvxs',
     author='Michael Davidsaver',
     author_email='mdavidsaver@gmail.com',
     license='BSD',

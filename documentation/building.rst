@@ -5,7 +5,7 @@ Building from Source
 
 Begin be fetching all needed source. ::
 
-    git clone --recursive https://github.com/mdavidsaver/pvxs.git
+    git clone --recursive https://github.com/epics-base/pvxs.git
     git clone --branch 7.0 https://github.com/epics-base/epics-base.git
 
 Prepare the PVXS source tree with the location of epics-base: ::

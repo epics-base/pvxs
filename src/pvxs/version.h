@@ -53,9 +53,9 @@
 #  define GCC_VERSION VERSION_INT(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__, 0)
 #endif
 
-// See https://mdavidsaver.github.io/pvxs/details.html#expertapi
+// See https://epics-base.github.io/pvxs/details.html#expertapi
 #if defined(PVXS_EXPERT_API_ENABLED)
-#  error Define PVXS_ENABLE_EXPERT_API to enable usage of Expert API.  See https://mdavidsaver.github.io/pvxs/details.html#expert-apis
+#  error Define PVXS_ENABLE_EXPERT_API to enable usage of Expert API.  See https://epics-base.github.io/pvxs/details.html#expert-apis
 #elif defined(PVXS_ENABLE_EXPERT_API)
 #  define PVXS_EXPERT_API_ENABLED
 #endif

@@ -3,6 +3,14 @@
 Release Notes
 =============
 
+1.3.2 (UNRELEASED)
+------------------
+
+* client: Avoid FD leak on failed connect()
+* Correctly set TCP_NODELAY on winsock
+* ioc: Workaround asTrapWrite clobbering dbChannel
+* ioc: ACF fix write permit when groups are present
+
 1.3.1 (Dec 2023)
 ----------------
 
