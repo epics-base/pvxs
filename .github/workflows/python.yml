@@ -48,27 +48,27 @@ jobs:
           - name: osx 3.8 arm64
             os: macos-latest
             python: "3.8"
-            piparch: macosx_11_0_arm64
+            piparch: macosx_11_0_universal2
 
           - name: osx 3.9 arm64
             os: macos-latest
             python: "3.9"
-            piparch: macosx_11_0_arm64
+            piparch: macosx_11_0_universal2
 
           - name: osx 3.10 arm64
             os: macos-latest
             python: "3.10"
-            piparch: macosx_11_0_arm64
+            piparch: macosx_11_0_universal2
 
           - name: osx 3.11 arm64
             os: macos-latest
             python: "3.11"
-            piparch: macosx_11_0_arm64
+            piparch: macosx_11_0_universal2
 
           - name: osx 3.12 arm64
             os: macos-latest
             python: "3.12"
-            piparch: macosx_11_0_arm64
+            piparch: macosx_11_0_universal2
 
           # Windows py builds
 
