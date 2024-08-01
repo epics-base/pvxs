@@ -219,6 +219,11 @@ jobs:
       LIBEVENT_TAG: ${{ matrix.libevent }}
       EXTRA: ${{ matrix.extra }}
       VV: "1"
+      # The Node version was updated to Node20 in 'checkout', which breaks stuff
+      # This allows the use of the "unsecure" Node16
+      # THIS IS VERY MUCH A TEMPORARY FIX AND WILL STOP WORKING IN THE FUTURE
+      # https://github.blog/changelog/2024-03-07-github-actions-all-actions-will-run-on-node20-instead-of-node16-by-default/
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     strategy:
       fail-fast: false
       matrix:
@@ -240,7 +245,12 @@ jobs:
       # actions/checkout@v2 wants git >=2.18
       # centos:7 has 1.8
       if: matrix.image=='centos:7'
+      # By default, Centos 7 uses mirrorlist.centos.org for yum
+      # mirrorlist.centos.org no longer exists (as of 1st July 2024), so need to update repolist
       run: |
+        sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
+        sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
+        sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
         yum -y install curl make gcc curl-devel expat-devel gettext-devel openssl-devel zlib-devel perl-ExtUtils-MakeMaker
         curl https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.29.0.tar.gz | tar -xz
         cd git-*
