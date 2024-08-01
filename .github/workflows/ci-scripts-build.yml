@@ -219,6 +219,11 @@ jobs:
       LIBEVENT_TAG: ${{ matrix.libevent }}
       EXTRA: ${{ matrix.extra }}
       VV: "1"
+      # The Node version was updated to Node20 in 'checkout', which breaks stuff
+      # This allows the use of the "unsecure" Node16
+      # THIS IS VERY MUCH A TEMPORARY FIX AND WILL STOP WORKING IN THE FUTURE
+      # https://github.blog/changelog/2024-03-07-github-actions-all-actions-will-run-on-node20-instead-of-node16-by-default/
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     strategy:
       fail-fast: false
       matrix:
@@ -270,11 +275,6 @@ jobs:
     - uses: actions/checkout@v3
       with:
         submodules: true
-      env:
-        # For some reason the Node version was updated to Node20, which breaks stuff
-        # This allows the use of the "insecure" Node20
-        # THIS IS VERY MUCH A TEMPORARY FIX
-        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     - name: Automatic core dumper analysis
       uses: mdavidsaver/ci-core-dumper@master
       if: matrix.image!='centos:7'
