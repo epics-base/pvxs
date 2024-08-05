@@ -22,25 +22,98 @@ namespace pvxs {
 namespace certs {
 
 
-std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertificateStatus status, time_t revocation_time, const pvxs::ossl_ptr<X509>& ca_cert, const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain) {
-    // Create OCSP_CERTID
-    auto cert_id = createOCSPCertId(ca_cert, serial);
-
-    // Create OCSP request
-    auto req = createOCSPRequest(cert_id);
-
+/**
+ * @brief Creates and signs an OCSP response for a given certificate.
+ *
+ * This function takes in a serial number, certificate status, revocation time, CA certificate,
+ * CA private key, and CA chain as input parameters. It creates an OCSP_CERTID using the CA
+ * certificate and serial number. Then it creates an OCSP request using the OCSP_CERTID.
+ * Next, it creates an OCSP basic response using the OCSP request, CA certificate, CA private key,
+ * CA chain, and certificate status. The function adds the status times to the OCSP basic response
+ * and serializes the response into a byte array. The byte array is then returned.
+ *
+ * @param serial The serial number of the certificate.
+ * @param status The status of the certificate (PENDING_VALIDATION, VALID, EXPIRED, or REVOKED).
+ * @param revocation_time The time of revocation for the certificate (0 if not revoked).
+ * @param ca_cert The CA certificate used for signing the OCSP response.
+ * @param ca_pkey The private key of the CA certificate.
+ * @param ca_chain The chain of CA certificates.
+ * @return The serialized OCSP response as a vector of uint8_t.
+ *
+ * @see createOCSPCertId
+ * @see ocspResponseToBytes
+ */
+std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertificateStatus status, time_t revocation_time,
+                                               const pvxs::ossl_ptr<X509>& ca_cert, const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey,
+                                               const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain) {
     // Create OCSP response
-    auto basic_resp =
-      createOCSPBasicResponse(req, ca_cert, ca_pkey, ca_chain, status);
+    pvxs::ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
-    // Add status times to the OCSP response
-    addStatusToBasicResp(basic_resp, cert_id, status, revocation_time);
-    cert_id.release();
+    // Set ASN1_TIME objects for revocationTime, thisUpdate, and nextUpdate using pvxs::ossl_ptr
+    pvxs::ossl_ptr<ASN1_TIME> revocationTime(nullptr, false);
+    pvxs::ossl_ptr<ASN1_TIME> thisUpdate(ASN1_TIME_new());
+    pvxs::ossl_ptr<ASN1_TIME> nextUpdate(ASN1_TIME_new());
+
+    // Set the current time as thisUpdate (i.e., time at which the status was verified)
+    ASN1_TIME_set(thisUpdate.get(), time(nullptr));
+
+    // Set nextUpdate time 30 minutes ahead
+    ASN1_TIME_adj(nextUpdate.get(), time(nullptr), 0, 30*60);
+
+    // Determine the OCSP status and revocation time
+    int ocsp_status;
+    switch (status) {
+        case VALID:
+            ocsp_status = V_OCSP_CERTSTATUS_GOOD;
+            break;
+        case REVOKED:
+            ocsp_status = V_OCSP_CERTSTATUS_REVOKED;
+            revocationTime.reset(ASN1_TIME_new());
+            ASN1_TIME_set(revocationTime.get(), revocation_time);
+            break;
+        case EXPIRED:
+        case PENDING_VALIDATION:
+        default:
+            ocsp_status = V_OCSP_CERTSTATUS_UNKNOWN;
+            break;
+    }
+
+    // Create OCSP_CERTID
+    auto cert_id = createOCSPCertId(serial, ca_cert);
+
+    // Add the status to the OCSP response
+    if (!OCSP_basic_add1_status(basic_resp.get(), cert_id.get(), ocsp_status, 0, revocationTime.get(), thisUpdate.get(), nextUpdate.get())) {
+        throw std::runtime_error("Failed to add status to OCSP response");
+    }
+
+    // Adding the CA chain to the response
+    for (int i = 0; i < sk_X509_num(ca_chain.get()); i++) {
+        X509* cert = sk_X509_value(ca_chain.get(), i);
+        OCSP_basic_add1_cert(basic_resp.get(), cert);
+    }
+
+    // Sign the OCSP response
+    if (!OCSP_basic_sign(basic_resp.get(), ca_cert.get(), ca_pkey.get(), EVP_sha256(), ca_chain.get(), 0)) {
+        throw std::runtime_error("Failed to sign the OCSP response");
+    }
 
     // Serialize OCSP response and return
     return ocspResponseToBytes(basic_resp);
 }
 
+/**
+ * @brief Converts a 64-bit unsigned integer (serial number) to an ASN.1 representation.
+ *
+ * This function takes a 64-bit unsigned integer (a serial number) and converts it
+ * to an ASN.1 representation. ASN.1 (Abstract Syntax Notation One) is a standard
+ * notation and set of rules for defining the structure of data.
+ *
+ * @param serial The 64-bit unsigned integer (serial number) to be converted.
+ *
+ * @return The ASN.1 representation of the given unsigned integer.
+ *
+ * @see uint64FromASN1()
+ */
 // Function to convert a uint64_t serial number to ASN1_INTEGER
 pvxs::ossl_ptr<ASN1_INTEGER> uint64ToASN1(uint64_t serial) {
     pvxs::ossl_ptr<ASN1_INTEGER> asn1_serial(ASN1_INTEGER_new());
@@ -59,8 +132,20 @@ pvxs::ossl_ptr<ASN1_INTEGER> uint64ToASN1(uint64_t serial) {
     return asn1_serial;
 }
 
-// Create an OCSP_CERTID using certificate information
-pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(const pvxs::ossl_ptr<X509>& ca_cert, uint64_t serial_number, const EVP_MD* digest) {
+/**
+ * @brief Creates an OCSP certificate ID using the given parameters.
+ *
+ * This function creates an OCSP (Online Certificate Status Protocol) certificate ID using the provided
+ * serial number, CA (Certification Authority) certificate, and digest algorithm.  The digest
+ * algorithm defaults to `EVP_sha1` if not specified.
+ *
+ * @param serial The serial number of the certificate for which the OCSP ID needs to be created.
+ * @param ca_cert The CA certificate used to sign the certificate.
+ * @param digest The digest algorithm used to compute the OCSP ID.  Defaults to EVP_sha1
+ *
+ * @return The OCSP certificate ID.
+ */
+pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(uint64_t serial, const pvxs::ossl_ptr<X509> &ca_cert, const EVP_MD *digest) {
     if (!ca_cert) {
         throw std::runtime_error("No CA certificate provided");
     }
@@ -82,63 +167,22 @@ pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(const pvxs::ossl_ptr<X509>& ca_cert
     EVP_DigestFinal_ex(mdctx.get(), issuer_key_hash, &issuer_key_hash_len);
 
     // Convert uint64_t serial number to ASN1_INTEGER
-    pvxs::ossl_ptr<ASN1_INTEGER> serial = uint64ToASN1(serial_number);
+    pvxs::ossl_ptr<ASN1_INTEGER> asn1_serial = uint64ToASN1(serial);
 
     // Create OCSP_CERTID
-    pvxs::ossl_ptr<OCSP_CERTID> id(OCSP_cert_id_new(digest, issuer_name, pub_key_bit_string, serial.get()));
+    pvxs::ossl_ptr<OCSP_CERTID> id(OCSP_cert_id_new(digest, issuer_name, pub_key_bit_string, asn1_serial.get()));
 
     return id;
 }
 
-
-// Create and set up an OCSP request using certificate information
-pvxs::ossl_ptr<OCSP_REQUEST> createOCSPRequest(const pvxs::ossl_ptr<OCSP_CERTID>& cert_id) {
-    pvxs::ossl_ptr<OCSP_REQUEST> req(OCSP_REQUEST_new());
-    OCSP_request_add0_id(req.get(), cert_id.get());
-    return req;
-}
-
-// Create and set up an OCSP response for a single certificate
-pvxs::ossl_ptr<OCSP_BASICRESP> createOCSPBasicResponse(const pvxs::ossl_ptr<OCSP_REQUEST>& req, const pvxs::ossl_ptr<X509>& ca_cert, const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain, CertificateStatus status) {
-    pvxs::ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
-
-    // There should be only one request in the OCSP request for a single certificate
-    OCSP_ONEREQ* one_req = OCSP_request_onereq_get0(req.get(), 0);
-    OCSP_CERTID* cert_id = OCSP_onereq_get0_id(one_req);
-
-    // Map CertificateStatus to OCSP status
-    int ocsp_status;
-    switch (status) {
-        case VALID:
-            ocsp_status = V_OCSP_CERTSTATUS_GOOD;
-            break;
-        case EXPIRED:
-            ocsp_status = V_OCSP_CERTSTATUS_REVOKED;
-            break;
-        case REVOKED:
-            ocsp_status = V_OCSP_CERTSTATUS_REVOKED;
-            break;
-        case PENDING_VALIDATION:
-        default:
-            ocsp_status = V_OCSP_CERTSTATUS_UNKNOWN;
-            break;
-    }
-
-    // Adding OCSP response for provided certificate ID
-    OCSP_basic_add1_status(basic_resp.get(), cert_id, ocsp_status, 0, 0, 0, 0);
-
-    // Adding the CA chain to the response
-    for (int i = 0; i < sk_X509_num(ca_chain.get()); i++) {
-        X509* cert = sk_X509_value(ca_chain.get(), i);
-        OCSP_basic_add1_cert(basic_resp.get(), cert);
-    }
-
-    // Signing the response
-    OCSP_basic_sign(basic_resp.get(), ca_cert.get(), ca_pkey.get(), EVP_sha256(), ca_chain.get(), 0);
-    return basic_resp;
-}
-
-// Serialize an OCSP response to a byte array
+/**
+ * @brief Converts the OCSP response to bytes.
+ *
+ * This function takes the OCSP response as input and converts it into a sequence of bytes.
+ *
+ * @param basic_resp The OCSP response to be converted.
+ * @return The sequence of bytes representing the OCSP response object.
+ */
 std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp) {
     unsigned char* resp_der = nullptr;
     int resp_len;
@@ -150,43 +194,6 @@ std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& b
     OPENSSL_free(resp_der);
 
     return resp_bytes;
-}
-
-// Function to set OCSP response details
-void addStatusToBasicResp(pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp, pvxs::ossl_ptr<OCSP_CERTID>& cert_id, CertificateStatus cert_status, time_t revocation_time) {
-    // Set ASN1_TIME objects for revocationTime, thisUpdate, and nextUpdate using pvxs::ossl_ptr
-    pvxs::ossl_ptr<ASN1_TIME> revocationTime(nullptr);
-    pvxs::ossl_ptr<ASN1_TIME> thisUpdate(ASN1_TIME_new());
-    pvxs::ossl_ptr<ASN1_TIME> nextUpdate(ASN1_TIME_new());
-
-    // Set the current time as thisUpdate (i.e., time at which the status was verified)
-    ASN1_TIME_set(thisUpdate.get(), time(nullptr));
-
-    // Set nextUpdate time 1 day ahead
-    ASN1_TIME_adj(nextUpdate.get(), time(nullptr), 1, 0);
-
-    // Determine the OCSP status and revocation time
-    int ocsp_status;
-    switch (cert_status) {
-        case VALID:
-            ocsp_status = V_OCSP_CERTSTATUS_GOOD;
-            break;
-        case REVOKED:
-            ocsp_status = V_OCSP_CERTSTATUS_REVOKED;
-            revocationTime.reset(ASN1_TIME_new());
-            ASN1_TIME_set(revocationTime.get(), revocation_time);
-            break;
-        case EXPIRED:
-        case PENDING_VALIDATION:
-        default:
-            ocsp_status = V_OCSP_CERTSTATUS_UNKNOWN;
-            break;
-    }
-
-    // Add the status to the OCSP response
-    if (!OCSP_basic_add1_status(basic_resp.get(), cert_id.get(), ocsp_status, 0, revocationTime.get(), thisUpdate.get(), nextUpdate.get())) {
-        throw std::runtime_error("Failed to add status to OCSP response");
-    }
 }
 
 }  // namespace certs

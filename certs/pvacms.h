@@ -108,7 +108,10 @@
     "UPDATE certs "                  \
     "SET status = :status "          \
     "WHERE serial = :serial "        \
-    "  AND status = :valid_status "
+    "  AND ( "                       \
+    "      status = :valid_status1 " \
+    "   OR status = :valid_status2 " \
+    "  )"
 
 namespace pvxs {
 namespace certs {

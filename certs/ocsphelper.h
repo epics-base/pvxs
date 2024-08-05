@@ -25,13 +25,7 @@ namespace certs {
 
 std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertificateStatus status, time_t revocation_time, const pvxs::ossl_ptr<X509>& ca_cert, const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain);
 
-void addStatusToBasicResp(pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp, pvxs::ossl_ptr<OCSP_CERTID>& cert_id, CertificateStatus cert_status, time_t revocation_time);
-
-pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(const pvxs::ossl_ptr<X509>& ca_cert, uint64_t serial_number, const EVP_MD* digest = EVP_sha1());
-
-pvxs::ossl_ptr<OCSP_BASICRESP> createOCSPBasicResponse(const pvxs::ossl_ptr<OCSP_REQUEST>& req, const pvxs::ossl_ptr<X509>& ca_cert, const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain, CertificateStatus status);
-
-pvxs::ossl_ptr<OCSP_REQUEST> createOCSPRequest(const pvxs::ossl_ptr<OCSP_CERTID>& cert_id);
+pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(uint64_t serial, const pvxs::ossl_ptr<X509> &ca_cert, const EVP_MD* digest = EVP_sha1());
 
 std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
 

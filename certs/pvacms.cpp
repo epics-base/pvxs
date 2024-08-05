@@ -296,13 +296,20 @@ void setCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertificateStatus cer
     if ((sql_status = sqlite3_prepare_v2(ca_db.get(), SQL_CERT_SET_STATUS, -1, &sql_statement, 0)) == SQLITE_OK) {
         sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), cert_status);
         sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":serial"), db_serial);
-        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":valid_status"), VALID);
+        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":valid_status1"), PENDING_VALIDATION);
+        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":valid_status1"), VALID);
 
         sql_status = sqlite3_step(sql_statement);
     }
     sqlite3_finalize(sql_statement);
 
-    if (sql_status != SQLITE_DONE) {
+    // Check the number of rows affected
+    if (sql_status == SQLITE_DONE) {
+        int rows_affected = sqlite3_changes(ca_db.get());
+        if (rows_affected == 0) {
+            throw std::runtime_error("No certificate found");
+        }
+    } else {
         throw std::runtime_error(SB() << "Failed to set cert status: " << sqlite3_errmsg(ca_db.get()));
     }
 }
@@ -326,21 +333,6 @@ uint64_t generateSerial() {
 
     uint64_t random_serial_number = distribution(seed);  // Generate a random number
     return random_serial_number;
-}
-
-const char *certificateStatusToString(CertificateStatus status) {
-    switch (status) {
-        case PENDING_VALIDATION:
-            return "PENDING VALIDATION";
-        case VALID:
-            return "VALID";
-        case EXPIRED:
-            return "EXPIRED";
-        case REVOKED:
-            return "REVOKED";
-        default:
-            return "UNKNOWN";
-    }
 }
 
 /**
@@ -628,7 +620,7 @@ void onCreateCertificate(sql_ptr &ca_db, const server::SharedPV &pv, std::unique
 void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name,
                  const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                  const ossl_ptr<EVP_PKEY> &ca_pub_key, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    Value status_value(kStatusPrototype.cloneEmpty());
+    Value status_value(kStatusPrototype.clone());
     try {
         // get serial and issuer from called pv
         auto it = parameters.begin();
@@ -675,7 +667,7 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
 void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
               const std::string &pv_name, const std::list<std::string> &parameters, pvxs::Value &&args, const ossl_ptr<EVP_PKEY> &ca_pkey,
               const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    Value status_value(kStatusPrototype.cloneEmpty());
+    Value status_value(kStatusPrototype.clone());
     try {
         // get serial and issuer from called pv
         auto it = parameters.begin();
