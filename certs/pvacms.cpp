@@ -79,7 +79,6 @@ namespace certs {
  * This array does not consider leap years
  */
 static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
-static const uint64_t k64BitOffset = 1ULL << 63;  // This is 2^63
 static const std::string kCertRevokePrefix("CERT:REVOKE");
 static const std::string kCertStatusPrefix("CERT:STATUS");
 static Value kStatusPrototype(certs::getStatusPrototype());
@@ -131,7 +130,7 @@ Value getStatusPrototype() {
                              Member(TypeCode::UInt8A, "ocsp"),
                          })
                      .create();
-    shared_array<const std::string> choices({"PENDING_VALIDATION", "VALID", "EXPIRED", "REVOKED"});
+    shared_array<const std::string> choices({"VALID", "EXPIRED", "REVOKED", "PENDING_VALIDATION", "PENDING"});
     value["status.value.choices"] = choices.freeze();
     return value;
 }
@@ -269,7 +268,7 @@ std::tuple<CertificateStatus, time_t> getCertificateStatus(sql_ptr &ca_db, uint6
     int cert_status;
     time_t status_date;
 
-    uint64_t db_serial = serial - k64BitOffset;
+    int64_t db_serial = *reinterpret_cast<int64_t*>(&serial);
     sqlite3_stmt *sql_statement;
     int sql_status;
     if ((sql_status = sqlite3_prepare_v2(ca_db.get(), SQL_CERT_STATUS, -1, &sql_statement, 0)) == SQLITE_OK) {
@@ -289,15 +288,17 @@ std::tuple<CertificateStatus, time_t> getCertificateStatus(sql_ptr &ca_db, uint6
     return std::make_tuple((CertificateStatus)cert_status, status_date);
 }
 
-void setCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertificateStatus cert_status) {
-    uint64_t db_serial = serial - k64BitOffset;
+void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertificateStatus cert_status, const std::vector<CertificateStatus> valid_status) {
+    int64_t db_serial = *reinterpret_cast<int64_t*>(&serial);
     sqlite3_stmt *sql_statement;
     int sql_status;
+    auto n_valid_status = valid_status.size();
     if ((sql_status = sqlite3_prepare_v2(ca_db.get(), SQL_CERT_SET_STATUS, -1, &sql_statement, 0)) == SQLITE_OK) {
         sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), cert_status);
         sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":serial"), db_serial);
-        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":valid_status1"), PENDING_VALIDATION);
-        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":valid_status1"), VALID);
+//        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":valid_status1"), valid_status[0]);
+//        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":valid_status2"), n_valid_status > 0 ? valid_status[1] : valid_status[n_valid_status-1]);
+//        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":valid_status3"), n_valid_status > 1 ? valid_status[2] : valid_status[n_valid_status-1]);
 
         sql_status = sqlite3_step(sql_statement);
     }
@@ -382,7 +383,7 @@ time_t ASN1_TIMEToTimeT(ASN1_TIME *time) {
  * database
  */
 void storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory) {
-    auto db_serial = (int64_t)(cert_factory.serial_ - k64BitOffset);  // db stores as signed int so convert to and from
+    auto db_serial = *reinterpret_cast<int64_t*>(&cert_factory.serial_);  // db stores as signed int so convert to and from
 
     checkForDuplicates(ca_db, cert_factory);
 
@@ -398,7 +399,10 @@ void storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory) {
         sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":C"), cert_factory.country_.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":not_before"), (int)cert_factory.not_before_);
         sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":not_after"), (int)cert_factory.not_after_);
-        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), VALID);
+        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"),
+                         current_time < cert_factory.not_before_ ? PENDING :
+                         current_time > cert_factory.not_after_ ? EXPIRED :
+                         VALID );
         sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status_date"), current_time);
 
         sql_status = sqlite3_step(sql_statement);
@@ -621,6 +625,7 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
                  const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                  const ossl_ptr<EVP_PKEY> &ca_pub_key, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(kStatusPrototype.clone());
+    uint64_t serial = 0;
     try {
         // get serial and issuer from called pv
         auto it = parameters.begin();
@@ -630,7 +635,6 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
         }
 
         const std::string &serial_string = *++it;
-        uint64_t serial = 0;
         try {
             serial = std::stoull(serial_string);
         } catch (const std::invalid_argument &e) {
@@ -647,20 +651,10 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
         //        shared_array<uint8_t> ocsp_bytes(100);
         auto ocsp_response = createAndSignOCSPResponse(serial, status, status_date, ca_cert, ca_pkey, ca_chain);
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-
-        std::cout << status_value << std::endl;
-        status_value["status.value.index"] = status;
-        status_value["serial"] = serial;
-        status_value["ocsp"] = ocsp_bytes.freeze();
-
-        // Publish status
-        status_pv.open(pv_name, status_value);
+        postCertificateStatus(status_pv, our_issuer_id, serial, status, true, ocsp_bytes);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error getting status: %s\n", e.what());
-        status_value["status.alarm.status"] = 1;
-        status_value["status.alarm.severity"] = 1;
-        status_value["status.alarm.message"] = (SB() << "Error getting status: " << e.what()).str();
-        status_pv.open(pv_name, status_value);
+        postCertificateErrorStatus(status_pv, our_issuer_id, serial, 1, 1, e.what());
     }
 }
 
@@ -687,22 +681,11 @@ void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWi
         }
 
         // set status value
-        certs::setCertificateStatus(ca_db, serial, REVOKED);
+        certs::updateCertificateStatus(ca_db, serial, REVOKED);
 
         auto ocsp_response = createAndSignOCSPResponse(serial, REVOKED, time(nullptr), ca_cert, ca_pkey, ca_chain);
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-
-        status_value["status.value.index"] = REVOKED;
-        status_value["serial"] = serial;
-        status_value["ocsp"] = ocsp_bytes.freeze();
-
-        // update the SharedPV cache and send update to any subscribers
-        if (status_pv.isOpen(pv_name)) {
-            status_pv.post(pv_name, status_value);
-        } else {
-            status_pv.open(pv_name, status_value);
-            status_pv.close(pv_name);
-        }
+        postCertificateStatus(status_pv, our_issuer_id, serial, REVOKED, false, ocsp_bytes);
         op->reply(status_value);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error revoking certificate: %s\n", e.what());
@@ -860,8 +843,8 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
     auto serial = generateSerial();
 
     auto certificate_factory =
-        CertFactory(serial, key_pair, PVXS_SERVICE_NAME, getCountryCode(), pvacms_org_name, PVXS_SERVICE_ORG_UNIT_NAME, getNotBeforeTimeFromCert(ca_cert.get()),
-                    getNotAfterTimeFromCert(ca_cert.get()), ssl::kForCMS, ca_cert.get(), ca_pkey.get(), ca_chain.get());
+      CertFactory(serial, key_pair, PVXS_SERVICE_NAME, getCountryCode(), pvacms_org_name, PVXS_SERVICE_ORG_UNIT_NAME, getNotBeforeTimeFromCert(ca_cert.get()),
+                  getNotAfterTimeFromCert(ca_cert.get()), ssl::kForCMS, ca_cert.get(), ca_pkey.get(), ca_chain.get());
 
     auto cert = createCertificate(ca_db, certificate_factory);
 
@@ -1038,6 +1021,109 @@ void usage(const char *argv0) {
                  " -V                   Print version and exit.\n";
 }
 
+void postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id,  const uint64_t &serial, const CertificateStatus &status, bool open_only, shared_array<uint8_t> ocsp_bytes) {
+    const std::string pv_name(SB() << kCertStatusPrefix << ":" << our_issuer_id << ":" << serial);
+    Value status_value;
+    if (status_pv.isOpen(pv_name))
+        status_value = status_pv.fetch(pv_name);
+    else
+        status_value = getStatusPrototype().clone();
+
+    status_value["status.value.index"] = status;
+    status_value["serial"] = serial;
+
+    if (status_pv.isOpen(pv_name))
+        status_pv.post(pv_name, status_value);
+    else {
+        status_pv.open(pv_name, status_value);
+        if ( !open_only)
+            status_pv.close(pv_name);
+    }
+}
+
+void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id,  const uint64_t &serial, const int32_t error_status, const int32_t error_severity, const std::string &error_message ) {
+    const std::string pv_name(SB() << kCertStatusPrefix << our_issuer_id << ":" << serial);
+    Value status_value;
+    if (status_pv.isOpen(pv_name))
+        status_value = status_pv.fetch(pv_name);
+    else
+        status_value = getStatusPrototype().clone();
+
+    status_value["status.alarm.status"] = error_status;
+    status_value["status.alarm.severity"] = error_severity;
+    status_value["status.alarm.message"] = error_message;
+
+    status_value["status.value.index"] = UNKNOWN;
+    status_value["serial"] = serial;
+    if (status_pv.isOpen(pv_name))
+        status_pv.post(pv_name, status_value);
+    else {
+        status_pv.open(pv_name, status_value);
+        status_pv.close(pv_name);
+    }
+}
+
+void certificateStatusMonitor(pvxs::sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv) {
+    std::cout << "Certificate Monitor Thread Started\n";
+    epicsMutex lock;
+    while (true) {
+        Guard G(lock);
+        sqlite3_stmt* stmt;
+
+        auto current_time = std::time(nullptr);
+
+        // Search for all certs that have become valid
+        if (sqlite3_prepare_v2(ca_db.get(), SQL_CERT_TO_VALID, -1, &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int64(stmt, sqlite3_bind_parameter_index(stmt, ":now1"), current_time);
+            sqlite3_bind_int64(stmt, sqlite3_bind_parameter_index(stmt, ":now2"), current_time);
+            sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":status"), PENDING);
+
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                int64_t db_serial = sqlite3_column_int64(stmt, 0);
+                uint64_t serial = *reinterpret_cast<uint64_t*>(&db_serial);
+                try {
+                    updateCertificateStatus(ca_db, serial, VALID, {PENDING});
+                    postCertificateStatus(status_pv, our_issuer_id, serial, VALID, true);
+                    log_info_printf(pvacms, "Certificate %s:%llu has become VALID\n", our_issuer_id.c_str(), serial);
+                } catch (const std::runtime_error &e) {
+                    log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", e.what());
+                }
+            }
+            sqlite3_finalize(stmt);
+        } else {
+            log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", sqlite3_errmsg(ca_db.get()));
+        }
+
+        // Search for all certs that have expired
+        if (sqlite3_prepare_v2(ca_db.get(), SQL_CERT_TO_EXPIRED, -1, &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int64(stmt, sqlite3_bind_parameter_index(stmt, ":now"), current_time);
+            sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":status1"), VALID);
+            sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":status2"), PENDING_VALIDATION);
+            sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":status3"), PENDING);
+
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                int64_t db_serial = sqlite3_column_int64(stmt, 0);
+                uint64_t serial = *reinterpret_cast<uint64_t*>(&db_serial);
+                try {
+                    updateCertificateStatus(ca_db, serial, EXPIRED, {VALID, PENDING_VALIDATION, PENDING});
+                    postCertificateStatus(status_pv, our_issuer_id, serial, EXPIRED, true);
+                    std::cout << "Certificate " << our_issuer_id << ":"  << serial << " has EXPIRED\n";
+                    log_info_printf(pvacms, "Certificate %s:%llu has EXPIRED\n", our_issuer_id.c_str(), serial);
+                } catch (const std::runtime_error &e) {
+                    log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", e.what());
+                }
+            }
+            sqlite3_finalize(stmt);
+        } else {
+            log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", sqlite3_errmsg(ca_db.get()));
+        }
+
+        UnGuard U(G);
+
+        std::this_thread::sleep_for(std::chrono::seconds(10));
+    }
+}
+
 }  // namespace certs
 }  // namespace pvxs
 
@@ -1086,9 +1172,9 @@ int main(int argc, char *argv[]) {
         // Get public key of ca certificate
         pvxs::ossl_ptr<EVP_PKEY> ca_pub_key(X509_get_pubkey(ca_cert.get()));
         create_pv.onRPC(
-            [&ca_db, &ca_pkey, &ca_cert, &ca_pub_key, ca_chain, &our_issuer_id](const SharedPV &pv, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
-                onCreateCertificate(ca_db, pv, std::move(op), std::move(args), ca_pkey, ca_cert, ca_pub_key, ca_chain, our_issuer_id);
-            });
+          [&ca_db, &ca_pkey, &ca_cert, &ca_pub_key, ca_chain, &our_issuer_id](const SharedPV &pv, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
+              onCreateCertificate(ca_db, pv, std::move(op), std::move(args), ca_pkey, ca_cert, ca_pub_key, ca_chain, our_issuer_id);
+          });
 
         // Status PV
         status_pv.onFirstConnect([&ca_db, &ca_pkey, &ca_cert, &ca_pub_key, ca_chain, &our_issuer_id](SharedWildcardPV &pv, const std::string &pv_name,
@@ -1100,8 +1186,8 @@ int main(int argc, char *argv[]) {
 
         // Revoke Certificate
         revoke_pv.onRPC([&ca_db, &status_pv, &our_issuer_id, &ca_pkey, &ca_cert, &ca_pub_key, ca_chain](
-                            SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &revoke_pv_name, const std::list<std::string> &parameters,
-                            pvxs::Value &&args) {
+          SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &revoke_pv_name, const std::list<std::string> &parameters,
+          pvxs::Value &&args) {
             auto status_pv_name(revoke_pv_name);
             status_pv_name.replace(0, kCertRevokePrefix.length(), kCertStatusPrefix);
             onRevoke(ca_db, our_issuer_id, status_pv, std::move(op), status_pv_name, parameters, std::move(args), ca_pkey, ca_cert, ca_pub_key, ca_chain);
@@ -1113,6 +1199,9 @@ int main(int argc, char *argv[]) {
         // Add functional PVs
         pva_server.addPV(RPC_CERT_CREATE, create_pv).addPV(RPC_CERT_REVOKE_PV, revoke_pv).addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
 
+        // Certificate Status Monitor
+        std::thread certificate_status_monitor_worker(certificateStatusMonitor, std::ref(ca_db), std::ref(our_issuer_id), std::ref(status_pv));
+
         if (verbose)
             // Print the configuration this server is using
             std::cout << "Effective config\n" << config;
@@ -1123,6 +1212,7 @@ int main(int argc, char *argv[]) {
         pva_server.run();
 
         std::cout << "PVACMS Exiting\n";
+        certificate_status_monitor_worker.detach();
 
         return 0;
     } catch (std::exception &e) {

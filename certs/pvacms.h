@@ -24,10 +24,15 @@
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 
+#include <pvxs/sharedwildcardpv.h>
+
 #include "certfactory.h"
 #include "certmgmtservice.h"
 #include "configcms.h"
 #include "ownedptr.h"
+
+typedef epicsGuard<epicsMutex> Guard;
+typedef epicsGuardRelease<epicsMutex> UnGuard;
 
 #define DEFAULT_KEYCHAIN_FILE "server.p12"
 #define DEFAULT_CA_KEYCHAIN_FILE "ca.p12"
@@ -107,11 +112,31 @@
 #define SQL_CERT_SET_STATUS          \
     "UPDATE certs "                  \
     "SET status = :status "          \
-    "WHERE serial = :serial "        \
-    "  AND ( "                       \
-    "      status = :valid_status1 " \
-    "   OR status = :valid_status2 " \
-    "  )"
+    "WHERE serial = :serial "
+//    "  AND ( "                       \
+//    "      status = :valid_status1 " \
+//    "   OR status = :valid_status2 " \
+//    "   OR status = :valid_status3 " \
+//    "  )"
+
+#define SQL_CERT_TO_VALID        \
+    "SELECT serial "             \
+    "FROM certs "                \
+    "WHERE not_before <= :now1 " \
+    "  AND not_after > :now2 "   \
+    "  AND status = :status "
+
+#define SQL_CERT_TO_EXPIRED      \
+    "SELECT serial "             \
+    "FROM certs "                \
+    "WHERE not_after <= :now "   \
+    "  AND ( "                   \
+    "      status = :status1 "   \
+    "   OR status = :status2 "   \
+    "   OR status = :status3 "   \
+    "  ) "
+
+
 
 namespace pvxs {
 namespace certs {
@@ -171,13 +196,18 @@ void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWi
 
 int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose);
 
-void setCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertificateStatus cert_status);
+void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertificateStatus cert_status,  std::vector<CertificateStatus> valid_status = {PENDING_VALIDATION, PENDING, VALID});
 
 void storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
 
 time_t tmToTimeTUTC(std::tm &tm);
 
 void usage(const char *argv0);
+
+void certificateStatusMonitor(sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv);
+
+void postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id,  const uint64_t &serial, const CertificateStatus &status, bool open_only=false, shared_array<uint8_t> ocsp_bytes = {});
+void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id,  const uint64_t &serial, int32_t error_status, int32_t error_severity, const std::string &error_message ) ;
 
 }  // namespace certs
 }  // namespace pvxs

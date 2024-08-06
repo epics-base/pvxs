@@ -14,8 +14,12 @@ fi
 name=$1
 org=$2
 usage=$3
-not_before=$(date +%s)
-not_after=$((not_before + 86400))
+now=$(date +%s)
+#not_before=$((now + 0))
+#not_after=$((now + 86400))
+
+not_before=$((now + 30))
+not_after=$((now + 90))
 
 if [ ! -f ~/.epics/public_key.pem ]
 then
