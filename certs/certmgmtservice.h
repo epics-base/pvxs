@@ -21,7 +21,7 @@ namespace certs {
 #define RPC_CERT_REVOKE_PV "CERT:REVOKE:????????:*"
 #define GET_MONITOR_CERT_STATUS_PV "CERT:STATUS:????????:*"
 
-enum CertificateStatus { UNKNOWN, VALID, EXPIRED, REVOKED, PENDING_VALIDATION, PENDING };
+enum CertificateStatus { UNKNOWN, VALID, EXPIRED, REVOKED, PENDING_APPROVAL, PENDING };
 
 #define RPC_SERVER_TIMEOUT 3
 

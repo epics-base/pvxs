@@ -71,8 +71,6 @@ std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertificateStatu
             revocationTime.reset(ASN1_TIME_new());
             ASN1_TIME_set(revocationTime.get(), revocation_time);
             break;
-        case EXPIRED:
-        case PENDING_VALIDATION:
         default:
             ocsp_status = V_OCSP_CERTSTATUS_UNKNOWN;
             break;

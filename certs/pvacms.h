@@ -94,14 +94,12 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
     "WHERE CN = :CN "    \
     "  AND O = :O "      \
     "  AND OU = :OU "    \
-    "  AND C = :C "      \
-    "  AND status = :status"
+    "  AND C = :C "
 
 #define SQL_DUPS_SUBJECT_KEY_IDENTIFIER \
     "SELECT COUNT(*) "                  \
     "FROM certs "                       \
-    "WHERE skid = :skid "               \
-    "  AND status = :status"
+    "WHERE skid = :skid "
 
 #define SQL_CERT_STATUS    \
     "SELECT status "       \
@@ -113,28 +111,17 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
     "UPDATE certs "                  \
     "SET status = :status "          \
     "WHERE serial = :serial "
-//    "  AND ( "                       \
-//    "      status = :valid_status1 " \
-//    "   OR status = :valid_status2 " \
-//    "   OR status = :valid_status3 " \
-//    "  )"
 
 #define SQL_CERT_TO_VALID        \
     "SELECT serial "             \
     "FROM certs "                \
-    "WHERE not_before <= :now1 " \
-    "  AND not_after > :now2 "   \
-    "  AND status = :status "
+    "WHERE not_before <= strftime('%s', 'now') " \
+    "  AND not_after > strftime('%s', 'now') "
 
 #define SQL_CERT_TO_EXPIRED      \
     "SELECT serial "             \
     "FROM certs "                \
-    "WHERE not_after <= :now "   \
-    "  AND ( "                   \
-    "      status = :status1 "   \
-    "   OR status = :status2 "   \
-    "   OR status = :status3 "   \
-    "  ) "
+    "WHERE not_after <= strftime('%s', 'now') "
 
 
 
@@ -196,7 +183,7 @@ void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWi
 
 int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose);
 
-void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertificateStatus cert_status,  std::vector<CertificateStatus> valid_status = {PENDING_VALIDATION, PENDING, VALID});
+void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertificateStatus cert_status,  std::vector<CertificateStatus> valid_status = {PENDING_APPROVAL, PENDING, VALID});
 
 void storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
 
@@ -204,10 +191,17 @@ time_t tmToTimeTUTC(std::tm &tm);
 
 void usage(const char *argv0);
 
-void certificateStatusMonitor(sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv);
+void certificateStatusMonitor(sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv, pvxs::ossl_ptr<X509> &ca_cert, pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
-void postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id,  const uint64_t &serial, const CertificateStatus &status, bool open_only=false, shared_array<uint8_t> ocsp_bytes = {});
+void postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &issuer_id, const uint64_t &serial, const CertificateStatus &status, bool open_only=false);
+void postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &issuer_id, const uint64_t &serial, const CertificateStatus &status, shared_array<uint8_t> &ocsp_bytes, bool open_only=false);
 void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id,  const uint64_t &serial, int32_t error_status, int32_t error_severity, const std::string &error_message ) ;
+
+std::string getCertUri(const std::string &prefix, const std::string &issuer_id, const uint64_t &serial);
+std::string getCertUri(const std::string &prefix, const std::string &cert_id);
+std::string getCertId(const std::string &issuer_id, const uint64_t &serial);
+std::string getValidStatusesClause(std::vector<CertificateStatus> valid_status);
+void bindValidStatusClauses(sqlite3_stmt *sql_statement, std::vector<CertificateStatus> valid_status);
 
 }  // namespace certs
 }  // namespace pvxs
