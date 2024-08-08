@@ -4,9 +4,9 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include <pvxs/log.h>
-
 #include "configcms.h"
+
+#include <pvxs/log.h>
 
 DEFINE_LOGGER(_logname, "pvxs.certs.config.cms");
 
@@ -16,27 +16,45 @@ namespace certs {
 void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     PickOne pickone{defs, true};
 
-    // EPICS_KEYCHAIN
+    // EPICS_KEYCHAIN ( default the private key to use the same file and password )
     if (pickone({"EPICS_PVACMS_TLS_KEYCHAIN", "EPICS_PVAS_TLS_KEYCHAIN"})) {
-        ensureDirectoryExists(tls_keychain_filename = pickone.val);
+        ensureDirectoryExists(tls_keychain_filename = tls_pkey_filename = pickone.val);
 
         // EPICS_CA_KEYCHAIN_PWD_FILE
         std::string password_filename;
-        if (pickone.name == "EPICS_PVACMS_KEYCHAIN") {
+        if (pickone.name == "EPICS_PVACMS_TLS_KEYCHAIN") {
             pickone({"EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE"});
             password_filename = pickone.val;
-        } else if (pickone.name == "EPICS_PVAS_KEYCHAIN") {
-            pickone({"EPICS_PVACS_TLS_KEYCHAIN_PWD_FILE"});
+        } else if (pickone.name == "EPICS_PVAS_TLS_KEYCHAIN") {
+            pickone({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"});
             password_filename = pickone.val;
         }
         ensureDirectoryExists(password_filename);
         try {
-            tls_keychain_password = getFileContents(password_filename);
+            tls_keychain_password = tls_pkey_password = getFileContents(password_filename);
         } catch (std::exception &e) {
-            log_err_printf(_logname,
-                           "error reading password file: %s. %s",
-                           password_filename.c_str(),
-                           e.what());
+            log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+        }
+    }
+
+    // EPICS_PKEY
+    if (pickone({"EPICS_PVACMS_TLS_PKEY", "EPICS_PVAS_TLS_PKEY"})) {
+        ensureDirectoryExists(tls_pkey_filename = pickone.val);
+
+        // EPICS_CA_PKEY_PWD_FILE
+        std::string password_filename;
+        if (pickone.name == "EPICS_PVACMS_TLS_PKEY") {
+            pickone({"EPICS_PVACMS_TLS_PKEY_PWD_FILE"});
+            password_filename = pickone.val;
+        } else if (pickone.name == "EPICS_PVAS_TLS_PKEY") {
+            pickone({"EPICS_PVAS_TLS_PKEY_PWD_FILE"});
+            password_filename = pickone.val;
+        }
+        ensureDirectoryExists(password_filename);
+        try {
+            tls_pkey_password = getFileContents(password_filename);
+        } catch (std::exception &e) {
+            log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
     }
 
@@ -56,9 +74,8 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     }
 
     // EPICS_CA_KEYCHAIN
-    if (pickone({"EPICS_CA_KEYCHAIN", "EPICS_PVACMS_TLS_KEYCHAIN",
-                 "EPICS_PVAS_TLS_KEYCHAIN"})) {
-        ensureDirectoryExists(ca_keychain_filename = pickone.val);
+    if (pickone({"EPICS_CA_KEYCHAIN", "EPICS_PVACMS_TLS_KEYCHAIN", "EPICS_PVAS_TLS_KEYCHAIN"})) {
+        ensureDirectoryExists(ca_keychain_filename = ca_pkey_filename = pickone.val);
 
         // EPICS_CA_KEYCHAIN_PWD_FILE
         std::string password_filename;
@@ -74,12 +91,33 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         }
         ensureDirectoryExists(password_filename);
         try {
-            ca_keychain_password = getFileContents(password_filename);
+            ca_keychain_password = ca_pkey_password = getFileContents(password_filename);
         } catch (std::exception &e) {
-            log_err_printf(_logname,
-                           "error reading password file: %s. %s",
-                           password_filename.c_str(),
-                           e.what());
+            log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+        }
+    }
+
+    // EPICS_CA_PKEY
+    if (pickone({"EPICS_CA_PKEY", "EPICS_PVACMS_TLS_PKEY", "EPICS_PVAS_TLS_PKEY"})) {
+        ensureDirectoryExists(ca_pkey_filename = pickone.val);
+
+        // EPICS_CA_PKEY_PWD_FILE
+        std::string password_filename;
+        if (pickone.name == "EPICS_CA_PKEY") {
+            pickone({"EPICS_CA_PKEY_PWD_FILE"});
+            password_filename = pickone.val;
+        } else if (pickone.name == "EPICS_PVACMS_PKEY") {
+            pickone({"EPICS_PVACMS_TLS_PKEY_PWD_FILE"});
+            password_filename = pickone.val;
+        } else if (pickone.name == "EPICS_PVAS_PKEY") {
+            pickone({"EPICS_PVACS_TLS_PKEY_PWD_FILE"});
+            password_filename = pickone.val;
+        }
+        ensureDirectoryExists(password_filename);
+        try {
+            ca_pkey_password = getFileContents(password_filename);
+        } catch (std::exception &e) {
+            log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
     }
 
@@ -103,10 +141,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         try {
             cert_pre_expiry_mins = parseTo<uint64_t>(pickone.val);
         } catch (std::exception &e) {
-            log_err_printf(_logname,
-                           "%s invalid integer : %s",
-                           pickone.name.c_str(),
-                           e.what());
+            log_err_printf(_logname, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
 
@@ -121,5 +156,5 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     }
 }
 
-} // certs
-} // pvxs
+}  // namespace certs
+}  // namespace pvxs

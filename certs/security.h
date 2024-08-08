@@ -77,8 +77,7 @@ struct CertCreationRequest final {
     std::vector<Member> verifier_fields;
 
     // Constructor
-    CertCreationRequest(const std::string &auth_type, std::vector<Member> verifier_fields)
-        : type(auth_type), verifier_fields(verifier_fields) {
+    CertCreationRequest(const std::string &auth_type, std::vector<Member> verifier_fields) : type(auth_type), verifier_fields(verifier_fields) {
         ccr = TypeDef(TypeCode::Struct, CCR_PROTOTYPE(verifier_fields)).create();
     }
 };
@@ -90,7 +89,23 @@ struct KeyPair final {
     // Default constructor
     KeyPair() = default;
 
+    explicit KeyPair(ossl_ptr<EVP_PKEY> new_pkey) : pkey(std::move(new_pkey)) {
+        ossl_ptr<BIO> bio(BIO_new(BIO_s_mem()));
+
+        if (!PEM_write_bio_PUBKEY(bio.get(), pkey.get())) {
+            throw std::runtime_error("Failed to write public key to BIO");
+        }
+
+        BUF_MEM *bptr;                      // to hold pointer to data in the BIO object.
+        BIO_get_mem_ptr(bio.get(), &bptr);  // set to point into BIO object
+
+        // Create a string from the BIO
+        std::string result(bptr->data, bptr->length);
+        public_key = result;
+    }
+
     // Constructor that takes a std::string for public_key
+    // @note private key is not set with this constructor
     explicit KeyPair(const std::string &public_key_string) : public_key(public_key_string) {
         BIO *bio = BIO_new_mem_buf((void *)public_key_string.c_str(), -1);
         pkey.reset(PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr));

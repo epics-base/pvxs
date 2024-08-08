@@ -17,18 +17,18 @@
 namespace pvxs {
 namespace certs {
 
-  class ConfigCms : public pvxs::server::Config {
-  public:
-      ConfigCms& applyEnv() {
-          pvxs::server::Config::applyEnv();
-          return *this;
-      }
+class ConfigCms : public pvxs::server::Config {
+   public:
+    ConfigCms& applyEnv() {
+        pvxs::server::Config::applyEnv();
+        return *this;
+    }
 
-      static inline ConfigCms fromEnv() {
-          auto config = ConfigCms{}.applyEnv();
-          config.fromCmsEnv(std::map<std::string, std::string>());
-          return  config;
-      }
+    static inline ConfigCms fromEnv() {
+        auto config = ConfigCms{}.applyEnv();
+        config.fromCmsEnv(std::map<std::string, std::string>());
+        return config;
+    }
 
     /**
      * @brief Minutes before expiry that `EXPIRY_IMMINENT`
@@ -94,6 +94,22 @@ namespace certs {
     std::string ca_keychain_password;
 
     /**
+     * @brief This is the string that determines
+     * the fully qualified path to the PKCS#12 key file that contains
+     * the private keys.
+     *
+     * This is optional.  If not specified, the `ca_keychain_filename` is used.
+     */
+    std::string ca_pkey_filename;
+
+    /**
+     * @brief This is the string that determines
+     * the fully qualified path to a file that contains the password that
+     * unlocks the `ca_pkey_filename`.
+     */
+    std::string ca_pkey_password;
+
+    /**
      * @brief This is the string that determines the
      * fully qualified path to a file that will be used as the
      * ACF file that configures the permissions that are accorded
@@ -154,6 +170,6 @@ namespace certs {
     void fromCmsEnv(const std::map<std::string, std::string>& defs);
 };
 
-} // certs
-} // pvxs
-#endif //PVXS_CONFIGCMS_H_
+}  // namespace certs
+}  // namespace pvxs
+#endif  // PVXS_CONFIGCMS_H_

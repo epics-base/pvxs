@@ -42,7 +42,7 @@ namespace pvxs {
 namespace impl {
 
 struct PVXS_API ConfigCommon {
-    enum ConfigTarget { CLIENT, SERVER, GATEWAY} config_target = CLIENT;
+    enum ConfigTarget { CLIENT, SERVER, GATEWAY } config_target = CLIENT;
 
     virtual ~ConfigCommon() = 0;
 
@@ -111,7 +111,7 @@ struct PVXS_API ConfigCommon {
             }
         }
     }
-#endif // EVENT2_HAS_OPENSSL
+#endif  // EVENT2_HAS_OPENSSL
 
     //! TCP port to bind.  Default is 5075.  May be zero.
     unsigned short tcp_port = 5075;
@@ -135,7 +135,7 @@ struct PVXS_API ConfigCommon {
      */
     bool tls_disabled = false;
 
-    /** Path to PKCS#12 file containing key and/or certificates.
+    /** Path to PKCS#12 file containing certificates.
      *  @since UNRELEASED
      */
     std::string tls_keychain_filename;
@@ -144,6 +144,16 @@ struct PVXS_API ConfigCommon {
      *  @since UNRELEASED
      */
     std::string tls_keychain_password;
+
+    /** Path to PKCS#12 file containing key.
+     *  @since UNRELEASED
+     */
+    std::string tls_pkey_filename;
+
+    /** Path to PKCS#12 file containing password for pkey file.
+     *  @since UNRELEASED
+     */
+    std::string tls_pkey_password;
 
     /** Client certificate request during TLS handshake.
      *
@@ -178,13 +188,13 @@ struct PVXS_API ConfigCommon {
     /**
      * True if the environment is configured for TLS.  All this means is that
      * the location of the keychain file has been specified in
-     * EPICS_PVA_TLS_KEYCHAIN.
+     * EPICS_PVA_TLS_KEYCHAIN, and EPICS_PVA_TLS_PKEY.
      *
      * @return true if the location of the keychain file has been specified,
      * false otherwise
      */
-    inline bool isTlsConfigured() const { return !tls_keychain_filename.empty(); }
-#endif // PVXS_ENABLE_OPENSSL
+    inline bool isTlsConfigured() const { return !tls_keychain_filename.empty() && !tls_pkey_filename.empty(); }
+#endif  // PVXS_ENABLE_OPENSSL
 
     inline std::string getFileContents(const std::string &file_name) {
         std::ifstream ifs(file_name);
@@ -198,15 +208,15 @@ struct PVXS_API ConfigCommon {
     }
 
     struct PickOne {
-        const std::map<std::string, std::string>& defs;
+        const std::map<std::string, std::string> &defs;
         bool useenv;
 
         std::string name, val;
 
-        bool operator()(std::initializer_list<const char*> names) {
-            for(auto candidate : names) {
-                if(useenv) {
-                    if(auto eval = getenv(candidate)) {
+        bool operator()(std::initializer_list<const char *> names) {
+            for (auto candidate : names) {
+                if (useenv) {
+                    if (auto eval = getenv(candidate)) {
                         name = candidate;
                         val = eval;
                         return true;
@@ -214,7 +224,7 @@ struct PVXS_API ConfigCommon {
 
                 } else {
                     auto it = defs.find(candidate);
-                    if(it!=defs.end()) {
+                    if (it != defs.end()) {
                         name = candidate;
                         val = it->second;
                         return true;

@@ -30,12 +30,11 @@ namespace certs {
 
 // EPICS OID for "validTillRevoked" extension:
 // TODO Possibly register this unassigned OID for EPICS
-#define NID_validTillRevoked               6789
-#define SN_validTillRevoked                "validTillRevoked"
-#define LN_validTillRevoked                "EPICS Valid Till Revoked"
+#define NID_validTillRevoked 6789
+#define SN_validTillRevoked "validTillRevoked"
+#define LN_validTillRevoked "EPICS Valid Till Revoked"
 
-#define METHOD_STRING(type) \
-    (((type).compare(PVXS_DEFAULT_AUTH_TYPE) == 0) ? "default credentials" : ((type) + " credentials"))
+#define METHOD_STRING(type) (((type).compare(PVXS_DEFAULT_AUTH_TYPE) == 0) ? "default credentials" : ((type) + " credentials"))
 #define NAME_STRING(name, org) name + (org.empty() ? "" : ("@" + (org)))
 
 /**
@@ -77,26 +76,31 @@ class PVXS_API CertFactory {
     const time_t not_before_;
     const time_t not_after_;
     const uint16_t usage_;
-    X509* issuer_certificate_ptr_; // Will point to the issuer certificate when created
-    EVP_PKEY *issuer_pkey_ptr_;  // Will point to the issuer private key when created
-    STACK_OF(X509) *issuer_chain_ptr_; // issuer cert chain
+    X509 *issuer_certificate_ptr_;       // Will point to the issuer certificate when created
+    EVP_PKEY *issuer_pkey_ptr_;          // Will point to the issuer private key when created
+    STACK_OF(X509) * issuer_chain_ptr_;  // issuer cert chain
     const ossl_shared_ptr<STACK_OF(X509)> certificate_chain_;
     bool valid_until_revoked_;
     std::string skid_;
 
-    CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name,
-                const std::string &country, const std::string &org, const std::string &org_unit,
-                time_t not_before, time_t not_after, const uint16_t &usage,
-                X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr,
-                STACK_OF(X509) *issuer_chain_ptr = nullptr,
-                bool valid_until_revoked = false)
-       : serial_(serial), key_pair_(key_pair), name_(name),
-         country_(country), org_(org), org_unit_(org_unit),
-         not_before_(not_before), not_after_(not_after), usage_(usage),
-         issuer_certificate_ptr_(issuer_certificate_ptr),
-         issuer_pkey_ptr_(issuer_pkey_ptr),
-         issuer_chain_ptr_(issuer_chain_ptr),
-         certificate_chain_(sk_X509_new_null()) {valid_until_revoked_ = valid_until_revoked;};
+    CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
+                const std::string &org_unit, time_t not_before, time_t not_after, const uint16_t &usage, X509 *issuer_certificate_ptr = nullptr,
+                EVP_PKEY *issuer_pkey_ptr = nullptr, STACK_OF(X509) *issuer_chain_ptr = nullptr, bool valid_until_revoked = false)
+        : serial_(serial),
+          key_pair_(key_pair),
+          name_(name),
+          country_(country),
+          org_(org),
+          org_unit_(org_unit),
+          not_before_(not_before),
+          not_after_(not_after),
+          usage_(usage),
+          issuer_certificate_ptr_(issuer_certificate_ptr),
+          issuer_pkey_ptr_(issuer_pkey_ptr),
+          issuer_chain_ptr_(issuer_chain_ptr),
+          certificate_chain_(sk_X509_new_null()) {
+        valid_until_revoked_ = valid_until_revoked;
+    };
 
     ossl_ptr<X509> PVXS_API create();
 
@@ -104,9 +108,9 @@ class PVXS_API CertFactory {
 
     static std::string getCertsDirectory();
 
-//    static bool PVXS_API verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data, const std::string &signature);
+    //    static bool PVXS_API verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data, const std::string &signature);
 
-//    static std::string sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data);
+    //    static std::string sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data);
 
     static inline std::string getError() {
         unsigned long err;
@@ -122,8 +126,10 @@ class PVXS_API CertFactory {
         return error_string;
     }
 
-  private:
-    static inline const char * nid2String(int nid) {
+    static std::string bioToString(const ossl_ptr<BIO> &bio);
+
+   private:
+    static inline const char *nid2String(int nid) {
         switch (nid) {
             case NID_subject_key_identifier:
                 return LN_subject_key_identifier;
@@ -144,17 +150,15 @@ class PVXS_API CertFactory {
 
     void setSubject(const ossl_ptr<X509> &certificate);
 
-    void setValidity(const ossl_ptr<X509> &certificate) const ;
+    void setValidity(const ossl_ptr<X509> &certificate) const;
 
     void setSerialNumber(const ossl_ptr<X509> &certificate);
 
     void addExtensions(const ossl_ptr<X509> &certificate);
 
-    void addExtension(const ossl_ptr<X509> &certificate, int nid, const char *value,
-                             const X509 *subject = nullptr);
+    void addExtension(const ossl_ptr<X509> &certificate, int nid, const char *value, const X509 *subject = nullptr);
 
-    void addBooleanExtensionByNid(const ossl_ptr<X509> &certificate, int nid,
-                             bool value);
+    void addBooleanExtensionByNid(const ossl_ptr<X509> &certificate, int nid, bool value);
 
     static void writeCertToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<X509> &cert);
 
@@ -162,13 +166,9 @@ class PVXS_API CertFactory {
 
     static ossl_ptr<BIO> newBio();
 
-    static std::string bioToString(const ossl_ptr<BIO> &bio);
+    static void writeP12ToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<PKCS12> &p12, std::string password, bool root_only = false);
 
-    static void writeP12ToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<PKCS12> &p12, std::string password,
-                              bool root_only = false);
-
-    static std::string certAndP12ToPemString(const ossl_ptr<PKCS12> &p12, const ossl_ptr<X509> &new_cert,
-                                             std::string password);
+    static std::string certAndP12ToPemString(const ossl_ptr<PKCS12> &p12, const ossl_ptr<X509> &new_cert, std::string password);
 
     static std::string p12ToPemString(ossl_ptr<PKCS12> &p12, std::string password);
 

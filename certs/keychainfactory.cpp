@@ -39,7 +39,6 @@
 #include "osiFileName.h"
 #include "ownedptr.h"
 #include "security.h"
-
 #include "utilpvt.h"
 
 namespace pvxs {
@@ -103,15 +102,32 @@ std::shared_ptr<KeyPair> KeychainFactory::createKeyPair() {
     return key_pair;
 };
 
-KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keychain_filename, std::string password) {
+std::shared_ptr<KeyPair> KeychainFactory::getKeyFromKeychainFile(std::string keychain_filename, std::string password) {
+    file_ptr fp(fopen(keychain_filename.c_str(), "rb"), false);
+    if (!fp) {
+        throw std::runtime_error(SB() << "Error opening keychain file for reading binary contents: \"" << keychain_filename << "\"");
+    }
+
+    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL));
+    if (!p12) {
+        throw std::runtime_error(SB() << "Error opening keychain file as a PKCS#12 object: " << keychain_filename);
+    }
+
     ossl_ptr<EVP_PKEY> pkey;
+    if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), nullptr, nullptr)) {
+        throw std::runtime_error(SB() << "Error parsing keychain file: " << keychain_filename);
+    }
+
+    return std::make_shared<KeyPair>(std::move(pkey));
+}
+
+KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keychain_filename, std::string password) {
     ossl_ptr<X509> cert;
     STACK_OF(X509) *chain_ptr = nullptr;
 
     auto file(fopen(keychain_filename.c_str(), "rb"));
     if (!file) {
-        throw std::runtime_error(SB() << "Error opening keychain file for reading binary contents: \""
-                                      << keychain_filename << "\"");
+        throw std::runtime_error(SB() << "Error opening keychain file for reading binary contents: \"" << keychain_filename << "\"");
     }
     file_ptr fp(file);
 
@@ -120,20 +136,20 @@ KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keycha
         throw std::runtime_error(SB() << "Error opening keychain file as a PKCS#12 object: " << keychain_filename);
     }
 
+    ossl_ptr<EVP_PKEY> pkey; // To be discarded
     if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), cert.acquire(), &chain_ptr)) {
         throw std::runtime_error(SB() << "Error parsing keychain file: " << keychain_filename);
     }
     ossl_shared_ptr<STACK_OF(X509)> chain;
-    if ( chain_ptr )
+    if (chain_ptr)
         chain = ossl_shared_ptr<STACK_OF(X509)>(chain_ptr);
     else
         chain = ossl_shared_ptr<STACK_OF(X509)>(sk_X509_new_null());
 
-    KeyChainData key_chain_data(pkey, cert, chain);
+    KeyChainData key_chain_data(cert, chain);
 
     return key_chain_data;
 }
-
 
 /**
  * @brief Backup the given keychain file
@@ -247,30 +263,33 @@ ossl_ptr<PKCS12> KeychainFactory::pemStringToP12(std::string password, EVP_PKEY 
     return toP12(password, keys_ptr, cert.get(), certs.get());
 }
 
-ossl_ptr<PKCS12> KeychainFactory::toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr,
-                                        STACK_OF(X509) * cert_chain_ptr) {
+ossl_ptr<PKCS12> KeychainFactory::toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) * cert_chain_ptr) {
     // Get the subject name of the certificate
-    if (!cert_ptr) throw std::runtime_error("No certificate provided");
+    if (!cert_ptr && !keys_ptr) throw std::runtime_error("No certificate or key provided");
 
-    auto subject_name(X509_get_subject_name(cert_ptr));
-    auto subject_string(X509_NAME_oneline(subject_name, nullptr, 0));
-    ossl_ptr<char> subject(subject_string, false);
-    if (!subject) {
-        throw std::runtime_error("Unable to get the subject of the certificate");
-    }
-
-    // Create the p12 structure
     ossl_ptr<PKCS12> p12;
-    if (sk_X509_num(cert_chain_ptr) < 1) {
-        // Use null cert and construct chain from cert
-        chainFromRootCertPtr(cert_chain_ptr, cert_ptr);
-        ERR_clear_error();
-        p12.reset(PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, nullptr, cert_chain_ptr, 0, 0, 0, 0, 0,
-                                    nullptr, nullptr, &jdkTrust, nullptr));
+    if (!cert_ptr) {
+        p12.reset(PKCS12_create_ex2(password.c_str(), nullptr, keys_ptr, nullptr, nullptr, 0, 0, 0, 0, 0, nullptr, nullptr, nullptr, nullptr));
     } else {
-        ERR_clear_error();
-        p12.reset(PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, cert_ptr, cert_chain_ptr, 0, 0, 0, 0, 0,
-                                    nullptr, nullptr, &jdkTrust, nullptr));
+        auto subject_name(X509_get_subject_name(cert_ptr));
+        auto subject_string(X509_NAME_oneline(subject_name, nullptr, 0));
+        ossl_ptr<char> subject(subject_string, false);
+        if (!subject) {
+            throw std::runtime_error("Unable to get the subject of the certificate");
+        }
+
+        // Create the p12 structure
+        if (sk_X509_num(cert_chain_ptr) < 1) {
+            // Use null cert and construct chain from cert
+            chainFromRootCertPtr(cert_chain_ptr, cert_ptr);
+            ERR_clear_error();
+            p12.reset(
+                PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, nullptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr, nullptr, &jdkTrust, nullptr));
+        } else {
+            ERR_clear_error();
+            p12.reset(
+                PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, cert_ptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr, nullptr, &jdkTrust, nullptr));
+        }
     }
 
     if (!p12) {
@@ -308,6 +327,9 @@ void KeychainFactory::writePKCS12File() {
     } else if (cert_ptr_) {
         // If a cert and certs have been specified then convert to p12
         p12 = toP12(password_, key_pair_->pkey.get(), cert_ptr_, certs_ptr_);
+    } else if (key_pair_->pkey.get()) {
+        // If private key only
+        p12 = toP12(password_, key_pair_->pkey.get(), nullptr, nullptr);
     }
 
     p12_ptr_ = p12.get();
@@ -324,8 +346,7 @@ void KeychainFactory::writePKCS12File() {
     }
 
     // Write PKCS12 object to file and check the result.
-    if (i2d_PKCS12_fp(file.get(), p12_ptr_) != 1)
-        throw std::runtime_error(SB() << "Error writing keychain data to file: " << keychain_filename_);
+    if (i2d_PKCS12_fp(file.get(), p12_ptr_) != 1) throw std::runtime_error(SB() << "Error writing keychain data to file: " << keychain_filename_);
 
     // flush the output to the file
     fflush(file.get());
@@ -342,8 +363,6 @@ void KeychainFactory::writePKCS12File() {
     log_info_printf(certs, "Keychain created: %s\n", keychain_filename_.c_str());
 }
 
-bool KeychainFactory::writeRootPemFile(const std::string &pem_string, const bool overwrite) {
-    return createRootPemFile(pem_string, overwrite);
-}
+bool KeychainFactory::writeRootPemFile(const std::string &pem_string, const bool overwrite) { return createRootPemFile(pem_string, overwrite); }
 }  // namespace certs
 }  // namespace pvxs
