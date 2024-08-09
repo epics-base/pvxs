@@ -135,6 +135,9 @@ struct PVXS_API SharedWildcardPV : public SharedPV {
     }
   private:
     std::shared_ptr<Impl> impl;
+
+    template <typename T>
+    bool exists(const std::map<std::string, T>&m , const std::string &ref) const;
 };
 
 } // namespace server

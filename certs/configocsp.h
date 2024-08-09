@@ -20,7 +20,7 @@ class ConfigCms : public Config {
 
     /**
      * @brief This is the string that determines
-     * the fully qualified path to the PKCS#12 keychain file that contains
+     * the fully qualified path to the PKCS#12 file that contains
      * the CA certificate, and public and private keys.
      *
      * This is used to sign certificates being created in the PVACMS or

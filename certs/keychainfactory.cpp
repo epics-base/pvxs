@@ -44,7 +44,7 @@
 namespace pvxs {
 namespace certs {
 
-DEFINE_LOGGER(certs, "pvxs.certs.keychainfactory");
+DEFINE_LOGGER(certs, "pvxs.certs.fms");
 
 /**
  * @brief Creates a key pair.
@@ -105,17 +105,17 @@ std::shared_ptr<KeyPair> KeychainFactory::createKeyPair() {
 std::shared_ptr<KeyPair> KeychainFactory::getKeyFromKeychainFile(std::string keychain_filename, std::string password) {
     file_ptr fp(fopen(keychain_filename.c_str(), "rb"), false);
     if (!fp) {
-        throw std::runtime_error(SB() << "Error opening keychain file for reading binary contents: \"" << keychain_filename << "\"");
+        throw std::runtime_error(SB() << "Error opening private key file for reading binary contents: \"" << keychain_filename << "\"");
     }
 
     ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL));
     if (!p12) {
-        throw std::runtime_error(SB() << "Error opening keychain file as a PKCS#12 object: " << keychain_filename);
+        throw std::runtime_error(SB() << "Error opening private key file as a PKCS#12 object: " << keychain_filename);
     }
 
     ossl_ptr<EVP_PKEY> pkey;
     if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), nullptr, nullptr)) {
-        throw std::runtime_error(SB() << "Error parsing keychain file: " << keychain_filename);
+        throw std::runtime_error(SB() << "Error parsing private key file: " << keychain_filename);
     }
 
     return std::make_shared<KeyPair>(std::move(pkey));
@@ -127,18 +127,18 @@ KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keycha
 
     auto file(fopen(keychain_filename.c_str(), "rb"));
     if (!file) {
-        throw std::runtime_error(SB() << "Error opening keychain file for reading binary contents: \"" << keychain_filename << "\"");
+        throw std::runtime_error(SB() << "Error opening certificate file for reading binary contents: \"" << keychain_filename << "\"");
     }
     file_ptr fp(file);
 
     ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL));
     if (!p12) {
-        throw std::runtime_error(SB() << "Error opening keychain file as a PKCS#12 object: " << keychain_filename);
+        throw std::runtime_error(SB() << "Error opening certificate file as a PKCS#12 object: " << keychain_filename);
     }
 
     ossl_ptr<EVP_PKEY> pkey; // To be discarded
     if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), cert.acquire(), &chain_ptr)) {
-        throw std::runtime_error(SB() << "Error parsing keychain file: " << keychain_filename);
+        throw std::runtime_error(SB() << "Error parsing certificate file: " << keychain_filename);
     }
     ossl_shared_ptr<STACK_OF(X509)> chain;
     if (chain_ptr)
@@ -152,9 +152,9 @@ KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keycha
 }
 
 /**
- * @brief Backup the given keychain file
+ * @brief Backup the given P12 file
  *
- * This function backs up the given keychain file by renaming it to a date
+ * This function backs up the given P12 file by renaming it to a date
  * stamped filename thus: {base filename}.{YY}{MM}{DD}{hh}{mm}.p12
  *
  * It assumes that the given filename ends with ".p12" without verifying it
@@ -185,7 +185,7 @@ void KeychainFactory::backupKeychainFileIfExists(std::string keychain_filename) 
     // Rename the file
     std::rename(keychain_filename.c_str(), new_filename.c_str());
 
-    log_warn_printf(certs, "Keychain file backed up: %s ==> %s\n", keychain_filename.c_str(), new_filename.c_str());
+    log_warn_printf(certs, "P12 file backed up: %s ==> %s\n", keychain_filename.c_str(), new_filename.c_str());
 }
 
 bool KeychainFactory::createRootPemFile(const std::string &p12PemString, bool overwrite) {
@@ -336,17 +336,17 @@ void KeychainFactory::writePKCS12File() {
 
     if (!p12_ptr_) throw std::runtime_error("Insufficient configuration to create certificate");
 
-    // Make a backup of the existing keychain file if it exists
-    backupKeychainFileIfExists(keychain_filename_);
+    // Make a backup of the existing P12 file if it exists
+    backupKeychainFileIfExists(filename_);
 
     // Open file for writing.
-    file_ptr file(fopen(keychain_filename_.c_str(), "wb"));
+    file_ptr file(fopen(filename_.c_str(), "wb"));
     if (!file) {
-        throw std::runtime_error(SB() << "Error opening keychain file for writing" << keychain_filename_);
+        throw std::runtime_error(SB() << "Error opening P12 file for writing" << filename_);
     }
 
     // Write PKCS12 object to file and check the result.
-    if (i2d_PKCS12_fp(file.get(), p12_ptr_) != 1) throw std::runtime_error(SB() << "Error writing keychain data to file: " << keychain_filename_);
+    if (i2d_PKCS12_fp(file.get(), p12_ptr_) != 1) throw std::runtime_error(SB() << "Error writing " << usage_ << " data to file: " << filename_);
 
     // flush the output to the file
     fflush(file.get());
@@ -358,9 +358,9 @@ void KeychainFactory::writePKCS12File() {
     p12.release();   // Free up p12 object
     file.release();  // Close file and release pointer
 
-    chmod(keychain_filename_.c_str(),
-          S_IRUSR | S_IWUSR);  // Protect keychain file
-    log_info_printf(certs, "Keychain created: %s\n", keychain_filename_.c_str());
+    chmod(filename_.c_str(),
+          S_IRUSR | S_IWUSR);  // Protect P12 file
+    log_info_printf(certs, "%s file Created: %s\n", usage_.c_str(), filename_.c_str());
 }
 
 bool KeychainFactory::writeRootPemFile(const std::string &pem_string, const bool overwrite) { return createRootPemFile(pem_string, overwrite); }

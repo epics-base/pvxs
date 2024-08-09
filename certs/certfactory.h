@@ -57,7 +57,7 @@ namespace certs {
  *  This method checks if the environment is configured for TLS by verifying
  *  whether the tls_keychain_filename in the configuration is not empty.
  * 5. GenStatus generateNewKeychainFile(...):
- *  This method creates a new keychain is called from the client or server
+ *  This method creates a new p12 file is called from the client or server
  *  and makes a call to the PVACMS to create a certificate.
  * 6. ossl_ptr<X509> create(...):
  *  Called from PVACMS, this method creates an X509 certificate. The

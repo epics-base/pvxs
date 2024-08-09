@@ -76,7 +76,7 @@ void mainThing() {
 
                 keychain_factory.writePKCS12File();
 
-                log_info_printf(certs, "New Keychain File created using %s: %s\n",
+                log_info_printf(certs, "New P12 File created using %s: %s\n",
                                 METHOD_STRING(authenticator.type_).c_str(), config.tls_keychain_filename.c_str());
                 std::cout << "Certificate created with "
                           << ((authenticator.type_ == PVXS_DEFAULT_AUTH_TYPE) ? "basic" : authenticator.type_)

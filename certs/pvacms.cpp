@@ -63,6 +63,7 @@
 #include "utilpvt.h"
 
 DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
+DEFINE_LOGGER(pvafms, "pvxs.certs.fms");
 
 namespace pvxs {
 namespace certs {
@@ -146,7 +147,7 @@ Value getStatusPrototype() {
  *
  * This function reads the command line options provided by the user and
  * sets the corresponding members in the given config. The options include
- * verbose mode, keychain file location, and a database file among others.
+ * verbose mode, P12 file location, and a database file among others.
  *
  * @param config the configuration object to update with the commandline values
  * @param argc The number of command line arguments.
@@ -163,10 +164,10 @@ int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose) {
                 config.ensureDirectoryExists(config.ca_acf_filename = optarg);
                 break;
             case 'c':
-                config.ensureDirectoryExists(config.ca_keychain_filename = optarg);
+                config.ensureDirectoryExists(config.ca_cert_filename = optarg);
                 break;
             case 'e':
-                config.ensureDirectoryExists(config.ca_pkey_filename = optarg);
+                config.ensureDirectoryExists(config.ca_private_key_filename = optarg);
                 break;
             case 'd':
                 config.ensureDirectoryExists(config.ca_db_filename = optarg);
@@ -175,10 +176,10 @@ int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose) {
                 usage(argv[0]);
                 return 1;
             case 'k':
-                config.ensureDirectoryExists(config.tls_keychain_filename = optarg);
+                config.ensureDirectoryExists(config.tls_cert_filename = optarg);
                 break;
             case 'l':
-                config.ensureDirectoryExists(config.tls_pkey_filename = optarg);
+                config.ensureDirectoryExists(config.tls_private_key_filename = optarg);
                 break;
             case 'n':
                 config.ca_name = optarg;
@@ -192,37 +193,37 @@ int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose) {
             case 'p': {
                 std::string filepath = optarg;
                 if (filepath == "-") {
-                    config.tls_keychain_password = "";
+                    config.tls_cert_password = "";
                 } else {
                     config.ensureDirectoryExists(filepath);
-                    config.tls_keychain_password = config.getFileContents(filepath);
+                    config.tls_cert_password = config.getFileContents(filepath);
                 }
             } break;
             case 'q': {
                 std::string filepath = optarg;
                 if (filepath == "-") {
-                    config.tls_pkey_password = "";
+                    config.tls_private_key_password = "";
                 } else {
                     config.ensureDirectoryExists(filepath);
-                    config.tls_pkey_password = config.getFileContents(filepath);
+                    config.tls_private_key_password = config.getFileContents(filepath);
                 }
             } break;
             case 's': {
                 std::string filepath = optarg;
                 if (filepath == "-") {
-                    config.ca_keychain_password = "";
+                    config.ca_cert_password = "";
                 } else {
                     config.ensureDirectoryExists(filepath);
-                    config.ca_keychain_password = config.getFileContents(filepath);
+                    config.ca_cert_password = config.getFileContents(filepath);
                 }
             } break;
             case 't': {
                 std::string filepath = optarg;
                 if (filepath == "-") {
-                    config.ca_pkey_password = "";
+                    config.ca_private_key_password = "";
                 } else {
                     config.ensureDirectoryExists(filepath);
-                    config.ca_pkey_password = config.getFileContents(filepath);
+                    config.ca_private_key_password = config.getFileContents(filepath);
                 }
             } break;
             case 'u':
@@ -295,24 +296,21 @@ void initCertsDatabase(sql_ptr &ca_db, std::string &db_file) {
  * retrieving the certificate status.
  */
 std::tuple<CertificateStatus, time_t> getCertificateStatus(sql_ptr &ca_db, uint64_t serial) {
-    int cert_status;
-    time_t status_date;
+    int cert_status = UNKNOWN;
+    time_t status_date = std::time(nullptr);
 
     int64_t db_serial = *reinterpret_cast<int64_t *>(&serial);
     sqlite3_stmt *sql_statement;
-    int sql_status;
-    if ((sql_status = sqlite3_prepare_v2(ca_db.get(), SQL_CERT_STATUS, -1, &sql_statement, 0)) == SQLITE_OK) {
+    if (sqlite3_prepare_v2(ca_db.get(), SQL_CERT_STATUS, -1, &sql_statement, 0) == SQLITE_OK) {
         sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":serial"), db_serial);
 
-        if ((sql_status = sqlite3_step(sql_statement)) == SQLITE_ROW) {
+        if (sqlite3_step(sql_statement) == SQLITE_ROW) {
             cert_status = sqlite3_column_int(sql_statement, 0);
             status_date = sqlite3_column_int64(sql_statement, 1);
         }
-    }
-    sqlite3_finalize(sql_statement);
-
-    if (sql_status != SQLITE_ROW) {
-        throw std::runtime_error(SB() << "Failed to get cert status: " << sqlite3_errmsg(ca_db.get()));
+    } else {
+        sqlite3_finalize(sql_statement);
+        throw std::logic_error(SB() << "failed to prepare sqlite statement: " << sqlite3_errmsg(ca_db.get()));
     }
 
     return std::make_tuple((CertificateStatus)cert_status, status_date);
@@ -589,26 +587,28 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factor
     // Print info about certificate creation
     std::string from = std::ctime(&certificate_factory.not_before_);
     std::string to = std::ctime(&certificate_factory.not_after_);
-    std::cout << "--------------------------------------\n"
-              << "X.509 "
-              << (IS_USED_FOR_(certificate_factory.usage_, ssl::kForIntermediateCa)
-                      ? "INTERMEDIATE CA"
-                      : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForClientAndServer)
-                             ? "CLIENT & SERVER"
-                             : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForClient)
-                                    ? "CLIENT"
-                                    : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForServer)
-                                           ? "SERVER"
-                                           : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCMS)
-                                                  ? "PVACMS"
-                                                  : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCa) ? "CA" : "STRANGE"))))))
-              << " certificate \n"
-              << "CERT_ID: " << getCertId(getIssuerId(certificate_factory.issuer_certificate_ptr_), certificate_factory.serial_) << "\n"
-              << "NAME: " << certificate_factory.name_ << "\n"
-              << "ORGANIZATION: " << certificate_factory.org_ << "\n"
-              << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_ << "\n"
-              << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1) << "\n"
-              << "--------------------------------------\n\n";
+
+    log_info_printf(pvacms, "--------------------------------------%s", "\n");
+    auto cert_description = (SB() << "X.509 "
+                  << (IS_USED_FOR_(certificate_factory.usage_, ssl::kForIntermediateCa)
+                    ? "INTERMEDIATE CA"
+                    : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForClientAndServer)
+                       ? "CLIENT & SERVER"
+                       : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForClient)
+                          ? "CLIENT"
+                          : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForServer)
+                             ? "SERVER"
+                             : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCMS)
+                                ? "PVACMS"
+                                : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCa) ? "CA" : "STRANGE"))))))
+                << " certificate").str();
+    log_info_printf(pvacms, "%s\n", cert_description.c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "CERT_ID: " << getCertId(getIssuerId(certificate_factory.issuer_certificate_ptr_), certificate_factory.serial_)).str().c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "NAME: " << certificate_factory.name_ ).str().c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATION: " << certificate_factory.org_ ).str().c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_ ).str().c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1) ).str().c_str());
+    log_info_printf(pvacms, "--------------------------------------%s", "\n");
 
     return certificate;
 }
@@ -798,8 +798,12 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
         CertificateStatus status;
         time_t status_date;
         std::tie(status, status_date) = certs::getCertificateStatus(ca_db, serial);
+        if (status == UNKNOWN) {
+            status_value["status.alarm.status"] = 1;
+            status_value["status.alarm.severity"] = 1;
+            status_value["status.alarm.message"] = "Unable to determine certificate status";
+        }
 
-        //        shared_array<uint8_t> ocsp_bytes(100);
         auto ocsp_response = createAndSignOCSPResponse(serial, status, status_date, ca_cert, ca_pkey, ca_chain);
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
         postCertificateStatus(status_pv, pv_name, serial, status, ocsp_bytes, true);
@@ -885,12 +889,12 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
     std::shared_ptr<KeyPair> key_pair;
     try {
         // Check if the CA key pair exists
-        key_pair = KeychainFactory::getKeyFromKeychainFile(config.ca_pkey_filename, config.ca_pkey_password);
+        key_pair = KeychainFactory::getKeyFromKeychainFile(config.ca_private_key_filename, config.ca_private_key_password);
     } catch (std::exception &e) {
         // Error getting key pair
         // Make a new key pair file
         try {
-            log_warn_printf(pvacms, "%s\n", e.what());
+            log_warn_printf(pvafms, "%s\n", e.what());
             key_pair = createCaKey(config);
         } catch (std::exception &e) {
             throw(std::runtime_error(SB() << "Error creating CA key: " << e.what()));
@@ -900,16 +904,16 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
     // Get certificate
     try {
         // Check if the CA certificates exist
-        auto keychain_data = KeychainFactory::getKeychainDataFromKeychainFile(config.ca_keychain_filename, config.ca_keychain_password);
+        auto keychain_data = KeychainFactory::getKeychainDataFromKeychainFile(config.ca_cert_filename, config.ca_cert_password);
         ca_cert = std::move(keychain_data.cert);
         ca_chain = keychain_data.ca;
     } catch (std::exception &e) {
         // Error getting certs file, or certs file invalid
         // Make a new CA Certificate
         try {
-            log_warn_printf(pvacms, "%s\n", e.what());
+            log_warn_printf(pvafms, "%s\n", e.what());
             createCaCertificate(config, ca_db, key_pair);
-            auto keychain_data = KeychainFactory::getKeychainDataFromKeychainFile(config.ca_keychain_filename, config.ca_keychain_password);
+            auto keychain_data = KeychainFactory::getKeychainDataFromKeychainFile(config.ca_cert_filename, config.ca_cert_password);
             ca_cert = std::move(keychain_data.cert);
             ca_chain = keychain_data.ca;
         } catch (std::exception &e) {
@@ -945,7 +949,7 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
     std::shared_ptr<KeyPair> key_pair;
     try {
         // Check if the server key pair exists
-        key_pair = KeychainFactory::getKeyFromKeychainFile(config.tls_pkey_filename, config.tls_pkey_password);
+        key_pair = KeychainFactory::getKeyFromKeychainFile(config.tls_private_key_filename, config.tls_private_key_password);
     } catch (std::exception &e) {
         // Error getting key pair
         // Make a new key pair file
@@ -960,7 +964,7 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
     // Get certificate
     try {
         // Check if the server certificates exist and can be read
-        KeychainFactory::getKeychainDataFromKeychainFile(config.tls_keychain_filename, config.tls_keychain_password);
+        KeychainFactory::getKeychainDataFromKeychainFile(config.tls_cert_filename, config.tls_cert_password);
     } catch (std::exception &e) {
         // Error getting certs file, or certs file invalid
         // Make a new server Certificate
@@ -978,7 +982,7 @@ std::shared_ptr<KeyPair> createCaKey(ConfigCms &config) {
     const auto key_pair = KeychainFactory::createKeyPair();
 
     // Create PKCS#12 file containing private key
-    KeychainFactory keychain_factory(config.ca_pkey_filename, config.ca_pkey_password, key_pair, nullptr, nullptr);
+    KeychainFactory keychain_factory(config.ca_private_key_filename, config.ca_private_key_password, key_pair);
     keychain_factory.writePKCS12File();
     return key_pair;
 }
@@ -988,7 +992,7 @@ std::shared_ptr<KeyPair> createCaKey(ConfigCms &config) {
  *
  * This function creates a CA certificate based on the configured parameters
  * and stores it in the given database as well as writing it out to the
- * configured keychain file protected by the optionally specified password.
+ * configured P12 file protected by the optionally specified password.
  *
  * @param config the configuration to use to get CA creation parameters
  * @param ca_db the reference to the certificate database to write the CA to
@@ -1008,7 +1012,7 @@ void createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<KeyP
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
     // Create PKCS#12 file containing certs, private key and null chain
-    KeychainFactory keychain_factory(config.ca_keychain_filename, config.ca_keychain_password, key_pair, pem_string);
+    KeychainFactory keychain_factory(config.ca_cert_filename, config.ca_cert_password, key_pair, pem_string);
 
     keychain_factory.writePKCS12File();
 
@@ -1026,7 +1030,7 @@ std::shared_ptr<KeyPair> createServerKey(const ConfigCms &config) {
     const auto key_pair(KeychainFactory::createKeyPair());
 
     // Create PKCS#12 file containing private key
-    KeychainFactory keychain_factory(config.tls_pkey_filename, config.tls_pkey_password, key_pair, nullptr, nullptr);
+    KeychainFactory keychain_factory(config.tls_private_key_filename, config.tls_private_key_password, key_pair, nullptr, nullptr);
     keychain_factory.writePKCS12File();
     return key_pair;
 }
@@ -1052,7 +1056,7 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
     auto cert = createCertificate(ca_db, certificate_factory);
 
     // Create PKCS#12 file containing certs, private key and null chain
-    KeychainFactory keychain_factory(config.tls_keychain_filename, config.tls_keychain_password, key_pair, cert.get(),
+    KeychainFactory keychain_factory(config.tls_cert_filename, config.tls_cert_password, key_pair, cert.get(),
                                      certificate_factory.certificate_chain_.get());
 
     keychain_factory.writePKCS12File();
@@ -1186,11 +1190,11 @@ void usage(const char *argv0) {
               << " -a <acf> <opts> \n"
                  "\n"
                  " -a <acf>             Access Security configuration file\n"
-                 " -c <CA keychain file> Specify CA keychain file location\n"
+                 " -c <CA P12 file>     Specify CA certificate file location\n"
                  "                      Overrides EPICS_CA_TLS_KEYCHAIN \n"
                  "                      environment variables.\n"
                  "                      Default ca.p12\n"
-                 " -e <CA key file>     Specify CA key file location\n"
+                 " -e <CA key file>     Specify CA private key file location\n"
                  "                      Overrides EPICS_CA_TLS_PKEY \n"
                  "                      environment variables.\n"
                  " -d <cert db file>    Specify cert db file location\n"
@@ -1198,14 +1202,14 @@ void usage(const char *argv0) {
                  "                      environment variable.\n"
                  "                      Default certs.db\n"
                  " -h                   Show this message.\n"
-                 " -k <keychain file>   Specify keychain file location\n"
+                 " -k <P12 file>        Specify certificate file location\n"
                  "                      Overrides EPICS_PVACMS_TLS_KEYCHAIN \n"
                  "                      environment variable.\n"
                  "                      Default server.p12\n"
-                 " -l <keychain file>   Specify pkey file location\n"
+                 " -l <P12 file>        Specify private key file location\n"
                  "                      Overrides EPICS_PVACMS_TLS_PKEY \n"
                  "                      environment variable.\n"
-                 "                      Default same as keychain file\n"
+                 "                      Default same as P12 file\n"
                  " -n <ca_name>         To specify the CA's name if we need\n"
                  "                      to create a root certificate.\n"
                  "                      Defaults to the CA\n"
@@ -1217,19 +1221,19 @@ void usage(const char *argv0) {
                  "                      to create a root certificate.\n"
                  "                      Defaults to the hostname.\n"
                  "                      Use '-' to leave unset.\n"
-                 " -p <password file>   Specify keychain password file location\n"
+                 " -p <password file>   Specify certificate password file location\n"
                  "                      Overrides EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE\n"
                  "                      environment variable.\n"
                  "                      '-' sets no password\n"
-                 " -q <password file>   Specify pkey password file location\n"
+                 " -q <password file>   Specify private key password file location\n"
                  "                      Overrides EPICS_PVACMS_TLS_PKEY_PWD_FILE\n"
                  "                      environment variable.\n"
                  "                      '-' sets no password\n"
-                 " -s <CA secret file>  Specify CA keychain password file\n"
+                 " -s <CA secret file>  Specify CA certificate password file\n"
                  "                      Overrides EPICS_CA_KEYCHAIN_PWD_FILE \n"
                  "                      environment variables.\n"
                  "                      '-' sets no password\n"
-                 " -t <CA secret file>  Specify CA key password file\n"
+                 " -t <CA secret file>  Specify CA private key password file\n"
                  "                      Overrides EPICS_CA_PKEY_PWD_FILE \n"
                  "                      environment variables.\n"
                  "                      '-' sets no password\n"
@@ -1260,22 +1264,12 @@ void postCertificateStatus(server::SharedWildcardPV &status_pv, const std::strin
     else
         status_value = getStatusPrototype().clone();
 
-    if (status_value["status.value.index"].as<uint32_t>() == status) {
-        status_value["status.value.index"].unmark();
-    } else {
-        status_value["status.value.index"] = status;
-    }
+    status_value["status.value.index"] = status;
     status_value["serial"] = serial;
-    if (ocsp_bytes.empty())
-        status_value["ocsp"].unmark();
-    else {
+    if (!ocsp_bytes.empty())
         status_value["ocsp"] = ocsp_bytes.freeze();
-        status_value["ocsp"].mark();
-    }
 
     if (status_pv.isOpen(pv_name)) {
-        status_value["serial"].unmark();
-        status_value["status.value.choices"].unmark();
         status_pv.post(pv_name, status_value);
     } else {
         status_pv.open(pv_name, status_value);
@@ -1316,6 +1310,7 @@ void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::
         status_pv.post(pv_name, status_value);
     else {
         status_pv.open(pv_name, status_value);
+        status_pv.post(pv_name, status_value);
         status_pv.close(pv_name);
     }
 }
@@ -1406,7 +1401,6 @@ void certificateStatusMonitor(sql_ptr &ca_db, std::string &issuer_id, server::Sh
                     auto ocsp_response = createAndSignOCSPResponse(serial, PENDING, time(nullptr), ca_cert, ca_pkey, ca_chain);
                     auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
                     postCertificateStatus(status_pv, pv_name, serial, VALID, ocsp_bytes);
-                    std::cout << "Certificate " << issuer_id << ":" << serial << " has become VALID\n";
                     log_info_printf(pvacms, "Certificate %s:%llu has become VALID\n", issuer_id.c_str(), serial);
                 } catch (const std::runtime_error &e) {
                     log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", e.what());
@@ -1433,7 +1427,6 @@ void certificateStatusMonitor(sql_ptr &ca_db, std::string &issuer_id, server::Sh
                     auto ocsp_response = createAndSignOCSPResponse(serial, EXPIRED, time(nullptr), ca_cert, ca_pkey, ca_chain);
                     auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
                     postCertificateStatus(status_pv, pv_name, serial, EXPIRED, ocsp_bytes);
-                    std::cout << "Certificate " << issuer_id << ":" << serial << " has EXPIRED\n";
                     log_info_printf(pvacms, "Certificate %s:%llu has EXPIRED\n", issuer_id.c_str(), serial);
                 } catch (const std::runtime_error &e) {
                     log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", e.what());
@@ -1458,9 +1451,6 @@ int main(int argc, char *argv[]) {
     using namespace pvxs::server;
 
     try {
-        // Logger config from environment
-        pvxs::logger_config_env();
-
         bool verbose = false;
         pvxs::sql_ptr ca_db;
 
@@ -1472,6 +1462,11 @@ int main(int argc, char *argv[]) {
         if ((exit_status = readOptions(config, argc, argv, verbose))) {
             return exit_status - 1;
         }
+        if ( verbose )
+            logger_level_set("pvxs.certs.*", pvxs::Level::Info);
+
+        // Logger config from environment ( so environment overrides verbose setting )
+        pvxs::logger_config_env();
 
         // Initialise the certificates database
         initCertsDatabase(ca_db, config.ca_db_filename);

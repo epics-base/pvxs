@@ -130,7 +130,7 @@ struct PVXS_API ConfigCommon {
 
     /**
      * @brief If TLS is disabled this is set to true.  This can happen
-     * if no keychain file is found and can't be configured and this is a
+     * if no certificate file is found and can't be configured and this is a
      * server
      */
     bool tls_disabled = false;
@@ -138,22 +138,22 @@ struct PVXS_API ConfigCommon {
     /** Path to PKCS#12 file containing certificates.
      *  @since UNRELEASED
      */
-    std::string tls_keychain_filename;
+    std::string tls_cert_filename;
 
-    /** Path to PKCS#12 file containing password for keychain file.
+    /** Path to file containing password for certificate file.
      *  @since UNRELEASED
      */
-    std::string tls_keychain_password;
+    std::string tls_cert_password;
 
     /** Path to PKCS#12 file containing key.
      *  @since UNRELEASED
      */
-    std::string tls_pkey_filename;
+    std::string tls_private_key_filename;
 
     /** Path to PKCS#12 file containing password for pkey file.
      *  @since UNRELEASED
      */
-    std::string tls_pkey_password;
+    std::string tls_private_key_password;
 
     /** Client certificate request during TLS handshake.
      *
@@ -187,13 +187,13 @@ struct PVXS_API ConfigCommon {
 
     /**
      * True if the environment is configured for TLS.  All this means is that
-     * the location of the keychain file has been specified in
+     * the location of the certificate file has been specified in
      * EPICS_PVA_TLS_KEYCHAIN, and EPICS_PVA_TLS_PKEY.
      *
-     * @return true if the location of the keychain file has been specified,
+     * @return true if the location of the certificate file has been specified,
      * false otherwise
      */
-    inline bool isTlsConfigured() const { return !tls_keychain_filename.empty() && !tls_pkey_filename.empty(); }
+    inline bool isTlsConfigured() const { return !tls_cert_filename.empty() && !tls_private_key_filename.empty(); }
 #endif  // PVXS_ENABLE_OPENSSL
 
     inline std::string getFileContents(const std::string &file_name) {

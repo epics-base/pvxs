@@ -341,6 +341,13 @@ void SharedWildcardPV::onRPC(std::function<void(SharedWildcardPV&, std::unique_p
     impl->onRPC = std::move(fn);
 }
 
+// Checks existence without creating entry in map
+template <typename T>
+bool SharedWildcardPV::exists(const std::map<std::string, T>& m, const std::string& ref) const {
+    auto it = m.find(ref);
+    return (it != m.end() && !!(it->second));
+}
+
 void SharedWildcardPV::open(const std::string &pv_name, const Value& initial)
 {
     if(!impl)
@@ -355,7 +362,7 @@ void SharedWildcardPV::open(const std::string &pv_name, const Value& initial)
     {
         Guard G(impl->lock);
 
-        if(impl->current_vals[pv_name])
+        if(exists(impl->current_vals, pv_name))
             throw std::logic_error("close() first");
 
         pending = std::move(impl->pending[pv_name]);
@@ -384,7 +391,7 @@ bool SharedWildcardPV::isOpen(const std::string &pv_name) const
     if(!impl)
         throw std::logic_error("Empty SharedWildcardPV");
     Guard G(impl->lock);
-    return !!impl->current_vals[pv_name];
+    return exists(impl->current_vals, pv_name);
 }
 
 void SharedWildcardPV::close(const std::string &pv_name)
@@ -397,7 +404,7 @@ void SharedWildcardPV::close(const std::string &pv_name)
     {
         Guard G(impl->lock);
 
-        if(impl->current_vals[pv_name])
+        if(exists(impl->current_vals, pv_name))
             impl->current_vals[pv_name] = Value();
 
         impl->subscribers[pv_name].clear();
@@ -419,7 +426,7 @@ void SharedWildcardPV::post(const std::string &pv_name, const Value& val)
 
     Guard G(impl->lock);
 
-    if(!impl->current_vals[pv_name])
+    if(!exists(impl->current_vals, pv_name))
         throw std::logic_error("Must open() before post()ing");
     else if(Value::Helper::desc(impl->current_vals[pv_name])!=Value::Helper::desc(val))
         throw std::logic_error("post() requires the exact type of open().  Recommend pvxs::Value::cloneEmpty()");
@@ -443,7 +450,7 @@ void SharedWildcardPV::fetch(const std::string &pv_name, Value& val) const
 
     Guard G(impl->lock);
 
-    if(impl->current_vals[pv_name]) {
+    if(exists(impl->current_vals, pv_name)) {
         val.assign(impl->current_vals[pv_name]);
     } else {
         throw std::logic_error("open() first");
@@ -457,7 +464,7 @@ Value SharedWildcardPV::fetch(const std::string &pv_name) const
 
     Guard G(impl->lock);
 
-    if(impl->current_vals[pv_name]) {
+    if(exists(impl->current_vals, pv_name)) {
         return impl->current_vals[pv_name].clone();
     } else {
         throw std::logic_error("open() first");

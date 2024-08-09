@@ -297,7 +297,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         // Get key
         ossl_ptr<EVP_PKEY> key;
         {
-            const std::string &key_filename = conf.tls_pkey_filename, &key_password = conf.tls_pkey_password;
+            const std::string &key_filename = conf.tls_private_key_filename, &key_password = conf.tls_private_key_password;
             log_debug_printf(_setup, "key_filename (PKCS12) %s;%s\n", key_filename.c_str(), key_password.empty() ? "" : " w/ password");
 
             file_ptr fp(fopen(key_filename.c_str(), "rb"), false);
@@ -316,7 +316,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         ossl_ptr<X509> cert;
         ossl_ptr<STACK_OF(X509)> CAs(__FILE__, __LINE__, sk_X509_new_null());
         {
-            const std::string &keychain_filename = conf.tls_keychain_filename, &password = conf.tls_keychain_password;
+            const std::string &keychain_filename = conf.tls_cert_filename, &password = conf.tls_cert_password;
             log_debug_printf(_setup, "keychain_filename (PKCS12) %s;%s\n", keychain_filename.c_str(), password.empty() ? "" : " w/ password");
 
             file_ptr fp(fopen(keychain_filename.c_str(), "rb"), false);

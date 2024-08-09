@@ -79,7 +79,7 @@ void usage(const char *argv0) {
  * @param argc The number of command line arguments.
  * @param argv The array of command line arguments.
  * @param verbose Reference to a boolean variable to enable verbose mode.
- * @param port The string variable to store the keychain file location.
+ * @param port The string variable to store the P12 file location.
  * @return 0 if successful, 1 if successful but need to exit immediately on
  * return, >1 if there is any error.
  */

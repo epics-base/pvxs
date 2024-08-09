@@ -47,15 +47,18 @@ enum CertAvailability {
  */
 class KeychainFactory {
    public:
+    KeychainFactory(const std::string &keychain_filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair)
+        : filename_(keychain_filename), password_(password), key_pair_(key_pair), cert_ptr_(nullptr), certs_ptr_(nullptr), usage_("private key") {}
+
     KeychainFactory(const std::string &keychain_filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr,
                     stack_st_X509 *certs_ptr)
-        : keychain_filename_(keychain_filename), password_(password), key_pair_(key_pair), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr) {}
+        : filename_(keychain_filename), password_(password), key_pair_(key_pair), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), usage_("certificate") {}
 
     KeychainFactory(const std::string &keychain_filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string)
-        : keychain_filename_(keychain_filename), password_(password), key_pair_(key_pair), pem_string_(pem_string) {}
+        : filename_(keychain_filename), password_(password), key_pair_(key_pair), pem_string_(pem_string), usage_("certificate") {}
 
     KeychainFactory(const std::string &keychain_filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p_12_ptr)
-        : keychain_filename_(keychain_filename), password_(password), key_pair_(key_pair), p12_ptr_(p_12_ptr) {}
+        : filename_(keychain_filename), password_(password), key_pair_(key_pair), p12_ptr_(p_12_ptr), usage_("certificate") {}
 
     static CertAvailability generateNewKeychainFile(const impl::ConfigCommon &config, const uint16_t &usage);
 
@@ -74,13 +77,14 @@ class KeychainFactory {
     bool writeRootPemFile(const std::string &pem_string, bool overwrite = false);
 
    private:
-    const std::string keychain_filename_;
+    const std::string filename_;
     const std::string password_;
     const std::shared_ptr<KeyPair> key_pair_;
     X509 *cert_ptr_;
     STACK_OF(X509) * certs_ptr_;
     std::string pem_string_;
     PKCS12 *p12_ptr_;
+    const std::string usage_;
 
     static ossl_ptr<PKCS12> pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string);
 

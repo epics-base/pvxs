@@ -72,7 +72,7 @@ class ConfigCms : public pvxs::server::Config {
 
     /**
      * @brief This is the string that determines
-     * the fully qualified path to the PKCS#12 keychain file that contains
+     * the fully qualified path to the PKCS#12 file that contains
      * the CA certificate, and public and private keys.
      *
      * This is used to sign certificates being created in the PVACMS or
@@ -81,7 +81,7 @@ class ConfigCms : public pvxs::server::Config {
      *
      * Note: This certificate needs to be trusted by all EPICS agents.
      */
-    std::string ca_keychain_filename;
+    std::string ca_cert_filename;
 
     /**
      * @brief This is the string that determines
@@ -91,7 +91,7 @@ class ConfigCms : public pvxs::server::Config {
      * This is optional.  If not specified, the `ca_keychain_filename`
      * contents will not be encrypted.
      */
-    std::string ca_keychain_password;
+    std::string ca_cert_password;
 
     /**
      * @brief This is the string that determines
@@ -100,14 +100,14 @@ class ConfigCms : public pvxs::server::Config {
      *
      * This is optional.  If not specified, the `ca_keychain_filename` is used.
      */
-    std::string ca_pkey_filename;
+    std::string ca_private_key_filename;
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to a file that contains the password that
      * unlocks the `ca_pkey_filename`.
      */
-    std::string ca_pkey_password;
+    std::string ca_private_key_password;
 
     /**
      * @brief This is the string that determines the
