@@ -820,9 +820,9 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
  *
  * @param ca_db A pointer to the SQL database object.
  * @param our_issuer_id The issuer ID of the server.  Must match the one provided in pv_name
- * @param status_pv The SharedWildcardPV object to update the statud in.
+ * @param status_pv The SharedWildcardPV object to update the status in.
  * @param op
- * @param pv_name The revoke pv requested.
+ * @param pv_name The status PV to be updated to REVOKED.
  * @param parameters The issuer id and serial number strings broken out from the pv_name.
  * @param ca_pkey The CA's private key.
  * @param ca_cert The CA's certificate.
