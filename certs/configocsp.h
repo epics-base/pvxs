@@ -12,7 +12,7 @@
 #include "ownedptr.h"
 
 class ConfigCms : public Config {
-  public:
+   public:
     /**
      * @brief The port for the OCSP server to listen on.
      */
@@ -29,25 +29,22 @@ class ConfigCms : public Config {
      *
      * Note: This certificate needs to be trusted by all EPICS agents.
      */
-    std::string ca_keychain_filename;
+    std::string ca_cert_filename;
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to a file that contains the password that
-     * unlocks the `ca_keychain_filename`.
+     * unlocks the `ca_cert_filename`.
      *
-     * This is optional.  If not specified, the `ca_keychain_filename`
+     * This is optional.  If not specified, the `ca_cert_filename`
      * contents will not be encrypted.
      */
-    std::string ca_keychain_password;
-
+    std::string ca_cert_password;
 };
 
 class ConfigCmsFactory : public ConfigFactoryInterface {
-  public:
-    std::unique_ptr<Config> create() override {
-        return std::make_unique<ConfigCms>();
-    }
+   public:
+    std::unique_ptr<Config> create() override { return std::make_unique<ConfigCms>(); }
 };
 
-#endif //PVXS_CONFIGCMS_H_
+#endif  // PVXS_CONFIGCMS_H_

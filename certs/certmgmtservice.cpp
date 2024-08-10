@@ -21,9 +21,9 @@
 #include <pvxs/nt.h>
 
 #include "certfactory.h"
-#include "keychainfactory.h"
 #include "openssl.h"
 #include "ownedptr.h"
+#include "p12filefactory.h"
 #include "security.h"
 #include "utilpvt.h"
 
@@ -95,9 +95,8 @@ std::string CertMgmtService::createAndSignCertificate(const std::shared_ptr<Cert
 
     // if does not complete successfully (timeout) then throw
     if (!done.wait(RPC_SERVER_TIMEOUT)) {
-        throw std::runtime_error(
-            SB() << "Timeout waiting for certificate creation using " << METHOD_STRING(ccr->type) << ": "
-                 << NAME_STRING(ccr->ccr["name"].as<std::string>(), ccr->ccr["organization"].as<std::string>()));
+        throw std::runtime_error(SB() << "Timeout waiting for certificate creation using " << METHOD_STRING(ccr->type) << ": "
+                                      << NAME_STRING(ccr->ccr["name"].as<std::string>(), ccr->ccr["organization"].as<std::string>()));
     }
 
     // Rethrow the exception from the `result()` callback here!

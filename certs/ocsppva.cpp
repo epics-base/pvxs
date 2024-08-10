@@ -30,7 +30,7 @@
 
 #include <pvxs/client.h>
 #include <pvxs/config.h>
-#include "keychainfactory.h"
+#include "p12filefactory.h"
 #include <pvxs/log.h>
 #include <pvxs/nt.h>
 
@@ -134,11 +134,11 @@ int ocspService(client::Context &pva_client, std::string &port, bool verbose) {
     OpenSSL_add_all_ciphers();
 
     auto config = clientConfig().get();
-    auto keychain_filename = config->tls_keychain_filename;
-    auto keychain_password = config->tls_keychain_password;
+    auto cert_filename = config->tls_cert_filename;
+    auto cert_password = config->tls_cert_password;
 
     auto key_chain_data =
-        security::KeychainFactory::getKeychainDataFromKeychainFile(keychain_filename, keychain_password);
+        security::KeychainFactory::getKeychainDataFromKeychainFile(cert_filename, cert_password);
     const ossl_ptr<EVP_PKEY> ca_pkey(std::move(key_chain_data.pkey));
     const ossl_ptr<X509> ca_cert(std::move(key_chain_data.cert));
     const ossl_ptr<EVP_PKEY> ca_pub_key(X509_get_pubkey(ca_cert.get()));

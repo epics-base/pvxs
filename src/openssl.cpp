@@ -298,7 +298,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         ossl_ptr<EVP_PKEY> key;
         {
             const std::string &key_filename = conf.tls_private_key_filename, &key_password = conf.tls_private_key_password;
-            log_debug_printf(_setup, "key_filename (PKCS12) %s;%s\n", key_filename.c_str(), key_password.empty() ? "" : " w/ password");
+            log_debug_printf(_setup, "private key filename (PKCS12) %s;%s\n", key_filename.c_str(), key_password.empty() ? "" : " w/ password");
 
             file_ptr fp(fopen(key_filename.c_str(), "rb"), false);
             ossl_ptr<PKCS12> p12;
@@ -316,20 +316,20 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         ossl_ptr<X509> cert;
         ossl_ptr<STACK_OF(X509)> CAs(__FILE__, __LINE__, sk_X509_new_null());
         {
-            const std::string &keychain_filename = conf.tls_cert_filename, &password = conf.tls_cert_password;
-            log_debug_printf(_setup, "keychain_filename (PKCS12) %s;%s\n", keychain_filename.c_str(), password.empty() ? "" : " w/ password");
+            const std::string &filename = conf.tls_cert_filename, &password = conf.tls_cert_password;
+            log_debug_printf(_setup, "cert filename (PKCS12) %s;%s\n", filename.c_str(), password.empty() ? "" : " w/ password");
 
-            file_ptr fp(fopen(keychain_filename.c_str(), "rb"), false);
+            file_ptr fp(fopen(filename.c_str(), "rb"), false);
             ossl_ptr<PKCS12> p12;
 
             // Try to open the certificate file
-            if (!checkP12File(fp, p12, (ssl_client ? ssl::kForClient : ssl::kForServer), keychain_filename))
+            if (!checkP12File(fp, p12, (ssl_client ? ssl::kForClient : ssl::kForServer), filename))
                 // If this is a client then continue without cert
                 return ctx;
 
             ossl_ptr<EVP_PKEY> pkey; // to discard
             if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), cert.acquire(), CAs.acquire()))
-                throw SSLError(SB() << "Unable to process \"" << keychain_filename << "\"");
+                throw SSLError(SB() << "Unable to process \"" << filename << "\"");
         }
         if (cert) {
             // some early sanity checks

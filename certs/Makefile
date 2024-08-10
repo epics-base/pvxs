@@ -24,7 +24,7 @@ PROD += pvacms
 pvacms_SRCS += pvacms.cpp
 pvacms_SRCS += configcms.cpp
 pvacms_SRCS += certfactory.cpp
-pvacms_SRCS += keychainfactory.cpp
+pvacms_SRCS += p12filefactory.cpp
 pvacms_SRCS += ocsphelper.cpp
 pvacms_LDFLAGS += -lsqlite3 -lssl -lcrypto
 

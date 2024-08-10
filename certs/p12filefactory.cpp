@@ -35,9 +35,9 @@
 #include <sys/types.h>
 
 #include "certfactory.h"
-#include "keychainfactory.h"
 #include "osiFileName.h"
 #include "ownedptr.h"
+#include "p12filefactory.h"
 #include "security.h"
 #include "utilpvt.h"
 
@@ -53,7 +53,7 @@ DEFINE_LOGGER(certs, "pvxs.certs.fms");
  *
  * @return a unique pointer to a managed KeyPair object.
  */
-std::shared_ptr<KeyPair> KeychainFactory::createKeyPair() {
+std::shared_ptr<KeyPair> P12FileFactory::createKeyPair() {
     // Create a new KeyPair object
     std::shared_ptr<KeyPair> key_pair(new KeyPair());
 
@@ -102,43 +102,43 @@ std::shared_ptr<KeyPair> KeychainFactory::createKeyPair() {
     return key_pair;
 };
 
-std::shared_ptr<KeyPair> KeychainFactory::getKeyFromKeychainFile(std::string keychain_filename, std::string password) {
-    file_ptr fp(fopen(keychain_filename.c_str(), "rb"), false);
+std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile(std::string filename, std::string password) {
+    file_ptr fp(fopen(filename.c_str(), "rb"), false);
     if (!fp) {
-        throw std::runtime_error(SB() << "Error opening private key file for reading binary contents: \"" << keychain_filename << "\"");
+        throw std::runtime_error(SB() << "Error opening private key file for reading binary contents: \"" << filename << "\"");
     }
 
     ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL));
     if (!p12) {
-        throw std::runtime_error(SB() << "Error opening private key file as a PKCS#12 object: " << keychain_filename);
+        throw std::runtime_error(SB() << "Error opening private key file as a PKCS#12 object: " << filename);
     }
 
     ossl_ptr<EVP_PKEY> pkey;
     if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), nullptr, nullptr)) {
-        throw std::runtime_error(SB() << "Error parsing private key file: " << keychain_filename);
+        throw std::runtime_error(SB() << "Error parsing private key file: " << filename);
     }
 
     return std::make_shared<KeyPair>(std::move(pkey));
 }
 
-KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keychain_filename, std::string password) {
+CertData P12FileFactory::getCertDataFromFile(std::string filename, std::string password) {
     ossl_ptr<X509> cert;
     STACK_OF(X509) *chain_ptr = nullptr;
 
-    auto file(fopen(keychain_filename.c_str(), "rb"));
+    auto file(fopen(filename.c_str(), "rb"));
     if (!file) {
-        throw std::runtime_error(SB() << "Error opening certificate file for reading binary contents: \"" << keychain_filename << "\"");
+        throw std::runtime_error(SB() << "Error opening certificate file for reading binary contents: \"" << filename << "\"");
     }
     file_ptr fp(file);
 
     ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL));
     if (!p12) {
-        throw std::runtime_error(SB() << "Error opening certificate file as a PKCS#12 object: " << keychain_filename);
+        throw std::runtime_error(SB() << "Error opening certificate file as a PKCS#12 object: " << filename);
     }
 
-    ossl_ptr<EVP_PKEY> pkey; // To be discarded
+    ossl_ptr<EVP_PKEY> pkey;  // To be discarded
     if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), cert.acquire(), &chain_ptr)) {
-        throw std::runtime_error(SB() << "Error parsing certificate file: " << keychain_filename);
+        throw std::runtime_error(SB() << "Error parsing certificate file: " << filename);
     }
     ossl_shared_ptr<STACK_OF(X509)> chain;
     if (chain_ptr)
@@ -146,7 +146,7 @@ KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keycha
     else
         chain = ossl_shared_ptr<STACK_OF(X509)>(sk_X509_new_null());
 
-    KeyChainData key_chain_data(cert, chain);
+    CertData key_chain_data(cert, chain);
 
     return key_chain_data;
 }
@@ -163,10 +163,10 @@ KeyChainData KeychainFactory::getKeychainDataFromKeychainFile(std::string keycha
  * As the file is renamed it will retain the same operating system permissions
  * as the original file.
  *
- * @param keychain_filename
+ * @param filename
  */
-void KeychainFactory::backupKeychainFileIfExists(std::string keychain_filename) {
-    std::fstream file(keychain_filename, std::ios_base::in);
+void P12FileFactory::backupFileIfExists(std::string filename) {
+    std::fstream file(filename, std::ios_base::in);
     if (!file.is_open())
         // File does not exist, return
         return;
@@ -180,15 +180,15 @@ void KeychainFactory::backupKeychainFileIfExists(std::string keychain_filename) 
     oss << std::put_time(&tm, "%y%m%d%H%M");
 
     // new filename is {base filename}.{yy}{mm}{dd}{HH}{MM}.p12
-    std::string new_filename = keychain_filename.substr(0, keychain_filename.size() - 4) + "." + oss.str() + ".p12";
+    std::string new_filename = filename.substr(0, filename.size() - 4) + "." + oss.str() + ".p12";
 
     // Rename the file
-    std::rename(keychain_filename.c_str(), new_filename.c_str());
+    std::rename(filename.c_str(), new_filename.c_str());
 
-    log_warn_printf(certs, "P12 file backed up: %s ==> %s\n", keychain_filename.c_str(), new_filename.c_str());
+    log_warn_printf(certs, "P12 file backed up: %s ==> %s\n", filename.c_str(), new_filename.c_str());
 }
 
-bool KeychainFactory::createRootPemFile(const std::string &p12PemString, bool overwrite) {
+bool P12FileFactory::createRootPemFile(const std::string &p12PemString, bool overwrite) {
     static constexpr auto kMaxAuthnNameLen = 256;
 
     ossl_ptr<BIO> bio(BIO_new_mem_buf(p12PemString.data(), p12PemString.size()));
@@ -234,7 +234,7 @@ bool KeychainFactory::createRootPemFile(const std::string &p12PemString, bool ov
     return false;
 }
 
-ossl_ptr<PKCS12> KeychainFactory::pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string) {
+ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string) {
     // Read PEM data into a new BIO
     ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string.c_str(), -1));
     if (!bio) {
@@ -263,7 +263,7 @@ ossl_ptr<PKCS12> KeychainFactory::pemStringToP12(std::string password, EVP_PKEY 
     return toP12(password, keys_ptr, cert.get(), certs.get());
 }
 
-ossl_ptr<PKCS12> KeychainFactory::toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) * cert_chain_ptr) {
+ossl_ptr<PKCS12> P12FileFactory::toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) * cert_chain_ptr) {
     // Get the subject name of the certificate
     if (!cert_ptr && !keys_ptr) throw std::runtime_error("No certificate or key provided");
 
@@ -307,7 +307,7 @@ ossl_ptr<PKCS12> KeychainFactory::toP12(std::string password, EVP_PKEY *keys_ptr
  * @param chain the chain pointer to set to the newly crested chain
  * @param root_cert_ptr the root pointer to make the chain from
  */
-void KeychainFactory::chainFromRootCertPtr(STACK_OF(X509) * &chain, X509 *root_cert_ptr) {
+void P12FileFactory::chainFromRootCertPtr(STACK_OF(X509) * &chain, X509 *root_cert_ptr) {
     chain = sk_X509_new_null();
 
     if (!chain) {
@@ -319,7 +319,7 @@ void KeychainFactory::chainFromRootCertPtr(STACK_OF(X509) * &chain, X509 *root_c
     }
 }
 
-void KeychainFactory::writePKCS12File() {
+void P12FileFactory::writePKCS12File() {
     // If a pem string has been specified then convert to p12
     ossl_ptr<PKCS12> p12;
     if (!pem_string_.empty()) {
@@ -337,7 +337,7 @@ void KeychainFactory::writePKCS12File() {
     if (!p12_ptr_) throw std::runtime_error("Insufficient configuration to create certificate");
 
     // Make a backup of the existing P12 file if it exists
-    backupKeychainFileIfExists(filename_);
+    backupFileIfExists(filename_);
 
     // Open file for writing.
     file_ptr file(fopen(filename_.c_str(), "wb"));
@@ -363,6 +363,6 @@ void KeychainFactory::writePKCS12File() {
     log_info_printf(certs, "%s file Created: %s\n", usage_.c_str(), filename_.c_str());
 }
 
-bool KeychainFactory::writeRootPemFile(const std::string &pem_string, const bool overwrite) { return createRootPemFile(pem_string, overwrite); }
+bool P12FileFactory::writeRootPemFile(const std::string &pem_string, const bool overwrite) { return createRootPemFile(pem_string, overwrite); }
 }  // namespace certs
 }  // namespace pvxs

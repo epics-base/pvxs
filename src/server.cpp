@@ -227,7 +227,7 @@ client::Config Server::clientConfig() const
         throw std::logic_error("NULL Server");
 
     client::Config ret;
-    // do not copy tls_keychain_file
+    // do not copy tls_cert_file
     ret.udp_port = pvt->effective.udp_port;
     ret.tcp_port = pvt->effective.tcp_port;
     ret.interfaces = pvt->effective.interfaces;

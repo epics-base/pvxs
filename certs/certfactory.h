@@ -44,26 +44,6 @@ namespace certs {
  *
  * This class provides methods for creating certificates, creating key
  * pairs, and verifying certificates.
- *
- * 1. static CertFactory *getInstance():
- *   This is the singleton access method. It checks if an instance of
- *   CertFactory already exists; if not, it creates one and returns it.
- * 2. std::shared_ptr<KeyPair> createKeyPair():
- *   This method creates a key pair. The specifics of key pair creation
- *   are not visible in the selected code.
- * 3. void createPKCS12File(...):
- *  This method creates a PKCS#12 file using a certificate, and a key pair.
- * 4. bool isTlsConfigured():
- *  This method checks if the environment is configured for TLS by verifying
- *  whether the tls_keychain_filename in the configuration is not empty.
- * 5. GenStatus generateNewKeychainFile(...):
- *  This method creates a new p12 file is called from the client or server
- *  and makes a call to the PVACMS to create a certificate.
- * 6. ossl_ptr<X509> create(...):
- *  Called from PVACMS, this method creates an X509 certificate. The
- * parameters provide the necessary information such as the key pair,
- * not-before and not-after dates, a flag indicating whether the certificate
- * is for a client, a server, or a Certificate Authority (CA), etc.
  */
 class PVXS_API CertFactory {
    public:

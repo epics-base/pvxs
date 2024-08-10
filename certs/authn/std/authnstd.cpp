@@ -71,20 +71,20 @@ void mainThing() {
 
                 // Attempt to write the certificate and private key
                 // to a PKCS#12 file protected by the configured password
-                security::KeychainFactory keychain_factory(config.tls_keychain_filename, config.tls_keychain_password,
+                security::P12FileFactory p12_file_factory(config.p12_cert_filename, config.p12_cert_password,
                                                            key_pair, p12PemString);
 
-                keychain_factory.writePKCS12File();
+                p12_file_factory.writePKCS12File();
 
                 log_info_printf(certs, "New P12 File created using %s: %s\n",
-                                METHOD_STRING(authenticator.type_).c_str(), config.tls_keychain_filename.c_str());
+                                METHOD_STRING(authenticator.type_).c_str(), config.p12_cert_filename.c_str());
                 std::cout << "Certificate created with "
                           << ((authenticator.type_ == PVXS_DEFAULT_AUTH_TYPE) ? "basic" : authenticator.type_)
-                          << " credentials and stored in:" << config.tls_keychain_filename << "\n";
+                          << " credentials and stored in:" << config.p12_cert_filename << "\n";
 
                 // Create the root certificate if it is not already there so
                 // that the user can trust it
-                if (keychain_factory.writeRootPemFile(p12PemString)) {
+                if (p12_file_factory.writeRootPemFile(p12PemString)) {
                     return CertAvailability::OK;
                 } else {
                     return CertAvailability::ROOT_CERT_INSTALLED;

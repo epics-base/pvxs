@@ -4,8 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#ifndef PVXS_KEYCHAIN_FACTORY_H
-#define PVXS_KEYCHAIN_FACTORY_H
+#ifndef PVXS_P12_FILE_FACTORY_H
+#define PVXS_P12_FILE_FACTORY_H
 
 #include <memory>
 #include <tuple>
@@ -26,11 +26,11 @@
 
 namespace pvxs {
 namespace certs {
-struct KeyChainData {
+struct CertData {
     ossl_ptr<X509> cert;
     ossl_shared_ptr<STACK_OF(X509)> ca;
 
-    KeyChainData(ossl_ptr<X509> &newCert, ossl_shared_ptr<STACK_OF(X509)> &newCa) : cert(std::move(newCert)), ca(newCa) {}
+    CertData(ossl_ptr<X509> &newCert, ossl_shared_ptr<STACK_OF(X509)> &newCa) : cert(std::move(newCert)), ca(newCa) {}
 };
 
 enum CertAvailability {
@@ -45,28 +45,29 @@ enum CertAvailability {
  *
  * @brief Manages certificates and associated operations.
  */
-class KeychainFactory {
+class P12FileFactory {
    public:
-    KeychainFactory(const std::string &keychain_filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair)
-        : filename_(keychain_filename), password_(password), key_pair_(key_pair), cert_ptr_(nullptr), certs_ptr_(nullptr), usage_("private key") {}
+    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair)
+        : filename_(filename), password_(password), key_pair_(key_pair), cert_ptr_(nullptr), certs_ptr_(nullptr), usage_("private key") {}
 
-    KeychainFactory(const std::string &keychain_filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr,
-                    stack_st_X509 *certs_ptr)
-        : filename_(keychain_filename), password_(password), key_pair_(key_pair), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), usage_("certificate") {}
+    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr, stack_st_X509 *certs_ptr)
+        : filename_(filename), password_(password), key_pair_(key_pair), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), usage_("certificate") {}
 
-    KeychainFactory(const std::string &keychain_filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string)
-        : filename_(keychain_filename), password_(password), key_pair_(key_pair), pem_string_(pem_string), usage_("certificate") {}
+    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string)
+        : filename_(filename),
+          password_(password),
+          key_pair_(key_pair),
+          cert_ptr_(nullptr),
+          certs_ptr_(nullptr),
+          pem_string_(pem_string),
+          usage_("certificate") {}
 
-    KeychainFactory(const std::string &keychain_filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p_12_ptr)
-        : filename_(keychain_filename), password_(password), key_pair_(key_pair), p12_ptr_(p_12_ptr), usage_("certificate") {}
+    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p_12_ptr)
+        : filename_(filename), password_(password), key_pair_(key_pair), p12_ptr_(p_12_ptr), usage_("certificate") {}
 
-    static CertAvailability generateNewKeychainFile(const impl::ConfigCommon &config, const uint16_t &usage);
-
-    static std::shared_ptr<KeyPair> getKeyFromKeychainFile(std::string keychain_filename, std::string password);
-    static KeyChainData getKeychainDataFromKeychainFile(std::string keychain_filename, std::string password);
-    ;
-
-    //    static inline const std::unique_ptr<Auth> &getAuth(const std::string &type) { return AuthRegistry::getAuth(type); }
+    static CertAvailability generateNewCertsFile(const impl::ConfigCommon &config, const uint16_t &usage);
+    static std::shared_ptr<KeyPair> getKeyFromFile(std::string filename, std::string password);
+    static CertData getCertDataFromFile(std::string filename, std::string password);
 
     static std::shared_ptr<KeyPair> createKeyPair();
 
@@ -77,20 +78,20 @@ class KeychainFactory {
     bool writeRootPemFile(const std::string &pem_string, bool overwrite = false);
 
    private:
-    const std::string filename_;
-    const std::string password_;
+    const std::string filename_{};
+    const std::string password_{};
     const std::shared_ptr<KeyPair> key_pair_;
-    X509 *cert_ptr_;
-    STACK_OF(X509) * certs_ptr_;
-    std::string pem_string_;
-    PKCS12 *p12_ptr_;
-    const std::string usage_;
+    X509 *cert_ptr_{};
+    STACK_OF(X509) * certs_ptr_ {};
+    std::string pem_string_{};
+    PKCS12 *p12_ptr_{};
+    const std::string usage_{};
 
     static ossl_ptr<PKCS12> pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string);
 
     static ossl_ptr<PKCS12> toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) *cert_chain_ptr = nullptr);
 
-    static void backupKeychainFileIfExists(std::string keychain_filename);
+    static void backupFileIfExists(std::string filename);
 
     static void chainFromRootCertPtr(STACK_OF(X509) * &chain, X509 *root_cert_ptr);
 
@@ -139,4 +140,4 @@ class KeychainFactory {
 }  // namespace certs
 }  // namespace pvxs
 
-#endif  // PVXS_KEYCHAIN_FACTORY_H
+#endif  // PVXS_P12_FILE_FACTORY_H

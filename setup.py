@@ -579,17 +579,7 @@ def define_DSOS(self):
         src_pvxs += ['src/os/default/osdSockExt.cpp']
     if DEFS['EVENT__HAVE_OPENSSL']=='1':
         src_pvxs += [
-            'src/auth.cpp'
-            'src/authregistry.cpp'
-            'src/certfactory.cpp'
-            'src/certmgmtservice.cpp'
-            'src/keychainfactory.cpp'
             'src/openssl.cpp'
-            'src/security.h'
-            'src/authdefault/authdefault.cpp'
-            'src/authjwt/authjwt.cpp'
-            'src/authkrb/authkrb.cpp'
-            'src/authldap/authldap.cpp'
         ]
 
     event_libs = []

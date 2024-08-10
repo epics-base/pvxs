@@ -86,9 +86,9 @@ class ConfigCms : public pvxs::server::Config {
     /**
      * @brief This is the string that determines
      * the fully qualified path to a file that contains the password that
-     * unlocks the `ca_keychain_filename`.
+     * unlocks the `ca_cert_filename`.
      *
-     * This is optional.  If not specified, the `ca_keychain_filename`
+     * This is optional.  If not specified, the `ca_cert_filename`
      * contents will not be encrypted.
      */
     std::string ca_cert_password;
@@ -98,7 +98,7 @@ class ConfigCms : public pvxs::server::Config {
      * the fully qualified path to the PKCS#12 key file that contains
      * the private keys.
      *
-     * This is optional.  If not specified, the `ca_keychain_filename` is used.
+     * This is optional.  If not specified, the `ca_cert_filename` is used.
      */
     std::string ca_private_key_filename;
 
