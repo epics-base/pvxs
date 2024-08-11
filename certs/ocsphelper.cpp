@@ -309,5 +309,56 @@ int parseOCSPResponse(const shared_array<uint8_t>& ocsp_bytes, std::string &stat
     return status;
 }
 
+int parseOCSPResponse(const shared_array<uint8_t>& ocsp_bytes, time_t &status_date, time_t &status_certified_until, time_t &revocation_date) {
+    // Create a BIO for the OCSP response
+    ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())), false);
+    if (!bio) {
+        throw OCSPParseException("Failed to create BIO for OCSP response");
+    }
+
+    // Parse the BIO into an OCSP_RESPONSE
+    ossl_ptr<OCSP_RESPONSE> ocsp_response(d2i_OCSP_RESPONSE_bio(bio.get(), nullptr), false);
+    if (!ocsp_response) {
+        throw OCSPParseException("Failed to parse OCSP response");
+    }
+
+    int response_status = OCSP_response_status(ocsp_response.get());
+    if (response_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {
+        throw OCSPParseException("OCSP response status not successful");
+    }
+
+    // Extract the basic OCSP response
+    ossl_ptr<OCSP_BASICRESP> basic_response(OCSP_response_get1_basic(ocsp_response.get()), false);
+    if (!basic_response) {
+        throw OCSPParseException("Failed to get basic OCSP response");
+    }
+
+    // Extract the certificate status from the basic response
+    OCSP_SINGLERESP *single_response = OCSP_resp_get0(basic_response.get(), 0);
+    if (!single_response) {
+        throw OCSPParseException("No entries found in OCSP response");
+    }
+
+    ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revoked_time = nullptr;
+    int reason = 0;
+
+    int status = OCSP_single_get0_status(single_response, &reason, &revoked_time, &this_update, &next_update);
+
+    // Get time_t
+    if (this_update) {
+        status_date = asn1TimeToTimeT(this_update);
+    }
+
+    if (next_update) {
+        status_certified_until = asn1TimeToTimeT(next_update);
+    }
+
+    if (revoked_time) {
+        revocation_date = asn1TimeToTimeT(revoked_time);
+    }
+
+    return status;
+}
+
 }  // namespace certs
 }  // namespace pvxs

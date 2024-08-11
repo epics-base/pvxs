@@ -41,6 +41,7 @@ std::string asn1TimeToString(ASN1_GENERALIZEDTIME *time);
 time_t asn1TimeToTimeT(ASN1_TIME *time);
 
 int parseOCSPResponse(const shared_array<uint8_t>& ocsp_bytes, std::string &status_date, std::string &status_certified_until, std::string &revocation_date);
+int parseOCSPResponse(const shared_array<uint8_t>& ocsp_bytes, time_t &status_date, time_t &status_certified_until, time_t &revocation_date);
 
 }  // namespace certs
 }  // namespace pvxs
