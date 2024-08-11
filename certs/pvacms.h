@@ -124,10 +124,6 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
 namespace pvxs {
 namespace certs {
 
-time_t ASN1_TIMEToTimeT(ASN1_TIME *time);
-
-const char *certificateStatusToString(CertificateStatus status);
-
 void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory);
 
 std::shared_ptr<KeyPair> createCaKey(ConfigCms &config);
@@ -189,8 +185,6 @@ void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertificateStatus 
                              std::vector<CertificateStatus> valid_status = {PENDING_APPROVAL, PENDING, VALID});
 
 void storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
-
-time_t tmToTimeTUTC(std::tm &tm);
 
 void usage(const char *argv0);
 

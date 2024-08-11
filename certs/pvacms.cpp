@@ -28,6 +28,7 @@
 #include <tuple>
 #include <vector>
 
+#include <asDbLib.h>
 #include <epicsGetopt.h>
 #include <epicsThread.h>
 #include <epicsTime.h>
@@ -79,7 +80,6 @@ namespace certs {
  *
  * This array does not consider leap years
  */
-static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 static const std::string kCertRevokePrefix("CERT:REVOKE");
 static const std::string kCertStatusPrefix("CERT:STATUS");
 static Value kStatusPrototype(certs::getStatusPrototype());
@@ -101,9 +101,12 @@ std::string pvacms_org_name;
  */
 Value getCreatePrototype() {
     using namespace members;
-    return TypeDef(TypeCode::Struct,
+    nt::NTEnum enum_value;
+    auto value = TypeDef(TypeCode::Struct,
                    {
+                       enum_value.build().as("status"),
                        Member(TypeCode::UInt64, "serial"),
+                       Member(TypeCode::String, "state"),
                        Member(TypeCode::String, "issuer"),
                        Member(TypeCode::String, "certid"),
                        Member(TypeCode::String, "statuspv"),
@@ -118,6 +121,9 @@ Value getCreatePrototype() {
                               }),
                    })
         .create();
+    shared_array<const std::string> choices(CERT_STATES);
+    value["status.value.choices"] = choices.freeze();
+    return value;
 }
 
 /**
@@ -134,10 +140,15 @@ Value getStatusPrototype() {
                          {
                              enum_value.build().as("status"),
                              Member(TypeCode::UInt64, "serial"),
+                             Member(TypeCode::String, "state"),
+                             Member(TypeCode::UInt32, "ocsp_state"),
+                             Member(TypeCode::String, "status_date"),
+                             Member(TypeCode::String, "status_certified_until"),
+                             Member(TypeCode::String, "revocation_date"),
                              Member(TypeCode::UInt8A, "ocsp"),
                          })
                      .create();
-    shared_array<const std::string> choices({"UNKNOWN", "VALID", "EXPIRED", "REVOKED", "PENDING_APPROVAL", "PENDING"});
+    shared_array<const std::string> choices(CERT_STATES);
     value["status.value.choices"] = choices.freeze();
     return value;
 }
@@ -416,41 +427,6 @@ uint64_t generateSerial() {
 
     uint64_t random_serial_number = distribution(seed);  // Generate a random number
     return random_serial_number;
-}
-
-/**
- * @brief  Manual calculation of time since epoch
- *
- * Gets round problematic timezone issues by relying on tm being in UTC beforehand
- *
- * @param tm tm struct in UTC
- * @return time_t seconds since epoch
- */
-time_t tmToTimeTUTC(std::tm &tm) {
-    int year = 1900 + tm.tm_year;
-    time_t days = (year - 1970) * 365;
-    days += (year - 1969) / 4;
-    days -= (year - 1901) / 100;
-    days += (year - 1601) / 400;
-    if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) && tm.tm_mon < 2) {
-        days--;
-    }
-    days += tm.tm_mday - 1;
-    days += kMonthStartDays[tm.tm_mon];  // month_start_days should be an array list with amount of days since beginning
-                                         // of year for each month
-    return ((days * 24 + tm.tm_hour) * 60 + tm.tm_min) * 60 + tm.tm_sec;
-}
-
-/**
- * @brief Convert from ASN1_TIME found in certificates to time_t format
- * @param time the ASN1_TIME to convert
- *
- * @return the time_t representation of the given ASN1_TIME value
- */
-time_t ASN1_TIMEToTimeT(ASN1_TIME *time) {
-    std::tm t{};
-    ASN1_TIME_to_tm(time, &t);
-    return tmToTimeTUTC(t);
 }
 
 /**
@@ -858,6 +834,7 @@ void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWi
         auto ocsp_response = createAndSignOCSPResponse(serial, REVOKED, time(nullptr), ca_cert, ca_pkey, ca_chain);
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
         postCertificateStatus(status_pv, pv_name, serial, REVOKED, ocsp_bytes);
+        log_info_printf(pvacms, "Certificate %s:%llu has been REVOKED\n", issuer_id.c_str(), serial);
         op->reply(status_value);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error revoking certificate: %s\n", e.what());
@@ -1104,7 +1081,7 @@ std::string getCountryCode() {
  */
 time_t getNotAfterTimeFromCert(const X509 *cert) {
     ASN1_TIME *cert_not_after = X509_get_notAfter(cert);
-    time_t not_after = ASN1_TIMEToTimeT(cert_not_after);
+    time_t not_after = asn1TimeToTimeT(cert_not_after);
     return not_after;
 }
 
@@ -1116,7 +1093,7 @@ time_t getNotAfterTimeFromCert(const X509 *cert) {
  */
 time_t getNotBeforeTimeFromCert(const X509 *cert) {
     ASN1_TIME *cert_not_before = X509_get_notBefore(cert);
-    time_t not_before = ASN1_TIMEToTimeT(cert_not_before);
+    time_t not_before = asn1TimeToTimeT(cert_not_before);
     return not_before;
 }
 
@@ -1265,9 +1242,22 @@ void postCertificateStatus(server::SharedWildcardPV &status_pv, const std::strin
     else
         status_value = getStatusPrototype().clone();
 
-    status_value["status.value.index"] = status;
     status_value["serial"] = serial;
-    if (!ocsp_bytes.empty()) status_value["ocsp"] = ocsp_bytes.freeze();
+    status_value["status.value.index"] = status;
+    auto choices(status_value["status.value.choices"].as<shared_array<const std::string>>());
+    status_value["state"] = choices[status];
+
+    // Get ocsp info if specified
+    if (!ocsp_bytes.empty()) {
+        std::string status_date, status_certified_until, revocation_date;
+        auto ocsp_status = parseOCSPResponse(ocsp_bytes, status_date, status_certified_until, revocation_date);
+        status_value["ocsp"] = ocsp_bytes.freeze();
+        status_value["ocsp_state"]=ocsp_status;
+        status_value["status_date"]=status_date;
+        status_value["status_certified_until"]=status_certified_until;
+        if ( !revocation_date.empty())
+            status_value["revocation_date"]=revocation_date;
+    }
 
     if (status_pv.isOpen(pv_name)) {
         status_pv.post(pv_name, status_value);
@@ -1379,7 +1369,7 @@ std::string getCertId(const std::string &issuer_id, const uint64_t &serial) {
  */
 void certificateStatusMonitor(sql_ptr &ca_db, std::string &issuer_id, server::SharedWildcardPV &status_pv, pvxs::ossl_ptr<X509> &ca_cert,
                               pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    std::cout << "Certificate Monitor Thread Started\n";
+    log_info_printf(pvacms, "Certificate Monitor Thread Started%s", "\n");
     epicsMutex lock;
     while (true) {
         Guard G(lock);
@@ -1464,6 +1454,10 @@ int main(int argc, char *argv[]) {
         }
         if (verbose) logger_level_set("pvxs.certs.*", pvxs::Level::Info);
 
+        // Set security if configured
+        if ( !config.ca_acf_filename.empty())
+            asSetFilename(config.ca_acf_filename.c_str());
+
         // Logger config from environment ( so environment overrides verbose setting )
         pvxs::logger_config_env();
 
@@ -1485,7 +1479,7 @@ int main(int argc, char *argv[]) {
         // Create the PVs
         SharedPV create_pv(SharedPV::buildReadonly());
         SharedWildcardPV revoke_pv(SharedWildcardPV::buildMailbox());
-        SharedWildcardPV status_pv(SharedWildcardPV::buildReadonly());
+        SharedWildcardPV status_pv(SharedWildcardPV::buildMailbox());
 
         // RPC handlers
         // Create Certificate: args: ccr (certificate creation request)
@@ -1526,13 +1520,13 @@ int main(int argc, char *argv[]) {
         if (verbose)
             // Print the configuration this server is using
             std::cout << "Effective config\n" << config;
-        std::cout << "PVACMS Running\n";
 
         // Start server and run forever, or until Ctrl+c is pressed.
         // Returns on SIGINT or SIGTERM
+        log_info_printf(pvacms, "PVACMS Running%s", "\n");
         pva_server.run();
+        log_info_printf(pvacms, "PVACMS Exiting%s","\n");
 
-        std::cout << "PVACMS Exiting\n";
         certificate_status_monitor_worker.detach();
 
         return 0;

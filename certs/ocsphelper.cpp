@@ -21,6 +21,7 @@
 namespace pvxs {
 namespace certs {
 
+static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
 /**
  * @brief Creates and signs an OCSP response for a given certificate.
@@ -192,6 +193,120 @@ std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& b
     OPENSSL_free(resp_der);
 
     return resp_bytes;
+}
+
+
+/**
+ * @brief  Manual calculation of time since epoch
+ *
+ * Gets round problematic timezone issues by relying on tm being in UTC beforehand
+ *
+ * @param tm tm struct in UTC
+ * @return time_t seconds since epoch
+ */
+time_t tmToTimeTUTC(std::tm &tm) {
+    int year = 1900 + tm.tm_year;
+
+    // Calculate days up to start of the current year
+    time_t days = (year - 1970) * 365
+      + (year - 1969) / 4  // Leap years
+      - (year - 1901) / 100  // Excluding non-leap centuries
+      + (year - 1601) / 400;  // Including leap centuries
+
+    // Calculate days up to the start of the current month within the current year
+    days += kMonthStartDays[tm.tm_mon];
+    if (tm.tm_mon > 1 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))) {
+        days += 1;  // Add one day for leap years after February
+    }
+
+    // Adjust with the current day in the month (tm_mday starts from 1)
+    days += tm.tm_mday - 1;
+
+    // Incorporate hours, minutes, and seconds
+    return ((days * 24 + tm.tm_hour) * 60 + tm.tm_min) * 60 + tm.tm_sec;
+}
+
+
+/**
+ * @brief Convert from ASN1_TIME found in certificates to time_t format
+ * @param time the ASN1_TIME to convert
+ *
+ * @return the time_t representation of the given ASN1_TIME value
+ */
+time_t asn1TimeToTimeT(ASN1_TIME *time) {
+    std::tm t{};
+    if (ASN1_TIME_to_tm(time, &t) != 1) {
+        throw std::runtime_error("Failed to convert ASN1_TIME to tm structure");
+    }
+    return tmToTimeTUTC(t);
+}
+
+// Utility function to convert ASN1_TIME to string (simplified)
+std::string asn1TimeToString(ASN1_GENERALIZEDTIME *time) {
+    ossl_ptr<BIO> bio(BIO_new(BIO_s_mem()), false);
+    if (!bio) {
+        throw OCSPParseException("Failed to create BIO for time conversion");
+    }
+    if (ASN1_GENERALIZEDTIME_print(bio.get(), time) == 0) {
+        throw OCSPParseException("Failed to format ASN1_GENERALIZEDTIME");
+    }
+
+    BUF_MEM *bptr;
+    BIO_get_mem_ptr(bio.get(), &bptr);
+    return std::string(bptr->data, bptr->length);
+}
+
+// Function to parse OCSP response byte buffer
+int parseOCSPResponse(const shared_array<uint8_t>& ocsp_bytes, std::string &status_date, std::string &status_certified_until, std::string &revocation_date) {
+    // Create a BIO for the OCSP response
+    ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())), false);
+    if (!bio) {
+        throw OCSPParseException("Failed to create BIO for OCSP response");
+    }
+
+    // Parse the BIO into an OCSP_RESPONSE
+    ossl_ptr<OCSP_RESPONSE> ocsp_response(d2i_OCSP_RESPONSE_bio(bio.get(), nullptr), false);
+    if (!ocsp_response) {
+        throw OCSPParseException("Failed to parse OCSP response");
+    }
+
+    int response_status = OCSP_response_status(ocsp_response.get());
+    if (response_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {
+        throw OCSPParseException("OCSP response status not successful");
+    }
+
+    // Extract the basic OCSP response
+    ossl_ptr<OCSP_BASICRESP> basic_response(OCSP_response_get1_basic(ocsp_response.get()), false);
+    if (!basic_response) {
+        throw OCSPParseException("Failed to get basic OCSP response");
+    }
+
+    // Extract the certificate status from the basic response
+    OCSP_SINGLERESP *single_response = OCSP_resp_get0(basic_response.get(), 0);
+    if (!single_response) {
+        throw OCSPParseException("No entries found in OCSP response");
+    }
+
+    ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revoked_time = nullptr;
+    int reason = 0;
+
+    int status = OCSP_single_get0_status(single_response, &reason, &revoked_time, &this_update, &next_update);
+
+    // Convert and store dates into strings
+    if (this_update) {
+        status_date = asn1TimeToString(this_update);
+    }
+
+    if (next_update) {
+        status_certified_until = asn1TimeToString(next_update);
+    }
+
+    if (revoked_time) {
+        revocation_date = asn1TimeToString(revoked_time);
+    }
+
+    // Return the OCSP single response status code
+    return status;
 }
 
 }  // namespace certs
