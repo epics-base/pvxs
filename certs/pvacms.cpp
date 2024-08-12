@@ -777,9 +777,7 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
         time_t status_date;
         std::tie(status, status_date) = certs::getCertificateStatus(ca_db, serial);
         if (status == UNKNOWN) {
-            status_value["status.alarm.status"] = 1;
-            status_value["status.alarm.severity"] = 1;
-            status_value["status.alarm.message"] = "Unable to determine certificate status";
+            throw std::runtime_error("Unable to determine certificate status");
         }
 
         auto ocsp_response = createAndSignOCSPResponse(serial, status, status_date, ca_cert, ca_pkey, ca_chain);
@@ -833,7 +831,7 @@ void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWi
 
         auto ocsp_response = createAndSignOCSPResponse(serial, REVOKED, time(nullptr), ca_cert, ca_pkey, ca_chain);
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-        postCertificateStatus(status_pv, pv_name, serial, REVOKED, ocsp_bytes);
+        status_value = postCertificateStatus(status_pv, pv_name, serial, REVOKED, ocsp_bytes);
         log_info_printf(pvacms, "Certificate %s:%llu has been REVOKED\n", issuer_id.c_str(), serial);
         op->reply(status_value);
     } catch (std::exception &e) {
@@ -1234,7 +1232,7 @@ void usage(const char *argv0) {
  * @param ocsp_bytes The OCSP response status
  * @param open_only Specifies whether to close the shared wildcard PV again after setting the status if it was closed to begin with.
  */
-void postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, const uint64_t &serial, const CertificateStatus &status,
+Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, const uint64_t &serial, const CertificateStatus &status,
                            shared_array<uint8_t> &ocsp_bytes, bool open_only) {
     Value status_value;
     if (status_pv.isOpen(pv_name))
@@ -1265,6 +1263,7 @@ void postCertificateStatus(server::SharedWildcardPV &status_pv, const std::strin
         status_pv.open(pv_name, status_value);
         if (!open_only) status_pv.close(pv_name);
     }
+    return status_value;
 }
 
 /**
