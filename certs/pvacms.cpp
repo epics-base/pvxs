@@ -903,9 +903,9 @@ void onApprove(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedW
             : VALID;
         certs::updateCertificateStatus(ca_db, serial, new_state, {PENDING_APPROVAL});
 
-        auto ocsp_response = createAndSignOCSPResponse(serial, VALID, current_time, ca_cert, ca_pkey, ca_chain);
+        auto ocsp_response = createAndSignOCSPResponse(serial, new_state, current_time, ca_cert, ca_pkey, ca_chain);
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-        postCertificateStatus(status_pv, pv_name, serial, VALID, ocsp_bytes);
+        postCertificateStatus(status_pv, pv_name, serial, new_state, ocsp_bytes);
         switch (new_state) {
             case VALID: log_info_printf(pvacms, "Certificate %s:%llu has been APPROVED\n", issuer_id.c_str(), serial); break;
             case EXPIRED: log_info_printf(pvacms, "Certificate %s:%llu has EXPIRED\n", issuer_id.c_str(), serial); break;

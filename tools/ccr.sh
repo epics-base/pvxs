@@ -25,11 +25,11 @@ P12_KEY_FILE="$HOME/.epics/keys/${target}.p12"
 P12_PASSWORD="$(cat $HOME/.epics/passwords/${target}.pass)"
 
 now=$(date +%s)
-not_before=$((now + 0))
-not_after=$((now + 86400))
+#not_before=$((now + 0))
+#not_after=$((now + 86400))
 
-#not_before=$((now + 30))
-#not_after=$((now + 90))
+not_before=$((now + 60))
+not_after=$((now + 90))
 
 # Check if the P12 key file exists to determine if keys need to be generated
 if [ ! -f "$P12_KEY_FILE" ]; then
