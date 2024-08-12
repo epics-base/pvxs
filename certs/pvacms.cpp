@@ -1369,6 +1369,7 @@ void setValue(Value &target, const std::string &field, const T &source) {
     if ( current.as<T>() == source ) {
         target[field].unmark();  // Assuming unmark is a valid method for indicating no change needed
     } else {
+        target[field].mark();
         target[field] = source;
     }
 }
