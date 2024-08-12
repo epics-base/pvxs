@@ -20,6 +20,7 @@
 #include <pvxs/log.h>
 #include <pvxs/version.h>
 
+#include "certmgmtservice.h"
 #include "ownedptr.h"
 #include "security.h"
 
@@ -62,10 +63,11 @@ class PVXS_API CertFactory {
     const ossl_shared_ptr<STACK_OF(X509)> certificate_chain_;
     bool valid_until_revoked_;
     std::string skid_;
+    CertificateStatus initial_status_;
 
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
                 const std::string &org_unit, time_t not_before, time_t not_after, const uint16_t &usage, X509 *issuer_certificate_ptr = nullptr,
-                EVP_PKEY *issuer_pkey_ptr = nullptr, STACK_OF(X509) *issuer_chain_ptr = nullptr, bool valid_until_revoked = false)
+                EVP_PKEY *issuer_pkey_ptr = nullptr, STACK_OF(X509) *issuer_chain_ptr = nullptr, CertificateStatus initial_status=VALID, bool valid_until_revoked = false)
         : serial_(serial),
           key_pair_(key_pair),
           name_(name),
@@ -78,7 +80,8 @@ class PVXS_API CertFactory {
           issuer_certificate_ptr_(issuer_certificate_ptr),
           issuer_pkey_ptr_(issuer_pkey_ptr),
           issuer_chain_ptr_(issuer_chain_ptr),
-          certificate_chain_(sk_X509_new_null()) {
+          certificate_chain_(sk_X509_new_null()),
+          initial_status_(initial_status) {
         valid_until_revoked_ = valid_until_revoked;
     };
 

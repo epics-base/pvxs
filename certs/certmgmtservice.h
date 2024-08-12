@@ -21,10 +21,28 @@ namespace certs {
 #define RPC_CERT_REVOKE_PV "CERT:REVOKE:????????:*"
 #define GET_MONITOR_CERT_STATUS_PV "CERT:STATUS:????????:*"
 
-enum CertificateStatus { UNKNOWN, VALID, EXPIRED, REVOKED, PENDING_APPROVAL, PENDING };
-#define CERT_STATES { "UNKNOWN", "VALID", "EXPIRED", "REVOKED", "PENDING_APPROVAL", "PENDING" }
+// All certificate statuses
+#define CERT_STATUS_LIST  \
+    X_IT(UNKNOWN)            \
+    X_IT(VALID)              \
+    X_IT(EXPIRED)            \
+    X_IT(REVOKED)            \
+    X_IT(PENDING_APPROVAL)   \
+    X_IT(PENDING)
 
-#define RPC_SERVER_TIMEOUT 3
+// Define the enum
+#define X_IT(name) name,
+enum CertificateStatus { CERT_STATUS_LIST };
+#undef X_IT
+
+// String initializer list
+#define X_IT(name) #name,
+#define CERT_STATES { CERT_STATUS_LIST }
+#define OCSP_CERT_STATES { "OCSP_CERTSTATUS_GOOD", "OCSP_CERTSTATUS_REVOKED", "OCSP_CERTSTATUS_UNKNOWN" }
+
+// Gets status name based on index
+#define CERT_STATE(index) ( (const char*[]) CERT_STATES[ (index) ] )
+#define OCSP_CERT_STATE(index) ( (const char*[]) OCSP_CERT_STATES[ (index) ] )
 
 /**
  * @class CertMgmtService

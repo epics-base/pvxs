@@ -175,7 +175,7 @@ void SharedWildcardPV::attach(std::unique_ptr<ChannelControl>&& ctrlop, const st
         }
     });
 
-    ctrl->onOp([self,parameters](std::unique_ptr<ConnectOp>&& op) {
+    ctrl->onOp([this, self,parameters](std::unique_ptr<ConnectOp>&& op) {
         // on server worker
 
         std::shared_ptr<ConnectOp> conn(std::move(op));
@@ -232,8 +232,7 @@ void SharedWildcardPV::attach(std::unique_ptr<ChannelControl>&& ctrlop, const st
         });
 
         Guard G(self->lock);
-
-        if(!self->current_vals[conn->name()]) {
+        if(!exists(self->current_vals, conn->name())) {
             // no type
             self->pending[conn->name()].insert(std::move(conn));
 
