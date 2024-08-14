@@ -54,6 +54,9 @@ GENVERSIONMACRO = PVXS_VCS_VERSION
 
 SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION)
 
+# Access to certs specific headers
+USR_CPPFLAGS += -I$(TOP)/certs
+
 INC += pvxs/client.h
 INC += pvxs/config.h
 INC += pvxs/data.h

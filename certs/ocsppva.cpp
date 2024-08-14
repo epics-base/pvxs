@@ -108,7 +108,7 @@ int readOptions(int argc, char *argv[], bool &verbose, std::string &port) {
     return 0;
 }
 
-bool getCertificateStatus(client::Context &pva_client, const uint64_t serial, CertificateStatus &status) {
+bool getCertificateStatus(client::Context &pva_client, const uint64_t serial, CertStatus &status) {
     std::string pvacms_uri = GET_CERT_STATUS;
     std::size_t pos = pvacms_uri.find('*');
 
@@ -123,7 +123,7 @@ bool getCertificateStatus(client::Context &pva_client, const uint64_t serial, Ce
     // wait for it to complete, for up to 5 seconds.
     Value result = operation->wait(3.0);
 
-    status = result["value"].as<CertificateStatus>();
+    status = result["value"].as<CertStatus>();
     return true;
 }
 
@@ -188,7 +188,7 @@ int ocspService(client::Context &pva_client, std::string &port, bool verbose) {
             uint64_t serial = std::strtoull(hex_serial.get(), nullptr, 16);
             BN_free(big_number);
 
-            CertificateStatus status;
+            CertStatus status;
             if (getCertificateStatus(pva_client, serial, status)) {
                 int ocsp_status;
                 switch (status) {

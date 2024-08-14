@@ -44,7 +44,7 @@ static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 27
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertificateStatus status, time_t revocation_time, const pvxs::ossl_ptr<X509>& ca_cert,
+std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertStatus status, time_t revocation_time, const pvxs::ossl_ptr<X509>& ca_cert,
                                                const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain) {
     // Create OCSP response
     pvxs::ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());

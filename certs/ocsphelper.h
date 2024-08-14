@@ -29,9 +29,9 @@ class OCSPParseException : public std::runtime_error {
     explicit OCSPParseException(const std::string& message) : std::runtime_error(message) {}
 };
 
-std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertificateStatus status, time_t revocation_time, const pvxs::ossl_ptr<X509>& ca_cert,
+std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertStatus status, time_t revocation_time, const pvxs::ossl_ptr<X509>& ca_cert,
                                                const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain);
-std::vector<std::vector<uint8_t>> createAndSignOCSPResponses(std::vector<uint64_t> serial, std::vector<CertificateStatus> status,
+std::vector<std::vector<uint8_t>> createAndSignOCSPResponses(std::vector<uint64_t> serial, std::vector<CertStatus> status,
                                                              std::vector<time_t> revocation_time, std::vector<const X509*>& ca_cert,
                                                              std::vector<const EVP_PKEY*>& ca_pkey, std::vector<const STACK_OF(X509) *>& ca_chain);
 

@@ -32,7 +32,7 @@ namespace certs {
 
 // Define the enum
 #define X_IT(name) name,
-enum CertificateStatus { CERT_STATUS_LIST };
+enum CertStatus { CERT_STATUS_LIST };
 #undef X_IT
 
 // String initializer list

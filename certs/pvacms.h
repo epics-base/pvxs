@@ -150,7 +150,7 @@ void ensureValidityCompatible(CertFactory &cert_factory);
 
 uint64_t generateSerial();
 
-std::tuple<CertificateStatus, time_t> getCertificateStatus(sql_ptr &ca_db, uint64_t serial);
+std::tuple<CertStatus, time_t> getCertificateStatus(sql_ptr &ca_db, uint64_t serial);
 std::tuple<time_t, time_t> getCertificateValidity(sql_ptr &ca_db, uint64_t serial);
 
 std::string getCountryCode();
@@ -196,17 +196,17 @@ void onDeny(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWild
 
 int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose);
 
-void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertificateStatus cert_status,
-                             std::vector<CertificateStatus> valid_status = {PENDING_APPROVAL, PENDING, VALID});
+void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertStatus cert_status,
+                             std::vector<CertStatus> valid_status = {PENDING_APPROVAL, PENDING, VALID});
 
-CertificateStatus storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
+CertStatus storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
 
 void usage(const char *argv0);
 
 void certificateStatusMonitor(sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv, pvxs::ossl_ptr<X509> &ca_cert,
                               pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
-Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, const uint64_t &serial, const CertificateStatus &status,
+Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, const uint64_t &serial, const CertStatus &status,
                            shared_array<uint8_t> &ocsp_bytes, bool open_only = false);
 void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id, const uint64_t &serial, int32_t error_status,
                                 int32_t error_severity, const std::string &error_message);
@@ -214,8 +214,8 @@ void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::
 std::string getCertUri(const std::string &prefix, const std::string &issuer_id, const uint64_t &serial);
 std::string getCertUri(const std::string &prefix, const std::string &cert_id);
 std::string getCertId(const std::string &issuer_id, const uint64_t &serial);
-std::string getValidStatusesClause(std::vector<CertificateStatus> valid_status);
-void bindValidStatusClauses(sqlite3_stmt *sql_statement, std::vector<CertificateStatus> valid_status);
+std::string getValidStatusesClause(std::vector<CertStatus> valid_status);
+void bindValidStatusClauses(sqlite3_stmt *sql_statement, std::vector<CertStatus> valid_status);
 std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &parameters);
 
 template <typename T>
