@@ -791,7 +791,7 @@ void onCreateCertificate(sql_ptr &ca_db, const server::SharedPV &pv, std::unique
  *
  * @return void
  */
-void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name,
+void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name,
                  const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                  const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(kStatusPrototype.clone());
@@ -812,9 +812,10 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
             throw std::runtime_error("Unable to determine certificate status");
         }
 
-        auto ocsp_response = createAndSignOCSPResponse(serial, status, status_date, ca_cert, ca_pkey, ca_chain);
+        auto now = std::time(nullptr);
+        auto ocsp_response = createAndSignOCSPResponse(config, serial, status, ca_cert, ca_pkey, ca_chain, now, status_date);
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-        postCertificateStatus(status_pv, pv_name, serial, status, ocsp_bytes, true);
+        postCertificateStatus(config, status_pv, pv_name, serial, status, now, status_date, ocsp_bytes, true);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error getting status: %s\n", e.what());
         postCertificateErrorStatus(status_pv, our_issuer_id, serial, 1, 1, e.what());
@@ -836,7 +837,7 @@ void onGetStatus(sql_ptr &ca_db, const std::string &our_issuer_id, server::Share
  *
  * @return void
  */
-void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
+void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
               const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
               const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool post_results) {
     Value status_value(kStatusPrototype.clone());
@@ -852,9 +853,10 @@ void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWi
         // set status value
         certs::updateCertificateStatus(ca_db, serial, REVOKED);
 
-        auto ocsp_response = createAndSignOCSPResponse(serial, REVOKED, time(nullptr), ca_cert, ca_pkey, ca_chain);
+        auto revocation_date = std::time(nullptr);
+        auto ocsp_response = createAndSignOCSPResponse(config, serial, REVOKED, ca_cert, ca_pkey, ca_chain, revocation_date, revocation_date);
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-        status_value = postCertificateStatus(status_pv, pv_name, serial, REVOKED, ocsp_bytes);
+        status_value = postCertificateStatus(config, status_pv, pv_name, serial, REVOKED, revocation_date, revocation_date, ocsp_bytes);
         log_info_printf(pvacms, "Certificate %s:%llu has been REVOKED\n", issuer_id.c_str(), serial);
         if (post_results)
             op->reply(status_value);
@@ -881,7 +883,7 @@ void onRevoke(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWi
  *
  * @return void
  */
-void onApprove(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
+void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
                const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(kStatusPrototype.clone());
@@ -895,15 +897,15 @@ void onApprove(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedW
         }
 
         // set status value
-        auto current_time(time(nullptr));
+        auto status_date(time(nullptr));
         time_t not_before, not_after;
         std::tie(not_before, not_after) = getCertificateValidity(ca_db, serial);
-        CertStatus new_state = current_time < not_before ? PENDING : current_time >= not_after ? EXPIRED : VALID;
+        CertStatus new_state = status_date < not_before ? PENDING : status_date >= not_after ? EXPIRED : VALID;
         certs::updateCertificateStatus(ca_db, serial, new_state, {PENDING_APPROVAL});
 
-        auto ocsp_response = createAndSignOCSPResponse(serial, new_state, current_time, ca_cert, ca_pkey, ca_chain);
+        auto ocsp_response = createAndSignOCSPResponse(config, serial, new_state, ca_cert, ca_pkey, ca_chain, status_date);
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-        postCertificateStatus(status_pv, pv_name, serial, new_state, ocsp_bytes);
+        postCertificateStatus(config, status_pv, pv_name, serial, new_state, status_date, status_date, ocsp_bytes);
         switch (new_state) {
             case VALID:
                 log_info_printf(pvacms, "Certificate %s:%llu has been APPROVED\n", issuer_id.c_str(), serial);
@@ -939,7 +941,7 @@ void onApprove(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedW
  *
  * @return void
  */
-void onDeny(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
+void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
             const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
             const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(kStatusPrototype.clone());
@@ -955,9 +957,10 @@ void onDeny(sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWild
         // set status value
         certs::updateCertificateStatus(ca_db, serial, REVOKED, {PENDING_APPROVAL});
 
-        auto ocsp_response = createAndSignOCSPResponse(serial, REVOKED, time(nullptr), ca_cert, ca_pkey, ca_chain);
+        auto revocation_date = std::time(nullptr);
+        auto ocsp_response = createAndSignOCSPResponse(config, serial, REVOKED, ca_cert, ca_pkey, ca_chain, revocation_date, revocation_date);
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-        postCertificateStatus(status_pv, pv_name, serial, REVOKED, ocsp_bytes);
+        postCertificateStatus(config, status_pv, pv_name, serial, REVOKED, revocation_date, revocation_date, ocsp_bytes);
         log_info_printf(pvacms, "Certificate %s:%llu request has been DENIED\n", issuer_id.c_str(), serial);
         op->reply();
     } catch (std::exception &e) {
@@ -1392,7 +1395,7 @@ void setValue(Value &target, const std::string &field, const T &source) {
  * @param ocsp_bytes The OCSP response status
  * @param open_only Specifies whether to close the shared wildcard PV again after setting the status if it was closed to begin with.
  */
-Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, const uint64_t &serial, const CertStatus &status,
+Value postCertificateStatus(ConfigCms &config, server::SharedWildcardPV &status_pv, const std::string &pv_name, const uint64_t &serial, const CertStatus &status, std::time_t status_date, std::time_t revocation_date,
                             shared_array<uint8_t> &ocsp_bytes, bool open_only) {
     Value status_value;
     if (status_pv.isOpen(pv_name)) {
@@ -1408,13 +1411,21 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
 
     // Get ocsp info if specified
     if (!ocsp_bytes.empty()) {
-        std::string status_date, status_certified_until, revocation_date;
-        auto ocsp_status = parseOCSPResponse<std::string>(ocsp_bytes, status_date, status_certified_until, revocation_date);
+        auto status_certified_until = status_date+config.cert_status_validity_mins*60;
+        int ocsp_status;
+        if (status == REVOKED) {
+            ocsp_status = V_OCSP_CERTSTATUS_REVOKED;
+        } else if (status == VALID) {
+            ocsp_status = V_OCSP_CERTSTATUS_GOOD;
+        } else {
+            ocsp_status = V_OCSP_CERTSTATUS_UNKNOWN;
+        }
         setValue<uint32_t>(status_value, "ocsp_status.value.index", ocsp_status);
         setValue<std::string>(status_value, "ocsp_state", OCSP_CERT_STATE(ocsp_status));
-        setValue<std::string>(status_value, "ocsp_status_date", status_date);
-        setValue<std::string>(status_value, "ocsp_certified_until", status_certified_until);
-        if (!revocation_date.empty()) setValue<std::string>(status_value, "ocsp_revocation_date", revocation_date);
+        setValue<std::string>(status_value, "ocsp_status_date",  std::ctime(&status_date));
+        setValue<std::string>(status_value, "ocsp_certified_until", std::ctime(&status_certified_until));
+        if (ocsp_status == V_OCSP_CERTSTATUS_REVOKED)
+            setValue<std::string>(status_value, "ocsp_revocation_date", std::ctime(&revocation_date));
         status_value["ocsp_response"] = ocsp_bytes.freeze();
     }
 
@@ -1528,7 +1539,7 @@ std::string getCertId(const std::string &issuer_id, const uint64_t &serial) {
  * @note This function assumes that the CA database and the status PV have been properly configured and initialized.
  * @note The status_pv parameter must be a valid SharedWildcardPV object.
  */
-void certificateStatusMonitor(sql_ptr &ca_db, std::string &issuer_id, server::SharedWildcardPV &status_pv, pvxs::ossl_ptr<X509> &ca_cert,
+void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &issuer_id, server::SharedWildcardPV &status_pv, pvxs::ossl_ptr<X509> &ca_cert,
                               pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     log_info_printf(pvacms, "Certificate Monitor Thread Started%s", "\n");
     epicsMutex lock;
@@ -1549,9 +1560,10 @@ void certificateStatusMonitor(sql_ptr &ca_db, std::string &issuer_id, server::Sh
                 try {
                     const std::string pv_name(getCertUri(kCertStatusPrefix, issuer_id, serial));
                     updateCertificateStatus(ca_db, serial, VALID, {PENDING});
-                    auto ocsp_response = createAndSignOCSPResponse(serial, PENDING, time(nullptr), ca_cert, ca_pkey, ca_chain);
+                    auto status_date = std::time(nullptr);
+                    auto ocsp_response = createAndSignOCSPResponse(config, serial, PENDING, ca_cert, ca_pkey, ca_chain, status_date);
                     auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-                    postCertificateStatus(status_pv, pv_name, serial, VALID, ocsp_bytes);
+                    postCertificateStatus(config, status_pv, pv_name, serial, VALID, status_date, status_date, ocsp_bytes);
                     log_info_printf(pvacms, "Certificate %s:%llu has become VALID\n", issuer_id.c_str(), serial);
                 } catch (const std::runtime_error &e) {
                     log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", e.what());
@@ -1575,9 +1587,10 @@ void certificateStatusMonitor(sql_ptr &ca_db, std::string &issuer_id, server::Sh
                 try {
                     const std::string pv_name(getCertUri(kCertStatusPrefix, issuer_id, serial));
                     updateCertificateStatus(ca_db, serial, EXPIRED, {VALID, PENDING_APPROVAL, PENDING});
-                    auto ocsp_response = createAndSignOCSPResponse(serial, EXPIRED, time(nullptr), ca_cert, ca_pkey, ca_chain);
+                    auto status_date = std::time(nullptr);
+                    auto ocsp_response = createAndSignOCSPResponse(config, serial, EXPIRED, ca_cert, ca_pkey, ca_chain, status_date);
                     auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-                    postCertificateStatus(status_pv, pv_name, serial, EXPIRED, ocsp_bytes);
+                    postCertificateStatus(config, status_pv, pv_name, serial, EXPIRED, status_date, status_date, ocsp_bytes);
                     log_info_printf(pvacms, "Certificate %s:%llu has EXPIRED\n", issuer_id.c_str(), serial);
                 } catch (const std::runtime_error &e) {
                     log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", e.what());
@@ -1652,13 +1665,13 @@ int main(int argc, char *argv[]) {
 
         // Status PV
         status_pv.onFirstConnect(
-            [&ca_db, &ca_pkey, &ca_cert, ca_chain, &our_issuer_id](SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
-                onGetStatus(ca_db, our_issuer_id, pv, pv_name, parameters, ca_pkey, ca_cert, ca_chain);
+            [&config, &ca_db, &ca_pkey, &ca_cert, ca_chain, &our_issuer_id](SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
+                onGetStatus(config, ca_db, our_issuer_id, pv, pv_name, parameters, ca_pkey, ca_cert, ca_chain);
             });
 
         status_pv.onLastDisconnect([](SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) { pv.close(pv_name); });
 
-        status_pv.onPut([&ca_db, &our_issuer_id, &ca_pkey, &ca_cert, ca_chain](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &pv_name,
+        status_pv.onPut([&config, &ca_db, &our_issuer_id, &ca_pkey, &ca_cert, ca_chain](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &pv_name,
                                                                                const std::list<std::string> &parameters, pvxs::Value &&value) {
             // Make sure that pv is open before any put operation
             if (!pv.isOpen(pv_name)) {
@@ -1674,23 +1687,23 @@ int main(int argc, char *argv[]) {
             std::transform(state.begin(), state.end(), state.begin(), ::toupper);
 
             if (state == "REVOKED") {
-                onRevoke(ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, ca_pkey, ca_cert, ca_chain, false);
+                onRevoke(config, ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, ca_pkey, ca_cert, ca_chain, false);
             } else if (state == "APPROVED") {
-                onApprove(ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, ca_pkey, ca_cert, ca_chain);
+                onApprove(config, ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, ca_pkey, ca_cert, ca_chain);
             } else if (state == "DENIED") {
-                onDeny(ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, ca_pkey, ca_cert, ca_chain);
+                onDeny(config, ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, ca_pkey, ca_cert, ca_chain);
             } else {
                 postCertificateErrorStatus(pv, our_issuer_id, serial, 1, 1, pvxs::SB() << "Invalid certificate state requested: " << state);
             }
         });
 
         // Revoke Certificate
-        revoke_pv.onRPC([&ca_db, &status_pv, &our_issuer_id, &ca_pkey, &ca_cert, ca_chain](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op,
+        revoke_pv.onRPC([&config, &ca_db, &status_pv, &our_issuer_id, &ca_pkey, &ca_cert, ca_chain](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op,
                                                                                            const std::string &revoke_pv_name,
                                                                                            const std::list<std::string> &parameters, pvxs::Value &&args) {
             auto status_pv_name(revoke_pv_name);
             status_pv_name.replace(0, kCertRevokePrefix.length(), kCertStatusPrefix);
-            onRevoke(ca_db, our_issuer_id, status_pv, std::move(op), status_pv_name, parameters, ca_pkey, ca_cert, ca_chain);
+            onRevoke(config, ca_db, our_issuer_id, status_pv, std::move(op), status_pv_name, parameters, ca_pkey, ca_cert, ca_chain);
         });
 
         // Build server which will serve this PV
@@ -1700,7 +1713,7 @@ int main(int argc, char *argv[]) {
         pva_server.addPV(RPC_CERT_CREATE, create_pv).addPV(RPC_CERT_REVOKE_PV, revoke_pv).addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
 
         // Certificate Status Monitor
-        std::thread certificate_status_monitor_worker(certificateStatusMonitor, std::ref(ca_db), std::ref(our_issuer_id), std::ref(status_pv),
+        std::thread certificate_status_monitor_worker(certificateStatusMonitor, std::ref(config), std::ref(ca_db), std::ref(our_issuer_id), std::ref(status_pv),
                                                       std::ref(ca_cert), std::ref(ca_pkey), std::ref(ca_chain));
 
         if (verbose)

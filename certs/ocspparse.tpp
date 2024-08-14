@@ -65,17 +65,7 @@ std::vector<int> parseOCSPResponses(const shared_array<uint8_t> &ocsp_bytes, std
                                     std::vector<T> &revocation_date, std::function<T(ASN1_GENERALIZEDTIME *)> &&date_convert_fn) {
     std::vector<int> statuses;
 
-    // Create a BIO for the OCSP response
-    ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())));
-    if (!bio) {
-        throw OCSPParseException("Failed to create BIO for OCSP response");
-    }
-
-    // Parse the BIO into an OCSP_RESPONSE
-    ossl_ptr<OCSP_RESPONSE> ocsp_response(d2i_OCSP_RESPONSE_bio(bio.get(), nullptr));
-    if (!ocsp_response) {
-        throw OCSPParseException("Failed to parse OCSP response");
-    }
+    auto&& ocsp_response = getOSCPResponse(ocsp_bytes);
 
     int response_status = OCSP_response_status(ocsp_response.get());
     if (response_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {

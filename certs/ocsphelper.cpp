@@ -16,6 +16,7 @@
 #include <openssl/x509.h>
 
 #include "certmgmtservice.h"
+#include "configcms.h"
 #include "ownedptr.h"
 
 namespace pvxs {
@@ -44,21 +45,22 @@ static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 27
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertStatus status, time_t revocation_time, const pvxs::ossl_ptr<X509>& ca_cert,
-                                               const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain) {
+std::vector<uint8_t> createAndSignOCSPResponse(ConfigCms &config, uint64_t serial, CertStatus status, const pvxs::ossl_ptr<X509>& ca_cert,
+                                               const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain,
+                                               time_t status_date, time_t revocation_time) {
     // Create OCSP response
     pvxs::ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
     // Set ASN1_TIME objects for revocationTime, thisUpdate, and nextUpdate using pvxs::ossl_ptr
-    pvxs::ossl_ptr<ASN1_TIME> revocationTime(nullptr, false);
     pvxs::ossl_ptr<ASN1_TIME> thisUpdate(ASN1_TIME_new());
     pvxs::ossl_ptr<ASN1_TIME> nextUpdate(ASN1_TIME_new());
+    pvxs::ossl_ptr<ASN1_TIME> revocationTime(nullptr, false);
 
-    // Set the current time as thisUpdate (i.e., time at which the status was verified)
-    ASN1_TIME_set(thisUpdate.get(), time(nullptr));
+    // Set the status date
+    ASN1_TIME_set(thisUpdate.get(), status_date);
 
-    // Set nextUpdate time 30 minutes ahead
-    ASN1_TIME_adj(nextUpdate.get(), time(nullptr), 0, 30 * 60);
+    // Set nextUpdate time to cert_status_validity_mins minutes ahead
+    ASN1_TIME_adj(nextUpdate.get(), status_date, 0, config.cert_status_validity_mins * 60);
 
     // Determine the OCSP status and revocation time
     int ocsp_status;
@@ -250,6 +252,46 @@ std::string asn1TimeToString(ASN1_GENERALIZEDTIME* time) {
     BUF_MEM* bptr;
     BIO_get_mem_ptr(bio.get(), &bptr);
     return std::string(bptr->data, bptr->length);
+}
+
+ossl_ptr<OCSP_RESPONSE> getOSCPResponse(const shared_array<uint8_t>& ocsp_bytes) {
+    // Create a BIO for the OCSP response
+    ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())));
+    if (!bio) {
+        throw OCSPParseException("Failed to create BIO for OCSP response");
+    }
+
+    // Parse the BIO into an OCSP_RESPONSE
+    ossl_ptr<OCSP_RESPONSE> ocsp_response(d2i_OCSP_RESPONSE_bio(bio.get(), nullptr));
+    if (!ocsp_response) {
+        throw OCSPParseException("Failed to parse OCSP response");
+    }
+
+    return ocsp_response;
+}
+
+bool verifyOCSPResponse(const shared_array<uint8_t>& ocsp_bytes, ossl_ptr<X509> &ca_cert) {
+    auto response(getOSCPResponse(ocsp_bytes));
+
+    // Create OCSP basic response structure
+    ossl_ptr<OCSP_BASICRESP> basic_response(OCSP_response_get1_basic(response.get()));
+    if (!basic_response) {
+        throw OCSPParseException("Could not retrieve basic OCSP response");
+    }
+
+    // Create a new X509_STORE and add the issuer certificate
+    ossl_ptr<X509_STORE> store(X509_STORE_new());
+    if (!store) {
+        throw OCSPParseException("Failed to create X509_STORE");
+    }
+
+    // Add the issuer certificate to the store
+    if (X509_STORE_add_cert(store.get(), ca_cert.get()) != 1) {
+        throw OCSPParseException("Failed to add issuer certificate to X509_STORE");
+    }
+
+    // Verify the OCSP response.  Values greater than 0 mean verified
+    return OCSP_basic_verify(basic_response.get(), nullptr, store.get(), 0) > 0;
 }
 
 }  // namespace certs

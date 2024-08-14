@@ -44,6 +44,26 @@ enum CertStatus { CERT_STATUS_LIST };
 #define CERT_STATE(index) ( (const char*[]) CERT_STATES[ (index) ] )
 #define OCSP_CERT_STATE(index) ( (const char*[]) OCSP_CERT_STATES[ (index) ] )
 
+struct CertificateStatus {
+    const CertStatus status;
+    int ocsp_status;
+    const shared_array<uint8_t> ocsp_bytes{};
+    std::time_t status_date;
+    std::time_t status_valid_until_date;
+    std::time_t revocation_date;
+
+    explicit CertificateStatus(CertStatus status, int ocsp_status, const shared_array<uint8_t> &ocsp_bytes,
+                               std::time_t status_date, std::time_t status_valid_until_date, std::time_t revocation_date)
+    : status(status)
+    , ocsp_status(ocsp_status)
+    , ocsp_bytes(ocsp_bytes)
+    , status_date(status_date)
+    , status_valid_until_date(status_valid_until_date)
+    , revocation_date(revocation_date)
+    {};
+};
+
+
 /**
  * @class CertMgmtService
  *

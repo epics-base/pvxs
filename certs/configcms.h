@@ -31,14 +31,10 @@ class ConfigCms : public pvxs::server::Config {
     }
 
     /**
-     * @brief Minutes before expiry that `EXPIRY_IMMINENT`
-     * status should be set on a certificate status.
-     *
-     * When a server or client receives such a status it will try to
-     * renew the cert but will keep a backup and if it fails to renew
-     * it will continue to use the original one.
+     * @brief Minutes that the ocsp status response will
+     * be valid before a client must re-request an update
      */
-    uint32_t cert_pre_expiry_mins = 1440;
+    uint32_t cert_status_validity_mins = 30;
 
     /**
      * @brief When basic credentials are used then set to true to

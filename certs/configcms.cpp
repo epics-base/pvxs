@@ -136,10 +136,10 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         ca_organizational_unit = pickone.val;
     }
 
-    // EPICS_PVACMS_PRE_EXPIRY_MINS
-    if (pickone({"EPICS_PVACMS_PRE_EXPIRY_MINS"})) {
+    // EPICS_PVACMS_CERT STATUS VALIDITY MINS
+    if (pickone({"EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS"})) {
         try {
-            cert_pre_expiry_mins = parseTo<uint64_t>(pickone.val);
+            cert_status_validity_mins = parseTo<uint64_t>(pickone.val);
         } catch (std::exception &e) {
             log_err_printf(_logname, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
