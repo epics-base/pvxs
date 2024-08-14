@@ -44,9 +44,8 @@ static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 27
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertificateStatus status, time_t revocation_time,
-                                               const pvxs::ossl_ptr<X509>& ca_cert, const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey,
-                                               const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain) {
+std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertificateStatus status, time_t revocation_time, const pvxs::ossl_ptr<X509>& ca_cert,
+                                               const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain) {
     // Create OCSP response
     pvxs::ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
@@ -59,7 +58,7 @@ std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertificateStatu
     ASN1_TIME_set(thisUpdate.get(), time(nullptr));
 
     // Set nextUpdate time 30 minutes ahead
-    ASN1_TIME_adj(nextUpdate.get(), time(nullptr), 0, 30*60);
+    ASN1_TIME_adj(nextUpdate.get(), time(nullptr), 0, 30 * 60);
 
     // Determine the OCSP status and revocation time
     int ocsp_status;
@@ -117,7 +116,7 @@ std::vector<uint8_t> createAndSignOCSPResponse(uint64_t serial, CertificateStatu
 pvxs::ossl_ptr<ASN1_INTEGER> uint64ToASN1(uint64_t serial) {
     pvxs::ossl_ptr<ASN1_INTEGER> asn1_serial(ASN1_INTEGER_new());
     if (!asn1_serial) {
-        throw std::runtime_error(SB() << "Error converting serial number: " << serial );
+        throw std::runtime_error(SB() << "Error converting serial number: " << serial);
     }
 
     // Convert uint64_t to a byte array
@@ -144,7 +143,7 @@ pvxs::ossl_ptr<ASN1_INTEGER> uint64ToASN1(uint64_t serial) {
  *
  * @return The OCSP certificate ID.
  */
-pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(uint64_t serial, const pvxs::ossl_ptr<X509> &ca_cert, const EVP_MD *digest) {
+pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(uint64_t serial, const pvxs::ossl_ptr<X509>& ca_cert, const EVP_MD* digest) {
     if (!ca_cert) {
         throw std::runtime_error("No CA certificate provided");
     }
@@ -195,7 +194,6 @@ std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& b
     return resp_bytes;
 }
 
-
 /**
  * @brief  Manual calculation of time since epoch
  *
@@ -204,14 +202,13 @@ std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& b
  * @param tm tm struct in UTC
  * @return time_t seconds since epoch
  */
-time_t tmToTimeTUTC(std::tm &tm) {
+time_t tmToTimeTUTC(std::tm& tm) {
     int year = 1900 + tm.tm_year;
 
     // Calculate days up to start of the current year
-    time_t days = (year - 1970) * 365
-      + (year - 1969) / 4  // Leap years
-      - (year - 1901) / 100  // Excluding non-leap centuries
-      + (year - 1601) / 400;  // Including leap centuries
+    time_t days = (year - 1970) * 365 + (year - 1969) / 4  // Leap years
+                  - (year - 1901) / 100                    // Excluding non-leap centuries
+                  + (year - 1601) / 400;                   // Including leap centuries
 
     // Calculate days up to the start of the current month within the current year
     days += kMonthStartDays[tm.tm_mon];
@@ -226,14 +223,13 @@ time_t tmToTimeTUTC(std::tm &tm) {
     return ((days * 24 + tm.tm_hour) * 60 + tm.tm_min) * 60 + tm.tm_sec;
 }
 
-
 /**
  * @brief Convert from ASN1_TIME found in certificates to time_t format
  * @param time the ASN1_TIME to convert
  *
  * @return the time_t representation of the given ASN1_TIME value
  */
-time_t asn1TimeToTimeT(ASN1_TIME *time) {
+time_t asn1TimeToTimeT(ASN1_TIME* time) {
     std::tm t{};
     if (ASN1_TIME_to_tm(time, &t) != 1) {
         throw std::runtime_error("Failed to convert ASN1_TIME to tm structure");
@@ -242,7 +238,7 @@ time_t asn1TimeToTimeT(ASN1_TIME *time) {
 }
 
 // Utility function to convert ASN1_TIME to string (simplified)
-std::string asn1TimeToString(ASN1_GENERALIZEDTIME *time) {
+std::string asn1TimeToString(ASN1_GENERALIZEDTIME* time) {
     ossl_ptr<BIO> bio(BIO_new(BIO_s_mem()), false);
     if (!bio) {
         throw OCSPParseException("Failed to create BIO for time conversion");
@@ -251,113 +247,9 @@ std::string asn1TimeToString(ASN1_GENERALIZEDTIME *time) {
         throw OCSPParseException("Failed to format ASN1_GENERALIZEDTIME");
     }
 
-    BUF_MEM *bptr;
+    BUF_MEM* bptr;
     BIO_get_mem_ptr(bio.get(), &bptr);
     return std::string(bptr->data, bptr->length);
-}
-
-// Function to parse OCSP response byte buffer
-int parseOCSPResponse(const shared_array<uint8_t>& ocsp_bytes, std::string &status_date, std::string &status_certified_until, std::string &revocation_date) {
-    // Create a BIO for the OCSP response
-    ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())), false);
-    if (!bio) {
-        throw OCSPParseException("Failed to create BIO for OCSP response");
-    }
-
-    // Parse the BIO into an OCSP_RESPONSE
-    ossl_ptr<OCSP_RESPONSE> ocsp_response(d2i_OCSP_RESPONSE_bio(bio.get(), nullptr), false);
-    if (!ocsp_response) {
-        throw OCSPParseException("Failed to parse OCSP response");
-    }
-
-    int response_status = OCSP_response_status(ocsp_response.get());
-    if (response_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {
-        throw OCSPParseException("OCSP response status not successful");
-    }
-
-    // Extract the basic OCSP response
-    ossl_ptr<OCSP_BASICRESP> basic_response(OCSP_response_get1_basic(ocsp_response.get()), false);
-    if (!basic_response) {
-        throw OCSPParseException("Failed to get basic OCSP response");
-    }
-
-    // Extract the certificate status from the basic response
-    OCSP_SINGLERESP *single_response = OCSP_resp_get0(basic_response.get(), 0);
-    if (!single_response) {
-        throw OCSPParseException("No entries found in OCSP response");
-    }
-
-    ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revoked_time = nullptr;
-    int reason = 0;
-
-    int status = OCSP_single_get0_status(single_response, &reason, &revoked_time, &this_update, &next_update);
-
-    // Convert and store dates into strings
-    if (this_update) {
-        status_date = asn1TimeToString(this_update);
-    }
-
-    if (next_update) {
-        status_certified_until = asn1TimeToString(next_update);
-    }
-
-    if (revoked_time) {
-        revocation_date = asn1TimeToString(revoked_time);
-    }
-
-    // Return the OCSP single response status code
-    return status;
-}
-
-int parseOCSPResponse(const shared_array<uint8_t>& ocsp_bytes, time_t &status_date, time_t &status_certified_until, time_t &revocation_date) {
-    // Create a BIO for the OCSP response
-    ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())), false);
-    if (!bio) {
-        throw OCSPParseException("Failed to create BIO for OCSP response");
-    }
-
-    // Parse the BIO into an OCSP_RESPONSE
-    ossl_ptr<OCSP_RESPONSE> ocsp_response(d2i_OCSP_RESPONSE_bio(bio.get(), nullptr), false);
-    if (!ocsp_response) {
-        throw OCSPParseException("Failed to parse OCSP response");
-    }
-
-    int response_status = OCSP_response_status(ocsp_response.get());
-    if (response_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {
-        throw OCSPParseException("OCSP response status not successful");
-    }
-
-    // Extract the basic OCSP response
-    ossl_ptr<OCSP_BASICRESP> basic_response(OCSP_response_get1_basic(ocsp_response.get()), false);
-    if (!basic_response) {
-        throw OCSPParseException("Failed to get basic OCSP response");
-    }
-
-    // Extract the certificate status from the basic response
-    OCSP_SINGLERESP *single_response = OCSP_resp_get0(basic_response.get(), 0);
-    if (!single_response) {
-        throw OCSPParseException("No entries found in OCSP response");
-    }
-
-    ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revoked_time = nullptr;
-    int reason = 0;
-
-    int status = OCSP_single_get0_status(single_response, &reason, &revoked_time, &this_update, &next_update);
-
-    // Get time_t
-    if (this_update) {
-        status_date = asn1TimeToTimeT(this_update);
-    }
-
-    if (next_update) {
-        status_certified_until = asn1TimeToTimeT(next_update);
-    }
-
-    if (revoked_time) {
-        revocation_date = asn1TimeToTimeT(revoked_time);
-    }
-
-    return status;
 }
 
 }  // namespace certs
