@@ -408,18 +408,40 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
     server->acceptor_loop.assertInLoop();
     auto orig_port = bind_addr.port();
 
-    sock = evsocket(bind_addr.family(), SOCK_STREAM, 0);
-
-    if(evutil_make_listen_socket_reuseable(sock.sock))
-        log_warn_printf(connsetup, "Unable to make socket reusable%s", "\n");
-
     // try to bind to requested port, then fallback to a random port
     while(true) {
+
+        sock = evsocket(bind_addr.family(), SOCK_STREAM, 0);
+
+        if(evutil_make_listen_socket_reuseable(sock.sock))
+            log_warn_printf(connsetup, "Unable to make socket reusable%s", "\n");
+
         try {
             sock.bind(bind_addr);
+            // semantics of SO_REUSEADDR on *nix allow multiple bind() to success.
+            // however, only one listen() will succeed
+
+            // added in libevent 2.1.1
+#ifndef LEV_OPT_DISABLED
+#  define LEV_OPT_DISABLED 0
+#endif
+
+            const int backlog = 4;
+            auto list(evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
+            if(!list) {
+                int err = evutil_socket_geterror(sock);
+                throw std::system_error(err, std::system_category());
+            }
+            listener = evlisten(__FILE__, __LINE__, list);
+
+            if(!LEV_OPT_DISABLED)
+                evconnlistener_disable(listener.get());
+
         } catch(std::system_error& e) {
-            if(fallback && e.code().value()==SOCK_EADDRINUSE) {
-                log_debug_printf(connsetup, "Address %s in use\n", bind_addr.tostring().c_str());
+            if(fallback && (e.code().value()==SOCK_EADDRINUSE || e.code().value()==SOCK_EACCES)) {
+                log_debug_printf(connsetup, "Address %s in use or not permitted: %s\n",
+                                 bind_addr.tostring().c_str(),
+                                 e.what());
                 bind_addr.setPort(0);
                 fallback = false;
                 continue;
@@ -438,18 +460,6 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
     if(orig_port && bind_addr.port() != orig_port) {
         log_warn_printf(connsetup, "Server unable to bind port %u, falling back to %s\n", orig_port, name.c_str());
     }
-
-    // added in libevent 2.1.1
-#ifndef LEV_OPT_DISABLED
-#  define LEV_OPT_DISABLED 0
-#endif
-
-    const int backlog = 4;
-    listener = evlisten(__FILE__, __LINE__,
-                        evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
-
-    if(!LEV_OPT_DISABLED)
-        evconnlistener_disable(listener.get());
 }
 
 void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw)
