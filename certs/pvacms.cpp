@@ -859,7 +859,7 @@ void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_i
         certs::updateCertificateStatus(ca_db, serial, REVOKED);
 
         auto revocation_date = std::time(nullptr);
-        ocsp_helper.makeOCSPResponse(serial, REVOKED,revocation_date, revocation_date);
+        ocsp_helper.makeOCSPResponse(serial, REVOKED, revocation_date, revocation_date);
         status_value = postCertificateStatus(config, status_pv, pv_name, ocsp_helper);
         log_info_printf(pvacms, "Certificate %s:%llu has been REVOKED\n", issuer_id.c_str(), ocsp_helper.serial());
         if (post_results)
@@ -1421,10 +1421,9 @@ Value postCertificateStatus(ConfigCms &config, server::SharedWildcardPV &status_
         auto ocsp_bytes = shared_array<uint8_t>(ocsp_helper.ocsp_response().begin(), ocsp_helper.ocsp_response().end());
         setValue<uint32_t>(status_value, "ocsp_status.value.index", ocsp_helper.ocsp_status());
         setValue<std::string>(status_value, "ocsp_state", OCSP_CERT_STATE(ocsp_helper.ocsp_status()));
-        setValue<std::string>(status_value, "ocsp_status_date",  ocsp_helper.status_date());
+        setValue<std::string>(status_value, "ocsp_status_date", ocsp_helper.status_date());
         setValue<std::string>(status_value, "ocsp_certified_until", ocsp_helper.status_valid_until_date());
-        if (ocsp_helper.ocsp_status() == V_OCSP_CERTSTATUS_REVOKED)
-            setValue<std::string>(status_value, "ocsp_revocation_date", ocsp_helper.revocation_date());
+        if (ocsp_helper.ocsp_status() == V_OCSP_CERTSTATUS_REVOKED) setValue<std::string>(status_value, "ocsp_revocation_date", ocsp_helper.revocation_date());
         status_value["ocsp_response"] = ocsp_bytes.freeze();
     }
 
@@ -1662,15 +1661,16 @@ int main(int argc, char *argv[]) {
             });
 
         // Status PV
-        status_pv.onFirstConnect(
-            [&config, &ca_db, &ca_pkey, &ca_cert, ca_chain, &our_issuer_id](SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
-                onGetStatus(config, ca_db, our_issuer_id, pv, pv_name, parameters, ca_pkey, ca_cert, ca_chain);
-            });
+        status_pv.onFirstConnect([&config, &ca_db, &ca_pkey, &ca_cert, ca_chain, &our_issuer_id](SharedWildcardPV &pv, const std::string &pv_name,
+                                                                                                 const std::list<std::string> &parameters) {
+            onGetStatus(config, ca_db, our_issuer_id, pv, pv_name, parameters, ca_pkey, ca_cert, ca_chain);
+        });
 
         status_pv.onLastDisconnect([](SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) { pv.close(pv_name); });
 
-        status_pv.onPut([&config, &ca_db, &our_issuer_id, &ca_pkey, &ca_cert, ca_chain](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &pv_name,
-                                                                               const std::list<std::string> &parameters, pvxs::Value &&value) {
+        status_pv.onPut([&config, &ca_db, &our_issuer_id, &ca_pkey, &ca_cert, ca_chain](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op,
+                                                                                        const std::string &pv_name, const std::list<std::string> &parameters,
+                                                                                        pvxs::Value &&value) {
             // Make sure that pv is open before any put operation
             if (!pv.isOpen(pv_name)) {
                 pv.open(pv_name, getStatusPrototype());
@@ -1696,9 +1696,9 @@ int main(int argc, char *argv[]) {
         });
 
         // Revoke Certificate
-        revoke_pv.onRPC([&config, &ca_db, &status_pv, &our_issuer_id, &ca_pkey, &ca_cert, ca_chain](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op,
-                                                                                           const std::string &revoke_pv_name,
-                                                                                           const std::list<std::string> &parameters, pvxs::Value &&args) {
+        revoke_pv.onRPC([&config, &ca_db, &status_pv, &our_issuer_id, &ca_pkey, &ca_cert, ca_chain](
+                            SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &revoke_pv_name, const std::list<std::string> &parameters,
+                            pvxs::Value &&args) {
             auto status_pv_name(revoke_pv_name);
             status_pv_name.replace(0, kCertRevokePrefix.length(), kCertStatusPrefix);
             onRevoke(config, ca_db, our_issuer_id, status_pv, std::move(op), status_pv_name, parameters, ca_pkey, ca_cert, ca_chain);

@@ -42,8 +42,7 @@ const int OCSPHelper::kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 24
  * @see ocspResponseToBytes
  */
 void OCSPHelper::makeOCSPResponse(uint64_t serial, CertStatus status, time_t status_date, time_t revocation_time) {
-    if ( process_mode_)
-        throw std::runtime_error("OCSP Helper not configured to create an OCSP response");
+    if (process_mode_) throw std::runtime_error("OCSP Helper not configured to create an OCSP response");
 
     serial_ = serial;
 
@@ -54,7 +53,7 @@ void OCSPHelper::makeOCSPResponse(uint64_t serial, CertStatus status, time_t sta
 
     // Set ASN1_TIME objects for revocationTime, thisUpdate, and nextUpdate using pvxs::ossl_ptr
     status_date_ = StatusDate(status_date);
-    status_valid_until_time_ = StatusDate(status_date+config_.cert_status_validity_mins*60);
+    status_valid_until_time_ = StatusDate(status_date + config_.cert_status_validity_mins * 60);
 
     pvxs::ossl_ptr<ASN1_TIME> thisUpdate(ASN1_TIME_new());
     pvxs::ossl_ptr<ASN1_TIME> nextUpdate(ASN1_TIME_new());
@@ -287,9 +286,14 @@ ossl_ptr<OCSP_RESPONSE> OCSPHelper::getOSCPResponse(const shared_array<uint8_t>&
  * @return the vector containing OCSP response status codes for each certificate status in the ocsp_bytes response
  */
 // Existing implementation of parseOCSPResponses can go here
-OCSPHelper::OCSPHelper(const ConfigCms &config, const shared_array<uint8_t> &ocsp_bytes, const pvxs::ossl_ptr<X509>& ca_cert)
-  : config_(config), ca_cert_(ca_cert), ca_pkey_(ossl_ptr_ref<EVP_PKEY>()), ca_chain_(ossl_shared_ptr_ref<STACK_OF(X509)>()), process_mode_(true), serial_(0) {
-    if ( !verifyOCSPResponse(ocsp_bytes)) {
+OCSPHelper::OCSPHelper(const ConfigCms& config, const shared_array<uint8_t>& ocsp_bytes, const pvxs::ossl_ptr<X509>& ca_cert)
+    : config_(config),
+      ca_cert_(ca_cert),
+      ca_pkey_(ossl_ptr_ref<EVP_PKEY>()),
+      ca_chain_(ossl_shared_ptr_ref<STACK_OF(X509)>()),
+      process_mode_(true),
+      serial_(0) {
+    if (!verifyOCSPResponse(ocsp_bytes)) {
         throw OCSPParseException("The OCSP response is not from a trusted source");
     }
 
@@ -306,7 +310,7 @@ OCSPHelper::OCSPHelper(const ConfigCms &config, const shared_array<uint8_t> &ocs
         throw OCSPParseException("Failed to get basic OCSP response");
     }
 
-    OCSP_SINGLERESP *single_response = OCSP_resp_get0(basic_response.get(), 0);
+    OCSP_SINGLERESP* single_response = OCSP_resp_get0(basic_response.get(), 0);
     if (!single_response) {
         throw OCSPParseException("No entries found in OCSP response");
     }

@@ -106,9 +106,9 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
     "FROM certs "         \
     "WHERE serial = :serial"
 
-#define SQL_CERT_VALIDITY   \
-    "SELECT not_before "      \
-    "     , not_after " \
+#define SQL_CERT_VALIDITY \
+    "SELECT not_before "  \
+    "     , not_after "   \
     "FROM certs "         \
     "WHERE serial = :serial"
 
@@ -185,15 +185,15 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
 
 void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
               const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
-              const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool post_results=true);
+              const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool post_results = true);
 
 void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
                const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
 void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
-              const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
-              const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+            const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
+            const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
 int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose);
 
@@ -207,7 +207,8 @@ void usage(const char *argv0);
 void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv, pvxs::ossl_ptr<X509> &ca_cert,
                               pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
-Value postCertificateStatus(ConfigCms &config, server::SharedWildcardPV &status_pv, const std::string &pv_name, const OCSPHelper &ocsp_helper, bool open_only = false);
+Value postCertificateStatus(ConfigCms &config, server::SharedWildcardPV &status_pv, const std::string &pv_name, const OCSPHelper &ocsp_helper,
+                            bool open_only = false);
 void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id, const uint64_t &serial, int32_t error_status,
                                 int32_t error_severity, const std::string &error_message);
 
