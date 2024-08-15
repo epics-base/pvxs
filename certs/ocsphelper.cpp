@@ -286,13 +286,15 @@ ossl_ptr<OCSP_RESPONSE> OCSPHelper::getOSCPResponse(const shared_array<uint8_t>&
  * @return the vector containing OCSP response status codes for each certificate status in the ocsp_bytes response
  */
 // Existing implementation of parseOCSPResponses can go here
-OCSPHelper::OCSPHelper(const ConfigCms& config, const shared_array<uint8_t>& ocsp_bytes, const pvxs::ossl_ptr<X509>& ca_cert)
+OCSPHelper::OCSPHelper(const ConfigCms& config, const shared_array<uint8_t>& ocsp_bytes, const pvxs::ossl_ptr<X509>& ca_cert, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain)
     : config_(config),
       ca_cert_(ca_cert),
       ca_pkey_(ossl_ptr_ref<EVP_PKEY>()),
-      ca_chain_(ossl_shared_ptr_ref<STACK_OF(X509)>()),
+      ca_chain_(ca_chain),
       process_mode_(true),
       serial_(0) {
+
+    // Verify signature of OCSP response
     if (!verifyOCSPResponse(ocsp_bytes)) {
         throw OCSPParseException("The OCSP response is not from a trusted source");
     }
@@ -375,7 +377,7 @@ bool OCSPHelper::verifyOCSPResponse(const shared_array<uint8_t>& ocsp_bytes) {
     }
 
     // Verify the OCSP response.  Values greater than 0 mean verified
-    return OCSP_basic_verify(basic_response.get(), nullptr, store.get(), 0) > 0;
+    return OCSP_basic_verify(basic_response.get(), ca_chain_.get(), store.get(), 0) > 0;
 }
 
 }  // namespace certs

@@ -48,12 +48,21 @@ class OCSPHelper {
     inline const std::time_t& revocation_time() const { return revocation_time_.t; }
     inline const std::vector<uint8_t>& ocsp_response() const { return ocsp_response_; }
 
-    // an OCSP Helper that can be used to make OCSP responses for given statuses
+    /**
+     * @brief An OCSP Helper that can be used to make OCSP responses for given statuses
+     * You need the private key of the CA in order to do this.
+     *
+     * @param config
+     * @param ca_cert
+     * @param ca_pkey
+     * @param ca_chain
+     */
     OCSPHelper(const ConfigCms& config, const ossl_ptr<X509>& ca_cert, const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey,
                const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain)
         : config_(config), ca_cert_(ca_cert), ca_pkey_(ca_pkey), ca_chain_(ca_chain), process_mode_(false) {};
 
-    OCSPHelper(const ConfigCms& config, const shared_array<uint8_t>& ocsp_bytes, const pvxs::ossl_ptr<X509>& ca_cert);
+    // An OCSP Helper that can be used to parse and verify OCSP responses and determine status
+    OCSPHelper(const ConfigCms& config, const shared_array<uint8_t>& ocsp_bytes, const pvxs::ossl_ptr<X509>& ca_cert, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain);
     void makeOCSPResponse(uint64_t serial, CertStatus status, time_t status_date = std::time(nullptr), time_t revocation_time = std::time(nullptr));
     static time_t asn1TimeToTimeT(ASN1_TIME* time);
 
