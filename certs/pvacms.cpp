@@ -796,7 +796,10 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
                  const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(kStatusPrototype.clone());
     uint64_t serial = 0;
+    epicsMutex lock;
+    static auto ocsp_helper(OCSPHelper(config, ca_cert, ca_pkey, ca_chain));
     try {
+        Guard G(lock);
         std::string issuer_id;
         std::tie(issuer_id, serial) = getParameters(parameters);
 
@@ -813,9 +816,8 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
         }
 
         auto now = std::time(nullptr);
-        auto ocsp_response = createAndSignOCSPResponse(config, serial, status, ca_cert, ca_pkey, ca_chain, now, status_date);
-        auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-        postCertificateStatus(config, status_pv, pv_name, serial, status, now, status_date, ocsp_bytes, true);
+        ocsp_helper.makeOCSPResponse(serial, status, now, status_date);
+        postCertificateStatus(config, status_pv, pv_name, ocsp_helper, true);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error getting status: %s\n", e.what());
         postCertificateErrorStatus(status_pv, our_issuer_id, serial, 1, 1, e.what());
@@ -841,7 +843,10 @@ void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_i
               const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
               const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool post_results) {
     Value status_value(kStatusPrototype.clone());
+    epicsMutex lock;
+    static auto ocsp_helper(OCSPHelper(config, ca_cert, ca_pkey, ca_chain));
     try {
+        Guard G(lock);
         std::string issuer_id;
         uint64_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
@@ -854,10 +859,9 @@ void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_i
         certs::updateCertificateStatus(ca_db, serial, REVOKED);
 
         auto revocation_date = std::time(nullptr);
-        auto ocsp_response = createAndSignOCSPResponse(config, serial, REVOKED, ca_cert, ca_pkey, ca_chain, revocation_date, revocation_date);
-        auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-        status_value = postCertificateStatus(config, status_pv, pv_name, serial, REVOKED, revocation_date, revocation_date, ocsp_bytes);
-        log_info_printf(pvacms, "Certificate %s:%llu has been REVOKED\n", issuer_id.c_str(), serial);
+        ocsp_helper.makeOCSPResponse(serial, REVOKED,revocation_date, revocation_date);
+        status_value = postCertificateStatus(config, status_pv, pv_name, ocsp_helper);
+        log_info_printf(pvacms, "Certificate %s:%llu has been REVOKED\n", issuer_id.c_str(), ocsp_helper.serial());
         if (post_results)
             op->reply(status_value);
         else
@@ -887,7 +891,10 @@ void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_
                const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(kStatusPrototype.clone());
+    epicsMutex lock;
+    static auto ocsp_helper(OCSPHelper(config, ca_cert, ca_pkey, ca_chain));
     try {
+        Guard G(lock);
         std::string issuer_id;
         uint64_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
@@ -903,9 +910,8 @@ void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_
         CertStatus new_state = status_date < not_before ? PENDING : status_date >= not_after ? EXPIRED : VALID;
         certs::updateCertificateStatus(ca_db, serial, new_state, {PENDING_APPROVAL});
 
-        auto ocsp_response = createAndSignOCSPResponse(config, serial, new_state, ca_cert, ca_pkey, ca_chain, status_date);
-        auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-        postCertificateStatus(config, status_pv, pv_name, serial, new_state, status_date, status_date, ocsp_bytes);
+        ocsp_helper.makeOCSPResponse(serial, new_state, status_date);
+        postCertificateStatus(config, status_pv, pv_name, ocsp_helper);
         switch (new_state) {
             case VALID:
                 log_info_printf(pvacms, "Certificate %s:%llu has been APPROVED\n", issuer_id.c_str(), serial);
@@ -945,7 +951,10 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
             const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
             const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(kStatusPrototype.clone());
+    epicsMutex lock;
+    static auto ocsp_helper(OCSPHelper(config, ca_cert, ca_pkey, ca_chain));
     try {
+        Guard G(lock);
         std::string issuer_id;
         uint64_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
@@ -958,9 +967,8 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
         certs::updateCertificateStatus(ca_db, serial, REVOKED, {PENDING_APPROVAL});
 
         auto revocation_date = std::time(nullptr);
-        auto ocsp_response = createAndSignOCSPResponse(config, serial, REVOKED, ca_cert, ca_pkey, ca_chain, revocation_date, revocation_date);
-        auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-        postCertificateStatus(config, status_pv, pv_name, serial, REVOKED, revocation_date, revocation_date, ocsp_bytes);
+        ocsp_helper.makeOCSPResponse(serial, REVOKED, revocation_date, revocation_date);
+        postCertificateStatus(config, status_pv, pv_name, ocsp_helper);
         log_info_printf(pvacms, "Certificate %s:%llu request has been DENIED\n", issuer_id.c_str(), serial);
         op->reply();
     } catch (std::exception &e) {
@@ -1232,7 +1240,7 @@ std::string getCountryCode() {
  */
 time_t getNotAfterTimeFromCert(const X509 *cert) {
     ASN1_TIME *cert_not_after = X509_get_notAfter(cert);
-    time_t not_after = asn1TimeToTimeT(cert_not_after);
+    time_t not_after = OCSPHelper::asn1TimeToTimeT(cert_not_after);
     return not_after;
 }
 
@@ -1244,7 +1252,7 @@ time_t getNotAfterTimeFromCert(const X509 *cert) {
  */
 time_t getNotBeforeTimeFromCert(const X509 *cert) {
     ASN1_TIME *cert_not_before = X509_get_notBefore(cert);
-    time_t not_before = asn1TimeToTimeT(cert_not_before);
+    time_t not_before = OCSPHelper::asn1TimeToTimeT(cert_not_before);
     return not_before;
 }
 
@@ -1395,8 +1403,7 @@ void setValue(Value &target, const std::string &field, const T &source) {
  * @param ocsp_bytes The OCSP response status
  * @param open_only Specifies whether to close the shared wildcard PV again after setting the status if it was closed to begin with.
  */
-Value postCertificateStatus(ConfigCms &config, server::SharedWildcardPV &status_pv, const std::string &pv_name, const uint64_t &serial, const CertStatus &status, std::time_t status_date, std::time_t revocation_date,
-                            shared_array<uint8_t> &ocsp_bytes, bool open_only) {
+Value postCertificateStatus(ConfigCms &config, server::SharedWildcardPV &status_pv, const std::string &pv_name, const OCSPHelper &ocsp_helper, bool open_only) {
     Value status_value;
     if (status_pv.isOpen(pv_name)) {
         status_value = status_pv.fetch(pv_name);
@@ -1404,28 +1411,20 @@ Value postCertificateStatus(ConfigCms &config, server::SharedWildcardPV &status_
     } else
         status_value = getStatusPrototype().clone();
 
-    setValue<uint64_t>(status_value, "serial", serial);
-    setValue<uint32_t>(status_value, "status.value.index", status);
+    setValue<uint64_t>(status_value, "serial", ocsp_helper.serial());
+    setValue<uint32_t>(status_value, "status.value.index", ocsp_helper.status());
     setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", time(nullptr));
-    setValue<std::string>(status_value, "state", CERT_STATE(status));
+    setValue<std::string>(status_value, "state", CERT_STATE(ocsp_helper.status()));
 
     // Get ocsp info if specified
-    if (!ocsp_bytes.empty()) {
-        auto status_certified_until = status_date+config.cert_status_validity_mins*60;
-        int ocsp_status;
-        if (status == REVOKED) {
-            ocsp_status = V_OCSP_CERTSTATUS_REVOKED;
-        } else if (status == VALID) {
-            ocsp_status = V_OCSP_CERTSTATUS_GOOD;
-        } else {
-            ocsp_status = V_OCSP_CERTSTATUS_UNKNOWN;
-        }
-        setValue<uint32_t>(status_value, "ocsp_status.value.index", ocsp_status);
-        setValue<std::string>(status_value, "ocsp_state", OCSP_CERT_STATE(ocsp_status));
-        setValue<std::string>(status_value, "ocsp_status_date",  std::ctime(&status_date));
-        setValue<std::string>(status_value, "ocsp_certified_until", std::ctime(&status_certified_until));
-        if (ocsp_status == V_OCSP_CERTSTATUS_REVOKED)
-            setValue<std::string>(status_value, "ocsp_revocation_date", std::ctime(&revocation_date));
+    if (!ocsp_helper.ocsp_response().empty()) {
+        auto ocsp_bytes = shared_array<uint8_t>(ocsp_helper.ocsp_response().begin(), ocsp_helper.ocsp_response().end());
+        setValue<uint32_t>(status_value, "ocsp_status.value.index", ocsp_helper.ocsp_status());
+        setValue<std::string>(status_value, "ocsp_state", OCSP_CERT_STATE(ocsp_helper.ocsp_status()));
+        setValue<std::string>(status_value, "ocsp_status_date",  ocsp_helper.status_date());
+        setValue<std::string>(status_value, "ocsp_certified_until", ocsp_helper.status_valid_until_date());
+        if (ocsp_helper.ocsp_status() == V_OCSP_CERTSTATUS_REVOKED)
+            setValue<std::string>(status_value, "ocsp_revocation_date", ocsp_helper.revocation_date());
         status_value["ocsp_response"] = ocsp_bytes.freeze();
     }
 
@@ -1543,6 +1542,7 @@ void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &is
                               pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     log_info_printf(pvacms, "Certificate Monitor Thread Started%s", "\n");
     epicsMutex lock;
+    auto ocsp_helper(OCSPHelper(config, ca_cert, ca_pkey, ca_chain));
     while (true) {
         Guard G(lock);
         sqlite3_stmt *stmt;
@@ -1561,9 +1561,8 @@ void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &is
                     const std::string pv_name(getCertUri(kCertStatusPrefix, issuer_id, serial));
                     updateCertificateStatus(ca_db, serial, VALID, {PENDING});
                     auto status_date = std::time(nullptr);
-                    auto ocsp_response = createAndSignOCSPResponse(config, serial, PENDING, ca_cert, ca_pkey, ca_chain, status_date);
-                    auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-                    postCertificateStatus(config, status_pv, pv_name, serial, VALID, status_date, status_date, ocsp_bytes);
+                    ocsp_helper.makeOCSPResponse(serial, VALID, status_date);
+                    postCertificateStatus(config, status_pv, pv_name, ocsp_helper);
                     log_info_printf(pvacms, "Certificate %s:%llu has become VALID\n", issuer_id.c_str(), serial);
                 } catch (const std::runtime_error &e) {
                     log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", e.what());
@@ -1588,9 +1587,8 @@ void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &is
                     const std::string pv_name(getCertUri(kCertStatusPrefix, issuer_id, serial));
                     updateCertificateStatus(ca_db, serial, EXPIRED, {VALID, PENDING_APPROVAL, PENDING});
                     auto status_date = std::time(nullptr);
-                    auto ocsp_response = createAndSignOCSPResponse(config, serial, EXPIRED, ca_cert, ca_pkey, ca_chain, status_date);
-                    auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
-                    postCertificateStatus(config, status_pv, pv_name, serial, EXPIRED, status_date, status_date, ocsp_bytes);
+                    ocsp_helper.makeOCSPResponse(serial, EXPIRED, status_date);
+                    postCertificateStatus(config, status_pv, pv_name, ocsp_helper);
                     log_info_printf(pvacms, "Certificate %s:%llu has EXPIRED\n", issuer_id.c_str(), serial);
                 } catch (const std::runtime_error &e) {
                     log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", e.what());

@@ -24,41 +24,72 @@
 namespace pvxs {
 namespace certs {
 
-///////////// OSCP RESPONSE CREATION
-std::string asn1TimeToString(ASN1_GENERALIZEDTIME* time);
-time_t asn1TimeToTimeT(ASN1_TIME* time);
-std::vector<uint8_t> createAndSignOCSPResponse(ConfigCms &config, uint64_t serial, CertStatus status, const pvxs::ossl_ptr<X509>& ca_cert,
-                                               const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain,
-                                               time_t status_date=std::time(nullptr), time_t revocation_time=std::time(nullptr));
-std::vector<std::vector<uint8_t>> createAndSignOCSPResponses(std::vector<uint64_t> serial, std::vector<CertStatus> status,
-                                                             std::vector<time_t> revocation_time, std::vector<const X509*>& ca_cert,
-                                                             std::vector<const EVP_PKEY*>& ca_pkey, std::vector<const STACK_OF(X509) *>& ca_chain);
+class OCSPHelper {
+  public:
+    struct StatusDate {
+        std::time_t t{};
+        std::string s{};
+        StatusDate() = default;
+        explicit StatusDate(std::time_t t) : t(t) {
+            char buffer[100];
+            std::strftime(buffer, sizeof(buffer), "%a %b %d %H:%M:%S %Y", std::localtime(&t));
+            s=buffer;
+        }
+    };
 
-pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(uint64_t serial, const pvxs::ossl_ptr<X509>& ca_cert, const EVP_MD* digest = EVP_sha1());
-std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
-pvxs::ossl_ptr<ASN1_INTEGER> uint64ToASN1(uint64_t serial);
+    inline const uint64_t& serial() const { return serial_; }
+    inline const CertStatus& status() const { return status_; }
+    inline const uint32_t& ocsp_status() const { return ocsp_status_; }
+    inline const std::string& status_date() const { return status_date_.s; }
+    inline const std::string& status_valid_until_date() const { return status_valid_until_time_.s; }
+    inline const std::string& revocation_date() const { return revocation_time_.s; }
+    inline const std::time_t& status_time() const { return status_date_.t; }
+    inline const std::time_t& status_valid_until_time() const { return status_valid_until_time_.t; }
+    inline const std::time_t& revocation_time() const { return revocation_time_.t; }
+    inline const std::vector<uint8_t>& ocsp_response() const { return ocsp_response_; }
 
-///////////// OSCP RESPONSE PROCESSING
+    // an OCSP Helper that can be used to make OCSP responses for given statuses
+    OCSPHelper(const ConfigCms &config, const ossl_ptr<X509> &ca_cert, const pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain)
+      : config_(config), ca_cert_(ca_cert), ca_pkey_(ca_pkey), ca_chain_(ca_chain), process_mode_(false) {};
+
+    OCSPHelper(const ConfigCms &config, const shared_array<uint8_t>& ocsp_bytes, const pvxs::ossl_ptr<X509>& ca_cert);
+void makeOCSPResponse(uint64_t serial, CertStatus status, time_t status_date=std::time(nullptr), time_t revocation_time=std::time(nullptr));
+    static time_t asn1TimeToTimeT(ASN1_TIME* time);
+
+  private:
+    static const int kMonthStartDays[];
+
+    const ConfigCms &config_;
+    const ossl_ptr<X509>&ca_cert_;
+    const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey_;
+    const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain_;
+    const bool process_mode_;
+
+    uint64_t serial_{};
+    CertStatus status_{};
+    uint32_t ocsp_status_{};
+    StatusDate status_date_;
+    StatusDate status_valid_until_time_;
+    StatusDate revocation_time_;
+    std::vector<uint8_t>ocsp_response_{};
+
+    pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(const EVP_MD* digest = EVP_sha1());
+    std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
+    pvxs::ossl_ptr<ASN1_INTEGER> uint64ToASN1();
+    std::string asn1TimeToString(ASN1_GENERALIZEDTIME* time);
+    static time_t tmToTimeTUTC(std::tm& tm);
+
+    bool verifyOCSPResponse(const shared_array<uint8_t>& ocsp_bytes) ;
+    ossl_ptr<OCSP_RESPONSE> getOSCPResponse(const shared_array<uint8_t>& ocsp_bytes);
+};
+
+///////////// OSCP RESPONSE ERRORS
 class OCSPParseException : public std::runtime_error {
   public:
     explicit OCSPParseException(const std::string& message) : std::runtime_error(message) {}
 };
 
-ossl_ptr<OCSP_RESPONSE> getOSCPResponse(const shared_array<uint8_t>& ocsp_bytes);
-
-template <typename T>
-int parseOCSPResponse(const shared_array<uint8_t>& ocsp_bytes, T& status_date, T& status_certified_until, T& revocation_date,
-                      std::function<T(ASN1_GENERALIZEDTIME*)>&& date_convert_fn = asn1TimeToString);
-
-template <typename T>
-std::vector<int> parseOCSPResponses(const shared_array<uint8_t>& ocsp_bytes, std::vector<T>& status_date, std::vector<T>& status_certified_until,
-                                    std::vector<T>& revocation_date, std::function<T(ASN1_GENERALIZEDTIME*)>&& date_convert_fn = asn1TimeToString);
-
-bool verifyOCSPResponse(const shared_array<uint8_t>& ocsp_bytes, ossl_ptr<X509> &ca_cert) ;
-
 }  // namespace certs
 }  // namespace pvxs
-
-#include "ocspparse.tpp"  // Include implementation file
 
 #endif  // PVXS_OCSPHELPER_H_

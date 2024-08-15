@@ -27,6 +27,7 @@
 #include "certfactory.h"
 #include "certmgmtservice.h"
 #include "configcms.h"
+#include "ocsphelper.h"
 #include "ownedptr.h"
 
 typedef epicsGuard<epicsMutex> Guard;
@@ -206,8 +207,7 @@ void usage(const char *argv0);
 void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv, pvxs::ossl_ptr<X509> &ca_cert,
                               pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
-Value postCertificateStatus(ConfigCms &config, server::SharedWildcardPV &status_pv, const std::string &pv_name, const uint64_t &serial, const CertStatus &status, std::time_t status_date, std::time_t revocation_date,
-                           shared_array<uint8_t> &ocsp_bytes, bool open_only = false);
+Value postCertificateStatus(ConfigCms &config, server::SharedWildcardPV &status_pv, const std::string &pv_name, const OCSPHelper &ocsp_helper, bool open_only = false);
 void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id, const uint64_t &serial, int32_t error_status,
                                 int32_t error_severity, const std::string &error_message);
 

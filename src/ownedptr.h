@@ -101,6 +101,7 @@ DEFINE_FILE_DELETER_FOR_(FILE);
 
 #ifdef PVXS_ENABLE_OPENSSL
 DEFINE_OPENSSL_DELETER_FOR_(char);
+DEFINE_OPENSSL_DELETER_FOR_(unsigned char);
 DEFINE_SQLITE_DELETER_FOR_(sqlite3);
 DEFINE_SSL_DELETER_ALL_FOR_(BIO);
 DEFINE_SSL_DELETER_FOR_(ASN1_OBJECT);
@@ -238,6 +239,26 @@ class ossl_shared_ptr : public std::shared_ptr<T> {
     }
 };
 #endif
+
+/// Utility function that returns a reference to a null `ossl_ptr`
+// USE with care whenever you need a reference but want to initialise with null
+template<typename T>
+ossl_ptr<T>& ossl_ptr_ref() {
+    struct PtrHolder {
+        ossl_ptr<T> ptr = nullptr;
+    };
+    thread_local PtrHolder holder;
+    return holder.ptr;
+}
+
+template<typename T>
+ossl_shared_ptr<T>& ossl_shared_ptr_ref() {
+    struct PtrHolder {
+        ossl_shared_ptr<T> ptr = nullptr;
+    };
+    thread_local PtrHolder holder;
+    return holder.ptr;
+}
 
 }  // namespace pvxs
 #endif  // PVXS_OWNED_PTR_H_
