@@ -37,6 +37,10 @@ namespace certs {
 
 DEFINE_LOGGER(certs, "pvxs.certs.cms");
 
+// Must be set up with correct values after OpenSSL initialisation if you are creating certificates
+//   CertFactory::registerCustomNids();
+int CertFactory::NID_PvaCertStatusURI = NID_undef;
+
 /**
  * Creates a new X.509 certificate from scratch.  It uses the provided public
  * key from the key pair and sets all the appropriate fields based on usage.
@@ -94,8 +98,9 @@ ossl_ptr<X509> CertFactory::create() {
     addExtension(certificate, NID_authority_key_identifier, "keyid:always,issuer:always");
 
     // 11. Add EPICS validTillRevoked extension, if required
-    if ( valid_until_revoked_) {
-        addBooleanExtensionByNid(certificate, NID_validTillRevoked, valid_until_revoked_);
+    if ( cert_status_subscription_required_) {
+        auto issuerId = getIssuerId(issuer_certificate_ptr_);
+        addCustomExtensionByNid(certificate, NID_PvaCertStatusURI, makeStatusURI(issuerId, serial_));
     }
 
     // 12. Create cert chain from issuer's chain and issuer's cert
@@ -213,11 +218,7 @@ void CertFactory::setSubject(const ossl_ptr<X509> &certificate) {
  */
 void CertFactory::setValidity(const ossl_ptr<X509> &certificate) const {
     ossl_ptr<ASN1_TIME> before(ASN1_TIME_adj(nullptr, not_before_, 0, -1));
-    // If valid until revoked then use 32 bit time_t max as expiration date
-    ossl_ptr<ASN1_TIME> after(ASN1_TIME_adj(nullptr,
-                                            (valid_until_revoked_
-                                            ? ((2038-1970)*365*24*60*60)
-                                            : not_after_), 0, 0));
+    ossl_ptr<ASN1_TIME> after(ASN1_TIME_adj(nullptr, not_after_, 0, 0));
 
     if (X509_set1_notBefore(certificate.get(), before.get()) != 1) {
         throw std::runtime_error("Failed to set validity start time in certificate.");
@@ -315,36 +316,61 @@ void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) {
  * see also "man x509v3_config" for explanation of "expr" string.
  */
 void CertFactory::addExtension(const ossl_ptr<X509> &certificate, int nid, const char *value, const X509 *subject) {
+    if (!value) {
+        throw std::invalid_argument("Value for the extension cannot be null.");
+    }
+
     X509V3_CTX context;
     X509V3_set_ctx_nodb(&context);
     X509V3_set_ctx(&context, const_cast<X509 *>(issuer_certificate_ptr_), const_cast<X509 *>(subject), nullptr, nullptr, 0);
 
-    ossl_ptr<X509_EXTENSION> extension(X509V3_EXT_conf_nid(nullptr, &context, nid, value));
-    if (X509_add_ext(certificate.get(), extension.get(), -1) != 1) {
-        throw std::runtime_error("Failed to set certificate extension");
+    ossl_ptr<X509_EXTENSION> extension(X509V3_EXT_conf_nid(nullptr, &context, nid, value), false);
+    if (!extension) {
+        unsigned long err = ERR_get_error();
+        char err_msg[256];
+        ERR_error_string_n(err, err_msg, sizeof(err_msg));
+        throw std::runtime_error(SB() << "Failed to set certificate extension: " << err_msg);
     }
-    log_debug_printf(certs, "Extension [%*d]: %-*s = \"%s\"\n", 3, nid, 32, nid2String(nid),  value);
+
+    if (X509_add_ext(certificate.get(), extension.get(), -1) != 1) {
+        throw std::runtime_error("Failed to add certificate extension");
+    }
+    log_debug_printf(certs, "Extension [%*d]: %-*s = \"%s\"\n", 3, nid, 32, nid2String(nid), value);
 }
 
 /**
  * Add a boolean extension by NID to certificate.
  *
  */
-void CertFactory::addBooleanExtensionByNid(const ossl_ptr<X509> &certificate, int nid, bool value) {
-    ossl_ptr<ASN1_OCTET_STRING> os(ASN1_OCTET_STRING_new());
-    if (!os) {
-        throw std::runtime_error("Failed to create ASN1_OCTET_STRING.");
-    }
-    auto val = static_cast<unsigned char>(value ? 0xFF : 0x00);
-    ASN1_OCTET_STRING_set(os.get(), &val, sizeof(val));
+void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value) {
+    X509V3_CTX context;
+    X509V3_set_ctx_nodb(&context);
+    X509V3_set_ctx(&context, const_cast<X509 *>(issuer_certificate_ptr_), certificate.get(), nullptr, nullptr, 0);
 
-    ossl_ptr<X509_EXTENSION> ext(X509_EXTENSION_create_by_NID(NULL, nid, 0, os.get()));
-    if (!ext) {
-        throw std::runtime_error("Failed to create extension.");
+    // Construct the string value
+    ossl_ptr<ASN1_OCTET_STRING>string_data(ASN1_OCTET_STRING_new());
+    ASN1_OCTET_STRING_set(string_data.get(), reinterpret_cast<const unsigned char *>(value.c_str()), -1);
+
+    // Create OID
+    ossl_ptr<ASN1_OBJECT> oid(OBJ_nid2obj(nid));
+
+    // Create extension
+    ossl_ptr<X509_EXTENSION> extension(X509_EXTENSION_create_by_OBJ(nullptr, oid.get(), 0, string_data.get()));
+    if (!extension) {
+        unsigned long err = ERR_get_error();
+        char err_msg[256];
+        ERR_error_string_n(err, err_msg, sizeof(err_msg));
+        throw std::runtime_error(SB() << "Failed to create extension: " << err_msg);
     }
-    if (!X509_add_ext(certificate.get(), ext.get(), -1)) {
-        throw std::runtime_error("Failed to add cetificate extension.");
+
+    // Add extension to certificate
+    if (!X509_add_ext(certificate.get(), extension.get(), -1)) {
+        unsigned long err = ERR_get_error();
+        char err_msg[256];
+        ERR_error_string_n(err, err_msg, sizeof(err_msg));
+        throw std::runtime_error(SB() << "Failed to add certificate extension: " << err_msg);
     }
+    log_debug_printf(certs, "Extension [%*d]: %-*s = \"%s\"\n", 3, nid, 32, nid2String(nid), value.c_str());
 }
 
 /**
@@ -554,7 +580,17 @@ void CertFactory::set_skid(ossl_ptr<X509> &certificate) {
 
     skid_ =  skid_ss.str();
 }
-
+/**
+ * @brief Register custom NIDs to be used in PVACMS generated certificates
+ */
+void CertFactory::registerCustomNids() {
+    NID_PvaCertStatusURI = OBJ_create(NID_PvaCertStatusURIID, SN_PvaCertStatusURI, LN_PvaCertStatusURI);
+    if (NID_PvaCertStatusURI == NID_undef) {
+        throw std::runtime_error("Failed to create NID for " SN_PvaCertStatusURI ": " LN_PvaCertStatusURI);
+    } else {
+        log_info_printf(certs, "Successfully registered %s: %s\n", SN_PvaCertStatusURI, OBJ_nid2sn(NID_PvaCertStatusURI));
+    }
+}
 
 }  // namespace certs
 }  // namespace pvxs

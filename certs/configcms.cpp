@@ -154,6 +154,11 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_PVACMS_REQUIRE_SERVER_APPROVAL"})) {
         cert_server_require_approval = parseTo<bool>(pickone.val);
     }
+
+    // EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION
+    if (pickone({"EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION"})) {
+        cert_status_subscription_required = parseTo<bool>(pickone.val);
+    }
 }
 
 }  // namespace certs

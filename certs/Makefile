@@ -25,7 +25,7 @@ pvacms_SRCS += pvacms.cpp
 pvacms_SRCS += configcms.cpp
 pvacms_SRCS += certfactory.cpp
 pvacms_SRCS += p12filefactory.cpp
-pvacms_SRCS += ocsphelper.cpp
+pvacms_SRCS += certstatus.cpp
 pvacms_LIBS += $(EPICS_BASE_IOC_LIBS)
 pvacms_LDFLAGS += -lsqlite3 -lssl -lcrypto
 

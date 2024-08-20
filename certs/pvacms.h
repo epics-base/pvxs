@@ -26,9 +26,13 @@
 
 #include "certfactory.h"
 #include "certmgmtservice.h"
+#include "certstatus.h"
 #include "configcms.h"
-#include "ocsphelper.h"
 #include "ownedptr.h"
+
+#define RPC_CERT_CREATE "CERT:CREATE"
+#define RPC_CERT_ROTATE_PV "CERT:ROTATE"
+#define RPC_CERT_REVOKE_PV "CERT:REVOKE:????????:*"
 
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
@@ -37,7 +41,6 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
 #define DEFAULT_CA_KEYCHAIN_FILE "ca.p12"
 #define DEFAULT_ACF_FILE "pvacms.acf"
 
-#define GET_MONITOR_CERT_STATUS_ROOT "CERT:STATUS"
 #define RPC_CERT_REVOKE_ROOT "CERT:REVOKE"
 
 #define PVXS_HOSTNAME_MAX 1024
@@ -151,7 +154,7 @@ void ensureValidityCompatible(CertFactory &cert_factory);
 
 uint64_t generateSerial();
 
-std::tuple<CertStatus, time_t> getCertificateStatus(sql_ptr &ca_db, uint64_t serial);
+std::tuple<certstatus_t, time_t> getCertificateStatus(sql_ptr &ca_db, uint64_t serial);
 std::tuple<time_t, time_t> getCertificateValidity(sql_ptr &ca_db, uint64_t serial);
 
 std::string getCountryCode();
@@ -162,8 +165,6 @@ std::string getIPAddress();
 
 std::string getIssuerId(const ossl_ptr<X509> &ca_cert);
 
-std::string getIssuerId(X509 *ca_cert);
-
 time_t getNotAfterTimeFromCert(const X509 *cert);
 
 time_t getNotBeforeTimeFromCert(const X509 *cert);
@@ -171,11 +172,9 @@ time_t getNotBeforeTimeFromCert(const X509 *cert);
 void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
-Value getStatusPrototype();
-
 void initCertsDatabase(sql_ptr &ca_db, std::string &db_file);
 
-void onCreateCertificate(sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&op, Value &&args, const ossl_ptr<EVP_PKEY> &ca_pkey,
+void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&op, Value &&args, const ossl_ptr<EVP_PKEY> &ca_pkey,
                          const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain,
                          std::string issuer_id);
 
@@ -197,17 +196,17 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
 
 int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose);
 
-void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, CertStatus cert_status,
-                             std::vector<CertStatus> valid_status = {PENDING_APPROVAL, PENDING, VALID});
+void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_status,
+                             std::vector<certstatus_t> valid_status = {PENDING_APPROVAL, PENDING, VALID});
 
-CertStatus storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
+certstatus_t storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
 
 void usage(const char *argv0);
 
 void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv, pvxs::ossl_ptr<X509> &ca_cert,
                               pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
-Value postCertificateStatus(ConfigCms &config, server::SharedWildcardPV &status_pv, const std::string &pv_name, const OCSPHelper &ocsp_helper,
+Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const CertificateStatus &cert_status,
                             bool open_only = false);
 void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id, const uint64_t &serial, int32_t error_status,
                                 int32_t error_severity, const std::string &error_message);
@@ -215,8 +214,8 @@ void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::
 std::string getCertUri(const std::string &prefix, const std::string &issuer_id, const uint64_t &serial);
 std::string getCertUri(const std::string &prefix, const std::string &cert_id);
 std::string getCertId(const std::string &issuer_id, const uint64_t &serial);
-std::string getValidStatusesClause(std::vector<CertStatus> valid_status);
-void bindValidStatusClauses(sqlite3_stmt *sql_statement, std::vector<CertStatus> valid_status);
+std::string getValidStatusesClause(std::vector<certstatus_t> valid_status);
+void bindValidStatusClauses(sqlite3_stmt *sql_statement, std::vector<certstatus_t> valid_status);
 std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &parameters);
 
 template <typename T>

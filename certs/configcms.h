@@ -58,6 +58,19 @@ class ConfigCms : public pvxs::server::Config {
     bool cert_server_require_approval = true;
 
     /**
+     * @brief This flag is used to indicate that a certificate user must subscribe
+     * to the certificate status PV to verify certificate's revoked status.
+     *
+     * With this flag set two extensions are added to created certificates.
+     * A flag indicating that subscription is required and a string
+     * containing the PV name to subscribe to.
+     *
+     * In absence of this flag certificate validity will work as normal
+     * but clients will not know that they have been revoked.
+     */
+    bool cert_status_subscription_required = false;
+
+    /**
      * @brief This is the string that determines the fully
      * qualified path to a file that will be used as the sqlite PVACMS
      * certificate database for a PVACMS process.

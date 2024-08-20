@@ -21,6 +21,7 @@
 #include <pvxs/version.h>
 
 #include "certmgmtservice.h"
+#include "certstatus.h"
 #include "ownedptr.h"
 #include "security.h"
 
@@ -30,10 +31,12 @@ namespace certs {
 #define PVXS_DEFAULT_AUTH_TYPE "x509"
 
 // EPICS OID for "validTillRevoked" extension:
-// TODO Possibly register this unassigned OID for EPICS
-#define NID_validTillRevoked 6789
-#define SN_validTillRevoked "validTillRevoked"
-#define LN_validTillRevoked "EPICS Valid Till Revoked"
+// TODO Register this unassigned OID for EPICS
+// "1.3.6.1.4.1" OID prefix for custom OIDs
+// "37427" DTMF for "EPICS"
+#define NID_PvaCertStatusURIID "1.3.6.1.4.1.37427.1"
+#define SN_PvaCertStatusURI "ASN.1 - PvaCertStatusURI"
+#define LN_PvaCertStatusURI "EPICS PVA Certificate Status URI"
 
 #define METHOD_STRING(type) (((type).compare(PVXS_DEFAULT_AUTH_TYPE) == 0) ? "default credentials" : ((type) + " credentials"))
 #define NAME_STRING(name, org) name + (org.empty() ? "" : ("@" + (org)))
@@ -61,13 +64,16 @@ class PVXS_API CertFactory {
     EVP_PKEY *issuer_pkey_ptr_;          // Will point to the issuer private key when created
     STACK_OF(X509) * issuer_chain_ptr_;  // issuer cert chain
     const ossl_shared_ptr<STACK_OF(X509)> certificate_chain_;
-    bool valid_until_revoked_;
+    bool cert_status_subscription_required_;
     std::string skid_;
-    CertStatus initial_status_;
+    certstatus_t initial_status_;
+
+    static int NID_PvaCertStatusURI;
 
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
-                const std::string &org_unit, time_t not_before, time_t not_after, const uint16_t &usage, X509 *issuer_certificate_ptr = nullptr,
-                EVP_PKEY *issuer_pkey_ptr = nullptr, STACK_OF(X509) *issuer_chain_ptr = nullptr, CertStatus initial_status=VALID, bool valid_until_revoked = false)
+                const std::string &org_unit, time_t not_before, time_t not_after, const uint16_t &usage, bool cert_status_subscription_required = false,
+                X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr, stack_st_X509 *issuer_chain_ptr = nullptr,
+                certstatus_t initial_status = VALID)
         : serial_(serial),
           key_pair_(key_pair),
           name_(name),
@@ -82,7 +88,7 @@ class PVXS_API CertFactory {
           issuer_chain_ptr_(issuer_chain_ptr),
           certificate_chain_(sk_X509_new_null()),
           initial_status_(initial_status) {
-        valid_until_revoked_ = valid_until_revoked;
+        cert_status_subscription_required_ = cert_status_subscription_required;
     };
 
     ossl_ptr<X509> PVXS_API create();
@@ -111,7 +117,9 @@ class PVXS_API CertFactory {
 
     static std::string bioToString(const ossl_ptr<BIO> &bio);
 
-   private:
+    static void registerCustomNids();
+
+  private:
     static inline const char *nid2String(int nid) {
         switch (nid) {
             case NID_subject_key_identifier:
@@ -141,7 +149,7 @@ class PVXS_API CertFactory {
 
     void addExtension(const ossl_ptr<X509> &certificate, int nid, const char *value, const X509 *subject = nullptr);
 
-    void addBooleanExtensionByNid(const ossl_ptr<X509> &certificate, int nid, bool value);
+    void addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value);
 
     static void writeCertToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<X509> &cert);
 

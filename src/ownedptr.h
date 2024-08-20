@@ -238,27 +238,14 @@ class ossl_shared_ptr : public std::shared_ptr<T> {
         if (!*this) throw loc_bad_alloc(__FILE__, __LINE__);
     }
 };
+
+// Helper function to create ossl_shared_ptr while removing const qualifier
+template <typename T>
+ossl_shared_ptr<T> make_ossl_shared_ptr(const T* ptr) {
+    return ossl_shared_ptr<T>(const_cast<T*>(ptr));
+}
+
 #endif
-
-/// Utility function that returns a reference to a null `ossl_ptr`
-// USE with care whenever you need a reference but want to initialise with null
-template<typename T>
-ossl_ptr<T>& ossl_ptr_ref() {
-    struct PtrHolder {
-        ossl_ptr<T> ptr = nullptr;
-    };
-    thread_local PtrHolder holder;
-    return holder.ptr;
-}
-
-template<typename T>
-ossl_shared_ptr<T>& ossl_shared_ptr_ref() {
-    struct PtrHolder {
-        ossl_shared_ptr<T> ptr = nullptr;
-    };
-    thread_local PtrHolder holder;
-    return holder.ptr;
-}
 
 }  // namespace pvxs
 #endif  // PVXS_OWNED_PTR_H_
