@@ -99,8 +99,8 @@ ossl_ptr<X509> CertFactory::create() {
 
     // 11. Add EPICS validTillRevoked extension, if required
     if ( cert_status_subscription_required_) {
-        auto issuerId = getIssuerId(issuer_certificate_ptr_);
-        addCustomExtensionByNid(certificate, NID_PvaCertStatusURI, makeStatusURI(issuerId, serial_));
+        auto issuerId = CertStatus::getIssuerId(issuer_certificate_ptr_);
+        addCustomExtensionByNid(certificate, NID_PvaCertStatusURI, CertStatus::makeStatusURI(issuerId, serial_));
     }
 
     // 12. Create cert chain from issuer's chain and issuer's cert

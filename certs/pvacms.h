@@ -34,9 +34,6 @@
 #define RPC_CERT_ROTATE_PV "CERT:ROTATE"
 #define RPC_CERT_REVOKE_PV "CERT:REVOKE:????????:*"
 
-typedef epicsGuard<epicsMutex> Guard;
-typedef epicsGuardRelease<epicsMutex> UnGuard;
-
 #define DEFAULT_KEYCHAIN_FILE "server.p12"
 #define DEFAULT_CA_KEYCHAIN_FILE "ca.p12"
 #define DEFAULT_ACF_FILE "pvacms.acf"
@@ -162,8 +159,6 @@ std::string getCountryCode();
 Value getCreatePrototype();
 
 std::string getIPAddress();
-
-std::string getIssuerId(const ossl_ptr<X509> &ca_cert);
 
 time_t getNotAfterTimeFromCert(const X509 *cert);
 

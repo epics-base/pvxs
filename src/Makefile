@@ -77,6 +77,8 @@ INC += pvxs/versionNum.h
 LIBRARY = pvxs
 
 LIB_SRCS += bitmask.cpp
+LIB_SRCS += certstatus.cpp
+LIB_SRCS += certstatusmanager.cpp
 LIB_SRCS += client.cpp
 LIB_SRCS += clientconn.cpp
 LIB_SRCS += clientdiscover.cpp

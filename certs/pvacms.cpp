@@ -55,6 +55,7 @@
 #include "certfactory.h"
 #include "certmgmtservice.h"
 #include "certstatus.h"
+#include "certstatusfactory.h"
 #include "configcms.h"
 #include "evhelper.h"
 #include "ownedptr.h"
@@ -575,7 +576,7 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factor
                                 .str();
     log_info_printf(pvacms, "%s\n", cert_description.c_str());
     log_info_printf(pvacms, "%s\n",
-                    (SB() << "CERT_ID: " << getCertId(getIssuerId(certificate_factory.issuer_certificate_ptr_), certificate_factory.serial_)).str().c_str());
+                    (SB() << "CERT_ID: " << getCertId(CertStatus::getIssuerId(certificate_factory.issuer_certificate_ptr_), certificate_factory.serial_)).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "NAME: " << certificate_factory.name_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATION: " << certificate_factory.org_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_).str().c_str());
@@ -604,16 +605,6 @@ std::string createCertificatePemString(sql_ptr &ca_db, CertFactory &cert_factory
     // Write out as PEM string for return to client
     return CertFactory::certAndCasToPemString(cert, cert_factory.certificate_chain_.get());
 }
-
-/**
- * @brief  Get the issuer ID which is the first 8 hex digits of the hex SKI
- *
- * Note that the given cert must contain the skid extension in the first place
- *
- * @param ca_cert  the cert from which to get the subject key identifier extension
- * @return first 8 hex digits of the hex SKI
- */
-std::string getIssuerId(const ossl_ptr<X509> &ca_cert) { return getIssuerId(ca_cert.get()); }
 
 /**
  * This function is used to retrieve the value of a specified field from a given structure.
@@ -706,7 +697,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
 
         // Construct and return the reply
         auto cert_id = getCertId(issuer_id, serial);
-        auto status_pv = getCertUri(kCertStatusPrefix, cert_id);
+        auto status_pv = getCertUri(GET_MONITOR_CERT_STATUS_ROOT, cert_id);
         auto revoke_pv = getCertUri(kCertRevokePrefix, cert_id);
         auto rotate_pv = RPC_CERT_ROTATE_PV;
         auto reply(getCreatePrototype());
@@ -747,10 +738,10 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
 void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name,
                  const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                  const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    Value status_value(kStatusPrototype.clone());
+    Value status_value(CertStatus::getStatusPrototype());
     uint64_t serial = 0;
     epicsMutex lock;
-    static auto cert_status_creator(CertStatusCreator(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
+    static auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
         Guard G(lock);
         std::string issuer_id;
@@ -795,9 +786,9 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
 void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
               const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
               const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool post_results) {
-    Value status_value(kStatusPrototype.clone());
+    Value status_value(CertStatus::getStatusPrototype());
     epicsMutex lock;
-    static auto cert_status_creator(CertStatusCreator(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
+    static auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
         Guard G(lock);
         std::string issuer_id;
@@ -843,9 +834,9 @@ void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_i
 void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
                const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    Value status_value(kStatusPrototype.clone());
+    Value status_value(CertStatus::getStatusPrototype());
     epicsMutex lock;
-    static auto cert_status_creator(CertStatusCreator(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
+    static auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
         Guard G(lock);
         std::string issuer_id;
@@ -903,9 +894,9 @@ void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_
 void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
             const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
             const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    Value status_value(kStatusPrototype.clone());
+    Value status_value(CertStatus::getStatusPrototype());
     epicsMutex lock;
-    static auto cert_status_creator(CertStatusCreator(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
+    static auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
         Guard G(lock);
         std::string issuer_id;
@@ -1362,7 +1353,7 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
         status_value = status_pv.fetch(pv_name);
         status_value.unmark();
     } else
-        status_value = getStatusPrototype().clone();
+        status_value = CertStatus::getStatusPrototype();
 
     setValue<uint64_t>(status_value, "serial", serial);
     setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
@@ -1405,13 +1396,13 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
  */
 void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id, const uint64_t &serial, const int32_t error_status,
                                 const int32_t error_severity, const std::string &error_message) {
-    std::string pv_name = getCertUri(kCertStatusPrefix, our_issuer_id, serial);
+    std::string pv_name = getCertUri(GET_MONITOR_CERT_STATUS_ROOT, our_issuer_id, serial);
     Value status_value;
     if (status_pv.isOpen(pv_name)) {
         status_value = status_pv.fetch(pv_name);
         status_value.unmark();
     } else
-        status_value = getStatusPrototype().clone();
+        status_value = CertStatus::getStatusPrototype();
 
     status_value["status.alarm.status"] = error_status;
     status_value["status.alarm.severity"] = error_severity;
@@ -1494,7 +1485,7 @@ void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &is
                               pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     log_info_printf(pvacms, "Certificate Monitor Thread Started%s", "\n");
     epicsMutex lock;
-    auto cert_status_creator(CertStatusCreator(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
+    auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     while (true) {
         Guard G(lock);
         sqlite3_stmt *stmt;
@@ -1510,7 +1501,7 @@ void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &is
                 int64_t db_serial = sqlite3_column_int64(stmt, 0);
                 uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
                 try {
-                    const std::string pv_name(getCertUri(kCertStatusPrefix, issuer_id, serial));
+                    const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, issuer_id, serial));
                     updateCertificateStatus(ca_db, serial, VALID, {PENDING});
                     auto status_date = std::time(nullptr);
                     auto cert_status = cert_status_creator.createOCSPStatus(serial, VALID, status_date);
@@ -1536,7 +1527,7 @@ void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &is
                 int64_t db_serial = sqlite3_column_int64(stmt, 0);
                 uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
                 try {
-                    const std::string pv_name(getCertUri(kCertStatusPrefix, issuer_id, serial));
+                    const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, issuer_id, serial));
                     updateCertificateStatus(ca_db, serial, EXPIRED, {VALID, PENDING_APPROVAL, PENDING});
                     auto status_date = std::time(nullptr);
                     auto cert_status = cert_status_creator.createOCSPStatus(serial, EXPIRED, status_date);
@@ -1604,7 +1595,7 @@ int main(int argc, char *argv[]) {
 
         // Get or create CA certificate
         getOrCreateCaCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain);
-        auto our_issuer_id = getIssuerId(ca_cert);
+        auto our_issuer_id = CertStatus::getIssuerId(ca_cert);
 
         // Create this PVACMS server's certificate if it does not already exist
         ensureServerCertificateExists(config, ca_db, ca_cert, ca_pkey, ca_chain);
@@ -1636,7 +1627,7 @@ int main(int argc, char *argv[]) {
                                                                                         pvxs::Value &&value) {
             // Make sure that pv is open before any put operation
             if (!pv.isOpen(pv_name)) {
-                pv.open(pv_name, getStatusPrototype());
+                pv.open(pv_name, CertStatus::getStatusPrototype());
             }
 
             std::string issuer_id;
@@ -1663,7 +1654,7 @@ int main(int argc, char *argv[]) {
                             SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &revoke_pv_name, const std::list<std::string> &parameters,
                             pvxs::Value &&args) {
             auto status_pv_name(revoke_pv_name);
-            status_pv_name.replace(0, kCertRevokePrefix.length(), kCertStatusPrefix);
+            status_pv_name.replace(0, kCertRevokePrefix.length(), GET_MONITOR_CERT_STATUS_ROOT);
             onRevoke(config, ca_db, our_issuer_id, status_pv, std::move(op), status_pv_name, parameters, ca_pkey, ca_cert, ca_chain);
         });
 
