@@ -8,8 +8,10 @@ Release Notes
 
 * client: Avoid FD leak on failed connect()
 * Correctly set TCP_NODELAY on winsock
+* Fix copy of Any/Union
 * ioc: Workaround asTrapWrite clobbering dbChannel
 * ioc: ACF fix write permit when groups are present
+* server: correctly adjudicate collision bind() of specific port
 
 1.3.1 (Dec 2023)
 ----------------
