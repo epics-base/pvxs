@@ -12,15 +12,12 @@
 #ifndef PVXS_CERTSTATUS_H_
 #define PVXS_CERTSTATUS_H_
 
-#include <openssl/evp.h>
-#include <openssl/ocsp.h>
-#include <openssl/pem.h>
+#include <iomanip>
+
 #include <openssl/x509.h>
 
-#include <pvxs/client.h>
+#include <pvxs/nt.h>
 
-#include "certmgmtservice.h"
-#include "configcms.h"
 #include "ownedptr.h"
 
 typedef epicsGuard<epicsMutex> Guard;
@@ -28,6 +25,14 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
 
 namespace pvxs {
 namespace certs {
+
+// EPICS OID for "validTillRevoked" extension:
+// TODO Register this unassigned OID for EPICS
+// "1.3.6.1.4.1" OID prefix for custom OIDs
+// "37427" DTMF for "EPICS"
+#define NID_PvaCertStatusURIID "1.3.6.1.4.1.37427.1"
+#define SN_PvaCertStatusURI "ASN.1 - PvaCertStatusURI"
+#define LN_PvaCertStatusURI "EPICS PVA Certificate Status URI"
 
 ///////////// OSCP RESPONSE ERRORS
 class OCSPParseException : public std::runtime_error {
@@ -83,18 +88,18 @@ struct CertStatus {
         nt::NTEnum enum_ocspvalue;
 
         auto value = TypeDef(TypeCode::Struct,
-                                   {
-                                     enum_value.build().as("status"),
-                                     Member(TypeCode::UInt64, "serial"),
-                                     Member(TypeCode::String, "state"),
-                                     enum_ocspvalue.build().as("ocsp_status"),
-                                     Member(TypeCode::String, "ocsp_state"),
-                                     Member(TypeCode::String, "ocsp_status_date"),
-                                     Member(TypeCode::String, "ocsp_certified_until"),
-                                     Member(TypeCode::String, "ocsp_revocation_date"),
-                                     Member(TypeCode::UInt8A, "ocsp_response"),
-                                   })
-          .create();
+                             {
+                                 enum_value.build().as("status"),
+                                 Member(TypeCode::UInt64, "serial"),
+                                 Member(TypeCode::String, "state"),
+                                 enum_ocspvalue.build().as("ocsp_status"),
+                                 Member(TypeCode::String, "ocsp_state"),
+                                 Member(TypeCode::String, "ocsp_status_date"),
+                                 Member(TypeCode::String, "ocsp_certified_until"),
+                                 Member(TypeCode::String, "ocsp_revocation_date"),
+                                 Member(TypeCode::UInt8A, "ocsp_response"),
+                             })
+                         .create();
         shared_array<const std::string> choices(CERT_STATES);
         value["status.value.choices"] = choices.freeze();
         shared_array<const std::string> ocsp_choices(OCSP_CERT_STATES);
@@ -110,7 +115,7 @@ struct CertStatus {
      * @param ca_cert  the cert from which to get the subject key identifier extension
      * @return first 8 hex digits of the hex SKI
      */
-    static inline std::string getIssuerId(const ossl_ptr<X509> &ca_cert) { return getIssuerId(ca_cert.get()); }
+    static inline std::string getIssuerId(const ossl_ptr<X509>& ca_cert) { return getIssuerId(ca_cert.get()); }
 
     static inline std::string getIssuerId(X509* ca_cert_ptr) {
         ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING*>(X509_get_ext_d2i(ca_cert_ptr, NID_subject_key_identifier, nullptr, nullptr)));
@@ -132,6 +137,15 @@ struct CertStatus {
         return SB() << GET_MONITOR_CERT_STATUS_ROOT << ":" << issuer_id << ":" << std::setw(16) << std::setfill('0') << serial;
     }
 
+    /**
+ * @brief Register custom NIDs to be used in PVACMS generated certificates
+ */
+    static inline void registerCustomNids(int &NID_PvaCertStatusURI) {
+        NID_PvaCertStatusURI = OBJ_create(NID_PvaCertStatusURIID, SN_PvaCertStatusURI, LN_PvaCertStatusURI);
+        if (NID_PvaCertStatusURI == NID_undef) {
+            throw std::runtime_error("Failed to create NID for " SN_PvaCertStatusURI ": " LN_PvaCertStatusURI);
+        }
+    }
 
   protected:
     explicit CertStatus(const uint32_t status, std::string&& status_string) : i(status), s(std::move(status_string)) {}
@@ -203,7 +217,6 @@ struct StatusDate {
             throw OCSPParseException("Failed to format status date");
         }
     }
-
 
     /**
      * @brief To get the time_t (unix time) from a std::tm structure

@@ -74,6 +74,17 @@ class CertStatusManager {
     using StatusCallback = std::function<void(const CertificateStatus&)>;
 
     /**
+     * @brief Get the status PV from a Cert.
+     * This function gets the PVA extension that stores the status PV in the certificate
+     * if the certificate must be used in conjunction with a status monitor to check for
+     * revoked status.
+     * @param cert the certificate to check for the status PV extension
+     * @return a blank string if no extension exists, otherwise contains the status PV
+     *         e.g. CERT:STATUS:0293823f:098294739483904875
+     */
+    static std::string getStatusPvFromCert(const ossl_ptr<X509>& cert);
+
+    /**
      * @brief To parse OCSP responses
      *
      * Parsing OCSP responses is carried out by providing the OCSP response buffer.
@@ -128,6 +139,8 @@ class CertStatusManager {
     static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
 
     std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
+
+    static int NID_PvaCertStatusURI;
 };
 
 template <>

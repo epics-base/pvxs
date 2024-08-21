@@ -1577,7 +1577,7 @@ int main(int argc, char *argv[]) {
         OpenSSL_add_all_digests();
 
         // Register custom NIDs
-        CertFactory::registerCustomNids();
+        CertStatus::registerCustomNids(CertFactory::NID_PvaCertStatusURI);
 
         // Set security if configured
         if (!config.ca_acf_filename.empty()) asSetFilename(config.ca_acf_filename.c_str());

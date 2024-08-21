@@ -30,14 +30,6 @@ namespace certs {
 
 #define PVXS_DEFAULT_AUTH_TYPE "x509"
 
-// EPICS OID for "validTillRevoked" extension:
-// TODO Register this unassigned OID for EPICS
-// "1.3.6.1.4.1" OID prefix for custom OIDs
-// "37427" DTMF for "EPICS"
-#define NID_PvaCertStatusURIID "1.3.6.1.4.1.37427.1"
-#define SN_PvaCertStatusURI "ASN.1 - PvaCertStatusURI"
-#define LN_PvaCertStatusURI "EPICS PVA Certificate Status URI"
-
 #define METHOD_STRING(type) (((type).compare(PVXS_DEFAULT_AUTH_TYPE) == 0) ? "default credentials" : ((type) + " credentials"))
 #define NAME_STRING(name, org) name + (org.empty() ? "" : ("@" + (org)))
 
@@ -116,8 +108,6 @@ class PVXS_API CertFactory {
     }
 
     static std::string bioToString(const ossl_ptr<BIO> &bio);
-
-    static void registerCustomNids();
 
   private:
     static inline const char *nid2String(int nid) {

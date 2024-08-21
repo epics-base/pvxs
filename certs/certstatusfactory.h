@@ -14,14 +14,9 @@
 
 #include <openssl/evp.h>
 #include <openssl/ocsp.h>
-#include <openssl/pem.h>
 #include <openssl/x509.h>
 
-#include <pvxs/client.h>
-
-#include "certmgmtservice.h"
 #include "certstatus.h"
-#include "configcms.h"
 #include "ownedptr.h"
 
 namespace pvxs {
@@ -39,7 +34,7 @@ namespace certs {
  * change.
  *
  * @code
- *      static auto cert_status_creator(CertStatusCreator(config, ca_cert, ca_pkey, ca_chain));
+ *      static auto cert_status_creator(CertStatusFactory(config, ca_cert, ca_pkey, ca_chain));
  *      auto cert_status = cert_status_creator.createOCSPStatus(serial, new_state);
  * @endcode
  */
@@ -79,7 +74,7 @@ class CertStatusFactory {
      * @return the Certificate Status containing the signed OCSP response and other OCSP response data.
      */
     CertificateStatus createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date = std::time(nullptr),
-                                       StatusDate revocation_time = std::time(nullptr));
+                                       StatusDate revocation_time = std::time(nullptr)) const;
 
    private:
     const ossl_ptr<X509>& ca_cert_;                          // CA Certificate to encode in the OCSP responses
@@ -88,17 +83,17 @@ class CertStatusFactory {
     const uint32_t cert_status_validity_mins_;               // The status validity period in minutes to encode in the OCSP responses
 
     /**
-     * @brief Internal function to create an OCSP CERTID.  Uses CertStatusCreator configuration
+     * @brief Internal function to create an OCSP CERTID.  Uses CertStatusFactory configuration
      * @param digest the method to use to create the CERTID
      * @return an OCSP CERTID
      */
-    pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(const uint64_t& serial, const EVP_MD* digest = EVP_sha1());
+    pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(const uint64_t& serial, const EVP_MD* digest = EVP_sha1()) const;
     /**
      * @brief Internal function to convert an OCSP_BASICRESP into a byte array
      * @param basic_resp the OCSP_BASICRESP to convert
      * @return a byte array
      */
-    std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
+    static std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
 
     /**
      * @brief Internal function to convert a PVA serial number into an ASN1_INTEGER

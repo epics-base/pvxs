@@ -38,7 +38,6 @@ namespace certs {
 DEFINE_LOGGER(certs, "pvxs.certs.cms");
 
 // Must be set up with correct values after OpenSSL initialisation if you are creating certificates
-//   CertFactory::registerCustomNids();
 int CertFactory::NID_PvaCertStatusURI = NID_undef;
 
 /**
@@ -579,17 +578,6 @@ void CertFactory::set_skid(ossl_ptr<X509> &certificate) {
     }
 
     skid_ =  skid_ss.str();
-}
-/**
- * @brief Register custom NIDs to be used in PVACMS generated certificates
- */
-void CertFactory::registerCustomNids() {
-    NID_PvaCertStatusURI = OBJ_create(NID_PvaCertStatusURIID, SN_PvaCertStatusURI, LN_PvaCertStatusURI);
-    if (NID_PvaCertStatusURI == NID_undef) {
-        throw std::runtime_error("Failed to create NID for " SN_PvaCertStatusURI ": " LN_PvaCertStatusURI);
-    } else {
-        log_info_printf(certs, "Successfully registered %s: %s\n", SN_PvaCertStatusURI, OBJ_nid2sn(NID_PvaCertStatusURI));
-    }
 }
 
 }  // namespace certs

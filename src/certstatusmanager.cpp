@@ -133,27 +133,15 @@ uint64_t CertStatusManager::getSerialNumber(const ossl_ptr<X509>& cert) {
 }
 
 cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X509>& cert, StatusCallback& callback) {
-    // Extract the serial number from the certificate
-    ASN1_INTEGER* serial_number_asn1 = X509_get_serialNumber(cert.get());
-    if (!serial_number_asn1) {
-        throw std::runtime_error("Failed to retrieve serial number from certificate");
-    }
-
-    // Convert ASN1_INTEGER to a 64-bit unsigned integer
-    uint64_t serial = ASN1ToUint64(serial_number_asn1);
-
-    // Extract the issuer's SKID from the certificate
-    std::string issuer_id = CertStatus::getIssuerId(cert.get());
-
     // Construct the URI
-    std::string uri = CertStatus::makeStatusURI(issuer_id, serial);
+    auto uri = CertStatusManager::getStatusPvFromCert(cert);
 
-    // Subscribe to the service using the constructed URI
-    auto client(client::Context::fromEnv());
+    // Subscribe to the service using the constructed URI with tls disabled
+    auto client(client::Context::fromEnv(true));
     auto sub = client.monitor(uri)
                    .maskConnected(false)
                    .maskDisconnected(false)
-                   .event([&callback](client::Subscription& sub) { callback(valToStatus(sub.pop())); })
+                   .event([callback](client::Subscription& sub) { callback(valToStatus(sub.pop())); })
                    .exec();
 
     return cert_status_ptr<CertStatusManager>(new CertStatusManager(cert, sub));
@@ -241,6 +229,51 @@ bool CertStatusManager::verifyOCSPResponse(ossl_ptr<OCSP_BASICRESP>& basic_respo
 
     // Verify the OCSP response.  Values greater than 0 mean verified
     return OCSP_basic_verify(basic_response.get(), ca_chain.get(), store.get(), 0) > 0;
+}
+
+// Must be set up with correct values after OpenSSL initialisation to retrieve status PV from certs
+int CertStatusManager::NID_PvaCertStatusURI = NID_undef;
+
+/**
+ * Get the string value of a custom extension by NID from a certificate.
+ *
+ */
+std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certificate) {
+    // Register the custom NID if it has not yet been registered
+    // TODO protect from race conditions
+    if (CertStatusManager::NID_PvaCertStatusURI == NID_undef) {
+        // Lazy load
+        CertStatus::registerCustomNids(CertStatusManager::NID_PvaCertStatusURI);
+    }
+
+    int extension_index = X509_get_ext_by_NID(certificate.get(), CertStatusManager::NID_PvaCertStatusURI, -1);
+    if (extension_index < 0) return "";
+
+    // Get the extension object from the certificate
+    X509_EXTENSION* extension = X509_get_ext(certificate.get(), extension_index);
+    if (!extension) {
+        throw std::runtime_error("Failed to get extension from the certificate.");
+    }
+
+    // Retrieve the extension data which is an ASN1_OCTET_STRING object
+    ASN1_OCTET_STRING* ext_data = X509_EXTENSION_get_data(extension);
+    if (!ext_data) {
+        throw std::runtime_error("Failed to get data from the extension.");
+    }
+
+    // Get the data as a string
+    const unsigned char* data = ASN1_STRING_get0_data(ext_data);
+    if (!data) {
+        throw std::runtime_error("Failed to extract data from ASN1_STRING.");
+    }
+
+    int length = ASN1_STRING_length(ext_data);
+    if (length < 0) {
+        throw std::runtime_error("Invalid length of ASN1_STRING data.");
+    }
+
+    // Return the data as a std::string
+    return std::string(reinterpret_cast<const char*>(data), length);
 }
 
 }  // namespace certs

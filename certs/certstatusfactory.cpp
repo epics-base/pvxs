@@ -4,7 +4,7 @@
  * in file LICENSE that is included with this distribution.
  */
 /**
- * The OCSP helper functions.
+ * The Certificate status Factory.
  *
  */
 
@@ -12,12 +12,10 @@
 
 #include <openssl/evp.h>
 #include <openssl/ocsp.h>
-#include <openssl/pem.h>
 #include <openssl/x509.h>
 
 #include <pvxs/client.h>
 
-#include "certmgmtservice.h"
 #include "certstatus.h"
 #include "configcms.h"
 #include "ownedptr.h"
@@ -37,12 +35,13 @@ namespace certs {
  *
  * @param serial The serial number of the certificate.
  * @param status The status of the certificate (PENDING_VALIDATION, VALID, EXPIRED, or REVOKED).
+ * @param status_date The status date of this status certification, normally now.
  * @param revocation_time The time of revocation for the certificate (0 if not revoked).
  *
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date, StatusDate revocation_time) {
+CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date, StatusDate revocation_time) const {
     // Create OCSP response
     pvxs::ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
@@ -110,11 +109,11 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
  * to an ASN.1 representation. ASN.1 (Abstract Syntax Notation One) is a standard
  * notation and set of rules for defining the structure of data.
  *
+ * @param serial the serial number to convert to ASN1 format
  * @return The ASN.1 representation of the serial number.
  *
  * @see uint64FromASN1()
  */
-// Function to convert uint64_t serial number to ASN1_INTEGER
 pvxs::ossl_ptr<ASN1_INTEGER> CertStatusFactory::uint64ToASN1(const uint64_t& serial) {
     pvxs::ossl_ptr<ASN1_INTEGER> asn1_serial(ASN1_INTEGER_new());
     if (!asn1_serial) {
@@ -143,7 +142,7 @@ pvxs::ossl_ptr<ASN1_INTEGER> CertStatusFactory::uint64ToASN1(const uint64_t& ser
  *
  * @return The OCSP certificate ID.
  */
-pvxs::ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& serial, const EVP_MD* digest) {
+pvxs::ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& serial, const EVP_MD* digest) const {
     unsigned char issuer_name_hash[EVP_MAX_MD_SIZE];
     unsigned char issuer_key_hash[EVP_MAX_MD_SIZE];
 
@@ -168,7 +167,7 @@ pvxs::ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& 
 }
 
 /**
- * @brief Converts the OCSP response to bytes.
+ * @brief Converts the given OCSP basic response to bytes.
  *
  * This function takes the OCSP response as input and converts it into a sequence of bytes.
  *
