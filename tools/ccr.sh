@@ -100,4 +100,4 @@ openssl pkcs12 -export \
   -out "$P12_FILE" \
   -passout pass:$P12_PASSWORD
 
-echo "Created: ${P12_FILE}.  Certificate: ${issuer}:${serial}"
+echo "Created: ${P12_FILE}.  ${target} certificate: ${issuer}:${serial}"
