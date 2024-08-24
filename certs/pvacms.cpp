@@ -53,7 +53,6 @@
 #include <pvxs/sharedwildcardpv.h>
 
 #include "certfactory.h"
-#include "certmgmtservice.h"
 #include "certstatus.h"
 #include "certstatusfactory.h"
 #include "configcms.h"

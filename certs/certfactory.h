@@ -20,7 +20,6 @@
 #include <pvxs/log.h>
 #include <pvxs/version.h>
 
-#include "certmgmtservice.h"
 #include "certstatus.h"
 #include "ownedptr.h"
 #include "security.h"

@@ -59,18 +59,18 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
     ASN1_TIME_set(nextUpdate.get(), status_valid_until_time.t);
 
     // Determine the OCSP status and revocation time
-    uint32_t ocsp_status;
+    ocspcertstatus_t ocsp_status;
     switch (status) {
         case VALID:
-            ocsp_status = V_OCSP_CERTSTATUS_GOOD;
+            ocsp_status = OCSP_CERTSTATUS_GOOD;
             break;
         case REVOKED:
-            ocsp_status = V_OCSP_CERTSTATUS_REVOKED;
+            ocsp_status = OCSP_CERTSTATUS_REVOKED;
             revocationTime.reset(ASN1_TIME_new());
             ASN1_TIME_set(revocationTime.get(), revocation_time.t);
             break;
         default:
-            ocsp_status = V_OCSP_CERTSTATUS_UNKNOWN;
+            ocsp_status = OCSP_CERTSTATUS_UNKNOWN;
             break;
     }
 

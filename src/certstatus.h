@@ -47,21 +47,31 @@ class OCSPParseException : public std::runtime_error {
 // All certificate statuses
 #define CERT_STATUS_LIST   \
     X_IT(UNKNOWN)          \
+    X_IT(PENDING_APPROVAL) \
+    X_IT(PENDING)          \
     X_IT(VALID)            \
     X_IT(EXPIRED)          \
-    X_IT(REVOKED)          \
-    X_IT(PENDING_APPROVAL) \
-    X_IT(PENDING)
+    X_IT(REVOKED)
+
+// All OCSP certificate statuses
+#define OCSP_CERT_STATUS_LIST     \
+    O_IT(OCSP_CERTSTATUS_GOOD)    \
+    O_IT(OCSP_CERTSTATUS_REVOKED) \
+    O_IT(OCSP_CERTSTATUS_UNKNOWN)
 
 // Define the enum
 #define X_IT(name) name,
+#define O_IT(name) name = V_##name,
 enum certstatus_t { CERT_STATUS_LIST };
+enum ocspcertstatus_t { OCSP_CERT_STATUS_LIST };
 #undef X_IT
+#undef O_IT
 
 // String initializer list
 #define X_IT(name) #name,
+#define O_IT(name) #name,
 #define CERT_STATES {CERT_STATUS_LIST}
-#define OCSP_CERT_STATES {"OCSP_CERTSTATUS_GOOD", "OCSP_CERTSTATUS_REVOKED", "OCSP_CERTSTATUS_UNKNOWN"}
+#define OCSP_CERT_STATES {OCSP_CERT_STATUS_LIST}
 
 // Gets status name based on index
 #define CERT_STATE(index) ((const char*[])CERT_STATES[(index)])
@@ -137,7 +147,7 @@ struct CertStatus {
         return SB() << GET_MONITOR_CERT_STATUS_ROOT << ":" << issuer_id << ":" << std::setw(16) << std::setfill('0') << serial;
     }
 
-    /**
+/**
  * @brief Register custom NIDs to be used in PVACMS generated certificates
  */
     static inline void registerCustomNids(int &NID_PvaCertStatusURI) {
@@ -169,10 +179,10 @@ struct PVACertStatus : CertStatus {
 struct OCSPCertStatus : CertStatus {
     OCSPCertStatus() = delete;
 
-    explicit OCSPCertStatus(const uint32_t& status) : CertStatus(status, toString(status)) {}
+    explicit OCSPCertStatus(const ocspcertstatus_t& status) : CertStatus(status, toString(status)) {}
 
    private:
-    static inline std::string toString(const uint32_t status) { return OCSP_CERT_STATE(status); }
+    static inline std::string toString(const ocspcertstatus_t status) { return OCSP_CERT_STATE(status); }
 };
 
 /**
@@ -261,7 +271,7 @@ struct OCSPStatus {
     const StatusDate status_valid_until_date;
     const StatusDate revocation_date;
 
-    explicit OCSPStatus(uint32_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_date,
+    explicit OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_date,
                         StatusDate revocation_date)
         : ocsp_status(ocsp_status),
           ocsp_bytes(ocsp_bytes),
@@ -281,7 +291,7 @@ struct OCSPStatus {
 struct CertificateStatus : public OCSPStatus {
     const PVACertStatus status;
 
-    explicit CertificateStatus(certstatus_t status, uint32_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date,
+    explicit CertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date,
                                StatusDate status_valid_until_date, StatusDate revocation_date)
         : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_date, revocation_date), status(status) {};
 };

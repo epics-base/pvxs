@@ -17,7 +17,7 @@
 
 #include <pvxs/client.h>
 
-#include "certmgmtservice.h"
+#include "certstatusclient.h"
 #include "certstatus.h"
 #include "configcms.h"
 #include "ownedptr.h"
@@ -90,7 +90,7 @@ OCSPStatus CertStatusManager::parse(shared_array<const uint8_t> ocsp_bytes) {
     ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revoked_time = nullptr;
     int reason = 0;
 
-    auto ocsp_status = OCSP_single_get0_status(single_response, &reason, &revoked_time, &this_update, &next_update);
+    auto ocsp_status = static_cast<ocspcertstatus_t>(OCSP_single_get0_status(single_response, &reason, &revoked_time, &this_update, &next_update));
 
     // Check status validity: less than 1 second old
     OCSP_check_validity(this_update, next_update, 0, 1);
@@ -114,7 +114,7 @@ uint64_t CertStatusManager::ASN1ToUint64(ASN1_INTEGER* asn1_number) {
  */
 CertificateStatus CertStatusManager::valToStatus(const Value& val) {
     auto status = val["status.value.index"].as<certstatus_t>();
-    auto ocsp_status = val["ocsp_status.value.index"].as<uint32_t>();
+    auto ocsp_status = val["ocsp_status.value.index"].as<ocspcertstatus_t>();
     auto const ocsp_response = val["ocsp_response"].template as<shared_array<const uint8_t>>();
     auto ocsp_status_detail = CertStatusManager::parse(ocsp_response);
     return CertificateStatus(status, ocsp_status, ocsp_response, ocsp_status_detail.status_date, ocsp_status_detail.status_valid_until_date,

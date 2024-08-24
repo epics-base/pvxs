@@ -294,6 +294,17 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
     }
 
     if (conf.isTlsConfigured()) {
+        // Start Cert Status monitor thread which will:
+        //   Look for key file,
+        //   Load cert file,
+        //   Look for cert file,
+        //   Load cert file,
+        //   Check validity of cert
+        //   Get cert status if extension included
+        //   If first time
+        //
+
+
         // Get key
         ossl_ptr<EVP_PKEY> key;
         {

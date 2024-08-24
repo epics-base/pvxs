@@ -14,7 +14,7 @@
 #include <pvxs/config.h>
 #include <pvxs/data.h>
 
-#include "certmgmtservice.h"
+#include "certstatusfactoryclient.h"
 #include "ownedptr.h"
 #include "security.h"
 
@@ -78,7 +78,7 @@ class Auth {
     }
 
    private:
-    security::CertMgmtService certificate_management_service_{};
+    security::CertStatusFactoryClient certificate_management_service_{};
 };
 
 /**

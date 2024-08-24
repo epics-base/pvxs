@@ -12,7 +12,7 @@
 
 #include <pvxs/log.h>
 
-#include "certmgmtservice.h"
+#include "certstatusfactoryclient.h"
 #include "ownedptr.h"
 #include "security.h"
 

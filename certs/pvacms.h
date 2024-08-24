@@ -25,7 +25,6 @@
 #include <pvxs/sharedwildcardpv.h>
 
 #include "certfactory.h"
-#include "certmgmtservice.h"
 #include "certstatus.h"
 #include "configcms.h"
 #include "ownedptr.h"
