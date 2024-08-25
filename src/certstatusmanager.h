@@ -104,7 +104,7 @@ class CertStatusManager {
      *
      * @see unsubscribe()
      */
-    static cert_status_ptr<CertStatusManager> subscribe(const ossl_ptr<X509>& cert, StatusCallback& callback);
+    static cert_status_ptr<CertStatusManager> subscribe(const ossl_ptr<X509>& cert, StatusCallback&& callback);
 
     /**
      * @brief Get status for a given certificate

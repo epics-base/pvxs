@@ -28,8 +28,8 @@ namespace certs {
 template <typename T>
 class P12FileWatcher {
   public:
-    P12FileWatcher(logger &logger, const T &config, const std::function<void(const T &)> &&reconfigure_fn)
-      : config_(config), reconfigure_fn_(reconfigure_fn), stop_flag_(false), logger_(logger) {}
+    P12FileWatcher(logger &logger, const T &config, std::function<void(const T &)> &&reconfigure_fn)
+      : config_(config), reconfigure_fn_(std::move(reconfigure_fn)), stop_flag_(false), logger_(logger) {}
 
     inline ~P12FileWatcher() {
         stopWatching();

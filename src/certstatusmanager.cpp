@@ -131,17 +131,22 @@ uint64_t CertStatusManager::getSerialNumber(const ossl_ptr<X509>& cert) {
     return ASN1ToUint64(serial_number_asn1);
 }
 
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X509>& cert, StatusCallback& callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X509>& cert, StatusCallback&& callback) {
     // Construct the URI
     auto uri = CertStatusManager::getStatusPvFromCert(cert);
 
-    // Subscribe to the service using the constructed URI with tls disabled
+    // Create a shared_ptr to hold the callback
+    auto callback_ptr = std::make_shared<StatusCallback>(std::move(callback));
+
+    // Subscribe to the service using the constructed URI with TLS disabled
     auto client(client::Context::fromEnv(true));
     auto sub = client.monitor(uri)
-                   .maskConnected(false)
-                   .maskDisconnected(false)
-                   .event([callback](client::Subscription& sub) { callback(valToStatus(sub.pop())); })
-                   .exec();
+      .maskConnected(false)
+      .maskDisconnected(false)
+      .event([callback_ptr](client::Subscription& sub) {
+          (*callback_ptr)(valToStatus(sub.pop()));
+      })
+      .exec();
 
     return cert_status_ptr<CertStatusManager>(new CertStatusManager(cert, sub));
 }
