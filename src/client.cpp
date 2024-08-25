@@ -16,6 +16,8 @@
 #include <pvxs/log.h>
 #include <clientimpl.h>
 
+#include "p12filewatcher.h"
+
 DEFINE_LOGGER(setup, "pvxs.client.setup");
 DEFINE_LOGGER(io, "pvxs.client.io");
 DEFINE_LOGGER(beacon, "pvxs.client.beacon");
@@ -438,30 +440,39 @@ Context::~Context() {}
 #ifdef PVXS_ENABLE_OPENSSL
 void Context::reconfigure(const Config& newconf)
 {
-    if(!pvt)
+    if (!pvt)
         throw std::logic_error("NULL Context");
 
     ossl::SSLContext new_context;
-    if(newconf.isTlsConfigured()) {
+    if (newconf.isTlsConfigured()) {
         new_context = ossl::SSLContext::for_client(newconf);
     }
 
-    pvt->impl->manager.loop().call([this, &new_context](){
+    auto file_watcher = std::make_shared<certs::P12FileWatcher<Config>>(setup, newconf, [this](const Config& conf) {
+        this->reconfigure(conf);
+    });
 
+    pvt->impl->manager.loop().call([this, newconf, new_context, file_watcher]() mutable {
         log_debug_printf(setup, "Client reconfigure%s", "\n");
 
         auto conns(std::move(pvt->impl->connByAddr));
 
-        for(auto& pair : conns) {
+        for (auto& pair : conns) {
             auto conn = pair.second.lock();
-            conn->cleanup();
+            if (conn) {
+                conn->cleanup();
+            }
         }
 
         conns.clear();
 
         pvt->impl->tls_context = new_context;
+
+        file_watcher->startWatching();
+        pvt->impl->file_watcher_ = file_watcher;
     });
 }
+
 #endif
 
 const Config& Context::config() const
@@ -707,6 +718,12 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     if(event_add(cacheCleaner.get(), &channelCacheCleanInterval))
         log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
 
+    auto file_watcher = std::make_shared<certs::P12FileWatcher<Config>>(setup, effective, [this](const Config& conf) {
+//        this->reconfigure(conf);
+    });
+
+    file_watcher->startWatching();
+    file_watcher_ = file_watcher;
     state = Running;
 }
 

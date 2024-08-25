@@ -294,17 +294,6 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
     }
 
     if (conf.isTlsConfigured()) {
-        // Start Cert Status monitor thread which will:
-        //   Look for key file,
-        //   Load cert file,
-        //   Look for cert file,
-        //   Load cert file,
-        //   Check validity of cert
-        //   Get cert status if extension included
-        //   If first time
-        //
-
-
         // Get key
         ossl_ptr<EVP_PKEY> key;
         {
@@ -359,7 +348,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
          * this, and gives us all of the certs. in one blob for us to sort through.
          *
          * We _assume_ that any root CA included in a PKCS#12 file is meant to be
-         * trusted.  Otherwise such a cert. could never appear in a valid chain.
+         * trusted.  Otherwise, such a cert. could never appear in a valid chain.
          */
 
         // extract CAs (intermediate and root) from PKCS12 bag
