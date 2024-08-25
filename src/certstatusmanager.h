@@ -19,7 +19,6 @@
 
 #include <pvxs/client.h>
 
-#include "certstatusclient.h"
 #include "certstatus.h"
 #include "configcms.h"
 #include "ownedptr.h"

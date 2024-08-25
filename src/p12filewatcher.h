@@ -25,11 +25,10 @@
 
 namespace pvxs {
 namespace certs {
-
 template <typename T>
 class P12FileWatcher {
   public:
-    P12FileWatcher(logger &logger, const T &config, const std::function<void(const T &)> &reconfigure_fn)
+    P12FileWatcher(logger &logger, const T &config, const std::function<void(const T &)> &&reconfigure_fn)
       : config_(config), reconfigure_fn_(reconfigure_fn), stop_flag_(false), logger_(logger) {}
 
     inline ~P12FileWatcher() {
@@ -37,10 +36,8 @@ class P12FileWatcher {
     }
 
     inline void startWatching() {
-        std::unique_lock<std::mutex> lock(mtx_);
         auto worker = [this]() {
             log_info_printf(logger_, "File Watcher: %s\n", "Starting");
-
 
             if (auto config = dynamic_cast<const impl::ConfigCommon*>(&config_)) {
                 // Initialize a vector of file paths to watch
@@ -97,7 +94,6 @@ class P12FileWatcher {
 
     inline void stopWatching() {
         stop_flag_.store(true);
-        cv_.notify_one();
         if (worker_.joinable()) {
             worker_.join();
         }
@@ -110,7 +106,6 @@ class P12FileWatcher {
     logger &logger_;
 
     std::thread worker_;
-    std::mutex mtx_;
     std::condition_variable cv_;
 
     inline time_t getFileModificationTime(const std::string& path) const {

@@ -78,7 +78,6 @@ INC += p12filewatcher.h
 LIBRARY = pvxs
 
 LIB_SRCS += bitmask.cpp
-LIB_SRCS += certstatusclient.cpp
 LIB_SRCS += certstatusmanager.cpp
 LIB_SRCS += client.cpp
 LIB_SRCS += clientconn.cpp
