@@ -126,8 +126,11 @@ class CertStatusManager {
      * @return CertificateStatus
      */
     CertificateStatus getStatus();
+    static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
 
-   private:
+    static CertificateStatus valToStatus(const Value& val);
+
+  private:
     CertStatusManager(const ossl_ptr<X509>& cert, std::shared_ptr<client::Subscription> sub) : cert_(cert), sub_(sub) {};
     const ossl_ptr<X509>& cert_;
     const std::shared_ptr<client::Subscription> sub_;
@@ -135,8 +138,6 @@ class CertStatusManager {
     static ossl_ptr<OCSP_RESPONSE> getOSCPResponse(const shared_array<const uint8_t>& ocsp_bytes);
     static bool verifyOCSPResponse(ossl_ptr<OCSP_BASICRESP>& basic_response);
     static uint64_t ASN1ToUint64(ASN1_INTEGER* asn1_number);
-    static CertificateStatus valToStatus(const Value& val);
-    static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
 
     std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
 

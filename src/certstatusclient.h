@@ -11,6 +11,7 @@
 #include <pvxs/nt.h>
 
 #include "security.h"
+#include "certstatus.h"
 
 namespace pvxs {
 namespace certs {
@@ -27,15 +28,19 @@ namespace certs {
  */
 class CertStatusClient {
    public:
-    /**
-     * @brief Checks if the Certificate Management System (CMS) is available and
-     * can be accessed.
-     *
-     * @return true if the CMS is available, false otherwise.
-     */
-    inline bool isCmsAvailable() const { return true; };
 
-//    std::string createAndSignCertificate(const std::shared_ptr<CertCreationRequest> &ccr) const;
+    explicit CertStatusClient(const ossl_ptr<X509> &cert) : cert_(cert) {
+    }
+
+    inline static CertificateStatus getStatus(const ossl_ptr<X509> &cert) {
+        return CertStatusClient(cert).get();
+    }
+
+    CertificateStatus get() const;
+
+  private:
+    const ossl_ptr<X509> &cert_;
+
 };
 
 }  // namespace certs

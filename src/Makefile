@@ -73,6 +73,7 @@ INC += pvxs/unittest.h
 INC += pvxs/util.h
 INC += pvxs/version.h
 INC += pvxs/versionNum.h
+INC += p12filewatcher.h
 
 LIBRARY = pvxs
 
@@ -99,7 +100,6 @@ LIB_SRCS += openssl.cpp
 LIB_SRCS += osdSockExt.cpp
 LIB_SRCS += osgroups.cpp
 LIB_SRCS += pvrequest.cpp
-LIB_SRCS += p12filewatcher.cpp
 LIB_SRCS += server.cpp
 LIB_SRCS += serverchan.cpp
 LIB_SRCS += serverconn.cpp

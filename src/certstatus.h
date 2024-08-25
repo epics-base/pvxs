@@ -20,6 +20,8 @@
 
 #include "ownedptr.h"
 
+#define CERT_TIME_FORMAT "%a %b %d %H:%M:%S %Y"
+
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
@@ -195,6 +197,7 @@ struct StatusDate {
 
     StatusDate() = delete;
 
+    StatusDate(const std::string& time_string) : t(toTimeT(time_string)), s(time_string) {}
     StatusDate(const std::time_t& time) : t(time), s(toString(time)) {}
     StatusDate(const std::tm& tm) : t(tmToTimeTUTC(tm)), s(toString(t)) {}
     StatusDate(const ASN1_TIME* time) : t(asn1TimeToTimeT(time)), s(toString(t)) {}
@@ -221,11 +224,26 @@ struct StatusDate {
      */
     static inline std::string toString(const std::time_t& time) {
         char buffer[100];
-        if (std::strftime(buffer, sizeof(buffer), "%a %b %d %H:%M:%S %Y", std::localtime(&time))) {
+        if (std::strftime(buffer, sizeof(buffer), CERT_TIME_FORMAT, std::localtime(&time))) {
             return std::string(buffer);
         } else {
             throw OCSPParseException("Failed to format status date");
         }
+    }
+
+    static inline time_t toTimeT(std::string time_string) {
+        // Read the string and parse it into std::tm
+        std::tm tm = {};
+        std::istringstream ss(time_string);
+        ss >> std::get_time(&tm, CERT_TIME_FORMAT);
+
+        // Check if parsing was successful
+        if (ss.fail()) {
+            throw OCSPParseException("Failed to parse date-time string.");
+        }
+
+        // Convert std::tm to time_t
+        return tmToTimeTUTC(tm);
     }
 
     /**
@@ -294,6 +312,18 @@ struct CertificateStatus : public OCSPStatus {
     explicit CertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date,
                                StatusDate status_valid_until_date, StatusDate revocation_date)
         : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_date, revocation_date), status(status) {};
+
+    // @note: Prefer the verified `CertStatusManager::valToStatus` instead of this unverified
+    //        constructor when certification is required
+    //        ocsp_bytes is not verified in this constructor
+    // @see CertStatusManager::valToStatus
+    explicit CertificateStatus(const Value& status_value)
+        : OCSPStatus(status_value["ocsp_status.value.index"].as<ocspcertstatus_t>(),
+                     status_value["ocsp_bytes"].as<shared_array<const uint8_t>>(),
+                     status_value["status_date"].as<std::string>(),
+                     status_value["status_valid_until_date"].as<std::string>(),
+                     status_value["revocation_date"].as<std::string>()),
+         status(status_value["status.value.index"].as<certstatus_t>()) {}
 };
 
 }  // namespace certs
