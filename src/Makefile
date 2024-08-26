@@ -74,6 +74,7 @@ INC += pvxs/util.h
 INC += pvxs/version.h
 INC += pvxs/versionNum.h
 INC += p12filewatcher.h
+INC += statuslistener.h
 
 LIBRARY = pvxs
 
@@ -109,7 +110,6 @@ LIB_SRCS += serversource.cpp
 LIB_SRCS += sharedarray.cpp
 LIB_SRCS += sharedpv.cpp
 LIB_SRCS += sharedwildcardpv.cpp
-LIB_SRCS += statuslistener.cpp
 LIB_SRCS += type.cpp
 LIB_SRCS += udp_collector.cpp
 LIB_SRCS += unittest.cpp
