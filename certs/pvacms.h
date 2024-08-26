@@ -39,8 +39,9 @@
 
 #define RPC_CERT_REVOKE_ROOT "CERT:REVOKE"
 
+#define CERT_MONITOR_POLLING_INTERVAL_SECS 10
+
 #define PVXS_HOSTNAME_MAX 1024
-#define PVXS_ORG_UNIT_MAME "Certificate Authority"
 #define PVXS_SERVICE_NAME "PVACMS Service"
 #define PVXS_SERVICE_ORG_UNIT_NAME "EPICS PVA Certificate Management Service"
 
@@ -130,6 +131,37 @@
 namespace pvxs {
 namespace certs {
 
+/**
+ * @brief Monitors the certificate status and updates the shared wildcard status pv when any become valid or expire.
+ *
+ * This function monitors the certificate status by connecting to the Certificate database, and searching
+ * for all certificates that have just expired and all certificates that have just become valid.  If any
+ * are found then the associated shared wildcard PV is updated and the new status stored in the database.
+ *
+ * @param ca_db The certificates database object.
+ * @param issuer_id The issuer ID.
+ * @param status_pv The shared wildcard PV to notify.
+ *
+ * @note This function assumes that the CA database and the status PV have been properly configured and initialized.
+ * @note The status_pv parameter must be a valid SharedWildcardPV object.
+ */
+class StatusMonitor {
+  public:
+    std::atomic<bool> stop_flag_{false};
+    ConfigCms &config_;
+    sql_ptr &ca_db_;
+    std::string &issuer_id_;
+    server::SharedWildcardPV &status_pv_;
+    pvxs::ossl_ptr<X509> &ca_cert_;
+    pvxs::ossl_ptr<EVP_PKEY> &ca_pkey_;
+    pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain_;
+
+  public:
+    StatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &issuer_id, server::SharedWildcardPV &status_pv, ossl_ptr<X509> &ca_cert,
+                  ossl_ptr<EVP_PKEY> &ca_pkey, ossl_shared_ptr<struct stack_st_X509> &ca_chain)
+      : config_(config), ca_db_(ca_db), issuer_id_(issuer_id), status_pv_(status_pv), ca_cert_(ca_cert), ca_pkey_(ca_pkey), ca_chain_(ca_chain) {}
+};
+
 void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory);
 
 std::shared_ptr<KeyPair> createCaKey(ConfigCms &config);
@@ -168,9 +200,9 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
 
 void initCertsDatabase(sql_ptr &ca_db, std::string &db_file);
 
-void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&op, Value &&args, const ossl_ptr<EVP_PKEY> &ca_pkey,
-                         const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain,
-                         std::string issuer_id);
+void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&op, Value &&args,
+                         const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key,
+                         const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, std::string issuer_id);
 
 void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name,
                  const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
@@ -178,7 +210,7 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
 
 void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
               const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
-              const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool post_results = true);
+              const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
 void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
                const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
@@ -197,13 +229,14 @@ certstatus_t storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
 
 void usage(const char *argv0);
 
-void certificateStatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv, pvxs::ossl_ptr<X509> &ca_cert,
-                              pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+void certificateStatusSetup(void *raw);
+void certificateStatusMonitor(std::atomic<bool> &stop, ConfigCms &config, sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
+                              pvxs::ossl_ptr<X509> &ca_cert, pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
 Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const CertificateStatus &cert_status,
                             bool open_only = false);
-void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, const std::string &our_issuer_id, const uint64_t &serial, int32_t error_status,
-                                int32_t error_severity, const std::string &error_message);
+void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op, const std::string &our_issuer_id,
+                                const uint64_t &serial, int32_t error_status, int32_t error_severity, const std::string &error_message);
 
 std::string getCertUri(const std::string &prefix, const std::string &issuer_id, const uint64_t &serial);
 std::string getCertUri(const std::string &prefix, const std::string &cert_id);

@@ -84,8 +84,8 @@ enum ocspcertstatus_t { OCSP_CERT_STATUS_LIST };
  * and the string representation `s` of the value for logging
  */
 struct CertStatus {
-    const uint32_t i;
-    const std::string s;
+    uint32_t i;
+    std::string s;
     CertStatus() = delete;
 
     /**
@@ -192,8 +192,8 @@ struct OCSPCertStatus : CertStatus {
  * Status dates have a string representation `s` as well as a time_t representation `t`
  */
 struct StatusDate {
-    const std::time_t t;
-    const std::string s;
+    std::time_t t;
+    std::string s;
 
     StatusDate() = delete;
 
@@ -283,11 +283,11 @@ struct StatusDate {
  * revocation date.  The ocsp_status field contains the OCSP status in numerical and text form.
  */
 struct OCSPStatus {
-    const OCSPCertStatus ocsp_status;
-    const shared_array<const uint8_t> ocsp_bytes;
-    const StatusDate status_date;
-    const StatusDate status_valid_until_date;
-    const StatusDate revocation_date;
+    OCSPCertStatus ocsp_status;
+    shared_array<const uint8_t> ocsp_bytes;
+    StatusDate status_date;
+    StatusDate status_valid_until_date;
+    StatusDate revocation_date;
 
     explicit OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_date,
                         StatusDate revocation_date)
@@ -307,7 +307,14 @@ struct OCSPStatus {
  * The ocsp_status field contains the OCSP status in numerical and text form.
  */
 struct CertificateStatus : public OCSPStatus {
-    const PVACertStatus status;
+    PVACertStatus status;
+    inline bool operator==(const CertificateStatus &rhs) const {
+        return this->status.i == rhs.status.i && this->ocsp_status.i == rhs.ocsp_status.i;
+    }
+
+    inline bool operator==(certstatus_t rhs) const {
+        return this->status.i == rhs;
+    }
 
     explicit CertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date,
                                StatusDate status_valid_until_date, StatusDate revocation_date)

@@ -448,11 +448,11 @@ void Context::reconfigure(const Config& newconf)
         new_context = ossl::SSLContext::for_client(newconf);
     }
 
-    auto file_watcher = std::make_shared<certs::P12FileWatcher<Config>>(setup, newconf, [this](const Config& conf) {
-        this->reconfigure(conf);
-    });
+//    auto file_watcher = std::make_shared<certs::P12FileWatcher<Config>>(setup, newconf, pvt->impl->stop_flag_, [this](const Config& conf) {
+//        this->reconfigure(conf);
+//    });
 
-    pvt->impl->manager.loop().call([this, newconf, new_context, file_watcher]() mutable {
+    pvt->impl->manager.loop().call([this, newconf, new_context/*, file_watcher*/]() mutable {
         log_debug_printf(setup, "Client reconfigure%s", "\n");
 
         auto conns(std::move(pvt->impl->connByAddr));
@@ -468,8 +468,8 @@ void Context::reconfigure(const Config& newconf)
 
         pvt->impl->tls_context = new_context;
 
-        file_watcher->startWatching();
-        pvt->impl->file_watcher_ = file_watcher;
+//        file_watcher->startWatching();
+//        pvt->impl->file_watcher_ = file_watcher;
     });
 }
 
@@ -718,12 +718,12 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     if(event_add(cacheCleaner.get(), &channelCacheCleanInterval))
         log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
 
-    auto file_watcher = std::make_shared<certs::P12FileWatcher<Config>>(setup, effective, [this](const Config& conf) {
-//        this->reconfigure(conf);
-    });
-
-    file_watcher->startWatching();
-    file_watcher_ = file_watcher;
+//    auto file_watcher = std::make_shared<certs::P12FileWatcher<Config>>(setup, effective, stop_flag_, [this](const Config& conf) {
+////        this->reconfigure(conf);
+//    });
+//
+//    file_watcher->startWatching();
+//    file_watcher_ = file_watcher;
     state = Running;
 }
 

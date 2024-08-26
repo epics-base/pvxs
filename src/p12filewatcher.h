@@ -1,23 +1,24 @@
 #ifndef PVXS_P12FILEWATCHER_H_
 #define PVXS_P12FILEWATCHER_H_
 
-#include <iostream>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
 #include <atomic>
-#include <functional>
-#include <vector>
-#include <stdexcept>
 #include <chrono>
+#include <condition_variable>
 #include <ctime>
+#include <functional>
+#include <iostream>
+#include <mutex>
+#include <stdexcept>
+#include <thread>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
-#include <sys/stat.h>
 #include <pvxs/config.h>
 #include <pvxs/log.h>
+
+#include <sys/stat.h>
 
 #include "utilpvt.h"
 
@@ -27,26 +28,20 @@ namespace pvxs {
 namespace certs {
 template <typename T>
 class P12FileWatcher {
-  public:
-    P12FileWatcher(logger &logger, const T &config, std::function<void(const T &)> &&reconfigure_fn)
-      : config_(config), reconfigure_fn_(std::move(reconfigure_fn)), stop_flag_(false), logger_(logger) {}
+   public:
+    P12FileWatcher(logger &logger, const T &config, std::atomic<bool> &stop_flag, std::function<void(const T &)> &&reconfigure_fn)
+        : config_(config), reconfigure_fn_(std::move(reconfigure_fn)), stop_flag_(stop_flag), logger_(logger) {}
 
-    inline ~P12FileWatcher() {
-        stopWatching();
-    }
+    inline ~P12FileWatcher() { stopWatching(); }
 
     inline void startWatching() {
-        auto worker = [this]() {
+        worker_ = std::thread([this]() {
             log_info_printf(logger_, "File Watcher: %s\n", "Starting");
 
-            if (auto config = dynamic_cast<const impl::ConfigCommon*>(&config_)) {
+            if (auto config = dynamic_cast<const impl::ConfigCommon *>(&config_)) {
                 // Initialize a vector of file paths to watch
-                const std::vector<std::string> paths_to_watch = {
-                  config->tls_cert_filename,
-                  config->tls_cert_password,
-                  config->tls_private_key_filename,
-                  config->tls_private_key_password
-                };
+                const std::vector<std::string> paths_to_watch = {config->tls_cert_filename, config->tls_cert_password, config->tls_private_key_filename,
+                                                                 config->tls_private_key_password};
 
                 // Initialize the last write times
                 std::vector<time_t> last_write_times(paths_to_watch.size(), 0);
@@ -56,7 +51,7 @@ class P12FileWatcher {
                             last_write_times[i] = getFileModificationTime(paths_to_watch[i]);
                         }
                     }
-                } catch (const std::runtime_error& e) {
+                } catch (const std::runtime_error &e) {
                     log_err_printf(logger_, "File Watcher: %s\n", e.what());
                     return;
                 }
@@ -76,7 +71,7 @@ class P12FileWatcher {
                                 }
                             }
                         }
-                    } catch (const std::runtime_error& e) {
+                    } catch (const std::runtime_error &e) {
                         log_err_printf(logger_, "File Watcher: A cert file was deleted: %s\n", e.what());
                         handleFileChange();
                         return;
@@ -87,28 +82,25 @@ class P12FileWatcher {
             } else {
                 throw std::invalid_argument("Expected Config instance");
             }
-        };
-
-        worker_ = std::thread(worker);
+        });
     }
 
     inline void stopWatching() {
-        stop_flag_.store(true);
-        if (worker_.joinable()) {
+        stop_flag_.store(true);  // Flag all listeners to stop - including others
+        if (worker_.joinable()) { // wait for this one to stop
             worker_.join();
         }
     }
 
-  private:
+   private:
     const T &config_;
-    const std::function<void(const T& config)> reconfigure_fn_;
-    std::atomic<bool> stop_flag_;
+    const std::function<void(const T &config)> reconfigure_fn_;
+    std::atomic<bool> &stop_flag_;
     logger &logger_;
 
     std::thread worker_;
-    std::condition_variable cv_;
 
-    inline time_t getFileModificationTime(const std::string& path) const {
+    inline time_t getFileModificationTime(const std::string &path) const {
 #ifdef _WIN32
         WIN32_FILE_ATTRIBUTE_DATA file_info;
         if (GetFileAttributesEx(path.c_str(), GetFileExInfoStandard, &file_info)) {
@@ -126,7 +118,7 @@ class P12FileWatcher {
             throw std::runtime_error("Could not get file attributes");
         }
 #else
-        struct stat file_info{};
+        struct stat file_info {};
         if (stat(path.c_str(), &file_info) == 0) {
             return file_info.st_mtime;
         } else {
@@ -135,15 +127,25 @@ class P12FileWatcher {
 #endif
     }
 
+    /**
+     * @brief Handles the file changes by reconfiguring the connection
+     *
+     * We need to exit this file watcher first because the reconfigure function may
+     * start a new file watcher.
+     *
+     * But as this file watcher and its thread will no longer exist once it is exited,
+     * we need to run in a detached thread and we need to make sure
+     * we have copied or moved versions of the parameters from its members
+     */
     inline void handleFileChange() {
         stopWatching();
-        std::thread([this](){
-            reconfigure_fn_(config_);
-        }).detach();
+        auto reconfigure_fn = std::move(reconfigure_fn_);
+        auto config_copy = config_;
+        std::thread([reconfigure_fn, config_copy]() mutable { reconfigure_fn(config_copy); }).detach();
     }
 };
 
-} // namespace certs
-} // namespace pvxs
+}  // namespace certs
+}  // namespace pvxs
 
-#endif // PVXS_P12FILEWATCHER_H_
+#endif  // PVXS_P12FILEWATCHER_H_

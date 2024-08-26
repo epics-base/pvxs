@@ -346,7 +346,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     ossl::SSLContext tls_context;
-    std::shared_ptr<certs::P12FileWatcher<Config>> file_watcher_;
+//    std::atomic<bool> stop_flag_{false};
+//    std::shared_ptr<certs::P12FileWatcher<Config>> file_watcher_;
 #endif
 
     INST_COUNTER(ClientContextImpl);
