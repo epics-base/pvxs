@@ -446,13 +446,14 @@ void Context::reconfigure(const Config& newconf)
     ossl::SSLContext new_context;
     if (newconf.isTlsConfigured()) {
         new_context = ossl::SSLContext::for_client(newconf);
+        new_context.client_file_watcher_ = std::make_shared<certs::P12FileWatcher<client::Config>>(setup, newconf, new_context.stop_flag_, [this](const client::Config& conf) {
+            log_debug_printf(setup, "Client reconfigure called back two or more times: %s\n", "File change");
+            reconfigure(conf);
+        });
+        new_context.client_file_watcher_->startWatching();
     }
 
-//    auto file_watcher = std::make_shared<certs::P12FileWatcher<Config>>(setup, newconf, pvt->impl->stop_flag_, [this](const Config& conf) {
-//        this->reconfigure(conf);
-//    });
-
-    pvt->impl->manager.loop().call([this, newconf, new_context/*, file_watcher*/]() mutable {
+    pvt->impl->manager.loop().call([this, newconf, new_context]() mutable {
         log_debug_printf(setup, "Client reconfigure%s", "\n");
 
         auto conns(std::move(pvt->impl->connByAddr));
@@ -467,9 +468,6 @@ void Context::reconfigure(const Config& newconf)
         conns.clear();
 
         pvt->impl->tls_context = new_context;
-
-//        file_watcher->startWatching();
-//        pvt->impl->file_watcher_ = file_watcher;
     });
 }
 
@@ -611,6 +609,11 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     if(conf.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_client(effective);
+            tls_context.client_file_watcher_ = std::make_shared<certs::P12FileWatcher<client::Config>>(setup, effective, tls_context.stop_flag_, [](const client::Config& conf) {
+                log_debug_printf(setup, "Client reconfigure callback: First time %s\n", "file change");
+//        reconfigure(conf);
+            });
+            tls_context.client_file_watcher_->startWatching();
         }catch(std::exception& e){
             log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
         }
@@ -718,12 +721,6 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     if(event_add(cacheCleaner.get(), &channelCacheCleanInterval))
         log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
 
-//    auto file_watcher = std::make_shared<certs::P12FileWatcher<Config>>(setup, effective, stop_flag_, [this](const Config& conf) {
-////        this->reconfigure(conf);
-//    });
-//
-//    file_watcher->startWatching();
-//    file_watcher_ = file_watcher;
     state = Running;
 }
 

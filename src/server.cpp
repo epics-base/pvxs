@@ -499,6 +499,11 @@ Server::Pvt::Pvt(const Config &conf)
     if(effective.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_server(effective);
+            tls_context.server_file_watcher_ = std::make_shared<certs::P12FileWatcher<Config>>(serversetup, effective, tls_context.stop_flag_, [](const Config& conf) {
+                log_debug_printf(serversetup, "Server reconfigure callback: %s\n", "File change");
+//        reconfigure(conf);
+            });
+            tls_context.server_file_watcher_->startWatching();
         }catch(std::exception& e){
             if (effective.tls_stop_if_no_cert) {
                 log_err_printf(serversetup, "***EXITING***: TLS disabled for server: %s\n", e.what());

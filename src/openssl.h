@@ -20,8 +20,10 @@
 #include <openssl/x509v3.h>
 
 #include <pvxs/client.h>
+#include <pvxs/server.h>
 
 #include "ownedptr.h"
+#include "p12filewatcher.h"
 
 namespace pvxs {
 
@@ -105,6 +107,9 @@ struct SSLContext {
 
     bool have_certificate() const;
     const X509* certificate0() const;
+    std::atomic<bool> stop_flag_;
+    std::shared_ptr<certs::P12FileWatcher<client::Config>> client_file_watcher_;
+    std::shared_ptr<certs::P12FileWatcher<server::Config>> server_file_watcher_;
 
     static
     bool fill_credentials(PeerCredentials& cred, const SSL *ctx);

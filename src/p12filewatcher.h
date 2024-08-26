@@ -45,36 +45,39 @@ class P12FileWatcher {
 
                 // Initialize the last write times
                 std::vector<time_t> last_write_times(paths_to_watch.size(), 0);
-                try {
-                    for (size_t i = 0; i < paths_to_watch.size(); ++i) {
-                        if (!paths_to_watch[i].empty()) {
+                for (size_t i = 0; i < paths_to_watch.size(); ++i) {
+                    if (!paths_to_watch[i].empty()) {
+                        try {
                             last_write_times[i] = getFileModificationTime(paths_to_watch[i]);
+                        } catch (...) {
+                            last_write_times[i] = 0;
                         }
                     }
-                } catch (const std::runtime_error &e) {
-                    log_err_printf(logger_, "File Watcher: %s\n", e.what());
-                    return;
                 }
 
                 // Start the file watching loop
                 while (!stop_flag_.load()) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(FILE_WATCHER_PERIOD_MS));
 
-                    try {
-                        for (size_t i = 0; i < paths_to_watch.size(); ++i) {
-                            if (!paths_to_watch[i].empty()) {
-                                const time_t current_write_time = getFileModificationTime(paths_to_watch[i]);
-                                if (current_write_time != last_write_times[i]) {
-                                    last_write_times[i] = current_write_time;
+                    for (size_t i = 0; i < paths_to_watch.size(); ++i) {
+                        if (!paths_to_watch[i].empty()) {
+                            time_t current_write_time;
+                            try {
+                                current_write_time = getFileModificationTime(paths_to_watch[i]);
+                            } catch (...) {
+                                if (last_write_times[i] != 0) {
+                                    log_err_printf(logger_, "File Watcher: %s file was deleted\n", paths_to_watch[i].c_str());
                                     handleFileChange();
                                     return;
                                 }
+                                continue;
+                            }
+                            if (current_write_time != last_write_times[i]) {
+                                log_info_printf(logger_, "File Watcher: %s file was updated\n", paths_to_watch[i].c_str());
+                                handleFileChange();
+                                return;
                             }
                         }
-                    } catch (const std::runtime_error &e) {
-                        log_err_printf(logger_, "File Watcher: A cert file was deleted: %s\n", e.what());
-                        handleFileChange();
-                        return;
                     }
                 }
 
