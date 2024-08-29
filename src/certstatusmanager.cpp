@@ -121,7 +121,7 @@ uint64_t CertStatusManager::getSerialNumber(const ossl_ptr<X509>& cert) {
     return ASN1ToUint64(serial_number_asn1);
 }
 
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X509>& cert, StatusCallback&& callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X509>&& cert, StatusCallback&& callback) {
     // Construct the URI
     auto uri = CertStatusManager::getStatusPvFromCert(cert);
 
@@ -136,17 +136,19 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
         sub = client->monitor(uri)
                   .maskConnected(true)
                   .maskDisconnected(true)
-                  .event([callback_ptr](client::Subscription& sub) {
+                  .event(std::bind([callback_ptr](client::Subscription& sub) {
                       try {
                           auto value = sub.pop();
-                          if (!value)
+                          if (!value) {
                               (*callback_ptr)({});
-                          (*callback_ptr)((CertificateStatus)value);
-                      } catch (std::exception& e) {
+                          } else {
+                              (*callback_ptr)((CertificateStatus)value);
+                          }
+                      } catch (const std::exception& e) {
                           log_warn_printf(status, "Error parsing certificate status: %s\n", e.what());
                           (*callback_ptr)({});
                       }
-                  })
+                  }, std::placeholders::_1))
                   .exec();
         return cert_status_ptr<CertStatusManager>(new CertStatusManager(cert, client, sub));
     } catch (std::exception& e) {
@@ -163,12 +165,7 @@ void CertStatusManager::unsubscribe() {
 CertificateStatus CertStatusManager::getStatus() { return getStatus(cert_); }
 
 CertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
-    // Extract the issuer's SKID from the certificate
-    auto issuer_id = CertStatus::getIssuerId(cert.get());
-    auto serial = getSerialNumber(cert);
-
-    // Construct the URI
-    auto uri = CertStatus::makeStatusURI(issuer_id, serial);
+    auto uri = getStatusPvFromCert(cert);
 
     // Build and start network operation
     // Disable TLS for get status as the OCSP payload is signed

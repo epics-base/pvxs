@@ -1012,10 +1012,9 @@ void Server::Pvt::watchCertificate(const Config& config, ossl::SSLContext& conte
     context.server_file_watcher_->startWatching();
 
     // Get the certificate from the context whose status needs to be monitored
-    auto cert = ossl_ptr<X509>(SSL_CTX_get0_certificate(context.ctx), false);
-    if (cert) {
-        X509_up_ref(cert.get());  // increase ref count to cert so we own it and have to free it
-
+    auto ctx_cert = SSL_CTX_get0_certificate(context.ctx);
+    if (ctx_cert) {
+        auto cert = ossl_ptr<X509>(X509_dup(ctx_cert));
         // Configure a status listener to listen for certificate status changes
         context.server_status_listener_ = std::make_shared<certs::StatusListener<Config>>(watcher, config, context.sl_stop_flag_, std::move(cert));
         // Start the listener

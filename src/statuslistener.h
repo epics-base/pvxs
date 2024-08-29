@@ -152,7 +152,7 @@ class StatusListener {
      * @return a CertStatusManager that could be used to get statuses periodically
      */
     inline cert_status_ptr<CertStatusManager> reactToStatusChanges() {
-        auto cert_status_manager =  CertStatusManager::subscribe(cert_, [this](const CertificateStatus &status) {
+        auto cert_status_manager =  CertStatusManager::subscribe(std::move(cert_), std::move([this](const CertificateStatus &status) {
             if (is_first_update_) {
                 // Just return this value
                 Guard G(lock_);
@@ -183,7 +183,7 @@ class StatusListener {
                         break;
                 }
             }
-        });
+        }));
         return std::move(cert_status_manager);
     }
 
