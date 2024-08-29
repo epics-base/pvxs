@@ -71,14 +71,16 @@ class StatusListener {
     inline void stopListening() {
         log_debug_printf(logger_, "Status Monitor: %s\n", "Stop Listening Called");
         stop_flag_.store(true);  // Flag listeners to stop
+/*
         try {
             if (worker_.joinable()) {
                 log_debug_printf(logger_, "Status Monitor: %s\n", "Waiting for Worker Thread to Stop ...");
                 worker_.join();
             }
-            log_debug_printf(logger_, "Status Monitor: %s\n", "Stopped");
         } catch (...) {
         }
+*/
+        log_debug_printf(logger_, "Status Monitor: %s\n", "Stopped");
     }
 
     /**
