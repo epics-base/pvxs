@@ -59,7 +59,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     }
 
     // EPICS_PVAS_TLS_STOP_IF_NO_CERT
-    if (pickone({"EPICS_PVACMS_TLS_STOP_IF_NO_CERT"})) {
+    if (pickone({"EPICS_PVACMS_TLS_STOP_IF_NO_CERT", "EPICS_PVAS_TLS_STOP_IF_NO_CERT"})) {
         tls_stop_if_no_cert = parseTo<bool>(pickone.val);
     }
 

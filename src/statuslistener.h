@@ -109,21 +109,22 @@ class StatusListener {
             // Other transitions are not possible
             //  PENDING and PENDING APPROVAL can only be starting states (except as noted above)
 
-            log_info_printf(logger_, "Status Monitor: %s\n", "Starting");
+            log_debug_printf(logger_, "Status Monitor: %s\n", "Starting");
             try {
                 // Subscribe to status changes and react
                 auto && cert_status_manager = reactToStatusChanges();
 
+                // Wait for first status to be available (or stopping)
+                first_status_available_.wait(stop_flag_);
+
                 // Start the status validity verification loop.
                 verifyStatusValidity(std::move(cert_status_manager));
-                log_info_printf(logger_, "Status Monitor: %s\n", "Stopped");
+                log_debug_printf(logger_, "Status Monitor: %s\n", "Stopped");
             } catch (std::exception &e) {
-                log_info_printf(logger_, "Status Monitor: Failed to Start: %s\n", e.what());
+                log_err_printf(logger_, "Status Monitor: Failed to Start: %s\n", e.what());
                 stopListening();
             }
         });
-        // Wait for first status to be available (or stopping)
-        first_status_available_.wait(stop_flag_);
         return status_;
     }
 
@@ -163,7 +164,7 @@ class StatusListener {
                     case EXPIRED:
                     case REVOKED:
                     case VALID:
-                        log_err_printf(logger_, "Status Monitor: certificate transitioned from %s => %s: reconfiguring", status_.status.s.c_str(),
+                        log_debug_printf(logger_, "Status Monitor: certificate transitioned from %s => %s: reconfiguring", status_.status.s.c_str(),
                                        status.status.s.c_str());
                         reconfigure_fn_(config_);
                         stop_flag_.store(true);
@@ -218,13 +219,13 @@ class StatusListener {
                 // If the PVACMS is unavailable we will fall into this case
                 // Just reconfigure: unavailability of service will mean a downgraded or
                 // closed connection depending on configuration
-                log_err_printf(logger_, "Status Monitor: PVACMS unavailable: %s", e.what());
+                log_err_printf(logger_, "Status Monitor: PVACMS unavailable: %s\n", e.what());
                 reconfigure_fn_(config_);
                 break;
             }
         }
         cert_status_manager->unsubscribe();
-        log_info_printf(logger_, "Status Monitor: %s\n", "Exiting");
+        log_debug_printf(logger_, "Status Monitor: %s\n", "Exiting");
     }
 };
 }  // namespace certs

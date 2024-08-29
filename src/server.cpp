@@ -162,7 +162,58 @@ std::vector<std::pair<std::string, int> > Server::listSource()
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-void Server::reconfigure(const Config& inconf) { pvt->reconfigureContext(pvt->server_ptr, inconf); }
+void Server::reconfigure(const Config& inconf)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+
+    auto newconf(inconf);
+    newconf.expand(); // maybe catch some errors early
+
+    log_info_printf(watcher, "Reconfiguring Server Context%s", "\n");
+
+    // is the current server running?
+
+    Pvt::state_t prev_state;
+    pvt->acceptor_loop.call([this, &prev_state]() {
+        prev_state = pvt->state;
+    });
+
+    bool was_running = prev_state==Pvt::Running || prev_state==Pvt::Starting;
+
+    if(was_running)
+        pvt->stop();
+
+    decltype(pvt->sources) transfers;
+    decltype(pvt->builtinsrc) builtin;
+
+    // copy all Source, including builtin
+    {
+        auto G(pvt->sourcesLock.lockReader());
+
+        transfers = pvt->sources;
+        builtin = pvt->builtinsrc;
+    }
+
+    // completely destroy the current/old server to free up TCP ports
+//    pvt.reset();
+
+    // build up a new, empty, server
+    Server newsrv(newconf);
+    pvt = std::move(newsrv.pvt);
+
+    {
+        auto G(pvt->sourcesLock.lockWriter());
+
+        pvt->sources = transfers;
+        pvt->builtinsrc = builtin;
+    }
+
+    if(was_running) {
+        pvt->start();
+        log_info_printf(watcher, "Resuming Server after Reconfiguration%s", "\n");
+    }
+}
 #endif
 
 const Config& Server::config() const
@@ -944,7 +995,7 @@ void Server::Pvt::watchCertificate(const Config& config, ossl::SSLContext& conte
     // Configure a file watcher to watch the configured certificate files
     context.server_file_watcher_ = std::make_shared<certs::P12FileWatcher<Config>>(watcher, config, context.fw_stop_flag_, [this](const Config& configuration) {
         log_debug_printf(watcher, "Reconfigure server context: %s\n", "certificate file(s) change");
-        reconfigureContext(server_ptr, configuration);
+        if ( server_ptr )  server_ptr->reconfigure(configuration);
     });
     // Start the file watcher
     context.server_file_watcher_->startWatching();
@@ -959,7 +1010,7 @@ void Server::Pvt::watchCertificate(const Config& config, ossl::SSLContext& conte
         // Start the listener
         context.server_status_listener_->startListening([this](const Config& configuration) {
             log_debug_printf(watcher, "Reconfigure server context: %s\n", "certificate status change");
-            reconfigureContext(server_ptr, configuration);
+            if ( server_ptr ) server_ptr->reconfigure(configuration);
         });
     }
 }

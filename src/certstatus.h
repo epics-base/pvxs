@@ -358,9 +358,9 @@ struct CertificateStatus : public OCSPStatus {
     explicit CertificateStatus(certstatus_t status, const shared_array<const uint8_t>&& ocsp_bytes) : OCSPStatus(std::move(ocsp_bytes)), status(status) {};
 
     explicit CertificateStatus(const Value& status_value)
-        : OCSPStatus(status_value["ocsp_bytes"].as<shared_array<const uint8_t>>()), status(status_value["status.value.index"].as<certstatus_t>()) {
-        if (!selfConsistent() || !dateConsistent(status_value["status_date"].as<std::string>(), status_value["status_valid_until_date"].as<std::string>(),
-                                                 status_value["revocation_date"].as<std::string>())) {
+        : OCSPStatus(status_value["ocsp_response"].as<shared_array<const uint8_t>>()), status(status_value["status.value.index"].as<certstatus_t>()) {
+        if (!selfConsistent() || !dateConsistent(status_value["ocsp_status_date"].as<std::string>(), status_value["ocsp_certified_until"].as<std::string>(),
+                                                 status_value["ocsp_revocation_date"].as<std::string>())) {
             throw OCSPParseException("Certificate status does not match certified OCSP status");
         };
     }

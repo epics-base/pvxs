@@ -42,7 +42,7 @@ int CertStatusManager::NID_PvaCertStatusURI = NID_undef;
  */
 ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOSCPResponse(const shared_array<const uint8_t>& ocsp_bytes) {
     // Create a BIO for the OCSP response
-    ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())));
+    ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())), false);
     if (!bio) {
         throw OCSPParseException("Failed to create BIO for OCSP response");
     }
@@ -137,14 +137,17 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
     std::shared_ptr<client::Subscription> sub;
     try {
         sub = client->monitor(uri)
-                  .maskConnected(false)
-                  .maskDisconnected(false)
+                  .maskConnected(true)
+                  .maskDisconnected(true)
                   .event([callback_ptr](client::Subscription& sub) {
                       try {
-                          (*callback_ptr)((CertificateStatus)sub.pop());
-                      } catch (OCSPParseException& e) {
+                          auto value = sub.pop();
+                          if (!value)
+                              (*callback_ptr)({});
+                          (*callback_ptr)((CertificateStatus)value);
+                      } catch (std::exception& e) {
                           log_warn_printf(status, "Error parsing certificate status: %s\n", e.what());
-                          (*callback_ptr)(CertificateStatus());
+                          (*callback_ptr)({});
                       }
                   })
                   .exec();

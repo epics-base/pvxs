@@ -22,7 +22,7 @@
 
 #include "utilpvt.h"
 
-#define FILE_WATCHER_PERIOD_MS 500
+#define FILE_WATCHER_PERIOD_MS 1000
 
 namespace pvxs {
 namespace certs {
@@ -51,7 +51,7 @@ class P12FileWatcher {
 
             // Start the file watcher until something changes, then handle change and exit
             task(paths_to_watch, last_write_times);
-            log_info_printf(logger_, "File Watcher: %s\n", "Exited");
+            log_debug_printf(logger_, "File Watcher: %s\n", "Exited");
         });
     }
 
@@ -84,7 +84,7 @@ class P12FileWatcher {
                 } catch (...) {}
             }
         }
-        log_info_printf(logger_, "File Watcher: %s\n", "Initialised");
+        log_debug_printf(logger_, "File Watcher: %s\n", "Initialised");
     }
 
     /**
@@ -130,10 +130,13 @@ class P12FileWatcher {
 
     inline void stopWatching() {
         log_debug_printf(logger_, "File Watcher: %s\n", "Stop Called");
-        stop_flag_.store(true);  // Flag all listeners to stop
-        if (worker_.joinable()) { // wait for this to stop
-            log_debug_printf(logger_, "File Watcher: %s\n", "Stopping ...");
-            worker_.join();
+        stop_flag_.store(true);  // Flag watcher to stop
+        try {
+            if (worker_.joinable()) { // wait for this to stop
+                log_debug_printf(logger_, "File Watcher: %s\n", "Stopping ...");
+                worker_.join();
+            }
+        } catch (...) {
         }
         log_debug_printf(logger_, "File Watcher: %s\n", "Stopped");
     }
