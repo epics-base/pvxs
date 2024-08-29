@@ -96,7 +96,7 @@ ossl_ptr<X509> CertFactory::create() {
     // 11. Add EPICS subscription status subscription extension, if required and is not CMS itself
     if ( cert_status_subscription_required_ && !IS_USED_FOR_(usage_, ssl::kForCMS)) {
         auto issuerId = CertStatus::getIssuerId(issuer_certificate_ptr_);
-        addCustomExtensionByNid(certificate, CertStatusManager::NID_PvaCertStatusURI, CertStatus::makeStatusURI(issuerId, serial_));
+        addCustomExtensionByNid(certificate, ossl::SSLContext::NID_PvaCertStatusURI, CertStatus::makeStatusURI(issuerId, serial_));
     }
 
     // 12. Create cert chain from issuer's chain and issuer's cert

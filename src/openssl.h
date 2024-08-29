@@ -26,6 +26,14 @@
 #include "p12filewatcher.h"
 #include "statuslistener.h"
 
+// EPICS OID for "validTillRevoked" extension:
+// TODO Register this unassigned OID for EPICS
+// "1.3.6.1.4.1" OID prefix for custom OIDs
+// "37427" DTMF for "EPICS"
+#define NID_PvaCertStatusURIID "1.3.6.1.4.1.37427.1"
+#define SN_PvaCertStatusURI "ASN.1 - PvaCertStatusURI"
+#define LN_PvaCertStatusURI "EPICS PVA Certificate Status URI"
+
 namespace pvxs {
 
 namespace client {
@@ -97,12 +105,28 @@ struct SSLContext {
         return *this;
     }
 
+    static inline void sslInit() {
+        // Initialize SSL
+        if (NID_PvaCertStatusURI == NID_undef) {
+            SSL_library_init();
+            OpenSSL_add_all_algorithms();
+            ERR_load_crypto_strings();
+            OpenSSL_add_all_ciphers();
+            OpenSSL_add_all_digests();
+            NID_PvaCertStatusURI = OBJ_create(NID_PvaCertStatusURIID, SN_PvaCertStatusURI, LN_PvaCertStatusURI);
+            if (NID_PvaCertStatusURI == NID_undef) {
+                throw std::runtime_error("Failed to create NID for " SN_PvaCertStatusURI ": " LN_PvaCertStatusURI);
+            }
+        }
+    }
+
     explicit operator bool() const { return ctx; }
 
     bool have_certificate() const;
     const X509* certificate0() const;
     std::atomic<bool> fw_stop_flag_{false};
     std::atomic<bool> sl_stop_flag_{false};
+    static PVXS_API int NID_PvaCertStatusURI;
     std::shared_ptr<certs::P12FileWatcher<client::Config>> client_file_watcher_;
     std::shared_ptr<certs::StatusListener<client::Config>> client_status_listener_;
     std::shared_ptr<certs::P12FileWatcher<server::Config>> server_file_watcher_;

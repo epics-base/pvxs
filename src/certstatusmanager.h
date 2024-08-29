@@ -141,8 +141,6 @@ class CertStatusManager {
 
     static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
 
-    static PVXS_API int NID_PvaCertStatusURI;
-
    private:
     CertStatusManager(const ossl_ptr<X509>& cert, std::shared_ptr<client::Context> &client, std::shared_ptr<client::Subscription> &sub)
         : cert_(cert), client_(client), sub_(sub) {};

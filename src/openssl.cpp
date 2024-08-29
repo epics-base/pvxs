@@ -267,6 +267,9 @@ void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
 SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const impl::ConfigCommon &conf) {
     impl::threadOnce<&OSSLGbl_init>();
 
+    // Initialise SSL subsystem and add our custom extensions (idempotent)
+    SSLContext::sslInit();
+
     SSLContext ctx;
     ctx.ctx = SSL_CTX_new_ex(ossl_gbl->libctx.get(), NULL, method);
     if (!ctx.ctx) throw SSLError("Unable to allocate SSL_CTX");
@@ -387,6 +390,9 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
 }
 
 }  // namespace
+
+// Must be set up with correct values after OpenSSL initialisation to retrieve status PV from certs
+int SSLContext::NID_PvaCertStatusURI = NID_undef;
 
 bool SSLContext::have_certificate() const {
     if (!ctx) throw std::invalid_argument("NULL");

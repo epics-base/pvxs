@@ -27,9 +27,6 @@ namespace certs {
 
 DEFINE_LOGGER(status, "pvxs.cert.status");
 
-// Must be set up with correct values after OpenSSL initialisation to retrieve status PV from certs
-int CertStatusManager::NID_PvaCertStatusURI = NID_undef;
-
 /**
  * @brief Retrieves the Online Certificate Status Protocol (OCSP) response from the given byte array.
  *
@@ -248,9 +245,7 @@ bool CertStatusManager::verifyOCSPResponse(ossl_ptr<OCSP_BASICRESP>& basic_respo
 }
 
 bool CertStatusManager::shouldMonitor(const ossl_ptr<X509>& certificate) {
-    // Register the custom NID if it has not yet been registered
-    CertStatus::registerCustomNids();
-    return (X509_get_ext_by_NID(certificate.get(), CertStatusManager::NID_PvaCertStatusURI, -1) >= 0);
+    return (X509_get_ext_by_NID(certificate.get(), ossl::SSLContext::NID_PvaCertStatusURI, -1) >= 0);
 }
 
 /**
@@ -258,11 +253,7 @@ bool CertStatusManager::shouldMonitor(const ossl_ptr<X509>& certificate) {
  *
  */
 std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certificate) {
-    // Register the custom NID if it has not yet been registered
-    // TODO protect from race conditions
-    CertStatus::registerCustomNids();
-
-    int extension_index = X509_get_ext_by_NID(certificate.get(), CertStatusManager::NID_PvaCertStatusURI, -1);
+    int extension_index = X509_get_ext_by_NID(certificate.get(), ossl::SSLContext::NID_PvaCertStatusURI, -1);
     if (extension_index < 0) return "";
 
     // Get the extension object from the certificate

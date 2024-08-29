@@ -60,6 +60,7 @@
 #include "certstatusfactory.h"
 #include "configcms.h"
 #include "evhelper.h"
+#include "openssl.h"
 #include "ownedptr.h"
 #include "p12filefactory.h"
 #include "sqlite3.h"
@@ -1575,14 +1576,7 @@ int main(int argc, char *argv[]) {
         if (verbose) logger_level_set("pvxs.certs.*", pvxs::Level::Info);
 
         // Initialize SSL
-        SSL_library_init();
-        OpenSSL_add_all_algorithms();
-        ERR_load_crypto_strings();
-        OpenSSL_add_all_ciphers();
-        OpenSSL_add_all_digests();
-
-        // Register custom NIDs
-        CertStatus::registerCustomNids();
+        pvxs::ossl::SSLContext::sslInit();
 
         // Set security if configured
         if (!config.ca_acf_filename.empty()) asSetFilename(config.ca_acf_filename.c_str());

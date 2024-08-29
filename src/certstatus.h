@@ -31,14 +31,6 @@ namespace certs {
 
 class CertStatusManager;
 
-// EPICS OID for "validTillRevoked" extension:
-// TODO Register this unassigned OID for EPICS
-// "1.3.6.1.4.1" OID prefix for custom OIDs
-// "37427" DTMF for "EPICS"
-#define NID_PvaCertStatusURIID "1.3.6.1.4.1.37427.1"
-#define SN_PvaCertStatusURI "ASN.1 - PvaCertStatusURI"
-#define LN_PvaCertStatusURI "EPICS PVA Certificate Status URI"
-
 ///////////// OSCP RESPONSE ERRORS
 class OCSPParseException : public std::runtime_error {
    public:
@@ -150,18 +142,6 @@ struct CertStatus {
 
     static inline std::string makeStatusURI(std::string& issuer_id, uint64_t& serial) {
         return SB() << GET_MONITOR_CERT_STATUS_ROOT << ":" << issuer_id << ":" << std::setw(16) << std::setfill('0') << serial;
-    }
-
-    /**
-     * @brief Register custom NIDs to be used in PVACMS generated certificates
-     */
-    static inline void registerCustomNids() {
-        if (CertStatusManager::NID_PvaCertStatusURI == NID_undef) {
-            CertStatusManager::NID_PvaCertStatusURI = OBJ_create(NID_PvaCertStatusURIID, SN_PvaCertStatusURI, LN_PvaCertStatusURI);
-            if (CertStatusManager::NID_PvaCertStatusURI == NID_undef) {
-                throw std::runtime_error("Failed to create NID for " SN_PvaCertStatusURI ": " LN_PvaCertStatusURI);
-            }
-        }
     }
 
    protected:

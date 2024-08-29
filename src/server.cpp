@@ -502,12 +502,23 @@ Server::Pvt::Pvt(const Config &conf)
     if(effective.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_server(effective);
+        } catch (std::exception& e) {
+            if (effective.tls_stop_if_no_cert) {
+                log_err_printf(serversetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
+                exit(1);
+            } else {
+                log_err_printf(serversetup, "TLS disabled for server: %s\n", e.what());
+            }
+        }
+        try {
             watchCertificate(effective, tls_context);
         } catch (std::exception& e) {
             if (effective.tls_stop_if_no_cert) {
                 log_err_printf(serversetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
                 exit(1);
             } else {
+                // TODO reset to non SSL tls_context
+                // SSLContext::getBaseContext();
                 log_err_printf(serversetup, "TLS disabled for server: %s\n", e.what());
             }
         }
