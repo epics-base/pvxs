@@ -106,7 +106,7 @@ class P12FileWatcher {
                         current_write_time = getFileModificationTime(paths_to_watch[i]);
                     } catch (...) {
                         if (last_write_times[i] != 0) {
-                            log_err_printf(logger_,
+                            log_debug_printf(logger_,
                                            "File Watcher: %s file was deleted\n",
                                            paths_to_watch[i].c_str());
                             reconfigure_fn_(config_);
@@ -116,7 +116,7 @@ class P12FileWatcher {
                         continue;
                     }
                     if (current_write_time != last_write_times[i]) {
-                        log_info_printf(logger_,
+                        log_debug_printf(logger_,
                                         "File Watcher: %s file was updated\n",
                                         paths_to_watch[i].c_str());
                         reconfigure_fn_(config_);

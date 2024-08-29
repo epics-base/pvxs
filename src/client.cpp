@@ -1262,7 +1262,7 @@ void ContextImpl::watchCertificate(const Config &new_config, ossl::SSLContext &c
         context.client_status_listener_ = std::make_shared<certs::StatusListener<Config>>(watcher, new_config, context.sl_stop_flag_, std::move(cert));
         auto cert_status = context.client_status_listener_->startListening([this](const Config& conf) {
             auto new_context = ossl::SSLContext::for_client(conf);
-            log_debug_printf(watcher, "Client reconfigure: %s\n", "File change");
+            log_debug_printf(watcher, "Client reconfigure: %s\n", "Status change");
             reconfigureContext(new_context);
         });
 
