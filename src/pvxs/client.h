@@ -23,6 +23,10 @@
 #include <pvxs/netcommon.h>
 #include <pvxs/util.h>
 
+#ifdef PVXS_ENABLE_OPENSSL
+#include "openssl.h"
+#endif
+
 namespace pvxs {
 namespace client {
 

@@ -65,10 +65,12 @@ class ConfigCms : public pvxs::server::Config {
      * A flag indicating that subscription is required and a string
      * containing the PV name to subscribe to.
      *
-     * In absence of this flag certificate validity will work as normal
+     * If the flag is false certificate validity will work as normal
      * but clients will not know that they have been revoked.
+     *
+     * Default is true
      */
-    bool cert_status_subscription_required = false;
+    bool cert_status_subscription_required = true;
 
     /**
      * @brief This is the string that determines the fully

@@ -12,19 +12,34 @@
 #ifndef PVXS_CERTSTATUSMANAGER_H_
 #define PVXS_CERTSTATUSMANAGER_H_
 
+#include <functional>
+
 #include <openssl/evp.h>
 #include <openssl/ocsp.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 
-#include <pvxs/client.h>
+//#include <pvxs/client.h>
+#include <pvxs/sharedArray.h>
 
-#include "certstatus.h"
-#include "configcms.h"
+//#include "certstatus.h"
 #include "ownedptr.h"
 
 namespace pvxs {
+
+// Forward def
+namespace client {
+class Context;
+struct Subscription;
+}
+
 namespace certs {
+
+// Forward def
+struct CertStatus;
+struct OCSPStatus;
+struct CertificateStatus;
+struct ParsedOCSPStatus;
 
 template <typename T>
 struct cert_status_delete;
@@ -70,7 +85,17 @@ using cert_status_ptr = OwnedPtr<T, cert_status_delete<T>>;
  */
 class CertStatusManager {
    public:
+    friend struct OCSPStatus;
+    CertStatusManager() = delete;
+
+    virtual ~CertStatusManager() {
+//        sub_->cancel();
+//        client_->close();
+    }
+
     using StatusCallback = std::function<void(const CertificateStatus&)>;
+
+    static bool shouldMonitor(const ossl_ptr<X509>& certificate);
 
     /**
      * @brief Get the status PV from a Cert.
@@ -82,18 +107,6 @@ class CertStatusManager {
      *         e.g. CERT:STATUS:0293823f:098294739483904875
      */
     static std::string getStatusPvFromCert(const ossl_ptr<X509>& cert);
-
-    /**
-     * @brief To parse OCSP responses
-     *
-     * Parsing OCSP responses is carried out by providing the OCSP response buffer.
-     * This function will verify the response comes from a trusted source,
-     * is well formed, and then will return the `OCSPStatus` it indicates.
-     *
-     * @param ocsp_bytes the ocsp response
-     * @return the OCSP response status
-     */
-    static OCSPStatus parse(shared_array<const uint8_t> ocsp_bytes);
 
     /**
      * @brief Used to create a helper that you can use to subscribe to certificate status with
@@ -125,22 +138,36 @@ class CertStatusManager {
      * @return CertificateStatus
      */
     CertificateStatus getStatus();
+
     static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
 
-    static CertificateStatus valToStatus(const Value& val);
+    static PVXS_API int NID_PvaCertStatusURI;
 
-  private:
-    CertStatusManager(const ossl_ptr<X509>& cert, std::shared_ptr<client::Subscription> sub) : cert_(cert), sub_(sub) {};
+   private:
+    CertStatusManager(const ossl_ptr<X509>& cert, std::shared_ptr<client::Context> client, std::shared_ptr<client::Subscription> sub)
+        : cert_(cert), client_(client), sub_(sub) {};
     const ossl_ptr<X509>& cert_;
+    std::shared_ptr<client::Context> client_;
     const std::shared_ptr<client::Subscription> sub_;
-
+    ;
     static ossl_ptr<OCSP_RESPONSE> getOSCPResponse(const shared_array<const uint8_t>& ocsp_bytes);
+
     static bool verifyOCSPResponse(ossl_ptr<OCSP_BASICRESP>& basic_response);
     static uint64_t ASN1ToUint64(ASN1_INTEGER* asn1_number);
 
-    std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
+    /**
+     * @brief To parse OCSP responses
+     *
+     * Parsing OCSP responses is carried out by providing the OCSP response buffer.
+     * This function will verify the response comes from a trusted source,
+     * is well formed, and then will return the `ParsedOCSPStatus` it indicates.
+     *
+     * @param ocsp_bytes the ocsp response
+     * @return the Parsed OCSP response status
+     */
+    static ParsedOCSPStatus parse(shared_array<const uint8_t> ocsp_bytes);
 
-    static int NID_PvaCertStatusURI;
+    std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
 };
 
 template <>

@@ -59,8 +59,6 @@ class PVXS_API CertFactory {
     std::string skid_;
     certstatus_t initial_status_;
 
-    static int NID_PvaCertStatusURI;
-
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
                 const std::string &org_unit, time_t not_before, time_t not_after, const uint16_t &usage, bool cert_status_subscription_required = false,
                 X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr, stack_st_X509 *issuer_chain_ptr = nullptr,

@@ -146,7 +146,7 @@ namespace certs {
  * @note The status_pv parameter must be a valid SharedWildcardPV object.
  */
 class StatusMonitor {
-  public:
+   public:
     std::atomic<bool> stop_flag_{false};
     ConfigCms &config_;
     sql_ptr &ca_db_;
@@ -156,10 +156,10 @@ class StatusMonitor {
     pvxs::ossl_ptr<EVP_PKEY> &ca_pkey_;
     pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain_;
 
-  public:
+   public:
     StatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &issuer_id, server::SharedWildcardPV &status_pv, ossl_ptr<X509> &ca_cert,
                   ossl_ptr<EVP_PKEY> &ca_pkey, ossl_shared_ptr<struct stack_st_X509> &ca_chain)
-      : config_(config), ca_db_(ca_db), issuer_id_(issuer_id), status_pv_(status_pv), ca_cert_(ca_cert), ca_pkey_(ca_pkey), ca_chain_(ca_chain) {}
+        : config_(config), ca_db_(ca_db), issuer_id_(issuer_id), status_pv_(status_pv), ca_cert_(ca_cert), ca_pkey_(ca_pkey), ca_chain_(ca_chain) {}
 };
 
 void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory);

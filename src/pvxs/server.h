@@ -25,10 +25,22 @@
 #include <pvxs/util.h>
 #include <pvxs/version.h>
 
+#ifdef PVXS_ENABLE_OPENSSL
+#include "openssl.h"
+#endif
+
 namespace pvxs {
 namespace client {
+struct Subscription;
 struct Config;
 }
+
+#ifdef PVXS_ENABLE_OPENSSL
+namespace ossl {
+struct SSLContext;
+}
+#endif
+
 namespace server {
 
 struct SharedPV;
@@ -51,6 +63,8 @@ struct Config;
  * There is also a "__server" source which provides the special "server" PV
  * used by the pvlist CLI.
  */
+
+
 class PVXS_API Server
 {
 public:

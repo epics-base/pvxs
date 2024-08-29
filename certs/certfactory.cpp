@@ -37,9 +37,6 @@ namespace certs {
 
 DEFINE_LOGGER(certs, "pvxs.certs.cms");
 
-// Must be set up with correct values after OpenSSL initialisation if you are creating certificates
-int CertFactory::NID_PvaCertStatusURI = NID_undef;
-
 /**
  * Creates a new X.509 certificate from scratch.  It uses the provided public
  * key from the key pair and sets all the appropriate fields based on usage.
@@ -55,7 +52,7 @@ ossl_ptr<X509> CertFactory::create() {
     // 2. Determine issuer: If no issuer then self sign, or specify cert & key
     if (!issuer_certificate_ptr_) {
         issuer_certificate_ptr_ = certificate.get();
-        issuer_pkey_ptr_ = key_pair_.get()->pkey.get();
+        issuer_pkey_ptr_ = key_pair_->pkey.get();
         issuer_chain_ptr_ = nullptr;
     } else if (!issuer_pkey_ptr_) {
         throw std::runtime_error("Issuer' private key not provided for signing the certificate");
@@ -69,7 +66,7 @@ ossl_ptr<X509> CertFactory::create() {
     log_debug_printf(certs, "Set Cert Version: %d\n", cert_version+1);
 
     // 4. Set the public key of the certificate using the provided key pair
-    if (X509_set_pubkey(certificate.get(), key_pair_.get()->getPublicKey().get()) != 1) {
+    if (X509_set_pubkey(certificate.get(), key_pair_->getPublicKey().get()) != 1) {
         throw std::runtime_error("Failed to set public key in certificate.");
     }
     log_debug_printf(certs, "Public Key: %s\n", "<set>");
@@ -96,10 +93,10 @@ ossl_ptr<X509> CertFactory::create() {
     // 10. Set the authority key identifier appropriately
     addExtension(certificate, NID_authority_key_identifier, "keyid:always,issuer:always");
 
-    // 11. Add EPICS validTillRevoked extension, if required
-    if ( cert_status_subscription_required_) {
+    // 11. Add EPICS subscription status subscription extension, if required and is not CMS itself
+    if ( cert_status_subscription_required_ && !IS_USED_FOR_(usage_, ssl::kForCMS)) {
         auto issuerId = CertStatus::getIssuerId(issuer_certificate_ptr_);
-        addCustomExtensionByNid(certificate, NID_PvaCertStatusURI, CertStatus::makeStatusURI(issuerId, serial_));
+        addCustomExtensionByNid(certificate, CertStatusManager::NID_PvaCertStatusURI, CertStatus::makeStatusURI(issuerId, serial_));
     }
 
     // 12. Create cert chain from issuer's chain and issuer's cert
@@ -338,37 +335,43 @@ void CertFactory::addExtension(const ossl_ptr<X509> &certificate, int nid, const
 }
 
 /**
- * Add a boolean extension by NID to certificate.
+ * Add a string extension by NID to certificate.
  *
  */
 void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value) {
+    char err_msg[256];
     X509V3_CTX context;
     X509V3_set_ctx_nodb(&context);
     X509V3_set_ctx(&context, const_cast<X509 *>(issuer_certificate_ptr_), certificate.get(), nullptr, nullptr, 0);
 
-    // Construct the string value
-    ossl_ptr<ASN1_OCTET_STRING>string_data(ASN1_OCTET_STRING_new());
-    ASN1_OCTET_STRING_set(string_data.get(), reinterpret_cast<const unsigned char *>(value.c_str()), -1);
-
-    // Create OID
-    ossl_ptr<ASN1_OBJECT> oid(OBJ_nid2obj(nid));
-
-    // Create extension
-    ossl_ptr<X509_EXTENSION> extension(X509_EXTENSION_create_by_OBJ(nullptr, oid.get(), 0, string_data.get()));
-    if (!extension) {
-        unsigned long err = ERR_get_error();
-        char err_msg[256];
-        ERR_error_string_n(err, err_msg, sizeof(err_msg));
-        throw std::runtime_error(SB() << "Failed to create extension: " << err_msg);
+    // Construct the string value using ASN1_STRING with IA5String type
+    ossl_ptr<ASN1_IA5STRING> string_data(ASN1_IA5STRING_new());
+    if (!string_data) {
+        throw std::runtime_error("Adding custom extension: Failed to create ASN1_IA5STRING object");
     }
 
-    // Add extension to certificate
-    if (!X509_add_ext(certificate.get(), extension.get(), -1)) {
+    // Set the string data using IA5STRING
+    if (!ASN1_STRING_set(string_data.get(), value.c_str(), value.size())) {
         unsigned long err = ERR_get_error();
-        char err_msg[256];
         ERR_error_string_n(err, err_msg, sizeof(err_msg));
-        throw std::runtime_error(SB() << "Failed to add certificate extension: " << err_msg);
+        throw std::runtime_error(SB() << "Adding custom extension: Failed to set ASN1_STRING: " << err_msg);
     }
+
+    // Create a new extension using your smart pointer
+    ossl_ptr<X509_EXTENSION> ext(X509_EXTENSION_create_by_NID(nullptr, nid, false, string_data.get()));
+    if (!ext) {
+        unsigned long err = ERR_get_error();
+        ERR_error_string_n(err, err_msg, sizeof(err_msg));
+        throw std::runtime_error(SB() << "Adding custom extension: Failed to create X509_EXTENSION: " << err_msg);
+    }
+
+    // Add the extension to the certificate
+    if (!X509_add_ext(certificate.get(), ext.get(), -1)) {
+        unsigned long err = ERR_get_error();
+        ERR_error_string_n(err, err_msg, sizeof(err_msg));
+        throw std::runtime_error(SB() << "Failed to add X509_EXTENSION to certificate: " << err_msg);
+    }
+
     log_debug_printf(certs, "Extension [%*d]: %-*s = \"%s\"\n", 3, nid, 32, nid2String(nid), value.c_str());
 }
 

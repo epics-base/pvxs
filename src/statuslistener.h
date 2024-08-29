@@ -36,9 +36,8 @@ namespace pvxs {
 namespace certs {
 
 class Semaphore {
-  public:
-    explicit Semaphore(int count = 0)
-      : count(count) {}
+   public:
+    explicit Semaphore(int count = 0) : count(count) {}
 
     void signal() {
         std::unique_lock<std::mutex> lock(mtx);
@@ -52,7 +51,7 @@ class Semaphore {
         --count;
     }
 
-  private:
+   private:
     std::mutex mtx;
     std::condition_variable cv;
     int count;
@@ -60,26 +59,49 @@ class Semaphore {
 
 template <typename T>
 class StatusListener {
-    StatusListener(logger &logger, const T &config, std::atomic<bool> &stop_flag, std::function<void(const T &)> &&reconfigure_fn)
-        : config_(config), reconfigure_fn_(std::move(reconfigure_fn)), stop_flag_(stop_flag), logger_(logger) {}
+   public:
+    StatusListener(logger &logger, const T &config, std::atomic<bool> &stop_flag, ossl_ptr<X509> &&cert)
+        : config_(config), cert_(std::move(cert)), stop_flag_(stop_flag), logger_(logger) {}
 
     inline ~StatusListener() { stopListening(); }
 
+    /**
+     * @brief Call to stop monitoring certificate status
+     */
     inline void stopListening() {
-        stop_flag_.store(true);  // Flag all listeners to stop - including others
-        if (worker_.joinable()) {
-            worker_.join();
+        log_debug_printf(logger_, "Status Monitor: %s\n", "Stop Listening Called");
+        stop_flag_.store(true);  // Flag listeners to stop
+        try {
+            if (worker_.joinable()) {
+                log_debug_printf(logger_, "Status Monitor: %s\n", "Waiting for Worker Thread to Stop ...");
+                worker_.join();
+            }
+            log_debug_printf(logger_, "Status Monitor: %s\n", "Stopped");
+        } catch (...) {
         }
     }
 
-    inline CertificateStatus startListening(logger &logger,
-                                            const T &config,
-                                            const ossl_ptr<X509> &cert,  // Cert only has to remain in scope until this function returns as by then data will have been read to start subscription
-                                            const std::function<void(const T &)> &&reconfigure_fn) {
-        config_ = config;
+    /**
+     * @brief Start listening and responding to certificate status changes
+     *
+     * Each OCSP status change's signature is verified for authenticity.
+     * It returns the first result so the caller can determine if the certificate is
+     *
+     * It reconfigures the connection if it gets UNKNOWN, EXPIRED, REVOKED or VALID
+     * It will ignore changes from PENDING_APPROVAL to PENDING
+     * Other transitions are not possible
+     *  PENDING and PENDING APPROVAL can only be starting states (except as noted above)
+     * @param reconfigure_fn
+     * @return
+     */
+    inline CertificateStatus startListening(const std::function<void(const T &)> &&reconfigure_fn) {
+        if (!CertStatusManager::shouldMonitor(cert_)) {
+            return {};
+        }
+
         reconfigure_fn_ = std::move(reconfigure_fn);
         stop_flag_.store(false);
-        worker_ = std::thread([this, &logger, &cert]() {
+        worker_ = std::thread([this]() {
             // The certificate status subscription picks up all changes to the certificate status
             // It returns the first result
             // It reconfigures the connection if it gets UNKNOWN, EXPIRED, REVOKED or VALID
@@ -87,67 +109,18 @@ class StatusListener {
             // Other transitions are not possible
             //  PENDING and PENDING APPROVAL can only be starting states (except as noted above)
 
-            log_info_printf(logger, "Status Monitor: %s\n", "Starting");
-            auto cert_status_manager = CertStatusManager::subscribe(cert, [this, &logger](const CertificateStatus&status) {
-                if ( is_first_update_) {
-                    // Just return this value
-                    Guard G(lock_);
-                    status_ = status;
-                    status_valid_until_ = status.status_valid_until_date.t;
-                    is_first_update_ = false;
-                } else {
-                    switch (status.status.i) {
-                        case UNKNOWN:
-                        case EXPIRED:
-                        case REVOKED:
-                        case VALID:
-                            log_err_printf(logger, "Status Monitor: certificate transitioned from %s => %s: reconfiguring", status_.status.s, status.status.s);
-                            handleStatusChange(status);
-                            break;
-                        case PENDING:
-                            if ( status_ == PENDING_APPROVAL ) {
-                                // ignore changes from PENDING_APPROVAL to PENDING (cert not yet valid because of date)
-                                Guard G(lock_);
-                                status_ = status;
-                                status_valid_until_ = status.status_valid_until_date.t;
-                                break;
-                            }
-                        default:
-                            break;
-                    }
-                }
-            });
+            log_info_printf(logger_, "Status Monitor: %s\n", "Starting");
+            try {
+                // Subscribe to status changes and react
+                auto && cert_status_manager = reactToStatusChanges();
 
-            // Check for availability of CMS service by periodically polling
-            // at intervals corresponding to the certificate state valid until time
-            // if it is not available then we reconfigure the connection but if its
-            // available we just continue to poll
-            // State changes are handled in the subscription
-            while (!stop_flag_.load()) {
-                Guard G(lock_);
-                auto time_to_wait_until = status_valid_until_;
-                UnGuard U(G);
-                time_t time_to_wait = time_to_wait_until - std::time(nullptr) - 1;
-                std::this_thread::sleep_for(std::chrono::seconds(time_to_wait));
-                try {
-                    auto status = cert_status_manager.get()->getStatus();
-                    if (  status_valid_until_ == time_to_wait_until && status_ == status) {
-                        // if the time to wait has not been updated and the status has not changed then just wait
-                        // again until the next validity time in the newly read status.
-                        // If the status has been updated by the subscription we ignore it here
-                        Guard G1(lock_);
-                        status_valid_until_ = status.status_valid_until_date.t;
-                    }
-                } catch (std::exception &e) {
-                    // If the PVACMS is unavailable we will fall into this case
-                    // Just reconfigure: unavailability of service will mean a downgraded or
-                    // closed connection depending on configuration
-                    log_err_printf(logger, "Status Monitor: PVACMS unavailable: %s", e.what());
-                    handleStatusChange(UNKNOWN);
-                }
+                // Start the status validity verification loop.
+                verifyStatusValidity(std::move(cert_status_manager));
+                log_info_printf(logger_, "Status Monitor: %s\n", "Stopped");
+            } catch (std::exception &e) {
+                log_info_printf(logger_, "Status Monitor: Failed to Start: %s\n", e.what());
+                stopListening();
             }
-            cert_status_manager.get()->unsubscribe();
-            log_info_printf(logger, "Status Monitor: %s\n", "Stopping");
         });
         // Wait for first status to be available (or stopping)
         first_status_available_.wait(stop_flag_);
@@ -156,32 +129,102 @@ class StatusListener {
 
    private:
     const T &config_;
-    const std::function<void(const T &config)> reconfigure_fn_;
+    std::function<void(const T &config)> reconfigure_fn_;
+    const ossl_ptr<X509> &cert_;
     std::atomic<bool> &stop_flag_;
-    Semaphore first_status_available_{0};
     logger &logger_;
+    Semaphore first_status_available_{0};
     epicsMutex lock_;
 
     std::thread worker_;
     bool is_first_update_{true};
     CertificateStatus status_;
-    time_t &status_valid_until_;
+    std::time_t status_valid_until_{0};
 
     /**
-     * @brief Handles the status changes by reconfiguring the connection
+     * @brief Respond to certificate status changes
      *
-     * We need to exit this status listener first because the reconfigure function may
-     * start a new status listener.
+     * Create the subscription two certificates latest changes, and respond appropriately
      *
-     * But as this status listener and its thread will no longer exist once it is exited,
-     * we need to run in a detached thread and we need to make sure
-     * we have copied or moved versions of the parameters from its members
+     * @return a CertStatusManager that could be used to get statuses periodically
      */
-    inline void handleStatusChange(const CertificateStatus&status) {
-        stopListening();
-        auto reconfigure_fn = std::move(reconfigure_fn_);
-        auto config_copy = config_;
-        std::thread([reconfigure_fn, config_copy]() mutable { reconfigure_fn(config_copy); }).detach();
+    inline cert_status_ptr<CertStatusManager> reactToStatusChanges() {
+        auto cert_status_manager =  CertStatusManager::subscribe(cert_, [this](const CertificateStatus &status) {
+            if (is_first_update_) {
+                // Just return this value
+                Guard G(lock_);
+                status_ = status;
+                status_valid_until_ = status.status_valid_until_date.t;
+                is_first_update_ = false;
+                first_status_available_.signal();
+            } else {
+                switch (status.status.i) {
+                    case UNKNOWN:
+                    case EXPIRED:
+                    case REVOKED:
+                    case VALID:
+                        log_err_printf(logger_, "Status Monitor: certificate transitioned from %s => %s: reconfiguring", status_.status.s.c_str(),
+                                       status.status.s.c_str());
+                        reconfigure_fn_(config_);
+                        stop_flag_.store(true);
+                        break;
+                    case PENDING:
+                        if (status_ == PENDING_APPROVAL) {
+                            // ignore changes from PENDING_APPROVAL to PENDING (cert not yet valid because of date)
+                            Guard G(lock_);
+                            status_ = status;
+                            status_valid_until_ = status.status_valid_until_date.t;
+                            break;
+                        }
+                    default:
+                        break;
+                }
+            }
+        });
+        return std::move(cert_status_manager);
+    }
+
+    /**
+     * @brief Verify that the status  validity period is valid while the certificate
+     * is being used
+     *
+     * We poll for new status at the end of the period and if the status is not available
+     * (indicating that PVACMS is unavailable) then we call the reconfiguration
+     * function that will create the appropriate new context.
+     *
+     * If any status changes happen in the meanwhile then they will be handled by
+     * reactToStatusChanges.
+     *
+     * @param cert_status_manager the configured status manager to use to get status
+     * @see reactToStatusChanges
+     */
+    inline void verifyStatusValidity(cert_status_ptr<CertStatusManager>  &&cert_status_manager) {
+        while (!stop_flag_.load()) {
+            Guard G(lock_);
+            auto time_to_wait_until = status_valid_until_;
+            UnGuard U(G);
+            time_t time_to_wait = time_to_wait_until - std::time(nullptr) - 1;
+            std::this_thread::sleep_for(std::chrono::seconds(time_to_wait));
+            try {
+                auto status = cert_status_manager->getStatus();
+                if (status_valid_until_ == time_to_wait_until && status_ == status) {
+                    // if the time to wait has not been updated and the status has not changed then just wait
+                    // again until the next validity time in the newly read status.
+                    // If the status has been updated by the subscription we ignore it here
+                    Guard G1(lock_);
+                    status_valid_until_ = status.status_valid_until_date.t;
+                }
+            } catch (std::exception &e) {
+                // If the PVACMS is unavailable we will fall into this case
+                // Just reconfigure: unavailability of service will mean a downgraded or
+                // closed connection depending on configuration
+                log_err_printf(logger_, "Status Monitor: PVACMS unavailable: %s", e.what());
+                reconfigure_fn_(config_);
+                break;
+            }
+        }
+        cert_status_manager->unsubscribe();
+        log_info_printf(logger_, "Status Monitor: %s\n", "Exiting");
     }
 };
 }  // namespace certs

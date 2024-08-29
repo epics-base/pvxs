@@ -105,9 +105,9 @@ void OSSLGbl_init() {
         gbl->keylog.open(env);
         if (gbl->keylog.is_open()) {
             epicsAtExit(sslkeylogfile_exit, nullptr);
-            fprintf(stderr, "⚠ Warning:  TLS Debug Enabled: logging TLS secrets to %s\n", env);
+            log_warn_printf(_setup, "TLS Debug Enabled: logging TLS secrets to %s\n", env);
         } else {
-            fprintf(stderr, "✘ Error: TLS Debug Disabled: Unable to open SSL key log file: %s\n", env);
+            log_err_printf(_setup, "TLS Debug Disabled: Unable to open SSL key log file: %s\n", env);
         }
     }
 #endif  // PVXS_ENABLE_SSLKEYLOGFILE
@@ -222,9 +222,10 @@ void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
         auto canSign(X509_check_ca(ca));
         auto flags(X509_get_extension_flags(ca));
 
-        if (canSign == 0) {
-            log_warn_printf(_setup, "Ignore non-CA certificate %s in PKCS#12 chain\n", std::string(SB() << ShowX509{ca}).c_str());
-            continue;
+        if (canSign == 0 && i != 0) {
+            log_err_printf(_setup, "non-CA certificate in PKCS#12 chain%s\n", "");
+            log_err_printf(_setup, "%s\n", (SB() << ShowX509{ca}).str().c_str());
+            throw std::runtime_error(SB() << "non-CA certificate found in PKCS#12 chain");
         }
 
         if (flags & EXFLAG_SS) {        // self-signed (aka. root)
@@ -437,6 +438,11 @@ bool SSLContext::fill_credentials(PeerCredentials &C, const SSL *ctx) {
     } else {
         return false;
     }
+}
+
+void SSLContext::unWatchCertificate() {
+    fw_stop_flag_.store(true);    // Stop file watchers if any are running
+    sl_stop_flag_.store(true);    // Stop status listeners if any are running
 }
 
 SSLContext SSLContext::for_client(const impl::ConfigCommon &conf) {

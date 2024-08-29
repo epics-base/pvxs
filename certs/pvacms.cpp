@@ -749,6 +749,7 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
         Guard G(lock);
         std::string issuer_id;
         std::tie(issuer_id, serial) = getParameters(parameters);
+        log_debug_printf(pvacms, "GET STATUS: Certificate %s:%llu\n", issuer_id.c_str(), serial);
 
         if (our_issuer_id != issuer_id) {
             throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
@@ -797,6 +798,7 @@ void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_i
         std::string issuer_id;
         uint64_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
+        log_debug_printf(pvacms, "REVOKE: Certificate %s:%llu\n", issuer_id.c_str(), serial);
 
         if (our_issuer_id != issuer_id) {
             throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
@@ -842,6 +844,7 @@ void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_
         std::string issuer_id;
         uint64_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
+        log_debug_printf(pvacms, "APPROVE: Certificate %s:%llu\n", issuer_id.c_str(), serial);
 
         if (our_issuer_id != issuer_id) {
             throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
@@ -855,7 +858,7 @@ void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_
         certs::updateCertificateStatus(ca_db, serial, new_state, {PENDING_APPROVAL});
 
         auto cert_status = cert_status_creator.createOCSPStatus(serial, new_state, status_date);
-        status_value = postCertificateStatus(status_pv, pv_name, serial, cert_status);
+        postCertificateStatus(status_pv, pv_name, serial, cert_status);
         switch (new_state) {
             case VALID:
                 log_info_printf(pvacms, "Certificate %s:%llu has been APPROVED\n", issuer_id.c_str(), serial);
@@ -869,7 +872,7 @@ void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_
             default:
                 break;
         }
-        op->reply(status_value);
+        op->reply();
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error approving certificate: %s\n", e.what());
         op->error(SB() << "Error approving certificate: " << e.what());
@@ -902,6 +905,7 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
         std::string issuer_id;
         uint64_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
+        log_debug_printf(pvacms, "DENY: Certificate %s:%llu\n", issuer_id.c_str(), serial);
 
         if (our_issuer_id != issuer_id) {
             throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
@@ -912,9 +916,9 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
 
         auto revocation_date = std::time(nullptr);
         auto cert_status = cert_status_creator.createOCSPStatus(serial, REVOKED, revocation_date, revocation_date);
-        status_value = postCertificateStatus(status_pv, pv_name, serial, cert_status);
+        postCertificateStatus(status_pv, pv_name, serial, cert_status);
         log_info_printf(pvacms, "Certificate %s:%llu request has been DENIED\n", issuer_id.c_str(), serial);
-        op->reply(status_value);
+        op->reply();
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error denying certificate request: %s\n", e.what());
         op->error(SB() << "Error denying certificate request: " << e.what());
@@ -1578,7 +1582,7 @@ int main(int argc, char *argv[]) {
         OpenSSL_add_all_digests();
 
         // Register custom NIDs
-        CertStatus::registerCustomNids(CertFactory::NID_PvaCertStatusURI);
+        CertStatus::registerCustomNids();
 
         // Set security if configured
         if (!config.ca_acf_filename.empty()) asSetFilename(config.ca_acf_filename.c_str());

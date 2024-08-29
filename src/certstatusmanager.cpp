@@ -16,6 +16,7 @@
 #include <openssl/x509.h>
 
 #include <pvxs/client.h>
+#include <pvxs/log.h>
 
 #include "certstatus.h"
 #include "configcms.h"
@@ -23,6 +24,12 @@
 
 namespace pvxs {
 namespace certs {
+
+DEFINE_LOGGER(status, "pvxs.cert.status");
+
+// Must be set up with correct values after OpenSSL initialisation to retrieve status PV from certs
+int CertStatusManager::NID_PvaCertStatusURI = NID_undef;
+
 /**
  * @brief Retrieves the Online Certificate Status Protocol (OCSP) response from the given byte array.
  *
@@ -61,7 +68,7 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOSCPResponse(const shared_array<co
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
  * @param trusted_issuer_cert the certificate of a trusted CA to use to verify the signature of the response.
  */
-OCSPStatus CertStatusManager::parse(shared_array<const uint8_t> ocsp_bytes) {
+ParsedOCSPStatus CertStatusManager::parse(shared_array<const uint8_t> ocsp_bytes) {
     auto&& ocsp_response = getOSCPResponse(ocsp_bytes);
 
     // Get the response status
@@ -94,7 +101,7 @@ OCSPStatus CertStatusManager::parse(shared_array<const uint8_t> ocsp_bytes) {
     // Check status validity: less than 1 second old
     OCSP_check_validity(this_update, next_update, 0, 1);
 
-    return OCSPStatus(ocsp_status, ocsp_bytes, this_update, next_update, revoked_time);
+    return {OCSPCertStatus(ocsp_status), StatusDate(this_update), StatusDate(next_update), StatusDate(revoked_time)};
 }
 
 // Convert ASN1_INTEGER to a 64-bit unsigned integer
@@ -104,20 +111,6 @@ uint64_t CertStatusManager::ASN1ToUint64(ASN1_INTEGER* asn1_number) {
         uint64_number = (uint64_number << 8) | asn1_number->data[i];
     }
     return uint64_number;
-}
-
-/**
- * @brief Converts a value off the wire to a CertificateStatus object
- * @param val value off the wire
- * @return CertificateStatus object
- */
-CertificateStatus CertStatusManager::valToStatus(const Value& val) {
-    auto status = val["status.value.index"].as<certstatus_t>();
-    auto ocsp_status = val["ocsp_status.value.index"].as<ocspcertstatus_t>();
-    auto const ocsp_response = val["ocsp_response"].template as<shared_array<const uint8_t>>();
-    auto ocsp_status_detail = CertStatusManager::parse(ocsp_response);
-    return CertificateStatus(status, ocsp_status, ocsp_response, ocsp_status_detail.status_date, ocsp_status_detail.status_valid_until_date,
-                             ocsp_status_detail.revocation_date);
 }
 
 uint64_t CertStatusManager::getSerialNumber(const ossl_ptr<X509>& cert) {
@@ -138,20 +131,34 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
     // Create a shared_ptr to hold the callback
     auto callback_ptr = std::make_shared<StatusCallback>(std::move(callback));
 
-    // Subscribe to the service using the constructed URI with TLS disabled
-    auto client(client::Context::fromEnv(true));
-    auto sub = client.monitor(uri)
-      .maskConnected(false)
-      .maskDisconnected(false)
-      .event([callback_ptr](client::Subscription& sub) {
-          (*callback_ptr)(valToStatus(sub.pop()));
-      })
-      .exec();
-
-    return cert_status_ptr<CertStatusManager>(new CertStatusManager(cert, sub));
+    // Subscribe to the service using the constructed URI
+    // with TLS disabled to avoid recursive loop
+    auto client(std::make_shared<client::Context>(client::Context::fromEnv(true)));
+    std::shared_ptr<client::Subscription> sub;
+    try {
+        sub = client->monitor(uri)
+                  .maskConnected(false)
+                  .maskDisconnected(false)
+                  .event([callback_ptr](client::Subscription& sub) {
+                      try {
+                          (*callback_ptr)((CertificateStatus)sub.pop());
+                      } catch (OCSPParseException& e) {
+                          log_warn_printf(status, "Error parsing certificate status: %s\n", e.what());
+                          (*callback_ptr)(CertificateStatus());
+                      }
+                  })
+                  .exec();
+        return cert_status_ptr<CertStatusManager>(new CertStatusManager(cert, client, sub));
+    } catch (std::exception& e) {
+        log_err_printf(status, "Error subscribing to certificate status: %s\n", e.what());
+        throw std::runtime_error(SB() << "Error subscribing to certificate status: " << e.what());
+    }
 }
 
-void CertStatusManager::unsubscribe() { sub_.get()->cancel(); }
+void CertStatusManager::unsubscribe() {
+    sub_->cancel();
+    client_->close();
+}
 
 CertificateStatus CertStatusManager::getStatus() { return getStatus(cert_); }
 
@@ -164,13 +171,15 @@ CertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
     auto uri = CertStatus::makeStatusURI(issuer_id, serial);
 
     // Build and start network operation
-    auto client(client::Context::fromEnv());
+    // Disable TLS for get status as the OCSP payload is signed
+    // and, we'll enter a recursive loop!!
+    auto client(client::Context::fromEnv(true));
     auto operation = client.get(uri).exec();
 
     // wait for it to complete, for up to 5 seconds.
     Value result = operation->wait(3.0);
 
-    return valToStatus(result);
+    return CertificateStatus(result);
 }
 
 /**
@@ -235,8 +244,11 @@ bool CertStatusManager::verifyOCSPResponse(ossl_ptr<OCSP_BASICRESP>& basic_respo
     return OCSP_basic_verify(basic_response.get(), ca_chain.get(), store.get(), 0) > 0;
 }
 
-// Must be set up with correct values after OpenSSL initialisation to retrieve status PV from certs
-int CertStatusManager::NID_PvaCertStatusURI = NID_undef;
+bool CertStatusManager::shouldMonitor(const ossl_ptr<X509>& certificate) {
+    // Register the custom NID if it has not yet been registered
+    CertStatus::registerCustomNids();
+    return (X509_get_ext_by_NID(certificate.get(), CertStatusManager::NID_PvaCertStatusURI, -1) >= 0);
+}
 
 /**
  * Get the string value of a custom extension by NID from a certificate.
@@ -245,10 +257,7 @@ int CertStatusManager::NID_PvaCertStatusURI = NID_undef;
 std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certificate) {
     // Register the custom NID if it has not yet been registered
     // TODO protect from race conditions
-    if (CertStatusManager::NID_PvaCertStatusURI == NID_undef) {
-        // Lazy load
-        CertStatus::registerCustomNids(CertStatusManager::NID_PvaCertStatusURI);
-    }
+    CertStatus::registerCustomNids();
 
     int extension_index = X509_get_ext_by_NID(certificate.get(), CertStatusManager::NID_PvaCertStatusURI, -1);
     if (extension_index < 0) return "";
@@ -279,6 +288,5 @@ std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certifi
     // Return the data as a std::string
     return std::string(reinterpret_cast<const char*>(data), length);
 }
-
 }  // namespace certs
 }  // namespace pvxs

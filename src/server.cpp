@@ -4,42 +4,42 @@
  * in file LICENSE that is included with this distribution.
  */
 
-
+#include <atomic>
+#include <cstdlib>
+#include <functional>
 #include <list>
 #include <map>
 #include <system_error>
-#include <functional>
-#include <atomic>
-#include <cstdlib>
-
-#include <signal.h>
 
 #include <dbDefs.h>
 #include <envDefs.h>
-#include <epicsThread.h>
-#include <epicsTime.h>
 #include <epicsGuard.h>
 #include <epicsString.h>
+#include <epicsThread.h>
+#include <epicsTime.h>
+#include <signal.h>
 
-#include <pvxs/server.h>
-#include <pvxs/sharedpv.h>
-#include <pvxs/sharedwildcardpv.h>
 #include <pvxs/client.h>
 #include <pvxs/config.h>
 #include <pvxs/log.h>
+#include <pvxs/server.h>
+#include <pvxs/sharedpv.h>
+#include <pvxs/sharedwildcardpv.h>
+
 #include "evhelper.h"
 #include "serverconn.h"
-#include "utilpvt.h"
 #include "udp_collector.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace impl {
 ReportInfo::~ReportInfo() {}
-}
+}  // namespace impl
 namespace server {
 using namespace impl;
 
 DEFINE_LOGGER(serversetup, "pvxs.server.setup");
+DEFINE_LOGGER(watcher, "pvxs.cert.watcher");
 DEFINE_LOGGER(serverio, "pvxs.server.io");
 DEFINE_LOGGER(serversearch, "pvxs.server.search");
 
@@ -75,6 +75,9 @@ Server::Server(const Config& conf)
      */
     auto internal(std::make_shared<Pvt>(conf));
     internal->internal_self = internal;
+#ifdef PVXS_ENABLE_OPENSSL
+    internal->server_ptr = this;
+#endif
 
     // external
     pvt.reset(internal.get(), [internal](Pvt*) mutable {
@@ -159,58 +162,7 @@ std::vector<std::pair<std::string, int> > Server::listSource()
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-void Server::reconfigure(const Config& inconf)
-{
-    if(!pvt)
-        throw std::logic_error("NULL Server");
-
-    auto newconf(inconf);
-    newconf.expand(); // maybe catch some errors early
-
-    log_info_printf(serversetup, "Reconfigure%s", "\n");
-
-    // is the current server running?
-
-    Pvt::state_t prev_state;
-    pvt->acceptor_loop.call([this, &prev_state]() {
-        prev_state = pvt->state;
-    });
-
-    bool was_running = prev_state==Pvt::Running || prev_state==Pvt::Starting;
-
-    if(was_running)
-        pvt->stop();
-
-    decltype(pvt->sources) transfers;
-    decltype(pvt->builtinsrc) builtin;
-
-    // copy all Source, including builtin
-    {
-        auto G(pvt->sourcesLock.lockReader());
-
-        transfers = pvt->sources;
-        builtin = pvt->builtinsrc;
-    }
-
-    // completely destroy the current/old server to free up TCP ports
-    pvt.reset();
-
-    // build up a new, empty, server
-    Server newsrv(newconf);
-    pvt = std::move(newsrv.pvt);
-
-    {
-        auto G(pvt->sourcesLock.lockWriter());
-
-        pvt->sources = transfers;
-        pvt->builtinsrc = builtin;
-    }
-
-    if(was_running) {
-        pvt->start();
-        log_info_printf(serversetup, "Resume%s", "\n");
-    }
-}
+void Server::reconfigure(const Config& inconf) { pvt->reconfigureContext(pvt->server_ptr, inconf); }
 #endif
 
 const Config& Server::config() const
@@ -499,12 +451,8 @@ Server::Pvt::Pvt(const Config &conf)
     if(effective.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_server(effective);
-            tls_context.server_file_watcher_ = std::make_shared<certs::P12FileWatcher<Config>>(serversetup, effective, tls_context.stop_flag_, [](const Config& conf) {
-                log_debug_printf(serversetup, "Server reconfigure callback: %s\n", "File change");
-//        reconfigure(conf);
-            });
-            tls_context.server_file_watcher_->startWatching();
-        }catch(std::exception& e){
+            watchCertificate(effective, tls_context);
+        } catch (std::exception& e) {
             if (effective.tls_stop_if_no_cert) {
                 log_err_printf(serversetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
                 exit(1);
@@ -974,6 +922,109 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
         log_exc_printf(serverio, "Unhandled error in beacon timer callback: %s\n", e.what());
     }
 }
+
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief Starts two monitors for certificate status
+ *
+ * One monitors any changes to the configured certs files.  If any of them change
+ * then the context is reconfigured.
+ *
+ * The other monitors any changes to certificate status.  If status becomes VALID,
+ * EXPIRES or is REVOKED then the context is reconfigured.
+ *
+ * @param config The config for the certs files
+ * @param context the current SSL context
+ */
+void Server::Pvt::watchCertificate(const Config& config, ossl::SSLContext& context) {
+    if (&context != &tls_context) {
+        tls_context.unWatchCertificate(); // Unwatch if any
+    }
+
+    // Configure a file watcher to watch the configured certificate files
+    context.server_file_watcher_ = std::make_shared<certs::P12FileWatcher<Config>>(watcher, config, context.fw_stop_flag_, [this](const Config& configuration) {
+        log_debug_printf(watcher, "Reconfigure server context: %s\n", "certificate file(s) change");
+        reconfigureContext(server_ptr, configuration);
+    });
+    // Start the file watcher
+    context.server_file_watcher_->startWatching();
+
+    // Get the certificate from the context whose status needs to be monitored
+    auto cert = ossl_ptr<X509>(SSL_CTX_get0_certificate(context.ctx), false);
+    if (cert) {
+        X509_up_ref(cert.get());  // increase ref count to cert so we own it and have to free it
+
+        // Configure a status listener to listen for certificate status changes
+        context.server_status_listener_ = std::make_shared<certs::StatusListener<Config>>(watcher, config, context.sl_stop_flag_, std::move(cert));
+        // Start the listener
+        context.server_status_listener_->startListening([this](const Config& configuration) {
+            log_debug_printf(watcher, "Reconfigure server context: %s\n", "certificate status change");
+            reconfigureContext(server_ptr, configuration);
+        });
+    }
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief Reconfigure the current server context by re-establishing a TLS connection based on the new certificate
+ * status and state of the certificate files
+ *
+ * @param server_ptr pointer to the Server object to attach the context to
+ * @param config the config to use to determine certificate files
+ */
+void Server::Pvt::reconfigureContext(Server *p_server, const Config& config) {
+    if (!p_server || !p_server->pvt) throw std::logic_error("NULL Server");
+
+    auto new_config(config);
+    new_config.expand();  // maybe catch some errors early
+
+    log_info_printf(watcher, "Reconfiguring Server Context%s", "\n");
+
+    // is the current server running?
+    Pvt::state_t prev_state;
+    p_server->pvt->acceptor_loop.call([&p_server, &prev_state]() { prev_state = p_server->pvt->state; });
+    bool was_running = prev_state == Pvt::Running || prev_state == Pvt::Starting;
+
+    // If server was running then stop it
+    if (was_running) {
+        log_info_printf(watcher, "Stopping Server for Reconfiguration%s", "\n");
+        p_server->pvt->stop();
+    }
+
+    decltype(pvt->sources) transfers;
+    decltype(pvt->builtinsrc) builtin;
+
+    // copy all Source, including builtin
+    {
+        auto G(p_server->pvt->sourcesLock.lockReader());
+
+        transfers = p_server->pvt->sources;
+        builtin = p_server->pvt->builtinsrc;
+    }
+
+    // completely destroy the current/old server to free up TCP ports
+    p_server->pvt.reset();
+
+    // build up a new, empty, server
+    // This will do the actual TLS setup and will also set up the new watchers
+    Server new_server(new_config);
+    p_server->pvt = std::move(new_server.pvt);
+
+    {
+        auto G(p_server->pvt->sourcesLock.lockWriter());
+
+        p_server->pvt->sources = transfers;
+        p_server->pvt->builtinsrc = builtin;
+    }
+
+    // If it was running then restart it
+    if (was_running) {
+        p_server->pvt->start();
+        log_info_printf(watcher, "Resuming Server after Reconfiguration%s", "\n");
+    }
+}
+#endif
 
 Source::~Source() {}
 

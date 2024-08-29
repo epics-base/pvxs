@@ -193,7 +193,7 @@ struct PVXS_API ConfigCommon {
      * @return true if the location of the certificate file has been specified,
      * false otherwise
      */
-    inline bool isTlsConfigured() const { return !tls_cert_filename.empty() && !tls_private_key_filename.empty(); }
+    inline bool isTlsConfigured() const { return !tls_disabled && !tls_cert_filename.empty() && !tls_private_key_filename.empty(); }
 #endif  // PVXS_ENABLE_OPENSSL
 
     inline std::string getFileContents(const std::string &file_name) {

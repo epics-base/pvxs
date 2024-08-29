@@ -9,6 +9,7 @@ include $(TOP)/configure/CONFIG
 #=============================
 
 PROD_LIBS += pvxs Com
+USR_CPPFLAGS += -I$(TOP)/src
 
 TESTPROD_HOST += simplesrv
 simplesrv_SRCS += simplesrv.cpp

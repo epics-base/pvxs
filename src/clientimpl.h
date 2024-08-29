@@ -346,8 +346,6 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     ossl::SSLContext tls_context;
-//    std::atomic<bool> stop_flag_{false};
-//    std::shared_ptr<certs::P12FileWatcher<Config>> file_watcher_;
 #endif
 
     INST_COUNTER(ClientContextImpl);
@@ -379,7 +377,13 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
     void onNSCheck();
     static void onNSCheckS(evutil_socket_t fd, short evt, void *raw);
-};
+
+  private:
+    friend class client::Context;
+    void reconfigureContext(const ossl::SSLContext &context);
+    void watchCertificate(const Config &new_config, ossl::SSLContext &context);
+
+    };
 
 struct Context::Pvt {
     // external ref to running loop.

@@ -18,6 +18,7 @@
 
 #include <pvxs/nt.h>
 
+#include "certstatusmanager.h"
 #include "ownedptr.h"
 
 #define CERT_TIME_FORMAT "%a %b %d %H:%M:%S %Y"
@@ -27,6 +28,8 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
 
 namespace pvxs {
 namespace certs {
+
+class CertStatusManager;
 
 // EPICS OID for "validTillRevoked" extension:
 // TODO Register this unassigned OID for EPICS
@@ -86,7 +89,7 @@ enum ocspcertstatus_t { OCSP_CERT_STATUS_LIST };
 struct CertStatus {
     uint32_t i;
     std::string s;
-    CertStatus() = delete;
+     CertStatus() = default;
 
     /**
      * @brief The prototype of the data returned for a certificate status request
@@ -149,17 +152,19 @@ struct CertStatus {
         return SB() << GET_MONITOR_CERT_STATUS_ROOT << ":" << issuer_id << ":" << std::setw(16) << std::setfill('0') << serial;
     }
 
-/**
- * @brief Register custom NIDs to be used in PVACMS generated certificates
- */
-    static inline void registerCustomNids(int &NID_PvaCertStatusURI) {
-        NID_PvaCertStatusURI = OBJ_create(NID_PvaCertStatusURIID, SN_PvaCertStatusURI, LN_PvaCertStatusURI);
-        if (NID_PvaCertStatusURI == NID_undef) {
-            throw std::runtime_error("Failed to create NID for " SN_PvaCertStatusURI ": " LN_PvaCertStatusURI);
+    /**
+     * @brief Register custom NIDs to be used in PVACMS generated certificates
+     */
+    static inline void registerCustomNids() {
+        if (CertStatusManager::NID_PvaCertStatusURI == NID_undef) {
+            CertStatusManager::NID_PvaCertStatusURI = OBJ_create(NID_PvaCertStatusURIID, SN_PvaCertStatusURI, LN_PvaCertStatusURI);
+            if (CertStatusManager::NID_PvaCertStatusURI == NID_undef) {
+                throw std::runtime_error("Failed to create NID for " SN_PvaCertStatusURI ": " LN_PvaCertStatusURI);
+            }
         }
     }
 
-  protected:
+   protected:
     explicit CertStatus(const uint32_t status, std::string&& status_string) : i(status), s(std::move(status_string)) {}
 };
 
@@ -179,7 +184,7 @@ struct PVACertStatus : CertStatus {
  * @brief OCSP Certificate status values enum and string
  */
 struct OCSPCertStatus : CertStatus {
-    OCSPCertStatus() = delete;
+    OCSPCertStatus() = default;
 
     explicit OCSPCertStatus(const ocspcertstatus_t& status) : CertStatus(status, toString(status)) {}
 
@@ -195,12 +200,14 @@ struct StatusDate {
     std::time_t t;
     std::string s;
 
-    StatusDate() = delete;
+    StatusDate() = default;
 
-    StatusDate(const std::string& time_string) : t(toTimeT(time_string)), s(time_string) {}
     StatusDate(const std::time_t& time) : t(time), s(toString(time)) {}
-    StatusDate(const std::tm& tm) : t(tmToTimeTUTC(tm)), s(toString(t)) {}
     StatusDate(const ASN1_TIME* time) : t(asn1TimeToTimeT(time)), s(toString(t)) {}
+    StatusDate(const std::string& time_string) : t(toTimeT(time_string)), s(time_string) {}
+    StatusDate(const std::tm& tm) : t(tmToTimeTUTC(tm)), s(toString(t)) {}
+
+    inline bool operator==(StatusDate rhs) const { return this->t == rhs.t; }
 
     /**
      * @brief To get the time_t (unix time) from a ASN1_TIME* time pointer
@@ -276,6 +283,20 @@ struct StatusDate {
 };
 
 /**
+ * @brief To store OCSP status value - parsed out of an OCSP response
+ * A true struct - no processing is done.
+ */
+struct ParsedOCSPStatus {
+    const OCSPCertStatus ocsp_status;
+    const StatusDate status_date;
+    const StatusDate status_valid_until_date;
+    const StatusDate revocation_date;
+    ParsedOCSPStatus(const OCSPCertStatus& ocsp_status, const StatusDate& status_date, const StatusDate& status_valid_until_date,
+                     const StatusDate& revocation_date)
+        : ocsp_status(ocsp_status), status_date(status_date), status_valid_until_date(status_valid_until_date), revocation_date(revocation_date) {}
+};
+
+/**
  * @brief Structure representing OCSP status.
  *
  * It contains the OCSP response bytes as well as the date the status was set and how
@@ -283,19 +304,42 @@ struct StatusDate {
  * revocation date.  The ocsp_status field contains the OCSP status in numerical and text form.
  */
 struct OCSPStatus {
-    OCSPCertStatus ocsp_status;
     shared_array<const uint8_t> ocsp_bytes;
+    OCSPCertStatus ocsp_status;
     StatusDate status_date;
     StatusDate status_valid_until_date;
     StatusDate revocation_date;
 
-    explicit OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_date,
-                        StatusDate revocation_date)
-        : ocsp_status(ocsp_status),
-          ocsp_bytes(ocsp_bytes),
+    // Constructor using lvalue reference
+    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes) : ocsp_bytes(ocsp_bytes) {
+        auto parsed_status = CertStatusManager::parse(ocsp_bytes);
+        ocsp_status = parsed_status.ocsp_status;
+        status_date = std::move(parsed_status.status_date);
+        status_valid_until_date = std::move(parsed_status.status_valid_until_date);
+        revocation_date = std::move(parsed_status.revocation_date);
+    }
+
+    // Constructor using rvalue reference
+    explicit OCSPStatus(shared_array<const uint8_t>&& ocsp_bytes) : ocsp_bytes(std::move(ocsp_bytes)) {
+        auto parsed_status = CertStatusManager::parse(ocsp_bytes);
+        ocsp_status = std::move(parsed_status.ocsp_status);
+        status_date = std::move(parsed_status.status_date);
+        status_valid_until_date = std::move(parsed_status.status_valid_until_date);
+        revocation_date = std::move(parsed_status.revocation_date);
+    }
+
+    // To  set an OCSP UNKNOWN status to indicate errors
+    OCSPStatus() : ocsp_status(OCSP_CERTSTATUS_UNKNOWN) {};
+
+   private:
+    friend struct CertificateStatus;
+    explicit OCSPStatus(ocspcertstatus_t ocsp_status, shared_array<const uint8_t>&& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
+                        StatusDate revocation_time)
+        : ocsp_bytes(std::move(ocsp_bytes)),
+          ocsp_status(ocsp_status),
           status_date(status_date),
-          status_valid_until_date(status_valid_until_date),
-          revocation_date(revocation_date) {};
+          status_valid_until_date(status_valid_until_time),
+          revocation_date(revocation_time) {};
 };
 
 /**
@@ -308,29 +352,37 @@ struct OCSPStatus {
  */
 struct CertificateStatus : public OCSPStatus {
     PVACertStatus status;
-    inline bool operator==(const CertificateStatus &rhs) const {
-        return this->status.i == rhs.status.i && this->ocsp_status.i == rhs.ocsp_status.i;
-    }
+    inline bool operator==(const CertificateStatus& rhs) const { return this->status.i == rhs.status.i && this->ocsp_status.i == rhs.ocsp_status.i; }
+    inline bool operator==(certstatus_t rhs) const { return this->status.i == rhs; }
 
-    inline bool operator==(certstatus_t rhs) const {
-        return this->status.i == rhs;
-    }
+    explicit CertificateStatus(certstatus_t status, const shared_array<const uint8_t>&& ocsp_bytes) : OCSPStatus(std::move(ocsp_bytes)), status(status) {};
 
-    explicit CertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date,
-                               StatusDate status_valid_until_date, StatusDate revocation_date)
-        : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_date, revocation_date), status(status) {};
-
-    // @note: Prefer the verified `CertStatusManager::valToStatus` instead of this unverified
-    //        constructor when certification is required
-    //        ocsp_bytes is not verified in this constructor
-    // @see CertStatusManager::valToStatus
     explicit CertificateStatus(const Value& status_value)
-        : OCSPStatus(status_value["ocsp_status.value.index"].as<ocspcertstatus_t>(),
-                     status_value["ocsp_bytes"].as<shared_array<const uint8_t>>(),
-                     status_value["status_date"].as<std::string>(),
-                     status_value["status_valid_until_date"].as<std::string>(),
-                     status_value["revocation_date"].as<std::string>()),
-         status(status_value["status.value.index"].as<certstatus_t>()) {}
+        : OCSPStatus(status_value["ocsp_bytes"].as<shared_array<const uint8_t>>()), status(status_value["status.value.index"].as<certstatus_t>()) {
+        if (!selfConsistent() || !dateConsistent(status_value["status_date"].as<std::string>(), status_value["status_valid_until_date"].as<std::string>(),
+                                                 status_value["revocation_date"].as<std::string>())) {
+            throw OCSPParseException("Certificate status does not match certified OCSP status");
+        };
+    }
+
+    // To  set an UNKNOWN status to indicate errors
+    CertificateStatus() : OCSPStatus(), status(UNKNOWN) {}
+
+   private:
+    friend class CertStatusFactory;
+    explicit CertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, shared_array<const uint8_t>&& ocsp_bytes, StatusDate status_date,
+                               StatusDate status_valid_until_time, StatusDate revocation_time)
+        : OCSPStatus(ocsp_status, std::move(ocsp_bytes), status_date, status_valid_until_time, revocation_time), status(status) {};
+
+    inline bool selfConsistent() {
+        return (ocsp_status.i == OCSP_CERTSTATUS_UNKNOWN && (!(status.i == VALID || status.i == EXPIRED || status.i == REVOKED))) ||
+               (ocsp_status.i == OCSP_CERTSTATUS_REVOKED && ((status.i == REVOKED) || (status.i == EXPIRED))) ||
+               (ocsp_status.i == OCSP_CERTSTATUS_GOOD && (status.i == VALID));
+    }
+
+    inline bool dateConsistent(StatusDate status_date_value, StatusDate status_valid_until_date_value, StatusDate revocation_date_value) {
+        return (status_date == status_date_value) && (status_valid_until_date == status_valid_until_date_value) && (revocation_date == revocation_date_value);
+    }
 };
 
 }  // namespace certs

@@ -256,6 +256,8 @@ struct Server::Pvt
 
 #ifdef PVXS_ENABLE_OPENSSL
     ossl::SSLContext tls_context;
+    Server *server_ptr;
+    void reconfigureContext(Server* server_ptr, const Config &config);
 #endif
 
     INST_COUNTER(ServerPvt);
@@ -270,6 +272,9 @@ private:
     void onSearch(const UDPManager::Search& msg);
     void doBeacons(short evt);
     static void doBeaconsS(evutil_socket_t fd, short evt, void *raw);
+#ifdef PVXS_ENABLE_OPENSSL
+    void watchCertificate(const Config &configuration, ossl::SSLContext &context);
+#endif
 };
 
 }} // namespace pvxs::server
