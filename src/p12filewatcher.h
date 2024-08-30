@@ -26,11 +26,17 @@
 
 namespace pvxs {
 namespace certs {
-template <typename T>
 class P12FileWatcher {
    public:
-    P12FileWatcher(logger &logger, const T &config, std::atomic<bool> &stop_flag, std::function<void(const T &)> &&reconfigure_fn)
-        : config_(config), reconfigure_fn_(std::move(reconfigure_fn)), stop_flag_(stop_flag), logger_(logger) {}
+    P12FileWatcher(logger &logger,
+                   const std::string &tls_private_key_filename,
+                   const std::string &tls_private_key_password,
+                   const std::string &tls_cert_filename,
+                   const std::string &tls_cert_password,
+                   std::atomic<bool> &stop_flag, std::function<void()> &&reconfigure_fn)
+        : tls_private_key_filename_(tls_private_key_filename), tls_private_key_password_(tls_private_key_password),
+          tls_cert_filename_(tls_cert_filename), tls_cert_password_(tls_cert_password),
+          reconfigure_fn_(std::move(reconfigure_fn)), stop_flag_(stop_flag), logger_(logger) {}
 
     inline ~P12FileWatcher() { stopWatching(); }
 
@@ -65,15 +71,8 @@ class P12FileWatcher {
      */
     inline void init(std::vector<std::string> &paths_to_watch, std::vector<time_t> &last_write_times) {
         log_debug_printf(logger_, "File Watcher: %s\n", "Initializing");
-        auto config = dynamic_cast<const impl::ConfigCommon *>(&config_);
-        if (!config) {
-            throw std::invalid_argument("Expected Config instance");
-        }
-
         // Initialize a vector of file paths to watch
-        paths_to_watch = {config->tls_cert_filename, config->tls_cert_password,
-                          config->tls_private_key_filename,
-                          config->tls_private_key_password};
+        paths_to_watch = {tls_cert_filename_, tls_cert_password_, tls_private_key_filename_, tls_private_key_password_};
 
         // Initialize the last write times
         last_write_times.resize(paths_to_watch.size(), 0);
@@ -109,7 +108,7 @@ class P12FileWatcher {
                             log_debug_printf(logger_,
                                            "File Watcher: %s file was deleted\n",
                                            paths_to_watch[i].c_str());
-                            reconfigure_fn_(config_);
+                            reconfigure_fn_();
                             stop_flag_.store(true);
                             break;
                         }
@@ -119,7 +118,7 @@ class P12FileWatcher {
                         log_debug_printf(logger_,
                                         "File Watcher: %s file was updated\n",
                                         paths_to_watch[i].c_str());
-                        reconfigure_fn_(config_);
+                        reconfigure_fn_();
                         stop_flag_.store(true);
                         break;
                     }
@@ -142,8 +141,11 @@ class P12FileWatcher {
     }
 
    private:
-    const T &config_;
-    const std::function<void(const T &config)> reconfigure_fn_;
+    const std::string tls_private_key_filename_;
+    const std::string tls_private_key_password_;
+    const std::string tls_cert_filename_;
+    const std::string tls_cert_password_;
+    const std::function<void()> reconfigure_fn_;
     std::atomic<bool> &stop_flag_;
     logger &logger_;
 

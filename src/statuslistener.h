@@ -27,8 +27,6 @@
 #include "ownedptr.h"
 #include "utilpvt.h"
 
-#define STATUS_LISTENER_PERIOD_MS 500
-
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
@@ -57,11 +55,10 @@ class Semaphore {
     int count;
 };
 
-template <typename T>
 class StatusListener {
    public:
-    StatusListener(logger &logger, const T &config, std::atomic<bool> &stop_flag, ossl_ptr<X509> &&cert)
-        : config_(config), cert_(std::move(cert)), stop_flag_(stop_flag), logger_(logger) {}
+    StatusListener(logger &logger, std::atomic<bool> &stop_flag, ossl_ptr<X509> &&cert)
+        : cert_(std::move(cert)), stop_flag_(stop_flag), logger_(logger) {}
 
     inline ~StatusListener() { stopListening(); }
 
@@ -96,7 +93,7 @@ class StatusListener {
      * @param reconfigure_fn
      * @return
      */
-    inline CertificateStatus startListening(const std::function<void(const T &)> &&reconfigure_fn) {
+    inline CertificateStatus startListening(const std::function<void()> &&reconfigure_fn) {
         if (!CertStatusManager::shouldMonitor(cert_)) {
             return {};
         }
@@ -131,8 +128,7 @@ class StatusListener {
     }
 
    private:
-    const T &config_;
-    std::function<void(const T &config)> reconfigure_fn_;
+    std::function<void()> reconfigure_fn_;
     const ossl_ptr<X509> &cert_;
     std::atomic<bool> &stop_flag_;
     logger &logger_;
@@ -152,7 +148,7 @@ class StatusListener {
      * @return a CertStatusManager that could be used to get statuses periodically
      */
     inline cert_status_ptr<CertStatusManager> reactToStatusChanges() {
-        auto cert_status_manager =  CertStatusManager::subscribe(std::move(cert_), std::move([this](const CertificateStatus &status) {
+        auto cert_status_manager =  CertStatusManager::subscribe(std::move(cert_), [this](const CertificateStatus &status) {
             if (is_first_update_) {
                 // Just return this value
                 Guard G(lock_);
@@ -168,7 +164,7 @@ class StatusListener {
                     case VALID:
                         log_debug_printf(logger_, "Status Monitor: certificate transitioned from %s => %s: reconfiguring", status_.status.s.c_str(),
                                        status.status.s.c_str());
-                        reconfigure_fn_(config_);
+                        reconfigure_fn_();
                         stop_flag_.store(true);
                         break;
                     case PENDING:
@@ -183,8 +179,8 @@ class StatusListener {
                         break;
                 }
             }
-        }));
-        return std::move(cert_status_manager);
+        });
+        return cert_status_manager;
     }
 
     /**
@@ -222,11 +218,10 @@ class StatusListener {
                 // Just reconfigure: unavailability of service will mean a downgraded or
                 // closed connection depending on configuration
                 log_err_printf(logger_, "Status Monitor: PVACMS unavailable: %s\n", e.what());
-                reconfigure_fn_(config_);
+                reconfigure_fn_();
                 break;
             }
         }
-        cert_status_manager->unsubscribe();
         log_debug_printf(logger_, "Status Monitor: %s\n", "Exiting");
     }
 };

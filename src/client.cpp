@@ -1249,9 +1249,12 @@ void ContextImpl::watchCertificate(const Config &new_config, ossl::SSLContext &c
         tls_context.unWatchCertificate(); // Unwatch if any
     }
 
-    context.client_file_watcher_ = std::make_shared<certs::P12FileWatcher<Config>>(watcher, new_config, context.fw_stop_flag_, [this](const Config& conf) {
+    context.client_file_watcher_ = std::make_shared<certs::P12FileWatcher>(watcher,
+                                                                           new_config.tls_private_key_filename, new_config.tls_private_key_password,
+                                                                           new_config.tls_cert_filename, new_config.tls_cert_password,
+                                                                                   context.fw_stop_flag_, [this, new_config]() {
         log_debug_printf(watcher, "Client reconfigure: %s\n", "File change");
-        auto new_context = ossl::SSLContext::for_client(conf);
+        auto new_context = ossl::SSLContext::for_client(new_config);
         reconfigureContext(new_context);
     });
     context.client_file_watcher_->startWatching();
@@ -1259,9 +1262,9 @@ void ContextImpl::watchCertificate(const Config &new_config, ossl::SSLContext &c
     auto cert = ossl_ptr<X509>(SSL_CTX_get0_certificate(context.ctx), false);
     if (cert) {
         X509_up_ref(cert.get());  // increase ref count to cert so we own it and have to free it
-        context.client_status_listener_ = std::make_shared<certs::StatusListener<Config>>(watcher, new_config, context.sl_stop_flag_, std::move(cert));
-        auto cert_status = context.client_status_listener_->startListening([this](const Config& conf) {
-            auto new_context = ossl::SSLContext::for_client(conf);
+        context.client_status_listener_ = std::make_shared<certs::StatusListener>(watcher, context.sl_stop_flag_, std::move(cert));
+        auto cert_status = context.client_status_listener_->startListening([this, new_config]() {
+            auto new_context = ossl::SSLContext::for_client(new_config);
             log_debug_printf(watcher, "Client reconfigure: %s\n", "Status change");
             reconfigureContext(new_context);
         });

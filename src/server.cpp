@@ -1004,9 +1004,12 @@ void Server::Pvt::watchCertificate(const Config& config, ossl::SSLContext& conte
     }
 
     // Configure a file watcher to watch the configured certificate files
-    context.server_file_watcher_ = std::make_shared<certs::P12FileWatcher<Config>>(watcher, config, context.fw_stop_flag_, [this](const Config& configuration) {
+    context.server_file_watcher_ = std::make_shared<certs::P12FileWatcher>(watcher,
+      config.tls_private_key_filename, config.tls_private_key_password,
+      config.tls_cert_filename, config.tls_cert_password,
+      context.fw_stop_flag_, [this, config]() {
         log_debug_printf(watcher, "Reconfigure server context: %s\n", "certificate file(s) change");
-        if ( server_ptr )  server_ptr->reconfigure(configuration);
+        if ( server_ptr )  server_ptr->reconfigure(config);
     });
     // Start the file watcher
     context.server_file_watcher_->startWatching();
@@ -1016,11 +1019,11 @@ void Server::Pvt::watchCertificate(const Config& config, ossl::SSLContext& conte
     if (ctx_cert) {
         auto cert = ossl_ptr<X509>(X509_dup(ctx_cert));
         // Configure a status listener to listen for certificate status changes
-        context.server_status_listener_ = std::make_shared<certs::StatusListener<Config>>(watcher, config, context.sl_stop_flag_, std::move(cert));
+        context.server_status_listener_ = std::make_shared<certs::StatusListener>(watcher, context.sl_stop_flag_, std::move(cert));
         // Start the listener
-        context.server_status_listener_->startListening([this](const Config& configuration) {
+        context.server_status_listener_->startListening([this, config]() {
             log_debug_printf(watcher, "Reconfigure server context: %s\n", "certificate status change");
-            if ( server_ptr ) server_ptr->reconfigure(configuration);
+            if ( server_ptr ) server_ptr->reconfigure(config);
         });
     }
 }

@@ -127,10 +127,10 @@ struct SSLContext {
     std::atomic<bool> fw_stop_flag_{false};
     std::atomic<bool> sl_stop_flag_{false};
     static PVXS_API int NID_PvaCertStatusURI;
-    std::shared_ptr<certs::P12FileWatcher<client::Config>> client_file_watcher_;
-    std::shared_ptr<certs::StatusListener<client::Config>> client_status_listener_;
-    std::shared_ptr<certs::P12FileWatcher<server::Config>> server_file_watcher_;
-    std::shared_ptr<certs::StatusListener<server::Config>> server_status_listener_;
+    std::shared_ptr<certs::P12FileWatcher> client_file_watcher_;
+    std::shared_ptr<certs::StatusListener> client_status_listener_;
+    std::shared_ptr<certs::P12FileWatcher> server_file_watcher_;
+    std::shared_ptr<certs::StatusListener> server_status_listener_;
 
     static bool fill_credentials(PeerCredentials& cred, const SSL* ctx);
     void unWatchCertificate();

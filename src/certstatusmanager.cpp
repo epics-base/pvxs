@@ -158,8 +158,10 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
 }
 
 void CertStatusManager::unsubscribe() {
-    sub_->cancel();
-    client_->close();
+    if (sub_)
+        sub_->cancel();
+    if ( client_ )
+        client_->close();
 }
 
 CertificateStatus CertStatusManager::getStatus() { return getStatus(cert_); }
