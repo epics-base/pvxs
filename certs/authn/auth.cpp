@@ -37,7 +37,7 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
                                                                      const std::shared_ptr<KeyPair> &key_pair,
                                                                      const uint16_t &usage) const {
     // Create a new CertCreationRequest object.
-    std::shared_ptr<CertCreationRequest> cert_creation_request(new CertCreationRequest(type_, verifier_fields_));
+    auto cert_creation_request = std::make_shared<CertCreationRequest>(type_, verifier_fields_);
 
     // Fill in the ccr from the base data we've gathered so far.
     cert_creation_request->ccr["name"] = credentials->name;

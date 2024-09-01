@@ -257,7 +257,6 @@ struct Server::Pvt
 #ifdef PVXS_ENABLE_OPENSSL
     ossl::SSLContext tls_context;
     Server *server_ptr;
-    void reconfigureContext(Server* server_ptr, const Config &config);
 #endif
 
     INST_COUNTER(ServerPvt);

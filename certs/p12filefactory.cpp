@@ -55,7 +55,7 @@ DEFINE_LOGGER(certs, "pvxs.certs.fms");
  */
 std::shared_ptr<KeyPair> P12FileFactory::createKeyPair() {
     // Create a new KeyPair object
-    std::shared_ptr<KeyPair> key_pair(new KeyPair());
+    auto key_pair = std::make_shared<KeyPair>();
 
     const int kKeySize = 2048;          // Key size
     const int kKeyType = EVP_PKEY_RSA;  // Key type

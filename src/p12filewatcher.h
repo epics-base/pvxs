@@ -109,8 +109,7 @@ class P12FileWatcher {
                                            "File Watcher: %s file was deleted\n",
                                            paths_to_watch[i].c_str());
                             reconfigure_fn_();
-                            stop_flag_.store(true);
-                            break;
+                            return;
                         }
                         continue;
                     }
@@ -119,8 +118,7 @@ class P12FileWatcher {
                                         "File Watcher: %s file was updated\n",
                                         paths_to_watch[i].c_str());
                         reconfigure_fn_();
-                        stop_flag_.store(true);
-                        break;
+                        return;
                     }
                 }
             }

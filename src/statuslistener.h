@@ -55,7 +55,7 @@ class Semaphore {
     int count;
 };
 
-class StatusListener {
+class StatusListener  : public std::enable_shared_from_this<StatusListener> {
    public:
     StatusListener(logger &logger, std::atomic<bool> &stop_flag, ossl_ptr<X509> &&cert)
         : cert_(std::move(cert)), stop_flag_(stop_flag), logger_(logger) {}
@@ -94,13 +94,12 @@ class StatusListener {
      * @return
      */
     inline CertificateStatus startListening(const std::function<void()> &&reconfigure_fn) {
-        if (!CertStatusManager::shouldMonitor(cert_)) {
-            return {};
-        }
-
         reconfigure_fn_ = std::move(reconfigure_fn);
         stop_flag_.store(false);
-        worker_ = std::thread([this]() {
+
+        auto self = shared_from_this();
+        worker_ = std::thread([self]() {
+            self->stop_flag_.store(false);  // Make sure
             // The certificate status subscription picks up all changes to the certificate status
             // It returns the first result
             // It reconfigures the connection if it gets UNKNOWN, EXPIRED, REVOKED or VALID
@@ -108,22 +107,27 @@ class StatusListener {
             // Other transitions are not possible
             //  PENDING and PENDING APPROVAL can only be starting states (except as noted above)
 
-            log_debug_printf(logger_, "Status Monitor: %s\n", "Starting");
+            log_debug_printf(self->logger_, "Status Monitor: %s\n", "Starting");
             try {
                 // Subscribe to status changes and react
-                auto && cert_status_manager = reactToStatusChanges();
+                auto && cert_status_manager = self->reactToStatusChanges();
 
                 // Wait for first status to be available (or stopping)
-                first_status_available_.wait(stop_flag_);
+                self->first_status_available_.wait(self->stop_flag_);
 
                 // Start the status validity verification loop.
-                verifyStatusValidity(std::move(cert_status_manager));
-                log_debug_printf(logger_, "Status Monitor: %s\n", "Stopped");
+                log_debug_printf(self->logger_, "Status Validity Monitor: %s\n", "Starting");
+                self->verifyStatusValidity(std::move(cert_status_manager));
+                log_debug_printf(self->logger_, "Status Validity Monitor: %s\n", "Stopped");
+                log_debug_printf(self->logger_, "Status Monitor: %s\n", "Stopped");
             } catch (std::exception &e) {
-                log_err_printf(logger_, "Status Monitor: Failed to Start: %s\n", e.what());
-                stopListening();
+                log_err_printf(self->logger_, "Status Monitor: Failed to Start: %s\n", e.what());
+                self->stopListening();
             }
         });
+        // Wait for first status to be available (or stopping)
+        self->first_status_available_.wait(self->stop_flag_);
+
         return status_;
     }
 
@@ -149,6 +153,7 @@ class StatusListener {
      */
     inline cert_status_ptr<CertStatusManager> reactToStatusChanges() {
         auto cert_status_manager =  CertStatusManager::subscribe(std::move(cert_), [this](const CertificateStatus &status) {
+            log_debug_printf(logger_, "Status Monitor: %s\n", "Started");
             if (is_first_update_) {
                 // Just return this value
                 Guard G(lock_);
@@ -198,6 +203,7 @@ class StatusListener {
      * @see reactToStatusChanges
      */
     inline void verifyStatusValidity(cert_status_ptr<CertStatusManager>  &&cert_status_manager) {
+        log_debug_printf(logger_, "Status Validity Monitor: %s\n", "Started");
         while (!stop_flag_.load()) {
             Guard G(lock_);
             auto time_to_wait_until = status_valid_until_;

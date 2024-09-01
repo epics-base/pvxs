@@ -1259,10 +1259,21 @@ void ContextImpl::watchCertificate(const Config &new_config, ossl::SSLContext &c
     });
     context.client_file_watcher_->startWatching();
 
-    auto cert = ossl_ptr<X509>(SSL_CTX_get0_certificate(context.ctx), false);
-    if (cert) {
-        X509_up_ref(cert.get());  // increase ref count to cert so we own it and have to free it
+    auto ctx_cert = SSL_CTX_get0_certificate(context.ctx);
+    if (ctx_cert) {
+        auto cert = ossl_ptr<X509>(X509_dup(ctx_cert));
+        auto status_uri = std::string();
+        try {
+            status_uri = certs::CertStatusManager::getStatusPvFromCert(cert);
+        } catch (...) {
+            log_debug_printf(watcher, "Status Monitor: %s\n", "Not Required");
+            return;
+        }
+        log_info_printf(watcher, "Status Monitor: %s\n", status_uri.c_str());
+
+        // Configure a status listener to listen for certificate status changes
         context.client_status_listener_ = std::make_shared<certs::StatusListener>(watcher, context.sl_stop_flag_, std::move(cert));
+        // Start the listener
         auto cert_status = context.client_status_listener_->startListening([this, new_config]() {
             auto new_context = ossl::SSLContext::for_client(new_config);
             log_debug_printf(watcher, "Client reconfigure: %s\n", "Status change");
@@ -1270,9 +1281,9 @@ void ContextImpl::watchCertificate(const Config &new_config, ossl::SSLContext &c
         });
 
         // If certificate is not valid
-        if ( cert_status.status.i != certs::VALID ) {
-            log_debug_printf(watcher, "Invalid certificate state: %s\n", CERT_STATE(cert_status.status.i));
-            throw std::runtime_error(SB() << "Invalid certificate state: " << CERT_STATE(cert_status.status.i));
+        if ( cert_status.status != certs::VALID ) {
+            log_debug_printf(watcher, "Invalid certificate state: %s\n", cert_status.status.s.c_str());
+            throw std::runtime_error(SB() << "Invalid certificate state: " << cert_status.status.s);
         }
     }
 }

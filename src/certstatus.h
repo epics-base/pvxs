@@ -78,10 +78,21 @@ enum ocspcertstatus_t { OCSP_CERT_STATUS_LIST };
  * @brief Base class for Certificate status values.  Contains the enum index `i`
  * and the string representation `s` of the value for logging
  */
+ struct PVACertStatus;
+ struct OCSPCertStatus;
 struct CertStatus {
     uint32_t i;
     std::string s;
-     CertStatus() = default;
+    CertStatus() = default;
+
+    bool operator==(PVACertStatus rhs) = delete;
+    bool operator==(OCSPCertStatus rhs) = delete;
+    bool operator==(ocspcertstatus_t rhs) = delete;
+    bool operator==(certstatus_t rhs) = delete;
+    bool operator!=(PVACertStatus rhs) = delete;
+    bool operator!=(OCSPCertStatus rhs) = delete;
+    bool operator!=(ocspcertstatus_t rhs) = delete;
+    bool operator!=(certstatus_t rhs) = delete;
 
     /**
      * @brief The prototype of the data returned for a certificate status request
@@ -156,7 +167,12 @@ struct PVACertStatus : CertStatus {
 
     explicit PVACertStatus(const certstatus_t& status) : CertStatus(status, toString(status)) {}
 
-   private:
+    bool operator==(PVACertStatus rhs) const { return this->i == rhs.i; }
+    bool operator==(certstatus_t rhs) const { return this->i == rhs; }
+    bool operator!=(PVACertStatus rhs) const { return this->i != rhs.i; }
+    bool operator!=(certstatus_t rhs) const { return this->i != rhs; }
+
+  private:
     static inline std::string toString(const certstatus_t status) { return CERT_STATE(status); }
 };
 
@@ -168,7 +184,12 @@ struct OCSPCertStatus : CertStatus {
 
     explicit OCSPCertStatus(const ocspcertstatus_t& status) : CertStatus(status, toString(status)) {}
 
-   private:
+    bool operator==(OCSPCertStatus rhs) const { return this->i == rhs.i; }
+    bool operator==(ocspcertstatus_t rhs) const { return this->i == rhs; }
+    bool operator!=(OCSPCertStatus rhs) const { return this->i != rhs.i; }
+    bool operator!=(ocspcertstatus_t rhs) const { return this->i != rhs; }
+
+  private:
     static inline std::string toString(const ocspcertstatus_t status) { return OCSP_CERT_STATE(status); }
 };
 
@@ -332,8 +353,8 @@ struct OCSPStatus {
  */
 struct CertificateStatus : public OCSPStatus {
     PVACertStatus status;
-    inline bool operator==(const CertificateStatus& rhs) const { return this->status.i == rhs.status.i && this->ocsp_status.i == rhs.ocsp_status.i; }
-    inline bool operator==(certstatus_t rhs) const { return this->status.i == rhs; }
+    inline bool operator==(const CertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status; }
+    inline bool operator==(certstatus_t rhs) const { return this->status == rhs; }
 
     explicit CertificateStatus(certstatus_t status, const shared_array<const uint8_t>&& ocsp_bytes) : OCSPStatus(std::move(ocsp_bytes)), status(status) {};
 
@@ -355,9 +376,9 @@ struct CertificateStatus : public OCSPStatus {
         : OCSPStatus(ocsp_status, std::move(ocsp_bytes), status_date, status_valid_until_time, revocation_time), status(status) {};
 
     inline bool selfConsistent() {
-        return (ocsp_status.i == OCSP_CERTSTATUS_UNKNOWN && (!(status.i == VALID || status.i == EXPIRED || status.i == REVOKED))) ||
-               (ocsp_status.i == OCSP_CERTSTATUS_REVOKED && ((status.i == REVOKED) || (status.i == EXPIRED))) ||
-               (ocsp_status.i == OCSP_CERTSTATUS_GOOD && (status.i == VALID));
+        return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN && (!(status == VALID || status == EXPIRED || status == REVOKED))) ||
+               (ocsp_status == OCSP_CERTSTATUS_REVOKED && ((status == REVOKED) || (status == EXPIRED))) ||
+               (ocsp_status == OCSP_CERTSTATUS_GOOD && (status == VALID));
     }
 
     inline bool dateConsistent(StatusDate status_date_value, StatusDate status_valid_until_date_value, StatusDate revocation_date_value) {

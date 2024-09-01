@@ -1015,77 +1015,35 @@ void Server::Pvt::watchCertificate(const Config& config, ossl::SSLContext& conte
     context.server_file_watcher_->startWatching();
 
     // Get the certificate from the context whose status needs to be monitored
-    auto ctx_cert = SSL_CTX_get0_certificate(context.ctx);
-    if (ctx_cert) {
-        auto cert = ossl_ptr<X509>(X509_dup(ctx_cert));
-        // Configure a status listener to listen for certificate status changes
-        context.server_status_listener_ = std::make_shared<certs::StatusListener>(watcher, context.sl_stop_flag_, std::move(cert));
-        // Start the listener
-        context.server_status_listener_->startListening([this, config]() {
-            log_debug_printf(watcher, "Reconfigure server context: %s\n", "certificate status change");
-            if ( server_ptr ) server_ptr->reconfigure(config);
-        });
-    }
-}
-#endif
+    if ( tls_context.ctx ) {
+        auto ctx_cert = SSL_CTX_get0_certificate(context.ctx);
+        if (ctx_cert) {
+            auto cert = ossl_ptr<X509>(X509_dup(ctx_cert));
+            std::string status_uri;
+            try {
+                status_uri = certs::CertStatusManager::getStatusPvFromCert(cert);
+            } catch (...) {}
 
-#ifdef PVXS_ENABLE_OPENSSL
-/**
- * @brief Reconfigure the current server context by re-establishing a TLS connection based on the new certificate
- * status and state of the certificate files
- *
- * @param server_ptr pointer to the Server object to attach the context to
- * @param config the config to use to determine certificate files
- */
-void Server::Pvt::reconfigureContext(Server *p_server, const Config& config) {
-    if (!p_server || !p_server->pvt) throw std::logic_error("NULL Server");
+            if (status_uri.empty()) {
+                log_debug_printf(watcher, "Status Monitor: %s\n", "Not Required");
+                return;
+            }
+            log_info_printf(watcher, "Status Monitor: %s\n", status_uri.c_str());
 
-    auto new_config(config);
-    new_config.expand();  // maybe catch some errors early
+            // Configure a status listener to listen for certificate status changes
+            context.server_status_listener_ = std::make_shared<certs::StatusListener>(watcher, context.sl_stop_flag_, std::move(cert));
+            // Start the listener
+            auto cert_status = context.server_status_listener_->startListening([this, config]() {
+                log_debug_printf(watcher, "Reconfigure server context: %s\n", "certificate status change");
+                if ( server_ptr ) server_ptr->reconfigure(config);
+            });
 
-    log_info_printf(watcher, "Reconfiguring Server Context%s", "\n");
-
-    // is the current server running?
-    Pvt::state_t prev_state;
-    p_server->pvt->acceptor_loop.call([&p_server, &prev_state]() { prev_state = p_server->pvt->state; });
-    bool was_running = prev_state == Pvt::Running || prev_state == Pvt::Starting;
-
-    // If server was running then stop it
-    if (was_running) {
-        log_info_printf(watcher, "Stopping Server for Reconfiguration%s", "\n");
-        p_server->pvt->stop();
-    }
-
-    decltype(pvt->sources) transfers;
-    decltype(pvt->builtinsrc) builtin;
-
-    // copy all Source, including builtin
-    {
-        auto G(p_server->pvt->sourcesLock.lockReader());
-
-        transfers = p_server->pvt->sources;
-        builtin = p_server->pvt->builtinsrc;
-    }
-
-    // completely destroy the current/old server to free up TCP ports
-    p_server->pvt.reset();
-
-    // build up a new, empty, server
-    // This will do the actual TLS setup and will also set up the new watchers
-    Server new_server(new_config);
-    p_server->pvt = std::move(new_server.pvt);
-
-    {
-        auto G(p_server->pvt->sourcesLock.lockWriter());
-
-        p_server->pvt->sources = transfers;
-        p_server->pvt->builtinsrc = builtin;
-    }
-
-    // If it was running then restart it
-    if (was_running) {
-        p_server->pvt->start();
-        log_info_printf(watcher, "Resuming Server after Reconfiguration%s", "\n");
+            // If certificate is not valid
+            if ( cert_status.status == certs::VALID ) {
+                log_debug_printf(watcher, "Invalid certificate state: %s\n", cert_status.status.s.c_str());
+                throw std::runtime_error(SB() << "Invalid certificate state: " << cert_status.status.s);
+            }
+        }
     }
 }
 #endif

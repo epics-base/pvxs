@@ -680,7 +680,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
 
         // Get Public Key to use
         auto public_key = getStructureValue<const std::string>(ccr, "pub_key");
-        const std::shared_ptr<KeyPair> key_pair(new KeyPair(public_key));
+        const auto key_pair = std::make_shared<KeyPair>(public_key);
 
         // Generate a new serial number
         auto serial = generateSerial();
@@ -1371,7 +1371,7 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
         setValue<std::string>(status_value, "ocsp_state", cert_status.ocsp_status.s);
         setValue<std::string>(status_value, "ocsp_status_date", cert_status.status_date.s);
         setValue<std::string>(status_value, "ocsp_certified_until", cert_status.status_valid_until_date.s);
-        if (cert_status.ocsp_status.i == V_OCSP_CERTSTATUS_REVOKED) setValue<std::string>(status_value, "ocsp_revocation_date", cert_status.revocation_date.s);
+        if (cert_status.ocsp_status == OCSP_CERTSTATUS_REVOKED) setValue<std::string>(status_value, "ocsp_revocation_date", cert_status.revocation_date.s);
         auto ocsp_bytes = shared_array<uint8_t>(cert_status.ocsp_bytes.begin(), cert_status.ocsp_bytes.end());
         status_value["ocsp_response"] = ocsp_bytes.freeze();
     }

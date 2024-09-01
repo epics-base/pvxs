@@ -136,7 +136,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
         sub = client->monitor(uri)
                   .maskConnected(true)
                   .maskDisconnected(true)
-                  .event(std::bind([callback_ptr](client::Subscription& sub) {
+                  .event([callback_ptr](client::Subscription& sub) {
                       try {
                           auto value = sub.pop();
                           if (!value) {
@@ -148,7 +148,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
                           log_warn_printf(status, "Error parsing certificate status: %s\n", e.what());
                           (*callback_ptr)({});
                       }
-                  }, std::placeholders::_1))
+                  })
                   .exec();
         return cert_status_ptr<CertStatusManager>(new CertStatusManager(cert, client, sub));
     } catch (std::exception& e) {
@@ -158,6 +158,8 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
 }
 
 void CertStatusManager::unsubscribe() {
+    client_->hurryUp();
+
     if (sub_)
         sub_->cancel();
     if ( client_ )
