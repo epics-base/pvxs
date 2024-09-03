@@ -69,12 +69,12 @@ class CertStatusFactory {
      * @param serial the serial number of the certificate to create an OCSP response for
      * @param status the PVA certificate status to create an OCSP response with
      * @param status_date the status date to set in the OCSP response
-     * @param revocation_time the revocation date to set in the OCSP response if applicable
+     * @param predicated_revocation_time the revocation date to set in the OCSP response if applicable
      *
      * @return the Certificate Status containing the signed OCSP response and other OCSP response data.
      */
     CertificateStatus createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date = std::time(nullptr),
-                                       StatusDate revocation_time = std::time(nullptr)) const;
+                                       StatusDate predicated_revocation_time = std::time(nullptr)) const;
 
    private:
     const ossl_ptr<X509>& ca_cert_;                          // CA Certificate to encode in the OCSP responses

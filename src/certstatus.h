@@ -78,8 +78,8 @@ enum ocspcertstatus_t { OCSP_CERT_STATUS_LIST };
  * @brief Base class for Certificate status values.  Contains the enum index `i`
  * and the string representation `s` of the value for logging
  */
- struct PVACertStatus;
- struct OCSPCertStatus;
+struct PVACertStatus;
+struct OCSPCertStatus;
 struct CertStatus {
     uint32_t i;
     std::string s;
@@ -172,7 +172,7 @@ struct PVACertStatus : CertStatus {
     bool operator!=(PVACertStatus rhs) const { return this->i != rhs.i; }
     bool operator!=(certstatus_t rhs) const { return this->i != rhs; }
 
-  private:
+   private:
     static inline std::string toString(const certstatus_t status) { return CERT_STATE(status); }
 };
 
@@ -189,7 +189,7 @@ struct OCSPCertStatus : CertStatus {
     bool operator!=(OCSPCertStatus rhs) const { return this->i != rhs.i; }
     bool operator!=(ocspcertstatus_t rhs) const { return this->i != rhs; }
 
-  private:
+   private:
     static inline std::string toString(const ocspcertstatus_t status) { return OCSP_CERT_STATE(status); }
 };
 
@@ -205,10 +205,24 @@ struct StatusDate {
 
     StatusDate(const std::time_t& time) : t(time), s(toString(time)) {}
     StatusDate(const ASN1_TIME* time) : t(asn1TimeToTimeT(time)), s(toString(t)) {}
-    StatusDate(const std::string& time_string) : t(toTimeT(time_string)), s(time_string) {}
-    StatusDate(const std::tm& tm) : t(tmToTimeTUTC(tm)), s(toString(t)) {}
+    StatusDate(const ossl_ptr<ASN1_TIME>& time) : t(asn1TimeToTimeT(time.get())), s(toString(t)) {}
+    StatusDate(const std::string& time_string) : t(toTimeT(time_string)), s(StatusDate(t).s) {}
 
     inline bool operator==(StatusDate rhs) const { return this->t == rhs.t; }
+
+    inline operator const std::string&() const { return s; }
+    inline operator std::string() const { return s; }
+    inline operator const time_t&() const { return t; }
+    inline operator time_t() const { return t; }
+    inline operator ossl_ptr<ASN1_TIME>() const { return toAsn1_Time(); };
+
+    inline ossl_ptr<ASN1_TIME> toAsn1_Time() const {
+        ossl_ptr<ASN1_TIME> asn1(ASN1_TIME_new());
+        ASN1_TIME_set(asn1.get(), t);
+        return asn1;
+    }
+
+    static inline ossl_ptr<ASN1_TIME> toAsn1_Time(StatusDate status_date) { return status_date.toAsn1_Time(); }
 
     /**
      * @brief To get the time_t (unix time) from a ASN1_TIME* time pointer
@@ -232,7 +246,7 @@ struct StatusDate {
      */
     static inline std::string toString(const std::time_t& time) {
         char buffer[100];
-        if (std::strftime(buffer, sizeof(buffer), CERT_TIME_FORMAT, std::localtime(&time))) {
+        if (std::strftime(buffer, sizeof(buffer), CERT_TIME_FORMAT, std::gmtime(&time))) {
             return std::string(buffer);
         } else {
             throw OCSPParseException("Failed to format status date");
@@ -241,6 +255,7 @@ struct StatusDate {
 
     static inline time_t toTimeT(std::string time_string) {
         // Read the string and parse it into std::tm
+        if (time_string.empty()) return 0;
         std::tm tm = {};
         std::istringstream ss(time_string);
         ss >> std::get_time(&tm, CERT_TIME_FORMAT);
@@ -312,22 +327,10 @@ struct OCSPStatus {
     StatusDate revocation_date;
 
     // Constructor using lvalue reference
-    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes) : ocsp_bytes(ocsp_bytes) {
-        auto parsed_status = CertStatusManager::parse(ocsp_bytes);
-        ocsp_status = parsed_status.ocsp_status;
-        status_date = std::move(parsed_status.status_date);
-        status_valid_until_date = std::move(parsed_status.status_valid_until_date);
-        revocation_date = std::move(parsed_status.revocation_date);
-    }
+    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param) : ocsp_bytes(ocsp_bytes_param) { init(); }
 
     // Constructor using rvalue reference
-    explicit OCSPStatus(shared_array<const uint8_t>&& ocsp_bytes) : ocsp_bytes(std::move(ocsp_bytes)) {
-        auto parsed_status = CertStatusManager::parse(ocsp_bytes);
-        ocsp_status = std::move(parsed_status.ocsp_status);
-        status_date = std::move(parsed_status.status_date);
-        status_valid_until_date = std::move(parsed_status.status_valid_until_date);
-        revocation_date = std::move(parsed_status.revocation_date);
-    }
+    explicit OCSPStatus(shared_array<const uint8_t>&& ocsp_bytes_param) : ocsp_bytes(std::move(ocsp_bytes_param)) { init(); }
 
     // To  set an OCSP UNKNOWN status to indicate errors
     OCSPStatus() : ocsp_status(OCSP_CERTSTATUS_UNKNOWN) {};
@@ -341,6 +344,18 @@ struct OCSPStatus {
           status_date(status_date),
           status_valid_until_date(status_valid_until_time),
           revocation_date(revocation_time) {};
+    inline void init() {
+        if (ocsp_bytes.empty()) {
+            ocsp_status = (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN;
+            status_date = time(nullptr);
+        } else {
+            auto parsed_status = CertStatusManager::parse(ocsp_bytes);
+            ocsp_status = std::move(parsed_status.ocsp_status);
+            status_date = std::move(parsed_status.status_date);
+            status_valid_until_date = std::move(parsed_status.status_valid_until_date);
+            revocation_date = std::move(parsed_status.revocation_date);
+        }
+    }
 };
 
 /**
@@ -360,6 +375,7 @@ struct CertificateStatus : public OCSPStatus {
 
     explicit CertificateStatus(const Value& status_value)
         : OCSPStatus(status_value["ocsp_response"].as<shared_array<const uint8_t>>()), status(status_value["status.value.index"].as<certstatus_t>()) {
+        if (ocsp_bytes.empty()) return;
         if (!selfConsistent() || !dateConsistent(status_value["ocsp_status_date"].as<std::string>(), status_value["ocsp_certified_until"].as<std::string>(),
                                                  status_value["ocsp_revocation_date"].as<std::string>())) {
             throw OCSPParseException("Certificate status does not match certified OCSP status");

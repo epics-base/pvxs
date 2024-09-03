@@ -59,11 +59,11 @@ ossl_ptr<X509> CertFactory::create() {
     }
 
     // 3. Set the certificate version to 2 (X.509 v3 - 0 based)
-    auto cert_version  = 2;
+    auto cert_version = 2;
     if (X509_set_version(certificate.get(), cert_version) != 1) {
         throw std::runtime_error("Failed to set certificate version.");
     }
-    log_debug_printf(certs, "Set Cert Version: %d\n", cert_version+1);
+    log_debug_printf(certs, "Set Cert Version: %d\n", cert_version + 1);
 
     // 4. Set the public key of the certificate using the provided key pair
     if (X509_set_pubkey(certificate.get(), key_pair_->getPublicKey().get()) != 1) {
@@ -94,23 +94,23 @@ ossl_ptr<X509> CertFactory::create() {
     addExtension(certificate, NID_authority_key_identifier, "keyid:always,issuer:always");
 
     // 11. Add EPICS subscription status subscription extension, if required and is not CMS itself
-    if ( cert_status_subscription_required_ && !IS_USED_FOR_(usage_, ssl::kForCMS)) {
+    if (cert_status_subscription_required_ && !IS_USED_FOR_(usage_, ssl::kForCMS)) {
         auto issuerId = CertStatus::getIssuerId(issuer_certificate_ptr_);
         addCustomExtensionByNid(certificate, ossl::SSLContext::NID_PvaCertStatusURI, CertStatus::makeStatusURI(issuerId, serial_));
     }
 
     // 12. Create cert chain from issuer's chain and issuer's cert
-    if ( issuer_chain_ptr_ ) {
+    if (issuer_chain_ptr_) {
         // Fill with issuer chain certificates if supplied
         int num_certs = sk_X509_num(issuer_chain_ptr_);
-        log_debug_printf(certs, "Creating Certificate Chain with %d entries\n", num_certs+1);
+        log_debug_printf(certs, "Creating Certificate Chain with %d entries\n", num_certs + 1);
         for (int i = 0; i < num_certs; ++i) {
-            if ( sk_X509_push(certificate_chain_.get(), sk_X509_value(issuer_chain_ptr_, i)) != 1 ) {
+            if (sk_X509_push(certificate_chain_.get(), sk_X509_value(issuer_chain_ptr_, i)) != 1) {
                 throw std::runtime_error(SB() << "Failed create certificate chain for new certificate");
             }
         }
         // Add the issuer's certificate too
-        if ( sk_X509_push(certificate_chain_.get(), issuer_certificate_ptr_) != 1 ) {
+        if (sk_X509_push(certificate_chain_.get(), issuer_certificate_ptr_) != 1) {
             throw std::runtime_error(SB() << "Failed add issuer certificate to certificate chain");
         }
     } else
@@ -180,26 +180,22 @@ bool CertFactory::verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::str
 void CertFactory::setSubject(const ossl_ptr<X509> &certificate) {
     auto subject_name(X509_get_subject_name(certificate.get()));
     if (subject_name) {
-        if (X509_NAME_add_entry_by_txt(subject_name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char *>(name_.c_str()),
-                                       -1, -1, 0) != 1) {
+        if (X509_NAME_add_entry_by_txt(subject_name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char *>(name_.c_str()), -1, -1, 0) != 1) {
             throw std::runtime_error(SB() << "Failed to set common name in certificate subject: " << name_);
         }
         log_debug_printf(certs, "Common Name: %s\n", name_.c_str());
-        if (!country_.empty()  &&
-            X509_NAME_add_entry_by_txt(subject_name, "C", MBSTRING_ASC,
-                                       reinterpret_cast<const unsigned char *>(country_.c_str()), -1, -1, 0) != 1) {
+        if (!country_.empty() &&
+            X509_NAME_add_entry_by_txt(subject_name, "C", MBSTRING_ASC, reinterpret_cast<const unsigned char *>(country_.c_str()), -1, -1, 0) != 1) {
             throw std::runtime_error(SB() << "Failed to set country in certificate subject: " << name_);
         }
         log_debug_printf(certs, "Country: %s\n", country_.c_str());
         if (!org_.empty() &&
-            X509_NAME_add_entry_by_txt(subject_name, "O", MBSTRING_ASC, reinterpret_cast<const unsigned char *>(org_.c_str()),
-                                       -1, -1, 0) != 1) {
+            X509_NAME_add_entry_by_txt(subject_name, "O", MBSTRING_ASC, reinterpret_cast<const unsigned char *>(org_.c_str()), -1, -1, 0) != 1) {
             throw std::runtime_error(SB() << "Failed to set org in certificate subject: " << name_);
         }
         log_debug_printf(certs, "Organization: %s\n", org_.c_str());
         if (!org_unit_.empty() &&
-            X509_NAME_add_entry_by_txt(subject_name, "OU", MBSTRING_ASC,
-                                       reinterpret_cast<const unsigned char *>(org_unit_.c_str()), -1, -1, 0) != 1) {
+            X509_NAME_add_entry_by_txt(subject_name, "OU", MBSTRING_ASC, reinterpret_cast<const unsigned char *>(org_unit_.c_str()), -1, -1, 0) != 1) {
             throw std::runtime_error(SB() << "Failed to set country in certificate subject: " << name_);
         }
         log_debug_printf(certs, "Organizational Unit: %s\n", org_unit_.c_str());
@@ -213,8 +209,8 @@ void CertFactory::setSubject(const ossl_ptr<X509> &certificate) {
  * @param certificate The certificate whose validity is to be set
  */
 void CertFactory::setValidity(const ossl_ptr<X509> &certificate) const {
-    ossl_ptr<ASN1_TIME> before(ASN1_TIME_adj(nullptr, not_before_, 0, -1));
-    ossl_ptr<ASN1_TIME> after(ASN1_TIME_adj(nullptr, not_after_, 0, 0));
+    auto before = StatusDate::toAsn1_Time(not_before_);
+    auto after = StatusDate::toAsn1_Time(not_after_);
 
     if (X509_set1_notBefore(certificate.get(), before.get()) != 1) {
         throw std::runtime_error("Failed to set validity start time in certificate.");
@@ -271,7 +267,7 @@ void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) {
     } else {
         usage = "digitalSignature";
     }
-    if ( !usage.empty()) {
+    if (!usage.empty()) {
         addExtension(certificate, NID_key_usage, usage.c_str());
     }
 
@@ -288,7 +284,7 @@ void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) {
     } else if (IS_USED_FOR_(usage_, ssl::kForCMS)) {
         extended_usage = "serverAuth,OCSPSigning";
     }
-    if ( !extended_usage.empty()) {
+    if (!extended_usage.empty()) {
         addExtension(certificate, NID_ext_key_usage, extended_usage.c_str());
     }
 }
@@ -494,8 +490,7 @@ void CertFactory::writeCertsToBio(const ossl_ptr<BIO> &bio, const STACK_OF(X509)
  * @param root_only Flag indicating whether only the root certificate should be
  * included.
  */
-void CertFactory::writeP12ToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<PKCS12> &p12, std::string password,
-                                const bool root_only) {
+void CertFactory::writeP12ToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<PKCS12> &p12, std::string password, const bool root_only) {
     ossl_ptr<STACK_OF(X509)> ca;
     ossl_ptr<X509> cert;
 
@@ -514,8 +509,7 @@ void CertFactory::writeP12ToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<PKCS12>
     }
 }
 
-std::string CertFactory::certAndP12ToPemString(const ossl_ptr<PKCS12> &p12, const ossl_ptr<X509> &new_cert,
-                                               std::string password) {
+std::string CertFactory::certAndP12ToPemString(const ossl_ptr<PKCS12> &p12, const ossl_ptr<X509> &new_cert, std::string password) {
     auto bio = newBio();
 
     // Write the newly created certificate and the PKCS12 certificates to the
@@ -569,18 +563,18 @@ void CertFactory::set_skid(ossl_ptr<X509> &certificate) {
     std::stringstream skid_ss;
 
     pos = X509_get_ext_by_NID(certificate.get(), NID_subject_key_identifier, pos);
-    X509_EXTENSION* ex = X509_get_ext(certificate.get(), pos);
+    X509_EXTENSION *ex = X509_get_ext(certificate.get(), pos);
 
-    ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING*>(X509V3_EXT_d2i(ex)));
+    ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING *>(X509V3_EXT_d2i(ex)));
 
-    if(skid != NULL) {
+    if (skid != NULL) {
         // Convert to hexadecimal string
-        for(int i = 0; i < skid->length; i++) {
+        for (int i = 0; i < skid->length; i++) {
             skid_ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(skid->data[i]);
         }
     }
 
-    skid_ =  skid_ss.str();
+    skid_ = skid_ss.str();
 }
 
 }  // namespace certs

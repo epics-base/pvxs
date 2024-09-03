@@ -246,8 +246,10 @@ struct CertCreator {
         // set valid time range
         {
             time_t now(time(nullptr));
-            pvxs::ossl_ptr<ASN1_TIME> before(ASN1_TIME_adj(nullptr, now, 0, -1));
-            pvxs::ossl_ptr<ASN1_TIME> after(ASN1_TIME_adj(nullptr, now, expire_days, 0));
+            pvxs::ossl_ptr<ASN1_TIME> before(ASN1_TIME_new());
+            ASN1_TIME_set(before.get(), now);
+            pvxs::ossl_ptr<ASN1_TIME> after(ASN1_TIME_new());
+            ASN1_TIME_set(after.get(), now+(expire_days*24*60*60));
             MUST(1, X509_set1_notBefore(cert.get(), before.get()));
             MUST(1, X509_set1_notAfter(cert.get(), after.get()));
         }

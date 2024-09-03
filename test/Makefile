@@ -125,6 +125,10 @@ TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp
 TESTS += testtls
 TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+
+TESTPROD_HOST += testtlstime
+testtlstime_SRCS += testtlstime.cpp
+TESTS += testtlstime
 endif # EVENT2_HAS_OPENSSL
 endif
 

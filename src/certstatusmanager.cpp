@@ -65,7 +65,7 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOSCPResponse(const shared_array<co
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
  * @param trusted_issuer_cert the certificate of a trusted CA to use to verify the signature of the response.
  */
-ParsedOCSPStatus CertStatusManager::parse(shared_array<const uint8_t> ocsp_bytes) {
+PVXS_API ParsedOCSPStatus CertStatusManager::parse(shared_array<const uint8_t> ocsp_bytes) {
     auto&& ocsp_response = getOSCPResponse(ocsp_bytes);
 
     // Get the response status
@@ -75,7 +75,7 @@ ParsedOCSPStatus CertStatusManager::parse(shared_array<const uint8_t> ocsp_bytes
     }
 
     // Extract the basic OCSP response
-    ossl_ptr<OCSP_BASICRESP> basic_response(OCSP_response_get1_basic(ocsp_response.get()));
+    ossl_ptr<OCSP_BASICRESP> basic_response(OCSP_response_get1_basic(ocsp_response.get()), false);
     if (!basic_response) {
         throw OCSPParseException("Failed to get basic OCSP response");
     }
@@ -90,15 +90,15 @@ ParsedOCSPStatus CertStatusManager::parse(shared_array<const uint8_t> ocsp_bytes
         throw OCSPParseException("No entries found in OCSP response");
     }
 
-    ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revoked_time = nullptr;
+    ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revocation_time = nullptr;
     int reason = 0;
 
-    auto ocsp_status = static_cast<ocspcertstatus_t>(OCSP_single_get0_status(single_response, &reason, &revoked_time, &this_update, &next_update));
+    auto ocsp_status = static_cast<ocspcertstatus_t>(OCSP_single_get0_status(single_response, &reason, &revocation_time, &this_update, &next_update));
 
     // Check status validity: less than 1 second old
     OCSP_check_validity(this_update, next_update, 0, 1);
 
-    return {OCSPCertStatus(ocsp_status), StatusDate(this_update), StatusDate(next_update), StatusDate(revoked_time)};
+    return {OCSPCertStatus(ocsp_status), this_update, next_update, revocation_time};
 }
 
 // Convert ASN1_INTEGER to a 64-bit unsigned integer
@@ -111,8 +111,16 @@ uint64_t CertStatusManager::ASN1ToUint64(ASN1_INTEGER* asn1_number) {
 }
 
 uint64_t CertStatusManager::getSerialNumber(const ossl_ptr<X509>& cert) {
+    return getSerialNumber(cert.get());
+}
+
+uint64_t CertStatusManager::getSerialNumber(X509 *cert) {
+    if ( !cert ) {
+        throw std::runtime_error("Can't get serial number: Null certificate");
+    }
+
     // Extract the serial number from the certificate
-    ASN1_INTEGER* serial_number_asn1 = X509_get_serialNumber(cert.get());
+    ASN1_INTEGER* serial_number_asn1 = X509_get_serialNumber(cert);
     if (!serial_number_asn1) {
         throw std::runtime_error("Failed to retrieve serial number from certificate");
     }
@@ -159,7 +167,6 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
 
 void CertStatusManager::unsubscribe() {
     client_->hurryUp();
-
     if (sub_)
         sub_->cancel();
     if ( client_ )
