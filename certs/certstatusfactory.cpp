@@ -43,9 +43,9 @@ namespace certs {
  */
 CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date, StatusDate predicated_revocation_time) const {
     // Create OCSP response
-    pvxs::ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
+    ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
-    // Set ASN1_TIME objects for revocationTime, thisUpdate, and nextUpdate using pvxs::ossl_ptr
+    // Set ASN1_TIME objects
     auto status_valid_until_time = StatusDate(status_date.t + cert_status_validity_mins_ * 60);
 
     auto this_update = status_date.toAsn1_Time();
@@ -73,7 +73,7 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
 
     // Add the status to the OCSP response
     if (!OCSP_basic_add1_status(basic_resp.get(), cert_id.get(), ocsp_status, 0, revocation_asn1_time.get(), this_update.get(), next_update.get())) {
-        throw std::runtime_error("Failed to add status to OCSP response");
+        throw std::runtime_error(SB() << "Failed to add status to OCSP response: " << getError());
     }
 
     // Adding the CA chain to the response
@@ -108,20 +108,13 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
  *
  * @see uint64FromASN1()
  */
-pvxs::ossl_ptr<ASN1_INTEGER> CertStatusFactory::uint64ToASN1(const uint64_t& serial) {
-    pvxs::ossl_ptr<ASN1_INTEGER> asn1_serial(ASN1_INTEGER_new());
-    if (!asn1_serial) {
+ossl_ptr<ASN1_INTEGER> CertStatusFactory::uint64ToASN1(const uint64_t& serial) {
+    ossl_ptr<ASN1_INTEGER> asn1_serial(ASN1_INTEGER_new(), false);
+    if (!asn1_serial)
         throw std::runtime_error(SB() << "Error converting serial number: " << serial);
-    }
-
-    // Convert uint64_t to a byte array
-    unsigned char serial_bytes[sizeof(uint64_t)];
-    for (size_t i = 0; i < sizeof(uint64_t); i++) {
-        serial_bytes[i] = (serial >> (8 * (sizeof(uint64_t) - 1 - i))) & 0xff;
-    }
 
     // Convert byte array to ASN1_INTEGER
-    ASN1_STRING_set(asn1_serial.get(), serial_bytes, sizeof(serial_bytes));
+    ASN1_INTEGER_set_uint64(asn1_serial.get(), serial);
     return asn1_serial;
 }
 
@@ -136,7 +129,7 @@ pvxs::ossl_ptr<ASN1_INTEGER> CertStatusFactory::uint64ToASN1(const uint64_t& ser
  *
  * @return The OCSP certificate ID.
  */
-pvxs::ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& serial, const EVP_MD* digest) const {
+ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& serial, const EVP_MD* digest) const {
     unsigned char issuer_name_hash[EVP_MAX_MD_SIZE];
     unsigned char issuer_key_hash[EVP_MAX_MD_SIZE];
 
@@ -147,17 +140,21 @@ pvxs::ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& 
 
     // Compute issuer_key_hash
     unsigned int issuer_key_hash_len = 0;
-    ASN1_BIT_STRING* pub_key_bit_string = X509_get0_pubkey_bitstr(ca_cert_.get());
+    ASN1_BIT_STRING* issuer_key = X509_get0_pubkey_bitstr(ca_cert_.get());
     pvxs::ossl_ptr<EVP_MD_CTX> mdctx(EVP_MD_CTX_new());
     EVP_DigestInit_ex(mdctx.get(), digest, nullptr);
-    EVP_DigestUpdate(mdctx.get(), pub_key_bit_string->data, pub_key_bit_string->length);
+    EVP_DigestUpdate(mdctx.get(), issuer_key->data, issuer_key->length);
     EVP_DigestFinal_ex(mdctx.get(), issuer_key_hash, &issuer_key_hash_len);
 
     // Convert uint64_t serial number to ASN1_INTEGER
-    pvxs::ossl_ptr<ASN1_INTEGER> asn1_serial = uint64ToASN1(serial);
+    ossl_ptr<ASN1_INTEGER> asn1_serial = uint64ToASN1(serial);
 
     // Create OCSP_CERTID
-    return pvxs::ossl_ptr<OCSP_CERTID>(OCSP_cert_id_new(digest, issuer_name, pub_key_bit_string, asn1_serial.get()));
+    auto cert_id = ossl_ptr<OCSP_CERTID>(OCSP_cert_id_new(digest, issuer_name, issuer_key, asn1_serial.get()), false);
+    if (!cert_id)
+        throw std::runtime_error(SB() << "Failed to create cert_id: " << getError());
+
+    return cert_id;
 }
 
 /**
@@ -168,9 +165,9 @@ pvxs::ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& 
  * @param basic_resp The OCSP response to be converted.
  * @return The sequence of bytes representing the OCSP response object.
  */
-std::vector<uint8_t> CertStatusFactory::ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp) {
+std::vector<uint8_t> CertStatusFactory::ocspResponseToBytes(const ossl_ptr<OCSP_BASICRESP>& basic_resp) {
     ossl_ptr<unsigned char> resp_der(nullptr, false);
-    pvxs::ossl_ptr<OCSP_RESPONSE> ocsp_resp(OCSP_response_create(OCSP_RESPONSE_STATUS_SUCCESSFUL, basic_resp.get()));
+    ossl_ptr<OCSP_RESPONSE> ocsp_resp(OCSP_response_create(OCSP_RESPONSE_STATUS_SUCCESSFUL, basic_resp.get()));
     int resp_len = i2d_OCSP_RESPONSE(ocsp_resp.get(), resp_der.acquire());
 
     std::vector<uint8_t> resp_bytes(resp_der.get(), resp_der.get() + resp_len);

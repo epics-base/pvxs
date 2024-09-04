@@ -101,6 +101,20 @@ class CertStatusFactory {
      * @return ASN1_INTEGER
      */
     static pvxs::ossl_ptr<ASN1_INTEGER> uint64ToASN1(const uint64_t& serial);
+
+    static inline std::string getError() {
+        unsigned long err;
+        std::string error_string;
+        std::string sep;
+        while ((err = ERR_get_error()))  // get all error codes from the error queue
+        {
+            char buffer[256];
+            ERR_error_string_n(err, buffer, sizeof(buffer));
+            error_string += sep + buffer;
+            sep = ", ";
+        }
+        return error_string;
+    }
 };
 
 }  // namespace certs
