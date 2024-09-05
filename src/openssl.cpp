@@ -32,6 +32,28 @@ DEFINE_LOGGER(_io, "pvxs.ossl.io");
 namespace pvxs {
 namespace ossl {
 
+int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
+    // note: no context pointer passed directly.  If needed see: man SSL_CTX_set_verify
+    if (!preverify_ok) {
+        //        X509_STORE_CTX_print_verify_cb(preverify_ok, x509_ctx);
+        auto err = X509_STORE_CTX_get_error(x509_ctx);
+
+        // TODO Remove Dev mode to ignore contexts with no chain &
+        // TODO Remove Dev mode to accept self signed certs as trusted
+        // If the error is that the certificate is self-signed, we accept it
+        if (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY ||err == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT || err == X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN) {
+            return 1; // Accept self-signed certificates
+        }
+
+        auto cert = X509_STORE_CTX_get_current_cert(x509_ctx);
+        log_err_printf(_io, "Unable to verify peer cert: %s : %s\n", X509_verify_cert_error_string(err), std::string(SB() << ShowX509{cert}).c_str());
+    }
+    if (preverify_ok) {  // cert passed initial inspection
+    }
+    log_printf(_io, preverify_ok ? Level::Debug : Level::Err, "TLS verify %s\n", preverify_ok ? "Ok" : "Reject");
+    return preverify_ok;
+}
+
 namespace {
 
 constexpr int ossl_verify_depth = 5;
@@ -112,20 +134,6 @@ void OSSLGbl_init() {
     }
 #endif  // PVXS_ENABLE_SSLKEYLOGFILE
     ossl_gbl = gbl.release();
-}
-
-int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
-    // note: no context pointer passed directly.  If needed see: man SSL_CTX_set_verify
-    if (!preverify_ok) {
-        //        X509_STORE_CTX_print_verify_cb(preverify_ok, x509_ctx);
-        auto err = X509_STORE_CTX_get_error(x509_ctx);
-        auto cert = X509_STORE_CTX_get_current_cert(x509_ctx);
-        log_err_printf(_io, "Unable to verify peer cert: %s : %s\n", X509_verify_cert_error_string(err), std::string(SB() << ShowX509{cert}).c_str());
-    }
-    if (preverify_ok) {  // cert passed initial inspection
-    }
-    log_printf(_io, preverify_ok ? Level::Debug : Level::Err, "TLS verify %s\n", preverify_ok ? "Ok" : "Reject");
-    return preverify_ok;
 }
 
 int ossl_alpn_select(SSL *, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *) {

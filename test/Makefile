@@ -8,9 +8,12 @@ include $(TOP)/configure/CONFIG
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
 
-# access to private headers
+# access to private headers and source
 USR_CPPFLAGS += -I$(TOP)/src
+USR_CPPFLAGS += -I$(TOP)/certs
 USR_CPPFLAGS += -I$(TOP)/ioc
+
+SRC_DIRS += $(TOP)/certs
 
 PROD_LIBS = pvxs Com
 
@@ -119,7 +122,8 @@ ifdef BASE_3_15
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 TESTPROD_HOST += gen_test_certs
-gen_test_certs += gen_test_certs.cpp
+gen_test_certs_SRCS += gen_test_certs.cpp
+gen_test_certs_SRCS += certfactory.cpp
 
 TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp
@@ -129,6 +133,12 @@ TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.
 TESTPROD_HOST += testtlstime
 testtlstime_SRCS += testtlstime.cpp
 TESTS += testtlstime
+
+TESTPROD_HOST += testtlsstatus
+testtlsstatus_SRCS += testtlsstatus.cpp
+testtlsstatus_SRCS += certstatusfactory.cpp
+TESTS += testtlsstatus
+
 endif # EVENT2_HAS_OPENSSL
 endif
 

@@ -334,11 +334,11 @@ void CertFactory::addExtension(const ossl_ptr<X509> &certificate, int nid, const
  * Add a string extension by NID to certificate.
  *
  */
-void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value) {
+void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value, const X509 *issuer_certificate_ptr) {
     char err_msg[256];
     X509V3_CTX context;
     X509V3_set_ctx_nodb(&context);
-    X509V3_set_ctx(&context, const_cast<X509 *>(issuer_certificate_ptr_), certificate.get(), nullptr, nullptr, 0);
+    X509V3_set_ctx(&context, const_cast<X509 *>(issuer_certificate_ptr), certificate.get(), nullptr, nullptr, 0);
 
     // Construct the string value using ASN1_STRING with IA5String type
     ossl_ptr<ASN1_IA5STRING> string_data(ASN1_IA5STRING_new());
@@ -369,6 +369,10 @@ void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int
     }
 
     log_debug_printf(certs, "Extension [%*d]: %-*s = \"%s\"\n", 3, nid, 32, nid2String(nid), value.c_str());
+}
+
+void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value) {
+    addCustomExtensionByNid(certificate, nid, value, issuer_certificate_ptr_);
 }
 
 /**

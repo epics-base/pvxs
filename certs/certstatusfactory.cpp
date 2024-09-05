@@ -130,6 +130,9 @@ ossl_ptr<ASN1_INTEGER> CertStatusFactory::uint64ToASN1(const uint64_t& serial) {
  * @return The OCSP certificate ID.
  */
 ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& serial, const EVP_MD* digest) const {
+    if (!ca_cert_)
+        throw std::runtime_error(SB() << "Can't create OCSP Cert ID: Null Certificate");
+
     unsigned char issuer_name_hash[EVP_MAX_MD_SIZE];
     unsigned char issuer_key_hash[EVP_MAX_MD_SIZE];
 

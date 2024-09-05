@@ -10,17 +10,9 @@
 #include <epicsUnitTest.h>
 #include <testMain.h>
 
-#include <openssl/conf.h>
 #include <openssl/crypto.h>
-#include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/ocsp.h>
-#include <openssl/pem.h>
 #include <openssl/pkcs12.h>
-#include <openssl/rsa.h>
-#include <openssl/ssl.h>
 #include <openssl/x509.h>
-#include <openssl/x509v3.h>
 
 #include <pvxs/unittest.h>
 #include <pvxs/log.h>
@@ -40,6 +32,7 @@ using namespace pvxs;
 #define REVOKED_SINCE_SECS (REVOKED_SINCE_MINS*60)
 
 #define CA_CERT_FILE "ca.p12"
+//#define CA_CERT_FILE "/Users/george/.epics/certs/ca.p12"
 #define CA_CERT_FILE_PWD ""
 #define SERVER_CERT_FILE "server1.p12"
 #define SERVER_CERT_FILE_PWD ""
@@ -142,21 +135,6 @@ struct Tester {
             return;
         }
         testShow()<<"Testing TLS Status Functions:\n";
-        auto ca_cert_status_creator(certs::CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
-        auto server_cert_status_creator(certs::CertStatusFactory(server_cert.cert, server_cert.pkey, server_cert.chain, STATUS_VALID_FOR_MINS));
-        auto client_cert_status_creator(certs::CertStatusFactory(client_cert.cert, client_cert.pkey, client_cert.chain, STATUS_VALID_FOR_MINS));
-
-        testDiag("Creating OCSP REVOKED status from: %s", "Client certificate");
-        client_cert_status = client_cert_status_creator.createOCSPStatus(3, certs::REVOKED, now, revocation_date);
-        testOk(1, "Created OCSP REVOKED status from: %s", "Client certificate");
-
-        testDiag("Creating OCSP PENDING status from: %s", "Server certificate");
-        server_cert_status = server_cert_status_creator.createOCSPStatus(1, certs::PENDING, now);
-        testOk(1, "Created OCSP PENDING status from: %s", "Server certificate");
-
-        testDiag("Creating OCSP VALID status from: %s", "CA certificate");
-        ca_cert_status = ca_cert_status_creator.createOCSPStatus(0, certs::VALID, now);
-        testOk(1, "Created OCSP VALID status from: %s", "CA certificate");
     }
 
     ~Tester() = default;
@@ -171,6 +149,82 @@ struct Tester {
     void ocspPayload()
     {
         testShow()<<__func__;
+        try {
+            auto ca_cert_status_creator(certs::CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
+            auto server_cert_status_creator(certs::CertStatusFactory(server_cert.cert, server_cert.pkey, server_cert.chain, STATUS_VALID_FOR_MINS));
+            auto client_cert_status_creator(certs::CertStatusFactory(client_cert.cert, client_cert.pkey, client_cert.chain, STATUS_VALID_FOR_MINS));
+
+            try {
+                testDiag("Creating OCSP REVOKED status from: %s", "Client certificate");
+                client_cert_status = client_cert_status_creator.createOCSPStatus(3, certs::REVOKED, now, revocation_date);
+                testOk(1, "Created OCSP REVOKED status from: %s", "Client certificate");
+            } catch (std::exception &e) {
+                testFail("Failed to create REVOKED status: %s\n", e.what());
+            }
+
+            try {
+                testDiag("Creating OCSP PENDING status from: %s", "Server certificate");
+                server_cert_status = server_cert_status_creator.createOCSPStatus(1, certs::PENDING, now);
+                testOk(1, "Created OCSP PENDING status from: %s", "Server certificate");
+            } catch (std::exception &e) {
+                testFail("Failed to create PENDING status: %s\n", e.what());
+            }
+            try {
+                testDiag("Creating OCSP VALID status from: %s", "CA certificate");
+                ca_cert_status = ca_cert_status_creator.createOCSPStatus(0, certs::VALID, now);
+                testOk(1, "Created OCSP VALID status from: %s", "CA certificate");
+            } catch (std::exception &e) {
+                testFail("Failed to create VALID status: %s\n", e.what());
+            }
+        } catch (std::exception &e) {
+            testFail("Failed to read certificate in from file: %s\n", e.what());
+        }
+
+    }
+
+    void parse()
+    {
+        testShow()<<__func__;
+        try {
+            testDiag("Parsing OCSP Response: %s", "Client certificate");
+            auto parsed_response = certs::CertStatusManager::parse(client_cert_status.ocsp_bytes);
+            testDiag("Parsed OCSP Response: %s", "Client certificate");
+
+            testEq(parsed_response.ocsp_status.i, certs::OCSP_CERTSTATUS_REVOKED);
+            testEq(parsed_response.status_date.t, now.t);
+            testEq(parsed_response.status_valid_until_date.t, status_valid_until_time.t);
+            testEq(parsed_response.revocation_date.t, revocation_date.t);
+        } catch (std::exception &e) {
+            testFail("Failed to parse Client OCSP response: %s", e.what());
+        }
+
+        testShow()<<__func__;
+        try {
+            testDiag("Parsing OCSP Response: %s", "Server certificate");
+            auto parsed_response = certs::CertStatusManager::parse(server_cert_status.ocsp_bytes);
+            testDiag("Parsed OCSP Response: %s", "Server certificate");
+
+            testEq(parsed_response.ocsp_status.i, certs::OCSP_CERTSTATUS_UNKNOWN);
+            testEq(parsed_response.status_date.t, now.t);
+            testEq(parsed_response.status_valid_until_date.t, status_valid_until_time.t);
+            testEq(parsed_response.revocation_date.t, 0);
+        } catch (std::exception &e) {
+            testFail("Failed to parse Server OCSP response: %s", e.what());
+        }
+
+        testShow()<<__func__;
+        try {
+            testDiag("Parsing OCSP Response: %s", "CA certificate");
+            auto parsed_response = certs::CertStatusManager::parse(ca_cert_status.ocsp_bytes);
+            testDiag("Parsed OCSP Response: %s", "CA certificate");
+
+            testEq(parsed_response.ocsp_status.i, certs::OCSP_CERTSTATUS_GOOD);
+            testEq(parsed_response.status_date.t, now.t);
+            testEq(parsed_response.status_valid_until_date.t, status_valid_until_time.t);
+            testEq(parsed_response.revocation_date.t, 0);
+        } catch (std::exception &e) {
+            testFail("Failed to parse CA OCSP response: %s", e.what());
+        }
     }
 
     void certificateStatus()
@@ -183,12 +237,14 @@ struct Tester {
 
 MAIN(testget)
 {
-    testPlan(56);
+    testPlan(32);
     testSetup();
     logger_config_env();
-    Tester().initialisation();
-    Tester().ocspPayload();
-    Tester().certificateStatus();
+    Tester tester;
+    tester.initialisation();
+    tester.ocspPayload();
+    tester.certificateStatus();
+    tester.parse();
     cleanup_for_valgrind();
     return testDone();
 }

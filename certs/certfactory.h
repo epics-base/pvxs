@@ -105,6 +105,7 @@ class PVXS_API CertFactory {
     }
 
     static std::string bioToString(const ossl_ptr<BIO> &bio);
+    static void addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value, const X509 *issuer_certificate_ptr);
 
   private:
     static inline const char *nid2String(int nid) {

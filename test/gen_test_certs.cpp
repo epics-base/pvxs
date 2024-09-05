@@ -12,6 +12,7 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
+#include <iomanip>
 
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
@@ -22,7 +23,12 @@
 
 #include <epicsGetopt.h>
 
+#include "p12filefactory.h"
+#include "certfactory.h"
 #include "ownedptr.h"
+#include "openssl.h"
+
+#define TEST_FIRST_SERIAL 9876543210
 
 namespace {
 
@@ -186,7 +192,7 @@ struct CertCreator {
     // expiration
     unsigned expire_days = 365*10;
     // cert. serial number
-    unsigned serial = 0;
+    uint64_t serial = 0;
     // extensions
     const char *key_usage = nullptr;
     const char *extended_key_usage = nullptr;
@@ -280,11 +286,16 @@ struct CertCreator {
         // RFC5280 mandates this for a CA cert.  (CA:TRUE)  Optional for others, but common
         add_extension(cert.get(), NID_basic_constraints, isCA ? "critical,CA:TRUE" : "CA:FALSE");
 
-        if(key_usage)
+        if (key_usage)
             add_extension(cert.get(), NID_key_usage, key_usage);
 
         if(extended_key_usage)
             add_extension(cert.get(), NID_ext_key_usage, extended_key_usage);
+
+        if (!isCA) {
+            auto issuerId = pvxs::certs::CertStatus::getIssuerId((X509*)issuer);
+            pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::SSLContext::NID_PvaCertStatusURI, pvxs::certs::CertStatus::makeStatusURI(issuerId, serial), issuer);
+        }
 
         auto nbytes(X509_sign(cert.get(), ikey, sig));
         if(nbytes==0)
@@ -308,6 +319,7 @@ void usage(const char* argv0) {
 int main(int argc, char *argv[])
 {
     try {
+        pvxs::ossl::SSLContext::sslInit();
         std::string outdir(".");
         {
             int opt;
@@ -337,7 +349,7 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        unsigned serial = 0;
+        uint64_t serial = TEST_FIRST_SERIAL;
 
         // The root certificate authority
         pvxs::ossl_ptr<X509> root_cert;
@@ -353,6 +365,7 @@ int main(int argc, char *argv[])
 
             PKCS12Writer p12(outdir);
             p12.friendlyName = cc.CN;
+            p12.key = root_key.get();
             MUST(1, sk_X509_push(p12.cacerts.get(), root_cert.get()));
             p12.write("ca.p12");
             // not saving rootCA key
