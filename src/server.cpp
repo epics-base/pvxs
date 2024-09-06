@@ -27,6 +27,7 @@
 #include <pvxs/sharedwildcardpv.h>
 
 #include "evhelper.h"
+#include "p12filewatcher.h"
 #include "serverconn.h"
 #include "udp_collector.h"
 #include "utilpvt.h"
@@ -54,19 +55,20 @@ Server Server::fromEnv()
     return Config::fromEnv().build();
 }
 #else
-static constexpr timeval statusIntervalShort{15, 0};
+static constexpr timeval statusIntervalInitial{15, 0};
+static constexpr timeval statusIntervalShort{5, 0};
 Server Server::fromEnv(const bool tls_disabled, const ConfigCommon::ConfigTarget target)
 {
     return Config::fromEnv(tls_disabled, target).build();
 }
 
-Server Server::fromEnv(StatusCallback &status_callback, const bool tls_disabled, const ConfigCommon::ConfigTarget target)
+Server Server::fromEnv(CertFileEventCallback &cert_file_event_callback, const bool tls_disabled, const ConfigCommon::ConfigTarget target)
 {
-    return Config::fromEnv(tls_disabled, target).build(status_callback);
+    return Config::fromEnv(tls_disabled, target).build(cert_file_event_callback);
 }
 
-Server::Server(const Config &conf, StatusCallback status_callback) {
-    auto internal(std::make_shared<Pvt>(conf, status_callback));
+Server::Server(const Config &conf, CertFileEventCallback cert_file_event_callback) {
+    auto internal(std::make_shared<Pvt>(conf, cert_file_event_callback));
     internal->internal_self = internal;
 
     // external
@@ -507,7 +509,7 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 #ifndef PVXS_ENABLE_OPENSSL
 Server::Pvt::Pvt(const Config &conf)
 #else
-Server::Pvt::Pvt(const Config& conf, StatusCallback status_callback)
+Server::Pvt::Pvt(const Config& conf, CertFileEventCallback cert_file_event_callback)
 //Server::Pvt::Pvt(const Config &conf, void (*status_callback)(evutil_socket_t fd, short evt, void *raw))
 #endif
     : effective(conf)
@@ -521,9 +523,9 @@ Server::Pvt::Pvt(const Config& conf, StatusCallback status_callback)
     , builtinsrc(StaticSource::build())
     , state(Stopped)
 #ifdef PVXS_ENABLE_OPENSSL
-    , status_callback(status_callback)
-    , status_timer(__FILE__, __LINE__,
-                   event_new(acceptor_loop.base, -1, EV_TIMEOUT, doStatusS, this))
+    , cert_file_event_callback(cert_file_event_callback)
+    , cert_file_event_timer(__FILE__, __LINE__,
+                            event_new(acceptor_loop.base, -1, EV_TIMEOUT, doCertFileEventhandler, this))
 #endif
 {
     effective.expand();
@@ -537,18 +539,6 @@ Server::Pvt::Pvt(const Config& conf, StatusCallback status_callback)
                 log_err_printf(serversetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
                 exit(1);
             } else {
-                log_err_printf(serversetup, "TLS disabled for server: %s\n", e.what());
-            }
-        }
-        try {
-//            watchTLSConfig(effective);
-        } catch (std::exception& e) {
-            if (effective.tls_stop_if_no_cert) {
-                log_err_printf(serversetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
-                exit(1);
-            } else {
-                // TODO reset to non SSL tls_context
-                // SSLContext::getBaseContext();
                 log_err_printf(serversetup, "TLS disabled for server: %s\n", e.what());
             }
         }
@@ -801,9 +791,8 @@ void Server::Pvt::start()
     // begin monitoring status
     acceptor_loop.call([this]()
     {
-        timeval immediate = {0,0};
-        // monitor first status immediately
-        if(event_add(status_timer.get(), &immediate))
+        // monitor first status with initial delay
+        if(event_add(cert_file_event_timer.get(), &statusIntervalInitial))
             log_err_printf(serversetup, "Error enabling monitor on\n%s", "");
 
         state = Running;
@@ -1027,21 +1016,78 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-void Server::Pvt::doStatusS(evutil_socket_t fd, short evt, void *raw) {
+void Server::Pvt::doCertFileEventhandler(evutil_socket_t fd, short evt, void *raw) {
     try {
         timeval interval(statusIntervalShort);
         auto pvt = static_cast<Pvt*>(raw);
-        pvt->status_callback(evt);
-        if(event_add(pvt->status_timer.get(), &interval))
-            log_err_printf(serversetup, "Error re-enabling status timer on\n%s", "");
+        // If a custom file event callback has been set then call it
+        auto run_default_file_event_callback = true;
+        if ( pvt->cert_file_event_callback) {
+            run_default_file_event_callback = pvt->cert_file_event_callback(evt);
+        }
+        // Running default file event callback can be disabled by custom callback returning false
+        if ( run_default_file_event_callback)
+            pvt->defaultCertFileEventCallback(evt);
+
+        // Re add the timer
+        if(event_add(pvt->cert_file_event_timer.get(), &interval))
+            log_err_printf(serversetup, "Error re-enabling cert file event timer on\n%s", "");
     }catch(std::exception& e){
-        log_exc_printf(serverio, "Unhandled error in status timer callback: %s\n", e.what());
+        log_exc_printf(serverio, "Unhandled error in cert file event timer callback: %s\n", e.what());
     }
 }
 
-// Default no-op status loop
-void Server::Pvt::doStatus(short evt) {
+/**
+ * @brief The default certificate file event callback
+ * @param evt
+ * @return false to signify that no more cert file callbacks must be called in this loop
+ */
+bool Server::Pvt::defaultCertFileEventCallback(short evt) {
+    if ( paths_to_watch.empty()) {
+        log_debug_printf(watcher, "File Watcher Event: %s\n", "Initializing");
+        // Initialize a vector of file paths to watch
+        paths_to_watch = {effective.tls_cert_filename, effective.tls_cert_password,
+                          effective.tls_private_key_filename, effective.tls_private_key_password};
 
+        // Initialize the last write times
+        last_write_times.resize(paths_to_watch.size(), 0);
+        for (size_t i = 0; i < paths_to_watch.size(); ++i) {
+            if (!paths_to_watch[i].empty()) {
+                try {
+                    last_write_times[i] =  certs::P12FileWatcher::getFileModificationTime(paths_to_watch[i]);
+                } catch (...) {
+                }
+            }
+        }
+        log_debug_printf(watcher, "File Watcher Event: %s\n", "Initialised");
+    }
+
+    log_debug_printf(watcher, "File Watcher Event: %s\n", "Wake up");
+    for (size_t i = 0; i < paths_to_watch.size(); ++i) {
+        if (!paths_to_watch[i].empty()) {
+            time_t current_write_time;
+            try {
+                current_write_time = certs::P12FileWatcher::getFileModificationTime(paths_to_watch[i]);
+            } catch (...) {
+                if (last_write_times[i] != 0) {
+                    log_debug_printf(watcher, "File Watcher: %s file was deleted\n", paths_to_watch[i].c_str());
+                    reconfigureContext(effective);
+                    paths_to_watch.clear();
+                    break;
+                }
+                continue;
+            }
+            if (current_write_time != last_write_times[i]) {
+                log_debug_printf(watcher, "File Watcher: %s file was updated\n", paths_to_watch[i].c_str());
+                reconfigureContext(effective);
+                paths_to_watch.clear();
+                break;
+            }
+        }
+    }
+    log_debug_printf(watcher, "File Watcher Event: %s\n", "Sleep");
+
+    return false;
 }
 
 X509 * Server::Pvt::getCert(ossl::SSLContext *context_ptr) {

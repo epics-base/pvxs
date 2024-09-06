@@ -228,7 +228,7 @@ certstatus_t storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
 
 void usage(const char *argv0);
 
-void statusMonitor(StatusMonitor &status_monitor_params);
+bool statusMonitor(StatusMonitor &status_monitor_params);
 
 Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const CertificateStatus &cert_status,
                             bool open_only = false);

@@ -67,7 +67,7 @@ struct Config;
  */
 
 #ifdef PVXS_ENABLE_OPENSSL
-using StatusCallback = std::function<void(short)>;
+using CertFileEventCallback = std::function<bool(short)>;
 #endif
 
 class PVXS_API Server
@@ -80,7 +80,7 @@ public:
     explicit Server(const Config&);
 
 #ifdef PVXS_ENABLE_OPENSSL
-    Server(const Config &config, StatusCallback status_callback);
+    Server(const Config &config, CertFileEventCallback cert_file_event_callback);
 #endif
     Server(const Server&) = default;
     Server(Server&& o) = default;
@@ -98,7 +98,7 @@ public:
     Server fromEnv();
 #else
     Server fromEnv(bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
-    Server fromEnv(StatusCallback &status_callback, bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
+    Server fromEnv(CertFileEventCallback &cert_file_event_callback, bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
 #endif // PVXS_ENABLE_OPENSSL
 
     //! Begin serving.  Does not block.
@@ -270,9 +270,9 @@ public:
         return Server(*this);
     }
 
-    //! Create a new Server using the current configuration.
-    inline Server build(StatusCallback &status_callback) const {
-        return Server(*this, status_callback);
+    //! Create a new Server using the current configuration with a custom file event callback
+    inline Server build(CertFileEventCallback &cert_file_event_callback) const {
+        return Server(*this, cert_file_event_callback);
     }
 
 #ifdef PVXS_EXPERT_API_ENABLED

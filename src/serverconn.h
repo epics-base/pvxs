@@ -255,8 +255,10 @@ struct Server::Pvt
     } state;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    StatusCallback status_callback;
-    evevent status_timer;
+    CertFileEventCallback cert_file_event_callback;
+    evevent cert_file_event_timer;
+    std::vector<std::string> paths_to_watch;
+    std::vector<time_t> last_write_times;
     ossl::SSLContext tls_context;
     std::atomic<bool> fw_stop_flag_{false};
     std::atomic<bool> sl_stop_flag_{false};
@@ -269,7 +271,7 @@ struct Server::Pvt
 #ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
 #else
-    Pvt(const Config& conf, StatusCallback status_callback = doStatus);
+    Pvt(const Config& conf, CertFileEventCallback cert_file_event_callback = nullptr);
 #endif
     ~Pvt();
 
@@ -287,8 +289,8 @@ private:
     void watchStatus(const Config& configuration);
     void statusListenerCallback(const Config &new_config, X509 *ctx_cert);
     Server reconfigureContext(const Config& configuration);
-    static void doStatusS(evutil_socket_t fd, short evt, void *raw);
-    static void doStatus(short evt);
+    static void doCertFileEventhandler(evutil_socket_t fd, short evt, void *raw);
+    bool defaultCertFileEventCallback(short evt);
 #else
     static inline void doStatus(evutil_socket_t fd, short evt, void *raw) { }
 #endif

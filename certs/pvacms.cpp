@@ -1471,7 +1471,7 @@ std::string getCertId(const std::string &issuer_id, const uint64_t &serial) {
     return cert_id;
 }
 
-void statusMonitor(StatusMonitor &status_monitor_params) {
+bool statusMonitor(StatusMonitor &status_monitor_params) {
     log_debug_printf(pvacmsmonitor, "Certificate Monitor Thread Wake Up%s", "\n");
     auto cert_status_creator(CertStatusFactory(status_monitor_params.ca_cert_, status_monitor_params.ca_pkey_, status_monitor_params.ca_chain_,
                                                status_monitor_params.config_.cert_status_validity_mins));
@@ -1531,6 +1531,7 @@ void statusMonitor(StatusMonitor &status_monitor_params) {
     }
 
     log_debug_printf(pvacmsmonitor, "Certificate Monitor Thread Sleep%s", "\n");
+    return true; // We're not done - check files too
 }
 
 }  // namespace certs
@@ -1626,9 +1627,10 @@ int main(int argc, char *argv[]) {
 
         StatusMonitor status_monitor_params(config, ca_db, our_issuer_id, status_pv, ca_cert, ca_pkey, ca_chain);
 
-        // Create a server with a certificate monitoring function
+        // Create a server with a certificate monitoring function attached to the cert file monitor timer
+        // Return true to indicate that we want the file monitor time to run after this
         Server pva_server = Server(config, [&status_monitor_params](short evt) {
-            statusMonitor(status_monitor_params);
+            return statusMonitor(status_monitor_params);
         });
 
         pva_server.addPV(RPC_CERT_CREATE, create_pv).addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);

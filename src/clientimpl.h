@@ -387,9 +387,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     void reconfigureContext(const ossl::SSLContext &context);
-    void watchTLSConfig(const Config &new_config);
     X509 * getCert(ossl::SSLContext *context = nullptr);
-    void watchFiles(const Config &new_config);
     void watchStatus(const Config &new_config);
     void statusListenerCallback(const Config &new_config, X509 *ctx_cert);
 #endif
