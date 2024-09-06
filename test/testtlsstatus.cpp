@@ -14,25 +14,25 @@
 #include <openssl/pkcs12.h>
 #include <openssl/x509.h>
 
-#include <pvxs/unittest.h>
 #include <pvxs/log.h>
+#include <pvxs/unittest.h>
 
 #include "certfactory.h"
 #include "certstatus.h"
+#include "certstatusfactory.h"
 #include "certstatusmanager.h"
 #include "ownedptr.h"
-#include "certstatusfactory.h"
 
 namespace {
 using namespace pvxs;
 
 #define STATUS_VALID_FOR_MINS 30
-#define STATUS_VALID_FOR_SECS (STATUS_VALID_FOR_MINS*60)
-#define REVOKED_SINCE_MINS (60*12)
-#define REVOKED_SINCE_SECS (REVOKED_SINCE_MINS*60)
+#define STATUS_VALID_FOR_SECS (STATUS_VALID_FOR_MINS * 60)
+#define REVOKED_SINCE_MINS (60 * 12)
+#define REVOKED_SINCE_SECS (REVOKED_SINCE_MINS * 60)
 
 #define CA_CERT_FILE "ca.p12"
-//#define CA_CERT_FILE "/Users/george/.epics/certs/ca.p12"
+// #define CA_CERT_FILE "/Users/george/.epics/certs/ca.p12"
 #define CA_CERT_FILE_PWD ""
 #define SERVER_CERT_FILE "server1.p12"
 #define SERVER_CERT_FILE_PWD ""
@@ -44,11 +44,8 @@ struct TestCert {
     ossl_shared_ptr<STACK_OF(X509)> chain;
     ossl_ptr<EVP_PKEY> pkey;
 
-    TestCert(ossl_ptr<X509> cert,
-             ossl_shared_ptr<stack_st_X509> chain,
-             ossl_ptr<EVP_PKEY> pkey)
-      : cert(std::move(cert)), chain(std::move(chain)), pkey(std::move(pkey)) {
-    }
+    TestCert(ossl_ptr<X509> cert, ossl_shared_ptr<stack_st_X509> chain, ossl_ptr<EVP_PKEY> pkey)
+        : cert(std::move(cert)), chain(std::move(chain)), pkey(std::move(pkey)) {}
 };
 
 TestCert getTestCerts(std::string filename, std::string password) {
@@ -82,7 +79,7 @@ TestCert getTestCerts(std::string filename, std::string password) {
     testTrue(cert.get());
     testTrue(pkey.get());
 
-    if ( !cert || !pkey) {
+    if (!cert || !pkey) {
         testFail("Error loading certificate: %s", filename.c_str());
         return TestCert(nullptr, nullptr, nullptr);
     }
@@ -100,7 +97,7 @@ TestCert getTestCerts(std::string filename, std::string password) {
         testEq(sk_X509_num(chain.get()), 2);
 
     // Test issuer load
-    X509_NAME* subject_name = X509_get_subject_name(cert.get());
+    X509_NAME *subject_name = X509_get_subject_name(cert.get());
     ossl_ptr<char> name(X509_NAME_oneline(subject_name, nullptr, 0), false);
     testTrue(name.get());
     testDiag("Subject of %s: %s", filename.c_str(), name.get());
@@ -108,7 +105,6 @@ TestCert getTestCerts(std::string filename, std::string password) {
     testOk(1, "Loaded certificate from: %s", filename.c_str());
     return TestCert(std::move(cert), std::move(chain), std::move(pkey));
 }
-
 
 struct Tester {
     // Pristine values
@@ -123,32 +119,29 @@ struct Tester {
     certs::CertificateStatus client_cert_status;
 
     Tester()
-    : now(time(nullptr)), status_valid_until_time(now.t + STATUS_VALID_FOR_SECS), revocation_date(now.t - REVOKED_SINCE_SECS),
-      ca_cert(getTestCerts(CA_CERT_FILE, CA_CERT_FILE_PWD)),
-      server_cert(getTestCerts(SERVER_CERT_FILE, SERVER_CERT_FILE_PWD)),
-      client_cert(getTestCerts(CLIENT_CERT_FILE, CLIENT_CERT_FILE_PWD))
-    {
-        if ( !ca_cert.cert || !ca_cert.pkey ||
-          !server_cert.cert || !server_cert.pkey ||
-          !client_cert.cert || !client_cert.pkey ) {
+        : now(time(nullptr)),
+          status_valid_until_time(now.t + STATUS_VALID_FOR_SECS),
+          revocation_date(now.t - REVOKED_SINCE_SECS),
+          ca_cert(getTestCerts(CA_CERT_FILE, CA_CERT_FILE_PWD)),
+          server_cert(getTestCerts(SERVER_CERT_FILE, SERVER_CERT_FILE_PWD)),
+          client_cert(getTestCerts(CLIENT_CERT_FILE, CLIENT_CERT_FILE_PWD)) {
+        if (!ca_cert.cert || !ca_cert.pkey || !server_cert.cert || !server_cert.pkey || !client_cert.cert || !client_cert.pkey) {
             testFail("Error loading one or more certificates");
             return;
         }
-        testShow()<<"Testing TLS Status Functions:\n";
+        testShow() << "Testing TLS Status Functions:\n";
     }
 
     ~Tester() = default;
 
-    void initialisation()
-    {
-        testShow()<<__func__;
-        testEq(now.t, status_valid_until_time.t-STATUS_VALID_FOR_SECS);
-        testEq(now.t, revocation_date.t+REVOKED_SINCE_SECS);
+    void initialisation() {
+        testShow() << __func__;
+        testEq(now.t, status_valid_until_time.t - STATUS_VALID_FOR_SECS);
+        testEq(now.t, revocation_date.t + REVOKED_SINCE_SECS);
     }
 
-    void ocspPayload()
-    {
-        testShow()<<__func__;
+    void ocspPayload() {
+        testShow() << __func__;
         try {
             auto ca_cert_status_creator(certs::CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
             auto server_cert_status_creator(certs::CertStatusFactory(server_cert.cert, server_cert.pkey, server_cert.chain, STATUS_VALID_FOR_MINS));
@@ -179,12 +172,10 @@ struct Tester {
         } catch (std::exception &e) {
             testFail("Failed to read certificate in from file: %s\n", e.what());
         }
-
     }
 
-    void parse()
-    {
-        testShow()<<__func__;
+    void parse() {
+        testShow() << __func__;
         try {
             testDiag("Parsing OCSP Response: %s", "Client certificate");
             auto parsed_response = certs::CertStatusManager::parse(client_cert_status.ocsp_bytes);
@@ -198,7 +189,7 @@ struct Tester {
             testFail("Failed to parse Client OCSP response: %s", e.what());
         }
 
-        testShow()<<__func__;
+        testShow() << __func__;
         try {
             testDiag("Parsing OCSP Response: %s", "Server certificate");
             auto parsed_response = certs::CertStatusManager::parse(server_cert_status.ocsp_bytes);
@@ -212,7 +203,7 @@ struct Tester {
             testFail("Failed to parse Server OCSP response: %s", e.what());
         }
 
-        testShow()<<__func__;
+        testShow() << __func__;
         try {
             testDiag("Parsing OCSP Response: %s", "CA certificate");
             auto parsed_response = certs::CertStatusManager::parse(ca_cert_status.ocsp_bytes);
@@ -227,16 +218,12 @@ struct Tester {
         }
     }
 
-    void certificateStatus()
-    {
-        testShow()<<__func__;
-    }
+    void certificateStatus() { testShow() << __func__; }
 };
 
-} // namespace
+}  // namespace
 
-MAIN(testget)
-{
+MAIN(testget) {
     testPlan(32);
     testSetup();
     logger_config_env();

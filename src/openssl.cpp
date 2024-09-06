@@ -23,7 +23,7 @@
 #include "utilpvt.h"
 
 #ifndef TLS1_3_VERSION
-#  error TLS 1.3 support required.  Upgrade to openssl >= 1.1.0
+#error TLS 1.3 support required.  Upgrade to openssl >= 1.1.0
 #endif
 
 DEFINE_LOGGER(_setup, "pvxs.ossl.setup");
@@ -41,8 +41,9 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
         // TODO Remove Dev mode to ignore contexts with no chain &
         // TODO Remove Dev mode to accept self signed certs as trusted
         // If the error is that the certificate is self-signed, we accept it
-        if (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY ||err == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT || err == X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN) {
-            return 1; // Accept self-signed certificates
+        if (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY || err == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT ||
+            err == X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN) {
+            return 1;  // Accept self-signed certificates
         }
 
         auto cert = X509_STORE_CTX_get_current_cert(x509_ctx);
@@ -339,7 +340,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
                 // If this is a client then continue without cert
                 return ctx;
 
-            ossl_ptr<EVP_PKEY> pkey; // to discard
+            ossl_ptr<EVP_PKEY> pkey;  // to discard
             if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), cert.acquire(), CAs.acquire()))
                 throw SSLError(SB() << "Unable to process \"" << filename << "\"");
         }
@@ -452,11 +453,6 @@ bool SSLContext::fill_credentials(PeerCredentials &C, const SSL *ctx) {
     } else {
         return false;
     }
-}
-
-void SSLContext::unWatchCertificate() {
-    fw_stop_flag_.store(true);    // Stop file watchers if any are running
-    sl_stop_flag_.store(true);    // Stop status listeners if any are running
 }
 
 SSLContext SSLContext::for_client(const impl::ConfigCommon &conf) {

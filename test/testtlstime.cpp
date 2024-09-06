@@ -10,15 +10,15 @@
 #include <epicsUnitTest.h>
 #include <testMain.h>
 
-#include <pvxs/unittest.h>
 #include <pvxs/log.h>
+#include <pvxs/unittest.h>
 
 #include "certstatus.h"
 
 namespace {
 using namespace pvxs;
 
-#define ONE_DAY_OF_SECONDS (60*60*24)
+#define ONE_DAY_OF_SECONDS (60 * 60 * 24)
 
 struct Tester {
     // Pristine values
@@ -32,35 +32,35 @@ struct Tester {
     const certs::StatusDate date_future;
 
     Tester()
-    : now(time(nullptr)), future(now + ONE_DAY_OF_SECONDS),
-      now_string(((certs::StatusDate)now).s), future_string(certs::StatusDate(future).s),
-      date_now(now), date_future(future) {
-        testShow()<<"Testing TLS Date Functions:\n";
+        : now(time(nullptr)),
+          future(now + ONE_DAY_OF_SECONDS),
+          now_string(((certs::StatusDate)now).s),
+          future_string(certs::StatusDate(future).s),
+          date_now(now),
+          date_future(future) {
+        testShow() << "Testing TLS Date Functions:\n";
     }
 
     ~Tester() = default;
 
-    void initialisation()
-    {
-        testShow()<<__func__;
+    void initialisation() {
+        testShow() << __func__;
         testEq(now, date_now.t);
         testEq(future, date_future.t);
         testEq(now_string, date_now.s);
         testEq(future_string, date_future.s);
     }
 
-    void conversion()
-    {
-        testShow()<<__func__;
+    void conversion() {
+        testShow() << __func__;
         testEq(now, ((certs::StatusDate)date_now.s).t);
         testEq(future, ((certs::StatusDate)date_future.s).t);
         testEq(now_string, certs::StatusDate(date_now.t).s);
         testEq(future_string, certs::StatusDate(date_future.t).s);
     }
 
-    void asn1_time()
-    {
-        testShow()<<__func__;
+    void asn1_time() {
+        testShow() << __func__;
         ossl_ptr<ASN1_TIME> now_asn1(ASN1_TIME_new());
         ASN1_TIME_set(now_asn1.get(), now);
         ossl_ptr<ASN1_TIME> future_asn1(ASN1_TIME_new());
@@ -74,10 +74,9 @@ struct Tester {
     }
 };
 
-} // namespace
+}  // namespace
 
-MAIN(testget)
-{
+MAIN(testget) {
     testPlan(12);
     testSetup();
     logger_config_env();

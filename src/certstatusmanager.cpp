@@ -110,12 +110,10 @@ uint64_t CertStatusManager::ASN1ToUint64(ASN1_INTEGER* asn1_number) {
     return uint64_number;
 }
 
-uint64_t CertStatusManager::getSerialNumber(const ossl_ptr<X509>& cert) {
-    return getSerialNumber(cert.get());
-}
+uint64_t CertStatusManager::getSerialNumber(const ossl_ptr<X509>& cert) { return getSerialNumber(cert.get()); }
 
-uint64_t CertStatusManager::getSerialNumber(X509 *cert) {
-    if ( !cert ) {
+uint64_t CertStatusManager::getSerialNumber(X509* cert) {
+    if (!cert) {
         throw std::runtime_error("Can't get serial number: Null certificate");
     }
 
@@ -129,7 +127,7 @@ uint64_t CertStatusManager::getSerialNumber(X509 *cert) {
     return ASN1ToUint64(serial_number_asn1);
 }
 
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X509>&& cert, StatusCallback&& callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X509>&& cert, std::atomic<bool>& stop_flag, StatusCallback&& callback) {
     // Construct the URI
     auto uri = CertStatusManager::getStatusPvFromCert(cert);
 
@@ -144,17 +142,24 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
         sub = client->monitor(uri)
                   .maskConnected(true)
                   .maskDisconnected(true)
-                  .event([callback_ptr](client::Subscription& sub) {
+                  .event([callback_ptr, &stop_flag](client::Subscription& sub) {
                       try {
-                          auto value = sub.pop();
-                          if (!value) {
-                              (*callback_ptr)({});
-                          } else {
-                              (*callback_ptr)((CertificateStatus)value);
+                          auto update = sub.pop();
+                          if (update) {
+                              //                              std::cout <<  update  << std::endl;
+                              (*callback_ptr)((CertificateStatus)update);
                           }
-                      } catch (const std::exception& e) {
-                          log_warn_printf(status, "Error parsing certificate status: %s\n", e.what());
-                          (*callback_ptr)({});
+                      } catch (client::Finished& conn) {
+                          log_debug_printf(status, "Subscription Finished: %s\n", conn.what());
+                          stop_flag = true;
+                      } catch (client::Connected& conn) {
+                          log_debug_printf(status, "Connected Subscription: %s\n", conn.peerName.c_str());
+                          stop_flag = true;
+                      } catch (client::Disconnect& conn) {
+                          log_debug_printf(status, "Disconnected Subscription: %s\n", conn.what());
+                          stop_flag = true;
+                      } catch (std::exception& e) {
+                          log_err_printf(status, "Error Getting Subscription: %s\n", e.what());
                       }
                   })
                   .exec();
@@ -167,10 +172,8 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
 
 void CertStatusManager::unsubscribe() {
     client_->hurryUp();
-    if (sub_)
-        sub_->cancel();
-    if ( client_ )
-        client_->close();
+    if (sub_) sub_->cancel();
+    if (client_) client_->close();
 }
 
 CertificateStatus CertStatusManager::getStatus() { return getStatus(cert_); }
@@ -218,7 +221,7 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
 
     // get ca_chain
     auto const_ca_chain_ptr = OCSP_resp_get0_certs(basic_response.get());
-    ossl_ptr<STACK_OF(X509)> ca_chain(sk_X509_dup(const_ca_chain_ptr)); // remove const-ness
+    ossl_ptr<STACK_OF(X509)> ca_chain(sk_X509_dup(const_ca_chain_ptr));  // remove const-ness
 
     // Create a new X509_STORE and add the issuer certificate
     ossl_ptr<X509_STORE> store(X509_STORE_new());

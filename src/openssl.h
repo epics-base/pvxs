@@ -60,6 +60,8 @@ constexpr uint16_t kAnyServer = kForCMS | kForServer;
 struct PeerCredentials;
 namespace ossl {
 
+PVXS_API int ossl_verify(int preverify_ok, X509_STORE_CTX* x509_ctx);
+
 struct SSLError : public std::runtime_error {
     explicit SSLError(const std::string& msg);
     virtual ~SSLError();
@@ -124,16 +126,9 @@ struct SSLContext {
 
     bool have_certificate() const;
     const X509* certificate0() const;
-    std::atomic<bool> fw_stop_flag_{false};
-    std::atomic<bool> sl_stop_flag_{false};
     static PVXS_API int NID_PvaCertStatusURI;
-    std::shared_ptr<certs::P12FileWatcher> client_file_watcher_;
-    std::shared_ptr<certs::StatusListener> client_status_listener_;
-    std::shared_ptr<certs::P12FileWatcher> server_file_watcher_;
-    std::shared_ptr<certs::StatusListener> server_status_listener_;
 
     static bool fill_credentials(PeerCredentials& cred, const SSL* ctx);
-    void unWatchCertificate();
 };
 
 }  // namespace ossl

@@ -25,6 +25,8 @@
 #include <pvxs/util.h>
 #include <pvxs/version.h>
 
+#include "evhelper.h"
+
 #ifdef PVXS_ENABLE_OPENSSL
 #include "openssl.h"
 #endif
@@ -64,6 +66,9 @@ struct Config;
  * used by the pvlist CLI.
  */
 
+#ifdef PVXS_ENABLE_OPENSSL
+using StatusCallback = std::function<void(short)>;
+#endif
 
 class PVXS_API Server
 {
@@ -73,6 +78,10 @@ public:
     constexpr Server() = default;
     //! Create/allocate, but do not start, a new server with the provided config.
     explicit Server(const Config&);
+
+#ifdef PVXS_ENABLE_OPENSSL
+    Server(const Config &config, StatusCallback status_callback);
+#endif
     Server(const Server&) = default;
     Server(Server&& o) = default;
     Server& operator=(const Server&) = default;
@@ -89,6 +98,7 @@ public:
     Server fromEnv();
 #else
     Server fromEnv(bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
+    Server fromEnv(StatusCallback &status_callback, bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
 #endif // PVXS_ENABLE_OPENSSL
 
     //! Begin serving.  Does not block.
@@ -258,6 +268,11 @@ public:
     //! Create a new Server using the current configuration.
     inline Server build() const {
         return Server(*this);
+    }
+
+    //! Create a new Server using the current configuration.
+    inline Server build(StatusCallback &status_callback) const {
+        return Server(*this, status_callback);
     }
 
 #ifdef PVXS_EXPERT_API_ENABLED

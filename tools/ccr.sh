@@ -30,11 +30,11 @@ CHAIN_FILE="$HOME/.epics/keys/${target}_chain.pem"
 P12_FILE="$HOME/.epics/certs/${target}.p12"
 
 now=$(date +%s)
-not_before=$((now + 0))
-not_after=$((now + 86400))
+#not_before=$((now + 0))
+#not_after=$((now + 86400))
 
-#not_before=$((now + 60))
-#not_after=$((now + 90))
+not_before=$((now + 60))
+not_after=$((now + 90))
 
 # Check if the P12 key file exists to determine if keys need to be generated
 if [ ! -f "$P12_KEY_FILE" ]; then

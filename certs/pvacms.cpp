@@ -68,6 +68,7 @@
 #include "utilpvt.h"
 
 DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
+DEFINE_LOGGER(pvacmsmonitor, "pvxs.certs.cms.monitor");
 DEFINE_LOGGER(pvafms, "pvxs.certs.fms");
 
 namespace pvxs {
@@ -377,6 +378,7 @@ void bindValidStatusClauses(sqlite3_stmt *sql_statement, const std::vector<certs
  *
  * @return None
  */
+epicsMutex status_update_lock;
 void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_status, const std::vector<certstatus_t> valid_status) {
     int64_t db_serial = *reinterpret_cast<int64_t *>(&serial);
     sqlite3_stmt *sql_statement;
@@ -384,6 +386,7 @@ void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_
     std::string sql(SQL_CERT_SET_STATUS);
     sql += getValidStatusesClause(valid_status);
 
+    Guard G(status_update_lock);
     if ((sql_status = sqlite3_prepare_v2(ca_db.get(), sql.c_str(), -1, &sql_statement, 0)) == SQLITE_OK) {
         sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), cert_status);
         sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":serial"), db_serial);
@@ -744,10 +747,8 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
                  const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(CertStatus::getStatusPrototype());
     uint64_t serial = 0;
-    epicsMutex lock;
     static auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
-        Guard G(lock);
         std::string issuer_id;
         std::tie(issuer_id, serial) = getParameters(parameters);
         log_debug_printf(pvacms, "GET STATUS: Certificate %s:%llu\n", issuer_id.c_str(), serial);
@@ -792,10 +793,8 @@ void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_i
               const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
               const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(CertStatus::getStatusPrototype());
-    epicsMutex lock;
     static auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
-        Guard G(lock);
         std::string issuer_id;
         uint64_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
@@ -838,10 +837,8 @@ void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_
                const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(CertStatus::getStatusPrototype());
-    epicsMutex lock;
     static auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
-        Guard G(lock);
         std::string issuer_id;
         uint64_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
@@ -899,10 +896,8 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
             const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
             const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(CertStatus::getStatusPrototype());
-    epicsMutex lock;
     static auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
-        Guard G(lock);
         std::string issuer_id;
         uint64_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
@@ -1351,8 +1346,10 @@ void setValue(Value &target, const std::string &field, const T &source) {
  * @param cert_status The status of the certificate (UNKNOWN, VALID, EXPIRED, REVOKED, PENDING_APPROVAL, PENDING).
  * @param open_only Specifies whether to close the shared wildcard PV again after setting the status if it was closed to begin with.
  */
+epicsMutex status_pv_lock;
 Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const CertificateStatus &cert_status,
                             bool open_only) {
+    Guard G(status_pv_lock);
     Value status_value;
     if (status_pv.isOpen(pv_name)) {
         status_value = status_pv.fetch(pv_name);
@@ -1401,6 +1398,7 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
  */
 void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op, const std::string &our_issuer_id,
                                 const uint64_t &serial, const int32_t error_status, const int32_t error_severity, const std::string &error_message) {
+    Guard G(status_pv_lock);
     std::string pv_name = getCertUri(GET_MONITOR_CERT_STATUS_ROOT, our_issuer_id, serial);
     Value status_value;
     if (status_pv.isOpen(pv_name)) {
@@ -1473,85 +1471,66 @@ std::string getCertId(const std::string &issuer_id, const uint64_t &serial) {
     return cert_id;
 }
 
-void certificateStatusSetup(void *raw) {
-    auto *monitor = static_cast<StatusMonitor *>(raw);
-    certificateStatusMonitor(monitor->stop_flag_, monitor->config_, monitor->ca_db_, monitor->issuer_id_, monitor->status_pv_, monitor->ca_cert_,
-                             monitor->ca_pkey_, monitor->ca_chain_);
-}
+void statusMonitor(StatusMonitor &status_monitor_params) {
+    log_debug_printf(pvacmsmonitor, "Certificate Monitor Thread Wake Up%s", "\n");
+    auto cert_status_creator(CertStatusFactory(status_monitor_params.ca_cert_, status_monitor_params.ca_pkey_, status_monitor_params.ca_chain_,
+                                               status_monitor_params.config_.cert_status_validity_mins));
+    sqlite3_stmt *stmt;
 
-void certificateStatusMonitor(std::atomic<bool> &stop, ConfigCms &config, sql_ptr &ca_db, std::string &issuer_id, server::SharedWildcardPV &status_pv,
-                              pvxs::ossl_ptr<X509> &ca_cert, pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    log_info_printf(pvacms, "Certificate Monitor Thread Started%s", "\n");
+    // Search for any certs that have become valid
+    std::string valid_sql(SQL_CERT_TO_VALID);
+    const std::vector<certstatus_t> valid_status{PENDING};
+    valid_sql += getValidStatusesClause(valid_status);
+    if (sqlite3_prepare_v2(status_monitor_params.ca_db_.get(), valid_sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        bindValidStatusClauses(stmt, valid_status);
 
-    epicsMutex lock;
-    auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
-
-    while (!stop.load()) {  // Check stop flag
-        Guard G(lock);
-        sqlite3_stmt *stmt;
-
-        // Search for all certs that have become valid
-        std::string valid_sql(SQL_CERT_TO_VALID);
-        const std::vector<certstatus_t> valid_status{PENDING};
-        valid_sql += getValidStatusesClause(valid_status);
-        if (sqlite3_prepare_v2(ca_db.get(), valid_sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-            bindValidStatusClauses(stmt, valid_status);
-
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                if (stop.load()) break;  // Check stop flag inside long loops
-                int64_t db_serial = sqlite3_column_int64(stmt, 0);
-                uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
-                try {
-                    const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, issuer_id, serial));
-                    updateCertificateStatus(ca_db, serial, VALID, {PENDING});
-                    auto status_date = std::time(nullptr);
-                    auto cert_status = cert_status_creator.createOCSPStatus(serial, VALID, status_date);
-                    postCertificateStatus(status_pv, pv_name, serial, cert_status);
-                    log_info_printf(pvacms, "Certificate %s:%llu has become VALID\n", issuer_id.c_str(), serial);
-                } catch (const std::runtime_error &e) {
-                    log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", e.what());
-                }
+        // Do one then reschedule the rest
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            int64_t db_serial = sqlite3_column_int64(stmt, 0);
+            uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
+            try {
+                const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, status_monitor_params.issuer_id_, serial));
+                updateCertificateStatus(status_monitor_params.ca_db_, serial, VALID, {PENDING});
+                auto status_date = std::time(nullptr);
+                auto cert_status = cert_status_creator.createOCSPStatus(serial, VALID, status_date);
+                postCertificateStatus(status_monitor_params.status_pv_, pv_name, serial, cert_status);
+                log_info_printf(pvacmsmonitor, "Certificate %s:%llu has become VALID\n", status_monitor_params.issuer_id_.c_str(), serial);
+            } catch (const std::runtime_error &e) {
+                log_err_printf(pvacmsmonitor, "PVACMS Certificate Monitor Error: %s\n", e.what());
             }
-            sqlite3_finalize(stmt);
-        } else {
-            log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", sqlite3_errmsg(ca_db.get()));
         }
-
-        // Search for all certs that have expired
-        std::string expired_sql(SQL_CERT_TO_EXPIRED);
-        const std::vector<certstatus_t> expired_status{VALID, PENDING_APPROVAL, PENDING};
-        expired_sql += getValidStatusesClause(expired_status);
-        if (sqlite3_prepare_v2(ca_db.get(), expired_sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-            bindValidStatusClauses(stmt, expired_status);
-
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                if (stop.load()) break;  // Check stop flag inside long loops
-                int64_t db_serial = sqlite3_column_int64(stmt, 0);
-                uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
-                try {
-                    const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, issuer_id, serial));
-                    updateCertificateStatus(ca_db, serial, EXPIRED, {VALID, PENDING_APPROVAL, PENDING});
-                    auto status_date = std::time(nullptr);
-                    auto cert_status = cert_status_creator.createOCSPStatus(serial, EXPIRED, status_date);
-                    postCertificateStatus(status_pv, pv_name, serial, cert_status);
-                    log_info_printf(pvacms, "Certificate %s:%llu has EXPIRED\n", issuer_id.c_str(), serial);
-                } catch (const std::runtime_error &e) {
-                    log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", e.what());
-                }
-            }
-            sqlite3_finalize(stmt);
-        } else {
-            log_err_printf(pvacms, "PVACMS Certificate Monitor Error: %s\n", sqlite3_errmsg(ca_db.get()));
-        }
-
-        UnGuard U(G);
-
-        for (int i = 0; i < 100 && !stop.load(); ++i) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(CERT_MONITOR_POLLING_INTERVAL_SECS * 10));
-        }
+        sqlite3_finalize(stmt);
+    } else {
+        log_err_printf(pvacmsmonitor, "PVACMS Certificate Monitor Error: %s\n", sqlite3_errmsg(status_monitor_params.ca_db_.get()));
     }
 
-    log_info_printf(pvacms, "Certificate Monitor Thread Stopped%s", "\n");
+    // Search for any certs that have expired
+    std::string expired_sql(SQL_CERT_TO_EXPIRED);
+    const std::vector<certstatus_t> expired_status{VALID, PENDING_APPROVAL, PENDING};
+    expired_sql += getValidStatusesClause(expired_status);
+    if (sqlite3_prepare_v2(status_monitor_params.ca_db_.get(), expired_sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        bindValidStatusClauses(stmt, expired_status);
+
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            int64_t db_serial = sqlite3_column_int64(stmt, 0);
+            uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
+            try {
+                const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, status_monitor_params.issuer_id_, serial));
+                updateCertificateStatus(status_monitor_params.ca_db_, serial, EXPIRED, {VALID, PENDING_APPROVAL, PENDING});
+                auto status_date = std::time(nullptr);
+                auto cert_status = cert_status_creator.createOCSPStatus(serial, EXPIRED, status_date);
+                postCertificateStatus(status_monitor_params.status_pv_, pv_name, serial, cert_status);
+                log_info_printf(pvacmsmonitor, "Certificate %s:%llu has EXPIRED\n", status_monitor_params.issuer_id_.c_str(), serial);
+            } catch (const std::runtime_error &e) {
+                log_err_printf(pvacmsmonitor, "PVACMS Certificate Monitor Error: %s\n", e.what());
+            }
+        }
+        sqlite3_finalize(stmt);
+    } else {
+        log_err_printf(pvacmsmonitor, "PVACMS Certificate Monitor Error: %s\n", sqlite3_errmsg(status_monitor_params.ca_db_.get()));
+    }
+
+    log_debug_printf(pvacmsmonitor, "Certificate Monitor Thread Sleep%s", "\n");
 }
 
 }  // namespace certs
@@ -1611,16 +1590,16 @@ int main(int argc, char *argv[]) {
             });
 
         // Client Connect handlers GET/MONITOR
-        status_pv.onFirstConnect([&config, &ca_db, &ca_pkey, &ca_cert, ca_chain, &our_issuer_id](SharedWildcardPV &pv, const std::string &pv_name,
-                                                                                                 const std::list<std::string> &parameters) {
+        status_pv.onFirstConnect([&config, &ca_db, &ca_pkey, &ca_cert, &ca_chain, &our_issuer_id](SharedWildcardPV &pv, const std::string &pv_name,
+                                                                                                  const std::list<std::string> &parameters) {
             onGetStatus(config, ca_db, our_issuer_id, pv, pv_name, parameters, ca_pkey, ca_cert, ca_chain);
         });
         status_pv.onLastDisconnect([](SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) { pv.close(pv_name); });
 
         // PUT handlers
-        status_pv.onPut([&config, &ca_db, &our_issuer_id, &ca_pkey, &ca_cert, ca_chain](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op,
-                                                                                        const std::string &pv_name, const std::list<std::string> &parameters,
-                                                                                        pvxs::Value &&value) {
+        status_pv.onPut([&config, &ca_db, &our_issuer_id, &ca_pkey, &ca_cert, &ca_chain](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op,
+                                                                                         const std::string &pv_name, const std::list<std::string> &parameters,
+                                                                                         pvxs::Value &&value) {
             // Make sure that pv is open before any put operation
             if (!pv.isOpen(pv_name)) {
                 pv.open(pv_name, CertStatus::getStatusPrototype());
@@ -1645,16 +1624,14 @@ int main(int argc, char *argv[]) {
             }
         });
 
-        Server pva_server = Server(config);
-
-        pva_server.addPV(RPC_CERT_CREATE, create_pv).addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
-
-        // Start Status Monitor Thread
         StatusMonitor status_monitor_params(config, ca_db, our_issuer_id, status_pv, ca_cert, ca_pkey, ca_chain);
 
-        epicsThreadOpts status_monitor_thread_options{epicsThreadPriorityMedium, epicsThreadGetStackSize(epicsThreadStackSmall), 1};
-        auto monitor_thread_id =
-            epicsThreadCreateOpt("Certificate Status Monitor", &certificateStatusSetup, &status_monitor_params, &status_monitor_thread_options);
+        // Create a server with a certificate monitoring function
+        Server pva_server = Server(config, [&status_monitor_params](short evt) {
+            statusMonitor(status_monitor_params);
+        });
+
+        pva_server.addPV(RPC_CERT_CREATE, create_pv).addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
 
         if (verbose) {
             std::cout << "Effective config\n" << config;
@@ -1663,13 +1640,10 @@ int main(int argc, char *argv[]) {
         try {
             log_info_printf(pvacms, "PVACMS Running%s", "\n");
             pva_server.run();
-            status_monitor_params.stop_flag_.store(true);
             log_info_printf(pvacms, "PVACMS Exiting%s", "\n");
         } catch (const std::exception &e) {
             log_err_printf(pvacms, "PVACMS error: %s\n", e.what());
         }
-
-        epicsThreadMustJoin(monitor_thread_id);
 
         return 0;
     } catch (std::exception &e) {

@@ -30,11 +30,11 @@
 
 #include <pvxs/client.h>
 #include <pvxs/config.h>
-#include "p12filefactory.h"
 #include <pvxs/log.h>
 #include <pvxs/nt.h>
 
 #include "ownedptr.h"
+#include "p12filefactory.h"
 #include "pvacms.h"
 
 using namespace pvxs;
@@ -137,8 +137,7 @@ int ocspService(client::Context &pva_client, std::string &port, bool verbose) {
     auto cert_filename = config->tls_cert_filename;
     auto cert_password = config->tls_cert_password;
 
-    auto key_chain_data =
-        security::KeychainFactory::getKeychainDataFromKeychainFile(cert_filename, cert_password);
+    auto key_chain_data = security::KeychainFactory::getKeychainDataFromKeychainFile(cert_filename, cert_password);
     const ossl_ptr<EVP_PKEY> ca_pkey(std::move(key_chain_data.pkey));
     const ossl_ptr<X509> ca_cert(std::move(key_chain_data.cert));
     const ossl_ptr<EVP_PKEY> ca_pub_key(X509_get_pubkey(ca_cert.get()));
@@ -207,8 +206,7 @@ int ocspService(client::Context &pva_client, std::string &port, bool verbose) {
                 ASN1_TIME *revocation_time = ASN1_TIME_new();
                 X509_gmtime_adj(revocation_time, 0);
 
-                OCSP_basic_add1_status(basic_resp.get(), cert_id, ocsp_status, OCSP_REVOKED_STATUS_NOSTATUS,
-                                       revocation_time, nullptr, nullptr);
+                OCSP_basic_add1_status(basic_resp.get(), cert_id, ocsp_status, OCSP_REVOKED_STATUS_NOSTATUS, revocation_time, nullptr, nullptr);
                 ASN1_TIME_free(revocation_time);
             }
 

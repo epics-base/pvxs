@@ -16,6 +16,7 @@
 
 #include <pvxs/log.h>
 
+#include "certstatusmanager.h"
 #include "p12filewatcher.h"
 
 DEFINE_LOGGER(setup, "pvxs.client.setup");
@@ -372,9 +373,7 @@ void Context::reconfigure(const Config& newconf) {
     ossl::SSLContext new_context;
     if (newconf.isTlsConfigured()) {
         new_context = ossl::SSLContext::for_client(newconf);
-        pvt->impl->watchCertificate(newconf, new_context);
     }
-
     pvt->impl->reconfigureContext(new_context);
 }
 
@@ -487,11 +486,20 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
       nsChecker(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::onNSCheckS, this)) {
 #ifdef PVXS_ENABLE_OPENSSL
     if (conf.isTlsConfigured()) {
+        bool tls_failed = false;
         try {
             tls_context = ossl::SSLContext::for_client(effective);
-            watchCertificate(effective, tls_context);
         } catch (std::exception& e) {
+            tls_failed = true;
             log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
+        }
+        try {
+            watchTLSConfig(effective);
+        } catch (std::exception& e) {
+            if ( !tls_failed ) {
+                // Reset to vanilla context
+                tls_context = ossl::SSLContext();
+            }
         }
     }
 #endif
@@ -1244,47 +1252,120 @@ void ContextImpl::cacheCleanS(evutil_socket_t fd, short evt, void* raw) {
     }
 }
 
-void ContextImpl::watchCertificate(const Config &new_config, ossl::SSLContext &context) {
-    if (&context != &tls_context) {
-        tls_context.unWatchCertificate(); // Unwatch if any
-    }
+X509 * ContextImpl::getCert(ossl::SSLContext *context_ptr) {
+    auto context = context_ptr == nullptr ? &tls_context : context_ptr;
+    if (!context->ctx)
+        return nullptr;
 
-    context.client_file_watcher_ = std::make_shared<certs::P12FileWatcher>(watcher,
-                                                                           new_config.tls_private_key_filename, new_config.tls_private_key_password,
-                                                                           new_config.tls_cert_filename, new_config.tls_cert_password,
-                                                                                   context.fw_stop_flag_, [this, new_config]() {
-        log_debug_printf(watcher, "Client reconfigure: %s\n", "File change");
+    return SSL_CTX_get0_certificate(context->ctx);
+}
+
+void ContextImpl::statusListenerCallback(const Config &new_config, X509 *ctx_cert) {
+    try {
         auto new_context = ossl::SSLContext::for_client(new_config);
         reconfigureContext(new_context);
+        // If no new cert stop listening
+        auto new_cert = getCert();
+        if ( !new_cert ) {
+            log_err_printf(watcher, "TLS Debug Disabled: No certificate%s\n", "");
+            // Don't wait for it to finish because we are calling from within it so
+            // we need to avoid deadlock
+            client_status_listener_->stopListening(false);
+
+            // Note that the listener can be restarted if a cert file changes
+        } else if ( certs::CertStatusManager::getSerialNumber(ctx_cert) != certs::CertStatusManager::getSerialNumber(new_cert) ) {
+            // If different then change the cert we are listening to
+            auto cert = ossl_ptr<X509>(X509_dup(getCert()));
+            client_status_listener_->changeCert(std::move(cert));
+        }
+    } catch (std::exception& e) {
+        log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
+        // If no cert then stop listening
+        if (!getCert()) {
+            client_status_listener_->stopListening(false);
+        }
+    }
+    auto new_context = ossl::SSLContext::for_client(new_config);
+    log_debug_printf(watcher, "Client reconfigure: %s\n", "Status change");
+    reconfigureContext(new_context);
+}
+
+void ContextImpl::watchTLSConfig(const Config &new_config) {
+    watchFiles(new_config);
+    watchStatus(new_config);
+}
+
+void ContextImpl::watchFiles(const Config &new_config) {
+    client_file_watcher_ = std::make_shared<certs::P12FileWatcher>(watcher,
+                                                                   new_config.tls_private_key_filename, new_config.tls_private_key_password,
+                                                                   new_config.tls_cert_filename, new_config.tls_cert_password,
+                                                                   fw_stop_flag_, [this, new_config]() {
+          log_debug_printf(watcher, "Client reconfigure: %s\n", "File change");
+          try {
+              auto old_cert = getCert();
+              auto new_context = ossl::SSLContext::for_client(new_config);
+              reconfigureContext(new_context);
+
+              // Note we never stop the file listener
+
+              // If there was an old cert and its different, then change the cert being listened to
+              auto new_cert = getCert(&new_context);
+              if (old_cert && new_cert) {
+                  if ( certs::CertStatusManager::getSerialNumber(old_cert)
+                    != certs::CertStatusManager::getSerialNumber(new_cert)) {
+                      auto cert = ossl_ptr<X509>(X509_dup(getCert()));
+                      client_status_listener_->changeCert(std::move(cert));
+                  }
+              } else if (new_cert) {
+                  // If no old one but we have a new one then start listening
+                  auto cert = ossl_ptr<X509>(X509_dup(getCert()));
+                  client_status_listener_ = std::make_shared<certs::StatusListener>(watcher, sl_stop_flag_, std::move(cert), [this, new_cert, new_config]() {
+                      statusListenerCallback(new_config, new_cert);
+                  });
+                  client_status_listener_->startListening();
+              } else if (old_cert) {
+                  // If old one then stop listening
+                  client_status_listener_->stopListening();
+              }
+          } catch (std::exception& e) {
+              log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
+              // If old cert and there is no new one or its different, then stop the status listener
+              auto old_cert = getCert();
+              if (old_cert) {
+                  client_status_listener_->stopListening();
+              }
+          }
+
+      });
+    client_file_watcher_->startWatching();
+}
+
+void ContextImpl::watchStatus(const Config &new_config) {
+    auto ctx_cert = getCert();
+    if (!ctx_cert)
+        return;
+
+    auto cert = ossl_ptr<X509>(X509_dup(ctx_cert));
+    auto status_uri = std::string();
+    try {
+        status_uri = certs::CertStatusManager::getStatusPvFromCert(cert);
+    } catch (...) {
+        log_debug_printf(watcher, "Status Monitor: %s\n", "Not Required");
+        return;
+    }
+    log_info_printf(watcher, "Status Monitor: %s\n", status_uri.c_str());
+
+    // Configure a status listener to listen for certificate status changes
+    client_status_listener_ = std::make_shared<certs::StatusListener>(watcher, sl_stop_flag_, std::move(cert), [this, ctx_cert, new_config]() {
+        statusListenerCallback(new_config, ctx_cert);
     });
-    context.client_file_watcher_->startWatching();
+    // Start the listener
+    auto cert_status = client_status_listener_->startListening();
 
-    auto ctx_cert = SSL_CTX_get0_certificate(context.ctx);
-    if (ctx_cert) {
-        auto cert = ossl_ptr<X509>(X509_dup(ctx_cert));
-        auto status_uri = std::string();
-        try {
-            status_uri = certs::CertStatusManager::getStatusPvFromCert(cert);
-        } catch (...) {
-            log_debug_printf(watcher, "Status Monitor: %s\n", "Not Required");
-            return;
-        }
-        log_info_printf(watcher, "Status Monitor: %s\n", status_uri.c_str());
-
-        // Configure a status listener to listen for certificate status changes
-        context.client_status_listener_ = std::make_shared<certs::StatusListener>(watcher, context.sl_stop_flag_, std::move(cert));
-        // Start the listener
-        auto cert_status = context.client_status_listener_->startListening([this, new_config]() {
-            auto new_context = ossl::SSLContext::for_client(new_config);
-            log_debug_printf(watcher, "Client reconfigure: %s\n", "Status change");
-            reconfigureContext(new_context);
-        });
-
-        // If certificate is not valid
-        if ( cert_status.status != certs::VALID ) {
-            log_debug_printf(watcher, "Invalid certificate state: %s\n", cert_status.status.s.c_str());
-            throw std::runtime_error(SB() << "Invalid certificate state: " << cert_status.status.s);
-        }
+    // If certificate is not valid
+    if ( cert_status.status != certs::VALID ) {
+        log_debug_printf(watcher, "Invalid certificate state: %s\n", cert_status.status.s.c_str());
+        throw std::runtime_error(SB() << "Invalid certificate state: " << cert_status.status.s);
     }
 }
 

@@ -19,10 +19,10 @@
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 
-//#include <pvxs/client.h>
+// #include <pvxs/client.h>
 #include <pvxs/sharedArray.h>
 
-//#include "certstatus.h"
+// #include "certstatus.h"
 #include "ownedptr.h"
 
 namespace pvxs {
@@ -31,7 +31,7 @@ namespace pvxs {
 namespace client {
 class Context;
 struct Subscription;
-}
+}  // namespace client
 
 namespace certs {
 
@@ -89,8 +89,8 @@ class CertStatusManager {
     CertStatusManager() = delete;
 
     virtual ~CertStatusManager() {
-//        sub_->cancel();
-//        client_->close();
+        //        sub_->cancel();
+        //        client_->close();
     }
 
     using StatusCallback = std::function<void(const CertificateStatus&)>;
@@ -117,7 +117,7 @@ class CertStatusManager {
      *
      * @see unsubscribe()
      */
-    static cert_status_ptr<CertStatusManager> subscribe(const ossl_ptr<X509>&& cert, StatusCallback&& callback);
+    static cert_status_ptr<CertStatusManager> subscribe(const ossl_ptr<X509>&& cert, std::atomic<bool>& stop_flag, StatusCallback&& callback);
 
     /**
      * @brief Get status for a given certificate
@@ -140,10 +140,10 @@ class CertStatusManager {
     CertificateStatus getStatus();
 
     static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
-    static uint64_t getSerialNumber(X509 * cert);
+    static uint64_t getSerialNumber(X509* cert);
 
    private:
-    CertStatusManager(const ossl_ptr<X509>& cert, std::shared_ptr<client::Context> &client, std::shared_ptr<client::Subscription> &sub)
+    CertStatusManager(const ossl_ptr<X509>& cert, std::shared_ptr<client::Context>& client, std::shared_ptr<client::Subscription>& sub)
         : cert_(cert), client_(client), sub_(sub) {};
     const ossl_ptr<X509>& cert_;
     std::shared_ptr<client::Context> client_;
@@ -151,7 +151,7 @@ class CertStatusManager {
     ;
     static ossl_ptr<OCSP_RESPONSE> getOSCPResponse(const shared_array<const uint8_t>& ocsp_bytes);
 
-    static bool verifyOCSPResponse(ossl_ptr<OCSP_BASICRESP>& basic_response);
+    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response);
     static uint64_t ASN1ToUint64(ASN1_INTEGER* asn1_number);
 
     /**
@@ -164,10 +164,10 @@ class CertStatusManager {
      * @param ocsp_bytes the ocsp response
      * @return the Parsed OCSP response status
      */
-  public:
+   public:
     static ParsedOCSPStatus parse(shared_array<const uint8_t> ocsp_bytes);
 
-  private:
+   private:
     std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
 };
 

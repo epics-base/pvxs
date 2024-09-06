@@ -26,39 +26,79 @@
 
 namespace pvxs {
 namespace certs {
+
+struct FileWatcherParams {
+    FileWatcherParams(logger &logger, const std::string &tls_private_key_filename, const std::string &tls_private_key_password,
+                      const std::string &tls_cert_filename, const std::string &tls_cert_password, std::function<void()> &&reconfigure_fn,
+                      std::atomic<bool> &stop_flag)
+        : logger_(logger),
+          tls_private_key_filename(tls_private_key_filename),
+          tls_private_key_password(tls_private_key_password),
+          tls_cert_filename(tls_cert_filename),
+          tls_cert_password(tls_cert_password),
+          reconfigure_fn(std::move(reconfigure_fn)),
+          stop_flag(stop_flag) {}
+
+    logger &logger_;
+    const std::string &tls_private_key_filename;
+    const std::string &tls_private_key_password;
+    const std::string &tls_cert_filename;
+    const std::string &tls_cert_password;
+    const std::function<void()> reconfigure_fn;
+    std::atomic<bool> &stop_flag;
+};
+
 class P12FileWatcher {
    public:
-    P12FileWatcher(logger &logger,
-                   const std::string &tls_private_key_filename,
-                   const std::string &tls_private_key_password,
-                   const std::string &tls_cert_filename,
-                   const std::string &tls_cert_password,
-                   std::atomic<bool> &stop_flag, std::function<void()> &&reconfigure_fn)
-        : tls_private_key_filename_(tls_private_key_filename), tls_private_key_password_(tls_private_key_password),
-          tls_cert_filename_(tls_cert_filename), tls_cert_password_(tls_cert_password),
-          reconfigure_fn_(std::move(reconfigure_fn)), stop_flag_(stop_flag), logger_(logger) {}
+    P12FileWatcher(logger &logger, const std::string &tls_private_key_filename, const std::string &tls_private_key_password,
+                   const std::string &tls_cert_filename, const std::string &tls_cert_password, std::atomic<bool> &stop_flag,
+                   std::function<void()> &&reconfigure_fn)
+        : file_watcher_params_(logger, tls_private_key_filename, tls_private_key_password, tls_cert_filename, tls_cert_password, std::move(reconfigure_fn),
+                               stop_flag) {}
 
     inline ~P12FileWatcher() { stopWatching(); }
 
+   private:
+    const FileWatcherParams file_watcher_params_;
+    epicsThreadOSD *file_watcher_thread_id_;
+
+   public:
     /**
      * @brief Start watching all certificate files associated with the TLS connection
      */
     inline void startWatching() {
-        worker_ = std::thread([this]() {
-            std::vector<std::string> paths_to_watch;
-            std::vector<time_t> last_write_times;
-            try {
-                init(paths_to_watch, last_write_times);
-            } catch (std::exception &e) {
-                // Start the file watching loop
-                log_err_printf(logger_, "File Watcher: Error in startup: %s\n", e.what());
-                return; // Exit thread - File Watching is abandoned
-            }
+        epicsThreadOpts file_watcher_thread_options{epicsThreadPriorityLow, epicsThreadGetStackSize(epicsThreadStackSmall), 1};
+        file_watcher_thread_id_ = epicsThreadCreateOpt("File Watcher", &workerThread, (void *)&file_watcher_params_, &file_watcher_thread_options);
+    }
 
-            // Start the file watcher until something changes, then handle change and exit
-            task(paths_to_watch, last_write_times);
-            log_debug_printf(logger_, "File Watcher: %s\n", "Exited");
-        });
+    inline void stopWatching() {
+        log_debug_printf(file_watcher_params_.logger_, "File Watcher: %s\n", "Stop Called");
+        file_watcher_params_.stop_flag = true;  // Flag watcher to stop
+        epicsThreadMustJoin(file_watcher_thread_id_);
+        log_debug_printf(file_watcher_params_.logger_, "File Watcher: %s\n", "Stopped");
+    }
+
+   private:
+    static inline void workerThread(void *raw) {
+        auto file_watcher_params = static_cast<FileWatcherParams *>(raw);
+        worker(file_watcher_params);
+    }
+
+    static inline void worker(FileWatcherParams *file_watcher_params) {
+        std::vector<std::string> paths_to_watch;
+        std::vector<time_t> last_write_times;
+        try {
+            workerInit(file_watcher_params, paths_to_watch, last_write_times);
+        } catch (std::exception &e) {
+            // Start the file watching loop
+            log_err_printf(file_watcher_params->logger_, "File Watcher: Error in startup: %s\n", e.what());
+            return;  // Exit thread - File Watching is abandoned
+        }
+
+        // Start the file watcher
+        workerTask(file_watcher_params, paths_to_watch, last_write_times);
+
+        log_debug_printf(file_watcher_params->logger_, "File Watcher: %s\n", "Exited");
     }
 
     /**
@@ -69,10 +109,11 @@ class P12FileWatcher {
      * @param paths_to_watch reference for vector to store the files to watch
      * @param last_write_times reference for vector to store initial modification times
      */
-    inline void init(std::vector<std::string> &paths_to_watch, std::vector<time_t> &last_write_times) {
-        log_debug_printf(logger_, "File Watcher: %s\n", "Initializing");
+    static inline void workerInit(FileWatcherParams *file_watcher_params, std::vector<std::string> &paths_to_watch, std::vector<time_t> &last_write_times) {
+        log_debug_printf(file_watcher_params->logger_, "File Watcher: %s\n", "Initializing");
         // Initialize a vector of file paths to watch
-        paths_to_watch = {tls_cert_filename_, tls_cert_password_, tls_private_key_filename_, tls_private_key_password_};
+        paths_to_watch = {file_watcher_params->tls_cert_filename, file_watcher_params->tls_cert_password, file_watcher_params->tls_private_key_filename,
+                          file_watcher_params->tls_private_key_password};
 
         // Initialize the last write times
         last_write_times.resize(paths_to_watch.size(), 0);
@@ -80,10 +121,11 @@ class P12FileWatcher {
             if (!paths_to_watch[i].empty()) {
                 try {
                     last_write_times[i] = getFileModificationTime(paths_to_watch[i]);
-                } catch (...) {}
+                } catch (...) {
+                }
             }
         }
-        log_debug_printf(logger_, "File Watcher: %s\n", "Initialised");
+        log_debug_printf(file_watcher_params->logger_, "File Watcher: %s\n", "Initialised");
     }
 
     /**
@@ -92,11 +134,10 @@ class P12FileWatcher {
      * @param paths_to_watch the paths to watch
      * @param last_write_times the initial set of modification times that we are looking at
      */
-    inline void task(const std::vector<std::string> &paths_to_watch, std::vector<time_t>
-    &last_write_times) {
-        while (!stop_flag_.load()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(
-              FILE_WATCHER_PERIOD_MS));
+    static inline void workerTask(FileWatcherParams *file_watcher_params, const std::vector<std::string> &paths_to_watch,
+                                  std::vector<time_t> &last_write_times) {
+        while (!file_watcher_params->stop_flag) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(FILE_WATCHER_PERIOD_MS));
 
             for (size_t i = 0; i < paths_to_watch.size(); ++i) {
                 if (!paths_to_watch[i].empty()) {
@@ -105,51 +146,23 @@ class P12FileWatcher {
                         current_write_time = getFileModificationTime(paths_to_watch[i]);
                     } catch (...) {
                         if (last_write_times[i] != 0) {
-                            log_debug_printf(logger_,
-                                           "File Watcher: %s file was deleted\n",
-                                           paths_to_watch[i].c_str());
-                            reconfigure_fn_();
-                            return;
+                            log_debug_printf(file_watcher_params->logger_, "File Watcher: %s file was deleted\n", paths_to_watch[i].c_str());
+                            file_watcher_params->reconfigure_fn();
+                            break;
                         }
                         continue;
                     }
                     if (current_write_time != last_write_times[i]) {
-                        log_debug_printf(logger_,
-                                        "File Watcher: %s file was updated\n",
-                                        paths_to_watch[i].c_str());
-                        reconfigure_fn_();
-                        return;
+                        log_debug_printf(file_watcher_params->logger_, "File Watcher: %s file was updated\n", paths_to_watch[i].c_str());
+                        file_watcher_params->reconfigure_fn();
+                        break;
                     }
                 }
             }
         }
     }
 
-    inline void stopWatching() {
-        log_debug_printf(logger_, "File Watcher: %s\n", "Stop Called");
-        stop_flag_.store(true);  // Flag watcher to stop
-        try {
-            if (worker_.joinable()) { // wait for this to stop
-                log_debug_printf(logger_, "File Watcher: %s\n", "Stopping ...");
-                worker_.join();
-            }
-        } catch (...) {
-        }
-        log_debug_printf(logger_, "File Watcher: %s\n", "Stopped");
-    }
-
-   private:
-    const std::string tls_private_key_filename_;
-    const std::string tls_private_key_password_;
-    const std::string tls_cert_filename_;
-    const std::string tls_cert_password_;
-    const std::function<void()> reconfigure_fn_;
-    std::atomic<bool> &stop_flag_;
-    logger &logger_;
-
-    std::thread worker_;
-
-    inline time_t getFileModificationTime(const std::string &path) const {
+    static inline time_t getFileModificationTime(const std::string &path) {
 #ifdef _WIN32
         WIN32_FILE_ATTRIBUTE_DATA file_info;
         if (GetFileAttributesEx(path.c_str(), GetFileExInfoStandard, &file_info)) {

@@ -255,13 +255,22 @@ struct Server::Pvt
     } state;
 
 #ifdef PVXS_ENABLE_OPENSSL
+    StatusCallback status_callback;
+    evevent status_timer;
     ossl::SSLContext tls_context;
-    Server *server_ptr;
+    std::atomic<bool> fw_stop_flag_{false};
+    std::atomic<bool> sl_stop_flag_{false};
+    std::shared_ptr<certs::P12FileWatcher> server_file_watcher_;
+    std::shared_ptr<certs::StatusListener> server_status_listener_;
 #endif
 
     INST_COUNTER(ServerPvt);
 
+#ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
+#else
+    Pvt(const Config& conf, StatusCallback status_callback = doStatus);
+#endif
     ~Pvt();
 
     void start();
@@ -272,7 +281,16 @@ private:
     void doBeacons(short evt);
     static void doBeaconsS(evutil_socket_t fd, short evt, void *raw);
 #ifdef PVXS_ENABLE_OPENSSL
-    void watchCertificate(const Config &configuration, ossl::SSLContext &context);
+    X509 * getCert(ossl::SSLContext *context_ptr = nullptr);
+    void watchTLSConfig(const Config &configuration);
+    void watchFiles(const Config& configuration);
+    void watchStatus(const Config& configuration);
+    void statusListenerCallback(const Config &new_config, X509 *ctx_cert);
+    Server reconfigureContext(const Config& configuration);
+    static void doStatusS(evutil_socket_t fd, short evt, void *raw);
+    static void doStatus(short evt);
+#else
+    static inline void doStatus(evutil_socket_t fd, short evt, void *raw) { }
 #endif
 };
 

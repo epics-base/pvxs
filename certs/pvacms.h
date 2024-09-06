@@ -147,7 +147,6 @@ namespace certs {
  */
 class StatusMonitor {
    public:
-    std::atomic<bool> stop_flag_{false};
     ConfigCms &config_;
     sql_ptr &ca_db_;
     std::string &issuer_id_;
@@ -158,7 +157,7 @@ class StatusMonitor {
 
    public:
     StatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &issuer_id, server::SharedWildcardPV &status_pv, ossl_ptr<X509> &ca_cert,
-                  ossl_ptr<EVP_PKEY> &ca_pkey, ossl_shared_ptr<struct stack_st_X509> &ca_chain)
+                  ossl_ptr<EVP_PKEY> &ca_pkey, ossl_shared_ptr<STACK_OF(X509)> &ca_chain)
         : config_(config), ca_db_(ca_db), issuer_id_(issuer_id), status_pv_(status_pv), ca_cert_(ca_cert), ca_pkey_(ca_pkey), ca_chain_(ca_chain) {}
 };
 
@@ -229,9 +228,7 @@ certstatus_t storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
 
 void usage(const char *argv0);
 
-void certificateStatusSetup(void *raw);
-void certificateStatusMonitor(std::atomic<bool> &stop, ConfigCms &config, sql_ptr &ca_db, std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
-                              pvxs::ossl_ptr<X509> &ca_cert, pvxs::ossl_ptr<EVP_PKEY> &ca_pkey, pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+void statusMonitor(StatusMonitor &status_monitor_params);
 
 Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const CertificateStatus &cert_status,
                             bool open_only = false);
