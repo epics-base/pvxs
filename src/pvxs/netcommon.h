@@ -19,6 +19,10 @@
 #include <pvxs/config.h>
 #include <pvxs/version.h>
 
+#ifdef PVXS_ENABLE_OPENSSL
+using CertEventCallback = std::function<bool(short)>;
+#endif
+
 namespace pvxs {
 
 /** Credentials presented by a client or server.

@@ -323,7 +323,10 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 #ifdef PVXS_ENABLE_OPENSSL
     // pair (addr, useTLS)
     std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
-    std::atomic<bool> fw_stop_flag_{false};
+    CertEventCallback cert_file_event_callback;
+    evevent cert_file_event_timer;
+    std::vector<std::string> paths_to_watch;
+    std::vector<time_t> last_write_times;
     std::atomic<bool> sl_stop_flag_{false};
     std::shared_ptr<certs::P12FileWatcher> client_file_watcher_;
     std::shared_ptr<certs::StatusListener> client_status_listener_;

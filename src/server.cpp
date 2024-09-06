@@ -62,12 +62,12 @@ Server Server::fromEnv(const bool tls_disabled, const ConfigCommon::ConfigTarget
     return Config::fromEnv(tls_disabled, target).build();
 }
 
-Server Server::fromEnv(CertFileEventCallback &cert_file_event_callback, const bool tls_disabled, const ConfigCommon::ConfigTarget target)
+Server Server::fromEnv(CertEventCallback &cert_file_event_callback, const bool tls_disabled, const ConfigCommon::ConfigTarget target)
 {
     return Config::fromEnv(tls_disabled, target).build(cert_file_event_callback);
 }
 
-Server::Server(const Config &conf, CertFileEventCallback cert_file_event_callback) {
+Server::Server(const Config &conf, CertEventCallback cert_file_event_callback) {
     auto internal(std::make_shared<Pvt>(conf, cert_file_event_callback));
     internal->internal_self = internal;
 
@@ -509,7 +509,7 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 #ifndef PVXS_ENABLE_OPENSSL
 Server::Pvt::Pvt(const Config &conf)
 #else
-Server::Pvt::Pvt(const Config& conf, CertFileEventCallback cert_file_event_callback)
+Server::Pvt::Pvt(const Config& conf, CertEventCallback cert_file_event_callback)
 //Server::Pvt::Pvt(const Config &conf, void (*status_callback)(evutil_socket_t fd, short evt, void *raw))
 #endif
     : effective(conf)

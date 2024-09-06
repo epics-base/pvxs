@@ -65,11 +65,6 @@ struct Config;
  * There is also a "__server" source which provides the special "server" PV
  * used by the pvlist CLI.
  */
-
-#ifdef PVXS_ENABLE_OPENSSL
-using CertFileEventCallback = std::function<bool(short)>;
-#endif
-
 class PVXS_API Server
 {
 public:
@@ -80,7 +75,7 @@ public:
     explicit Server(const Config&);
 
 #ifdef PVXS_ENABLE_OPENSSL
-    Server(const Config &config, CertFileEventCallback cert_file_event_callback);
+    Server(const Config &config, CertEventCallback cert_file_event_callback);
 #endif
     Server(const Server&) = default;
     Server(Server&& o) = default;
@@ -98,7 +93,7 @@ public:
     Server fromEnv();
 #else
     Server fromEnv(bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
-    Server fromEnv(CertFileEventCallback &cert_file_event_callback, bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
+    Server fromEnv(CertEventCallback &cert_file_event_callback, bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
 #endif // PVXS_ENABLE_OPENSSL
 
     //! Begin serving.  Does not block.
@@ -271,7 +266,7 @@ public:
     }
 
     //! Create a new Server using the current configuration with a custom file event callback
-    inline Server build(CertFileEventCallback &cert_file_event_callback) const {
+    inline Server build(CertEventCallback &cert_file_event_callback) const {
         return Server(*this, cert_file_event_callback);
     }
 

@@ -255,7 +255,7 @@ struct Server::Pvt
     } state;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    CertFileEventCallback cert_file_event_callback;
+    CertEventCallback cert_file_event_callback;
     evevent cert_file_event_timer;
     std::vector<std::string> paths_to_watch;
     std::vector<time_t> last_write_times;
@@ -269,7 +269,7 @@ struct Server::Pvt
 #ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
 #else
-    Pvt(const Config& conf, CertFileEventCallback cert_file_event_callback = nullptr);
+    Pvt(const Config& conf, CertEventCallback cert_file_event_callback = nullptr);
 #endif
     ~Pvt();
 
