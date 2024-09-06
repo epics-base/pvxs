@@ -260,9 +260,7 @@ struct Server::Pvt
     std::vector<std::string> paths_to_watch;
     std::vector<time_t> last_write_times;
     ossl::SSLContext tls_context;
-    std::atomic<bool> fw_stop_flag_{false};
     std::atomic<bool> sl_stop_flag_{false};
-    std::shared_ptr<certs::P12FileWatcher> server_file_watcher_;
     std::shared_ptr<certs::StatusListener> server_status_listener_;
 #endif
 
@@ -284,15 +282,11 @@ private:
     static void doBeaconsS(evutil_socket_t fd, short evt, void *raw);
 #ifdef PVXS_ENABLE_OPENSSL
     X509 * getCert(ossl::SSLContext *context_ptr = nullptr);
-    void watchTLSConfig(const Config &configuration);
-    void watchFiles(const Config& configuration);
     void watchStatus(const Config& configuration);
     void statusListenerCallback(const Config &new_config, X509 *ctx_cert);
     Server reconfigureContext(const Config& configuration);
     static void doCertFileEventhandler(evutil_socket_t fd, short evt, void *raw);
     bool defaultCertFileEventCallback(short evt);
-#else
-    static inline void doStatus(evutil_socket_t fd, short evt, void *raw) { }
 #endif
 };
 

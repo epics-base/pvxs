@@ -1111,55 +1111,6 @@ X509 * Server::Pvt::getCert(ossl::SSLContext *context_ptr) {
  * @param configuration The config for the certs files
  * @param context the current SSL context
  */
-void Server::Pvt::watchTLSConfig(const Config& new_config) {
-    watchFiles(new_config);
-    watchStatus(new_config);
-}
-
-void Server::Pvt::watchFiles(const Config& new_config) {
-    server_file_watcher_ = std::make_shared<certs::P12FileWatcher>(watcher,
-                                                                   new_config.tls_private_key_filename, new_config.tls_private_key_password,
-                                                                   new_config.tls_cert_filename, new_config.tls_cert_password,
-                                                                   fw_stop_flag_, [this, new_config]() {
-          log_debug_printf(watcher, "Server reconfigure: %s\n", "File change");
-          try {
-              auto old_cert = getCert();
-              auto new_context = ossl::SSLContext::for_server(new_config);
-              auto new_server = reconfigureContext(new_config); // TODO use new server
-
-              // Note we never stop the file listener
-
-              // If there was an old cert and its different, then change the cert being listened to
-              auto new_cert = getCert(&new_context);
-              if (old_cert && new_cert) {
-                  if ( certs::CertStatusManager::getSerialNumber(old_cert)
-                    != certs::CertStatusManager::getSerialNumber(new_cert)) {
-                      auto cert = ossl_ptr<X509>(X509_dup(getCert()));
-                      server_status_listener_->changeCert(std::move(cert));
-                  }
-              } else if (new_cert) {
-                  // If no old one but we have a new one then start listening
-                  auto cert = ossl_ptr<X509>(X509_dup(getCert()));
-                  server_status_listener_ = std::make_shared<certs::StatusListener>(watcher, sl_stop_flag_, std::move(cert), [this, new_cert, new_config]() {
-                      statusListenerCallback(new_config, new_cert);
-                  });
-                  server_status_listener_->startListening();
-              } else if (old_cert) {
-                  // If old one then stop listening
-                  server_status_listener_->stopListening();
-              }
-          } catch (std::exception& e) {
-              log_warn_printf(watcher, "TLS disabled for server: %s\n", e.what());
-              // If old cert and there is no new one or its different, then stop the status listener
-              auto old_cert = getCert();
-              if (old_cert) {
-                  server_status_listener_->stopListening();
-              }
-          }
-
-      });
-    server_file_watcher_->startWatching();
-}
 
 void Server::Pvt::watchStatus(const Config& new_config) {
     auto ctx_cert = getCert();
