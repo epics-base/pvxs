@@ -19,11 +19,11 @@
 #include "certstatusmanager.h"
 #include "p12filewatcher.h"
 
-DEFINE_LOGGER(setup, "pvxs.client.setup");
-DEFINE_LOGGER(watcher, "pvxs.cert.watcher");
-DEFINE_LOGGER(io, "pvxs.client.io");
-DEFINE_LOGGER(beacon, "pvxs.client.beacon");
-DEFINE_LOGGER(duppv, "pvxs.client.dup");
+DEFINE_LOGGER(setup, "pvxs.cli.init");
+DEFINE_LOGGER(watcher, "pvxs.cert.mon");
+DEFINE_LOGGER(io, "pvxs.cli.io");
+DEFINE_LOGGER(beacon, "pvxs.cli.beacon");
+DEFINE_LOGGER(duppv, "pvxs.cli.dup");
 
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
@@ -465,7 +465,11 @@ static Value buildCAMethod() {
         .create();
 }
 
+#ifndef PVXS_ENABLE_OPENSSL
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
+#else
+ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop, CertEventCallback cert_file_event_callback)
+#endif
     : ifmap(IfaceMap::instance()),
       effective([conf]() -> Config {
           Config eff(conf);
@@ -483,11 +487,18 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
       manager(UDPManager::instance(effective.shareUDP())),
       beaconCleaner(__FILE__, __LINE__, event_new(manager.loop().base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::tickBeaconCleanS, this)),
       cacheCleaner(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::cacheCleanS, this)),
-      nsChecker(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::onNSCheckS, this)) {
+      nsChecker(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::onNSCheckS, this))
+#ifdef PVXS_ENABLE_OPENSSL
+      , cert_file_event_callback(cert_file_event_callback)
+      , cert_file_event_timer(__FILE__, __LINE__,
+                          event_new(tcp_loop.base, -1, EV_TIMEOUT, doCertFileEventhandler, this))
+#endif
+      {
 #ifdef PVXS_ENABLE_OPENSSL
     if (conf.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_client(effective);
+            log_info_printf(setup, "TLS enabled for client%s\n", "");
         } catch (std::exception& e) {
             log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
         }
@@ -1242,6 +1253,95 @@ void ContextImpl::cacheCleanS(evutil_socket_t fd, short evt, void* raw) {
     }
 }
 
+
+void ContextImpl::doCertFileEventhandler(evutil_socket_t fd, short evt, void *raw) {
+    try {
+        timeval interval(statusIntervalShort);
+        auto pvt = static_cast<ContextImpl*>(raw);
+        // If a custom file event callback has been set then call it
+        auto run_default_file_event_callback = true;
+        if ( pvt->cert_file_event_callback) {
+            run_default_file_event_callback = pvt->cert_file_event_callback(evt);
+        }
+        // Running default file event callback can be disabled by custom callback returning false
+        if ( run_default_file_event_callback)
+            pvt->defaultCertFileEventCallback(evt);
+
+        // Re add the timer
+        if(event_add(pvt->cert_file_event_timer.get(), &interval))
+            log_err_printf(setup, "Error re-enabling cert file event timer on\n%s", "");
+    }catch(std::exception& e){
+        log_exc_printf(io, "Unhandled error in cert file event timer callback: %s\n", e.what());
+    }
+}
+
+/**
+ * @brief The default certificate file event callback
+ * @param evt
+ * @return false to signify that no more cert file callbacks must be called in this loop
+ */
+bool ContextImpl::defaultCertFileEventCallback(short evt) {
+    if ( paths_to_watch.empty()) {
+        log_debug_printf(watcher, "File Watcher Event: %s\n", "Initializing");
+        // Initialize a vector of file paths to watch
+        paths_to_watch = {effective.tls_cert_filename, effective.tls_cert_password,
+                          effective.tls_private_key_filename, effective.tls_private_key_password};
+
+        // Initialize the last write times
+        last_write_times.resize(paths_to_watch.size(), 0);
+        for (size_t i = 0; i < paths_to_watch.size(); ++i) {
+            if (!paths_to_watch[i].empty()) {
+                try {
+                    last_write_times[i] =  certs::P12FileWatcher::getFileModificationTime(paths_to_watch[i]);
+                } catch (...) {
+                }
+            }
+        }
+        log_debug_printf(watcher, "File Watcher Event: %s\n", "Initialised");
+    }
+
+    log_debug_printf(watcher, "File Watcher Event: %s\n", "Wake up");
+    for (size_t i = 0; i < paths_to_watch.size(); ++i) {
+        if (!paths_to_watch[i].empty()) {
+            time_t current_write_time;
+            try {
+                current_write_time = certs::P12FileWatcher::getFileModificationTime(paths_to_watch[i]);
+            } catch (...) {
+                if (last_write_times[i] != 0) {
+                    log_debug_printf(watcher, "File Watcher: %s file was deleted\n", paths_to_watch[i].c_str());
+                    ossl::SSLContext new_context;
+                    try {
+                        new_context = ossl::SSLContext::for_client(effective);
+                        log_info_printf(setup, "TLS enabled for client: %s\n", "reconfigure");
+                    } catch (std::exception& e) {
+                        log_warn_printf(setup, "TLS disabled for client: reconfigure: %s\n", e.what());
+                    }
+                    reconfigureContext(new_context);
+                    paths_to_watch.clear();
+                    break;
+                }
+                continue;
+            }
+            if (current_write_time != last_write_times[i]) {
+                log_debug_printf(watcher, "File Watcher: %s file was updated\n", paths_to_watch[i].c_str());
+                ossl::SSLContext new_context;
+                try {
+                    new_context = ossl::SSLContext::for_client(effective);
+                    log_info_printf(setup, "TLS enabled for client: %s\n", "reconfigure");
+                } catch (std::exception& e) {
+                    log_warn_printf(setup, "TLS disabled for client: reconfigure: %s\n", e.what());
+                }
+                reconfigureContext(new_context);
+                paths_to_watch.clear();
+                break;
+            }
+        }
+    }
+    log_debug_printf(watcher, "File Watcher Event: %s\n", "Sleep");
+
+    return false;
+}
+
 X509 * ContextImpl::getCert(ossl::SSLContext *context_ptr) {
     auto context = context_ptr == nullptr ? &tls_context : context_ptr;
     if (!context->ctx)
@@ -1310,7 +1410,7 @@ void ContextImpl::watchStatus(const Config &new_config) {
 }
 
 void ContextImpl::reconfigureContext(const ossl::SSLContext &context) {
-    manager.loop().call([this, context]() mutable {
+    manager.loop().dispatch([this, context]() mutable {
         log_debug_printf(watcher, "Client reconfigure%s", "\n");
 
         auto conns(std::move(connByAddr));
@@ -1323,7 +1423,6 @@ void ContextImpl::reconfigureContext(const ossl::SSLContext &context) {
         tls_context = context;
     });
 }
-
 
 Context::Pvt::Pvt(const Config& conf) : loop("PVXCTCP", epicsThreadPriorityCAServerLow), impl(std::make_shared<ContextImpl>(conf, loop.internal())) {}
 

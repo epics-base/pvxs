@@ -22,7 +22,7 @@
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
-DEFINE_LOGGER(logshared, "pvxs.server.sharedpv.wildcard");
+DEFINE_LOGGER(logshared, "pvxs.svr.pvwild");
 DEFINE_LOGGER(logmailbox, "pvxs.mailbox");
 
 namespace pvxs {

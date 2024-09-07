@@ -26,7 +26,7 @@
 #error TLS 1.3 support required.  Upgrade to openssl >= 1.1.0
 #endif
 
-DEFINE_LOGGER(_setup, "pvxs.ossl.setup");
+DEFINE_LOGGER(_setup, "pvxs.ossl.init");
 DEFINE_LOGGER(_io, "pvxs.ossl.io");
 
 namespace pvxs {

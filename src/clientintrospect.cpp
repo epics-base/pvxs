@@ -12,8 +12,8 @@
 namespace pvxs {
 namespace client {
 
-DEFINE_LOGGER(setup, "pvxs.client.setup");
-DEFINE_LOGGER(io, "pvxs.client.io");
+DEFINE_LOGGER(setup, "pvxs.cli.init");
+DEFINE_LOGGER(io, "pvxs.cli.io");
 
 namespace {
 

@@ -52,7 +52,7 @@ DEFINE_INST_COUNTER2(Server::Pvt, ServerPvt);
 namespace pvxs {namespace impl {
 
 // message related to client state and errors
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 // related to low level send/recv
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 

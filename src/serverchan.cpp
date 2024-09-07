@@ -13,11 +13,11 @@
 namespace pvxs {namespace impl {
 
 // message related to client state and errors
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 // related to low level send/recv
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
-DEFINE_LOGGER(serversearch, "pvxs.server.search");
+DEFINE_LOGGER(serversearch, "pvxs.svr.search");
 
 ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
                        uint32_t sid,

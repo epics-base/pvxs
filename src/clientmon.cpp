@@ -18,8 +18,8 @@ namespace client {
 
 typedef epicsGuard<epicsMutex> Guard;
 
-DEFINE_LOGGER(monevt, "pvxs.client.monitor");
-DEFINE_LOGGER(io, "pvxs.client.io");
+DEFINE_LOGGER(monevt, "pvxs.cli.mon");
+DEFINE_LOGGER(io, "pvxs.cli.io");
 
 namespace {
 struct Entry {

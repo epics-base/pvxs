@@ -39,10 +39,11 @@ ReportInfo::~ReportInfo() {}
 namespace server {
 using namespace impl;
 
-DEFINE_LOGGER(serversetup, "pvxs.server.setup");
-DEFINE_LOGGER(watcher, "pvxs.cert.watcher");
-DEFINE_LOGGER(serverio, "pvxs.server.io");
-DEFINE_LOGGER(serversearch, "pvxs.server.search");
+DEFINE_LOGGER(serversetup, "pvxs.svr.init");
+DEFINE_LOGGER(osslsetup, "pvxs.ossl.init");
+DEFINE_LOGGER(watcher, "pvxs.cert.mon");
+DEFINE_LOGGER(serverio, "pvxs.svr.io");
+DEFINE_LOGGER(serversearch, "pvxs.svr.search");
 
 // mimic pvAccessCPP server (almost)
 // send a "burst" of beacons, then fallback to a longer interval
@@ -55,8 +56,6 @@ Server Server::fromEnv()
     return Config::fromEnv().build();
 }
 #else
-static constexpr timeval statusIntervalInitial{15, 0};
-static constexpr timeval statusIntervalShort{5, 0};
 Server Server::fromEnv(const bool tls_disabled, const ConfigCommon::ConfigTarget target)
 {
     return Config::fromEnv(tls_disabled, target).build();
@@ -510,7 +509,6 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 Server::Pvt::Pvt(const Config &conf)
 #else
 Server::Pvt::Pvt(const Config& conf, CertEventCallback cert_file_event_callback)
-//Server::Pvt::Pvt(const Config &conf, void (*status_callback)(evutil_socket_t fd, short evt, void *raw))
 #endif
     : effective(conf)
     , beaconMsg(128)
@@ -534,12 +532,13 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback cert_file_event_callback)
     if(effective.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_server(effective);
+            log_info_printf(osslsetup, "TLS enabled for server%s\n", "");
         } catch (std::exception& e) {
             if (effective.tls_stop_if_no_cert) {
-                log_err_printf(serversetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
+                log_err_printf(osslsetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
                 exit(1);
             } else {
-                log_err_printf(serversetup, "TLS disabled for server: %s\n", e.what());
+                log_err_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
             }
         }
     }

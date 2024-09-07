@@ -8,7 +8,7 @@
 
 #include <pvxs/log.h>
 
-DEFINE_LOGGER(_logname, "pvxs.certs.config.cms");
+DEFINE_LOGGER(_logname, "pvxs.certs.cfg");
 
 namespace pvxs {
 namespace certs {

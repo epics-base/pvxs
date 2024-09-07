@@ -31,8 +31,8 @@
 #include "serverconn.h"
 #include "utilpvt.h"
 
-DEFINE_LOGGER(serversetup, "pvxs.server.setup");
-DEFINE_LOGGER(clientsetup, "pvxs.client.setup");
+DEFINE_LOGGER(serversetup, "pvxs.svr.init");
+DEFINE_LOGGER(clientsetup, "pvxs.cli.init");
 DEFINE_LOGGER(config, "pvxs.config");
 
 namespace pvxs {
