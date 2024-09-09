@@ -527,10 +527,10 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback cert_file_event_callback)
                    [this]() {
                        ossl::SSLContext new_context;
                        try {
-                           new_context = ossl::SSLContext::for_client(effective);
-                           log_info_printf(watcher, "TLS enabled for client: %s\n", "reconfigure");
+                           new_context = ossl::SSLContext::for_server(effective);
+                           log_info_printf(watcher, "TLS enabled for server: %s\n", "reconfigure");
                        } catch (std::exception& e) {
-                           log_warn_printf(watcher, "TLS disabled for client: reconfigure: %s\n", e.what());
+                           log_warn_printf(watcher, "TLS disabled for server: reconfigure: %s\n", e.what());
                        }
                        reconfigureContext(new_context);
                    })
