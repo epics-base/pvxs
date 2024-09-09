@@ -348,7 +348,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     ossl::SSLContext tls_context;
     CertEventCallback cert_file_event_callback;
     evevent cert_event_timer;
-    bool first_cert_event;
+    bool first_cert_event{true};
     certs::CertificateStatus current_status;
     certs::P12FileWatcher file_watcher;
 #endif

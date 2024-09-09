@@ -1034,11 +1034,8 @@ void Server::Pvt::doCertEventhandler(evutil_socket_t fd, short evt, void* raw) {
 
         // Running cert status event callback can be disabled by custom callback returning 1
         // Don't run unless this is a CLIENT, SERVER, or GATEWAY (not PVACMS)
-        if (run_default_file_event_callback > 0 && pvt->effective.config_target != ConfigCommon::CMS) {
-            pvt->certStatusEventCallback(evt);
-        }
-        if (pvt->first_cert_event)
-            pvt->first_cert_event = false;
+        if (run_default_file_event_callback > 0 && pvt->effective.config_target != ConfigCommon::CMS) pvt->certStatusEventCallback(evt);
+        if (pvt->first_cert_event) pvt->first_cert_event = false;
 
         // Re add the timer
         timeval interval(statusIntervalShort);
@@ -1064,7 +1061,7 @@ uint8_t Server::Pvt::certStatusEventCallback(short evt) {
     }
 
     auto current_config(effective);
-    certs::StatusListener::handleStatusUpdates(status, current_status, watcher, [this, &status, &current_config]() { HANDLE_UPDATE(server) });
+    certs::StatusListener::handleStatusUpdates(status, current_status, watcher, [this, status, current_config]() { HANDLE_UPDATE(server) });
 
     log_info_printf(watcher, "Status Monitor Sleep%s\n", "");
     return 0;

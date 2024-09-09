@@ -608,7 +608,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop, CertEventCa
     if (event_add(searchRx6.get(), nullptr)) log_err_printf(setup, "Error enabling search RX6\n%s", "");
     if (event_add(beaconCleaner.get(), &beaconCleanInterval)) log_err_printf(setup, "Error enabling beacon clean timer on\n%s", "");
     if (event_add(cacheCleaner.get(), &channelCacheCleanInterval)) log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
-    if (event_add(cert_event_timer.get(), &statusIntervalInitial)) log_err_printf(setup, "Error enabling cert status timer on\n%s", "");
+    if (event_add(cert_event_timer.get(), &statusIntervalShort)) log_err_printf(setup, "Error enabling cert status timer on\n%s", "");
 
     state = Running;
 }
@@ -1283,8 +1283,7 @@ void ContextImpl::doCertEventhandler(evutil_socket_t fd, short evt, void* raw) {
 
         // Running cert status event callback can be disabled by custom callback returning 1
         if (run_default_file_event_callback > 0) pvt->certStatusEventCallback(evt);
-        if (pvt->first_cert_event)
-            pvt->first_cert_event = false;
+        if (pvt->first_cert_event) pvt->first_cert_event = false;
 
         // Re add the timer
         timeval interval(statusIntervalShort);
@@ -1326,7 +1325,7 @@ uint8_t ContextImpl::certStatusEventCallback(short evt) {
     }
 
     auto current_config(effective);
-    certs::StatusListener::handleStatusUpdates(status, current_status, watcher, [this, &status, &current_config]() { HANDLE_UPDATE(client) });
+    certs::StatusListener::handleStatusUpdates(status, current_status, watcher, [this, status, current_config]() { HANDLE_UPDATE(client) });
 
     log_info_printf(watcher, "Status Monitor Sleep%s\n", "");
     return 0;
