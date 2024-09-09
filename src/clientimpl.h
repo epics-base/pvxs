@@ -325,7 +325,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
     std::atomic<bool> sl_stop_flag_{false};
     std::shared_ptr<certs::P12FileWatcher> client_file_watcher_;
-    std::shared_ptr<certs::StatusListener> client_status_listener_;
+    std::shared_ptr<certs::StatusListener<ossl::SSLContext>> client_status_listener_;
 #else
     std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
 #endif
@@ -349,18 +349,21 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     CertEventCallback cert_file_event_callback;
-    evevent cert_file_event_timer;
+    evevent cert_event_timer;
     std::vector<std::string> paths_to_watch;
     std::vector<time_t> last_write_times;
+    certs::CertificateStatus current_status;
+    bool first_status;
     ossl::SSLContext tls_context;
+    certs::P12FileWatcher file_watcher;
 #endif
 
     INST_COUNTER(ClientContextImpl);
 
-#ifdef PVXS_ENABLE_OPENSSL
-    ContextImpl(const Config& conf, const evbase &tcp_loop, CertEventCallback cert_file_event_callback = nullptr);
-#else
+#ifndef PVXS_ENABLE_OPENSSL
     ContextImpl(const Config& conf, const evbase &tcp_loop);
+#else
+    ContextImpl(const Config& conf, const evbase &tcp_loop, CertEventCallback cert_file_event_callback = nullptr);
 #endif
     ~ContextImpl();
 
@@ -394,11 +397,10 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     void reconfigureContext(const ossl::SSLContext &context);
-    static void doCertFileEventhandler(evutil_socket_t fd, short evt, void *raw);
-    bool defaultCertFileEventCallback(short evt);
+    static void doCertEventhandler(evutil_socket_t fd, short evt, void *raw);
+    uint8_t  defaultCertFileEventCallback(short evt);
+    uint8_t  certStatusEventCallback(short evt);
     X509 * getCert(ossl::SSLContext *context = nullptr);
-    void watchStatus(const Config &new_config);
-    void statusListenerCallback(const Config &new_config, X509 *ctx_cert);
 #endif
     };
 
@@ -412,7 +414,11 @@ public:
 
     INST_COUNTER(ClientPvt);
 
+#ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
+#else
+    Pvt(const Config& conf, CertEventCallback cert_file_event_callback = nullptr);
+#endif
     ~Pvt(); // I call ContextImpl::close()
 };
 

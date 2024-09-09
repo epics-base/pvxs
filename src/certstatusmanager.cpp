@@ -25,7 +25,7 @@
 namespace pvxs {
 namespace certs {
 
-DEFINE_LOGGER(status, "pvxs.cert.status");
+DEFINE_LOGGER(status, "pvxs.certs.status");
 
 /**
  * @brief Retrieves the Online Certificate Status Protocol (OCSP) response from the given byte array.
@@ -182,9 +182,8 @@ CertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
     auto uri = getStatusPvFromCert(cert);
 
     // Build and start network operation
-    // Disable TLS for get status as the OCSP payload is signed
-    // and, we'll enter a recursive loop!!
-    auto client(client::Context::fromEnv(true));
+    // use an unsecure socket that doesn't monitor files or status
+    auto client(client::Context::fromEnvUnsecured());
     auto operation = client.get(uri).exec();
 
     // wait for it to complete, for up to 5 seconds.

@@ -20,8 +20,8 @@
 #include <pvxs/version.h>
 
 #ifdef PVXS_ENABLE_OPENSSL
-using CertEventCallback = std::function<bool(short)>;
-static constexpr timeval statusIntervalInitial{15, 0};
+using CertEventCallback = std::function<uint8_t (short)>;
+static constexpr timeval statusIntervalInitial{0, 0};
 static constexpr timeval statusIntervalShort{5, 0};
 #endif
 

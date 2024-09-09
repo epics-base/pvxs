@@ -369,7 +369,11 @@ struct OCSPStatus {
 struct CertificateStatus : public OCSPStatus {
     PVACertStatus status;
     inline bool operator==(const CertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status; }
+    inline bool operator!=(const CertificateStatus& rhs) const { return this->status != rhs.status || this->ocsp_status != rhs.ocsp_status; }
     inline bool operator==(certstatus_t rhs) const { return this->status == rhs; }
+    inline bool operator==(ocspcertstatus_t rhs) const { return this->ocsp_status == rhs; }
+    inline bool operator!=(certstatus_t rhs) const { return !(this->status == rhs); }
+    inline bool operator!=(ocspcertstatus_t rhs) const { return !(this->ocsp_status == rhs); }
 
     explicit CertificateStatus(certstatus_t status, const shared_array<const uint8_t>&& ocsp_bytes) : OCSPStatus(std::move(ocsp_bytes)), status(status) {};
 
@@ -385,7 +389,17 @@ struct CertificateStatus : public OCSPStatus {
     // To  set an UNKNOWN status to indicate errors
     CertificateStatus() : OCSPStatus(), status(UNKNOWN) {}
 
-   private:
+    /**
+     * @brief Verify that the status validity dates are currently valid and the status is known
+     * @return true if the status is still valid
+     */
+    bool isValid() noexcept {
+        if ( status == UNKNOWN ) return false;
+        auto now(std::time(nullptr));
+        return status_valid_until_date.t > now;
+    }
+
+  private:
     friend class CertStatusFactory;
     explicit CertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, shared_array<const uint8_t>&& ocsp_bytes, StatusDate status_date,
                                StatusDate status_valid_until_time, StatusDate revocation_time)

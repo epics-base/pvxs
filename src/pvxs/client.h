@@ -330,7 +330,9 @@ public:
 #ifndef PVXS_ENABLE_OPENSSL
     static Context fromEnv();
 #else
+    Context(const Config &, const std::function<int(int)>&);
     static Context fromEnv(const bool tls_disabled = false);
+    static Context fromEnvUnsecured();
 
     /** Apply (in part) updated configuration
      *
@@ -1109,6 +1111,10 @@ public:
     inline
     Context build() const {
         return Context(*this);
+    }
+    inline
+    Context buildUnsecured() const {
+        return Context(*this, [](int evt) { return 0; });
     }
 
 #ifdef PVXS_EXPERT_API_ENABLED

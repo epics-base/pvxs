@@ -256,12 +256,12 @@ struct Server::Pvt
 
 #ifdef PVXS_ENABLE_OPENSSL
     CertEventCallback cert_file_event_callback;
-    evevent cert_file_event_timer;
-    std::vector<std::string> paths_to_watch;
-    std::vector<time_t> last_write_times;
+    evevent cert_event_timer;
+    certs::CertificateStatus current_status;
+    bool first_status{true};
     ossl::SSLContext tls_context;
-    std::atomic<bool> sl_stop_flag_{false};
-    std::shared_ptr<certs::StatusListener> server_status_listener_;
+    certs::P12FileWatcher file_watcher;
+    std::shared_ptr<certs::StatusListener<ossl::SSLContext>> server_status_listener;
 #endif
 
     INST_COUNTER(ServerPvt);
@@ -282,11 +282,10 @@ private:
     static void doBeaconsS(evutil_socket_t fd, short evt, void *raw);
 #ifdef PVXS_ENABLE_OPENSSL
     X509 * getCert(ossl::SSLContext *context_ptr = nullptr);
-    void watchStatus(const Config& configuration);
-    void statusListenerCallback(const Config &new_config, X509 *ctx_cert);
-    Server reconfigureContext(const Config& configuration);
-    static void doCertFileEventhandler(evutil_socket_t fd, short evt, void *raw);
-    bool defaultCertFileEventCallback(short evt);
+    void reconfigureContext(ossl::SSLContext& new_context);
+    static void doCertEventhandler(evutil_socket_t fd, short evt, void *raw);
+    uint8_t defaultCertFileEventCallback(short evt);
+    uint8_t certStatusEventCallback(short evt);
 #endif
 };
 
