@@ -1547,6 +1547,7 @@ int main(int argc, char *argv[]) {
 
         // Get config
         auto config = ConfigCms::fromEnv();
+        config.config_target = pvxs::impl::ConfigCommon::CMS;
 
         // Read commandline options
         int exit_status;

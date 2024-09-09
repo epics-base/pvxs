@@ -1034,8 +1034,7 @@ void Server::Pvt::doCertEventhandler(evutil_socket_t fd, short evt, void* raw) {
 
         // Running cert status event callback can be disabled by custom callback returning 1
         // Don't run unless this is a CLIENT, SERVER, or GATEWAY (not PVACMS)
-        if (run_default_file_event_callback > 0 && pvt->effective.config_target != ConfigCommon::CLIENT &&
-            pvt->effective.config_target != ConfigCommon::SERVER && pvt->effective.config_target != ConfigCommon::GATEWAY) {
+        if (run_default_file_event_callback > 0 && pvt->effective.config_target != ConfigCommon::CMS) {
             pvt->certStatusEventCallback(evt);
         }
         if (pvt->first_cert_event)

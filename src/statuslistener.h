@@ -63,7 +63,7 @@ class StatusListener {
         }
 
         // If the OCSP status went from GOOD to BAD or BAD to GOOD then reconfigure
-        if (new_status == certs::OCSP_CERTSTATUS_GOOD || current_status == certs::OCSP_CERTSTATUS_GOOD) {
+        if (new_status != current_status && (new_status == certs::OCSP_CERTSTATUS_GOOD || current_status == certs::OCSP_CERTSTATUS_GOOD)) {
             log_warn_printf(logger, "Certificate Validity has changed: %s ==> %s\n", current_status.status.s.c_str(), new_status.status.s.c_str());
             reconfigure_fn();
         }

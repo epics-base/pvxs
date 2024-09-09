@@ -42,7 +42,7 @@ namespace pvxs {
 namespace impl {
 
 struct PVXS_API ConfigCommon {
-    enum ConfigTarget { CLIENT, SERVER, GATEWAY } config_target = CLIENT;
+    enum ConfigTarget { CLIENT, SERVER, GATEWAY, CMS, OCSP } config_target = CLIENT;
 
     virtual ~ConfigCommon() = 0;
 
