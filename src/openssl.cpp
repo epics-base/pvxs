@@ -344,6 +344,14 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
             if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), cert.acquire(), CAs.acquire()))
                 throw SSLError(SB() << "Unable to process \"" << filename << "\"");
         }
+
+        if ( conf.config_target != ConfigCommon::CMS && cert ) {
+            auto status = certs::CertStatusManager::getStatus(cert);
+            if ( status != certs::OCSP_CERTSTATUS_GOOD ) {
+                throw SSLError(SB() << "Certificate status is: " << status.status.s);
+            }
+        }
+
         if (cert) {
             // some early sanity checks
             verifyKeyUsage(cert, ssl_client);

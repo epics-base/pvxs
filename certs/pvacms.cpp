@@ -770,7 +770,9 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
         postCertificateStatus(status_pv, pv_name, serial, cert_status, true);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error getting status: %s\n", e.what());
-        postCertificateErrorStatus(status_pv, nullptr, our_issuer_id, serial, 1, 1, e.what());
+        auto cert_status = CertificateStatus();
+        postCertificateStatus(status_pv, pv_name, serial, cert_status, true);
+//        postCertificateErrorStatus(status_pv, nullptr, our_issuer_id, serial, 1, 1, e.what());
     }
 }
 
@@ -1361,6 +1363,10 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
     setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
     setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", time(nullptr));
     setValue<std::string>(status_value, "state", cert_status.status.s);
+    // Set OCSP state to default values even if bytes are not set
+    setValue<uint32_t>(status_value, "ocsp_status.value.index", cert_status.ocsp_status.i);
+    setValue<time_t>(status_value, "ocsp_status.timeStamp.secondsPastEpoch", time(nullptr));
+    setValue<std::string>(status_value, "ocsp_state", SB() << "**UNCERTIFIED**: " << cert_status.ocsp_status.s);
 
     // Get ocsp info if specified
     if (!cert_status.ocsp_bytes.empty()) {
@@ -1373,6 +1379,7 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
         status_value["ocsp_response"] = ocsp_bytes.freeze();
     }
 
+    log_debug_printf(pvacms, "Posting Certificate Status: %s = %s\n", pv_name.c_str(), cert_status.status.s.c_str());
     if (status_pv.isOpen(pv_name)) {
         status_pv.post(pv_name, status_value);
     } else {
@@ -1407,12 +1414,19 @@ void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique
     } else
         status_value = CertStatus::getStatusPrototype();
 
+    auto cert_status = CertificateStatus();
+    setValue<uint64_t>(status_value, "serial", serial);
+    setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
+    setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", time(nullptr));
+    setValue<std::string>(status_value, "state", cert_status.status.s);
+
     status_value["status.alarm.status"] = error_status;
     status_value["status.alarm.severity"] = error_severity;
     status_value["status.alarm.message"] = error_message;
 
     status_value["status.value.index"] = UNKNOWN;
     status_value["serial"] = serial;
+    log_debug_printf(pvacms, "Posting Certificate Error Status: %s = %s\n", pv_name.c_str(), error_message.c_str());
     if (status_pv.isOpen(pv_name))
         status_pv.post(pv_name, status_value);
     else {
@@ -1420,7 +1434,7 @@ void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique
         status_pv.post(pv_name, status_value);
         status_pv.close(pv_name);
     }
-    if (op != nullptr) op->error(error_message);
+//    if (op != nullptr) op->error(error_message);
 }
 
 /**
