@@ -345,13 +345,6 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
                 throw SSLError(SB() << "Unable to process \"" << filename << "\"");
         }
 
-        if ( conf.config_target != ConfigCommon::CMS && cert ) {
-            auto status = certs::CertStatusManager::getStatus(cert);
-            if ( status != certs::OCSP_CERTSTATUS_GOOD ) {
-                throw SSLError(SB() << "Certificate status is: " << status.status.s);
-            }
-        }
-
         if (cert) {
             // some early sanity checks
             verifyKeyUsage(cert, ssl_client);
@@ -383,6 +376,14 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
 
             if (!SSL_CTX_build_cert_chain(ctx.ctx, SSL_BUILD_CHAIN_FLAG_UNTRUSTED))  // SSL_BUILD_CHAIN_FLAG_CHECK
                 throw SSLError("invalid cert chain");
+        }
+
+        if ( conf.config_target != ConfigCommon::CMS && cert ) {
+            auto status = certs::CertStatusManager::getStatus(cert);
+            if ( status != certs::OCSP_CERTSTATUS_GOOD ) {
+                ctx.cert_invalid = true;
+                log_warn_printf(_setup, "TLS disabled for %s certificate is: %s\n", ssl_client ? "client" : "server", status.status.s.c_str());
+            }
         }
     }
 

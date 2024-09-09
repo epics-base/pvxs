@@ -811,9 +811,9 @@ void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_i
 
         auto revocation_date = std::time(nullptr);
         auto ocsp_status = cert_status_creator.createOCSPStatus(serial, REVOKED, revocation_date, revocation_date);
-        status_value = postCertificateStatus(status_pv, pv_name, serial, ocsp_status);
+        postCertificateStatus(status_pv, pv_name, serial, ocsp_status);
         log_info_printf(pvacms, "Certificate %s:%llu has been REVOKED\n", issuer_id.c_str(), serial);
-        op->reply(status_value);
+        op->reply();
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error revoking certificate: %s\n", e.what());
         op->error(SB() << "Error revoking certificate: " << e.what());
