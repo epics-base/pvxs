@@ -608,6 +608,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop, CertEventCa
     if (event_add(searchRx6.get(), nullptr)) log_err_printf(setup, "Error enabling search RX6\n%s", "");
     if (event_add(beaconCleaner.get(), &beaconCleanInterval)) log_err_printf(setup, "Error enabling beacon clean timer on\n%s", "");
     if (event_add(cacheCleaner.get(), &channelCacheCleanInterval)) log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
+    if (event_add(cert_event_timer.get(), &statusIntervalInitial)) log_err_printf(setup, "Error enabling cert status timer on\n%s", "");
 
     state = Running;
 }
@@ -653,6 +654,7 @@ void ContextImpl::close() {
         (void)event_del(searchRx6.get());
         (void)event_del(beaconCleaner.get());
         (void)event_del(cacheCleaner.get());
+        (void)event_del(cert_event_timer.get());
 
         auto conns(std::move(connByAddr));
         // explicitly break ref. loop of channel cache
