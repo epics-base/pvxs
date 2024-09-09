@@ -31,7 +31,7 @@ namespace certs {
 
 class CertStatusManager;
 
-///////////// OSCP RESPONSE ERRORS
+///////////// OCSP RESPONSE ERRORS
 class OCSPParseException : public std::runtime_error {
    public:
     explicit OCSPParseException(const std::string& message) : std::runtime_error(message) {}

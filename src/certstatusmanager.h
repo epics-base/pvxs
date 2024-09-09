@@ -149,7 +149,7 @@ class CertStatusManager {
     std::shared_ptr<client::Context> client_;
     const std::shared_ptr<client::Subscription> sub_;
     ;
-    static ossl_ptr<OCSP_RESPONSE> getOSCPResponse(const shared_array<const uint8_t>& ocsp_bytes);
+    static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes);
 
     static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response);
     static uint64_t ASN1ToUint64(ASN1_INTEGER* asn1_number);

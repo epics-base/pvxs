@@ -30,14 +30,14 @@ DEFINE_LOGGER(status, "pvxs.certs.status");
 /**
  * @brief Retrieves the Online Certificate Status Protocol (OCSP) response from the given byte array.
  *
- * The getOSCPResponse function takes a shared_array of uint8_t bytes as input and returns the OCSP response.
+ * The getOCSPResponse function takes a shared_array of uint8_t bytes as input and returns the OCSP response.
  * The OCSP response is a data structure used to validate the status of an SSL certificate. It contains information
  * about the certificate, including its validity and revocation status.
  *
  * @param ocsp_bytes A shared_array of bytes representing the OCSP response.
  * @return The OCSP response as a data structure.
  */
-ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOSCPResponse(const shared_array<const uint8_t>& ocsp_bytes) {
+ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes) {
     // Create a BIO for the OCSP response
     ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())), false);
     if (!bio) {
@@ -66,7 +66,7 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOSCPResponse(const shared_array<co
  * @param trusted_issuer_cert the certificate of a trusted CA to use to verify the signature of the response.
  */
 PVXS_API ParsedOCSPStatus CertStatusManager::parse(shared_array<const uint8_t> ocsp_bytes) {
-    auto&& ocsp_response = getOSCPResponse(ocsp_bytes);
+    auto&& ocsp_response = getOCSPResponse(ocsp_bytes);
 
     // Get the response status
     int response_status = OCSP_response_status(ocsp_response.get());
