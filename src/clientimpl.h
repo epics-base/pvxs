@@ -323,9 +323,6 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 #ifdef PVXS_ENABLE_OPENSSL
     // pair (addr, useTLS)
     std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
-    std::atomic<bool> sl_stop_flag_{false};
-    std::shared_ptr<certs::P12FileWatcher> client_file_watcher_;
-    std::shared_ptr<certs::StatusListener<ossl::SSLContext>> client_status_listener_;
 #else
     std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
 #endif
@@ -348,13 +345,11 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent nsChecker;
 
 #ifdef PVXS_ENABLE_OPENSSL
+    ossl::SSLContext tls_context;
     CertEventCallback cert_file_event_callback;
     evevent cert_event_timer;
-    std::vector<std::string> paths_to_watch;
-    std::vector<time_t> last_write_times;
+    bool first_cert_event;
     certs::CertificateStatus current_status;
-    bool first_status;
-    ossl::SSLContext tls_context;
     certs::P12FileWatcher file_watcher;
 #endif
 

@@ -1038,8 +1038,8 @@ void Server::Pvt::doCertEventhandler(evutil_socket_t fd, short evt, void* raw) {
             pvt->effective.config_target != ConfigCommon::SERVER && pvt->effective.config_target != ConfigCommon::GATEWAY) {
             pvt->certStatusEventCallback(evt);
         }
-        if (pvt->first_status)
-            pvt->first_status = false;
+        if (pvt->first_cert_event)
+            pvt->first_cert_event = false;
 
         // Re add the timer
         timeval interval(statusIntervalShort);
@@ -1059,20 +1059,13 @@ uint8_t Server::Pvt::certStatusEventCallback(short evt) {
     auto status = certs::CertStatusManager::getStatus(cert);
 
     // If this is the first time then just register the status and return to wait for changes
-    if (first_status) {
-        first_status = false;
+    if (first_cert_event) {
         current_status = status;
         return 0;
     }
 
     auto current_config(effective);
-    certs::StatusListener<ossl::SSLContext>::handleStatusUpdates(
-        status, current_status, watcher, [&current_config]() { return ossl::SSLContext::for_server(current_config); },
-        [this](ossl::SSLContext new_context) {
-            if (new_context.ctx) {
-                reconfigureContext(new_context);
-            }
-        });
+    certs::StatusListener::handleStatusUpdates(status, current_status, watcher, [this, &status, &current_config]() { HANDLE_UPDATE(server) });
 
     log_info_printf(watcher, "Status Monitor Sleep%s\n", "");
     return 0;
@@ -1084,7 +1077,7 @@ uint8_t Server::Pvt::certStatusEventCallback(short evt) {
  * @return false to signify that no more cert file callbacks must be called in this loop
  */
 uint8_t Server::Pvt::defaultCertFileEventCallback(short evt) {
-    if (first_status) return 1; // Skip first event
+    if (first_cert_event) return 1; // Skip first event
     file_watcher.checkFileStatus();
     return 1;
 }

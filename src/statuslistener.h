@@ -31,10 +31,23 @@
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
+#define HANDLE_UPDATE(FOR_TARGET)                                                                     \
+    ossl::SSLContext new_context;                                                                     \
+    try {                                                                                             \
+        new_context = ossl::SSLContext::for_##FOR_TARGET(current_config);                             \
+        if (status == certs::VALID) {                                                                 \
+            log_info_printf(watcher, "TLS enabled for " #FOR_TARGET ": %s\n", "reconfiguring");       \
+        } else {                                                                                      \
+            log_info_printf(watcher, "TLS Disabled for " #FOR_TARGET ": %s\n", "reconfiguring");      \
+        }                                                                                             \
+    } catch (std::exception& e) {                                                                     \
+        log_warn_printf(watcher, "TLS disabled for " #FOR_TARGET ": reconfiguring: %s\n", e.what());  \
+    }                                                                                                 \
+    reconfigureContext(new_context);
+
 namespace pvxs {
 namespace certs {
 
-template<typename T>
 class StatusListener {
    public:
     StatusListener() = default;
@@ -42,8 +55,7 @@ class StatusListener {
     static void handleStatusUpdates(CertificateStatus &new_status,
                                     CertificateStatus &current_status,
                                     logger &logger,
-                                    std::function<T()> get_context_fn,
-                                    std::function<void(T)> reconfigure_fn) {
+                                    std::function<void()> reconfigure_fn) {
         // If CMS is unavailable (UNKNOWN) and the prior status is still valid then fast return
         if (new_status == certs::UNKNOWN && current_status.isValid()) {
             log_debug_printf(logger, "Status Monitor: %s Status Still Valid\n", current_status.status.s.c_str());
@@ -53,18 +65,7 @@ class StatusListener {
         // If the OCSP status went from GOOD to BAD or BAD to GOOD then reconfigure
         if (new_status == certs::OCSP_CERTSTATUS_GOOD || current_status == certs::OCSP_CERTSTATUS_GOOD) {
             log_warn_printf(logger, "Certificate Validity has changed: %s ==> %s\n", current_status.status.s.c_str(), new_status.status.s.c_str());
-            T new_context;
-            try {
-                new_context = get_context_fn();
-                if (new_status == certs::VALID) {
-                    log_info_printf(logger, "TLS enabled for client: %s\n", "reconfiguring");
-                } else {
-                    log_info_printf(logger, "TLS Disabled for client: %s\n", "reconfiguring");
-                }
-            } catch (std::exception& e) {
-                log_warn_printf(logger, "TLS disabled for client: reconfiguring: %s\n", e.what());
-            }
-            reconfigure_fn(new_context);
+            reconfigure_fn();
         }
         current_status = new_status;
     }

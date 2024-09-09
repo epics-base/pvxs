@@ -255,13 +255,12 @@ struct Server::Pvt
     } state;
 
 #ifdef PVXS_ENABLE_OPENSSL
+    ossl::SSLContext tls_context;
     CertEventCallback cert_file_event_callback;
     evevent cert_event_timer;
+    bool first_cert_event{true};
     certs::CertificateStatus current_status;
-    bool first_status{true};
-    ossl::SSLContext tls_context;
     certs::P12FileWatcher file_watcher;
-    std::shared_ptr<certs::StatusListener<ossl::SSLContext>> server_status_listener;
 #endif
 
     INST_COUNTER(ServerPvt);
