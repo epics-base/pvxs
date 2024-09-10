@@ -14,7 +14,7 @@
 #include <pvxs/config.h>
 #include <pvxs/data.h>
 
-#include "certstatusfactoryclient.h"
+#include "certFactory.h"
 #include "ownedptr.h"
 #include "security.h"
 

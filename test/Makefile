@@ -139,6 +139,10 @@ testtlsstatus_SRCS += testtlsstatus.cpp
 testtlsstatus_SRCS += certstatusfactory.cpp
 TESTS += testtlsstatus
 
+TESTPROD_HOST += jwtlogintest
+jwtlogintest_SRCS += jwtlogintest.cpp
+jwtlogintest_LDFLAGS +=-lcurl
+
 endif # EVENT2_HAS_OPENSSL
 endif
 

@@ -35,7 +35,7 @@ pvacms_LDFLAGS += -lsqlite3 -lssl -lcrypto
 #pvaocsp_SRCS += ocsppva.cpp
 #pvaocsp_SRCS += configocsp.cpp
 
-#include $(AUTHN)/Makefile
+include $(AUTHN)/Makefile
 
 endif # EVENT2_HAS_OPENSSL
 
