@@ -315,7 +315,7 @@ void Connection::handle_CONNECTION_VALIDATION()
         if(method=="ca" || (method=="anonymous" && selected!="ca"))
             selected = method;
 #ifdef PVXS_ENABLE_OPENSSL
-        else if(isTLS && method=="x509" && context->tls_context.have_certificate())
+        else if(isTLS && method=="x509" && context->tls_context.cert_valid && context->tls_context.have_certificate())
             selected = method;
 #endif
     }

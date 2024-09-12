@@ -381,8 +381,9 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         if ( conf.config_target != ConfigCommon::CMS && cert ) {
             auto status = certs::CertStatusManager::getStatus(cert);
             if ( status != certs::OCSP_CERTSTATUS_GOOD ) {
-                ctx.cert_invalid = true;
                 log_warn_printf(_setup, "TLS disabled for %s certificate is: %s\n", ssl_client ? "client" : "server", status.status.s.c_str());
+            } else {
+                ctx.cert_valid = true;
             }
         }
     }

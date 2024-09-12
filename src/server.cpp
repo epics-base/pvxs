@@ -668,7 +668,7 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback cert_file_event_callback)
             }
 
 #ifdef PVXS_ENABLE_OPENSSL
-        if(tls_context && !tls_context.cert_invalid) {
+        if(tls_context && tls_context.cert_valid) {
             firstiface = true;
             for(auto& addr : tlsifaces) {
                 // unconditionally set port to avoid clash with plain TCP listener

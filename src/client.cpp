@@ -1004,7 +1004,7 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked) {
             to_wire(M, uint8_t(0u));
 
 #ifdef PVXS_ENABLE_OPENSSL
-        } else if (tls_context && !tls_context.cert_invalid) {
+        } else if (tls_context && tls_context.cert_valid) {
             to_wire(M, uint8_t(2u));
             to_wire(M, "tls");
             to_wire(M, "tcp");

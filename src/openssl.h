@@ -127,7 +127,7 @@ struct SSLContext {
     bool have_certificate() const;
     const X509* certificate0() const;
     static PVXS_API int NID_PvaCertStatusURI;
-    bool cert_invalid{false};  // To signal that cert is invalid even though we have a certificate in the context
+    bool cert_valid{false};  // To signal that cert is valid when we have received the status for the certificate
 
     static bool fill_credentials(PeerCredentials& cred, const SSL* ctx);
 };
