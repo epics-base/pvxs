@@ -12,7 +12,17 @@ include $(TOP)/configure/CONFIG
 USR_CPPFLAGS += -I$(TOP)/src
 
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
+SRC_DIRS += $(TOP)/certs
+SRC_DIRS += $(TOP)/src
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+USR_CPPFLAGS += -I$(TOP)/certs
+
+PROD += pvxcert
+pvxcert_SRCS += status.cpp
+pvxcert_SRCS += p12filefactory.cpp
+pvxcert_SRCS += certfactory.cpp
+pvxcert_SRCS += certstatusmanager.cpp
+
 endif # EVENT2_HAS_OPENSSL
 
 PROD_LIBS += pvxs Com
