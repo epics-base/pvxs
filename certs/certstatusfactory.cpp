@@ -41,7 +41,8 @@ namespace certs {
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date, StatusDate predicated_revocation_time) const {
+CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date,
+                                                      StatusDate predicated_revocation_time) const {
     // Create OCSP response
     ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
@@ -91,7 +92,7 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
 
     // Serialize OCSP response
     auto ocsp_response = ocspResponseToBytes(basic_resp);
-    auto ocsp_bytes = shared_array<const uint8_t>(ocsp_response.begin(), ocsp_response.end());
+    auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
 
     return CertificateStatus(status, ocsp_status, std::move(ocsp_bytes), status_date, status_valid_until_time, revocation_time_to_use);
 }
@@ -110,8 +111,7 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
  */
 ossl_ptr<ASN1_INTEGER> CertStatusFactory::uint64ToASN1(const uint64_t& serial) {
     ossl_ptr<ASN1_INTEGER> asn1_serial(ASN1_INTEGER_new(), false);
-    if (!asn1_serial)
-        throw std::runtime_error(SB() << "Error converting serial number: " << serial);
+    if (!asn1_serial) throw std::runtime_error(SB() << "Error converting serial number: " << serial);
 
     // Convert byte array to ASN1_INTEGER
     ASN1_INTEGER_set_uint64(asn1_serial.get(), serial);
@@ -130,8 +130,7 @@ ossl_ptr<ASN1_INTEGER> CertStatusFactory::uint64ToASN1(const uint64_t& serial) {
  * @return The OCSP certificate ID.
  */
 ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& serial, const EVP_MD* digest) const {
-    if (!ca_cert_)
-        throw std::runtime_error(SB() << "Can't create OCSP Cert ID: Null Certificate");
+    if (!ca_cert_) throw std::runtime_error(SB() << "Can't create OCSP Cert ID: Null Certificate");
 
     unsigned char issuer_name_hash[EVP_MAX_MD_SIZE];
     unsigned char issuer_key_hash[EVP_MAX_MD_SIZE];
@@ -154,8 +153,7 @@ ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& serial
 
     // Create OCSP_CERTID
     auto cert_id = ossl_ptr<OCSP_CERTID>(OCSP_cert_id_new(digest, issuer_name, issuer_key, asn1_serial.get()), false);
-    if (!cert_id)
-        throw std::runtime_error(SB() << "Failed to create cert_id: " << getError());
+    if (!cert_id) throw std::runtime_error(SB() << "Failed to create cert_id: " << getError());
 
     return cert_id;
 }

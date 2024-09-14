@@ -18,7 +18,6 @@
 
 #include <pvxs/nt.h>
 
-#include "certstatusmanager.h"
 #include "ownedptr.h"
 
 #define CERT_TIME_FORMAT "%a %b %d %H:%M:%S %Y UTC"
@@ -35,6 +34,21 @@ class CertStatusManager;
 class OCSPParseException : public std::runtime_error {
    public:
     explicit OCSPParseException(const std::string& message) : std::runtime_error(message) {}
+};
+
+class CertStatusException : public std::runtime_error {
+   public:
+    explicit CertStatusException(const std::string& message) : std::runtime_error(message) {}
+};
+
+class CertStatusNoExtensionException : public CertStatusException {
+   public:
+    explicit CertStatusNoExtensionException(const std::string& message) : CertStatusException(message) {}
+};
+
+class CertStatusSubscriptionException : public CertStatusException {
+   public:
+    explicit CertStatusSubscriptionException(const std::string& message) : CertStatusException(message) {}
 };
 
 // Certificate management
@@ -320,42 +334,33 @@ struct ParsedOCSPStatus {
  * revocation date.  The ocsp_status field contains the OCSP status in numerical and text form.
  */
 struct OCSPStatus {
-    shared_array<const uint8_t> ocsp_bytes;
+    shared_array<uint8_t> ocsp_bytes;
     OCSPCertStatus ocsp_status;
     StatusDate status_date;
     StatusDate status_valid_until_date;
     StatusDate revocation_date;
 
     // Constructor using lvalue reference
-    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param) : ocsp_bytes(ocsp_bytes_param) { init(); }
+    explicit OCSPStatus(const shared_array<uint8_t>& ocsp_bytes_param) : ocsp_bytes(ocsp_bytes_param) { init(); }
 
     // Constructor using rvalue reference
-    explicit OCSPStatus(shared_array<const uint8_t>&& ocsp_bytes_param) : ocsp_bytes(std::move(ocsp_bytes_param)) { init(); }
+    explicit OCSPStatus(shared_array<uint8_t>&& ocsp_bytes_param) : ocsp_bytes(std::move(ocsp_bytes_param)) { init(); }
 
     // To  set an OCSP UNKNOWN status to indicate errors
     OCSPStatus() : ocsp_status(OCSP_CERTSTATUS_UNKNOWN) {};
+    OCSPStatus(ocspcertstatus_t ocsp_status, time_t status_valid_until_date, time_t revocation_date)
+        : ocsp_bytes{},
+          ocsp_status(ocsp_status),
+          status_date(time(nullptr)),
+          status_valid_until_date(status_valid_until_date),
+          revocation_date(revocation_date) {};
 
    private:
     friend struct CertificateStatus;
-    explicit OCSPStatus(ocspcertstatus_t ocsp_status, shared_array<const uint8_t>&& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
-                        StatusDate revocation_time)
-        : ocsp_bytes(std::move(ocsp_bytes)),
-          ocsp_status(ocsp_status),
-          status_date(status_date),
-          status_valid_until_date(status_valid_until_time),
-          revocation_date(revocation_time) {};
-    inline void init() {
-        if (ocsp_bytes.empty()) {
-            ocsp_status = (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN;
-            status_date = time(nullptr);
-        } else {
-            auto parsed_status = CertStatusManager::parse(ocsp_bytes);
-            ocsp_status = std::move(parsed_status.ocsp_status);
-            status_date = std::move(parsed_status.status_date);
-            status_valid_until_date = std::move(parsed_status.status_valid_until_date);
-            revocation_date = std::move(parsed_status.revocation_date);
-        }
-    }
+    explicit OCSPStatus(ocspcertstatus_t ocsp_status, shared_array<uint8_t>&& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
+                        StatusDate revocation_time);
+
+    void init();
 };
 
 /**
@@ -375,10 +380,10 @@ struct CertificateStatus : public OCSPStatus {
     inline bool operator!=(certstatus_t rhs) const { return !(this->status == rhs); }
     inline bool operator!=(ocspcertstatus_t rhs) const { return !(this->ocsp_status == rhs); }
 
-    explicit CertificateStatus(certstatus_t status, const shared_array<const uint8_t>&& ocsp_bytes) : OCSPStatus(std::move(ocsp_bytes)), status(status) {};
+    explicit CertificateStatus(certstatus_t status, const shared_array<uint8_t>&& ocsp_bytes) : OCSPStatus(std::move(ocsp_bytes)), status(status) {};
 
     explicit CertificateStatus(const Value& status_value)
-        : OCSPStatus(status_value["ocsp_response"].as<shared_array<const uint8_t>>()), status(status_value["status.value.index"].as<certstatus_t>()) {
+        : OCSPStatus(status_value["ocsp_response"].as<shared_array<const uint8_t>>().thaw()), status(status_value["status.value.index"].as<certstatus_t>()) {
         if (ocsp_bytes.empty()) return;
         if (!selfConsistent() || !dateConsistent(status_value["ocsp_status_date"].as<std::string>(), status_value["ocsp_certified_until"].as<std::string>(),
                                                  status_value["ocsp_revocation_date"].as<std::string>())) {
@@ -388,27 +393,34 @@ struct CertificateStatus : public OCSPStatus {
 
     // To  set an UNKNOWN status to indicate errors
     CertificateStatus() : OCSPStatus(), status(UNKNOWN) {}
+    CertificateStatus(certstatus_t pva_status, time_t status_valid_until_date, time_t revocation_date)
+        : OCSPStatus(pva_status == REVOKED   ? OCSP_CERTSTATUS_REVOKED
+                     : (pva_status == VALID) ? OCSP_CERTSTATUS_GOOD
+                                             : OCSP_CERTSTATUS_UNKNOWN,
+                     status_valid_until_date, revocation_date),
+          status(pva_status) {}
 
     /**
      * @brief Verify that the status validity dates are currently valid and the status is known
      * @return true if the status is still valid
      */
-    bool isValid() noexcept {
-        if ( status == UNKNOWN ) return false;
+    inline bool isValid() noexcept {
+        if (status == UNKNOWN) return false;
         auto now(std::time(nullptr));
         return status_valid_until_date.t > now;
     }
 
-  private:
+    inline bool isGood() noexcept { return isValid() && *this == certs::OCSP_CERTSTATUS_GOOD; }
+
+   private:
     friend class CertStatusFactory;
-    explicit CertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, shared_array<const uint8_t>&& ocsp_bytes, StatusDate status_date,
+    explicit CertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, shared_array<uint8_t>&& ocsp_bytes, StatusDate status_date,
                                StatusDate status_valid_until_time, StatusDate revocation_time)
         : OCSPStatus(ocsp_status, std::move(ocsp_bytes), status_date, status_valid_until_time, revocation_time), status(status) {};
 
     inline bool selfConsistent() {
-        return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN && (!(status == VALID || status == EXPIRED || status == REVOKED))) ||
-               (ocsp_status == OCSP_CERTSTATUS_REVOKED && ((status == REVOKED) || (status == EXPIRED))) ||
-               (ocsp_status == OCSP_CERTSTATUS_GOOD && (status == VALID));
+        return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN && (!(status == VALID || status == REVOKED))) ||
+               (ocsp_status == OCSP_CERTSTATUS_REVOKED && (status == REVOKED)) || (ocsp_status == OCSP_CERTSTATUS_GOOD && (status == VALID));
     }
 
     inline bool dateConsistent(StatusDate status_date_value, StatusDate status_valid_until_date_value, StatusDate revocation_date_value) {

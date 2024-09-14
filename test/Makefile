@@ -10,10 +10,13 @@ include $(TOP)/configure/CONFIG
 
 # access to private headers and source
 USR_CPPFLAGS += -I$(TOP)/src
-USR_CPPFLAGS += -I$(TOP)/certs
 USR_CPPFLAGS += -I$(TOP)/ioc
 
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -I$(TOP)/certs
 SRC_DIRS += $(TOP)/certs
+SRC_DIRS += $(TOP)/src
+endif
 
 PROD_LIBS = pvxs Com
 
@@ -137,6 +140,7 @@ TESTS += testtlstime
 TESTPROD_HOST += testtlsstatus
 testtlsstatus_SRCS += testtlsstatus.cpp
 testtlsstatus_SRCS += certstatusfactory.cpp
+testtlsstatus_SRCS += certstatus.cpp
 TESTS += testtlsstatus
 
 TESTPROD_HOST += jwtlogintest

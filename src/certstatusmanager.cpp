@@ -10,6 +10,8 @@
 
 #include "certstatusmanager.h"
 
+#include <thread>
+
 #include <openssl/evp.h>
 #include <openssl/ocsp.h>
 #include <openssl/pem.h>
@@ -20,6 +22,7 @@
 
 #include "certstatus.h"
 #include "configcms.h"
+#include "evhelper.h"
 #include "ownedptr.h"
 
 namespace pvxs {
@@ -37,7 +40,7 @@ DEFINE_LOGGER(status, "pvxs.certs.status");
  * @param ocsp_bytes A shared_array of bytes representing the OCSP response.
  * @return The OCSP response as a data structure.
  */
-ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes) {
+ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<uint8_t>& ocsp_bytes) {
     // Create a BIO for the OCSP response
     ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())), false);
     if (!bio) {
@@ -61,11 +64,9 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<co
  *
  * Then parse it and read out the status and the status times
  *
- * @param config The Configuration to use.
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
- * @param trusted_issuer_cert the certificate of a trusted CA to use to verify the signature of the response.
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(shared_array<const uint8_t> ocsp_bytes) {
+PVXS_API ParsedOCSPStatus CertStatusManager::parse(shared_array<uint8_t> ocsp_bytes) {
     auto&& ocsp_response = getOCSPResponse(ocsp_bytes);
 
     // Get the response status
@@ -101,7 +102,11 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(shared_array<const uint8_t> o
     return {OCSPCertStatus(ocsp_status), this_update, next_update, revocation_time};
 }
 
-// Convert ASN1_INTEGER to a 64-bit unsigned integer
+/**
+ * @brief Convert ASN1_INTEGER to a 64-bit unsigned integer
+ * @param asn1_number
+ * @return
+ */
 uint64_t CertStatusManager::ASN1ToUint64(ASN1_INTEGER* asn1_number) {
     uint64_t uint64_number = 0;
     for (int i = 0; i < asn1_number->length; ++i) {
@@ -110,8 +115,18 @@ uint64_t CertStatusManager::ASN1ToUint64(ASN1_INTEGER* asn1_number) {
     return uint64_number;
 }
 
+/**
+ * @brief Get serial number from an owned cert
+ * @param cert owned cert
+ * @return serial number
+ */
 uint64_t CertStatusManager::getSerialNumber(const ossl_ptr<X509>& cert) { return getSerialNumber(cert.get()); }
 
+/**
+ * @brief Get a serial number from a cert pointer
+ * @param cert cert pointer
+ * @return serial number
+ */
 uint64_t CertStatusManager::getSerialNumber(X509* cert) {
     if (!cert) {
         throw std::runtime_error("Can't get serial number: Null certificate");
@@ -127,9 +142,28 @@ uint64_t CertStatusManager::getSerialNumber(X509* cert) {
     return ASN1ToUint64(serial_number_asn1);
 }
 
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X509>&& cert, std::atomic<bool>& stop_flag, StatusCallback&& callback) {
+/**
+ * @brief Subscribe to status updates for the given certificate,
+ * calling the given callback with a CertificateStatus if the status changes.
+ * It also sets members with the pva certificate status, the status validity period, and a
+ * revocation date if applicable.
+ *
+ * It will not call the callback unless the status udpdate has been verified and
+ * all errors are ignored.
+ *
+ * @param cert_ptr the certificate to monoitor
+ * @param callback the callback to call
+ * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
+ */
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509* cert_ptr, StatusCallback&& callback) {
+    if (!cert_ptr) {
+        throw CertStatusSubscriptionException("Can't subscribe: Null certificate");
+    }
+
+    auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));
+
     // Construct the URI
-    auto uri = CertStatusManager::getStatusPvFromCert(cert);
+    auto uri = CertStatusManager::getStatusPvFromCert(ctx_cert);
 
     // Create a shared_ptr to hold the callback
     auto callback_ptr = std::make_shared<StatusCallback>(std::move(callback));
@@ -137,46 +171,61 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const ossl_ptr<X
     // Subscribe to the service using the constructed URI
     // with TLS disabled to avoid recursive loop
     auto client(std::make_shared<client::Context>(client::Context::fromEnv(true)));
-    std::shared_ptr<client::Subscription> sub;
     try {
-        sub = client->monitor(uri)
-                  .maskConnected(true)
-                  .maskDisconnected(true)
-                  .event([callback_ptr, &stop_flag](client::Subscription& sub) {
-                      try {
-                          auto update = sub.pop();
-                          if (update) {
-                              //                              std::cout <<  update  << std::endl;
-                              (*callback_ptr)((CertificateStatus)update);
-                          }
-                      } catch (client::Finished& conn) {
-                          log_debug_printf(status, "Subscription Finished: %s\n", conn.what());
-                          stop_flag = true;
-                      } catch (client::Connected& conn) {
-                          log_debug_printf(status, "Connected Subscription: %s\n", conn.peerName.c_str());
-                          stop_flag = true;
-                      } catch (client::Disconnect& conn) {
-                          log_debug_printf(status, "Disconnected Subscription: %s\n", conn.what());
-                          stop_flag = true;
-                      } catch (std::exception& e) {
-                          log_err_printf(status, "Error Getting Subscription: %s\n", e.what());
-                      }
-                  })
-                  .exec();
-        return cert_status_ptr<CertStatusManager>(new CertStatusManager(cert, client, sub));
+        auto cert_status_manager = cert_status_ptr<CertStatusManager>(new CertStatusManager(std::move(ctx_cert), client));
+        auto sub = client->monitor(uri)
+                       .maskConnected(true)
+                       .maskDisconnected(true)
+                       .event([callback_ptr, &cert_status_manager](client::Subscription& sub) {
+                           try {
+                               auto update = sub.pop();
+                               if (update) {
+                                   auto status((CertificateStatus)update);
+                                   cert_status_manager->status_ = (certstatus_t)status.status.i;
+                                   cert_status_manager->status_valid_until_date_ = status.status_valid_until_date.t;
+                                   cert_status_manager->revocation_date_ = status.revocation_date.t;
+                                   (*callback_ptr)(status);
+                               }
+                           } catch (client::Finished& conn) {
+                               log_debug_printf(status, "Subscription Finished: %s\n", conn.what());
+                           } catch (client::Connected& conn) {
+                               log_debug_printf(status, "Connected Subscription: %s\n", conn.peerName.c_str());
+                           } catch (client::Disconnect& conn) {
+                               log_debug_printf(status, "Disconnected Subscription: %s\n", conn.what());
+                           } catch (std::exception& e) {
+                               log_err_printf(status, "Error Getting Subscription: %s\n", e.what());
+                           }
+                       })
+                       .exec();
+        cert_status_manager->subscribe(sub);
+        return cert_status_manager;
     } catch (std::exception& e) {
         log_err_printf(status, "Error subscribing to certificate status: %s\n", e.what());
-        throw std::runtime_error(SB() << "Error subscribing to certificate status: " << e.what());
+        throw CertStatusSubscriptionException(SB() << "Error subscribing to certificate status: " << e.what());
     }
 }
 
+/**
+ * @brief Unsubscribe from the certificate status monitoring
+ */
 void CertStatusManager::unsubscribe() {
     client_->hurryUp();
     if (sub_) sub_->cancel();
     if (client_) client_->close();
 }
 
-CertificateStatus CertStatusManager::getStatus() { return getStatus(cert_); }
+/**
+ * @brief Get status from the manager.
+ *
+ * If status has already been retrieved and it is still valid then use that otherwise go get new status
+ *
+ * @return the simplified status - does not have ocsp bytes but has been verified and certified
+ * @see waitForStatus
+ */
+CertificateStatus CertStatusManager::getStatus() {
+    auto status_so_far = CertificateStatus(status_, status_valid_until_date_, revocation_date_);
+    return isValid() ? status_so_far : getStatus(cert_);
+}
 
 CertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
     auto uri = getStatusPvFromCert(cert);
@@ -190,6 +239,32 @@ CertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
     Value result = operation->wait(3.0);
 
     return CertificateStatus(result);
+}
+
+/**
+ * @brief After we have started a subscription for status we may sometimes want to
+ * wait until the status is available.
+ * This method waits until the status is returned for up to 3 seconds.  If the status has
+ * already been updated by the subscription then it is returned immediately.
+ *
+ * If not it will start a light weight loop to wait for the status to arrive.
+ *
+ * @note as long as the status is not UNKNOWN then Certificate status returned will be
+ * certified and verified.  However we don't include the byte array in this light weight
+ * CertificateStatus that we return.
+ *
+ * @param loop the event loop to use to wait
+ * @return the certificate status at the end of the time - either UNKNOWN still or
+ * some new value.
+ */
+CertificateStatus CertStatusManager::waitForStatus(const evbase& loop) {
+    auto start(time(nullptr));
+    // Timeout 3 seconds
+    while ((status_ == UNKNOWN) && time(nullptr) < start + 3) {
+        loop.dispatch([]() { });
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    return CertificateStatus(status_, status_valid_until_date_, revocation_date_);
 }
 
 /**
@@ -265,39 +340,54 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
     return OCSP_basic_verify(basic_response.get(), ca_chain.get(), store.get(), 0) > 0;
 }
 
+/**
+ * @brief Call this method to see if we should monitor the given certificate
+ * This will return true if there is our custom extension in the certificate.
+ * It will produce various exceptions to tell you if it failed to look.
+ * Otherwise the boolean returned indicates whether the certificate status is
+ * valid only when monitored.
+ *
+ * @param certificate certificate to check
+ * @return true if we should monitor the given certificate
+ */
 bool CertStatusManager::shouldMonitor(const ossl_ptr<X509>& certificate) {
     return (X509_get_ext_by_NID(certificate.get(), ossl::SSLContext::NID_PvaCertStatusURI, -1) >= 0);
 }
 
-/**
- * Get the string value of a custom extension by NID from a certificate.
- *
- */
+ /**
+  * @brief Get the string value of a custom extension by NID from a certificate.
+  * This will return the PV name to monitor for status of the given certificate.
+  * It is stored in the certificate using a custom extension.
+  * Exceptions are thrown if it is unable to retrieve the value of the extension
+  * or it does not exist.
+  * @param certificate the certificate to examine
+  * @return the PV name to call for status on that certificate
+  */
 std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certificate) {
     int extension_index = X509_get_ext_by_NID(certificate.get(), ossl::SSLContext::NID_PvaCertStatusURI, -1);
-    if (extension_index < 0) return "";
+    if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find extension index");
 
     // Get the extension object from the certificate
     X509_EXTENSION* extension = X509_get_ext(certificate.get(), extension_index);
     if (!extension) {
-        throw std::runtime_error("Failed to get extension from the certificate.");
+        throw CertStatusNoExtensionException("Failed to get extension from the certificate.");
     }
 
     // Retrieve the extension data which is an ASN1_OCTET_STRING object
     ASN1_OCTET_STRING* ext_data = X509_EXTENSION_get_data(extension);
     if (!ext_data) {
-        throw std::runtime_error("Failed to get data from the extension.");
+        throw CertStatusNoExtensionException("Failed to get data from the extension.");
     }
 
     // Get the data as a string
     const unsigned char* data = ASN1_STRING_get0_data(ext_data);
     if (!data) {
-        throw std::runtime_error("Failed to extract data from ASN1_STRING.");
+        throw CertStatusNoExtensionException("Failed to extract data from ASN1_STRING.");
     }
 
     int length = ASN1_STRING_length(ext_data);
     if (length < 0) {
-        throw std::runtime_error("Invalid length of ASN1_STRING data.");
+        throw CertStatusNoExtensionException("Invalid length of ASN1_STRING data.");
     }
 
     // Return the data as a std::string

@@ -17,7 +17,7 @@ namespace certs {
 
 class P12FileWatcher {
    public:
-    P12FileWatcher(logger &logger, const std::vector<std::string> &paths_to_watch, const std::function<void()> &reconfigure_fn)
+    P12FileWatcher(logger &logger, const std::vector<std::string> &paths_to_watch, const std::function<void(bool)> &reconfigure_fn)
         : logger_(logger), paths_to_watch_(paths_to_watch), reconfigure_fn_(reconfigure_fn) {
         log_debug_printf(logger_, "File Watcher Event: %s\n", "Initializing");
         // Initialize the last write times
@@ -46,7 +46,7 @@ class P12FileWatcher {
                 if (last_write_times_[i] != 0) {
                     log_debug_printf(logger_, "File Watcher: %s file was deleted\n", paths_to_watch_[i].c_str());
                     last_write_times_[i] = current_write_time;
-                    reconfigure_fn_();
+                    reconfigure_fn_(false);
                     break;
                 }
                 continue;
@@ -54,7 +54,7 @@ class P12FileWatcher {
             if (current_write_time != last_write_times_[i]) {
                 log_debug_printf(logger_, "File Watcher: %s file was updated\n", paths_to_watch_[i].c_str());
                 last_write_times_[i] = current_write_time;
-                reconfigure_fn_();
+                reconfigure_fn_(true);
                 break;
             }
         }
@@ -64,7 +64,7 @@ class P12FileWatcher {
    private:
     logger &logger_;
     const std::vector<std::string> paths_to_watch_;
-    std::function<void()> reconfigure_fn_;
+    std::function<void(bool)> reconfigure_fn_;
     std::vector<time_t> last_write_times_;
 
     static inline time_t getFileModificationTime(const std::string &path) {

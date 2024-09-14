@@ -21,6 +21,7 @@ PROD += pvxcert
 pvxcert_SRCS += status.cpp
 pvxcert_SRCS += p12filefactory.cpp
 pvxcert_SRCS += certfactory.cpp
+pvxcert_SRCS += certstatus.cpp
 pvxcert_SRCS += certstatusmanager.cpp
 
 endif # EVENT2_HAS_OPENSSL

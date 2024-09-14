@@ -19,8 +19,9 @@
 #include <pvxs/client.h>
 #include <pvxs/log.h>
 
-#include "p12filefactory.h"
 #include "certfactory.h"
+#include "certstatusmanager.h"
+#include "p12filefactory.h"
 
 using namespace pvxs;
 

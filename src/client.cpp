@@ -21,6 +21,7 @@
 
 DEFINE_LOGGER(setup, "pvxs.cli.init");
 DEFINE_LOGGER(watcher, "pvxs.certs.mon");
+DEFINE_LOGGER(filemon, "pvxs.file.mon");
 DEFINE_LOGGER(io, "pvxs.cli.io");
 DEFINE_LOGGER(beacon, "pvxs.cli.beacon");
 DEFINE_LOGGER(duppv, "pvxs.cli.dup");
@@ -217,6 +218,12 @@ std::shared_ptr<Connect> ConnectBuilder::exec() {
 
     auto syncCancel(_syncCancel);
     auto context(ctx->impl->shared_from_this());
+    if ( context->tls_context && context->tls_context.has_cert ) { // tls context with a cert
+        if ( !context->tls_context.cert_valid && context->cert_status_manager ) { // but cert is not valid and we're monitoring
+            if (context->cert_status_manager->getStatus().isGood())
+                context->tls_context.cert_valid = true;
+        }
+    }
 
     auto op(std::make_shared<ConnectImpl>(context->tcp_loop, _pvname));
     op->_onConn = std::move(_onConn);
@@ -332,7 +339,7 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
 
             context->scheduleInitialSearch();
 
-        } else {  // bypass search and connect so a specific server
+        } else {  // bypass search and connect to a specific server
             chan->forcedServer = forceServer;
             chan->conn = Connection::build(context, forceServer.addr, false
 #ifdef PVXS_ENABLE_OPENSSL
@@ -376,9 +383,9 @@ void Context::reconfigure(const Config& newconf) {
 
     ossl::SSLContext new_context;
     if (newconf.isTlsConfigured()) {
-        new_context = ossl::SSLContext::for_client(newconf);
+        pvt->impl->tls_context = ossl::SSLContext::for_client(newconf);
+        pvt->impl->manager.loop().dispatch([this]() mutable { pvt->impl->enableTls(); });
     }
-    pvt->impl->reconfigureContext(new_context);
 }
 
 #endif
@@ -469,11 +476,7 @@ static Value buildCAMethod() {
         .create();
 }
 
-#ifndef PVXS_ENABLE_OPENSSL
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
-#else
-ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop, CertEventCallback cert_file_event_callback)
-#endif
     : ifmap(IfaceMap::instance()),
       effective([conf]() -> Config {
           Config eff(conf);
@@ -494,18 +497,14 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop, CertEventCa
       nsChecker(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::onNSCheckS, this))
 #ifdef PVXS_ENABLE_OPENSSL
       ,
-      cert_file_event_callback(cert_file_event_callback),
-      cert_event_timer(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT, doCertEventhandler, this)),
-      file_watcher(watcher, {effective.tls_cert_filename, effective.tls_cert_password, effective.tls_private_key_filename, effective.tls_private_key_password},
-                   [this]() {
-                       ossl::SSLContext new_context;
-                       try {
-                           new_context = ossl::SSLContext::for_client(effective);
-                           log_info_printf(watcher, "TLS enabled for client: %s\n", "reconfigure");
-                       } catch (std::exception& e) {
-                           log_warn_printf(watcher, "TLS disabled for client: reconfigure: %s\n", e.what());
-                       }
-                       reconfigureContext(new_context);
+      cert_event_timer(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT, doCertEventHandler, this)),
+      cert_validity_timer(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT, doCertStatusValidityEventhandler, this)),
+      file_watcher(filemon, {effective.tls_cert_filename, effective.tls_cert_password, effective.tls_private_key_filename, effective.tls_private_key_password},
+                   [this](bool enable) {
+                       if (enable)
+                           manager.loop().dispatch([this]() mutable { enableTls(); });
+                       else
+                           manager.loop().dispatch([this]() mutable { disableTls(); });
                    })
 #endif
 {
@@ -513,7 +512,27 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop, CertEventCa
     if (conf.isTlsConfigured()) {
         try {
             tls_context = ossl::SSLContext::for_client(effective);
-            log_info_printf(setup, "TLS enabled for client%s\n", "");
+            if (auto ctx_cert = getCert()) {
+                try {
+                    // Subscribe and set validity when the status is verified
+                    cert_status_manager = certs::CertStatusManager::subscribe(ctx_cert, [this](certs::CertificateStatus status) {
+                        if (status.isGood()) {
+                            tls_context.cert_valid = true;
+                            log_debug_printf(watcher, "Set cert_valid: %s\n", "true");
+                            manager.loop().dispatch([this]() mutable { enableTls(); });
+                        } else {
+                            tls_context.cert_valid = false;
+                            log_debug_printf(watcher, "Set cert_valid: %s\n", "false");
+                            manager.loop().dispatch([this]() mutable { disableTls(); });
+                        }
+                    });
+                    log_info_printf(setup, "TLS enabled for client pending certificate status%s\n", "");
+                } catch (certs::CertStatusNoExtensionException& e) {
+                    log_warn_printf(setup, "Certificate status monitoring disabled: %s\n", e.what());
+                    tls_context.cert_valid = true;
+                    log_info_printf(setup, "TLS enabled for client%s\n", "");
+                }
+            }
         } catch (std::exception& e) {
             log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
         }
@@ -655,6 +674,7 @@ void ContextImpl::close() {
         (void)event_del(beaconCleaner.get());
         (void)event_del(cacheCleaner.get());
         (void)event_del(cert_event_timer.get());
+        (void)event_del(cert_validity_timer.get());
 
         auto conns(std::move(connByAddr));
         // explicitly break ref. loop of channel cache
@@ -1270,95 +1290,85 @@ void ContextImpl::cacheCleanS(evutil_socket_t fd, short evt, void* raw) {
     }
 }
 
-void ContextImpl::doCertEventhandler(evutil_socket_t fd, short evt, void* raw) {
-    try {
-        auto pvt = static_cast<ContextImpl*>(raw);
-        // If a custom file event callback has been set then call it
-        uint8_t run_default_file_event_callback = 2;
-        if (pvt->cert_file_event_callback) {
-            run_default_file_event_callback = pvt->cert_file_event_callback(evt);
-        }
-        // Running default file event callback can be disabled by custom callback returning 0
-        if (run_default_file_event_callback-- > 0) run_default_file_event_callback = pvt->defaultCertFileEventCallback(evt);
-
-        // Running cert status event callback can be disabled by custom callback returning 1
-        if (run_default_file_event_callback > 0) pvt->certStatusEventCallback(evt);
-        if (pvt->first_cert_event) pvt->first_cert_event = false;
-
-        // Re add the timer
-        timeval interval(statusIntervalShort);
-        if (event_add(pvt->cert_event_timer.get(), &interval)) log_err_printf(setup, "Error re-enabling cert file event timer on\n%s", "");
-    } catch (std::exception& e) {
-        log_exc_printf(io, "Unhandled error in cert file event timer callback: %s\n", e.what());
-    }
-}
-
-/**
- * @brief The default certificate file event callback
- * @param evt
- * @return false to signify that no more cert file callbacks must be called in this loop
- */
-uint8_t ContextImpl::defaultCertFileEventCallback(short evt) {
-    if (first_cert_event) return 1;  // Skip first event
-    file_watcher.checkFileStatus();
-    return 1;
-}
-
-/**
- * @brief The last client status event callback - Checks the certificate status if one is found
- * @param evt the event id
- * @return 0 to indicate that no more callbacks should be chained after this one
- */
-uint8_t ContextImpl::certStatusEventCallback(short evt) {
-    auto ctx_cert = getCert();
-    if (!ctx_cert) return 0;
-
-    log_info_printf(watcher, "Status Monitor: %s\n", "Wake Up");
-
-    auto cert = ossl_ptr<X509>(X509_dup(ctx_cert));
-    auto status = certs::CertStatusManager::getStatus(cert);
-
-    // If this is the first time then just register the status and return to wait for changes
-    if (first_cert_event) {
-        current_status = status;
-        return 0;
-    }
-
-    auto current_config(effective);
-    certs::StatusListener::handleStatusUpdates(status, current_status, watcher, [this, status, current_config]() { HANDLE_UPDATE(client) });
-
-    log_info_printf(watcher, "Status Monitor Sleep%s\n", "");
-    return 0;
-}
-
-X509* ContextImpl::getCert(ossl::SSLContext* context_ptr) {
-    auto context = context_ptr == nullptr ? &tls_context : context_ptr;
-    if (!context->ctx) return nullptr;
-
-    return SSL_CTX_get0_certificate(context->ctx);
-}
-
-void ContextImpl::reconfigureContext(const ossl::SSLContext &context) {
-    manager.loop().dispatch([this, context]() mutable {
-        log_debug_printf(watcher, "Client reconfigure%s", "\n");
-
-        auto conns(std::move(connByAddr));
-        for (auto& pair : conns) {
-            auto conn = pair.second.lock();
-            if (conn)conn->cleanup();
-        }
-
-        conns.clear();
-        tls_context = context;
-    });
-}
-
 #ifndef PVXS_ENABLE_OPENSSL
 Context::Pvt::Pvt(const Config& conf) : loop("PVXCTCP", epicsThreadPriorityCAServerLow), impl(std::make_shared<ContextImpl>(conf, loop.internal())) {}
 #else
-Context::Pvt::Pvt(const Config& conf, CertEventCallback cert_file_event_callback)
+
+DO_CERT_EVENT_HANDLER(ContextImpl, io)
+DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(ContextImpl)
+
+void ContextImpl::disableTls() {
+    if (cert_status_manager) cert_status_manager.release(); // Stop subscribing to status
+    tls_context.cert_valid = false;
+    tls_context.has_cert = false;
+    log_debug_printf(watcher, "Disable TLS: set cert_valid=%s \n", tls_context.cert_valid ? "true" : "false");
+
+    std::vector<std::weak_ptr<Connection>> to_cleanup;
+    // Collect tls connections to clean-up
+    for (auto& pair : connByAddr) {
+        auto conn = pair.second.lock();
+        if (conn && conn->isTLS) {
+            log_debug_printf(watcher, "Disable TLS: scheduling close of connection to: %s \n", conn.get()->peerName.c_str());
+            to_cleanup.push_back(pair.second);
+        }
+    }
+    // Clean them up
+    for (auto& weak_conn : to_cleanup) {
+        auto conn = weak_conn.lock();
+        if (conn) {
+            log_debug_printf(watcher, "Disable TLS: closing connection to: %s \n", conn.get()->peerName.c_str());
+            conn->cleanup();
+        }
+    }
+    log_warn_printf(watcher, "TLS disabled for client%s\n", "");
+}
+
+void ContextImpl::enableTls() {
+    try {
+        // if cert isn't valid then get a new one
+        if ( tls_context.has_cert && !tls_context.cert_valid )
+            tls_context = ossl::SSLContext::for_client(effective);
+
+        // If unsuccessful in getting cert or cert is invalid then don't do anything
+        if ( !tls_context.has_cert ) return;
+
+        // Subscribe to certificate status if not already subscribed
+        if ( !cert_status_manager ) {
+            subscribeToCertStatus();
+        }
+
+        std::vector<std::weak_ptr<Connection>> toCleanup;
+        // Collect tcp connections to clean-up
+        for (auto& pair : connByAddr) {
+            auto conn = pair.second.lock();
+            if (conn && !conn->isTLS) {
+                toCleanup.push_back(pair.second);
+            }
+        }
+        // Clean them up - they will reconnect as tls (I HOPE :) )
+        for (auto& weakConn : toCleanup) {
+            auto conn = weakConn.lock();
+            if (conn) {
+                conn->cleanup();
+            }
+        }
+
+        // Set callback for when this status' validity ends
+        startStatusValidityTimer();
+        log_info_printf(watcher, "TLS enabled for client%s\n", "");
+    } catch (std::exception& e) {
+        log_debug_printf(watcher, "TLS remains disabled for client: %s\n", e.what());
+    }
+}
+
+FILE_EVENT_CALLBACK(ContextImpl)
+GET_CERT(ContextImpl)
+START_STATUS_VALIDITY_TIMER(ContextImpl, manager.loop())
+SUBSCRIBE_TO_CERT_STATUS(ContextImpl, manager.loop())
+
+Context::Pvt::Pvt(const Config& conf)
     : loop("PVXCTCP", epicsThreadPriorityCAServerLow),
-      impl(std::make_shared<ContextImpl>(conf, loop.internal(), cert_file_event_callback))
+      impl(std::make_shared<ContextImpl>(conf, loop.internal()))
 #endif
 {}
 

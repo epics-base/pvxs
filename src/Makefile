@@ -74,11 +74,11 @@ INC += pvxs/util.h
 INC += pvxs/version.h
 INC += pvxs/versionNum.h
 INC += p12filewatcher.h
-INC += statuslistener.h
 
 LIBRARY = pvxs
 
 LIB_SRCS += bitmask.cpp
+LIB_SRCS += certstatus.cpp
 LIB_SRCS += certstatusmanager.cpp
 LIB_SRCS += client.cpp
 LIB_SRCS += clientconn.cpp

@@ -574,6 +574,12 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
                                      std::shared_ptr<GPROp>&& op,
                                      bool syncCancel)
 {
+    if ( context->tls_context && context->tls_context.has_cert ) { // tls context with a cert
+        if ( !context->tls_context.cert_valid && context->cert_status_manager ) { // but cert is not valid and we're monitoring
+            if (context->cert_status_manager->getStatus().isGood())
+                context->tls_context.cert_valid = true;
+        }
+    }
     auto internal(std::move(op));
     internal->internal_self = internal;
 

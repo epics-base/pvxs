@@ -279,31 +279,31 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
     // Initialise SSL subsystem and add our custom extensions (idempotent)
     SSLContext::sslInit();
 
-    SSLContext ctx;
-    ctx.ctx = SSL_CTX_new_ex(ossl_gbl->libctx.get(), NULL, method);
-    if (!ctx.ctx) throw SSLError("Unable to allocate SSL_CTX");
+    SSLContext tls_context;
+    tls_context.ctx = SSL_CTX_new_ex(ossl_gbl->libctx.get(), NULL, method);
+    if (!tls_context.ctx) throw SSLError("Unable to allocate SSL_CTX");
 
     {
         std::unique_ptr<SSL_CTX_sidecar> car{new SSL_CTX_sidecar};
-        if (!SSL_CTX_set_ex_data(ctx.ctx, ossl_gbl->SSL_CTX_ex_idx, car.get())) throw SSLError("SSL_CTX_set_ex_data");
+        if (!SSL_CTX_set_ex_data(tls_context.ctx, ossl_gbl->SSL_CTX_ex_idx, car.get())) throw SSLError("SSL_CTX_set_ex_data");
         car.release();  // SSL_CTX_free() now responsible
     }
 
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
     //    assert(!SSL_CTX_get_keylog_callback(ctx.ctx));
-    (void)SSL_CTX_set_keylog_callback(ctx.ctx, &sslkeylogfile_log);
+    (void)SSL_CTX_set_keylog_callback(tls_context.ctx, &sslkeylogfile_log);
 #endif
 
     // TODO: SSL_CTX_set_options(), SSL_CTX_set_mode() ?
 
     // we mandate TLS >= 1.3
-    (void)SSL_CTX_set_min_proto_version(ctx.ctx, TLS1_3_VERSION);
-    (void)SSL_CTX_set_max_proto_version(ctx.ctx, 0);  // up to max.
+    (void)SSL_CTX_set_min_proto_version(tls_context.ctx, TLS1_3_VERSION);
+    (void)SSL_CTX_set_max_proto_version(tls_context.ctx, 0);  // up to max.
 
     if (ssl_client && conf.tls_disabled) {
         // For clients if tls is disabled then allow server to make a tls
         // connection if it can but disable client side
-        return ctx;
+        return tls_context;
     }
 
     if (conf.isTlsConfigured()) {
@@ -319,7 +319,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
             // Check the key file
             if (!checkP12File(fp, p12, (ssl_client ? ssl::kForClient : ssl::kForServer), key_filename))
                 // If this is a client then continue without a cert
-                return ctx;
+                return tls_context;
 
             if (!PKCS12_parse(p12.get(), key_password.c_str(), key.acquire(), nullptr, nullptr))
                 throw SSLError(SB() << "Unable to process \"" << key_filename << "\"");
@@ -338,7 +338,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
             // Try to open the certificate file
             if (!checkP12File(fp, p12, (ssl_client ? ssl::kForClient : ssl::kForServer), filename))
                 // If this is a client then continue without cert
-                return ctx;
+                return tls_context;
 
             ossl_ptr<EVP_PKEY> pkey;  // to discard
             if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), cert.acquire(), CAs.acquire()))
@@ -354,8 +354,8 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         // except for special handling of root CA (maybe) appearing in PKCS12 chain
 
         // sets SSL_CTX::cert
-        if (cert && !SSL_CTX_use_certificate(ctx.ctx, cert.get())) throw SSLError("SSL_CTX_use_certificate");
-        if (key && !SSL_CTX_use_PrivateKey(ctx.ctx, key.get())) throw SSLError("SSL_CTX_use_certificate");
+        if (cert && !SSL_CTX_use_certificate(tls_context.ctx, cert.get())) throw SSLError("SSL_CTX_use_certificate");
+        if (key && !SSL_CTX_use_PrivateKey(tls_context.ctx, key.get())) throw SSLError("SSL_CTX_use_certificate");
 
         /* java keytool adds an extra attribute to indicate that a certificate
          * is trusted.  However, PKCS12_parse() circa 3.1 does not know about
@@ -366,25 +366,17 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
          */
 
         // extract CAs (intermediate and root) from PKCS12 bag
-        extractCAs(ctx, CAs);
+        extractCAs(tls_context, CAs);
 
-        if (key && !SSL_CTX_check_private_key(ctx.ctx)) throw SSLError("invalid private key");
+        if (key && !SSL_CTX_check_private_key(tls_context.ctx)) throw SSLError("invalid private key");
 
         if (cert) {
-            auto car = static_cast<SSL_CTX_sidecar *>(SSL_CTX_get_ex_data(ctx.ctx, ossl_gbl->SSL_CTX_ex_idx));
+            auto car = static_cast<SSL_CTX_sidecar *>(SSL_CTX_get_ex_data(tls_context.ctx, ossl_gbl->SSL_CTX_ex_idx));
             car->cert = std::move(cert);
+            tls_context.has_cert = true;
 
-            if (!SSL_CTX_build_cert_chain(ctx.ctx, SSL_BUILD_CHAIN_FLAG_UNTRUSTED))  // SSL_BUILD_CHAIN_FLAG_CHECK
+            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_UNTRUSTED))  // SSL_BUILD_CHAIN_FLAG_CHECK
                 throw SSLError("invalid cert chain");
-        }
-
-        if ( conf.config_target != ConfigCommon::CMS && cert ) {
-            auto status = certs::CertStatusManager::getStatus(cert);
-            if ( status != certs::OCSP_CERTSTATUS_GOOD ) {
-                log_warn_printf(_setup, "TLS disabled for %s certificate is: %s\n", ssl_client ? "client" : "server", status.status.s.c_str());
-            } else {
-                ctx.cert_valid = true;
-            }
         }
     }
 
@@ -401,11 +393,11 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
             log_debug_printf(_setup, "This Secure PVAccess Server requires an X.509 client certificate%s", "\n");
         }
-        SSL_CTX_set_verify(ctx.ctx, mode, &ossl_verify);
-        SSL_CTX_set_verify_depth(ctx.ctx, ossl_verify_depth);
+        SSL_CTX_set_verify(tls_context.ctx, mode, &ossl_verify);
+        SSL_CTX_set_verify_depth(tls_context.ctx, ossl_verify_depth);
     }
 
-    return ctx;
+    return tls_context;
 }
 
 }  // namespace

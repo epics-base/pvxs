@@ -24,7 +24,6 @@
 
 #include "ownedptr.h"
 #include "p12filewatcher.h"
-#include "statuslistener.h"
 
 // EPICS OID for "validTillRevoked" extension:
 // TODO Register this unassigned OID for EPICS
@@ -73,7 +72,10 @@ struct ShowX509 {
 std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
 
 struct SSLContext {
+    static PVXS_API int NID_PvaCertStatusURI;
     SSL_CTX* ctx = nullptr;
+    bool has_cert{false};    // set when a certificate has been established
+    bool cert_valid{false};  // To signal that cert is valid when we have received the status for the certificate
 
     PVXS_API
     static SSLContext for_client(const impl::ConfigCommon& conf);
@@ -81,13 +83,13 @@ struct SSLContext {
     static SSLContext for_server(const impl::ConfigCommon& conf);
 
     SSLContext() = default;
-    inline SSLContext(const SSLContext& o) : ctx(o.ctx) {
+    inline SSLContext(const SSLContext& o) : ctx(o.ctx), has_cert(o.has_cert), cert_valid(o.cert_valid) {
         if (ctx) {
             auto ret(SSL_CTX_up_ref(ctx));
             assert(ret == 1);  // can up_ref actually fail?
         }
     }
-    inline SSLContext(SSLContext& o) noexcept : ctx(o.ctx) { o.ctx = nullptr; }
+    inline SSLContext(SSLContext& o) noexcept : ctx(o.ctx), has_cert(o.has_cert), cert_valid(o.cert_valid) { o.ctx = nullptr; }
     inline ~SSLContext() {
         SSL_CTX_free(ctx);  // If ctx is NULL nothing is done.
     }
@@ -98,11 +100,15 @@ struct SSLContext {
         }
         SSL_CTX_free(ctx);
         ctx = o.ctx;
+        has_cert = o.has_cert;
+        cert_valid = o.cert_valid;
         return *this;
     }
     inline SSLContext& operator=(SSLContext&& o) {
         SSL_CTX_free(ctx);
         ctx = o.ctx;
+        has_cert = o.has_cert;
+        cert_valid = o.cert_valid;
         o.ctx = nullptr;
         return *this;
     }
@@ -126,8 +132,6 @@ struct SSLContext {
 
     bool have_certificate() const;
     const X509* certificate0() const;
-    static PVXS_API int NID_PvaCertStatusURI;
-    bool cert_valid{false};  // To signal that cert is valid when we have received the status for the certificate
 
     static bool fill_credentials(PeerCredentials& cred, const SSL* ctx);
 };

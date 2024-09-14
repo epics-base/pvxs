@@ -14,6 +14,8 @@
 
 #include <pvxs/client.h>
 
+#include "certstatus.h"
+#include "certstatusmanager.h"
 #include "conn.h"
 #include "dataimpl.h"
 #include "evhelper.h"
@@ -346,20 +348,17 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     ossl::SSLContext tls_context;
-    CertEventCallback cert_file_event_callback;
     evevent cert_event_timer;
+    evevent cert_validity_timer;
     bool first_cert_event{true};
     certs::CertificateStatus current_status;
     certs::P12FileWatcher file_watcher;
+    certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
 #endif
 
     INST_COUNTER(ClientContextImpl);
 
-#ifndef PVXS_ENABLE_OPENSSL
     ContextImpl(const Config& conf, const evbase &tcp_loop);
-#else
-    ContextImpl(const Config& conf, const evbase &tcp_loop, CertEventCallback cert_file_event_callback = nullptr);
-#endif
     ~ContextImpl();
 
     void startNS();
@@ -391,13 +390,16 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     friend class client::Context;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    void reconfigureContext(const ossl::SSLContext &context);
-    static void doCertEventhandler(evutil_socket_t fd, short evt, void *raw);
-    uint8_t  defaultCertFileEventCallback(short evt);
-    uint8_t  certStatusEventCallback(short evt);
+    static void doCertEventHandler(evutil_socket_t fd, short evt, void *raw);
+    static void doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void *raw);
+    void disableTls();
+    void enableTls();
+    void fileEventCallback(short evt);
     X509 * getCert(ossl::SSLContext *context = nullptr);
+    void startStatusValidityTimer();
+    void subscribeToCertStatus();
 #endif
-    };
+};
 
 struct Context::Pvt {
     // external ref to running loop.
@@ -412,7 +414,7 @@ public:
 #ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
 #else
-    Pvt(const Config& conf, CertEventCallback cert_file_event_callback = nullptr);
+    Pvt(const Config& conf);
 #endif
     ~Pvt(); // I call ContextImpl::close()
 };

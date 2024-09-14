@@ -11,6 +11,7 @@ include $(TOP)/configure/CONFIG
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 AUTHN = $(TOP)/certs/authn
+SRC_DIRS += $(TOP)/src
 
 PROD_LIBS = pvxs Com
 
@@ -25,6 +26,7 @@ PROD += pvacms
 pvacms_SRCS += pvacms.cpp
 pvacms_SRCS += configcms.cpp
 pvacms_SRCS += certfactory.cpp
+pvacms_SRCS += certstatus.cpp
 pvacms_SRCS += p12filefactory.cpp
 pvacms_SRCS += certstatusfactory.cpp
 

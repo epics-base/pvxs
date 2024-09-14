@@ -194,7 +194,6 @@ int ocspService(client::Context &pva_client, std::string &port, bool verbose) {
                     case VALID:
                         ocsp_status = V_OCSP_CERTSTATUS_GOOD;
                         break;
-                    case EXPIRED:
                     case REVOKED:
                         ocsp_status = V_OCSP_CERTSTATUS_REVOKED;
                         break;

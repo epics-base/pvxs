@@ -68,7 +68,7 @@
 #include "utilpvt.h"
 
 DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
-DEFINE_LOGGER(pvacmsmonitor, "pvxs.certs.mon");
+DEFINE_LOGGER(pvacmsmonitor, "pvxs.certs.stat");
 DEFINE_LOGGER(pvafms, "pvxs.certs.fms");
 
 namespace pvxs {
