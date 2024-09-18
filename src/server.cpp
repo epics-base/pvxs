@@ -939,7 +939,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
 #ifdef PVXS_ENABLE_OPENSSL
-    if(msg.protoTLS && tls_context && effective.tls_port /*&& tls_context.cert_valid*/) {
+    if(msg.protoTLS && tls_context && effective.tls_port && tls_context.cert_is_valid) {
         to_wire(M, uint16_t(effective.tls_port));
         to_wire(M, "tls");
     } else
