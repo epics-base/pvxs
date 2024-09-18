@@ -212,7 +212,7 @@ int main(int argc, char* argv[]) {
         } catch (std::exception& e) {
             std::cerr << "Unable to " << actionToString(action) << " ==> " << cert_id << std::endl;
             ctxt.close();
-            return 2;
+            return 3;
         }
 
         // expedite search after starting all requests
@@ -225,17 +225,17 @@ int main(int argc, char* argv[]) {
 
         if (!waited) {
             std::cerr << "Timeout with " << remaining.load() << " outstanding\n";
-            return 1;
+            return 4;
 
         } else if (remaining.load() == 0u) {
             return 0;
 
         } else {
             if (verbose) std::cerr << "Interrupted\n";
-            return 2;
+            return 5;
         }
     } catch (std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
-        return 1;
+        return 6;
     }
 }
