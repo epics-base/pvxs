@@ -747,13 +747,6 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 
     auto context(ctx->impl->shared_from_this());
 
-    if ( context->tls_context && context->tls_context.has_cert ) { // tls context with a cert
-        if ( !context->tls_context.cert_valid && context->cert_status_manager ) { // but cert is not valid and we're monitoring
-            if (context->cert_status_manager->getStatus().isGood())
-                context->tls_context.cert_valid = true;
-        }
-    }
-
     auto op(std::make_shared<SubscriptionImpl>(context->tcp_loop));
     op->self = op;
     op->channelName = std::move(_name);
@@ -823,8 +816,9 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     });
 
     auto server(std::move(_server));
-    context->tcp_loop.dispatch([op, context, server]() {
+    context->tcp_loop.dispatchWhen([=]() {
         // on worker
+        log_debug_printf(io, "Proceeding with connection establishment: %s\n", op->channelName.c_str());
 
         try {
             op->chan = Channel::build(context, op->channelName, server);
@@ -838,7 +832,8 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
             op->queue.back().exc = std::current_exception();
             op->doNotify();
         }
-    });
+    }, [context](){ return context->connectionCanProceed(); }, 3 // timeout seconds
+    );
 
     return external;
 }

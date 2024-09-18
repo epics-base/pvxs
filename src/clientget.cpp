@@ -161,8 +161,8 @@ struct GPROp : public OperationBase
                 done(std::move(result));
         } catch(std::exception& e) {
             if(chan && chan->conn)
-                log_err_printf(io, "Server %s channel %s error in result cb : %s\n",
-                               chan->conn->peerName.c_str(), chan->name.c_str(), e.what());
+                log_err_printf(io, "Result Callback Error: Server %s channel %s\n", chan->conn->peerName.c_str(), chan->name.c_str());
+                log_err_printf(io, "Result Callback Error: %s\n", e.what());
 
             // keep first error (eg. from put builder)
             if(!result.error())
@@ -574,12 +574,6 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
                                      std::shared_ptr<GPROp>&& op,
                                      bool syncCancel)
 {
-    if ( context->tls_context && context->tls_context.has_cert ) { // tls context with a cert
-        if ( !context->tls_context.cert_valid && context->cert_status_manager ) { // but cert is not valid and we're monitoring
-            if (context->cert_status_manager->getStatus().isGood())
-                context->tls_context.cert_valid = true;
-        }
-    }
     auto internal(std::move(op));
     internal->internal_self = internal;
 
@@ -598,8 +592,9 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
                        }, std::move(temp)));
     });
 
-    context->tcp_loop.dispatch([internal, context, name, server]() {
+    context->tcp_loop.dispatchWhen([=]() {
         // on worker
+        log_debug_printf(io, "Proceeding with connection establishment: %s\n", name.c_str());
 
         try {
             internal->chan = Channel::build(context, name, server);
@@ -610,7 +605,8 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
             internal->result = Result(std::current_exception());
             internal->notify();
         }
-    });
+    }, [context](){ return context->connectionCanProceed(); }, 3 // timeout seconds
+    );
 
     return external;
 }

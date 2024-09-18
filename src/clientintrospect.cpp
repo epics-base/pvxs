@@ -187,13 +187,6 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
 
     auto context(ctx->impl->shared_from_this());
 
-    if ( context->tls_context && context->tls_context.has_cert ) { // tls context with a cert
-        if ( !context->tls_context.cert_valid && context->cert_status_manager ) { // but cert is not valid and we're monitoring
-            if (context->cert_status_manager->getStatus().isGood())
-                context->tls_context.cert_valid = true;
-        }
-    }
-
     auto op(std::make_shared<InfoOp>(context->tcp_loop));
     if(_result) {
         op->done = std::move(_result);
@@ -222,8 +215,9 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
 
     auto name(std::move(_name));
     auto server(std::move(_server));
-    context->tcp_loop.dispatch([op, context, name, server]() {
+    context->tcp_loop.dispatchWhen([=]() {
         // on worker
+        log_debug_printf(io, "Proceeding with connection establishment: %s\n", name.c_str());
 
         try {
             op->chan = Channel::build(context, name, server);
@@ -241,7 +235,8 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
                 log_exc_printf(setup, "Unhandled exception %s in Info result() callback: %s\n", typeid (e).name(), e.what());
             }
         }
-    });
+    }, [context](){ return context->connectionCanProceed(); }, 3 // timeout seconds
+    );
 
     return external;
 }

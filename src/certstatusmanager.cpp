@@ -40,7 +40,7 @@ DEFINE_LOGGER(status, "pvxs.certs.status");
  * @param ocsp_bytes A shared_array of bytes representing the OCSP response.
  * @return The OCSP response as a data structure.
  */
-ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<uint8_t>& ocsp_bytes) {
+ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes) {
     // Create a BIO for the OCSP response
     ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())), false);
     if (!bio) {
@@ -66,8 +66,8 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<ui
  *
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(shared_array<uint8_t> ocsp_bytes) {
-    auto&& ocsp_response = getOCSPResponse(ocsp_bytes);
+PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes) {
+    auto ocsp_response = getOCSPResponse(ocsp_bytes);
 
     // Get the response status
     int response_status = OCSP_response_status(ocsp_response.get());
@@ -164,6 +164,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509* cert_ptr, 
 
     // Construct the URI
     auto uri = CertStatusManager::getStatusPvFromCert(ctx_cert);
+    log_debug_printf(status, "Starting Status Subscription: %s\n", uri.c_str());
 
     // Create a shared_ptr to hold the callback
     auto callback_ptr = std::make_shared<StatusCallback>(std::move(callback));
@@ -173,6 +174,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509* cert_ptr, 
     auto client(std::make_shared<client::Context>(client::Context::fromEnv(true)));
     try {
         auto cert_status_manager = cert_status_ptr<CertStatusManager>(new CertStatusManager(std::move(ctx_cert), client));
+        log_debug_printf(status, "Subscribing to status: %p\n", cert_status_manager.get());
         auto sub = client->monitor(uri)
                        .maskConnected(true)
                        .maskDisconnected(true)
@@ -180,11 +182,13 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509* cert_ptr, 
                            try {
                                auto update = sub.pop();
                                if (update) {
-                                   auto status((CertificateStatus)update);
-                                   cert_status_manager->status_ = (certstatus_t)status.status.i;
-                                   cert_status_manager->status_valid_until_date_ = status.status_valid_until_date.t;
-                                   cert_status_manager->revocation_date_ = status.revocation_date.t;
-                                   (*callback_ptr)(status);
+                                   auto status_update((CertificateStatus)update);
+                                   log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
+                                   log_debug_printf(status, "Status subscription address: %p\n", cert_status_manager.get());
+                                   cert_status_manager->status_ = (certstatus_t)status_update.status.i;
+                                   cert_status_manager->status_valid_until_date_ = status_update.status_valid_until_date.t + 100;
+                                   cert_status_manager->revocation_date_ = status_update.revocation_date.t;
+                                   (*callback_ptr)(status_update);
                                }
                            } catch (client::Finished& conn) {
                                log_debug_printf(status, "Subscription Finished: %s\n", conn.what());
@@ -198,6 +202,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509* cert_ptr, 
                        })
                        .exec();
         cert_status_manager->subscribe(sub);
+        log_debug_printf(status, "subscription address: %p\n", cert_status_manager.get());
         return cert_status_manager;
     } catch (std::exception& e) {
         log_err_printf(status, "Error subscribing to certificate status: %s\n", e.what());
@@ -228,17 +233,22 @@ CertificateStatus CertStatusManager::getStatus() {
 }
 
 CertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
-    auto uri = getStatusPvFromCert(cert);
+    try {
+        auto uri = getStatusPvFromCert(cert);
 
-    // Build and start network operation
-    // use an unsecure socket that doesn't monitor files or status
-    auto client(client::Context::fromEnvUnsecured());
-    auto operation = client.get(uri).exec();
+        // Build and start network operation
+        // use an unsecure socket that doesn't monitor files or status
+        auto client(client::Context::fromEnvUnsecured());
+        auto operation = client.get(uri).exec();
 
-    // wait for it to complete, for up to 5 seconds.
-    Value result = operation->wait(3.0);
+        // wait for it to complete, for up to 3 seconds.
+        Value result = operation->wait(3.0);
+        client.close();
 
-    return CertificateStatus(result);
+        return CertificateStatus(result);
+    } catch (...) {
+        return {};
+    }
 }
 
 /**
@@ -261,7 +271,7 @@ CertificateStatus CertStatusManager::waitForStatus(const evbase& loop) {
     auto start(time(nullptr));
     // Timeout 3 seconds
     while ((status_ == UNKNOWN) && time(nullptr) < start + 3) {
-        loop.dispatch([]() { });
+        loop.dispatch([]() {});
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     return CertificateStatus(status_, status_valid_until_date_, revocation_date_);
@@ -354,15 +364,15 @@ bool CertStatusManager::shouldMonitor(const ossl_ptr<X509>& certificate) {
     return (X509_get_ext_by_NID(certificate.get(), ossl::SSLContext::NID_PvaCertStatusURI, -1) >= 0);
 }
 
- /**
-  * @brief Get the string value of a custom extension by NID from a certificate.
-  * This will return the PV name to monitor for status of the given certificate.
-  * It is stored in the certificate using a custom extension.
-  * Exceptions are thrown if it is unable to retrieve the value of the extension
-  * or it does not exist.
-  * @param certificate the certificate to examine
-  * @return the PV name to call for status on that certificate
-  */
+/**
+ * @brief Get the string value of a custom extension by NID from a certificate.
+ * This will return the PV name to monitor for status of the given certificate.
+ * It is stored in the certificate using a custom extension.
+ * Exceptions are thrown if it is unable to retrieve the value of the extension
+ * or it does not exist.
+ * @param certificate the certificate to examine
+ * @return the PV name to call for status on that certificate
+ */
 std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certificate) {
     int extension_index = X509_get_ext_by_NID(certificate.get(), ossl::SSLContext::NID_PvaCertStatusURI, -1);
     if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find extension index");

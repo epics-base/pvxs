@@ -92,9 +92,9 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
 
     // Serialize OCSP response
     auto ocsp_response = ocspResponseToBytes(basic_resp);
-    auto ocsp_bytes = shared_array<uint8_t>(ocsp_response.begin(), ocsp_response.end());
+    const auto ocsp_bytes = shared_array<const uint8_t>(ocsp_response.begin(), ocsp_response.end());
 
-    return CertificateStatus(status, ocsp_status, std::move(ocsp_bytes), status_date, status_valid_until_time, revocation_time_to_use);
+    return CertificateStatus(status, ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time_to_use);
 }
 
 /**

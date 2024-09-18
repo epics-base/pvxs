@@ -138,6 +138,31 @@ public:
     void dispatch(mfunction&& fn) const {
         _dispatch(std::move(fn), true);
     }
+
+    void recursiveDispatch(mfunction fn, std::function<bool()> condition_fn, time_t timeout_secs, time_t first_time) const {
+        auto now = std::time(nullptr);
+        if (first_time + timeout_secs > now) {
+            dispatchWhen(std::move(fn), std::move(condition_fn), timeout_secs, first_time);
+        } else {
+            if (fn) {
+                _dispatch(std::move(fn), true);
+            }
+        }
+    }
+
+    template<typename ConditionFn>
+    void dispatchWhen(mfunction&& fn, ConditionFn dispatch_when_condition, time_t timeout_secs, time_t first_time = std::time(nullptr)) const {
+        auto captured_condition_fn = std::move(dispatch_when_condition);
+        auto captured_fn = std::move(fn);
+
+        if (captured_condition_fn()) {
+            _dispatch(std::move(captured_fn), true);
+        } else {
+            epicsThreadSleep(0.1);
+            recursiveDispatch(std::move(captured_fn), std::move(captured_condition_fn), timeout_secs, first_time);
+        }
+    }
+
     inline
     bool tryDispatch(mfunction&& fn) const {
         return _dispatch(std::move(fn), false);
@@ -149,18 +174,19 @@ public:
         else
             return tryDispatch(std::move(fn));
     }
-
     void assertInLoop() const;
+
     //! Caller must be on the worker, or the worker must be stopped.
     //! @returns true if working is running.
     bool assertInRunningLoop() const;
 
     inline void reset() { pvt.reset(); }
 
-private:
+  private:
     struct Pvt;
     std::shared_ptr<Pvt> pvt;
-public:
+
+  public:
     event_base* base = nullptr;
 };
 

@@ -17,9 +17,9 @@
 namespace pvxs {
 namespace certs {
 
-OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, shared_array<uint8_t>&& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
+OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
                        StatusDate revocation_time)
-    : ocsp_bytes(std::move(ocsp_bytes)),
+    : ocsp_bytes(ocsp_bytes),
       ocsp_status(ocsp_status),
       status_date(status_date),
       status_valid_until_date(status_valid_until_time),

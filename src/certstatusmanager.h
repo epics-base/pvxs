@@ -89,15 +89,20 @@
     void TYPE::subscribeToCertStatus() {                                                                                      \
         if (auto ctx_cert = getCert()) {                                                                                      \
             try {                                                                                                             \
+                if ( cert_status_manager ) return;                                                                            \
                 cert_status_manager = certs::CertStatusManager::subscribe(ctx_cert, [this](certs::CertificateStatus status) { \
                     if (status.isGood()) {                                                                                    \
-                        tls_context.cert_valid = true;                                                                        \
-                        log_debug_printf(watcher, "Set cert_valid: %s\n", "true");                                            \
-                        (LOOP).dispatch([this]() mutable { enableTls(); });                                                   \
+                        (LOOP).dispatch([this]() mutable {                                                                    \
+                            enableTls();                                                                                      \
+                            log_debug_printf(watcher, "Set cert_is_valid: %s\n", "true");                                     \
+                            tls_context.cert_is_valid = true;                                                                 \
+                        });                                                                                                   \
                     } else {                                                                                                  \
-                        tls_context.cert_valid = false;                                                                       \
-                        log_debug_printf(watcher, "Set cert_valid: %s\n", "false");                                           \
-                        (LOOP).dispatch([this]() mutable { disableTls(); });                                                  \
+                        (LOOP).dispatch([this]() mutable {                                                                    \
+                            disableTls();                                                                                     \
+                            log_debug_printf(watcher, "Set cert_is_valid: %s\n", "false");                                    \
+                            tls_context.cert_is_valid = false;                                                                \
+                        });                                                                                                   \
                     }                                                                                                         \
                 });                                                                                                           \
             } catch (certs::CertStatusSubscriptionException & e) {                                                            \
@@ -122,7 +127,7 @@ template <typename T>
 struct cert_status_delete;
 
 template <typename T>
-using cert_status_ptr = OwnedPtr<T, cert_status_delete<T>>;
+using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
 
 /**
  * @brief This class is used to parse OCSP responses and to get/subscribe to certificate status
@@ -223,25 +228,25 @@ class CertStatusManager {
     static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
     static uint64_t getSerialNumber(X509* cert);
 
+    inline bool available() noexcept { return isValid() || (manager_start_time_ + 3) < std::time(nullptr); }
+
+    inline bool isValid() noexcept { return (status_ != UNKNOWN) && status_valid_until_date_ > std::time(nullptr); }
+
    private:
     CertStatusManager(ossl_ptr<X509>&& cert, std::shared_ptr<client::Context>& client, std::shared_ptr<client::Subscription>& sub)
         : cert_(std::move(cert)), client_(client), sub_(sub) {};
     CertStatusManager(ossl_ptr<X509>&& cert, std::shared_ptr<client::Context>& client) : cert_(std::move(cert)), client_(client) {};
     inline void subscribe(std::shared_ptr<client::Subscription>& sub) { sub_ = sub; }
-    inline bool isValid() noexcept {
-        if (status_ == UNKNOWN) return false;
-        auto now(std::time(nullptr));
-        return status_valid_until_date_ > now;
-    }
     inline bool isGood() noexcept { return isValid() && status_ == VALID; }
 
     const ossl_ptr<X509> cert_;
     std::shared_ptr<client::Context> client_;
     std::shared_ptr<client::Subscription> sub_;
     certstatus_t status_;
-    time_t status_valid_until_date_;
+    time_t manager_start_time_{time(nullptr)};
+    time_t status_valid_until_date_{manager_start_time_};
     time_t revocation_date_;
-    static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<uint8_t>& ocsp_bytes);
+    static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes);
 
     static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response);
     static uint64_t ASN1ToUint64(ASN1_INTEGER* asn1_number);
@@ -257,7 +262,7 @@ class CertStatusManager {
      * @return the Parsed OCSP response status
      */
    public:
-    static ParsedOCSPStatus parse(shared_array<uint8_t> ocsp_bytes);
+    static ParsedOCSPStatus parse(const shared_array<const uint8_t> ocsp_bytes);
 
    private:
     std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);

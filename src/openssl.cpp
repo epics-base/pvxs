@@ -18,6 +18,8 @@
 
 #include <pvxs/log.h>
 
+#include "certstatus.h"
+#include "certstatusmanager.h"
 #include "evhelper.h"
 #include "ownedptr.h"
 #include "utilpvt.h"
@@ -27,6 +29,7 @@
 #endif
 
 DEFINE_LOGGER(_setup, "pvxs.ossl.init");
+DEFINE_LOGGER(watcher, "pvxs.certs.mon");
 DEFINE_LOGGER(_io, "pvxs.ossl.io");
 
 namespace pvxs {
@@ -106,10 +109,6 @@ void sslkeylogfile_log(const SSL *, const char *line) noexcept {
     }
 }
 #endif  // PVXS_ENABLE_SSLKEYLOGFILE
-
-struct SSL_CTX_sidecar {
-    ossl_ptr<X509> cert;
-};
 
 void free_SSL_CTX_sidecar(void *parent, void *ptr, CRYPTO_EX_DATA *ad, int idx, long argl, void *argp) noexcept {
     auto car = static_cast<SSL_CTX_sidecar *>(ptr);
@@ -346,6 +345,11 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         }
 
         if (cert) {
+            try {
+                auto uri = certs::CertStatusManager::getStatusPvFromCert(cert);
+                log_info_printf(watcher, "%s\n", uri.c_str());
+            } catch (...) {
+            }
             // some early sanity checks
             verifyKeyUsage(cert, ssl_client);
         }
@@ -375,7 +379,9 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
             car->cert = std::move(cert);
             tls_context.has_cert = true;
 
-            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_UNTRUSTED))  // SSL_BUILD_CHAIN_FLAG_CHECK
+            if (!SSL_CTX_build_cert_chain(tls_context.ctx, 0))  // checks Normal
+//            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_CHECK))      // Check build chain
+//            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_UNTRUSTED))  // Flag untrusted in build chain
                 throw SSLError("invalid cert chain");
         }
     }
@@ -401,6 +407,40 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
 }
 
 }  // namespace
+
+/**
+ * @brief Staple server's ocsp response to the tls handshake
+ * @param ssl the ssl context
+ * @param arg
+ * @return
+ */
+void stapleOcspResponse(SSL_CTX *ctx, SSL *ssl) {
+    auto car = static_cast<ossl::SSL_CTX_sidecar *>(SSL_CTX_get_ex_data(ctx, ossl_gbl->SSL_CTX_ex_idx));
+    if (!car) {
+        log_warn_printf(_setup, "Server OCSP Stapling: no sidecar found in context: ignoring%s\n", "");
+        return;
+    }
+
+    try {
+        auto uri = certs::CertStatusManager::getStatusPvFromCert(car->cert);
+
+        // Build and start network operation
+        // use an unsecure socket that doesn't monitor files or status
+        auto client(client::Context::fromEnvUnsecured());
+        auto operation = client.get(uri).exec();
+
+        // wait for it to complete, for up to 3 seconds.
+        client.hurryUp();
+        Value status_value = operation->wait(3.0);
+
+        auto ocsp_response = status_value["ocsp_response"].as<shared_array<const uint8_t>>().thaw();
+
+        SSL_set_tlsext_status_ocsp_resp(ssl, ocsp_response.data(), ocsp_response.size());
+        log_info_printf(_setup, "Server OCSP response stapled%s\n", "");
+    } catch (certs::CertStatusException &e) {
+        log_warn_printf(_setup, "Server OCSP Stapling: not required: %s\n", e.what());
+    }
+}
 
 // Must be set up with correct values after OpenSSL initialisation to retrieve status PV from certs
 int SSLContext::NID_PvaCertStatusURI = NID_undef;

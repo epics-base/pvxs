@@ -347,6 +347,14 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent nsChecker;
 
 #ifdef PVXS_ENABLE_OPENSSL
+    inline bool connectionCanProceed() const {
+        return
+             !tls_context                       // If this is not a TLS context then we can proceed immediately without waiting for status
+          || !tls_context.has_cert              // If no certificate has been loaded then we can't establish a TLS context, so proceed with tcp
+          || tls_context.cert_is_valid          // If we have a cert and have already received status from the CMS, then proceed now
+          || !cert_status_manager               // If we have no active subscription then we'll never get status so go ahead now with tcp
+          || cert_status_manager->available();  // Finally if the subscription has an available status, or we've waited long enough (3s), then use it
+    }
     ossl::SSLContext tls_context;
     evevent cert_event_timer;
     evevent cert_validity_timer;

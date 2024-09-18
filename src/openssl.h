@@ -66,16 +66,21 @@ struct SSLError : public std::runtime_error {
     virtual ~SSLError();
 };
 
+struct SSL_CTX_sidecar {
+    ossl_ptr<X509> cert;
+};
+
 struct ShowX509 {
     const X509* cert;
 };
 std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
+PVXS_API void stapleOcspResponse(SSL_CTX* ctx, SSL* ssl);
 
 struct SSLContext {
     static PVXS_API int NID_PvaCertStatusURI;
     SSL_CTX* ctx = nullptr;
-    bool has_cert{false};    // set when a certificate has been established
-    bool cert_valid{false};  // To signal that cert is valid when we have received the status for the certificate
+    bool has_cert{false};       // set when a certificate has been established
+    bool cert_is_valid{false};  // To signal that cert is valid when we have received the status for the certificate
 
     PVXS_API
     static SSLContext for_client(const impl::ConfigCommon& conf);
@@ -83,13 +88,13 @@ struct SSLContext {
     static SSLContext for_server(const impl::ConfigCommon& conf);
 
     SSLContext() = default;
-    inline SSLContext(const SSLContext& o) : ctx(o.ctx), has_cert(o.has_cert), cert_valid(o.cert_valid) {
+    inline SSLContext(const SSLContext& o) : ctx(o.ctx), has_cert(o.has_cert), cert_is_valid(o.cert_is_valid) {
         if (ctx) {
             auto ret(SSL_CTX_up_ref(ctx));
             assert(ret == 1);  // can up_ref actually fail?
         }
     }
-    inline SSLContext(SSLContext& o) noexcept : ctx(o.ctx), has_cert(o.has_cert), cert_valid(o.cert_valid) { o.ctx = nullptr; }
+    inline SSLContext(SSLContext& o) noexcept : ctx(o.ctx), has_cert(o.has_cert), cert_is_valid(o.cert_is_valid) { o.ctx = nullptr; }
     inline ~SSLContext() {
         SSL_CTX_free(ctx);  // If ctx is NULL nothing is done.
     }
@@ -101,14 +106,14 @@ struct SSLContext {
         SSL_CTX_free(ctx);
         ctx = o.ctx;
         has_cert = o.has_cert;
-        cert_valid = o.cert_valid;
+        cert_is_valid = o.cert_is_valid;
         return *this;
     }
     inline SSLContext& operator=(SSLContext&& o) {
         SSL_CTX_free(ctx);
         ctx = o.ctx;
         has_cert = o.has_cert;
-        cert_valid = o.cert_valid;
+        cert_is_valid = o.cert_is_valid;
         o.ctx = nullptr;
         return *this;
     }
@@ -134,6 +139,11 @@ struct SSLContext {
     const X509* certificate0() const;
 
     static bool fill_credentials(PeerCredentials& cred, const SSL* ctx);
+};
+
+struct OCSPStapleData {
+    size_t size;
+    uint8_t ocsp_response[];
 };
 
 }  // namespace ossl

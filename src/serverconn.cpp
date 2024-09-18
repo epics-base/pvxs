@@ -13,6 +13,7 @@
 #include <epicsAssert.h>
 
 #include <pvxs/log.h>
+#include "openssl.h"
 #include "serverconn.h"
 
 // limit on size of TX buffer above which we suspend RX.
@@ -86,6 +87,18 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         auto ctx(SSL_new(iface->server->tls_context.ctx));
         if(!ctx)
             throw ossl::SSLError("SSL_new()");
+
+/*
+        try {
+            log_debug_printf(connio, "stapling OCSP status: stapling server OCSP response%s\n", "");
+            ossl::stapleOcspResponse(iface->server->tls_context.ctx, ctx); // Staple response if extension present
+        } catch (certs::OCSPParseException &e) {
+            throw ossl::SSLError(SB() << "Server OCSP Stapling: Parse error: " << e.what());
+        } catch (std::exception &e) {
+            throw ossl::SSLError(SB() << "Server OCSP Stapling: " << e.what());
+        }
+*/
+
         auto rawconn = bev.release();
         // BEV_OPT_CLOSE_ON_FREE will free on error
         evbufferevent tlsconn(__FILE__, __LINE__,

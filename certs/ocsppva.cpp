@@ -120,7 +120,7 @@ bool getCertificateStatus(client::Context &pva_client, const uint64_t serial, Ce
     // Build and start network operation
     auto operation = pva_client.get(pvacms_uri).exec();
 
-    // wait for it to complete, for up to 5 seconds.
+    // wait for it to complete, for up to 3 seconds.
     Value result = operation->wait(3.0);
 
     status = result["value"].as<CertStatus>();
