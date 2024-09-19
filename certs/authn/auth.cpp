@@ -12,12 +12,13 @@
 
 #include <pvxs/log.h>
 
-#include "certstatusfactoryclient.h"
+#include "ccrmanager.h"
 #include "ownedptr.h"
 #include "security.h"
+#include "p12filefactory.h"
 
 namespace pvxs {
-namespace security {
+namespace  certs {
 
 /**
  * @brief Creates a signed certificate.
@@ -38,6 +39,7 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
                                                                      const uint16_t &usage) const {
     // Create a new CertCreationRequest object.
     auto cert_creation_request = std::make_shared<CertCreationRequest>(type_, verifier_fields_);
+    cert_creation_request->credentials = credentials;
 
     // Fill in the ccr from the base data we've gathered so far.
     cert_creation_request->ccr["name"] = credentials->name;
@@ -69,19 +71,20 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
  * cert_creation_request object is valid and contains the required information
  * before calling this function.
  */
-std::string Auth::processCertificateCreationRequest(
-    const std::shared_ptr<CertCreationRequest> &cert_creation_request) const {
-    // Check if the PVACMS is available
-    if (!certificate_management_service_.isCmsAvailable()) {
-        throw std::runtime_error(
-            "Can't sign certificate: Certificate Management Service is not "
-            "available.");
-    }
-
-    // Forwards the ccr to the certificate management service
-    std::string p12PemString(certificate_management_service_.createAndSignCertificate(cert_creation_request));
+std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &cert_creation_request) const {
+    // Forward the ccr to the certificate management service
+    std::string p12PemString(ccr_manager_.createCertificate(cert_creation_request));
     return p12PemString;
 }
 
-}  // namespace security
+std::shared_ptr<KeyPair> Auth::createKeyPair(const ConfigCommon &config) {
+    // Create a key pair
+    const auto key_pair(P12FileFactory::createKeyPair());
+
+    // Create PKCS#12 file containing private key
+    P12FileFactory p12file_factory(config.tls_private_key_filename, config.tls_private_key_password, key_pair);
+    p12file_factory.writePKCS12File();
+    return key_pair;
+}
+}  // namespace certs
 }  // namespace pvxs

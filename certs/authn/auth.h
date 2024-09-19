@@ -4,22 +4,23 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#ifndef PVXS_AUTH_SEC_H
-#define PVXS_AUTH_SEC_H
+#ifndef PVXS_AUTH_H
+#define PVXS_AUTH_H
 
 #include <functional>
 #include <string>
 #include <vector>
 
-#include <pvxs/config.h>
 #include <pvxs/data.h>
 
-#include "certFactory.h"
+#include "configstd.h"
+#include "ccrmanager.h"
+#include "certfactory.h"
 #include "ownedptr.h"
 #include "security.h"
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
 #define MAX_AUTH_NAME_LEN 256
 
@@ -30,6 +31,7 @@ namespace security {
  * The Auth class provides an interface for retrieving credentials and
  * creating certificate creation request.
  */
+using namespace certs;
 class Auth {
    public:
     std::string type_;
@@ -40,7 +42,7 @@ class Auth {
         : type_(type), verifier_fields_(verifier_fields) {};
     virtual ~Auth() = default;
 
-    virtual std::shared_ptr<Credentials> getCredentials(const impl::ConfigCommon &config) const = 0;
+    virtual std::shared_ptr<Credentials> getCredentials(const ConfigStd &config) const = 0;
     virtual std::shared_ptr<CertCreationRequest> createCertCreationRequest(
         const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
         const uint16_t &usage) const;
@@ -67,7 +69,10 @@ class Auth {
 
     virtual std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr) const;
 
+    std::shared_ptr<KeyPair> createKeyPair(const ConfigCommon &config);
+
    protected:
+
     // Called to have a standard presentation of the CCR for the
     // purposes of generating and verifying signatures
     inline const std::string ccrToString(const Value &ccr) const {
@@ -78,7 +83,7 @@ class Auth {
     }
 
    private:
-    security::CertStatusFactoryClient certificate_management_service_{};
+    CCRManager ccr_manager_{};
 };
 
 /**
@@ -126,7 +131,7 @@ inline std::shared_ptr<S> castAs(const std::shared_ptr<C> &baseClass) {
     return std::dynamic_pointer_cast<S>(baseClass);
 }
 
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs
 
-#endif  // PVXS_AUTH_SEC_H
+#endif  // PVXS_AUTH_H

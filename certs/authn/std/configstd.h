@@ -9,12 +9,28 @@
 
 #include <memory>
 
+#include <pvxs/config.h>
+#include <pvxs/server.h>
+
 #include "ownedptr.h"
 
-#include "certconfig.h"
 
-class ConfigStd : public Config {
+namespace pvxs {
+namespace certs {
+
+class ConfigStd : public pvxs::client::Config {
   public:
+    ConfigStd& applyEnv() {
+        pvxs::client::Config::applyEnv(true, CLIENT);
+        return *this;
+    }
+
+    static inline ConfigStd fromEnv() {
+        auto config = ConfigStd{}.applyEnv();
+        config.fromStdEnv(std::map<std::string, std::string>());
+        return config;
+    }
+
     /**
      * @brief The number of minutes from now after which the new certificate being created should expire.
      *
@@ -49,13 +65,10 @@ class ConfigStd : public Config {
      * of the logged-on user as the principal
      */
     bool use_process_name = false;
+
+    void fromStdEnv(const std::map<std::string, std::string>& defs);
 };
 
-class ConfigStdFactory : public ConfigFactoryInterface {
-  public:
-    std::unique_ptr<Config> create() override {
-        return std::make_unique<ConfigStd>();
-    }
-};
-
+} // certs
+} // pvxs
 #endif //PVXS_CONFIGSTD_H_

@@ -13,6 +13,8 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
+DEFINE_LOGGER(auths, "pvxs.certs.auth.jwt");
+
 namespace pvxs {
 namespace certs {
 

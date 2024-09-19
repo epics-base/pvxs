@@ -6,37 +6,38 @@
 
 #include "configstd.h"
 
-std::unique_ptr<ConfigFactoryInterface> getConfigFactory() {
-    struct ConfigStdFactory : public ConfigFactoryInterface {
-        std::unique_ptr<Config> create() override {
-            // EPICS_PVA_CERT_VALIDITY_MINS
-            if (pickone({"EPICS_PVA_CERT_VALIDITY_MINS"})) {
-                try {
-                    self.cert_validity_mins = parseTo<uint64_t>(pickone.val);
-                } catch (std::exception &e) {
-                    log_err_printf(serversetup, "%s invalid validity minutes : %s", pickone.name.c_str(), e.what());
-                }
-            }
+DEFINE_LOGGER(_logname, "pvxs.certs.cfg");
 
-            // EPICS_PVAS_AUTH_DEVICE_NAME
-            if (pickone({"EPICS_PVAS_AUTH_DEVICE_NAME", "EPICS_PVA_AUTH_DEVICE_NAME"})) {
-                self.device_name = pickone.val;
-            }
+namespace pvxs {
+namespace certs {
 
-            // EPICS_PVAS_AUTH_PROCESS_NAME
-            if (pickone({"EPICS_PVAS_AUTH_PROCESS_NAME", "EPICS_PVA_AUTH_PROCESS_NAME"})) {
-                self.process_name = pickone.val;
-            }
+void ConfigStd::fromStdEnv(const std::map<std::string, std::string> &defs) {
+    PickOne pickone{defs, true};
 
-            // EPICS_PVAS_AUTH_USE_PROCESS_NAME
-            if (pickone({"EPICS_PVAS_AUTH_USE_PROCESS_NAME", "EPICS_PVA_AUTH_USE_PROCESS_NAME"})) {
-                self.use_process_name = parseTo<bool>(pickone.val);
-            }
-
-
-            return std::make_unique<ConfigStd>();
+    // EPICS_AUTH_STD_CERT_VALIDITY_MINS
+    if (pickone({"EPICS_AUTH_STD_CERT_VALIDITY_MINS"})) {
+        try {
+            cert_validity_mins = parseTo<uint64_t>(pickone.val);
+        } catch (std::exception &e) {
+            log_err_printf(_logname, "%s invalid validity minutes : %s", pickone.name.c_str(), e.what());
         }
-    };
+    }
 
-    return std::make_unique<ConfigStdFactory>();
+    // EPICS_AUTH_STD_DEVICE_NAME
+    if (pickone({"EPICS_AUTH_STD_DEVICE_NAME"})) {
+        device_name = pickone.val;
+    }
+
+    // EPICS_AUTH_STD_PROCESS_NAME
+    if (pickone({"EPICS_AUTH_STD_PROCESS_NAME"})) {
+        process_name = pickone.val;
+    }
+
+    // EPICS_AUTH_STD_USE_PROCESS_NAME
+    if (pickone({"EPICS_AUTH_STD_USE_PROCESS_NAME"})) {
+        use_process_name = parseTo<bool>(pickone.val);
+    }
 }
+
+} // certs
+} // pvxs

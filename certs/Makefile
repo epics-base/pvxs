@@ -12,6 +12,8 @@ ifeq ($(EVENT2_HAS_OPENSSL),YES)
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 AUTHN = $(TOP)/certs/authn
 SRC_DIRS += $(TOP)/src
+SRCS += p12filefactory.cpp
+SRCS += certfactory.cpp
 
 PROD_LIBS = pvxs Com
 
@@ -25,9 +27,7 @@ INC += security.h
 PROD += pvacms
 pvacms_SRCS += pvacms.cpp
 pvacms_SRCS += configcms.cpp
-pvacms_SRCS += certfactory.cpp
 pvacms_SRCS += certstatus.cpp
-pvacms_SRCS += p12filefactory.cpp
 pvacms_SRCS += certstatusfactory.cpp
 
 pvacms_LIBS += $(EPICS_BASE_IOC_LIBS)

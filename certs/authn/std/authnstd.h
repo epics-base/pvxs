@@ -46,11 +46,11 @@
 #include <memory>
 #include <string>
 
-#include <pvxs/config.h>
 #include <pvxs/data.h>
 #include <pvxs/version.h>
 
 #include "auth.h"
+#include "configstd.h"
 #include "certfactory.h"
 #include "ownedptr.h"
 #include "security.h"
@@ -60,7 +60,7 @@
 #define PVXS_X509_AUTH_USERNAME_MAX 256
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
 /**
  * The subclass of Credentials that contains the DefaultAuth specific
@@ -85,13 +85,13 @@ struct DefaultCredentials : public Credentials {};
  * createCertCreationRequest() method creates a signed certificate using the
  * provided credentials.
  */
-class DefaultAuth : public Auth {
+class AuthStd : public Auth {
    public:
     // Constructor
-    DefaultAuth() : Auth(PVXS_DEFAULT_AUTH_TYPE, {}) {};
-    ~DefaultAuth() override = default;
+    AuthStd() : Auth(PVXS_DEFAULT_AUTH_TYPE, {}) {};
+    ~AuthStd() override = default;
 
-    std::shared_ptr<Credentials> getCredentials(const impl::ConfigCommon &config) const override;
+    std::shared_ptr<Credentials> getCredentials(const ConfigStd &config) const override;
 
     std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
                                                                    const std::shared_ptr<KeyPair> &key_pair,
