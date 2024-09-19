@@ -178,7 +178,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509* cert_ptr, 
         auto sub = client->monitor(uri)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([callback_ptr, &cert_status_manager](client::Subscription& sub) {
+                       .event([callback_ptr, cert_status_manager](client::Subscription& sub) {
                            try {
                                auto update = sub.pop();
                                if (update) {
