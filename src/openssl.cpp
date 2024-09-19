@@ -396,7 +396,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
          */
         int mode = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
         if (!ssl_client ) {
-            tls_context.cert_is_valid = true;  // Force servers certificates to be valid when before we get status
+            tls_context.cert_is_valid = true;  // Force servers certificates to be valid
         }
         if (!ssl_client && conf.tls_client_cert_required == ConfigCommon::Require) {
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
