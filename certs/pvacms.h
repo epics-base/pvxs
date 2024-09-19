@@ -54,6 +54,7 @@
     "     O TEXT,"                      \
     "     OU TEXT,"                     \
     "     C TEXT,"                      \
+    "     approved INTEGER,"            \
     "     not_before INTEGER,"          \
     "     not_after INTEGER,"           \
     "     status INTEGER,"              \
@@ -69,6 +70,7 @@
     "     O,"              \
     "     OU,"             \
     "     C,"              \
+    "     approved,"       \
     "     not_before,"     \
     "     not_after,"      \
     "     status,"         \
@@ -81,6 +83,7 @@
     "     :O,"             \
     "     :OU,"            \
     "     :C,"             \
+    "     :approved,"      \
     "     :not_before,"    \
     "     :not_after,"     \
     "     :status,"        \
@@ -112,9 +115,17 @@
     "FROM certs "         \
     "WHERE serial = :serial"
 
-#define SQL_CERT_SET_STATUS \
-    "UPDATE certs "         \
-    "SET status = :status " \
+#define SQL_CERT_SET_STATUS           \
+    "UPDATE certs "                   \
+    "SET status = :status "           \
+    "  , status_date = :status_date " \
+    "WHERE serial = :serial "
+
+#define SQL_CERT_SET_STATUS_W_APPROVAL \
+    "UPDATE certs "                   \
+    "SET status = :status "           \
+    "  , approved = :approved "       \
+    "  , status_date = :status_date " \
     "WHERE serial = :serial "
 
 #define SQL_CERT_TO_VALID                        \
@@ -127,6 +138,16 @@
     "SELECT serial "        \
     "FROM certs "           \
     "WHERE not_after <= strftime('%s', 'now') "
+
+#define SQL_PRIOR_APPROVAL_STATUS \
+    "SELECT approved "            \
+    "FROM certs "                 \
+    "WHERE CN = :CN "             \
+    "  AND O = :O "               \
+    "  AND OU = :OU "             \
+    "  AND C = :C "               \
+    "ORDER BY status_date DESC "  \
+    "LIMIT 1 "
 
 namespace pvxs {
 namespace certs {
@@ -203,6 +224,8 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
                          const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key,
                          const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, std::string issuer_id);
 
+bool getPriorApprovalStatus(sql_ptr &ca_db, std::string &name, std::string &country, std::string &organization, std::string &organization_unit);
+
 void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name,
                  const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                  const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
@@ -221,7 +244,7 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
 
 int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose);
 
-void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_status,
+void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_status, int approval_status,
                              std::vector<certstatus_t> valid_status = {PENDING_APPROVAL, PENDING, VALID});
 
 certstatus_t storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);

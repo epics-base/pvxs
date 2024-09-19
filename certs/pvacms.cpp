@@ -379,16 +379,19 @@ void bindValidStatusClauses(sqlite3_stmt *sql_statement, const std::vector<certs
  * @return None
  */
 epicsMutex status_update_lock;
-void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_status, const std::vector<certstatus_t> valid_status) {
+void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_status, int approval_status, const std::vector<certstatus_t> valid_status) {
     int64_t db_serial = *reinterpret_cast<int64_t *>(&serial);
     sqlite3_stmt *sql_statement;
     int sql_status;
-    std::string sql(SQL_CERT_SET_STATUS);
+    std::string sql(approval_status == -1 ? SQL_CERT_SET_STATUS : SQL_CERT_SET_STATUS_W_APPROVAL);
     sql += getValidStatusesClause(valid_status);
-
+    auto current_time = std::time(nullptr);
     Guard G(status_update_lock);
     if ((sql_status = sqlite3_prepare_v2(ca_db.get(), sql.c_str(), -1, &sql_statement, 0)) == SQLITE_OK) {
         sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), cert_status);
+        if ( approval_status >= 0 )
+            sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":approved"), approval_status );
+        sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status_date"), current_time);
         sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":serial"), db_serial);
         bindValidStatusClauses(sql_statement, valid_status);
         sql_status = sqlite3_step(sql_statement);
@@ -461,6 +464,7 @@ certstatus_t storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory) {
         sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":not_before"), (int)cert_factory.not_before_);
         sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":not_after"), (int)cert_factory.not_after_);
         sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), effective_status);
+        sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":approved"), cert_factory.initial_status_ == VALID ? 1 : 0);
         sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status_date"), current_time);
 
         sql_status = sqlite3_step(sql_statement);
@@ -634,6 +638,29 @@ T getStructureValue(const Value &src, const std::string &field) {
     return value.as<T>();
 }
 
+bool getPriorApprovalStatus(sql_ptr &ca_db, std::string &name, std::string &country, std::string &organization, std::string &organization_unit) {
+    // Check for duplicate subject
+    sqlite3_stmt *sql_statement;
+    bool previously_approved{false};
+
+    std::string approved_sql(SQL_PRIOR_APPROVAL_STATUS);
+    if (sqlite3_prepare_v2(ca_db.get(), approved_sql.c_str(), -1, &sql_statement, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare statement");
+    }
+    sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":CN"), name.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":O"), organization.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":OU"), organization_unit.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":C"), country.c_str(), -1, SQLITE_STATIC);
+
+    if (sqlite3_step(sql_statement) == SQLITE_ROW) {
+        previously_approved = sqlite3_column_int(sql_statement, 0) == 1;
+    }
+    std::cout << "Getting prior approval status: " << previously_approved << std::endl;
+
+
+    return previously_approved;
+}
+
 /**
  * @brief CERT:CREATE Handles the creation of a certificate.
  *
@@ -694,6 +721,13 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
         auto not_before = getStructureValue<time_t>(ccr, "not_before");
         auto not_after = getStructureValue<time_t>(ccr, "not_after");
         auto usage = getStructureValue<uint16_t>(ccr, "usage");
+
+        // If pending approval then check if it has already been approved
+        if ( state == PENDING_APPROVAL) {
+            if (getPriorApprovalStatus(ca_db, name, country, organization, organization_unit) ) {
+                state = VALID;
+            }
+        }
 
         // Create a certificate factory
         auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, usage,
@@ -807,7 +841,7 @@ void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_i
         }
 
         // set status value
-        certs::updateCertificateStatus(ca_db, serial, REVOKED);
+        certs::updateCertificateStatus(ca_db, serial, REVOKED, 0);
 
         auto revocation_date = std::time(nullptr);
         auto ocsp_status = cert_status_creator.createOCSPStatus(serial, REVOKED, revocation_date, revocation_date);
@@ -855,7 +889,7 @@ void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_
         time_t not_before, not_after;
         std::tie(not_before, not_after) = getCertificateValidity(ca_db, serial);
         certstatus_t new_state = status_date < not_before ? PENDING : status_date >= not_after ? EXPIRED : VALID;
-        certs::updateCertificateStatus(ca_db, serial, new_state, {PENDING_APPROVAL});
+        certs::updateCertificateStatus(ca_db, serial, new_state, 1, {PENDING_APPROVAL});
 
         auto cert_status = cert_status_creator.createOCSPStatus(serial, new_state, status_date);
         postCertificateStatus(status_pv, pv_name, serial, cert_status);
@@ -910,7 +944,7 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
         }
 
         // set status value
-        certs::updateCertificateStatus(ca_db, serial, REVOKED, {PENDING_APPROVAL});
+        certs::updateCertificateStatus(ca_db, serial, REVOKED, 0, {PENDING_APPROVAL});
 
         auto revocation_date = std::time(nullptr);
         auto cert_status = cert_status_creator.createOCSPStatus(serial, REVOKED, revocation_date, revocation_date);
@@ -1504,7 +1538,7 @@ bool statusMonitor(StatusMonitor &status_monitor_params) {
             uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
             try {
                 const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, status_monitor_params.issuer_id_, serial));
-                updateCertificateStatus(status_monitor_params.ca_db_, serial, VALID, {PENDING});
+                updateCertificateStatus(status_monitor_params.ca_db_, serial, VALID, 1, {PENDING});
                 auto status_date = std::time(nullptr);
                 auto cert_status = cert_status_creator.createOCSPStatus(serial, VALID, status_date);
                 postCertificateStatus(status_monitor_params.status_pv_, pv_name, serial, cert_status);
@@ -1530,7 +1564,7 @@ bool statusMonitor(StatusMonitor &status_monitor_params) {
             uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
             try {
                 const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, status_monitor_params.issuer_id_, serial));
-                updateCertificateStatus(status_monitor_params.ca_db_, serial, EXPIRED, {VALID, PENDING_APPROVAL, PENDING});
+                updateCertificateStatus(status_monitor_params.ca_db_, serial, EXPIRED, -1, {VALID, PENDING_APPROVAL, PENDING});
                 auto status_date = std::time(nullptr);
                 auto cert_status = cert_status_creator.createOCSPStatus(serial, EXPIRED, status_date);
                 postCertificateStatus(status_monitor_params.status_pv_, pv_name, serial, cert_status);
