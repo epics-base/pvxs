@@ -1409,7 +1409,7 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
         setValue<std::string>(status_value, "ocsp_status_date", cert_status.status_date.s);
         setValue<std::string>(status_value, "ocsp_certified_until", cert_status.status_valid_until_date.s);
         if (cert_status.ocsp_status == OCSP_CERTSTATUS_REVOKED) setValue<std::string>(status_value, "ocsp_revocation_date", cert_status.revocation_date.s);
-        auto ocsp_bytes = shared_array<uint8_t>(cert_status.ocsp_bytes.begin(), cert_status.ocsp_bytes.end());
+        auto ocsp_bytes = shared_array<const uint8_t>(cert_status.ocsp_bytes.begin(), cert_status.ocsp_bytes.end());
         status_value["ocsp_response"] = ocsp_bytes.freeze();
     }
 

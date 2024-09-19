@@ -395,6 +395,9 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
          *   when new certs. loaded.
          */
         int mode = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
+        if (!ssl_client ) {
+            tls_context.cert_is_valid = true;  // Force servers certificates to be valid when before we get status
+        }
         if (!ssl_client && conf.tls_client_cert_required == ConfigCommon::Require) {
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
             log_debug_printf(_setup, "This Secure PVAccess Server requires an X.509 client certificate%s", "\n");
@@ -439,6 +442,8 @@ void stapleOcspResponse(SSL_CTX *ctx, SSL *ssl) {
         log_info_printf(_setup, "Server OCSP response stapled%s\n", "");
     } catch (certs::CertStatusException &e) {
         log_warn_printf(_setup, "Server OCSP Stapling: not required: %s\n", e.what());
+    } catch (std::exception &e) {
+        log_warn_printf(_setup, "Error configuring stapling: %s\n", e.what());
     }
 }
 

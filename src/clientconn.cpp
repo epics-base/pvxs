@@ -91,12 +91,14 @@ void Connection::startConnecting() {
         if (!ctx) throw ossl::SSLError("SSL_new");
 
         // Enable OCSP status request extension
+/*
         log_debug_printf(stapling, "stapling OCSP status: Setting up request%s\n", "");
         if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
             log_info_printf(io, "OCSP status requested%s\n", "");
         } else {
             throw ossl::SSLError("Enabling OCSP status request");
         }
+*/
 
         // w/ BEV_OPT_CLOSE_ON_FREE calls SSL_free() on error
         bev.reset(bufferevent_openssl_socket_new(context->tcp_loop.base, -1, ctx, BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
