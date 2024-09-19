@@ -1352,6 +1352,7 @@ void ContextImpl::enableTls() {
         }
 
         // Collect tcp connections to clean-up
+        // TODO Store info about what search was requested (tls or tcp) to determine which connections to bounce
         std::vector<std::weak_ptr<Connection>> to_cleanup;
         for (auto& pair : connByAddr) {
             auto conn = pair.second.lock();

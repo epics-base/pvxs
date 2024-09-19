@@ -424,6 +424,7 @@ void stapleOcspResponse(SSL_CTX *ctx, SSL *ssl) {
         return;
     }
 
+    // TODO Cache the status in memory and disk so we dont have to always get from PVACMS
     try {
         auto uri = certs::CertStatusManager::getStatusPvFromCert(car->cert);
 

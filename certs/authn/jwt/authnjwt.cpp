@@ -13,6 +13,8 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
+#include <pvxs/log.h>
+
 DEFINE_LOGGER(auths, "pvxs.certs.auth.jwt");
 
 namespace pvxs {
@@ -23,7 +25,7 @@ void handle_request(int client_socket) {
     int valread = read(client_socket, buffer, 1024);
 
     std::string request(buffer);
-    std::cout << "Received Request:\n" << request << std::endl;
+    log_info_printf(auths, "Received Request: %s\n", request.c_str());
 
     // Parse request to find the token
     std::string method = request.substr(0, request.find(" "));
@@ -34,7 +36,7 @@ void handle_request(int client_socket) {
         if (token_pos != std::string::npos) {
             std::string token = request.substr(token_pos + 6); // Length of 'token=' is 6
             token = token.substr(0, token.find("&"));
-            std::cout << "Received Token: " << token << std::endl;
+            log_info_printf(auths, "Received Token: %s\n", token.c_str());
 
             std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nToken received";
             send(client_socket, response.c_str(), response.size(), 0);
@@ -60,6 +62,7 @@ int main() {
 
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+        log_err_printf(auths, "Socket Error: %s\n", "");
         perror("socket failed");
         exit(EXIT_FAILURE);
     }
@@ -67,6 +70,7 @@ int main() {
     // Forcefully attaching socket to the port 8080
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+        log_err_printf(auths, "Setsockopt Error: %s\n", "");
         perror("setsockopt");
         close(server_fd);
         exit(EXIT_FAILURE);
@@ -78,21 +82,21 @@ int main() {
 
     // Forcefully attaching socket to the port 8080
     if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
-        perror("bind failed");
+        log_err_printf(auths, "Bind failure: %s\n", "");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
     if (listen(server_fd, 3) < 0) {
-        perror("listen");
+        log_err_printf(auths, "Listen failure: %s\n", "");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "Server listening on port " << pvxs::certs::PORT << std::endl;
+    log_info_printf(auths, "Server listening on port: %d\n", pvxs::certs::PORT);
 
     while (true) {
         if ((new_socket = accept(server_fd, (struct sockaddr*)&address, (socklen_t*)&addrlen)) < 0) {
-            perror("accept");
+            log_err_printf(auths, "Accept failure: %s\n", "");
             close(server_fd);
             exit(EXIT_FAILURE);
         }

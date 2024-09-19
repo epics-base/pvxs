@@ -54,6 +54,7 @@ struct OperationBase : public Operation
     Value result;
     bool done = false;
     std::shared_ptr<ResultWaiter> waiter;
+    // TODO store the "wants-tls" so that we know what we can bounce when TLS is enabled in enableTLS
 
     OperationBase(operation_t op, const evbase& loop);
     virtual ~OperationBase();

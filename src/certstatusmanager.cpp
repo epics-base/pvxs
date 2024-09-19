@@ -293,7 +293,7 @@ CertificateStatus CertStatusManager::waitForStatus(const evbase& loop) {
  *
  * Example usage:
  * @code
- *     shared_array<uint8_t> ocsp_bytes = generateOCSPResponse(); // Generates an OCSP response
+ *     shared_array<const uint8_t> ocsp_bytes = generateOCSPResponse(); // Generates an OCSP response
  *     ossl_ptr<X509> ca_cert = loadCACertificate(); // Loads a CA certificate
  *     bool isValid = verifyOCSPResponse(ocsp_bytes, ca_cert); // Verifies the OCSP response
  * @endcode

@@ -123,6 +123,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         this->cred = std::move(cred);
     }
 
+    // TODO Sends the event to handle the, sets timeout, and
     bufferevent_setcb(bev.get(), &bevReadS, &bevWriteS, &bevEventS, this);
 
     timeval tmo(totv(iface->server->effective.tcpTimeout));
