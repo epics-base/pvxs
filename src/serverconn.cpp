@@ -91,11 +91,11 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 
         try {
             log_debug_printf(stapling, "stapling OCSP status: stapling server OCSP response%s\n", "");
-//            ossl::stapleOcspResponse(iface->server->tls_context.ctx, ctx); // Staple response if extension present
+            ossl::stapleOcspResponse(iface->server->tls_context.ctx, ctx); // Staple response if extension present
         } catch (certs::OCSPParseException &e) {
-            throw ossl::SSLError(SB() << "Server OCSP Stapling: Parse error: " << e.what());
+            log_debug_printf(stapling, "stapling OCSP status: failed add to tls context: %s\n", e.what());
         } catch (std::exception &e) {
-            throw ossl::SSLError(SB() << "Server OCSP Stapling: " << e.what());
+            log_debug_printf(stapling, "stapling OCSP status: failed add to tls context: %s\n", e.what());
         }
 
         auto rawconn = bev.release();

@@ -1048,7 +1048,7 @@ void Server::Pvt::disableTls() {
     if (cert_status_manager) cert_status_manager.reset();  // Stop subscribing to status
     tls_context.cert_is_valid = false;
     tls_context.has_cert = false;
-
+/*
     std::vector<std::weak_ptr<ServerConn>> to_cleanup;
     // Collect tls connections to clean-up
     for (auto& pair : connections) {
@@ -1063,7 +1063,7 @@ void Server::Pvt::disableTls() {
         if (conn) {
             conn->cleanup();
         }
-    }
+    }*/
 
     log_warn_printf(watcher, "TLS disabled for server%s\n", "");
 }
@@ -1091,6 +1091,8 @@ void Server::Pvt::enableTls() {
             }
         }
 
+/*
+        // TODO think about state machine
         // Collect TCP connections to upgrade
         std::vector<std::weak_ptr<ServerConn>> to_cleanup;
         for (auto& pair : connections) {
@@ -1109,6 +1111,7 @@ void Server::Pvt::enableTls() {
             }
         }
 
+*/
         // Set callback for when this status' validity ends
         log_debug_printf(watcher, "Starting server certificate status validity timer%s\n", "");
         startStatusValidityTimer();

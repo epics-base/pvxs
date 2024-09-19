@@ -436,11 +436,21 @@ void stapleOcspResponse(SSL_CTX *ctx, SSL *ssl) {
         // wait for it to complete, for up to 3 seconds.
         client.hurryUp();
         Value status_value = operation->wait(3.0);
+        client.close();
 
-        auto ocsp_response = status_value["ocsp_response"].as<shared_array<const uint8_t>>().thaw();
+        auto status = status_value["status.value.index"].as<certs::certstatus_t>();
+        if ( status == certs::VALID ) {
+            auto ocsp_response = status_value["ocsp_response"].as<shared_array<const uint8_t>>().thaw();
 
-        SSL_set_tlsext_status_ocsp_resp(ssl, ocsp_response.data(), ocsp_response.size());
-        log_info_printf(_setup, "Server OCSP response stapled%s\n", "");
+//            int result = SSL_set_tlsext_status_ocsp_resp(ssl, ocsp_response.data(), ocsp_response.size());
+//            if (result != 1) {
+//                log_err_printf(_setup, "Failed to set OCSP response in SSL context: %s\n", ERR_error_string(ERR_get_error(), nullptr));
+//                return;
+//            }
+//            log_info_printf(_setup, "Server OCSP response stapled%s\n", "");
+        } else {
+            log_warn_printf(_setup, "Server OCSP Stapling: not setup as server cert status is invalid%s\n", "");
+        }
     } catch (certs::CertStatusException &e) {
         log_warn_printf(_setup, "Server OCSP Stapling: not required: %s\n", e.what());
     } catch (std::exception &e) {
