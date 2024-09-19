@@ -418,6 +418,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
  * @return
  */
 void stapleOcspResponse(SSL_CTX *ctx, SSL *ssl) {
+    if ( !ctx || !ssl) return;
     auto car = static_cast<ossl::SSL_CTX_sidecar *>(SSL_CTX_get_ex_data(ctx, ossl_gbl->SSL_CTX_ex_idx));
     if (!car) {
         log_warn_printf(_setup, "Server OCSP Stapling: no sidecar found in context: ignoring%s\n", "");
