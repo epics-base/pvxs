@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ccr.sh name org usage
-if [ $# != 3 ]
+if [[ $# -lt 3 ]]
 then
   echo "usage:"
   echo "    $0 name org usage_mask"
@@ -13,6 +13,7 @@ fi
 name=$1
 org=$2
 usage=$3
+short=$4
 if [ $usage == 1 ]
 then
   target="client"
@@ -30,11 +31,14 @@ CHAIN_FILE="$HOME/.epics/keys/${target}_chain.pem"
 P12_FILE="$HOME/.epics/certs/${target}.p12"
 
 now=$(date +%s)
-not_before=$((now + 0))
-not_after=$((now + 86400))
+if [[ $short == "-s" ]]; then
+  not_before=$((now + 60))
+  not_after=$((now + 300))
+else
+  not_before=$((now + 0))
+  not_after=$((now + 86400))
+fi
 
-#not_before=$((now + 60))
-#not_after=$((now + 90))
 
 # Check if the P12 key file exists to determine if keys need to be generated
 if [ ! -f "$P12_KEY_FILE" ]; then
