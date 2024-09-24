@@ -230,12 +230,20 @@ struct StatusDate {
     inline operator time_t() const { return t; }
     inline operator ossl_ptr<ASN1_TIME>() const { return toAsn1_Time(); };
 
+    /**
+     * @brief Create an ASN1_TIME object from this StatusDate object
+     * @return and ASN1_TIME object corresponding this StatusDate object
+     */
     inline ossl_ptr<ASN1_TIME> toAsn1_Time() const {
         ossl_ptr<ASN1_TIME> asn1(ASN1_TIME_new());
         ASN1_TIME_set(asn1.get(), t);
         return asn1;
     }
 
+    /**
+     * @brief Create an ASN1_TIME object from a StatusDate object
+     * @return and ASN1_TIME object corresponding the given StatusDate object
+     */
     static inline ossl_ptr<ASN1_TIME> toAsn1_Time(StatusDate status_date) { return status_date.toAsn1_Time(); }
 
     /**
@@ -267,6 +275,19 @@ struct StatusDate {
         }
     }
 
+    /**
+     * @brief Convert the given string to a time_t value.
+     *
+     * The string is assumed to represent a time in the UTC timezone.  The
+     * format of the string is defined by `CERT_TIME_FORMAT`.  The string is parsed
+     * and the time_t extracted and returned.
+     *
+     * Any errors in format are signalled by raising OCSPParseExceptions as this function
+     * is called from OCSP parsing
+     *
+     * @param time_string
+     * @return
+     */
     static inline time_t toTimeT(std::string time_string) {
         // Read the string and parse it into std::tm
         if (time_string.empty()) return 0;

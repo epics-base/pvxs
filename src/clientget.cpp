@@ -605,7 +605,7 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
             internal->result = Result(std::current_exception());
             internal->notify();
         }
-    }, [context](){ return context->connectionCanProceed(); }, 3 // timeout seconds
+    }, [context](){ return context->connectionCanProceed(); }, STATUS_WAIT_TIME_SECONDS // timeout seconds
     );
 
     return external;

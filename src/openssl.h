@@ -25,6 +25,9 @@
 #include "ownedptr.h"
 #include "p12filewatcher.h"
 
+typedef epicsGuard<epicsMutex> Guard;
+typedef epicsGuardRelease<epicsMutex> UnGuard;
+
 // EPICS OID for "validTillRevoked" extension:
 // TODO Register this unassigned OID for EPICS
 // "1.3.6.1.4.1" OID prefix for custom OIDs
@@ -74,9 +77,9 @@ struct ShowX509 {
     const X509* cert;
 };
 std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
-PVXS_API void stapleOcspResponse(SSL_CTX* ctx, SSL* ssl);
 
 struct SSLContext {
+    epicsMutex lock;  // To lock changes to context state that happen as a result of changes to certificate status
     static PVXS_API int NID_PvaCertStatusURI;
     SSL_CTX* ctx = nullptr;
     bool has_cert{false};       // set when a certificate has been established
@@ -140,6 +143,8 @@ struct SSLContext {
 
     static bool fill_credentials(PeerCredentials& cred, const SSL* ctx);
 };
+
+PVXS_API void stapleOcspResponse(void * server, SSL* ssl);
 
 struct OCSPStapleData {
     size_t size;

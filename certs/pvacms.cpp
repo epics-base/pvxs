@@ -655,8 +655,6 @@ bool getPriorApprovalStatus(sql_ptr &ca_db, std::string &name, std::string &coun
     if (sqlite3_step(sql_statement) == SQLITE_ROW) {
         previously_approved = sqlite3_column_int(sql_statement, 0) == 1;
     }
-    std::cout << "Getting prior approval status: " << previously_approved << std::endl;
-
 
     return previously_approved;
 }
@@ -1408,7 +1406,7 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
         setValue<std::string>(status_value, "ocsp_state", cert_status.ocsp_status.s);
         setValue<std::string>(status_value, "ocsp_status_date", cert_status.status_date.s);
         setValue<std::string>(status_value, "ocsp_certified_until", cert_status.status_valid_until_date.s);
-        if (cert_status.ocsp_status == OCSP_CERTSTATUS_REVOKED) setValue<std::string>(status_value, "ocsp_revocation_date", cert_status.revocation_date.s);
+        setValue<std::string>(status_value, "ocsp_revocation_date", cert_status.revocation_date.s);
         auto ocsp_bytes = shared_array<const uint8_t>(cert_status.ocsp_bytes.begin(), cert_status.ocsp_bytes.end());
         status_value["ocsp_response"] = ocsp_bytes.freeze();
     }

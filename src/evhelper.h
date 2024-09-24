@@ -33,6 +33,7 @@
 
 #ifdef PVXS_ENABLE_OPENSSL
 #include "openssl.h"
+constexpr timeval status_ready_polling_interval{0, 100000};
 #endif
 
 namespace pvxs {namespace impl {
@@ -107,6 +108,17 @@ private:
     std::unique_ptr<mdetail::VFunctor0> fn;
 };
 
+struct DelayedDispatcher {
+    mfunction fn;
+    std::function<bool()> dispatch_when_condition;
+    time_t timeout_secs;
+    time_t first_time{std::time(nullptr)};
+    DelayedDispatcher(mfunction &&fn, const std::function<bool()> &&dispatch_when_condition, time_t timeout_secs)
+      : fn(std::move(fn))
+      , dispatch_when_condition(dispatch_when_condition)
+      , timeout_secs(timeout_secs) {}
+};
+
 struct PVXS_API evbase {
     evbase() = default;
     explicit evbase(const std::string& name, unsigned prio=0);
@@ -120,6 +132,7 @@ struct PVXS_API evbase {
 
 private:
     bool _dispatch(mfunction&& fn, bool dothrow) const;
+    bool _delayedDispatch(timeval delay, mfunction&& fn, bool dothrow) const;
     bool _call(mfunction&& fn, bool dothrow) const;
 public:
 
@@ -139,28 +152,27 @@ public:
         _dispatch(std::move(fn), true);
     }
 
-    void recursiveDispatch(mfunction fn, std::function<bool()> condition_fn, time_t timeout_secs, time_t first_time) const {
+    // queue request to execute in event loop after a given delay.  return immediately.
+    inline
+    void delayedDispatch(timeval delay, mfunction&& fn) const {
+        _delayedDispatch(delay, std::move(fn), true);
+    }
+
+    void recursiveDispatch(std::shared_ptr<DelayedDispatcher> delayed_dispatcher) const {
         auto now = std::time(nullptr);
-        if (first_time + timeout_secs > now) {
-            dispatchWhen(std::move(fn), std::move(condition_fn), timeout_secs, first_time);
+        if (delayed_dispatcher->dispatch_when_condition() // Supplied condition is true
+        || !(delayed_dispatcher->first_time + delayed_dispatcher->timeout_secs > now)) { // or we've waited long enough
+            // Execute now
+            dispatch(std::move(delayed_dispatcher->fn));
         } else {
-            if (fn) {
-                _dispatch(std::move(fn), true);
-            }
+            // Wait some more
+            delayedDispatch(status_ready_polling_interval, [=]() { recursiveDispatch(delayed_dispatcher); });
         }
     }
 
-    template<typename ConditionFn>
-    void dispatchWhen(mfunction&& fn, ConditionFn dispatch_when_condition, time_t timeout_secs, time_t first_time = std::time(nullptr)) const {
-        auto captured_condition_fn = std::move(dispatch_when_condition);
-        auto captured_fn = std::move(fn);
-
-        if (captured_condition_fn()) {
-            _dispatch(std::move(captured_fn), true);
-        } else {
-            epicsThreadSleep(0.1);
-            recursiveDispatch(std::move(captured_fn), std::move(captured_condition_fn), timeout_secs, first_time);
-        }
+    void dispatchWhen(mfunction&& fn, std::function<bool()> dispatch_when_condition, time_t timeout_secs, time_t first_time = std::time(nullptr)) const {
+        auto delayed_dispatcher = std::make_shared<DelayedDispatcher>(std::move(fn), std::move(dispatch_when_condition), timeout_secs);
+        recursiveDispatch(delayed_dispatcher);
     }
 
     inline

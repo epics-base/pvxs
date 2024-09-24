@@ -35,22 +35,22 @@ namespace certs {
  *
  * @param serial The serial number of the certificate.
  * @param status The status of the certificate (PENDING_VALIDATION, VALID, EXPIRED, or REVOKED).
- * @param status_date The status date of this status certification, normally now.
+ * @param this_status_update The status date of this status certification, normally now.
  * @param predicated_revocation_time The time of revocation for the certificate if revoked.
  *
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date,
+CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate this_status_update,
                                                       StatusDate predicated_revocation_time) const {
     // Create OCSP response
     ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
     // Set ASN1_TIME objects
-    auto status_valid_until_time = StatusDate(status_date.t + cert_status_validity_mins_ * 60);
+    auto status_valid_until_time = StatusDate(this_status_update.t + cert_status_validity_mins_ * 60);
 
-    auto this_update = status_date.toAsn1_Time();
-    auto next_update = status_valid_until_time.toAsn1_Time();
+    const auto this_update = this_status_update.toAsn1_Time();
+    const auto next_update = status_valid_until_time.toAsn1_Time();
     StatusDate revocation_time_to_use = (time_t)0;  // Default to 0
 
     // Determine the OCSP status and revocation time
@@ -73,7 +73,8 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
     auto cert_id = createOCSPCertId(serial);
 
     // Add the status to the OCSP response
-    if (!OCSP_basic_add1_status(basic_resp.get(), cert_id.get(), ocsp_status, 0, revocation_asn1_time.get(), this_update.get(), next_update.get())) {
+    if (!OCSP_basic_add1_status(basic_resp.get(), cert_id.get(), ocsp_status, 0, (revocation_time_to_use.t == 0) ? nullptr : revocation_asn1_time.get(),
+                                this_update.get(), next_update.get())) {
         throw std::runtime_error(SB() << "Failed to add status to OCSP response: " << getError());
     }
 
@@ -94,7 +95,7 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
     auto ocsp_response = ocspResponseToBytes(basic_resp);
     const auto ocsp_bytes = shared_array<const uint8_t>(ocsp_response.begin(), ocsp_response.end());
 
-    return CertificateStatus(status, ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time_to_use);
+    return CertificateStatus(status, ocsp_status, ocsp_bytes, this_status_update, status_valid_until_time, revocation_time_to_use);
 }
 
 /**

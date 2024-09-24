@@ -534,7 +534,8 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     if (pickone({"EPICS_PVAS_TLS_STOP_IF_NO_CERT"})) {
         self.tls_stop_if_no_cert = parseTo<bool>(pickone.val);
     }
-#endif
+#endif  // PVXS_ENABLE_OPENSSL
+    is_initialized = true;
 }
 #ifndef PVXS_ENABLE_OPENSSL
 
@@ -773,6 +774,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         }
     }
 #endif  // PVXS_ENABLE_OPENSSL
+    is_initialized = true;
 }
 
 #ifndef PVXS_ENABLE_OPENSSL

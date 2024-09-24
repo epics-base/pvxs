@@ -24,6 +24,10 @@
 #include "udp_collector.h"
 #include "utilpvt.h"
 
+#ifdef PVXS_ENABLE_OPENSSL
+#define STATUS_WAIT_TIME_SECONDS 1
+#endif
+
 namespace pvxs {
 namespace client {
 
@@ -402,7 +406,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     static void doCertEventHandler(evutil_socket_t fd, short evt, void *raw);
     static void doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void *raw);
     void disableTls();
-    void enableTls();
+    void enableTls(const Config& new_config = {});
     void fileEventCallback(short evt);
     X509 * getCert(ossl::SSLContext *context = nullptr);
     void startStatusValidityTimer();

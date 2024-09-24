@@ -832,7 +832,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
             op->queue.back().exc = std::current_exception();
             op->doNotify();
         }
-    }, [context](){ return context->connectionCanProceed(); }, 3 // timeout seconds
+    }, [context](){ return context->connectionCanProceed(); }, STATUS_WAIT_TIME_SECONDS // timeout seconds
     );
 
     return external;

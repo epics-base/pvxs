@@ -289,7 +289,7 @@ private:
     static void doCertEventHandler(evutil_socket_t fd, short evt, void* raw);
     static void doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void* raw);
     void disableTls();
-    void enableTls();
+    void enableTls(const Config& new_config = {});
     void fileEventCallback(short evt);
     X509* getCert(ossl::SSLContext* context_ptr = nullptr);
     void startStatusValidityTimer();

@@ -235,7 +235,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
                 log_exc_printf(setup, "Unhandled exception %s in Info result() callback: %s\n", typeid (e).name(), e.what());
             }
         }
-    }, [context](){ return context->connectionCanProceed(); }, 3 // timeout seconds
+    }, [context](){ return context->connectionCanProceed(); }, STATUS_WAIT_TIME_SECONDS // timeout seconds
     );
 
     return external;

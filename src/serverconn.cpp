@@ -85,13 +85,13 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 #ifdef PVXS_ENABLE_OPENSSL
     if(iface->isTLS) {
         assert(iface->server->tls_context);
-        auto ctx(SSL_new(iface->server->tls_context.ctx));
-        if(!ctx)
+        auto ssl(SSL_new(iface->server->tls_context.ctx));
+        if(!ssl)
             throw ossl::SSLError("SSL_new()");
 
         try {
             log_debug_printf(stapling, "stapling OCSP status: stapling server OCSP response%s\n", "");
-            ossl::stapleOcspResponse(iface->server->tls_context.ctx, ctx); // Staple response if extension present
+            ossl::stapleOcspResponse((void *)iface->server, ssl); // Staple response
         } catch (certs::OCSPParseException &e) {
             log_debug_printf(stapling, "stapling OCSP status: failed add to tls context: %s\n", e.what());
         } catch (std::exception &e) {
@@ -103,7 +103,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         evbufferevent tlsconn(__FILE__, __LINE__,
                               bufferevent_openssl_filter_new(iface->server->acceptor_loop.base,
                                                              rawconn,
-                                                             ctx,
+                                                             ssl,
                                                              BUFFEREVENT_SSL_ACCEPTING,
                                                              BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
         bev = std::move(tlsconn);

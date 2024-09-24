@@ -80,6 +80,30 @@ std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>
     return ret;
 }
 
+int clientOCSPCallback(SSL *ctx, ContextImpl *tls_context_ptr) {
+    try {
+        uint8_t *ocsp_response_ptr;
+        auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
+
+        if (!ocsp_response_ptr || !len) {
+            log_debug_printf(stapling, "No OCSP response was sent by server%s\n", "");
+            return 1; // Acceptable - TODO We will check ourselves
+        }
+        const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
+        auto parsed_ocsp_responce = certs::CertStatusManager::parse(ocsp_bytes);
+        if (parsed_ocsp_responce.ocsp_status == certs::OCSP_CERTSTATUS_GOOD) {
+            log_info_printf(stapling, "OCSP stapled response is: %s\n", parsed_ocsp_responce.ocsp_status.s.c_str());
+            return 1;
+        } else {
+            log_err_printf(stapling, "OCSP stapled response is: %s\n", parsed_ocsp_responce.ocsp_status.s.c_str());
+            return 0;
+        }
+    } catch (...) {
+        log_err_printf(stapling, "OCSP failed to validate stapled OCSP response%s\n", "");
+    }
+    return -1;
+}
+
 void Connection::startConnecting() {
     assert(!this->bev);
 

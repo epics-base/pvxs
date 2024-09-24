@@ -22,6 +22,7 @@ void SecurityClient::update(dbChannel* ch, Credentials& cred) {
 
     for (size_t i = 0, N = temp.cli.size(); i < N; i++) {
         /* asAddClient() fails secure to no-permission */
+        std::cout << cred.cred[i] << std::endl;
         (void)asAddClient(&temp.cli[i],
                 dbChannelRecord(ch)->asp,
                 dbChannelFldDes(ch)->as_level,
@@ -40,7 +41,7 @@ SecurityClient::~SecurityClient() {
 }
 
 bool SecurityClient::canWrite() const {
-    return std::all_of(cli.begin(), cli.end(), [](ASCLIENTPVT asc) {
+    return std::any_of(cli.begin(), cli.end(), [](ASCLIENTPVT asc) {
         return asCheckPut(asc);
     });
 }

@@ -42,6 +42,7 @@ namespace pvxs {
 namespace impl {
 
 struct PVXS_API ConfigCommon {
+    bool is_initialized{false};
     enum ConfigTarget { CLIENT, SERVER, GATEWAY, CMS, OCSP } config_target = CLIENT;
 
     virtual ~ConfigCommon() = 0;

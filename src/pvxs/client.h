@@ -1048,6 +1048,7 @@ public:
 DiscoverBuilder Context::discover(std::function<void (const Discovered &)> && fn) { return DiscoverBuilder(pvt, std::move(fn)); }
 
 struct PVXS_API Config : public impl::ConfigCommon {
+
     /** List of unicast, multicast, and broadcast addresses to which search requests will be sent.
      *
      * Entries may take the forms:

@@ -151,17 +151,11 @@ uint64_t CertStatusManager::getSerialNumber(X509* cert) {
  * It will not call the callback unless the status udpdate has been verified and
  * all errors are ignored.
  *
- * @param cert_ptr the certificate to monoitor
+ * @param ctx_cert the certificate to monitor
  * @param callback the callback to call
  * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
  */
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509* cert_ptr, StatusCallback&& callback) {
-    if (!cert_ptr) {
-        throw CertStatusSubscriptionException("Can't subscribe: Null certificate");
-    }
-
-    auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));
-
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509> &&ctx_cert, StatusCallback&& callback) {
     // Construct the URI
     auto uri = CertStatusManager::getStatusPvFromCert(ctx_cert);
     log_debug_printf(status, "Starting Status Subscription: %s\n", uri.c_str());
@@ -241,8 +235,8 @@ CertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
         auto client(client::Context::fromEnvUnsecured());
         auto operation = client.get(uri).exec();
 
-        // wait for it to complete, for up to 3 seconds.
-        Value result = operation->wait(3.0);
+        // wait for it to complete, for up to 2 second.  Very short wait for status
+        Value result = operation->wait(2.0);
         client.close();
 
         return CertificateStatus(result);

@@ -22,6 +22,7 @@
 #include "certstatusmanager.h"
 #include "evhelper.h"
 #include "ownedptr.h"
+#include "serverconn.h"
 #include "utilpvt.h"
 
 #ifndef TLS1_3_VERSION
@@ -29,6 +30,7 @@
 #endif
 
 DEFINE_LOGGER(_setup, "pvxs.ossl.init");
+DEFINE_LOGGER(stapling, "pvxs.stapling");
 DEFINE_LOGGER(watcher, "pvxs.certs.mon");
 DEFINE_LOGGER(_io, "pvxs.ossl.io");
 
@@ -383,6 +385,10 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
 //            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_CHECK))      // Check build chain
 //            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_UNTRUSTED))  // Flag untrusted in build chain
                 throw SSLError("invalid cert chain");
+
+            if ( conf.config_target == ConfigCommon::CMS ) {
+                tls_context.cert_is_valid = true;
+            }
         }
     }
 
@@ -395,9 +401,6 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
          *   when new certs. loaded.
          */
         int mode = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
-        if (!ssl_client ) {
-            tls_context.cert_is_valid = true;  // Force servers certificates to be valid
-        }
         if (!ssl_client && conf.tls_client_cert_required == ConfigCommon::Require) {
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
             log_debug_printf(_setup, "This Secure PVAccess Server requires an X.509 client certificate%s", "\n");
@@ -412,51 +415,25 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
 }  // namespace
 
 /**
+ * @brief This is the callback that is made by the TLS handshake to add the server OCSP status to the payload
+ *
+ * @param tls_context the tls context to add the OCSP response to
+ */
+void serverOCSPCallback(SSL* ssl, pvxs::server::Server::Pvt * server) {
+    if ( SSL_set_tlsext_status_ocsp_resp(ssl, (void *) server->current_status.ocsp_bytes.data(), server->current_status.ocsp_bytes.size()) != 1 )
+        log_warn_printf(stapling, "Server OCSP Stapling: unable to staple server status%s\n", "");
+}
+
+/**
  * @brief Staple server's ocsp response to the tls handshake
  * @param ssl the ssl context
  * @param arg
  * @return
  */
-void stapleOcspResponse(SSL_CTX *ctx, SSL *ssl) {
-    if ( !ctx || !ssl) return;
-    auto car = static_cast<ossl::SSL_CTX_sidecar *>(SSL_CTX_get_ex_data(ctx, ossl_gbl->SSL_CTX_ex_idx));
-    if (!car) {
-        log_warn_printf(_setup, "Server OCSP Stapling: no sidecar found in context: ignoring%s\n", "");
-        return;
-    }
-
-    // TODO Cache the status in memory and disk so we dont have to always get from PVACMS
-    try {
-        auto uri = certs::CertStatusManager::getStatusPvFromCert(car->cert);
-
-        // Build and start network operation
-        // use an unsecure socket that doesn't monitor files or status
-        auto client(client::Context::fromEnvUnsecured());
-        auto operation = client.get(uri).exec();
-
-        // wait for it to complete, for up to 3 seconds.
-        client.hurryUp();
-        Value status_value = operation->wait(3.0);
-        client.close();
-
-        auto status = status_value["status.value.index"].as<certs::certstatus_t>();
-        if ( status == certs::VALID ) {
-            auto ocsp_response = status_value["ocsp_response"].as<shared_array<const uint8_t>>().thaw();
-
-//            int result = SSL_set_tlsext_status_ocsp_resp(ssl, ocsp_response.data(), ocsp_response.size());
-//            if (result != 1) {
-//                log_err_printf(_setup, "Failed to set OCSP response in SSL context: %s\n", ERR_error_string(ERR_get_error(), nullptr));
-//                return;
-//            }
-//            log_info_printf(_setup, "Server OCSP response stapled%s\n", "");
-        } else {
-            log_warn_printf(_setup, "Server OCSP Stapling: not setup as server cert status is invalid%s\n", "");
-        }
-    } catch (certs::CertStatusException &e) {
-        log_warn_printf(_setup, "Server OCSP Stapling: not required: %s\n", e.what());
-    } catch (std::exception &e) {
-        log_warn_printf(_setup, "Error configuring stapling: %s\n", e.what());
-    }
+void stapleOcspResponse(void * server_ptr, SSL* ssl) {
+    auto server = (pvxs::server::Server::Pvt *)server_ptr;
+    SSL_CTX_set_tlsext_status_cb(server->tls_context.ctx, serverOCSPCallback);
+    SSL_CTX_set_tlsext_status_arg(server->tls_context.ctx, server);
 }
 
 // Must be set up with correct values after OpenSSL initialisation to retrieve status PV from certs

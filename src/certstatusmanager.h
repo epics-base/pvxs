@@ -87,22 +87,18 @@
 
 #define SUBSCRIBE_TO_CERT_STATUS(TYPE, LOOP)                                                                                  \
     void TYPE::subscribeToCertStatus() {                                                                                      \
-        if (auto ctx_cert = getCert()) {                                                                                      \
+        if (auto cert_ptr = getCert()) {                                                                                      \
             try {                                                                                                             \
                 if ( cert_status_manager ) return;                                                                            \
-                cert_status_manager = certs::CertStatusManager::subscribe(ctx_cert, [this](certs::CertificateStatus status) { \
-                    if (status.isGood()) {                                                                                    \
-                        (LOOP).dispatch([this]() mutable {                                                                    \
-                            enableTls();                                                                                      \
-                            log_debug_printf(watcher, "Set cert_is_valid: %s\n", "true");                                     \
-                            tls_context.cert_is_valid = true;                                                                 \
-                        });                                                                                                   \
-                    } else {                                                                                                  \
-                        (LOOP).dispatch([this]() mutable {                                                                    \
-                            disableTls();                                                                                     \
-                            log_debug_printf(watcher, "Set cert_is_valid: %s\n", "false");                                    \
-                            tls_context.cert_is_valid = false;                                                                \
-                        });                                                                                                   \
+                auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));                                                           \
+                cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::CertificateStatus status) { \
+                    Guard G(tls_context.lock);                                                                                \
+                    auto was_good = current_status.isGood();                                                                  \
+                    if ((current_status = status).isGood()) {                                                                 \
+                        if ( !was_good )                                                                                      \
+                            (LOOP).dispatch([this]() mutable { enableTls(); });                                               \
+                    } else if ( was_good ) {                                                                                  \
+                        (LOOP).dispatch([this]() mutable {disableTls();});                                                    \
                     }                                                                                                         \
                 });                                                                                                           \
             } catch (certs::CertStatusSubscriptionException & e) {                                                            \
@@ -191,12 +187,12 @@ class CertStatusManager {
      * @brief Used to create a helper that you can use to subscribe to certificate status with
      * Subsequently call subscribe() to subscribe
      *
-     * @param cert_ptr pointer to certificate you want to subscribe to
-     * @param callback the callback to callwhen a status change has appeared
+     * @param ctx_cert certificate you want to subscribe to
+     * @param callback the callback to call when a status change has appeared
      *
      * @see unsubscribe()
      */
-    static cert_status_ptr<CertStatusManager> subscribe(X509* cert_ptr, StatusCallback&& callback);
+    static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509> &&ctx_cert, StatusCallback&& callback);
 
     /**
      * @brief Get status for a given certificate
