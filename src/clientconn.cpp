@@ -10,10 +10,57 @@
 #include "clientimpl.h"
 
 namespace pvxs {
+
+#ifdef PVXS_ENABLE_OPENSSL
+namespace {
+DEFINE_LOGGER(stapling, "pvxs.stapling");
+
+/**
+ * @brief A callback function for handling OCSP (Online Certificate Status Protocol) responses in an SSL context.
+ *
+ * This function is intended to be used as a client-side callback for validating the status of certificates using OCSP.
+ * The implementation of this function should handle the retrieval and processing of OCSP responses, potentially affecting
+ * the SSL connection based on the certificate validity determined by the OCSP response.
+ *
+ * @param ctx A pointer to the SSL context where the callback is set.
+ * @param arg An optional user-defined argument that can be passed to the callback. (ignored)
+ *
+ * @return Typically returns an integer value indicating the SSL_TLSEXT_ERR_OK, SSL_TLSEXT_ERR_ALERT_WARNING,
+ * or SSL_TLSEXT_ERR_ALERT_FATAL of the OCSP validation.
+ */
+static int clientOCSPCallback(SSL *ctx, void *) {
+    try {
+        uint8_t *ocsp_response_ptr;
+        auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
+
+        if (!ocsp_response_ptr || !len) {
+            log_debug_printf(stapling, "No Stapled OCSP response found%s\n", "");
+            return SSL_TLSEXT_ERR_OK; // Acceptable - TODO We will check ourselves
+        }
+        const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
+        auto status = certs::OCSPStatus(ocsp_bytes);
+        if (status.isGood()) {
+            log_info_printf(stapling, "OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
+            log_info_printf(stapling, "OCSP stapled status date: %s\n", status.status_date.s.c_str());
+            log_info_printf(stapling, "OCSP stapled status valid until: %s\n", status.status_valid_until_date.s.c_str());
+            log_info_printf(stapling, "OCSP stapled revocation date: %s\n", status.revocation_date.s.c_str());
+            return SSL_TLSEXT_ERR_OK;
+        } else {
+            log_err_printf(stapling, "OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
+            return SSL_TLSEXT_ERR_ALERT_FATAL;
+        }
+    } catch (std::exception &e) {
+        log_err_printf(stapling, "Stapled OCSP response: %s\n", e.what());
+    }
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
+}
+
+} //
+#endif
+
 namespace client {
 
 DEFINE_LOGGER(io, "pvxs.cli.io");
-DEFINE_LOGGER(stapling, "pvxs.stapling");
 DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 DEFINE_LOGGER(remote, "pvxs.remote.log");
 
@@ -80,30 +127,6 @@ std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>
     return ret;
 }
 
-int clientOCSPCallback(SSL *ctx, ContextImpl *tls_context_ptr) {
-    try {
-        uint8_t *ocsp_response_ptr;
-        auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
-
-        if (!ocsp_response_ptr || !len) {
-            log_debug_printf(stapling, "No OCSP response was sent by server%s\n", "");
-            return 1; // Acceptable - TODO We will check ourselves
-        }
-        const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
-        auto parsed_ocsp_responce = certs::CertStatusManager::parse(ocsp_bytes);
-        if (parsed_ocsp_responce.ocsp_status == certs::OCSP_CERTSTATUS_GOOD) {
-            log_info_printf(stapling, "OCSP stapled response is: %s\n", parsed_ocsp_responce.ocsp_status.s.c_str());
-            return 1;
-        } else {
-            log_err_printf(stapling, "OCSP stapled response is: %s\n", parsed_ocsp_responce.ocsp_status.s.c_str());
-            return 0;
-        }
-    } catch (...) {
-        log_err_printf(stapling, "OCSP failed to validate stapled OCSP response%s\n", "");
-    }
-    return -1;
-}
-
 void Connection::startConnecting() {
     assert(!this->bev);
 
@@ -112,14 +135,18 @@ void Connection::startConnecting() {
 #ifdef PVXS_ENABLE_OPENSSL
     if (isTLS) {
         auto ctx(SSL_new(context->tls_context.ctx));
-        if (!ctx) throw ossl::SSLError("SSL_new");
+        if (!ctx) throw std::runtime_error("SSL_new");
 
-        // Enable OCSP status request extension
-        log_debug_printf(stapling, "stapling OCSP status: Setting up request%s\n", "");
-        if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
-            log_info_printf(io, "OCSP status requested%s\n", "");
-        } else {
-            throw ossl::SSLError("Enabling OCSP status request");
+        if ( !context->tls_context.status_check_disabled ) {
+            // Enable OCSP status request extension
+            log_debug_printf(stapling, "stapling OCSP status: Setting up request%s\n", "");
+            if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
+                log_debug_printf(stapling, "OCSP status requested type set for stapling%s\n", "");
+            } else {
+                throw ossl::SSLError("Error enabling OCSP status stapling");
+            }
+            SSL_CTX_set_tlsext_status_cb(context->tls_context.ctx, clientOCSPCallback);
+            SSL_CTX_set_tlsext_status_arg(context->tls_context.ctx, NULL);
         }
 
         // w/ BEV_OPT_CLOSE_ON_FREE calls SSL_free() on error
