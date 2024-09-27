@@ -243,19 +243,15 @@ void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
 
             log_debug_printf(_setup, "Trusting root CA %s\n", std::string(SB() << ShowX509{ca}).c_str());
 
-            // populate SSL_CTX::cert_store
-            auto trusted = SSL_CTX_get_cert_store(ctx.ctx);
-            assert(trusted);
-            if (!X509_STORE_add_cert(trusted, ca)) throw SSLError("X509_STORE_add_cert");
-
+            // populate the context's trust store with the root cert
+            X509_STORE* trusted_store = SSL_CTX_get_cert_store(ctx.ctx);
+            if (!X509_STORE_add_cert(trusted_store, ca)) throw SSLError("X509_STORE_add_cert");
         } else {  // signed by another CA
             log_debug_printf(_setup, "Using untrusted/chain CA cert %s\n", std::string(SB() << ShowX509{ca}).c_str());
-
-            // note: chain certs added this way are ignored unless SSL_BUILD_CHAIN_FLAG_UNTRUSTED
-            //       passed below.
+            // note: chain certs added this way are ignored unless SSL_BUILD_CHAIN_FLAG_UNTRUSTED is used
             // appends SSL_CTX::cert::chain
-            if (!SSL_CTX_add0_chain_cert(ctx.ctx, ca)) throw SSLError("SSL_CTX_add0_chain_cert");
         }
+        if (!SSL_CTX_add0_chain_cert(ctx.ctx, ca)) throw SSLError("SSL_CTX_add0_chain_cert");
     }
 }
 
@@ -281,6 +277,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
     SSLContext::sslInit();
 
     SSLContext tls_context;
+    tls_context.status_check_disabled = conf.tls_disable_status_check;
     tls_context.ctx = SSL_CTX_new_ex(ossl_gbl->libctx.get(), NULL, method);
     if (!tls_context.ctx) throw SSLError("Unable to allocate SSL_CTX");
 
@@ -308,10 +305,12 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
     }
 
     if (conf.isTlsConfigured()) {
+        const std::string &filename = conf.tls_cert_filename, &password = conf.tls_cert_password;
         // Get key
         ossl_ptr<EVP_PKEY> key;
         {
-            const std::string &key_filename = conf.tls_private_key_filename, &key_password = conf.tls_private_key_password;
+            const std::string &key_filename = (conf.tls_private_key_filename.empty() ? filename : conf.tls_private_key_filename);
+            const std::string &key_password = (conf.tls_private_key_password.empty() ? password : conf.tls_private_key_password);
             log_debug_printf(_setup, "private key filename (PKCS12) %s;%s\n", key_filename.c_str(), key_password.empty() ? "" : " w/ password");
 
             file_ptr fp(fopen(key_filename.c_str(), "rb"), false);
@@ -330,7 +329,6 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         ossl_ptr<X509> cert;
         ossl_ptr<STACK_OF(X509)> CAs(__FILE__, __LINE__, sk_X509_new_null());
         {
-            const std::string &filename = conf.tls_cert_filename, &password = conf.tls_cert_password;
             log_debug_printf(_setup, "cert filename (PKCS12) %s;%s\n", filename.c_str(), password.empty() ? "" : " w/ password");
 
             file_ptr fp(fopen(filename.c_str(), "rb"), false);
@@ -356,20 +354,9 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
             verifyKeyUsage(cert, ssl_client);
         }
 
-        // the following is ~= SSL_CTX_use_cert_and_key()
-        // except for special handling of root CA (maybe) appearing in PKCS12 chain
-
         // sets SSL_CTX::cert
         if (cert && !SSL_CTX_use_certificate(tls_context.ctx, cert.get())) throw SSLError("SSL_CTX_use_certificate");
         if (key && !SSL_CTX_use_PrivateKey(tls_context.ctx, key.get())) throw SSLError("SSL_CTX_use_certificate");
-
-        /* java keytool adds an extra attribute to indicate that a certificate
-         * is trusted.  However, PKCS12_parse() circa 3.1 does not know about
-         * this, and gives us all of the certs. in one blob for us to sort through.
-         *
-         * We _assume_ that any root CA included in a PKCS#12 file is meant to be
-         * trusted.  Otherwise, such a cert. could never appear in a valid chain.
-         */
 
         // extract CAs (intermediate and root) from PKCS12 bag
         extractCAs(tls_context, CAs);
@@ -381,12 +368,12 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
             car->cert = std::move(cert);
             tls_context.has_cert = true;
 
-            if (!SSL_CTX_build_cert_chain(tls_context.ctx, 0))  // checks Normal
-//            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_CHECK))      // Check build chain
+            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_CHECK))      // Check build chain
 //            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_UNTRUSTED))  // Flag untrusted in build chain
+//            if (!SSL_CTX_build_cert_chain(tls_context.ctx, 0))  // checks default operation
                 throw SSLError("invalid cert chain");
 
-            if ( conf.config_target == ConfigCommon::CMS ) {
+            if ( tls_context.status_check_disabled ) {
                 tls_context.cert_is_valid = true;
             }
         }
@@ -419,9 +406,26 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
  *
  * @param tls_context the tls context to add the OCSP response to
  */
-void serverOCSPCallback(SSL* ssl, pvxs::server::Server::Pvt * server) {
-    if ( SSL_set_tlsext_status_ocsp_resp(ssl, (void *) server->current_status.ocsp_bytes.data(), server->current_status.ocsp_bytes.size()) != 1 )
-        log_warn_printf(stapling, "Server OCSP Stapling: unable to staple server status%s\n", "");
+int serverOCSPCallback(SSL* ssl, pvxs::server::Server::Pvt * server) {
+    auto ocsp_data_ptr = (void * )server->current_status.ocsp_bytes.data();
+    auto ocsp_data_len = server->current_status.ocsp_bytes.size();
+
+    if (!server->cached_ocsp_response || memcmp(ocsp_data_ptr, server->cached_ocsp_response, ocsp_data_len) ) {
+        // if status has changed
+        if ( server->cached_ocsp_response) {
+            OPENSSL_free(server->cached_ocsp_response);
+        }
+        server->cached_ocsp_response = OPENSSL_malloc(ocsp_data_len);
+        memcpy(server->cached_ocsp_response, ocsp_data_ptr, ocsp_data_len);
+
+        if ( SSL_set_tlsext_status_ocsp_resp(ssl, server->cached_ocsp_response, ocsp_data_len) != 1 ) {
+            log_warn_printf(stapling, "Server OCSP Stapling: unable to staple server status%s\n", "");
+            return SSL_TLSEXT_ERR_ALERT_FATAL;
+        }
+        else
+            log_info_printf(stapling, "Server OCSP Stapling: server status stapled%s\n", "");
+    }
+    return SSL_TLSEXT_ERR_OK;
 }
 
 /**

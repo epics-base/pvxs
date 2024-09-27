@@ -140,6 +140,7 @@ TESTS += testtlstime
 TESTPROD_HOST += testtlsstatus
 testtlsstatus_SRCS += testtlsstatus.cpp
 testtlsstatus_SRCS += certstatusfactory.cpp
+testtlsstatus_SRCS += certstatusmanager.cpp
 testtlsstatus_SRCS += certstatus.cpp
 TESTS += testtlsstatus
 

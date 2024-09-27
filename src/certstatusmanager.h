@@ -221,9 +221,6 @@ class CertStatusManager {
      */
     CertificateStatus getStatus();
 
-    static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
-    static uint64_t getSerialNumber(X509* cert);
-
     inline bool available() noexcept { return isValid() || (manager_start_time_ + 3) < std::time(nullptr); }
 
     inline bool isValid() noexcept { return (status_ != UNKNOWN) && status_valid_until_date_ > std::time(nullptr); }
@@ -245,7 +242,6 @@ class CertStatusManager {
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes);
 
     static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response);
-    static uint64_t ASN1ToUint64(ASN1_INTEGER* asn1_number);
 
     /**
      * @brief To parse OCSP responses

@@ -371,20 +371,6 @@ Context::Context(const Config& conf) : pvt(std::make_shared<Pvt>(conf)) { pvt->i
 
 Context::~Context() {}
 
-#ifdef PVXS_ENABLE_OPENSSL
-void Context::reconfigure(const Config& newconf) {
-    if (!pvt) throw std::logic_error("NULL Context");
-
-    ossl::SSLContext new_context;
-    if (newconf.isTlsConfigured()) {
-        Guard G(pvt->impl->tls_context.lock);
-        pvt->impl->tls_context.has_cert = false;  // Force reload of context from cert
-        pvt->impl->manager.loop().dispatch([this]() mutable { pvt->impl->enableTls(); });
-    }
-}
-
-#endif
-
 const Config& Context::config() const {
     if (!pvt) throw std::logic_error("NULL Context");
 
@@ -509,25 +495,31 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
             tls_context = ossl::SSLContext::for_client(effective);
             if ( tls_context.has_cert ) {
                 if (auto cert_ptr = getCert()) {
-                    try {
-                        // Subscribe and set validity when the status is verified
-                        auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));                                                           \
-                        cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::CertificateStatus status) {
-                            Guard G(tls_context.lock);
-                            auto was_good = current_status.isGood();
-                            if ((current_status = status).isGood()) {
-                                if ( !was_good )
-                                    manager.loop().dispatch([this]() mutable { enableTls(); });
-                            } else if ( was_good ) {
-                                manager.loop().dispatch([this]() mutable { disableTls(); });
-                            }
-                        });
-                        log_info_printf(setup, "TLS enabled for client pending certificate status: %p\n", cert_status_manager.get());
-                    } catch (certs::CertStatusNoExtensionException& e) {
-                        log_debug_printf(setup, "Certificate status monitoring disabled: %s\n", e.what());
+                    if ( tls_context.status_check_disabled ) {
                         Guard G(tls_context.lock);
                         tls_context.cert_is_valid = true;
-                        log_info_printf(setup, "TLS enabled for client%s\n", "");
+                        log_info_printf(setup, "Certificate status monitoring disabled: %s\n", "By config");
+                    } else {
+                        try {
+                            // Subscribe and set validity when the status is verified
+                            auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));                                                           \
+                            cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::CertificateStatus status) {
+                                Guard G(tls_context.lock);
+                                auto was_good = current_status.isGood();
+                                if ((current_status = status).isGood()) {
+                                    if ( !was_good )
+                                        manager.loop().dispatch([this]() mutable { enableTls(); });
+                                } else if ( was_good ) {
+                                    manager.loop().dispatch([this]() mutable { disableTls(); });
+                                }
+                            });
+                            log_info_printf(setup, "TLS enabled for client pending certificate status: %p\n", cert_status_manager.get());
+                        } catch (certs::CertStatusNoExtensionException& e) {
+                            log_debug_printf(setup, "Certificate status monitoring disabled: %s\n", e.what());
+                            Guard G(tls_context.lock);
+                            tls_context.cert_is_valid = true;
+                            log_info_printf(setup, "TLS enabled for client%s\n", "");
+                        }
                     }
                 }
             }
@@ -1295,6 +1287,79 @@ Context::Pvt::Pvt(const Config& conf) : loop("PVXCTCP", epicsThreadPriorityCASer
 DO_CERT_EVENT_HANDLER(ContextImpl, io)
 DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(ContextImpl)
 
+void Context::reconfigure(const Config& newconf) {
+    if (!pvt) throw std::logic_error("NULL Context");
+
+#ifdef PVXS_ENABLE_OPENSSL
+    if (newconf.isTlsConfigured()) {
+        Guard G(pvt->impl->tls_context.lock);
+        pvt->impl->tls_context.has_cert = false;  // Force reload of context from cert
+        UnGuard U(G);
+        pvt->impl->manager.loop().call([this, &newconf]() mutable { pvt->impl->enableTls(newconf); });
+        pvt->impl->manager.loop().sync();
+    }
+#else
+    pvt->impl->manager.loop().sync();
+#endif
+}
+
+/**
+ * @brief Enable TLS with the optional config if provided
+ * @param new_config optional config (check the is_initialized flag to see if its blank or not)
+ */
+void ContextImpl::enableTls(const Config& new_config) {
+    // If already valid then don't do anything
+    if ( tls_context.has_cert && tls_context.cert_is_valid )
+        return;
+
+    log_debug_printf(watcher, "Enabling TLS: %s\n", "");
+    try {
+        Guard G(tls_context.lock); // We can lock here because `for_client` will create a completely different tls_context
+
+        // if we don't have a cert then get a new one
+        if (!tls_context.has_cert) {
+            log_debug_printf(watcher, "Creating a new TLS context from the environment%s\n", "");
+            auto new_context = ossl::SSLContext::for_client(new_config.is_initialized ? new_config : effective);
+
+            // If unsuccessful in getting cert then don't do anything
+            if (!new_context.has_cert) {
+                log_debug_printf(watcher, "Failed to create new TLS context: TLS disabled%s\n", "");
+                return;
+            }
+            tls_context = new_context;
+            effective = (new_config.is_initialized ? new_config : effective);
+        }
+
+        // Subscribe to certificate status if not already subscribed
+        if ( !cert_status_manager && !tls_context.status_check_disabled ) {
+            log_debug_printf(watcher, "Subscribing to certificate status: %s\n", "");
+            subscribeToCertStatus();  // Sets the cert_status_manager if successfully subscribes
+        }
+
+        // Close all connections and replace with TLS ones
+        log_debug_printf(watcher, "Closing %zu connections to replace with TLS ones\n", connByAddr.size());
+        auto conns(std::move(connByAddr));
+        for (auto& pair : conns) {
+            auto conn = pair.second.lock();
+            if (conn) {
+                conn->cleanup();
+            }
+        }
+        conns.clear();
+
+        // Set callback for when this status' validity ends
+        if ( !tls_context.status_check_disabled ) {
+            log_debug_printf(watcher, "Starting certificate status validity timer%s\n", "");
+            startStatusValidityTimer();
+        }
+
+        tls_context.cert_is_valid = true;
+        log_info_printf(watcher, "TLS enabled for client%s\n", "");
+    } catch (std::exception& e) {
+        log_debug_printf(watcher, "TLS remains disabled for client: %s\n", e.what());
+    }
+}
+
 /**
  * @brief Called to disable TLS - if TLS is not enabled then this will do nothin.  It is idempotent
  */
@@ -1333,58 +1398,6 @@ void ContextImpl::disableTls() {
     tls_context.cert_is_valid = false;
     tls_context.has_cert = false;
     log_warn_printf(watcher, "TLS disabled for client%s\n", "");
-}
-
-/**
- * @brief Enable TLS with the optional config if provided
- * @param new_config optional config (check the is_initialized flag to see if its blank or not)
- */
-void ContextImpl::enableTls(const Config& new_config) {
-    // If already valid then don't do anything
-    if ( tls_context.cert_is_valid )
-        return;
-
-    log_debug_printf(watcher, "Enabling TLS: %s\n", "");
-    try {
-        Guard G(tls_context.lock); // We can lock here because `for_client` will create a completely different tls_context
-
-        // if we don't have a cert then get a new one
-        if (!tls_context.has_cert) {
-            log_debug_printf(watcher, "Creating a new TLS context from the environment%s\n", "");
-            auto new_context = ossl::SSLContext::for_client(new_config.is_initialized ? new_config : effective);
-
-            // If unsuccessful in getting cert then don't do anything, note that clients can wait for status
-            if (!new_context.has_cert) {
-                log_debug_printf(watcher, "Failed to create new TLS context: TLS disabled%s\n", "");
-                return;
-            }
-            tls_context = new_context;
-        }
-
-        // Subscribe to certificate status if not already subscribed
-        if ( !cert_status_manager ) {
-            log_debug_printf(watcher, "Subscribing to certificate status: %s\n", "");
-            subscribeToCertStatus();  // Sets the cert_status_manager if successfully subscribes
-        }
-
-        // Close all connections and replace with TLS ones
-        log_debug_printf(watcher, "Closing %zu connections to replace with TLS ones\n", connByAddr.size());
-        for (auto& pair : connByAddr) {
-            auto conn = pair.second.lock();
-            if (conn) {
-                conn->cleanup();
-            }
-        }
-
-        // Set callback for when this status' validity ends
-        log_debug_printf(watcher, "Starting certificate status validity timer%s\n", "");
-        startStatusValidityTimer();
-
-        tls_context.cert_is_valid = true;
-        log_info_printf(watcher, "TLS enabled for client%s\n", "");
-    } catch (std::exception& e) {
-        log_debug_printf(watcher, "TLS remains disabled for client: %s\n", e.what());
-    }
 }
 
 FILE_EVENT_CALLBACK(ContextImpl)

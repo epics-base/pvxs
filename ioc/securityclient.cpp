@@ -22,7 +22,6 @@ void SecurityClient::update(dbChannel* ch, Credentials& cred) {
 
     for (size_t i = 0, N = temp.cli.size(); i < N; i++) {
         /* asAddClient() fails secure to no-permission */
-        std::cout << cred.cred[i] << std::endl;
         (void)asAddClient(&temp.cli[i],
                 dbChannelRecord(ch)->asp,
                 dbChannelFldDes(ch)->as_level,

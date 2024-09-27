@@ -16,6 +16,7 @@
 
 #include <openssl/x509.h>
 
+#include <pvxs/log.h>
 #include <pvxs/nt.h>
 
 #include "ownedptr.h"
@@ -25,10 +26,10 @@
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
+DEFINE_LOGGER(status_setup, "pvxs.certs.status");
+
 namespace pvxs {
 namespace certs {
-
-class CertStatusManager;
 
 ///////////// OCSP RESPONSE ERRORS
 class OCSPParseException : public std::runtime_error {
@@ -338,13 +339,14 @@ struct StatusDate {
  * A true struct - no processing is done.
  */
 struct ParsedOCSPStatus {
+    const uint64_t serial;
     const OCSPCertStatus ocsp_status;
     const StatusDate status_date;
     const StatusDate status_valid_until_date;
     const StatusDate revocation_date;
-    ParsedOCSPStatus(const OCSPCertStatus& ocsp_status, const StatusDate& status_date, const StatusDate& status_valid_until_date,
+    ParsedOCSPStatus(const uint64_t & serial, const OCSPCertStatus& ocsp_status, const StatusDate& status_date, const StatusDate& status_valid_until_date,
                      const StatusDate& revocation_date)
-        : ocsp_status(ocsp_status), status_date(status_date), status_valid_until_date(status_valid_until_date), revocation_date(revocation_date) {}
+        : serial(serial), ocsp_status(ocsp_status), status_date(status_date), status_valid_until_date(status_valid_until_date), revocation_date(revocation_date) {}
 };
 
 /**
@@ -372,7 +374,18 @@ struct OCSPStatus {
           status_valid_until_date(status_valid_until_date),
           revocation_date(revocation_date) {};
 
-   private:
+    /**
+     * @brief Verify that the status validity dates are currently valid and the status is known
+     * @return true if the status is still valid
+     */
+    inline bool isValid() noexcept {
+        auto now(std::time(nullptr));
+        return status_valid_until_date.t > now;
+    }
+
+    inline bool isGood() noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
+
+  private:
     friend struct CertificateStatus;
     explicit OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
                         StatusDate revocation_time);
@@ -390,18 +403,22 @@ struct OCSPStatus {
  */
 struct CertificateStatus : public OCSPStatus {
     PVACertStatus status;
-    inline bool operator==(const CertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status; }
-    inline bool operator!=(const CertificateStatus& rhs) const { return this->status != rhs.status || this->ocsp_status != rhs.ocsp_status; }
+    inline bool operator==(const CertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
+    inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs) ; }
     inline bool operator==(certstatus_t rhs) const { return this->status == rhs; }
     inline bool operator==(ocspcertstatus_t rhs) const { return this->ocsp_status == rhs; }
-    inline bool operator!=(certstatus_t rhs) const { return !(this->status == rhs); }
-    inline bool operator!=(ocspcertstatus_t rhs) const { return !(this->ocsp_status == rhs); }
+    inline bool operator!=(certstatus_t rhs) const { return !(*this == rhs); }
+    inline bool operator!=(ocspcertstatus_t rhs) const { return !(*this == rhs); }
 
     explicit CertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes) : OCSPStatus(ocsp_bytes), status(status) {};
 
     explicit CertificateStatus(const Value& status_value)
         : CertificateStatus(status_value["status.value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>()) {
         if (ocsp_bytes.empty()) return;
+        log_debug_println(status_setup, "Value Status: %s\n", (SB() << status_value).str().c_str() );
+        log_debug_printf(status_setup, "Status Date: %s\n", this->status_date.s.c_str() );
+        log_debug_printf(status_setup, "Status Validity: %s\n", this->status_valid_until_date.s.c_str() );
+        log_debug_printf(status_setup, "Revocation Date: %s\n", this->revocation_date.s.c_str() );
         if (!selfConsistent() || !dateConsistent(status_value["ocsp_status_date"].as<std::string>(), status_value["ocsp_certified_until"].as<std::string>(),
                                                  status_value["ocsp_revocation_date"].as<std::string>())) {
             throw OCSPParseException("Certificate status does not match certified OCSP status");
@@ -416,18 +433,6 @@ struct CertificateStatus : public OCSPStatus {
                                              : OCSP_CERTSTATUS_UNKNOWN,
                      status_valid_until_date, revocation_date),
           status(pva_status) {}
-
-    /**
-     * @brief Verify that the status validity dates are currently valid and the status is known
-     * @return true if the status is still valid
-     */
-    inline bool isValid() noexcept {
-        if (status == UNKNOWN) return false;
-        auto now(std::time(nullptr));
-        return status_valid_until_date.t > now;
-    }
-
-    inline bool isGood() noexcept { return isValid() && *this == certs::OCSP_CERTSTATUS_GOOD; }
 
    private:
     friend class CertStatusFactory;

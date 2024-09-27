@@ -73,8 +73,23 @@ class CertStatusFactory {
      *
      * @return the Certificate Status containing the signed OCSP response and other OCSP response data.
      */
+    CertificateStatus createOCSPStatus(const ossl_ptr<X509> &cert, certstatus_t status, StatusDate status_date = std::time(nullptr),
+                                       StatusDate predicated_revocation_time = std::time(nullptr)) const;
     CertificateStatus createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date = std::time(nullptr),
                                        StatusDate predicated_revocation_time = std::time(nullptr)) const;
+
+    /**
+     * @brief Convert ASN1_INTEGER to a 64-bit unsigned integer
+     * @param asn1_number
+     * @return
+     */
+    static inline uint64_t ASN1ToUint64(ASN1_INTEGER* asn1_number) {
+        uint64_t uint64_number = 0;
+        for (int i = 0; i < asn1_number->length; ++i) {
+            uint64_number = (uint64_number << 8) | asn1_number->data[i];
+        }
+        return uint64_number;
+    }
 
    private:
     const ossl_ptr<X509>& ca_cert_;                          // CA Certificate to encode in the OCSP responses
@@ -94,6 +109,8 @@ class CertStatusFactory {
      * @return a byte array
      */
     static std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
+    static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
+    static uint64_t getSerialNumber(X509* cert);
 
     /**
      * @brief Internal function to convert a PVA serial number into an ASN1_INTEGER

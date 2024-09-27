@@ -64,6 +64,9 @@ PVXS_API
 void _log_printf(unsigned rawlvl, _Printf_format_string_ const char *fmt, ...) EPICS_PRINTF_STYLE(2,3);
 
 PVXS_API
+void _log_println(unsigned rawlvl, const char *log_prefix, _Printf_format_string_ const char *fmt, ...) EPICS_PRINTF_STYLE(3,4) ;
+
+PVXS_API
 void _log_printf_hex(unsigned rawlvl, _Printf_format_string_ const void *buf, size_t buflen, const char *fmt, ...) EPICS_PRINTF_STYLE(4,5);
 
 } // namespace detail
@@ -91,6 +94,11 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
         ::pvxs::detail:: _log_printf(unsigned(LVL), "%s " FMT, _log_prefix, __VA_ARGS__); \
 }while(0)
 
+#define log_println(LOGGER, LVL, FMT, ...) do{ \
+    if(auto _log_prefix = ::pvxs::detail::log_prep(LOGGER, unsigned(LVL))) \
+        ::pvxs::detail:: _log_println(unsigned(LVL), _log_prefix, FMT, __VA_ARGS__); \
+}while(0)
+
 /* A note about MSVC (legacy) pre-processor weirdness.
  * Care needs to be taken when expanding nested macros w/ __VA_ARGS__.
  * Expansion of __VA_ARGS__ for the outer macro seems to result in
@@ -115,6 +123,14 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
 #define log_warn_printf(LOGGER, FMT, ...)  log_printf(LOGGER, ::pvxs::Level::Warn, FMT, __VA_ARGS__)
 #define log_info_printf(LOGGER, FMT, ...)  log_printf(LOGGER, ::pvxs::Level::Info, FMT, __VA_ARGS__)
 #define log_debug_printf(LOGGER, FMT, ...) log_printf(LOGGER, ::pvxs::Level::Debug, FMT, __VA_ARGS__)
+
+// USE WITH CARE!!! - inserts a 0.0001 second pause every 10 lines - Recommend for DEBUG ONLY
+#define log_exc_println(LOGGER, FMT, ...)  log_println(LOGGER, unsigned(::pvxs::Level::Crit)|0x1000, FMT, __VA_ARGS__)
+#define log_crit_println(LOGGER, FMT, ...)  log_println(LOGGER, ::pvxs::Level::Crit, FMT, __VA_ARGS__)
+#define log_err_println(LOGGER, FMT, ...)   log_println(LOGGER, ::pvxs::Level::Err, FMT, __VA_ARGS__)
+#define log_warn_println(LOGGER, FMT, ...)  log_println(LOGGER, ::pvxs::Level::Warn, FMT, __VA_ARGS__)
+#define log_info_println(LOGGER, FMT, ...)  log_println(LOGGER, ::pvxs::Level::Info, FMT, __VA_ARGS__)
+#define log_debug_println(LOGGER, FMT, ...) log_println(LOGGER, ::pvxs::Level::Debug, FMT, __VA_ARGS__)
 
 #define log_hex_printf(LOGGER, LVL, BUF, BUFLEN, FMT, ...) do{ \
     if(auto _log_prefix = ::pvxs::detail::log_prep(LOGGER, unsigned(LVL))) \

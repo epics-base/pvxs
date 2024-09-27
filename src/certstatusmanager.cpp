@@ -21,6 +21,7 @@
 #include <pvxs/log.h>
 
 #include "certstatus.h"
+#include "certstatusfactory.h"
 #include "configcms.h"
 #include "evhelper.h"
 #include "ownedptr.h"
@@ -94,52 +95,21 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
     ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revocation_time = nullptr;
     int reason = 0;
 
+    // Get the OCSP_CERTID from the single response and extract the serial number
+    const OCSP_CERTID* cert_id = OCSP_SINGLERESP_get0_id(single_response);
+    ASN1_INTEGER* serial = nullptr;
+    OCSP_id_get0_info(nullptr, nullptr, nullptr, &serial, const_cast<OCSP_CERTID*>(cert_id));
+
+
     auto ocsp_status = static_cast<ocspcertstatus_t>(OCSP_single_get0_status(single_response, &reason, &revocation_time, &this_update, &next_update));
+    // Check status validity: less than 5 seconds old
+    OCSP_check_validity(this_update, next_update, 0, 5);
 
-    // Check status validity: less than 1 second old
-    OCSP_check_validity(this_update, next_update, 0, 1);
-
-    return {OCSPCertStatus(ocsp_status), this_update, next_update, revocation_time};
-}
-
-/**
- * @brief Convert ASN1_INTEGER to a 64-bit unsigned integer
- * @param asn1_number
- * @return
- */
-uint64_t CertStatusManager::ASN1ToUint64(ASN1_INTEGER* asn1_number) {
-    uint64_t uint64_number = 0;
-    for (int i = 0; i < asn1_number->length; ++i) {
-        uint64_number = (uint64_number << 8) | asn1_number->data[i];
-    }
-    return uint64_number;
-}
-
-/**
- * @brief Get serial number from an owned cert
- * @param cert owned cert
- * @return serial number
- */
-uint64_t CertStatusManager::getSerialNumber(const ossl_ptr<X509>& cert) { return getSerialNumber(cert.get()); }
-
-/**
- * @brief Get a serial number from a cert pointer
- * @param cert cert pointer
- * @return serial number
- */
-uint64_t CertStatusManager::getSerialNumber(X509* cert) {
-    if (!cert) {
-        throw std::runtime_error("Can't get serial number: Null certificate");
+    if ( ocsp_status == OCSP_CERTSTATUS_REVOKED && !revocation_time) {
+        throw OCSPParseException("Revocation time not set when status is REVOKED");
     }
 
-    // Extract the serial number from the certificate
-    ASN1_INTEGER* serial_number_asn1 = X509_get_serialNumber(cert);
-    if (!serial_number_asn1) {
-        throw std::runtime_error("Failed to retrieve serial number from certificate");
-    }
-
-    // Convert ASN1_INTEGER to a 64-bit unsigned integer
-    return ASN1ToUint64(serial_number_asn1);
+    return {CertStatusFactory::ASN1ToUint64(serial), OCSPCertStatus(ocsp_status), this_update, next_update, revocation_time};
 }
 
 /**
@@ -178,7 +148,6 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509> &
                                if (update) {
                                    auto status_update((CertificateStatus)update);
                                    log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
-                                   log_debug_printf(status, "Status subscription address: %p\n", cert_status_manager.get());
                                    cert_status_manager->status_ = (certstatus_t)status_update.status.i;
                                    cert_status_manager->status_valid_until_date_ = status_update.status_valid_until_date.t + 100;
                                    cert_status_manager->revocation_date_ = status_update.revocation_date.t;

@@ -35,12 +35,14 @@ void testGetSuper() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "superserver1.p12";
+    serv_conf.tls_disable_status_check = true;
 
     auto serv(serv_conf.build()
               .addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = "ca.p12";
+    cli_conf.tls_cert_filename = "client1.p12";
+    cli_conf.tls_disable_status_check = true;
 
     auto cli(cli_conf.build());
 
@@ -49,7 +51,7 @@ void testGetSuper() {
 
     auto conn(cli.connect("mailbox")
               .onConnect([](const client::Connected& c){
-        testTrue(c.cred && c.cred->isTLS)<<" Connected with TLS";
+        testTrue(c.cred && c.cred->isTLS);
     })
               .exec());
 
@@ -66,12 +68,14 @@ void testGetIntermediate() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "server1.p12";
+    serv_conf.tls_disable_status_check = true;
 
     auto serv(serv_conf.build()
               .addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = "ca.p12";
+    cli_conf.tls_cert_filename = "client1.p12";
+    cli_conf.tls_disable_status_check = true;
 
     auto cli(cli_conf.build());
 
@@ -80,7 +84,7 @@ void testGetIntermediate() {
 
     auto conn(cli.connect("mailbox")
               .onConnect([](const client::Connected& c){
-        testTrue(c.cred && c.cred->isTLS)<<" Connected with TLS";
+        testTrue(c.cred && c.cred->isTLS);
     })
               .exec());
 
@@ -97,12 +101,15 @@ void testGetNameServer() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "server1.p12";
+    serv_conf.tls_disable_status_check = true;
 
     auto serv(serv_conf.build()
               .addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = "ca.p12";
+    cli_conf.tls_cert_filename = "client1.p12";
+    cli_conf.tls_disable_status_check = true;
+
     for(auto& addr : cli_conf.addressList)
         cli_conf.nameServers.push_back(SB()<<"pvas://"<<addr/*<<':'<<cli_conf.tls_port*/);
     cli_conf.autoAddrList = false;
@@ -115,7 +122,7 @@ void testGetNameServer() {
 
     auto conn(cli.connect("mailbox")
               .onConnect([](const client::Connected& c){
-        testTrue(c.cred && c.cred->isTLS)<<" Connected with TLS";
+        testTrue(c.cred && c.cred->isTLS);
     })
               .exec());
 
@@ -187,12 +194,14 @@ void testClientReconfig() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "ioc1.p12";
+    serv_conf.tls_disable_status_check = true;
 
     auto serv(serv_conf.build()
               .addSource("whoami", std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = "client1.p12";
+    cli_conf.tls_disable_status_check = true;
 
     auto cli(cli_conf.build());
 
@@ -251,12 +260,14 @@ void testServerReconfig() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "server1.p12";
+    serv_conf.tls_disable_status_check = true;
 
     auto serv(serv_conf.build()
               .addSource("whoami", std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = "ioc1.p12";
+    cli_conf.tls_disable_status_check = true;
 
     auto cli(cli_conf.build());
 
@@ -317,11 +328,27 @@ MAIN(testtls)
     testPlan(22);
     testSetup();
     logger_config_env();
-    testGetSuper();
+    try {
+        testGetSuper();
+    } catch (std::runtime_error &e) {
+        testFail("FAILED with errors: %s\n", e.what());
+    }
     testGetIntermediate();
-    testGetNameServer();
-    testClientReconfig();
-     testServerReconfig();
+    try {
+        testGetNameServer();
+    } catch (std::runtime_error &e) {
+        testFail("FAILED with errors: %s\n", e.what());
+    }
+    try {
+        testClientReconfig();
+    } catch (std::runtime_error &e) {
+        testFail("FAILED with errors: %s\n", e.what());
+    }
+    try {
+        testServerReconfig();
+    } catch (std::runtime_error &e) {
+        testFail("FAILED with errors: %s\n", e.what());
+    }
     cleanup_for_valgrind();
     return testDone();
 }

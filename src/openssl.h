@@ -84,6 +84,7 @@ struct SSLContext {
     SSL_CTX* ctx = nullptr;
     bool has_cert{false};       // set when a certificate has been established
     bool cert_is_valid{false};  // To signal that cert is valid when we have received the status for the certificate
+    bool status_check_disabled{false};
 
     PVXS_API
     static SSLContext for_client(const impl::ConfigCommon& conf);
@@ -91,13 +92,13 @@ struct SSLContext {
     static SSLContext for_server(const impl::ConfigCommon& conf);
 
     SSLContext() = default;
-    inline SSLContext(const SSLContext& o) : ctx(o.ctx), has_cert(o.has_cert), cert_is_valid(o.cert_is_valid) {
+    inline SSLContext(const SSLContext& o) : ctx(o.ctx), has_cert(o.has_cert), cert_is_valid(o.cert_is_valid), status_check_disabled(o.status_check_disabled) {
         if (ctx) {
             auto ret(SSL_CTX_up_ref(ctx));
             assert(ret == 1);  // can up_ref actually fail?
         }
     }
-    inline SSLContext(SSLContext& o) noexcept : ctx(o.ctx), has_cert(o.has_cert), cert_is_valid(o.cert_is_valid) { o.ctx = nullptr; }
+    inline SSLContext(SSLContext& o) noexcept : ctx(o.ctx), has_cert(o.has_cert), cert_is_valid(o.cert_is_valid), status_check_disabled(o.status_check_disabled) { o.ctx = nullptr; }
     inline ~SSLContext() {
         SSL_CTX_free(ctx);  // If ctx is NULL nothing is done.
     }
@@ -110,6 +111,7 @@ struct SSLContext {
         ctx = o.ctx;
         has_cert = o.has_cert;
         cert_is_valid = o.cert_is_valid;
+        status_check_disabled = o.status_check_disabled;
         return *this;
     }
     inline SSLContext& operator=(SSLContext&& o) {
@@ -117,6 +119,7 @@ struct SSLContext {
         ctx = o.ctx;
         has_cert = o.has_cert;
         cert_is_valid = o.cert_is_valid;
+        status_check_disabled = o.status_check_disabled;
         o.ctx = nullptr;
         return *this;
     }

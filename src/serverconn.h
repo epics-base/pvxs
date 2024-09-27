@@ -265,6 +265,7 @@ struct Server::Pvt
     bool first_cert_event{true};
     certs::CertificateStatus current_status;
     certs::P12FileWatcher file_watcher;
+    void* cached_ocsp_response{nullptr};
     certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
 #endif
 

@@ -86,16 +86,18 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     if(iface->isTLS) {
         assert(iface->server->tls_context);
         auto ssl(SSL_new(iface->server->tls_context.ctx));
-        if(!ssl)
+        if (!ssl)
             throw ossl::SSLError("SSL_new()");
 
-        try {
-            log_debug_printf(stapling, "stapling OCSP status: stapling server OCSP response%s\n", "");
-            ossl::stapleOcspResponse((void *)iface->server, ssl); // Staple response
-        } catch (certs::OCSPParseException &e) {
-            log_debug_printf(stapling, "stapling OCSP status: failed add to tls context: %s\n", e.what());
-        } catch (std::exception &e) {
-            log_debug_printf(stapling, "stapling OCSP status: failed add to tls context: %s\n", e.what());
+        if ( !iface->server->tls_context.status_check_disabled ) {
+            try {
+                log_debug_printf(stapling, "stapling OCSP status: installing callback%s\n", "");
+                ossl::stapleOcspResponse((void *)iface->server, ssl); // Staple response
+            } catch (certs::OCSPParseException &e) {
+                log_debug_printf(stapling, "stapling OCSP status: failed to install callback: %s\n", e.what());
+            } catch (std::exception &e) {
+                log_debug_printf(stapling, "stapling OCSP status: failed to install callback: %s\n", e.what());
+            }
         }
 
         auto rawconn = bev.release();

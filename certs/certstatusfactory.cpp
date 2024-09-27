@@ -15,13 +15,40 @@
 #include <openssl/x509.h>
 
 #include <pvxs/client.h>
+#include <pvxs/log.h>
 
 #include "certstatus.h"
 #include "configcms.h"
 #include "ownedptr.h"
 
+DEFINE_LOGGER(certs, "pvxs.certs.status");
+
 namespace pvxs {
 namespace certs {
+
+struct CertStatusManager;
+
+/**
+ * @brief Creates and signs an OCSP response for a given certificate.
+ *
+ * This function takes in a certificate, certificate status, revocation time, CA certificate,
+ * CA private key, and CA chain as input parameters. It creates an OCSP_CERTID using the CA
+ * certificate and its serial number. Then it creates an OCSP request using the OCSP_CERTID.
+ * Next, it creates an OCSP basic response using the OCSP request, CA certificate, CA private key,
+ * CA chain, and certificate status. The function adds the status times to the OCSP basic response
+ * and serializes the response into a byte array. The byte array is then returned.
+ *
+ * @param cert The certificate.
+ * @param status The status of the certificate (PENDING_VALIDATION, VALID, EXPIRED, or REVOKED).
+ * @param this_status_update The status date of this status certification, normally now.
+ * @param predicated_revocation_time The time of revocation for the certificate if revoked.
+ *
+ * @see createOCSPCertId
+ * @see ocspResponseToBytes
+ */
+CertificateStatus CertStatusFactory::createOCSPStatus(const ossl_ptr<X509> &cert, certstatus_t status, StatusDate this_status_update, StatusDate predicated_revocation_time) const {
+    return createOCSPStatus(getSerialNumber(cert), status, this_status_update, predicated_revocation_time);
+}
 
 /**
  * @brief Creates and signs an OCSP response for a given certificate.
@@ -41,14 +68,12 @@ namespace certs {
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate this_status_update,
-                                                      StatusDate predicated_revocation_time) const {
+CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate this_status_update, StatusDate predicated_revocation_time) const {
     // Create OCSP response
     ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
     // Set ASN1_TIME objects
     auto status_valid_until_time = StatusDate(this_status_update.t + cert_status_validity_mins_ * 60);
-
     const auto this_update = this_status_update.toAsn1_Time();
     const auto next_update = status_valid_until_time.toAsn1_Time();
     StatusDate revocation_time_to_use = (time_t)0;  // Default to 0
@@ -73,8 +98,7 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
     auto cert_id = createOCSPCertId(serial);
 
     // Add the status to the OCSP response
-    if (!OCSP_basic_add1_status(basic_resp.get(), cert_id.get(), ocsp_status, 0, (revocation_time_to_use.t == 0) ? nullptr : revocation_asn1_time.get(),
-                                this_update.get(), next_update.get())) {
+    if (!OCSP_basic_add1_status(basic_resp.get(), cert_id.get(), ocsp_status, 0, revocation_asn1_time.get(), this_update.get(), next_update.get())) {
         throw std::runtime_error(SB() << "Failed to add status to OCSP response: " << getError());
     }
 
@@ -94,6 +118,12 @@ CertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatu
     // Serialize OCSP response
     auto ocsp_response = ocspResponseToBytes(basic_resp);
     const auto ocsp_bytes = shared_array<const uint8_t>(ocsp_response.begin(), ocsp_response.end());
+
+    log_debug_printf(status_setup, "Status: %d\n", status);
+    log_debug_printf(status_setup, "OCSP Status: %d\n", ocsp_status);
+    log_debug_printf(status_setup, "Status Date: %s\n", this_status_update.s.c_str());
+    log_debug_printf(status_setup, "Status Vaidity: %s\n", status_valid_until_time.s.c_str());
+    log_debug_printf(status_setup, "Revocation Date: %s\n", revocation_time_to_use.s.c_str());
 
     return CertificateStatus(status, ocsp_status, ocsp_bytes, this_status_update, status_valid_until_time, revocation_time_to_use);
 }
@@ -175,6 +205,33 @@ std::vector<uint8_t> CertStatusFactory::ocspResponseToBytes(const ossl_ptr<OCSP_
     std::vector<uint8_t> resp_bytes(resp_der.get(), resp_der.get() + resp_len);
 
     return resp_bytes;
+}
+
+/**
+ * @brief Get serial number from an owned cert
+ * @param cert owned cert
+ * @return serial number
+ */
+uint64_t CertStatusFactory::getSerialNumber(const ossl_ptr<X509>& cert) { return getSerialNumber(cert.get()); }
+
+/**
+ * @brief Get a serial number from a cert pointer
+ * @param cert cert pointer
+ * @return serial number
+ */
+uint64_t CertStatusFactory::getSerialNumber(X509* cert) {
+    if (!cert) {
+        throw std::runtime_error("Can't get serial number: Null certificate");
+    }
+
+    // Extract the serial number from the certificate
+    ASN1_INTEGER* serial_number_asn1 = X509_get_serialNumber(cert);
+    if (!serial_number_asn1) {
+        throw std::runtime_error("Failed to retrieve serial number from certificate");
+    }
+
+    // Convert ASN1_INTEGER to a 64-bit unsigned integer
+    return ASN1ToUint64(serial_number_asn1);
 }
 
 }  // namespace certs
