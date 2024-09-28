@@ -38,5 +38,7 @@ void OCSPStatus::init() {
     }
 }
 
+CertificateStatus::operator CertifiedCertificateStatus() const noexcept { return CertifiedCertificateStatus{*this}; }
+
 }  // namespace certs
 }  // namespace pvxs

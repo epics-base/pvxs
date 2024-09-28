@@ -328,27 +328,11 @@ MAIN(testtls)
     testPlan(22);
     testSetup();
     logger_config_env();
-    try {
-        testGetSuper();
-    } catch (std::runtime_error &e) {
-        testFail("FAILED with errors: %s\n", e.what());
-    }
+    testGetSuper();
     testGetIntermediate();
-    try {
-        testGetNameServer();
-    } catch (std::runtime_error &e) {
-        testFail("FAILED with errors: %s\n", e.what());
-    }
-    try {
-        testClientReconfig();
-    } catch (std::runtime_error &e) {
-        testFail("FAILED with errors: %s\n", e.what());
-    }
-    try {
-        testServerReconfig();
-    } catch (std::runtime_error &e) {
-        testFail("FAILED with errors: %s\n", e.what());
-    }
+    testGetNameServer();
+    testClientReconfig();
+    testServerReconfig();
     cleanup_for_valgrind();
     return testDone();
 }

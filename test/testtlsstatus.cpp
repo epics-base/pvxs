@@ -385,9 +385,7 @@ struct Tester {
                 testOk(1, "Closing Status Request Connection: %s", pv_name.c_str() );
                 pv.close(pv_name);
             });
-//            status_pv.open(client_status_pv_name, client_status_response_value);
-//            status_pv.open(server_status_pv_name, server_status_response_value);
-//            status_pv.open(ca_status_pv_name, ca_status_response_value);
+
             pvacms.start();
 
             testDiag("Set up: %s", "Mock PVACMS Server");
@@ -443,13 +441,14 @@ MAIN(testget) {
     testPlan(50);
     testSetup();
     logger_config_env();
-    Tester tester;
-    tester.initialisation();
-    tester.ocspPayload();
-    tester.certificateStatus();
-    tester.parse();
-    tester.response();
-    tester.request();
+    auto tester = new Tester() ;
+    tester->initialisation();
+    tester->ocspPayload();
+    tester->certificateStatus();
+    tester->parse();
+    tester->response();
+    tester->request();
+    delete(tester);
     cleanup_for_valgrind();
     return testDone();
 }
