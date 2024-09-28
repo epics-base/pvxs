@@ -1384,13 +1384,7 @@ epicsMutex status_pv_lock;
 Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const CertificateStatus &cert_status,
                             bool open_only) {
     Guard G(status_pv_lock);
-    Value status_value;
-    if (status_pv.isOpen(pv_name)) {
-        status_value = status_pv.fetch(pv_name);
-        status_value.unmark();
-    } else
-        status_value = CertStatus::getStatusPrototype();
-
+    Value status_value{CertStatus::getStatusPrototype()};
     setValue<uint64_t>(status_value, "serial", serial);
     setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
     setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", time(nullptr));
@@ -1416,7 +1410,6 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
         status_pv.post(pv_name, status_value);
     } else {
         status_pv.open(pv_name, status_value);
-        if (!open_only) status_pv.close(pv_name);
     }
     return status_value;
 }
@@ -1439,14 +1432,8 @@ void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique
                                 const uint64_t &serial, const int32_t error_status, const int32_t error_severity, const std::string &error_message) {
     Guard G(status_pv_lock);
     std::string pv_name = getCertUri(GET_MONITOR_CERT_STATUS_ROOT, our_issuer_id, serial);
-    Value status_value;
-    if (status_pv.isOpen(pv_name)) {
-        status_value = status_pv.fetch(pv_name);
-        status_value.unmark();
-    } else
-        status_value = CertStatus::getStatusPrototype();
-
-    auto cert_status = CertificateStatus();
+    Value status_value{CertStatus::getStatusPrototype()};
+    auto cert_status = CertificateStatus();   // Create an UNKNOWN CertificateStatus
     setValue<uint64_t>(status_value, "serial", serial);
     setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
     setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", time(nullptr));

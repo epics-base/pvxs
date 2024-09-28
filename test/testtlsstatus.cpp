@@ -147,7 +147,6 @@ struct Tester {
     server::SharedWildcardPV status_pv{server::SharedWildcardPV::buildMailbox()};
     server::Server pvacms{server::Config::isolated().build().addPV(GET_MONITOR_CERT_STATUS_PV, status_pv)};
     client::Context client{pvacms.clientConfig().build()};
-    bool monitor_test{false};
 
     Tester()
         : now(time(nullptr)),
@@ -279,6 +278,9 @@ struct Tester {
             // We're not testing the wire at this point so we assume we get the same value that we sent so just test that status is correctly transferred
             auto received_client_status = certs::CertificateStatus(client_status_response_value);
             testOk1(received_client_status == client_cert_status);
+            testOk1((certs::CertifiedCertificateStatus)received_client_status == client_cert_status);
+            testOk1( (certs::CertifiedCertificateStatus)client_cert_status == received_client_status);
+            testOk1((certs::CertifiedCertificateStatus)received_client_status == (certs::CertifiedCertificateStatus)client_cert_status);
             testEq(received_client_status.ocsp_bytes.size(), client_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
             testFail("Failed to setup Client status response: %s", e.what());
@@ -309,6 +311,9 @@ struct Tester {
 
             auto received_server_status = certs::CertificateStatus(server_status_response_value);
             testOk1(received_server_status == server_cert_status);
+            testOk1((certs::CertifiedCertificateStatus)received_server_status == server_cert_status);
+            testOk1( (certs::CertifiedCertificateStatus)server_cert_status == received_server_status);
+            testOk1((certs::CertifiedCertificateStatus)received_server_status == (certs::CertifiedCertificateStatus)server_cert_status);
             testEq(received_server_status.ocsp_bytes.size(), server_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
             testFail("Failed to setup Server status response: %s", e.what());
@@ -339,6 +344,9 @@ struct Tester {
 
             auto received_ca_status = certs::CertificateStatus(ca_status_response_value);
             testOk1(received_ca_status == ca_cert_status);
+            testOk1((certs::CertifiedCertificateStatus)received_ca_status == ca_cert_status);
+            testOk1( (certs::CertifiedCertificateStatus)ca_cert_status == received_ca_status);
+            testOk1((certs::CertifiedCertificateStatus)received_ca_status == (certs::CertifiedCertificateStatus)ca_cert_status);
             testEq(received_ca_status.ocsp_bytes.size(), ca_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
             testFail("Failed to setup CA status response: %s", e.what());
@@ -359,27 +367,23 @@ struct Tester {
                 uint64_t serial = std::stoull(serial_string);
 
                 testOk(1, "Status Request for: issuer %s, serial %s", issuer_id.c_str(), serial_string.c_str() );
-                Value value_to_post;
-                switch (serial) {
-                    case client_serial: value_to_post = client_status_response_value; break;
-                    case server_serial: value_to_post = server_status_response_value; break;
-                    case ca_serial:     value_to_post = ca_status_response_value;     break;
-                    default:testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
-                }
-                if ( value_to_post ) {
-                    // Set initial value if not open
-                    auto open = status_pv.isOpen(pv_name);
-                    if (!open) {
-                        status_pv.open(pv_name, value_to_post.cloneEmpty());
+                if ( status_pv.isOpen(pv_name) ) {
+                    switch (serial) {
+                        case client_serial: status_pv.post(pv_name, client_status_response_value); break;
+                        case server_serial: status_pv.post(pv_name, server_status_response_value) ; break;
+                        case ca_serial:     status_pv.post(pv_name, ca_status_response_value);     break;
+                        default:testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
                     }
-                    status_pv.post(pv_name, value_to_post);
+                } else {
+                    switch (serial) {
+                        case client_serial: status_pv.open(pv_name, client_status_response_value); break;
+                        case server_serial: status_pv.open(pv_name, server_status_response_value) ; break;
+                        case ca_serial:     status_pv.open(pv_name, ca_status_response_value);     break;
+                        default:testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
+                    }
+                }
 
-                    // If not a monitor test then close it if it was closed to begin with
-                    if (!open && !monitor_test) {
-//                        status_pv.close(pv_name);
-                    }
-                    testDiag("Posted Value for request: %s", pv_name.c_str());
-                }
+                testDiag("Posted Value for request: %s", pv_name.c_str());
             });
             status_pv.onLastDisconnect([](server::SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
                 testOk(1, "Closing Status Request Connection: %s", pv_name.c_str() );
