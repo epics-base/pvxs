@@ -351,7 +351,7 @@ struct ParsedOCSPStatus {
 
 struct CertificateStatus;
 struct CertifiedCertificateStatus;
-struct UncertifiedCertificateStatus;
+struct UnknownCertificateStatus;
 
 /**
  * @brief Structure representing OCSP status.
@@ -388,6 +388,7 @@ struct OCSPStatus {
     }
 
     inline bool isGood() noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
+    virtual explicit operator CertificateStatus() const noexcept ;
 
   private:
     friend struct PVACertificateStatus;
@@ -456,6 +457,7 @@ struct PVACertificateStatus : public OCSPStatus {
 };
 
 struct CertificateStatus {
+    const bool certified;
     const PVACertStatus status;
     const OCSPCertStatus ocsp_status;
     const StatusDate status_date;
@@ -465,7 +467,7 @@ struct CertificateStatus {
     CertificateStatus() = delete;
     ~CertificateStatus() =default;
 
-    inline bool operator==(const CertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
+    inline bool operator==(const CertificateStatus& rhs) const { return this->certified == rhs.certified && this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
     inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs) ; }
     inline bool operator==(const PVACertificateStatus& rhs) const { return (CertificateStatus)rhs == *this; }
     inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs) ; }
@@ -486,9 +488,9 @@ struct CertificateStatus {
     inline bool isGood() noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
   private:
     friend struct CertifiedCertificateStatus;
-    friend struct UncertifiedCertificateStatus;
-    explicit CertificateStatus(PVACertStatus status, OCSPCertStatus ocsp_status, StatusDate status_date, StatusDate status_valid_until_date, StatusDate revocation_date)
-      : status(status), ocsp_status(ocsp_status), status_date(status_date), status_valid_until_date(status_valid_until_date), revocation_date(revocation_date) {};
+    friend struct UnknownCertificateStatus;
+    explicit CertificateStatus(bool certified, PVACertStatus status, OCSPCertStatus ocsp_status, StatusDate status_date, StatusDate status_valid_until_date, StatusDate revocation_date)
+      : certified(certified), status(status), ocsp_status(ocsp_status), status_date(status_date), status_valid_until_date(status_valid_until_date), revocation_date(revocation_date) {};
 };
 
 /**
@@ -504,12 +506,17 @@ struct CertificateStatus {
  */
 struct CertifiedCertificateStatus : public CertificateStatus {
     explicit CertifiedCertificateStatus(PVACertificateStatus cs)
-    : CertificateStatus(cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {};
+    : CertificateStatus(true, cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {};
+  private:
+    friend struct OCSPStatus;
+    explicit CertifiedCertificateStatus(OCSPStatus cs)
+      : CertificateStatus(true, PVACertStatus(cs.ocsp_status == OCSP_CERTSTATUS_GOOD ? VALID: REVOKED), cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {};
+
 };
 
-struct UncertifiedCertificateStatus : public CertificateStatus {
-    UncertifiedCertificateStatus()
-      : CertificateStatus((PVACertStatus)UNKNOWN, (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN, std::time(nullptr), (time_t)0, (time_t)0) {};
+struct UnknownCertificateStatus : public CertificateStatus {
+    UnknownCertificateStatus()
+      : CertificateStatus(false, (PVACertStatus)UNKNOWN, (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN, std::time(nullptr), (time_t)0, (time_t)0) {};
 };
 
 }  // namespace certs

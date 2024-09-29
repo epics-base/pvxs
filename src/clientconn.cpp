@@ -39,7 +39,7 @@ static int clientOCSPCallback(SSL *ctx, void *) {
         }
         const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
         auto status = certs::OCSPStatus(ocsp_bytes);
-        if (status.isGood()) {
+        if (((certs::CertificateStatus)status).isGood()) {
             log_info_printf(stapling, "OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
             log_info_printf(stapling, "OCSP stapled status date: %s\n", status.status_date.s.c_str());
             log_info_printf(stapling, "OCSP stapled status valid until: %s\n", status.status_valid_until_date.s.c_str());

@@ -38,7 +38,8 @@ void OCSPStatus::init() {
     }
 }
 
-PVACertificateStatus::operator CertificateStatus() const noexcept { return (status==UNKNOWN) ? (CertificateStatus)UncertifiedCertificateStatus{} : CertifiedCertificateStatus{*this}; }
+PVACertificateStatus::operator CertificateStatus() const noexcept { return (status==UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this}; }
+OCSPStatus::operator CertificateStatus() const noexcept { return (ocsp_status==OCSP_CERTSTATUS_UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this}; }
 
 }  // namespace certs
 }  // namespace pvxs

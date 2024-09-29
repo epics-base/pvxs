@@ -493,14 +493,14 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
                             Guard G(tls_context.lock);
                             auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
                             current_status = certs::CertStatusManager::getStatus(cert);
-                            if (current_status.isGood()) {
+                            if (((certs::CertificateStatus)current_status).isGood()) {
                                 tls_context.cert_is_valid = true;
                             }
                             // Subscribe and set validity when the status is verified
                             cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [this](certs::PVACertificateStatus status) {
                                 Guard G(tls_context.lock);
-                                auto was_good = current_status.isGood();
-                                if ((current_status = status).isGood()) {
+                                auto was_good = ((certs::CertificateStatus)current_status).isGood();
+                                if (((certs::CertificateStatus)(current_status = status)).isGood()) {
                                     if ( !was_good )
                                         acceptor_loop.dispatch([this]() mutable { enableTls(); });
                                 } else if ( was_good ) {
