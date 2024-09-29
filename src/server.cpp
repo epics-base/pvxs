@@ -497,7 +497,7 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
                                 tls_context.cert_is_valid = true;
                             }
                             // Subscribe and set validity when the status is verified
-                            cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [this](certs::CertificateStatus status) {
+                            cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [this](certs::PVACertificateStatus status) {
                                 Guard G(tls_context.lock);
                                 auto was_good = current_status.isGood();
                                 if ((current_status = status).isGood()) {

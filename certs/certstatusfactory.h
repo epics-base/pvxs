@@ -73,10 +73,10 @@ class CertStatusFactory {
      *
      * @return the Certificate Status containing the signed OCSP response and other OCSP response data.
      */
-    CertificateStatus createOCSPStatus(const ossl_ptr<X509> &cert, certstatus_t status, StatusDate status_date = std::time(nullptr),
-                                       StatusDate predicated_revocation_time = std::time(nullptr)) const;
-    CertificateStatus createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date = std::time(nullptr),
-                                       StatusDate predicated_revocation_time = std::time(nullptr)) const;
+    PVACertificateStatus createOCSPStatus(const ossl_ptr<X509> &cert, certstatus_t status, StatusDate status_date = std::time(nullptr),
+                                          StatusDate predicated_revocation_time = std::time(nullptr)) const;
+    PVACertificateStatus createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date = std::time(nullptr),
+                                          StatusDate predicated_revocation_time = std::time(nullptr)) const;
 
     /**
      * @brief Convert ASN1_INTEGER to a 64-bit unsigned integer

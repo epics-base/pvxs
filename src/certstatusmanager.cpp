@@ -146,7 +146,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509> &
                            try {
                                auto update = sub.pop();
                                if (update) {
-                                   auto status_update((CertificateStatus)update);
+                                   auto status_update((PVACertificateStatus)update);
                                    log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
                                    cert_status_manager->status_ = (certstatus_t)status_update.status.i;
                                    cert_status_manager->status_valid_until_date_ = status_update.status_valid_until_date.t + 100;
@@ -190,12 +190,12 @@ void CertStatusManager::unsubscribe() {
  * @return the simplified status - does not have ocsp bytes but has been verified and certified
  * @see waitForStatus
  */
-CertificateStatus CertStatusManager::getStatus() {
-    auto status_so_far = CertificateStatus(status_, status_valid_until_date_, revocation_date_);
+PVACertificateStatus CertStatusManager::getStatus() {
+    auto status_so_far = PVACertificateStatus(status_, status_valid_until_date_, revocation_date_);
     return isValid() ? status_so_far : getStatus(cert_);
 }
 
-CertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
+PVACertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
     try {
         auto uri = getStatusPvFromCert(cert);
 
@@ -208,7 +208,7 @@ CertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
         Value result = operation->wait(2.0);
         client.close();
 
-        return CertificateStatus(result);
+        return PVACertificateStatus(result);
     } catch (...) {
         return {};
     }
@@ -230,14 +230,14 @@ CertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
  * @return the certificate status at the end of the time - either UNKNOWN still or
  * some new value.
  */
-CertificateStatus CertStatusManager::waitForStatus(const evbase& loop) {
+PVACertificateStatus CertStatusManager::waitForStatus(const evbase& loop) {
     auto start(time(nullptr));
     // Timeout 3 seconds
     while ((status_ == UNKNOWN) && time(nullptr) < start + 3) {
         loop.dispatch([]() {});
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-    return CertificateStatus(status_, status_valid_until_date_, revocation_date_);
+    return PVACertificateStatus(status_, status_valid_until_date_, revocation_date_);
 }
 
 /**

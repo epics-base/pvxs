@@ -263,7 +263,7 @@ struct Server::Pvt
     evevent cert_event_timer;
     evevent cert_validity_timer;
     bool first_cert_event{true};
-    certs::CertificateStatus current_status;
+    certs::PVACertificateStatus current_status;
     certs::P12FileWatcher file_watcher;
     void* cached_ocsp_response{nullptr};
     certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;

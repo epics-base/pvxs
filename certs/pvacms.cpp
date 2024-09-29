@@ -802,7 +802,7 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
         postCertificateStatus(status_pv, pv_name, serial, cert_status, true);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error getting status: %s\n", e.what());
-        auto cert_status = CertificateStatus();
+        auto cert_status = PVACertificateStatus();
         postCertificateStatus(status_pv, pv_name, serial, cert_status, true);
 //        postCertificateErrorStatus(status_pv, nullptr, our_issuer_id, serial, 1, 1, e.what());
     }
@@ -1381,7 +1381,7 @@ void setValue(Value &target, const std::string &field, const T &source) {
  * @param open_only Specifies whether to close the shared wildcard PV again after setting the status if it was closed to begin with.
  */
 epicsMutex status_pv_lock;
-Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const CertificateStatus &cert_status,
+Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const PVACertificateStatus &cert_status,
                             bool open_only) {
     Guard G(status_pv_lock);
     Value status_value{CertStatus::getStatusPrototype()};
@@ -1433,7 +1433,7 @@ void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique
     Guard G(status_pv_lock);
     std::string pv_name = getCertUri(GET_MONITOR_CERT_STATUS_ROOT, our_issuer_id, serial);
     Value status_value{CertStatus::getStatusPrototype()};
-    auto cert_status = CertificateStatus();   // Create an UNKNOWN CertificateStatus
+    auto cert_status = PVACertificateStatus();   // Create an UNKNOWN CertificateStatus
     setValue<uint64_t>(status_value, "serial", serial);
     setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
     setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", time(nullptr));

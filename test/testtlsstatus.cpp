@@ -134,9 +134,9 @@ struct Tester {
     const TestCert ca_cert;
     const TestCert server_cert;
     const TestCert client_cert;
-    certs::CertificateStatus ca_cert_status;
-    certs::CertificateStatus server_cert_status;
-    certs::CertificateStatus client_cert_status;
+    certs::PVACertificateStatus ca_cert_status;
+    certs::PVACertificateStatus server_cert_status;
+    certs::PVACertificateStatus client_cert_status;
     const Value status_value_prototype{certs::CertStatus::getStatusPrototype()};
     Value client_status_response_value{status_value_prototype.cloneEmpty()};
     Value server_status_response_value{status_value_prototype.cloneEmpty()};
@@ -276,7 +276,7 @@ struct Tester {
             testDiag("Set up: %s", "Client certificate Status Response");
 
             // We're not testing the wire at this point so we assume we get the same value that we sent so just test that status is correctly transferred
-            auto received_client_status = certs::CertificateStatus(client_status_response_value);
+            auto received_client_status = certs::PVACertificateStatus(client_status_response_value);
             testOk1(received_client_status == client_cert_status);
             testOk1((certs::CertifiedCertificateStatus)received_client_status == client_cert_status);
             testOk1( (certs::CertifiedCertificateStatus)client_cert_status == received_client_status);
@@ -309,7 +309,7 @@ struct Tester {
             }
             testDiag("Set up: %s", "Server certificate Status Response");
 
-            auto received_server_status = certs::CertificateStatus(server_status_response_value);
+            auto received_server_status = certs::PVACertificateStatus(server_status_response_value);
             testOk1(received_server_status == server_cert_status);
             testOk1((certs::CertifiedCertificateStatus)received_server_status == server_cert_status);
             testOk1( (certs::CertifiedCertificateStatus)server_cert_status == received_server_status);
@@ -342,7 +342,7 @@ struct Tester {
             }
             testDiag("Set up: %s", "CA certificate Status Response");
 
-            auto received_ca_status = certs::CertificateStatus(ca_status_response_value);
+            auto received_ca_status = certs::PVACertificateStatus(ca_status_response_value);
             testOk1(received_ca_status == ca_cert_status);
             testOk1((certs::CertifiedCertificateStatus)received_ca_status == ca_cert_status);
             testOk1( (certs::CertifiedCertificateStatus)ca_cert_status == received_ca_status);
@@ -397,7 +397,7 @@ struct Tester {
             try {
                 testDiag("Sending: %s", "Client Status Request");
                 auto result = client.get(client_status_pv_name).exec()->wait(5.0);
-                auto client_status_response = certs::CertificateStatus(result);
+                auto client_status_response = certs::PVACertificateStatus(result);
                 testOk1(client_status_response == client_cert_status);
                 testDiag("Successfully Received: %s", "Client Status Response");
             } catch (std::exception &e) {
@@ -408,7 +408,7 @@ struct Tester {
             try {
                 testDiag("Sending: %s", "Server Status Request");
                 auto result = client.get(server_status_pv_name).exec()->wait(5.0);
-                auto server_status_response = certs::CertificateStatus(result);
+                auto server_status_response = certs::PVACertificateStatus(result);
                 testOk1(server_status_response == server_cert_status);
                 testDiag("Successfully Received: %s", "Server Status Response");
             } catch (std::exception &e) {
@@ -419,7 +419,7 @@ struct Tester {
             try {
                 testDiag("Sending: %s", "CA Status Request");
                 auto result = client.get(ca_status_pv_name).exec()->wait(5.0);
-                auto ca_status_response = certs::CertificateStatus(result);
+                auto ca_status_response = certs::PVACertificateStatus(result);
                 testOk1(ca_status_response == ca_cert_status);
                 testDiag("Successfully Received: %s", "CA Status Response");
             } catch (std::exception &e) {
@@ -442,7 +442,7 @@ MAIN(testget) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(50);
+    testPlan(59);
     testSetup();
     logger_config_env();
     auto tester = new Tester() ;

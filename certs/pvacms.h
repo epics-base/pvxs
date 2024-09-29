@@ -253,7 +253,7 @@ void usage(const char *argv0);
 
 bool statusMonitor(StatusMonitor &status_monitor_params);
 
-Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const CertificateStatus &cert_status,
+Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const PVACertificateStatus &cert_status,
                             bool open_only = false);
 void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op, const std::string &our_issuer_id,
                                 const uint64_t &serial, int32_t error_status, int32_t error_severity, const std::string &error_message);

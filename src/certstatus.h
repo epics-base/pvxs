@@ -349,6 +349,10 @@ struct ParsedOCSPStatus {
         : serial(serial), ocsp_status(ocsp_status), status_date(status_date), status_valid_until_date(status_valid_until_date), revocation_date(revocation_date) {}
 };
 
+struct CertificateStatus;
+struct CertifiedCertificateStatus;
+struct UncertifiedCertificateStatus;
+
 /**
  * @brief Structure representing OCSP status.
  *
@@ -386,14 +390,12 @@ struct OCSPStatus {
     inline bool isGood() noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
 
   private:
-    friend struct CertificateStatus;
+    friend struct PVACertificateStatus;
     explicit OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
                         StatusDate revocation_time);
 
     void init();
 };
-
-struct CertifiedCertificateStatus;
 
 /**
  * @brief Structure representing PVA-OCSP certificate status.  This is a superclass of OCSPStatus
@@ -403,19 +405,19 @@ struct CertifiedCertificateStatus;
  * revocation date.  The status field contains the PVA certificate status in numerical and text form.
  * The ocsp_status field contains the OCSP status in numerical and text form.
  */
-struct CertificateStatus : public OCSPStatus {
+struct PVACertificateStatus : public OCSPStatus {
     PVACertStatus status;
-    inline bool operator==(const CertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
-    inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs) ; }
+    inline bool operator==(const PVACertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
+    inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs) ; }
     inline bool operator==(certstatus_t rhs) const { return this->status == rhs; }
     inline bool operator==(ocspcertstatus_t rhs) const { return this->ocsp_status == rhs; }
     inline bool operator!=(certstatus_t rhs) const { return !(*this == rhs); }
     inline bool operator!=(ocspcertstatus_t rhs) const { return !(*this == rhs); }
 
-    explicit CertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes) : OCSPStatus(ocsp_bytes), status(status) {};
+    explicit PVACertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes) : OCSPStatus(ocsp_bytes), status(status) {};
 
-    explicit CertificateStatus(const Value& status_value)
-        : CertificateStatus(status_value["status.value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>()) {
+    explicit PVACertificateStatus(const Value& status_value)
+        : PVACertificateStatus(status_value["status.value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>()) {
         if (ocsp_bytes.empty()) return;
         log_debug_println(status_setup, "Value Status: %s\n", (SB() << status_value).str().c_str() );
         log_debug_printf(status_setup, "Status Date: %s\n", this->status_date.s.c_str() );
@@ -428,19 +430,19 @@ struct CertificateStatus : public OCSPStatus {
     }
 
     // To  set an UNKNOWN status to indicate errors
-    CertificateStatus() : OCSPStatus(), status(UNKNOWN) {}
-    CertificateStatus(certstatus_t pva_status, time_t status_valid_until_date, time_t revocation_date)
+    PVACertificateStatus() : OCSPStatus(), status(UNKNOWN) {}
+    PVACertificateStatus(certstatus_t pva_status, time_t status_valid_until_date, time_t revocation_date)
         : OCSPStatus(pva_status == REVOKED   ? OCSP_CERTSTATUS_REVOKED
                      : (pva_status == VALID) ? OCSP_CERTSTATUS_GOOD
                                              : OCSP_CERTSTATUS_UNKNOWN,
                      status_valid_until_date, revocation_date),
           status(pva_status) {}
-    explicit operator CertifiedCertificateStatus() const noexcept ;
+    explicit operator CertificateStatus() const noexcept ;
 
    private:
     friend class CertStatusFactory;
-    explicit CertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date,
-                               StatusDate status_valid_until_time, StatusDate revocation_time)
+    explicit PVACertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date,
+                                  StatusDate status_valid_until_time, StatusDate revocation_time)
         : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time), status(status) {};
 
     inline bool selfConsistent() {
@@ -453,36 +455,20 @@ struct CertificateStatus : public OCSPStatus {
     }
 };
 
-/**
- * @brief Represents the status of a certified certificate.
- *
- * This is the certificate status struct to use when you don't need to carry round the heavy PKCS#7 `ocsp_bytes`
- * It is certified because it can only be created from a certified `CertificateStatus` struct.
- * Create by casting a `CertificateStatus` or by passing one to the single argument constructor.
- *
- * The `CertifiedCertificateStatus` struct encapsulates various attributes related to the
- * status of a certified certificate, including PVA certificate status, OCSP status, status date,
- * status valid-until date, and revocation date.
- */
-struct CertifiedCertificateStatus {
+struct CertificateStatus {
     const PVACertStatus status;
     const OCSPCertStatus ocsp_status;
     const StatusDate status_date;
     const StatusDate status_valid_until_date;
     const StatusDate revocation_date;
 
-    CertifiedCertificateStatus() = delete;
-    ~CertifiedCertificateStatus() =default;
+    CertificateStatus() = delete;
+    ~CertificateStatus() =default;
 
-    explicit CertifiedCertificateStatus(CertificateStatus cs)
-    : status(cs.status), ocsp_status(cs.ocsp_status), status_date(cs.status_date), status_valid_until_date(cs.status_valid_until_date), revocation_date(cs.revocation_date) {
-        if ( status == UNKNOWN ) throw CertStatusException("Uncertified Certificate Status provided in constructor");
-    };
-
-    inline bool operator==(const CertifiedCertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
-    inline bool operator!=(const CertifiedCertificateStatus& rhs) const { return !(*this == rhs) ; }
-    inline bool operator==(const CertificateStatus& rhs) const { return (CertifiedCertificateStatus)rhs == *this; }
+    inline bool operator==(const CertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
     inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs) ; }
+    inline bool operator==(const PVACertificateStatus& rhs) const { return (CertificateStatus)rhs == *this; }
+    inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs) ; }
     inline bool operator==(certstatus_t rhs) const { return this->status == rhs; }
     inline bool operator==(ocspcertstatus_t rhs) const { return this->ocsp_status == rhs; }
     inline bool operator!=(certstatus_t rhs) const { return !(*this == rhs); }
@@ -498,6 +484,32 @@ struct CertifiedCertificateStatus {
     }
 
     inline bool isGood() noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
+  private:
+    friend struct CertifiedCertificateStatus;
+    friend struct UncertifiedCertificateStatus;
+    explicit CertificateStatus(PVACertStatus status, OCSPCertStatus ocsp_status, StatusDate status_date, StatusDate status_valid_until_date, StatusDate revocation_date)
+      : status(status), ocsp_status(ocsp_status), status_date(status_date), status_valid_until_date(status_valid_until_date), revocation_date(revocation_date) {};
+};
+
+/**
+ * @brief Represents the status of a certified certificate.
+ *
+ * This is the certificate status struct to use when you don't need to carry round the heavy PKCS#7 `ocsp_bytes`
+ * It is certified because it can only be created from a certified `CertificateStatus` struct.
+ * Create by casting a `CertificateStatus` or by passing one to the single argument constructor.
+ *
+ * The `CertifiedCertificateStatus` struct encapsulates various attributes related to the
+ * status of a certified certificate, including PVA certificate status, OCSP status, status date,
+ * status valid-until date, and revocation date.
+ */
+struct CertifiedCertificateStatus : public CertificateStatus {
+    explicit CertifiedCertificateStatus(PVACertificateStatus cs)
+    : CertificateStatus(cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {};
+};
+
+struct UncertifiedCertificateStatus : public CertificateStatus {
+    UncertifiedCertificateStatus()
+      : CertificateStatus((PVACertStatus)UNKNOWN, (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN, std::time(nullptr), (time_t)0, (time_t)0) {};
 };
 
 }  // namespace certs

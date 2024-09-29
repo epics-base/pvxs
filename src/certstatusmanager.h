@@ -91,7 +91,7 @@
             try {                                                                                                             \
                 if ( cert_status_manager ) return;                                                                            \
                 auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));                                                           \
-                cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::CertificateStatus status) { \
+                cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::PVACertificateStatus status) { \
                     Guard G(tls_context.lock);                                                                                \
                     auto was_good = current_status.isGood();                                                                  \
                     if ((current_status = status).isGood()) {                                                                 \
@@ -168,7 +168,7 @@ class CertStatusManager {
 
     virtual ~CertStatusManager() = default;
 
-    using StatusCallback = std::function<void(const CertificateStatus&)>;
+    using StatusCallback = std::function<void(const PVACertificateStatus&)>;
 
     static bool shouldMonitor(const ossl_ptr<X509>& certificate);
 
@@ -199,14 +199,14 @@ class CertStatusManager {
      * @param cert the certificate for which you want to get status
      * @return CertificateStatus
      */
-    static CertificateStatus getStatus(const ossl_ptr<X509>& cert);
+    static PVACertificateStatus getStatus(const ossl_ptr<X509>& cert);
 
     /**
      * @brief Wait for status to become available or return the current status if it is still valid
      * @param loop the event loop base to use to wait
      * @return the status
      */
-    CertificateStatus waitForStatus(const evbase& loop);
+    PVACertificateStatus waitForStatus(const evbase& loop);
 
     /**
      * @brief Unsubscribe from listening to certificate status
@@ -219,7 +219,7 @@ class CertStatusManager {
      * @brief Get status for a currently subscribed certificate
      * @return CertificateStatus
      */
-    CertificateStatus getStatus();
+    PVACertificateStatus getStatus();
 
     inline bool available() noexcept { return isValid() || (manager_start_time_ + 3) < std::time(nullptr); }
 
