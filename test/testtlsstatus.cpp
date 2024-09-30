@@ -27,6 +27,7 @@
 
 namespace {
 using namespace pvxs;
+using namespace pvxs::certs;
 
 #define STATUS_VALID_FOR_MINS 30
 #define STATUS_VALID_FOR_SECS (STATUS_VALID_FOR_MINS * 60)
@@ -128,16 +129,16 @@ TestCert getTestCerts(std::string filename, std::string password) {
 
 struct Tester {
     // Pristine values
-    const certs::StatusDate now;
-    const certs::StatusDate status_valid_until_time;
-    const certs::StatusDate revocation_date;
+    const StatusDate now;
+    const StatusDate status_valid_until_time;
+    const StatusDate revocation_date;
     const TestCert ca_cert;
     const TestCert server_cert;
     const TestCert client_cert;
-    certs::PVACertificateStatus ca_cert_status;
-    certs::PVACertificateStatus server_cert_status;
-    certs::PVACertificateStatus client_cert_status;
-    const Value status_value_prototype{certs::CertStatus::getStatusPrototype()};
+    PVACertificateStatus ca_cert_status;
+    PVACertificateStatus server_cert_status;
+    PVACertificateStatus client_cert_status;
+    const Value status_value_prototype{CertStatus::getStatusPrototype()};
     Value client_status_response_value{status_value_prototype.cloneEmpty()};
     Value server_status_response_value{status_value_prototype.cloneEmpty()};
     Value ca_status_response_value{status_value_prototype.cloneEmpty()};
@@ -173,13 +174,13 @@ struct Tester {
     void ocspPayload() {
         testShow() << __func__;
         try {
-            auto ca_cert_status_creator(certs::CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
-            auto server_cert_status_creator(certs::CertStatusFactory(server_cert.cert, server_cert.pkey, server_cert.chain, STATUS_VALID_FOR_MINS));
-            auto client_cert_status_creator(certs::CertStatusFactory(client_cert.cert, client_cert.pkey, client_cert.chain, STATUS_VALID_FOR_MINS));
+            auto ca_cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
+            auto server_cert_status_creator(CertStatusFactory(server_cert.cert, server_cert.pkey, server_cert.chain, STATUS_VALID_FOR_MINS));
+            auto client_cert_status_creator(CertStatusFactory(client_cert.cert, client_cert.pkey, client_cert.chain, STATUS_VALID_FOR_MINS));
 
             try {
                 testDiag("Creating OCSP REVOKED status from: %s", "Client certificate");
-                client_cert_status = client_cert_status_creator.createOCSPStatus(client_cert.cert, certs::REVOKED, now, revocation_date);
+                client_cert_status = client_cert_status_creator.createOCSPStatus(client_cert.cert, REVOKED, now, revocation_date);
                 testOk(1, "Created OCSP REVOKED status from: %s", "Client certificate");
             } catch (std::exception &e) {
                 testFail("Failed to create REVOKED status: %s\n", e.what());
@@ -187,14 +188,14 @@ struct Tester {
 
             try {
                 testDiag("Creating OCSP PENDING status from: %s", "Server certificate");
-                server_cert_status = server_cert_status_creator.createOCSPStatus(server_cert.cert, certs::PENDING, now);
+                server_cert_status = server_cert_status_creator.createOCSPStatus(server_cert.cert, PENDING, now);
                 testOk(1, "Created OCSP PENDING status from: %s", "Server certificate");
             } catch (std::exception &e) {
                 testFail("Failed to create PENDING status: %s\n", e.what());
             }
             try {
                 testDiag("Creating OCSP VALID status from: %s", "CA certificate");
-                ca_cert_status = ca_cert_status_creator.createOCSPStatus(ca_cert.cert, certs::VALID, now);
+                ca_cert_status = ca_cert_status_creator.createOCSPStatus(ca_cert.cert, VALID, now);
                 testOk(1, "Created OCSP VALID status from: %s", "CA certificate");
             } catch (std::exception &e) {
                 testFail("Failed to create VALID status: %s\n", e.what());
@@ -208,11 +209,11 @@ struct Tester {
         testShow() << __func__;
         try {
             testDiag("Parsing OCSP Response: %s", "Client certificate");
-            auto parsed_response = certs::CertStatusManager::parse(client_cert_status.ocsp_bytes);
+            auto parsed_response = CertStatusManager::parse(client_cert_status.ocsp_bytes);
             testDiag("Parsed OCSP Response: %s", "Client certificate");
 
             testEq(parsed_response.serial, client_serial);
-            testEq(parsed_response.ocsp_status.i, certs::OCSP_CERTSTATUS_REVOKED);
+            testEq(parsed_response.ocsp_status.i, OCSP_CERTSTATUS_REVOKED);
             testEq(parsed_response.status_date.t, now.t);
             testEq(parsed_response.status_valid_until_date.t, status_valid_until_time.t);
             testEq(parsed_response.revocation_date.t, revocation_date.t);
@@ -223,11 +224,11 @@ struct Tester {
         testShow() << __func__;
         try {
             testDiag("Parsing OCSP Response: %s", "Server certificate");
-            auto parsed_response = certs::CertStatusManager::parse(server_cert_status.ocsp_bytes);
+            auto parsed_response = CertStatusManager::parse(server_cert_status.ocsp_bytes);
             testDiag("Parsed OCSP Response: %s", "Server certificate");
 
             testEq(parsed_response.serial, server_serial);
-            testEq(parsed_response.ocsp_status.i, certs::OCSP_CERTSTATUS_UNKNOWN);
+            testEq(parsed_response.ocsp_status.i, OCSP_CERTSTATUS_UNKNOWN);
             testEq(parsed_response.status_date.t, now.t);
             testEq(parsed_response.status_valid_until_date.t, status_valid_until_time.t);
             testEq(parsed_response.revocation_date.t, 0);
@@ -238,11 +239,11 @@ struct Tester {
         testShow() << __func__;
         try {
             testDiag("Parsing OCSP Response: %s", "CA certificate");
-            auto parsed_response = certs::CertStatusManager::parse(ca_cert_status.ocsp_bytes);
+            auto parsed_response = CertStatusManager::parse(ca_cert_status.ocsp_bytes);
             testDiag("Parsed OCSP Response: %s", "CA certificate");
 
             testEq(parsed_response.serial, ca_serial);
-            testEq(parsed_response.ocsp_status.i, certs::OCSP_CERTSTATUS_GOOD);
+            testEq(parsed_response.ocsp_status.i, OCSP_CERTSTATUS_GOOD);
             testEq(parsed_response.status_date.t, now.t);
             testEq(parsed_response.status_valid_until_date.t, status_valid_until_time.t);
             testEq(parsed_response.revocation_date.t, 0);
@@ -255,7 +256,7 @@ struct Tester {
         testShow() << __func__;
         try {
             testDiag("Setting up: %s", "Client Certificate Response");
-            client_status_response_value = certs::CertStatus::getStatusPrototype();
+            client_status_response_value = CertStatus::getStatusPrototype();
             setValue<uint64_t>(client_status_response_value, "serial", client_serial);
             setValue<uint32_t>(client_status_response_value, "status.value.index", client_cert_status.status.i);
             setValue<time_t>(client_status_response_value, "status.timeStamp.secondsPastEpoch", time(nullptr));
@@ -276,11 +277,11 @@ struct Tester {
             testDiag("Set up: %s", "Client certificate Status Response");
 
             // We're not testing the wire at this point so we assume we get the same value that we sent so just test that status is correctly transferred
-            auto received_client_status = certs::PVACertificateStatus(client_status_response_value);
+            auto received_client_status = PVACertificateStatus(client_status_response_value);
             testOk1(received_client_status == client_cert_status);
-            testOk1((certs::CertifiedCertificateStatus)received_client_status == client_cert_status);
-            testOk1( (certs::CertifiedCertificateStatus)client_cert_status == received_client_status);
-            testOk1((certs::CertifiedCertificateStatus)received_client_status == (certs::CertifiedCertificateStatus)client_cert_status);
+            testOk1((CertifiedCertificateStatus)received_client_status == client_cert_status);
+            testOk1( (CertifiedCertificateStatus)client_cert_status == received_client_status);
+            testOk1((CertifiedCertificateStatus)received_client_status == (CertifiedCertificateStatus)client_cert_status);
             testEq(received_client_status.ocsp_bytes.size(), client_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
             testFail("Failed to setup Client status response: %s", e.what());
@@ -289,7 +290,7 @@ struct Tester {
         testShow() << __func__;
         try {
             testDiag("Setting up: %s", "Server Certificate Status Response");
-            server_status_response_value = certs::CertStatus::getStatusPrototype();
+            server_status_response_value = CertStatus::getStatusPrototype();
             setValue<uint64_t>(server_status_response_value, "serial", server_serial);
             setValue<uint32_t>(server_status_response_value, "status.value.index", server_cert_status.status.i);
             setValue<time_t>(server_status_response_value, "status.timeStamp.secondsPastEpoch", time(nullptr));
@@ -309,11 +310,11 @@ struct Tester {
             }
             testDiag("Set up: %s", "Server certificate Status Response");
 
-            auto received_server_status = certs::PVACertificateStatus(server_status_response_value);
+            auto received_server_status = PVACertificateStatus(server_status_response_value);
             testOk1(received_server_status == server_cert_status);
-            testOk1((certs::CertifiedCertificateStatus)received_server_status == server_cert_status);
-            testOk1( (certs::CertifiedCertificateStatus)server_cert_status == received_server_status);
-            testOk1((certs::CertifiedCertificateStatus)received_server_status == (certs::CertifiedCertificateStatus)server_cert_status);
+            testOk1((CertifiedCertificateStatus)received_server_status == server_cert_status);
+            testOk1( (CertifiedCertificateStatus)server_cert_status == received_server_status);
+            testOk1((CertifiedCertificateStatus)received_server_status == (CertifiedCertificateStatus)server_cert_status);
             testEq(received_server_status.ocsp_bytes.size(), server_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
             testFail("Failed to setup Server status response: %s", e.what());
@@ -322,7 +323,7 @@ struct Tester {
         testShow() << __func__;
         try {
             testDiag("Setting up: %s", "CA Certificate Status Response");
-            ca_status_response_value = certs::CertStatus::getStatusPrototype();
+            ca_status_response_value = CertStatus::getStatusPrototype();
             setValue<uint64_t>(ca_status_response_value, "serial", ca_serial);
             setValue<uint32_t>(ca_status_response_value, "status.value.index", ca_cert_status.status.i);
             setValue<time_t>(ca_status_response_value, "status.timeStamp.secondsPastEpoch", time(nullptr));
@@ -342,14 +343,103 @@ struct Tester {
             }
             testDiag("Set up: %s", "CA certificate Status Response");
 
-            auto received_ca_status = certs::PVACertificateStatus(ca_status_response_value);
+            auto received_ca_status = PVACertificateStatus(ca_status_response_value);
             testOk1(received_ca_status == ca_cert_status);
-            testOk1((certs::CertifiedCertificateStatus)received_ca_status == ca_cert_status);
-            testOk1( (certs::CertifiedCertificateStatus)ca_cert_status == received_ca_status);
-            testOk1((certs::CertifiedCertificateStatus)received_ca_status == (certs::CertifiedCertificateStatus)ca_cert_status);
+            testOk1((CertifiedCertificateStatus)received_ca_status == ca_cert_status);
+            testOk1( (CertifiedCertificateStatus)ca_cert_status == received_ca_status);
+            testOk1((CertifiedCertificateStatus)received_ca_status == (CertifiedCertificateStatus)ca_cert_status);
             testEq(received_ca_status.ocsp_bytes.size(), ca_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
             testFail("Failed to setup CA status response: %s", e.what());
+        }
+    }
+
+    void testStatusConversions() {
+        testShow() << __func__;
+        try {
+            auto unknown_status = UnknownCertificateStatus();
+            {
+                auto client_cs = (CertifiedCertificateStatus)client_cert_status;
+                auto server_cs = (CertifiedCertificateStatus)server_cert_status;
+                auto ca_cs = (CertifiedCertificateStatus)ca_cert_status;
+
+                testDiag("Convert to CertificateStatus: Compare PVACertificateStatus");
+                testOk1(client_cs == client_cert_status); // REVOKED == REVOKED
+                testOk1(server_cs == server_cert_status); // PENDING == PENDING
+                testOk1(ca_cs == ca_cert_status);         // VALID == VALID
+                testOk1(client_cert_status == client_cs); // REVOKED == REVOKED
+                testOk1(server_cert_status == server_cs); // PENDING == PENDING
+                testOk1(ca_cert_status == ca_cs);         // VALID == VALID
+
+                testOk1(client_cs != ca_cert_status);       // REVOKED != VALID
+                testOk1(server_cs != client_cert_status);   // PENDING != REVOKED
+                testOk1(ca_cs != server_cert_status);       // VALID != PENDING
+                testOk1(ca_cert_status != client_cs);       // VALID != REVOKED
+                testOk1(client_cert_status != server_cs);   // REVOKED != UNKNOWN
+                testOk1(server_cert_status != ca_cs);       // PENDING != VALID
+
+                testDiag("Convert to OCSPStatus: Compare PVACertificateStatus");
+                auto client_ocs = (OCSPStatus)client_cert_status;
+                auto server_ocs = (OCSPStatus)server_cert_status;
+                auto ca_ocs = (OCSPStatus)ca_cert_status;
+
+                testOk1(client_ocs == client_cert_status); // REVOKED == REVOKED
+                testOk1(server_ocs != server_cert_status); // UNKNOWN == PENDING
+                testOk1(ca_ocs == ca_cert_status);         // VALID == VALID
+                testOk1(client_cert_status == client_ocs); // REVOKED == REVOKED
+                testOk1(server_cert_status != server_ocs); // PENDING == UNKNOWN
+                testOk1(ca_cert_status == ca_ocs);         // VALID == VALID
+
+                testOk1(client_ocs != ca_cert_status);      // REVOKED != VALID
+                testOk1(server_ocs != client_cert_status);  // UNKNOWN != REVOKED
+                testOk1(ca_ocs != server_cert_status);      // VALID != PENDING
+                testOk1(ca_cert_status != client_ocs);      // VALID != REVOKED
+                testOk1(client_cert_status != server_ocs);  // REVOKED != UNKNOWN
+                testOk1(server_cert_status != ca_ocs);      // PENDING != VALID
+            }
+
+            {
+                auto client_cs_t = (certstatus_t)client_cert_status.status.i;
+                auto server_cs_t = (certstatus_t)server_cert_status.status.i;
+                auto ca_cs_t = (certstatus_t)ca_cert_status.status.i;
+
+                testDiag("Convert to certstatus_t: Compare PVACertificateStatus");
+                testOk1(client_cs_t == client_cert_status); // REVOKED == REVOKED
+                testOk1(server_cs_t == server_cert_status); // PENDING == PENDING
+                testOk1(ca_cs_t == ca_cert_status);         // VALID == VALID
+                testOk1(client_cert_status == client_cs_t); // REVOKED == REVOKED
+                testOk1(server_cert_status == server_cs_t); // PENDING == PENDING
+                testOk1(ca_cert_status == ca_cs_t);         // VALID == VALID
+
+                testOk1(client_cs_t != ca_cert_status);       // REVOKED != VALID
+                testOk1(server_cs_t != client_cert_status);   // PENDING != REVOKED
+                testOk1(ca_cs_t != server_cert_status);       // VALID != PENDING
+                testOk1(ca_cert_status != client_cs_t);       // VALID != REVOKED
+                testOk1(client_cert_status != server_cs_t);   // REVOKED != UNKNOWN
+                testOk1(server_cert_status != ca_cs_t);       // PENDING != VALID
+
+                testDiag("Convert to certstatus_t & OCSPStatus: Compare");
+                auto client_ocs = (OCSPStatus)client_cert_status;
+                auto server_ocs = (OCSPStatus)server_cert_status;
+                auto ca_ocs = (OCSPStatus)ca_cert_status;
+
+                testOk1(client_ocs == client_cs_t); // REVOKED == REVOKED
+                testOk1(server_ocs != server_cs_t); // UNKNOWN != PENDING
+                testOk1(ca_ocs == ca_cs_t);         // VALID == VALID
+                testOk1(client_cs_t == client_ocs); // REVOKED == REVOKED
+                testOk1(server_cs_t != server_ocs); // PENDING != UNKNOWN
+                testOk1(ca_cs_t == ca_ocs);         // VALID == VALID
+
+                testOk1(client_ocs != ca_cs_t);      // REVOKED != VALID
+                testOk1(server_ocs != client_cs_t);  // UNKNOWN != REVOKED
+                testOk1(ca_ocs != server_cs_t);      // VALID != PENDING
+                testOk1(client_cs_t != ca_ocs);      // VALID != REVOKED
+                testOk1(server_cs_t != client_ocs);  // REVOKED != UNKNOWN
+                testOk1(ca_cs_t != server_ocs);      // PENDING != VALID
+            }
+
+        } catch (std::exception &e) {
+            testFail("Failed test status conversions: %s", e.what());
         }
     }
 
@@ -357,9 +447,9 @@ struct Tester {
         testShow() << __func__;
         try {
             testDiag("Setting up: %s", "Mock PVACMS Server");
-            client_status_pv_name = certs::CertStatusManager::getStatusPvFromCert(client_cert.cert);
-            server_status_pv_name = certs::CertStatusManager::getStatusPvFromCert(server_cert.cert);
-            ca_status_pv_name = certs::CertStatusManager::getStatusPvFromCert(ca_cert.cert);
+            client_status_pv_name = CertStatusManager::getStatusPvFromCert(client_cert.cert);
+            server_status_pv_name = CertStatusManager::getStatusPvFromCert(server_cert.cert);
+            ca_status_pv_name = CertStatusManager::getStatusPvFromCert(ca_cert.cert);
             status_pv.onFirstConnect([=](server::SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
                 auto it = parameters.begin();
                 const std::string &issuer_id = *it;
@@ -397,14 +487,14 @@ struct Tester {
             try {
                 testDiag("Sending: %s", "Client Status Request");
                 auto result = client.get(client_status_pv_name).exec()->wait(5.0);
-                auto client_status_response = certs::PVACertificateStatus(result);
+                auto client_status_response = PVACertificateStatus(result);
                 testOk1(client_status_response == client_cert_status);
-                testOk1((certs::CertifiedCertificateStatus)client_status_response == client_cert_status);
-                testOk1((certs::CertifiedCertificateStatus)client_status_response == (certs::CertifiedCertificateStatus)client_cert_status);
-                testOk1(client_status_response == (certs::CertifiedCertificateStatus)client_cert_status);
-                testOk1((certs::OCSPStatus)client_status_response == client_cert_status);
-                testOk1((certs::OCSPStatus)client_status_response == (certs::OCSPStatus)client_cert_status);
-                testOk1(client_status_response == (certs::OCSPStatus)client_cert_status);
+                testOk1((CertifiedCertificateStatus)client_status_response == client_cert_status);
+                testOk1((CertifiedCertificateStatus)client_status_response == (CertifiedCertificateStatus)client_cert_status);
+                testOk1(client_status_response == (CertifiedCertificateStatus)client_cert_status);
+                testOk1((OCSPStatus)client_status_response == client_cert_status);
+                testOk1((OCSPStatus)client_status_response == (OCSPStatus)client_cert_status);
+                testOk1(client_status_response == (OCSPStatus)client_cert_status);
                 testDiag("Successfully Received: %s", "Client Status Response");
             } catch (std::exception &e) {
                 testFail("Failed to send Client Status Request: %s", e.what());
@@ -414,7 +504,7 @@ struct Tester {
             try {
                 testDiag("Sending: %s", "Server Status Request");
                 auto result = client.get(server_status_pv_name).exec()->wait(5.0);
-                auto server_status_response = certs::PVACertificateStatus(result);
+                auto server_status_response = PVACertificateStatus(result);
                 testOk1(server_status_response == server_cert_status);
                 testDiag("Successfully Received: %s", "Server Status Response");
             } catch (std::exception &e) {
@@ -425,7 +515,7 @@ struct Tester {
             try {
                 testDiag("Sending: %s", "CA Status Request");
                 auto result = client.get(ca_status_pv_name).exec()->wait(5.0);
-                auto ca_status_response = certs::PVACertificateStatus(result);
+                auto ca_status_response = PVACertificateStatus(result);
                 testOk1(ca_status_response == ca_cert_status);
                 testDiag("Successfully Received: %s", "CA Status Response");
             } catch (std::exception &e) {
@@ -457,6 +547,7 @@ MAIN(testget) {
     tester->certificateStatus();
     tester->parse();
     tester->makeStatusResponse();
+    tester->testStatusConversions();
     tester->makeStatusRequest();
     delete(tester);
     cleanup_for_valgrind();

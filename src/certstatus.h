@@ -385,8 +385,10 @@ struct OCSPStatus {
     virtual inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs) ; }
     virtual bool operator==(const PVACertificateStatus& rhs) const ;
     virtual inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs) ; }
-    virtual inline bool operator==(ocspcertstatus_t rhs) const { return this->ocsp_status == rhs; }
-    virtual inline bool operator!=(ocspcertstatus_t rhs) const { return !(*this == rhs); }
+    virtual inline bool operator==(ocspcertstatus_t &rhs) const { return this->ocsp_status == rhs; }
+    virtual inline bool operator!=(ocspcertstatus_t &rhs) const { return !(*this == rhs); }
+    virtual inline bool operator==(certstatus_t &rhs) const { return ((rhs == VALID && this->ocsp_status == OCSP_CERTSTATUS_GOOD) || (rhs == REVOKED && this->ocsp_status == OCSP_CERTSTATUS_REVOKED) ); }
+    virtual inline bool operator!=(certstatus_t &rhs) const { return !(*this == rhs); }
 
     /**
      * @brief Verify that the status validity dates are currently valid and the status is known
@@ -408,6 +410,11 @@ struct OCSPStatus {
     void init();
 };
 
+bool operator==(ocspcertstatus_t &lhs, OCSPStatus &rhs);
+bool operator!=(ocspcertstatus_t &lhs, OCSPStatus &rhs) ;
+bool operator==(certstatus_t &lhs, OCSPStatus &rhs);
+bool operator!=(certstatus_t &lhs, OCSPStatus &rhs) ;
+
 /**
  * @brief Structure representing PVA-OCSP certificate status.  This is a superclass of OCSPStatus
  *
@@ -421,12 +428,12 @@ struct PVACertificateStatus : public OCSPStatus {
     inline bool operator==(const PVACertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
     inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs) ; }
 
-    inline bool operator==(certstatus_t rhs) const { return this->status == rhs; }
-    inline bool operator!=(certstatus_t rhs) const { return !(*this == rhs); }
-    inline bool operator==(ocspcertstatus_t rhs) const { return this->ocsp_status == rhs; }
-    inline bool operator!=(ocspcertstatus_t rhs) const { return !(*this == rhs); }
+    inline bool operator==(certstatus_t &rhs) const { return this->status == rhs; }
+    inline bool operator!=(certstatus_t &rhs) const { return !(*this == rhs); }
+    inline bool operator==(ocspcertstatus_t &rhs) const { return this->ocsp_status == rhs; }
+    inline bool operator!=(ocspcertstatus_t &rhs) const { return !(*this == rhs); }
 
-    inline bool operator==(const OCSPStatus& rhs) const { return this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
+    inline bool operator==(const OCSPStatus& rhs) const { return (this->status != VALID && this->status != REVOKED) ? false : this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
     inline bool operator!=(const OCSPStatus& rhs) const { return !(*this == rhs) ; }
     bool operator==(const CertificateStatus& rhs) const;
     inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs) ; }
@@ -472,6 +479,11 @@ struct PVACertificateStatus : public OCSPStatus {
     }
 };
 
+bool operator==(ocspcertstatus_t &lhs, PVACertificateStatus &rhs);
+bool operator!=(ocspcertstatus_t &lhs, PVACertificateStatus &rhs);
+bool operator==(certstatus_t &lhs, PVACertificateStatus &rhs);
+bool operator!=(certstatus_t &lhs, PVACertificateStatus &rhs);
+
 struct CertificateStatus {
     const bool certified;
     const PVACertStatus status;
@@ -490,10 +502,10 @@ struct CertificateStatus {
     inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs) ; }
     inline bool operator==(const PVACertificateStatus& rhs) const { return (CertificateStatus)rhs == *this; }
     inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs) ; }
-    inline bool operator==(certstatus_t rhs) const { return this->status == rhs; }
-    inline bool operator==(ocspcertstatus_t rhs) const { return this->ocsp_status == rhs; }
-    inline bool operator!=(certstatus_t rhs) const { return !(*this == rhs); }
-    inline bool operator!=(ocspcertstatus_t rhs) const { return !(*this == rhs); }
+    inline bool operator==(certstatus_t &rhs) const { return this->status == rhs; }
+    inline bool operator==(ocspcertstatus_t &rhs) const { return this->ocsp_status == rhs; }
+    inline bool operator!=(certstatus_t &rhs) const { return !(*this == rhs); }
+    inline bool operator!=(ocspcertstatus_t &rhs) const { return !(*this == rhs); }
 
     /**
      * @brief Verify that the status validity dates are currently valid and the status is known

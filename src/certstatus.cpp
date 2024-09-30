@@ -44,5 +44,15 @@ bool OCSPStatus::operator==(const CertificateStatus& rhs) const { return this->o
 bool OCSPStatus::operator==(const PVACertificateStatus& rhs) const { return (CertificateStatus)*this == rhs ; }
 bool PVACertificateStatus::operator==(const CertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
 
+bool operator==(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs == lhs; };
+bool operator!=(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs != lhs; };
+bool operator==(certstatus_t &lhs, PVACertificateStatus &rhs) { return rhs == lhs; };
+bool operator!=(certstatus_t &lhs, PVACertificateStatus &rhs) { return rhs != lhs; };
+
+bool operator==(ocspcertstatus_t &lhs, OCSPStatus &rhs) { return rhs == lhs; };
+bool operator!=(ocspcertstatus_t &lhs, OCSPStatus &rhs)  { return rhs != lhs; };
+bool operator==(certstatus_t &lhs, OCSPStatus &rhs) { return rhs == lhs; };
+bool operator!=(certstatus_t &lhs, OCSPStatus &rhs)  { return rhs != lhs; };
+
 }  // namespace certs
 }  // namespace pvxs
