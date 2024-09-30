@@ -251,7 +251,7 @@ struct Tester {
         }
     }
 
-    void response() {
+    void makeStatusResponse() {
         testShow() << __func__;
         try {
             testDiag("Setting up: %s", "Client Certificate Response");
@@ -353,7 +353,7 @@ struct Tester {
         }
     }
 
-    void request() {
+    void makeStatusRequest() {
         testShow() << __func__;
         try {
             testDiag("Setting up: %s", "Mock PVACMS Server");
@@ -399,6 +399,12 @@ struct Tester {
                 auto result = client.get(client_status_pv_name).exec()->wait(5.0);
                 auto client_status_response = certs::PVACertificateStatus(result);
                 testOk1(client_status_response == client_cert_status);
+                testOk1((certs::CertifiedCertificateStatus)client_status_response == client_cert_status);
+                testOk1((certs::CertifiedCertificateStatus)client_status_response == (certs::CertifiedCertificateStatus)client_cert_status);
+                testOk1(client_status_response == (certs::CertifiedCertificateStatus)client_cert_status);
+                testOk1((certs::OCSPStatus)client_status_response == client_cert_status);
+                testOk1((certs::OCSPStatus)client_status_response == (certs::OCSPStatus)client_cert_status);
+                testOk1(client_status_response == (certs::OCSPStatus)client_cert_status);
                 testDiag("Successfully Received: %s", "Client Status Response");
             } catch (std::exception &e) {
                 testFail("Failed to send Client Status Request: %s", e.what());
@@ -450,8 +456,8 @@ MAIN(testget) {
     tester->ocspPayload();
     tester->certificateStatus();
     tester->parse();
-    tester->response();
-    tester->request();
+    tester->makeStatusResponse();
+    tester->makeStatusRequest();
     delete(tester);
     cleanup_for_valgrind();
     return testDone();

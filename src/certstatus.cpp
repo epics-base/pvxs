@@ -40,6 +40,9 @@ void OCSPStatus::init() {
 
 PVACertificateStatus::operator CertificateStatus() const noexcept { return (status==UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this}; }
 OCSPStatus::operator CertificateStatus() const noexcept { return (ocsp_status==OCSP_CERTSTATUS_UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this}; }
+bool OCSPStatus::operator==(const CertificateStatus& rhs) const { return this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
+bool OCSPStatus::operator==(const PVACertificateStatus& rhs) const { return (CertificateStatus)*this == rhs ; }
+bool PVACertificateStatus::operator==(const CertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
 
 }  // namespace certs
 }  // namespace pvxs

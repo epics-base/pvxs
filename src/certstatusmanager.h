@@ -93,8 +93,8 @@
                 auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));                                                           \
                 cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::PVACertificateStatus status) { \
                     Guard G(tls_context.lock);                                                                                \
-                    auto was_good = ((certs::CertificateStatus)current_status).isGood();                                                                  \
-                    if ((current_status = status).isGood()) {                                                                 \
+                    auto was_good = ((certs::CertificateStatus)current_status).isGood();                                      \
+                    if (((certs::CertificateStatus)(current_status = status)).isGood()) {                                     \
                         if ( !was_good )                                                                                      \
                             (LOOP).dispatch([this]() mutable { enableTls(); });                                               \
                     } else if ( was_good ) {                                                                                  \
