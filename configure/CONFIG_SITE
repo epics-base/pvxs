@@ -45,3 +45,13 @@ CHECK_RELEASE = YES
 USR_CPPFLAGS_WIN32 += -DNOMINMAX -D_WIN32_WINNT=_WIN32_WINNT_VISTA
 
 USR_CPPFLAGS += -DUSE_TYPED_RSET
+
+# applied to all libraries
+SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION).$(PVXS_MAINTENANCE_VERSION)
+
+# for ELF targets w/ shared libraries, emit additional symlinks
+ifeq (YES,$(SHARED_LIBRARIES))
+ifneq (,$(filter Linux,$(OS_CLASS)))
+COMPAT_VERSIONS = 0.1
+endif
+endif

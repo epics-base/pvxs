@@ -27,8 +27,6 @@ INC += pvxs/iochooks.h
 
 LIBRARY += pvxsIoc
 
-SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION)
-
 pvxsIoc_SRCS += iochooks.cpp
 
 ifdef BASE_3_15
