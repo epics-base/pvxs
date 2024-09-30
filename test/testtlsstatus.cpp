@@ -359,87 +359,114 @@ struct Tester {
         try {
             auto unknown_status = UnknownCertificateStatus();
             {
+                testDiag("PVACertificateStatus ==> CertificateStatus");
                 auto client_cs = (CertifiedCertificateStatus)client_cert_status;
                 auto server_cs = (CertifiedCertificateStatus)server_cert_status;
                 auto ca_cs = (CertifiedCertificateStatus)ca_cert_status;
 
-                testDiag("Convert to CertificateStatus: Compare PVACertificateStatus");
+                testDiag("CertificateStatus == PVACertificateStatus");
                 testOk1(client_cs == client_cert_status);  // REVOKED == REVOKED
                 testOk1(server_cs == server_cert_status);  // PENDING == PENDING
                 testOk1(ca_cs == ca_cert_status);          // VALID == VALID
+
+                testDiag("PVACertificateStatus == CertificateStatus");
                 testOk1(client_cert_status == client_cs);  // REVOKED == REVOKED
                 testOk1(server_cert_status == server_cs);  // PENDING == PENDING
                 testOk1(ca_cert_status == ca_cs);          // VALID == VALID
 
+                testDiag("CertificateStatus != PVACertificateStatus");
                 testOk1(client_cs != ca_cert_status);      // REVOKED != VALID
                 testOk1(server_cs != client_cert_status);  // PENDING != REVOKED
                 testOk1(ca_cs != server_cert_status);      // VALID != PENDING
+
+                testDiag("PVACertificateStatus != CertificateStatus");
                 testOk1(ca_cert_status != client_cs);      // VALID != REVOKED
                 testOk1(client_cert_status != server_cs);  // REVOKED != UNKNOWN
                 testOk1(server_cert_status != ca_cs);      // PENDING != VALID
             }
 
             {
-                testDiag("Convert to OCSPStatus: Compare PVACertificateStatus");
+                testDiag("PVACertificateStatus ==> OCSPStatus");
                 auto client_ocs = (OCSPStatus)client_cert_status;
                 auto server_ocs = (OCSPStatus)server_cert_status;
                 auto ca_ocs = (OCSPStatus)ca_cert_status;
 
+                testDiag("OCSPStatus == PVACertificateStatus");
                 testOk1(client_ocs == client_cert_status);  // REVOKED == REVOKED
-                testOk1(server_ocs != server_cert_status);  // UNKNOWN == PENDING
                 testOk1(ca_ocs == ca_cert_status);          // VALID == VALID
+
+                testDiag("PVACertificateStatus == OCSPStatus");
                 testOk1(client_cert_status == client_ocs);  // REVOKED == REVOKED
-                testOk1(server_cert_status != server_ocs);  // PENDING == UNKNOWN
                 testOk1(ca_cert_status == ca_ocs);          // VALID == VALID
 
+                testDiag("OCSPStatus != PVACertificateStatus");
                 testOk1(client_ocs != ca_cert_status);      // REVOKED != VALID
-                testOk1(server_ocs != client_cert_status);  // UNKNOWN != REVOKED
                 testOk1(ca_ocs != server_cert_status);      // VALID != PENDING
+
+                testOk1(server_ocs != server_cert_status);  // UNKNOWN == PENDING
+                testOk1(server_ocs != client_cert_status);  // UNKNOWN != REVOKED
+
+                testDiag("PVACertificateStatus != OCSPStatus");
                 testOk1(ca_cert_status != client_ocs);      // VALID != REVOKED
-                testOk1(client_cert_status != server_ocs);  // REVOKED != UNKNOWN
                 testOk1(server_cert_status != ca_ocs);      // PENDING != VALID
+
+                testOk1(server_cert_status != server_ocs);  // PENDING == UNKNOWN
+                testOk1(client_cert_status != server_ocs);  // REVOKED != UNKNOWN
             }
 
             {
+                testDiag("PVACertificateStatus ==> certstatus_t");
                 auto client_cs_t = (certstatus_t)client_cert_status.status.i;
                 auto server_cs_t = (certstatus_t)server_cert_status.status.i;
                 auto ca_cs_t = (certstatus_t)ca_cert_status.status.i;
 
-                testDiag("Convert to certstatus_t: Compare PVACertificateStatus");
+                testDiag("certstatus_t == PVACertificateStatus");
                 testOk1(client_cs_t == client_cert_status);  // REVOKED == REVOKED
                 testOk1(server_cs_t == server_cert_status);  // PENDING == PENDING
                 testOk1(ca_cs_t == ca_cert_status);          // VALID == VALID
+
+                testDiag("PVACertificateStatus == certstatus_t");
                 testOk1(client_cert_status == client_cs_t);  // REVOKED == REVOKED
                 testOk1(server_cert_status == server_cs_t);  // PENDING == PENDING
                 testOk1(ca_cert_status == ca_cs_t);          // VALID == VALID
 
+                testDiag("certstatus_t != PVACertificateStatus");
                 testOk1(client_cs_t != ca_cert_status);      // REVOKED != VALID
                 testOk1(server_cs_t != client_cert_status);  // PENDINGm. != REVOKED
                 testOk1(ca_cs_t != server_cert_status);      // VALID != PENDING
+
+                testDiag("PVACertificateStatus != certstatus_t");
                 testOk1(ca_cert_status != client_cs_t);      // VALID != REVOKED
                 testOk1(client_cert_status != server_cs_t);  // REVOKED != UNKNOWN
                 testOk1(server_cert_status != ca_cs_t);      // PENDING != VALID
             }
 
             {
-                testDiag("Convert to certstatus_t & OCSPStatus: Compare");
+                testDiag("PVACertificateStatus ==> certstatus_t & OCSPStatus");
                 auto client_cs_t = (certstatus_t)client_cert_status.status.i;
                 auto server_cs_t = (certstatus_t)server_cert_status.status.i;
                 auto ca_cs_t = (certstatus_t)ca_cert_status.status.i;
+
                 auto client_ocs = (OCSPStatus)client_cert_status;
                 auto server_ocs = (OCSPStatus)server_cert_status;
                 auto ca_ocs = (OCSPStatus)ca_cert_status;
 
+                testDiag("OCSPStatus == certstatus_t");
                 testOk1(client_ocs == client_cs_t);  // REVOKED == REVOKED
                 testOk1(server_ocs != server_cs_t);  // UNKNOWN != PENDING
                 testOk1(ca_ocs == ca_cs_t);          // VALID == VALID
+
+                testDiag("certstatus_t == OCSPStatus");
                 testOk1(client_cs_t == client_ocs);  // REVOKED == REVOKED
                 testOk1(server_cs_t != server_ocs);  // PENDING != UNKNOWN
                 testOk1(ca_cs_t == ca_ocs);          // VALID == VALID
 
+                testDiag("certstatus_t != OCSPStatus");
                 testOk1(client_ocs != ca_cs_t);      // REVOKED != VALID
                 testOk1(server_ocs != client_cs_t);  // UNKNOWN != REVOKED
                 testOk1(ca_ocs != server_cs_t);      // VALID != PENDING
+
+                testDiag("OCSPStatus != certstatus_t");
                 testOk1(client_cs_t != ca_ocs);      // VALID != REVOKED
                 testOk1(server_cs_t != client_ocs);  // REVOKED != UNKNOWN
                 testOk1(ca_cs_t != server_ocs);      // PENDING != VALID
