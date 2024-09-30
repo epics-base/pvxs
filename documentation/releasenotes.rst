@@ -3,9 +3,10 @@
 Release Notes
 =============
 
-1.3.2 (UNRELEASED)
+1.3.2 (Oct 2024)
 ------------------
 
+* Python 3.12 support
 * client: Avoid FD leak on failed connect()
 * Correctly set TCP_NODELAY on winsock
 * Fix copy of Any/Union
