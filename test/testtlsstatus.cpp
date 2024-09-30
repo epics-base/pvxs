@@ -39,8 +39,8 @@ using namespace pvxs::certs;
 #define GET_MONITOR_CERT_STATUS_PV "CERT:STATUS:????????:*"
 
 constexpr uint64_t ca_serial = TEST_FIRST_SERIAL;
-constexpr uint64_t server_serial = ca_serial+3;
-constexpr uint64_t client_serial = ca_serial+6;
+constexpr uint64_t server_serial = ca_serial + 3;
+constexpr uint64_t client_serial = ca_serial + 6;
 
 #define CA_CERT_FILE "ca.p12"
 // #define CA_CERT_FILE "/Users/george/.epics/certs/ca.p12"
@@ -280,7 +280,7 @@ struct Tester {
             auto received_client_status = PVACertificateStatus(client_status_response_value);
             testOk1(received_client_status == client_cert_status);
             testOk1((CertifiedCertificateStatus)received_client_status == client_cert_status);
-            testOk1( (CertifiedCertificateStatus)client_cert_status == received_client_status);
+            testOk1((CertifiedCertificateStatus)client_cert_status == received_client_status);
             testOk1((CertifiedCertificateStatus)received_client_status == (CertifiedCertificateStatus)client_cert_status);
             testEq(received_client_status.ocsp_bytes.size(), client_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
@@ -313,7 +313,7 @@ struct Tester {
             auto received_server_status = PVACertificateStatus(server_status_response_value);
             testOk1(received_server_status == server_cert_status);
             testOk1((CertifiedCertificateStatus)received_server_status == server_cert_status);
-            testOk1( (CertifiedCertificateStatus)server_cert_status == received_server_status);
+            testOk1((CertifiedCertificateStatus)server_cert_status == received_server_status);
             testOk1((CertifiedCertificateStatus)received_server_status == (CertifiedCertificateStatus)server_cert_status);
             testEq(received_server_status.ocsp_bytes.size(), server_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
@@ -346,7 +346,7 @@ struct Tester {
             auto received_ca_status = PVACertificateStatus(ca_status_response_value);
             testOk1(received_ca_status == ca_cert_status);
             testOk1((CertifiedCertificateStatus)received_ca_status == ca_cert_status);
-            testOk1( (CertifiedCertificateStatus)ca_cert_status == received_ca_status);
+            testOk1((CertifiedCertificateStatus)ca_cert_status == received_ca_status);
             testOk1((CertifiedCertificateStatus)received_ca_status == (CertifiedCertificateStatus)ca_cert_status);
             testEq(received_ca_status.ocsp_bytes.size(), ca_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
@@ -364,31 +364,33 @@ struct Tester {
                 auto ca_cs = (CertifiedCertificateStatus)ca_cert_status;
 
                 testDiag("Convert to CertificateStatus: Compare PVACertificateStatus");
-                testOk1(client_cs == client_cert_status); // REVOKED == REVOKED
-                testOk1(server_cs == server_cert_status); // PENDING == PENDING
-                testOk1(ca_cs == ca_cert_status);         // VALID == VALID
-                testOk1(client_cert_status == client_cs); // REVOKED == REVOKED
-                testOk1(server_cert_status == server_cs); // PENDING == PENDING
-                testOk1(ca_cert_status == ca_cs);         // VALID == VALID
+                testOk1(client_cs == client_cert_status);  // REVOKED == REVOKED
+                testOk1(server_cs == server_cert_status);  // PENDING == PENDING
+                testOk1(ca_cs == ca_cert_status);          // VALID == VALID
+                testOk1(client_cert_status == client_cs);  // REVOKED == REVOKED
+                testOk1(server_cert_status == server_cs);  // PENDING == PENDING
+                testOk1(ca_cert_status == ca_cs);          // VALID == VALID
 
-                testOk1(client_cs != ca_cert_status);       // REVOKED != VALID
-                testOk1(server_cs != client_cert_status);   // PENDING != REVOKED
-                testOk1(ca_cs != server_cert_status);       // VALID != PENDING
-                testOk1(ca_cert_status != client_cs);       // VALID != REVOKED
-                testOk1(client_cert_status != server_cs);   // REVOKED != UNKNOWN
-                testOk1(server_cert_status != ca_cs);       // PENDING != VALID
+                testOk1(client_cs != ca_cert_status);      // REVOKED != VALID
+                testOk1(server_cs != client_cert_status);  // PENDING != REVOKED
+                testOk1(ca_cs != server_cert_status);      // VALID != PENDING
+                testOk1(ca_cert_status != client_cs);      // VALID != REVOKED
+                testOk1(client_cert_status != server_cs);  // REVOKED != UNKNOWN
+                testOk1(server_cert_status != ca_cs);      // PENDING != VALID
+            }
 
+            {
                 testDiag("Convert to OCSPStatus: Compare PVACertificateStatus");
                 auto client_ocs = (OCSPStatus)client_cert_status;
                 auto server_ocs = (OCSPStatus)server_cert_status;
                 auto ca_ocs = (OCSPStatus)ca_cert_status;
 
-                testOk1(client_ocs == client_cert_status); // REVOKED == REVOKED
-                testOk1(server_ocs != server_cert_status); // UNKNOWN == PENDING
-                testOk1(ca_ocs == ca_cert_status);         // VALID == VALID
-                testOk1(client_cert_status == client_ocs); // REVOKED == REVOKED
-                testOk1(server_cert_status != server_ocs); // PENDING == UNKNOWN
-                testOk1(ca_cert_status == ca_ocs);         // VALID == VALID
+                testOk1(client_ocs == client_cert_status);  // REVOKED == REVOKED
+                testOk1(server_ocs != server_cert_status);  // UNKNOWN == PENDING
+                testOk1(ca_ocs == ca_cert_status);          // VALID == VALID
+                testOk1(client_cert_status == client_ocs);  // REVOKED == REVOKED
+                testOk1(server_cert_status != server_ocs);  // PENDING == UNKNOWN
+                testOk1(ca_cert_status == ca_ocs);          // VALID == VALID
 
                 testOk1(client_ocs != ca_cert_status);      // REVOKED != VALID
                 testOk1(server_ocs != client_cert_status);  // UNKNOWN != REVOKED
@@ -404,31 +406,36 @@ struct Tester {
                 auto ca_cs_t = (certstatus_t)ca_cert_status.status.i;
 
                 testDiag("Convert to certstatus_t: Compare PVACertificateStatus");
-                testOk1(client_cs_t == client_cert_status); // REVOKED == REVOKED
-                testOk1(server_cs_t == server_cert_status); // PENDING == PENDING
-                testOk1(ca_cs_t == ca_cert_status);         // VALID == VALID
-                testOk1(client_cert_status == client_cs_t); // REVOKED == REVOKED
-                testOk1(server_cert_status == server_cs_t); // PENDING == PENDING
-                testOk1(ca_cert_status == ca_cs_t);         // VALID == VALID
+                testOk1(client_cs_t == client_cert_status);  // REVOKED == REVOKED
+                testOk1(server_cs_t == server_cert_status);  // PENDING == PENDING
+                testOk1(ca_cs_t == ca_cert_status);          // VALID == VALID
+                testOk1(client_cert_status == client_cs_t);  // REVOKED == REVOKED
+                testOk1(server_cert_status == server_cs_t);  // PENDING == PENDING
+                testOk1(ca_cert_status == ca_cs_t);          // VALID == VALID
 
-                testOk1(client_cs_t != ca_cert_status);       // REVOKED != VALID
-                testOk1(server_cs_t != client_cert_status);   // PENDING != REVOKED
-                testOk1(ca_cs_t != server_cert_status);       // VALID != PENDING
-                testOk1(ca_cert_status != client_cs_t);       // VALID != REVOKED
-                testOk1(client_cert_status != server_cs_t);   // REVOKED != UNKNOWN
-                testOk1(server_cert_status != ca_cs_t);       // PENDING != VALID
+                testOk1(client_cs_t != ca_cert_status);      // REVOKED != VALID
+                testOk1(server_cs_t != client_cert_status);  // PENDINGm. != REVOKED
+                testOk1(ca_cs_t != server_cert_status);      // VALID != PENDING
+                testOk1(ca_cert_status != client_cs_t);      // VALID != REVOKED
+                testOk1(client_cert_status != server_cs_t);  // REVOKED != UNKNOWN
+                testOk1(server_cert_status != ca_cs_t);      // PENDING != VALID
+            }
 
+            {
                 testDiag("Convert to certstatus_t & OCSPStatus: Compare");
+                auto client_cs_t = (certstatus_t)client_cert_status.status.i;
+                auto server_cs_t = (certstatus_t)server_cert_status.status.i;
+                auto ca_cs_t = (certstatus_t)ca_cert_status.status.i;
                 auto client_ocs = (OCSPStatus)client_cert_status;
                 auto server_ocs = (OCSPStatus)server_cert_status;
                 auto ca_ocs = (OCSPStatus)ca_cert_status;
 
-                testOk1(client_ocs == client_cs_t); // REVOKED == REVOKED
-                testOk1(server_ocs != server_cs_t); // UNKNOWN != PENDING
-                testOk1(ca_ocs == ca_cs_t);         // VALID == VALID
-                testOk1(client_cs_t == client_ocs); // REVOKED == REVOKED
-                testOk1(server_cs_t != server_ocs); // PENDING != UNKNOWN
-                testOk1(ca_cs_t == ca_ocs);         // VALID == VALID
+                testOk1(client_ocs == client_cs_t);  // REVOKED == REVOKED
+                testOk1(server_ocs != server_cs_t);  // UNKNOWN != PENDING
+                testOk1(ca_ocs == ca_cs_t);          // VALID == VALID
+                testOk1(client_cs_t == client_ocs);  // REVOKED == REVOKED
+                testOk1(server_cs_t != server_ocs);  // PENDING != UNKNOWN
+                testOk1(ca_cs_t == ca_ocs);          // VALID == VALID
 
                 testOk1(client_ocs != ca_cs_t);      // REVOKED != VALID
                 testOk1(server_ocs != client_cs_t);  // UNKNOWN != REVOKED
@@ -456,27 +463,41 @@ struct Tester {
                 const std::string &serial_string = *++it;
                 uint64_t serial = std::stoull(serial_string);
 
-                testOk(1, "Status Request for: issuer %s, serial %s", issuer_id.c_str(), serial_string.c_str() );
-                if ( status_pv.isOpen(pv_name) ) {
+                testOk(1, "Status Request for: issuer %s, serial %s", issuer_id.c_str(), serial_string.c_str());
+                if (status_pv.isOpen(pv_name)) {
                     switch (serial) {
-                        case client_serial: status_pv.post(pv_name, client_status_response_value); break;
-                        case server_serial: status_pv.post(pv_name, server_status_response_value) ; break;
-                        case ca_serial:     status_pv.post(pv_name, ca_status_response_value);     break;
-                        default:testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
+                        case client_serial:
+                            status_pv.post(pv_name, client_status_response_value);
+                            break;
+                        case server_serial:
+                            status_pv.post(pv_name, server_status_response_value);
+                            break;
+                        case ca_serial:
+                            status_pv.post(pv_name, ca_status_response_value);
+                            break;
+                        default:
+                            testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
                     }
                 } else {
                     switch (serial) {
-                        case client_serial: status_pv.open(pv_name, client_status_response_value); break;
-                        case server_serial: status_pv.open(pv_name, server_status_response_value) ; break;
-                        case ca_serial:     status_pv.open(pv_name, ca_status_response_value);     break;
-                        default:testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
+                        case client_serial:
+                            status_pv.open(pv_name, client_status_response_value);
+                            break;
+                        case server_serial:
+                            status_pv.open(pv_name, server_status_response_value);
+                            break;
+                        case ca_serial:
+                            status_pv.open(pv_name, ca_status_response_value);
+                            break;
+                        default:
+                            testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
                     }
                 }
 
                 testDiag("Posted Value for request: %s", pv_name.c_str());
             });
             status_pv.onLastDisconnect([](server::SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
-                testOk(1, "Closing Status Request Connection: %s", pv_name.c_str() );
+                testOk(1, "Closing Status Request Connection: %s", pv_name.c_str());
                 pv.close(pv_name);
             });
 
@@ -538,10 +559,10 @@ MAIN(testget) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(59);
+    testPlan(113);
     testSetup();
     logger_config_env();
-    auto tester = new Tester() ;
+    auto tester = new Tester();
     tester->initialisation();
     tester->ocspPayload();
     tester->certificateStatus();
@@ -549,7 +570,7 @@ MAIN(testget) {
     tester->makeStatusResponse();
     tester->testStatusConversions();
     tester->makeStatusRequest();
-    delete(tester);
+    delete (tester);
     cleanup_for_valgrind();
     return testDone();
 }
