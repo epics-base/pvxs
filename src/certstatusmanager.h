@@ -26,16 +26,16 @@
 #include "evhelper.h"
 #include "ownedptr.h"
 
-#define DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(TYPE)                                         \
+#define DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(TYPE, STATUS_CALL)                            \
     void TYPE::doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void* raw) { \
         auto pvt = static_cast<TYPE*>(raw);                                                 \
-        if (pvt->current_status.isValid()) return;                                          \
+        if (pvt->current_status->isValid()) return;                                         \
         if (!pvt->cert_status_manager)                                                      \
             pvt->disableTls();                                                              \
         else {                                                                              \
             try {                                                                           \
-                pvt->current_status = pvt->cert_status_manager->getStatus();                \
-                if (((certs::CertificateStatus)pvt->current_status).isGood())                                           \
+                pvt->current_status = pvt->cert_status_manager->STATUS_CALL();            \
+                if (pvt->current_status->isGood())                                          \
                     pvt->startStatusValidityTimer();                                        \
                 else                                                                        \
                     pvt->disableTls();                                                      \
@@ -49,6 +49,7 @@
     if (pvt->custom_cert_event_callback) {    \
         pvt->custom_cert_event_callback(evt); \
     }
+
 #define _FILE_EVENT_CALL
 
 #define DO_CERT_EVENT_HANDLER(TYPE, LOG, ...)                                                                                              \
@@ -80,12 +81,12 @@
     void TYPE::startStatusValidityTimer() {                                                                                                               \
         (LOOP).dispatch([this]() {                                                                                                                        \
             auto now = time(nullptr);                                                                                                                     \
-            timeval validity_end = {current_status.status_valid_until_date.t - now, 0};                                                                   \
+            timeval validity_end = {current_status->status_valid_until_date.t - now, 0};                                                                   \
             if (event_add(cert_validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting certificate status validity timer\n%s", ""); \
         });                                                                                                                                               \
     }
 
-#define SUBSCRIBE_TO_CERT_STATUS(TYPE, LOOP)                                                                                  \
+#define SUBSCRIBE_TO_CERT_STATUS(TYPE, STATUS_TYPE, LOOP)                                                                     \
     void TYPE::subscribeToCertStatus() {                                                                                      \
         if (auto cert_ptr = getCert()) {                                                                                      \
             try {                                                                                                             \
@@ -93,8 +94,9 @@
                 auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));                                                           \
                 cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::PVACertificateStatus status) { \
                     Guard G(tls_context.lock);                                                                                \
-                    auto was_good = ((certs::CertificateStatus)current_status).isGood();                                      \
-                    if (((certs::CertificateStatus)(current_status = status)).isGood()) {                                     \
+                    auto was_good = current_status->isGood();                                                                 \
+                    current_status = std::make_shared<certs::STATUS_TYPE>(status);                                          \
+                    if (current_status->isGood()) {                                                                           \
                         if ( !was_good )                                                                                      \
                             (LOOP).dispatch([this]() mutable { enableTls(); });                                               \
                     } else if ( was_good ) {                                                                                  \
@@ -195,18 +197,29 @@ class CertStatusManager {
     static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509> &&ctx_cert, StatusCallback&& callback);
 
     /**
-     * @brief Get status for a given certificate
+     * @brief Get status for a given certificate.  Does not contain OCSP signed
+     * status data so use for client status.
+     *
      * @param cert the certificate for which you want to get status
-     * @return CertificateStatus
+     * @return std::shared_ptr<CertificateStatus>
      */
-    static PVACertificateStatus getStatus(const ossl_ptr<X509>& cert);
+    static std::shared_ptr<CertificateStatus> getStatus(const ossl_ptr<X509>& cert);
+
+    /**
+     * @brief Get status for a given certificate.  This status contains the OCSP signed
+     * status data so can be used for stapling.  Use this for server status.
+     *
+     * @param cert the certificate for which you want to get status
+     * @return ::shared_ptr<PVACertificateStatus>
+     */
+    static std::shared_ptr<PVACertificateStatus> getPVAStatus(const ossl_ptr<X509>& cert);
 
     /**
      * @brief Wait for status to become available or return the current status if it is still valid
      * @param loop the event loop base to use to wait
      * @return the status
      */
-    PVACertificateStatus waitForStatus(const evbase& loop);
+    std::shared_ptr<CertificateStatus> waitForStatus(const evbase& loop);
 
     /**
      * @brief Unsubscribe from listening to certificate status
@@ -219,26 +232,31 @@ class CertStatusManager {
      * @brief Get status for a currently subscribed certificate
      * @return CertificateStatus
      */
-    PVACertificateStatus getStatus();
+    std::shared_ptr<CertificateStatus> getStatus();
+
+    /**
+     * @brief Get status for a currently subscribed certificate
+     * @return CertificateStatus
+     */
+    std::shared_ptr<PVACertificateStatus> getPVAStatus();
 
     inline bool available() noexcept { return isValid() || (manager_start_time_ + 3) < std::time(nullptr); }
 
-    inline bool isValid() noexcept { return (status_ != UNKNOWN) && status_valid_until_date_ > std::time(nullptr); }
+    inline bool isValid() noexcept { return status_->isValid(); }
 
    private:
     CertStatusManager(ossl_ptr<X509>&& cert, std::shared_ptr<client::Context>& client, std::shared_ptr<client::Subscription>& sub)
         : cert_(std::move(cert)), client_(client), sub_(sub) {};
     CertStatusManager(ossl_ptr<X509>&& cert, std::shared_ptr<client::Context>& client) : cert_(std::move(cert)), client_(client) {};
     inline void subscribe(std::shared_ptr<client::Subscription>& sub) { sub_ = sub; }
-    inline bool isGood() noexcept { return isValid() && status_ == VALID; }
+    inline bool isGood() noexcept { return status_->isGood(); }
 
     const ossl_ptr<X509> cert_;
     std::shared_ptr<client::Context> client_;
     std::shared_ptr<client::Subscription> sub_;
-    certstatus_t status_;
+    std::shared_ptr<CertificateStatus> status_;
+    std::shared_ptr<PVACertificateStatus> pva_status_;
     time_t manager_start_time_{time(nullptr)};
-    time_t status_valid_until_date_{manager_start_time_};
-    time_t revocation_date_;
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes);
 
     static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response);

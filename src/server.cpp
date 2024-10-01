@@ -492,15 +492,16 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
                         try {
                             Guard G(tls_context.lock);
                             auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
-                            current_status = certs::CertStatusManager::getStatus(cert);
-                            if (((certs::CertificateStatus)current_status).isGood()) {
+                            current_status = certs::CertStatusManager::getPVAStatus(cert);
+                            if (current_status->isGood()) {
                                 tls_context.cert_is_valid = true;
                             }
                             // Subscribe and set validity when the status is verified
                             cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [this](certs::PVACertificateStatus status) {
                                 Guard G(tls_context.lock);
-                                auto was_good = ((certs::CertificateStatus)current_status).isGood();
-                                if (((certs::CertificateStatus)(current_status = status)).isGood()) {
+                                auto was_good = current_status->isGood();
+                                current_status = std::make_shared<certs::PVACertificateStatus>(status);
+                                if (current_status->isGood()) {
                                     if ( !was_good )
                                         acceptor_loop.dispatch([this]() mutable { enableTls(); });
                                 } else if ( was_good ) {
@@ -996,7 +997,7 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 
 #ifdef PVXS_ENABLE_OPENSSL
 DO_CERT_EVENT_HANDLER(Server::Pvt, serverio, CUSTOM)
-DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(Server::Pvt)
+DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(Server::Pvt, getPVAStatus)
 
 void Server::reconfigure(const Config& inconf)
 {
@@ -1143,7 +1144,7 @@ void Server::Pvt::disableTls() {
 FILE_EVENT_CALLBACK(Server::Pvt)
 GET_CERT(Server::Pvt)
 START_STATUS_VALIDITY_TIMER(Server::Pvt, acceptor_loop)
-SUBSCRIBE_TO_CERT_STATUS(Server::Pvt, acceptor_loop)
+SUBSCRIBE_TO_CERT_STATUS(Server::Pvt, PVACertificateStatus, acceptor_loop)
 
 #endif
 

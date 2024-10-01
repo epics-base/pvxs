@@ -148,9 +148,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509> &
                                if (update) {
                                    auto status_update((PVACertificateStatus)update);
                                    log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
-                                   cert_status_manager->status_ = (certstatus_t)status_update.status.i;
-                                   cert_status_manager->status_valid_until_date_ = status_update.status_valid_until_date.t + 100;
-                                   cert_status_manager->revocation_date_ = status_update.revocation_date.t;
+                                   cert_status_manager->status_ = std::make_shared<CertificateStatus>(status_update);
                                    (*callback_ptr)(status_update);
                                }
                            } catch (client::Finished& conn) {
@@ -190,12 +188,51 @@ void CertStatusManager::unsubscribe() {
  * @return the simplified status - does not have ocsp bytes but has been verified and certified
  * @see waitForStatus
  */
-PVACertificateStatus CertStatusManager::getStatus() {
-    auto status_so_far = PVACertificateStatus(status_, status_valid_until_date_, revocation_date_);
-    return isValid() ? status_so_far : getStatus(cert_);
+std::shared_ptr<CertificateStatus> CertStatusManager::getStatus() {
+    if (isValid())
+        return status_;
+    else
+        return status_ = getStatus(cert_);
 }
 
-PVACertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
+/**
+ * @brief Get status from the manager.
+ *
+ * If status has already been retrieved and it is still valid then use that otherwise go get new status
+ *
+ * @return the simplified status - does not have ocsp bytes but has been verified and certified
+ * @see waitForStatus
+ */
+std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus() {
+    if ( isValid() )
+        return pva_status_;
+    else
+        return pva_status_ = getPVAStatus(cert_);
+}
+
+/**
+ * @brief Get status for the given cert from the manager.
+ *
+ * If status has already been retrieved and it is still valid then use that otherwise go get new status
+ *
+ * @param cert the given cert
+ * @return the simplified status - does not have ocsp bytes but has been verified and certified
+ * @see waitForStatus
+ */
+std::shared_ptr<CertificateStatus> CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
+    return std::make_shared<CertificateStatus>(*getPVAStatus(cert));
+}
+
+/**
+ * @brief Get status for the given cert from the manager.
+ *
+ * If status has already been retrieved and it is still valid then use that otherwise go get new status
+ *
+ * @param cert the given cert
+ * @return the simplified status - does not have ocsp bytes but has been verified and certified
+ * @see waitForStatus
+ */
+std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus(const ossl_ptr<X509>& cert) {
     try {
         auto uri = getStatusPvFromCert(cert);
 
@@ -208,7 +245,7 @@ PVACertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
         Value result = operation->wait(2.0);
         client.close();
 
-        return PVACertificateStatus(result);
+        return std::make_shared<PVACertificateStatus>(result);
     } catch (...) {
         return {};
     }
@@ -230,14 +267,14 @@ PVACertificateStatus CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
  * @return the certificate status at the end of the time - either UNKNOWN still or
  * some new value.
  */
-PVACertificateStatus CertStatusManager::waitForStatus(const evbase& loop) {
+std::shared_ptr<CertificateStatus> CertStatusManager::waitForStatus(const evbase& loop) {
     auto start(time(nullptr));
     // Timeout 3 seconds
-    while ((status_ == UNKNOWN) && time(nullptr) < start + 3) {
+    while ((!status_ || !status_->isValid()) && time(nullptr) < start + 3) {
         loop.dispatch([]() {});
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-    return PVACertificateStatus(status_, status_valid_until_date_, revocation_date_);
+    return status_;
 }
 
 /**

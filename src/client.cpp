@@ -505,8 +505,9 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
                             auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));                                                           \
                             cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::PVACertificateStatus status) {
                                 Guard G(tls_context.lock);
-                                auto was_good = ((certs::CertificateStatus)current_status).isGood();
-                                if (((certs::CertificateStatus)(current_status = status)).isGood()) {
+                                auto was_good = current_status->isGood();
+                                current_status=std::make_shared<certs::CertificateStatus>(status);
+                                if (current_status->isGood()) {
                                     if ( !was_good )
                                         manager.loop().dispatch([this]() mutable { enableTls(); });
                                 } else if ( was_good ) {
@@ -1285,7 +1286,7 @@ Context::Pvt::Pvt(const Config& conf) : loop("PVXCTCP", epicsThreadPriorityCASer
 #else
 
 DO_CERT_EVENT_HANDLER(ContextImpl, io)
-DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(ContextImpl)
+DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(ContextImpl, getStatus)
 
 void Context::reconfigure(const Config& newconf) {
     if (!pvt) throw std::logic_error("NULL Context");
@@ -1403,7 +1404,7 @@ void ContextImpl::disableTls() {
 FILE_EVENT_CALLBACK(ContextImpl)
 GET_CERT(ContextImpl)
 START_STATUS_VALIDITY_TIMER(ContextImpl, manager.loop())
-SUBSCRIBE_TO_CERT_STATUS(ContextImpl, manager.loop())
+SUBSCRIBE_TO_CERT_STATUS(ContextImpl, CertificateStatus, manager.loop())
 
 Context::Pvt::Pvt(const Config& conf)
     : loop("PVXCTCP", epicsThreadPriorityCAServerLow),

@@ -372,12 +372,6 @@ struct OCSPStatus {
 
     // To  set an OCSP UNKNOWN status to indicate errors
     OCSPStatus() : ocsp_status(OCSP_CERTSTATUS_UNKNOWN) {};
-    OCSPStatus(ocspcertstatus_t ocsp_status, time_t status_valid_until_date, time_t revocation_date)
-        : ocsp_bytes{},
-          ocsp_status(ocsp_status),
-          status_date(time(nullptr)),
-          status_valid_until_date(status_valid_until_date),
-          revocation_date(revocation_date) {};
 
     virtual inline bool operator==(const OCSPStatus& rhs) const { return this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
     virtual inline bool operator!=(const OCSPStatus& rhs) const { return !(*this == rhs) ; }
@@ -399,7 +393,7 @@ struct OCSPStatus {
         return status_valid_until_date.t > now;
     }
 
-//    inline bool isGood() noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
+    inline bool isGood() noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
     virtual explicit operator CertificateStatus() const noexcept ;
 
   private:
@@ -423,7 +417,7 @@ bool operator!=(certstatus_t &lhs, OCSPStatus &rhs) ;
  * revocation date.  The status field contains the PVA certificate status in numerical and text form.
  * The ocsp_status field contains the OCSP status in numerical and text form.
  */
-struct PVACertificateStatus : public OCSPStatus {
+struct PVACertificateStatus final : public OCSPStatus {
     PVACertStatus status;
     inline bool operator==(const PVACertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
     inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs) ; }
@@ -455,12 +449,6 @@ struct PVACertificateStatus : public OCSPStatus {
 
     // To  set an UNKNOWN status to indicate errors
     PVACertificateStatus() : OCSPStatus(), status(UNKNOWN) {}
-    PVACertificateStatus(certstatus_t pva_status, time_t status_valid_until_date, time_t revocation_date)
-        : OCSPStatus(pva_status == REVOKED   ? OCSP_CERTSTATUS_REVOKED
-                     : (pva_status == VALID) ? OCSP_CERTSTATUS_GOOD
-                                             : OCSP_CERTSTATUS_UNKNOWN,
-                     status_valid_until_date, revocation_date),
-          status(pva_status) {}
     operator CertificateStatus() const noexcept ;
 
    private:
@@ -535,7 +523,7 @@ struct CertificateStatus {
  * status of a certified certificate, including PVA certificate status, OCSP status, status date,
  * status valid-until date, and revocation date.
  */
-struct CertifiedCertificateStatus : public CertificateStatus {
+struct CertifiedCertificateStatus final : public CertificateStatus {
     explicit CertifiedCertificateStatus(PVACertificateStatus cs)
     : CertificateStatus(true, cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {};
   private:
@@ -545,7 +533,7 @@ struct CertifiedCertificateStatus : public CertificateStatus {
 
 };
 
-struct UnknownCertificateStatus : public CertificateStatus {
+struct UnknownCertificateStatus final : public CertificateStatus {
     UnknownCertificateStatus()
       : CertificateStatus(false, (PVACertStatus)UNKNOWN, (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN, std::time(nullptr), (time_t)0, (time_t)0) {};
 };

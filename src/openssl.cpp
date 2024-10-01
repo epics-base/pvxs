@@ -407,8 +407,8 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
  * @param tls_context the tls context to add the OCSP response to
  */
 int serverOCSPCallback(SSL* ssl, pvxs::server::Server::Pvt * server) {
-    auto ocsp_data_ptr = (void * )server->current_status.ocsp_bytes.data();
-    auto ocsp_data_len = server->current_status.ocsp_bytes.size();
+    auto ocsp_data_ptr = (void * )server->current_status->ocsp_bytes.data();
+    auto ocsp_data_len = server->current_status->ocsp_bytes.size();
 
     if (!server->cached_ocsp_response || memcmp(ocsp_data_ptr, server->cached_ocsp_response, ocsp_data_len) ) {
         // if status has changed
