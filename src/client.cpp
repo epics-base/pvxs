@@ -904,6 +904,7 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
             chan->conn = Connection::build(self.shared_from_this(), serv);
 
             chan->conn->pending[chan->cid] = chan;
+            chan->nSearch = 0u;
             chan->state = Channel::Connecting;
 
             chan->conn->createChannels();
