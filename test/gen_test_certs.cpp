@@ -316,6 +316,7 @@ void usage(const char* argv0) {
                ;
 }
 
+/*
 std::string writeCertToTempFile(pvxs::ossl_ptr<X509> &cert) {
     std::string temp_file_path = "ca_cert.pem";
 
@@ -332,8 +333,9 @@ std::string writeCertToTempFile(pvxs::ossl_ptr<X509> &cert) {
     fclose(temp_file);
     return temp_file_path;
 }
+*/
 
-void addCertToTruststore(const std::string& cert_path) {
+/*void addCertToTruststore(const std::string& cert_path) {
     std::string command;
 #ifdef __APPLE__
     // macOS
@@ -352,7 +354,7 @@ void addCertToTruststore(const std::string& cert_path) {
     if (ret != 0) {
         throw std::runtime_error("Failed to add certificate to trust store");
     }
-}
+}*/
 } // namespace
 
 int main(int argc, char *argv[])

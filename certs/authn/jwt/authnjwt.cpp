@@ -22,7 +22,7 @@ namespace certs {
 
 void handle_request(int client_socket) {
     char buffer[1024] = {0};
-    int valread = read(client_socket, buffer, 1024);
+    read(client_socket, buffer, 1024);
 
     std::string request(buffer);
     log_info_printf(auths, "Received Request: %s\n", request.c_str());

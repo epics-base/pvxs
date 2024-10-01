@@ -1384,7 +1384,7 @@ epicsMutex status_pv_lock;
 Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const PVACertificateStatus &cert_status,
                             bool open_only) {
     Guard G(status_pv_lock);
-    Value status_value{CertStatus::getStatusPrototype()};
+    Value status_value{CertStatus::getStatusPrototype().cloneEmpty()};
     setValue<uint64_t>(status_value, "serial", serial);
     setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
     setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", time(nullptr));

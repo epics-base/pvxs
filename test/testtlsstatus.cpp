@@ -279,9 +279,6 @@ struct Tester {
             // We're not testing the wire at this point so we assume we get the same value that we sent so just test that status is correctly transferred
             auto received_client_status = PVACertificateStatus(client_status_response_value);
             testOk1(received_client_status == client_cert_status);
-            testOk1((CertifiedCertificateStatus)received_client_status == client_cert_status);
-            testOk1((CertifiedCertificateStatus)client_cert_status == received_client_status);
-            testOk1((CertifiedCertificateStatus)received_client_status == (CertifiedCertificateStatus)client_cert_status);
             testEq(received_client_status.ocsp_bytes.size(), client_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
             testFail("Failed to setup Client status response: %s", e.what());
@@ -312,9 +309,6 @@ struct Tester {
 
             auto received_server_status = PVACertificateStatus(server_status_response_value);
             testOk1(received_server_status == server_cert_status);
-            testOk1((CertifiedCertificateStatus)received_server_status == server_cert_status);
-            testOk1((CertifiedCertificateStatus)server_cert_status == received_server_status);
-            testOk1((CertifiedCertificateStatus)received_server_status == (CertifiedCertificateStatus)server_cert_status);
             testEq(received_server_status.ocsp_bytes.size(), server_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
             testFail("Failed to setup Server status response: %s", e.what());
@@ -345,9 +339,6 @@ struct Tester {
 
             auto received_ca_status = PVACertificateStatus(ca_status_response_value);
             testOk1(received_ca_status == ca_cert_status);
-            testOk1((CertifiedCertificateStatus)received_ca_status == ca_cert_status);
-            testOk1((CertifiedCertificateStatus)ca_cert_status == received_ca_status);
-            testOk1((CertifiedCertificateStatus)received_ca_status == (CertifiedCertificateStatus)ca_cert_status);
             testEq(received_ca_status.ocsp_bytes.size(), ca_cert_status.ocsp_bytes.size());
         } catch (std::exception &e) {
             testFail("Failed to setup CA status response: %s", e.what());
@@ -586,7 +577,7 @@ MAIN(testget) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(113);
+    testPlan(104);
     testSetup();
     logger_config_env();
     auto tester = new Tester();

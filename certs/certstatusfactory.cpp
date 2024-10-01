@@ -15,13 +15,8 @@
 #include <openssl/x509.h>
 
 #include <pvxs/client.h>
-#include <pvxs/log.h>
 
-#include "certstatus.h"
 #include "configcms.h"
-#include "ownedptr.h"
-
-DEFINE_LOGGER(certs, "pvxs.certs.status");
 
 namespace pvxs {
 namespace certs {
