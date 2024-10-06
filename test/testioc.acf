@@ -2,9 +2,20 @@ UAG(MYSELF) {
     "$(user)"
 }
 
+# UAG(MYSELF) {
+#    "x509/georges"
+#    "george"
+#    "role"
+# }
+
 ASG(DEFAULT) {
     RULE(1,WRITE,TRAPWRITE)
 }
+
+# # ROLE is in the group // Ralf
+# ASG(DEFAULT) {
+#     RULE(1,WRITE,TRAPWRITE)
+# }
 
 ASG(SPECIAL) {
     RULE(1,WRITE,TRAPWRITE) {
@@ -12,6 +23,31 @@ ASG(SPECIAL) {
     }
 }
 
+# ASG(SPECIAL) {
+# 	## Badge analogy
+#     RULE(1,WRITE,TRAPWRITE) {
+#         UAG(MICHAEL)	          # Principal (name)
+# 		AUTH(ORNL)                # Provider of authority
+# 		METHOD(BADGE)             #
+#     }
+#
+# 	# KRB example
+#     RULE(1,WRITE,TRAPWRITE) {
+#         UAG(michael)	              # Principal (name) - It's Michael
+# 		AUTH(KRB5:SLAC.STANFORD.EDU)  # The authority that certifies that its Michael
+# 		METHOD(x509:4F0F83CD)         # Way that the cert is delivered
+#     }
+#
+# 	# JWT example
+#     RULE(1,WRITE,TRAPWRITE) {
+#         UAG(maria)	                  # Principal (name) - It's a real world JWT user
+# 		AUTH(oAuth::oauth.admin.com)  # Some oAuth server (Kerberos, LDAP, ...)
+# 		METHOD(JWT:4F0F83CD)          # Way that the cert was delivered
+#     }
+#
+# }
+
 ASG(RO) {
     RULE(1, READ)
 }
+

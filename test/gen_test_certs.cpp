@@ -207,7 +207,7 @@ struct CertCreator {
     size_t keylen = 2048;
     const EVP_MD* sig = EVP_sha256();
 
-    std::tuple<pvxs::ossl_ptr<EVP_PKEY>, pvxs::ossl_ptr<X509>> create()
+    std::tuple<pvxs::ossl_ptr<EVP_PKEY>, pvxs::ossl_ptr<X509>> create(bool add_status_extension=true)
     {
         // generate public/private key pair
         pvxs::ossl_ptr<EVP_PKEY> key;
@@ -296,8 +296,10 @@ struct CertCreator {
         if(extended_key_usage)
             add_extension(cert.get(), NID_ext_key_usage, extended_key_usage);
 
-        auto issuerId = pvxs::certs::CertStatus::getIssuerId((X509*)issuer);
-        pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::SSLContext::NID_PvaCertStatusURI, pvxs::certs::CertStatus::makeStatusURI(issuerId, serial), issuer);
+        if ( add_status_extension) {
+            auto issuerId = pvxs::certs::CertStatus::getIssuerId((X509*)issuer);
+            pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::SSLContext::NID_PvaCertStatusURI, pvxs::certs::CertStatus::makeStatusURI(issuerId, serial), issuer);
+        }
 
         auto nbytes(X509_sign(cert.get(), ikey, sig));
         if(nbytes==0)
@@ -430,7 +432,7 @@ int main(int argc, char *argv[])
 
             pvxs::ossl_ptr<X509> cert;
             pvxs::ossl_ptr<EVP_PKEY> key;
-            std::tie(key, cert) = cc.create();
+            std::tie(key, cert) = cc.create(false); // Don't add extension so this can be used as Mock PVACMS cert in tests
 
             PKCS12Writer p12(outdir);
             p12.friendlyName = cc.CN;

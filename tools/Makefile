@@ -18,7 +18,7 @@ USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 USR_CPPFLAGS += -I$(TOP)/certs
 
 PROD += pvxcert
-pvxcert_SRCS += status.cpp
+pvxcert_SRCS += cert.cpp
 pvxcert_SRCS += p12filefactory.cpp
 pvxcert_SRCS += certfactory.cpp
 pvxcert_SRCS += certstatus.cpp

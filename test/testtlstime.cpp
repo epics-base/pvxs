@@ -76,7 +76,7 @@ struct Tester {
 
 }  // namespace
 
-MAIN(testget) {
+MAIN(testtlstime) {
     testPlan(12);
     testSetup();
     logger_config_env();

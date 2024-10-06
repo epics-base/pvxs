@@ -122,10 +122,10 @@
     "WHERE serial = :serial "
 
 #define SQL_CERT_SET_STATUS_W_APPROVAL \
-    "UPDATE certs "                   \
-    "SET status = :status "           \
-    "  , approved = :approved "       \
-    "  , status_date = :status_date " \
+    "UPDATE certs "                    \
+    "SET status = :status "            \
+    "  , approved = :approved "        \
+    "  , status_date = :status_date "  \
     "WHERE serial = :serial "
 
 #define SQL_CERT_TO_VALID                        \
@@ -253,8 +253,7 @@ void usage(const char *argv0);
 
 bool statusMonitor(StatusMonitor &status_monitor_params);
 
-Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const PVACertificateStatus &cert_status,
-                            bool open_only = false);
+Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const PVACertificateStatus &cert_status = {});
 void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op, const std::string &our_issuer_id,
                                 const uint64_t &serial, int32_t error_status, int32_t error_severity, const std::string &error_message);
 

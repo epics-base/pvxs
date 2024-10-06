@@ -345,11 +345,6 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         }
 
         if (cert) {
-            try {
-                auto uri = certs::CertStatusManager::getStatusPvFromCert(cert);
-                log_info_printf(watcher, "%s\n", uri.c_str());
-            } catch (...) {
-            }
             // some early sanity checks
             verifyKeyUsage(cert, ssl_client);
         }
@@ -407,6 +402,11 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
  * @param tls_context the tls context to add the OCSP response to
  */
 int serverOCSPCallback(SSL* ssl, pvxs::server::Server::Pvt * server) {
+    if (!server->current_status) {
+        log_warn_printf(stapling, "Server OCSP Stapling: No server status to staple%s\n", "");
+        return SSL_TLSEXT_ERR_ALERT_FATAL;
+    }
+
     auto ocsp_data_ptr = (void * )server->current_status->ocsp_bytes.data();
     auto ocsp_data_len = server->current_status->ocsp_bytes.size();
 

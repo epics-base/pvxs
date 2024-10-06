@@ -158,10 +158,10 @@ public:
         _delayedDispatch(delay, std::move(fn), true);
     }
 
+    inline
     void recursiveDispatch(std::shared_ptr<DelayedDispatcher> delayed_dispatcher) const {
-        auto now = std::time(nullptr);
         if (delayed_dispatcher->dispatch_when_condition() // Supplied condition is true
-        || !(delayed_dispatcher->first_time + delayed_dispatcher->timeout_secs > now)) { // or we've waited long enough
+        || !(delayed_dispatcher->first_time + delayed_dispatcher->timeout_secs > std::time(nullptr))) { // or we've waited long enough
             // Execute now
             dispatch(std::move(delayed_dispatcher->fn));
         } else {
@@ -170,6 +170,7 @@ public:
         }
     }
 
+    inline
     void dispatchWhen(mfunction&& fn, std::function<bool()> dispatch_when_condition, time_t timeout_secs, time_t first_time = std::time(nullptr)) const {
         auto delayed_dispatcher = std::make_shared<DelayedDispatcher>(std::move(fn), std::move(dispatch_when_condition), timeout_secs);
         recursiveDispatch(delayed_dispatcher);

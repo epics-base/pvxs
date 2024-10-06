@@ -31,7 +31,8 @@ DEFINE_LOGGER(certslog, "pvxs.certs.tool");
 
 void usage(const char* argv0) {
     std::cerr << "Usage: " << argv0 << " <opts> <certid>\n"
-              << "       " << argv0 << " <opts> -f <cert-file> [-p]\n"
+              << "       " << argv0
+              << " <opts> -f <cert-file> [-p]\n"
                  "\n"
                  "  -h        Show this message.\n"
                  "  -V        Print version and exit.\n"
@@ -62,13 +63,8 @@ void setEcho(bool enable) {
 
 }  // namespace
 
-enum CertAction {
-    STATUS,
-    APPROVE,
-    DENY,
-    REVOKE
-};
-std::string actionToString(CertAction &action) {
+enum CertAction { STATUS, APPROVE, DENY, REVOKE };
+std::string actionToString(CertAction& action) {
     return (action == STATUS ? "Get Status" : action == APPROVE ? "Approve" : action == REVOKE ? "Revoke" : "Deny");
 }
 
@@ -167,47 +163,47 @@ int main(int argc, char* argv[]) {
         }
 
         try {
-            std::cout  << actionToString(action) << " ==> " << cert_id<< "\n";
+            std::cout << actionToString(action) << " ==> " << cert_id << "\n";
             switch (action) {
                 case STATUS: {
-                    ops.push_back(ctxt.get(cert_id).result([cert_id, &done, format, arrLimit](
-                      client::Result &&result) {
-                        Indented I(std::cout);
-                        std::cout << result().format().format(format).arrayLimit(arrLimit);
-                        done.signal();
-                    }).exec());
-                }
-                    break;
+                    ops.push_back(ctxt.get(cert_id)
+                                      .result([cert_id, &done, format, arrLimit](client::Result&& result) {
+                                          Indented I(std::cout);
+                                          std::cout << result().format().format(format).arrayLimit(arrLimit);
+                                          done.signal();
+                                      })
+                                      .exec());
+                } break;
                 case APPROVE: {
-                    ops.push_back(ctxt.put(cert_id).set("state", "APPROVED").result([cert_id, &done, format, arrLimit](
-                      client::Result &&result) {
-                        Indented I(std::cout);
-                        if ( result)
-                            std::cout << result().format().format(format).arrayLimit(arrLimit);
-                        done.signal();
-                    }).exec());
-                }
-                    break;
+                    ops.push_back(ctxt.put(cert_id)
+                                      .set("state", "APPROVED")
+                                      .result([cert_id, &done, format, arrLimit](client::Result&& result) {
+                                          Indented I(std::cout);
+                                          if (result) std::cout << result().format().format(format).arrayLimit(arrLimit);
+                                          done.signal();
+                                      })
+                                      .exec());
+                } break;
                 case DENY: {
-                    ops.push_back(ctxt.put(cert_id).set("state", "DENIED").result([cert_id, &done, format, arrLimit](
-                      client::Result &&result) {
-                        Indented I(std::cout);
-                        if ( result)
-                            std::cout << result().format().format(format).arrayLimit(arrLimit);
-                        done.signal();
-                    }).exec());
-                }
-                    break;
+                    ops.push_back(ctxt.put(cert_id)
+                                      .set("state", "DENIED")
+                                      .result([cert_id, &done, format, arrLimit](client::Result&& result) {
+                                          Indented I(std::cout);
+                                          if (result) std::cout << result().format().format(format).arrayLimit(arrLimit);
+                                          done.signal();
+                                      })
+                                      .exec());
+                } break;
                 case REVOKE: {
-                    ops.push_back(ctxt.put(cert_id).set("state", "REVOKED").result([cert_id,  &done, format, arrLimit](
-                      client::Result &&result) {
-                        Indented I(std::cout);
-                        if ( result)
-                            std::cout << result().format().format(format).arrayLimit(arrLimit);
-                        done.signal();
-                    }).exec());
-                }
-                    break;
+                    ops.push_back(ctxt.put(cert_id)
+                                      .set("state", "REVOKED")
+                                      .result([cert_id, &done, format, arrLimit](client::Result&& result) {
+                                          Indented I(std::cout);
+                                          if (result) std::cout << result().format().format(format).arrayLimit(arrLimit);
+                                          done.signal();
+                                      })
+                                      .exec());
+                } break;
             }
         } catch (std::exception& e) {
             std::cerr << "Unable to " << actionToString(action) << " ==> " << cert_id << std::endl;

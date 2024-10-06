@@ -389,8 +389,7 @@ void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_
     Guard G(status_update_lock);
     if ((sql_status = sqlite3_prepare_v2(ca_db.get(), sql.c_str(), -1, &sql_statement, 0)) == SQLITE_OK) {
         sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status"), cert_status);
-        if ( approval_status >= 0 )
-            sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":approved"), approval_status );
+        if (approval_status >= 0) sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":approved"), approval_status);
         sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":status_date"), current_time);
         sqlite3_bind_int64(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":serial"), db_serial);
         bindValidStatusClauses(sql_statement, valid_status);
@@ -721,8 +720,8 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
         auto usage = getStructureValue<uint16_t>(ccr, "usage");
 
         // If pending approval then check if it has already been approved
-        if ( state == PENDING_APPROVAL) {
-            if (getPriorApprovalStatus(ca_db, name, country, organization, organization_unit) ) {
+        if (state == PENDING_APPROVAL) {
+            if (getPriorApprovalStatus(ca_db, name, country, organization, organization_unit)) {
                 state = VALID;
             }
         }
@@ -798,13 +797,11 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
         }
 
         auto now = std::time(nullptr);
-        auto cert_status = cert_status_creator.createOCSPStatus(serial, status, now, status_date);
-        postCertificateStatus(status_pv, pv_name, serial, cert_status, true);
+        auto cert_status = cert_status_creator.createPVACertificateStatus(serial, status, now, status_date);
+        postCertificateStatus(status_pv, pv_name, serial, cert_status);
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error getting status: %s\n", e.what());
-        auto cert_status = PVACertificateStatus();
-        postCertificateStatus(status_pv, pv_name, serial, cert_status, true);
-//        postCertificateErrorStatus(status_pv, nullptr, our_issuer_id, serial, 1, 1, e.what());
+        postCertificateStatus(status_pv, pv_name, serial);
     }
 }
 
@@ -842,7 +839,7 @@ void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_i
         certs::updateCertificateStatus(ca_db, serial, REVOKED, 0);
 
         auto revocation_date = std::time(nullptr);
-        auto ocsp_status = cert_status_creator.createOCSPStatus(serial, REVOKED, revocation_date, revocation_date);
+        auto ocsp_status = cert_status_creator.createPVACertificateStatus(serial, REVOKED, revocation_date, revocation_date);
         postCertificateStatus(status_pv, pv_name, serial, ocsp_status);
         log_info_printf(pvacms, "Certificate %s:%llu has been REVOKED\n", issuer_id.c_str(), serial);
         op->reply();
@@ -889,7 +886,7 @@ void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_
         certstatus_t new_state = status_date < not_before ? PENDING : status_date >= not_after ? EXPIRED : VALID;
         certs::updateCertificateStatus(ca_db, serial, new_state, 1, {PENDING_APPROVAL});
 
-        auto cert_status = cert_status_creator.createOCSPStatus(serial, new_state, status_date);
+        auto cert_status = cert_status_creator.createPVACertificateStatus(serial, new_state, status_date);
         postCertificateStatus(status_pv, pv_name, serial, cert_status);
         switch (new_state) {
             case VALID:
@@ -945,7 +942,7 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
         certs::updateCertificateStatus(ca_db, serial, REVOKED, 0, {PENDING_APPROVAL});
 
         auto revocation_date = std::time(nullptr);
-        auto cert_status = cert_status_creator.createOCSPStatus(serial, REVOKED, revocation_date, revocation_date);
+        auto cert_status = cert_status_creator.createPVACertificateStatus(serial, REVOKED, revocation_date, revocation_date);
         postCertificateStatus(status_pv, pv_name, serial, cert_status);
         log_info_printf(pvacms, "Certificate %s:%llu request has been DENIED\n", issuer_id.c_str(), serial);
         op->reply();
@@ -1381,10 +1378,15 @@ void setValue(Value &target, const std::string &field, const T &source) {
  * @param open_only Specifies whether to close the shared wildcard PV again after setting the status if it was closed to begin with.
  */
 epicsMutex status_pv_lock;
-Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const PVACertificateStatus &cert_status,
-                            bool open_only) {
+Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const PVACertificateStatus &cert_status) {
     Guard G(status_pv_lock);
-    Value status_value{CertStatus::getStatusPrototype().cloneEmpty()};
+    Value status_value;
+    auto was_open = status_pv.isOpen(pv_name);
+    if (was_open) {
+        status_value = status_pv.fetch(pv_name);
+    } else {
+        status_value = CertStatus::getStatusPrototype();
+    }
     setValue<uint64_t>(status_value, "serial", serial);
     setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
     setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", time(nullptr));
@@ -1406,7 +1408,7 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
     }
 
     log_debug_printf(pvacms, "Posting Certificate Status: %s = %s\n", pv_name.c_str(), cert_status.status.s.c_str());
-    if (status_pv.isOpen(pv_name)) {
+    if (was_open) {
         status_pv.post(pv_name, status_value);
     } else {
         status_pv.open(pv_name, status_value);
@@ -1433,7 +1435,7 @@ void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique
     Guard G(status_pv_lock);
     std::string pv_name = getCertUri(GET_MONITOR_CERT_STATUS_ROOT, our_issuer_id, serial);
     Value status_value{CertStatus::getStatusPrototype()};
-    auto cert_status = PVACertificateStatus();   // Create an UNKNOWN CertificateStatus
+    auto cert_status = PVACertificateStatus();  // Create an UNKNOWN CertificateStatus
     setValue<uint64_t>(status_value, "serial", serial);
     setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
     setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", time(nullptr));
@@ -1450,10 +1452,8 @@ void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique
         status_pv.post(pv_name, status_value);
     else {
         status_pv.open(pv_name, status_value);
-        status_pv.post(pv_name, status_value);
-        status_pv.close(pv_name);
     }
-//    if (op != nullptr) op->error(error_message);
+    if (op != nullptr) op->error(error_message);
 }
 
 /**
@@ -1525,7 +1525,7 @@ bool statusMonitor(StatusMonitor &status_monitor_params) {
                 const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, status_monitor_params.issuer_id_, serial));
                 updateCertificateStatus(status_monitor_params.ca_db_, serial, VALID, 1, {PENDING});
                 auto status_date = std::time(nullptr);
-                auto cert_status = cert_status_creator.createOCSPStatus(serial, VALID, status_date);
+                auto cert_status = cert_status_creator.createPVACertificateStatus(serial, VALID, status_date);
                 postCertificateStatus(status_monitor_params.status_pv_, pv_name, serial, cert_status);
                 log_info_printf(pvacmsmonitor, "Certificate %s:%llu has become VALID\n", status_monitor_params.issuer_id_.c_str(), serial);
             } catch (const std::runtime_error &e) {
@@ -1551,7 +1551,7 @@ bool statusMonitor(StatusMonitor &status_monitor_params) {
                 const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, status_monitor_params.issuer_id_, serial));
                 updateCertificateStatus(status_monitor_params.ca_db_, serial, EXPIRED, -1, {VALID, PENDING_APPROVAL, PENDING});
                 auto status_date = std::time(nullptr);
-                auto cert_status = cert_status_creator.createOCSPStatus(serial, EXPIRED, status_date);
+                auto cert_status = cert_status_creator.createPVACertificateStatus(serial, EXPIRED, status_date);
                 postCertificateStatus(status_monitor_params.status_pv_, pv_name, serial, cert_status);
                 log_info_printf(pvacmsmonitor, "Certificate %s:%llu has EXPIRED\n", status_monitor_params.issuer_id_.c_str(), serial);
             } catch (const std::runtime_error &e) {
@@ -1564,7 +1564,7 @@ bool statusMonitor(StatusMonitor &status_monitor_params) {
     }
 
     log_debug_printf(pvacmsmonitor, "Certificate Monitor Thread Sleep%s", "\n");
-    return true; // We're not done - check files too
+    return true;  // We're not done - check files too
 }
 
 }  // namespace certs
@@ -1664,9 +1664,7 @@ int main(int argc, char *argv[]) {
 
         // Create a server with a certificate monitoring function attached to the cert file monitor timer
         // Return true to indicate that we want the file monitor time to run after this
-        Server pva_server = Server(config, [&status_monitor_params](short evt) {
-            return statusMonitor(status_monitor_params);
-        });
+        Server pva_server = Server(config, [&status_monitor_params](short evt) { return statusMonitor(status_monitor_params); });
 
         pva_server.addPV(RPC_CERT_CREATE, create_pv).addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
 

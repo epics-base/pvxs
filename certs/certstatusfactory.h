@@ -27,15 +27,15 @@ namespace certs {
  *
  * You can create a cert_status_creator and reuse it to make response statuses for
  * certificates providing their serial number and the desired status by calling
- * `createOCSPStatus()`.
+ * `createPVACertificateStatus()`.
  *
  * When using the getters (e.g. status()) be aware that they are references into
- * the class and so each time you call createOCSPStatus() these reference values
+ * the class and so each time you call createPVACertificateStatus() these reference values
  * change.
  *
  * @code
  *      static auto cert_status_creator(CertStatusFactory(config, ca_cert, ca_pkey, ca_chain));
- *      auto cert_status = cert_status_creator.createOCSPStatus(serial, new_state);
+ *      auto cert_status = cert_status_creator.createPVACertificateStatus(serial, new_state);
  * @endcode
  */
 class CertStatusFactory {
@@ -43,14 +43,14 @@ class CertStatusFactory {
     /**
      * @brief Used to make OCSP responses for given statuses
      * You need the private key of the CA in order to do this.
-     * Subsequently call createOCSPStatus() to make responses for certificates
+     * Subsequently call createPVACertificateStatus() to make responses for certificates
      *
      * @param ca_cert the CA certificate to use to sign the OCSP response
      * @param ca_pkey the CA's private key to use to sign the response
      * @param ca_chain the CA's certificate change used to sign any response
      * @param cert_status_validity_mins_ the number of minutes the status is valid for
      *
-     * @see createOCSPStatus()
+     * @see createPVACertificateStatus()
      */
     CertStatusFactory(const ossl_ptr<X509>& ca_cert, const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain,
                       uint32_t cert_status_validity_mins = 30)
@@ -73,10 +73,10 @@ class CertStatusFactory {
      *
      * @return the Certificate Status containing the signed OCSP response and other OCSP response data.
      */
-    PVACertificateStatus createOCSPStatus(const ossl_ptr<X509> &cert, certstatus_t status, StatusDate status_date = std::time(nullptr),
-                                          StatusDate predicated_revocation_time = std::time(nullptr)) const;
-    PVACertificateStatus createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate status_date = std::time(nullptr),
-                                          StatusDate predicated_revocation_time = std::time(nullptr)) const;
+    PVACertificateStatus createPVACertificateStatus(const ossl_ptr<X509>& cert, certstatus_t status, StatusDate status_date = std::time(nullptr),
+                                                    StatusDate predicated_revocation_time = std::time(nullptr)) const;
+    PVACertificateStatus createPVACertificateStatus(uint64_t serial, certstatus_t status, StatusDate status_date = std::time(nullptr),
+                                                    StatusDate predicated_revocation_time = std::time(nullptr)) const;
 
     /**
      * @brief Convert ASN1_INTEGER to a 64-bit unsigned integer

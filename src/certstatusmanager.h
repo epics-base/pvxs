@@ -29,16 +29,19 @@
 #define DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(TYPE, STATUS_CALL)                            \
     void TYPE::doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void* raw) { \
         auto pvt = static_cast<TYPE*>(raw);                                                 \
-        if (pvt->current_status->isValid()) return;                                         \
+        if (pvt->current_status && pvt->current_status->isValid()) return;                  \
         if (!pvt->cert_status_manager)                                                      \
             pvt->disableTls();                                                              \
         else {                                                                              \
             try {                                                                           \
-                pvt->current_status = pvt->cert_status_manager->STATUS_CALL();            \
-                if (pvt->current_status->isGood())                                          \
-                    pvt->startStatusValidityTimer();                                        \
-                else                                                                        \
-                    pvt->disableTls();                                                      \
+                try {                                                                       \
+                    pvt->current_status = pvt->cert_status_manager->STATUS_CALL();          \
+                    if (pvt->current_status && pvt->current_status->isGood())               \
+                        pvt->startStatusValidityTimer();                                    \
+                    else                                                                    \
+                        pvt->disableTls();                                                  \
+                } catch (certs::CertStatusNoExtensionException & e) {                       \
+                }                                                                           \
             } catch (...) {                                                                 \
                 pvt->disableTls();                                                          \
             }                                                                               \
@@ -81,34 +84,33 @@
     void TYPE::startStatusValidityTimer() {                                                                                                               \
         (LOOP).dispatch([this]() {                                                                                                                        \
             auto now = time(nullptr);                                                                                                                     \
-            timeval validity_end = {current_status->status_valid_until_date.t - now, 0};                                                                   \
+            timeval validity_end = {current_status->status_valid_until_date.t - now, 0};                                                                  \
             if (event_add(cert_validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting certificate status validity timer\n%s", ""); \
         });                                                                                                                                               \
     }
 
-#define SUBSCRIBE_TO_CERT_STATUS(TYPE, STATUS_TYPE, LOOP)                                                                     \
-    void TYPE::subscribeToCertStatus() {                                                                                      \
-        if (auto cert_ptr = getCert()) {                                                                                      \
-            try {                                                                                                             \
-                if ( cert_status_manager ) return;                                                                            \
-                auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));                                                           \
+#define SUBSCRIBE_TO_CERT_STATUS(TYPE, STATUS_TYPE, LOOP)                                                                                   \
+    void TYPE::subscribeToCertStatus() {                                                                                                    \
+        if (auto cert_ptr = getCert()) {                                                                                                    \
+            try {                                                                                                                           \
+                if (cert_status_manager) return;                                                                                            \
+                auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));                                                                         \
                 cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::PVACertificateStatus status) { \
-                    Guard G(tls_context.lock);                                                                                \
-                    auto was_good = current_status->isGood();                                                                 \
-                    current_status = std::make_shared<certs::STATUS_TYPE>(status);                                          \
-                    if (current_status->isGood()) {                                                                           \
-                        if ( !was_good )                                                                                      \
-                            (LOOP).dispatch([this]() mutable { enableTls(); });                                               \
-                    } else if ( was_good ) {                                                                                  \
-                        (LOOP).dispatch([this]() mutable {disableTls();});                                                    \
-                    }                                                                                                         \
-                });                                                                                                           \
-            } catch (certs::CertStatusSubscriptionException & e) {                                                            \
-                log_warn_printf(watcher, "TLS Disabled: %s\n", e.what());                                                     \
-            } catch (certs::CertStatusNoExtensionException & e) {                                                             \
-                log_debug_printf(watcher, "Status monitoring not configured correctly: %s\n", e.what());                      \
-            }                                                                                                                 \
-        }                                                                                                                     \
+                    Guard G(tls_context.lock);                                                                                              \
+                    auto was_good = current_status && current_status->isGood();                                                             \
+                    current_status = std::make_shared<certs::STATUS_TYPE>(status);                                                          \
+                    if (current_status && current_status->isGood()) {                                                                       \
+                        if (!was_good) (LOOP).dispatch([this]() mutable { enableTls(); });                                                  \
+                    } else if (was_good) {                                                                                                  \
+                        (LOOP).dispatch([this]() mutable { disableTls(); });                                                                \
+                    }                                                                                                                       \
+                });                                                                                                                         \
+            } catch (certs::CertStatusSubscriptionException & e) {                                                                          \
+                log_warn_printf(watcher, "TLS Disabled: %s\n", e.what());                                                                   \
+            } catch (certs::CertStatusNoExtensionException & e) {                                                                           \
+                log_debug_printf(watcher, "Status monitoring not configured correctly: %s\n", e.what());                                    \
+            }                                                                                                                               \
+        }                                                                                                                                   \
     }
 
 namespace pvxs {
@@ -194,7 +196,7 @@ class CertStatusManager {
      *
      * @see unsubscribe()
      */
-    static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509> &&ctx_cert, StatusCallback&& callback);
+    static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback);
 
     /**
      * @brief Get status for a given certificate.  Does not contain OCSP signed
@@ -242,14 +244,14 @@ class CertStatusManager {
 
     inline bool available() noexcept { return isValid() || (manager_start_time_ + 3) < std::time(nullptr); }
 
-    inline bool isValid() noexcept { return status_->isValid(); }
+    inline bool isValid() noexcept { return status_ && status_->isValid(); }
 
    private:
     CertStatusManager(ossl_ptr<X509>&& cert, std::shared_ptr<client::Context>& client, std::shared_ptr<client::Subscription>& sub)
         : cert_(std::move(cert)), client_(client), sub_(sub) {};
     CertStatusManager(ossl_ptr<X509>&& cert, std::shared_ptr<client::Context>& client) : cert_(std::move(cert)), client_(client) {};
     inline void subscribe(std::shared_ptr<client::Subscription>& sub) { sub_ = sub; }
-    inline bool isGood() noexcept { return status_->isGood(); }
+    inline bool isGood() noexcept { return status_ && status_->isGood(); }
 
     const ossl_ptr<X509> cert_;
     std::shared_ptr<client::Context> client_;

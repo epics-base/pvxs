@@ -41,12 +41,13 @@ struct CertStatusManager;
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-PVACertificateStatus CertStatusFactory::createOCSPStatus(const ossl_ptr<X509> &cert, certstatus_t status, StatusDate this_status_update, StatusDate predicated_revocation_time) const {
-    return createOCSPStatus(getSerialNumber(cert), status, this_status_update, predicated_revocation_time);
+PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_ptr<X509>& cert, certstatus_t status, StatusDate this_status_update,
+                                                                   StatusDate predicated_revocation_time) const {
+    return createPVACertificateStatus(getSerialNumber(cert), status, this_status_update, predicated_revocation_time);
 }
 
 /**
- * @brief Creates and signs an OCSP response for a given certificate.
+ * @brief Create a PVACertificateStatus for a given certificate, that involves creating a signed OCSP response .
  *
  * This function takes in a serial number, certificate status, revocation time, CA certificate,
  * CA private key, and CA chain as input parameters. It creates an OCSP_CERTID using the CA
@@ -63,7 +64,8 @@ PVACertificateStatus CertStatusFactory::createOCSPStatus(const ossl_ptr<X509> &c
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-PVACertificateStatus CertStatusFactory::createOCSPStatus(uint64_t serial, certstatus_t status, StatusDate this_status_update, StatusDate predicated_revocation_time) const {
+PVACertificateStatus CertStatusFactory::createPVACertificateStatus(uint64_t serial, certstatus_t status, StatusDate this_status_update,
+                                                                   StatusDate predicated_revocation_time) const {
     // Create OCSP response
     ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 

@@ -100,12 +100,11 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
     ASN1_INTEGER* serial = nullptr;
     OCSP_id_get0_info(nullptr, nullptr, nullptr, &serial, const_cast<OCSP_CERTID*>(cert_id));
 
-
     auto ocsp_status = static_cast<ocspcertstatus_t>(OCSP_single_get0_status(single_response, &reason, &revocation_time, &this_update, &next_update));
     // Check status validity: less than 5 seconds old
     OCSP_check_validity(this_update, next_update, 0, 5);
 
-    if ( ocsp_status == OCSP_CERTSTATUS_REVOKED && !revocation_time) {
+    if (ocsp_status == OCSP_CERTSTATUS_REVOKED && !revocation_time) {
         throw OCSPParseException("Revocation time not set when status is REVOKED");
     }
 
@@ -125,7 +124,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
  * @param callback the callback to call
  * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
  */
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509> &&ctx_cert, StatusCallback&& callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
     // Construct the URI
     auto uri = CertStatusManager::getStatusPvFromCert(ctx_cert);
     log_debug_printf(status, "Starting Status Subscription: %s\n", uri.c_str());
@@ -204,7 +203,7 @@ std::shared_ptr<CertificateStatus> CertStatusManager::getStatus() {
  * @see waitForStatus
  */
 std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus() {
-    if ( isValid() )
+    if (isValid())
         return pva_status_;
     else
         return pva_status_ = getPVAStatus(cert_);
@@ -219,9 +218,7 @@ std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus() {
  * @return the simplified status - does not have ocsp bytes but has been verified and certified
  * @see waitForStatus
  */
-std::shared_ptr<CertificateStatus> CertStatusManager::getStatus(const ossl_ptr<X509>& cert) {
-    return std::make_shared<CertificateStatus>(*getPVAStatus(cert));
-}
+std::shared_ptr<CertificateStatus> CertStatusManager::getStatus(const ossl_ptr<X509>& cert) { return std::make_shared<CertificateStatus>(*getPVAStatus(cert)); }
 
 /**
  * @brief Get status for the given cert from the manager.
@@ -233,22 +230,15 @@ std::shared_ptr<CertificateStatus> CertStatusManager::getStatus(const ossl_ptr<X
  * @see waitForStatus
  */
 std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus(const ossl_ptr<X509>& cert) {
-    try {
-        auto uri = getStatusPvFromCert(cert);
+    auto uri = getStatusPvFromCert(cert);
 
-        // Build and start network operation
-        // use an unsecure socket that doesn't monitor files or status
-        auto client(client::Context::fromEnvUnsecured());
-        auto operation = client.get(uri).exec();
-
-        // wait for it to complete, for up to 2 second.  Very short wait for status
-        Value result = operation->wait(2.0);
-        client.close();
-
-        return std::make_shared<PVACertificateStatus>(result);
-    } catch (...) {
-        return {};
-    }
+    // Build and start network operation
+    // use an unsecure socket that doesn't monitor status
+    auto client(client::Context::forCMS());
+    // Very short wait for status
+    Value result = client.get(uri).exec()->wait(2.0);
+    client.close();
+    return std::make_shared<PVACertificateStatus>(result);
 }
 
 /**

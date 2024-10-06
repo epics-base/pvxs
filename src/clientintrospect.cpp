@@ -14,6 +14,7 @@ namespace client {
 
 DEFINE_LOGGER(setup, "pvxs.cli.init");
 DEFINE_LOGGER(io, "pvxs.cli.io");
+DEFINE_LOGGER(watcher, "pvxs.certs.mon");
 
 namespace {
 
@@ -215,10 +216,23 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
 
     auto name(std::move(_name));
     auto server(std::move(_server));
+#ifdef PVXS_ENABLE_OPENSSL
     context->tcp_loop.dispatchWhen([=]() {
-        // on worker
-        log_debug_printf(io, "Proceeding with connection establishment: %s\n", name.c_str());
+#else
+    context->tcp_loop.dispatch([=]() {
+#endif
+#ifdef PVXS_ENABLE_OPENSSL
+        if ( context->effective.isTlsConfigured() ) {
+            if (context->current_status)
+                log_debug_printf(watcher, __FILE__ ":%d: Proceeding with connection establishment: %s: status=%s\n", __LINE__, context->effective.tls_cert_filename.c_str(), context->current_status->status.s.c_str());
+            else
+                log_debug_printf(watcher, __FILE__ ":%d: Proceeding with connection establishment: %s: status=UNKNOWN\n", __LINE__, context->effective.tls_cert_filename.c_str());
+        } else if (!context->effective.tls_disabled) {
+            log_debug_printf(watcher, __FILE__ ":%d: Proceeding with connection establishment - TLS not configured: %s\n", __LINE__, name.c_str());
+        }
+#endif
 
+        // on worker
         try {
             op->chan = Channel::build(context, name, server);
 
@@ -235,7 +249,10 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
                 log_exc_printf(setup, "Unhandled exception %s in Info result() callback: %s\n", typeid (e).name(), e.what());
             }
         }
-    }, [context](){ return context->connectionCanProceed(); }, STATUS_WAIT_TIME_SECONDS // timeout seconds
+    }
+#ifdef PVXS_ENABLE_OPENSSL
+    , [context](){ return context->connectionCanProceed(); }, STATUS_WAIT_TIME_SECONDS // timeout seconds
+#endif
     );
 
     return external;
