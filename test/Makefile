@@ -133,12 +133,25 @@ testtls_SRCS += testtls.cpp
 TESTS += testtls
 TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
+TESTPROD_HOST += testtlswithstapling
+testtlswithstapling_SRCS += testtlswithstapling.cpp
+TESTS += testtlswithstapling
+TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+
 TESTPROD_HOST += testtlswithcms
 testtlswithcms_SRCS += testtlswithcms.cpp
 testtlswithcms_SRCS += certstatusfactory.cpp
 testtlswithcms_SRCS += certstatusmanager.cpp
 testtlswithcms_SRCS += certstatus.cpp
 TESTS += testtlswithcms
+TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+
+TESTPROD_HOST += testtlswithcmsandstapling
+testtlswithcmsandstapling_SRCS += testtlswithcmsandstapling.cpp
+testtlswithcmsandstapling_SRCS += certstatusfactory.cpp
+testtlswithcmsandstapling_SRCS += certstatusmanager.cpp
+testtlswithcmsandstapling_SRCS += certstatus.cpp
+TESTS += testtlswithcmsandstapling
 TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
 TESTPROD_HOST += testtlstime
