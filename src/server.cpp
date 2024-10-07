@@ -796,11 +796,18 @@ void Server::Pvt::start()
 void Server::Pvt::stop()
 {
     log_debug_printf(serversetup, "Server Stopping\n%s", "");
+#ifdef PVXS_ENABLE_OPENSSL
     // Stop status subscription if enabled
     if ( cert_status_manager ) {
         cert_status_manager->unsubscribe();
         cert_status_manager.reset();
     }
+
+    // Stop file watcher if enabled
+    if ( file_watcher.isRunning() ) {
+        file_watcher.stop();
+    }
+#endif
 
     // Stop sending Beacons
     state_t prev_state;

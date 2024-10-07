@@ -687,11 +687,18 @@ void ContextImpl::startNS() {
 void ContextImpl::close() {
     log_debug_printf(setup, "context %p close\n", this);
 
+#ifdef PVXS_ENABLE_OPENSSL
     // Stop status subscription if enabled
     if ( cert_status_manager ) {
         cert_status_manager->unsubscribe();
         cert_status_manager.reset();
     }
+
+    // Stop file watcher if enabled
+    if ( file_watcher.isRunning() ) {
+        file_watcher.stop();
+    }
+#endif
 
     // terminate all active connections
     tcp_loop.call([this]() {
