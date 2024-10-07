@@ -139,11 +139,11 @@ void Connection::startConnecting() {
 
         if ( !context->tls_context.stapling_disabled ) {
             // Enable OCSP status request extension
-            log_debug_printf(stapling, "stapling OCSP status: Setting up request%s\n", "");
+            log_debug_printf(stapling, "Client OCSP Stapling: Setting up request%s\n", "");
             if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
-                log_debug_printf(stapling, "OCSP status requested type set for stapling%s\n", "");
+                log_debug_printf(stapling, "Client OCSP Stapling: requested type set for stapling%s\n", "");
             } else {
-                throw ossl::SSLError("Error enabling OCSP status stapling");
+                throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
             }
             SSL_CTX_set_tlsext_status_cb(context->tls_context.ctx, clientOCSPCallback);
             SSL_CTX_set_tlsext_status_arg(context->tls_context.ctx, NULL);

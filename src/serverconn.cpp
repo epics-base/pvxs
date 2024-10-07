@@ -89,14 +89,14 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         if (!ssl)
             throw ossl::SSLError("SSL_new()");
 
-        if ( !iface->server->tls_context.stapling_disabled ) {
+        if ( !iface->server->tls_context.stapling_disabled && !iface->server->tls_context.status_check_disabled ) {
             try {
-                log_debug_printf(stapling, "stapling OCSP status: installing callback%s\n", "");
+                log_debug_printf(stapling, "Server OCSP Stapling: installing callback%s\n", "");
                 ossl::stapleOcspResponse((void *)iface->server, ssl); // Staple response
             } catch (certs::OCSPParseException &e) {
-                log_debug_printf(stapling, "stapling OCSP status: failed to install callback: %s\n", e.what());
+                log_debug_printf(stapling, "Server OCSP Stapling: failed to install callback: %s\n", e.what());
             } catch (std::exception &e) {
-                log_debug_printf(stapling, "stapling OCSP status: failed to install callback: %s\n", e.what());
+                log_debug_printf(stapling, "Server OCSP Stapling: failed to install callback: %s\n", e.what());
             }
         }
 
