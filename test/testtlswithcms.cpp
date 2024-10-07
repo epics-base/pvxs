@@ -67,6 +67,7 @@ struct Tester {
         pvacms_config.tls_cert_filename = SUPER_SERVER_CERT_FILE;  // Set up the Mock PVACMS server certificate (does not contain custom status extension)
         //        pvacms_config.tls_cert_filename.clear();  // Set up the Mock PVACMS server with no certificate
         pvacms_config.tls_disable_status_check = true;
+        pvacms_config.tls_disable_stapling = true;
         pvacms_config.config_target = pvxs::impl::ConfigCommon::CMS;
         pvacms = pvacms_config.build().addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
         client = pvacms.clientConfig().build();
@@ -80,7 +81,7 @@ struct Tester {
         testShow() << "Loaded all test certs\n";
     }
 
-    ~Tester() { pvacms.stop(); };
+    ~Tester() {};
 
     void createCertStatuses() {
         testShow() << __func__;
@@ -188,10 +189,12 @@ struct Tester {
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+        serv_conf.tls_disable_stapling = true;
         auto serv(serv_conf.build().addPV("mailbox", mbox));
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_disable_stapling = true;
         auto cli(cli_conf.build());
 
         mbox.open(initial.update("value", 42));
@@ -201,36 +204,8 @@ struct Tester {
 
         auto reply(cli.get("mailbox").exec()->wait(5.0));
         testEq(reply["value"].as<int32_t>(), 42);
+
         conn.reset();
-    }
-
-    void testGetNameServer() {
-        testShow() << __func__;
-
-        auto initial(nt::NTScalar{TypeCode::Int32}.create());
-        auto mbox(server::SharedPV::buildReadonly());
-
-        auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
-
-        auto serv(serv_conf.build().addPV("mailbox", mbox));
-
-        auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
-
-        for (auto& addr : cli_conf.addressList) cli_conf.nameServers.push_back(SB() << "pvas://" << addr /*<<':'<<cli_conf.tls_port*/);
-        cli_conf.autoAddrList = false;
-        cli_conf.addressList.clear();
-
-        auto cli(cli_conf.build());
-
-        mbox.open(initial.update("value", 42));
-        serv.start();
-
-        auto conn(cli.connect("mailbox").onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
-
-        auto reply(cli.get("mailbox").exec()->wait(5.0));
-        testEq(reply["value"].as<int32_t>(), 42);
     }
 
     struct WhoAmI final : public server::Source {
@@ -288,11 +263,13 @@ struct Tester {
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = IOC_CERT_FILE;
+        serv_conf.tls_disable_stapling = true;
 
         auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_disable_stapling = true;
 
         auto cli(cli_conf.build());
 
@@ -319,6 +296,7 @@ struct Tester {
         cli_conf = cli.config();
         cli_conf.tls_cert_filename = CLIENT2_CERT_FILE;
         cli_conf.tls_cert_password = CLIENT2_CERT_FILE_PWD;
+        cli_conf.tls_disable_stapling = true;
         testDiag("cli.reconfigure()");
         cli.reconfigure(cli_conf);
 
@@ -344,11 +322,13 @@ struct Tester {
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+        serv_conf.tls_disable_stapling = true;
 
         auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_cert_filename = IOC_CERT_FILE;
+        cli_conf.tls_disable_stapling = true;
 
         auto cli(cli_conf.build());
 
@@ -374,6 +354,7 @@ struct Tester {
 
         serv_conf = serv.config();
         serv_conf.tls_cert_filename = IOC_CERT_FILE;
+        serv_conf.tls_disable_stapling = true;
         testDiag("serv.reconfigure()");
         serv.reconfigure(serv_conf);
 
@@ -402,7 +383,7 @@ MAIN(testtlswithcms) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(118);
+    testPlan(136);
     testSetup();
     logger_config_env();
     auto tester = new Tester();
@@ -414,29 +395,21 @@ MAIN(testtlswithcms) {
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }
-    /*
-        try {
-            tester->testGetNameServer();
-        } catch (std::runtime_error& e) {
-            testFail("FAILED with errors: %s\n", e.what());
-        }
-        try {
-            tester->testClientReconfig();
-        } catch (std::runtime_error& e) {
-            testFail("FAILED with errors: %s\n", e.what());
-        }
-        try {
-            tester->testServerReconfig();
-        } catch (std::runtime_error& e) {
-            testFail("FAILED with errors: %s\n", e.what());
-        }
-    */
+    try {
+        tester->testClientReconfig();
+    } catch (std::runtime_error& e) {
+        testFail("FAILED with errors: %s\n", e.what());
+    }
+    try {
+        tester->testServerReconfig();
+    } catch (std::runtime_error& e) {
+        testFail("FAILED with errors: %s\n", e.what());
+    }
     try {
         tester->stopMockCMS();
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }
-    tester->client.close();
     delete (tester);
     cleanup_for_valgrind();
     return testDone();

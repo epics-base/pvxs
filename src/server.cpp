@@ -796,6 +796,11 @@ void Server::Pvt::start()
 void Server::Pvt::stop()
 {
     log_debug_printf(serversetup, "Server Stopping\n%s", "");
+    // Stop status subscription if enabled
+    if ( cert_status_manager ) {
+        cert_status_manager->unsubscribe();
+        cert_status_manager.reset();
+    }
 
     // Stop sending Beacons
     state_t prev_state;
@@ -1073,7 +1078,7 @@ void Server::Pvt::enableTls(const Config& new_config) {
     if ( tls_context.has_cert && tls_context.cert_is_valid )
         return;
 
-    log_debug_printf(watcher, "Enabling TLS: %s\n", "");
+    log_debug_printf(watcher, "Enabling TLS. Certificate file is %s\n", effective.tls_cert_filename.c_str());
     try {
         // Exclude PVACMS
         if (effective.config_target != ConfigCommon::CMS) {
@@ -1081,12 +1086,12 @@ void Server::Pvt::enableTls(const Config& new_config) {
 
             // if cert isn't valid then get a new one
             if ( !tls_context.has_cert ) {
-                log_debug_printf(watcher, "Creating a new Server TLS context from the environment%s\n", "");
+                log_debug_printf(watcher, "Creating a new Server TLS context from %s\n", effective.tls_cert_filename.c_str());
                 auto new_context = ossl::SSLContext::for_server(new_config.is_initialized ? new_config : effective);
 
                 // If unsuccessful in getting cert or cert is invalid then don't do anything
                 if (!new_context.has_cert || !new_context.cert_is_valid) {
-                    log_debug_printf(watcher, "Failed to create new Server TLS context: TLS disabled%s\n", "");
+                    log_debug_printf(watcher, "Failed to create new Server TLS context: TLS disabled: %s\n", effective.tls_cert_filename.c_str());
                     return;
                 }
                 tls_context = new_context;
@@ -1095,7 +1100,7 @@ void Server::Pvt::enableTls(const Config& new_config) {
 
             // Subscribe to certificate status if not already subscribed
             if ( !cert_status_manager && tls_context.status_check_disabled ) {
-                log_debug_printf(watcher, "Subscribing to Server certificate status: %s\n", "");
+                log_debug_printf(watcher, "Subscribing to Server certificate status: %s\n", effective.tls_cert_filename.c_str());
                 subscribeToCertStatus();
             }
 
@@ -1104,15 +1109,15 @@ void Server::Pvt::enableTls(const Config& new_config) {
 
             // Set callback for when this status' validity ends
             if ( !tls_context.status_check_disabled ) {
-                log_debug_printf(watcher, "Starting server certificate status validity timer after receiving a status update%s\n", "");
+                log_debug_printf(watcher, "Starting server certificate status validity timer after receiving a status update for %s\n", effective.tls_cert_filename.c_str());
                 startStatusValidityTimer();
             }
 
             tls_context.cert_is_valid = true;
-            log_info_printf(watcher, "TLS enabled for server due to a certificate status update%s\n", "");
+            log_info_printf(watcher, "TLS enabled for server due to a certificate status update on %s\n", effective.tls_cert_filename.c_str());
         }
     } catch (std::exception& e) {
-        log_debug_printf(watcher, "TLS remains disabled for server: %s\n", e.what());
+        log_debug_printf(watcher, "%s: TLS remains disabled for server with %s\n", e.what(), effective.tls_cert_filename.c_str());
     }
 }
 

@@ -186,7 +186,17 @@ struct PVXS_API ConfigCommon {
         Standby,
     } expiration_behaviour = FallbackToTCP;
 
+    /**
+     * @brief True if status checking from the PVACMS is disabled irrespective of whether configured in the certificate
+     * TODO Add an environment variable to control this
+     */
     bool tls_disable_status_check{false};
+
+    /**
+     * @brief True if stapling is disabled irrespective of whether TLS is configured
+     * TODO Add an environment variable to control this
+     */
+    bool tls_disable_stapling{false};
 
     /**
      * True if the environment is configured for TLS.  All this means is that

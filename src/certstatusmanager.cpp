@@ -236,7 +236,7 @@ std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus(const ossl
     // use an unsecure socket that doesn't monitor status
     auto client(client::Context::forCMS());
     // Very short wait for status
-    Value result = client.get(uri).exec()->wait(2.0);
+    Value result = client.get(uri).exec()->wait(0.2);
     client.close();
     return std::make_shared<PVACertificateStatus>(result);
 }

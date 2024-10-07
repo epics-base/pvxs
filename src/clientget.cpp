@@ -601,11 +601,11 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
 #ifdef PVXS_ENABLE_OPENSSL
         if ( context->effective.isTlsConfigured() ) {
             if (context->current_status)
-                log_debug_printf(watcher, __FILE__ ":%d: Proceeding with connection establishment: %s: status=%s\n", __LINE__, context->effective.tls_cert_filename.c_str(), context->current_status->status.s.c_str());
+                log_debug_printf(watcher, __FILE__ ":%d: gpr_setup: Connection establishment: %s: status=%s\n", __LINE__, context->effective.tls_cert_filename.c_str(), context->current_status->status.s.c_str());
             else
-                log_debug_printf(watcher, __FILE__ ":%d: Proceeding with connection establishment: %s: status=UNKNOWN\n", __LINE__, context->effective.tls_cert_filename.c_str());
+                log_debug_printf(watcher, __FILE__ ":%d: gpr_setup: Connection establishment: %s: status=UNKNOWN\n", __LINE__, context->effective.tls_cert_filename.c_str());
         } else if (!context->effective.tls_disabled) {
-            log_debug_printf(watcher, __FILE__ ":%d: Proceeding with connection establishment - TLS not configured: %s\n", __LINE__, name.c_str());
+            log_debug_printf(watcher, __FILE__ ":%d: gpr_setup: Connection establishment - TLS not configured: %s\n", __LINE__, name.c_str());
         }
 #endif
         // on worker

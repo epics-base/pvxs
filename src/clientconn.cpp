@@ -137,7 +137,7 @@ void Connection::startConnecting() {
         auto ctx(SSL_new(context->tls_context.ctx));
         if (!ctx) throw std::runtime_error("SSL_new");
 
-        if ( !context->tls_context.status_check_disabled ) {
+        if ( !context->tls_context.stapling_disabled ) {
             // Enable OCSP status request extension
             log_debug_printf(stapling, "stapling OCSP status: Setting up request%s\n", "");
             if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {

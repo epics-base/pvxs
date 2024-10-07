@@ -89,7 +89,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         if (!ssl)
             throw ossl::SSLError("SSL_new()");
 
-        if ( !iface->server->tls_context.status_check_disabled ) {
+        if ( !iface->server->tls_context.stapling_disabled ) {
             try {
                 log_debug_printf(stapling, "stapling OCSP status: installing callback%s\n", "");
                 ossl::stapleOcspResponse((void *)iface->server, ssl); // Staple response

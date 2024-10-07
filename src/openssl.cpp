@@ -278,6 +278,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
 
     SSLContext tls_context;
     tls_context.status_check_disabled = conf.tls_disable_status_check;
+    tls_context.stapling_disabled = conf.tls_disable_stapling;
     tls_context.ctx = SSL_CTX_new_ex(ossl_gbl->libctx.get(), NULL, method);
     if (!tls_context.ctx) throw SSLError("Unable to allocate SSL_CTX");
 

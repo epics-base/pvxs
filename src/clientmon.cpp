@@ -825,11 +825,11 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 #ifdef PVXS_ENABLE_OPENSSL
         if ( context->effective.isTlsConfigured() ) {
             if (context->current_status)
-                log_debug_printf(watcher, __FILE__ ":%d: Proceeding with connection establishment: %s: status=%s\n", __LINE__, context->effective.tls_cert_filename.c_str(), context->current_status->status.s.c_str());
+                log_debug_printf(watcher, __FILE__ ":%d: monitor exec: Connection establishment: %s: status=%s\n", __LINE__, context->effective.tls_cert_filename.c_str(), context->current_status->status.s.c_str());
             else
-                log_debug_printf(watcher, __FILE__ ":%d: Proceeding with connection establishment: %s: status=UNKNOWN\n", __LINE__, context->effective.tls_cert_filename.c_str());
+                log_debug_printf(watcher, __FILE__ ":%d: monitor exec: Connection establishment: %s: status=UNKNOWN\n", __LINE__, context->effective.tls_cert_filename.c_str());
         } else if (!context->effective.tls_disabled) {
-            log_debug_printf(watcher, __FILE__ ":%d: Proceeding with connection establishment - TLS not configured: %s\n", __LINE__, op->channelName.c_str());
+            log_debug_printf(watcher, __FILE__ ":%d: monitor exec: Connection establishment - TLS not configured: %s\n", __LINE__, op->channelName.c_str());
         }
 #endif
 
