@@ -432,8 +432,7 @@ void ServerConn::bevEvent(short events)
 #ifdef PVXS_ENABLE_OPENSSL
     if((events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) && iface->isTLS && bev) {
         while(auto err = bufferevent_get_openssl_error(bev.get())) {
-            log_err_printf(connio, "TLS Error (0x%lx) %s\n",
-                           err, ERR_reason_error_string(err));
+            log_err_printf(connio, "Server: TLS Error (0x%lx) %s\n", err, ERR_reason_error_string(err));
         }
     }
 #endif

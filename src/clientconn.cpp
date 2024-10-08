@@ -33,17 +33,17 @@ static int clientOCSPCallback(SSL *ctx, void *) {
         uint8_t *ocsp_response_ptr;
         auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
 
-        if (!ocsp_response_ptr || !len) {
-            log_debug_printf(stapling, "No Stapled OCSP response found%s\n", "");
-            return SSL_TLSEXT_ERR_OK; // Acceptable - TODO We will check ourselves
+        if (!ocsp_response_ptr || len == -1) {
+            log_debug_printf(stapling, "No Stapled OCSP response found by %s\n", "client");
+            return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
         const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
-        auto status = certs::OCSPStatus(ocsp_bytes);
-        if (((certs::CertificateStatus)status).isGood()) {
-            log_info_printf(stapling, "OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
-            log_info_printf(stapling, "OCSP stapled status date: %s\n", status.status_date.s.c_str());
-            log_info_printf(stapling, "OCSP stapled status valid until: %s\n", status.status_valid_until_date.s.c_str());
-            log_info_printf(stapling, "OCSP stapled revocation date: %s\n", status.revocation_date.s.c_str());
+        auto status = (certs::CertificateStatus)(certs::OCSPStatus(ocsp_bytes));
+        if (status.isGood()) {
+            log_info_printf(stapling, "Client OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
+            log_info_printf(stapling, "Client OCSP stapled status date: %s\n", status.status_date.s.c_str());
+            log_info_printf(stapling, "Client OCSP stapled status valid until: %s\n", status.status_valid_until_date.s.c_str());
+            log_info_printf(stapling, "Client OCSP stapled revocation date: %s\n", status.revocation_date.s.c_str());
             return SSL_TLSEXT_ERR_OK;
         } else {
             log_err_printf(stapling, "OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
@@ -137,18 +137,6 @@ void Connection::startConnecting() {
         auto ctx(SSL_new(context->tls_context.ctx));
         if (!ctx) throw std::runtime_error("SSL_new");
 
-        if ( !context->tls_context.stapling_disabled ) {
-            // Enable OCSP status request extension
-            log_debug_printf(stapling, "Client OCSP Stapling: Setting up request%s\n", "");
-            if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
-                log_debug_printf(stapling, "Client OCSP Stapling: requested type set for stapling%s\n", "");
-            } else {
-                throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
-            }
-            SSL_CTX_set_tlsext_status_cb(context->tls_context.ctx, clientOCSPCallback);
-            SSL_CTX_set_tlsext_status_arg(context->tls_context.ctx, NULL);
-        }
-
         // w/ BEV_OPT_CLOSE_ON_FREE calls SSL_free() on error
         bev.reset(bufferevent_openssl_socket_new(context->tcp_loop.base, -1, ctx, BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
 
@@ -157,6 +145,21 @@ void Connection::startConnecting() {
         // deprecated, but not yet removed
         bufferevent_openssl_set_allow_dirty_shutdown(bev.get(), 1);
 
+        if ( !context->tls_context.stapling_disabled ) {
+            // Stapling is not disabled
+            if (SSL_get_tlsext_status_type(ctx) != -1) {
+                // Client was not previously set to request the stapled OCSP Response
+
+                // Enable OCSP status request extension
+                log_debug_printf(stapling, "Client OCSP Stapling: Setting up request%s\n", "");
+                if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
+                    log_debug_printf(stapling, "Client OCSP Stapling: requested type set for stapling%s\n", "");
+                } else {
+                    throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
+                }
+                SSL_CTX_set_tlsext_status_cb(context->tls_context.ctx, clientOCSPCallback);
+            }
+        }
     } else
 #endif
     {
@@ -235,7 +238,7 @@ void Connection::bevEvent(short events)
         while(auto err = bufferevent_get_openssl_error(bev.get())) {
             auto error_reason=ERR_reason_error_string(err);
             if ( error_reason )
-                log_err_printf(io, "TLS Error (0x%lx) %s\n", err, ERR_reason_error_string(err));
+                log_err_printf(io, "Client: TLS Error (0x%lx) %s\n", err, ERR_reason_error_string(err));
         }
     }
 #endif
