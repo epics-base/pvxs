@@ -403,6 +403,11 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
  * @param tls_context the tls context to add the OCSP response to
  */
 int serverOCSPCallback(SSL* ssl, pvxs::server::Server::Pvt * server) {
+    if ( SSL_get_tlsext_status_type(ssl) != -1 ) {
+        // Should never be triggered.  Because the callback should only be called when the client has requested stappling.
+        return SSL_TLSEXT_ERR_ALERT_WARNING;
+    }
+
     if (!server->current_status) {
         log_warn_printf(stapling, "Server OCSP Stapling: No server status to staple%s\n", "");
         return SSL_TLSEXT_ERR_ALERT_FATAL;
