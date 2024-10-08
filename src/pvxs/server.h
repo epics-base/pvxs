@@ -272,9 +272,15 @@ public:
 
 #ifdef PVXS_EXPERT_API_ENABLED
     // for protocol compatibility testing
-    inline Config& overrideSendBE(bool be) { BE = be; return *this; }
+    inline Config& overrideSendBE(bool be) {
+        BE = be;
+        return *this;
+    }
     inline bool sendBE() const { return BE; }
-    inline Config& overrideShareUDP(bool share) { UDP = share; return *this; }
+    inline Config& overrideShareUDP(bool share) {
+        UDP = share;
+        return *this;
+    }
     inline bool shareUDP() const { return UDP; }
 #endif
     void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);

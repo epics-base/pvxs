@@ -16,11 +16,12 @@ namespace pvxs {
 namespace certs {
 
 class P12FileWatcher {
-  private:
+   private:
     bool running{false};
+
    public:
     inline bool isRunning() { return true; };
-    inline void stop() { running = false;};
+    inline void stop() { running = false; };
     P12FileWatcher(logger &logger, const std::vector<std::string> &paths_to_watch, const std::function<void(bool)> &reconfigure_fn)
         : logger_(logger), paths_to_watch_(paths_to_watch), reconfigure_fn_(reconfigure_fn) {
         log_debug_printf(logger_, "File Watcher Event: %s\n", "Initializing");

@@ -83,19 +83,18 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    if(iface->isTLS) {
+    if (iface->isTLS) {
         assert(iface->server->tls_context);
         auto ssl(SSL_new(iface->server->tls_context.ctx));
-        if (!ssl)
-            throw ossl::SSLError("SSL_new()");
+        if (!ssl) throw ossl::SSLError("SSL_new()");
 
-        if ( !iface->server->tls_context.stapling_disabled && !iface->server->tls_context.status_check_disabled ) {
+        if (!iface->server->tls_context.stapling_disabled && !iface->server->tls_context.status_check_disabled) {
             try {
                 log_debug_printf(stapling, "Server OCSP Stapling: installing callback%s\n", "");
-                ossl::stapleOcspResponse((void *)iface->server, ssl); // Staple response
-            } catch (certs::OCSPParseException &e) {
+                ossl::stapleOcspResponse((void*)iface->server, ssl);  // Staple response
+            } catch (certs::OCSPParseException& e) {
                 log_debug_printf(stapling, "Server OCSP Stapling: failed to install callback: %s\n", e.what());
-            } catch (std::exception &e) {
+            } catch (std::exception& e) {
                 log_debug_printf(stapling, "Server OCSP Stapling: failed to install callback: %s\n", e.what());
             }
         }
@@ -103,11 +102,8 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         auto rawconn = bev.release();
         // BEV_OPT_CLOSE_ON_FREE will free on error
         evbufferevent tlsconn(__FILE__, __LINE__,
-                              bufferevent_openssl_filter_new(iface->server->acceptor_loop.base,
-                                                             rawconn,
-                                                             ssl,
-                                                             BUFFEREVENT_SSL_ACCEPTING,
-                                                             BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
+                              bufferevent_openssl_filter_new(iface->server->acceptor_loop.base, rawconn, ssl, BUFFEREVENT_SSL_ACCEPTING,
+                                                             BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
         bev = std::move(tlsconn);
 
         // added with libevent 2.2.1-alpha

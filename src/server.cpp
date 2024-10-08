@@ -371,12 +371,12 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
             strm<<"\n";
 
 #ifdef PVXS_ENABLE_OPENSSL
-            if(serv.pvt->tls_context) {
+            if (serv.pvt->tls_context) {
                 auto cert(serv.pvt->tls_context.certificate0());
                 assert(cert);
-                strm<<indent{}<<"TLS Cert. "<<ossl::ShowX509{cert}<<"\n";
+                strm << indent{} << "TLS Cert. " << ossl::ShowX509{cert} << "\n";
             } else {
-                strm<<indent{}<<"TLS Cert. not loaded\n";
+                strm << indent{} << "TLS Cert. not loaded\n";
             }
 #else
             strm<<indent{}<<"TLS Support not enabled\n";
@@ -403,11 +403,10 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 
                 strm<<indent{}<<"Cred: "<<*conn->cred<<"\n";
 #ifdef PVXS_ENABLE_OPENSSL
-                if(conn->iface->isTLS && conn->connection()) {
+                if (conn->iface->isTLS && conn->connection()) {
                     auto ctx = bufferevent_openssl_get_ssl(conn->connection());
                     assert(ctx);
-                    if(auto cert = SSL_get0_peer_certificate(ctx))
-                        strm<<indent{}<<"Cert: "<<ossl::ShowX509{cert}<<"\n";
+                    if (auto cert = SSL_get0_peer_certificate(ctx)) strm << indent{} << "Cert: " << ossl::ShowX509{cert} << "\n";
                 }
 #endif
 
@@ -484,9 +483,9 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
         try {
             log_debug_printf(osslsetup, "Begin TLS setup with cert file: %s\n", effective.tls_cert_filename.c_str());
             tls_context = ossl::SSLContext::for_server(effective);
-            if ( tls_context.has_cert ) {
+            if (tls_context.has_cert) {
                 if (auto cert_ptr = getCert()) {
-                    if ( tls_context.status_check_disabled ) {
+                    if (tls_context.status_check_disabled) {
                         Guard G(tls_context.lock);
                         tls_context.cert_is_valid = true;
                         log_warn_printf(osslsetup, "Certificate status monitoring disabled by config: %s\n", effective.tls_cert_filename.c_str());
@@ -497,13 +496,15 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
                             // For servers, we need to wait for status if status monitoring is enabled
                             try {
                                 current_status = certs::CertStatusManager::getPVAStatus(cert);
-                                if ( current_status && current_status->isGood() ) {
+                                if (current_status && current_status->isGood()) {
                                     tls_context.cert_is_valid = true;
-                                    log_info_printf(osslsetup, "TLS enabled for server with %s with reported %s status\n", effective.tls_cert_filename.c_str(), current_status->status.s.c_str());
+                                    log_info_printf(osslsetup, "TLS enabled for server with %s with reported %s status\n", effective.tls_cert_filename.c_str(),
+                                                    current_status->status.s.c_str());
                                 } else {
-                                    log_info_printf(osslsetup, "TLS disabled for server with reported %s status for %s\n", current_status->status.s.c_str(), effective.tls_cert_filename.c_str());
+                                    log_info_printf(osslsetup, "TLS disabled for server with reported %s status for %s\n", current_status->status.s.c_str(),
+                                                    effective.tls_cert_filename.c_str());
                                 }
-                            } catch (certs::CertStatusNoExtensionException &e) {
+                            } catch (certs::CertStatusNoExtensionException& e) {
                                 tls_context.cert_is_valid = true;
                                 log_info_printf(osslsetup, "TLS enabled for server no status check configured: %s\n", effective.tls_cert_filename.c_str());
                             } catch (std::exception& e) {
@@ -515,9 +516,8 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
                                 auto was_good = current_status && current_status->isGood();
                                 current_status = std::make_shared<certs::PVACertificateStatus>(status);
                                 if (current_status && current_status->isGood()) {
-                                    if ( !was_good )
-                                        acceptor_loop.dispatch([this]() mutable { enableTls(); });
-                                } else if ( was_good ) {
+                                    if (!was_good) acceptor_loop.dispatch([this]() mutable { enableTls(); });
+                                } else if (was_good) {
                                     acceptor_loop.dispatch([this]() mutable { disableTls(); });
                                 }
                             });
@@ -655,19 +655,18 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
             }
 
 #ifdef PVXS_ENABLE_OPENSSL
-        if(tls_context && tls_context.cert_is_valid) {
-            firstiface = true;
-            for(auto& addr : tlsifaces) {
-                // unconditionally set port to avoid clash with plain TCP listener
-                addr.setPort(effective.tls_port);
+            if (tls_context && tls_context.cert_is_valid) {
+                firstiface = true;
+                for (auto& addr : tlsifaces) {
+                    // unconditionally set port to avoid clash with plain TCP listener
+                    addr.setPort(effective.tls_port);
 
-                interfaces.emplace_back(addr, this, firstiface, true);
+                    interfaces.emplace_back(addr, this, firstiface, true);
 
-                if(firstiface || effective.tls_port==0)
-                    effective.tls_port = interfaces.back().bind_addr.port();
-                firstiface = false;
+                    if (firstiface || effective.tls_port == 0) effective.tls_port = interfaces.back().bind_addr.port();
+                    firstiface = false;
+                }
             }
-        }
 #endif
 
             for (const auto& addr : effective.beaconDestinations) {
@@ -798,13 +797,13 @@ void Server::Pvt::stop()
     log_debug_printf(serversetup, "Server Stopping\n%s", "");
 #ifdef PVXS_ENABLE_OPENSSL
     // Stop status subscription if enabled
-    if ( cert_status_manager ) {
+    if (cert_status_manager) {
         cert_status_manager->unsubscribe();
         cert_status_manager.reset();
     }
 
     // Stop file watcher if enabled
-    if ( file_watcher.isRunning() ) {
+    if (file_watcher.isRunning()) {
         file_watcher.stop();
     }
 #endif
@@ -1023,27 +1022,22 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 DO_CERT_EVENT_HANDLER(Server::Pvt, serverio, CUSTOM)
 DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(Server::Pvt, getPVAStatus)
 
-void Server::reconfigure(const Config& inconf)
-{
-    if(!pvt)
-        throw std::logic_error("NULL Server");
+void Server::reconfigure(const Config& inconf) {
+    if (!pvt) throw std::logic_error("NULL Server");
 
     auto newconf(inconf);
-    newconf.expand(); // maybe catch some errors early
+    newconf.expand();  // maybe catch some errors early
 
     log_info_printf(serversetup, "Reconfiguring Server Context%s", "\n");
 
     // is the current server running?
 
     Pvt::state_t prev_state;
-    pvt->acceptor_loop.call([this, &prev_state]() {
-        prev_state = pvt->state;
-    });
+    pvt->acceptor_loop.call([this, &prev_state]() { prev_state = pvt->state; });
 
-    bool was_running = prev_state==Pvt::Running || prev_state==Pvt::Starting;
+    bool was_running = prev_state == Pvt::Running || prev_state == Pvt::Starting;
 
-    if(was_running)
-        pvt->stop();
+    if (was_running) pvt->stop();
 
     decltype(pvt->sources) transfers;
     decltype(pvt->builtinsrc) builtin;
@@ -1070,7 +1064,7 @@ void Server::reconfigure(const Config& inconf)
         pvt->builtinsrc = builtin;
     }
 
-    if(was_running) {
+    if (was_running) {
         pvt->start();
         log_info_printf(serversetup, "Resuming Server after Reconfiguration%s", "\n");
     }
@@ -1082,17 +1076,16 @@ void Server::reconfigure(const Config& inconf)
  */
 void Server::Pvt::enableTls(const Config& new_config) {
     // If already valid then don't do anything
-    if ( tls_context.has_cert && tls_context.cert_is_valid )
-        return;
+    if (tls_context.has_cert && tls_context.cert_is_valid) return;
 
     log_debug_printf(watcher, "Enabling TLS. Certificate file is %s\n", effective.tls_cert_filename.c_str());
     try {
         // Exclude PVACMS
         if (effective.config_target != ConfigCommon::CMS) {
-            Guard G(tls_context.lock); // We can lock here because `for_server` will create a completely different tls_context
+            Guard G(tls_context.lock);  // We can lock here because `for_server` will create a completely different tls_context
 
             // if cert isn't valid then get a new one
-            if ( !tls_context.has_cert ) {
+            if (!tls_context.has_cert) {
                 log_debug_printf(watcher, "Creating a new Server TLS context from %s\n", effective.tls_cert_filename.c_str());
                 auto new_context = ossl::SSLContext::for_server(new_config.is_initialized ? new_config : effective);
 
@@ -1106,7 +1099,7 @@ void Server::Pvt::enableTls(const Config& new_config) {
             }
 
             // Subscribe to certificate status if not already subscribed
-            if ( !cert_status_manager && tls_context.status_check_disabled ) {
+            if (!cert_status_manager && tls_context.status_check_disabled) {
                 log_debug_printf(watcher, "Subscribing to Server certificate status: %s\n", effective.tls_cert_filename.c_str());
                 subscribeToCertStatus();
             }
@@ -1115,8 +1108,9 @@ void Server::Pvt::enableTls(const Config& new_config) {
             // Don't drop any existing connections
 
             // Set callback for when this status' validity ends
-            if ( !tls_context.status_check_disabled ) {
-                log_debug_printf(watcher, "Starting server certificate status validity timer after receiving a status update for %s\n", effective.tls_cert_filename.c_str());
+            if (!tls_context.status_check_disabled) {
+                log_debug_printf(watcher, "Starting server certificate status validity timer after receiving a status update for %s\n",
+                                 effective.tls_cert_filename.c_str());
                 startStatusValidityTimer();
             }
 
@@ -1138,8 +1132,7 @@ void Server::Pvt::disableTls() {
     }
 
     // Skip if TLS is already disabled
-    if ( !tls_context.has_cert || !tls_context.cert_is_valid )
-        return;
+    if (!tls_context.has_cert || !tls_context.cert_is_valid) return;
 
     // Remove all tls connections so that clients will reconnect as tcp
     std::vector<std::weak_ptr<ServerConn>> to_cleanup;

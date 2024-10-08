@@ -244,7 +244,7 @@ void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
             log_debug_printf(_setup, "Trusting root CA %s\n", std::string(SB() << ShowX509{ca}).c_str());
 
             // populate the context's trust store with the root cert
-            X509_STORE* trusted_store = SSL_CTX_get_cert_store(ctx.ctx);
+            X509_STORE *trusted_store = SSL_CTX_get_cert_store(ctx.ctx);
             if (!X509_STORE_add_cert(trusted_store, ca)) throw SSLError("X509_STORE_add_cert");
         } else {  // signed by another CA
             log_debug_printf(_setup, "Using untrusted/chain CA cert %s\n", std::string(SB() << ShowX509{ca}).c_str());
@@ -364,12 +364,12 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
             car->cert = std::move(cert);
             tls_context.has_cert = true;
 
-            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_CHECK))      // Check build chain
-//            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_UNTRUSTED))  // Flag untrusted in build chain
-//            if (!SSL_CTX_build_cert_chain(tls_context.ctx, 0))  // checks default operation
+            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_CHECK))  // Check build chain
+                //            if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_UNTRUSTED))  // Flag untrusted in build chain
+                //            if (!SSL_CTX_build_cert_chain(tls_context.ctx, 0))  // checks default operation
                 throw SSLError("invalid cert chain");
 
-            if ( tls_context.status_check_disabled ) {
+            if (tls_context.status_check_disabled) {
                 tls_context.cert_is_valid = true;
             }
         }
@@ -402,8 +402,8 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
  *
  * @param tls_context the tls context to add the OCSP response to
  */
-int serverOCSPCallback(SSL* ssl, pvxs::server::Server::Pvt * server) {
-    if ( SSL_get_tlsext_status_type(ssl) != -1 ) {
+int serverOCSPCallback(SSL *ssl, pvxs::server::Server::Pvt *server) {
+    if (SSL_get_tlsext_status_type(ssl) != -1) {
         // Should never be triggered.  Because the callback should only be called when the client has requested stappling.
         return SSL_TLSEXT_ERR_ALERT_WARNING;
     }
@@ -413,22 +413,21 @@ int serverOCSPCallback(SSL* ssl, pvxs::server::Server::Pvt * server) {
         return SSL_TLSEXT_ERR_ALERT_FATAL;
     }
 
-    auto ocsp_data_ptr = (void * )server->current_status->ocsp_bytes.data();
+    auto ocsp_data_ptr = (void *)server->current_status->ocsp_bytes.data();
     auto ocsp_data_len = server->current_status->ocsp_bytes.size();
 
-    if (!server->cached_ocsp_response || memcmp(ocsp_data_ptr, server->cached_ocsp_response, ocsp_data_len) ) {
+    if (!server->cached_ocsp_response || memcmp(ocsp_data_ptr, server->cached_ocsp_response, ocsp_data_len)) {
         // if status has changed
-        if ( server->cached_ocsp_response) {
+        if (server->cached_ocsp_response) {
             OPENSSL_free(server->cached_ocsp_response);
         }
         server->cached_ocsp_response = OPENSSL_malloc(ocsp_data_len);
         memcpy(server->cached_ocsp_response, ocsp_data_ptr, ocsp_data_len);
 
-        if ( SSL_set_tlsext_status_ocsp_resp(ssl, server->cached_ocsp_response, ocsp_data_len) != 1 ) {
+        if (SSL_set_tlsext_status_ocsp_resp(ssl, server->cached_ocsp_response, ocsp_data_len) != 1) {
             log_warn_printf(stapling, "Server OCSP Stapling: unable to staple server status%s\n", "");
             return SSL_TLSEXT_ERR_ALERT_FATAL;
-        }
-        else
+        } else
             log_info_printf(stapling, "Server OCSP Stapling: server status stapled%s\n", "");
     }
     return SSL_TLSEXT_ERR_OK;
@@ -440,7 +439,7 @@ int serverOCSPCallback(SSL* ssl, pvxs::server::Server::Pvt * server) {
  * @param arg
  * @return
  */
-void stapleOcspResponse(void * server_ptr, SSL* ssl) {
+void stapleOcspResponse(void *server_ptr, SSL *ssl) {
     auto server = (pvxs::server::Server::Pvt *)server_ptr;
     SSL_CTX_set_tlsext_status_cb(server->tls_context.ctx, serverOCSPCallback);
     SSL_CTX_set_tlsext_status_arg(server->tls_context.ctx, server);

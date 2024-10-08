@@ -93,13 +93,25 @@ struct SSLContext {
     static SSLContext for_server(const impl::ConfigCommon& conf);
 
     SSLContext() = default;
-    inline SSLContext(const SSLContext& o) : ctx(o.ctx), has_cert(o.has_cert), cert_is_valid(o.cert_is_valid), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) {
+    inline SSLContext(const SSLContext& o)
+        : ctx(o.ctx),
+          has_cert(o.has_cert),
+          cert_is_valid(o.cert_is_valid),
+          status_check_disabled(o.status_check_disabled),
+          stapling_disabled(o.stapling_disabled) {
         if (ctx) {
             auto ret(SSL_CTX_up_ref(ctx));
             assert(ret == 1);  // can up_ref actually fail?
         }
     }
-    inline SSLContext(SSLContext& o) noexcept : ctx(o.ctx), has_cert(o.has_cert), cert_is_valid(o.cert_is_valid), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) { o.ctx = nullptr; }
+    inline SSLContext(SSLContext& o) noexcept
+        : ctx(o.ctx),
+          has_cert(o.has_cert),
+          cert_is_valid(o.cert_is_valid),
+          status_check_disabled(o.status_check_disabled),
+          stapling_disabled(o.stapling_disabled) {
+        o.ctx = nullptr;
+    }
     inline ~SSLContext() {
         SSL_CTX_free(ctx);  // If ctx is NULL nothing is done.
     }
@@ -150,7 +162,7 @@ struct SSLContext {
     static bool fill_credentials(PeerCredentials& cred, const SSL* ctx);
 };
 
-PVXS_API void stapleOcspResponse(void * server, SSL* ssl);
+PVXS_API void stapleOcspResponse(void* server, SSL* ssl);
 
 struct OCSPStapleData {
     size_t size;

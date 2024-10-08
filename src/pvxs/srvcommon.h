@@ -103,9 +103,7 @@ public:
 #ifdef PVXS_EXPERT_API_ENABLED
     //! Create/start timer.  cb runs on worker associated with Channel of this Operation.
     //! @since 0.2.0
-    Timer timerOneShot(double delay, std::function<void()>&& cb) {
-        return _timerOneShot(delay, std::move(cb));
-    }
+    Timer timerOneShot(double delay, std::function<void()>&& cb) { return _timerOneShot(delay, std::move(cb)); }
 #endif // PVXS_EXPERT_API_ENABLED
 private:
     virtual Timer _timerOneShot(double delay, std::function<void()>&& cb) =0;

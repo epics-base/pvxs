@@ -17,7 +17,7 @@
 namespace pvxs {
 namespace certs {
 
-OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
+OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t> &ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
                        StatusDate revocation_time)
     : ocsp_bytes(ocsp_bytes),
       ocsp_status(ocsp_status),
@@ -38,11 +38,21 @@ void OCSPStatus::init() {
     }
 }
 
-PVACertificateStatus::operator CertificateStatus() const noexcept { return (status==UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this}; }
-OCSPStatus::operator CertificateStatus() const noexcept { return (ocsp_status==OCSP_CERTSTATUS_UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this}; }
-bool OCSPStatus::operator==(const CertificateStatus& rhs) const { return this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
-bool OCSPStatus::operator==(const PVACertificateStatus& rhs) const { return (CertificateStatus)*this == rhs ; }
-bool PVACertificateStatus::operator==(const CertificateStatus& rhs) const { return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date; }
+PVACertificateStatus::operator CertificateStatus() const noexcept {
+    return (status == UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this};
+}
+OCSPStatus::operator CertificateStatus() const noexcept {
+    return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this};
+}
+bool OCSPStatus::operator==(const CertificateStatus &rhs) const {
+    return this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date &&
+           this->revocation_date == rhs.revocation_date;
+}
+bool OCSPStatus::operator==(const PVACertificateStatus &rhs) const { return (CertificateStatus) * this == rhs; }
+bool PVACertificateStatus::operator==(const CertificateStatus &rhs) const {
+    return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
+           this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
+}
 
 bool operator==(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs == lhs; };
 bool operator!=(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs != lhs; };
@@ -50,9 +60,9 @@ bool operator==(certstatus_t &lhs, PVACertificateStatus &rhs) { return rhs == lh
 bool operator!=(certstatus_t &lhs, PVACertificateStatus &rhs) { return rhs != lhs; };
 
 bool operator==(ocspcertstatus_t &lhs, OCSPStatus &rhs) { return rhs == lhs; };
-bool operator!=(ocspcertstatus_t &lhs, OCSPStatus &rhs)  { return rhs != lhs; };
+bool operator!=(ocspcertstatus_t &lhs, OCSPStatus &rhs) { return rhs != lhs; };
 bool operator==(certstatus_t &lhs, OCSPStatus &rhs) { return rhs == lhs; };
-bool operator!=(certstatus_t &lhs, OCSPStatus &rhs)  { return rhs != lhs; };
+bool operator!=(certstatus_t &lhs, OCSPStatus &rhs) { return rhs != lhs; };
 
 }  // namespace certs
 }  // namespace pvxs

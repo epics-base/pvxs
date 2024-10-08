@@ -28,9 +28,9 @@ DEFINE_LOGGER(stapling, "pvxs.stapling");
  * @return Typically returns an integer value indicating the SSL_TLSEXT_ERR_OK, SSL_TLSEXT_ERR_ALERT_WARNING,
  * or SSL_TLSEXT_ERR_ALERT_FATAL of the OCSP validation.
  */
-static int clientOCSPCallback(SSL *ctx, void *) {
+static int clientOCSPCallback(SSL* ctx, void*) {
     try {
-        uint8_t *ocsp_response_ptr;
+        uint8_t* ocsp_response_ptr;
         auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
 
         if (!ocsp_response_ptr || len == -1) {
@@ -49,13 +49,13 @@ static int clientOCSPCallback(SSL *ctx, void *) {
             log_err_printf(stapling, "OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
-    } catch (std::exception &e) {
+    } catch (std::exception& e) {
         log_err_printf(stapling, "Stapled OCSP response: %s\n", e.what());
     }
     return SSL_TLSEXT_ERR_ALERT_FATAL;
 }
 
-} //
+}  // namespace
 #endif
 
 namespace client {
@@ -114,7 +114,7 @@ std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>
     auto pair(std::make_pair(serv, tls));
     std::shared_ptr<Connection> ret;
     auto it = context->connByAddr.find(pair);
-    if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
+    if (it == context->connByAddr.end() || !(ret = it->second.lock())) {
         context->connByAddr[pair] = ret = std::make_shared<Connection>(context, serv, reconn, tls);
     }
 #else
@@ -145,7 +145,7 @@ void Connection::startConnecting() {
         // deprecated, but not yet removed
         bufferevent_openssl_set_allow_dirty_shutdown(bev.get(), 1);
 
-        if ( !context->tls_context.stapling_disabled ) {
+        if (!context->tls_context.stapling_disabled) {
             // Stapling is not disabled
             if (SSL_get_tlsext_status_type(ctx) != -1) {
                 // Client was not previously set to request the stapled OCSP Response
@@ -234,11 +234,10 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
 void Connection::bevEvent(short events)
 {
 #ifdef PVXS_ENABLE_OPENSSL
-    if((events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) && isTLS && bev) {
-        while(auto err = bufferevent_get_openssl_error(bev.get())) {
-            auto error_reason=ERR_reason_error_string(err);
-            if ( error_reason )
-                log_err_printf(io, "Client: TLS Error (0x%lx) %s\n", err, ERR_reason_error_string(err));
+    if ((events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) && isTLS && bev) {
+        while (auto err = bufferevent_get_openssl_error(bev.get())) {
+            auto error_reason = ERR_reason_error_string(err);
+            if (error_reason) log_err_printf(io, "Client: TLS Error (0x%lx) %s\n", err, ERR_reason_error_string(err));
         }
     }
 #endif
@@ -254,7 +253,7 @@ void Connection::bevEvent(short events)
 #ifdef PVXS_ENABLE_OPENSSL
         peerCred->isTLS = isTLS;
 
-        if(isTLS) {
+        if (isTLS) {
             auto ctx = bufferevent_openssl_get_ssl(bev.get());
             assert(ctx);
             ossl::SSLContext::fill_credentials(*peerCred, ctx);
@@ -367,7 +366,7 @@ void Connection::handle_CONNECTION_VALIDATION()
             selected = method;
 #ifdef PVXS_ENABLE_OPENSSL
         // Only validate as TLS if we have a valid certificate
-        else if(isTLS && method=="x509" && context->tls_context.has_cert && context->tls_context.cert_is_valid)
+        else if (isTLS && method == "x509" && context->tls_context.has_cert && context->tls_context.cert_is_valid)
             selected = method;
 #endif
     }
