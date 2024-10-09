@@ -59,7 +59,7 @@ struct Tester {
 
               INIT_CERT_MEMBER_FROM_FILE(ca, CA) INIT_CERT_MEMBER_FROM_FILE(super_server, SUPER_SERVER)
                   INIT_CERT_MEMBER_FROM_FILE(intermediate_server, INTERMEDIATE_SERVER) INIT_CERT_MEMBER_FROM_FILE(server1, SERVER1)
-                      INIT_CERT_MEMBER_FROM_FILE(server2, SERVER2) INIT_CERT_MEMBER_FROM_FILE(ioc, IOC) INIT_CERT_MEMBER_FROM_FILE(client1, CLIENT1)
+                      INIT_CERT_MEMBER_FROM_FILE(server2, SERVER2) INIT_CERT_MEMBER_FROM_FILE(ioc, IOC1) INIT_CERT_MEMBER_FROM_FILE(client1, CLIENT1)
                           INIT_CERT_MEMBER_FROM_FILE(client2, CLIENT2)
 
     {
@@ -259,7 +259,7 @@ struct Tester {
         testShow() << __func__;
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = IOC_CERT_FILE;
+        serv_conf.tls_cert_filename = IOC1_CERT_FILE;
 
         auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
 
@@ -320,7 +320,7 @@ struct Tester {
         auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = IOC_CERT_FILE;
+        cli_conf.tls_cert_filename = IOC1_CERT_FILE;
 
         auto cli(cli_conf.build());
 
@@ -345,7 +345,7 @@ struct Tester {
         testEq(update["value"].as<std::string>(), "x509/ioc1");
 
         serv_conf = serv.config();
-        serv_conf.tls_cert_filename = IOC_CERT_FILE;
+        serv_conf.tls_cert_filename = IOC1_CERT_FILE;
         testDiag("serv.reconfigure()");
         serv.reconfigure(serv_conf);
 

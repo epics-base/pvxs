@@ -50,8 +50,8 @@ using namespace pvxs::certs;
 #define SERVER1_CERT_FILE_PWD ""
 #define SERVER2_CERT_FILE "server2.p12"
 #define SERVER2_CERT_FILE_PWD ""
-#define IOC_CERT_FILE "ioc1.p12"
-#define IOC_CERT_FILE_PWD ""
+#define IOC1_CERT_FILE "ioc1.p12"
+#define IOC1_CERT_FILE_PWD ""
 #define CLIENT1_CERT_FILE "client1.p12"
 #define CLIENT1_CERT_FILE_PWD ""
 #define CLIENT2_CERT_FILE "client2.p12"
@@ -127,11 +127,12 @@ using namespace pvxs::certs;
  * @param LNAME lowercase name of the certificate
  * @param ACTION post or open depending on whether this is the initial value or subsequent values
  */
-#define POST_VALUE_CASE(LNAME, ACTION)                     \
-    case LNAME##_serial:                                   \
-        LNAME##_status_response_value.mark();              \
-        pv.ACTION(pv_name, LNAME##_status_response_value); \
-        break;
+#define POST_VALUE_CASE(LNAME, ACTION)                      \
+    case LNAME##_serial:                                    \
+        LNAME##_status_response_value.mark();               \
+        pv.ACTION(pv_name, LNAME##_status_response_value);  \
+        testOk(1, "Posted value for: %s", pv_name.c_str()); \
+break;
 
 /**
  * @brief Generates the code fragment that will set the member variable holding the certificate status to be
