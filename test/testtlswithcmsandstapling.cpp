@@ -374,7 +374,7 @@ MAIN(testtlswithcms) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(136);
+    testPlan(142);
     testSetup();
     logger_config_env();
     auto tester = new Tester();
