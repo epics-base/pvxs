@@ -57,6 +57,20 @@ using namespace pvxs::certs;
 #define CLIENT2_CERT_FILE "client2.p12"
 #define CLIENT2_CERT_FILE_PWD "oraclesucks"
 
+#define WHO_AM_I_PV "whoami"
+#define TLS_METHOD_STRING "x509"
+#define TCP_METHOD_STRING "ca"
+#define ANON_METHOD_STRING "anonymous"
+
+#define CERT_CN_SERVER1 "server1"
+#define CERT_CN_SERVER2 "server2"
+#define CERT_CN_IOC1 "ioc1"
+#define CERT_CN_CLIENT1 "client1"
+#define CERT_CN_CLIENT2 "client2"
+
+#define TEST_PV "TESTPV"
+#define TEST_PV_FIELD "value"
+
 /**
  * @brief Generate the member variables required to store the named certificate
  * @code

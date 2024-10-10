@@ -28,19 +28,6 @@
 #include "testcerts.h"
 #include "utilpvt.h"
 
-#define WHO_AM_I_PV "whoami"
-#define TLS_METHOD_STRING "x509"
-#define TCP_METHOD_STRING "ca"
-
-#define CERT_CN_SERVER1 "server1"
-#define CERT_CN_SERVER2 "server2"
-#define CERT_CN_IOC1 "ioc1"
-#define CERT_CN_CLIENT1 "client1"
-#define CERT_CN_CLIENT2 "client2"
-
-#define TEST_PV "TESTPV"
-#define TEST_PV_FIELD "value"
-
 /**
  * @brief This tester uses a Tester object and a bunch of MACROS that rely on a very opinionated
  * set of named variables to function.  prefixes `ca`, `super_server`, `intermediate_server`,
@@ -150,9 +137,9 @@ struct Tester {
 
     /**
      * @brief Pop the next event off the subscribed PV's queue
-     * @param sub the subscriprion
+     * @param sub the subscription
      * @param evt the epics event
-     * @return thne popped Value or empty on timeout
+     * @return the popped Value or empty on timeout
      */
     Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt) {
         while (true) {
@@ -492,6 +479,71 @@ struct Tester {
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_IOC1);
     }
+
+    /**
+     * @brief This test checks that tls connections are prohibited when CMS is unavailable but configuration requires it
+     *
+     * The Mock PVACMS must be previously stopped prior to this test
+     *
+     */
+    void testCMSUnavailable() {
+        testShow() << __func__;
+
+        auto serv_conf(server::Config::isolated());
+        serv_conf.tls_cert_filename = IOC1_CERT_FILE;
+        serv_conf.tls_disable_stapling = true;
+
+        auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
+
+        auto cli_conf(serv.clientConfig());
+        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_disable_stapling = true;
+
+        auto cli(cli_conf.build());
+
+        serv.start();
+
+        epicsEvent evt;
+        auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
+        Value update;
+
+        try {
+            pop(sub, evt);
+            testFail("Unexpected success");
+            testSkip(2, "oops");
+        } catch (client::Connected& e) {
+            testFalse(e.cred->isTLS);
+            testEq(e.cred->method, ANON_METHOD_STRING);
+            testEq(e.cred->account, "");
+        }
+        testDiag("Connect");
+
+        update = pop(sub, evt);
+        testEq(strncmp(update[TEST_PV_FIELD].as<std::string>().c_str(), TCP_METHOD_STRING, strlen(TCP_METHOD_STRING)), 0);
+
+        cli_conf = cli.config();
+        cli_conf.tls_cert_filename = CLIENT2_CERT_FILE;
+        cli_conf.tls_cert_password = CLIENT2_CERT_FILE_PWD;
+        cli_conf.tls_disable_stapling = true;
+        testDiag("cli.reconfigure()");
+        cli.reconfigure(cli_conf);
+
+        testThrows<client::Disconnect>([this, &sub, &evt] { pop(sub, evt); });
+        testDiag("Disconnect");
+
+        try {
+            (void)pop(sub, evt);
+            testFail("Missing expected Connected");
+        } catch (client::Connected& e) {
+            testOk1(e.cred && !e.cred->isTLS);
+        } catch (...) {
+            testFail("Unexpected exception instead of Connected");
+        }
+        testDiag("Reconnect");
+
+        update = pop(sub, evt);
+        testEq(strncmp(update[TEST_PV_FIELD].as<std::string>().c_str(), TCP_METHOD_STRING, strlen(TCP_METHOD_STRING)), 0);
+    }
 };
 
 }  // namespace
@@ -504,7 +556,7 @@ MAIN(testtlswithcms) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(142);
+    testPlan(149);
     testSetup();
     logger_config_env();
     auto tester = new Tester();
@@ -528,6 +580,11 @@ MAIN(testtlswithcms) {
     }
     try {
         tester->stopMockCMS();
+    } catch (std::runtime_error& e) {
+        testFail("FAILED with errors: %s\n", e.what());
+    }
+    try {
+        tester->testCMSUnavailable();
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }

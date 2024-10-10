@@ -83,10 +83,12 @@
 #define START_STATUS_VALIDITY_TIMER(TYPE, LOOP)                                                                                                           \
     void TYPE::startStatusValidityTimer() {                                                                                                               \
         (LOOP).dispatch([this]() {                                                                                                                        \
-            auto now = time(nullptr);                                                                                                                     \
-            timeval validity_end = {current_status->status_valid_until_date.t - now, 0};                                                                  \
-            if (event_add(cert_validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting certificate status validity timer\n%s", ""); \
-        });                                                                                                                                               \
+            if (current_status) {                                                                                                                         \
+                auto now = time(nullptr);                                                                                                                 \
+                timeval validity_end = {current_status->status_valid_until_date.t - now, 0};                                                              \
+                if (event_add(cert_validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting certificate status validity timer\n%s", ""); \
+            }                                                                                                                                              \
+        });                                                                                                                                                \
     }
 
 #define SUBSCRIBE_TO_CERT_STATUS(TYPE, STATUS_TYPE, LOOP)                                                                                   \
