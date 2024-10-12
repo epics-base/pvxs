@@ -254,6 +254,11 @@ std::shared_ptr<Connect> ConnectBuilder::exec() {
                 else
                     log_debug_printf(watcher, __FILE__ ":%d: exec: Connection establishment: %s: status=UNKNOWN\n", __LINE__,
                                      context->effective.tls_cert_filename.c_str());
+                if (context->tls_context.current_peer_status)
+                    log_debug_printf(watcher, __FILE__ ":%d: exec: Connection establishment: peer status=%s\n", __LINE__,
+                                      context->tls_context.current_peer_status->status.s.c_str());
+                else
+                    log_debug_printf(watcher, __FILE__ ":%d: exec: Connection establishment: peer status=UNKNOWN\n", __LINE__);
             } else if (!context->effective.tls_disabled) {
                 log_debug_printf(watcher, __FILE__ ":%d: exec: Connection establishment - TLS not configured: %s\n", __LINE__, _pvname.c_str());
             }

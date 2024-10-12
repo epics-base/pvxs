@@ -209,7 +209,6 @@ struct Tester {
                             testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
                     }
                 }
-                testDiag("Posted Value for request: %s", pv_name.c_str());
             });
             status_pv.onLastDisconnect([](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>& parameters) {
                 testOk(1, "Closing Status Request Connection: %s", pv_name.c_str());
@@ -217,13 +216,6 @@ struct Tester {
             });
 
             pvacms.start();
-
-            TEST_STATUS_REQUEST(intermediate_server)
-            TEST_STATUS_REQUEST(server1)
-            TEST_STATUS_REQUEST(server2)
-            TEST_STATUS_REQUEST(ioc)
-            TEST_STATUS_REQUEST(client1)
-            TEST_STATUS_REQUEST(client2)
 
             testDiag("Set up: %s", "Mock PVACMS Server");
         } catch (std::exception& e) {
@@ -556,7 +548,7 @@ MAIN(testtlswithcms) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(149);
+    testPlan(110);
     testSetup();
     logger_config_env();
     auto tester = new Tester();

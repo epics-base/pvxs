@@ -357,10 +357,11 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
              !tls_context                       // If this is not a TLS context then we can proceed immediately without waiting for status
           || !effective.isTlsConfigured()       // TLS is not configured
           || !tls_context.has_cert              // If no certificate has been loaded then we can't establish a TLS context, so proceed with tcp
-          || tls_context.cert_is_valid          // If we have a cert and have already received status from the CMS, then proceed now
+          || (tls_context.cert_is_valid && tls_context.current_peer_status && tls_context.current_peer_status->isGood())          // If we have a cert and have already received status from the CMS, then proceed now
           || tls_context.status_check_disabled  // or we don't have to wait for status, then proceed now
           || !cert_status_manager               // If we have no active subscription then we'll never get status so go ahead now with tcp
-          || cert_status_manager->available();  // Finally if the subscription has an available status, or we've waited long enough (3s), then use it
+          || (cert_status_manager->available()       // Finally if the subscription has an available status, or we've waited long enough (3s), then use it
+          && peer_cert_status_manager && peer_cert_status_manager->available());  // and if the peer subscription has an available status, or we've waited long enough (3s), then use it
     }
     ossl::SSLContext tls_context;
     evevent cert_event_timer;
@@ -369,6 +370,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::shared_ptr<certs::CertificateStatus> current_status;
     certs::P12FileWatcher file_watcher;
     certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
+    certs::cert_status_ptr<certs::CertStatusManager> peer_cert_status_manager;
 #endif
 
     INST_COUNTER(ClientContextImpl);
@@ -407,12 +409,13 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 #ifdef PVXS_ENABLE_OPENSSL
     static void doCertEventHandler(evutil_socket_t fd, short evt, void *raw);
     static void doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void *raw);
-    void disableTls();
-    void enableTls(const Config& new_config = {});
     void fileEventCallback(short evt);
     X509 * getCert(ossl::SSLContext *context = nullptr);
     void startStatusValidityTimer();
     void subscribeToCertStatus();
+  public:
+    void disableTls();
+    void enableTls(const Config& new_config = {});
 #endif
 };
 

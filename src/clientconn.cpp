@@ -7,6 +7,11 @@
 #include <osiProcess.h>
 
 #include <pvxs/log.h>
+
+#ifdef PVXS_ENABLE_OPENSSL
+#include "certstatusmanager.h"
+#endif
+
 #include "clientimpl.h"
 
 namespace pvxs {
@@ -14,6 +19,7 @@ namespace pvxs {
 #ifdef PVXS_ENABLE_OPENSSL
 namespace {
 DEFINE_LOGGER(stapling, "pvxs.stapling");
+DEFINE_LOGGER(io, "pvxs.io");
 
 /**
  * @brief A callback function for handling OCSP (Online Certificate Status Protocol) responses in an SSL context.
@@ -28,17 +34,20 @@ DEFINE_LOGGER(stapling, "pvxs.stapling");
  * @return Typically returns an integer value indicating the SSL_TLSEXT_ERR_OK, SSL_TLSEXT_ERR_ALERT_WARNING,
  * or SSL_TLSEXT_ERR_ALERT_FATAL of the OCSP validation.
  */
-static int clientOCSPCallback(SSL* ctx, void*) {
+static int clientOCSPCallback(SSL* ctx, ossl::SSLContext* tls_context) {
     try {
+        Guard G(tls_context->lock);
         uint8_t* ocsp_response_ptr;
         auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
 
         if (!ocsp_response_ptr || len == -1) {
             log_debug_printf(stapling, "No Stapled OCSP response found by %s\n", "client");
+            tls_context->current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnknownCertificateStatus());
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
         const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
         auto status = (certs::CertificateStatus)(certs::OCSPStatus(ocsp_bytes));
+        tls_context->current_peer_status = std::make_shared<certs::CertificateStatus>(status);
         if (status.isGood()) {
             log_info_printf(stapling, "Client OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
             log_info_printf(stapling, "Client OCSP stapled status date: %s\n", status.status_date.s.c_str());
@@ -50,6 +59,8 @@ static int clientOCSPCallback(SSL* ctx, void*) {
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
     } catch (std::exception& e) {
+        Guard G(tls_context->lock);
+        tls_context->current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnknownCertificateStatus());
         log_err_printf(stapling, "Stapled OCSP response: %s\n", e.what());
     }
     return SSL_TLSEXT_ERR_ALERT_FATAL;
@@ -145,20 +156,50 @@ void Connection::startConnecting() {
         // deprecated, but not yet removed
         bufferevent_openssl_set_allow_dirty_shutdown(bev.get(), 1);
 
-        if (!context->tls_context.stapling_disabled) {
-            // Stapling is not disabled
-            if (SSL_get_tlsext_status_type(ctx) != -1) {
-                // Client was not previously set to request the stapled OCSP Response
+        // If there is a peer cert
+        if (auto cert_ptr = SSL_get0_peer_certificate(ctx)) {
+            auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
+            if (!context->tls_context.stapling_disabled) {
+                // Stapling is not disabled
+                if (SSL_get_tlsext_status_type(ctx) != -1) {
+                    // Client was not previously set to request the stapled OCSP Response
 
-                // Enable OCSP status request extension
-                log_debug_printf(stapling, "Client OCSP Stapling: Setting up request%s\n", "");
-                if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
-                    log_debug_printf(stapling, "Client OCSP Stapling: requested type set for stapling%s\n", "");
-                } else {
-                    throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
+                    // Enable OCSP status request extension
+                    log_debug_printf(stapling, "Client OCSP Stapling: Setting up request%s\n", "");
+                    if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
+                        log_debug_printf(stapling, "Client OCSP Stapling: requested type set for stapling%s\n", "");
+                    } else {
+                        throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
+                    }
+                    SSL_CTX_set_tlsext_status_cb(this->context->tls_context.ctx, clientOCSPCallback);
+                    SSL_CTX_set_tlsext_status_arg(this->context->tls_context.ctx, &this->context->tls_context);
                 }
-                SSL_CTX_set_tlsext_status_cb(context->tls_context.ctx, clientOCSPCallback);
+            } else {
+                // Check if status monitoring is required, if not then set peer status to VALID
+                try {
+                    auto status_pv_name = certs::CertStatusManager::getStatusPvFromCert(cert);
+                } catch (certs::CertStatusNoExtensionException &e) {
+                    Guard G(context->tls_context.lock);
+                    context->tls_context.current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnCertifiedCertificateStatus());
+                }
             }
+
+            // Monitor peer status going forwards if required
+            try {
+                context->peer_cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [this](certs::PVACertificateStatus status) {
+                    Guard G(context->tls_context.lock);
+                    auto was_good = context->tls_context.current_peer_status && context->tls_context.current_peer_status->isGood();
+                    context->tls_context.current_peer_status = std::make_shared<certs::CertificateStatus>(status);
+                    if (context->tls_context.current_peer_status && context->tls_context.current_peer_status->isGood()) {
+                        if (!was_good) context->manager.loop().dispatch([this]() mutable { context->enableTls(); });
+                    } else if (was_good) {
+                        context->manager.loop().dispatch([this]() mutable { context->disableTls(); });
+                    }
+                });
+            } catch ( ...) {}
+        } else {
+            log_debug_printf(io, "Client connect: no peer certificate so no peer status%s\n", "");
+            context->tls_context.current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnknownCertificateStatus());
         }
     } else
 #endif
@@ -643,6 +684,5 @@ void Connection::tickEchoS(evutil_socket_t fd, short evt, void *raw)
         log_exc_printf(io, "Unhandled error in echo timer callback: %s\n", e.what());
     }
 }
-
 } // namespace client
 } // namespace pvxs

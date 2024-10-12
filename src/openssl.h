@@ -44,6 +44,9 @@ struct Config;
 namespace server {
 struct Config;
 }
+namespace certs {
+struct CertificateStatus;
+}
 
 namespace ssl {
 constexpr uint16_t kForClient = 0x01;
@@ -86,6 +89,7 @@ struct SSLContext {
     bool cert_is_valid{false};  // To signal that cert is valid when we have received the status for the certificate
     bool status_check_disabled{false};
     bool stapling_disabled{false};
+    std::shared_ptr<certs::CertificateStatus> current_peer_status;
 
     PVXS_API
     static SSLContext for_client(const impl::ConfigCommon& conf);

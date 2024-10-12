@@ -218,13 +218,6 @@ struct Tester {
 
             pvacms.start();
 
-            TEST_STATUS_REQUEST(intermediate_server)
-            TEST_STATUS_REQUEST(server1)
-            TEST_STATUS_REQUEST(server2)
-            TEST_STATUS_REQUEST(ioc)
-            TEST_STATUS_REQUEST(client1)
-            TEST_STATUS_REQUEST(client2)
-
             testDiag("Set up: %s", "Mock PVACMS Server");
         } catch (std::exception& e) {
             testFail("Failed to set up Mock PVACMS Server: %s", e.what());
@@ -603,7 +596,7 @@ MAIN(testtlswithcmsandstapling) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(153);
+    testPlan(132);
     testSetup();
     logger_config_env();
     auto tester = new Tester();

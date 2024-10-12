@@ -364,11 +364,24 @@ bool CertStatusManager::shouldMonitor(const ossl_ptr<X509>& certificate) {
  * @return the PV name to call for status on that certificate
  */
 std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certificate) {
-    int extension_index = X509_get_ext_by_NID(certificate.get(), ossl::SSLContext::NID_PvaCertStatusURI, -1);
+    return getStatusPvFromCert(certificate.get());
+}
+
+/**
+ * @brief Get the string value of a custom extension by NID from a certificate.
+ * This will return the PV name to monitor for status of the given certificate.
+ * It is stored in the certificate using a custom extension.
+ * Exceptions are thrown if it is unable to retrieve the value of the extension
+ * or it does not exist.
+ * @param certificate the certificate to examine
+ * @return the PV name to call for status on that certificate
+ */
+std::string CertStatusManager::getStatusPvFromCert(const X509 * certificate) {
+    int extension_index = X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_PvaCertStatusURI, -1);
     if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find extension index");
 
     // Get the extension object from the certificate
-    X509_EXTENSION* extension = X509_get_ext(certificate.get(), extension_index);
+    X509_EXTENSION* extension = X509_get_ext(certificate, extension_index);
     if (!extension) {
         throw CertStatusNoExtensionException("Failed to get extension from the certificate.");
     }
