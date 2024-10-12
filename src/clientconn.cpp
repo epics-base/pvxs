@@ -175,12 +175,6 @@ void Connection::startConnecting() {
                     // And send the tls context as the parameter to the callabck
                     SSL_CTX_set_tlsext_status_arg(this->context->tls_context.ctx, &this->context->tls_context);
                 }
-            } else {
-                // Check if status monitoring is required, if not then set peer status to VALID
-                if ( !certs::CertStatusManager::statusMonitoringRequired(cert.get()) ) {
-                    Guard G(context->tls_context.lock);
-                    context->tls_context.current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnCertifiedCertificateStatus());
-                }
             }
 
             // Monitor peer status going forwards if required

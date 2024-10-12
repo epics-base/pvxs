@@ -256,6 +256,51 @@ void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
 }
 
 /**
+ * @brief Verify peer certificate's revocation status with PVACMS if it is required
+ * @param ctx the SSL context
+ * @param tls_context_ptr the pointer to the tls context
+ * @return 1 if successful and 0 if fails verification
+ */
+int certVerifyCalback(X509_STORE_CTX *ctx, void *tls_context_ptr) {
+    auto *tls_context = (SSLContext*)tls_context_ptr;
+
+    // If stapling is not disabled then we'll get peer status in TLS handshake
+    if (!tls_context->stapling_disabled) {
+        assert(tls_context->current_peer_status);
+        return 1; // Success - status will have come in TLS handshake
+    }
+
+    SSL *ssl = (SSL *)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+    auto cert_ptr = SSL_get0_peer_certificate(ssl);
+    if (!cert_ptr) {
+        log_debug_printf(_setup, "No Peer certificate%s\n", "");
+        return 1; // Success - nothing to verify
+    }
+    auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
+
+    try {
+        // Get status if current status is non existent or not valid
+        if (!tls_context->current_peer_status || !tls_context->current_peer_status->isValid()) {
+            tls_context->current_peer_status = certs::CertStatusManager::getStatus(cert);
+        }
+        if ( tls_context->current_peer_status->isGood()) {
+            return 1;  // Successfully validated cert
+        } else {
+            return 0;
+        }
+    } catch (certs::CertStatusNoExtensionException &e) {
+        log_debug_printf(_setup, "Status monitoring not required%s\n", "");
+        Guard G(tls_context->lock);
+        tls_context->current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnCertifiedCertificateStatus());
+        return 1; // Status monitoring not required
+    } catch (std::runtime_error &e) {
+        log_warn_printf(_setup, "Unable to verify peer revocation status: %s\n", e.what());
+    }
+    return 0; // Default case is fail
+}
+
+
+/**
  * @brief Common setup for OpenSSL SSL context
  *
  * This function sets up the OpenSSL SSL context used for SSL/TLS communication.
@@ -390,6 +435,12 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         }
         SSL_CTX_set_verify(tls_context.ctx, mode, &ossl_verify);
         SSL_CTX_set_verify_depth(tls_context.ctx, ossl_verify_depth);
+    }
+
+    {
+        // Set up certificate verification using cert verify callback
+        if (ssl_client)
+            SSL_CTX_set_cert_verify_callback(tls_context.ctx, certVerifyCalback, &tls_context);
     }
 
     return tls_context;
