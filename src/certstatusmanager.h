@@ -187,8 +187,23 @@ class CertStatusManager {
      * @return a blank string if no extension exists, otherwise contains the status PV
      *         e.g. CERT:STATUS:0293823f:098294739483904875
      */
-
     static std::string getStatusPvFromCert(const ossl_ptr<X509>& cert);
+
+    /**
+     * @brief Get the custom status extension from the given certificate
+     * @param certificate the certificate to retrieve the status extension from
+     * @return the extension
+     * @throws CertStatusNoExtensionException if no extension is present in the certificate
+     */
+    static X509_EXTENSION* getExtension(const X509 * certificate);
+
+    /**
+     * @brief Determine if status monitoring is required for the given certificate
+     * @param certificate the certificate to check
+     * @return true if certificate monitoring is required
+     */
+    static bool statusMonitoringRequired(const X509 * certificate);
+
     /**
      * @brief Get the status PV from a Cert.
      * This function gets the PVA extension that stores the status PV in the certificate

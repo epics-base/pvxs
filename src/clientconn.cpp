@@ -159,26 +159,25 @@ void Connection::startConnecting() {
         // If there is a peer cert
         if (auto cert_ptr = SSL_get0_peer_certificate(ctx)) {
             auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
+            // And if stapling is not disabled
             if (!context->tls_context.stapling_disabled) {
-                // Stapling is not disabled
+                // And client was not previously set to request the stapled OCSP Response
                 if (SSL_get_tlsext_status_type(ctx) != -1) {
-                    // Client was not previously set to request the stapled OCSP Response
-
-                    // Enable OCSP status request extension
+                    // Then enable OCSP status request extension
                     log_debug_printf(stapling, "Client OCSP Stapling: Setting up request%s\n", "");
                     if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
                         log_debug_printf(stapling, "Client OCSP Stapling: requested type set for stapling%s\n", "");
                     } else {
                         throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
                     }
+                    // Set the callback
                     SSL_CTX_set_tlsext_status_cb(this->context->tls_context.ctx, clientOCSPCallback);
+                    // And send the tls context as the parameter to the callabck
                     SSL_CTX_set_tlsext_status_arg(this->context->tls_context.ctx, &this->context->tls_context);
                 }
             } else {
                 // Check if status monitoring is required, if not then set peer status to VALID
-                try {
-                    auto status_pv_name = certs::CertStatusManager::getStatusPvFromCert(cert);
-                } catch (certs::CertStatusNoExtensionException &e) {
+                if ( !certs::CertStatusManager::statusMonitoringRequired(cert.get()) ) {
                     Guard G(context->tls_context.lock);
                     context->tls_context.current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnCertifiedCertificateStatus());
                 }

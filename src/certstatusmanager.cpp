@@ -367,6 +367,26 @@ std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certifi
     return getStatusPvFromCert(certificate.get());
 }
 
+bool CertStatusManager::statusMonitoringRequired(const X509 * certificate) {
+    try {
+        getExtension(certificate);
+        return true;
+    } catch (...) {}
+    return false;
+}
+
+X509_EXTENSION* CertStatusManager::getExtension(const X509 * certificate) {
+    int extension_index = X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_PvaCertStatusURI, -1);
+    if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find extension index");
+
+    // Get the extension object from the certificate
+    X509_EXTENSION* extension = X509_get_ext(certificate, extension_index);
+    if (!extension) {
+        throw CertStatusNoExtensionException("Failed to get extension from the certificate.");
+    }
+    return extension;
+}
+
 /**
  * @brief Get the string value of a custom extension by NID from a certificate.
  * This will return the PV name to monitor for status of the given certificate.
@@ -377,14 +397,7 @@ std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certifi
  * @return the PV name to call for status on that certificate
  */
 std::string CertStatusManager::getStatusPvFromCert(const X509 * certificate) {
-    int extension_index = X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_PvaCertStatusURI, -1);
-    if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find extension index");
-
-    // Get the extension object from the certificate
-    X509_EXTENSION* extension = X509_get_ext(certificate, extension_index);
-    if (!extension) {
-        throw CertStatusNoExtensionException("Failed to get extension from the certificate.");
-    }
+    auto extension = getExtension(certificate);
 
     // Retrieve the extension data which is an ASN1_OCTET_STRING object
     ASN1_OCTET_STRING* ext_data = X509_EXTENSION_get_data(extension);
