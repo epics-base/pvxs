@@ -25,6 +25,64 @@ using namespace pvxs;
 
 namespace {
 
+void testClientBackwardsCompatibility() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_cert_filename = "superserver1.p12";
+    serv_conf.tls_disable_status_check = true;
+    serv_conf.tls_disable_stapling = true;
+
+    auto serv(serv_conf.build().addPV("mailbox", mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_disable_status_check = true;
+    cli_conf.tls_disable_stapling = true;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update("value", 42));
+    serv.start();
+
+    auto conn(cli.connect("mailbox").onConnect([](const client::Connected& c) { testTrue(c.cred && !c.cred->isTLS); }).exec());
+
+    auto reply(cli.get("mailbox").exec()->wait(5.0));
+    testEq(reply["value"].as<int32_t>(), 42);
+    conn.reset();
+}
+
+void testServerBackwardsCompatibility() {
+    testShow() << __func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_disable_status_check = true;
+    serv_conf.tls_disable_stapling = true;
+
+    auto serv(serv_conf.build().addPV("mailbox", mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_cert_filename = "client1.p12";
+    cli_conf.tls_disable_status_check = true;
+    cli_conf.tls_disable_stapling = true;
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update("value", 42));
+    serv.start();
+
+    auto conn(cli.connect("mailbox").onConnect([](const client::Connected& c) { testTrue(c.cred && !c.cred->isTLS); }).exec());
+
+    auto reply(cli.get("mailbox").exec()->wait(5.0));
+    testEq(reply["value"].as<int32_t>(), 42);
+    conn.reset();
+}
+
 void testGetSuper() {
     testShow() << __func__;
 
@@ -291,9 +349,11 @@ void testServerReconfig() {
 }  // namespace
 
 MAIN(testtls) {
-    testPlan(22);
+    testPlan(26);
     testSetup();
     logger_config_env();
+    testClientBackwardsCompatibility();
+    testServerBackwardsCompatibility();
     testGetSuper();
     testGetIntermediate();
     testGetNameServer();
