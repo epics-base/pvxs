@@ -12,6 +12,13 @@
 #include <stdexcept>
 #include <string>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <sys/types.h>
+#include <sys/socket.h>
+#endif
+
 #include <epicsAssert.h>
 
 #include <openssl/err.h>
@@ -24,6 +31,12 @@
 
 #include "ownedptr.h"
 #include "p12filewatcher.h"
+
+#ifdef _WIN32
+typedef SOCKET fd_t;
+#else
+typedef int fd_t;
+#endif
 
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
@@ -46,6 +59,12 @@ struct Config;
 }
 namespace certs {
 struct CertificateStatus;
+class CertStatusManager;
+template <typename T>
+struct cert_status_delete;
+
+template <typename T>
+using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
 }
 
 namespace ssl {
@@ -81,6 +100,52 @@ struct ShowX509 {
 };
 std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
 
+/**
+ * @brief Contains peer status and peer status monitor
+ *
+ * Created whenever a connection to an SSLContext is made.  There is a map in the
+ * `SSLContext` from `fd` (socket file descriptor) to the related `SSLPeerStatus`
+ * Use `int fd = SSL_get_fd(ssl)` to retrieve the file descriptor from the `SSL*`.
+ * The fd is available during TLS handshake and in any callbacks that are set up.
+ *
+ * Use: A connection will be prevented from being finalised unless a valid (`isValid()`)
+ * and good (`isGood()`) status exists for that `fd` identified connection.
+ *
+ * FOR CLIENTS
+ * Client's peers are servers.  They can only have one.
+ *
+ * If `status_check_disabled` then an entry must be added to
+ * made to `peer_status` containing an `certs::UnCertifiedCertificateStatus` and
+ * no cert_status_manager (nullptr)
+ *
+ * If stapling is enabled in the client `SSLContext` then this is filled by the stapling callback.
+ *
+ * FOR SERVERS
+ * Server's peers are clients.  There can be many peers to a single context
+ *
+ */
+struct SSLPeerStatus {
+    std::shared_ptr<const certs::CertificateStatus> status;
+    certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
+};
+
+/**
+ * @brief SSL context for TLS communication
+ *
+ * This struct encapsulates the OpenSSL SSL_CTX and related state for managing
+ * TLS connections. It includes flags for certificate validity, status checking,
+ * and stapling. The context can be used for both client and server connections,
+ * and maintains a map of peer statuses for multiple connections.
+ *
+ * Key components:
+ * - SSL_CTX* ctx: The OpenSSL SSL context
+ * - Flags for certificate and status checking states
+ * - A map of socket file descriptors to SSLPeerStatus for managing multiple connections
+ * - Static methods for creating client and server contexts
+ *
+ * This struct is central to PVXS's TLS implementation, handling context creation,
+ * certificate management, and peer status tracking.
+ */
 struct SSLContext {
     epicsMutex lock;  // To lock changes to context state that happen as a result of changes to certificate status
     static PVXS_API int NID_PvaCertStatusURI;
@@ -89,7 +154,9 @@ struct SSLContext {
     bool cert_is_valid{false};  // To signal that cert is valid when we have received the status for the certificate
     bool status_check_disabled{false};
     bool stapling_disabled{false};
-    std::shared_ptr<certs::CertificateStatus> current_peer_status;
+
+    // A context can have multiple peers
+    std::map<fd_t, SSLPeerStatus> peer_status;
 
     PVXS_API
     static SSLContext for_client(const impl::ConfigCommon& conf);
@@ -143,6 +210,19 @@ struct SSLContext {
         return *this;
     }
 
+    /**
+     * @brief Initializes the SSL library and sets up the custom certificate status URI OID
+     * Uses the singleton pattern to ensure that the SSL library is initialized only once,
+     * keyed off NID_PvaCertStatusURI being undefined.
+     *
+     * This is idempotent.  It can be called multiple times, but will not re-initialize the SSL library.
+     * 
+     * It will do all the one time SSL library initialization that is required, inluding
+     * SSL_library_init(), OpenSSL_add_all_algorithms(), ERR_load_crypto_strings(), 
+     * OpenSSL_add_all_ciphers(), and OpenSSL_add_all_digests().
+     *
+     * It will also create and register the custom certificate status URI OID.
+     */
     static inline void sslInit() {
         // Initialize SSL
         if (NID_PvaCertStatusURI == NID_undef) {
@@ -157,6 +237,84 @@ struct SSLContext {
             }
         }
     }
+
+    /**
+     * @brief Returns the socket file descriptor for the given SSL object
+     * @param ssl - SSL object
+     * @return The socket file descriptor
+     */
+    static inline fd_t getFd(const SSL *ssl) {
+        return (fd_t)SSL_get_fd(ssl);
+    }
+
+    /**
+     * @brief Sets the peer status for the certificate for the given SSL object
+     * @param ssl - SSL object
+     * @param status - Certificate status
+     * @return The peer status that was set
+     */
+    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(const SSL *ssl, const certs::CertificateStatus &status) {
+        return setCachedPeerStatus(getFd(ssl), status);
+    }
+
+    /**
+     * @brief Sets the peer status for the certificate on the other end of a given socket file descriptor
+     * @param fd - Socket file descriptor
+     * @param status - Certificate status
+     * @return The peer status that was set
+     */
+    std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(fd_t fd, const certs::CertificateStatus &status);
+
+    /**
+     * @brief Sets the peer status for the certificate for the given SSL object
+     * @param ssl - SSL object
+     * @param status - Certificate status
+     * @return The peer status that was set
+     */
+    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(const SSL *ssl, std::shared_ptr<const certs::CertificateStatus> status) {
+        return setCachedPeerStatus(getFd(ssl), status);
+    }
+
+    /**
+     * @brief Sets the peer status for the certificate on the other end of a given socket file descriptor
+     * @param fd - Socket file descriptor
+     * @param status - Certificate status
+     * @return The peer status that was set
+     */
+    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(fd_t fd, const std::shared_ptr<const certs::CertificateStatus> status) {
+        Guard G(lock);
+        peer_status[fd].status = status;
+        return peer_status[fd].status;
+    }
+
+    /**
+     * @brief Returns the currently cached peer status if any.  Null if none cached
+     * @param ssl - SSL object
+     * @return The the cached peer status
+     */
+    inline std::shared_ptr<const certs::CertificateStatus> getCachedPeerStatus(const SSL *ssl) const {
+        return getCachedPeerStatus(getFd(ssl));
+    }
+
+    /**
+     * @brief Returns the currently cached peer status if any.  Null if none cached
+     * @param fd - Socket file descriptor
+     * @return The cached peer status
+     */
+    inline std::shared_ptr<const certs::CertificateStatus> getCachedPeerStatus(const fd_t fd) const {
+        auto it = peer_status.find(fd);
+        if (it != peer_status.end()) {
+            return it->second.status;
+        }
+        return nullptr;
+    }
+
+    /**
+     * @brief Subscribes to peer status if required and not already monitoring
+     * @param ssl - SSL pointer at the other end of which is the certificate to subscribe to
+     * @param fn - Function to call when the peer status changes from good to bad or vice versa
+     */
+    void subscribeToPeerStatus(const SSL *ssl, std::function<void(SSLContext*, bool)> fn);
 
     explicit operator bool() const { return ctx; }
 

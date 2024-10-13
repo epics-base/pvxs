@@ -261,44 +261,41 @@ void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
  * @param tls_context_ptr the pointer to the tls context
  * @return 1 if successful and 0 if fails verification
  */
-int certVerifyCalback(X509_STORE_CTX *ctx, void *tls_context_ptr) {
-    auto *tls_context = (SSLContext*)tls_context_ptr;
+int certVerifyCallback(X509_STORE_CTX *ctx, void *tls_context_ptr) {
+    auto *tls_context = (SSLContext *)tls_context_ptr;
 
     // If stapling is not disabled then we'll get peer status in TLS handshake
     if (!tls_context->stapling_disabled) {
-        assert(tls_context->current_peer_status);
-        return 1; // Success - status will have come in TLS handshake
+        return 1;  // Success - status will have come in TLS handshake
     }
 
-    SSL *ssl = (SSL *)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+    auto const ssl = (SSL *)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
     auto cert_ptr = SSL_get0_peer_certificate(ssl);
     if (!cert_ptr) {
         log_debug_printf(_setup, "No Peer certificate%s\n", "");
-        return 1; // Success - nothing to verify
+        return 1;  // Success - nothing to verify
     }
-    auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
 
+    auto peer_status = tls_context->getCachedPeerStatus(ssl);
     try {
         // Get status if current status is non existent or not valid
-        if (!tls_context->current_peer_status || !tls_context->current_peer_status->isValid()) {
-            tls_context->current_peer_status = certs::CertStatusManager::getStatus(cert);
+        if (!peer_status || !peer_status->isValid()) {
+            peer_status = tls_context->setCachedPeerStatus(ssl, certs::CertStatusManager::getStatus(ossl_ptr<X509>(X509_dup(cert_ptr))));
         }
-        if ( tls_context->current_peer_status->isGood()) {
+        if (peer_status->isGood()) {
             return 1;  // Successfully validated cert
         } else {
-            return 0;
+            return 0;  // Failed to validate cert
         }
     } catch (certs::CertStatusNoExtensionException &e) {
         log_debug_printf(_setup, "Status monitoring not required%s\n", "");
-        Guard G(tls_context->lock);
-        tls_context->current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnCertifiedCertificateStatus());
-        return 1; // Status monitoring not required
+        tls_context->setCachedPeerStatus(ssl, certs::UnCertifiedCertificateStatus());
+        return 1;  // Status monitoring not required
     } catch (std::runtime_error &e) {
         log_warn_printf(_setup, "Unable to verify peer revocation status: %s\n", e.what());
     }
-    return 0; // Default case is fail
+    return 0;  // Default case is fail
 }
-
 
 /**
  * @brief Common setup for OpenSSL SSL context
@@ -440,7 +437,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
     {
         // Set up certificate verification using cert verify callback
         if (ssl_client)
-            SSL_CTX_set_cert_verify_callback(tls_context.ctx, certVerifyCalback, &tls_context);
+            SSL_CTX_set_cert_verify_callback(tls_context.ctx, certVerifyCallback, &tls_context);
     }
 
     return tls_context;
@@ -504,6 +501,56 @@ bool SSLContext::have_certificate() const {
 
     auto car = static_cast<SSL_CTX_sidecar *>(SSL_CTX_get_ex_data(ctx, ossl_gbl->SSL_CTX_ex_idx));
     return car->cert.operator bool();
+}
+
+/**
+ * @brief Sets the peer status for the certificate on the other end of a given socket file descriptor
+ * @param fd - Socket file descriptor
+ * @param status - Certificate status
+ * @return The peer status that was set
+ */
+std::shared_ptr<const certs::CertificateStatus> SSLContext::setCachedPeerStatus(fd_t fd, const certs::CertificateStatus &status) {
+    return setCachedPeerStatus(fd, std::make_shared<certs::CertificateStatus>(status));
+}
+
+
+/**
+ * @brief Subscribes to peer status if required and not already monitoring
+ * @param ssl - SSL pointer at the other end of which is the certificate to subscribe to
+ * @param fn - Function to call when the peer status changes from good to bad or vice versa
+ */
+void SSLContext::subscribeToPeerStatus(const SSL *ssl, std::function<void(SSLContext*, bool)> fn) {
+    auto fd = getFd(ssl);
+    auto &cert_status_manager = peer_status[fd].cert_status_manager;
+
+    if ( cert_status_manager)
+        return; // Already subscribed
+
+    try {
+        // Get the peer certificate
+        if (auto cert_ptr = SSL_get0_peer_certificate(ssl)) {
+            // Duplicate the certificate
+            auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
+            // Subscribe to the certificate status
+            cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [=](certs::PVACertificateStatus status) {
+                Guard G(lock);
+                // Get the previous status
+                auto previous_status = getCachedPeerStatus(fd);
+                // Check if the previous status was good
+                auto was_good = previous_status && previous_status->isGood();
+                // Set the cached peer status
+                auto current_status = setCachedPeerStatus(fd, status);
+                if (current_status && current_status->isGood()) {
+                    if (!was_good)
+                        // If the status has changed from bad or unknown to good, call the function
+                        fn(this, true);
+                } else if (was_good) {
+                    // If the status has changed from good to bad, call the function
+                    fn(this, false);
+                }
+            });
+        }
+    } catch ( ...) {}
 }
 
 const X509 *SSLContext::certificate0() const {

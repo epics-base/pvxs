@@ -42,12 +42,12 @@ static int clientOCSPCallback(SSL* ctx, ossl::SSLContext* tls_context) {
 
         if (!ocsp_response_ptr || len == -1) {
             log_debug_printf(stapling, "No Stapled OCSP response found by %s\n", "client");
-            tls_context->current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnknownCertificateStatus());
+            tls_context->setCachedPeerStatus(ctx, certs::UnknownCertificateStatus());
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
         const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
         auto status = (certs::CertificateStatus)(certs::OCSPStatus(ocsp_bytes));
-        tls_context->current_peer_status = std::make_shared<certs::CertificateStatus>(status);
+        tls_context->setCachedPeerStatus(ctx, status);
         if (status.isGood()) {
             log_info_printf(stapling, "Client OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
             log_info_printf(stapling, "Client OCSP stapled status date: %s\n", status.status_date.s.c_str());
@@ -60,7 +60,7 @@ static int clientOCSPCallback(SSL* ctx, ossl::SSLContext* tls_context) {
         }
     } catch (std::exception& e) {
         Guard G(tls_context->lock);
-        tls_context->current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnknownCertificateStatus());
+        tls_context->setCachedPeerStatus(ctx, certs::UnknownCertificateStatus());
         log_err_printf(stapling, "Stapled OCSP response: %s\n", e.what());
     }
     return SSL_TLSEXT_ERR_ALERT_FATAL;
@@ -171,28 +171,28 @@ void Connection::startConnecting() {
                         throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
                     }
                     // Set the callback
-                    SSL_CTX_set_tlsext_status_cb(this->context->tls_context.ctx, clientOCSPCallback);
+                    SSL_CTX_set_tlsext_status_cb(context->tls_context.ctx, clientOCSPCallback);
                     // And send the tls context as the parameter to the callabck
-                    SSL_CTX_set_tlsext_status_arg(this->context->tls_context.ctx, &this->context->tls_context);
+                    SSL_CTX_set_tlsext_status_arg(context->tls_context.ctx, &context->tls_context);
                 }
             }
 
             // Monitor peer status going forwards if required
             try {
-                context->peer_cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [this](certs::PVACertificateStatus status) {
-                    Guard G(context->tls_context.lock);
-                    auto was_good = context->tls_context.current_peer_status && context->tls_context.current_peer_status->isGood();
-                    context->tls_context.current_peer_status = std::make_shared<certs::CertificateStatus>(status);
-                    if (context->tls_context.current_peer_status && context->tls_context.current_peer_status->isGood()) {
-                        if (!was_good) context->manager.loop().dispatch([this]() mutable { context->enableTls(); });
-                    } else if (was_good) {
+                context->tls_context.subscribeToPeerStatus(ctx, [this](ossl::SSLContext *tls_context, bool is_good) {
+                    if (is_good) {
+                        // For clients if the peer (server) changes to GOOD then we can renegotiate as TLS
+                        context->manager.loop().dispatch([this]() mutable { context->enableTls(); });
+                    } else {
+                        // For clients if the peer (server) is not GOOD then no TLS can occur
                         context->manager.loop().dispatch([this]() mutable { context->disableTls(); });
                     }
                 });
             } catch ( ...) {}
         } else {
             log_debug_printf(io, "Client connect: no peer certificate so no peer status%s\n", "");
-            context->tls_context.current_peer_status = std::make_shared<certs::CertificateStatus>(certs::UnknownCertificateStatus());
+            Guard G(context->tls_context.lock);
+            context->tls_context.setCachedPeerStatus(ctx, certs::UnknownCertificateStatus());
         }
     } else
 #endif

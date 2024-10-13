@@ -221,6 +221,15 @@ std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus() {
 std::shared_ptr<CertificateStatus> CertStatusManager::getStatus(const ossl_ptr<X509>& cert) { return std::make_shared<CertificateStatus>(*getPVAStatus(cert)); }
 
 /**
+ * @brief Get status for a given uri.  Does not contain OCSP signed
+ * status data.
+ *
+ * @param uri the certificate status PV to get status from
+ * @return std::shared_ptr<CertificateStatus>
+ */
+std::shared_ptr<CertificateStatus> CertStatusManager::getStatus(const std::string uri) { return std::make_shared<CertificateStatus>(*getPVAStatus(uri)); }
+
+/**
  * @brief Get status for the given cert from the manager.
  *
  * If status has already been retrieved and it is still valid then use that otherwise go get new status
@@ -230,8 +239,17 @@ std::shared_ptr<CertificateStatus> CertStatusManager::getStatus(const ossl_ptr<X
  * @see waitForStatus
  */
 std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus(const ossl_ptr<X509>& cert) {
-    auto uri = getStatusPvFromCert(cert);
+    return getPVAStatus(getStatusPvFromCert(cert));
+}
 
+/**
+ * @brief Get status from the given uri.  This status contains the OCSP signed
+ * status data so can be used for stapling.
+ *
+ * @param uri the uri to GET status from
+ * @return ::shared_ptr<PVACertificateStatus>
+ */
+std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus(const std::string uri) {
     // Build and start network operation
     // use an unsecure socket that doesn't monitor status
     auto client(client::Context::forCMS());
