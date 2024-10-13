@@ -111,12 +111,12 @@ struct Tester {
         testShow() << __func__;
         try {
             auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
-            CREATE_CERT_STATUS(intermediate_server, VALID)
-            CREATE_CERT_STATUS(server1, VALID)
-            CREATE_CERT_STATUS(server2, VALID)
-            CREATE_CERT_STATUS(ioc, VALID)
-            CREATE_CERT_STATUS(client1, VALID)
-            CREATE_CERT_STATUS(client2, VALID)
+            CREATE_CERT_STATUS(intermediate_server, {VALID})
+            CREATE_CERT_STATUS(server1, {VALID})
+            CREATE_CERT_STATUS(server2, {VALID})
+            CREATE_CERT_STATUS(ioc, {VALID})
+            CREATE_CERT_STATUS(client1, {VALID})
+            CREATE_CERT_STATUS(client2, {VALID})
         } catch (std::exception& e) {
             testFail("Failed to read certificate in from file: %s\n", e.what());
         }
@@ -127,6 +127,7 @@ struct Tester {
      */
     void makeStatusResponses() {
         testShow() << __func__;
+        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
         MAKE_STATUS_RESPONSE(intermediate_server)
         MAKE_STATUS_RESPONSE(server1)
         MAKE_STATUS_RESPONSE(server2)
@@ -185,7 +186,6 @@ struct Tester {
                 const std::string& serial_string = *++it;
                 uint64_t serial = std::stoull(serial_string);
 
-                testOk(1, "Status Request for: issuer %s, serial %s", issuer_id.c_str(), serial_string.c_str());
                 if (pv.isOpen(pv_name)) {
                     switch (serial) {
                         POST_VALUE_CASE(intermediate_server, post)
@@ -548,7 +548,7 @@ MAIN(testtlswithcms) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(110);
+    testPlan(119);
     testSetup();
     logger_config_env();
     auto tester = new Tester();

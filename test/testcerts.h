@@ -82,7 +82,9 @@ using namespace pvxs::certs;
     const TestCert LNAME##_cert;                                 \
     Value LNAME##_status_response_value{status_value_prototype}; \
     std::string LNAME##_status_pv_name;                          \
-    PVACertificateStatus LNAME##_cert_status;
+    PVACertificateStatus LNAME##_cert_status;                    \
+    std::vector<certstatus_t> LNAME##_cert_statuses;             \
+    int LNAME##_cert_status_response_counter{0};
 
 /**
  * @brief set the appropriate member variable with the name of the PV to get status for a specific certificate
@@ -141,30 +143,40 @@ using namespace pvxs::certs;
  * @param LNAME lowercase name of the certificate
  * @param ACTION post or open depending on whether this is the initial value or subsequent values
  */
-#define POST_VALUE_CASE(LNAME, ACTION)                      \
-    case LNAME##_serial:                                    \
-        LNAME##_status_response_value.mark();               \
-        pv.ACTION(pv_name, LNAME##_status_response_value);  \
-        testOk(1, "Posted value for: %s", pv_name.c_str()); \
-break;
+#define POST_VALUE_CASE(LNAME, ACTION)                                                                                                           \
+    case LNAME##_serial:                                                                                                                         \
+        LNAME##_status_response_value.mark();                                                                                                    \
+        pv.ACTION(pv_name, LNAME##_status_response_value);                                                                                       \
+        LNAME##_cert_status_response_counter++;                                                                                                  \
+        testOk(1, "PV: %s / RESPONSE: %d / VALUE: %s", pv_name.c_str(),                                                                          \
+               LNAME##_cert_status_response_counter, LNAME##_cert_status.status.s.c_str());                                                      \
+        {                                                                                                                                        \
+            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));                       \
+            MAKE_STATUS_RESPONSE(LNAME)                                                                                                          \
+        }                                                                                                                                        \
+        break;
 
 /**
  * @brief Generates the code fragment that will set the member variable holding the certificate status to be
  * returned for status requests for the given certificate from the Mock PVACMS server
  * @param LNAME lowercase name of the certificate
- * @param STATE the state to set the member variable to.
- *              One of `UNKNOWN`, `PENDING_APPROVAL`, `PENDING`, `VALID`, `EXPIRED` or `REVOKED`
+ * @param STATUSES the statuses to set the member variable to.
+ *              each status is one of `UNKNOWN`, `PENDING_APPROVAL`, `PENDING`, `VALID`, `EXPIRED` or `REVOKED`
+ *              and the statuses are in the order they should be returned for the certificate each time
+ *              the status is requested
  */
-#define CREATE_CERT_STATUS(LNAME, STATE)                                                                                            \
-    try {                                                                                                                           \
-        testDiag("Creating OCSP " #STATE " status from: %s", #LNAME " certificate");                                                \
-        if (REVOKED == (STATE))                                                                                                     \
-            LNAME##_cert_status = cert_status_creator.createPVACertificateStatus(LNAME##_cert.cert, STATE, now, revocation_date.t); \
-        else                                                                                                                        \
-            LNAME##_cert_status = cert_status_creator.createPVACertificateStatus(LNAME##_cert.cert, STATE, now);                    \
-        testOk(1, "Created OCSP " #STATE " status from: %s", #LNAME " certificate");                                                \
-    } catch (std::exception & e) {                                                                                                  \
-        testFail("Failed to create " #STATE " status: %s\n", e.what());                                                             \
+#define CREATE_CERT_STATUS(LNAME, STATUSES)                                                                                      \
+    try {                                                                                                                        \
+        testDiag("Creating OCSP " #STATUSES " status from: %s", #LNAME " certificate");                                          \
+        LNAME##_cert_statuses = STATUSES;                                                                                        \
+        auto _s = LNAME##_cert_statuses[0];                                                                                      \
+        if (_s == REVOKED)                                                                                                       \
+            LNAME##_cert_status = cert_status_creator.createPVACertificateStatus(LNAME##_cert.cert, _s, now, revocation_date.t); \
+        else                                                                                                                     \
+            LNAME##_cert_status = cert_status_creator.createPVACertificateStatus(LNAME##_cert.cert, _s, now);                    \
+        testOk(1, "Created initial OCSP %s status from: %s", ((PVACertStatus)_s).s.c_str(), #LNAME " certificate");              \
+    } catch (std::exception & e) {                                                                                               \
+        testFail("Failed to create " #STATUSES " status: %s\n", e.what());                                                       \
     }
 
 /**
@@ -200,6 +212,17 @@ break;
         auto received_client_status = PVACertificateStatus(LNAME##_status_response_value);                                                    \
         testOk1(received_client_status == LNAME##_cert_status);                                                                               \
         testEq(received_client_status.ocsp_bytes.size(), LNAME##_cert_status.ocsp_bytes.size());                                              \
+                                                                                                                                              \
+        if (!LNAME##_cert_statuses.empty()) {                                                                                                 \
+            LNAME##_cert_statuses.erase(LNAME##_cert_statuses.begin());                                                                       \
+            if (!LNAME##_cert_statuses.empty()) {                                                                                             \
+                auto _s = LNAME##_cert_statuses[0];                                                                                           \
+                if (_s == REVOKED)                                                                                                            \
+                    LNAME##_cert_status = cert_status_creator.createPVACertificateStatus(LNAME##_cert.cert, _s, now, revocation_date.t);      \
+                else                                                                                                                          \
+                    LNAME##_cert_status = cert_status_creator.createPVACertificateStatus(LNAME##_cert.cert, _s, now);                         \
+            }                                                                                                                                 \
+        }                                                                                                                                     \
     } catch (std::exception & e) {                                                                                                            \
         testFail("Failed to setup " #LNAME " status response: %s", e.what());                                                                 \
     }
