@@ -118,7 +118,7 @@ jobs:
             piparch: win_amd64
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Automatic core dumper analysis
@@ -317,14 +317,15 @@ jobs:
             pre: linux32
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Setup native python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python || '3.7' }}
+          # used to run twine for uploads
+          python-version: '3.11'
           #architecture: x64
 
       - name: Native Prep/Info
