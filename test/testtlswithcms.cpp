@@ -110,7 +110,7 @@ struct Tester {
     void createCertStatuses() {
         testShow() << __func__;
         try {
-            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
+            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
             CREATE_CERT_STATUS(intermediate_server, {VALID})
             CREATE_CERT_STATUS(server1, {VALID})
             CREATE_CERT_STATUS(server2, {VALID})
@@ -127,7 +127,7 @@ struct Tester {
      */
     void makeStatusResponses() {
         testShow() << __func__;
-        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
+        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
         MAKE_STATUS_RESPONSE(intermediate_server)
         MAKE_STATUS_RESPONSE(server1)
         MAKE_STATUS_RESPONSE(server2)
@@ -508,6 +508,63 @@ struct Tester {
     }
 
     /**
+ * @brief Test getting a value using a certificate that is configured to use an intermediate CA
+ * Note that we don't disable status monitoring so therefore the framework will attempt to contact
+ * PVACMS to verify certificate status for any certificates that contain the certificate status extension.
+ *
+ * We chose the SERVER1 and CLIENT1 certificates for this test which as well as both being
+ * certificates that have an intermediate certificate between them and the root CA, they
+ * also have the certificate status extension embedded in them.  So this test will
+ * verify that the statuses are verified and the TLS proceeds as expected.  If the
+ * statuses are not verified then the test count will be off because there is a test
+ * in the Mock PVACMS when certificate statuses are posted.
+ *
+ * The test to make sure that the connection is a tls connection here serves to verify that
+ * the successful status verification does indeed result in a secure PVAccess connection being
+ * established.
+ */
+    void testUnCachedStatus() {
+        testShow() << __func__;
+        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SHORT_SECS));
+        MAKE_STATUS_RESPONSE(intermediate_server)
+        MAKE_STATUS_RESPONSE(server1)
+        MAKE_STATUS_RESPONSE(server2)
+        MAKE_STATUS_RESPONSE(ioc)
+        MAKE_STATUS_RESPONSE(client1)
+        MAKE_STATUS_RESPONSE(client2)
+
+        RESET_COUNTER(server1)
+        RESET_COUNTER(client1)
+
+        auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
+        auto test_pv(server::SharedPV::buildReadonly());
+
+        auto serv_conf(server::Config::isolated());
+        serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+        serv_conf.tls_disable_stapling = true;
+        auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
+
+        auto cli_conf(serv.clientConfig());
+        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_disable_stapling = true;
+        auto cli(cli_conf.build());
+
+        test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
+        serv.start();
+        sleep(1);
+
+        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); sleep(1); }).exec());
+        sleep(1);
+
+        auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+        testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+        TEST_COUNTER_EQ(server1,2)
+        TEST_COUNTER_EQ(client1,1)
+
+        conn.reset();
+    }
+
+    /**
      * @brief This test checks that tls connections are prohibited when CMS is unavailable but configuration requires it
      *
      * The Mock PVACMS must be previously stopped prior to this test
@@ -602,6 +659,11 @@ MAIN(testtlswithcms) {
     }
     try {
         tester->testServerReconfig();
+    } catch (std::runtime_error& e) {
+        testFail("FAILED with errors: %s\n", e.what());
+    }
+    try {
+        tester->testUnCachedStatus();
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }

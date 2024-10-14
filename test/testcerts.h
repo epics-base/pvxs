@@ -29,6 +29,7 @@ using namespace pvxs::certs;
 
 #define STATUS_VALID_FOR_MINS 30
 #define STATUS_VALID_FOR_SECS (STATUS_VALID_FOR_MINS * 60)
+#define STATUS_VALID_FOR_SHORT_SECS 1
 #define REVOKED_SINCE_MINS (60 * 12)
 #define REVOKED_SINCE_SECS (REVOKED_SINCE_MINS * 60)
 
@@ -151,7 +152,7 @@ using namespace pvxs::certs;
         testOk(1, "PV: %s / RESPONSE: %d / VALUE: %s", pv_name.c_str(),                                                                          \
                LNAME##_cert_status_response_counter, LNAME##_cert_status.status.s.c_str());                                                      \
         {                                                                                                                                        \
-            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));                       \
+            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));                       \
             MAKE_STATUS_RESPONSE(LNAME)                                                                                                          \
         }                                                                                                                                        \
         break;

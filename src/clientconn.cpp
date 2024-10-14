@@ -35,32 +35,35 @@ DEFINE_LOGGER(io, "pvxs.io");
  * or SSL_TLSEXT_ERR_ALERT_FATAL of the OCSP validation.
  */
 static int clientOCSPCallback(SSL* ctx, ossl::SSLContext* tls_context) {
+    X509 *peer_cert = SSL_get_peer_certificate(ctx);
+    auto peer_status = tls_context->ex_data();
     try {
-        Guard G(tls_context->lock);
         uint8_t* ocsp_response_ptr;
         auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
 
         if (!ocsp_response_ptr || len == -1) {
             log_debug_printf(stapling, "No Stapled OCSP response found by %s\n", "client");
-            tls_context->setCachedPeerStatus(ctx, certs::UnknownCertificateStatus());
+            if (peer_status)
+                peer_status->setCachedPeerStatus(peer_cert, certs::UnknownCertificateStatus());
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
         const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
         auto status = (certs::CertificateStatus)(certs::OCSPStatus(ocsp_bytes));
-        tls_context->setCachedPeerStatus(ctx, status);
+        if (peer_status)
+            peer_status->setCachedPeerStatus(peer_cert, status);
         if (status.isGood()) {
-            log_info_printf(stapling, "Client OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
-            log_info_printf(stapling, "Client OCSP stapled status date: %s\n", status.status_date.s.c_str());
-            log_info_printf(stapling, "Client OCSP stapled status valid until: %s\n", status.status_valid_until_date.s.c_str());
-            log_info_printf(stapling, "Client OCSP stapled revocation date: %s\n", status.revocation_date.s.c_str());
+            log_debug_printf(stapling, "Client OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
+            log_debug_printf(stapling, "Client OCSP stapled status date: %s\n", status.status_date.s.c_str());
+            log_debug_printf(stapling, "Client OCSP stapled status valid until: %s\n", status.status_valid_until_date.s.c_str());
+            log_debug_printf(stapling, "Client OCSP stapled revocation date: %s\n", status.revocation_date.s.c_str());
             return SSL_TLSEXT_ERR_OK;
         } else {
             log_err_printf(stapling, "OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
     } catch (std::exception& e) {
-        Guard G(tls_context->lock);
-        tls_context->setCachedPeerStatus(ctx, certs::UnknownCertificateStatus());
+        if (peer_status)
+            peer_status->setCachedPeerStatus(peer_cert, certs::UnknownCertificateStatus());
         log_err_printf(stapling, "Stapled OCSP response: %s\n", e.what());
     }
     return SSL_TLSEXT_ERR_ALERT_FATAL;
@@ -156,43 +159,22 @@ void Connection::startConnecting() {
         // deprecated, but not yet removed
         bufferevent_openssl_set_allow_dirty_shutdown(bev.get(), 1);
 
-        // If there is a peer cert
-        if (auto cert_ptr = SSL_get0_peer_certificate(ctx)) {
-            auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
-            // And if stapling is not disabled
-            if (!context->tls_context.stapling_disabled) {
-                // And client was not previously set to request the stapled OCSP Response
-                if (SSL_get_tlsext_status_type(ctx) != -1) {
-                    // Then enable OCSP status request extension
-                    log_debug_printf(stapling, "Client OCSP Stapling: Setting up request%s\n", "");
-                    if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
-                        log_debug_printf(stapling, "Client OCSP Stapling: requested type set for stapling%s\n", "");
-                    } else {
-                        throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
-                    }
-                    // Set the callback
-                    SSL_CTX_set_tlsext_status_cb(context->tls_context.ctx, clientOCSPCallback);
-                    // And send the tls context as the parameter to the callabck
-                    SSL_CTX_set_tlsext_status_arg(context->tls_context.ctx, &context->tls_context);
+        // If stapling is not disabled
+        if (!context->tls_context.stapling_disabled) {
+            // And client was not previously set to request the stapled OCSP Response
+            if (SSL_get_tlsext_status_type(ctx) != -1) {
+                // Then enable OCSP status request extension
+                log_debug_printf(stapling, "Client OCSP Stapling: Setting up request%s\n", "");
+                if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
+                    log_debug_printf(stapling, "Client OCSP Stapling: requested type set for stapling%s\n", "");
+                } else {
+                    throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
                 }
+                // Set the callback
+                SSL_CTX_set_tlsext_status_cb(context->tls_context.ctx, clientOCSPCallback);
+                // And send the tls context as the parameter to the callabck
+                SSL_CTX_set_tlsext_status_arg(context->tls_context.ctx, &context->tls_context);
             }
-
-            // Monitor peer status going forwards if required
-            try {
-                context->tls_context.subscribeToPeerStatus(ctx, [this](ossl::SSLContext *tls_context, bool is_good) {
-                    if (is_good) {
-                        // For clients if the peer (server) changes to GOOD then we can renegotiate as TLS
-                        context->manager.loop().dispatch([this]() mutable { context->enableTls(); });
-                    } else {
-                        // For clients if the peer (server) is not GOOD then no TLS can occur
-                        context->manager.loop().dispatch([this]() mutable { context->disableTls(); });
-                    }
-                });
-            } catch ( ...) {}
-        } else {
-            log_debug_printf(io, "Client connect: no peer certificate so no peer status%s\n", "");
-            Guard G(context->tls_context.lock);
-            context->tls_context.setCachedPeerStatus(ctx, certs::UnknownCertificateStatus());
         }
     } else
 #endif

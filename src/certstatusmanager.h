@@ -307,7 +307,7 @@ class CertStatusManager {
     time_t manager_start_time_{time(nullptr)};
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes);
 
-    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response);
+    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, std::string custom_ca_dir);
 
     /**
      * @brief To parse OCSP responses
@@ -320,7 +320,7 @@ class CertStatusManager {
      * @return the Parsed OCSP response status
      */
    public:
-    static ParsedOCSPStatus parse(const shared_array<const uint8_t> ocsp_bytes);
+    static ParsedOCSPStatus parse(const shared_array<const uint8_t> ocsp_bytes, std::string custom_ca_dir = {});
 
    private:
     std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);

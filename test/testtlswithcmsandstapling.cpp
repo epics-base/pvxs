@@ -109,7 +109,7 @@ struct Tester {
     void createCertStatuses() {
         testShow() << __func__;
         try {
-            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
+            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
             CREATE_CERT_STATUS(intermediate_server, {VALID})
             CREATE_CERT_STATUS(server1, {VALID})
             CREATE_CERT_STATUS(server2, {VALID})
@@ -126,7 +126,7 @@ struct Tester {
      */
     void makeStatusResponses() {
         testShow() << __func__;
-        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
+        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
         MAKE_STATUS_RESPONSE(intermediate_server)
         MAKE_STATUS_RESPONSE(server1)
         MAKE_STATUS_RESPONSE(server2)

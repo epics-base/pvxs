@@ -218,17 +218,23 @@ bool P12FileFactory::createRootPemFile(const std::string &p12PemString, bool ove
     std::string certs_file = certs_directory_string + "/" + fileName;
 
     // Check if file already exists, if it does, do nothing and return
+/*
     if (!overwrite && access(certs_file.c_str(), F_OK) != -1) {
         log_debug_printf(certs, "Root Certificate already installed: %s\n", certs_file.c_str());
         return true;
     }
+*/
 
+    std::remove(certs_file.c_str());
     file_ptr fp(fopen(certs_file.c_str(), "w"));
     if (!fp) {
         throw std::runtime_error(SB() << "Error opening root certificate file for writing: " << certs_file);
     }
 
     PEM_write_X509(fp.get(), xi->x509);
+
+    // Create appropriate symlink
+    CertFactory::createCertSymlink(certs_file);
 
     log_warn_printf(certs, "The root certificate has been installed.%s", "\n");
     return false;

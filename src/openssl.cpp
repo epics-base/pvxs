@@ -38,8 +38,30 @@ namespace pvxs {
 namespace ossl {
 
 int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
-    // note: no context pointer passed directly.  If needed see: man SSL_CTX_set_verify
-    if (!preverify_ok) {
+    X509 *cert_ptr = X509_STORE_CTX_get_current_cert(x509_ctx);
+    if (preverify_ok) {
+        // cert passed initial inspection verify revocation status
+        log_debug_printf(_io, "Current cert: %s\n", std::string(SB() << ShowX509{cert_ptr}).c_str());
+        auto pva_ex_data = CertStatusExData::fromSSL_X509_STORE_CTX(x509_ctx);
+        if ( pva_ex_data->status_check_enabled ) {
+            auto peer_status = pva_ex_data->getCachedPeerStatus(cert_ptr);
+            try {
+                // Get status if current status is non existent or not valid
+                if (!peer_status || !peer_status->isValid()) {
+                    peer_status = pva_ex_data->setCachedPeerStatus(cert_ptr, certs::CertStatusManager::getStatus(ossl_ptr<X509>(X509_dup(cert_ptr))));
+                }
+                if (!peer_status->isGood()) {
+                    return 0;  // At least one cert is not good
+                }
+            } catch (certs::CertStatusNoExtensionException &e) {
+                log_debug_printf(_io, "Status monitoring not required%s\n", "");
+                pva_ex_data->setCachedPeerStatus(cert_ptr, certs::UnCertifiedCertificateStatus());
+            } catch (std::runtime_error &e) {
+                log_warn_printf(_io, "Unable to verify peer revocation status: %s\n", e.what());
+                return 0;  // We need to verify the peer status but can't so fail
+            }
+        }
+    } else {
         //        X509_STORE_CTX_print_verify_cb(preverify_ok, x509_ctx);
         auto err = X509_STORE_CTX_get_error(x509_ctx);
 
@@ -48,13 +70,9 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
         // If the error is that the certificate is self-signed, we accept it
         if (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY || err == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT ||
             err == X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN) {
-            return 1;  // Accept self-signed certificates
+            return preverify_ok;  // Accept self-signed certificates
         }
-
-        auto cert = X509_STORE_CTX_get_current_cert(x509_ctx);
-        log_err_printf(_io, "Unable to verify peer cert: %s : %s\n", X509_verify_cert_error_string(err), std::string(SB() << ShowX509{cert}).c_str());
-    }
-    if (preverify_ok) {  // cert passed initial inspection
+        log_err_printf(_io, "Unable to verify peer cert: %s : %s\n", X509_verify_cert_error_string(err), std::string(SB() << ShowX509{cert_ptr}).c_str());
     }
     log_printf(_io, preverify_ok ? Level::Debug : Level::Err, "TLS verify %s\n", preverify_ok ? "Ok" : "Reject");
     return preverify_ok;
@@ -113,7 +131,7 @@ void sslkeylogfile_log(const SSL *, const char *line) noexcept {
 #endif  // PVXS_ENABLE_SSLKEYLOGFILE
 
 void free_SSL_CTX_sidecar(void *parent, void *ptr, CRYPTO_EX_DATA *ad, int idx, long argl, void *argp) noexcept {
-    auto car = static_cast<SSL_CTX_sidecar *>(ptr);
+    auto car = static_cast<CertStatusExData *>(ptr);
     delete car;
 }
 
@@ -256,48 +274,6 @@ void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
 }
 
 /**
- * @brief Verify peer certificate's revocation status with PVACMS if it is required
- * @param ctx the SSL context
- * @param tls_context_ptr the pointer to the tls context
- * @return 1 if successful and 0 if fails verification
- */
-int certVerifyCallback(X509_STORE_CTX *ctx, void *tls_context_ptr) {
-    auto *tls_context = (SSLContext *)tls_context_ptr;
-
-    // If stapling is not disabled then we'll get peer status in TLS handshake
-    if (!tls_context->stapling_disabled) {
-        return 1;  // Success - status will have come in TLS handshake
-    }
-
-    auto const ssl = (SSL *)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
-    auto cert_ptr = SSL_get0_peer_certificate(ssl);
-    if (!cert_ptr) {
-        log_debug_printf(_setup, "No Peer certificate%s\n", "");
-        return 1;  // Success - nothing to verify
-    }
-
-    auto peer_status = tls_context->getCachedPeerStatus(ssl);
-    try {
-        // Get status if current status is non existent or not valid
-        if (!peer_status || !peer_status->isValid()) {
-            peer_status = tls_context->setCachedPeerStatus(ssl, certs::CertStatusManager::getStatus(ossl_ptr<X509>(X509_dup(cert_ptr))));
-        }
-        if (peer_status->isGood()) {
-            return 1;  // Successfully validated cert
-        } else {
-            return 0;  // Failed to validate cert
-        }
-    } catch (certs::CertStatusNoExtensionException &e) {
-        log_debug_printf(_setup, "Status monitoring not required%s\n", "");
-        tls_context->setCachedPeerStatus(ssl, certs::UnCertifiedCertificateStatus());
-        return 1;  // Status monitoring not required
-    } catch (std::runtime_error &e) {
-        log_warn_printf(_setup, "Unable to verify peer revocation status: %s\n", e.what());
-    }
-    return 0;  // Default case is fail
-}
-
-/**
  * @brief Common setup for OpenSSL SSL context
  *
  * This function sets up the OpenSSL SSL context used for SSL/TLS communication.
@@ -325,7 +301,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
     if (!tls_context.ctx) throw SSLError("Unable to allocate SSL_CTX");
 
     {
-        std::unique_ptr<SSL_CTX_sidecar> car{new SSL_CTX_sidecar};
+        std::unique_ptr<CertStatusExData> car{new CertStatusExData(!conf.tls_disable_status_check)};
         if (!SSL_CTX_set_ex_data(tls_context.ctx, ossl_gbl->SSL_CTX_ex_idx, car.get())) throw SSLError("SSL_CTX_set_ex_data");
         car.release();  // SSL_CTX_free() now responsible
     }
@@ -402,8 +378,8 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         if (key && !SSL_CTX_check_private_key(tls_context.ctx)) throw SSLError("invalid private key");
 
         if (cert) {
-            auto car = static_cast<SSL_CTX_sidecar *>(SSL_CTX_get_ex_data(tls_context.ctx, ossl_gbl->SSL_CTX_ex_idx));
-            car->cert = std::move(cert);
+            auto ex_data = tls_context.ex_data();
+            ex_data->cert = std::move(cert);
             tls_context.has_cert = true;
 
             if (!SSL_CTX_build_cert_chain(tls_context.ctx, SSL_BUILD_CHAIN_FLAG_CHECK))  // Check build chain
@@ -433,13 +409,6 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         SSL_CTX_set_verify(tls_context.ctx, mode, &ossl_verify);
         SSL_CTX_set_verify_depth(tls_context.ctx, ossl_verify_depth);
     }
-
-    {
-        // Set up certificate verification using cert verify callback
-        if (ssl_client)
-            SSL_CTX_set_cert_verify_callback(tls_context.ctx, certVerifyCallback, &tls_context);
-    }
-
     return tls_context;
 }
 
@@ -499,64 +468,85 @@ int SSLContext::NID_PvaCertStatusURI = NID_undef;
 bool SSLContext::have_certificate() const {
     if (!ctx) throw std::invalid_argument("NULL");
 
-    auto car = static_cast<SSL_CTX_sidecar *>(SSL_CTX_get_ex_data(ctx, ossl_gbl->SSL_CTX_ex_idx));
+    auto car = static_cast<CertStatusExData *>(SSL_CTX_get_ex_data(ctx, ossl_gbl->SSL_CTX_ex_idx));
     return car->cert.operator bool();
 }
 
 /**
- * @brief Sets the peer status for the certificate on the other end of a given socket file descriptor
- * @param fd - Socket file descriptor
+ * @brief Sets the peer status for the given serial number
+ * @param serial_number - Serial number
  * @param status - Certificate status
  * @return The peer status that was set
  */
-std::shared_ptr<const certs::CertificateStatus> SSLContext::setCachedPeerStatus(fd_t fd, const certs::CertificateStatus &status) {
-    return setCachedPeerStatus(fd, std::make_shared<certs::CertificateStatus>(status));
+std::shared_ptr<const certs::CertificateStatus> CertStatusExData::setCachedPeerStatus(serial_number_t serial_number, const certs::CertificateStatus &status) {
+    return setCachedPeerStatus(serial_number, std::make_shared<certs::CertificateStatus>(status));
 }
 
 
 /**
  * @brief Subscribes to peer status if required and not already monitoring
- * @param ssl - SSL pointer at the other end of which is the certificate to subscribe to
+ * @param cert_ptr - peer Certificate status to subscribe to
  * @param fn - Function to call when the peer status changes from good to bad or vice versa
  */
-void SSLContext::subscribeToPeerStatus(const SSL *ssl, std::function<void(SSLContext*, bool)> fn) {
-    auto fd = getFd(ssl);
-    auto &cert_status_manager = peer_status[fd].cert_status_manager;
+void CertStatusExData::subscribeToPeerStatus(X509 *cert_ptr, std::function<void(bool)> fn) {
+    auto serial_number = getSerialNumber(cert_ptr);
+    auto &cert_status_manager = peer_statuses[serial_number].cert_status_manager;
 
     if ( cert_status_manager)
         return; // Already subscribed
 
     try {
-        // Get the peer certificate
-        if (auto cert_ptr = SSL_get0_peer_certificate(ssl)) {
-            // Duplicate the certificate
-            auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
-            // Subscribe to the certificate status
-            cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [=](certs::PVACertificateStatus status) {
-                Guard G(lock);
-                // Get the previous status
-                auto previous_status = getCachedPeerStatus(fd);
-                // Check if the previous status was good
-                auto was_good = previous_status && previous_status->isGood();
-                // Set the cached peer status
-                auto current_status = setCachedPeerStatus(fd, status);
-                if (current_status && current_status->isGood()) {
-                    if (!was_good)
-                        // If the status has changed from bad or unknown to good, call the function
-                        fn(this, true);
-                } else if (was_good) {
-                    // If the status has changed from good to bad, call the function
-                    fn(this, false);
-                }
-            });
-        }
+        // Duplicate the certificate
+        auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
+        // Subscribe to the certificate status
+        cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [=](certs::PVACertificateStatus status) {
+            Guard G(lock);
+            // Get the previous status
+            auto previous_status = getCachedPeerStatus(serial_number);
+            // Check if the previous status was good
+            auto was_good = previous_status && previous_status->isGood();
+            // Set the cached peer status
+            auto current_status = setCachedPeerStatus(serial_number, status);
+            if (current_status && current_status->isGood()) {
+                if (!was_good)
+                    // If the status has changed from bad or unknown to good, call the function
+                    fn(true);
+            } else if (was_good) {
+                // If the status has changed from good to bad, call the function
+                fn(false);
+            }
+        });
     } catch ( ...) {}
+}
+
+CertStatusExData* CertStatusExData::fromSSL_X509_STORE_CTX(X509_STORE_CTX* x509_ctx) {
+    SSL *ssl = (SSL*) X509_STORE_CTX_get_ex_data(x509_ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+    return fromSSL(ssl);
+}
+
+CertStatusExData* CertStatusExData::fromSSL(SSL* ssl) {
+    if (!ssl) {
+        return nullptr;
+    }
+    SSL_CTX *ssl_ctx = SSL_get_SSL_CTX(ssl);
+    return fromSSL_CTX(ssl_ctx);
+}
+
+CertStatusExData* CertStatusExData::fromSSL_CTX(SSL_CTX* ssl_ctx) {
+    if (!ssl_ctx) {
+        return nullptr;
+    }
+    return static_cast<CertStatusExData*>(SSL_CTX_get_ex_data(ssl_ctx, ossl_gbl->SSL_CTX_ex_idx));
+}
+
+CertStatusExData* SSLContext::ex_data() const {
+    return CertStatusExData::fromSSL_CTX(ctx);
 }
 
 const X509 *SSLContext::certificate0() const {
     if (!ctx) throw std::invalid_argument("NULL");
 
-    auto car = static_cast<SSL_CTX_sidecar *>(SSL_CTX_get_ex_data(ctx, ossl_gbl->SSL_CTX_ex_idx));
+    auto car = static_cast<CertStatusExData *>(SSL_CTX_get_ex_data(ctx, ossl_gbl->SSL_CTX_ex_idx));
     return car->cert.get();
 }
 

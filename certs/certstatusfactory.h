@@ -12,6 +12,19 @@
 #ifndef PVXS_CERTSTATUSFACTORY_H_
 #define PVXS_CERTSTATUSFACTORY_H_
 
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <stdexcept>
+#include <cstring>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 #include <openssl/evp.h>
 #include <openssl/ocsp.h>
 #include <openssl/x509.h>
@@ -53,8 +66,8 @@ class CertStatusFactory {
      * @see createPVACertificateStatus()
      */
     CertStatusFactory(const ossl_ptr<X509>& ca_cert, const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain,
-                      uint32_t cert_status_validity_mins = 30)
-        : ca_cert_(ca_cert), ca_pkey_(ca_pkey), ca_chain_(ca_chain), cert_status_validity_mins_(cert_status_validity_mins) {};
+                      uint32_t cert_status_validity_mins = 30, uint32_t cert_status_validity_secs = 0)
+        : ca_cert_(ca_cert), ca_pkey_(ca_pkey), ca_chain_(ca_chain), cert_status_validity_mins_(cert_status_validity_mins) , cert_status_validity_secs_(cert_status_validity_secs) {};
 
     /**
      * @brief Create OCSP status for certificate identified by serial number
@@ -96,6 +109,7 @@ class CertStatusFactory {
     const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey_;                // CA Certificate's private key to sign the OCSP responses
     const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain_;  // CA Certificate chain to encode in the OCSP responses
     const uint32_t cert_status_validity_mins_;               // The status validity period in minutes to encode in the OCSP responses
+    const uint32_t cert_status_validity_secs_;               // The status validity period additional seconds to encode in the OCSP responses
 
     /**
      * @brief Internal function to create an OCSP CERTID.  Uses CertStatusFactory configuration

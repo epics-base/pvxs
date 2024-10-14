@@ -7,6 +7,7 @@
 #define PVXS_OWNED_PTR_H_
 
 #ifdef PVXS_ENABLE_OPENSSL
+#include <openssl/bn.h>
 #include <openssl/conf.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
@@ -97,9 +98,18 @@ struct file_delete;
     }
 #endif
 
+#define DEFINE_BIGNUM_DELETER_FOR_(TYPE)                  \
+    template <>                                           \
+    struct ssl_delete<TYPE> {                             \
+        inline void operator()(TYPE *base_pointer) {      \
+            if (base_pointer) BN_free(base_pointer);      \
+        }                                                 \
+    }
+
 DEFINE_FILE_DELETER_FOR_(FILE);
 
 #ifdef PVXS_ENABLE_OPENSSL
+DEFINE_BIGNUM_DELETER_FOR_(BIGNUM);
 DEFINE_OPENSSL_DELETER_FOR_(char);
 DEFINE_OPENSSL_DELETER_FOR_(unsigned char);
 DEFINE_SQLITE_DELETER_FOR_(sqlite3);

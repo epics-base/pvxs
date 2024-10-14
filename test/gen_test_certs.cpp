@@ -318,7 +318,6 @@ void usage(const char* argv0) {
                ;
 }
 
-/*
 std::string writeCertToTempFile(pvxs::ossl_ptr<X509> &cert) {
     std::string temp_file_path = "ca_cert.pem";
 
@@ -335,9 +334,8 @@ std::string writeCertToTempFile(pvxs::ossl_ptr<X509> &cert) {
     fclose(temp_file);
     return temp_file_path;
 }
-*/
 
-/*void addCertToTruststore(const std::string& cert_path) {
+void addCertToTruststore(const std::string& cert_path) {
     std::string command;
 #ifdef __APPLE__
     // macOS
@@ -352,11 +350,12 @@ std::string writeCertToTempFile(pvxs::ossl_ptr<X509> &cert) {
     throw std::runtime_error("Unsupported platform");
 #endif
 
-    int ret = std::system(command.c_str());
-    if (ret != 0) {
-        throw std::runtime_error("Failed to add certificate to trust store");
-    }
-}*/
+    std::cout << "Root Certificate Created." << std::endl << "Run the following to trust it: " << std::endl << command << std::endl;
+//    int ret = std::system(command.c_str());
+//    if (ret != 0) {
+//        throw std::runtime_error("Failed to add certificate to trust store");
+//    }
+}
 } // namespace
 
 int main(int argc, char *argv[])
@@ -412,12 +411,10 @@ int main(int argc, char *argv[])
             MUST(1, sk_X509_push(p12.cacerts.get(), root_cert.get()));
             p12.write("ca.p12");
 
-/*
             std::string temp_cert_path = writeCertToTempFile(root_cert);
             addCertToTruststore(temp_cert_path);
-            std::remove(temp_cert_path.c_str());
+            pvxs::certs::CertFactory::createCertSymlink(temp_cert_path);
             std::cout << "CA Certificate added to trust store successfully." << std::endl;
-*/
         }
 
         // a server-type cert. issued directly from the root

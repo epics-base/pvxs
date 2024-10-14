@@ -21,6 +21,7 @@
 
 #include <epicsAssert.h>
 
+#include <openssl/bn.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
@@ -32,14 +33,9 @@
 #include "ownedptr.h"
 #include "p12filewatcher.h"
 
-#ifdef _WIN32
-typedef SOCKET fd_t;
-#else
-typedef int fd_t;
-#endif
-
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
+typedef uint64_t serial_number_t;
 
 // EPICS OID for "validTillRevoked" extension:
 // TODO Register this unassigned OID for EPICS
@@ -91,43 +87,121 @@ struct SSLError : public std::runtime_error {
     virtual ~SSLError();
 };
 
-struct SSL_CTX_sidecar {
-    ossl_ptr<X509> cert;
-};
-
-struct ShowX509 {
-    const X509* cert;
-};
-std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
-
 /**
  * @brief Contains peer status and peer status monitor
- *
- * Created whenever a connection to an SSLContext is made.  There is a map in the
- * `SSLContext` from `fd` (socket file descriptor) to the related `SSLPeerStatus`
- * Use `int fd = SSL_get_fd(ssl)` to retrieve the file descriptor from the `SSL*`.
- * The fd is available during TLS handshake and in any callbacks that are set up.
- *
- * Use: A connection will be prevented from being finalised unless a valid (`isValid()`)
- * and good (`isGood()`) status exists for that `fd` identified connection.
- *
- * FOR CLIENTS
- * Client's peers are servers.  They can only have one.
- *
- * If `status_check_disabled` then an entry must be added to
- * made to `peer_status` containing an `certs::UnCertifiedCertificateStatus` and
- * no cert_status_manager (nullptr)
- *
- * If stapling is enabled in the client `SSLContext` then this is filled by the stapling callback.
- *
- * FOR SERVERS
- * Server's peers are clients.  There can be many peers to a single context
  *
  */
 struct SSLPeerStatus {
     std::shared_ptr<const certs::CertificateStatus> status;
     certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
 };
+
+struct CertStatusExData {
+    epicsMutex lock;  // To lock changes to peer statuses
+    ossl_ptr<X509> cert;
+    const bool status_check_enabled;
+    CertStatusExData(bool status_check_enabled) : status_check_enabled(status_check_enabled) {}
+
+    std::map<serial_number_t, SSLPeerStatus> peer_statuses;
+
+    static CertStatusExData* fromSSL_X509_STORE_CTX(X509_STORE_CTX* x509_ctx);
+    static CertStatusExData* fromSSL_CTX(SSL_CTX* ssl);
+    static CertStatusExData* fromSSL(SSL* ssl);
+
+    /**
+     * @brief Returns the serial number for the given certificate
+     * @param cert_ptr - Certificate
+     * @return The serial number
+     */
+    static inline serial_number_t getSerialNumber(X509 *cert_ptr) {
+        ASN1_INTEGER *serial = X509_get_serialNumber(cert_ptr);
+        ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr));
+        if (!bn) {
+            return 0;
+        }
+
+        if (BN_num_bytes(bn.get()) > sizeof(uint64_t)) {
+            return 0;
+        }
+
+        return (serial_number_t)BN_get_word(bn.get());
+    }
+
+    /**
+     * @brief Sets the peer status for the certificate for the given certificate
+     * @param cert_ptr - Certificate
+     * @param status - Certificate status
+     * @return The peer status that was set
+     */
+    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(X509 *cert_ptr, const certs::CertificateStatus &status) {
+        return setCachedPeerStatus(getSerialNumber(cert_ptr), status);
+    }
+
+    /**
+     * @brief Sets the peer status for the given serial number
+     * @param serial_number - Serial number
+     * @param status - Certificate status
+     * @return The peer status that was set
+     */
+    std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(serial_number_t serial_number, const certs::CertificateStatus &status);
+
+    /**
+     * @brief Sets the peer status for the given certificate
+     * @param cert_ptr - Certificate
+     * @param status - Certificate status
+     * @return The peer status that was set
+     */
+    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(X509 *cert_ptr, std::shared_ptr<const certs::CertificateStatus> status) {
+        return setCachedPeerStatus(getSerialNumber(cert_ptr), status);
+    }
+
+    /**
+     * @brief Sets the peer status for the given serial number
+     * @param serial_number - Serial number
+     * @param status - Certificate status
+     * @return The peer status that was set
+     */
+    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(serial_number_t serial_number, const std::shared_ptr<const certs::CertificateStatus> status) {
+        Guard G(lock);
+        peer_statuses[serial_number].status = status;
+        return peer_statuses[serial_number].status;
+    }
+
+    /**
+     * @brief Returns the currently cached peer status if any.  Null if none cached
+     * @param cert_ptr - Certificate
+     * @return The the cached peer status
+     */
+    inline std::shared_ptr<const certs::CertificateStatus> getCachedPeerStatus(X509 *cert_ptr) const {
+        return getCachedPeerStatus(getSerialNumber(cert_ptr));
+    }
+
+    /**
+     * @brief Returns the currently cached peer status if any.  Null if none cached
+     * @param serial_number - Serial number
+     * @return The cached peer status
+     */
+    inline std::shared_ptr<const certs::CertificateStatus> getCachedPeerStatus(const serial_number_t serial_number) const {
+        auto it = peer_statuses.find(serial_number);
+        if (it != peer_statuses.end()) {
+            return it->second.status;
+        }
+        return nullptr;
+    }
+
+    /**
+     * @brief Subscribes to peer status if required and not already monitoring
+     * @param cert_ptr - peer certificate status to subscribe to
+     * @param fn - Function to call when the peer status changes from good to bad or vice versa
+     */
+    void subscribeToPeerStatus(X509 *cert_ptr, std::function<void(bool)> fn);
+};
+
+struct ShowX509 {
+    const X509* cert;
+};
+
+std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
 
 /**
  * @brief SSL context for TLS communication
@@ -155,13 +229,12 @@ struct SSLContext {
     bool status_check_disabled{false};
     bool stapling_disabled{false};
 
-    // A context can have multiple peers
-    std::map<fd_t, SSLPeerStatus> peer_status;
-
     PVXS_API
     static SSLContext for_client(const impl::ConfigCommon& conf);
     PVXS_API
     static SSLContext for_server(const impl::ConfigCommon& conf);
+
+    CertStatusExData* ex_data() const;
 
     SSLContext() = default;
     inline SSLContext(const SSLContext& o)
@@ -216,9 +289,9 @@ struct SSLContext {
      * keyed off NID_PvaCertStatusURI being undefined.
      *
      * This is idempotent.  It can be called multiple times, but will not re-initialize the SSL library.
-     * 
+     *
      * It will do all the one time SSL library initialization that is required, inluding
-     * SSL_library_init(), OpenSSL_add_all_algorithms(), ERR_load_crypto_strings(), 
+     * SSL_library_init(), OpenSSL_add_all_algorithms(), ERR_load_crypto_strings(),
      * OpenSSL_add_all_ciphers(), and OpenSSL_add_all_digests().
      *
      * It will also create and register the custom certificate status URI OID.
@@ -237,84 +310,6 @@ struct SSLContext {
             }
         }
     }
-
-    /**
-     * @brief Returns the socket file descriptor for the given SSL object
-     * @param ssl - SSL object
-     * @return The socket file descriptor
-     */
-    static inline fd_t getFd(const SSL *ssl) {
-        return (fd_t)SSL_get_fd(ssl);
-    }
-
-    /**
-     * @brief Sets the peer status for the certificate for the given SSL object
-     * @param ssl - SSL object
-     * @param status - Certificate status
-     * @return The peer status that was set
-     */
-    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(const SSL *ssl, const certs::CertificateStatus &status) {
-        return setCachedPeerStatus(getFd(ssl), status);
-    }
-
-    /**
-     * @brief Sets the peer status for the certificate on the other end of a given socket file descriptor
-     * @param fd - Socket file descriptor
-     * @param status - Certificate status
-     * @return The peer status that was set
-     */
-    std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(fd_t fd, const certs::CertificateStatus &status);
-
-    /**
-     * @brief Sets the peer status for the certificate for the given SSL object
-     * @param ssl - SSL object
-     * @param status - Certificate status
-     * @return The peer status that was set
-     */
-    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(const SSL *ssl, std::shared_ptr<const certs::CertificateStatus> status) {
-        return setCachedPeerStatus(getFd(ssl), status);
-    }
-
-    /**
-     * @brief Sets the peer status for the certificate on the other end of a given socket file descriptor
-     * @param fd - Socket file descriptor
-     * @param status - Certificate status
-     * @return The peer status that was set
-     */
-    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(fd_t fd, const std::shared_ptr<const certs::CertificateStatus> status) {
-        Guard G(lock);
-        peer_status[fd].status = status;
-        return peer_status[fd].status;
-    }
-
-    /**
-     * @brief Returns the currently cached peer status if any.  Null if none cached
-     * @param ssl - SSL object
-     * @return The the cached peer status
-     */
-    inline std::shared_ptr<const certs::CertificateStatus> getCachedPeerStatus(const SSL *ssl) const {
-        return getCachedPeerStatus(getFd(ssl));
-    }
-
-    /**
-     * @brief Returns the currently cached peer status if any.  Null if none cached
-     * @param fd - Socket file descriptor
-     * @return The cached peer status
-     */
-    inline std::shared_ptr<const certs::CertificateStatus> getCachedPeerStatus(const fd_t fd) const {
-        auto it = peer_status.find(fd);
-        if (it != peer_status.end()) {
-            return it->second.status;
-        }
-        return nullptr;
-    }
-
-    /**
-     * @brief Subscribes to peer status if required and not already monitoring
-     * @param ssl - SSL pointer at the other end of which is the certificate to subscribe to
-     * @param fn - Function to call when the peer status changes from good to bad or vice versa
-     */
-    void subscribeToPeerStatus(const SSL *ssl, std::function<void(SSLContext*, bool)> fn);
 
     explicit operator bool() const { return ctx; }
 

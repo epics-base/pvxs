@@ -67,7 +67,7 @@ struct Tester {
     void ocspPayload() {
         testShow() << __func__;
         try {
-            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
+            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
             CREATE_CERT_STATUS(ca, {VALID});
             CREATE_CERT_STATUS(server1, {PENDING});
             CREATE_CERT_STATUS(client1, {REVOKED});
@@ -123,7 +123,7 @@ struct Tester {
 
     void makeStatusResponses() {
         testShow() << __func__;
-        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, STATUS_VALID_FOR_MINS));
+        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
         MAKE_STATUS_RESPONSE(ca)
         MAKE_STATUS_RESPONSE(server1)
         MAKE_STATUS_RESPONSE(client1)

@@ -70,7 +70,7 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(uint64_t seri
     ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
     // Set ASN1_TIME objects
-    auto status_valid_until_time = StatusDate(this_status_update.t + cert_status_validity_mins_ * 60);
+    auto status_valid_until_time = StatusDate(this_status_update.t + (cert_status_validity_mins_ * 60) + cert_status_validity_secs_);
     const auto this_update = this_status_update.toAsn1_Time();
     const auto next_update = status_valid_until_time.toAsn1_Time();
     StatusDate revocation_time_to_use = (time_t)0;  // Default to 0

@@ -107,7 +107,61 @@ class PVXS_API CertFactory {
     static std::string bioToString(const ossl_ptr<BIO> &bio);
     static void addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value, const X509 *issuer_certificate_ptr);
 
-   private:
+    static inline std::string getCertHashName(const std::string& cert_path) {
+        std::ifstream cert_file(cert_path, std::ios::binary);
+        if (!cert_file) {
+            throw std::runtime_error("Unable to open certificate file");
+        }
+
+        std::string cert_data((std::istreambuf_iterator<char>(cert_file)),
+                              std::istreambuf_iterator<char>());
+
+        BIO* bio = BIO_new_mem_buf(cert_data.data(), cert_data.size());
+        if (!bio) {
+            throw std::runtime_error("Failed to create BIO");
+        }
+
+        X509* cert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+        if (!cert) {
+            BIO_free(bio);
+            throw std::runtime_error("Failed to read certificate");
+        }
+
+        unsigned long hash = X509_subject_name_hash(cert);
+
+        X509_free(cert);
+        BIO_free(bio);
+
+        std::stringstream ss;
+        ss << std::hex << std::setfill('0') << std::setw(8) << hash << ".0";
+        return ss.str();
+    }
+
+    static inline void createCertSymlink(const std::string& cert_path) {
+        std::string hash_name = getCertHashName(cert_path);
+        std::string dir_path;
+        size_t last_slash = cert_path.find_last_of("/\\");
+        if (last_slash != std::string::npos) {
+            dir_path = cert_path.substr(0, last_slash + 1);
+        }
+        std::string symlink_path = dir_path + hash_name;
+        std::string target_path = cert_path.substr(last_slash + 1);
+        std::remove(symlink_path.c_str());
+
+#ifdef _WIN32
+        // Windows doesn't support symlinks easily, so we'll create a hard link
+    if (!CreateHardLinkA(symlink_path.c_str(), cert_path.c_str(), nullptr)) {
+        throw std::runtime_error("Failed to create hard link: " + std::to_string(GetLastError()));
+    }
+#else
+        // UNIX-like systems
+        if (symlink(target_path.c_str(), symlink_path.c_str()) != 0) {
+            throw std::runtime_error("Failed to create symlink: " + std::string(strerror(errno)));
+        }
+#endif
+    }
+
+  private:
     static inline const char *nid2String(int nid) {
         switch (nid) {
             case NID_subject_key_identifier:
