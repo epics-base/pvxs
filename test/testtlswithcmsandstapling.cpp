@@ -28,9 +28,6 @@
 #include "testcerts.h"
 #include "utilpvt.h"
 
-using namespace pvxs;
-using namespace pvxs::certs;
-
 /**
  * @brief This tester uses a Tester object and a bunch of MACROS that rely on a very opinionated
  * set of named variables to function.  prefixes `ca`, `super_server`, `intermediate_server`,
@@ -45,6 +42,9 @@ using namespace pvxs::certs;
  * edge conditions such as requesting stapling but none being provided.
  *
  */
+using namespace pvxs;
+using namespace pvxs::certs;
+
 namespace {
 
 /**
@@ -81,9 +81,9 @@ struct Tester {
                           INIT_CERT_MEMBER_FROM_FILE(client2, CLIENT2)
 
     {
+        // Set up the Mock PVACMS server certificate (does not contain custom status extension)
         auto pvacms_config = server::Config::fromEnv();
-        pvacms_config.tls_cert_filename = SUPER_SERVER_CERT_FILE;  // Set up the Mock PVACMS server certificate (does not contain custom status extension)
-        //        pvacms_config.tls_cert_filename.clear();  // Set up the Mock PVACMS server with no certificate
+        pvacms_config.tls_cert_filename = SUPER_SERVER_CERT_FILE;
         pvacms_config.tls_disable_status_check = true;
         pvacms_config.config_target = pvxs::impl::ConfigCommon::CMS;
         pvacms = pvacms_config.build().addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
@@ -208,7 +208,6 @@ struct Tester {
                             testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
                     }
                 }
-                testDiag("Posted Value for request: %s", pv_name.c_str());
             });
             status_pv.onLastDisconnect([](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>& parameters) {
                 testOk(1, "Closing Status Request Connection: %s", pv_name.c_str());
@@ -257,34 +256,33 @@ struct Tester {
 
         virtual void onSearch(Search& op) override final {
             for (auto& pv : op) {
-                if (strcmp(pv.name(), "whoami") == 0) pv.claim();
+                if (strcmp(pv.name(), WHO_AM_I_PV) == 0) pv.claim();
             }
         }
 
         virtual void onCreate(std::unique_ptr<server::ChannelControl>&& op) override final {
-            if (op->name() != "whoami") return;
+            if (op->name() != WHO_AM_I_PV) return;
 
+            // Handle GET
             op->onOp([this](std::unique_ptr<server::ConnectOp>&& cop) {
-                cop->onGet([this](std::unique_ptr<server::ExecOp>&& eop) {
-                    auto cred(eop->credentials());
-                    std::ostringstream strm;
-                    strm << cred->method << '/' << cred->account;
-
-                    eop->reply(resultType.cloneEmpty().update("value", strm.str()));
-                });
+                cop->onGet([this](std::unique_ptr<server::ExecOp>&& eop) { eop->reply(getWhoAmIValue(eop->credentials())); });
 
                 cop->connect(resultType);
             });
 
+            // Handle MONITOR
             std::shared_ptr<server::MonitorControlOp> sub;
             op->onSubscribe([this, sub](std::unique_ptr<server::MonitorSetupOp>&& sop) mutable {
                 sub = sop->connect(resultType);
-                auto cred(sub->credentials());
-                std::ostringstream strm;
-                strm << cred->method << '/' << cred->account;
-
-                sub->post(resultType.cloneEmpty().update("value", strm.str()));
+                sub->post(getWhoAmIValue(sub->credentials()));
             });
+        }
+
+        // Create the concatenated whoami response string from the `method` and `account`
+        inline Value getWhoAmIValue(std::shared_ptr<const server::ClientCredentials> cred) {
+            std::ostringstream strm;
+            strm << cred->method << '/' << cred->account;
+            return resultType.cloneEmpty().update(TEST_PV_FIELD, strm.str());
         }
     };
 
@@ -306,24 +304,29 @@ struct Tester {
      */
     void testGetIntermediate() {
         testShow() << __func__;
-        auto initial(nt::NTScalar{TypeCode::Int32}.create());
-        auto mbox(server::SharedPV::buildReadonly());
+        RESET_COUNTER(server1)
+        RESET_COUNTER(client1)
+
+        auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
+        auto test_pv(server::SharedPV::buildReadonly());
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
-        auto serv(serv_conf.build().addPV("mailbox", mbox));
+        auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
         auto cli(cli_conf.build());
 
-        mbox.open(initial.update("value", 42));
+        test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
         serv.start();
 
-        auto conn(cli.connect("mailbox").onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
+        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
 
-        auto reply(cli.get("mailbox").exec()->wait(5.0));
-        testEq(reply["value"].as<int32_t>(), 42);
+        auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+        testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+        TEST_COUNTER_EQ(server1,2)
+        TEST_COUNTER_EQ(client1,1)
 
         conn.reset();
     }
@@ -347,11 +350,14 @@ struct Tester {
      */
     void testClientReconfig() {
         testShow() << __func__;
+        RESET_COUNTER(ioc)
+        RESET_COUNTER(client1)
+        RESET_COUNTER(client2)
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = IOC1_CERT_FILE;
 
-        auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
+        auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
@@ -361,7 +367,7 @@ struct Tester {
         serv.start();
 
         epicsEvent evt;
-        auto sub(cli.monitor("whoami").maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
+        auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
         Value update;
 
         try {
@@ -370,13 +376,19 @@ struct Tester {
             testSkip(2, "oops");
         } catch (client::Connected& e) {
             testTrue(e.cred->isTLS);
-            testEq(e.cred->method, "x509");
-            testEq(e.cred->account, "ioc1");
+            testEq(e.cred->method, TLS_METHOD_STRING);
+            testEq(e.cred->account, CERT_CN_IOC1);
+            TEST_COUNTER_EQ(ioc, 2)
+            TEST_COUNTER_EQ(client1, 1)
+            TEST_COUNTER_EQ(client2, 0)
         }
         testDiag("Connect");
 
         update = pop(sub, evt);
-        testEq(update["value"].as<std::string>(), "x509/client1");
+        testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
+        TEST_COUNTER_EQ(ioc, 2)
+        TEST_COUNTER_EQ(client1, 1)
+        TEST_COUNTER_EQ(client2, 0)
 
         cli_conf = cli.config();
         cli_conf.tls_cert_filename = CLIENT2_CERT_FILE;
@@ -392,13 +404,19 @@ struct Tester {
             testFail("Missing expected Connected");
         } catch (client::Connected& e) {
             testOk1(e.cred && e.cred->isTLS);
+            TEST_COUNTER_EQ(ioc, 2)
+            TEST_COUNTER_EQ(client1, 1)
+            TEST_COUNTER_EQ(client2, 0)
         } catch (...) {
             testFail("Unexpected exception instead of Connected");
         }
         testDiag("Reconnect");
 
         update = pop(sub, evt);
-        testEq(update["value"].as<std::string>(), "x509/client2");
+        testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2);
+        TEST_COUNTER_EQ(ioc, 2)
+        TEST_COUNTER_EQ(client1, 1)
+        TEST_COUNTER_EQ(client2, 0)
     }
 
     /**
@@ -411,21 +429,24 @@ struct Tester {
      */
     void testServerReconfig() {
         testShow() << __func__;
+        RESET_COUNTER(server1)
+        RESET_COUNTER(client1)
+        RESET_COUNTER(ioc)
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
 
-        auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
+        auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = IOC1_CERT_FILE;
+        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
 
         auto cli(cli_conf.build());
 
         serv.start();
 
         epicsEvent evt;
-        auto sub(cli.monitor("whoami").maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
+        auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
         Value update;
 
         try {
@@ -434,13 +455,19 @@ struct Tester {
             testSkip(2, "oops");
         } catch (client::Connected& e) {
             testTrue(e.cred->isTLS);
-            testEq(e.cred->method, "x509");
-            testEq(e.cred->account, "server1");
+            testEq(e.cred->method, TLS_METHOD_STRING);
+            testEq(e.cred->account, CERT_CN_SERVER1);
+            TEST_COUNTER_EQ(server1, 2)
+            TEST_COUNTER_EQ(client1, 1)
+            TEST_COUNTER_EQ(ioc, 0)
         }
         testDiag("Connect");
 
         update = pop(sub, evt);
-        testEq(update["value"].as<std::string>(), "x509/ioc1");
+        testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
+        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(client1, 1)
+        TEST_COUNTER_EQ(ioc, 0)
 
         serv_conf = serv.config();
         serv_conf.tls_cert_filename = IOC1_CERT_FILE;
@@ -456,13 +483,89 @@ struct Tester {
             testSkip(2, "oops");
         } catch (client::Connected& e) {
             testTrue(e.cred->isTLS);
-            testEq(e.cred->method, "x509");
-            testEq(e.cred->account, "ioc1");
+            testEq(e.cred->method, TLS_METHOD_STRING);
+            testEq(e.cred->account, CERT_CN_IOC1);
+            TEST_COUNTER_EQ(server1, 2)
+            TEST_COUNTER_EQ(client1, 1)
+            TEST_COUNTER_EQ(ioc, 2)
         }
         testDiag("Reconnect");
 
         update = pop(sub, evt);
-        testEq(update["value"].as<std::string>(), "x509/ioc1");
+        testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
+        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(client1, 1)
+        TEST_COUNTER_EQ(ioc, 2)
+    }
+
+    /**
+     * @brief Test that if client requests stapling but server does not send it
+     * communication is established by out of band status request to CMS
+     */
+    void testClientStaplingNoServerStapling() {
+        testShow() << __func__;
+        RESET_COUNTER(server1)
+        RESET_COUNTER(client1)
+        auto initial(nt::NTScalar{TypeCode::Int32}.create());
+        auto mbox(server::SharedPV::buildReadonly());
+
+        auto serv_conf(server::Config::isolated());
+        serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+        serv_conf.tls_disable_stapling = true;
+        auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+        auto cli_conf(serv.clientConfig());
+        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        auto cli(cli_conf.build());
+
+        mbox.open(initial.update("value", 42));
+        serv.start();
+
+        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
+        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(client1, 0)
+
+        auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+        testEq(reply["value"].as<int32_t>(), 42);
+        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(client1, 1)
+
+        conn.reset();
+    }
+
+    /**
+     * @brief Test that if server sends stapling but client is not expecting it
+     * communication is established by out of band status request to CMS
+     */
+    void testServerStaplingNoClientStapling() {
+        testShow() << __func__;
+        RESET_COUNTER(server1)
+        RESET_COUNTER(client1)
+        auto initial(nt::NTScalar{TypeCode::Int32}.create());
+        auto mbox(server::SharedPV::buildReadonly());
+
+        auto serv_conf(server::Config::isolated());
+        serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+        auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+        auto cli_conf(serv.clientConfig());
+        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_disable_stapling = true;
+        auto cli(cli_conf.build());
+
+        mbox.open(initial.update("value", 42));
+        serv.start();
+
+        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
+        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(client1, 0)
+
+        auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+        testEq(reply["value"].as<int32_t>(), 42);
+        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(client1, 1)
+
+        conn.reset();
     }
 
     /**
@@ -529,64 +632,6 @@ struct Tester {
         update = pop(sub, evt);
         testEq(strncmp(update[TEST_PV_FIELD].as<std::string>().c_str(), TCP_METHOD_STRING, strlen(TCP_METHOD_STRING)), 0);
     }
-
-    /**
-     * @brief Test that if client requests stapling but server does not send it
-     * communication is established by out of band status request to CMS
-     */
-    void testClientStaplingNoServerStapling() {
-        testShow() << __func__;
-        auto initial(nt::NTScalar{TypeCode::Int32}.create());
-        auto mbox(server::SharedPV::buildReadonly());
-
-        auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
-        serv_conf.tls_disable_stapling = true;
-        auto serv(serv_conf.build().addPV("mailbox", mbox));
-
-        auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
-        auto cli(cli_conf.build());
-
-        mbox.open(initial.update("value", 42));
-        serv.start();
-
-        auto conn(cli.connect("mailbox").onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
-
-        auto reply(cli.get("mailbox").exec()->wait(5.0));
-        testEq(reply["value"].as<int32_t>(), 42);
-
-        conn.reset();
-    }
-
-    /**
-     * @brief Test that if server sends stapling but client is not expecting it
-     * communication is established by out of band status request to CMS
-     */
-    void testServertStaplingNoClientStapling() {
-        testShow() << __func__;
-        auto initial(nt::NTScalar{TypeCode::Int32}.create());
-        auto mbox(server::SharedPV::buildReadonly());
-
-        auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
-        auto serv(serv_conf.build().addPV("mailbox", mbox));
-
-        auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
-        cli_conf.tls_disable_stapling = true;
-        auto cli(cli_conf.build());
-
-        mbox.open(initial.update("value", 42));
-        serv.start();
-
-        auto conn(cli.connect("mailbox").onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
-
-        auto reply(cli.get("mailbox").exec()->wait(5.0));
-        testEq(reply["value"].as<int32_t>(), 42);
-
-        conn.reset();
-    }
 };
 
 }  // namespace
@@ -595,7 +640,7 @@ MAIN(testtlswithcmsandstapling) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(147);
+    testPlan(189);
     testSetup();
     logger_config_env();
     auto tester = new Tester();
@@ -623,7 +668,7 @@ MAIN(testtlswithcmsandstapling) {
         testFail("FAILED with errors: %s\n", e.what());
     }
     try {
-        tester->testServertStaplingNoClientStapling();
+        tester->testServerStaplingNoClientStapling();
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }

@@ -157,6 +157,21 @@ using namespace pvxs::certs;
         break;
 
 /**
+ * @brief reset the counter for the given status response
+ * @param LNAME the name of the counter to reset
+ */
+#define RESET_COUNTER(LNAME) \
+    LNAME##_cert_status_response_counter=0;
+
+/**
+ * @brief Test that the counter value is correct
+ * @param LNAME the name of the counter to test
+ * @param VAL the expected value
+ */
+#define TEST_COUNTER_EQ(LNAME, VAL)  \
+    testEq(LNAME##_cert_status_response_counter, VAL);
+
+/**
  * @brief Generates the code fragment that will set the member variable holding the certificate status to be
  * returned for status requests for the given certificate from the Mock PVACMS server
  * @param LNAME lowercase name of the certificate
@@ -187,7 +202,6 @@ using namespace pvxs::certs;
  */
 #define MAKE_STATUS_RESPONSE(LNAME)                                                                                                           \
     try {                                                                                                                                     \
-        testDiag("Setting up: %s", #LNAME " Certificate Response");                                                                           \
         LNAME##_status_response_value = CertStatus::getStatusPrototype().cloneEmpty();                                                        \
         LNAME##_status_response_value.unmark();                                                                                               \
         setValue<uint64_t>(LNAME##_status_response_value, "serial", LNAME##_serial);                                                          \
@@ -209,9 +223,9 @@ using namespace pvxs::certs;
         }                                                                                                                                     \
         testDiag("Set up: %s", #LNAME " certificate Status Response");                                                                        \
                                                                                                                                               \
-        auto received_client_status = PVACertificateStatus(LNAME##_status_response_value);                                                    \
-        testOk1(received_client_status == LNAME##_cert_status);                                                                               \
-        testEq(received_client_status.ocsp_bytes.size(), LNAME##_cert_status.ocsp_bytes.size());                                              \
+        auto converted_response = PVACertificateStatus(LNAME##_status_response_value);                                                    \
+        testOk1(converted_response == LNAME##_cert_status);                                                                               \
+        testEq(converted_response.ocsp_bytes.size(), LNAME##_cert_status.ocsp_bytes.size());                                              \
                                                                                                                                               \
         if (!LNAME##_cert_statuses.empty()) {                                                                                                 \
             LNAME##_cert_statuses.erase(LNAME##_cert_statuses.begin());                                                                       \

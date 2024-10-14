@@ -305,6 +305,9 @@ struct Tester {
      */
     void testGetIntermediate() {
         testShow() << __func__;
+        RESET_COUNTER(server1)
+        RESET_COUNTER(client1)
+
         auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
         auto test_pv(server::SharedPV::buildReadonly());
 
@@ -325,6 +328,8 @@ struct Tester {
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+        TEST_COUNTER_EQ(server1,2)
+        TEST_COUNTER_EQ(client1,1)
 
         conn.reset();
     }
@@ -348,6 +353,9 @@ struct Tester {
      */
     void testClientReconfig() {
         testShow() << __func__;
+        RESET_COUNTER(ioc)
+        RESET_COUNTER(client1)
+        RESET_COUNTER(client2)
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = IOC1_CERT_FILE;
@@ -375,11 +383,17 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
+            TEST_COUNTER_EQ(ioc, 2)
+            TEST_COUNTER_EQ(client1, 1)
+            TEST_COUNTER_EQ(client2, 0)
         }
         testDiag("Connect");
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
+        TEST_COUNTER_EQ(ioc, 2)
+        TEST_COUNTER_EQ(client1, 1)
+        TEST_COUNTER_EQ(client2, 0)
 
         cli_conf = cli.config();
         cli_conf.tls_cert_filename = CLIENT2_CERT_FILE;
@@ -396,6 +410,9 @@ struct Tester {
             testFail("Missing expected Connected");
         } catch (client::Connected& e) {
             testOk1(e.cred && e.cred->isTLS);
+            TEST_COUNTER_EQ(ioc, 2)
+            TEST_COUNTER_EQ(client1, 1)
+            TEST_COUNTER_EQ(client2, 0)
         } catch (...) {
             testFail("Unexpected exception instead of Connected");
         }
@@ -403,6 +420,9 @@ struct Tester {
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2);
+        TEST_COUNTER_EQ(ioc, 2)
+        TEST_COUNTER_EQ(client1, 1)
+        TEST_COUNTER_EQ(client2, 0)
     }
 
     /**
@@ -415,6 +435,9 @@ struct Tester {
      */
     void testServerReconfig() {
         testShow() << __func__;
+        RESET_COUNTER(server1)
+        RESET_COUNTER(client1)
+        RESET_COUNTER(ioc)
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
@@ -423,7 +446,7 @@ struct Tester {
         auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = IOC1_CERT_FILE;
+        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
         cli_conf.tls_disable_stapling = true;
 
         auto cli(cli_conf.build());
@@ -442,11 +465,17 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_SERVER1);
+            TEST_COUNTER_EQ(server1, 2)
+            TEST_COUNTER_EQ(client1, 1)
+            TEST_COUNTER_EQ(ioc, 0)
         }
         testDiag("Connect");
 
         update = pop(sub, evt);
-        testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_IOC1);
+        testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
+        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(client1, 1)
+        TEST_COUNTER_EQ(ioc, 0)
 
         serv_conf = serv.config();
         serv_conf.tls_cert_filename = IOC1_CERT_FILE;
@@ -465,11 +494,17 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
+            TEST_COUNTER_EQ(server1, 2)
+            TEST_COUNTER_EQ(client1, 1)
+            TEST_COUNTER_EQ(ioc, 2)
         }
         testDiag("Reconnect");
 
         update = pop(sub, evt);
-        testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_IOC1);
+        testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
+        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(client1, 1)
+        TEST_COUNTER_EQ(ioc, 2)
     }
 
     /**
@@ -548,7 +583,7 @@ MAIN(testtlswithcms) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(119);
+    testPlan(153);
     testSetup();
     logger_config_env();
     auto tester = new Tester();
