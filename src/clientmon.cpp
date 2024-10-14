@@ -242,7 +242,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
         loop.call([this, &ret](){
             // really on worker
 
-            // try to re-use already wrapped
+            // try to reuse already wrapped
             ret = external_internal.lock();
             if(!ret) {
                 // nope, need to build a fresh one

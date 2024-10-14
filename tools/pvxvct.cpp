@@ -83,7 +83,7 @@ void usage(const char *name)
                "\n"
                "PV Access Virtual Cable Tester\n"
                "\n"
-               "Assist in troubleshooting network (mis)configuration by listening\n"
+               "Assist in troubleshooting network configuration by listening\n"
                "for (some) PVA client/server UDP traffic.\n"
                "\n"
                "  -h               Print this message\n"

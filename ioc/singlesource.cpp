@@ -304,7 +304,7 @@ void onOp(const std::shared_ptr<SingleInfo>& sInfo, const Value& valuePrototype,
             });
 
     // Make a security cache for this client's connection to this pv
-    // Each time the same client calls put we will re-use the cached security client
+    // Each time the same client calls put we will reuse the cached security client
     // The security cache will be deleted when the client disconnects from this pv
     auto putOperationCache = std::make_shared<PutOperationCache>();
 

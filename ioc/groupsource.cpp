@@ -159,7 +159,7 @@ void GroupSource::onOp(Group& group,
     });
 
     // Make a security cache for this client's connection to this group
-    // Each time the same client calls put we will re-use the cached security client
+    // Each time the same client calls put we will reuse the cached security client
     // The security cache will be deleted when the client disconnects from this group pv
     auto securityCache = std::make_shared<GroupSecurityCache>();
 

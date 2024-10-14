@@ -52,7 +52,7 @@ EPICS_PVAS_INTF_ADDR_LIST
 
 EPICS_PVAS_BEACON_ADDR_LIST or EPICS_PVA_ADDR_LIST
     Space separated list of unicast or broadcast addresses.
-    This list is supplimented all local broadcast addresses if auto-beacon is YES.
+    This list is supplemented all local broadcast addresses if auto-beacon is YES.
     Sets `pvxs::server::Config::beaconDestinations`
 
 EPICS_PVAS_AUTO_BEACON_ADDR_LIST or EPICS_PVA_AUTO_ADDR_LIST

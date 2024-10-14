@@ -798,7 +798,7 @@ void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
     cur.guid = msg.guid;
     cur.peerVersion = msg.peerVersion;
     cur.time = now;
-    // don't trigger if sender changes as server (mis)configuration
+    // don't trigger if sender changes as server configuration
     // could see beacons reach us from multiple interfaces.
     cur.sender = msg.src;
 

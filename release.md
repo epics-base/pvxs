@@ -1,6 +1,6 @@
 # Preparation
 
-1. Generage ABI change report from previous release tag to latest commit.
+1. Generate ABI change report from previous release tag to latest commit.
    Ensure `PVXS_MINOR_VERSION` incrementes if not 100% (or if other ABI change
    is known)
 

@@ -85,7 +85,7 @@ void pvaOpenLink(DBLINK *plink) noexcept
             linkGlobal_t::channels_t::iterator it(linkGlobal->channels.find(key));
 
             if(it!=linkGlobal->channels.end()) {
-                // re-use existing channel
+                // reuse existing channel
                 chan = it->second.lock();
             }
 
