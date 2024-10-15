@@ -29,7 +29,7 @@ void ServerSource::onSearch(Search &op)
 
 void ServerSource::onCreate(std::unique_ptr<server::ChannelControl> &&op)
 {
-    if(op->name()!=name)
+    if(!op || op->name()!=name)
         return;
 
     auto handle = std::move(op); // claim

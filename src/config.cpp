@@ -551,9 +551,9 @@ Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
 
 /**
  * @brief Create a Config object with default values suitable for isolated testing
- * 
+ *
  * @param family AF_INET or AF_INET6
- * @return Config 
+ * @return Config
  */
 Config Config::isolated(int family) {
     Config ret;
@@ -577,6 +577,7 @@ Config Config::isolated(int family) {
     ret.tls_disable_status_check = true;
     ret.tls_disable_stapling = true;
 
+    ret.is_initialized = true;
     return ret;
 }
 
