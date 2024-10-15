@@ -251,8 +251,8 @@ std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus(const std:
     // Build and start network operation
     // use an unsecure socket that doesn't monitor status
     auto client(client::Context::forCMS());
-    // Very short wait for status
-    Value result = client.get(uri).exec()->wait(0.2);
+    // Wait for status
+    Value result = client.get(uri).exec()->wait();
     client.close();
     return std::make_shared<PVACertificateStatus>(result);
 }
@@ -410,6 +410,14 @@ std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certifi
     return getStatusPvFromCert(certificate.get());
 }
 
+/**
+ * @brief Check if status monitoring is required for the given certificate.
+ * This method checks if the given certificate has the custom extension with the NID_PvaCertStatusURI.
+ * If such an extension is found, it returns true, indicating that status monitoring is required.
+ * If no such extension is found, it returns false, indicating that status monitoring is not required.
+ * @param certificate the certificate to check for status monitoring requirement
+ * @return true if status monitoring is required, false otherwise
+ */
 bool CertStatusManager::statusMonitoringRequired(const X509 * certificate) {
     try {
         getExtension(certificate);
@@ -418,6 +426,13 @@ bool CertStatusManager::statusMonitoringRequired(const X509 * certificate) {
     return false;
 }
 
+/**
+ * @brief Get the extension from the certificate.
+ * This method retrieves the extension from the given certificate using the NID_PvaCertStatusURI.
+ * If the extension is not found, it throws a CertStatusNoExtensionException.
+ * @param certificate the certificate to retrieve the extension from
+ * @return the X509_EXTENSION object if found, otherwise throws an exception
+ */
 X509_EXTENSION* CertStatusManager::getExtension(const X509 * certificate) {
     int extension_index = X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_PvaCertStatusURI, -1);
     if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find extension index");

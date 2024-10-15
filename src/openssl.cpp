@@ -40,9 +40,17 @@ namespace ossl {
 int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
     X509 *cert_ptr = X509_STORE_CTX_get_current_cert(x509_ctx);
     if (preverify_ok) {
-        // cert passed initial inspection verify revocation status
-        log_debug_printf(_io, "Current cert: %s\n", std::string(SB() << ShowX509{cert_ptr}).c_str());
+        // cert passed initial inspection, now check if revocation status is required
+        if ( !certs::CertStatusManager::statusMonitoringRequired(cert_ptr) ) {
+            return preverify_ok; // No need to check status
+        }
+
+        // Status monitoring required, now check revocation status
+        log_debug_println(watcher, "Current cert: %s\n", std::string(SB() << ShowX509{cert_ptr}).c_str());
         auto pva_ex_data = CertStatusExData::fromSSL_X509_STORE_CTX(x509_ctx);
+
+        // Check if status monitoring is enabled
+        // TODO Verify with working group that this logic is correct
         if ( pva_ex_data->status_check_enabled ) {
             auto peer_status = pva_ex_data->getCachedPeerStatus(cert_ptr);
             try {
@@ -54,10 +62,10 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
                     return 0;  // At least one cert is not good
                 }
             } catch (certs::CertStatusNoExtensionException &e) {
-                log_debug_printf(_io, "Status monitoring not required%s\n", "");
-                pva_ex_data->setCachedPeerStatus(cert_ptr, certs::UnCertifiedCertificateStatus());
+                log_err_printf(watcher, "Logic Error: Status monitored when not configured in cert: %s\n", std::string(SB() << ShowX509{cert_ptr}).c_str());
+                exit(1);
             } catch (std::runtime_error &e) {
-                log_warn_printf(_io, "Unable to verify peer revocation status: %s\n", e.what());
+                log_warn_printf(watcher, "Unable to verify peer revocation status: %s\n", e.what());
                 return 0;  // We need to verify the peer status but can't so fail
             }
         }
@@ -259,13 +267,13 @@ void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
         if (flags & EXFLAG_SS) {        // self-signed (aka. root)
             assert(flags & EXFLAG_SI);  // circa OpenSSL, self-signed implies self-issued
 
-            log_debug_printf(_setup, "Trusting root CA %s\n", std::string(SB() << ShowX509{ca}).c_str());
+            log_debug_println(_setup, "Trusting root CA %s\n", std::string(SB() << ShowX509{ca}).c_str());
 
             // populate the context's trust store with the root cert
             X509_STORE *trusted_store = SSL_CTX_get_cert_store(ctx.ctx);
             if (!X509_STORE_add_cert(trusted_store, ca)) throw SSLError("X509_STORE_add_cert");
         } else {  // signed by another CA
-            log_debug_printf(_setup, "Using untrusted/chain CA cert %s\n", std::string(SB() << ShowX509{ca}).c_str());
+            log_debug_println(_setup, "Using untrusted/chain CA cert %s\n", std::string(SB() << ShowX509{ca}).c_str());
             // note: chain certs added this way are ignored unless SSL_BUILD_CHAIN_FLAG_UNTRUSTED is used
             // appends SSL_CTX::cert::chain
         }

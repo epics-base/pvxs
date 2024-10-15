@@ -110,6 +110,7 @@ struct Tester {
         testShow() << __func__;
         try {
             auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
+            CREATE_CERT_STATUS(ca, {VALID})
             CREATE_CERT_STATUS(intermediate_server, {VALID})
             CREATE_CERT_STATUS(server1, {VALID})
             CREATE_CERT_STATUS(server2, {VALID})
@@ -127,6 +128,7 @@ struct Tester {
     void makeStatusResponses() {
         testShow() << __func__;
         auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
+        MAKE_STATUS_RESPONSE(ca)
         MAKE_STATUS_RESPONSE(intermediate_server)
         MAKE_STATUS_RESPONSE(server1)
         MAKE_STATUS_RESPONSE(server2)
@@ -172,6 +174,7 @@ struct Tester {
         try {
             testDiag("Setting up: %s", "Mock PVACMS Server");
 
+            SET_PV(ca)
             SET_PV(intermediate_server)
             SET_PV(server1)
             SET_PV(server2)
@@ -187,6 +190,7 @@ struct Tester {
 
                 if (pv.isOpen(pv_name)) {
                     switch (serial) {
+                        POST_VALUE_CASE(ca, post)
                         POST_VALUE_CASE(intermediate_server, post)
                         POST_VALUE_CASE(server1, post)
                         POST_VALUE_CASE(server2, post)
@@ -198,6 +202,7 @@ struct Tester {
                     }
                 } else {
                     switch (serial) {
+                        POST_VALUE_CASE(ca, open)
                         POST_VALUE_CASE(intermediate_server, open)
                         POST_VALUE_CASE(server1, open)
                         POST_VALUE_CASE(server2, open)
