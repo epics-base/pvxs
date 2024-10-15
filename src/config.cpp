@@ -549,6 +549,12 @@ Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
     return *this;
 }
 
+/**
+ * @brief Create a Config object with default values suitable for isolated testing
+ * 
+ * @param family AF_INET or AF_INET6
+ * @return Config 
+ */
 Config Config::isolated(int family) {
     Config ret;
 
@@ -567,6 +573,9 @@ Config Config::isolated(int family) {
         default:
             throw std::logic_error(SB() << "Unsupported address family " << family);
     }
+    // For testing purposes disable status checking and stapling when using isolated config
+    ret.tls_disable_status_check = true;
+    ret.tls_disable_stapling = true;
 
     return ret;
 }

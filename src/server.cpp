@@ -203,6 +203,8 @@ client::Config Server::clientConfig() const
 #ifdef PVXS_ENABLE_OPENSSL
     ret.tls_port = pvt->effective.tls_port;
     ret.tls_disabled = pvt->effective.tls_disabled;
+    ret.tls_disable_status_check = pvt->effective.tls_disable_status_check;
+    ret.tls_disable_stapling = pvt->effective.tls_disable_stapling;
 #endif
     ret.is_initialized = true;
 

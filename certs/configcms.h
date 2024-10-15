@@ -24,8 +24,22 @@ class ConfigCms : public pvxs::server::Config {
         return *this;
     }
 
+    /**
+     * @brief Create a CMS configuration from environment variables
+     * 
+     * @return ConfigCms 
+     */
     static inline ConfigCms fromEnv() {
+        // Get default config
         auto config = ConfigCms{}.applyEnv();
+
+        // Indicate that this is a CMS configuration
+        config.config_target = pvxs::impl::ConfigCommon::CMS;
+
+        // Disable status checking as this is the CMS itself
+        config.tls_disable_status_check = true;
+
+        // Override with any specific CMS configuration from environment variables
         config.fromCmsEnv(std::map<std::string, std::string>());
         return config;
     }

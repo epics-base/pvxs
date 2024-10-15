@@ -1580,8 +1580,6 @@ int main(int argc, char *argv[]) {
 
         // Get config
         auto config = ConfigCms::fromEnv();
-        config.config_target = pvxs::impl::ConfigCommon::CMS;
-        config.tls_disable_status_check = true;
 
         // Read commandline options
         int exit_status;

@@ -33,14 +33,12 @@ void testClientBackwardsCompatibility() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "superserver1.p12";
-    serv_conf.tls_disable_status_check = true;
-    serv_conf.tls_disable_stapling = true;
+
 
     auto serv(serv_conf.build().addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_disable_status_check = true;
-    cli_conf.tls_disable_stapling = true;
+
 
     auto cli(cli_conf.build());
 
@@ -61,15 +59,13 @@ void testServerBackwardsCompatibility() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_disable_status_check = true;
-    serv_conf.tls_disable_stapling = true;
+
 
     auto serv(serv_conf.build().addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = "client1.p12";
-    cli_conf.tls_disable_status_check = true;
-    cli_conf.tls_disable_stapling = true;
+
 
     auto cli(cli_conf.build());
 
@@ -91,15 +87,11 @@ void testGetSuper() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "superserver1.p12";
-    serv_conf.tls_disable_status_check = true;
-    serv_conf.tls_disable_stapling = true;
 
     auto serv(serv_conf.build().addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = "client1.p12";
-    cli_conf.tls_disable_status_check = true;
-    cli_conf.tls_disable_stapling = true;
 
     auto cli(cli_conf.build());
 
@@ -121,15 +113,11 @@ void testGetIntermediate() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "server1.p12";
-    serv_conf.tls_disable_status_check = true;
-    serv_conf.tls_disable_stapling = true;
 
     auto serv(serv_conf.build().addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = "client1.p12";
-    cli_conf.tls_disable_status_check = true;
-    cli_conf.tls_disable_stapling = true;
 
     auto cli(cli_conf.build());
 
@@ -151,15 +139,11 @@ void testGetNameServer() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "server1.p12";
-    serv_conf.tls_disable_status_check = true;
-    serv_conf.tls_disable_stapling = true;
 
     auto serv(serv_conf.build().addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = "client1.p12";
-    cli_conf.tls_disable_status_check = true;
-    cli_conf.tls_disable_stapling = true;
 
     for (auto& addr : cli_conf.addressList) cli_conf.nameServers.push_back(SB() << "pvas://" << addr /*<<':'<<cli_conf.tls_port*/);
     cli_conf.autoAddrList = false;
@@ -231,15 +215,11 @@ void testClientReconfig() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "ioc1.p12";
-    serv_conf.tls_disable_status_check = true;
-    serv_conf.tls_disable_stapling = true;
 
     auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = "client1.p12";
-    cli_conf.tls_disable_status_check = true;
-    cli_conf.tls_disable_stapling = true;
 
     auto cli(cli_conf.build());
 
@@ -291,15 +271,13 @@ void testServerReconfig() {
 
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "server1.p12";
-    serv_conf.tls_disable_status_check = true;
-    serv_conf.tls_disable_stapling = true;
+
 
     auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = "ioc1.p12";
-    cli_conf.tls_disable_status_check = true;
-    cli_conf.tls_disable_stapling = true;
+
 
     auto cli(cli_conf.build());
 

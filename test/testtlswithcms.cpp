@@ -318,12 +318,11 @@ struct Tester {
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
-        serv_conf.tls_disable_stapling = true;
+        serv_conf.tls_disable_status_check = false;
         auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
-        cli_conf.tls_disable_stapling = true;
         auto cli(cli_conf.build());
 
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
@@ -364,13 +363,12 @@ struct Tester {
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = IOC1_CERT_FILE;
-        serv_conf.tls_disable_stapling = true;
+        serv_conf.tls_disable_status_check = false;
 
         auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
-        cli_conf.tls_disable_stapling = true;
 
         auto cli(cli_conf.build());
 
@@ -446,13 +444,12 @@ struct Tester {
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
-        serv_conf.tls_disable_stapling = true;
+        serv_conf.tls_disable_status_check = false;
 
         auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
-        cli_conf.tls_disable_stapling = true;
 
         auto cli(cli_conf.build());
 
@@ -484,7 +481,6 @@ struct Tester {
 
         serv_conf = serv.config();
         serv_conf.tls_cert_filename = IOC1_CERT_FILE;
-        serv_conf.tls_disable_stapling = true;
         testDiag("serv.reconfigure()");
         serv.reconfigure(serv_conf);
 
@@ -547,12 +543,12 @@ struct Tester {
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
-        serv_conf.tls_disable_stapling = true;
+        serv_conf.tls_disable_status_check = false;
         auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
-        cli_conf.tls_disable_stapling = true;
+
         auto cli(cli_conf.build());
 
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
@@ -581,13 +577,12 @@ struct Tester {
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_cert_filename = IOC1_CERT_FILE;
-        serv_conf.tls_disable_stapling = true;
+        serv_conf.tls_disable_status_check = false;
 
         auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
-        cli_conf.tls_disable_stapling = true;
 
         auto cli(cli_conf.build());
 
@@ -595,44 +590,14 @@ struct Tester {
 
         epicsEvent evt;
         auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
-        Value update;
 
         try {
-            pop(sub, evt);
+            testTrue(!evt.wait(5.0));
+        } catch (client::Connected& e) {
             testFail("Unexpected success");
-            testSkip(2, "oops");
-        } catch (client::Connected& e) {
-            testFalse(e.cred->isTLS);
-            testEq(e.cred->method, ANON_METHOD_STRING);
-            testEq(e.cred->account, "");
+            testSkip(1, "oops");
         }
-        testDiag("Connect");
-
-        update = pop(sub, evt);
-        testEq(strncmp(update[TEST_PV_FIELD].as<std::string>().c_str(), TCP_METHOD_STRING, strlen(TCP_METHOD_STRING)), 0);
-
-        cli_conf = cli.config();
-        cli_conf.tls_cert_filename = CLIENT2_CERT_FILE;
-        cli_conf.tls_cert_password = CLIENT2_CERT_FILE_PWD;
-        cli_conf.tls_disable_stapling = true;
-        testDiag("cli.reconfigure()");
-        cli.reconfigure(cli_conf);
-
-        testThrows<client::Disconnect>([this, &sub, &evt] { pop(sub, evt); });
-        testDiag("Disconnect");
-
-        try {
-            (void)pop(sub, evt);
-            testFail("Missing expected Connected");
-        } catch (client::Connected& e) {
-            testOk1(e.cred && !e.cred->isTLS);
-        } catch (...) {
-            testFail("Unexpected exception instead of Connected");
-        }
-        testDiag("Reconnect");
-
-        update = pop(sub, evt);
-        testEq(strncmp(update[TEST_PV_FIELD].as<std::string>().c_str(), TCP_METHOD_STRING, strlen(TCP_METHOD_STRING)), 0);
+        testDiag("Expected to not connect");
     }
 };
 
