@@ -332,8 +332,8 @@ struct Tester {
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-        TEST_COUNTER_EQ(server1,2)
-        TEST_COUNTER_EQ(client1,1)
+        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(client1, 1)
 
         conn.reset();
     }
@@ -509,21 +509,21 @@ struct Tester {
     }
 
     /**
- * @brief Test getting a value using a certificate that is configured to use an intermediate CA
- * Note that we don't disable status monitoring so therefore the framework will attempt to contact
- * PVACMS to verify certificate status for any certificates that contain the certificate status extension.
- *
- * We chose the SERVER1 and CLIENT1 certificates for this test which as well as both being
- * certificates that have an intermediate certificate between them and the root CA, they
- * also have the certificate status extension embedded in them.  So this test will
- * verify that the statuses are verified and the TLS proceeds as expected.  If the
- * statuses are not verified then the test count will be off because there is a test
- * in the Mock PVACMS when certificate statuses are posted.
- *
- * The test to make sure that the connection is a tls connection (isTLS) here serves to verify that
- * the successful status verification does indeed result in a secure PVAccess connection being
- * established.
- */
+     * @brief Test getting a value using a certificate that is configured to use an intermediate CA
+     * Note that we don't disable status monitoring so therefore the framework will attempt to contact
+     * PVACMS to verify certificate status for any certificates that contain the certificate status extension.
+     *
+     * We chose the SERVER1 and CLIENT1 certificates for this test which as well as both being
+     * certificates that have an intermediate certificate between them and the root CA, they
+     * also have the certificate status extension embedded in them.  So this test will
+     * verify that the statuses are verified and the TLS proceeds as expected.  If the
+     * statuses are not verified then the test count will be off because there is a test
+     * in the Mock PVACMS when certificate statuses are posted.
+     *
+     * The test to make sure that the connection is a tls connection (isTLS) here serves to verify that
+     * the successful status verification does indeed result in a secure PVAccess connection being
+     * established.
+     */
     void testUnCachedStatus() {
         testShow() << __func__;
         auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SHORT_SECS));
@@ -555,13 +555,18 @@ struct Tester {
         serv.start();
         sleep(1);
 
-        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); sleep(1); }).exec());
+        auto conn(cli.connect(TEST_PV)
+                      .onConnect([](const client::Connected& c) {
+                          testTrue(c.cred && c.cred->isTLS);
+                          sleep(1);
+                      })
+                      .exec());
         sleep(1);
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-        TEST_COUNTER_EQ(server1,2)
-        TEST_COUNTER_EQ(client1,1)
+        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(client1, 1)
 
         conn.reset();
     }

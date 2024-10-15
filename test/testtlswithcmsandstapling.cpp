@@ -332,8 +332,8 @@ struct Tester {
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-        TEST_COUNTER_EQ(server1,2)
-        TEST_COUNTER_EQ(client1,1)
+        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(client1, 1)
 
         conn.reset();
     }

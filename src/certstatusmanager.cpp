@@ -236,9 +236,7 @@ std::shared_ptr<CertificateStatus> CertStatusManager::getStatus(const std::strin
  * @return the simplified status - does not have ocsp bytes but has been verified and certified
  * @see waitForStatus
  */
-std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus(const ossl_ptr<X509>& cert) {
-    return getPVAStatus(getStatusPvFromCert(cert));
-}
+std::shared_ptr<PVACertificateStatus> CertStatusManager::getPVAStatus(const ossl_ptr<X509>& cert) { return getPVAStatus(getStatusPvFromCert(cert)); }
 
 /**
  * @brief Get status from the given uri.  This status contains the OCSP signed
@@ -328,14 +326,14 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
         throw OCSPParseException("Failed to load system default CA certificates to verify OCSP response");
     }
 
-    if ( !custom_ca_dir.empty() ) {
+    if (!custom_ca_dir.empty()) {
         if (X509_STORE_load_locations(store.get(), nullptr, custom_ca_dir.c_str()) != 1) {
             throw OCSPParseException(SB() << "Failed to load CA certificates from custom directory: " << custom_ca_dir);
         }
     }
 
     if (X509_STORE_load_locations(store.get(), nullptr, ".") != 1) {
-        throw OCSPParseException(SB() << "Failed to load CA certificates from custom directory: ." );
+        throw OCSPParseException(SB() << "Failed to load CA certificates from custom directory: .");
     }
 
     // Set up the store context for verification
@@ -350,10 +348,10 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
 
     // Verify the CA certificate
     X509_STORE_CTX_set_flags(ctx.get(),
-                             X509_V_FLAG_PARTIAL_CHAIN |          // Succeed as soon as at least one intermediary is trusted
-                             X509_V_FLAG_CHECK_SS_SIGNATURE |     // Allow self-signed root CA
-                             X509_V_FLAG_TRUSTED_FIRST            // Check the trusted locations first
-                             );
+                             X509_V_FLAG_PARTIAL_CHAIN |           // Succeed as soon as at least one intermediary is trusted
+                                 X509_V_FLAG_CHECK_SS_SIGNATURE |  // Allow self-signed root CA
+                                 X509_V_FLAG_TRUSTED_FIRST         // Check the trusted locations first
+    );
     if (X509_verify_cert(ctx.get()) != 1) {
         throw OCSPParseException("Issuer certificate in OCSP response is not trusted by this host");
     }
@@ -406,9 +404,7 @@ bool CertStatusManager::shouldMonitor(const ossl_ptr<X509>& certificate) {
  * @param certificate the certificate to examine
  * @return the PV name to call for status on that certificate
  */
-std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certificate) {
-    return getStatusPvFromCert(certificate.get());
-}
+std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certificate) { return getStatusPvFromCert(certificate.get()); }
 
 /**
  * @brief Check if status monitoring is required for the given certificate.
@@ -418,11 +414,12 @@ std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certifi
  * @param certificate the certificate to check for status monitoring requirement
  * @return true if status monitoring is required, false otherwise
  */
-bool CertStatusManager::statusMonitoringRequired(const X509 * certificate) {
+bool CertStatusManager::statusMonitoringRequired(const X509* certificate) {
     try {
         getExtension(certificate);
         return true;
-    } catch (...) {}
+    } catch (...) {
+    }
     return false;
 }
 
@@ -433,7 +430,7 @@ bool CertStatusManager::statusMonitoringRequired(const X509 * certificate) {
  * @param certificate the certificate to retrieve the extension from
  * @return the X509_EXTENSION object if found, otherwise throws an exception
  */
-X509_EXTENSION* CertStatusManager::getExtension(const X509 * certificate) {
+X509_EXTENSION* CertStatusManager::getExtension(const X509* certificate) {
     int extension_index = X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_PvaCertStatusURI, -1);
     if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find extension index");
 
@@ -454,7 +451,7 @@ X509_EXTENSION* CertStatusManager::getExtension(const X509 * certificate) {
  * @param certificate the certificate to examine
  * @return the PV name to call for status on that certificate
  */
-std::string CertStatusManager::getStatusPvFromCert(const X509 * certificate) {
+std::string CertStatusManager::getStatusPvFromCert(const X509* certificate) {
     auto extension = getExtension(certificate);
 
     // Retrieve the extension data which is an ASN1_OCTET_STRING object

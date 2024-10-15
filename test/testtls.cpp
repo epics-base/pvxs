@@ -34,11 +34,9 @@ void testClientBackwardsCompatibility() {
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "superserver1.p12";
 
-
     auto serv(serv_conf.build().addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
-
 
     auto cli(cli_conf.build());
 
@@ -60,12 +58,10 @@ void testServerBackwardsCompatibility() {
 
     auto serv_conf(server::Config::isolated());
 
-
     auto serv(serv_conf.build().addPV("mailbox", mbox));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = "client1.p12";
-
 
     auto cli(cli_conf.build());
 
@@ -272,12 +268,10 @@ void testServerReconfig() {
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = "server1.p12";
 
-
     auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = "ioc1.p12";
-
 
     auto cli(cli_conf.build());
 
