@@ -111,12 +111,9 @@ private:
 struct DelayedDispatcher {
     mfunction fn;
     std::function<bool()> dispatch_when_condition;
-    time_t timeout_secs;
-    time_t first_time{std::time(nullptr)};
-    DelayedDispatcher(mfunction &&fn, const std::function<bool()> &&dispatch_when_condition, time_t timeout_secs)
+    DelayedDispatcher(mfunction &&fn, const std::function<bool()> &&dispatch_when_condition)
       : fn(std::move(fn))
-      , dispatch_when_condition(dispatch_when_condition)
-      , timeout_secs(timeout_secs) {}
+      , dispatch_when_condition(dispatch_when_condition){}
 };
 
 struct PVXS_API evbase {
@@ -160,8 +157,8 @@ public:
 
     inline
     void recursiveDispatch(std::shared_ptr<DelayedDispatcher> delayed_dispatcher) const {
-        if (delayed_dispatcher->dispatch_when_condition() // Supplied condition is true
-        || !(delayed_dispatcher->first_time + delayed_dispatcher->timeout_secs > std::time(nullptr))) { // or we've waited long enough
+        // if supplied condition is true
+        if (delayed_dispatcher->dispatch_when_condition() ) {
             // Execute now
             dispatch(std::move(delayed_dispatcher->fn));
         } else {
@@ -170,9 +167,8 @@ public:
         }
     }
 
-    inline
-    void dispatchWhen(mfunction&& fn, std::function<bool()> dispatch_when_condition, time_t timeout_secs, time_t first_time = std::time(nullptr)) const {
-        auto delayed_dispatcher = std::make_shared<DelayedDispatcher>(std::move(fn), std::move(dispatch_when_condition), timeout_secs);
+    inline void dispatchWhen(mfunction &&fn, std::function<bool()> dispatch_when_condition) const {
+        auto delayed_dispatcher = std::make_shared<DelayedDispatcher>(std::move(fn), std::move(dispatch_when_condition));
         recursiveDispatch(delayed_dispatcher);
     }
 

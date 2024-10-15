@@ -848,7 +848,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
         }
     }
 #ifdef PVXS_ENABLE_OPENSSL
-    , [context](){ return context->connectionCanProceed(); }, STATUS_WAIT_TIME_SECONDS // timeout seconds
+    , [context](){ return context->connectionCanProceed(); }
 #endif
     );
 

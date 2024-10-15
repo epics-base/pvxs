@@ -621,7 +621,7 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
         // on worker
     }
 #ifdef PVXS_ENABLE_OPENSSL
-    , [context](){ return context->connectionCanProceed(); }, STATUS_WAIT_TIME_SECONDS // timeout seconds
+    , [context](){ return context->connectionCanProceed(); }
 #endif
     );
 

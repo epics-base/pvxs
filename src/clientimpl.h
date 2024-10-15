@@ -24,10 +24,6 @@
 #include "udp_collector.h"
 #include "utilpvt.h"
 
-#ifdef PVXS_ENABLE_OPENSSL
-#define STATUS_WAIT_TIME_SECONDS 1
-#endif
-
 namespace pvxs {
 namespace client {
 

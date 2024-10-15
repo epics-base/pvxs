@@ -274,7 +274,7 @@ std::shared_ptr<Connect> ConnectBuilder::exec() {
         }
 #ifdef PVXS_ENABLE_OPENSSL
         ,
-        [context]() { return context->connectionCanProceed(); }, STATUS_WAIT_TIME_SECONDS  // timeout seconds
+        [context]() { return context->connectionCanProceed(); }
 #endif
     );
     return external;
