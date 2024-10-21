@@ -21,7 +21,7 @@ EPICS_PVA_ADDR_LIST
     May contain unicast and/or broadcast addresses.
 
 EPICS_PVA_AUTO_ADDR_LIST
-    If "YES" then all local broadcast addresses will be implicitly appended to $EPICS_PVA_ADDR_LIST
+    If "YES" then all local broadcast addresses will be implicitly appended to $EPICS_PVA_ADDR_LIST.
     "YES" if unset.
 
 EPICS_PVA_NAME_SERVERS
