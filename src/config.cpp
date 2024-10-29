@@ -378,6 +378,8 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
 
     for (auto opt : opts) {
         auto sep(opt.find_first_of('='));
+        if ( sep == std::string::npos)
+            sep = opt.size();
         auto key(opt.substr(0, sep));
         auto val(sep <= key.size() ? opt.substr(sep + 1) : std::string());
 
@@ -387,7 +389,7 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
             } else if (val == "optional") {
                 conf.tls_client_cert_required = ConfigCommon::Optional;
             } else {
-                log_warn_printf(config, "Ignore unknown TLS option value %s.  expected require or optional\n", opt.c_str());
+                log_warn_printf(config, "Ignore unknown TLS option `client_cert` value %s.  expected `require` or `optional`\n", opt.c_str());
             }
         } else if (key == "on_expiration") {
             if (val == "fallback-to-tcp") {
@@ -397,8 +399,26 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
             } else if (val == "standby") {
                 conf.expiration_behaviour = ConfigCommon::Standby;
             } else {
-                log_warn_printf(config, "Ignore unknown TLS option value %s.  expected fallback-to-tcp, shutdown or standby\n", opt.c_str());
+                log_warn_printf(config, "Ignore unknown TLS option `on_expiration` value %s.  expected `fallback-to-tcp`, `shutdown` or `standby`\n", opt.c_str());
             }
+        } else if (key == "on_no_cms") {
+            if (val == "fallback-to-tcp") {
+                conf.tls_throw_if_cant_verify = false;
+            } else if (val == "throw") {
+                conf.tls_throw_if_cant_verify = true;
+            } else {
+                log_warn_printf(config, "Ignore unknown TLS option `on_no_cms` value %s.  expected `fallback-to-tcp` or `throw`\n", opt.c_str());
+            }
+        } else if (key == "no_revocation_check") {
+            if ( val.empty())
+                conf.tls_disable_status_check = true;
+            else
+                log_warn_printf(config, "Ignore unknown TLS option `no_revocation_check` value %s.  no value expected\n", opt.c_str());
+        } else if (key == "no_stapling") {
+            if ( val.empty())
+                conf.tls_disable_stapling = true;
+            else
+                log_warn_printf(config, "Ignore unknown TLS option `no_stapling` value %s.  no value expected\n", opt.c_str());
         } else {
             log_warn_printf(config, "Ignore unknown TLS option key %s\n", opt.c_str());
         }
@@ -428,6 +448,14 @@ std::string printTLSOptions(const ConfigCommon& conf) {
             opts.push_back("on_expiration=standby");
             break;
     }
+    if ( conf.tls_disable_status_check)
+        opts.push_back("no_revocation_check");
+    if ( conf.tls_disable_stapling)
+        opts.push_back("no_stapling");
+    if ( conf.tls_throw_if_cant_verify)
+        opts.push_back("on_no_cms=throw");
+    else
+        opts.push_back("on_no_cms=fallback-to-tcp");
     return join_addr(opts);
 }
 #endif

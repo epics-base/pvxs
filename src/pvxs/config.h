@@ -102,7 +102,7 @@ struct PVXS_API ConfigCommon {
         size_t pos = 0;
         std::string token;
         std::string path = "";
-        struct stat info;
+        struct stat info{};
         while ((pos = temp_path.find(delimiter)) != std::string::npos) {
             token = temp_path.substr(0, pos);
             path += token + delimiter;
@@ -188,9 +188,13 @@ struct PVXS_API ConfigCommon {
 
     /**
      * @brief True if status checking from the PVACMS is disabled irrespective of whether configured in the certificate
-     * TODO Add an environment variable to control this
      */
     bool tls_disable_status_check{false};
+
+    /**
+     * @brief True if stapling is disabled irrespective of whether TLS is configured
+     */
+    bool tls_disable_stapling{false};
 
     /**
      * @brief True if we want to throw an exception if we can't verify a cert with the
@@ -200,15 +204,9 @@ struct PVXS_API ConfigCommon {
 
     /**
      * @brief The request timeout specified in a user call
-     * Cannot be set by an environment variable, but passed in by commandline tools
+     * @note Cannot be set by an environment variable, but is passed in by commandline tools, or set programmatically
      */
     double request_timeout_specified{5.0};
-
-    /**
-     * @brief True if stapling is disabled irrespective of whether TLS is configured
-     * TODO Add an environment variable to control this
-     */
-    bool tls_disable_stapling{false};
 
     /**
      * True if the environment is configured for TLS.  All this means is that
