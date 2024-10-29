@@ -313,7 +313,6 @@ struct SSLContext {
 
     explicit operator bool() const { return ctx; }
 
-    bool have_certificate() const;
     const X509* certificate0() const;
 
     static bool fill_credentials(PeerCredentials& cred, const SSL* ctx);
