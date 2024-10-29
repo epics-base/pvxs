@@ -205,10 +205,16 @@ struct PVXS_API Config : public impl::ConfigCommon {
 
 #ifdef PVXS_ENABLE_OPENSSL
     /**
-     * @brief true if server should stop if no cert can is available or can be
-     * comissioned
+     * @brief true if server should stop if no cert is available or can be
+     * verified if status check is enabled
      */
     bool tls_stop_if_no_cert = false;
+
+    /**
+     * @brief true if server should throw an exception if no cert is available or can be
+     * verified if status check is enabled
+     */
+    bool tls_throw_if_no_cert = false;
 
 #endif // PVXS_ENABLE_OPENSSL
 

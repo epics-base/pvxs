@@ -492,11 +492,11 @@ std::shared_ptr<const certs::CertificateStatus> CertStatusExData::setCachedPeerS
 
 
 /**
- * @brief Subscribes to peer status if required and not already monitoring
- * @param cert_ptr - peer Certificate status to subscribe to
- * @param fn - Function to call when the peer status changes from good to bad or vice versa
+ * @brief Subscribes to cert status if required and not already monitoring
+ * @param cert_ptr - Certificate status to subscribe to
+ * @param fn - Function to call when the certificate status changes from good to bad or vice versa
  */
-void CertStatusExData::subscribeToPeerStatus(X509 *cert_ptr, std::function<void(bool)> fn) {
+void CertStatusExData::subscribeToCertStatus(X509 *cert_ptr, std::function<void(bool)> fn) {
     auto serial_number = getSerialNumber(cert_ptr);
     auto &cert_status_manager = peer_statuses[serial_number].cert_status_manager;
 
@@ -505,23 +505,22 @@ void CertStatusExData::subscribeToPeerStatus(X509 *cert_ptr, std::function<void(
 
     try {
         // Duplicate the certificate
-        auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
+        auto cert_to_monitor = ossl_ptr<X509>(X509_dup(cert_ptr));
         // Subscribe to the certificate status
-        cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [=](certs::PVACertificateStatus status) {
+        cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert_to_monitor), [=](certs::PVACertificateStatus status) {
             Guard G(lock);
             // Get the previous status
             auto previous_status = getCachedPeerStatus(serial_number);
             // Check if the previous status was good
             auto was_good = previous_status && previous_status->isGood();
-            // Set the cached peer status
+            // Get the current state while setting the cached peer status
             auto current_status = setCachedPeerStatus(serial_number, status);
-            if (current_status && current_status->isGood()) {
-                if (!was_good)
-                    // If the status has changed from bad or unknown to good, call the function
-                    fn(true);
-            } else if (was_good) {
-                // If the status has changed from good to bad, call the function
-                fn(false);
+            // Check if the current status is good
+            bool is_good = current_status && current_status->isGood();
+            UnGuard U(G);
+            // If the state has changed, call the function
+            if (is_good != was_good) {
+                fn(is_good);
             }
         });
     } catch ( ...) {}

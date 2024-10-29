@@ -826,8 +826,11 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
         if ( context->effective.isTlsConfigured() ) {
             if (context->current_status)
                 log_debug_printf(watcher, __FILE__ ":%d: monitor exec: Connection establishment: %s: status=%s\n", __LINE__, context->effective.tls_cert_filename.c_str(), context->current_status->status.s.c_str());
-            else
+            else if (context->effective.tls_throw_if_cant_verify) {
+                return nullptr; // Indicate that the monitoring cannot be set up
+            } else {
                 log_debug_printf(watcher, __FILE__ ":%d: monitor exec: Connection establishment: %s: status=UNKNOWN\n", __LINE__, context->effective.tls_cert_filename.c_str());
+            }
         } else if (!context->effective.tls_disabled) {
             log_debug_printf(watcher, __FILE__ ":%d: monitor exec: Connection establishment - TLS not configured: %s\n", __LINE__, op->channelName.c_str());
         }

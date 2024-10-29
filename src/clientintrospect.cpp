@@ -225,7 +225,9 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
         if ( context->effective.isTlsConfigured() ) {
             if (context->current_status)
                 log_debug_printf(watcher, __FILE__ ":%d: exec_info: Connection establishment: %s: status=%s\n", __LINE__, context->effective.tls_cert_filename.c_str(), context->current_status->status.s.c_str());
-            else
+            else if (context->cert_status_manager && context->effective.tls_throw_if_cant_verify) {
+                return nullptr;
+            } else
                 log_debug_printf(watcher, __FILE__ ":%d: exec_info: Connection establishment: %s: status=UNKNOWN\n", __LINE__, context->effective.tls_cert_filename.c_str());
         } else if (!context->effective.tls_disabled) {
             log_debug_printf(watcher, __FILE__ ":%d: exec_info: Connection establishment - TLS not configured: %s\n", __LINE__, name.c_str());

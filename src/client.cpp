@@ -251,7 +251,9 @@ std::shared_ptr<Connect> ConnectBuilder::exec() {
                 if (context->current_status)
                     log_debug_printf(watcher, __FILE__ ":%d: exec: Connection establishment: %s: status=%s\n", __LINE__,
                                      context->effective.tls_cert_filename.c_str(), context->current_status->status.s.c_str());
-                else
+                else if (context->cert_status_manager && context->effective.tls_throw_if_cant_verify) {
+                    return nullptr;
+                } else
                     log_debug_printf(watcher, __FILE__ ":%d: exec: Connection establishment: %s: status=UNKNOWN\n", __LINE__,
                                      context->effective.tls_cert_filename.c_str());
             } else if (!context->effective.tls_disabled) {
@@ -387,13 +389,8 @@ Context Context::forCMS() {
     config_to_use.interfaces = env_config.interfaces;
     config_to_use.addressList = env_config.addressList;
     config_to_use.autoAddrList = env_config.autoAddrList;
-
-#ifdef PVXS_ENABLE_OPENSSL
     config_to_use.tls_disabled = false;
-#endif
-
     config_to_use.is_initialized = true;
-
     return config_to_use.build();
 }
 Context::Context(const Config& conf, const std::function<int(int)>& fn) : pvt(std::make_shared<Pvt>(conf)) { pvt->impl->startNS(); }
@@ -531,7 +528,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
                     if (tls_context.status_check_disabled) {
                         Guard G(tls_context.lock);
                         tls_context.cert_is_valid = true;
-                        log_info_printf(setup, "Certificate status monitoring disabled by config: %s\n", effective.tls_cert_filename.c_str());
+                        log_warn_printf(setup, "Certificate status monitoring disabled by config: %s\n", effective.tls_cert_filename.c_str());
                     } else {
                         try {
                             // Subscribe and set validity when the status is verified
@@ -540,10 +537,13 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
                                 Guard G(tls_context.lock);
                                 auto was_good = current_status && current_status->isGood();
                                 current_status = std::make_shared<certs::CertificateStatus>(status);
-                                if (current_status && current_status->isGood()) {
-                                    if (!was_good) manager.loop().dispatch([this]() mutable { enableTls(); });
-                                } else if (was_good) {
-                                    manager.loop().dispatch([this]() mutable { disableTls(); });
+                                auto is_good = current_status && current_status->isGood();
+                                UnGuard U(G); // Un-Guard to allow enabling and disabling TLS
+                                if (is_good != was_good) {
+                                    manager.loop().dispatch([this, is_good]() {
+                                        if (is_good) enableTls();
+                                        else disableTls();
+                                    });
                                 }
                             });
                             log_info_printf(setup, "TLS enabled for client pending certificate status: %s\n", effective.tls_cert_filename.c_str());

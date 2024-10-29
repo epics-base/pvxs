@@ -169,6 +169,22 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&&
 }
 
 /**
+ * @brief Subscribe to the certificate status and wait until the status is available
+ *
+ * @param loop the event loop to use to wait
+ * @param ctx_cert the certificate to monitor
+ * @param callback the callback to call
+ * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
+ */
+cert_status_ptr<CertStatusManager> CertStatusManager::getAndSubscribe(evbase loop, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
+    auto cert_status_manager = subscribe(std::move(ctx_cert), std::move(callback));
+
+    // Wait until the status is available
+    cert_status_manager->waitForStatus(loop);
+    return cert_status_manager;
+}
+
+/**
  * @brief Unsubscribe from the certificate status monitoring
  */
 void CertStatusManager::unsubscribe() {

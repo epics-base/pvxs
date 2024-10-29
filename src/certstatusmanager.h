@@ -226,6 +226,8 @@ class CertStatusManager {
      */
     static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback);
 
+    static cert_status_ptr<CertStatusManager> getAndSubscribe(evbase loop, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback);
+
     /**
      * @brief Get status for a given certificate.  Does not contain OCSP signed
      * status data so use for client status.
@@ -288,7 +290,9 @@ class CertStatusManager {
      */
     std::shared_ptr<PVACertificateStatus> getPVAStatus();
 
-    inline bool available() noexcept { return isValid() || (manager_start_time_ + 3) < std::time(nullptr); }
+    inline bool available(double timeout = 5.0 ) noexcept { return isValid() || waitedTooLong(timeout); }
+
+    inline bool waitedTooLong(double timeout = 5.0 ) const noexcept { return (manager_start_time_ + (time_t)timeout) < std::time(nullptr); }
 
     inline bool isValid() noexcept { return status_ && status_->isValid(); }
 

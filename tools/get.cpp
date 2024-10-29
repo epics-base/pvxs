@@ -99,11 +99,13 @@ int main(int argc, char *argv[])
             }
         }
 
-        client::Context ctxt;
-        ctxt = client::Context::fromEnv();
+        // Get the timeout from the environment and build the context
+        auto conf = client::Config::fromEnv();
+        conf.request_timeout_specified = timeout;
+        auto ctxt = conf.build();
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
+            std::cout<<"Effective config\n"<<conf;
 
         std::list<std::shared_ptr<client::Operation>> ops;
 

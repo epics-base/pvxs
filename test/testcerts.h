@@ -70,6 +70,8 @@ using namespace pvxs::certs;
 #define CERT_CN_CLIENT2 "client2"
 
 #define TEST_PV "TESTPV"
+#define TEST_PV1 "TESTPV1"
+#define TEST_PV2 "TESTPV2"
 #define TEST_PV_FIELD "value"
 
 /**

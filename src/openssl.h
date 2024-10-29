@@ -194,7 +194,7 @@ struct CertStatusExData {
      * @param cert_ptr - peer certificate status to subscribe to
      * @param fn - Function to call when the peer status changes from good to bad or vice versa
      */
-    void subscribeToPeerStatus(X509 *cert_ptr, std::function<void(bool)> fn);
+    void subscribeToCertStatus(X509 *cert_ptr, std::function<void(bool)> fn);
 };
 
 struct ShowX509 {

@@ -492,28 +492,11 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
                         tls_context.cert_is_valid = true;
                         log_warn_printf(osslsetup, "Certificate status monitoring disabled by config: %s\n", effective.tls_cert_filename.c_str());
                     } else {
+                        auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
+                        // For servers, we need to wait for status if status monitoring is enabled
                         try {
-                            Guard G(tls_context.lock);
-                            auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
-                            // For servers, we need to wait for status if status monitoring is enabled
-                            try {
-                                current_status = certs::CertStatusManager::getPVAStatus(cert);
-                                if (current_status && current_status->isGood()) {
-                                    tls_context.cert_is_valid = true;
-                                    log_info_printf(osslsetup, "TLS enabled for server with %s with reported %s status\n", effective.tls_cert_filename.c_str(),
-                                                    current_status->status.s.c_str());
-                                } else {
-                                    log_info_printf(osslsetup, "TLS disabled for server with reported %s status for %s\n", current_status->status.s.c_str(),
-                                                    effective.tls_cert_filename.c_str());
-                                }
-                            } catch (certs::CertStatusNoExtensionException& e) {
-                                tls_context.cert_is_valid = true;
-                                log_info_printf(osslsetup, "TLS enabled for server no status check configured: %s\n", effective.tls_cert_filename.c_str());
-                            } catch (std::exception& e) {
-                                throw(std::runtime_error(SB() << e.what() << " waiting for PVACMS to report status for " << effective.tls_cert_filename));
-                            }
-                            // Subscribe and set validity when the status is verified
-                            cert_status_manager = certs::CertStatusManager::subscribe(std::move(cert), [this](certs::PVACertificateStatus status) {
+                            // Subscribe to the server's certificate status and wait until at least first update is received
+                            cert_status_manager = certs::CertStatusManager::getAndSubscribe(acceptor_loop, std::move(cert), [this](certs::PVACertificateStatus status) {
                                 Guard G(tls_context.lock);
                                 auto was_good = current_status && current_status->isGood();
                                 current_status = std::make_shared<certs::PVACertificateStatus>(status);
@@ -523,11 +506,29 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
                                     acceptor_loop.dispatch([this]() mutable { disableTls(); });
                                 }
                             });
+                            if (current_status && current_status->isGood()) {
+                                Guard G(tls_context.lock);
+                                tls_context.cert_is_valid = true;
+                                log_info_printf(osslsetup, "TLS enabled for server with cert %s with reported %s status\n", effective.tls_cert_filename.c_str(),
+                                                current_status->status.s.c_str());
+                            } else {
+                                if (effective.tls_stop_if_no_cert) {
+                                    log_err_printf(osslsetup, "***EXITING***: Unable to contact PVACMS to verify cert %s\n", effective.tls_cert_filename.c_str());
+                                    exit(1);
+                                } else if (effective.tls_throw_if_no_cert) {
+                                    log_err_printf(osslsetup, "Unable to contact PVACMS to verify cert %s\n", effective.tls_cert_filename.c_str());
+                                    throw(std::runtime_error("Unable to contact PVACMS"));
+                                } else {
+                                    log_info_printf(osslsetup, "TLS disabled for server with reported %s status for cert %s\n", current_status->status.s.c_str(),
+                                                effective.tls_cert_filename.c_str());
+                                }
+                            }
                         } catch (certs::CertStatusNoExtensionException& e) {
-                            log_debug_printf(osslsetup, "No certificate status extension found: %s: %s\n", effective.tls_cert_filename.c_str(), e.what());
                             Guard G(tls_context.lock);
                             tls_context.cert_is_valid = true;
-                            log_info_printf(osslsetup, "TLS enabled for server during initialization%s\n", "");
+                            log_info_printf(osslsetup, "TLS enabled for server without status check: %s\n", effective.tls_cert_filename.c_str());
+                        } catch (std::exception& e) {
+                            throw(std::runtime_error(SB() << e.what() << ": Waiting for PVACMS to report status for cert " << effective.tls_cert_filename));
                         }
                     }
                 }
@@ -536,6 +537,8 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
             if (effective.tls_stop_if_no_cert) {
                 log_err_printf(osslsetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
                 exit(1);
+            } else if (effective.tls_throw_if_no_cert) {
+                throw(std::runtime_error(e.what()));
             } else {
                 log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
             }
@@ -765,7 +768,7 @@ void Server::Pvt::start()
     if(prev_state!=Stopped)
         return;
 
-    // being processing Searches
+    // begin processing Searches
     for(auto& L : listeners) {
         L->start();
     }

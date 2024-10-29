@@ -332,7 +332,7 @@ struct Tester {
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(server1, 1)
         TEST_COUNTER_EQ(client1, 1)
 
         conn.reset();
@@ -387,7 +387,7 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
-            TEST_COUNTER_EQ(ioc, 2)
+            TEST_COUNTER_EQ(ioc, 1)
             TEST_COUNTER_EQ(client1, 1)
             TEST_COUNTER_EQ(client2, 0)
         }
@@ -395,7 +395,7 @@ struct Tester {
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        TEST_COUNTER_EQ(ioc, 2)
+        TEST_COUNTER_EQ(ioc, 1)
         TEST_COUNTER_EQ(client1, 1)
         TEST_COUNTER_EQ(client2, 0)
 
@@ -413,7 +413,7 @@ struct Tester {
             testFail("Missing expected Connected");
         } catch (client::Connected& e) {
             testOk1(e.cred && e.cred->isTLS);
-            TEST_COUNTER_EQ(ioc, 2)
+            TEST_COUNTER_EQ(ioc, 1)
             TEST_COUNTER_EQ(client1, 1)
             TEST_COUNTER_EQ(client2, 1)
         } catch (...) {
@@ -423,7 +423,7 @@ struct Tester {
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2);
-        TEST_COUNTER_EQ(ioc, 2)
+        TEST_COUNTER_EQ(ioc, 1)
         TEST_COUNTER_EQ(client1, 1)
         TEST_COUNTER_EQ(client2, 1)
     }
@@ -468,7 +468,7 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_SERVER1);
-            TEST_COUNTER_EQ(server1, 2)
+            TEST_COUNTER_EQ(server1, 1)
             TEST_COUNTER_EQ(client1, 1)
             TEST_COUNTER_EQ(ioc, 0)
         }
@@ -476,7 +476,7 @@ struct Tester {
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(server1, 1)
         TEST_COUNTER_EQ(client1, 1)
         TEST_COUNTER_EQ(ioc, 0)
 
@@ -496,17 +496,17 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
-            TEST_COUNTER_EQ(server1, 2)
+            TEST_COUNTER_EQ(server1, 1)
             TEST_COUNTER_EQ(client1, 1)
-            TEST_COUNTER_EQ(ioc, 2)
+            TEST_COUNTER_EQ(ioc, 1)
         }
         testDiag("Reconnect");
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(server1, 1)
         TEST_COUNTER_EQ(client1, 1)
-        TEST_COUNTER_EQ(ioc, 2)
+        TEST_COUNTER_EQ(ioc, 1)
     }
 
     /**
@@ -539,7 +539,7 @@ struct Tester {
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply["value"].as<int32_t>(), 42);
-        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(server1, 1)
         TEST_COUNTER_EQ(client1, 1)
 
         conn.reset();
@@ -576,7 +576,7 @@ struct Tester {
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply["value"].as<int32_t>(), 42);
-        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(server1, 1)
         TEST_COUNTER_EQ(client1, 1)
 
         conn.reset();
@@ -590,31 +590,103 @@ struct Tester {
      */
     void testCMSUnavailable() {
         testShow() << __func__;
+        // Create a test PV and set value to 42
+        auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
+        auto test_pv(server::SharedPV::buildReadonly());
+        test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
 
-        auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = IOC1_CERT_FILE;
-        serv_conf.tls_disable_status_check = false;
-        serv_conf.tls_disable_stapling = false;
+        {
+            std::shared_ptr<evbase> test_loop(new evbase("test_loop", epicsThreadPriorityCAServerLow - 2));
+            epicsEvent server_started_evt;
 
-        auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
+            // Configure server with status checking and stapling enabled
+            auto serv_conf(server::Config::isolated());
+            serv_conf.tls_cert_filename = IOC1_CERT_FILE;
+            serv_conf.tls_disable_status_check = false;
+            serv_conf.tls_disable_stapling = false;
 
-        auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+            // Test that server will not start because the Mock CMS is not running
+            test_loop->dispatch([&server_started_evt, &serv_conf, &test_pv]() {
+                auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
+                server_started_evt.signal();  // Should never get here
+            });
 
-        auto cli(cli_conf.build());
+            // Wait for the server to fail to start
+            testTrue(!server_started_evt.wait(1.0));
 
-        serv.start();
+            // Now lets try again with status checking and stapling disabled so we can test the client
+            serv_conf.tls_disable_status_check = true;
+            serv_conf.tls_disable_stapling = true;
+            auto serv(serv_conf.build().addPV(TEST_PV1, test_pv));
 
-        epicsEvent evt;
-        auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
+            // Configure client with status checking enabled
+            epicsEvent client_started_evt;
+            auto cli_conf(serv.clientConfig());
+            cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+            cli_conf.tls_disable_status_check = false;
+            cli_conf.tls_disable_stapling = false;
+            auto cli(cli_conf.build());
 
-        try {
-            testTrue(!evt.wait(5.0));
-        } catch (client::Connected& e) {
-            testFail("Unexpected success");
-            testSkip(1, "oops");
+            // Start the server
+            serv.start();
+
+            test_loop->dispatch([&cli, &client_started_evt]() {
+                auto sub(cli.get(TEST_PV1).exec()->wait());
+                client_started_evt.signal();  // Should never get here
+            });
+
+            // Wait for the client to fail to connect
+            testTrue(!client_started_evt.wait(1.0));
+
+            // Try again with a monitor
+            test_loop->dispatch([&cli, &client_started_evt]() {
+                auto sub(cli.monitor(TEST_PV1)
+                           .maskConnected(false)
+                           .maskDisconnected(false)
+                           .event([&client_started_evt](client::Subscription&) { client_started_evt.signal(); })
+                           .exec());
+                client_started_evt.signal();  // Should never get here
+            });
+
+            // Wait for the client to fail to connect
+            testTrue(!client_started_evt.wait(1.0));
+
+            // Clean up the event loop
+            test_loop->dispatch([test_loop]() { event_base_loopbreak(test_loop->base); });
         }
-        testDiag("Expected to not connect");
+
+        {
+            // Create a new event loop for the control test with status checking disabled for both server and client
+            std::shared_ptr<evbase> test_loop2(new evbase("test_loop2", epicsThreadPriorityCAServerLow - 2));
+            epicsEvent client_started_evt;
+
+            // Configure server with status checking and stapling disabled
+            auto serv_conf2(server::Config::isolated());
+            serv_conf2.tls_cert_filename = IOC1_CERT_FILE;
+            serv_conf2.tls_disable_status_check = true;
+            serv_conf2.tls_disable_stapling = true;
+            auto serv2(serv_conf2.build().addPV(TEST_PV2, test_pv));
+
+            // Configure client with status checking disabled
+            auto cli_conf2(serv2.clientConfig());
+            cli_conf2.tls_cert_filename = CLIENT1_CERT_FILE;
+            auto cli2(cli_conf2.build());
+
+            // Start the server
+            serv2.start();
+
+            // Try to get the value of the PV
+            test_loop2->dispatch([&cli2, &client_started_evt]() {
+                auto sub(cli2.get(TEST_PV2).exec()->wait());
+                client_started_evt.signal();  // Should get here
+            });
+
+            // Wait for the client to connect which should succeed
+            testTrue(client_started_evt.wait(1.0));
+
+            // Clean up the event loop
+            test_loop2->dispatch([test_loop2]() { event_base_loopbreak(test_loop2->base); });
+        }
     }
 };
 
@@ -624,7 +696,7 @@ MAIN(testtlswithcmsandstapling) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(189);
+    testPlan(267);
     testSetup();
     logger_config_env();
     auto tester = new Tester();

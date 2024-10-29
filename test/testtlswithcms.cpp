@@ -579,30 +579,412 @@ struct Tester {
      */
     void testCMSUnavailable() {
         testShow() << __func__;
+        // Create a test PV and set value to 42
+        auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
+        auto test_pv(server::SharedPV::buildReadonly());
+        test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
 
-        auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = IOC1_CERT_FILE;
-        serv_conf.tls_disable_status_check = false;
+        {
+            std::shared_ptr<evbase> test_loop(new evbase("test_loop", epicsThreadPriorityCAServerLow - 2));
+            epicsEvent server_started_evt;
 
-        auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
+            // Configure server with status checking enabled
+            auto serv_conf(server::Config::isolated());
+            serv_conf.tls_cert_filename = IOC1_CERT_FILE;
+            serv_conf.tls_disable_status_check = false;
 
-        auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+            // Test that server will not start because the Mock CMS is not running
+            test_loop->dispatch([&server_started_evt, &serv_conf, &test_pv]() {
+                auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
+                server_started_evt.signal();  // Should never get here
+            });
 
-        auto cli(cli_conf.build());
+            // Wait for the server to fail to start
+            testTrue(!server_started_evt.wait(1.0));
 
-        serv.start();
+            // Now lets try again with status checking disabled so we can test the client
+            serv_conf.tls_disable_status_check = true;
+            auto serv(serv_conf.build().addPV(TEST_PV1, test_pv));
 
-        epicsEvent evt;
-        auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
+            // Configure client with status checking enabled
+            epicsEvent client_started_evt;
+            auto cli_conf(serv.clientConfig());
+            cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+            cli_conf.tls_disable_status_check = false;
+            auto cli(cli_conf.build());
 
-        try {
-            testTrue(!evt.wait(5.0));
-        } catch (client::Connected& e) {
-            testFail("Unexpected success");
-            testSkip(1, "oops");
+            // Start the server
+            serv.start();
+
+            test_loop->dispatch([&cli, &client_started_evt]() {
+                auto sub(cli.get(TEST_PV1).exec()->wait());
+                client_started_evt.signal();  // Should never get here
+            });
+
+            // Wait for the client to fail to connect
+            testTrue(!client_started_evt.wait(1.0));
+
+            // Try again with a monitor
+            test_loop->dispatch([&cli, &client_started_evt]() {
+                auto sub(cli.monitor(TEST_PV1)
+                             .maskConnected(false)
+                             .maskDisconnected(false)
+                             .event([&client_started_evt](client::Subscription&) { client_started_evt.signal(); })
+                             .exec());
+                client_started_evt.signal();  // Should never get here
+            });
+
+            // Wait for the client to fail to connect
+            testTrue(!client_started_evt.wait(1.0));
+
+            // Clean up the event loop
+            test_loop->dispatch([test_loop]() { event_base_loopbreak(test_loop->base); });
         }
-        testDiag("Expected to not connect");
+
+        {
+            // Create a new event loop for the control test with status checking disabled for both server and client
+            std::shared_ptr<evbase> test_loop2(new evbase("test_loop2", epicsThreadPriorityCAServerLow - 2));
+            epicsEvent client_started_evt;
+
+            // Configure server with status checking disabled
+            auto serv_conf2(server::Config::isolated());
+            serv_conf2.tls_cert_filename = IOC1_CERT_FILE;
+            serv_conf2.tls_disable_status_check = true;
+            auto serv2(serv_conf2.build().addPV(TEST_PV2, test_pv));
+
+            // Configure client with status checking disabled
+            auto cli_conf2(serv2.clientConfig());
+            cli_conf2.tls_cert_filename = CLIENT1_CERT_FILE;
+            auto cli2(cli_conf2.build());
+
+            // Start the server
+            serv2.start();
+
+            // Try to get the value of the PV
+            test_loop2->dispatch([&cli2, &client_started_evt]() {
+                auto sub(cli2.get(TEST_PV2).exec()->wait());
+                client_started_evt.signal();  // Should get here
+            });
+
+            // Wait for the client to connect which should succeed
+            testTrue(client_started_evt.wait(1.0));
+
+            // Clean up the event loop
+            test_loop2->dispatch([test_loop2]() { event_base_loopbreak(test_loop2->base); });
+        }
+    }
+};
+
+/**
+ * @class Tester
+ * @brief A class used for testing tls while monitoring certificate statuses against a Mock PVACMS server.
+ */
+struct UnavailabilityTester {
+    const StatusDate now;
+    const StatusDate status_valid_until_time;
+    const StatusDate revocation_date;
+
+    const Value status_value_prototype{CertStatus::getStatusPrototype()};
+    DEFINE_MEMBERS(ca)
+    DEFINE_MEMBERS(super_server)
+    DEFINE_MEMBERS(intermediate_server)
+    DEFINE_MEMBERS(server1)
+    DEFINE_MEMBERS(server2)
+    DEFINE_MEMBERS(ioc)
+    DEFINE_MEMBERS(client1)
+    DEFINE_MEMBERS(client2)
+
+    server::SharedWildcardPV status_pv{server::SharedWildcardPV::buildMailbox()};
+    server::Server pvacms;
+    client::Context client;
+
+    UnavailabilityTester()
+      : now(time(nullptr)),
+        status_valid_until_time(now.t + STATUS_VALID_FOR_SECS),
+        revocation_date(now.t - REVOKED_SINCE_SECS)
+
+      INIT_CERT_MEMBER_FROM_FILE(ca, CA) INIT_CERT_MEMBER_FROM_FILE(super_server, SUPER_SERVER)
+      INIT_CERT_MEMBER_FROM_FILE(intermediate_server, INTERMEDIATE_SERVER) INIT_CERT_MEMBER_FROM_FILE(server1, SERVER1)
+      INIT_CERT_MEMBER_FROM_FILE(server2, SERVER2) INIT_CERT_MEMBER_FROM_FILE(ioc, IOC1) INIT_CERT_MEMBER_FROM_FILE(client1, CLIENT1)
+        INIT_CERT_MEMBER_FROM_FILE(client2, CLIENT2)
+
+    {
+        if (CHECK_CERT_MEMBER_CONDITION(ca) || CHECK_CERT_MEMBER_CONDITION(super_server) || CHECK_CERT_MEMBER_CONDITION(intermediate_server) ||
+          CHECK_CERT_MEMBER_CONDITION(server1) || CHECK_CERT_MEMBER_CONDITION(server2) || CHECK_CERT_MEMBER_CONDITION(ioc) ||
+          CHECK_CERT_MEMBER_CONDITION(client1) || CHECK_CERT_MEMBER_CONDITION(client2)) {
+            testFail("Error loading one or more certificates");
+            return;
+        }
+        testShow() << "Loaded all test certs\n";
+    }
+
+    ~UnavailabilityTester() {};
+
+    /**
+     * @brief Creates certificate statuses.
+     *
+     * This function generates mock statuses to be returned by the Mock CMS server.
+     * These statuses are replete with valid OCSP responses that are valid for `STATUS_VALID_FOR_MINS` minutes
+     */
+    void createCertStatuses() {
+        testShow() << __func__;
+        try {
+            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
+            CREATE_CERT_STATUS(ca, {VALID})
+            CREATE_CERT_STATUS(intermediate_server, {VALID})
+            CREATE_CERT_STATUS(server1, {VALID})
+            CREATE_CERT_STATUS(server2, {VALID})
+            CREATE_CERT_STATUS(ioc, {VALID})
+            CREATE_CERT_STATUS(client1, {VALID})
+            CREATE_CERT_STATUS(client2, {VALID})
+        } catch (std::exception& e) {
+            testFail("Failed to read certificate in from file: %s\n", e.what());
+        }
+    }
+
+    /**
+     * @brief Make PVAccess Certificate Status Responses for each of the certificates
+     */
+    void makeStatusResponses() {
+        testShow() << __func__;
+        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
+        MAKE_STATUS_RESPONSE(ca)
+        MAKE_STATUS_RESPONSE(intermediate_server)
+        MAKE_STATUS_RESPONSE(server1)
+        MAKE_STATUS_RESPONSE(server2)
+        MAKE_STATUS_RESPONSE(ioc)
+        MAKE_STATUS_RESPONSE(client1)
+        MAKE_STATUS_RESPONSE(client2)
+    }
+
+    /**
+     * @brief Pop the next event off the subscribed PV's queue
+     * @param sub the subscription
+     * @param evt the epics event
+     * @return the popped Value or empty on timeout
+     */
+    Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt) {
+        while (true) {
+            if (auto ret = sub->pop()) {
+                return ret;
+
+            } else if (!evt.wait(5.0)) {
+                testFail("timeout waiting for event");
+                return Value();
+            }
+        }
+    }
+
+    /**
+     * @brief Start the Mock PVACMS service]
+     *
+     * Important; This server is implemented by using the standard SharedWildcardPV so it
+     * also tests this newly exposed feature.
+     *
+     * This essentially creates a server that will serve a `SharedWildcardPV` that responds to
+     * PVs  corresponding to the certificate status request pattern.  It will respond to only those PVs that were
+     * generated by `gen_test_certs` anx only with the responses created in `createCertStatuses`
+     * unless changed by putting values like 'APPROVED', 'DENIED', or 'REVOKED' to the 'state' field.
+     *
+     * During the setup tests are performed to verify that it works as expected
+     *
+     */
+    void startMockCMS() {
+        testShow() << __func__;
+        try {
+            testDiag("Setting up: %s", "Mock PVACMS Server");
+
+            SET_PV(ca)
+            SET_PV(intermediate_server)
+            SET_PV(server1)
+            SET_PV(server2)
+            SET_PV(ioc)
+            SET_PV(client1)
+            SET_PV(client2)
+
+            status_pv.onFirstConnect([this](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>& parameters) {
+                auto it = parameters.begin();
+                const std::string& issuer_id = *it;
+                const std::string& serial_string = *++it;
+                uint64_t serial = std::stoull(serial_string);
+
+                if (pv.isOpen(pv_name)) {
+                    switch (serial) {
+                        POST_VALUE_CASE(ca, post)
+                        POST_VALUE_CASE(intermediate_server, post)
+                        POST_VALUE_CASE(server1, post)
+                        POST_VALUE_CASE(server2, post)
+                        POST_VALUE_CASE(ioc, post)
+                        POST_VALUE_CASE(client1, post)
+                        POST_VALUE_CASE(client2, post)
+                        default:
+                            testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
+                    }
+                } else {
+                    switch (serial) {
+                        POST_VALUE_CASE(ca, open)
+                        POST_VALUE_CASE(intermediate_server, open)
+                        POST_VALUE_CASE(server1, open)
+                        POST_VALUE_CASE(server2, open)
+                        POST_VALUE_CASE(ioc, open)
+                        POST_VALUE_CASE(client1, open)
+                        POST_VALUE_CASE(client2, open)
+                        default:
+                            testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
+                    }
+                }
+            });
+            status_pv.onLastDisconnect([](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>& parameters) {
+                testOk(1, "Closing Status Request Connection: %s", pv_name.c_str());
+                pv.close(pv_name);
+            });
+
+            pvacms.start();
+
+            testDiag("Set up: %s", "Mock PVACMS Server");
+        } catch (std::exception& e) {
+            testFail("Failed to set up Mock PVACMS Server: %s", e.what());
+        }
+    }
+
+    /**
+     * @brief Stop the Mock PVACMS Server
+     */
+    void stopMockCMS() {
+        testShow() << __func__;
+        try {
+            testDiag("Stopping: %s", "Mock PVACMS Server");
+            pvacms.stop();
+        } catch (std::exception& e) {
+            testFail("Failed to stop Mock PVACMS Server: %s", e.what());
+        }
+    }
+
+    /**
+     * @brief This test checks that tls connections are prohibited when CMS is unavailable but configuration requires it
+     *
+     * The Mock PVACMS must be previously stopped prior to this test
+     *
+     */
+    void testCMSUnavailable() {
+        testShow() << __func__;
+        // Create a test PV and set value to 42
+        auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
+        auto test_pv(server::SharedPV::buildReadonly());
+        test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
+
+        {
+            std::shared_ptr<evbase> test_loop(new evbase("test_loop", epicsThreadPriorityCAServerLow - 2));
+            epicsEvent server_started_evt;
+
+            // Configure server with status checking enabled
+            auto serv_conf(server::Config::isolated());
+            serv_conf.tls_cert_filename = IOC1_CERT_FILE;
+            serv_conf.tls_disable_status_check = false;
+            serv_conf.tls_throw_if_no_cert = true;
+
+            // Test that server will not start because the Mock CMS is not running
+            try {
+                auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
+                testFail("Unexpected successful creation of server");
+            } catch ( std::runtime_error &e) {
+                testStrEq("Unable to contact PVACMS: Waiting for PVACMS to report status for cert " IOC1_CERT_FILE, e.what());
+            }
+
+            // Now lets try again with status checking disabled so we can test the client
+            serv_conf.tls_disable_status_check = true;
+            auto serv(serv_conf.build().addPV(TEST_PV1, test_pv));
+            // Start the server
+            serv.start();
+
+            // Configure client with status checking enabled
+            epicsEvent client_started_evt;
+            auto cli_conf(serv.clientConfig());
+            cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+            cli_conf.tls_disable_status_check = false;
+
+            {
+                // Test fallback to tcp
+                auto cli(cli_conf.build());
+
+                try {
+                    auto val(cli.get(TEST_PV1).exec()->wait());
+                    testEq(42, val["value"].as<uint32_t>());
+                } catch (std::exception &e) {
+                    testFail("Unexpected exception: %s", e.what());
+                }
+            }
+
+            {
+                // Test exception to tcp
+                cli_conf.tls_throw_if_cant_verify = true;
+                auto cli(cli_conf.build());
+
+                try {
+                    auto val(cli.get(TEST_PV1).exec()->wait(3.0));
+                    testNotEq(42, val["value"].as<uint32_t>());
+                } catch (std::exception &e) {
+                    testStrEq("Timeout", e.what());
+                }
+            }
+
+            {
+                // Try again with a monitor
+                testDiag("START OF MONITORING");
+                cli_conf.tls_throw_if_cant_verify = true;
+                auto cli(cli_conf.build());
+                try {
+                    auto sub(cli.monitor(TEST_PV1)
+                               .maskConnected(false)
+                               .maskDisconnected(false)
+                               .event([](client::Subscription& update) {
+                                   auto val = update.pop();
+                                   testNotEq(42, val["value"].as<uint32_t>());
+                               })
+                               .exec());
+                    testTrue(!sub);
+                } catch (std::exception &e) {
+                    testStrEq("Unable to create monitor: No response for certificate status request: " CLIENT1_CERT_FILE, e.what());
+                }
+            }
+
+            testDiag("END OF MONITORING");
+
+            // Clean up the event loop
+//            test_loop->dispatch([test_loop]() { event_base_loopbreak(test_loop->base); });
+        }
+
+        {
+            // Create a new event loop for the control test with status checking disabled for both server and client
+            std::shared_ptr<evbase> test_loop2(new evbase("test_loop2", epicsThreadPriorityCAServerLow - 2));
+            epicsEvent client_started_evt;
+
+            // Configure server with status checking disabled
+            auto serv_conf2(server::Config::isolated());
+            serv_conf2.tls_cert_filename = IOC1_CERT_FILE;
+            serv_conf2.tls_disable_status_check = true;
+            auto serv2(serv_conf2.build().addPV(TEST_PV2, test_pv));
+
+            // Configure client with status checking disabled
+            auto cli_conf2(serv2.clientConfig());
+            cli_conf2.tls_cert_filename = CLIENT1_CERT_FILE;
+            auto cli2(cli_conf2.build());
+
+            // Start the server
+            serv2.start();
+
+            // Try to get the value of the PV
+            test_loop2->dispatch([&cli2, &client_started_evt]() {
+                auto sub(cli2.get(TEST_PV2).exec()->wait());
+                client_started_evt.signal();  // Should get here
+            });
+
+            // Wait for the client to connect which should succeed
+            testTrue(client_started_evt.wait(1.0));
+
+            // Clean up the event loop
+            test_loop2->dispatch([test_loop2]() { event_base_loopbreak(test_loop2->base); });
+        }
     }
 };
 
@@ -648,12 +1030,18 @@ MAIN(testtlswithcms) {
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }
+    delete (tester);
+
+    auto unavailabilityTester = new UnavailabilityTester();
     try {
-        tester->testCMSUnavailable();
+        unavailabilityTester->testCMSUnavailable();
+        epicsThreadSleep(1.0);
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }
-    delete (tester);
+    delete(unavailabilityTester);
+
     cleanup_for_valgrind();
+
     return testDone();
 }

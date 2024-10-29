@@ -193,6 +193,18 @@ struct PVXS_API ConfigCommon {
     bool tls_disable_status_check{false};
 
     /**
+     * @brief True if we want to throw an exception if we can't verify a cert with the
+     * PVACMS, otherwise we downgrade to a tcp connection
+     */
+    bool tls_throw_if_cant_verify{false};
+
+    /**
+     * @brief The request timeout specified in a user call
+     * Cannot be set by an environment variable, but passed in by commandline tools
+     */
+    double request_timeout_specified{5.0};
+
+    /**
      * @brief True if stapling is disabled irrespective of whether TLS is configured
      * TODO Add an environment variable to control this
      */
