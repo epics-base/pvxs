@@ -27,6 +27,11 @@
 namespace pvxs {
 namespace client {
 
+class MonitorCreationException : public std::runtime_error {
+  public:
+    explicit MonitorCreationException(const std::string& message) : std::runtime_error(message) {}
+};
+
 struct Channel;
 struct ContextImpl;
 

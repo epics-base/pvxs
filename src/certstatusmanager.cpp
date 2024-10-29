@@ -110,12 +110,28 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
 }
 
 /**
+ * @brief Subscribe to the certificate status and wait until the status is available
+ *
+ * @param loop the event loop to use to wait
+ * @param ctx_cert the certificate to monitor
+ * @param callback the callback to call
+ * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
+ */
+cert_status_ptr<CertStatusManager> CertStatusManager::getAndSubscribe(evbase loop, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
+    auto cert_status_manager = subscribe(std::move(ctx_cert), std::move(callback));
+
+    // Wait until the status is available
+    cert_status_manager->waitForStatus(loop);
+    return cert_status_manager;
+}
+
+/**
  * @brief Subscribe to status updates for the given certificate,
  * calling the given callback with a CertificateStatus if the status changes.
  * It also sets members with the pva certificate status, the status validity period, and a
  * revocation date if applicable.
  *
- * It will not call the callback unless the status udpdate has been verified and
+ * It will not call the callback unless the status update has been verified and
  * all errors are ignored.
  *
  * @param ctx_cert the certificate to monitor
@@ -166,22 +182,6 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&&
         log_err_printf(status, "Error subscribing to certificate status: %s\n", e.what());
         throw CertStatusSubscriptionException(SB() << "Error subscribing to certificate status: " << e.what());
     }
-}
-
-/**
- * @brief Subscribe to the certificate status and wait until the status is available
- *
- * @param loop the event loop to use to wait
- * @param ctx_cert the certificate to monitor
- * @param callback the callback to call
- * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
- */
-cert_status_ptr<CertStatusManager> CertStatusManager::getAndSubscribe(evbase loop, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
-    auto cert_status_manager = subscribe(std::move(ctx_cert), std::move(callback));
-
-    // Wait until the status is available
-    cert_status_manager->waitForStatus(loop);
-    return cert_status_manager;
 }
 
 /**
