@@ -240,26 +240,7 @@ std::shared_ptr<Connect> ConnectBuilder::exec() {
     });
 
     auto server(std::move(_server));
-#ifdef PVXS_ENABLE_OPENSSL
-    context->tcp_loop.dispatchWhen(
-#else
-    context->tcp_loop.dispatch(
-#endif
-        [=]() {
-#ifdef PVXS_ENABLE_OPENSSL
-            if (context->effective.isTlsConfigured()) {
-                if (context->current_status)
-                    log_debug_printf(watcher, __FILE__ ":%d: exec: Connection establishment: %s: status=%s\n", __LINE__,
-                                     context->effective.tls_cert_filename.c_str(), context->current_status->status.s.c_str());
-                else if (context->cert_status_manager && context->effective.tls_throw_if_cant_verify) {
-                    return nullptr;
-                } else
-                    log_debug_printf(watcher, __FILE__ ":%d: exec: Connection establishment: %s: status=UNKNOWN\n", __LINE__,
-                                     context->effective.tls_cert_filename.c_str());
-            } else if (!context->effective.tls_disabled) {
-                log_debug_printf(watcher, __FILE__ ":%d: exec: Connection establishment - TLS not configured: %s\n", __LINE__, _pvname.c_str());
-            }
-#endif
+    context->tcp_loop.dispatch([=]() {
             // on worker
             op->chan = Channel::build(context, op->_name, server);
 
@@ -274,10 +255,6 @@ std::shared_ptr<Connect> ConnectBuilder::exec() {
 
             op->chan->connectors.push_back(op.get());
         }
-#ifdef PVXS_ENABLE_OPENSSL
-        ,
-        [context]() { return context->connectionCanProceed(); }
-#endif
     );
     return external;
 }

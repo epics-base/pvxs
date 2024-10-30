@@ -149,29 +149,6 @@ public:
         _dispatch(std::move(fn), true);
     }
 
-    // queue request to execute in event loop after a given delay.  return immediately.
-    inline
-    void delayedDispatch(timeval delay, mfunction&& fn) const {
-        _delayedDispatch(delay, std::move(fn), true);
-    }
-
-    inline
-    void recursiveDispatch(std::shared_ptr<DelayedDispatcher> delayed_dispatcher) const {
-        // if supplied condition is true
-        if (delayed_dispatcher->dispatch_when_condition() ) {
-            // Execute now
-            dispatch(std::move(delayed_dispatcher->fn));
-        } else {
-            // Wait some more
-            delayedDispatch(status_ready_polling_interval, [=]() { recursiveDispatch(delayed_dispatcher); });
-        }
-    }
-
-    inline void dispatchWhen(mfunction &&fn, std::function<bool()> dispatch_when_condition) const {
-        auto delayed_dispatcher = std::make_shared<DelayedDispatcher>(std::move(fn), std::move(dispatch_when_condition));
-        recursiveDispatch(delayed_dispatcher);
-    }
-
     inline
     bool tryDispatch(mfunction&& fn) const {
         return _dispatch(std::move(fn), false);

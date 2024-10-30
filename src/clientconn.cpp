@@ -469,7 +469,10 @@ void Connection::handle_CONNECTION_VALIDATED()
                          sts.msg.empty() ? "" : " ", sts.msg.c_str());
     }
 
-    ready = true;
+    // we are ready as long as we're not waiting for certificate status
+    ready = context->connectionCanProceed();
+    if ( !ready )
+        return;
 
     createChannels();
 

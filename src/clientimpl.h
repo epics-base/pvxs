@@ -354,6 +354,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     inline bool connectionCanProceed() const {
+        if (cert_status_manager)
+            std::cout << "STATUS: " << (cert_status_manager->isValid() ? cert_status_manager->getStatus()->status.s : "UNKNOWN") << std::endl;
         return
              !tls_context                       // If this is not a TLS context then we can proceed immediately without waiting for status
           || !effective.isTlsConfigured()       // TLS is not configured
