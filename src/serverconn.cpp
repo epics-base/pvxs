@@ -273,6 +273,8 @@ void ServerConn::handle_CONNECTION_VALIDATION()
             C->raw = auth;
 
             cred = std::move(C);
+            log_debug_printf(connsetup, "Client credentials. account: %s, method: %s, authority: %s\n",
+                             cred->account.c_str(), cred->method.c_str(), cred->authority.c_str());
         }
     }
 
@@ -282,8 +284,8 @@ void ServerConn::handle_CONNECTION_VALIDATION()
         return;
 
     } else {
-        log_debug_printf(connsetup, "Client %s selects auth \"%s\" as \"%s\"\n",
-                         peerName.c_str(), cred->method.c_str(), cred->account.c_str());
+        log_debug_printf(connsetup, "selected-%s: Client %s selects auth \"%s\" as \"%s\" on \"%s\" authority\n", selected.c_str(),
+                         peerName.c_str(), cred->method.c_str(), cred->account.c_str(), cred->authority.c_str());
     }
 
     // remainder of segBuf is payload w/ credentials

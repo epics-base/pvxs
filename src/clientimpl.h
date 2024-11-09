@@ -354,8 +354,6 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     inline bool connectionCanProceed() const {
-        if (cert_status_manager)
-            std::cout << "STATUS: " << (cert_status_manager->isValid() ? cert_status_manager->getStatus()->status.s : "UNKNOWN") << std::endl;
         return
              !tls_context                       // If this is not a TLS context then we can proceed immediately without waiting for status
           || !effective.isTlsConfigured()       // TLS is not configured
@@ -363,7 +361,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
           || (tls_context.cert_is_valid)        // If we have a cert and have already received status from the CMS, then proceed now
           || tls_context.status_check_disabled  // or we don't have to wait for status, then proceed now
           || !cert_status_manager               // If we have no active subscription then we'll never get status so go ahead now with tcp
-          || (cert_status_manager->available(effective.request_timeout_specified));// Finally if the subscription has an available status, or we've waited long enough (3s), then use it
+          || (cert_status_manager->available(effective.request_timeout_specified));// Finally if the subscription has an available status, or we've waited long enough, then use it
     }
     ossl::SSLContext tls_context;
     evevent cert_event_timer;

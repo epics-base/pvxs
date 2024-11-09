@@ -184,7 +184,6 @@ struct Tester {
 
             status_pv.onFirstConnect([this](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>& parameters) {
                 auto it = parameters.begin();
-                const std::string& issuer_id = *it;
                 const std::string& serial_string = *++it;
                 uint64_t serial = std::stoull(serial_string);
 

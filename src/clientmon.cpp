@@ -20,7 +20,6 @@ typedef epicsGuard<epicsMutex> Guard;
 
 DEFINE_LOGGER(monevt, "pvxs.cli.mon");
 DEFINE_LOGGER(io, "pvxs.cli.io");
-DEFINE_LOGGER(watcher, "pvxs.certs.mon");
 
 namespace {
 struct Entry {

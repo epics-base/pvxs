@@ -45,8 +45,10 @@ public:
                    const Credentials& credentials,
                    const SecurityClient& securityClient)
         :pfieldsave(pDbChannel->addr.pfield)
-        ,pvt(asTrapWriteWithData((securityClient.cli)[0], // The user is the first element
+        ,pvt(asTrapWriteWithDataX((securityClient.cli)[0], // The user is the first element
                          credentials.cred[0].c_str(),     // The user is the first element
+                         credentials.method.c_str(),
+                         credentials.authority.c_str(),
                          credentials.host.c_str(),
                          pDbChannel,
                          dbChannelFinalFieldType(pDbChannel),

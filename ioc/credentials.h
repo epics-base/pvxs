@@ -27,6 +27,8 @@ namespace ioc {
 class Credentials {
 public:
     std::vector<std::string> cred;
+    std::string method;
+    std::string authority;
     std::string host;
     explicit Credentials(const server::ClientCredentials& clientCredentials);
     Credentials(const Credentials&) = delete;

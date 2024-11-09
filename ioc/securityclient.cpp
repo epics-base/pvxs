@@ -22,11 +22,13 @@ void SecurityClient::update(dbChannel* ch, Credentials& cred) {
 
     for (size_t i = 0, N = temp.cli.size(); i < N; i++) {
         /* asAddClient() fails secure to no-permission */
-        (void)asAddClient(&temp.cli[i],
+        (void)asAddClientX(&temp.cli[i],
                 dbChannelRecord(ch)->asp,
                 dbChannelFldDes(ch)->as_level,
                 cred.cred[i].c_str(),
                 // TODO switch to vector of char to accommodate inplace modifications to string
+                const_cast<char*>(cred.method.c_str()),
+                const_cast<char*>(cred.authority.c_str()),
                 const_cast<char*>(cred.host.data()));
     }
 

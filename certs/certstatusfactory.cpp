@@ -21,7 +21,7 @@
 namespace pvxs {
 namespace certs {
 
-struct CertStatusManager;
+class CertStatusManager;
 
 /**
  * @brief Creates and signs an OCSP response for a given certificate.
