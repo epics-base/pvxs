@@ -26,8 +26,8 @@ class ConfigCms : public pvxs::server::Config {
 
     /**
      * @brief Create a CMS configuration from environment variables
-     * 
-     * @return ConfigCms 
+     *
+     * @return ConfigCms
      */
     static inline ConfigCms fromEnv() {
         // Get default config
@@ -147,12 +147,12 @@ class ConfigCms : public pvxs::server::Config {
      *
      * e.g.
      * @code
-     *      AG(ADMINS) {
+     *      USG(ADMINS) {
      *       "ed@slac.stanford.edu",
      *       "greg@slac.stanford.edu"
      *      }
      *
-     *      SG(SPECIAL) {
+     *      ASG(SPECIAL) {
      *       RULE(1,WRITE,TRAPWRITE) {
      *         UAG(ADMINS)
      *      }

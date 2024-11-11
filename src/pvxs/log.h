@@ -148,15 +148,16 @@ inline void logger_level_set(const char *name, Level lvl) {
 //! Use prior to re-applying new configuration.
 PVXS_API void logger_level_clear();
 
-/** Configure logging from environment variable **$PVXS_LOG**
+/**
+ * @brief Configure logging from environment variable `$PVXS_LOG`
  *
- * Value of the form "key=VAL,..."
+ * Value of environment variable has the form `key=VAL,...`
  *
- * Keys may be literal logger names, or may include '*' wildcards
- * to match multiple loggers.  eg. "pvxs.*=DEBUG" will enable
+ * - `keys`: Keys may be literal logger names, or may include `*` wildcards
+ * to match multiple loggers.  eg. `pvxs.*=DEBUG` will enable
  * all internal log messages.
  *
- * VAL may be one of "CRIT", "ERR", "WARN", "INFO", or "DEBUG"
+ * - `values`: `VAL` may be one of `CRIT`, `ERR`, `WARN`, `INFO`, or `DEBUG`
  */
 PVXS_API void logger_config_env();
 

@@ -73,24 +73,54 @@ struct PVXS_API SharedWildcardPV : public SharedPV {
 
     /** Provide data type and initial value.  Allows clients to begin connecting.
      * @pre !isOpen()
+     * @param pv_name For wildcard PVs this indicates the actual PV requested
      * @param initial Defines data type, and initial value
      */
     void open(const std::string &pv_name, const Value& initial);
-    //! Test whether open(pv_name) has been called w/o matching close(pv_name)
+    /**
+     * @brief Test whether open(pv_name) has been called w/o matching close(pv_name)
+     * @param pv_name For wildcard PVs this indicates the actual PV requested
+     * @return true if open
+     */
     bool isOpen(const std::string &pv_name) const;
-    //! Reverse the effects of open(pv_name) and force disconnect any remaining clients.
+    /**
+     * @brief Reverse the effects of open(pv_name) and force disconnect any remaining clients.
+     * @param pv_name For wildcard PVs this indicates the actual PV requested
+     */
     void close(const std::string &pv_name);
-
-    //! Update the internal data value, and dispatch subscription updates to any clients.
+    /**
+     * @brief Update the internal data value, and dispatch subscription updates to any clients.
+     * @param pv_name For wildcard PVs this indicates the actual PV requested
+     * @param val the value to post
+     */
     void post(const std::string &pv_name, const Value& val);
-    //! query the internal data value and update the provided Value.
+    /**
+     * @brief query the internal data value and update the provided Value.
+     * @param pv_name For wildcard PVs this indicates the actual PV requested
+     * @param val reference to value to update by fetching
+     */
     void fetch(const std::string &pv_name, Value& val) const;
-    //! Return a (shallow) copy of the internal data value
+    /**
+     * @brief Return a (shallow) copy of the internal data value
+     * @param pv_name For wildcard PVs this indicates the actual PV requested
+     * @return shallow copy of the internal data value
+     */
     Value fetch(const std::string &pv_name) const;
 
     struct Impl;
-    //! The Wildcard PV name, only set when wildcard match is called
+    /**
+     * @brief The Wildcard PV name, only set when wildcard match is called
+     */
     std::string wildcard_pv;
+    /**
+     * @brief Get the parameters from the given wildcard PV name.
+     * Will provide strings for each of the parts of the PV name matched by
+     * patterns in the wildcard PV name.  e.g. strings of `???` or `*` will
+     * resolve to strings in the returned vector.
+     *
+     * @param pv_name For wildcard PVs this indicates the actual PV requested
+     * @return a list of strings that correspond to the parts of the PV name matched by pattersn in the Wildcard PV.
+     */
     inline const std::list<std::string> getParameters(const std::string& pv_name) noexcept {
         std::list<std::string> parameters;
         size_t pv_name_pos = 0;
