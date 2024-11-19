@@ -136,7 +136,7 @@ then the last mapped record in that chain should have ``+trigger: "*"``.
 
 .. note:: As a special case.  A group with no ``+trigger`` mappings at all will function as if every mapping
           includes a ``+trigger`` mapping for itself.
-          This is done so that such a situation does not cause confusion be posting no monitor updates at all.
+          This is done so that such a situation does not cause confusion by posting no monitor updates at all.
           However, this situation will almost never give desired behaviour as changes to records which
           could otherwise be atomic will be split into multiple subscription updates.
 
