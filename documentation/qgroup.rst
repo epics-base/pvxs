@@ -40,8 +40,8 @@ Use ``dbLoadGroup()`` to load .json files. ::
     # Store in some .json
     {
         "grp:name": {
-            "X": {+channel:"rec:X.VAL"}, # full PV name
-            "Y": {+channel:"rec:Y.VAL"}
+            "X": {"+channel":"rec:X.VAL"}, # full PV name
+            "Y": {"+channel":"rec:Y.VAL"}
         }
     }
 
@@ -95,6 +95,8 @@ or a special key.
         })
     }
 
+.. note:: When using separate JSON files, mappings must be quoted: e.g. ``+id`` should be ``"+id"``.
+
 Mapping ``+type``:
 
 - ``scalar`` (default) places an NTScalar or NTScalarArray as a sub-structure.  (see :ref:`ntscalar`)
@@ -115,7 +117,7 @@ The most common record field to map is ``+channel: "VAL"``.
 When included in an ``info(Q:group, ...``, the ``+channel`` must only name a field of the enclosing record.
 (eg. ``+channel:"VAL"``)
 When in a separate JSON file, ``+channel`` must be a full PV name, beginning with a record or alias name.
-(eg. ``+channel:"record:name.VAL"``)
+(eg. ``"+channel":"record:name.VAL"``)
 
 Mapping ``+trigger``:
 
