@@ -108,6 +108,8 @@ Mapping ``+type``:
 - ``proc`` places no fields.  The associated ``+channel`` is processed on PUT.
   "proc" mappings will almost always set ``+putorder`` to control the relative
   ordering of record processing.
+- ``const`` places the value of the ``+const`` mapping, so it doesn't use any
+  information from the enclosing record, if there is any.
 
 
 Mapping ``+channel``:
@@ -151,6 +153,8 @@ the order in which the associated records are processed (in increasing order).
 Additionally, the values of ``+putorder`` also control the order of fields in the group PV definition.
 This control is necessary only in limited cases, such as the ``NTTable`` specification,
 where the iteration order of fields must match the order of the ``labels`` array.
+
+``+const`` must be set when using ``+type: "const"``. It accepts literals, e.g. integers, floats, and strings.
 
 .. _understandinggroups:
 
