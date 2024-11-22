@@ -1,0 +1,5 @@
+{
+    "$(N)fromFile": {
+        "value": {"+type": "const", "+const": 3}
+    }
+}

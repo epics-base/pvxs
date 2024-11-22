@@ -15,6 +15,7 @@
 #include <epicsTime.h>
 #include <epicsExit.h>
 #include <generalTimeSup.h>
+#include <iocsh.h>
 
 #include "testioc.h"
 #include "utilpvt.h"
@@ -715,11 +716,29 @@ void testConst()
               );
 }
 
+void testDbLoadGroup()
+{
+    testDiag("%s", __func__);
+    TestClient ctxt;
+
+    auto val(ctxt.get("tst:fromFile").exec()->wait(5.0));
+    testStrEq(std::string(SB()<<val.format()),
+              "struct {\n"
+              "    struct {\n"
+              "        struct {\n"
+              "            int32_t queueSize = 0\n"
+              "            bool atomic = true\n"
+              "        } _options\n"
+              "    } record\n"
+              "    int64_t value = 3\n"
+              "}\n");
+}
+
 } // namespace
 
 MAIN(testqgroup)
 {
-    testPlan(37);
+    testPlan(38);
     testSetup();
     {
         generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -734,12 +753,14 @@ MAIN(testqgroup)
         testdbReadDatabase("ntenum.db", nullptr, "P=enm");
         testdbReadDatabase("iq.db", nullptr, "N=iq:");
         testdbReadDatabase("const.db", nullptr, "P=tst:");
+        iocsh("../qgroup.cmd");
         ioc.init();
         testTable();
         testEnum();
         testImage();
         testIQ();
         testConst();
+        testDbLoadGroup();
     }
     // call epics atexits explicitly to handle older base w/o de-init hooks
     epicsExitCallAtExits();
