@@ -126,8 +126,8 @@ Triggers define when and which **changes to the constituent field are translated
 
 - ``""`` (default) means that changes to the field do not cause a subscription update.  (see note below)
 - ``"*"`` causes a subscription update containing the most recent values/meta-data of all group fields.
-- A comma separated list of field names causes an update with the most recent values of only the listed group fields.
-  eg. ``+trigger: "value.A, value.B"``.
+- A comma separated list of field names causes an update with the most recent values of **only** the listed group fields.
+  eg. ``+trigger: "value.A, value.B"`` doesn't update ``labels`` or ``timeStamp``.
 
 For a new group definition, including records from one or more record processing chains,
 the last record in that chain should have a ``+trigger`` mapping listing the group fields
