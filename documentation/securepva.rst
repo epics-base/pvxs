@@ -95,7 +95,7 @@ Quick Start Guide
         export PATH=$PATH:$(pwd)
         cd ../../..
 
-1. PVACMS Setup
+5. PVACMS Setup
 ^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -131,7 +131,7 @@ Quick Start Guide
         #   with private key at location specified by EPICS_PVACMS_TLS_KEY
         pvacms
 
-1. Install Root Certificate
+6. Install Root Certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -141,7 +141,7 @@ Quick Start Guide
         # note: If root cert is signed by a public CA this step is optional
         pvxcert -I
 
-1. Configure EPICS Agent Environment
+7. Configure EPICS Agent Environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -158,7 +158,7 @@ Quick Start Guide
         # An EPICS server agent certificate if required
         export EPICS_PVAS_TLS_KEYCHAIN=~/.epics/server.p12
 
-1. Create Certificates
+8. Create Certificates
 ^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
