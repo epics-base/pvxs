@@ -31,7 +31,7 @@ pvacms_SRCS += certstatus.cpp
 pvacms_SRCS += certstatusfactory.cpp
 
 pvacms_LIBS += $(EPICS_BASE_IOC_LIBS)
-pvacms_LDFLAGS += -lsqlite3 -lssl -lcrypto
+pvacms_SYS_LIBS += sqlite3 ssl crypto
 
 #PROD += ocsppva
 #pvaocsp_SRCS += ocsppva.cpp
