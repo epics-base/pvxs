@@ -86,14 +86,10 @@ Quick Start Guide
 
     .. code-block:: sh
 
-        git clone --recursive  https://github.com/epics-base/pvxs.git
+        git clone --recursive  --branch tls https://github.com/george-mcintyre/pvxs.git
         cd pvxs
 
-        # Fetch PR #92 (TLS With Certificate Management for PVXS)
-        git fetch origin pull/92/head:tls
-        git checkout tls
-
-        # Build PVXS
+]       # Build PVXS
         make -j10 all
 
         # set path
