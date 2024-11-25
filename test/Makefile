@@ -162,7 +162,7 @@ TESTS += testtlsstatus
 
 TESTPROD_HOST += jwtlogintest
 jwtlogintest_SRCS += jwtlogintest.cpp
-jwtlogintest_LDFLAGS +=-lcurl
+jwtlogintest_SYS_LIBS +=curl
 
 endif # EVENT2_HAS_OPENSSL
 endif
