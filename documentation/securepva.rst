@@ -61,11 +61,11 @@ Quick Start Guide
 
         # Optional: To enable appropriate site authentication mechanisms.
         # Note: `authnstd` is always available.
-        cat >> CONFIG_SITE.local <<EOF
-        PVXS_ENABLE_KRB_AUTH = YES
-        PVXS_ENABLE_JWT_AUTH = YES
-        PVXS_ENABLE_LDAP_AUTH = YES
-        EOF
+        # cat >> CONFIG_SITE.local <<EOF
+        # PVXS_ENABLE_KRB_AUTH = YES
+        # PVXS_ENABLE_JWT_AUTH = YES
+        # PVXS_ENABLE_LDAP_AUTH = YES
+        #EOF
 
         # find paths to libevent and openssl
         pkg-config --cflags openssl libevent
