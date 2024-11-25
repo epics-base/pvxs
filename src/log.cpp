@@ -127,28 +127,6 @@ void _log_printf(unsigned rawlvl, const char *fmt, ...)
     va_end(args);
 }
 
-void _log_println(unsigned rawlvl, const char *log_prefix, const char *fmt, ...) {
-    // Get full string without prefix
-    va_list args;
-    va_start(args, fmt);
-    int length = vsnprintf(nullptr, 0, fmt, args);
-    if (length < 0) return;
-    std::string total_string(length, '\0');
-    vsnprintf(&total_string[0], length + 1, fmt, args);
-    va_end(args);
-
-    // Split the string by newline characters
-    std::istringstream stream(total_string);
-    std::string next_line;
-    int count = 0;
-    while (std::getline(stream, next_line)) {
-        next_line = SB() << log_prefix << " " << next_line << "\n";
-        _log_vprintf(rawlvl, "%s", (va_list)&next_line);
-        if ( !(++count % 10) )
-            epicsThreadSleep(0.0001);
-    }
-}
-
 void _log_printf_hex(unsigned rawlvl, const void *buf, size_t buflen, const char *fmt, ...)
 {
     va_list args;

@@ -30,8 +30,8 @@ Quick Start Guide
 
     .. code-block:: sh
 
-        # For Debian/Ubuntu
-        apt-get install openssl libevent-dev sqlite3 libsqlite3-dev
+        # For Debian/Ubuntu (build-essential is optional)
+        apt-get install openssl libssl-dev libevent-dev sqlite3 libsqlite3-dev build-essential
 
         # For RHEL/CentOS
         yum install openssl-devel libevent-devel sqlite-devel
@@ -44,7 +44,7 @@ Quick Start Guide
 
     .. code-block:: sh
 
-        git clone --branch 7.0 git@github.com:epics-base/epics-base.git
+        git clone --branch 7.0 https://github.com/epics-base/epics-base.git
         cd epics-base
 
         # Fetch and checkout PR #563 - TLS support for AUTHORITY, METHOD, and isTLS in ACF files
@@ -75,7 +75,7 @@ Quick Start Guide
         pkg-config --cflags openssl libevent
         pkg-config --libs openssl libevent
 
-        # Set paths to libevent and openssl (exact paths may vary)
+        # Set paths to libevent and openssl (if required)
         export C_INCLUDE_PATH=/<path_to_libevent>/libevent/2.1.12_1/include:/<path_to_openssl>/openssl@3/3.2.1/include
         export CPLUS_INCLUDE_PATH=/<path_to_libevent>/libevent/2.1.12_1/include:/<path_to_openssl>/openssl@3/3.2.1/include
         export LIBRARY_PATH=/<path_to_libevent>/libevent/2.1.12_1/lib:/<path_to_openssl>/openssl@3/3.2.1/lib
@@ -86,7 +86,7 @@ Quick Start Guide
 
     .. code-block:: sh
 
-        git clone --recursive git@github.com:epics-base/pvxs.git
+        git clone --recursive  https://github.com/epics-base/pvxs.git
         cd pvxs
 
         # Fetch PR #92 (TLS With Certificate Management for PVXS)
@@ -101,7 +101,7 @@ Quick Start Guide
         export PATH=$PATH:$(pwd)
         cd ../../..
 
-5. PVACMS Setup
+1. PVACMS Setup
 ^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -137,7 +137,7 @@ Quick Start Guide
         #   with private key at location specified by EPICS_PVACMS_TLS_KEY
         pvacms
 
-6. Install Root Certificate
+1. Install Root Certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -147,7 +147,7 @@ Quick Start Guide
         # note: If root cert is signed by a public CA this step is optional
         pvxcert -I
 
-7. Configure EPICS Agent Environment
+1. Configure EPICS Agent Environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -164,7 +164,7 @@ Quick Start Guide
         # An EPICS server agent certificate if required
         export EPICS_PVAS_TLS_KEYCHAIN=~/.epics/server.p12
 
-8. Create Certificates
+1. Create Certificates
 ^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh

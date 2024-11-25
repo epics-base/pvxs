@@ -64,9 +64,6 @@ PVXS_API
 void _log_printf(unsigned rawlvl, _Printf_format_string_ const char *fmt, ...) EPICS_PRINTF_STYLE(2,3);
 
 PVXS_API
-void _log_println(unsigned rawlvl, const char *log_prefix, _Printf_format_string_ const char *fmt, ...) EPICS_PRINTF_STYLE(3,4) ;
-
-PVXS_API
 void _log_printf_hex(unsigned rawlvl, _Printf_format_string_ const void *buf, size_t buflen, const char *fmt, ...) EPICS_PRINTF_STYLE(4,5);
 
 } // namespace detail
@@ -95,8 +92,6 @@ void xerrlogHexPrintf(const void *buf, size_t buflen);
 }while(0)
 
 #define log_println(LOGGER, LVL, FMT, ...) do{ \
-    if(auto _log_prefix = ::pvxs::detail::log_prep(LOGGER, unsigned(LVL))) \
-        ::pvxs::detail:: _log_println(unsigned(LVL), _log_prefix, FMT, __VA_ARGS__); \
 }while(0)
 
 /* A note about MSVC (legacy) pre-processor weirdness.
