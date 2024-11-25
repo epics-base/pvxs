@@ -50,6 +50,7 @@ public:
                          credentials.method.c_str(),
                          credentials.authority.c_str(),
                          credentials.host.c_str(),
+                         true, // isTLS TODO fix this!!
                          pDbChannel,
                          dbChannelFinalFieldType(pDbChannel),
                          dbChannelFinalElements(pDbChannel),

@@ -40,6 +40,7 @@ See :ref:`relpolicy` for details.
 
    overview
    netconfig
+   securepva
    example
    building
    cli

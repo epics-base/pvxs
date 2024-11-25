@@ -29,7 +29,9 @@ void SecurityClient::update(dbChannel* ch, Credentials& cred) {
                 // TODO switch to vector of char to accommodate inplace modifications to string
                 const_cast<char*>(cred.method.c_str()),
                 const_cast<char*>(cred.authority.c_str()),
-                const_cast<char*>(cred.host.data()));
+                const_cast<char*>(cred.host.data()),
+                true // isTLS TODO fix this!!!
+                );
     }
 
     cli.swap(temp.cli);

@@ -59,7 +59,7 @@ class ConfigCms : public pvxs::server::Config {
      *
      * All other auth methods will never require administrator approval.
      */
-    bool cert_client_require_approval = false;
+    bool cert_client_require_approval = true;
 
     /**
      * @brief When basic credentials are used then set to true
@@ -84,7 +84,7 @@ class ConfigCms : public pvxs::server::Config {
      *
      * Default is true
      */
-    bool cert_status_subscription_required = true;
+    bool cert_status_subscription = true;
 
     /**
      * @brief This is the string that determines the fully

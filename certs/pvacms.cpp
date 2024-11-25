@@ -728,7 +728,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
 
         // Create a certificate factory
         auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, usage,
-                                               config.cert_status_subscription_required, ca_cert.get(), ca_pkey.get(), ca_chain.get(), state);
+                                               config.cert_status_subscription, ca_cert.get(), ca_pkey.get(), ca_chain.get(), state);
 
         // Create the certificate using the certificate factory, store it in the database and return the PEM string
         auto pem_string = createCertificatePemString(ca_db, certificate_factory);
@@ -1120,7 +1120,7 @@ void createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<KeyP
     auto serial = generateSerial();
 
     auto certificate_factory = CertFactory(serial, key_pair, config.ca_name, getCountryCode(), config.ca_organization, config.ca_organizational_unit,
-                                           not_before, not_after, ssl::kForCa, config.cert_status_subscription_required);
+                                           not_before, not_after, ssl::kForCa, config.cert_status_subscription);
 
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
@@ -1164,7 +1164,7 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
 
     auto certificate_factory = CertFactory(serial, key_pair, PVXS_SERVICE_NAME, getCountryCode(), pvacms_org_name, PVXS_SERVICE_ORG_UNIT_NAME,
                                            getNotBeforeTimeFromCert(ca_cert.get()), getNotAfterTimeFromCert(ca_cert.get()), ssl::kForCMS,
-                                           config.cert_status_subscription_required, ca_cert.get(), ca_pkey.get(), ca_chain.get());
+                                           config.cert_status_subscription, ca_cert.get(), ca_pkey.get(), ca_chain.get());
 
     auto cert = createCertificate(ca_db, certificate_factory);
 

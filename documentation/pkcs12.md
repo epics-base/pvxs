@@ -1,3 +1,5 @@
+.. _pkcs12:
+
 # PKCS#12 files in brief
 
 The following is based on a reading of [RFC7292](https://datatracker.ietf.org/doc/html/rfc7292) as of July 2014.
@@ -65,7 +67,7 @@ This is feature [planned for 3.2](https://github.com/openssl/openssl/pull/19025)
 
 TODO: keytool has been observed setting this to "6".  OpenSSL 3.2 set `anyExtendedKeyUsage`, aka. 1.
 
-## File Structure as Observed
+## File Structure
 
 The structures of files created by `openssl pkcs12` and `keytool` are almost identical.
 

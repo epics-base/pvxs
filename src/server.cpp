@@ -496,6 +496,7 @@ Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callbac
                         // For servers, we need to wait for status if status monitoring is enabled
                         try {
                             // Subscribe to the server's certificate status and wait until at least first update is received
+                            // TODO change to subscribe() only and then don't respond to SEARCH_REQUEST until status is available
                             cert_status_manager = certs::CertStatusManager::getAndSubscribe(acceptor_loop, std::move(cert), [this](certs::PVACertificateStatus status) {
                                 Guard G(tls_context.lock);
                                 auto was_good = current_status && current_status->isGood();
