@@ -85,7 +85,7 @@ Quick Start Guide
         git clone --recursive  --branch tls https://github.com/george-mcintyre/pvxs.git
         cd pvxs
 
-]       # Build PVXS
+        # Build PVXS
         make -j10 all
 
         # set path
