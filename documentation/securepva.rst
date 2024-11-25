@@ -112,14 +112,14 @@ Quick Start Guide
         #### Set key paths (keys will be created here if not exists)
         # Place your CA's private key in this file if you have one
         # otherwise the CA will be created by PVACMS
-        export EPICS_CA_TLS_KEY=~/.ssh/cakey.p12
+        export EPICS_CA_PKEY=~/.ssh/cakey.p12
         # Specify the path to your PVACMS's private key.  It will be created automatically
-        export EPICS_PVACMS_TLS_KEY=~/.ssh/pvacmskey.p12
+        export EPICS_PVACMS_TLS_PKEY=~/.ssh/pvacmskey.p12
 
         #### Set certificate paths (certificates will be created here if not exists)
         # Place your CA's certificate in this file if you have one
         # otherwise the CA certificate will be created by PVACMS
-        export EPICS_CA_TLS_KEYCHAIN=~/.epics/ca.p12
+        export EPICS_CA_KEYCHAIN=~/.epics/ca.p12
         # Specify the path to your PVACMS's certificate.  It will be created automatically
         export EPICS_PVACMS_TLS_KEYCHAIN=~/.epics/pvacms.p12
 
