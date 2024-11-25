@@ -31,7 +31,7 @@ Quick Start Guide
     .. code-block:: sh
 
         # For Debian/Ubuntu (build-essential is optional)
-        apt-get install openssl libssl-dev libevent-dev sqlite3 libsqlite3-dev build-essential
+        apt-get install openssl libssl-dev libevent-dev libsqlite3-dev build-essential
 
         # For RHEL/CentOS
         yum install openssl-devel libevent-devel sqlite-devel
@@ -44,12 +44,8 @@ Quick Start Guide
 
     .. code-block:: sh
 
-        git clone --branch 7.0 https://github.com/epics-base/epics-base.git
+        git clone --branch 7.0-method_and_authority https://github.com/george-mcintyre/epics-base.git
         cd epics-base
-
-        # Fetch and checkout PR #563 - TLS support for AUTHORITY, METHOD, and isTLS in ACF files
-        git fetch origin pull/563/head:tls
-        git checkout tls
 
         make -j10 all
         cd ..
@@ -97,7 +93,7 @@ Quick Start Guide
         export PATH=$PATH:$(pwd)
         cd ../../..
 
-1. PVACMS Setup
+5. PVACMS Setup
 ^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -133,7 +129,7 @@ Quick Start Guide
         #   with private key at location specified by EPICS_PVACMS_TLS_KEY
         pvacms
 
-1. Install Root Certificate
+6. Install Root Certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -143,7 +139,7 @@ Quick Start Guide
         # note: If root cert is signed by a public CA this step is optional
         pvxcert -I
 
-1. Configure EPICS Agent Environment
+7. Configure EPICS Agent Environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -160,7 +156,7 @@ Quick Start Guide
         # An EPICS server agent certificate if required
         export EPICS_PVAS_TLS_KEYCHAIN=~/.epics/server.p12
 
-1. Create Certificates
+8. Create Certificates
 ^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh

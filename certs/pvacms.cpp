@@ -64,7 +64,6 @@
 #include "ownedptr.h"
 #include "p12filefactory.h"
 #include "sqlite3.h"
-#include "sqlite3ext.h"
 #include "utilpvt.h"
 
 DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
