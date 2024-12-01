@@ -59,9 +59,31 @@ class PVXS_API CertFactory {
     std::string skid_;
     certstatus_t initial_status_;
 
+    /**
+     * @brief Constructor for CertFactory
+     *
+     * @param serial the serial number
+     * @param key_pair the key pair
+     * @param name the name
+     * @param country the country
+     * @param org the organization
+     * @param org_unit the organizational unit
+     * @param not_before the not before time
+     * @param not_after the not after time
+     * @param usage the usage
+     * @param cert_status_subscription_required whether certificate status subscription is required
+     * @param issuer_certificate_ptr the issuer certificate
+     * @param issuer_pkey_ptr the issuer private key
+     * @param issuer_chain_ptr the issuer certificate chain
+     * @param initial_status the initial status
+     * @param issuer_certificate_ptr the issuer certificate optional
+     * @param issuer_pkey_ptr the issuer private key optional
+     * @param issuer_chain_ptr the issuer certificate chain optional
+     * @param initial_status the initial status - defaults to VALID
+     */
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
                 const std::string &org_unit, time_t not_before, time_t not_after, const uint16_t &usage, bool cert_status_subscription_required = false,
-                X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr, stack_st_X509 *issuer_chain_ptr = nullptr,
+                X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr, STACK_OF(X509) *issuer_chain_ptr = nullptr,
                 certstatus_t initial_status = VALID)
         : serial_(serial),
           key_pair_(key_pair),
@@ -90,6 +112,10 @@ class PVXS_API CertFactory {
 
     //    static std::string sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data);
 
+    /**
+     * @brief Get the error string from the error queue
+     * @return the error string
+     */
     static inline std::string getError() {
         unsigned long err;
         std::string error_string;
@@ -107,6 +133,11 @@ class PVXS_API CertFactory {
     static std::string bioToString(const ossl_ptr<BIO> &bio);
     static void addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value, const X509 *issuer_certificate_ptr);
 
+    /**
+     * @brief Get the hash name of a certificate
+     * @param cert_path the path to the certificate
+     * @return the hash name
+     */
     static inline std::string getCertHashName(const std::string& cert_path) {
         std::ifstream cert_file(cert_path, std::ios::binary);
         if (!cert_file) {
@@ -116,28 +147,29 @@ class PVXS_API CertFactory {
         std::string cert_data((std::istreambuf_iterator<char>(cert_file)),
                               std::istreambuf_iterator<char>());
 
-        BIO* bio = BIO_new_mem_buf(cert_data.data(), cert_data.size());
+        ossl_ptr<BIO> bio(BIO_new_mem_buf(cert_data.data(), cert_data.size()));
         if (!bio) {
             throw std::runtime_error("Failed to create BIO");
         }
 
-        X509* cert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+        ossl_ptr<X509> cert(PEM_read_bio_X509_AUX(bio.get(), NULL, NULL, NULL));
         if (!cert) {
-            BIO_free(bio);
             throw std::runtime_error("Failed to read certificate");
         }
 
-        unsigned long hash = X509_subject_name_hash(cert);
-
-        X509_free(cert);
-        BIO_free(bio);
+        unsigned long hash = X509_subject_name_hash(cert.get());
 
         std::stringstream ss;
         ss << std::hex << std::setfill('0') << std::setw(8) << hash << ".0";
         return ss.str();
     }
 
-    static inline void createCertSymlink(const std::string& cert_path) {
+    /**
+     * @brief Create a symlink to a certificate
+     * @param cert_path the path to the certificate
+     * @return the path to the symlink
+     */
+    static inline std::string createCertSymlink(const std::string& cert_path) {
         std::string hash_name = getCertHashName(cert_path);
         std::string dir_path;
         size_t last_slash = cert_path.find_last_of("/\\");
@@ -159,9 +191,15 @@ class PVXS_API CertFactory {
             throw std::runtime_error("Failed to create symlink: " + std::string(strerror(errno)));
         }
 #endif
+        return hash_name;
     }
 
   private:
+    /**
+     * @brief Convert a NID to a string
+     * @param nid the NID
+     * @return the string representation of the NID
+     */
     static inline const char *nid2String(int nid) {
         switch (nid) {
             case NID_subject_key_identifier:

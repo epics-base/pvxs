@@ -74,21 +74,12 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     }
 
     // EPICS_CA_KEYCHAIN
-    if (pickone({"EPICS_CA_KEYCHAIN", "EPICS_PVACMS_TLS_KEYCHAIN", "EPICS_PVAS_TLS_KEYCHAIN"})) {
+    if (pickone({"EPICS_CA_KEYCHAIN"})) {
         ensureDirectoryExists(ca_cert_filename = ca_private_key_filename = pickone.val);
 
         // EPICS_CA_KEYCHAIN_PWD_FILE
-        std::string password_filename;
-        if (pickone.name == "EPICS_CA_KEYCHAIN") {
-            pickone({"EPICS_CA_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
-        } else if (pickone.name == "EPICS_PVACMS_KEYCHAIN") {
-            pickone({"EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
-        } else if (pickone.name == "EPICS_PVAS_KEYCHAIN") {
-            pickone({"EPICS_PVACS_TLS_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
-        }
+        pickone({"EPICS_CA_KEYCHAIN_PWD_FILE"});
+        std::string password_filename(pickone.val);
         ensureDirectoryExists(password_filename);
         try {
             ca_cert_password = ca_private_key_password = getFileContents(password_filename);
@@ -98,21 +89,12 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     }
 
     // EPICS_CA_PKEY
-    if (pickone({"EPICS_CA_PKEY", "EPICS_PVACMS_TLS_PKEY", "EPICS_PVAS_TLS_PKEY"})) {
+    if (pickone({"EPICS_CA_PKEY"})) {
         ensureDirectoryExists(ca_private_key_filename = pickone.val);
 
         // EPICS_CA_PKEY_PWD_FILE
-        std::string password_filename;
-        if (pickone.name == "EPICS_CA_PKEY") {
-            pickone({"EPICS_CA_PKEY_PWD_FILE"});
-            password_filename = pickone.val;
-        } else if (pickone.name == "EPICS_PVACMS_PKEY") {
-            pickone({"EPICS_PVACMS_TLS_PKEY_PWD_FILE"});
-            password_filename = pickone.val;
-        } else if (pickone.name == "EPICS_PVAS_PKEY") {
-            pickone({"EPICS_PVACS_TLS_PKEY_PWD_FILE"});
-            password_filename = pickone.val;
-        }
+        pickone({"EPICS_CA_PKEY_PWD_FILE"});
+        std::string password_filename(pickone.val);
         ensureDirectoryExists(password_filename);
         try {
             ca_private_key_password = getFileContents(password_filename);

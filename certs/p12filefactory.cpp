@@ -194,49 +194,111 @@ bool P12FileFactory::createRootPemFile(const std::string &p12PemString, bool ove
     ossl_ptr<BIO> bio(BIO_new_mem_buf(p12PemString.data(), p12PemString.size()));
 
     // Create a stack for the certs
-    STACK_OF(X509_INFO)
-    *inf(PEM_X509_INFO_read_bio(bio.get(), NULL, NULL, NULL));
+    STACK_OF(X509_INFO) *inf(PEM_X509_INFO_read_bio(bio.get(), NULL, NULL, NULL));
+    if (!inf || sk_X509_INFO_num(inf) == 0) {
+        throw std::runtime_error("No certificates found in PEM data");
+    }
 
-    // Assuming the last one is the root CA certificate
-    X509_INFO *xi = sk_X509_INFO_value(inf, sk_X509_INFO_num(inf) - 1);
+    // Get the root CA certificate (either the only one or the last in chain)
+    X509_INFO *xi = nullptr;
+    int num_certs = sk_X509_INFO_num(inf);
+
+    if (num_certs == 1) {
+        // Single certificate case (self-signed CA)
+        xi = sk_X509_INFO_value(inf, 0);
+    } else {
+        // Certificate chain case (get the last one)
+        xi = sk_X509_INFO_value(inf, num_certs - 1);
+    }
+
+    if (!xi || !xi->x509) {
+        throw std::runtime_error("Failed to get root certificate");
+    }
 
     // Build filename based on the CA certificate's CN field
-    ossl_ptr<X509_NAME> name(X509_get_subject_name(xi->x509));  // get the subject name from the certificate
+    ossl_ptr<X509_NAME> name(X509_get_subject_name(xi->x509));
+    if (!name) {
+        throw std::runtime_error("Failed to get subject name from certificate");
+    }
 
-    char cn[kMaxAuthnNameLen];  // buffer to hold the CN
-    X509_NAME_get_text_by_NID(name.get(), NID_commonName, cn,
-                              sizeof(cn));  // get the CN
-    std::string fileName(cn);               // create a std::string
-    std::replace(fileName.begin(), fileName.end(), ' ',
-                 '_');  // Replace spaces if any
+    char cn[kMaxAuthnNameLen];
+    if (X509_NAME_get_text_by_NID(name.get(), NID_commonName, cn, sizeof(cn)) < 0) {
+        throw std::runtime_error("Failed to get CN from certificate");
+    }
 
+    std::string fileName(cn);
+    std::replace(fileName.begin(), fileName.end(), ' ', '_');
     fileName += ".pem";
 
     // Prepare file to write
     std::string certs_directory_string = CertFactory::getCertsDirectory();
-
     std::string certs_file = certs_directory_string + "/" + fileName;
+    std::string hash_link;
 
     // Check if file already exists, if it does, do nothing and return
-/*
-    if (!overwrite && access(certs_file.c_str(), F_OK) != -1) {
+
+    // Check if file already exists
+    bool exists = (access(certs_file.c_str(), F_OK) != -1);
+    if (!overwrite && exists) {
         log_debug_printf(certs, "Root Certificate already installed: %s\n", certs_file.c_str());
         return true;
     }
-*/
 
     std::remove(certs_file.c_str());
-    file_ptr fp(fopen(certs_file.c_str(), "w"));
-    if (!fp) {
-        throw std::runtime_error(SB() << "Error opening root certificate file for writing: " << certs_file);
+    {
+        file_ptr fp(fopen(certs_file.c_str(), "w"));
+        if (!fp) {
+            throw std::runtime_error(SB() << "Error opening root certificate file for writing: " << certs_file);
+        }
+
+        if (PEM_write_X509(fp.get(), xi->x509) != 1) {
+            throw std::runtime_error("Failed to write certificate to file");
+        }
     }
 
-    PEM_write_X509(fp.get(), xi->x509);
+    // Verify the file was written correctly
+    if (std::ifstream(certs_file).peek() == std::ifstream::traits_type::eof()) {
+        throw std::runtime_error(SB() << "Certificate file is empty after writing: " << certs_file);
+    }
 
     // Create appropriate symlink
-    CertFactory::createCertSymlink(certs_file);
+    hash_link = CertFactory::createCertSymlink(certs_file);
 
-    log_warn_printf(certs, "The root certificate has been installed.%s", "\n");
+    log_warn_printf(certs, "New Root CA certificate installed: %s\n", certs_file.c_str());
+
+#if defined(__linux__)
+    log_warn_printf(certs, "To trust this Root CA on Linux:%s", "\n");
+    log_warn_printf(certs, "1. Debian/Ubuntu:%s", "\n");
+    log_warn_printf(certs, "   sudo cp %s /usr/local/share/ca-certificates/\n", certs_file.c_str());
+    log_warn_printf(certs, "   sudo update-ca-certificates%s", "\n");
+    log_warn_printf(certs, "2. RHEL/CentOS:%s", "\n");
+    log_warn_printf(certs, "   sudo cp %s /etc/pki/ca-trust/source/anchors/\n", certs_file.c_str());
+    log_warn_printf(certs, "   sudo update-ca-trust%s", "\n");
+
+#elif defined(__APPLE__)
+    log_warn_printf(certs, "To trust this Root CA on macOS:%s", "\n");
+    log_warn_printf(certs, "1. Add to System Keychain:%s", "\n");
+    log_warn_printf(certs, "   sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain %s\n",
+                    certs_file.c_str());
+    log_warn_printf(certs, "2. Create hash symlink:%s", "\n");
+    log_warn_printf(certs, "   sudo ln -sf %s /etc/ssl/certs/%s\n",
+                    certs_file.c_str(), hash_link.c_str());
+
+#elif defined(_WIN32)
+    log_warn_printf(certs, "To trust this Root CA on Windows:%s", "\n");
+    log_warn_printf(certs, "1. Double-click %s\n", certs_file.c_str());
+    log_warn_printf(certs, "2. Click 'Install Certificate'%s", "\n");
+    log_warn_printf(certs, "3. Select 'Local Machine' and click 'Next'%s", "\n");
+    log_warn_printf(certs, "4. Select 'Place all certificates in the following store'%s", "\n");
+    log_warn_printf(certs, "5. Click 'Browse' and select 'Trusted Root Certification Authorities'%s", "\n");
+    log_warn_printf(certs, "6. Click 'Next' and then 'Finish'%s", "\n");
+
+#elif defined(__rtems__)
+    log_warn_printf(certs, "For RTEMS systems:%s", "\n");
+    log_warn_printf(certs, "Ensure %s is included in your SSL certificate directory\n", certs_file.c_str());
+    log_warn_printf(certs, "Hash link: %s\n", hash_link.c_str());
+#endif
+
     return false;
 }
 

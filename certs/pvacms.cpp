@@ -1130,7 +1130,9 @@ void createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<KeyP
 
     // Create the root certificate (overwrite existing)
     // The user must re-trust it if it already existed
-    p12file_factory.writeRootPemFile(pem_string, true);
+    if ( !p12file_factory.writeRootPemFile(pem_string, false)) {
+        exit(0);
+    }
 }
 
 /**
