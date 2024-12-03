@@ -15,46 +15,6 @@ namespace certs {
 DEFINE_LOGGER(pemcerts, "pvxs.certs.pem");
 
 /**
- * @brief Get the certificate data from a PEM file
- *
- * @param filename the path to the PEM file
- * @return a CertData object containing the certificate and the chain
- * @throw std::runtime_error if the file cannot be opened or read
- */
-CertData PEMFileFactory::getCertDataFromFile(const std::string& filename) {
-    file_ptr fp(fopen(filename.c_str(), "r"));
-    if (!fp) {
-        throw std::runtime_error(SB() << "Error opening certificate file: " << filename);
-    }
-
-    // Read the first certificate (main cert)
-    ossl_ptr<X509> cert(PEM_read_X509(fp.get(), nullptr, nullptr, nullptr));
-    if (!cert) {
-        throw std::runtime_error(SB() << "Error reading certificate from file: " << filename);
-    }
-
-    // Read any additional certificates (chain)
-    ossl_shared_ptr<STACK_OF(X509)> chain(sk_X509_new_null());
-    if (!chain) {
-        throw std::runtime_error("Unable to allocate certificate chain");
-    }
-
-    ossl_ptr<X509> ca;
-    while (X509* ca_ptr = PEM_read_X509(fp.get(), nullptr, nullptr, nullptr)) {
-        ca = ossl_ptr<X509>(ca_ptr);
-        if (sk_X509_push(chain.get(), ca.get()) != 1) {
-            throw std::runtime_error("Failed to add certificate to chain");
-        }
-        ca.release();
-    }
-
-    // Clear any end-of-file errors
-    ERR_clear_error();
-
-    return CertData(cert, chain);
-}
-
-/**
  * @brief Create a root PEM file from a PEM string
  *
  * @param p12PemString the PEM string to convert
@@ -216,6 +176,62 @@ void PEMFileFactory::writePEMFile() {
 }
 
 /**
+ * @brief Get the certificate data from a PEM file
+ *
+ * @param filename the path to the PEM file
+ * @return a CertData object containing the certificate and the chain
+ * @throw std::runtime_error if the file cannot be opened or read
+ */
+CertData PEMFileFactory::getCertDataFromFile() {
+    file_ptr fp(fopen(filename_.c_str(), "r"));
+    if (!fp) {
+        throw std::runtime_error(SB() << "Error opening certificate file: " << filename_);
+    }
+
+    // Read the first certificate (main cert)
+    ossl_ptr<X509> cert(PEM_read_X509(fp.get(), nullptr, nullptr, nullptr), false);
+    if (!cert) {
+        throw std::runtime_error(SB() << "Error reading certificate from file: " << filename_);
+    }
+
+    // Read any additional certificates (chain)
+    ossl_shared_ptr<STACK_OF(X509)> chain(sk_X509_new_null());
+    if (!chain) {
+        throw std::runtime_error("Unable to allocate certificate chain");
+    }
+
+    ossl_ptr<X509> ca;
+    while (X509* ca_ptr = PEM_read_X509(fp.get(), nullptr, nullptr, nullptr)) {
+        ca = ossl_ptr<X509>(ca_ptr);
+        if (sk_X509_push(chain.get(), ca.get()) != 1) {
+            throw std::runtime_error("Failed to add certificate to chain");
+        }
+        ca.release();
+    }
+
+    // Clear any end-of-file errors
+    ERR_clear_error();
+
+    // Read any private key
+    std::shared_ptr<KeyPair> key_pair;
+
+    // Try to read the private key
+    try {
+        ossl_ptr<EVP_PKEY> pkey(PEM_read_PrivateKey(fp.get(), nullptr, nullptr, nullptr), false);
+
+        // Try to get key from file if it is configured
+        if (!pkey && key_file_) {
+            key_pair = key_file_->getKeyFromFile();
+            pkey = std::move(key_pair->pkey);
+        }
+        if (pkey)
+            return CertData(cert, chain, std::make_shared<KeyPair>(std::move(pkey)));
+    } catch (...) {}
+
+    return CertData(cert, chain);
+}
+
+/**
  * @brief Get a key pair from a PEM file
  *
  * @return a shared pointer to the KeyPair object
@@ -227,23 +243,14 @@ std::shared_ptr<KeyPair> PEMFileFactory::getKeyFromFile() {
         throw std::runtime_error(SB() << "Error opening private key file: \"" << filename_ << "\"");
     }
 
-    // Read through the file looking for PEM objects
-    char line[256];
-    while (fgets(line, sizeof(line), fp.get())) {
-        if (strstr(line, "-----BEGIN PRIVATE KEY-----") || strstr(line, "-----BEGIN RSA PRIVATE KEY-----") || strstr(line, "-----BEGIN EC PRIVATE KEY-----")) {
-            // Found a private key header, rewind to start of this PEM block
-            fseek(fp.get(), -strlen(line), SEEK_CUR);
-
-            // Try to read the private key
-            ossl_ptr<EVP_PKEY> pkey(PEM_read_PrivateKey(fp.get(), nullptr, nullptr, nullptr));
-            if (pkey) {
-                return std::make_shared<KeyPair>(std::move(pkey));
-            }
-            ERR_clear_error();
-        }
+    // Try to read the private key
+    ossl_ptr<EVP_PKEY> pkey(PEM_read_PrivateKey(fp.get(), nullptr, nullptr, nullptr));
+    if (!pkey) {
+        ERR_clear_error();
+        throw std::runtime_error(SB() << "No private key found in file: " << filename_);
     }
 
-    throw std::runtime_error(SB() << "No private key found in file: " << filename_);
+    return std::make_shared<KeyPair>(std::move(pkey));
 }
 
 }  // namespace certs

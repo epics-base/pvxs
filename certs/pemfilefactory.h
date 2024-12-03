@@ -16,11 +16,10 @@ class PEMFileFactory : public CertFileFactory {
 
     PEMFileFactory(const std::string& filename, const std::string& pem_string, bool certs_only = false) : CertFileFactory(filename, nullptr, nullptr, "certificate", pem_string, certs_only) {}
 
-    static CertData getCertDataFromFile(const std::string& filename);
     static bool createRootPemFile(const std::string& pemString, bool overwrite = false);
 
     std::shared_ptr<KeyPair> getKeyFromFile() override;
-    CertData getCertDataFromFile() override { return getCertDataFromFile(filename_); }
+    CertData getCertDataFromFile() override;
 
     void writeCertFile() override { writePEMFile(); }
     void writePEMFile();

@@ -47,13 +47,12 @@ class P12FileFactory : public CertFileFactory {
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p12_ptr, bool certs_only = false)
         : CertFileFactory(filename, nullptr, nullptr, "certificate", "", certs_only), password_(password), key_pair_(key_pair), p12_ptr_(p12_ptr) {}
 
-    static CertData getCertDataFromFile(std::string filename, std::string password);
     void writePKCS12File();
 
     void writeCertFile() override { writePKCS12File(); }
 
+    CertData getCertDataFromFile() override ;
     std::shared_ptr<KeyPair> getKeyFromFile() override;
-    CertData getCertDataFromFile() override { return getCertDataFromFile(filename_, password_); }
 
    private:
     const std::string password_{};

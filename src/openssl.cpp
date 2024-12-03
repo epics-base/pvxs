@@ -24,6 +24,7 @@
 #include "ownedptr.h"
 #include "serverconn.h"
 #include "utilpvt.h"
+#include "certfilefactory.h"
 
 #ifndef TLS1_3_VERSION
 #error TLS 1.3 support required.  Upgrade to openssl >= 1.1.0
@@ -222,7 +223,7 @@ void verifyKeyUsage(const ossl_ptr<X509> &cert,
  * @param ctx the context to add the CAs to
  * @param CAs the stack of X509 CA certificates
  */
-void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
+void extractCAs(SSLContext &ctx, const ossl_shared_ptr<STACK_OF(X509)> &CAs) {
     for (int i = 0, N = sk_X509_num(CAs.get()); i < N; i++) {
         auto ca = sk_X509_value(CAs.get(), i);
 
@@ -255,108 +256,6 @@ void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
 }
 
 /**
- * @brief Get a certificate from the given file
- *
- * This function reads a p12 object from the provided file and returns true if successful.
- *
- * @param fp The file pointer of the p12 file.
- * @param p12 The PKCS12 object reference to be updated
- * @param ssl_client True if the request came from a client, false from a server
- * @param cert_filename The filename of the p12 file
- *
- * @return true if the p12 file exists and can be read
- * @return false if the p12 file does not exist or is invalid and the request was from a client
- *
- * @throws std::runtime_error("Invalid, Untrusted, or Nonexistent cert file  ...")
- *         if p12 file not found or invalid and it if for a server
- */
-bool checkP12File(file_ptr &fp, ossl_ptr<PKCS12> &p12, const uint16_t &usage, const std::string &cert_filename) {
-    // Return true if it exists and is readable
-    if (fp && d2i_PKCS12_fp(fp.get(), p12.acquire())) return true;
-
-    // If file not found or unreadable
-    if (usage == ssl::kForClient) {
-        // Client ONLY can create SSL session even though it has no certificate/key as long as the server allows it
-        return false;
-    } else {
-        throw std::runtime_error(SB() << "Invalid, Untrusted, or Nonexistent cert file at [" << cert_filename << "]");
-    }
-}
-
-/**
- * @brief Get the key and certificate from the given p12 file
- *
- * @param filename - The filename of the p12 file
- * @param password - The password for the p12 file
- * @param ssl_client - True if the request came from a client, false from a server
- * @param key - The key to be retrieved
- * @param cert - The certificate to be retrieved
- * @param CAs - The CA certificates to be retrieved
- * @param get_key - True if the key should be retrieved
- * @param get_cert - True if the certificate and chain should be retrieved
- * @return True if the key and certificate were retrieved successfully
- * @throws SSLError if the p12 file can't be processed
- */
-bool getKeyAndCertFromP12File(const std::string filename, const std::string password, bool ssl_client, ossl_ptr<EVP_PKEY> &key, ossl_ptr<X509> &cert,
-                              ossl_ptr<STACK_OF(X509)> &CAs, bool get_key = true, bool get_cert = true) {
-    log_debug_printf(setup, "PKCS12 filename %s;%s\n", filename.c_str(), password.empty() ? "" : " w/ password");
-
-    // Open the p12 file
-    file_ptr fp(fopen(filename.c_str(), "rb"), false);
-
-    // Check if the p12 file is valid
-    ossl_ptr<PKCS12> p12;
-    if (!checkP12File(fp, p12, (ssl_client ? ssl::kForClient : ssl::kForServer), filename)) return false;
-
-    // If both key and certificate are to be retrieved
-    if (get_key && get_cert) {
-        if (PKCS12_parse(p12.get(), password.c_str(), key.acquire(), cert.acquire(), CAs.acquire())) return true;
-    } else if (get_key) {
-        // If only the key is to be retrieved
-        if (PKCS12_parse(p12.get(), password.c_str(), key.acquire(), nullptr, nullptr)) return true;
-    } else {
-        // If only the certificate and chain are to be retrieved
-        ossl_ptr<EVP_PKEY> pkey;  // to discard
-        if (PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), cert.acquire(), CAs.acquire())) return true;
-    }
-
-    // If the p12 file can't be processed, throw an error
-    throw SSLError(SB() << "Unable to process \"" << filename << "\"");
-}
-
-/**
- * @brief Get the key from the given p12 file
- *
- * @param filename - The filename of the p12 file
- * @param password - The password for the p12 file
- * @param ssl_client - True if the request came from a client, false from a server
- * @param key - The key to be retrieved
- * @return True if the key was retrieved successfully
- * @throws SSLError if the p12 file can't be processed
- */
-bool getKeyFromP12File(const std::string filename, const std::string password, bool ssl_client, ossl_ptr<EVP_PKEY> &key) {
-    ossl_ptr<X509> cert;
-    ossl_ptr<STACK_OF(X509)> CAs(__FILE__, __LINE__, sk_X509_new_null());
-    return getKeyAndCertFromP12File(filename, password, ssl_client, key, cert, CAs, true, false);
-}
-
-/**
- * @brief Get the certificate and chain from the given p12 file
- *
- * @param filename - The filename of the p12 file
- * @param password - The password for the p12 file
- * @param ssl_client - True if the request came from a client, false from a server
- * @param cert - The certificate to be retrieved
- * @param CAs - The CA certificates to be retrieved
- * @return True if the certificate was retrieved successfully
- * @throws SSLError if the p12 file can't be processed
- */
-bool getCertFromP12File(const std::string filename, const std::string password, bool ssl_client, ossl_ptr<X509> &cert, ossl_ptr<STACK_OF(X509)> &CAs) {
-    ossl_ptr<EVP_PKEY> key;
-    return getKeyAndCertFromP12File(filename, password, ssl_client, key, cert, CAs, false, true);
-}
-
-/**
  * @brief Common setup for OpenSSL SSL context
  *
  * This function sets up the OpenSSL SSL context used for SSL/TLS communication.
@@ -384,7 +283,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
     if (!tls_context.ctx) throw SSLError("Unable to allocate SSL_CTX");
 
     {
-        std::unique_ptr<CertStatusExData> car{new CertStatusExData(!conf.tls_disable_status_check)};
+        std::unique_ptr<CertStatusExData> car{new CertStatusExData(!tls_context.status_check_disabled)};
         if (!SSL_CTX_set_ex_data(tls_context.ctx, ossl_gbl->SSL_CTX_ex_idx, car.get())) throw SSLError("SSL_CTX_set_ex_data");
         car.release();  // SSL_CTX_free() now responsible
     }
@@ -411,36 +310,26 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         auto key_filename = conf.tls_private_key_filename.empty() ? filename : conf.tls_private_key_filename;
         auto key_password = conf.tls_private_key_password.empty() ? password : conf.tls_private_key_password;
 
-        ossl_ptr<EVP_PKEY> key;
-        ossl_ptr<X509> cert;
-        ossl_ptr<STACK_OF(X509)> CAs(__FILE__, __LINE__, sk_X509_new_null());
-
-        // get the key and certificate from the p12 file or files
-        if (key_filename == filename) {
-            if (!getKeyAndCertFromP12File(filename, password, ssl_client, key, cert, CAs)) return tls_context;
-        } else {
-            if (!getKeyFromP12File(key_filename, key_password, ssl_client, key)) return tls_context;
-            if (!getCertFromP12File(filename, password, ssl_client, cert, CAs)) return tls_context;
-        }
-
-        if (cert) {
+        // get the key and certificate from the file or files
+        auto cert_data = certs::CertFileFactory::createReader(filename, password, key_filename, key_password)->getCertDataFromFile();
+        if (cert_data.cert) {
             // some early sanity checks
-            verifyKeyUsage(cert, ssl_client);
+            verifyKeyUsage(cert_data.cert, ssl_client);
         }
 
         // sets SSL_CTX::cert
-        if (cert && !SSL_CTX_use_certificate(tls_context.ctx, cert.get())) throw SSLError("SSL_CTX_use_certificate");
-        if (key && !SSL_CTX_use_PrivateKey(tls_context.ctx, key.get())) throw SSLError("SSL_CTX_use_certificate");
+        if (cert_data.cert && !SSL_CTX_use_certificate(tls_context.ctx, cert_data.cert.get())) throw SSLError("SSL_CTX_use_certificate");
+        if (cert_data.key_pair && !SSL_CTX_use_PrivateKey(tls_context.ctx, cert_data.key_pair->pkey.get())) throw SSLError("SSL_CTX_use_certificate");
 
         // extract CAs (intermediate and root) from PKCS12 bag
-        extractCAs(tls_context, CAs);
+        extractCAs(tls_context, cert_data.ca);
 
-        if (key && !SSL_CTX_check_private_key(tls_context.ctx)) throw SSLError("invalid private key");
+        if (cert_data.key_pair->pkey && !SSL_CTX_check_private_key(tls_context.ctx)) throw SSLError("invalid private key");
 
         // Move cert to the context
-        if (cert) {
+        if (cert_data.cert) {
             auto ex_data = tls_context.ex_data();
-            ex_data->cert = std::move(cert);
+            ex_data->cert = std::move(cert_data.cert);
             tls_context.has_cert = true;
 
             // Build the certificate chain and set verification flags

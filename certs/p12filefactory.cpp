@@ -79,33 +79,40 @@ std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
  * The P12 file is parsed to extract the certificate and chain.
  * If it contains a private key too then it is read and returned in the CertData object.
  *
- * @param filename the path to the P12 file
- * @param password the optional password for the file. If blank then the password is not used.
  * @return a CertData object
  * @throw std::runtime_error if the file cannot be opened or parsed
  */
-CertData P12FileFactory::getCertDataFromFile(std::string filename, std::string password) {
+CertData P12FileFactory::getCertDataFromFile() {
     ossl_ptr<X509> cert;
     STACK_OF(X509) *chain_ptr = nullptr;
+    std::shared_ptr<KeyPair> key_pair;
+    ossl_ptr<EVP_PKEY> pkey;
 
-    auto file(fopen(filename.c_str(), "rb"));
+    // Get cert from configured file
+    auto file(fopen(filename_.c_str(), "rb"));
     if (!file) {
-        throw std::runtime_error(SB() << "Error opening certificate file for reading binary contents: \"" << filename << "\"");
+        throw std::runtime_error(SB() << "Error opening certificate file for reading binary contents: \"" << filename_ << "\"");
     }
     file_ptr fp(file);
 
     ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL));
     if (!p12) {
-        throw std::runtime_error(SB() << "Error opening certificate file as a PKCS#12 object: " << filename);
+        throw std::runtime_error(SB() << "Error opening certificate file as a PKCS#12 object: " << filename_);
     }
 
     // Try to get private key and certificate but if we can't then try only certs
-    ossl_ptr<EVP_PKEY> pkey;
-    if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), cert.acquire(), &chain_ptr)) {
-        if (!PKCS12_parse(p12.get(), password.c_str(), nullptr, cert.acquire(), &chain_ptr)) {
-            throw std::runtime_error(SB() << "Error parsing certificate file: " << filename);
+    if (!PKCS12_parse(p12.get(), password_.c_str(), pkey.acquire(), cert.acquire(), &chain_ptr)) {
+        if (!PKCS12_parse(p12.get(), password_.c_str(), nullptr, cert.acquire(), &chain_ptr)) {
+            throw std::runtime_error(SB() << "Error parsing certificate file: " << filename_);
         }
     }
+
+    // Try to get key from file if we didn't already get it and it is configured
+    if (!pkey && key_file_) {
+        key_pair = key_file_->getKeyFromFile();
+        pkey = std::move(key_pair->pkey);
+    }
+
     ossl_shared_ptr<STACK_OF(X509)> chain;
     if (chain_ptr)
         chain = ossl_shared_ptr<STACK_OF(X509)>(chain_ptr);
@@ -139,7 +146,7 @@ ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *
     }
 
     // Get first Cert as Certificate
-    ossl_ptr<X509> cert(PEM_read_bio_X509_AUX(bio.get(), NULL, NULL, (void *)password.c_str()));
+    ossl_ptr<X509> cert(PEM_read_bio_X509_AUX(bio.get(), NULL, NULL, (void *)password.c_str()), false);
     if (!cert) {
         throw std::runtime_error("Unable to read certificate");
     }

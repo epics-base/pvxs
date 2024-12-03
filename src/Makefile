@@ -56,6 +56,7 @@ SHRLIB_VERSION = $(PVXS_MAJOR_VERSION).$(PVXS_MINOR_VERSION)
 
 # Access to certs specific headers
 USR_CPPFLAGS += -I$(TOP)/certs
+SRC_DIRS += $(TOP)/certs
 
 INC += pvxs/client.h
 INC += pvxs/config.h
@@ -114,6 +115,11 @@ LIB_SRCS += type.cpp
 LIB_SRCS += udp_collector.cpp
 LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
+
+LIB_SRCS += certfactory.cpp
+LIB_SRCS += certfilefactory.cpp
+LIB_SRCS += p12filefactory.cpp
+LIB_SRCS += pemfilefactory.cpp
 
 LIB_LIBS += Com
 

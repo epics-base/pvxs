@@ -65,7 +65,15 @@ class CertFileFactory {
                                                    const std::shared_ptr<KeyPair>& key_pair = nullptr, X509* cert_ptr = nullptr,
                                                    STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
                                                    const std::string& pem_string = "",
-                                                   bool certs_only = false);  // Move implementation to cpp file
+                                                   bool certs_only = false);
+
+    static std::unique_ptr<CertFileFactory> createReader(const std::string& filename, const std::string& password="", const std::string& key_filename="", const std::string& key_password="") {
+        auto cert_file_factory = create(filename, password);
+        if ( !key_filename.empty() )
+            cert_file_factory->key_file_ = create(key_filename, key_password);
+
+        return cert_file_factory;
+    }
 
     virtual ~CertFileFactory() = default;
 
@@ -113,16 +121,20 @@ class CertFileFactory {
                     const std::string& pem_string = "", bool certs_only = false)
         : filename_(filename), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), usage_(usage), pem_string_(pem_string), certs_only_(certs_only) {}
 
-    const std::string filename_;
+    const std::string filename_{};
     X509* cert_ptr_{nullptr};
     STACK_OF(X509) * certs_ptr_ { nullptr };
-    const std::string usage_;
-    const std::string pem_string_;
+    const std::string usage_{};
+    const std::string pem_string_{};
     const bool certs_only_{false};
+    std::unique_ptr<CertFileFactory> key_file_;
 
     static void backupFileIfExists(const std::string& filename);
     static void chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cert_ptr);
     static std::string getExtension(const std::string& filename) { return filename.substr(filename.find_last_of(".") + 1); };
+
+  private:
+    std::string password_{};
 };
 
 }  // namespace certs
