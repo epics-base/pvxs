@@ -147,12 +147,12 @@ class PVXS_API CertFactory {
         std::string cert_data((std::istreambuf_iterator<char>(cert_file)),
                               std::istreambuf_iterator<char>());
 
-        ossl_ptr<BIO> bio(BIO_new_mem_buf(cert_data.data(), cert_data.size()));
+        ossl_ptr<BIO> bio(BIO_new_mem_buf(cert_data.data(), cert_data.size()), false);
         if (!bio) {
             throw std::runtime_error("Failed to create BIO");
         }
 
-        ossl_ptr<X509> cert(PEM_read_bio_X509_AUX(bio.get(), NULL, NULL, NULL));
+        ossl_ptr<X509> cert(PEM_read_bio_X509_AUX(bio.get(), NULL, NULL, NULL), false);
         if (!cert) {
             throw std::runtime_error("Failed to read certificate");
         }

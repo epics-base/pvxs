@@ -49,7 +49,7 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<co
     }
 
     // Parse the BIO into an OCSP_RESPONSE
-    ossl_ptr<OCSP_RESPONSE> ocsp_response(d2i_OCSP_RESPONSE_bio(bio.get(), nullptr));
+    ossl_ptr<OCSP_RESPONSE> ocsp_response(d2i_OCSP_RESPONSE_bio(bio.get(), nullptr), false);
     if (!ocsp_response) {
         throw OCSPParseException("Failed to parse OCSP response");
     }
@@ -332,7 +332,7 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
     ossl_ptr<STACK_OF(X509)> ca_chain(sk_X509_dup(const_ca_chain_ptr));  // remove const-ness
 
     // Create a new X509_STORE with trusted root CAs
-    ossl_ptr<X509_STORE> store(X509_STORE_new());
+    ossl_ptr<X509_STORE> store(X509_STORE_new(), false);
     if (!store) {
         throw OCSPParseException("Failed to create X509_STORE to verify OCSP response");
     }
@@ -353,7 +353,7 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
     }
 
     // Set up the store context for verification
-    ossl_ptr<X509_STORE_CTX> ctx(X509_STORE_CTX_new());
+    ossl_ptr<X509_STORE_CTX> ctx(X509_STORE_CTX_new(), false);
     if (!ctx) {
         throw OCSPParseException("Failed to create X509_STORE_CTX to verify OCSP response");
     }

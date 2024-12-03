@@ -115,7 +115,7 @@ struct CertStatusExData {
      */
     static inline serial_number_t getSerialNumber(X509 *cert_ptr) {
         ASN1_INTEGER *serial = X509_get_serialNumber(cert_ptr);
-        ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr));
+        ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
         if (!bn) {
             return 0;
         }

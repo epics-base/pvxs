@@ -168,8 +168,8 @@ struct CertStatus {
      * @return first 8 hex digits of the hex SKID (subject key identifier)
      */
     static inline std::string getIssuerId(X509* ca_cert_ptr) {
-        ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING*>(X509_get_ext_d2i(ca_cert_ptr, NID_subject_key_identifier, nullptr, nullptr)));
-        if (!skid.get()) {
+        ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING*>(X509_get_ext_d2i(ca_cert_ptr, NID_subject_key_identifier, nullptr, nullptr)), false);
+        if (!skid) {
             throw std::runtime_error("Failed to get Subject Key Identifier.");
         }
 

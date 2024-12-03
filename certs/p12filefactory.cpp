@@ -60,7 +60,7 @@ std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
         throw std::runtime_error(SB() << "Error opening private key file for reading binary contents: \"" << filename_ << "\"");
     }
 
-    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL));
+    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL), false);
     if (!p12) {
         throw std::runtime_error(SB() << "Error opening private key file as a PKCS#12 object: " << filename_);
     }
@@ -95,7 +95,7 @@ CertData P12FileFactory::getCertDataFromFile() {
     }
     file_ptr fp(file);
 
-    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL));
+    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL), false);
     if (!p12) {
         throw std::runtime_error(SB() << "Error opening certificate file as a PKCS#12 object: " << filename_);
     }
@@ -140,7 +140,7 @@ CertData P12FileFactory::getCertDataFromFile() {
  */
 ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string, bool certs_only) {
     // Read PEM data into a new BIO
-    ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string.c_str(), -1));
+    ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string.c_str(), -1), false);
     if (!bio) {
         throw std::runtime_error("Unable to allocate BIO");
     }

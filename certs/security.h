@@ -120,7 +120,7 @@ struct KeyPair final {
             throw std::runtime_error("Unable to create BIO");
         }
 
-        ossl_ptr<EVP_PKEY> key(PEM_read_bio_PUBKEY(bio.get(), NULL, NULL, NULL));
+        ossl_ptr<EVP_PKEY> key(PEM_read_bio_PUBKEY(bio.get(), NULL, NULL, NULL), false);
         if (!key) {
             throw std::runtime_error("Unable to read public key");
         }

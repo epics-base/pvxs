@@ -114,7 +114,7 @@ CertData CertFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) 
 
     if (!pem_string_.empty()) {
         // Parse certificates from PEM string
-        ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string_.data(), pem_string_.size()));
+        ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string_.data(), pem_string_.size()), false);
         if (!bio) {
             throw std::runtime_error("Failed to create BIO for PEM data");
         }
@@ -127,7 +127,7 @@ CertData CertFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) 
 
         // Read remaining certificates into chain
         while (true) {
-            ossl_ptr<X509> chain_cert(PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr));
+            ossl_ptr<X509> chain_cert(PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr), false);
             if (!chain_cert) {
                 ERR_clear_error();  // Clear EOF error
                 break;
@@ -147,7 +147,7 @@ CertData CertFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) 
         if (certs_ptr_) {
             // Duplicate each certificate in the chain
             for (int i = 0; i < sk_X509_num(certs_ptr_); i++) {
-                ossl_ptr<X509> int_cert(X509_dup(sk_X509_value(certs_ptr_, i)));
+                ossl_ptr<X509> int_cert(X509_dup(sk_X509_value(certs_ptr_, i)), false);
                 if (!int_cert || sk_X509_push(chain.get(), int_cert.get()) != 1) {
                     throw std::runtime_error("Failed to duplicate chain certificate");
                 }
@@ -199,7 +199,7 @@ std::shared_ptr<KeyPair> CertFileFactory::createKeyPair() {
     const int kKeyType = EVP_PKEY_RSA;  // Key type
 
     // Initialize the context for the key generation operation
-    ossl_ptr<EVP_PKEY_CTX> context(EVP_PKEY_CTX_new_id(kKeyType, nullptr));
+    ossl_ptr<EVP_PKEY_CTX> context(EVP_PKEY_CTX_new_id(kKeyType, nullptr), false);
     if (!context) {
         throw std::runtime_error("Failed to create EVP_PKEY_CTX");
     }

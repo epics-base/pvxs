@@ -50,7 +50,7 @@ bool PEMFileFactory::createRootPemFile(const std::string& p12PemString, bool ove
     }
 
     // Build filename based on the CA certificate's CN field
-    ossl_ptr<X509_NAME> name(X509_get_subject_name(xi->x509));
+    ossl_ptr<X509_NAME> name(X509_get_subject_name(xi->x509), false);
     if (!name) {
         throw std::runtime_error("Failed to get subject name from certificate");
     }
@@ -275,7 +275,7 @@ std::shared_ptr<KeyPair> PEMFileFactory::getKeyFromFile() {
     }
 
     // Try to read the private key
-    ossl_ptr<EVP_PKEY> pkey(PEM_read_PrivateKey(fp.get(), nullptr, nullptr, nullptr));
+    ossl_ptr<EVP_PKEY> pkey(PEM_read_PrivateKey(fp.get(), nullptr, nullptr, nullptr), false);
     if (!pkey) {
         ERR_clear_error();
         throw std::runtime_error(SB() << "No private key found in file: " << filename_);

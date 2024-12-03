@@ -341,7 +341,7 @@ void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int
     X509V3_set_ctx(&context, const_cast<X509 *>(issuer_certificate_ptr), certificate.get(), nullptr, nullptr, 0);
 
     // Construct the string value using ASN1_STRING with IA5String type
-    ossl_ptr<ASN1_IA5STRING> string_data(ASN1_IA5STRING_new());
+    ossl_ptr<ASN1_IA5STRING> string_data(ASN1_IA5STRING_new(), false);
     if (!string_data) {
         throw std::runtime_error("Adding custom extension: Failed to create ASN1_IA5STRING object");
     }
@@ -354,7 +354,7 @@ void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int
     }
 
     // Create a new extension using your smart pointer
-    ossl_ptr<X509_EXTENSION> ext(X509_EXTENSION_create_by_NID(nullptr, nid, false, string_data.get()));
+    ossl_ptr<X509_EXTENSION> ext(X509_EXTENSION_create_by_NID(nullptr, nid, false, string_data.get()), false);
     if (!ext) {
         unsigned long err = ERR_get_error();
         ERR_error_string_n(err, err_msg, sizeof(err_msg));
@@ -412,7 +412,7 @@ std::string CertFactory::getCertsDirectory() {
  */
 ossl_ptr<BIO> CertFactory::newBio() {
     ERR_clear_error();
-    ossl_ptr<BIO> bio(BIO_new(BIO_s_mem()));
+    ossl_ptr<BIO> bio(BIO_new(BIO_s_mem()), false);
     if (!bio) {
         throw std::runtime_error(SB() << "Error: Failed to create bio for output: " << getError());
     }
@@ -569,7 +569,7 @@ void CertFactory::set_skid(ossl_ptr<X509> &certificate) {
     pos = X509_get_ext_by_NID(certificate.get(), NID_subject_key_identifier, pos);
     X509_EXTENSION *ex = X509_get_ext(certificate.get(), pos);
 
-    ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING *>(X509V3_EXT_d2i(ex)));
+    ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING *>(X509V3_EXT_d2i(ex)), false);
 
     if (skid != NULL) {
         // Convert to hexadecimal string
