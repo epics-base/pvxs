@@ -177,7 +177,7 @@ struct PKCS12Writer {
                                                 &jdk_trust, nullptr));
 
         std::string outpath(SB()<<outdir<<fname);
-        pvxs::file_ptr out(fopen(outpath.c_str(), "wb"));
+        pvxs::file_ptr out(fopen(outpath.c_str(), "wb"), false);
         if(!out) {
             auto err = errno;
             throw std::runtime_error(SB()<<"Error opening for write : "<<outpath<<" : "<<strerror(err));

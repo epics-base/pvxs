@@ -78,7 +78,7 @@ bool PEMFileFactory::createRootPemFile(const std::string& p12PemString, bool ove
 
     std::remove(certs_file.c_str());
     {
-        file_ptr fp(fopen(certs_file.c_str(), "w"));
+        file_ptr fp(fopen(certs_file.c_str(), "w"), false);
         if (!fp) {
             throw std::runtime_error(SB() << "Error opening root certificate file for writing: " << certs_file);
         }
@@ -142,7 +142,7 @@ void PEMFileFactory::writePEMFile() {
     backupFileIfExists(filename_);
 
     // Open file for writing
-    file_ptr fp(fopen(filename_.c_str(), "w"));
+    file_ptr fp(fopen(filename_.c_str(), "w"), false);
     if (!fp) {
         throw std::runtime_error(SB() << "Error opening certificate file for writing: " << filename_);
     }
@@ -207,7 +207,7 @@ void PEMFileFactory::writePEMFile() {
  * @throw std::runtime_error if the file cannot be opened or read
  */
 CertData PEMFileFactory::getCertDataFromFile() {
-    file_ptr fp(fopen(filename_.c_str(), "r"));
+    file_ptr fp(fopen(filename_.c_str(), "rb"), false);
     if (!fp) {
         throw std::runtime_error(SB() << "Error opening certificate file: " << filename_);
     }
@@ -269,7 +269,7 @@ CertData PEMFileFactory::getCertDataFromFile() {
  * @throw std::runtime_error if the file cannot be opened or read
  */
 std::shared_ptr<KeyPair> PEMFileFactory::getKeyFromFile() {
-    file_ptr fp(fopen(filename_.c_str(), "r"));
+    file_ptr fp(fopen(filename_.c_str(), "r"), false);
     if (!fp) {
         throw std::runtime_error(SB() << "Error opening private key file: \"" << filename_ << "\"");
     }
