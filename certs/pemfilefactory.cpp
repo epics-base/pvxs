@@ -62,7 +62,7 @@ bool PEMFileFactory::createRootPemFile(const std::string& p12PemString, bool ove
 
     std::string fileName(cn);
     std::replace(fileName.begin(), fileName.end(), ' ', '_');
-    fileName += ".pem";
+    fileName += ".crt";
 
     // Prepare file to write
     std::string certs_directory_string = CertFactory::getCertsDirectory();
@@ -173,7 +173,7 @@ void PEMFileFactory::writePEMFile() {
             if (!password_.empty()) {
                 // Write encrypted private key using PKCS8 format
                 const EVP_CIPHER* cipher = EVP_aes_256_cbc();
-                if (PEM_write_PKCS8PrivateKey(fp.get(), 
+                if (PEM_write_PKCS8PrivateKey(fp.get(),
                                             key_pair_->pkey.get(),
                                             cipher,
                                             nullptr, 0,
@@ -183,7 +183,7 @@ void PEMFileFactory::writePEMFile() {
                 }
             } else {
                 // Write unencrypted private key
-                if (PEM_write_PrivateKey(fp.get(), 
+                if (PEM_write_PrivateKey(fp.get(),
                                        key_pair_->pkey.get(),
                                        nullptr, nullptr, 0,
                                        nullptr, nullptr) != 1) {

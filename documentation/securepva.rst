@@ -105,7 +105,7 @@ Quick Start Guide
     .. code-block:: sh
 
         cat >> RELEASE.local <<EOF
-        EPICS_BASE = $(TOP)/../epics-base
+        EPICS_BASE = \$(TOP)/../epics-base
         EOF
 
         # Optional: To enable appropriate site authentication mechanisms.
@@ -139,7 +139,7 @@ Quick Start Guide
 
         # Build PVXS
 
-?        make -j10 all
+        make -j10 all
 
 5. PVACMS Setup
 ^^^^^^^^^^^^^^^
