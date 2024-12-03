@@ -117,11 +117,13 @@ class CertFileFactory {
     CertData getCertData(const std::shared_ptr<KeyPair>& key_pair);
 
    protected:
-    CertFileFactory(const std::string& filename, X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
+    CertFileFactory(const std::string& filename, const std::string &password="", const std::shared_ptr<KeyPair> &key_pair=nullptr, X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
                     const std::string& pem_string = "", bool certs_only = false)
-        : filename_(filename), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), usage_(usage), pem_string_(pem_string), certs_only_(certs_only) {}
+        : filename_(filename), password_(password), key_pair_(key_pair), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), usage_(usage), pem_string_(pem_string), certs_only_(certs_only) {}
 
     const std::string filename_{};
+    std::string password_{};
+    const std::shared_ptr<KeyPair> key_pair_;
     X509* cert_ptr_{nullptr};
     STACK_OF(X509) * certs_ptr_ { nullptr };
     const std::string usage_{};
@@ -132,9 +134,6 @@ class CertFileFactory {
     static void backupFileIfExists(const std::string& filename);
     static void chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cert_ptr);
     static std::string getExtension(const std::string& filename) { return filename.substr(filename.find_last_of(".") + 1); };
-
-  private:
-    std::string password_{};
 };
 
 }  // namespace certs

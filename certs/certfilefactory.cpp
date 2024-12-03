@@ -175,13 +175,10 @@ std::unique_ptr<CertFileFactory> CertFileFactory::create(const std::string& file
             return make_unique<P12FileFactory>(filename, password, key_pair, cert_ptr, certs_ptr, certs_only);
         }
     } else if (ext == "pem" || ext == "crt" || ext == "key" || ext == "cer") {
-        if (!password.empty()) {
-            throw std::runtime_error(SB() << usage << ": PEM Files (.pem, .crt, .key) can't be password protected");
-        }
         if (!pem_string.empty()) {
-            return make_unique<PEMFileFactory>(filename, pem_string, certs_only);
+            return make_unique<PEMFileFactory>(filename, password, key_pair, pem_string, certs_only);
         } else {
-            return make_unique<PEMFileFactory>(filename, cert_ptr, certs_ptr, certs_only);
+            return make_unique<PEMFileFactory>(filename, password, key_pair, cert_ptr, certs_ptr, certs_only);
         }
     }
     throw std::runtime_error(SB() << usage << ": Unsupported certificate file extension: " + ext);
@@ -195,35 +192,6 @@ std::unique_ptr<CertFileFactory> CertFileFactory::create(const std::string& file
  * @return a unique pointer to a managed KeyPair object.
  */
 std::shared_ptr<KeyPair> CertFileFactory::createKeyPair() {
-    // Seed the PRNG
-    unsigned char seed[32];  // 256 bits of entropy
-
-#ifdef _WIN32
-    // Windows-specific entropy gathering
-    HCRYPTPROV hProvider = 0;
-    if (!CryptAcquireContext(&hProvider, 0, 0, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT)) {
-        throw std::runtime_error("Failed to acquire crypto context");
-    }
-    if (!CryptGenRandom(hProvider, sizeof(seed), seed)) {
-        CryptReleaseContext(hProvider, 0);
-        throw std::runtime_error("Failed to generate random seed");
-    }
-    CryptReleaseContext(hProvider, 0);
-#else
-    // Unix-like systems - read from /dev/urandom
-    std::ifstream urandom("/dev/urandom", std::ios::in|std::ios::binary);
-    if (!urandom) {
-        throw std::runtime_error("Failed to open /dev/urandom");
-    }
-    urandom.read(reinterpret_cast<char*>(seed), sizeof(seed));
-    if (urandom.gcount() != sizeof(seed)) {
-        throw std::runtime_error("Failed to read enough random data");
-    }
-#endif
-
-    // Seed OpenSSL's PRNG
-    RAND_seed(seed, sizeof(seed));
-
     // Create a new KeyPair object
     auto key_pair = std::make_shared<KeyPair>();
 
@@ -231,24 +199,24 @@ std::shared_ptr<KeyPair> CertFileFactory::createKeyPair() {
     const int kKeyType = EVP_PKEY_RSA;  // Key type
 
     // Initialize the context for the key generation operation
-    ossl_ptr<EVP_PKEY_CTX> context(EVP_PKEY_CTX_new_id(kKeyType, NULL));
+    ossl_ptr<EVP_PKEY_CTX> context(EVP_PKEY_CTX_new_id(kKeyType, nullptr));
     if (!context) {
-        throw std::runtime_error("Failed to create EVP_PKEY_CTX.");
+        throw std::runtime_error("Failed to create EVP_PKEY_CTX");
     }
 
     // Initialize key generation context for RSA algorithm
     if (EVP_PKEY_keygen_init(context.get()) != 1) {
-        throw std::runtime_error("Failed to initialize EVP_KEY context for key generation.");
+        throw std::runtime_error("Failed to initialize EVP_KEY context for key generation");
     }
 
     // Set the RSA key size for key generation
     if (EVP_PKEY_CTX_set_rsa_keygen_bits(context.get(), kKeySize) != 1) {
-        throw std::runtime_error("Failed to set RSA key size for key generation.");
+        throw std::runtime_error("Failed to set RSA key size for key generation");
     }
 
     // Generate the key pair
     if (EVP_PKEY_keygen(context.get(), key_pair->pkey.acquire()) != 1) {
-        throw std::runtime_error("Failed to generate key pair.");
+        throw std::runtime_error("Failed to generate key pair");
     }
 
     // Create a memory buffer BIO for storing the public key
@@ -256,7 +224,7 @@ std::shared_ptr<KeyPair> CertFileFactory::createKeyPair() {
 
     // Write the public key into the buffer
     if (!PEM_write_bio_PUBKEY(bio_public.get(), key_pair->pkey.get())) {
-        throw std::runtime_error("Failed to write public key to BIO.");
+        throw std::runtime_error("Failed to write public key to BIO");
     }
 
     // Get the public key data as binary and store it in the buffer
@@ -268,9 +236,8 @@ std::shared_ptr<KeyPair> CertFileFactory::createKeyPair() {
     key_pair->public_key = public_key;
     log_debug_printf(certs, "Key Pair Generated: %s\n", public_key.c_str());
 
-    // Return the unique_ptr to the new KeyPair object
     return key_pair;
-};
+}
 
 }  // namespace certs
 }  // namespace pvxs

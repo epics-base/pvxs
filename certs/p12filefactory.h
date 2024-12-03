@@ -36,16 +36,16 @@ namespace certs {
 class P12FileFactory : public CertFileFactory {
    public:
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, bool certs_only = false)
-        : CertFileFactory(filename, nullptr, nullptr, "private key", "", certs_only), password_(password), key_pair_(key_pair), p12_ptr_(nullptr) {}
+        : CertFileFactory(filename, password, key_pair, nullptr, nullptr, "private key", "", certs_only), p12_ptr_(nullptr) {}
 
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr, stack_st_X509 *certs_ptr, bool certs_only = false)
-        : CertFileFactory(filename, cert_ptr, certs_ptr, "certificate", "", certs_only), password_(password), key_pair_(key_pair), p12_ptr_(nullptr) {}
+        : CertFileFactory(filename, password, key_pair, cert_ptr, certs_ptr, "certificate", "", certs_only), p12_ptr_(nullptr) {}
 
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string, bool certs_only = false)
-        : CertFileFactory(filename, nullptr, nullptr, "certificate", pem_string, certs_only), password_(password), key_pair_(key_pair), p12_ptr_(nullptr) {}
+        : CertFileFactory(filename, password, key_pair, nullptr, nullptr, "certificate", pem_string, certs_only), p12_ptr_(nullptr) {}
 
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p12_ptr, bool certs_only = false)
-        : CertFileFactory(filename, nullptr, nullptr, "certificate", "", certs_only), password_(password), key_pair_(key_pair), p12_ptr_(p12_ptr) {}
+        : CertFileFactory(filename, password, key_pair, nullptr, nullptr, "certificate", "", certs_only), p12_ptr_(p12_ptr) {}
 
     void writePKCS12File();
 
@@ -55,8 +55,6 @@ class P12FileFactory : public CertFileFactory {
     std::shared_ptr<KeyPair> getKeyFromFile() override;
 
    private:
-    const std::string password_{};
-    const std::shared_ptr<KeyPair> key_pair_;
     PKCS12 *p12_ptr_{};
 
     static ossl_ptr<PKCS12> pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string, bool certs_only = false);

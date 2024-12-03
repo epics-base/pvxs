@@ -167,6 +167,30 @@ void PEMFileFactory::writePEMFile() {
                 }
             }
         }
+
+        // Write private key if available
+        if (key_pair_ && key_pair_->pkey) {
+            if (!password_.empty()) {
+                // Write encrypted private key using PKCS8 format
+                const EVP_CIPHER* cipher = EVP_aes_256_cbc();
+                if (PEM_write_PKCS8PrivateKey(fp.get(), 
+                                            key_pair_->pkey.get(),
+                                            cipher,
+                                            nullptr, 0,
+                                            nullptr,
+                                            const_cast<char*>(password_.c_str())) != 1) {
+                    throw std::runtime_error("Failed to write encrypted private key");
+                }
+            } else {
+                // Write unencrypted private key
+                if (PEM_write_PrivateKey(fp.get(), 
+                                       key_pair_->pkey.get(),
+                                       nullptr, nullptr, 0,
+                                       nullptr, nullptr) != 1) {
+                    throw std::runtime_error("Failed to write private key");
+                }
+            }
+        }
     } else {
         throw std::runtime_error("No certificate or PEM string available to write");
     }
@@ -217,7 +241,14 @@ CertData PEMFileFactory::getCertDataFromFile() {
 
     // Try to read the private key
     try {
-        ossl_ptr<EVP_PKEY> pkey(PEM_read_PrivateKey(fp.get(), nullptr, nullptr, nullptr), false);
+        ossl_ptr<EVP_PKEY> pkey;
+        if (!password_.empty()) {
+            // Use password if available
+            pkey.reset(PEM_read_PrivateKey(fp.get(), nullptr, nullptr, const_cast<char*>(password_.c_str())));
+        } else {
+            // Try reading without password
+            pkey.reset(PEM_read_PrivateKey(fp.get(), nullptr, nullptr, nullptr));
+        }
 
         // Try to get key from file if it is configured
         if (!pkey && key_file_) {
