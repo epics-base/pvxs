@@ -25,6 +25,7 @@
 #include <pvxs/sharedwildcardpv.h>
 
 #include "certfactory.h"
+#include "certfilefactory.h"
 #include "certstatus.h"
 #include "configcms.h"
 #include "ownedptr.h"
@@ -185,7 +186,7 @@ class StatusMonitor {
 void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory);
 
 std::shared_ptr<KeyPair> createCaKey(ConfigCms &config);
-void createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<KeyPair> &key_pair);
+CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<KeyPair> &key_pair);
 
 ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
 

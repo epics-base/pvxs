@@ -15,7 +15,6 @@ namespace client {
 
 DEFINE_LOGGER(setup, "pvxs.cli.init");
 DEFINE_LOGGER(io, "pvxs.cli.io");
-DEFINE_LOGGER(watcher, "pvxs.certs.mon");
 
 namespace detail {
 

@@ -21,81 +21,62 @@
 #include <pvxs/log.h>
 #include <pvxs/version.h>
 
+#include "certfilefactory.h"
 #include "ownedptr.h"
 #include "security.h"
 
 namespace pvxs {
 namespace certs {
-struct CertData {
-    ossl_ptr<X509> cert;
-    ossl_shared_ptr<STACK_OF(X509)> ca;
-
-    CertData(ossl_ptr<X509> &newCert, ossl_shared_ptr<STACK_OF(X509)> &newCa) : cert(std::move(newCert)), ca(newCa) {}
-};
-
-enum CertAvailability {
-    OK,
-    NOT_AVAILABLE,
-    ROOT_CERT_INSTALLED,
-    AVAILABLE,  // Certificate file already exists
-};
 
 /**
  * @class KeychainFactory
  *
  * @brief Manages certificates and associated operations.
  */
-class P12FileFactory {
+class P12FileFactory : public CertFileFactory {
    public:
-    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair)
-        : filename_(filename), password_(password), key_pair_(key_pair), cert_ptr_(nullptr), certs_ptr_(nullptr), usage_("private key") {}
+    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, bool certs_only = false)
+        : CertFileFactory(filename, nullptr, nullptr, "private key", "", certs_only), password_(password), key_pair_(key_pair), p12_ptr_(nullptr) {}
 
-    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr, stack_st_X509 *certs_ptr)
-        : filename_(filename), password_(password), key_pair_(key_pair), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), usage_("certificate") {}
+    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr, stack_st_X509 *certs_ptr, bool certs_only = false)
+        : CertFileFactory(filename, cert_ptr, certs_ptr, "certificate", "", certs_only), password_(password), key_pair_(key_pair), p12_ptr_(nullptr) {}
 
-    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string)
-        : filename_(filename),
-          password_(password),
-          key_pair_(key_pair),
-          cert_ptr_(nullptr),
-          certs_ptr_(nullptr),
-          pem_string_(pem_string),
-          usage_("certificate") {}
+    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string, bool certs_only = false)
+        : CertFileFactory(filename, nullptr, nullptr, "certificate", pem_string, certs_only), password_(password), key_pair_(key_pair), p12_ptr_(nullptr) {}
 
-    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p_12_ptr)
-        : filename_(filename), password_(password), key_pair_(key_pair), p12_ptr_(p_12_ptr), usage_("certificate") {}
+    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p12_ptr, bool certs_only = false)
+        : CertFileFactory(filename, nullptr, nullptr, "certificate", "", certs_only), password_(password), key_pair_(key_pair), p12_ptr_(p12_ptr) {}
 
-    static CertAvailability generateNewCertsFile(const impl::ConfigCommon &config, const uint16_t &usage);
-    static std::shared_ptr<KeyPair> getKeyFromFile(std::string filename, std::string password);
     static CertData getCertDataFromFile(std::string filename, std::string password);
-
-    static std::shared_ptr<KeyPair> createKeyPair();
-
-    static bool createRootPemFile(const std::string &p12PemString, bool overwrite = false);
-
     void writePKCS12File();
 
-    bool writeRootPemFile(const std::string &pem_string, bool overwrite = false);
+    void writeCertFile() override { writePKCS12File(); }
+
+    std::shared_ptr<KeyPair> getKeyFromFile() override;
+    CertData getCertDataFromFile() override { return getCertDataFromFile(filename_, password_); }
 
    private:
-    const std::string filename_{};
     const std::string password_{};
     const std::shared_ptr<KeyPair> key_pair_;
-    X509 *cert_ptr_{};
-    STACK_OF(X509) * certs_ptr_ {};
-    std::string pem_string_{};
     PKCS12 *p12_ptr_{};
-    const std::string usage_{};
 
-    static ossl_ptr<PKCS12> pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string);
+    static ossl_ptr<PKCS12> pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string, bool certs_only = false);
 
-    static ossl_ptr<PKCS12> toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) *cert_chain_ptr = nullptr);
-
-    static void backupFileIfExists(std::string filename);
-
-    static void chainFromRootCertPtr(STACK_OF(X509) * &chain, X509 *root_cert_ptr);
+    static ossl_ptr<PKCS12> toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) *cert_chain_ptr = nullptr, bool certs_only = false);
 
 #ifdef NID_oracle_jdk_trustedkeyusage
+    /**
+     * @brief Add the JDK trusted key usage attribute to the p12 object
+     *
+     * This is done by using the callback mechanism that is triggered by PKCS12_create_ex2 for every bag.
+     * We can then ignore all bags except X509 certificates with an associated key.
+     *
+     * This is conditionally compiled in for platforms that support it.
+     *
+     * @param bag the p12 safe bag to add the attribute to
+     * @param cbarg the callback argument (not used)
+     * @return 1 if the attribute was added, 0 if it was not added
+     */
     static int jdkTrust(PKCS12_SAFEBAG *bag, void *cbarg) noexcept {
         try {
             // Only add trustedkeyusage when bag is an X509 cert. with an
@@ -114,7 +95,7 @@ class P12FileFactory {
 
             if (sk_X509_ATTRIBUTE_push(newattrs.get(), attr.get()) != 1) {
                 std::cerr << "Error: unable to add JDK trust attribute\n";
-                return 0;
+                return 1;
             }
             attr.release();
 

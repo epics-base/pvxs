@@ -56,6 +56,7 @@
 #include <pvxs/sharedwildcardpv.h>
 
 #include "certfactory.h"
+#include "certfilefactory.h"
 #include "certstatus.h"
 #include "certstatusfactory.h"
 #include "configcms.h"
@@ -991,11 +992,13 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
  */
 void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    // Get key pair
+    // Get key pair if specified
     std::shared_ptr<KeyPair> key_pair;
     try {
-        // Check if the CA key pair exists
-        key_pair = P12FileFactory::getKeyFromFile(config.ca_private_key_filename, config.ca_private_key_password);
+        if (!config.ca_private_key_filename.empty()) {
+            // Check if the CA key exists
+            key_pair = CertFileFactory::create(config.ca_private_key_filename, config.ca_private_key_password)->getKeyFromFile();
+        }
     } catch (std::exception &e) {
         // Error getting key pair
         // Make a new key pair file
@@ -1007,29 +1010,47 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
         }
     }
 
+    // At this point if a separate key was configured then we will have one, or we will have thrown an exception
+    // If we don't have one then it's because it was configured to be in the same file as the certificate
+
     // Get certificate
     try {
         // Check if the CA certificates exist
-        auto cert_data = P12FileFactory::getCertDataFromFile(config.ca_cert_filename, config.ca_cert_password);
-        ca_cert = std::move(cert_data.cert);
-        ca_chain = cert_data.ca;
-        if (!ca_cert) {
+        auto cert_data = CertFileFactory::create(config.ca_cert_filename, config.ca_cert_password)->getCertDataFromFile();
+        if (!key_pair) key_pair = cert_data.key_pair;
+
+        // If we have a key
+        if (key_pair) {
+            // And we have a cert
+            if (cert_data.cert) {
+                // all is ok
+                ca_pkey = std::move(key_pair->pkey);
+                ca_cert = std::move(cert_data.cert);
+                ca_chain = cert_data.ca;
+                return;
+            }
+            // We have keys but no cert then create the cert file
             throw(std::runtime_error("Certificate file does not contain a certificate: "));
         }
+        // We don't have keys so create a key in a combined cert and key file
+        key_pair = CertFileFactory::createKeyPair();
+        throw(std::runtime_error("Certificate file does not contain a certificate: "));
     } catch (std::exception &e) {
         // Error getting certs file, or certs file invalid
         // Make a new CA Certificate
         try {
             log_warn_printf(pvafms, "%s\n", e.what());
-            createCaCertificate(config, ca_db, key_pair);
-            auto cert_data = P12FileFactory::getCertDataFromFile(config.ca_cert_filename, config.ca_cert_password);
+            if (!key_pair)  key_pair = CertFileFactory::createKeyPair();
+
+            auto cert_data = createCaCertificate(config, ca_db, key_pair);
+            // all is ok
+            ca_pkey = std::move(key_pair->pkey);
             ca_cert = std::move(cert_data.cert);
             ca_chain = cert_data.ca;
         } catch (std::exception &e) {
             throw(std::runtime_error(SB() << "Error creating CA certificate: " << e.what()));
         }
     }
-    ca_pkey = std::move(key_pair->pkey);
 }
 
 /**
@@ -1054,11 +1075,13 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
  */
 void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                                    const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    // Get key pair
+    // Get key pair if specified
     std::shared_ptr<KeyPair> key_pair;
     try {
-        // Check if the server key pair exists
-        key_pair = P12FileFactory::getKeyFromFile(config.tls_private_key_filename, config.tls_private_key_password);
+        if (!config.tls_private_key_filename.empty()) {
+            // Check if the server key pair exists
+            key_pair = CertFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password)->getKeyFromFile();
+        }
     } catch (std::exception &e) {
         // Error getting key pair
         // Make a new key pair file
@@ -1070,19 +1093,37 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
         }
     }
 
+    // At this point if a separate key was configured then we will have one, or we will have thrown an exception
+    // If we don't have one then it's because it was configured to be in the same file as the certificate
+
     // Get certificate
     try {
-        // Check if the server certificates exist and can be read
-        auto cert_data = P12FileFactory::getCertDataFromFile(config.tls_cert_filename, config.tls_cert_password);
-        if (!cert_data.cert) {
+        // Check if the server certificates exist
+        auto cert_data = CertFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getCertDataFromFile();
+        if (!key_pair) key_pair = cert_data.key_pair;
+
+        // If we have a key
+        if (key_pair) {
+            // And we have a cert
+            if (cert_data.cert) {
+                // all is ok
+                return;
+            }
+            // We don't have keys so create a key in a combined cert and key file
             throw(std::runtime_error("Certificate file does not contain a certificate: "));
         }
+        // We don't have keys so create a key and a combined cert and key file
+        key_pair = CertFileFactory::createKeyPair();
+        throw(std::runtime_error("Certificate file does not contain a private key: "));
     } catch (std::exception &e) {
         // Error getting certs file, or certs file invalid
         // Make a new server Certificate
         try {
             log_warn_printf(pvacms, "%s\n", e.what());
+            if (!key_pair)  key_pair = CertFileFactory::createKeyPair();
+
             createServerCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain, key_pair);
+            // All is ok
         } catch (std::exception &e) {
             throw(std::runtime_error(SB() << "Error creating server certificate: " << e.what()));
         }
@@ -1091,11 +1132,10 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
 
 std::shared_ptr<KeyPair> createCaKey(ConfigCms &config) {
     // Create a key pair
-    const auto key_pair = P12FileFactory::createKeyPair();
+    const auto key_pair = CertFileFactory::createKeyPair();
 
     // Create PKCS#12 file containing private key
-    P12FileFactory p12file_factory(config.ca_private_key_filename, config.ca_private_key_password, key_pair);
-    p12file_factory.writePKCS12File();
+    CertFileFactory::create(config.ca_private_key_filename, config.ca_private_key_password, key_pair)->writeCertFile();
     return key_pair;
 }
 
@@ -1109,8 +1149,9 @@ std::shared_ptr<KeyPair> createCaKey(ConfigCms &config) {
  * @param config the configuration to use to get CA creation parameters
  * @param ca_db the reference to the certificate database to write the CA to
  * @param key_pair the key pair to use for the certificate
+ * @return a cert data structure containing the cert and chain and a copy of the key
  */
-void createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<KeyPair> &key_pair) {
+CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<KeyPair> &key_pair) {
     // Set validity to 4 yrs
     time_t not_before(time(nullptr));
     time_t not_after(not_before + (4 * 365 + 1) * 24 * 60 * 60);  // 4yrs
@@ -1124,15 +1165,16 @@ void createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<KeyP
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
     // Create PKCS#12 file containing certs, private key and chain
-    P12FileFactory p12file_factory(config.ca_cert_filename, config.ca_cert_password, key_pair, pem_string);
+    auto cert_file_factory = CertFileFactory::create(config.ca_cert_filename, config.ca_cert_password, key_pair, nullptr, nullptr, "certificate", pem_string, !config.ca_private_key_filename.empty());
 
-    p12file_factory.writePKCS12File();
+    cert_file_factory->writeCertFile();
 
     // Create the root certificate (overwrite existing)
     // The user must re-trust it if it already existed
-    if ( !p12file_factory.writeRootPemFile(pem_string, false)) {
+    if (!cert_file_factory->writeRootPemFile(pem_string, false)) {
         exit(0);
     }
+    return cert_file_factory->getCertData(key_pair);
 }
 
 /**
@@ -1141,16 +1183,18 @@ void createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<KeyP
  */
 std::shared_ptr<KeyPair> createServerKey(const ConfigCms &config) {
     // Create a key pair
-    const auto key_pair(P12FileFactory::createKeyPair());
+    const auto key_pair(CertFileFactory::createKeyPair());
 
     // Create PKCS#12 file containing private key
-    P12FileFactory p12file_factory(config.tls_private_key_filename, config.tls_private_key_password, key_pair);
-    p12file_factory.writePKCS12File();
+    CertFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password, key_pair)->writeCertFile();
     return key_pair;
 }
 
 /**
  * @brief Create a PVACMS server certificate
+ *
+ * If private key file is configured then don't add key to cert file
+ *
  * @param config the configuration use to get the parameters to create cert
  * @param ca_db the db to store the certificate in
  * @param ca_pkey the CA's private key to sign the certificate
@@ -1163,16 +1207,18 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
     // Generate a new serial number
     auto serial = generateSerial();
 
-    auto certificate_factory = CertFactory(serial, key_pair, PVXS_SERVICE_NAME, getCountryCode(), pvacms_org_name, PVXS_SERVICE_ORG_UNIT_NAME,
-                                           getNotBeforeTimeFromCert(ca_cert.get()), getNotAfterTimeFromCert(ca_cert.get()), ssl::kForCMS,
-                                           config.cert_status_subscription, ca_cert.get(), ca_pkey.get(), ca_chain.get());
+    auto certificate_factory =
+        CertFactory(serial, key_pair, PVXS_SERVICE_NAME, getCountryCode(), pvacms_org_name, PVXS_SERVICE_ORG_UNIT_NAME, getNotBeforeTimeFromCert(ca_cert.get()),
+                    getNotAfterTimeFromCert(ca_cert.get()), ssl::kForCMS, config.cert_status_subscription, ca_cert.get(), ca_pkey.get(), ca_chain.get());
 
     auto cert = createCertificate(ca_db, certificate_factory);
 
     // Create PKCS#12 file containing certs, private key and null chain
-    P12FileFactory p12file_factory(config.tls_cert_filename, config.tls_cert_password, key_pair, cert.get(), certificate_factory.certificate_chain_.get());
+    auto pem_string = CertFactory::certAndCasToPemString(cert, certificate_factory.certificate_chain_.get());
+    auto cert_file_factory = CertFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr,
+                                                     nullptr, "PVACMS server certificate", pem_string, !config.tls_private_key_filename.empty());
 
-    p12file_factory.writePKCS12File();
+    cert_file_factory->writeCertFile();
 }
 
 /**
@@ -1593,6 +1639,7 @@ int main(int argc, char *argv[]) {
         pvxs::ossl::SSLContext::sslInit();
 
         // Set security if configured
+        // TODO if not configured then provide a default and provide a VALID certificate for that default
         if (!config.ca_acf_filename.empty()) asSetFilename(config.ca_acf_filename.c_str());
 
         // Logger config from environment (so environment overrides verbose setting)

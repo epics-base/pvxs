@@ -24,20 +24,69 @@ Note: This release requires specific unmerged changes to epics-base.
 Quick Start Guide
 ---------------
 
-
 1. Install Requirements
 ^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
-        # For Debian/Ubuntu (build-essential is optional)
-        apt-get install openssl libssl-dev libevent-dev libsqlite3-dev build-essential
+        # For Debian/Ubuntu
 
-        # For RHEL/CentOS
-        yum install openssl-devel libevent-devel sqlite-devel
+        apt-get update
+        apt-get install -y \
+            build-essential \
+            git \
+            openssl \
+            libssl-dev \
+            libevent-dev \
+            libsqlite3-dev \
+            libcurl4-openssl-dev \
+            pkg-config \
+            zsh
+
+        # For RHEL/CentOS/Rocky/Alma Linux/Fedora
+
+        dnf install -y \
+            gcc-c++ \
+            git \
+            make \
+            openssl-devel \
+            libevent-devel \
+            sqlite-devel \
+            libcurl-devel \
+            pkg-config \
+            zsh
 
         # For macOS
-        brew install openssl libevent sqlite3
+
+        brew update
+        brew install \
+            openssl@3 \
+            libevent \
+            sqlite3 \
+            curl \
+            pkg-config \
+            zsh
+
+        # For Alpine Linux
+
+        apk add --no-cache \
+            build-base \
+            git \
+            openssl-dev \
+            libevent-dev \
+            sqlite-dev \
+            curl-dev \
+            pkgconfig \
+            zsh
+
+        # For RTEMS
+        # First install RTEMS toolchain from https://docs.rtems.org/branches/master/user/start/
+        # Then ensure these are built into your BSP:
+        #   - openssl
+        #   - libevent
+        #   - sqlite
+        #   - libcurl
+        # Note: RTEMS support requires additional configuration. See RTEMS-specific documentation.
 
 2. Build epics-base
 ^^^^^^^^^^^^^^^^^
@@ -61,6 +110,7 @@ Quick Start Guide
 
         # Optional: To enable appropriate site authentication mechanisms.
         # Note: `authnstd` is always available.
+
         # cat >> CONFIG_SITE.local <<EOF
         # PVXS_ENABLE_KRB_AUTH = YES
         # PVXS_ENABLE_JWT_AUTH = YES
@@ -68,10 +118,12 @@ Quick Start Guide
         #EOF
 
         # find paths to libevent and openssl
+
         pkg-config --cflags openssl libevent
         pkg-config --libs openssl libevent
 
         # Set paths to libevent and openssl (if required)
+
         export C_INCLUDE_PATH=/<path_to_libevent>/libevent/2.1.12_1/include:/<path_to_openssl>/openssl@3/3.2.1/include
         export CPLUS_INCLUDE_PATH=/<path_to_libevent>/libevent/2.1.12_1/include:/<path_to_openssl>/openssl@3/3.2.1/include
         export LIBRARY_PATH=/<path_to_libevent>/libevent/2.1.12_1/lib:/<path_to_openssl>/openssl@3/3.2.1/lib
@@ -86,37 +138,49 @@ Quick Start Guide
         cd pvxs
 
         # Build PVXS
-        make -j10 all
 
-        # set path
-        cd bin/*
-        export PATH=$PATH:$(pwd)
-        cd ../../..
+?        make -j10 all
 
 5. PVACMS Setup
 ^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
+        // TODO FIX LATER!!!!! need a machine location
         #### [optional] Set path and name of the CA database file (default: ./certs.db)
-        export EPICS_CA_DB=~/.epics/certs.db
+
+        export EPICS_CONFIG_HOME=${HOME}/.config/epics
+        export EPICS_CONFIG_CERTS=${EPICS_CONFIG_HOME}/certs
+        export EPICS_CONFIG_KEYS=${EPICS_CONFIG_HOME}/keys
+
+        export EPICS_CA_DB=${EPICS_CONFIG_HOME}/certs.db
 
         #### Set key paths (keys will be created here if not exists)
         # Place your CA's private key in this file if you have one
         # otherwise the CA will be created by PVACMS
-        export EPICS_CA_PKEY=~/.ssh/cakey.p12
+
+        export EPICS_CA_PKEY=${EPICS_CONFIG_KEYS}/cakey.p12
+
         # Specify the path to your PVACMS's private key.  It will be created automatically
-        export EPICS_PVACMS_TLS_PKEY=~/.ssh/pvacmskey.p12
+
+        export EPICS_PVACMS_TLS_PKEY=${EPICS_CONFIG_KEYS}/pvacmskey.p12
 
         #### Set certificate paths (certificates will be created here if not exists)
         # Place your CA's certificate in this file if you have one
         # otherwise the CA certificate will be created by PVACMS
-        export EPICS_CA_KEYCHAIN=~/.epics/ca.p12
-        # Specify the path to your PVACMS's certificate.  It will be created automatically
-        export EPICS_PVACMS_TLS_KEYCHAIN=~/.epics/pvacms.p12
 
-        #### Start PVACMS service
-        # - creates database (certs.db) if does not exist,
+        export EPICS_CA_KEYCHAIN=${EPICS_CONFIG_CERTS}/ca.p12
+
+        # Specify the path to your PVACMS's certificate.  It will be created automatically
+
+        export EPICS_PVACMS_TLS_KEYCHAIN=${EPICS_CONFIG_CERTS}/pvacms.p12
+
+        # Specify the name of your CA
+        export EPICS_CA_NAME="EPICS Test Root CA"
+        export EPICS_CA_ORGANIZATION="ca.epics.org"
+        export EPICS_CA_ORGANIZATIONAL_UNIT="EPICS Certificate Authority"
+
+        #### Create root CA
         # - creates root CA if does not exist,
         #   at location specified by EPICS_CA_TLS_KEYCHAIN,
         #   with private key at location specified by EPICS_CA_TLS_KEY
@@ -124,10 +188,21 @@ Quick Start Guide
         #   with O specified by EPICS_CA_ORGANIZATION (default: ca.epics.org)
         #   with OU specified by EPICS_CA_ORGANIZATIONAL_UNIT (default: EPICS Certificate Authority)
         #   with C that is the country code based on where the code is running
+        #
+        # If the root CA does not already exist it will exit here with instructions on what to do to trust the
+        # root CA
+        # Will continue without exiting if CA already exists
+
+        ./pvxs/bin/*/pvacms
+
+        #### Create the PVACMS server certificate and Start PVACMS service
         # - creates server certificate if does not exist,
         #   at location specified by EPICS_PVACMS_TLS_KEYCHAIN,
         #   with private key at location specified by EPICS_PVACMS_TLS_KEY
-        pvacms
+        # - creates default ACF file (pvacms.yaml) at location pointed to by EPICS_CA_ACF or in current working directory
+        # - creates database (certs.db) if does not exist at location pointed to by EPICS_CA_DB or in current working directory,
+
+        ./pvxs/bin/*/pvacms
 
 6. Install Root Certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -137,7 +212,8 @@ Quick Start Guide
         #### Install and Trust Root CA
         # Follow instructions, when command completes, to trust the downloaded CA certificate
         # note: If root cert is signed by a public CA this step is optional
-        pvxcert -I
+
+        ./pvxs/bin/*/pvxcert -I
 
 7. Configure EPICS Agent Environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -146,8 +222,11 @@ Quick Start Guide
 
         #### Set key paths (keys will be created here if they don't already exist)
         # An EPICS client agent key if required
+
         export EPICS_PVA_TLS_KEY=~/.ssh/clientkey.p12
+
         # An EPICS server agent key if required
+
         export EPICS_PVAS_TLS_KEY=~/.ssh/serverkey.p12
 
         #### Set certificate paths (certificates will be created here if they don't already exist)
@@ -163,11 +242,13 @@ Quick Start Guide
 
         #### 1. Create a new client private key at location specified by EPICS_PVA_TLS_KEY if it does not already exist
         #### 2. Create client certificate at location specified by EPICS_PVA_TLS_KEYCHAIN
-        authnstd -C client
+
+        ./pvxs/bin/*/authnstd -C client
 
         #### 1. Create a new server private key at location specified by EPICS_PVAS_TLS_KEY if it does not already exist
         #### 2. Create server certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
-        authnstd -C server
+
+        ./pvxs/bin/*/authnstd -C server
 
 
 .. _transport_layer_security:
@@ -1613,7 +1694,7 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 || EPICS_CA_PKEY         || <path to CA private key password file>    || fully qualified path to a file that will be used as the                 |
 || _PWD_FILE             || e.g. ``~/.ssh/cakey.pass``                || CA private key password file.                                           |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_CA              || <name of the Certificate Authority>       || To provide the name (CN) to be used in the subject of the               |
+|| EPICS_CA_NAME         || <name of the Certificate Authority>       || To provide the name (CN) to be used in the subject of the               |
 ||                       || e.g. ``Epics Root CA``                    || CA's certificate if :ref:`pvacms` creates it. default: "EPICS Root CA"  |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_CA              || <name of the CA organisation>             || To provide the name (O) to be used in the subject of the CA's           |

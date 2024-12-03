@@ -19,7 +19,6 @@ namespace pvxs {
 #ifdef PVXS_ENABLE_OPENSSL
 namespace {
 DEFINE_LOGGER(stapling, "pvxs.stapling");
-DEFINE_LOGGER(io, "pvxs.io");
 
 /**
  * @brief A callback function for handling OCSP (Online Certificate Status Protocol) responses in an SSL context.

@@ -13,6 +13,8 @@ USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 AUTHN = $(TOP)/certs/authn
 SRC_DIRS += $(TOP)/src
 SRCS += p12filefactory.cpp
+SRCS += pemfilefactory.cpp
+SRCS += certfilefactory.cpp
 SRCS += certfactory.cpp
 
 PROD_LIBS = pvxs Com

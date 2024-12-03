@@ -15,6 +15,7 @@
 #include "ccrmanager.h"
 #include "ownedptr.h"
 #include "security.h"
+#include "certfactory.h"
 #include "p12filefactory.h"
 
 namespace pvxs {
@@ -79,11 +80,10 @@ std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCr
 
 std::shared_ptr<KeyPair> Auth::createKeyPair(const ConfigCommon &config) {
     // Create a key pair
-    const auto key_pair(P12FileFactory::createKeyPair());
+    const auto key_pair(CertFileFactory::createKeyPair());
 
     // Create PKCS#12 file containing private key
-    P12FileFactory p12file_factory(config.tls_private_key_filename, config.tls_private_key_password, key_pair);
-    p12file_factory.writePKCS12File();
+    CertFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password, key_pair)->writeCertFile();
     return key_pair;
 }
 }  // namespace certs

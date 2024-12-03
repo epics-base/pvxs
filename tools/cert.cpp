@@ -22,6 +22,7 @@
 #include "certfactory.h"
 #include "certstatusmanager.h"
 #include "p12filefactory.h"
+#include "certfilefactory.h"
 
 using namespace pvxs;
 
@@ -154,7 +155,7 @@ int main(int argc, char* argv[]) {
 
         if (!cert_file.empty()) {
             try {
-                auto cert_data = certs::P12FileFactory::getCertDataFromFile(cert_file, password);
+                auto cert_data = certs::CertFileFactory::create(cert_file, password)->getCertDataFromFile();
                 cert_id = certs::CertStatusManager::getStatusPvFromCert(cert_data.cert);
             } catch (std::exception& e) {
                 std::cerr << "Unable to get cert from cert file: " << e.what() << std::endl;

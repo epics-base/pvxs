@@ -262,15 +262,15 @@ void extractCAs(SSLContext &ctx, const ossl_ptr<stack_st_X509> &CAs) {
  * @param fp The file pointer of the p12 file.
  * @param p12 The PKCS12 object reference to be updated
  * @param ssl_client True if the request came from a client, false from a server
- * @param p12_filename The filename of the p12 file
+ * @param cert_filename The filename of the p12 file
  *
  * @return true if the p12 file exists and can be read
  * @return false if the p12 file does not exist or is invalid and the request was from a client
  *
- * @throws std::runtime_error("Invalid, Untrusted, or Nonexistent p12 file  ...")
+ * @throws std::runtime_error("Invalid, Untrusted, or Nonexistent cert file  ...")
  *         if p12 file not found or invalid and it if for a server
  */
-bool checkP12File(file_ptr &fp, ossl_ptr<PKCS12> &p12, const uint16_t &usage, const std::string &p12_filename) {
+bool checkP12File(file_ptr &fp, ossl_ptr<PKCS12> &p12, const uint16_t &usage, const std::string &cert_filename) {
     // Return true if it exists and is readable
     if (fp && d2i_PKCS12_fp(fp.get(), p12.acquire())) return true;
 
@@ -279,7 +279,7 @@ bool checkP12File(file_ptr &fp, ossl_ptr<PKCS12> &p12, const uint16_t &usage, co
         // Client ONLY can create SSL session even though it has no certificate/key as long as the server allows it
         return false;
     } else {
-        throw std::runtime_error(SB() << "Invalid, Untrusted, or Nonexistent p12 file at [" << p12_filename << "]");
+        throw std::runtime_error(SB() << "Invalid, Untrusted, or Nonexistent cert file at [" << cert_filename << "]");
     }
 }
 
