@@ -264,6 +264,21 @@ can authenticate their peer using X.509 certificates. Key features of the TLS im
 - Fallback to TCP when TLS is not configured or certificates are invalid
 - Certificate status verification during connection establishment
 
+Supported Certificate Formats, Encodings and File Types
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++-----------+----------------------+-----------+-------------------------+------------------------------+-------------------------+
+| File Type | Extension            | Encoding  | Includes Private Key?   | Includes Certificate Chain?  |     Common Usage        |
++===========+======================+===========+=========================+==============================+=========================+
+|| PEM      || ``.pem``, ``.crt``, || Base64   || Optional               || Optional (concatenated)     || Web servers, OpenSSL   |
+||          || ``.cer``, ``.key``  ||          ||                        ||                             ||                        |
++-----------+----------------------+-----------+-------------------------+------------------------------+-------------------------+
+|| PKCS#12  || ``.p12``, ``.pfx``  || Binary   || Optional (password)    || Yes                         || Distributing cert key  |
++-----------+----------------------+-----------+-------------------------+------------------------------+-------------------------+
+|| JKS      || ``.jks``            || Binary   || Optional               || Yes                         || Java applications      |
++-----------+----------------------+-----------+-------------------------+------------------------------+-------------------------+
+
+To use any of these formats just use the appropriate file extension when specifying the certificate and key files.
 
 TLS encapsulation of the PVAccess protocol
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
