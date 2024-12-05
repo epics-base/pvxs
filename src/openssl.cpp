@@ -324,7 +324,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         // extract CAs (intermediate and root) from PKCS12 bag
         extractCAs(tls_context, cert_data.ca);
 
-        if (cert_data.key_pair->pkey && !SSL_CTX_check_private_key(tls_context.ctx)) throw SSLError("invalid private key");
+        if (cert_data.key_pair && cert_data.key_pair->pkey && !SSL_CTX_check_private_key(tls_context.ctx)) throw SSLError("invalid private key");
 
         // Move cert to the context
         if (cert_data.cert) {

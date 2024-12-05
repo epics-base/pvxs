@@ -82,7 +82,7 @@ namespace ossl {
 
 PVXS_API int ossl_verify(int preverify_ok, X509_STORE_CTX* x509_ctx);
 
-struct SSLError : public std::runtime_error {
+struct PVXS_API SSLError : public std::runtime_error {
     explicit SSLError(const std::string& msg);
     virtual ~SSLError();
 };

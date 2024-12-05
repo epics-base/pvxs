@@ -40,6 +40,7 @@
 #include "p12filefactory.h"
 #include "security.h"
 #include "utilpvt.h"
+#include "openssl.h"
 
 namespace pvxs {
 namespace certs {
@@ -67,7 +68,7 @@ std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
 
     ossl_ptr<EVP_PKEY> pkey;
     if (!PKCS12_parse(p12.get(), password_.c_str(), pkey.acquire(), nullptr, nullptr)) {
-        throw std::runtime_error(SB() << "Error parsing private key file: " << filename_);
+        throw ossl::SSLError(SB() << "Error parsing private key file: " << filename_);
     }
 
     return std::make_shared<KeyPair>(std::move(pkey));
