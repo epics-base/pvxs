@@ -15,7 +15,6 @@ namespace certs {
 using namespace members;
 
 std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequest> &cert_creation_request) const {
-    std::string p12PemString;
     auto uri = nt::NTURI({}).build();
     uri += {Struct("query", CCR_PROTOTYPE(cert_creation_request->verifier_fields))};
     auto arg = uri.create();

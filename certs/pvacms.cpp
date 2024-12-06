@@ -84,7 +84,7 @@ namespace certs {
  *
  * This array does not consider leap years
  */
-static const std::string kCertRevokePrefix("CERT:REVOKE");
+static const std::string kCertRoot("CERT:ROOT");
 
 // The current partition number
 uint16_t partition_number = 0;
@@ -112,8 +112,6 @@ Value getCreatePrototype() {
                              Member(TypeCode::String, "issuer"),
                              Member(TypeCode::String, "certid"),
                              Member(TypeCode::String, "statuspv"),
-                             Member(TypeCode::String, "revokepv"),
-                             Member(TypeCode::String, "rotatepv"),
                              Member(TypeCode::String, "cert"),
                              Struct("alarm", "alarm_t",
                                     {
@@ -125,6 +123,60 @@ Value getCreatePrototype() {
                      .create();
     shared_array<const std::string> choices(CERT_STATES);
     value["status.value.choices"] = choices.freeze();
+    return value;
+}
+
+/**
+ * @brief  The value for a GET root certificate operation
+ * @return  The value for a GET root certificate operation
+ */
+Value getRootValue(const std::string &issuer_id, const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
+    using namespace members;
+    auto value = TypeDef(TypeCode::Struct,
+                         {
+                             Member(TypeCode::UInt64, "serial"),
+                             Member(TypeCode::String, "issuer"),
+                             Member(TypeCode::String, "name"),
+                             Member(TypeCode::String, "org"),
+                             Member(TypeCode::String, "org_unit"),
+                             Member(TypeCode::String, "cert"),
+                             Struct("alarm", "alarm_t",
+                                    {
+                                        Int32("severity"),
+                                        Int32("status"),
+                                        String("message"),
+                                    }),
+                         })
+                     .create();
+    auto subject_name(X509_get_subject_name(ca_cert.get()));
+    auto subject_string(X509_NAME_oneline(subject_name, nullptr, 0));
+    ossl_ptr<char> owned_subject(subject_string, false);
+    if (!owned_subject) {
+        throw std::runtime_error("Unable to get the subject of the CA certificate");
+    }
+    std::string subject(owned_subject.get());
+
+    // Subject part extractor
+    auto extractSubjectPart = [&subject](const std::string& key) -> std::string {
+        std::size_t start = subject.find("/" + key + "=");
+        if (start == std::string::npos) {
+            throw std::runtime_error("Key not found: " + key);
+        }
+        start += key.size() + 2;  // Skip over "/key="
+        std::size_t end = subject.find("/", start);  // Find the end of the current value
+        if (end == std::string::npos) {
+            end = subject.size();
+        }
+        return subject.substr(start, end - start);
+    };
+
+    value["serial"] = pvxs::certs::CertStatusFactory::getSerialNumber(ca_cert);
+    value["issuer"] = issuer_id;
+    value["name"] = extractSubjectPart("CN");
+    value["org"] = extractSubjectPart("O");
+    value["org_unit"] = extractSubjectPart("OU");
+    value["cert"] = CertFactory::certAndCasToPemString(ca_cert, ca_chain.get());
+
     return value;
 }
 
@@ -735,8 +787,6 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
         // Construct and return the reply
         auto cert_id = getCertId(issuer_id, serial);
         auto status_pv = getCertUri(GET_MONITOR_CERT_STATUS_ROOT, cert_id);
-        auto revoke_pv = getCertUri(kCertRevokePrefix, cert_id);
-        auto rotate_pv = RPC_CERT_ROTATE_PV;
         auto reply(getCreatePrototype());
         auto now(time(nullptr));
         reply["status.value.index"] = state;
@@ -746,8 +796,6 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
         reply["issuer"] = issuer_id;
         reply["certid"] = cert_id;
         reply["statuspv"] = status_pv;
-        reply["revokepv"] = revoke_pv;
-        reply["rotatepv"] = rotate_pv;
         reply["cert"] = pem_string;
         op->reply(reply);
     } catch (std::exception &e) {
@@ -1661,7 +1709,12 @@ int main(int argc, char *argv[]) {
 
         // Create the PVs
         SharedPV create_pv(SharedPV::buildReadonly());
+        SharedPV root_pv(SharedPV::buildReadonly());
         SharedWildcardPV status_pv(SharedWildcardPV::buildMailbox());
+
+        // Create Root PV value which won't change
+        // TODO what happens when it changes
+        pvxs::Value root_pv_value = getRootValue(our_issuer_id, ca_cert, ca_chain);
 
         // RPC handlers
         pvxs::ossl_ptr<EVP_PKEY> ca_pub_key(X509_get_pubkey(ca_cert.get()));
@@ -1711,7 +1764,8 @@ int main(int argc, char *argv[]) {
         // Return true to indicate that we want the file monitor time to run after this
         Server pva_server = Server(config, [&status_monitor_params](short evt) { return statusMonitor(status_monitor_params); });
 
-        pva_server.addPV(RPC_CERT_CREATE, create_pv).addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
+        pva_server.addPV(RPC_CERT_CREATE, create_pv).addPV(GET_MONITOR_CERT_STATUS_PV, status_pv).addPV(kCertRoot, root_pv);
+        root_pv.open(root_pv_value);
 
         if (verbose) {
             std::cout << "Effective config\n" << config;

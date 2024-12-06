@@ -104,7 +104,9 @@ class CertStatusFactory {
         return uint64_number;
     }
 
-   private:
+    static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
+
+  private:
     const ossl_ptr<X509>& ca_cert_;                          // CA Certificate to encode in the OCSP responses
     const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey_;                // CA Certificate's private key to sign the OCSP responses
     const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain_;  // CA Certificate chain to encode in the OCSP responses
@@ -123,7 +125,7 @@ class CertStatusFactory {
      * @return a byte array
      */
     static std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
-    static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
+
     static uint64_t getSerialNumber(X509* cert);
 
     /**

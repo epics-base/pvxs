@@ -15,7 +15,7 @@ ifeq ($(EVENT2_HAS_OPENSSL),YES)
 SRC_DIRS += $(TOP)/certs
 SRC_DIRS += $(TOP)/src
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
-USR_CPPFLAGS += -I$(TOP)/certs
+USR_CPPFLAGS += -I$(TOP)/certs -I$(TOP)/bundle/CLI11/include
 
 PROD += pvxcert
 pvxcert_SRCS += cert.cpp

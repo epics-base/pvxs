@@ -22,10 +22,10 @@ DEFINE_LOGGER(pemcerts, "pvxs.certs.pem");
  * @return true if the file already exists, false otherwise
  * @throw std::runtime_error if the file cannot be written
  */
-bool PEMFileFactory::createRootPemFile(const std::string& p12PemString, bool overwrite) {
+bool PEMFileFactory::createRootPemFile(const std::string& p12_pem_string, bool overwrite) {
     static constexpr auto kMaxAuthnNameLen = 256;
 
-    ossl_ptr<BIO> bio(BIO_new_mem_buf(p12PemString.data(), p12PemString.size()));
+    ossl_ptr<BIO> bio(BIO_new_mem_buf(p12_pem_string.data(), p12_pem_string.size()));
 
     // Create a stack for the certs
     STACK_OF(X509_INFO) * inf(PEM_X509_INFO_read_bio(bio.get(), NULL, NULL, NULL));

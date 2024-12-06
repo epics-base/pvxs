@@ -7,3 +7,6 @@
 [submodule "bundle/jwt-cpp"]
 	path = bundle/jwt-cpp
 	url = https://github.com/Thalhammer/jwt-cpp.git
+[submodule "bundle/CLI11"]
+	path = bundle/CLI11
+	url = https://github.com/CLIUtils/CLI11.git

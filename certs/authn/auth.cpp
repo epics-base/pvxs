@@ -74,8 +74,8 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
  */
 std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &cert_creation_request) const {
     // Forward the ccr to the certificate management service
-    std::string p12PemString(ccr_manager_.createCertificate(cert_creation_request));
-    return p12PemString;
+    std::string p12_pem_string(ccr_manager_.createCertificate(cert_creation_request));
+    return p12_pem_string;
 }
 
 std::shared_ptr<KeyPair> Auth::createKeyPair(const ConfigCommon &config) {

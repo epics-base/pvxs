@@ -31,8 +31,6 @@
 #include "ownedptr.h"
 
 #define RPC_CERT_CREATE "CERT:CREATE"
-#define RPC_CERT_ROTATE_PV "CERT:ROTATE"
-#define RPC_CERT_REVOKE_PV "CERT:REVOKE:????????:*"
 
 #define DEFAULT_KEYCHAIN_FILE "server.p12"
 #define DEFAULT_CA_KEYCHAIN_FILE "ca.p12"
