@@ -1578,24 +1578,28 @@ pvxcert
 
     .. code-block:: console
 
-        Usage: pvxcert <opts> <certid>
-            pvxcert <opts> -f <cert-file> [-p]
+        Usage: pvxcert [OPTIONS] [cert_id]
+            pvxcert [OPTIONS] -f [cert-file] [-p]
             pvxcert -I
 
-        Options:
-        -h        Show this message
-        -V        Print version and exit
-        -I        Install root certificate in trusted store
-        -v        Increase verbosity
-        -d        Set $PVXS_LOG="pvxs.*=DEBUG" for detailed logging
-        -w <sec>  Operation timeout in seconds (default: 5)
-        -# <cnt>  Maximum array elements to print (0=unlimited, default: 20)
-        -f <file> Certificate file to read
-        -p        Prompt for password
-        -F <fmt>  Output format: delta, tree
-        -A        APPROVE certificate (admin only)
-        -R        REVOKE certificate (admin only)
-        -D        DENY STATUS_CHECK certificate (admin only)
+        POSITIONALS:
+          cert_id TEXT                Certificate ID
+
+        OPTIONS:
+          -h,     --help              Print this help message and exit
+          -w,     --timeout FLOAT [5] Operation timeout in seconds
+          -v,     --verbose           Make more noise
+          -d,     --debug             Shorthand for $PVXS_LOG="pvxs.*=DEBUG". Make a lot of noise.
+          -f,     --file TEXT         The certificate file to read if no Certificate ID specified
+          -p,     --password          Prompt for password
+          -V,     --version           Print version and exit.
+          -#,     --limit UINT [20]   Maximum number of elements to print for each array field. Set to
+                                      zero 0 for unlimited
+          -F,     --format TEXT       Output format mode: delta, tree
+          -I,     --install           Download and install the root certificate
+          -A,     --approve           APPROVE the certificate (ADMIN ONLY)
+          -R,     --revoke            REVOKE the certificate (ADMIN ONLY)
+          -D,     --deny              DENY the pending certificate (ADMIN ONLY)
 
 Key Operations:
 
