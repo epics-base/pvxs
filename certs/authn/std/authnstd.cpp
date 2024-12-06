@@ -26,20 +26,83 @@ void usage(const char *argv0) {
     std::cerr << "Usage: " << argv0
               << " <opts> \n"
                  "\n"
-                 " -v                   Make more noise.\n";
+                 "  -v         Make more noise.\n"
+                 "  -h         Show this help message and exit\n"
+                 "  -d         Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.\n"
+                 "  -D         Run in Daemon mode.  Monitors and updates certs as needed\n"
+                 "  -V         Show version and exit\n"
+                 "  -u <use>   Usage. client, server, or gateway\n"
+                 "  -N <name>  Name override the CN subject field\n"
+                 "  -O <name>  Org override the O subject field\n"
+                 "  -o <name>  Override the OU subject field\n"
+                 "  \n"
+                 "ENVIRONMENT VARIABLES: at least one mandatory variable must be set\n"
+                 "\tEPICS_PVA_TLS_KEYCHAIN\t\t\tSet name and location of client certificate file (mandatory for clients)\n"
+                 "\tEPICS_PVAS_TLS_KEYCHAIN\t\t\tSet name and location of server certificate file (mandatory for server)\n"
+                 "\tEPICS_PVA_TLS_KEYCHAIN_PWD_FILE\t\tSet name and location of client certificate password file (optional)\n"
+                 "\tEPICS_PVAS_TLS_KEYCHAIN_PWD_FILE\tSet name and location of server certificate password file (optional)\n"
+                 "\tEPICS_PVA_TLS_PKEY\t\t\tSet name and location of client private key file (optional)\n"
+                 "\tEPICS_PVAS_TLS_PKEY\t\t\tSet name and location of server private key file (optional)\n"
+                 "\tEPICS_PVA_TLS_PKEY_PWD_FILE\t\tSet name and location of client private key password file (optional)\n"
+                 "\tEPICS_PVAS_TLS_PKEY_PWD_FILE\t\tSet name and location of server private key password file (optional)\n"
+                 ;
 }
 
-int readOptions(ConfigStd &config, int argc, char *argv[], bool &verbose) {
+int readOptions(ConfigStd &config, int argc, char *argv[], bool &verbose, uint16_t &cert_usage, std::string &name, std::string &org, std::string &ou) {
     int opt;
-    while ((opt = getopt(argc, argv, "v")) != -1) {
+    while ((opt = getopt(argc, argv, "vhVdu:N:O:o:D")) != -1) {
         switch (opt) {
             case 'v':
                 verbose = true;
                 break;
+            case 'h':
+                usage(argv[0]);
+                return 1;
+            case 'D':
+                usage(argv[0]);
+                std::cerr << "\nNot yet supported: -" << char(optopt) << std::endl;
+                return 4;
+            case 'd':
+                logger_level_set("pvxs.*", Level::Debug);
+                break;
+            case 'V':
+                std::cout << pvxs::version_information;
+                return 1;
+            case 'u': {
+                    std::string usage_str = optarg;
+                    if ( usage_str == "gateway" || usage_str == "server") {
+                        // Use the Server versions of environment variables
+                        config.tls_cert_filename = config.tls_srv_cert_filename;
+                        config.tls_private_key_filename = config.tls_srv_private_key_filename ;
+                        config.tls_cert_password = config.tls_srv_cert_password;
+                        config.tls_private_key_password = config.tls_srv_private_key_password ;
+                        if (usage_str == "gateway") {
+                            cert_usage = pvxs::ssl::kForClientAndServer;
+                        } else if (usage_str == "server") {
+                            cert_usage = pvxs::ssl::kForServer;
+                        }
+                    } else if (usage_str == "client") {
+                        cert_usage = pvxs::ssl::kForClient;
+                    } else {
+                        usage(argv[0]);
+                        std::cerr << "\nUnknown argument: -" << char(optopt) << " " << usage_str << std::endl;
+                        return 2;
+                    }
+                }
+                break;
+            case 'N':
+                name = optarg;
+                break;
+            case 'O':
+                org = optarg;
+                break;
+            case 'o':
+                ou = optarg;
+                break;
             default:
                 usage(argv[0]);
                 std::cerr << "\nUnknown argument: -" << char(optopt) << std::endl;
-                return 2;
+                return 3;
         }
     }
 
@@ -126,7 +189,7 @@ std::shared_ptr<Credentials> AuthStd::getCredentials(const ConfigStd &config) co
     // Set the expiration time of the certificate
     time_t now = time(nullptr);
     x509_credentials->not_before = now;
-    x509_credentials->not_after = now + PVXS_X509_AUTH_DEFAULT_VALIDITY_S;
+    x509_credentials->not_after = now + (config.cert_validity_mins*60);
 
     if (!config.device_name.empty()) {
         // Get Device Name (Organization)
@@ -189,14 +252,31 @@ int main(int argc, char *argv[]) {
     pvxs::logger_config_env();
 
     bool verbose{false}, retrieved_credentials{false};
+    uint16_t cert_usage{pvxs::ssl::kForClient};
+    std::string name, org, ou;
+
     try {
         auto config = ConfigStd::fromEnv();
         std::shared_ptr<KeyPair> key_pair;
 
         // Read commandline options
         int exit_status;
-        if ((exit_status = readOptions(config, argc, argv, verbose))) {
+
+        if ((exit_status = readOptions(config, argc, argv, verbose, cert_usage, name, org, ou))) {
             return exit_status - 1;
+        }
+
+        if ( config.tls_cert_filename.empty() ) {
+            std::cerr << "You must set at least one mandatory environment variables to create certificates: " << std::endl;
+            std::cerr << "\tEPICS_PVA_TLS_KEYCHAIN\t\t\tSet name and location of client certificate file (mandatory for clients)" << std::endl;
+            std::cerr << "\tEPICS_PVAS_TLS_KEYCHAIN\t\t\tSet name and location of server certificate file (mandatory for server)" << std::endl;
+            std::cerr << "\tEPICS_PVA_TLS_KEYCHAIN_PWD_FILE\t\tSet name and location of client certificate password file (optional)" << std::endl;
+            std::cerr << "\tEPICS_PVAS_TLS_KEYCHAIN_PWD_FILE\tSet name and location of server certificate password file (optional)" << std::endl;
+            std::cerr << "\tEPICS_PVA_TLS_PKEY\t\t\tSet name and location of client private key file (optional)" << std::endl;
+            std::cerr << "\tEPICS_PVAS_TLS_PKEY\t\t\tSet name and location of server private key file (optional)" << std::endl;
+            std::cerr << "\tEPICS_PVA_TLS_PKEY_PWD_FILE\t\tSet name and location of client private key password file (optional)" << std::endl;
+            std::cerr << "\tEPICS_PVAS_TLS_PKEY_PWD_FILE\t\tSet name and location of server private key password file (optional)" << std::endl;
+            return 10;
         }
         if (verbose) logger_level_set("pvxs.certs.auth.std*", pvxs::Level::Info);
 
@@ -204,7 +284,17 @@ int main(int argc, char *argv[]) {
         AuthStd authenticator;
 
         // Try to retrieve credentials from the authenticator
+        if ( !name.empty() ) {
+            config.use_process_name = true;
+            config.process_name = name;
+        }
+        if ( !org.empty() ) {
+            config.device_name = org;
+        }
         if (auto credentials = authenticator.getCredentials(config)) {
+            if ( !ou.empty() ) {
+                credentials->organization_unit = ou;
+            }
             log_debug_printf(auths, "Credentials retrieved for: %s authenticator\n", authenticator.type_.c_str());
             retrieved_credentials = true;
 
@@ -224,7 +314,7 @@ int main(int argc, char *argv[]) {
 
             // Create a certificate creation request using the credentials and
             // key pair
-            auto cert_creation_request = authenticator.createCertCreationRequest(credentials, key_pair, pvxs::ssl::kForClient);
+            auto cert_creation_request = authenticator.createCertCreationRequest(credentials, key_pair, cert_usage);
 
             log_debug_printf(auths, "CCR created for: %s authentication type\n", authenticator.type_.c_str());
 
@@ -239,12 +329,18 @@ int main(int argc, char *argv[]) {
                 // Attempt to write the certificate and private key
                 // to a cert file protected by the configured password
                 auto file_factory =
-                    CertFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr, nullptr, "certificate", p12_pem_string);
+                    CertFileFactory::create(
+                      (cert_usage ? config.tls_cert_filename : config.tls_cert_filename), config.tls_cert_password, key_pair, nullptr, nullptr, "certificate", p12_pem_string);
                 file_factory->writeCertFile();
 
                 log_info_printf(auths, "New Cert File created using %s: %s\n", METHOD_STRING(authenticator.type_).c_str(), config.tls_cert_filename.c_str());
                 std::cout << "Certificate created with " << ((authenticator.type_ == PVXS_DEFAULT_AUTH_TYPE) ? "basic" : authenticator.type_)
-                          << " credentials and stored in:" << config.tls_cert_filename << "\n";
+                          << " credentials and stored in:" << config.tls_cert_filename
+                          << (config.tls_private_key_filename.empty() or config.tls_private_key_filename == config.tls_cert_filename ? "" : " and " + config.tls_private_key_filename)
+                          << "\n\tNAME:\t" << credentials->name
+                          << "\n\tORG:\t" << credentials->organization
+                          << "\n\tOU:\t" << credentials->organization_unit
+                          << "\n";
 
                 // Create the root certificate if it is not already there so
                 // that the user can trust it

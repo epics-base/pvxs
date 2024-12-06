@@ -46,6 +46,11 @@ class ConfigStd : public pvxs::client::Config {
      */
     std::string device_name;
 
+    std::string tls_srv_cert_filename;
+    std::string tls_srv_private_key_filename ;
+    std::string tls_srv_cert_password;
+    std::string tls_srv_private_key_password ;
+
     /**
      * @brief Value will be used as the process name when an EPICS agent
      * is determining basic credentials instead of the logged-on

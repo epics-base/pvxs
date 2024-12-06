@@ -222,18 +222,17 @@ Quick Start Guide
 
         #### Set key paths (keys will be created here if they don't already exist)
         # An EPICS client agent key if required
-
-        export EPICS_PVA_TLS_KEY=~/.ssh/clientkey.p12
+        export EPICS_PVA_TLS_PKEY=~/.epics/client.p12
 
         # An EPICS server agent key if required
-
-        export EPICS_PVAS_TLS_KEY=~/.ssh/serverkey.p12
+        export EPICS_PVAS_TLS_PKEY=~/.epics/server.p12
 
         #### Set certificate paths (certificates will be created here if they don't already exist)
         # An EPICS client agent certificate if required
-        export EPICS_PVA_TLS_KEYCHAIN=~/.epics/client.p12
+        export EPICS_PVA_TLS_KEYCHAIN=~/.epics/client.pem
+
         # An EPICS server agent certificate if required
-        export EPICS_PVAS_TLS_KEYCHAIN=~/.epics/server.p12
+        export EPICS_PVAS_TLS_KEYCHAIN=~/.epics/server.pem
 
 8. Create Certificates
 ^^^^^^^^^^^^^^^^^^^^
@@ -243,12 +242,12 @@ Quick Start Guide
         #### 1. Create a new client private key at location specified by EPICS_PVA_TLS_KEY if it does not already exist
         #### 2. Create client certificate at location specified by EPICS_PVA_TLS_KEYCHAIN
 
-        ./pvxs/bin/*/authnstd -C client
+        ./pvxs/bin/*/authnstd -u client
 
         #### 1. Create a new server private key at location specified by EPICS_PVAS_TLS_KEY if it does not already exist
         #### 2. Create server certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
 
-        ./pvxs/bin/*/authnstd -C server
+        ./pvxs/bin/*/authnstd -u server
 
 
 .. _transport_layer_security:
@@ -1047,17 +1046,27 @@ private key, and password file locations.
 
     .. code-block:: sh
 
-        authnstd <opts>
+        Usage: authnstd <opts>
 
-        Options:
-        -h show help
-        -v verbose output
-        -t {client | server}     Client or server certificate certificate type
-        -C                       Create a certificate and exit
-        -D                       Start authentication daemon to monitor certificate files and certificate status.
-                                Will attempt to install a new certificate if the existing one expires,
-                                or if the certificate file is deleted, or if the certificate is REVOKED.
+          -v         Make more noise.
+          -h         Show this help message and exit
+          -d         Shorthand for $PVXS_LOG="pvxs.*=DEBUG".  Make a lot of noise.
+          -D         Run in Daemon mode.  Monitors and updates certs as needed
+          -V         Show version and exit
+          -u <use>   Usage. client, server, or gateway
+          -N <name>  Name override the CN subject field
+          -O <name>  Org override the O subject field
+          -o <name>  Override the OU subject field
 
+        ENVIRONMENT VARIABLES: at least one mandatory variable must be set
+            EPICS_PVA_TLS_KEYCHAIN              Set name and location of client certificate file (mandatory for clients)
+            EPICS_PVAS_TLS_KEYCHAIN             Set name and location of server certificate file (mandatory for server)
+            EPICS_PVA_TLS_KEYCHAIN_PWD_FILE     Set name and location of client certificate password file (optional)
+            EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE    Set name and location of server certificate password file (optional)
+            EPICS_PVA_TLS_PKEY                  Set name and location of client private key file (optional)
+            EPICS_PVAS_TLS_PKEY                 Set name and location of server private key file (optional)
+            EPICS_PVA_TLS_PKEY_PWD_FILE         Set name and location of client private key password file (optional)
+            EPICS_PVAS_TLS_PKEY_PWD_FILE        Set name and location of server private key password file (optional)
 
 **Environment Variables for authnstd**
 

@@ -37,6 +37,26 @@ void ConfigStd::fromStdEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_AUTH_STD_USE_PROCESS_NAME"})) {
         use_process_name = parseTo<bool>(pickone.val);
     }
+
+    // EPICS_PVAS_TLS_KEYCHAIN
+    if (pickone({"EPICS_PVAS_TLS_KEYCHAIN"})) {
+        ensureDirectoryExists(tls_srv_cert_filename = tls_srv_private_key_filename = pickone.val);
+    }
+
+    // EPICS_PVAS_TLS_KEYCHAIN
+    if (pickone({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"})) {
+        tls_srv_cert_password = tls_srv_private_key_password = getFileContents(pickone.val);
+    }
+
+    // EPICS_PVAS_TLS_PKEY
+    if (pickone({"EPICS_PVAS_TLS_PKEY"})) {
+        ensureDirectoryExists(tls_srv_private_key_filename = pickone.val);
+    }
+
+    // EPICS_PVAS_TLS_PKEY_PWD_FILE
+    if (pickone({"EPICS_PVAS_TLS_PKEY_PWD_FILE"})) {
+        tls_srv_private_key_password = getFileContents(pickone.val);
+    }
 }
 
 } // certs
