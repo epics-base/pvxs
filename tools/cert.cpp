@@ -4,12 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include <atomic>
-#include <cstring>
-#include <fstream>
 #include <iostream>
 #include <list>
-#include <sstream>
 #include <string>
 
 #include <epicsGetopt.h>
@@ -19,12 +15,13 @@
 #include <pvxs/client.h>
 #include <pvxs/log.h>
 
-#include "certfactory.h"
-#include "certstatusmanager.h"
-#include "pemfilefactory.h"
-#include "p12filefactory.h"
-#include "certfilefactory.h"
 #include <CLI/CLI.hpp>
+
+#include "certfactory.h"
+#include "certfilefactory.h"
+#include "certstatusmanager.h"
+#include "p12filefactory.h"
+#include "pemfilefactory.h"
 
 using namespace pvxs;
 
@@ -58,7 +55,11 @@ Value::Fmt::format_t stringToFormat(const std::string& formatStr) {
 
 enum CertAction { STATUS, INSTALL, APPROVE, DENY, REVOKE };
 std::string actionToString(CertAction& action) {
-    return (action == STATUS ? "Get Status" : action == INSTALL ? "Install Root Certificate" : action == APPROVE ? "Approve" : action == REVOKE ? "Revoke" : "Deny");
+    return (action == STATUS    ? "Get Status"
+            : action == INSTALL ? "Install Root Certificate"
+            : action == APPROVE ? "Approve"
+            : action == REVOKE  ? "Revoke"
+                                : "Deny");
 }
 
 int main(int argc, char* argv[]) {
@@ -80,6 +81,10 @@ int main(int argc, char* argv[]) {
         CertAction action{STATUS};
         bool install{false}, approve{false}, revoke{false}, deny{false};
 
+        // Add a positional argument
+        std::string issuer_serial_string;
+        app.add_option("cert_id", issuer_serial_string, "Certificate ID")->required(false);
+
         // Define options
         app.add_option("-w,--timeout", timeout, "Operation timeout in seconds")->default_val(5.0);
         app.add_flag("-v,--verbose", verbose, "Make more noise");
@@ -87,8 +92,7 @@ int main(int argc, char* argv[]) {
         app.add_option("-f,--file", cert_file, "The certificate file to read if no Certificate ID specified");
         app.add_flag("-p,--password", password_flag, "Prompt for password");
         app.add_flag("-V,--version", show_version, "Print version and exit.");
-        app.add_option("-#,--limit", arrLimit, "Maximum number of elements to print for each array field. Set to zero 0 for unlimited. Default: 20")
-           ->default_val(20);
+        app.add_option("-#,--limit", arrLimit, "Maximum number of elements to print for each array field. Set to zero 0 for unlimited")->default_val(20);
         app.add_option("-F,--format", format_str, "Output format mode: delta, tree");
 
         // Action flags in mutually exclusive group
@@ -97,10 +101,6 @@ int main(int argc, char* argv[]) {
         action_group->add_flag("-A,--approve", approve, "APPROVE the certificate (ADMIN ONLY)");
         action_group->add_flag("-R,--revoke", revoke, "REVOKE the certificate (ADMIN ONLY)");
         action_group->add_flag("-D,--deny", deny, "DENY the pending certificate (ADMIN ONLY)");
-
-        // Add a positional argument
-        std::string issuer_serial_string;
-        app.add_option("cert_id", issuer_serial_string, "Certificate ID")->required(false);
 
         CLI11_PARSE(app, argc, argv);
 
@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
             return 2;
         }
 
-        if ( !format_str.empty() ) {
+        if (!format_str.empty()) {
             format = stringToFormat(format_str);
         }
 
@@ -171,27 +171,28 @@ int main(int argc, char* argv[]) {
         }
 
         try {
-            if ( action != INSTALL)
-                std::cout << actionToString(action) << " ==> " << ((!root_id.empty()) ? root_id: cert_id) << "\n";
+            if (action != INSTALL) std::cout << actionToString(action) << " ==> " << ((!root_id.empty()) ? root_id : cert_id) << "\n";
             switch (action) {
                 case INSTALL: {
                     ops.push_back(ctxt.get(root_id)
-                                    .result([root_id, &done](client::Result&& result) {
-                                        Indented I(std::cout);
-                                        auto value = result();
-                                        uint64_t serial = value["serial"].as<uint64_t>();
-                                        auto name = value["name"].as<std::string>();
-                                        auto issuer = value["issuer"].as<std::string>();
-                                        auto org = value["org"].as<std::string>();
-                                        auto org_unit = value["org_unit"].as<std::string>();
-                                        auto pem_string = value["cert"].as<std::string>();
+                                      .result([root_id, &done](client::Result&& result) {
+                                          Indented I(std::cout);
+                                          auto value = result();
+                                          uint64_t serial = value["serial"].as<uint64_t>();
+                                          auto name = value["name"].as<std::string>();
+                                          auto issuer = value["issuer"].as<std::string>();
+                                          auto org = value["org"].as<std::string>();
+                                          auto org_unit = value["org_unit"].as<std::string>();
+                                          auto pem_string = value["cert"].as<std::string>();
 
-                                        std::cout << "Installing Root CA Certificate" << "\n\tNAME:\t\t\t" << name << "\n\tORGANIZATION:\t\t" << org << "\n\tORGANIZATIONAL UNIT:\t" << org_unit << "\n\tISSUER:\t\t\t" << issuer << "\n\tSERIAL:\t\t\t" << serial << std::endl;
+                                          std::cout << "Installing Root CA Certificate"
+                                                    << "\n\tNAME:\t\t\t" << name << "\n\tORGANIZATION:\t\t" << org << "\n\tORGANIZATIONAL UNIT:\t" << org_unit
+                                                    << "\n\tISSUER:\t\t\t" << issuer << "\n\tSERIAL:\t\t\t" << serial << std::endl;
 
-                                        certs::PEMFileFactory::createRootPemFile(pem_string, true);
-                                        done.signal();
-                                    })
-                                    .exec());
+                                          certs::PEMFileFactory::createRootPemFile(pem_string, true);
+                                          done.signal();
+                                      })
+                                      .exec());
                 } break;
                 case STATUS: {
                     ops.push_back(ctxt.get(cert_id)
@@ -234,7 +235,7 @@ int main(int argc, char* argv[]) {
                 } break;
             }
         } catch (std::exception& e) {
-            log_err_printf(certslog, "Unable to %s ==> %s %s", actionToString(action).c_str(), cert_id.c_str(),  "\n");
+            log_err_printf(certslog, "Unable to %s ==> %s %s", actionToString(action).c_str(), cert_id.c_str(), "\n");
             ctxt.close();
             return 3;
         }
@@ -255,12 +256,11 @@ int main(int argc, char* argv[]) {
             return 0;
 
         } else {
-            if (verbose)
-                log_err_printf(certslog, "Interrupted.%s", "\n");
+            if (verbose) log_err_printf(certslog, "Interrupted.%s", "\n");
             return 5;
         }
     } catch (std::exception& e) {
-        log_err_printf(certslog, "Error: %s%s", e.what(),  "\n");
+        log_err_printf(certslog, "Error: %s%s", e.what(), "\n");
         return 6;
     }
 }
