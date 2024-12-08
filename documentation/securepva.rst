@@ -117,18 +117,6 @@ Quick Start Guide
         # PVXS_ENABLE_LDAP_AUTH = YES
         #EOF
 
-        # find paths to libevent and openssl
-
-        pkg-config --cflags openssl libevent
-        pkg-config --libs openssl libevent
-
-        # Set paths to libevent and openssl (if required)
-
-        export C_INCLUDE_PATH=/<path_to_libevent>/libevent/2.1.12_1/include:/<path_to_openssl>/openssl@3/3.2.1/include
-        export CPLUS_INCLUDE_PATH=/<path_to_libevent>/libevent/2.1.12_1/include:/<path_to_openssl>/openssl@3/3.2.1/include
-        export LIBRARY_PATH=/<path_to_libevent>/libevent/2.1.12_1/lib:/<path_to_openssl>/openssl@3/3.2.1/lib
-
-
 4. Build PVXS
 ^^^^^^^^^^^^
 
