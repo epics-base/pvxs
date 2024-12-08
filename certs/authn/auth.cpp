@@ -80,12 +80,12 @@ std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCr
 
 std::shared_ptr<KeyPair> Auth::createKeyPair(const ConfigCommon &config) {
     // Create a key pair
-    const auto key_pair(CertFileFactory::createKeyPair());
+    const auto key_pair(IdFileFactory::createKeyPair());
 
     // Create PKCS#12 file containing private key
-    CertFileFactory::create(config.tls_private_key_filename,
-                            config.tls_private_key_password,
-                            key_pair)->writeIdentityFile();
+    IdFileFactory::create(config.tls_private_key_filename,
+                          config.tls_private_key_password,
+                          key_pair)->writeIdentityFile();
     return key_pair;
 }
 }  // namespace certs

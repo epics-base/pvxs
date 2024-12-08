@@ -311,7 +311,7 @@ SSLContext ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const im
         auto key_password = conf.tls_private_key_password.empty() ? password : conf.tls_private_key_password;
 
         // get the key and certificate from the file or files
-        auto cert_data = certs::CertFileFactory::createReader(filename, password, key_filename, key_password)->getCertDataFromFile();
+        auto cert_data = certs::IdFileFactory::createReader(filename, password, key_filename, key_password)->getCertDataFromFile();
         if (cert_data.cert) {
             // some early sanity checks
             verifyKeyUsage(cert_data.cert, ssl_client);

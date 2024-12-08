@@ -1044,7 +1044,7 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
     try {
         if (!config.ca_private_key_filename.empty()) {
             // Check if the CA key exists
-            key_pair = CertFileFactory::create(config.ca_private_key_filename, config.ca_private_key_password)->getKeyFromFile();
+            key_pair = IdFileFactory::create(config.ca_private_key_filename, config.ca_private_key_password)->getKeyFromFile();
         }
     } catch (std::exception &e) {
         // Error getting key pair
@@ -1063,7 +1063,7 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
     // Get certificate
     try {
         // Check if the CA certificates exist
-        auto cert_data = CertFileFactory::create(config.ca_cert_filename, config.ca_cert_password)->getCertDataFromFile();
+        auto cert_data = IdFileFactory::create(config.ca_cert_filename, config.ca_cert_password)->getCertDataFromFile();
         if (!key_pair) key_pair = cert_data.key_pair;
 
         // If we have a key
@@ -1080,14 +1080,14 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
             throw(std::runtime_error("Certificate file does not contain a certificate: "));
         }
         // We don't have keys so create a key in a combined cert and key file
-        key_pair = CertFileFactory::createKeyPair();
+        key_pair = IdFileFactory::createKeyPair();
         throw(std::runtime_error("Certificate file does not contain a certificate: "));
     } catch (std::exception &e) {
         // Error getting certs file, or certs file invalid
         // Make a new CA Certificate
         try {
             log_warn_printf(pvafms, "%s\n", e.what());
-            if (!key_pair) key_pair = CertFileFactory::createKeyPair();
+            if (!key_pair) key_pair = IdFileFactory::createKeyPair();
 
             auto cert_data = createCaCertificate(config, ca_db, key_pair);
             // all is ok
@@ -1127,7 +1127,7 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
     try {
         if (!config.tls_private_key_filename.empty()) {
             // Check if the server key pair exists
-            key_pair = CertFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password)->getKeyFromFile();
+            key_pair = IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password)->getKeyFromFile();
         }
     } catch (std::exception &e) {
         // Error getting key pair
@@ -1146,7 +1146,7 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
     // Get certificate
     try {
         // Check if the server certificates exist
-        auto cert_data = CertFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getCertDataFromFile();
+        auto cert_data = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getCertDataFromFile();
         if (!key_pair) key_pair = cert_data.key_pair;
 
         // If we have a key
@@ -1160,14 +1160,14 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
             throw(std::runtime_error("Certificate file does not contain a certificate: "));
         }
         // We don't have keys so create a key and a combined cert and key file
-        key_pair = CertFileFactory::createKeyPair();
+        key_pair = IdFileFactory::createKeyPair();
         throw(std::runtime_error("Certificate file does not contain a private key: "));
     } catch (std::exception &e) {
         // Error getting certs file, or certs file invalid
         // Make a new server Certificate
         try {
             log_warn_printf(pvacms, "%s\n", e.what());
-            if (!key_pair) key_pair = CertFileFactory::createKeyPair();
+            if (!key_pair) key_pair = IdFileFactory::createKeyPair();
 
             createServerCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain, key_pair);
             // All is ok
@@ -1179,12 +1179,12 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
 
 std::shared_ptr<KeyPair> createCaKey(ConfigCms &config) {
     // Create a key pair
-    const auto key_pair = CertFileFactory::createKeyPair();
+    const auto key_pair = IdFileFactory::createKeyPair();
 
     // Create key file containing private key
-    CertFileFactory::create(config.ca_private_key_filename,
-                            config.ca_private_key_password,
-                            key_pair)->writeIdentityFile();
+    IdFileFactory::create(config.ca_private_key_filename,
+                          config.ca_private_key_password,
+                          key_pair)->writeIdentityFile();
     return key_pair;
 }
 
@@ -1214,8 +1214,8 @@ CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
     // Create PKCS#12 file containing certs, private key and chain
-    auto cert_file_factory = CertFileFactory::create(config.ca_cert_filename, config.ca_cert_password, key_pair, nullptr, nullptr, "certificate", pem_string,
-                                                     !config.ca_private_key_filename.empty());
+    auto cert_file_factory = IdFileFactory::create(config.ca_cert_filename, config.ca_cert_password, key_pair, nullptr, nullptr, "certificate", pem_string,
+                                                   !config.ca_private_key_filename.empty());
 
     cert_file_factory->writeIdentityFile();
 
@@ -1233,12 +1233,12 @@ CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<
  */
 std::shared_ptr<KeyPair> createServerKey(const ConfigCms &config) {
     // Create a key pair
-    const auto key_pair(CertFileFactory::createKeyPair());
+    const auto key_pair(IdFileFactory::createKeyPair());
 
     // Create PKCS#12 file containing private key
-    CertFileFactory::create(config.tls_private_key_filename,
-                            config.tls_private_key_password,
-                            key_pair)->writeIdentityFile();
+    IdFileFactory::create(config.tls_private_key_filename,
+                          config.tls_private_key_password,
+                          key_pair)->writeIdentityFile();
     return key_pair;
 }
 
@@ -1267,8 +1267,8 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
 
     // Create PKCS#12 file containing certs, private key and null chain
     auto pem_string = CertFactory::certAndCasToPemString(cert, certificate_factory.certificate_chain_.get());
-    auto cert_file_factory = CertFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr, nullptr,
-                                                     "PVACMS server certificate", pem_string, !config.tls_private_key_filename.empty());
+    auto cert_file_factory = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr, nullptr,
+                                                   "PVACMS server certificate", pem_string, !config.tls_private_key_filename.empty());
 
     cert_file_factory->writeIdentityFile();
 }

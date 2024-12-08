@@ -301,7 +301,7 @@ int main(int argc, char *argv[]) {
             // Get key pair
             try {
                 // Check if the key pair exists
-                key_pair = CertFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password)->getKeyFromFile();
+                key_pair = IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password)->getKeyFromFile();
             } catch (std::exception &e) {
                 // Make a new key pair file
                 try {
@@ -329,7 +329,7 @@ int main(int argc, char *argv[]) {
                 // Attempt to write the certificate and private key
                 // to a cert file protected by the configured password
                 auto file_factory =
-                    CertFileFactory::create(
+                    IdFileFactory::create(
                       (cert_usage ? config.tls_cert_filename : config.tls_cert_filename), config.tls_cert_password, key_pair, nullptr, nullptr, "certificate", p12_pem_string);
                 file_factory->writeIdentityFile();
 

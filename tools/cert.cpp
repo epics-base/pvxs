@@ -156,7 +156,7 @@ int main(int argc, char* argv[]) {
 
         if (!cert_file.empty()) {
             try {
-                auto cert_data = certs::CertFileFactory::create(cert_file, password)->getCertDataFromFile();
+                auto cert_data = certs::IdFileFactory::create(cert_file, password)->getCertDataFromFile();
                 cert_id = certs::CertStatusManager::getStatusPvFromCert(cert_data.cert);
             } catch (std::exception& e) {
                 log_err_printf(certslog, "Unable to get cert from cert file: %s\n", e.what());

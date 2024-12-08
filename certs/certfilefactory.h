@@ -18,7 +18,7 @@ namespace certs {
 // Forward declarations
 class P12FileFactory;
 class PEMFileFactory;
-class CertFileFactory;
+class IdFileFactory;
 
 // C++11 implementation of make_unique
 template <typename T, typename... Args>
@@ -55,9 +55,9 @@ enum CertAvailability {
     AVAILABLE,
 };
 
-typedef std::unique_ptr<CertFileFactory> cert_factory_ptr;
+typedef std::unique_ptr<IdFileFactory> cert_factory_ptr;
 
-class CertFileFactory {
+class IdFileFactory {
    public:
     /**
      * @brief Creates a new CertFileFactory object.
@@ -78,7 +78,7 @@ class CertFileFactory {
         return cert_file_factory;
     }
 
-    virtual ~CertFileFactory() = default;
+    virtual ~IdFileFactory() = default;
 
     /**
      * @brief Writes the credentials file.
@@ -123,8 +123,8 @@ class CertFileFactory {
     CertData getCertData(const std::shared_ptr<KeyPair>& key_pair);
 
    protected:
-    CertFileFactory(const std::string& filename, const std::string &password="", const std::shared_ptr<KeyPair> &key_pair=nullptr, X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
-                    const std::string& pem_string = "", bool certs_only = false)
+    IdFileFactory(const std::string& filename, const std::string &password="", const std::shared_ptr<KeyPair> &key_pair=nullptr, X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
+                  const std::string& pem_string = "", bool certs_only = false)
         : filename_(filename), password_(password), key_pair_(key_pair), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), usage_(usage), pem_string_(pem_string), certs_only_(certs_only) {}
 
     const std::string filename_{};
@@ -135,7 +135,7 @@ class CertFileFactory {
     const std::string usage_{};
     const std::string pem_string_{};
     const bool certs_only_{false};
-    std::unique_ptr<CertFileFactory> key_file_;
+    std::unique_ptr<IdFileFactory> key_file_;
 
     static void backupFileIfExists(const std::string& filename);
     static void chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cert_ptr);

@@ -33,19 +33,19 @@ namespace certs {
  *
  * @brief Manages certificates and associated operations.
  */
-class P12FileFactory : public CertFileFactory {
+class P12FileFactory : public IdFileFactory {
    public:
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, bool certs_only = false)
-        : CertFileFactory(filename, password, key_pair, nullptr, nullptr, "private key", "", certs_only), p12_ptr_(nullptr) {}
+        : IdFileFactory(filename, password, key_pair, nullptr, nullptr, "private key", "", certs_only), p12_ptr_(nullptr) {}
 
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr, stack_st_X509 *certs_ptr, bool certs_only = false)
-        : CertFileFactory(filename, password, key_pair, cert_ptr, certs_ptr, "certificate", "", certs_only), p12_ptr_(nullptr) {}
+        : IdFileFactory(filename, password, key_pair, cert_ptr, certs_ptr, "certificate", "", certs_only), p12_ptr_(nullptr) {}
 
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string, bool certs_only = false)
-        : CertFileFactory(filename, password, key_pair, nullptr, nullptr, "certificate", pem_string, certs_only), p12_ptr_(nullptr) {}
+        : IdFileFactory(filename, password, key_pair, nullptr, nullptr, "certificate", pem_string, certs_only), p12_ptr_(nullptr) {}
 
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p12_ptr, bool certs_only = false)
-        : CertFileFactory(filename, password, key_pair, nullptr, nullptr, "certificate", "", certs_only), p12_ptr_(p12_ptr) {}
+        : IdFileFactory(filename, password, key_pair, nullptr, nullptr, "certificate", "", certs_only), p12_ptr_(p12_ptr) {}
 
     void writePKCS12File();
 

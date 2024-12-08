@@ -25,7 +25,7 @@ DEFINE_LOGGER(certs, "pvxs.certs.file");
  *
  * @param filename The filename and path of the file to backup.
  */
-void CertFileFactory::backupFileIfExists(const std::string& filename) {
+void IdFileFactory::backupFileIfExists(const std::string& filename) {
     std::fstream file(filename, std::ios_base::in);
     if (!file.is_open())
         // File does not exist, return
@@ -62,7 +62,7 @@ void CertFileFactory::backupFileIfExists(const std::string& filename) {
  * @param chain The certificate chain reference that will be allocated and populated.
  * @param root_cert_ptr The root certificate to add to the chain.
  */
-void CertFileFactory::chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cert_ptr) {
+void IdFileFactory::chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cert_ptr) {
     if (!root_cert_ptr) {
         throw std::runtime_error("Root certificate pointer is null");
     }
@@ -91,7 +91,7 @@ void CertFileFactory::chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_c
  * @param overwrite Whether to overwrite the file if it already exists.
  * @return true if the file was created, false if it already exists.
  */
-bool CertFileFactory::writeRootPemFile(const std::string& pem_string, const bool overwrite) { return PEMFileFactory::createRootPemFile(pem_string, overwrite); }
+bool IdFileFactory::writeRootPemFile(const std::string& pem_string, const bool overwrite) { return PEMFileFactory::createRootPemFile(pem_string, overwrite); }
 
 /**
  * @brief Gets the certificate data.
@@ -101,7 +101,7 @@ bool CertFileFactory::writeRootPemFile(const std::string& pem_string, const bool
  * @param key_pair The key pair to include in the certificate data.
  * @return The certificate data.
  */
-CertData CertFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) {
+CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) {
     if (pem_string_.empty() && !cert_ptr_) {
         throw std::runtime_error("No certificate data available");
     }
@@ -159,9 +159,9 @@ CertData CertFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) 
     return CertData(cert, chain, key_pair);
 }
 
-cert_factory_ptr CertFileFactory::create(const std::string& filename, const std::string& password, const std::shared_ptr<KeyPair>& key_pair,
-                                                         X509* cert_ptr, STACK_OF(X509) * certs_ptr, const std::string& usage, const std::string& pem_string,
-                                                         bool certs_only) {
+cert_factory_ptr IdFileFactory::create(const std::string& filename, const std::string& password, const std::shared_ptr<KeyPair>& key_pair,
+                                       X509* cert_ptr, STACK_OF(X509) * certs_ptr, const std::string& usage, const std::string& pem_string,
+                                       bool certs_only) {
     std::string ext = getExtension(filename);
     if (ext == "p12" || ext == "pfx") {
         if (certs_only) {
@@ -191,7 +191,7 @@ cert_factory_ptr CertFileFactory::create(const std::string& filename, const std:
  *
  * @return a unique pointer to a managed KeyPair object.
  */
-std::shared_ptr<KeyPair> CertFileFactory::createKeyPair() {
+std::shared_ptr<KeyPair> IdFileFactory::createKeyPair() {
     // Create a new KeyPair object
     auto key_pair = std::make_shared<KeyPair>();
 
