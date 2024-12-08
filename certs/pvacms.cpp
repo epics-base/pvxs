@@ -588,7 +588,7 @@ void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory) {
     auto skid_dup_status = sqlite3_step(sql_statement) == SQLITE_ROW && sqlite3_column_int(sql_statement, 0) > 0;
     sqlite3_finalize(sql_statement);
     if (skid_dup_status) {
-        throw std::runtime_error("Duplicate Certificate Subject Key Identifier.  Use a distinct Key-Pair for each certificate");
+        throw std::runtime_error("Duplicate Certificate Subject Key Identifier.  Best-practices require use of a distinct Key-Pair for each certificate");
     }
 }
 
