@@ -1181,8 +1181,10 @@ std::shared_ptr<KeyPair> createCaKey(ConfigCms &config) {
     // Create a key pair
     const auto key_pair = CertFileFactory::createKeyPair();
 
-    // Create PKCS#12 file containing private key
-    CertFileFactory::create(config.ca_private_key_filename, config.ca_private_key_password, key_pair)->writeCertFile();
+    // Create key file containing private key
+    CertFileFactory::create(config.ca_private_key_filename,
+                            config.ca_private_key_password,
+                            key_pair)->writeIdentityFile();
     return key_pair;
 }
 
@@ -1215,7 +1217,7 @@ CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<
     auto cert_file_factory = CertFileFactory::create(config.ca_cert_filename, config.ca_cert_password, key_pair, nullptr, nullptr, "certificate", pem_string,
                                                      !config.ca_private_key_filename.empty());
 
-    cert_file_factory->writeCertFile();
+    cert_file_factory->writeIdentityFile();
 
     // Create the root certificate (overwrite existing)
     // The user must re-trust it if it already existed
@@ -1234,7 +1236,9 @@ std::shared_ptr<KeyPair> createServerKey(const ConfigCms &config) {
     const auto key_pair(CertFileFactory::createKeyPair());
 
     // Create PKCS#12 file containing private key
-    CertFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password, key_pair)->writeCertFile();
+    CertFileFactory::create(config.tls_private_key_filename,
+                            config.tls_private_key_password,
+                            key_pair)->writeIdentityFile();
     return key_pair;
 }
 
@@ -1266,7 +1270,7 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
     auto cert_file_factory = CertFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr, nullptr,
                                                      "PVACMS server certificate", pem_string, !config.tls_private_key_filename.empty());
 
-    cert_file_factory->writeCertFile();
+    cert_file_factory->writeIdentityFile();
 }
 
 /**

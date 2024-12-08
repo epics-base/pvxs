@@ -19,7 +19,7 @@ class PEMFileFactory : public CertFileFactory {
     std::shared_ptr<KeyPair> getKeyFromFile() override;
     CertData getCertDataFromFile() override;
 
-    void writeCertFile() override { writePEMFile(); }
+    void writeIdentityFile() override { writePEMFile(); }
     void writePEMFile();
   private:
     const std::string password_{};

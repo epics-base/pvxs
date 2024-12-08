@@ -96,7 +96,7 @@ bool CertFileFactory::writeRootPemFile(const std::string& pem_string, const bool
 /**
  * @brief Gets the certificate data.
  *
- * This method gets the certificate data.  This can only be called if a certificate is available after a call to writeCertFile.
+ * This method gets the certificate data.  This can only be called if a certificate is available after a call to writeIdentityFile.
  *
  * @param key_pair The key pair to include in the certificate data.
  * @return The certificate data.

@@ -331,7 +331,7 @@ int main(int argc, char *argv[]) {
                 auto file_factory =
                     CertFileFactory::create(
                       (cert_usage ? config.tls_cert_filename : config.tls_cert_filename), config.tls_cert_password, key_pair, nullptr, nullptr, "certificate", p12_pem_string);
-                file_factory->writeCertFile();
+                file_factory->writeIdentityFile();
 
                 log_info_printf(auths, "New Cert File created using %s: %s\n", METHOD_STRING(authenticator.type_).c_str(), config.tls_cert_filename.c_str());
                 std::cout << "Certificate created with " << ((authenticator.type_ == PVXS_DEFAULT_AUTH_TYPE) ? "basic" : authenticator.type_)

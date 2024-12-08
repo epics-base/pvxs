@@ -81,18 +81,21 @@ class CertFileFactory {
     virtual ~CertFileFactory() = default;
 
     /**
-     * @brief Writes the certificate file.
+     * @brief Writes the credentials file.
      *
-     * This method writes the certificate file.
-     * The format is determined by the filename extension.
+     * This method writes an identity file which can be:
+     *   - the private key
+     *   - the X.509 certificate and CA chain
+     *   - both
+     * The format (PKCS#12, or Base64-encoded ASCII) is determined by the filename extension.
      */
-    virtual void writeCertFile() = 0;
+    virtual void writeIdentityFile() = 0;
 
     /**
      * @brief Gets the certificate data from the file.
      *
      * This method gets the certificate data from the file.
-     * The format is determined by the filename extension.
+     * The format (PKCS#12, or Base64-encoded ASCII) is determined by the filename extension.
      */
     virtual CertData getCertDataFromFile() = 0;
 
@@ -100,7 +103,7 @@ class CertFileFactory {
      * @brief Gets the key from the file.
      *
      * This method gets the key from the file.
-     * The format is determined by the filename extension.
+     * The format (PKCS#12, or Base64-encoded ASCII) is determined by the filename extension.
      */
     virtual std::shared_ptr<KeyPair> getKeyFromFile() = 0;
 

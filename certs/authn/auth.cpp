@@ -83,7 +83,9 @@ std::shared_ptr<KeyPair> Auth::createKeyPair(const ConfigCommon &config) {
     const auto key_pair(CertFileFactory::createKeyPair());
 
     // Create PKCS#12 file containing private key
-    CertFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password, key_pair)->writeCertFile();
+    CertFileFactory::create(config.tls_private_key_filename,
+                            config.tls_private_key_password,
+                            key_pair)->writeIdentityFile();
     return key_pair;
 }
 }  // namespace certs

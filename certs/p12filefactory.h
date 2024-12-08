@@ -49,7 +49,7 @@ class P12FileFactory : public CertFileFactory {
 
     void writePKCS12File();
 
-    void writeCertFile() override { writePKCS12File(); }
+    void writeIdentityFile() override { writePKCS12File(); }
 
     CertData getCertDataFromFile() override ;
     std::shared_ptr<KeyPair> getKeyFromFile() override;
