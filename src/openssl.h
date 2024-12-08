@@ -81,6 +81,7 @@ struct PeerCredentials;
 namespace ossl {
 
 PVXS_API int ossl_verify(int preverify_ok, X509_STORE_CTX* x509_ctx);
+PVXS_API void ensureTrusted(const ossl_ptr<X509> &ca_cert, const ossl_ptr<STACK_OF(X509)> &CAs);
 
 struct PVXS_API SSLError : public std::runtime_error {
     explicit SSLError(const std::string& msg);

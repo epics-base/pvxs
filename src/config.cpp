@@ -466,6 +466,7 @@ namespace server {
 
 void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
     PickOne pickone{defs, useenv};
+    PickOne pick_another_one{defs, useenv};
 
     if (pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
         try {
@@ -510,11 +511,11 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
         std::string password_filename;
         if (pickone.name == "EPICS_PVAS_TLS_KEYCHAIN") {
-            pickone({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
+            pick_another_one({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"});
+            password_filename = pick_another_one.val;
         } else {
-            pickone({"EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
+            pick_another_one({"EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"});
+            password_filename = pick_another_one.val;
         }
         self.ensureDirectoryExists(password_filename);
         try {
@@ -530,11 +531,11 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         // EPICS_PVAS_TLS_PKEY_PWD_FILE
         std::string password_filename;
         if (pickone.name == "EPICS_PVAS_TLS_PKEY") {
-            pickone({"EPICS_PVAS_TLS_PKEY_PWD_FILE"});
-            password_filename = pickone.val;
+            pick_another_one({"EPICS_PVAS_TLS_PKEY_PWD_FILE"});
+            password_filename = pick_another_one.val;
         } else {
-            pickone({"EPICS_PVA_TLS_PKEY_PWD_FILE"});
-            password_filename = pickone.val;
+            pick_another_one({"EPICS_PVA_TLS_PKEY_PWD_FILE"});
+            password_filename = pick_another_one.val;
         }
         self.ensureDirectoryExists(password_filename);
         try {

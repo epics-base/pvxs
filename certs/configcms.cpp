@@ -15,6 +15,7 @@ namespace certs {
 
 void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     PickOne pickone{defs, true};
+    PickOne pick_another_one{defs, true};
 
     // EPICS_KEYCHAIN ( default the private key to use the same file and password )
     if (pickone({"EPICS_PVACMS_TLS_KEYCHAIN", "EPICS_PVAS_TLS_KEYCHAIN"})) {
@@ -23,11 +24,11 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         // EPICS_CA_KEYCHAIN_PWD_FILE
         std::string password_filename;
         if (pickone.name == "EPICS_PVACMS_TLS_KEYCHAIN") {
-            pickone({"EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
+            pick_another_one({"EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE"});
+            password_filename = pick_another_one.val;
         } else if (pickone.name == "EPICS_PVAS_TLS_KEYCHAIN") {
-            pickone({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"});
-            password_filename = pickone.val;
+            pick_another_one({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"});
+            password_filename = pick_another_one.val;
         }
         ensureDirectoryExists(password_filename);
         try {
@@ -44,11 +45,11 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         // EPICS_CA_PKEY_PWD_FILE
         std::string password_filename;
         if (pickone.name == "EPICS_PVACMS_TLS_PKEY") {
-            pickone({"EPICS_PVACMS_TLS_PKEY_PWD_FILE"});
-            password_filename = pickone.val;
+            pick_another_one({"EPICS_PVACMS_TLS_PKEY_PWD_FILE"});
+            password_filename = pick_another_one.val;
         } else if (pickone.name == "EPICS_PVAS_TLS_PKEY") {
-            pickone({"EPICS_PVAS_TLS_PKEY_PWD_FILE"});
-            password_filename = pickone.val;
+            pick_another_one({"EPICS_PVAS_TLS_PKEY_PWD_FILE"});
+            password_filename = pick_another_one.val;
         }
         ensureDirectoryExists(password_filename);
         try {
@@ -78,13 +79,15 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         ensureDirectoryExists(ca_cert_filename = ca_private_key_filename = pickone.val);
 
         // EPICS_CA_KEYCHAIN_PWD_FILE
-        pickone({"EPICS_CA_KEYCHAIN_PWD_FILE"});
-        std::string password_filename(pickone.val);
-        ensureDirectoryExists(password_filename);
-        try {
-            ca_cert_password = ca_private_key_password = getFileContents(password_filename);
-        } catch (std::exception &e) {
-            log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+        if (pickone.name == "EPICS_CA_KEYCHAIN") {
+            pick_another_one({"EPICS_CA_KEYCHAIN_PWD_FILE"});
+            std::string password_filename = pick_another_one.val;
+            ensureDirectoryExists(password_filename);
+            try {
+                ca_cert_password = ca_private_key_password = getFileContents(password_filename);
+            } catch (std::exception &e) {
+                log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+            }
         }
     }
 
@@ -93,13 +96,15 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         ensureDirectoryExists(ca_private_key_filename = pickone.val);
 
         // EPICS_CA_PKEY_PWD_FILE
-        pickone({"EPICS_CA_PKEY_PWD_FILE"});
-        std::string password_filename(pickone.val);
-        ensureDirectoryExists(password_filename);
-        try {
-            ca_private_key_password = getFileContents(password_filename);
-        } catch (std::exception &e) {
-            log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+        if (pickone.name == "EPICS_CA_PKEY") {
+            pick_another_one({"EPICS_CA_PKEY_PWD_FILE"});
+            std::string password_filename = pick_another_one.val;
+            ensureDirectoryExists(password_filename);
+            try {
+                ca_private_key_password = getFileContents(password_filename);
+            } catch (std::exception &e) {
+                log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+            }
         }
     }
 

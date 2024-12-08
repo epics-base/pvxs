@@ -257,7 +257,7 @@ void P12FileFactory::writePKCS12File() {
         throw std::runtime_error(SB() << "Error opening P12 file for writing" << filename_);
     }
 
-    // Write PKCS12 object to file and check the result.
+    // Write PKCS12 object to file
     if (i2d_PKCS12_fp(file.get(), p12_ptr_) != 1) throw std::runtime_error(SB() << "Error writing " << usage_ << " data to file: " << filename_);
 
     // flush the output to the file

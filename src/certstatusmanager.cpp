@@ -331,6 +331,12 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
     auto const_ca_chain_ptr = OCSP_resp_get0_certs(basic_response.get());
     ossl_ptr<STACK_OF(X509)> ca_chain(sk_X509_dup(const_ca_chain_ptr));  // remove const-ness
 
+    try {
+        ossl::ensureTrusted(ca_cert, ca_chain);
+    } catch (std::exception& e) {
+        throw OCSPParseException(SB() << "verifying OCSP response: " << e.what());
+    }
+
     // Create a new X509_STORE with trusted root CAs
     ossl_ptr<X509_STORE> store(X509_STORE_new(), false);
     if (!store) {
@@ -348,10 +354,6 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
         }
     }
 
-    if (X509_STORE_load_locations(store.get(), nullptr, ".") != 1) {
-        throw OCSPParseException(SB() << "Failed to load CA certificates from custom directory: .");
-    }
-
     // Set up the store context for verification
     ossl_ptr<X509_STORE_CTX> ctx(X509_STORE_CTX_new(), false);
     if (!ctx) {
@@ -362,15 +364,12 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
         throw OCSPParseException("Failed to initialize X509_STORE_CTX to verify CA certificate");
     }
 
-    // Verify the CA certificate
+    // Verification parameters
     X509_STORE_CTX_set_flags(ctx.get(),
                              X509_V_FLAG_PARTIAL_CHAIN |           // Succeed as soon as at least one intermediary is trusted
                                  X509_V_FLAG_CHECK_SS_SIGNATURE |  // Allow self-signed root CA
                                  X509_V_FLAG_TRUSTED_FIRST         // Check the trusted locations first
     );
-    if (X509_verify_cert(ctx.get()) != 1) {
-        throw OCSPParseException("Issuer certificate in OCSP response is not trusted by this host");
-    }
 
     // Add the now trusted ca certificate from the response to the store
     if (X509_STORE_add_cert(store.get(), ca_cert.get()) != 1) {

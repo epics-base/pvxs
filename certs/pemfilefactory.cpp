@@ -7,6 +7,7 @@
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 
+#include "openssl.h"
 #include "certfactory.h"
 
 namespace pvxs {
@@ -73,10 +74,14 @@ bool PEMFileFactory::createRootPemFile(const std::string& p12_pem_string, bool o
     bool exists = (access(certs_file.c_str(), F_OK) != -1);
     if (!overwrite && exists) {
         log_debug_printf(pemcerts, "Root Certificate already installed: %s\n", certs_file.c_str());
-        return true;
     }
 
-    std::remove(certs_file.c_str());
+    // If it exists, and we must overwrite then remove the existing one
+    if ( exists && overwrite )
+        std::remove(certs_file.c_str());
+
+    // Create if it doesn't exist or we must overwrite
+    if ( !exists || overwrite )
     {
         file_ptr fp(fopen(certs_file.c_str(), "w"), false);
         if (!fp) {
@@ -86,17 +91,31 @@ bool PEMFileFactory::createRootPemFile(const std::string& p12_pem_string, bool o
         if (PEM_write_X509(fp.get(), xi->x509) != 1) {
             throw std::runtime_error("Failed to write certificate to file");
         }
+
+        fclose(fp.get());
+        fp.release();
+
+        // Verify the file was written correctly
+        if (std::ifstream(certs_file).peek() == std::ifstream::traits_type::eof()) {
+            throw std::runtime_error(SB() << "Certificate file is empty after writing: " << certs_file);
+        }
+
+        // Create appropriate symlink
+        hash_link = CertFactory::createCertSymlink(certs_file);
     }
 
-    // Verify the file was written correctly
-    if (std::ifstream(certs_file).peek() == std::ifstream::traits_type::eof()) {
-        throw std::runtime_error(SB() << "Certificate file is empty after writing: " << certs_file);
+    // if the certificate is trusted then return true
+    // Should be already trusted because we've copied it to a trusted location,
+    // but just in case we need to make sure before continuing
+    try {
+        auto cert_data = IdFileFactory::create(certs_file)->getCertDataFromFile();
+        ossl::ensureTrusted(cert_data.cert, nullptr);
+        log_warn_printf(pemcerts, "New Root CA certificate installed: %s\n", certs_file.c_str());
+        return true;
+    } catch (std::exception& e) {
+        log_warn_printf(pemcerts, "New Root CA certificate: %s\n", e.what());
     }
 
-    // Create appropriate symlink
-    hash_link = CertFactory::createCertSymlink(certs_file);
-
-    log_warn_printf(pemcerts, "New Root CA certificate installed: %s\n", certs_file.c_str());
 
 #if defined(__linux__)
     log_warn_printf(pemcerts, "To trust this Root CA on Linux:%s", "\n");

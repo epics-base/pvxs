@@ -55,7 +55,7 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
         if (pva_ex_data->status_check_enabled) {
             auto peer_status = pva_ex_data->getCachedPeerStatus(cert_ptr);
             try {
-                // Get status if current status is non existent or not valid
+                // Get status if current status is non-existent or not valid
                 if (!peer_status || !peer_status->isValid()) {
                     peer_status = pva_ex_data->setCachedPeerStatus(cert_ptr, certs::CertStatusManager::getStatus(ossl_ptr<X509>(X509_dup(cert_ptr))));
                 }
@@ -71,20 +71,44 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
             }
         }
     } else {
-        //        X509_STORE_CTX_print_verify_cb(preverify_ok, x509_ctx);
         auto err = X509_STORE_CTX_get_error(x509_ctx);
-
-        // TODO Remove Dev mode to ignore contexts with no chain &
-        // TODO Remove Dev mode to accept self signed certs as trusted
-        // If the error is that the certificate is self-signed, we accept it
-        if (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY || err == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT ||
-            err == X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN) {
-            return preverify_ok;  // Accept self-signed certificates
-        }
         log_err_printf(io, "Unable to verify peer cert: %s : %s\n", X509_verify_cert_error_string(err), std::string(SB() << ShowX509{cert_ptr}).c_str());
     }
     log_printf(io, preverify_ok ? Level::Debug : Level::Err, "TLS verify %s\n", preverify_ok ? "Ok" : "Reject");
     return preverify_ok;
+}
+
+void ensureTrusted(const ossl_ptr<X509> &ca_cert, const ossl_ptr<STACK_OF(X509)> &CAs) {
+    // Create a new X509_STORE with trusted root CAs
+    ossl_ptr<X509_STORE> store(X509_STORE_new(), false);
+    if (!store) {
+        throw std::runtime_error("Failed to create X509_STORE to verify CA trust");
+    }
+
+    // Load trusted root CAs from a predefined location
+    if (X509_STORE_set_default_paths(store.get()) != 1) {
+        throw std::runtime_error("Failed to load system default CA certificates to verify CA trust");
+    }
+
+    // Set up a store context for verification
+    ossl_ptr<X509_STORE_CTX> ctx(X509_STORE_CTX_new(), false);
+    if (!ctx) {
+        throw std::runtime_error("Failed to create X509_STORE_CTX to verify CA trust");
+    }
+
+    if (X509_STORE_CTX_init(ctx.get(), store.get(), ca_cert.get(), CAs.get()) != 1) {
+        throw std::runtime_error("Failed to initialize X509_STORE_CTX to verify CA certificate");
+    }
+
+    // Set parameters for verification of the CA certificate
+    X509_STORE_CTX_set_flags(ctx.get(),
+                             X509_V_FLAG_PARTIAL_CHAIN |           // Succeed as soon as at least one intermediary is trusted
+                               X509_V_FLAG_CHECK_SS_SIGNATURE |  // Allow self-signed root CA
+                               X509_V_FLAG_TRUSTED_FIRST         // Check the trusted locations first
+    );
+    if (X509_verify_cert(ctx.get()) != 1) {
+        throw std::runtime_error("Certificate is not trusted by this host");
+    }
 }
 
 namespace {

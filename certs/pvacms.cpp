@@ -1159,8 +1159,6 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
             // We don't have keys so create a key in a combined cert and key file
             throw(std::runtime_error("Certificate file does not contain a certificate: "));
         }
-        // We don't have keys so create a key and a combined cert and key file
-        key_pair = IdFileFactory::createKeyPair();
         throw(std::runtime_error("Certificate file does not contain a private key: "));
     } catch (std::exception &e) {
         // Error getting certs file, or certs file invalid
@@ -1220,8 +1218,8 @@ CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<
     cert_file_factory->writeIdentityFile();
 
     // Create the root certificate (overwrite existing)
-    // The user must re-trust it if it already existed
-    if (!cert_file_factory->writeRootPemFile(pem_string, false)) {
+    // The user must re-trust it if it already trusted
+    if (!cert_file_factory->writeRootPemFile(pem_string, true)) {
         exit(0);
     }
     return cert_file_factory->getCertData(key_pair);
