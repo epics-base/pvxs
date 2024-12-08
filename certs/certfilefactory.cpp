@@ -181,7 +181,7 @@ cert_factory_ptr CertFileFactory::create(const std::string& filename, const std:
             return make_factory_ptr<PEMFileFactory>(filename, password, key_pair, cert_ptr, certs_ptr, certs_only);
         }
     }
-    throw std::runtime_error(SB() << usage << ": Unsupported certificate file extension: " + ext);
+    throw std::runtime_error(SB() << usage << ": Unsupported certificate file extension: " << (ext.empty() ? "<none>" : ext));
 }
 
 /**
