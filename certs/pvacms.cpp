@@ -157,12 +157,12 @@ Value getRootValue(const std::string &issuer_id, const ossl_ptr<X509> &ca_cert, 
     std::string subject(owned_subject.get());
 
     // Subject part extractor
-    auto extractSubjectPart = [&subject](const std::string& key) -> std::string {
+    auto extractSubjectPart = [&subject](const std::string &key) -> std::string {
         std::size_t start = subject.find("/" + key + "=");
         if (start == std::string::npos) {
             throw std::runtime_error("Key not found: " + key);
         }
-        start += key.size() + 2;  // Skip over "/key="
+        start += key.size() + 2;                     // Skip over "/key="
         std::size_t end = subject.find("/", start);  // Find the end of the current value
         if (end == std::string::npos) {
             end = subject.size();
@@ -1087,7 +1087,7 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
         // Make a new CA Certificate
         try {
             log_warn_printf(pvafms, "%s\n", e.what());
-            if (!key_pair)  key_pair = CertFileFactory::createKeyPair();
+            if (!key_pair) key_pair = CertFileFactory::createKeyPair();
 
             auto cert_data = createCaCertificate(config, ca_db, key_pair);
             // all is ok
@@ -1167,7 +1167,7 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
         // Make a new server Certificate
         try {
             log_warn_printf(pvacms, "%s\n", e.what());
-            if (!key_pair)  key_pair = CertFileFactory::createKeyPair();
+            if (!key_pair) key_pair = CertFileFactory::createKeyPair();
 
             createServerCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain, key_pair);
             // All is ok
@@ -1212,7 +1212,8 @@ CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
     // Create PKCS#12 file containing certs, private key and chain
-    auto cert_file_factory = CertFileFactory::create(config.ca_cert_filename, config.ca_cert_password, key_pair, nullptr, nullptr, "certificate", pem_string, !config.ca_private_key_filename.empty());
+    auto cert_file_factory = CertFileFactory::create(config.ca_cert_filename, config.ca_cert_password, key_pair, nullptr, nullptr, "certificate", pem_string,
+                                                     !config.ca_private_key_filename.empty());
 
     cert_file_factory->writeCertFile();
 
@@ -1262,8 +1263,8 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
 
     // Create PKCS#12 file containing certs, private key and null chain
     auto pem_string = CertFactory::certAndCasToPemString(cert, certificate_factory.certificate_chain_.get());
-    auto cert_file_factory = CertFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr,
-                                                     nullptr, "PVACMS server certificate", pem_string, !config.tls_private_key_filename.empty());
+    auto cert_file_factory = CertFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr, nullptr,
+                                                     "PVACMS server certificate", pem_string, !config.tls_private_key_filename.empty());
 
     cert_file_factory->writeCertFile();
 }
