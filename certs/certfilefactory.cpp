@@ -159,7 +159,7 @@ CertData CertFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) 
     return CertData(cert, chain, key_pair);
 }
 
-std::unique_ptr<CertFileFactory> CertFileFactory::create(const std::string& filename, const std::string& password, const std::shared_ptr<KeyPair>& key_pair,
+cert_factory_ptr CertFileFactory::create(const std::string& filename, const std::string& password, const std::shared_ptr<KeyPair>& key_pair,
                                                          X509* cert_ptr, STACK_OF(X509) * certs_ptr, const std::string& usage, const std::string& pem_string,
                                                          bool certs_only) {
     std::string ext = getExtension(filename);
@@ -168,17 +168,17 @@ std::unique_ptr<CertFileFactory> CertFileFactory::create(const std::string& file
             log_warn_printf(certs, "For compatibility %s P12 files (.pem, .crt, .key) should contain a private key\n", usage.c_str());
         }
         if (!pem_string.empty()) {
-            return make_unique<P12FileFactory>(filename, password, key_pair, pem_string, certs_only);
+            return make_factory_ptr<P12FileFactory>(filename, password, key_pair, pem_string, certs_only);
         } else if (!cert_ptr) {
-            return make_unique<P12FileFactory>(filename, password, key_pair, certs_only);
+            return make_factory_ptr<P12FileFactory>(filename, password, key_pair, certs_only);
         } else {
-            return make_unique<P12FileFactory>(filename, password, key_pair, cert_ptr, certs_ptr, certs_only);
+            return make_factory_ptr<P12FileFactory>(filename, password, key_pair, cert_ptr, certs_ptr, certs_only);
         }
     } else if (ext == "pem" || ext == "crt" || ext == "key" || ext == "cer") {
         if (!pem_string.empty()) {
-            return make_unique<PEMFileFactory>(filename, password, key_pair, pem_string, certs_only);
+            return make_factory_ptr<PEMFileFactory>(filename, password, key_pair, pem_string, certs_only);
         } else {
-            return make_unique<PEMFileFactory>(filename, password, key_pair, cert_ptr, certs_ptr, certs_only);
+            return make_factory_ptr<PEMFileFactory>(filename, password, key_pair, cert_ptr, certs_ptr, certs_only);
         }
     }
     throw std::runtime_error(SB() << usage << ": Unsupported certificate file extension: " + ext);

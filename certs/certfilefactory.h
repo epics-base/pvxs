@@ -18,10 +18,11 @@ namespace certs {
 // Forward declarations
 class P12FileFactory;
 class PEMFileFactory;
+class CertFileFactory;
 
 // C++11 implementation of make_unique
 template <typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args&&... args) {
+std::unique_ptr<T> make_factory_ptr(Args&&... args) {
     return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
@@ -54,6 +55,8 @@ enum CertAvailability {
     AVAILABLE,
 };
 
+typedef std::unique_ptr<CertFileFactory> cert_factory_ptr;
+
 class CertFileFactory {
    public:
     /**
@@ -61,13 +64,13 @@ class CertFileFactory {
      *
      * This method creates a new CertFileFactory object.
      */
-    static std::unique_ptr<CertFileFactory> create(const std::string& filename, const std::string& password = "",
+    static cert_factory_ptr create(const std::string& filename, const std::string& password = "",
                                                    const std::shared_ptr<KeyPair>& key_pair = nullptr, X509* cert_ptr = nullptr,
                                                    STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
                                                    const std::string& pem_string = "",
                                                    bool certs_only = false);
 
-    static std::unique_ptr<CertFileFactory> createReader(const std::string& filename, const std::string& password="", const std::string& key_filename="", const std::string& key_password="") {
+    static cert_factory_ptr createReader(const std::string& filename, const std::string& password="", const std::string& key_filename="", const std::string& key_password="") {
         auto cert_file_factory = create(filename, password);
         if ( !key_filename.empty() )
             cert_file_factory->key_file_ = create(key_filename, key_password);
@@ -133,7 +136,13 @@ class CertFileFactory {
 
     static void backupFileIfExists(const std::string& filename);
     static void chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cert_ptr);
-    static std::string getExtension(const std::string& filename) { return filename.substr(filename.find_last_of(".") + 1); };
+    static std::string getExtension(const std::string& filename) {
+        auto pos = filename.find_last_of('.');
+        if (pos == std::string::npos) {
+            return "";
+        }
+        return filename.substr(pos + 1);
+    }
 };
 
 }  // namespace certs
