@@ -64,13 +64,13 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         tls_stop_if_no_cert = parseTo<bool>(pickone.val);
     }
 
-    // EPICS_CA_ACF
-    if (pickone({"EPICS_CA_ACF"})) {
+    // EPICS_PVACMS_ACF
+    if (pickone({"EPICS_PVACMS_ACF"})) {
         ensureDirectoryExists(ca_acf_filename = pickone.val);
     }
 
-    // EPICS_CA_DB
-    if (pickone({"EPICS_CA_DB"})) {
+    // EPICS_PVACMS_DB
+    if (pickone({"EPICS_PVACMS_DB"})) {
         ensureDirectoryExists(ca_db_filename = pickone.val);
     }
 

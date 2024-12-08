@@ -1094,6 +1094,11 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
             ca_pkey = std::move(key_pair->pkey);
             ca_cert = std::move(cert_data.cert);
             ca_chain = cert_data.ca;
+
+            // If we had to make a new certificate then we need to make a new ACF and admin client cert
+//            createDefaultAdminACF(config, ca_db, ca_cert);
+//            createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain);
+
         } catch (std::exception &e) {
             throw(std::runtime_error(SB() << "Error creating CA certificate: " << e.what()));
         }
@@ -1407,7 +1412,7 @@ void usage(const char *argv0) {
                  "                      Overrides EPICS_CA_TLS_PKEY \n"
                  "                      environment variables.\n"
                  " -d <cert db file>    Specify cert db file location\n"
-                 "                      Overrides EPICS_CA_DB \n"
+                 "                      Overrides EPICS_PVACMS_DB \n"
                  "                      environment variable.\n"
                  "                      Default certs.db\n"
                  " -h                   Show this message.\n"

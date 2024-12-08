@@ -24,7 +24,21 @@ Note: This release requires specific unmerged changes to epics-base.
 Quick Start Guide
 ---------------
 
-1. Install Requirements
+1. Initialise Environment
+^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        # Set up data and configuration home if not already set
+        export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+        export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+        mkdir -p ${XDG_DATA_HOME} ${XDG_CONFIG_HOME}
+
+        # Make working directory for building project files
+        export PROJECT_HOME=~/src
+        mkdir -p ${PROJECT_HOME}
+
+2. Install Requirements
 ^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -88,22 +102,24 @@ Quick Start Guide
         #   - libcurl
         # Note: RTEMS support requires additional configuration. See RTEMS-specific documentation.
 
-2. Build epics-base
+3. Build epics-base
 ^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
+        cd ${PROJECT_HOME}
         git clone --branch 7.0-method_and_authority https://github.com/george-mcintyre/epics-base.git
         cd epics-base
 
         make -j10 all
-        cd ..
+        cd ${PROJECT_HOME}
 
-3. Configure PVXS Build
+4. Configure PVXS Build
 ^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
+        cd ${PROJECT_HOME}
         cat >> RELEASE.local <<EOF
         EPICS_BASE = \$(TOP)/../epics-base
         EOF
@@ -117,82 +133,116 @@ Quick Start Guide
         # PVXS_ENABLE_LDAP_AUTH = YES
         #EOF
 
-4. Build PVXS
+5. Build PVXS
 ^^^^^^^^^^^^
 
     .. code-block:: sh
 
+        cd ${PROJECT_HOME}
         git clone --recursive  --branch tls https://github.com/george-mcintyre/pvxs.git
         cd pvxs
 
         # Build PVXS
 
         make -j10 all
+        cd ${PROJECT_HOME}
 
-5. PVACMS Setup
+6. PVACMS Setup
 ^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
-        // TODO FIX LATER!!!!! need a machine location
         #### [optional] Set path and name of the CA database file (default: ./certs.db)
 
-        export EPICS_CONFIG_HOME=${HOME}/.config/epics
-        export EPICS_CONFIG_CERTS=${EPICS_CONFIG_HOME}/certs
-        export EPICS_CONFIG_KEYS=${EPICS_CONFIG_HOME}/keys
+        export EPICS_PVACMS_DB=${XDG_DATA_HOME}/certs.db
 
-        export EPICS_CA_DB=${EPICS_CONFIG_HOME}/certs.db
 
-        #### Set key paths (keys will be created here if not exists)
-        # Place your CA's private key in this file if you have one
+    .. code-block:: sh
+
+        #### [optional] SETUP CA KEY FILE
+        # Note that if key is not set then the key will be stored in the same keychain file as the certificate
+        # [optional] Place your CA's private key in this file if you have one
         # otherwise the CA will be created by PVACMS
 
-        export EPICS_CA_PKEY=${EPICS_CONFIG_KEYS}/cakey.p12
+        export EPICS_CA_PKEY=${XDG_CONFIG_HOME}/cakey.p12
 
-        # Specify the path to your PVACMS's private key.  It will be created automatically
-
-        export EPICS_PVACMS_TLS_PKEY=${EPICS_CONFIG_KEYS}/pvacmskey.p12
-
-        #### Set certificate paths (certificates will be created here if not exists)
-        # Place your CA's certificate in this file if you have one
+        #### SETUP CA KEYCHAIN FILE (can contain both key and certs)
+        # Place your CA's certificate (and optionally key) in this file if you have one
         # otherwise the CA certificate will be created by PVACMS
 
-        export EPICS_CA_KEYCHAIN=${EPICS_CONFIG_CERTS}/ca.p12
+        export EPICS_CA_KEYCHAIN=${XDG_CONFIG_HOME}/ca.pem
 
-        # Specify the path to your PVACMS's certificate.  It will be created automatically
 
-        export EPICS_PVACMS_TLS_KEYCHAIN=${EPICS_CONFIG_CERTS}/pvacms.p12
+    .. code-block:: sh
+
+        #### [optional] SETUP PVACMS KEY FILE
+        # Note that if key is not set then the key will be stored in the same keychain file as the certificate
+
+        export EPICS_PVACMS_PKEY=${XDG_CONFIG_HOME}/pvacmskey.p12
+
+        #### SETUP PVACMS KEYCHAIN FILE (can contain both key and certs)
+
+        export EPICS_PVACMS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pvacms.pem
+
+
+    .. code-block:: sh
 
         # Specify the name of your CA
+
         export EPICS_CA_NAME="EPICS Test Root CA"
         export EPICS_CA_ORGANIZATION="ca.epics.org"
         export EPICS_CA_ORGANIZATIONAL_UNIT="EPICS Certificate Authority"
 
-        #### Create root CA
-        # - creates root CA if does not exist,
-        #   at location specified by EPICS_CA_TLS_KEYCHAIN,
-        #   with private key at location specified by EPICS_CA_TLS_KEY
-        #   with CN specified by EPICS_CA_NAME (default: EPICS Root CA)
-        #   with O specified by EPICS_CA_ORGANIZATION (default: ca.epics.org)
-        #   with OU specified by EPICS_CA_ORGANIZATIONAL_UNIT (default: EPICS Certificate Authority)
-        #   with C that is the country code based on where the code is running
+
+    .. code-block:: sh
+
+        # Configure ADMIN user and admin user permissions file
+
+        export EPICS_ADMIN_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/admin.p12
+        export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pvacms.acf
+
+    .. code-block:: sh
+
+        #### RUN PVACMS
         #
-        # If the root CA does not already exist it will exit here with instructions on what to do to trust the
-        # root CA
-        # Will continue without exiting if CA already exists
+        # 1. Create root CA
+        #   - creates root CA if does not exist,
+        #   - at location specified by EPICS_CA_TLS_KEYCHAIN,
+        #   - with private key at location specified by EPICS_CA_TLS_KEY
+        #   - with CN specified by EPICS_CA_NAME (default: EPICS Root CA)
+        #   - with O specified by EPICS_CA_ORGANIZATION (default: ca.epics.org)
+        #   - with OU specified by EPICS_CA_ORGANIZATIONAL_UNIT (default: EPICS Certificate Authority)
+        #
+        #   NOTE: If the root CA is not trusted it will exit here with instructions on what to do to trust the
+        #         root CA.  Normally it will be trusted because it is installed if/when created.  If it exits,
+        #         then follow the instructions then rerun the command.
+        #
+        # 2. Create the PVACMS server certificate
+        #   - creates server certificate if does not exist,
+        #   - at location specified by EPICS_PVACMS_TLS_KEYCHAIN,
+        #   - with private key at location specified by EPICS_PVACMS_TLS_KEY
+        #
+        # 3. Create PVACMS certificate database
+        #   - creates database (default certs.db) if does not exist
+        #   - at location pointed to by EPICS_PVACMS_DB
+        #   - or in current working directory,
+        #
+        # 4. Create the default ACF file that controls permissions for the PVACMS service
+        #   - creates default ACF file (pvacms.yaml)
+        #   - at location pointed to by EPICS_PVACMS_ACF
+        #   - or in current working directory
+        #
+        # 5. Create the default admin client certificate that can be used to access PVACMS admin functions like REVOKE and APPROVE
+        #   - creates default admin client certificate (default admin.p12)
+        #   - at location specified by EPICS_ADMIN_TLS_KEYCHAIN,
+        #   - with private key at location specified by EPICS_ADMIN_TLS_KEY
+        #   - or by default in current working directory
+        #
+        # 6. Start PVACMS service
 
-        ./pvxs/bin/*/pvacms
+        ${PROJECT_HOME}/pvxs/bin/*/pvacms
 
-        #### Create the PVACMS server certificate and Start PVACMS service
-        # - creates server certificate if does not exist,
-        #   at location specified by EPICS_PVACMS_TLS_KEYCHAIN,
-        #   with private key at location specified by EPICS_PVACMS_TLS_KEY
-        # - creates default ACF file (pvacms.yaml) at location pointed to by EPICS_CA_ACF or in current working directory
-        # - creates database (certs.db) if does not exist at location pointed to by EPICS_CA_DB or in current working directory,
-
-        ./pvxs/bin/*/pvacms
-
-6. Install Root Certificate
+7. Install Root Certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -201,28 +251,28 @@ Quick Start Guide
         # Follow instructions, when command completes, to trust the downloaded CA certificate
         # note: If root cert is signed by a public CA this step is optional
 
-        ./pvxs/bin/*/pvxcert -I
+        ${PROJECT_HOME}/pvxs/bin/*/pvxcert -I
 
-7. Configure EPICS Agent Environment
+8. Configure EPICS Agent Environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
         #### Set key paths (keys will be created here if they don't already exist)
         # An EPICS client agent key if required
-        export EPICS_PVA_TLS_PKEY=~/.epics/client.p12
+        export EPICS_PVA_TLS_PKEY=~/.config/client.p12
 
         # An EPICS server agent key if required
-        export EPICS_PVAS_TLS_PKEY=~/.epics/server.p12
+        export EPICS_PVAS_TLS_PKEY=~/.config/server.p12
 
         #### Set certificate paths (certificates will be created here if they don't already exist)
         # An EPICS client agent certificate if required
-        export EPICS_PVA_TLS_KEYCHAIN=~/.epics/client.pem
+        export EPICS_PVA_TLS_KEYCHAIN=~/.config/client.pem
 
         # An EPICS server agent certificate if required
-        export EPICS_PVAS_TLS_KEYCHAIN=~/.epics/server.pem
+        export EPICS_PVAS_TLS_KEYCHAIN=~/.config/server.pem
 
-8. Create Certificates
+9. Create Certificates
 ^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -230,12 +280,12 @@ Quick Start Guide
         #### 1. Create a new client private key at location specified by EPICS_PVA_TLS_KEY if it does not already exist
         #### 2. Create client certificate at location specified by EPICS_PVA_TLS_KEYCHAIN
 
-        ./pvxs/bin/*/authnstd -u client
+        ${PROJECT_HOME}/pvxs/bin/*/authnstd -u client
 
         #### 1. Create a new server private key at location specified by EPICS_PVAS_TLS_KEY if it does not already exist
         #### 2. Create server certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
 
-        ./pvxs/bin/*/authnstd -u server
+        ${PROJECT_HOME}/pvxs/bin/*/authnstd -u server
 
 
 .. _transport_layer_security:
@@ -295,7 +345,7 @@ The following environment variables control SPVA behavior:
 .. note::
    There is an implied hierarchy to the applicability of the environment variables such that
    the PVAS version supersedes a PVA version.
-   So, if an EPICS server agent wants to specify its PKCS#12 keychain file location it can simply
+   So, if an EPICS server agent wants to specify its keychain file location it can simply
    provide the ``EPICS_PVA_TLS_KEYCHAIN`` environment variable as long as
    ``EPICS_PVAS_TLS_KEYCHAIN`` is not configured.
 
@@ -304,25 +354,25 @@ The following environment variables control SPVA behavior:
 | Name                     | Key                        | Value                               | Description                                                   |
 +==========================+============================+=====================================+===============================================================+
 | EPICS_PVA_TLS_KEYCHAIN   | {fully qualified path  to keychain file}                         | This is the string that determines the fully qualified path   |
-+--------------------------+                                                                  | to the PKCS#12 keychain file that contains the certificate,   |
-| EPICS_PVAS_TLS_KEYCHAIN  | e.g. ``~/.epics/client.p12``                                     | and private keys used in the TLS handshake.                   |
-|                          | e.g. ``~/.epics/server.p12``                                     | Note: If not specified then TLS is disabled                   |
++--------------------------+                                                                  | to the keychain file that contains the certificate,           |
+| EPICS_PVAS_TLS_KEYCHAIN  | e.g. ``~/.config/client.p12``                                    | and optional private keys used in the TLS handshake.          |
+|                          | e.g. ``~/.config/server.p12``                                    | Note: If not specified then TLS is disabled                   |
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_KEYCHAIN   | {fully qualified path to keychain password file}                 | This is the string that determines the fully qualified path   |
 | _PWD_FILE                |                                                                  | to a file that contains the password that unlocks the         |
-+--------------------------+ e.g. ``~/.epics/client.pass``                                    | TLS KEYCHAIN file.  This is optional.  If not specified, the  |
-| EPICS_PVAS_TLS_KEYCHAIN  | e.g. ``~/.epics/server.pass``                                    | TLS KEYCHAIN file contents will not be encrypted. It is not   |
++--------------------------+ e.g. ``~/.config/client.pass``                                   | keychain file.  This is optional.  If not specified, the      |
+| EPICS_PVAS_TLS_KEYCHAIN  | e.g. ``~/.config/server.pass``                                   | keychain file contents will not be encrypted. It is not       |
 | _PWD_FILE                |                                                                  | recommended to not specify a password file.                   |
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_KEY        | {fully qualified path to key file}                               | This is the string that determines the fully qualified path   |
-+--------------------------+                                                                  | to the PKCS#12 keychain file that contains the private key    |
-| EPICS_PVAS_TLS_KEY       | e.g. ``~/.ssh/clientkey.p12``                                    | used in the TLS handshake with peers.  Note: This is optional |
-|                          | e.g. ``~/.ssh/serverkey.p12``                                    | and if not specified the TLS_KEYCHAIN file is used.           |
++--------------------------+                                                                  | to the private key if specified separately as                 |
+| EPICS_PVAS_TLS_KEY       | e.g. ``~/.config/clientkey.p12``                                 | used in the TLS handshake with peers.  Note: This is optional |
+|                          | e.g. ``~/.config/serverkey.p12``                                 | and if not specified the keychain file is used.               |
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_KEY_PWD    | {fully qualified path to key password file}                      | This is the string that determines the fully qualified path   |
-| _FILE                    |                                                                  | to a file that contains the password that unlocks the TLS KEY |
-+--------------------------+ e.g. ``~/.ssh/clikey.pass``                                      | file.  This is optional.  If not specified, the TLS KEY file  |
-| EPICS_PVAS_TLS_KEY_PWD   | e.g. ``~/.ssh/servkey.pass``                                     | contents will not be encrypted. Recommended to not specify a  |
+| _FILE                    |                                                                  | to a file that contains the password that unlocks the private |
++--------------------------+ e.g. ``~/.config/clikey.pass``                                   | key file.  This is optional.  If not specified, the key file  |
+| EPICS_PVAS_TLS_KEY_PWD   | e.g. ``~/.config/servkey.pass``                                  | contents will not be encrypted. Recommended to not specify a  |
 | _FILE                    |                                                                  | password file.                                                |
 +--------------------------+----------------------------+-------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_OPTIONS    | ``client_cert``            | ``optional`` (default)              | Require client certificate to be presented.                   |
@@ -361,8 +411,8 @@ The following environment variables control SPVA behavior:
 |                          |                                                                  |                                                               |
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | SSLKEYLOGFILE            | {fully qualified path to key log file}                           | This is the path to the SSL key log file that, in conjunction |
-|                          |                                                                  | with the build-time macro PVXS_ENABLE_SSLKEYLOGFILE,          |
-|                          | e.g. ``~/.epics/keylog``                                         | controls where and whether we store the session key for TLS   |
+|                          |                                                                  | with the build-time macro `PVXS_ENABLE_SSLKEYLOGFILE`,        |
+|                          | e.g. ``~/.config/keylog``                                         | controls where and whether we store the session key for TLS  |
 |                          |                                                                  | sessions in a file.  If it is defined, then the code will     |
 |                          |                                                                  | contain the calls to save the keys in the file specified      |
 |                          |                                                                  | by this variable.                                             |
@@ -419,7 +469,7 @@ and keys exist, loading and verifying them, checking for status and status of pe
         cli_conf.tls_cert_password = "pwd";
         cli.reconfigure(cli_conf);
 
-Creation of client to :ref:`pvacms`
+Creation of client to PVACMS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Internally SPVA needs to create a special client when it is connecting to :ref:`pvacms` to check status.  This
@@ -1073,6 +1123,36 @@ private key, and password file locations.
 || EPICS_AUTH_STD      || {``true`` or ``false`` (default)} || If ``true`` use the process name as the CN field in new certificates |
 || _USE_PROCESS_NAME   ||                                   ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_TLS       || <path to the client cert file>    || The location of the client or gateway certificate file.  The file    |
+|| _TLS_KEYCHAIN       ||                                   || will created here for clients and gateways.                          |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_TLS       || <client cert password file path>  || The location of the file containing the password for the client      |
+|| _KEYCHAIN_PWD_FILE  ||                                   || or gateway certificate.                                              |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVAS_TLS      || <path to the server cert file>    || The location of the server certificate file.  The file will be       |
+|| _TLS_KEYCHAIN       ||                                   || created here for servers.                                            |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVAS_TLS      || <server cert password file path>  || The location of the file containing the password for the server      |
+|| _KEYCHAIN_PWD_FILE  ||                                   || certificate.                                                         |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+
+**Examples**
+
+    .. code-block:: sh
+
+        # create a client certificate for greg@slac.stanford.edu
+        authnstd -u client -N greg -O slac.stanford.edu
+
+    .. code-block:: sh
+
+        # create a server certificate for IOC1
+        authnstd -u server -N IOC1 -O "KLI:LI01:10" -OU "FACET"
+
+
+    .. code-block:: sh
+
+        # create a gateway certificate for gateway1
+        authnstd -u gateway -N gateway1 -O bridge.ornl.gov -OU "Networking"
 
 
 authkrb Configuration and Usage
@@ -1124,7 +1204,7 @@ Credentials Verifier for :ref:`pvacms` at runtime.
 +-----------------+--------------------------------------+---------------------------------------------------------------------+
 | Name            | Keys and Values                      | Description                                                         |
 +=================+======================================+=====================================================================+
-|| EPICS_AUTH_KRB || {string location of keytab file}    || This is the keytab file shared with :ref:`pvacms` by the KDC so .         |
+|| EPICS_AUTH_KRB || {string location of keytab file}    || This is the keytab file shared with :ref:`pvacms` by the KDC so .  |
 || _KEYTAB        || e.g. ``/etc/security/keytab``       || that it can verify kerberos tickets                                |
 +-----------------+--------------------------------------+---------------------------------------------------------------------+
 || EPICS_AUTH_KRB || {this is the kerberos realm to use} || This is the kerberos realm to use when verifying kerberos tickets. |
@@ -1184,7 +1264,7 @@ LDAP Credentials Verifier for :ref:`pvacms` at runtime in addition to the AuthnK
 || _ACCOUNT          || e.g. ``admin``                       || when verifying LDAP credentials.                          |
 +--------------------+---------------------------------------+------------------------------------------------------------+
 || EPICS_AUTH_LDAP   || {location of password file}          || file containing password for the given LDAP admin account |
-|| _ACCOUNT_PWD_FILE || e.g. ``~/.ssh/ldap.pass/``           ||                                                           |
+|| _ACCOUNT_PWD_FILE || e.g. ``~/.config/ldap.pass/``        ||                                                           |
 +--------------------+---------------------------------------+------------------------------------------------------------+
 || EPICS_AUTH_LDAP   || {hostname of LDAP server}            || Trusted hostname of the LDAP server                       |
 || _HOST             || e.g. ``ldap.stanford.edu``           ||                                                           |
@@ -1274,14 +1354,12 @@ Credentials Verifier for :ref:`pvacms` at runtime.
 || EPICS_AUTH_JWT     || {uri of JWT validation endpoint}                 || Trusted URI of the validation endpoint – the substring that starts the URI         |
 || _TRUSTED_URI       ||                                                  || including the http://, https:// and port number.                                   |
 +---------------------+---------------------------------------------------+-------------------------------------------------------------------------------------+
-|| EPICS_AUTH_JWT_USE || case insensitive: ``YES``, ``TRUE``, or ``1``    || If set this tells :ref:`pvacms` that when it receives a 200 HTTP-response code from       |
+|| EPICS_AUTH_JWT_USE || case insensitive: ``YES``, ``TRUE``, or ``1``    || If set this tells :ref:`pvacms` that when it receives a 200 HTTP-response from     |
 || _RESPONSE_CODE     ||                                                  || the HTTP request then the token is valid, and invalid for any other response code. |
 +---------------------+---------------------------------------------------+-------------------------------------------------------------------------------------+
 || EPICS_AUTH_JWT     || {``POST`` (default) or ``GET``}                  || This determines whether the endpoint will be called with HTTP GET or POST.         |
 || _REQUEST_METHOD    ||                                                  ||                                                                                    |
 +---------------------+---------------------------------------------------+-------------------------------------------------------------------------------------+
-
-
 
 
 .. _epics_security:
@@ -1380,50 +1458,61 @@ Alternative YAML format for improved readability:
         version: 1.0
 
         uags:
-        - name: bar
-        users: [boss]
-        - name: foo
-        users: [testing]
-        - name: ops
-        users: [geek]
+          - name: bar
+            users:
+              - boss
+          - name: foo
+            users:
+              - testing
+          - name: ops
+            users:
+              - geek
 
         asgs:
-        - name: ro
-        rules:
-        - level: 0
-            access: NONE
-            trapwrite: false
-        - level: 1
-            access: READ
-            isTLS: true
-            uags: [foo, ops]
-            methods: [ca]
+          - name: ro
+            rules:
+              - level: 0
+                access: NONE
+                trapwrite: false
+              - level: 1
+                access: READ
+                isTLS: true
+                uags:
+                  - foo
+                  - ops
+                methods:
+                  - ca
 
-        - name: rw
-        rules:
-        - level: 0
-            access: NONE
-            trapwrite: false
-        - level: 1
-            access: WRITE
-            trapwrite: true
-            uags: [foo]
-            methods: [x509]
-            authorities: ["SLAC Certificate Authority"]
+          - name: rw
+            rules:
+              - level: 0
+                access: NONE
+                trapwrite: false
+              - level: 1
+                access: WRITE
+                trapwrite: true
+                uags:
+                  - foo
+                methods:
+                  - x509
+                authorities:
+                  - SLAC Certificate Authority
 
-        - name: rwx
-        rules:
-        - level: 0
-            access: NONE
-            trapwrite: false
-        - level: 1
-            access: RPC
-            trapwrite: true
-            uags: [bar]
-            methods: [x509]
-            authorities:
-            - "SLAC Certificate Authority"
-            - "ORNL Org CA"
+          - name: rwx
+            rules:
+              - level: 0
+                access: NONE
+                trapwrite: false
+              - level: 1
+                access: RPC
+                trapwrite: true
+                uags:
+                  - bar
+                methods:
+                  - x509
+                authorities:
+                  - SLAC Certificate Authority
+                  - ORNL Org CA
 
 
 .. _certificate_management:
@@ -1633,7 +1722,7 @@ PVACMS Usage
                             Overrides EPICS_CA_TLS_PKEY
                             environment variables.
         -d <cert db file>    Specify cert db file location
-                            Overrides EPICS_CA_DB
+                            Overrides EPICS_PVACMS_DB
                             environment variable.
                             Default certs.db
         -h                   Show this message.
@@ -1685,30 +1774,24 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 .. note::
    There is also an implied hierarchy to their applicability such that :ref:`pvacms`
    supersedes the PVAS version which in turn, supersedes the PVA version.
-   So, if a :ref:`pvacms` wants to specify its PKCS#12 keychain file location it can simply
+   So, if a :ref:`pvacms` wants to specify its keychain file location it can simply
    provide the ``EPICS_PVA_TLS_KEYCHAIN`` environment variable as long as neither
    ``EPICS_PVACMS_TLS_KEYCHAIN`` nor ``EPICS_PVAS_TLS_KEYCHAIN`` are configured.
 
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 | Name                   | Keys and Values                            | Description                                                              |
 +========================+============================================+==========================================================================+
-|| EPICS_CA_ACF          || <path to ACF file>                        || fully qualified path to a file that will be used as the                 |
-||                       || e.g. ``~/.ssh/pvacms.acf``                || ACF file that configures the permissions of :ref:`pvacms` peers.        |
-+------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_CA_DB           || <path to DB file>                         || fully qualified path to a file that will be used as the                 |
-||                       || e.g. ``~/.epics/certs.db``                || CA database file.                                                       |
-+------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_CA_KEYCHAIN     || <path to CA PKCS#12 keychain file>        || fully qualified path to a file that will be used as the                 |
-||                       || e.g. ``~/.epics/cacert.p12``              || CA PKCS#12 keychain file.                                               |
+|| EPICS_CA_KEYCHAIN     || <path to CA keychain file>                || fully qualified path to a file that will be used as the                 |
+||                       || e.g. ``~/.config/cacert.p12``             || CA keychain file.                                                       |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_CA_KEYCHAIN     || <path to CA password text file>           || fully qualified path to a file that will be used as the                 |
-|| _PWD_FILE             || e.g. ``~/.ssh/cacert.pass``               || CA password file.                                                       |
+|| _PWD_FILE             || e.g. ``~/.config/cacert.pass``            || CA keychain password file.                                              |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_CA_PKEY         || <path to PKCS#12 CA private key file>     || fully qualified path to a file that will be used as the                 |
-||                       || e.g. ``~/.ssh/cakey.p12``                 || CA private key file.                                                    |
+|| EPICS_CA_PKEY         || <path to CA private key file>             || fully qualified path to a file that will be used as the                 |
+||                       || e.g. ``~/.config/cakey.p12``              || CA private key file.  Use same EPICS_CA_KEYCHAIN file if not specified  |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_CA_PKEY         || <path to CA private key password file>    || fully qualified path to a file that will be used as the                 |
-|| _PWD_FILE             || e.g. ``~/.ssh/cakey.pass``                || CA private key password file.                                           |
+|| _PWD_FILE             || e.g. ``~/.config/cakey.pass``             || CA private key password file if specified.                              |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_CA_NAME         || <name of the Certificate Authority>       || To provide the name (CN) to be used in the subject of the               |
 ||                       || e.g. ``Epics Root CA``                    || CA's certificate if :ref:`pvacms` creates it. default: "EPICS Root CA"  |
@@ -1720,12 +1803,30 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 || _ORGANIZATIONAL_UNIT  || e.g. ``EPICS Certificate Authority``      || certificate if :ref:`pvacms` creates it.                                |
 ||                       ||                                           || default: "EPICS Certificate Authority"                                  |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_ACF      || <path to ACF file>                        || fully qualified path to a file that will be used as the                 |
+||                       || e.g. ``~/.config/pvacms.acf``             || ACF file that configures the permissions of :ref:`pvacms` peers.        |
++------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_ADMIN_TLS       || <path to ADMIN user keychain file>        || The location of the :ref:`pvacms` ADMIN user keychain file.             |
+|| _KEYCHAIN             || e.g. ``~/.config/pvacms.p12``             ||                                                                         |
++------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_ADMIN_TLS       || <path to ADMIN user password text file>   || Location of a password file for :ref:`pvacms` ADMIN user keychain file. |
+|| _KEYCHAIN_PWD_FILE    || e.g. ``~/.config/pvacms.pass``            ||                                                                         |
++------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_ADMIN_TLS       || <path to ADMIN user private key file>     || The location of the :ref:`pvacms` ADMIN user private key file.          |
+|| _PKEY                 || e.g. ``~/.config/pvacmskey.p12``          ||                                                                         |
++------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_ADMIN_TLS       || <path to ADMIN private key password file> || Location of password file for :ref:`pvacms` ADMIN user private key file |
+|| _PKEY_PWD_FILE        || e.g. ``~/.config/adminkey.pass``          ||                                                                         |
++------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_CERT     || <number of minutes>                       || Minutes that the ocsp status response will                              |
 || _STATUS_VALIDITY_MINS || e.g. ``30``                               || be valid before a client must re-request an update                      |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_CERTS    || {``true`` (default) or ``false``}         || For authnstd: ``true`` if we require peers to                           |
 || _REQUIRE_SUBSCRIPTION ||                                           || subscribe to certificate status for certificates to                     |
 ||                       ||                                           || be deemed VALID. Adds extension to new certificates                     |
++------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_DB       || <path to DB file>                         || fully qualified path to a file that will be used as the                 |
+||                       || e.g. ``~/.local/share/certs.db``          || CA database file.                                                       |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false``}         || For authnstd: ``true`` if we require APPROVAL before                    |
 || _CLIENT_APPROVAL      ||                                           || new client certificates are VALID                                       |
@@ -1736,26 +1837,24 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 || EPICS_PVACMS_STATUS   || {string prefix for certificate status PV} || This replaces the default ``CERT:STATUS`` prefix.                       |
 || _PV_ROOT              || e.g. ``:ref:`pvacms`:STATUS``             || will be followed by ``:????????:*`` pattern                             |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS      || <path to PKCS#12 certificate file>        || The location of the :ref:`pvacms` PKCS#12 keychain file.                |
-|| _KEYCHAIN             || e.g. ``~/.epics/pvacms.p12``              ||                                                                         |
+|| EPICS_PVACMS_TLS      || <path to PKCS#12 certificate file>        || The location of the :ref:`pvacms` keychain file.                        |
+|| _KEYCHAIN             || e.g. ``~/.config/pvacms.p12``             ||                                                                         |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS      || <path to password text file>              || Location of a password file for :ref:`pvacms` PKCS#12 keychain file.    |
-|| _KEYCHAIN_PWD_FILE    || e.g. ``~/.ssh/pvacms.pass``               ||                                                                         |
+|| EPICS_PVACMS_TLS      || <path to password text file>              || Location of a password file for :ref:`pvacms` keychain file.            |
+|| _KEYCHAIN_PWD_FILE    || e.g. ``~/.config/pvacms.pass``            ||                                                                         |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS      || <path to PKCS#12 private key file>        || The location of the :ref:`pvacms` PKCS#12 private key file.             |
-|| _PKEY                 || e.g. ``~/.ssh/pvacmskey.p12``             ||                                                                         |
+|| EPICS_PVACMS_TLS      || <path to private key file>                || The location of the :ref:`pvacms` private key file.                     |
+|| _PKEY                 || e.g. ``~/.config/pvacmskey.p12``          ||                                                                         |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS      || <path to password text file>              || Location of a password file for :ref:`pvacms` PKCS#12 private key file. |
-|| _PKEY_PWD_FILE        || e.g. ``~/.ssh/pvacmskey.pass``            ||                                                                         |
+|| EPICS_PVACMS_TLS      || <path to password text file>              || Location of a password file for :ref:`pvacms` private key file.         |
+|| _PKEY_PWD_FILE        || e.g. ``~/.config/pvacmskey.pass``         ||                                                                         |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_TLS      || {``true`` or ``false`` (default) }        || ``true`` if server should stop if no cert is available or can be        |
 || _STOP_IF_NO_CERT      ||                                           || verified if status check is enabled                                     |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 
-
-Extensions to Config for :ref:`pvacms`
+Extensions to Config for PVACMS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 
 - `cert_status_validity_mins`
     - The number of minutes that the certificate status is valid for.
@@ -1795,6 +1894,87 @@ Extensions to Config for :ref:`pvacms`
     - The CA organizational unit - used to create the CA certificate if it does not already exist
     - Default: ``EPICS Certificate Authority``
 
+
+PVACMS Authorization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A default ACF file is generated when PVACMS starts up for the first time.
+It contains a user group named for the SKID - Subject Key Identifier - of the
+root CA.  It has one single user called `admin`.  It defines
+an access rule that allows users in this group `WRITE` access
+to the Certificate Status PVs so that the state of certificates
+can be managed. Only Users that have been verified by the
+certificate authority that the PVACMS manages are authorized.
+
+    .. code-block:: text
+
+        UAG(fedcba98) {admin}
+
+        ASG(DEFAULT) {
+            RULE(0,READ)
+            RULE(1,WRITE) {
+                UAG(admin)
+                METHOD("x509")
+                AUTHORITY("Epics Org CA")
+            }
+        }
+
+Equivalent YAML format:
+
+    .. code-block:: yaml
+
+        # EPICS YAML
+        version: 1.0
+
+        uags:
+          - name: fedcba98
+          users:
+            - admin
+
+        asgs:
+          - name: DEFAULT
+            rules:
+              - level: 0
+                access: READ
+              - level: 1
+                access: WRITE
+                uags:
+                  - fedcba98
+                methods:
+                  - x509
+                authorities:
+                  - Epics Org CA
+
+A default client certificate is generated that matches this security privilege.
+This certificate has the subject CN name `admin` and is generated by the Certificate Authority
+associated with this PVACMS.  By default the certificate and key are stored in the file admmin.p12
+in the current working directory.
+
+    .. code-block:: console
+
+        2025-06-08T18:00:49.487647000 INFO pvxs.certs.cms X.509 CA certificate
+        2025-06-08T18:00:49.487665000 INFO pvxs.certs.cms CERT_ID: fedcba98:13822586378443716801
+        2025-06-08T18:00:49.487693000 INFO pvxs.certs.cms NAME: admin
+        2025-06-08T18:00:49.487708000 INFO pvxs.certs.cms ORGANIZATION:
+        2025-06-08T18:00:49.487731000 INFO pvxs.certs.cms ORGANIZATIONAL UNIT:
+        2025-06-08T18:00:49.487746000 INFO pvxs.certs.cms STATUS: VALID
+        2025-06-08T18:00:49.487758000 INFO pvxs.certs.cms VALIDITY: Sun Jun  8 18:00:49 2025 to Fri Jun  8 18:00:49 2029
+
+        admin.p12
+
+Using this certificate an administrator can `Approve` or `Deny`
+certificates in the ``PENDING_APPROVAL`` state and `Revoke` ``VALID`` ones.
+
+    .. code-block:: shell
+
+        # Approve PENDING_APPROVAL certificate 3519231305961542464
+        pvxcert fedcba98:3519231305961542464 -A
+
+        # Deny PENDING_APPROVAL certificate 3519231305961542464
+        pvxcert fedcba98:3519231305961542464 -D
+
+        # Revoke VALID certificate 3519231305961542464
+        pvxcert fedcba98:3519231305961542464 -R
 
 .. _network_deployment:
 
