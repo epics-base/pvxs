@@ -70,7 +70,7 @@ bool PEMFileFactory::createRootPemFile(const std::string& p12_pem_string, bool o
     std::string certs_file = certs_directory_string + "/" + fileName;
     std::string hash_link;
 
-    // Check if file already exists, if it does, do nothing and return
+    // Check if file already exists
     bool exists = (access(certs_file.c_str(), F_OK) != -1);
     if (!overwrite && exists) {
         log_debug_printf(pemcerts, "Root Certificate already installed: %s\n", certs_file.c_str());
@@ -110,10 +110,10 @@ bool PEMFileFactory::createRootPemFile(const std::string& p12_pem_string, bool o
     try {
         auto cert_data = IdFileFactory::create(certs_file)->getCertDataFromFile();
         ossl::ensureTrusted(cert_data.cert, nullptr);
-        log_warn_printf(pemcerts, "New Root CA certificate installed: %s\n", certs_file.c_str());
+        log_info_printf(pemcerts, "Root CA certificate installed at: %s\n", certs_file.c_str());
         return true;
     } catch (std::exception& e) {
-        log_warn_printf(pemcerts, "New Root CA certificate: %s\n", e.what());
+        log_warn_printf(pemcerts, "Root CA certificate is UNTRUSTED: %s\n", e.what());
     }
 
 
