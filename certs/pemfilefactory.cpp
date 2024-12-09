@@ -7,8 +7,8 @@
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 
-#include "openssl.h"
 #include "certfactory.h"
+#include "openssl.h"
 
 namespace pvxs {
 namespace certs {
@@ -77,12 +77,10 @@ bool PEMFileFactory::createRootPemFile(const std::string& p12_pem_string, bool o
     }
 
     // If it exists, and we must overwrite then remove the existing one
-    if ( exists && overwrite )
-        std::remove(certs_file.c_str());
+    if (exists && overwrite) std::remove(certs_file.c_str());
 
     // Create if it doesn't exist or we must overwrite
-    if ( !exists || overwrite )
-    {
+    if (!exists || overwrite) {
         file_ptr fp(fopen(certs_file.c_str(), "w"), false);
         if (!fp) {
             throw std::runtime_error(SB() << "Error opening root certificate file for writing: " << certs_file);
@@ -115,7 +113,6 @@ bool PEMFileFactory::createRootPemFile(const std::string& p12_pem_string, bool o
     } catch (std::exception& e) {
         log_warn_printf(pemcerts, "Root CA certificate is UNTRUSTED: %s\n", e.what());
     }
-
 
 #if defined(__linux__)
     log_warn_printf(pemcerts, "To trust this Root CA on Linux:%s", "\n");
@@ -192,20 +189,12 @@ void PEMFileFactory::writePEMFile() {
             if (!password_.empty()) {
                 // Write encrypted private key using PKCS8 format
                 const EVP_CIPHER* cipher = EVP_aes_256_cbc();
-                if (PEM_write_PKCS8PrivateKey(fp.get(),
-                                            key_pair_->pkey.get(),
-                                            cipher,
-                                            nullptr, 0,
-                                            nullptr,
-                                            const_cast<char*>(password_.c_str())) != 1) {
+                if (PEM_write_PKCS8PrivateKey(fp.get(), key_pair_->pkey.get(), cipher, nullptr, 0, nullptr, const_cast<char*>(password_.c_str())) != 1) {
                     throw std::runtime_error("Failed to write encrypted private key");
                 }
             } else {
                 // Write unencrypted private key
-                if (PEM_write_PrivateKey(fp.get(),
-                                       key_pair_->pkey.get(),
-                                       nullptr, nullptr, 0,
-                                       nullptr, nullptr) != 1) {
+                if (PEM_write_PrivateKey(fp.get(), key_pair_->pkey.get(), nullptr, nullptr, 0, nullptr, nullptr) != 1) {
                     throw std::runtime_error("Failed to write private key");
                 }
             }
@@ -274,9 +263,9 @@ CertData PEMFileFactory::getCertDataFromFile() {
             key_pair = key_file_->getKeyFromFile();
             pkey = std::move(key_pair->pkey);
         }
-        if (pkey)
-            return CertData(cert, chain, std::make_shared<KeyPair>(std::move(pkey)));
-    } catch (...) {}
+        if (pkey) return CertData(cert, chain, std::make_shared<KeyPair>(std::move(pkey)));
+    } catch (...) {
+    }
 
     return CertData(cert, chain);
 }

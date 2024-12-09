@@ -159,13 +159,12 @@ CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) {
     return CertData(cert, chain, key_pair);
 }
 
-cert_factory_ptr IdFileFactory::create(const std::string& filename, const std::string& password, const std::shared_ptr<KeyPair>& key_pair,
-                                       X509* cert_ptr, STACK_OF(X509) * certs_ptr, const std::string& usage, const std::string& pem_string,
-                                       bool certs_only) {
+cert_factory_ptr IdFileFactory::create(const std::string& filename, const std::string& password, const std::shared_ptr<KeyPair>& key_pair, X509* cert_ptr,
+                                       STACK_OF(X509) * certs_ptr, const std::string& usage, const std::string& pem_string, bool certs_only) {
     std::string ext = getExtension(filename);
     if (ext == "p12" || ext == "pfx") {
         if (certs_only) {
-            log_warn_printf(certs, "For compatibility %s P12 files (.pem, .crt, .key) should contain a private key\n", usage.c_str());
+            log_warn_printf(certs, "**No key**: For compatibility %s keychain files (.p12, .pfx) should contain a private key\n", usage.c_str());
         }
         if (!pem_string.empty()) {
             return make_factory_ptr<P12FileFactory>(filename, password, key_pair, pem_string, certs_only);

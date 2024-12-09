@@ -1,11 +1,12 @@
 // Created on 19/09/2024.
 //
+#include "ccrmanager.h"
+
 #include <pvxs/nt.h>
 
-#include "ccrmanager.h"
 #include "client.h"
-#include "security.h"
 #include "pvacms.h"
+#include "security.h"
 
 DEFINE_LOGGER(auths, "pvxs.certs.auth");
 
@@ -33,7 +34,7 @@ std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequ
     log_info_printf(auths, "%s\n", value["issuer"].as<std::string>().c_str());
     log_info_printf(auths, "%s\n", value["certid"].as<std::string>().c_str());
     log_info_printf(auths, "%s\n", value["statuspv"].as<std::string>().c_str());
-    return value["cert"].as<std::string>() ;
+    return value["cert"].as<std::string>();
 }
-} // certs
-} // pvxs
+}  // namespace certs
+}  // namespace pvxs

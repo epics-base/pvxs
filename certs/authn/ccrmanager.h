@@ -10,10 +10,10 @@ namespace pvxs {
 namespace certs {
 
 class CCRManager {
-  public:
-    std::string createCertificate(const std::shared_ptr<CertCreationRequest> & cert_creation_request) const;
+   public:
+    std::string createCertificate(const std::shared_ptr<CertCreationRequest>& cert_creation_request) const;
 };
-} // certs
-} // pvxs
+}  // namespace certs
+}  // namespace pvxs
 
-#endif //PVXS_CCRMANAGER_H_
+#endif  // PVXS_CCRMANAGER_H_

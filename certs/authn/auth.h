@@ -13,9 +13,9 @@
 
 #include <pvxs/data.h>
 
-#include "configstd.h"
 #include "ccrmanager.h"
 #include "certfactory.h"
+#include "configstd.h"
 #include "ownedptr.h"
 #include "security.h"
 
@@ -38,20 +38,16 @@ class Auth {
     std::vector<Member> verifier_fields_;
 
     // Constructor and Destructor
-    Auth(const std::string &type, const std::vector<Member> &verifier_fields)
-        : type_(type), verifier_fields_(verifier_fields) {};
+    Auth(const std::string &type, const std::vector<Member> &verifier_fields) : type_(type), verifier_fields_(verifier_fields) {};
     virtual ~Auth() = default;
 
     virtual std::shared_ptr<Credentials> getCredentials(const ConfigStd &config) const = 0;
-    virtual std::shared_ptr<CertCreationRequest> createCertCreationRequest(
-        const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
-        const uint16_t &usage) const;
+    virtual std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
+                                                                           const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const;
     // Called inside PVACMS to verify request
     // if an out-of-band authentication is used then it will check the signature
     // established by the signCcrPayloadIfNeeded() method
-    virtual bool verify(
-        const Value ccr,
-        std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const = 0;
+    virtual bool verify(const Value ccr, std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const = 0;
     // @brief: If implemented, signCcrPayloadIfNeeded(), will make a call to
     // PVACMS server through an authentication-method specific API to verify the
     // contents of the CCR match the authentication-method's credentials On the
@@ -72,13 +68,11 @@ class Auth {
     std::shared_ptr<KeyPair> createKeyPair(const ConfigCommon &config);
 
    protected:
-
     // Called to have a standard presentation of the CCR for the
     // purposes of generating and verifying signatures
     inline const std::string ccrToString(const Value &ccr) const {
-        return SB() << ccr["type"].as<std::string>() << ccr["name"].as<std::string>()
-                    << ccr["country"].as<std::string>() << ccr["organization"].as<std::string>()
-                    << ccr["organization_unit"].as<std::string>() << ccr["not_before"].as<time_t>()
+        return SB() << ccr["type"].as<std::string>() << ccr["name"].as<std::string>() << ccr["country"].as<std::string>()
+                    << ccr["organization"].as<std::string>() << ccr["organization_unit"].as<std::string>() << ccr["not_before"].as<time_t>()
                     << ccr["not_after"].as<time_t>() << ccr["usage"].as<uint16_t>();
     }
 

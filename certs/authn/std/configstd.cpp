@@ -59,5 +59,5 @@ void ConfigStd::fromStdEnv(const std::map<std::string, std::string> &defs) {
     }
 }
 
-} // certs
-} // pvxs
+}  // namespace certs
+}  // namespace pvxs

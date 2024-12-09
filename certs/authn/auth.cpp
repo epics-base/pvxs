@@ -13,13 +13,13 @@
 #include <pvxs/log.h>
 
 #include "ccrmanager.h"
-#include "ownedptr.h"
-#include "security.h"
 #include "certfactory.h"
+#include "ownedptr.h"
 #include "p12filefactory.h"
+#include "security.h"
 
 namespace pvxs {
-namespace  certs {
+namespace certs {
 
 /**
  * @brief Creates a signed certificate.
@@ -35,8 +35,7 @@ namespace  certs {
  * @param usage the desired certificate usage
  * @return A managed shared CertCreationRequest object.
  */
-std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
-                                                                     const std::shared_ptr<KeyPair> &key_pair,
+std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
                                                                      const uint16_t &usage) const {
     // Create a new CertCreationRequest object.
     auto cert_creation_request = std::make_shared<CertCreationRequest>(type_, verifier_fields_);
@@ -82,10 +81,8 @@ std::shared_ptr<KeyPair> Auth::createKeyPair(const ConfigCommon &config) {
     // Create a key pair
     const auto key_pair(IdFileFactory::createKeyPair());
 
-    // Create PKCS#12 file containing private key
-    IdFileFactory::create(config.tls_private_key_filename,
-                          config.tls_private_key_password,
-                          key_pair)->writeIdentityFile();
+    // Create private key file containing private key
+    IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password, key_pair)->writeIdentityFile();
     return key_pair;
 }
 }  // namespace certs

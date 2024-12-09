@@ -38,10 +38,12 @@ class P12FileFactory : public IdFileFactory {
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, bool certs_only = false)
         : IdFileFactory(filename, password, key_pair, nullptr, nullptr, "private key", "", certs_only), p12_ptr_(nullptr) {}
 
-    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr, stack_st_X509 *certs_ptr, bool certs_only = false)
+    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr, stack_st_X509 *certs_ptr,
+                   bool certs_only = false)
         : IdFileFactory(filename, password, key_pair, cert_ptr, certs_ptr, "certificate", "", certs_only), p12_ptr_(nullptr) {}
 
-    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string, bool certs_only = false)
+    P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string,
+                   bool certs_only = false)
         : IdFileFactory(filename, password, key_pair, nullptr, nullptr, "certificate", pem_string, certs_only), p12_ptr_(nullptr) {}
 
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p12_ptr, bool certs_only = false)
@@ -51,7 +53,7 @@ class P12FileFactory : public IdFileFactory {
 
     void writeIdentityFile() override { writePKCS12File(); }
 
-    CertData getCertDataFromFile() override ;
+    CertData getCertDataFromFile() override;
     std::shared_ptr<KeyPair> getKeyFromFile() override;
 
    private:

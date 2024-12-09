@@ -9,7 +9,7 @@ include $(TOP)/configure/CONFIG
 #=============================
 
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
-USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL -I$(TOP)/bundle/CLI11/include
 AUTHN = $(TOP)/certs/authn
 SRC_DIRS += $(TOP)/src
 SRCS += p12filefactory.cpp

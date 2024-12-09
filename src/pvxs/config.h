@@ -136,7 +136,7 @@ struct PVXS_API ConfigCommon {
      */
     bool tls_disabled = false;
 
-    /** Path to PKCS#12 file containing certificates.
+    /** Path to keychain file containing certificates and optional keys.
      *  @since UNRELEASED
      */
     std::string tls_cert_filename;
@@ -146,12 +146,12 @@ struct PVXS_API ConfigCommon {
      */
     std::string tls_cert_password;
 
-    /** Path to PKCS#12 file containing key.
+    /** Path to private key file containing key.
      *  @since UNRELEASED
      */
     std::string tls_private_key_filename;
 
-    /** Path to PKCS#12 file containing password for pkey file.
+    /** Path to file containing password for the private key file.
      *  @since UNRELEASED
      */
     std::string tls_private_key_password;

@@ -138,14 +138,13 @@ class PVXS_API CertFactory {
      * @param cert_path the path to the certificate
      * @return the hash name
      */
-    static inline std::string getCertHashName(const std::string& cert_path) {
+    static inline std::string getCertHashName(const std::string &cert_path) {
         std::ifstream cert_file(cert_path, std::ios::binary);
         if (!cert_file) {
             throw std::runtime_error("Unable to open certificate file");
         }
 
-        std::string cert_data((std::istreambuf_iterator<char>(cert_file)),
-                              std::istreambuf_iterator<char>());
+        std::string cert_data((std::istreambuf_iterator<char>(cert_file)), std::istreambuf_iterator<char>());
 
         ossl_ptr<BIO> bio(BIO_new_mem_buf(cert_data.data(), cert_data.size()), false);
         if (!bio) {
@@ -169,7 +168,7 @@ class PVXS_API CertFactory {
      * @param cert_path the path to the certificate
      * @return the path to the symlink
      */
-    static inline std::string createCertSymlink(const std::string& cert_path) {
+    static inline std::string createCertSymlink(const std::string &cert_path) {
         std::string hash_name = getCertHashName(cert_path);
         std::string dir_path;
         size_t last_slash = cert_path.find_last_of("/\\");
@@ -182,9 +181,9 @@ class PVXS_API CertFactory {
 
 #ifdef _WIN32
         // Windows doesn't support symlinks easily, so we'll create a hard link
-    if (!CreateHardLinkA(symlink_path.c_str(), cert_path.c_str(), nullptr)) {
-        throw std::runtime_error("Failed to create hard link: " + std::to_string(GetLastError()));
-    }
+        if (!CreateHardLinkA(symlink_path.c_str(), cert_path.c_str(), nullptr)) {
+            throw std::runtime_error("Failed to create hard link: " + std::to_string(GetLastError()));
+        }
 #else
         // UNIX-like systems
         if (symlink(target_path.c_str(), symlink_path.c_str()) != 0) {
@@ -194,7 +193,7 @@ class PVXS_API CertFactory {
         return hash_name;
     }
 
-  private:
+   private:
     /**
      * @brief Convert a NID to a string
      * @param nid the NID

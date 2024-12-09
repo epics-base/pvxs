@@ -19,7 +19,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
 
     // EPICS_KEYCHAIN ( default the private key to use the same file and password )
     if (pickone({"EPICS_PVACMS_TLS_KEYCHAIN", "EPICS_PVAS_TLS_KEYCHAIN"})) {
-        ensureDirectoryExists(tls_cert_filename = tls_private_key_filename = pickone.val);
+        ensureDirectoryExists(tls_cert_filename = pickone.val);
 
         // EPICS_CA_KEYCHAIN_PWD_FILE
         std::string password_filename;
@@ -32,7 +32,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         }
         ensureDirectoryExists(password_filename);
         try {
-            tls_cert_password = tls_private_key_password = getFileContents(password_filename);
+            tls_cert_password = getFileContents(password_filename);
         } catch (std::exception &e) {
             log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
@@ -76,7 +76,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
 
     // EPICS_CA_KEYCHAIN
     if (pickone({"EPICS_CA_KEYCHAIN"})) {
-        ensureDirectoryExists(ca_cert_filename = ca_private_key_filename = pickone.val);
+        ensureDirectoryExists(ca_cert_filename = pickone.val);
 
         // EPICS_CA_KEYCHAIN_PWD_FILE
         if (pickone.name == "EPICS_CA_KEYCHAIN") {
@@ -84,7 +84,41 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
             std::string password_filename = pick_another_one.val;
             ensureDirectoryExists(password_filename);
             try {
-                ca_cert_password = ca_private_key_password = getFileContents(password_filename);
+                ca_cert_password = getFileContents(password_filename);
+            } catch (std::exception &e) {
+                log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+            }
+        }
+    }
+
+    // EPICS_CA_PKEY
+    if (pickone({"EPICS_CA_PKEY"})) {
+        ensureDirectoryExists(ca_private_key_filename = pickone.val);
+
+        // EPICS_CA_PKEY_PWD_FILE
+        if (pickone.name == "EPICS_CA_PKEY") {
+            pick_another_one({"EPICS_CA_PKEY_PWD_FILE"});
+            std::string password_filename = pick_another_one.val;
+            ensureDirectoryExists(password_filename);
+            try {
+                ca_private_key_password = getFileContents(password_filename);
+            } catch (std::exception &e) {
+                log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+            }
+        }
+    }
+
+    // EPICS_ADMIN_TLS_KEYCHAIN
+    if (pickone({"EPICS_ADMIN_TLS_KEYCHAIN"})) {
+        ensureDirectoryExists(admin_cert_filename = pickone.val);
+
+        // EPICS_CA_KEYCHAIN_PWD_FILE
+        if (pickone.name == "EPICS_ADMIN_TLS_KEYCHAIN") {
+            pick_another_one({"EPICS_ADMIN_TLS_KEYCHAIN_PWD_FILE"});
+            std::string password_filename = pick_another_one.val;
+            ensureDirectoryExists(password_filename);
+            try {
+                ca_cert_password = getFileContents(password_filename);
             } catch (std::exception &e) {
                 log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
             }
@@ -123,6 +157,11 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         ca_organizational_unit = pickone.val;
     }
 
+    // EPICS_CA_COUNTRY
+    if (pickone({"EPICS_CA_COUNTRY"})) {
+        ca_country = pickone.val;
+    }
+
     // EPICS_PVACMS_CERT STATUS VALIDITY MINS
     if (pickone({"EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS"})) {
         try {
@@ -140,6 +179,11 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     // EPICS_PVACMS_REQUIRE_SERVER_APPROVAL
     if (pickone({"EPICS_PVACMS_REQUIRE_SERVER_APPROVAL"})) {
         cert_server_require_approval = parseTo<bool>(pickone.val);
+    }
+
+    // EPICS_PVACMS_REQUIRE_SERVER_APPROVAL
+    if (pickone({"EPICS_PVACMS_REQUIRE_GATEWAY_APPROVAL", "EPICS_PVACMS_REQUIRE_SERVER_APPROVAL", "EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"})) {
+        cert_gateway_require_approval = parseTo<bool>(pickone.val);
     }
 
     // EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION

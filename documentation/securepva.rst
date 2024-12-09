@@ -1643,8 +1643,8 @@ Identity Assertion Process:
 Key Security:
 
 - Private key protection is critical
-- Store in protected PKCS#12 file
-- Use separate PKCS#12 files for each certificate
+- Store in protected keychain file
+- Use separate keychain files for each certificate
 
 
 Certificate Management Tools
@@ -1828,16 +1828,19 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 || EPICS_PVACMS_DB       || <path to DB file>                         || fully qualified path to a file that will be used as the                 |
 ||                       || e.g. ``~/.local/share/certs.db``          || CA database file.                                                       |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false``}         || For authnstd: ``true`` if we require APPROVAL before                    |
-|| _CLIENT_APPROVAL      ||                                           || new client certificates are VALID                                       |
+|| EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false`` }        || ``true`` if server should generate new client certificates in the       |
+|| _CLIENT_APPROVAL      ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false``}         || For authnstd: ``true`` if we require APPROVAL before                    |
-|| _SERVER_APPROVAL      ||                                           || new server certificates are VALID                                       |
+|| EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false`` }        || ``true`` if server should generate new gateway certificates in the      |
+|| _GATEWAY_APPROVAL     ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
++------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false`` }        || ``true`` if server should generate new server certificates in the       |
+|| _SERVER_APPROVAL      ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_STATUS   || {string prefix for certificate status PV} || This replaces the default ``CERT:STATUS`` prefix.                       |
 || _PV_ROOT              || e.g. ``:ref:`pvacms`:STATUS``             || will be followed by ``:????????:*`` pattern                             |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS      || <path to PKCS#12 certificate file>        || The location of the :ref:`pvacms` keychain file.                        |
+|| EPICS_PVACMS_TLS      || <path to keychain file>                   || The location of the :ref:`pvacms` keychain file.                        |
 || _KEYCHAIN             || e.g. ``~/.config/pvacms.p12``             ||                                                                         |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_TLS      || <path to password text file>              || Location of a password file for :ref:`pvacms` keychain file.            |
@@ -2171,8 +2174,8 @@ Glossary
       EPICS network.
     - In practice it simply makes a hash of the public key,
       as the public key has a one-to-one relationship to the private key.
-    - An EPICS agent keeps the private key in a separate PKCS#12 file to
-      the certificate so that it can be used to generate new certificate when
+    - An EPICS agent keeps the private key in a separate key file to
+      the certificate so that it can be used to generate a new certificate when
       the old one expires and will retain the same SKID on the network.  You can’t
       generate a new certificate with the same SKID while a prior one has not ``EXPIRED`` or been ``REVOKED``.
     - when we show the SKID of a certificate issuer we use only the first 8 characters of the hexadecimal hash.

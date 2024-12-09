@@ -65,11 +65,11 @@ std::string actionToString(CertAction& action) {
 int main(int argc, char* argv[]) {
     try {
         logger_config_env();  // from $PVXS_LOG
+        auto conf = client::Config::fromEnv();
 
         CLI::App app{"Certificate management utility for PVXS"};
 
         // Variables to store options
-        double timeout{5.0};
         bool verbose{false};
         bool debug{false};
         bool show_version{false};
@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
         app.add_option("cert_id", issuer_serial_string, "Certificate ID")->required(false);
 
         // Define options
-        app.add_option("-w,--timeout", timeout, "Operation timeout in seconds")->default_val(5.0);
+        app.add_option("-w,--timeout", conf.request_timeout_specified, "Operation timeout in seconds")->default_val(5.0);
         app.add_flag("-v,--verbose", verbose, "Make more noise");
         app.add_flag("-d,--debug", debug, "Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.");
         app.add_option("-f,--file", cert_file, "The certificate file to read if no Certificate ID specified");
@@ -142,8 +142,6 @@ int main(int argc, char* argv[]) {
         if (revoke) action = REVOKE;
         if (deny) action = DENY;
 
-        auto conf = client::Config::fromEnv();
-        conf.request_timeout_specified = timeout;
         auto ctxt = conf.build();
 
         if (verbose) std::cout << "Effective config\n" << conf;
@@ -246,7 +244,7 @@ int main(int argc, char* argv[]) {
 
         SigInt sig([&done]() { done.signal(); });
 
-        bool waited = done.wait(timeout);
+        bool waited = done.wait(conf.request_timeout_specified);
         ops.clear();  // implied cancel
 
         if (!waited) {

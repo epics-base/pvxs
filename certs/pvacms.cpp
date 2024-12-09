@@ -55,6 +55,8 @@
 #include <pvxs/sharedpv.h>
 #include <pvxs/sharedwildcardpv.h>
 
+#include <CLI/CLI.hpp>
+
 #include "certfactory.h"
 #include "certfilefactory.h"
 #include "certstatus.h"
@@ -91,9 +93,6 @@ uint16_t partition_number = 0;
 
 // The current number of partitions
 uint16_t num_partitions = 1;
-
-// The organization name to use for the pvacms cerrificate if it needs to be created
-std::string pvacms_org_name;
 
 // Forward decls
 
@@ -178,125 +177,6 @@ Value getRootValue(const std::string &issuer_id, const ossl_ptr<X509> &ca_cert, 
     value["cert"] = CertFactory::certAndCasToPemString(ca_cert, ca_chain.get());
 
     return value;
-}
-
-/**
- * @brief Reads command line options and sets corresponding variables.
- *
- * This function reads the command line options provided by the user and
- * sets the corresponding members in the given config. The options include
- * verbose mode, P12 file location, and a database file among others.
- *
- * @param config the configuration object to update with the commandline values
- * @param argc The number of command line arguments.
- * @param argv The array of command line arguments.
- * @param verbose Reference to a boolean variable to enable verbose mode.
- * @return 0 if successful, 1 if successful but need to exit immediately on
- * return, >1 if there is any error.
- */
-int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose) {
-    int opt;
-    while ((opt = getopt(argc, argv, "a:c:d:hk:n:m:o:p:s:u:vV")) != -1) {
-        switch (opt) {
-            case 'a':
-                config.ensureDirectoryExists(config.ca_acf_filename = optarg);
-                break;
-            case 'c':
-                config.ensureDirectoryExists(config.ca_cert_filename = optarg);
-                break;
-            case 'e':
-                config.ensureDirectoryExists(config.ca_private_key_filename = optarg);
-                break;
-            case 'd':
-                config.ensureDirectoryExists(config.ca_db_filename = optarg);
-                break;
-            case 'h':
-                usage(argv[0]);
-                return 1;
-            case 'k':
-                config.ensureDirectoryExists(config.tls_cert_filename = optarg);
-                break;
-            case 'l':
-                config.ensureDirectoryExists(config.tls_private_key_filename = optarg);
-                break;
-            case 'n':
-                config.ca_name = optarg;
-                break;
-            case 'm':
-                pvacms_org_name = optarg;
-                break;
-            case 'o':
-                config.ca_organization = optarg;
-                break;
-            case 'p': {
-                std::string filepath = optarg;
-                if (filepath == "-") {
-                    config.tls_cert_password = "";
-                } else {
-                    config.ensureDirectoryExists(filepath);
-                    config.tls_cert_password = config.getFileContents(filepath);
-                }
-            } break;
-            case 'q': {
-                std::string filepath = optarg;
-                if (filepath == "-") {
-                    config.tls_private_key_password = "";
-                } else {
-                    config.ensureDirectoryExists(filepath);
-                    config.tls_private_key_password = config.getFileContents(filepath);
-                }
-            } break;
-            case 's': {
-                std::string filepath = optarg;
-                if (filepath == "-") {
-                    config.ca_cert_password = "";
-                } else {
-                    config.ensureDirectoryExists(filepath);
-                    config.ca_cert_password = config.getFileContents(filepath);
-                }
-            } break;
-            case 't': {
-                std::string filepath = optarg;
-                if (filepath == "-") {
-                    config.ca_private_key_password = "";
-                } else {
-                    config.ensureDirectoryExists(filepath);
-                    config.ca_private_key_password = config.getFileContents(filepath);
-                }
-            } break;
-            case 'u':
-                config.ca_organizational_unit = optarg;
-                break;
-            case 'v':
-                verbose = true;
-                break;
-            case 'V':
-                std::cout << version_information;
-                return 1;
-            default:
-                usage(argv[0]);
-                std::cerr << "\nUnknown argument: " << char(opt) << std::endl;
-                return 2;
-        }
-    }
-
-    // Set default for organisation name
-    if (config.ca_organization.empty()) {
-        // Default the organisation to the hostname
-        char hostname[PVXS_HOSTNAME_MAX];
-        if (!!gethostname(hostname, PVXS_HOSTNAME_MAX)) {
-            // If no hostname then try to get IP address
-            strcpy(hostname, getIPAddress().c_str());
-        }
-        config.ca_organization = hostname;  // copy
-    }
-    if (pvacms_org_name.empty()) pvacms_org_name = config.ca_organization;
-
-    // Override some PVACMS mandatory settings
-    config.tls_stop_if_no_cert = true;
-    config.tls_client_cert_required = ConfigCommon::Optional;
-
-    return 0;
 }
 
 /**
@@ -603,10 +483,6 @@ void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory) {
  * @return the PEM string that contains the Cert, its chain and the root cert
  */
 ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factory) {
-    // Verify if there is an outstanding un-revoked certificate out there
-    //    ensureCertificateDoesntAlreadyExist(name, country, organization,
-    //    organization_unit);
-
     // Check validity falls within acceptable range
     if (certificate_factory.issuer_certificate_ptr_) ensureValidityCompatible(certificate_factory);
 
@@ -729,6 +605,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
     auto type = getStructureValue<const std::string>(ccr, "type");
     auto name = getStructureValue<const std::string>(ccr, "name");
     auto organization = getStructureValue<const std::string>(ccr, "organization");
+    auto usage = getStructureValue<uint16_t>(ccr, "usage");
 
     try {
         certstatus_t state = UNKNOWN;
@@ -750,6 +627,11 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
             state = VALID;
         } else {
             state = PENDING_APPROVAL;
+            if ((IS_USED_FOR_(usage, ssl::kForClientAndServer) && !config.cert_gateway_require_approval) ||
+                (IS_USED_FOR_(usage, ssl::kForClient) && !config.cert_client_require_approval) ||
+                (IS_USED_FOR_(usage, ssl::kForServer) && !config.cert_server_require_approval)) {
+                state = VALID;
+            }
         }
 
         ///////////////////
@@ -768,7 +650,6 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
         auto organization_unit = getStructureValue<const std::string>(ccr, "organization_unit");
         auto not_before = getStructureValue<time_t>(ccr, "not_before");
         auto not_after = getStructureValue<time_t>(ccr, "not_after");
-        auto usage = getStructureValue<uint16_t>(ccr, "usage");
 
         // If pending approval then check if it has already been approved
         if (state == PENDING_APPROVAL) {
@@ -999,6 +880,12 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
     }
 }
 
+/**
+ * @brief Get the issuer ID and serial number from the parameters
+ *
+ * @param parameters The list of parameters from the SharedWildcardPV
+ * @return A tuple containing the issuer ID and serial number
+ */
 std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &parameters) {
     // get serial and issuer from URI parameters
     auto it = parameters.begin();
@@ -1096,13 +983,111 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
             ca_chain = cert_data.ca;
 
             // If we had to make a new certificate then we need to make a new ACF and admin client cert
-//            createDefaultAdminACF(config, ca_db, ca_cert);
-//            createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain);
+            try {
+                createDefaultAdminACF(config, ca_cert);
+            } catch (std::exception &e) {
+                log_err_printf(pvacms, "Error creating ACF file: %s\n", e.what());
+            }
+
+            try {
+                createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain);
+            } catch (std::exception &e) {
+                log_err_printf(pvacms, "Error creating admin client keychain: %s\n", e.what());
+            }
 
         } catch (std::exception &e) {
             throw(std::runtime_error(SB() << "Error creating CA certificate: " << e.what()));
         }
     }
+}
+
+/**
+ * @brief Create the default admin ACF file
+ *
+ * @param config the config to use to get the ACF filename
+ * @param ca_cert the CA certificate to use to get the issuer ID and common name
+ */
+void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert) {
+    auto issuer_id = CertStatus::getIssuerId(ca_cert.get());
+    auto cn = CertStatus::getCommonName(ca_cert);
+
+    const std::string acf_file_body =
+        "UAG(%s) {admin}\n"
+        "\n"
+        "ASG(DEFAULT) {\n"
+        "    RULE(0,READ)\n"
+        "    RULE(1,WRITE) {\n"
+        "        UAG(%s)\n"
+        "        METHOD(\"x509\")\n"
+        "        AUTHORITY(\"%s\")\n"
+        "    }\n"
+        "}";
+
+    char buffer[1024];
+    std::snprintf(buffer, sizeof(buffer), acf_file_body.c_str(), issuer_id.c_str(), issuer_id.c_str(), cn.c_str());
+    std::string final_acf = buffer;
+
+    // Write the final string to the specified file
+    std::ofstream out_file(config.ca_acf_filename, std::ios::out | std::ios::trunc);
+    if (!out_file) {
+        throw std::runtime_error("Failed to open ACF file for writing: " + config.ca_acf_filename);
+    }
+
+    out_file << final_acf;
+    out_file.close();
+    log_info_printf(pvacms, "Created Default ACF file: %s\n", config.ca_acf_filename.c_str());
+    log_info_printf(pvacms, "--------------------------------------%s", "\n");
+    log_info_printf(pvacms, "UAG(%s) {admin}%s", issuer_id.c_str(), "\n");
+    log_info_printf(pvacms, "%s", "\n");
+    log_info_printf(pvacms, "ASG(DEFAULT) {%s", "\n");
+    log_info_printf(pvacms, "    RULE(0,READ)%s", "\n");
+    log_info_printf(pvacms, "    RULE(1,WRITE) {%s", "\n");
+    log_info_printf(pvacms, "        UAG(%s)%s", issuer_id.c_str(), "\n");
+    log_info_printf(pvacms, "        METHOD(\"x509\")%s", "\n");
+    log_info_printf(pvacms, "        AUTHORITY(\"%s\")%s", cn.c_str(), "\n");
+    log_info_printf(pvacms, "    }%s", "\n");
+    log_info_printf(pvacms, "}%s", "\n");
+}
+
+void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
+                                  ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
+    auto key_pair = IdFileFactory::createKeyPair();
+    auto serial = generateSerial();
+
+    // Get other certificate parameters from request
+    auto country = getCountryCode();
+    auto name = "admin";
+    auto organization = "";
+    auto organization_unit = "";
+    time_t not_before(time(nullptr));
+    time_t not_after(not_before + (4 * 365 + 1) * 24 * 60 * 60);  // 4yrs
+
+    // Create a certificate factory
+    auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, ssl::kForClient, true,
+                                           ca_cert.get(), ca_pkey.get(), ca_chain.get(), VALID);
+
+    // Create the certificate using the certificate factory, store it in the database and return the PEM string
+    auto pem_string = createCertificatePemString(ca_db, certificate_factory);
+
+    // If there is a separate key file then write that first
+    if (!config.admin_private_key_filename.empty()) {
+        auto cert_file_factory = IdFileFactory::create(config.admin_private_key_filename, config.admin_private_key_password, key_pair);
+        cert_file_factory->writeIdentityFile();
+        log_warn_printf(pvacms, "Created private key file for default PVACMS admin user: %s\n", config.admin_private_key_filename.c_str());
+    }
+
+    auto cert_file_factory = IdFileFactory::create(config.admin_cert_filename, config.admin_cert_password, key_pair, nullptr, nullptr, "certificate",
+                                                   pem_string, !config.admin_private_key_filename.empty());
+
+    std::string from = std::ctime(&certificate_factory.not_before_);
+    std::string to = std::ctime(&certificate_factory.not_after_);
+    log_info_printf(pvacms, "Created Keychain file for default PVACMS admin user: %s\n", config.admin_cert_filename.c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "NAME: " << certificate_factory.name_).str().c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATION: " << certificate_factory.org_).str().c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_).str().c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "STATUS: " << CERT_STATE(VALID)).str().c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1)).str().c_str());
+    log_info_printf(pvacms, "--------------------------------------%s", "\n");
 }
 
 /**
@@ -1180,14 +1165,18 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
     }
 }
 
+/**
+ * @brief Create a CA key
+ *
+ * @param config the configuration to use to get the parameters to create cert
+ * @return the key pair
+ */
 std::shared_ptr<KeyPair> createCaKey(ConfigCms &config) {
     // Create a key pair
     const auto key_pair = IdFileFactory::createKeyPair();
 
     // Create key file containing private key
-    IdFileFactory::create(config.ca_private_key_filename,
-                          config.ca_private_key_password,
-                          key_pair)->writeIdentityFile();
+    IdFileFactory::create(config.ca_private_key_filename, config.ca_private_key_password, key_pair)->writeIdentityFile();
     return key_pair;
 }
 
@@ -1211,12 +1200,12 @@ CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<
     // Generate a new serial number
     auto serial = generateSerial();
 
-    auto certificate_factory = CertFactory(serial, key_pair, config.ca_name, getCountryCode(), config.ca_organization, config.ca_organizational_unit,
+    auto certificate_factory = CertFactory(serial, key_pair, config.ca_name, config.ca_country, config.ca_organization, config.ca_organizational_unit,
                                            not_before, not_after, ssl::kForCa, config.cert_status_subscription);
 
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
-    // Create PKCS#12 file containing certs, private key and chain
+    // Create keychain file containing certs, private key and chain
     auto cert_file_factory = IdFileFactory::create(config.ca_cert_filename, config.ca_cert_password, key_pair, nullptr, nullptr, "certificate", pem_string,
                                                    !config.ca_private_key_filename.empty());
 
@@ -1238,10 +1227,8 @@ std::shared_ptr<KeyPair> createServerKey(const ConfigCms &config) {
     // Create a key pair
     const auto key_pair(IdFileFactory::createKeyPair());
 
-    // Create PKCS#12 file containing private key
-    IdFileFactory::create(config.tls_private_key_filename,
-                          config.tls_private_key_password,
-                          key_pair)->writeIdentityFile();
+    // Create private key file containing private key
+    IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password, key_pair)->writeIdentityFile();
     return key_pair;
 }
 
@@ -1262,16 +1249,16 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
     // Generate a new serial number
     auto serial = generateSerial();
 
-    auto certificate_factory =
-        CertFactory(serial, key_pair, PVXS_SERVICE_NAME, getCountryCode(), pvacms_org_name, PVXS_SERVICE_ORG_UNIT_NAME, getNotBeforeTimeFromCert(ca_cert.get()),
-                    getNotAfterTimeFromCert(ca_cert.get()), ssl::kForCMS, config.cert_status_subscription, ca_cert.get(), ca_pkey.get(), ca_chain.get());
+    auto certificate_factory = CertFactory(serial, key_pair, config.pvacms_name, config.pvacms_country, config.pvacms_organization,
+                                           config.pvacms_organizational_unit, getNotBeforeTimeFromCert(ca_cert.get()), getNotAfterTimeFromCert(ca_cert.get()),
+                                           ssl::kForCMS, config.cert_status_subscription, ca_cert.get(), ca_pkey.get(), ca_chain.get());
 
     auto cert = createCertificate(ca_db, certificate_factory);
 
-    // Create PKCS#12 file containing certs, private key and null chain
+    // Create keychain file containing certs, private key and null chain
     auto pem_string = CertFactory::certAndCasToPemString(cert, certificate_factory.certificate_chain_.get());
-    auto cert_file_factory = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr, nullptr,
-                                                   "PVACMS server certificate", pem_string, !config.tls_private_key_filename.empty());
+    auto cert_file_factory = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr, nullptr, "PVACMS server certificate",
+                                                   pem_string, !config.tls_private_key_filename.empty());
 
     cert_file_factory->writeIdentityFile();
 }
@@ -1389,71 +1376,6 @@ std::string getIPAddress() {
     }
 
     return chosen_ip;
-}
-
-/**
- * @brief Prints the usage message for the program.
- *
- * This function prints the usage message for the program, including
- * the available command line options and their descriptions.
- *
- * @param argv0 The name of the program (usually argv[0]).
- */
-void usage(const char *argv0) {
-    std::cerr << "Usage: " << argv0
-              << " -a <acf> <opts> \n"
-                 "\n"
-                 " -a <acf>             Access Security configuration file\n"
-                 " -c <CA P12 file>     Specify CA certificate file location\n"
-                 "                      Overrides EPICS_CA_TLS_KEYCHAIN \n"
-                 "                      environment variables.\n"
-                 "                      Default ca.p12\n"
-                 " -e <CA key file>     Specify CA private key file location\n"
-                 "                      Overrides EPICS_CA_TLS_PKEY \n"
-                 "                      environment variables.\n"
-                 " -d <cert db file>    Specify cert db file location\n"
-                 "                      Overrides EPICS_PVACMS_DB \n"
-                 "                      environment variable.\n"
-                 "                      Default certs.db\n"
-                 " -h                   Show this message.\n"
-                 " -k <P12 file>        Specify certificate file location\n"
-                 "                      Overrides EPICS_PVACMS_TLS_KEYCHAIN \n"
-                 "                      environment variable.\n"
-                 "                      Default server.p12\n"
-                 " -l <P12 file>        Specify private key file location\n"
-                 "                      Overrides EPICS_PVACMS_TLS_PKEY \n"
-                 "                      environment variable.\n"
-                 "                      Default same as P12 file\n"
-                 " -n <ca_name>         To specify the CA's name if we need\n"
-                 "                      to create a root certificate.\n"
-                 "                      Defaults to the CA\n"
-                 " -m <pvacms org>      To specify the pvacms organization name if \n"
-                 "                      we need to create a server certificate.\n"
-                 "                      Defaults to the name of this executable "
-                 "(pvacms)\n"
-                 " -o <ca_org>          To specify the CA's organization if we need\n"
-                 "                      to create a root certificate.\n"
-                 "                      Defaults to the hostname.\n"
-                 "                      Use '-' to leave unset.\n"
-                 " -p <password file>   Specify certificate password file location\n"
-                 "                      Overrides EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE\n"
-                 "                      environment variable.\n"
-                 "                      '-' sets no password\n"
-                 " -q <password file>   Specify private key password file location\n"
-                 "                      Overrides EPICS_PVACMS_TLS_PKEY_PWD_FILE\n"
-                 "                      environment variable.\n"
-                 "                      '-' sets no password\n"
-                 " -s <CA secret file>  Specify CA certificate password file\n"
-                 "                      Overrides EPICS_CA_KEYCHAIN_PWD_FILE \n"
-                 "                      environment variables.\n"
-                 "                      '-' sets no password\n"
-                 " -t <CA secret file>  Specify CA private key password file\n"
-                 "                      Overrides EPICS_CA_PKEY_PWD_FILE \n"
-                 "                      environment variables.\n"
-                 "                      '-' sets no password\n"
-                 " -u <ca_org_unit>     To specify the CA's organizational unit\n"
-                 " -v                   Make more noise.\n"
-                 " -V                   Print version and exit.\n";
 }
 
 template <typename T>
@@ -1677,27 +1599,117 @@ int main(int argc, char *argv[]) {
     using namespace pvxs::server;
 
     try {
-        bool verbose = false;
-        pvxs::sql_ptr ca_db;
-
         // Get config
         auto config = ConfigCms::fromEnv();
+        pvxs::sql_ptr ca_db;
 
-        // Read commandline options
-        int exit_status;
-        if ((exit_status = readOptions(config, argc, argv, verbose))) {
-            return exit_status - 1;
+        CLI::App app{"PVACMS - Certificate Management Service"};
+
+        // Variables for each option
+        bool verbose = false;
+        bool show_version = false;
+
+        std::string ca_password_file, pvacms_password_file, admin_password_file;
+        std::string ca_pk_password_file, pvacms_pk_password_file, admin_pk_password_file;
+
+        // Define options
+        app.set_help_flag("-h,--help", "Show this message");
+        app.add_flag("-v,--verbose", verbose, "Make more noise");
+        app.add_flag("-V,--version", show_version, "Print version and exit.");
+
+        app.add_option("--ck,--ca-keychain", config.ca_cert_filename, "Specify CA keychain file location")->default_val(config.ca_cert_filename);
+        app.add_option("--cpk,--ca-private-key", config.ca_private_key_filename, "Specify CA private key file location");
+        app.add_option("--ckp,--ca-keychain-pwd", ca_password_file, "Specify CA keychain password file location");
+        app.add_option("--cpkp,--ca-private-key-pwd", ca_pk_password_file, "Specify CA private key password file location");
+
+        app.add_option("--pk,--pvacms-keychain", config.tls_cert_filename, "Specify PVACMS keychain file location")->default_val(config.tls_cert_filename);
+        app.add_option("--ppk,--pvacms-private-key", config.tls_private_key_filename, "Specify PVACMS private key file location");
+        app.add_option("--pkp,--pvacms-keychain-pwd", pvacms_password_file, "Specify PVACMS keychain password file location");
+        app.add_option("--ppkp,--pvacms-private-key-pwd", pvacms_pk_password_file, "Specify PVACMS private key password file location");
+
+        app.add_option("--ak,--admin-keychain", config.admin_cert_filename, "Specify PVACMS admin user's keychain file location")->default_val(config.admin_cert_filename);
+        app.add_option("--apk,--admin-private-key", config.admin_private_key_filename, "Specify PVACMS admin user's private key file location");
+        app.add_option("--akp,--admin-keychain-pwd", admin_password_file, "Specify PVACMS admin user's keychain password file location");
+        app.add_option("--apkp,--admin-private-key-pwd", admin_pk_password_file, "Specify PVACMS admin user's private key password file location");
+
+        app.add_option("--cn,--ca-name", config.ca_name, "Specify the CA's name. Used if we need to create a root certificate")->default_val(config.ca_name);
+        app.add_option("--co,--ca-org", config.ca_organization, "Specify the CA's Organization. Used if we need to create a root certificate")
+            ->default_val("ca.epics.org");
+        app.add_option("--cou,--ca-org-unit", config.ca_organizational_unit, "Specify the CA's Organization Unit. Used if we need to create a root certificate")
+            ->default_val("EPICS Certificate Authority");
+        app.add_option("--cc,--ca-country", config.ca_country, "Specify the CA's Country. Used if we need to create a root certificate")
+            ->default_val(config.ca_country.empty() ? getCountryCode() : config.ca_country);
+
+        app.add_option("--pn,--pvacms-name", config.pvacms_name, "Specify the PVACMS name. Used if we need to create a PVACMS certificate")
+            ->default_val("PVACMS");
+        app.add_option("--po,--pvacms-org", config.pvacms_organization, "Specify the PVACMS Organization. Used if we need to create a PVACMS certificate")
+            ->default_val("ca.epics.org");
+        app.add_option("--pou,--pvacms-org-unit", config.pvacms_organizational_unit,
+                       "Specify the PVACMS Organization Unit. Used if we need to create a PVACMS certificate")
+            ->default_val("EPICS Certificate Authority");
+        app.add_option("--pc,--pvacms-country", config.pvacms_country, "Specify the PVACMS Country. Used if we need to create a PVACMS certificate")
+            ->default_val(config.pvacms_country.empty() ? getCountryCode() : config.pvacms_country);
+
+        app.add_option("-s,--acf", config.ca_acf_filename, "Access security Configuration File")->default_val(config.ca_acf_filename);
+        app.add_option("-d,--cert-db", config.ca_db_filename, "Specify cert db file location")->default_val(config.ca_db_filename);
+
+        app.add_option("--client-require-approval", config.cert_client_require_approval, "Generate Client Certificates in PENDING_APPROVAL state")
+            ->default_val(config.cert_client_require_approval);
+        app.add_option("--server-require-approval", config.cert_server_require_approval, "Generate Server Certificates in PENDING_APPROVAL state")
+            ->default_val(config.cert_server_require_approval);
+        app.add_option("--gateway-require-approval", config.cert_gateway_require_approval, "Generate Server Certificates in PENDING_APPROVAL state")
+            ->default_val(config.cert_gateway_require_approval);
+
+        app.add_option("--svm,--status-validity-mins", config.cert_status_validity_mins, "Set Status Validity Time in Minutes")->default_val(config.cert_status_validity_mins);
+        app.add_option("--sme,--status-monitoring-enabled", config.cert_status_subscription,
+                       "Require Peers to monitor Status of Certificates Generated by this server by default.  Can be overridden in each CCR")
+            ->default_val(config.cert_status_subscription);
+
+        CLI11_PARSE(app, argc, argv);
+
+        // Make sure some directories exist
+        if (!config.ca_cert_filename.empty()) config.ensureDirectoryExists(config.ca_cert_filename);
+        if (!config.ca_private_key_filename.empty()) config.ensureDirectoryExists(config.ca_private_key_filename);
+
+        if (!config.tls_cert_filename.empty()) config.ensureDirectoryExists(config.tls_cert_filename);
+        if (!config.tls_private_key_filename.empty()) config.ensureDirectoryExists(config.tls_private_key_filename);
+
+        if (!config.ca_acf_filename.empty()) config.ensureDirectoryExists(config.ca_acf_filename);
+
+        if (!config.admin_cert_filename.empty()) config.ensureDirectoryExists(config.admin_cert_filename);
+        if (!config.admin_private_key_filename.empty()) config.ensureDirectoryExists(config.admin_private_key_filename);
+
+        if (!config.ca_db_filename.empty()) config.ensureDirectoryExists(config.ca_db_filename);
+
+        if (!ca_password_file.empty()) config.ensureDirectoryExists(ca_password_file);
+        if (!ca_pk_password_file.empty()) config.ensureDirectoryExists(ca_pk_password_file);
+        if (!pvacms_password_file.empty()) config.ensureDirectoryExists(pvacms_password_file);
+        if (!pvacms_pk_password_file.empty()) config.ensureDirectoryExists(pvacms_pk_password_file);
+        if (!admin_password_file.empty()) config.ensureDirectoryExists(admin_password_file);
+        if (!admin_pk_password_file.empty()) config.ensureDirectoryExists(admin_pk_password_file);
+
+        // Read in some passwords from files
+        if (!ca_password_file.empty()) config.ca_cert_password = config.getFileContents(ca_password_file);
+        if (!ca_pk_password_file.empty()) config.ca_private_key_password = config.getFileContents(ca_pk_password_file);
+        if (!pvacms_password_file.empty()) config.tls_cert_filename = config.getFileContents(pvacms_password_file);
+        if (!pvacms_pk_password_file.empty()) config.tls_private_key_password = config.getFileContents(pvacms_pk_password_file);
+        if (!admin_password_file.empty()) config.admin_cert_password = config.getFileContents(admin_password_file);
+        if (!admin_pk_password_file.empty()) config.admin_private_key_password = config.getFileContents(admin_pk_password_file);
+
+        // Override some settings for PVACMS
+        config.tls_stop_if_no_cert = true;
+        config.tls_client_cert_required = pvxs::impl::ConfigCommon::Optional;
+
+        if (show_version) {
+            std::cout << pvxs::version_information;
+            return 0;
         }
-        if (verbose) logger_level_set("pvxs.certs.*", pvxs::Level::Info);
 
         // Initialize SSL
         pvxs::ossl::SSLContext::sslInit();
 
-        // Set security if configured
-        // TODO if not configured then provide a default and provide a VALID certificate for that default
-        if (!config.ca_acf_filename.empty()) asSetFilename(config.ca_acf_filename.c_str());
-
         // Logger config from environment (so environment overrides verbose setting)
+        if (verbose) logger_level_set("pvxs.certs.*", pvxs::Level::Info);
         pvxs::logger_config_env();
 
         // Initialize the certificates database
@@ -1714,6 +1726,12 @@ int main(int argc, char *argv[]) {
 
         // Create this PVACMS server's certificate if it does not already exist
         ensureServerCertificateExists(config, ca_db, ca_cert, ca_pkey, ca_chain);
+
+        // Set security if configured
+        if (!config.ca_acf_filename.empty()) {
+            log_warn_printf(pvacms, "PVACMS secured with %s\n", config.ca_acf_filename.c_str());
+            asSetFilename(config.ca_acf_filename.c_str());
+        }
 
         // Create the PVs
         SharedPV create_pv(SharedPV::buildReadonly());

@@ -184,6 +184,54 @@ struct CertStatus {
     }
 
     /**
+     * @brief Get the common name of the given certificate
+     * return the common name or an empty string if cert is null or
+     * there are any problems retrieving the common name
+     *
+     * @param cert to retrieve the subject CN field
+     * @return the common name
+     */
+    static inline std::string getCommonName(ossl_ptr<X509>& cert) {
+        if ( !cert )
+            return "";
+
+        // Get the subject name from the certificate
+        X509_NAME* subject = X509_get_subject_name(cert.get());
+        if (!subject) {
+            return "";
+        }
+
+        // Find the position of the Common Name field within the subject name
+        int idx = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
+        if (idx < 0) {
+            return "";
+        }
+
+        X509_NAME_ENTRY* entry = X509_NAME_get_entry(subject, idx);
+        if (!entry) {
+            return "";
+        }
+
+        ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
+        if (!data) {
+            return "";
+        }
+
+        // Convert the ASN1_STRING to a UTF-8 C string
+        unsigned char* utf8 = nullptr;
+        int length = ASN1_STRING_to_UTF8(&utf8, data);
+        if (length < 0 || !utf8) {
+            return "";
+        }
+
+        // Construct a std::string from the UTF-8 data
+        std::string cn(reinterpret_cast<char*>(utf8), length);
+        OPENSSL_free(utf8);
+
+        return cn;
+    }
+
+    /**
      * @brief Make the status URI for a certificate
      *
      * @param issuer_id the issuer ID (first 8 hex digits of the hex SKID)

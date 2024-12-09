@@ -35,12 +35,12 @@
 #include <sys/types.h>
 
 #include "certfactory.h"
+#include "openssl.h"
 #include "osiFileName.h"
 #include "ownedptr.h"
 #include "p12filefactory.h"
 #include "security.h"
 #include "utilpvt.h"
-#include "openssl.h"
 
 namespace pvxs {
 namespace certs {

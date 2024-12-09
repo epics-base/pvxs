@@ -8,13 +8,13 @@
 #define PVXS_AUTHN_H_
 
 class Config {
-  public:
+   public:
 };
 
 // Interface to create Config objects
 class ConfigFactoryInterface {
-  public:
+   public:
     virtual Config* create() = 0;
 };
 
-#endif //PVXS_AUTHN_H_
+#endif  // PVXS_AUTHN_H_

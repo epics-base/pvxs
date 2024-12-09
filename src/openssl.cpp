@@ -240,7 +240,7 @@ void verifyKeyUsage(const ossl_ptr<X509> &cert,
  * is trusted.  However, PKCS12_parse() circa 3.1 does not know about
  * this, and gives us all the certs. in one blob for us to sort through.
  *
- * We _assume_ that any root CA included in a PKCS#12 file is meant to
+ * We _assume_ that any root CA included in a keychain file is meant to
  * be trusted.  Otherwise, such a cert. could never appear in a valid
  * chain.
  *
@@ -255,9 +255,9 @@ void extractCAs(SSLContext &ctx, const ossl_shared_ptr<STACK_OF(X509)> &CAs) {
         auto flags(X509_get_extension_flags(ca));
 
         if (canSign == 0 && i != 0) {
-            log_err_printf(setup, "non-CA certificate in PKCS#12 chain%s\n", "");
+            log_err_printf(setup, "non-CA certificate in keychain%s\n", "");
             log_err_printf(setup, "%s\n", (SB() << ShowX509{ca}).str().c_str());
-            throw std::runtime_error(SB() << "non-CA certificate found in PKCS#12 chain");
+            throw std::runtime_error(SB() << "non-CA certificate found in keychain");
         }
 
         if (flags & EXFLAG_SS) {        // self-signed (aka. root)

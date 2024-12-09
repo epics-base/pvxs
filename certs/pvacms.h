@@ -41,8 +41,6 @@
 #define CERT_MONITOR_POLLING_INTERVAL_SECS 10
 
 #define PVXS_HOSTNAME_MAX 1024
-#define PVXS_SERVICE_NAME "PVACMS Service"
-#define PVXS_SERVICE_ORG_UNIT_NAME "EPICS PVA Certificate Management Service"
 
 #define SQL_CREATE_DB_FILE              \
     "BEGIN TRANSACTION;"                \
@@ -217,6 +215,11 @@ time_t getNotBeforeTimeFromCert(const X509 *cert);
 void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
+void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert);
+
+void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
+                                  ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+
 void initCertsDatabase(sql_ptr &ca_db, std::string &db_file);
 
 void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&op, Value &&args,
@@ -247,8 +250,6 @@ void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_
                              std::vector<certstatus_t> valid_status = {PENDING_APPROVAL, PENDING, VALID});
 
 certstatus_t storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
-
-void usage(const char *argv0);
 
 bool statusMonitor(StatusMonitor &status_monitor_params);
 

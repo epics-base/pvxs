@@ -64,16 +64,14 @@ class IdFileFactory {
      *
      * This method creates a new CertFileFactory object.
      */
-    static cert_factory_ptr create(const std::string& filename, const std::string& password = "",
-                                                   const std::shared_ptr<KeyPair>& key_pair = nullptr, X509* cert_ptr = nullptr,
-                                                   STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
-                                                   const std::string& pem_string = "",
-                                                   bool certs_only = false);
+    static cert_factory_ptr create(const std::string& filename, const std::string& password = "", const std::shared_ptr<KeyPair>& key_pair = nullptr,
+                                   X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
+                                   const std::string& pem_string = "", bool certs_only = false);
 
-    static cert_factory_ptr createReader(const std::string& filename, const std::string& password="", const std::string& key_filename="", const std::string& key_password="") {
+    static cert_factory_ptr createReader(const std::string& filename, const std::string& password = "", const std::string& key_filename = "",
+                                         const std::string& key_password = "") {
         auto cert_file_factory = create(filename, password);
-        if ( !key_filename.empty() )
-            cert_file_factory->key_file_ = create(key_filename, key_password);
+        if (!key_filename.empty()) cert_file_factory->key_file_ = create(key_filename, key_password);
 
         return cert_file_factory;
     }
@@ -123,9 +121,16 @@ class IdFileFactory {
     CertData getCertData(const std::shared_ptr<KeyPair>& key_pair);
 
    protected:
-    IdFileFactory(const std::string& filename, const std::string &password="", const std::shared_ptr<KeyPair> &key_pair=nullptr, X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
-                  const std::string& pem_string = "", bool certs_only = false)
-        : filename_(filename), password_(password), key_pair_(key_pair), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), usage_(usage), pem_string_(pem_string), certs_only_(certs_only) {}
+    IdFileFactory(const std::string& filename, const std::string& password = "", const std::shared_ptr<KeyPair>& key_pair = nullptr, X509* cert_ptr = nullptr,
+                  STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate", const std::string& pem_string = "", bool certs_only = false)
+        : filename_(filename),
+          password_(password),
+          key_pair_(key_pair),
+          cert_ptr_(cert_ptr),
+          certs_ptr_(certs_ptr),
+          usage_(usage),
+          pem_string_(pem_string),
+          certs_only_(certs_only) {}
 
     const std::string filename_{};
     std::string password_{};

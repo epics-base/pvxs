@@ -54,9 +54,6 @@ class ConfigCms : public pvxs::server::Config {
      * @brief When basic credentials are used then set to true to
      * request administrator approval to issue client certificates.
      *
-     * This will mean that clients will have to keep retrying connections
-     * until the certificate request is approved by an administrator.
-     *
      * All other auth methods will never require administrator approval.
      */
     bool cert_client_require_approval = true;
@@ -64,12 +61,18 @@ class ConfigCms : public pvxs::server::Config {
     /**
      * @brief When basic credentials are used then set to true
      * to request administrator approval to issue server certificates.
-     * This will mean that servers will have to keep retrying connections
-     * until the certificate request is approved by an administrator.
      *
      * All other auth methods will never require administrator approval.
      */
     bool cert_server_require_approval = true;
+
+    /**
+     * @brief When basic credentials are used then set to true
+     * to request administrator approval to issue gateway certificates.
+     *
+     * All other auth methods will never require administrator approval.
+     */
+    bool cert_gateway_require_approval = true;
 
     /**
      * @brief This flag is used to indicate that a certificate user must subscribe
@@ -97,7 +100,7 @@ class ConfigCms : public pvxs::server::Config {
 
     /**
      * @brief This is the string that determines
-     * the fully qualified path to the PKCS#12 file that contains
+     * the fully qualified path to the keychain file that contains
      * the CA certificate, and public and private keys.
      *
      * This is used to sign certificates being created in the PVACMS or
@@ -120,7 +123,7 @@ class ConfigCms : public pvxs::server::Config {
 
     /**
      * @brief This is the string that determines
-     * the fully qualified path to the PKCS#12 key file that contains
+     * the fully qualified path to the private key file that contains
      * the private keys.
      *
      * This is optional.  If not specified, the `ca_cert_filename` is used.
@@ -133,6 +136,34 @@ class ConfigCms : public pvxs::server::Config {
      * unlocks the `ca_pkey_filename`.
      */
     std::string ca_private_key_password;
+
+    /**
+     * @brief This is the string that determines
+     * the fully qualified path to the keychain file that contains
+     * the admin user's certificate, and public and private keys.
+     */
+    std::string admin_cert_filename;
+
+    /**
+     * @brief This is the string that determines
+     * the fully qualified path to a file that contains the password that
+     * unlocks the admin user's keychain file.
+     */
+    std::string admin_cert_password;
+
+    /**
+     * @brief This is the string that determines
+     * the fully qualified path to the admin user's private key file that contains
+     * the private keys.
+     */
+    std::string admin_private_key_filename;
+
+    /**
+     * @brief This is the string that determines
+     * the fully qualified path to a file that contains the password that
+     * unlocks the admin user's private key file.
+     */
+    std::string admin_private_key_password;
 
     /**
      * @brief This is the string that determines the
@@ -148,19 +179,22 @@ class ConfigCms : public pvxs::server::Config {
      * e.g.
      * @code
      *      USG(ADMINS) {
-     *       "ed@slac.stanford.edu",
-     *       "greg@slac.stanford.edu"
+     *       "admin",
+     *       "admin@yourdomain.com"
      *      }
      *
      *      ASG(SPECIAL) {
-     *       RULE(1,WRITE,TRAPWRITE) {
+     *       RULE(0,READ)
+     *       RULE(1,WRITE) {
      *         UAG(ADMINS)
+     *         METHOD("x509")
+     *         AUTHORITY("CN of your Certificate Authority")
      *      }
      *
      * @endcode
      *
      */
-    std::string ca_acf_filename;
+    std::string ca_acf_filename{"pvacms.acf"};
 
     /**
      * @brief If a CA root certificate has not been established
@@ -191,6 +225,46 @@ class ConfigCms : public pvxs::server::Config {
      * subject of the CA certificate we can use this environment variable.
      */
     std::string ca_organizational_unit = "EPICS Certificate Authority";
+
+    /**
+     * @brief The CA Country
+     */
+    std::string ca_country;
+
+    /**
+     * @brief If a PVACMS certificate has not been established
+     * prior to the first time that the PVACMS starts up, then one
+     * will be created automatically.
+     *
+     * To provide the name (CN) to be used in the subject of the
+     * PVACMS certificate we can use this environment variable.
+     */
+    std::string pvacms_name = "PVACMS Service";
+
+    /**
+     * @brief If a PVACMS certificate has not been established
+     * prior to the first time that the PVACMS starts up, then one will be
+     * created automatically.
+     *
+     * To provide the organization (O) to be used in the subject of
+     * the PVACMS certificate we can use this environment variable.
+     */
+    std::string pvacms_organization = "ca.epics.org";
+
+    /**
+     * @brief If a PVACMS certificate has not been
+     * established prior to the first time that the PVACMS starts up,
+     * then one will be created automatically.
+     *
+     * To provide the organizational unit (OU) to be used in the
+     * subject of the PVACMS certificate we can use this environment variable.
+     */
+    std::string pvacms_organizational_unit = "EPICS PVA Certificate Management Service";
+
+    /**
+     * @brief The PVACMS Country
+     */
+    std::string pvacms_country;
 
     void fromCmsEnv(const std::map<std::string, std::string>& defs);
 };

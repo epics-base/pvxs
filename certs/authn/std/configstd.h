@@ -14,12 +14,11 @@
 
 #include "ownedptr.h"
 
-
 namespace pvxs {
 namespace certs {
 
 class ConfigStd : public pvxs::client::Config {
-  public:
+   public:
     ConfigStd& applyEnv() {
         pvxs::client::Config::applyEnv(true, CLIENT);
         return *this;
@@ -47,9 +46,9 @@ class ConfigStd : public pvxs::client::Config {
     std::string device_name;
 
     std::string tls_srv_cert_filename;
-    std::string tls_srv_private_key_filename ;
+    std::string tls_srv_private_key_filename;
     std::string tls_srv_cert_password;
-    std::string tls_srv_private_key_password ;
+    std::string tls_srv_private_key_password;
 
     /**
      * @brief Value will be used as the process name when an EPICS agent
@@ -74,6 +73,6 @@ class ConfigStd : public pvxs::client::Config {
     void fromStdEnv(const std::map<std::string, std::string>& defs);
 };
 
-} // certs
-} // pvxs
-#endif //PVXS_CONFIGSTD_H_
+}  // namespace certs
+}  // namespace pvxs
+#endif  // PVXS_CONFIGSTD_H_

@@ -50,8 +50,8 @@
 #include <pvxs/version.h>
 
 #include "auth.h"
-#include "configstd.h"
 #include "certfactory.h"
+#include "configstd.h"
 #include "ownedptr.h"
 #include "security.h"
 
@@ -93,16 +93,13 @@ class AuthStd : public Auth {
 
     std::shared_ptr<Credentials> getCredentials(const ConfigStd &config) const override;
 
-    std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
-                                                                   const std::shared_ptr<KeyPair> &key_pair,
+    std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
                                                                    const uint16_t &usage) const override;
 
-    bool verify(
-        const Value ccr,
-        std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const override;
+    bool verify(const Value ccr, std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const override;
 };
 
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs
 
 #endif  // PVXS_AUTH_DEFAULT_H
