@@ -1009,24 +1009,7 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
  * @param ca_cert the CA certificate to use to get the issuer ID and common name
  */
 void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert) {
-    auto issuer_id = CertStatus::getIssuerId(ca_cert.get());
     auto cn = CertStatus::getCommonName(ca_cert);
-
-    const std::string acf_file_body =
-        "UAG(%s) {admin}\n"
-        "\n"
-        "ASG(DEFAULT) {\n"
-        "    RULE(0,READ)\n"
-        "    RULE(1,WRITE) {\n"
-        "        UAG(%s)\n"
-        "        METHOD(\"x509\")\n"
-        "        AUTHORITY(\"%s\")\n"
-        "    }\n"
-        "}";
-
-    char buffer[1024];
-    std::snprintf(buffer, sizeof(buffer), acf_file_body.c_str(), issuer_id.c_str(), issuer_id.c_str(), cn.c_str());
-    std::string final_acf = buffer;
 
     // Write the final string to the specified file
     std::ofstream out_file(config.ca_acf_filename, std::ios::out | std::ios::trunc);
@@ -1034,16 +1017,27 @@ void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert) {
         throw std::runtime_error("Failed to open ACF file for writing: " + config.ca_acf_filename);
     }
 
-    out_file << final_acf;
+    out_file <<
+      "UAG(CMS_ADMIN) {admin}\n"
+      "\n"
+      "ASG(DEFAULT) {\n"
+      "    RULE(0,READ)\n"
+      "    RULE(1,WRITE) {\n"
+      "        UAG(CMS_ADMIN)\n"
+      "        METHOD(\"x509\")\n"
+      "        AUTHORITY(\"" << cn << "\")\n"
+      "    }\n"
+      "}";
+
     out_file.close();
     log_info_printf(pvacms, "Created Default ACF file: %s\n", config.ca_acf_filename.c_str());
     log_info_printf(pvacms, "--------------------------------------%s", "\n");
-    log_info_printf(pvacms, "UAG(%s) {admin}%s", issuer_id.c_str(), "\n");
+    log_info_printf(pvacms, "UAG(CMS_ADMIN) {admin}%s", "\n");
     log_info_printf(pvacms, "%s", "\n");
     log_info_printf(pvacms, "ASG(DEFAULT) {%s", "\n");
     log_info_printf(pvacms, "    RULE(0,READ)%s", "\n");
     log_info_printf(pvacms, "    RULE(1,WRITE) {%s", "\n");
-    log_info_printf(pvacms, "        UAG(%s)%s", issuer_id.c_str(), "\n");
+    log_info_printf(pvacms, "        UAG(CMS_ADMIN)%s", "\n");
     log_info_printf(pvacms, "        METHOD(\"x509\")%s", "\n");
     log_info_printf(pvacms, "        AUTHORITY(\"%s\")%s", cn.c_str(), "\n");
     log_info_printf(pvacms, "    }%s", "\n");
@@ -1808,6 +1802,21 @@ int main(int argc, char *argv[]) {
             // Get desired state
             auto state = value["state"].as<std::string>();
             std::transform(state.begin(), state.end(), state.begin(), ::toupper);
+
+/*
+            // Get credentials for this operation
+            auto creds = op->credentials();
+
+
+            // Get security client from channel
+            SecurityClient securityClient = op->channel()->securityClient();
+
+            if (!securityClient.canWrite()) {
+                log_err_printf(pvacms, "PVACMS Client Not Authorised%s", "\n");
+                op->error(pvxs::SB() << state << " operation not authorized on " << issuer_id << ":" << serial );
+                return;
+            }
+*/
 
             if (state == "REVOKED") {
                 onRevoke(config, ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, ca_pkey, ca_cert, ca_chain);

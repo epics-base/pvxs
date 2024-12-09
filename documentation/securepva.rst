@@ -274,14 +274,14 @@ Quick Start Guide
 
     .. code-block:: sh
 
+        #### 1. Create a new server private key and certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
+
+        ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u server -N IOC1 -O "KLI:LI01:10" -o "FACET"
+
         #### 1. Create a new client private key at location specified by EPICS_PVA_TLS_KEY if it does not already exist
         #### 2. Create client certificate at location specified by EPICS_PVA_TLS_KEYCHAIN
 
         ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u client -N greg -O "SLAC.STANFORD.EDU" -o "Controls"
-
-        #### 1. Create a new server private key and certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
-
-        ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u server -N IOC1 -O "KLI:LI01:10" -o "FACET
 
 
 10. Run a service
@@ -293,7 +293,7 @@ Quick Start Guide
 
         #### 1. Create a new server private key and certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
 
-        ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u server -N IOC1 -O "KLI:LI01:10" -o "FACET
+        ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u server -N IOC1 -O "KLI:LI01:10" -o "FACET"
 
 
 .. _transport_layer_security:
