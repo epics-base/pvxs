@@ -517,6 +517,7 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factor
     log_info_printf(pvacms, "%s\n", (SB() << "NAME: " << certificate_factory.name_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATION: " << certificate_factory.org_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_).str().c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "COUNTRY: " << certificate_factory.country_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "STATUS: " << CERT_STATE(effective_status)).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1)).str().c_str());
     log_info_printf(pvacms, "--------------------------------------%s", "\n");
@@ -1085,6 +1086,7 @@ void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EV
     log_info_printf(pvacms, "%s\n", (SB() << "NAME: " << certificate_factory.name_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATION: " << certificate_factory.org_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_).str().c_str());
+    log_info_printf(pvacms, "%s\n", (SB() << "COUNTRY: " << certificate_factory.country_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "STATUS: " << CERT_STATE(VALID)).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1)).str().c_str());
     log_info_printf(pvacms, "--------------------------------------%s", "\n");
@@ -1287,13 +1289,45 @@ void ensureValidityCompatible(CertFactory &cert_factory) {
  *
  * @return the current country code of where the process is running
  */
-std::string getCountryCode() {
-    std::locale loc;
-    auto country_code(loc.name().substr(0, 2));
-    if (country_code == "C") return "";
+std::string extractCountryCode(const std::string &locale_str) {
+    // Look for underscore
+    auto pos = locale_str.find('_');
+    if (pos == std::string::npos || pos + 3 > locale_str.size()) {
+        return "";
+    }
 
+    std::string country_code = locale_str.substr(pos + 1, 2);
     std::transform(country_code.begin(), country_code.end(), country_code.begin(), ::toupper);
     return country_code;
+}
+
+std::string getCountryCode() {
+    // 1. Try from std::locale("")
+    {
+        std::locale loc("");
+        std::string name = loc.name();
+        if (name != "C" && name != "POSIX") {
+            std::string cc = extractCountryCode(name);
+            if (!cc.empty()) {
+                return cc;
+            }
+        }
+    }
+
+    // 2. If we failed, try the LANG environment variable
+    {
+        const char *lang = std::getenv("LANG");
+        if (lang && *lang) {
+            std::string locale_str(lang);
+            std::string cc = extractCountryCode(locale_str);
+            if (!cc.empty()) {
+                return cc;
+            }
+        }
+    }
+
+    // 3. Default to "US" if both attempts failed
+    return "US";
 }
 
 /**
@@ -1627,7 +1661,8 @@ int main(int argc, char *argv[]) {
         app.add_option("--pkp,--pvacms-keychain-pwd", pvacms_password_file, "Specify PVACMS keychain password file location");
         app.add_option("--ppkp,--pvacms-private-key-pwd", pvacms_pk_password_file, "Specify PVACMS private key password file location");
 
-        app.add_option("--ak,--admin-keychain", config.admin_cert_filename, "Specify PVACMS admin user's keychain file location")->default_val(config.admin_cert_filename);
+        app.add_option("--ak,--admin-keychain", config.admin_cert_filename, "Specify PVACMS admin user's keychain file location")
+            ->default_val(config.admin_cert_filename);
         app.add_option("--apk,--admin-private-key", config.admin_private_key_filename, "Specify PVACMS admin user's private key file location");
         app.add_option("--akp,--admin-keychain-pwd", admin_password_file, "Specify PVACMS admin user's keychain password file location");
         app.add_option("--apkp,--admin-private-key-pwd", admin_pk_password_file, "Specify PVACMS admin user's private key password file location");
@@ -1660,7 +1695,8 @@ int main(int argc, char *argv[]) {
         app.add_option("--gateway-require-approval", config.cert_gateway_require_approval, "Generate Server Certificates in PENDING_APPROVAL state")
             ->default_val(config.cert_gateway_require_approval);
 
-        app.add_option("--svm,--status-validity-mins", config.cert_status_validity_mins, "Set Status Validity Time in Minutes")->default_val(config.cert_status_validity_mins);
+        app.add_option("--svm,--status-validity-mins", config.cert_status_validity_mins, "Set Status Validity Time in Minutes")
+            ->default_val(config.cert_status_validity_mins);
         app.add_option("--sme,--status-monitoring-enabled", config.cert_status_subscription,
                        "Require Peers to monitor Status of Certificates Generated by this server by default.  Can be overridden in each CCR")
             ->default_val(config.cert_status_subscription);

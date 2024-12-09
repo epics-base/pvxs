@@ -80,15 +80,15 @@
         return SSL_CTX_get0_certificate(context->ctx);                      \
     }
 
-#define START_STATUS_VALIDITY_TIMER(TYPE, LOOP)                                                                                                           \
-    void TYPE::startStatusValidityTimer() {                                                                                                               \
-        (LOOP).dispatch([this]() {                                                                                                                        \
-            if (current_status) {                                                                                                                         \
-                auto now = time(nullptr);                                                                                                                 \
-                timeval validity_end = {current_status->status_valid_until_date.t - now, 0};                                                              \
+#define START_STATUS_VALIDITY_TIMER(TYPE, LOOP)                                                                                                               \
+    void TYPE::startStatusValidityTimer() {                                                                                                                   \
+        (LOOP).dispatch([this]() {                                                                                                                            \
+            if (current_status) {                                                                                                                             \
+                auto now = time(nullptr);                                                                                                                     \
+                timeval validity_end = {current_status->status_valid_until_date.t - now, 0};                                                                  \
                 if (event_add(cert_validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting certificate status validity timer\n%s", ""); \
-            }                                                                                                                                              \
-        });                                                                                                                                                \
+            }                                                                                                                                                 \
+        });                                                                                                                                                   \
     }
 
 #define SUBSCRIBE_TO_CERT_STATUS(TYPE, STATUS_TYPE, LOOP)                                                                                   \
@@ -195,14 +195,14 @@ class CertStatusManager {
      * @return the extension
      * @throws CertStatusNoExtensionException if no extension is present in the certificate
      */
-    static X509_EXTENSION* getExtension(const X509 * certificate);
+    static X509_EXTENSION* getExtension(const X509* certificate);
 
     /**
      * @brief Determine if status monitoring is required for the given certificate
      * @param certificate the certificate to check
      * @return true if certificate monitoring is required
      */
-    static bool statusMonitoringRequired(const X509 * certificate);
+    static bool statusMonitoringRequired(const X509* certificate);
 
     /**
      * @brief Get the status PV from a Cert.
@@ -290,9 +290,9 @@ class CertStatusManager {
      */
     std::shared_ptr<PVACertificateStatus> getPVAStatus();
 
-    inline bool available(double timeout = 5.0 ) noexcept { return isValid() || waitedTooLong(timeout); }
+    inline bool available(double timeout = 5.0) noexcept { return isValid() || waitedTooLong(timeout); }
 
-    inline bool waitedTooLong(double timeout = 5.0 ) const noexcept { return (manager_start_time_ + (time_t)timeout) < std::time(nullptr); }
+    inline bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t)timeout) < std::time(nullptr); }
 
     inline bool isValid() noexcept { return status_ && status_->isValid(); }
 

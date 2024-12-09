@@ -6,7 +6,7 @@
 
 #include "configstd.h"
 
-DEFINE_LOGGER(_logname, "pvxs.certs.cfg");
+DEFINE_LOGGER(cfg, "pvxs.certs.cfg");
 
 namespace pvxs {
 namespace certs {
@@ -19,23 +19,48 @@ void ConfigStd::fromStdEnv(const std::map<std::string, std::string> &defs) {
         try {
             cert_validity_mins = parseTo<uint64_t>(pickone.val);
         } catch (std::exception &e) {
-            log_err_printf(_logname, "%s invalid validity minutes : %s", pickone.name.c_str(), e.what());
+            log_err_printf(cfg, "%s invalid validity minutes : %s", pickone.name.c_str(), e.what());
         }
     }
 
-    // EPICS_AUTH_STD_DEVICE_NAME
-    if (pickone({"EPICS_AUTH_STD_DEVICE_NAME"})) {
-        device_name = pickone.val;
+    // EPICS_AUTH_STD_NAME
+    if (pickone({"EPICS_PVA_AUTH_STD_NAME"})) {
+        name = server_name = pickone.val;
     }
 
-    // EPICS_AUTH_STD_PROCESS_NAME
-    if (pickone({"EPICS_AUTH_STD_PROCESS_NAME"})) {
-        process_name = pickone.val;
+    // EPICS_AUTH_STD_ORG
+    if (pickone({"EPICS_PVA_AUTH_STD_ORG"})) {
+        organization = server_organization = pickone.val;
     }
 
-    // EPICS_AUTH_STD_USE_PROCESS_NAME
-    if (pickone({"EPICS_AUTH_STD_USE_PROCESS_NAME"})) {
-        use_process_name = parseTo<bool>(pickone.val);
+    // EPICS_AUTH_STD_ORG_UNIT
+    if (pickone({"EPICS_PVA_AUTH_STD_ORG_UNIT"})) {
+        organizational_unit = server_organizational_unit = pickone.val;
+    }
+
+    // EPICS_AUTH_STD_COUNTRY
+    if (pickone({"EPICS_PVA_AUTH_STD_COUNTRY"})) {
+        country = server_country = pickone.val;
+    }
+
+    // EPICS_AUTH_STD_NAME
+    if (pickone({"EPICS_PVAS_AUTH_STD_NAME"})) {
+        server_name = pickone.val;
+    }
+
+    // EPICS_AUTH_STD_ORG
+    if (pickone({"EPICS_PVAS_AUTH_STD_ORG"})) {
+        server_organization = pickone.val;
+    }
+
+    // EPICS_AUTH_STD_ORG_UNIT
+    if (pickone({"EPICS_PVAS_AUTH_STD_ORG_UNIT"})) {
+        server_organizational_unit = pickone.val;
+    }
+
+    // EPICS_AUTH_STD_COUNTRY
+    if (pickone({"EPICS_PVAS_AUTH_STD_COUNTRY"})) {
+        server_country = pickone.val;
     }
 
     // EPICS_PVAS_TLS_KEYCHAIN

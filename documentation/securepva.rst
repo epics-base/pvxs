@@ -846,14 +846,14 @@ Enable detailed PVXS debug logging:
 New Debug Categories:
 
 - ``pvxs.certs.auth``          - Authentication mechanisms
-- ``pvxs.certs.auth.cfg``      - Authn configuration
-- ``pvxs.certs.auth.cms``      - CMS authentication
-- ``pvxs.certs.auth.jwt``      - JWT authentication mechanism
-- ``pvxs.certs.auth.krb``      - Kerberos authentication mechanism
-- ``pvxs.certs.auth.mon``      - Authn monitoring
-- ``pvxs.certs.auth.stat``     - Authn status
-- ``pvxs.certs.auth.std``      - Basic credentials authentication mechanism
-- ``pvxs.certs.auth.tool``     - Authn tools (``pvacert``)
+- ``pvxs.auth.cfg``            - Authn configuration
+- ``pvxs.auth.cms``            - CMS authentication
+- ``pvxs.auth.jwt``            - JWT authentication mechanism
+- ``pvxs.auth.krb``            - Kerberos authentication mechanism
+- ``pvxs.auth.mon``            - Authn monitoring
+- ``pvxs.auth.stat``           - Authn status
+- ``pvxs.auth.std``            - Basic credentials authentication mechanism
+- ``pvxs.auth.tool``           - Authn tools (``pvacert``)
 - ``pvxs.certs.status``        - Certificate management
 - ``pvxs.ossl.init``           - TLS initialization
 - ``pvxs.ossl.io``             - TLS I/O
@@ -1065,17 +1065,19 @@ It can be used to create a certificate with a username and hostname.
 
 - `CN` field in the certificate will be the logged in username
 
-  - unless the EPICS_AUTH_STD_PROCESS_NAME environment variable is set
-  - or the EPICS_AUTH_STD_USE_PROCESS_NAME environment variable is set to ``true``
-    in which case the actual process name is used
+  - unless the EPICS_PVA_AUTH_STD_NAME, EPICS_PVAS_AUTH_STD_NAME environment variable is set
 
 - `O` field in the certificate will be the hostname
 
-  - unless the EPICS_AUTH_STD_DEVICE_NAME environment variable is set
+  - unless the EPICS_PVA_AUTH_STD_ORG, EPICS_PVAS_AUTH_STD_ORG environment variable is set
 
 - `OU` field in the certificate will not be set
+
+  - unless the EPICS_PVA_AUTH_STD_ORG_UNIT, EPICS_PVAS_AUTH_STD_ORG_UNIT environment variable is set
+
 - `C` field in the certificate will be set to the local country code
 
+  - unless the EPICS_PVA_AUTH_STD_COUNTRY, EPICS_PVAS_AUTH_STD_COUNTRY environment variable is set
 
 **usage**
 
@@ -1114,26 +1116,53 @@ private key, and password file locations.
 || EPICS_AUTH_STD      || <number of minutes>               || Amount of minutes before the certificate expires.                    |
 || _CERT_VALIDITY_MINS || e.g. ``525960`` for 1 year        ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_AUTH_STD      || {string name of device}           || Name of device to use in new certificates                            |
-|| _DEVICE_NAME        || e.g. ``KLYS:LI01:01``             ||                                                                      |
+|| EPICS_PVA_AUTH_STD  || {name to use}                     || Name to use in new certificates                                      |
+|| _NAME               || e.g. ``archiver``                 ||                                                                      |
++----------------------+  e.g. ``IOC1``                     ||                                                                      |
+|| EPICS_PVAS_AUTH_STD || e.g. ``greg``                     ||                                                                      |
+|| _NAME               ||                                   ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_AUTH_STD      || {name of process}                 || Name of process to use in new certificates                           |
-|| _PROCESS_NAME       || e.g. ``archiver``                 ||                                                                      |
+|| EPICS_PVA_AUTH_STD  || {organization to use}             || Organization to use in new certificates                              |
+|| _ORG                || e.g. ``site.epics.org``           ||                                                                      |
++----------------------+  e.g. ``SLAC.STANFORD.EDU``        ||                                                                      |
+|| EPICS_PVAS_AUTH_STD || e.g. ``KLYS:LI01:101``            ||                                                                      |
+|| _ORG                || e.g. ``centos07``                 ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_AUTH_STD      || {``true`` or ``false`` (default)} || If ``true`` use the process name as the CN field in new certificates |
-|| _USE_PROCESS_NAME   ||                                   ||                                                                      |
+|| EPICS_PVA_AUTH_STD  || {organization unit to use}        || Organization Unit to use in new certificates                         |
+|| _ORG_UNIT           || e.g. ``data center``              ||                                                                      |
++----------------------+  e.g. ``ops``                      ||                                                                      |
+|| EPICS_PVAS_AUTH_STD || e.g. ``prod``                     ||                                                                      |
+|| _ORG_UNIT           || e.g. ``remote``                   ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_TLS       || <path to the client cert file>    || The location of the client or gateway certificate file.  The file    |
-|| _TLS_KEYCHAIN       ||                                   || will created here for clients and gateways.                          |
+|| EPICS_PVA_AUTH_STD  || {country to use}                  || Country to use in new certificates.                                  |
+|| _COUNTRY            || e.g. ``US``                       || Must be a two digit country code                                     |
++----------------------+  e.g. ``CA``                       ||                                                                      |
+|| EPICS_PVAS_AUTH_STD ||                                   ||                                                                      |
+|| _COUNTRY            ||                                   ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_TLS       || <client cert password file path>  || The location of the file containing the password for the client      |
-|| _KEYCHAIN_PWD_FILE  ||                                   || or gateway certificate.                                              |
+|| EPICS_PVA_TLS       || <path to the keychain file>       || The location of the keychain file.  The file will be created here    |
+|| _TLS_KEYCHAIN       ||                                   ||                                                                      |
++----------------------+                                    ||                                                                      |
+|| EPICS_PVAS_TLS      ||                                   ||                                                                      |
+|| _TLS_KEYCHAIN       ||                                   ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVAS_TLS      || <path to the server cert file>    || The location of the server certificate file.  The file will be       |
-|| _TLS_KEYCHAIN       ||                                   || created here for servers.                                            |
+|| EPICS_PVA_TLS       || <cert password file path>         || The location of the file containing the password for the keychain    |
+|| _KEYCHAIN_PWD_FILE  ||                                   || file.                                                                |
++----------------------+                                    ||                                                                      |
+|| EPICS_PVAS_TLS      ||                                   ||                                                                      |
+|| _KEYCHAIN_PWD_FILE  ||                                   ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVAS_TLS      || <server cert password file path>  || The location of the file containing the password for the server      |
-|| _KEYCHAIN_PWD_FILE  ||                                   || certificate.                                                         |
+|| EPICS_PVA_TLS       || <path to the private key file>    || The location of the private key file.  The file will be created here |
+|| _TLS_PKEY           ||                                   ||                                                                      |
++----------------------+                                    ||                                                                      |
+|| EPICS_PVAS_TLS      ||                                   ||                                                                      |
+|| _TLS_PKEY           ||                                   ||                                                                      |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_TLS       || <cert private key password file>  || The location of the file containing the password for the private key |
+|| _PKEY_PWD_FILE      ||                                   || file.                                                                |
++----------------------+                                    ||                                                                      |
+|| EPICS_PVAS_TLS      ||                                   ||                                                                      |
+|| _PKEY_PWD_FILE      ||                                   ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
 
 **Examples**
@@ -1146,13 +1175,13 @@ private key, and password file locations.
     .. code-block:: sh
 
         # create a server certificate for IOC1
-        authnstd -u server -N IOC1 -O "KLI:LI01:10" -OU "FACET"
+        authnstd -u server -N IOC1 -O "KLI:LI01:10" -o "FACET"
 
 
     .. code-block:: sh
 
         # create a gateway certificate for gateway1
-        authnstd -u gateway -N gateway1 -O bridge.ornl.gov -OU "Networking"
+        authnstd -u gateway -N gateway1 -O bridge.ornl.gov -o "Networking"
 
 
 authkrb Configuration and Usage

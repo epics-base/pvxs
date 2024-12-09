@@ -43,32 +43,20 @@ class ConfigStd : public pvxs::client::Config {
      * is determining basic credentials instead of the hostname as
      * the principal
      */
-    std::string device_name;
+    std::string name;
+    std::string organization;
+    std::string organizational_unit;
+    std::string country;
+
+    std::string server_name;
+    std::string server_organization;
+    std::string server_organizational_unit;
+    std::string server_country;
 
     std::string tls_srv_cert_filename;
     std::string tls_srv_private_key_filename;
     std::string tls_srv_cert_password;
     std::string tls_srv_private_key_password;
-
-    /**
-     * @brief Value will be used as the process name when an EPICS agent
-     * is determining basic credentials instead of the logged-on
-     * user as the principal.
-     */
-#ifdef __linux__
-    std::string process_name = program_invocation_short_name;
-#elif defined(__APPLE__) || defined(__FreeBSD__)
-    std::string process_name = getprogname();
-#else
-    // alternative
-    std::string process_name;
-#endif
-    /**
-     * @brief true will mean that when an EPICS agent is determining
-     * basic credentials it will use the process name instead
-     * of the logged-on user as the principal
-     */
-    bool use_process_name = false;
 
     void fromStdEnv(const std::map<std::string, std::string>& defs);
 };

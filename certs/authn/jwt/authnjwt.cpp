@@ -15,7 +15,7 @@
 
 #include <pvxs/log.h>
 
-DEFINE_LOGGER(auths, "pvxs.certs.auth.jwt");
+DEFINE_LOGGER(auths, "pvxs.auth.jwt");
 
 namespace pvxs {
 namespace certs {
