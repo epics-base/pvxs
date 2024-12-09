@@ -82,7 +82,11 @@ std::shared_ptr<KeyPair> Auth::createKeyPair(const ConfigCommon &config) {
     const auto key_pair(IdFileFactory::createKeyPair());
 
     // Create private key file containing private key
-    IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password, key_pair)->writeIdentityFile();
+    if ( config.tls_private_key_filename.empty()) {
+        IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair)->writeIdentityFile();
+    } else {
+        IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password, key_pair)->writeIdentityFile();
+    }
     return key_pair;
 }
 }  // namespace certs

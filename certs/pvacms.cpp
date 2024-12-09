@@ -1149,9 +1149,9 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
                 return;
             }
             // We don't have keys so create a key in a combined cert and key file
-            throw(std::runtime_error("Certificate file does not contain a certificate: "));
+            throw(std::runtime_error("Certificate file does not contain a certificate"));
         }
-        throw(std::runtime_error("Certificate file does not contain a private key: "));
+        throw(std::runtime_error("Certificate file does not contain a private key"));
     } catch (std::exception &e) {
         // Error getting certs file, or certs file invalid
         // Make a new server Certificate

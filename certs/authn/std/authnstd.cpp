@@ -416,7 +416,11 @@ int main(int argc, char *argv[]) {
             // Get key pair
             try {
                 // Check if the key pair exists
-                key_pair = IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password)->getKeyFromFile();
+                if ( config.tls_private_key_filename.empty() ) {
+                    key_pair = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getKeyFromFile();
+                } else {
+                    key_pair = IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password)->getKeyFromFile();
+                }
             } catch (std::exception &e) {
                 // Make a new key pair file
                 try {

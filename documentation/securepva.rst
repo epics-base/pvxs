@@ -178,7 +178,7 @@ Quick Start Guide
         #### [optional] SETUP PVACMS KEY FILE
         # Note that if key is not set then the key will be stored in the same keychain file as the certificate
 
-        export EPICS_PVACMS_PKEY=${XDG_CONFIG_HOME}/pvacmskey.p12
+        export EPICS_PVACMS_TLS_PKEY=${XDG_CONFIG_HOME}/pvacmskey.p12
 
         #### SETUP PVACMS KEYCHAIN FILE (can contain both key and certs)
 
@@ -240,7 +240,7 @@ Quick Start Guide
         #
         # 6. Start PVACMS service
 
-        ${PROJECT_HOME}/pvxs/bin/*/pvacms
+        ${PROJECT_HOME}/pvxs/bin/*/pvacms -v
 
 7. Install Root Certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -262,15 +262,12 @@ Quick Start Guide
         # An EPICS client agent key if required
         export EPICS_PVA_TLS_PKEY=~/.config/client.p12
 
-        # An EPICS server agent key if required
-        export EPICS_PVAS_TLS_PKEY=~/.config/server.p12
-
         #### Set certificate paths (certificates will be created here if they don't already exist)
         # An EPICS client agent certificate if required
         export EPICS_PVA_TLS_KEYCHAIN=~/.config/client.pem
 
-        # An EPICS server agent certificate if required
-        export EPICS_PVAS_TLS_KEYCHAIN=~/.config/server.pem
+        # An EPICS server agent key and certificate combined
+        export EPICS_PVAS_TLS_KEYCHAIN=~/.config/server.p12
 
 9. Create Certificates
 ^^^^^^^^^^^^^^^^^^^^
@@ -280,12 +277,23 @@ Quick Start Guide
         #### 1. Create a new client private key at location specified by EPICS_PVA_TLS_KEY if it does not already exist
         #### 2. Create client certificate at location specified by EPICS_PVA_TLS_KEYCHAIN
 
-        ${PROJECT_HOME}/pvxs/bin/*/authnstd -u client
+        ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u client -N greg -O "SLAC.STANFORD.EDU" -o "Controls"
 
-        #### 1. Create a new server private key at location specified by EPICS_PVAS_TLS_KEY if it does not already exist
-        #### 2. Create server certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
+        #### 1. Create a new server private key and certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
 
-        ${PROJECT_HOME}/pvxs/bin/*/authnstd -u server
+        ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u server -N IOC1 -O "KLI:LI01:10" -o "FACET
+
+
+10. Run a service
+^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u client -N greg -O "SLAC.STANFORD.EDU" -o "Controls"
+
+        #### 1. Create a new server private key and certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
+
+        ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u server -N IOC1 -O "KLI:LI01:10" -o "FACET
 
 
 .. _transport_layer_security:
