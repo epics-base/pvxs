@@ -12,6 +12,7 @@ ifeq ($(EVENT2_HAS_OPENSSL),YES)
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL -I$(TOP)/bundle/CLI11/include
 AUTHN = $(TOP)/certs/authn
 SRC_DIRS += $(TOP)/src
+SRC_DIRS += $(TOP)/ioc
 SRCS += p12filefactory.cpp
 SRCS += pemfilefactory.cpp
 SRCS += certfilefactory.cpp
@@ -22,6 +23,7 @@ PROD_LIBS = pvxs Com
 # access to API and private headers
 USR_CPPFLAGS += -I$(TOP)/src/pvxs
 USR_CPPFLAGS += -I$(TOP)/src
+USR_CPPFLAGS += -I$(TOP)/ioc
 
 #INC += certstatus.h
 INC += security.h
@@ -31,6 +33,8 @@ pvacms_SRCS += pvacms.cpp
 pvacms_SRCS += configcms.cpp
 pvacms_SRCS += certstatus.cpp
 pvacms_SRCS += certstatusfactory.cpp
+pvacms_SRCS += credentials.cpp
+pvacms_SRCS += securityclient.cpp
 
 pvacms_LIBS += $(EPICS_BASE_IOC_LIBS)
 pvacms_SYS_LIBS += sqlite3 ssl crypto

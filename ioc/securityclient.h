@@ -27,6 +27,7 @@ public:
 	std::vector<ASCLIENTPVT> cli;
 	~SecurityClient();
 	void update(dbChannel* ch, Credentials& cred);
+	void update(ASMEMBERPVT mem, int asl, Credentials& cred);
 	bool canWrite() const;
 };
 
@@ -68,7 +69,12 @@ struct PutOperationCache : public SingleSecurityCache {
 	Value valueToSet;
 	std::unique_ptr<server::ExecOp> putOperation;
     INST_COUNTER(PutOperationCache);
-	~PutOperationCache();
+    ~PutOperationCache() {
+        // To avoid bug epics-base: unchecked access to notify.chan
+        if (notify.chan) {
+            dbNotifyCancel(&notify);
+        }
+    }
 };
 
 } // pvxs

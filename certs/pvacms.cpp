@@ -67,6 +67,8 @@
 #include "ownedptr.h"
 #include "sqlite3.h"
 #include "utilpvt.h"
+#include "securityclient.h"
+#include "credentials.h"
 
 DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
 DEFINE_LOGGER(pvacmsmonitor, "pvxs.certs.stat");
@@ -74,6 +76,22 @@ DEFINE_LOGGER(pvafms, "pvxs.certs.fms");
 
 namespace pvxs {
 namespace certs {
+
+struct ASMember {
+    std::string name;
+    ASMEMBERPVT mem;
+    ASMember() : ASMember("DEFAULT") {}
+    ASMember(const std::string &n) : name(n) {
+        if (asAddMember(&mem, name.c_str()))
+            throw std::runtime_error(SB() << "Unable to create ASMember " << n);
+        // mem references name.c_str()
+    }
+    ~ASMember() {
+        // all clients must be disconnected...
+        if (asRemoveMember(&mem))
+            log_err_printf(pvacms, "Unable to cleanup ASMember %s\n", name.c_str());
+    }
+};
 
 /**
  * @brief These are the cumulative total days in a year at the start of each month,
@@ -1073,6 +1091,7 @@ void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EV
 
     auto cert_file_factory = IdFileFactory::create(config.admin_cert_filename, config.admin_cert_password, key_pair, nullptr, nullptr, "certificate",
                                                    pem_string, !config.admin_private_key_filename.empty());
+    cert_file_factory->writeIdentityFile();
 
     std::string from = std::ctime(&certificate_factory.not_before_);
     std::string to = std::ctime(&certificate_factory.not_after_);
@@ -1760,7 +1779,10 @@ int main(int argc, char *argv[]) {
         // Set security if configured
         if (!config.ca_acf_filename.empty()) {
             log_warn_printf(pvacms, "PVACMS secured with %s\n", config.ca_acf_filename.c_str());
-            asSetFilename(config.ca_acf_filename.c_str());
+            asInitFile(config.ca_acf_filename.c_str(), "");
+        } else {
+            log_err_printf(pvacms, "****EXITING****: PVACMS Access Security Policy File Required%s", "\n");
+            return 1;
         }
 
         // Create the PVs
@@ -1803,20 +1825,25 @@ int main(int argc, char *argv[]) {
             auto state = value["state"].as<std::string>();
             std::transform(state.begin(), state.end(), state.begin(), ::toupper);
 
-/*
             // Get credentials for this operation
             auto creds = op->credentials();
 
+            pvxs::ioc::Credentials credentials(*creds);
 
             // Get security client from channel
-            SecurityClient securityClient = op->channel()->securityClient();
+            pvxs::ioc::SecurityClient securityClient;
+
+            // TODO move somewhere else
+            //      We're using DEFAULT ASG
+            //      ASmember needs to outlive the server (to allow all clients to disconnect)
+            static ASMember as_member;
+            securityClient.update(as_member.mem, ASL1, credentials);
 
             if (!securityClient.canWrite()) {
                 log_err_printf(pvacms, "PVACMS Client Not Authorised%s", "\n");
                 op->error(pvxs::SB() << state << " operation not authorized on " << issuer_id << ":" << serial );
                 return;
             }
-*/
 
             if (state == "REVOKED") {
                 onRevoke(config, ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, ca_pkey, ca_cert, ca_chain);

@@ -16,25 +16,29 @@
 namespace pvxs {
 namespace ioc {
 
-void SecurityClient::update(dbChannel* ch, Credentials& cred) {
+void SecurityClient::update(ASMEMBERPVT mem, int asl, Credentials& cred) {
     SecurityClient temp;
     temp.cli.resize(cred.cred.size(), nullptr);
 
     for (size_t i = 0, N = temp.cli.size(); i < N; i++) {
         /* asAddClient() fails secure to no-permission */
         (void)asAddClientX(&temp.cli[i],
-                dbChannelRecord(ch)->asp,
-                dbChannelFldDes(ch)->as_level,
-                cred.cred[i].c_str(),
-                // TODO switch to vector of char to accommodate inplace modifications to string
-                const_cast<char*>(cred.method.c_str()),
-                const_cast<char*>(cred.authority.c_str()),
-                const_cast<char*>(cred.host.data()),
-                true // isTLS TODO fix this!!!
-                );
+                           mem,
+                           asl,
+                           cred.cred[i].c_str(),
+          // TODO switch to vector of char to accommodate inplace modifications to string
+                           const_cast<char*>(cred.method.c_str()),
+                           const_cast<char*>(cred.authority.c_str()),
+                           const_cast<char*>(cred.host.data()),
+                           true // isTLS TODO fix this!!!
+        );
     }
 
     cli.swap(temp.cli);
+}
+
+void SecurityClient::update(dbChannel* ch, Credentials& cred) {
+    update(dbChannelRecord(ch)->asp, dbChannelFldDes(ch)->as_level, cred);
 }
 
 SecurityClient::~SecurityClient() {
@@ -47,13 +51,6 @@ bool SecurityClient::canWrite() const {
     return std::any_of(cli.begin(), cli.end(), [](ASCLIENTPVT asc) {
         return asCheckPut(asc);
     });
-}
-
-PutOperationCache::~PutOperationCache() {
-    // To avoid bug epics-base: unchecked access to notify.chan
-    if (notify.chan) {
-        dbNotifyCancel(&notify);
-    }
 }
 } // pvxs
 } // ioc
