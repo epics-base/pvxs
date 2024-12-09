@@ -1711,58 +1711,77 @@ PVACMS Usage
 
     .. code-block:: console
 
-        Usage: pvacms -a <acf> <opts>
+        PVACMS - Certificate Management Service
 
-        -a <acf>             Access Security configuration file
-        -c <CA P12 file>     Specify CA certificate file location
-                            Overrides xTLS_KEYCHAIN
-                            environment variables.
-                            Default ca.p12
-        -e <CA key file>     Specify CA private key file location
-                            Overrides EPICS_CA_TLS_PKEY
-                            environment variables.
-        -d <cert db file>    Specify cert db file location
-                            Overrides EPICS_PVACMS_DB
-                            environment variable.
-                            Default certs.db
-        -h                   Show this message.
-        -k <P12 file>        Specify certificate file location
-                            Overrides EPICS_PVACMS_TLS_KEYCHAIN
-                            environment variable.
-                            Default server.p12
-        -l <P12 file>        Specify private key file location
-                            Overrides EPICS_PVACMS_TLS_PKEY
-                            environment variable.
-                            Default same as P12 file
-        -n <ca_name>         To specify the CA's name if we need
-                            to create a root certificate.
-                            Defaults to the CA
-        -m <pvacms org>      To specify the pvacms organization name if
-                            we need to create a server certificate.
-                            Defaults to the name of this executable (pvacms)
-        -o <ca_org>          To specify the CA's organization if we need
-                            to create a root certificate.
-                            Defaults to the hostname.
-                            Use '-' to leave unset.
-        -p <password file>   Specify certificate password file location
-                            Overrides EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE
-                            environment variable.
-                            '-' sets no password
-        -q <password file>   Specify private key password file location
-                            Overrides EPICS_PVACMS_TLS_PKEY_PWD_FILE
-                            environment variable.
-                            '-' sets no password
-        -s <CA secret file>  Specify CA certificate password file
-                            Overrides EPICS_CA_KEYCHAIN_PWD_FILE
-                            environment variables.
-                            '-' sets no password
-        -t <CA secret file>  Specify CA private key password file
-                            Overrides EPICS_CA_PKEY_PWD_FILE
-                            environment variables.
-                            '-' sets no password
-        -u <ca_org_unit>     To specify the CA's organizational unit
-        -v                   Make more noise.
-        -V                   Print version and exit.
+        pvacms [OPTIONS]
+
+        OPTIONS:
+          -h,     --help              Show this message
+          -v,     --verbose           Make more noise
+          -V,     --version           Print version and exit.
+                  --ck, --ca-keychain TEXT [/Users/george/.epics/certs/ca.pem]
+                                      Specify CA keychain file location
+                  --cpk, --ca-private-key TEXT
+                                      Specify CA private key file location
+                  --ckp, --ca-keychain-pwd TEXT
+                                      Specify CA keychain password file location
+                  --cpkp, --ca-private-key-pwd TEXT
+                                      Specify CA private key password file location
+                  --pk, --pvacms-keychain TEXT [/Users/george/.epics/certs/pvacms.pem]
+                                      Specify PVACMS keychain file location
+                  --ppk, --pvacms-private-key TEXT
+                                      Specify PVACMS private key file location
+                  --pkp, --pvacms-keychain-pwd TEXT
+                                      Specify PVACMS keychain password file location
+                  --ppkp, --pvacms-private-key-pwd TEXT
+                                      Specify PVACMS private key password file location
+                  --ak, --admin-keychain TEXT
+                                      Specify PVACMS admin user's keychain file location
+                  --apk, --admin-private-key TEXT
+                                      Specify PVACMS admin user's private key file location
+                  --akp, --admin-keychain-pwd TEXT
+                                      Specify PVACMS admin user's keychain password file location
+                  --apkp, --admin-private-key-pwd TEXT
+                                      Specify PVACMS admin user's private key password file location
+                  --cn, --ca-name TEXT [EPICS Root CA]
+                                      Specify the CA's name. Used if we need to create a root
+                                      certificate
+                  --co, --ca-org TEXT [ca.epics.org]
+                                      Specify the CA's Organization. Used if we need to create a root
+                                      certificate
+                  --cou, --ca-org-unit TEXT [EPICS Certificate Authority]
+                                      Specify the CA's Organization Unit. Used if we need to create a
+                                      root certificate
+                  --cc, --ca-country TEXT
+                                      Specify the CA's Country. Used if we need to create a root
+                                      certificate
+                  --pn, --pvacms-name TEXT [PVACMS]
+                                      Specify the PVACMS name. Used if we need to create a PVACMS
+                                      certificate
+                  --po, --pvacms-org TEXT [ca.epics.org]
+                                      Specify the PVACMS Organization. Used if we need to create a
+                                      PVACMS certificate
+                  --pou, --pvacms-org-unit TEXT [EPICS Certificate Authority]
+                                      Specify the PVACMS Organization Unit. Used if we need to create a
+                                      PVACMS certificate
+                  --pc, --pvacms-country TEXT
+                                      Specify the PVACMS Country. Used if we need to create a PVACMS
+                                      certificate
+          -s,     --acf TEXT [/Users/george/.epics/auth/pvacms.acf]
+                                      Access security Configuration File
+          -d,     --cert-db TEXT [/Users/george/.epics/db/certs.db]
+                                      Specify cert db file location
+                  --client-require-approval BOOLEAN [1]
+                                      Generate Client Certificates in PENDING_APPROVAL state
+                  --server-require-approval BOOLEAN [1]
+                                      Generate Server Certificates in PENDING_APPROVAL state
+                  --gateway-require-approval BOOLEAN [1]
+                                      Generate Server Certificates in PENDING_APPROVAL state
+                  --svm, --status-validity-mins UINT [30]
+                                      Set Status Validity Time in Minutes
+                  --sme, --status-monitoring-enabled BOOLEAN [1]
+                                      Require Peers to monitor Status of Certificates Generated by this
+                                      server by default. Can be overridden in each CCR
 
 .. _pvacms_configuration:
 
