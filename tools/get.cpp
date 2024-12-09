@@ -9,6 +9,9 @@
 #include <atomic>
 
 #include <cstring>
+#include <fstream>
+#include <sstream>
+#include <string>
 
 #include <epicsVersion.h>
 #include <epicsGetopt.h>
@@ -40,7 +43,7 @@ void usage(const char* argv0)
                ;
 }
 
-}
+}  // namespace
 
 int main(int argc, char *argv[])
 {
@@ -50,11 +53,13 @@ int main(int argc, char *argv[])
         bool verbose = false;
         std::string request;
         Value::Fmt::format_t format = Value::Fmt::Delta;
-        auto arrLimit = uint64_t(-1);
+        auto arrLimit = uint64_t(20);
 
+        std::string options;
+        options = "hVvdw:r:#:F:";
         {
             int opt;
-            while ((opt = getopt(argc, argv, "hVvdw:r:#:F:")) != -1) {
+            while ((opt = getopt(argc, argv, options.c_str())) != -1) {
                 switch(opt) {
                 case 'h':
                     usage(argv[0]);
@@ -88,16 +93,19 @@ int main(int argc, char *argv[])
                     break;
                 default:
                     usage(argv[0]);
-                    std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
+                    std::cerr<<"\nUnknown argument: -"<<char(optopt)<<std::endl;
                     return 1;
                 }
             }
         }
 
-        auto ctxt(client::Context::fromEnv());
+        // Get the timeout from the environment and build the context
+        auto conf = client::Config::fromEnv();
+        conf.request_timeout_specified = timeout;
+        auto ctxt = conf.build();
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
+            std::cout<<"Effective config\n"<<conf;
 
         std::list<std::shared_ptr<client::Operation>> ops;
 

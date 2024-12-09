@@ -1,17 +1,22 @@
-UAG(MYSELF) {
-    "$(user)"
+UAG(DEFAULT) {
+    "george"
 }
 
-ASG(DEFAULT) {
-    RULE(1,WRITE,TRAPWRITE)
+UAG(BAR) {
+    "michael"
+}
+
+ASG(RO) {
+    RULE(1,READ,TRAPWRITE)
 }
 
 ASG(SPECIAL) {
     RULE(1,WRITE,TRAPWRITE) {
-        UAG(MYSELF)
+        UAG(DEFAULT)
+        UAG(BAR)
+		AUTHORITY("EPICS Root CA")
+#		AUTHORITY("CA Beamline")
+#		METHOD("ca")
+		METHOD("x509")
     }
-}
-
-ASG(RO) {
-    RULE(1, READ)
 }

@@ -38,6 +38,9 @@ void usage(const char* argv0)
                "            Set to zero 0 for unlimited.\n"
                "            Default: 20\n"
                "  -F <fmt>  Output format mode: delta, tree\n"
+#ifdef PVXS_ENABLE_OPENSSL
+               "  -w <sec>  Timeout for certificate status verification if configured.  default 5 sec.\n"
+#endif
                ;
 }
 
@@ -47,14 +50,19 @@ int main(int argc, char *argv[])
 {
     try {
         logger_config_env(); // from $PVXS_LOG
+        double timeout{5.0};
         bool verbose = false;
         std::string request;
         Value::Fmt::format_t format = Value::Fmt::Delta;
-        auto arrLimit = uint64_t(-1);
+        auto arrLimit = uint64_t(20);
 
         {
             int opt;
+#ifdef PVXS_ENABLE_OPENSSL
+            while ((opt = getopt(argc, argv, "hVvw:dr:#:F:")) != -1) {
+#else
             while ((opt = getopt(argc, argv, "hVvdr:#:F:")) != -1) {
+#endif
                 switch(opt) {
                 case 'h':
                     usage(argv[0]);
@@ -69,6 +77,11 @@ int main(int argc, char *argv[])
                 case 'd':
                     logger_level_set("pvxs.*", Level::Debug);
                     break;
+#ifdef PVXS_ENABLE_OPENSSL
+                case 'w':
+                    timeout = parseTo<double>(optarg);
+                    break;
+#endif
                 case 'r':
                     request = optarg;
                     break;
@@ -86,16 +99,21 @@ int main(int argc, char *argv[])
                     break;
                 default:
                     usage(argv[0]);
-                    std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
+                    std::cerr<<"\nUnknown argument: -"<<char(optopt)<<std::endl;
                     return 1;
                 }
             }
         }
 
-        auto ctxt(client::Context::fromEnv());
+        // Get the timeout from the environment and build the context
+        auto conf = client::Config::fromEnv();
+#ifdef PVXS_ENABLE_OPENSSL
+        conf.request_timeout_specified = timeout;
+#endif
+        auto ctxt = conf.build();
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
+            std::cout<<"Effective config\n"<<conf;
 
         // space for every subscription and one more for SigInt
         MPMCFIFO<std::shared_ptr<client::Subscription>> workqueue(argc-optind+1);

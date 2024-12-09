@@ -61,7 +61,7 @@ public:
 
     bufferevent* connection() { return bev.get(); }
 
-    void connect(evbufferevent &&bev);
+    void connect(ev_owned_ptr<bufferevent> &&bev);
     void disconnect();
 
 protected:

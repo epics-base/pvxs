@@ -35,6 +35,14 @@ CHECK_RELEASE = YES
 #HOST_OPT = NO
 #CROSS_OPT = NO
 
+# set to NO to disable handling of $SSLKEYLOGFILE
+PVXS_ENABLE_SSLKEYLOGFILE ?= YES
+
+# Uncomment the appropriate line or include in your private $(TOP)/../CONFIG_SITE.local
+# PVXS_ENABLE_KRB_AUTH = YES
+# PVXS_ENABLE_JWT_AUTH = YES
+# PVXS_ENABLE_LDAP_AUTH = YES
+
 # These allow developers to override the CONFIG_SITE variable
 # settings without having to modify the configure/CONFIG_SITE
 # file itself.

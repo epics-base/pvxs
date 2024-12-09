@@ -164,6 +164,9 @@ uint64_t parseTo<uint64_t>(const std::string& s);
 template<>
 PVXS_API
 int64_t parseTo<int64_t>(const std::string& s);
+template<>
+PVXS_API
+bool parseTo<bool>(const std::string& s);
 
 #ifdef _WIN32
 #  define RWLOCK_TYPE SRWLOCK

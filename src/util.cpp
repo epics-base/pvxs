@@ -806,6 +806,13 @@ int64_t parseTo<int64_t>(const std::string& s) {
     return ret;
 }
 
+template <>
+bool parseTo<bool>(const std::string &s) {
+    std::string lower;
+    std::transform(s.begin(), s.end(), std::back_inserter(lower), ::tolower);
+    return lower == "yes" ||lower == "on" || lower == "enabled" || lower == "true" || lower == "1";
+}
+
 static
 std::vector<std::string>
 splitLines(const char *inp)

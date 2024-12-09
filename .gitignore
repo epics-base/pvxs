@@ -16,3 +16,48 @@ __pycache__/
 *.log
 .*.swp
 .vscode
+.clang-format
+.iocsh_history
+EPICS_CA.pem
+login_certs.txt
+system_certs.txt
+.idea/editor.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/pvxs.iml
+.idea/vcs.xml
+.idea/workspace.xml
+.idea/codeStyles/codeStyleConfig.xml
+.idea/copyright/profiles_settings.xml
+.idea/inspectionProfiles/Project_Default.xml
+.idea/shelf/Add_detailed_documentation_for_certificate_testing_code__Enhanced_the__testtlswithcmsandst.xml
+.idea/shelf/authenticator_framework.xml
+.idea/shelf/big_refactor.xml
+.idea/shelf/Changes.xml
+.idea/shelf/Don_t_kn.xml
+.idea/shelf/framework_updates.xml
+.idea/shelf/Kerberos_spike.xml
+.idea/shelf/move_lambdas_into_subscribe_and_watch_methods.xml
+.idea/shelf/rename_CertificateStatus_and_change_OCSPStatus_creation_and_verification.xml
+.idea/shelf/statuslistener.xml
+.idea/shelf/subdirectories_for_each_auth_method1.xml
+.idea/shelf/Add_detailed_documentation_for_certificate_testing_code__Enhanced_the_`testtlswithcmsandst/shelved.patch
+.idea/shelf/authenticator_framework/shelved.patch
+.idea/shelf/big_refactor/shelved.patch
+.idea/shelf/Changes/shelved.patch
+.idea/shelf/Don't_kn/shelved.patch
+.idea/shelf/framework_updates/shelved.patch
+.idea/shelf/Kerberos_spike/shelved.patch
+.idea/shelf/move_lambdas_into_subscribe_and_watch_methods/shelved.patch
+.idea/shelf/rename_CertificateStatus_and_change_OCSPStatus_creation_and_verification/shelved.patch
+.idea/shelf/statuslistener/shelved.patch
+.idea/shelf/subdirectories_for_each_auth_method1/shelved.patch
+configure/TOOLCHAIN.tmp
+test/testioc.db
+test/testiocg.db
+test/slac-test/Sign In.htm
+test/slac-test/Sign In.mhtml
+test/slac-test/Sign In_files/doe-logo.png
+test/slac-test/Sign In_files/logo.png
+test/slac-test/Sign In_files/stanford-logo.png
+test/slac-test/Sign In_files/style.css

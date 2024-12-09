@@ -7,24 +7,90 @@
 #include <osiProcess.h>
 
 #include <pvxs/log.h>
+
+#ifdef PVXS_ENABLE_OPENSSL
+#include "certstatusmanager.h"
+#endif
+
 #include "clientimpl.h"
 
 namespace pvxs {
+
+#ifdef PVXS_ENABLE_OPENSSL
+namespace {
+DEFINE_LOGGER(stapling, "pvxs.stapling");
+
+/**
+ * @brief A callback function for handling OCSP (Online Certificate Status Protocol) responses in an SSL context.
+ *
+ * This function is intended to be used as a client-side callback for validating the status of certificates using OCSP.
+ * The implementation of this function should handle the retrieval and processing of OCSP responses, potentially affecting
+ * the SSL connection based on the certificate validity determined by the OCSP response.
+ *
+ * @param ctx A pointer to the SSL context where the callback is set.
+ * @param arg An optional user-defined argument that can be passed to the callback. (ignored)
+ *
+ * @return Typically returns an integer value indicating the SSL_TLSEXT_ERR_OK, SSL_TLSEXT_ERR_ALERT_WARNING,
+ * or SSL_TLSEXT_ERR_ALERT_FATAL of the OCSP validation.
+ */
+static int clientOCSPCallback(SSL* ctx, ossl::SSLContext* tls_context) {
+    X509 *peer_cert = SSL_get_peer_certificate(ctx);
+    auto peer_status = tls_context->ex_data();
+    try {
+        uint8_t* ocsp_response_ptr;
+        auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
+
+        if (!ocsp_response_ptr || len == -1) {
+            log_debug_printf(stapling, "No Stapled OCSP response found by %s\n", "client");
+            if (peer_status)
+                peer_status->setCachedPeerStatus(peer_cert, certs::UnknownCertificateStatus());
+            return SSL_TLSEXT_ERR_ALERT_FATAL;
+        }
+        const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
+        auto status = (certs::CertificateStatus)(certs::OCSPStatus(ocsp_bytes));
+        if (peer_status)
+            peer_status->setCachedPeerStatus(peer_cert, status);
+        if (status.isGood()) {
+            log_debug_printf(stapling, "Client OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
+            log_debug_printf(stapling, "Client OCSP stapled status date: %s\n", status.status_date.s.c_str());
+            log_debug_printf(stapling, "Client OCSP stapled status valid until: %s\n", status.status_valid_until_date.s.c_str());
+            log_debug_printf(stapling, "Client OCSP stapled revocation date: %s\n", status.revocation_date.s.c_str());
+            return SSL_TLSEXT_ERR_OK;
+        } else {
+            log_err_printf(stapling, "OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
+            return SSL_TLSEXT_ERR_ALERT_FATAL;
+        }
+    } catch (std::exception& e) {
+        if (peer_status)
+            peer_status->setCachedPeerStatus(peer_cert, certs::UnknownCertificateStatus());
+        log_err_printf(stapling, "Stapled OCSP response: %s\n", e.what());
+    }
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
+}
+
+}  // namespace
+#endif
+
 namespace client {
 
-DEFINE_LOGGER(io, "pvxs.client.io");
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(io, "pvxs.cli.io");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 DEFINE_LOGGER(remote, "pvxs.remote.log");
 
 Connection::Connection(const std::shared_ptr<ContextImpl>& context,
                        const SockAddr& peerAddr,
-                       bool reconn,
-                       bool isTLS)
+                       bool reconn
+#ifdef PVXS_ENABLE_OPENSSL
+                     , bool isTLS
+#endif
+                       )
     :ConnBase (true, context->effective.sendBE(),
                nullptr,
                peerAddr)
     ,context(context)
+#ifdef PVXS_ENABLE_OPENSSL
     ,isTLS(isTLS)
+#endif
     ,echoTimer(__FILE__, __LINE__,
                event_new(context->tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &tickEchoS, this))
 {
@@ -46,53 +112,73 @@ Connection::~Connection()
     cleanup();
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
 std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
                                               const SockAddr& serv, bool reconn, bool tls)
+#else
+std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
+                                              const SockAddr& serv, bool reconn)
+#endif
 {
     if(context->state!=ContextImpl::Running)
         throw std::logic_error("Context close()d");
 
+#ifdef PVXS_ENABLE_OPENSSL
     auto pair(std::make_pair(serv, tls));
     std::shared_ptr<Connection> ret;
     auto it = context->connByAddr.find(pair);
-    if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
+    if (it == context->connByAddr.end() || !(ret = it->second.lock())) {
         context->connByAddr[pair] = ret = std::make_shared<Connection>(context, serv, reconn, tls);
     }
+#else
+    std::shared_ptr<Connection> ret;
+    auto it = context->connByAddr.find(serv);
+    if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
+        context->connByAddr[serv] = ret = std::make_shared<Connection>(context, serv, reconn);
+    }
+#endif
     return ret;
 }
 
-void Connection::startConnecting()
-{
+void Connection::startConnecting() {
     assert(!this->bev);
 
-    decltype(this->bev) bev(__FILE__, __LINE__,
-                bufferevent_socket_new(context->tcp_loop.base, -1,
-                                       BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
+    decltype(this->bev) bev(__FILE__, __LINE__, bufferevent_socket_new(context->tcp_loop.base, -1, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
 
 #ifdef PVXS_ENABLE_OPENSSL
-    if(isTLS) {
+    if (isTLS) {
         auto ctx(SSL_new(context->tls_context.ctx));
-        if(!ctx)
-            throw ossl::SSLError("SSL_new");
+        if (!ctx) throw std::runtime_error("SSL_new");
 
         // w/ BEV_OPT_CLOSE_ON_FREE calls SSL_free() on error
-        bev.reset(bufferevent_openssl_socket_new(context->tcp_loop.base,
-                                                 -1,
-                                                 ctx,
-                                                 BUFFEREVENT_SSL_CONNECTING,
-                                                 BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
+        bev.reset(bufferevent_openssl_socket_new(context->tcp_loop.base, -1, ctx, BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
 
         // added with libevent 2.2.1-alpha
         //(void)bufferevent_ssl_set_flags(bev.get(), BUFFEREVENT_SSL_DIRTY_SHUTDOWN);
         // deprecated, but not yet removed
         bufferevent_openssl_set_allow_dirty_shutdown(bev.get(), 1);
 
+        // If stapling is not disabled
+        if (!context->tls_context.stapling_disabled) {
+            // And client was not previously set to request the stapled OCSP Response
+            if (SSL_get_tlsext_status_type(ctx) != -1) {
+                // Then enable OCSP status request extension
+                log_debug_printf(stapling, "Client OCSP Stapling: Setting up request%s\n", "");
+                if (SSL_set_tlsext_status_type(ctx, TLSEXT_STATUSTYPE_ocsp)) {
+                    log_debug_printf(stapling, "Client OCSP Stapling: requested type set for stapling%s\n", "");
+                } else {
+                    throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
+                }
+                // Set the callback
+                SSL_CTX_set_tlsext_status_cb(context->tls_context.ctx, clientOCSPCallback);
+                // And send the tls context as the parameter to the callabck
+                SSL_CTX_set_tlsext_status_arg(context->tls_context.ctx, &context->tls_context);
+            }
+        }
     } else
 #endif
     {
-        bev.reset(bufferevent_socket_new(context->tcp_loop.base,
-                                         -1,
-                                         BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
+        bev.reset(bufferevent_socket_new(context->tcp_loop.base, -1, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
     }
 
     bufferevent_setcb(bev.get(), &bevReadS, nullptr, &bevEventS, this);
@@ -100,13 +186,15 @@ void Connection::startConnecting()
     timeval tmo(totv(context->effective.tcpTimeout));
     bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
-    if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
-        throw std::runtime_error("Unable to begin connecting");
+    if (bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size())) throw std::runtime_error("Unable to begin connecting");
 
     connect(std::move(bev));
 
-    log_debug_printf(io, "Connecting to %s, RX readahead %zu%s\n",
-                     peerName.c_str(), readahead, isTLS ? " TLS" : "");
+#ifdef PVXS_ENABLE_OPENSSL
+    log_debug_printf(io, "Connecting to %s, RX readahead %zu%s\n", peerName.c_str(), readahead, isTLS ? " TLS" : "");
+#else
+    log_debug_printf(io, "Connecting to %s, RX readahead %zu\n", peerName.c_str(), readahead);
+#endif
 }
 
 void Connection::createChannels()
@@ -161,10 +249,10 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
 void Connection::bevEvent(short events)
 {
 #ifdef PVXS_ENABLE_OPENSSL
-    if((events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) && isTLS && bev) {
-        while(auto err = bufferevent_get_openssl_error(bev.get())) {
-            log_err_printf(io, "TLS Error (0x%lx) %s\n",
-                           err, ERR_reason_error_string(err));
+    if ((events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) && isTLS && bev) {
+        while (auto err = bufferevent_get_openssl_error(bev.get())) {
+            auto error_reason = ERR_reason_error_string(err);
+            if (error_reason) log_err_printf(io, "Client: TLS Error (0x%lx) %s\n", err, ERR_reason_error_string(err));
         }
     }
 #endif
@@ -177,10 +265,10 @@ void Connection::bevEvent(short events)
 
         auto peerCred(std::make_shared<ServerCredentials>());
         peerCred->peer = peerName;
+#ifdef PVXS_ENABLE_OPENSSL
         peerCred->isTLS = isTLS;
 
-#ifdef PVXS_ENABLE_OPENSSL
-        if(isTLS) {
+        if (isTLS) {
             auto ctx = bufferevent_openssl_get_ssl(bev.get());
             assert(ctx);
             ossl::SSLContext::fill_credentials(*peerCred, ctx);
@@ -224,7 +312,11 @@ void Connection::cleanup()
 {
     ready = false;
 
+#ifdef PVXS_ENABLE_OPENSSL
     context->connByAddr.erase(std::make_pair(peerAddr, isTLS));
+#else
+    context->connByAddr.erase(peerAddr);
+#endif
 
     if(bev)
         bev.reset();
@@ -288,7 +380,8 @@ void Connection::handle_CONNECTION_VALIDATION()
         if(method=="ca" || (method=="anonymous" && selected!="ca"))
             selected = method;
 #ifdef PVXS_ENABLE_OPENSSL
-        else if(isTLS && method=="x509" && context->tls_context.have_certificate())
+        // Only validate as TLS if we have a valid certificate
+        else if (isTLS && method == "x509" && context->tls_context.has_cert && context->tls_context.cert_is_valid)
             selected = method;
 #endif
     }
@@ -375,7 +468,10 @@ void Connection::handle_CONNECTION_VALIDATED()
                          sts.msg.empty() ? "" : " ", sts.msg.c_str());
     }
 
-    ready = true;
+    // we are ready as long as we're not waiting for certificate status
+    ready = context->connectionCanProceed();
+    if ( !ready )
+        return;
 
     createChannels();
 
@@ -565,6 +661,5 @@ void Connection::tickEchoS(evutil_socket_t fd, short evt, void *raw)
         log_exc_printf(io, "Unhandled error in echo timer callback: %s\n", e.what());
     }
 }
-
 } // namespace client
 } // namespace pvxs

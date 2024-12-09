@@ -23,6 +23,10 @@
 #include <pvxs/netcommon.h>
 #include <pvxs/util.h>
 
+#ifdef PVXS_ENABLE_OPENSSL
+#include "openssl.h"
+#endif
+
 namespace pvxs {
 namespace client {
 
@@ -323,8 +327,12 @@ public:
      * Shorthand for @code Config::fromEnv().build() @endcode.
      * @since 0.2.1
      */
-    static
-    Context fromEnv();
+#ifndef PVXS_ENABLE_OPENSSL
+    static Context fromEnv();
+#else
+    Context(const Config &, const std::function<int(int)>&);
+    static Context fromEnv(const bool tls_disabled = false);
+    static Context forCMS();
 
     /** Apply (in part) updated configuration
      *
@@ -334,6 +342,7 @@ public:
      * @since UNRELEASED
      */
     void reconfigure(const Config&);
+#endif // PVXS_ENABLE_OPENSSL
 
     //! effective config of running client
     //! @since UNRELEASED Reference invalidated by a call to reconfigure()
@@ -1039,6 +1048,7 @@ public:
 DiscoverBuilder Context::discover(std::function<void (const Discovered &)> && fn) { return DiscoverBuilder(pvt, std::move(fn)); }
 
 struct PVXS_API Config : public impl::ConfigCommon {
+
     /** List of unicast, multicast, and broadcast addresses to which search requests will be sent.
      *
      * Entries may take the forms:
@@ -1065,14 +1075,19 @@ private:
     bool UDP = true;
 public:
 
+#ifndef PVXS_ENABLE_OPENSSL
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }
-
     //! Default configuration using process environment
-    static inline Config fromEnv()  { return Config{}.applyEnv(); }
-
+    static inline Config fromEnv() { return Config{}.applyEnv(); }
     //! update using defined EPICS_PVA* environment variables
-    Config& applyEnv();
+    Config &applyEnv();
+#else
+    static inline Config from_env(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
+    static inline Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
+    Config &applyEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT);
+    Config &applyEnv(const bool tls_disabled = false);
+#endif // PVXS_ENABLE_OPENSSL
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables
@@ -1106,6 +1121,8 @@ public:
     inline Config& overrideShareUDP(bool share) { UDP = share; return *this; }
     inline bool shareUDP() const { return UDP; }
 #endif
+
+    void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);
 };
 
 PVXS_API

@@ -31,6 +31,7 @@ def read_version(fmt):
 
 # -- Project information -----------------------------------------------------
 
+# TODO Update Copyright and Attribution to reflect SLAC input
 project = 'PVXS'
 copyright = time.strftime('%Y Michael Davidsaver and Osprey DCS LLC')
 author = 'Michael Davidsaver'

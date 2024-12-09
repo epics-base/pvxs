@@ -303,6 +303,7 @@ void pvxrefdiff() {
     }
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
 void pvxreconfigure()
 {
     Guard (pvxServer->lock);
@@ -316,7 +317,7 @@ void pvxreconfigure()
         fprintf(stderr, "Warning: QSRV not running\n");
     }
 }
-
+#endif
 } // namespace
 
 static
@@ -482,9 +483,11 @@ void pvxsBaseRegistrar() noexcept {
                        "Save the current set of instance counters for reference by later pvxrefdiff.\n").implementation<&pvxrefsave>();
         IOCShCommand<>("pvxrefdiff",
                        "Show different of current instance counts with those when pvxrefsave was called.\n").implementation<&pvxrefdiff>();
+#ifdef PVXS_ENABLE_OPENSSL
         IOCShCommand<>("pvxreconfigure",
                        "Reconfigure QSRV using current values of EPICS_PVA*.  Only disconnects TLS clients\n")
                 .implementation<&pvxreconfigure>();
+#endif
 
         // Initialise the PVXS Server
         initialisePvxsServer();

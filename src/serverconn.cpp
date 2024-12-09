@@ -13,6 +13,7 @@
 #include <epicsAssert.h>
 
 #include <pvxs/log.h>
+#include "openssl.h"
 #include "serverconn.h"
 
 // limit on size of TX buffer above which we suspend RX.
@@ -52,9 +53,10 @@ DEFINE_INST_COUNTER2(Server::Pvt, ServerPvt);
 namespace pvxs {namespace impl {
 
 // message related to client state and errors
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 // related to low level send/recv
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
+DEFINE_LOGGER(stapling, "pvxs.stapling");
 
 DEFINE_LOGGER(remote, "pvxs.remote.log");
 
@@ -67,8 +69,11 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     ,iface(iface)
     ,tcp_tx_limit(evsocket::get_buffer_size(sock, true) * tcp_tx_limit_mult)
 {
-    log_debug_printf(connio, "Client %s connects%s, RX readahead %zu TX limit %zu\n",
-                     peerName.c_str(), iface->isTLS ? " TLS" : "", readahead, tcp_tx_limit);
+    log_debug_printf(connio, "Client %s connects%s, RX readahead %zu TX limit %zu\n", peerName.c_str(),
+#ifdef PVXS_ENABLE_OPENSSL
+                       iface->isTLS ? " TLS" :
+#endif
+                      "", readahead, tcp_tx_limit);
     {
         int opt = 1;
         if(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
@@ -78,19 +83,27 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    if(iface->isTLS) {
+    if (iface->isTLS) {
         assert(iface->server->tls_context);
-        auto ctx(SSL_new(iface->server->tls_context.ctx));
-        if(!ctx)
-            throw ossl::SSLError("SSL_new()");
+        auto ssl(SSL_new(iface->server->tls_context.ctx));
+        if (!ssl) throw ossl::SSLError("SSL_new()");
+
+        if (!iface->server->tls_context.stapling_disabled && !iface->server->tls_context.status_check_disabled) {
+            try {
+                log_debug_printf(stapling, "Server OCSP Stapling: installing callback%s\n", "");
+                ossl::stapleOcspResponse((void*)iface->server, ssl);  // Staple response
+            } catch (certs::OCSPParseException& e) {
+                log_debug_printf(stapling, "Server OCSP Stapling: failed to install callback: %s\n", e.what());
+            } catch (std::exception& e) {
+                log_debug_printf(stapling, "Server OCSP Stapling: failed to install callback: %s\n", e.what());
+            }
+        }
+
         auto rawconn = bev.release();
         // BEV_OPT_CLOSE_ON_FREE will free on error
         evbufferevent tlsconn(__FILE__, __LINE__,
-                              bufferevent_openssl_filter_new(iface->server->acceptor_loop.base,
-                                                             rawconn,
-                                                             ctx,
-                                                             BUFFEREVENT_SSL_ACCEPTING,
-                                                             BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
+                              bufferevent_openssl_filter_new(iface->server->acceptor_loop.base, rawconn, ssl, BUFFEREVENT_SSL_ACCEPTING,
+                                                             BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
         bev = std::move(tlsconn);
 
         // added with libevent 2.2.1-alpha
@@ -108,6 +121,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         this->cred = std::move(cred);
     }
 
+    // TODO Sends the event to handle the, sets timeout, and
     bufferevent_setcb(bev.get(), &bevReadS, &bevWriteS, &bevEventS, this);
 
     timeval tmo(totv(iface->server->effective.tcpTimeout));
@@ -135,11 +149,17 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
          * Old pvAccess* was missing a "break" when looping,
          * so it took the last known plugin.
          */
-        to_wire(M, Size{iface->isTLS ? 3u : 2u});
+        to_wire(M, Size{
+#ifdef PVXS_ENABLE_OPENSSL
+          iface->isTLS ? 3u :
+#endif
+          2u});
         to_wire(M, "anonymous");
         to_wire(M, "ca");
+#ifdef PVXS_ENABLE_OPENSSL
         if(iface->isTLS)
             to_wire(M, "x509");
+#endif
         auto bend = M.save();
 
         FixedBuf H(sendBE, save, 8);
@@ -230,7 +250,9 @@ void ServerConn::handle_CONNECTION_VALIDATION()
                        std::string(SB()<<auth).c_str());
 
             auto C(std::make_shared<server::ClientCredentials>(*cred));
+#ifdef PVXS_ENABLE_OPENSSL
             C->isTLS = iface->isTLS;
+#endif
 
             if(selected=="ca") {
                 auth["user"].as<std::string>([&C, &selected](const std::string& user) {
@@ -251,6 +273,8 @@ void ServerConn::handle_CONNECTION_VALIDATION()
             C->raw = auth;
 
             cred = std::move(C);
+            log_debug_printf(connsetup, "Client credentials. account: %s, method: %s, authority: %s\n",
+                             cred->account.c_str(), cred->method.c_str(), cred->authority.c_str());
         }
     }
 
@@ -260,8 +284,8 @@ void ServerConn::handle_CONNECTION_VALIDATION()
         return;
 
     } else {
-        log_debug_printf(connsetup, "Client %s selects auth \"%s\" as \"%s\"\n",
-                         peerName.c_str(), cred->method.c_str(), cred->account.c_str());
+        log_debug_printf(connsetup, "selected-%s: Client %s selects auth \"%s\" as \"%s\" on \"%s\" authority\n", selected.c_str(),
+                         peerName.c_str(), cred->method.c_str(), cred->account.c_str(), cred->authority.c_str());
     }
 
     // remainder of segBuf is payload w/ credentials
@@ -406,8 +430,7 @@ void ServerConn::bevEvent(short events)
 #ifdef PVXS_ENABLE_OPENSSL
     if((events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) && iface->isTLS && bev) {
         while(auto err = bufferevent_get_openssl_error(bev.get())) {
-            log_err_printf(connio, "TLS Error (0x%lx) %s\n",
-                           err, ERR_reason_error_string(err));
+            log_err_printf(connio, "Server: TLS Error (0x%lx) %s\n", err, ERR_reason_error_string(err));
         }
     }
 #endif
@@ -456,7 +479,9 @@ void ServerConn::bevWrite()
 
 ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fallback, bool isTLS)
     :server(server)
-    ,isTLS(isTLS)
+#ifdef PVXS_ENABLE_OPENSSL
+  ,isTLS(isTLS)
+#endif
     ,bind_addr(addr)
 {
     server->acceptor_loop.assertInLoop();
@@ -502,8 +527,11 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
     listener = evlisten(__FILE__, __LINE__,
                         evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtautological-constant-compare"
     if(!LEV_OPT_DISABLED)
         evconnlistener_disable(listener.get());
+#pragma GCC diagnostic pop
 }
 
 void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw)

@@ -6,29 +6,43 @@
 #ifndef PVXS_SERVER_H
 #define PVXS_SERVER_H
 
-#include <osiSock.h>
-
-#include <iosfwd>
+#include <array>
 #include <functional>
+#include <iosfwd>
+#include <map>
+#include <memory>
+#include <set>
 #include <string>
 #include <tuple>
-#include <set>
-#include <map>
 #include <vector>
-#include <memory>
-#include <array>
 
 #include <epicsEndian.h>
+#include <osiSock.h>
 
-#include <pvxs/version.h>
-#include <pvxs/util.h>
 #include <pvxs/data.h>
+#include <pvxs/sharedwildcardpv.h>
 #include <pvxs/netcommon.h>
+#include <pvxs/util.h>
+#include <pvxs/version.h>
+
+#include "evhelper.h"
+
+#ifdef PVXS_ENABLE_OPENSSL
+#include "openssl.h"
+#endif
 
 namespace pvxs {
 namespace client {
+struct Subscription;
 struct Config;
 }
+
+#ifdef PVXS_ENABLE_OPENSSL
+namespace ossl {
+struct SSLContext;
+}
+#endif
+
 namespace server {
 
 struct SharedPV;
@@ -59,6 +73,10 @@ public:
     constexpr Server() = default;
     //! Create/allocate, but do not start, a new server with the provided config.
     explicit Server(const Config&);
+
+#ifdef PVXS_ENABLE_OPENSSL
+    Server(const Config &config, CertEventCallback cert_file_event_callback);
+#endif
     Server(const Server&) = default;
     Server(Server&& o) = default;
     Server& operator=(const Server&) = default;
@@ -71,7 +89,12 @@ public:
      * @since 0.2.1
      */
     static
+#ifndef PVXS_ENABLE_OPENSSL
     Server fromEnv();
+#else
+    Server fromEnv(bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
+    Server fromEnv(CertEventCallback &cert_file_event_callback, bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
+#endif // PVXS_ENABLE_OPENSSL
 
     //! Begin serving.  Does not block.
     Server& start();
@@ -91,6 +114,7 @@ public:
     //! Queue a request to break run()
     Server& interrupt();
 
+#ifdef PVXS_ENABLE_OPENSSL
     /** Apply (in part) updated configuration
      *
      * Currently, only updates TLS configuration.  Causes all in-progress
@@ -99,6 +123,7 @@ public:
      * @since UNRELEASED
      */
     void reconfigure(const Config&);
+#endif
 
     //! effective config
     //! @since UNRELEASED Reference invalidated by a call to reconfigure()
@@ -110,6 +135,7 @@ public:
 
     //! Add a SharedPV to the "__builtin" StaticSource
     Server& addPV(const std::string& name, const SharedPV& pv);
+    Server& addPV(const std::string& name, const SharedWildcardPV& pv);
     //! Remove a SharedPV from the "__builtin" StaticSource
     Server& removePV(const std::string& name);
 
@@ -177,6 +203,21 @@ struct PVXS_API Config : public impl::ConfigCommon {
     //! Whether to populate the beacon address list automatically.  (recommended)
     bool auto_beacon = true;
 
+#ifdef PVXS_ENABLE_OPENSSL
+    /**
+     * @brief true if server should stop if no cert is available or can be
+     * verified if status check is enabled
+     */
+    bool tls_stop_if_no_cert = false;
+
+    /**
+     * @brief true if server should throw an exception if no cert is available or can be
+     * verified if status check is enabled
+     */
+    bool tls_throw_if_no_cert = false;
+
+#endif // PVXS_ENABLE_OPENSSL
+
     //! Server unique ID.  Only meaningful in readback via Server::config()
     ServerGUID guid{};
 
@@ -185,19 +226,26 @@ private:
     bool UDP = true;
 public:
 
+#ifndef PVXS_ENABLE_OPENSSL
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }
-
     //! Default configuration using process environment
     static inline Config fromEnv()  { return Config{}.applyEnv(); }
+    //! update using defined EPICS_PVA* environment variables
+    Config& applyEnv();
+#else
+    static inline Config from_env(const bool tls_disabled = false, const ConfigTarget target = SERVER) {
+        return Config{}.applyEnv(tls_disabled, target);
+    }
+    static inline Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER) { return Config{}.applyEnv(tls_disabled, target); }
+    Config &applyEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER);
+//    Config &applyEnv(const bool tls_disabled = false);
+#endif
 
     //! Configuration limited to the local loopback interface on a randomly chosen port.
     //! Suitable for use in self-contained unit-tests.
     //! @since 0.3.0 Address family argument added.
     static Config isolated(int family=AF_INET);
-
-    //! update using defined EPICS_PVA* environment variables
-    Config& applyEnv();
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables.
@@ -223,13 +271,25 @@ public:
         return Server(*this);
     }
 
+    //! Create a new Server using the current configuration with a custom file event callback
+    inline Server build(CertEventCallback &cert_file_event_callback) const {
+        return Server(*this, cert_file_event_callback);
+    }
+
 #ifdef PVXS_EXPERT_API_ENABLED
     // for protocol compatibility testing
-    inline Config& overrideSendBE(bool be) { BE = be; return *this; }
+    inline Config& overrideSendBE(bool be) {
+        BE = be;
+        return *this;
+    }
     inline bool sendBE() const { return BE; }
-    inline Config& overrideShareUDP(bool share) { UDP = share; return *this; }
+    inline Config& overrideShareUDP(bool share) {
+        UDP = share;
+        return *this;
+    }
     inline bool shareUDP() const { return UDP; }
 #endif
+    void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);
 };
 
 PVXS_API

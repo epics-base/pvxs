@@ -4,51 +4,81 @@
  * in file LICENSE that is included with this distribution.
  */
 
-
+#include <atomic>
+#include <cstdlib>
+#include <functional>
 #include <list>
 #include <map>
 #include <system_error>
-#include <functional>
-#include <atomic>
-#include <cstdlib>
-
-#include <signal.h>
 
 #include <dbDefs.h>
 #include <envDefs.h>
-#include <epicsThread.h>
-#include <epicsTime.h>
 #include <epicsGuard.h>
 #include <epicsString.h>
+#include <epicsThread.h>
+#include <epicsTime.h>
+#include <signal.h>
 
-#include <pvxs/server.h>
 #include <pvxs/client.h>
+#include <pvxs/config.h>
 #include <pvxs/log.h>
+#include <pvxs/server.h>
+#include <pvxs/sharedpv.h>
+#include <pvxs/sharedwildcardpv.h>
+
+#include "certstatusmanager.h"
 #include "evhelper.h"
+#include "p12filewatcher.h"
 #include "serverconn.h"
-#include "utilpvt.h"
 #include "udp_collector.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace impl {
 ReportInfo::~ReportInfo() {}
-}
+}  // namespace impl
 namespace server {
 using namespace impl;
 
-DEFINE_LOGGER(serversetup, "pvxs.server.setup");
-DEFINE_LOGGER(serverio, "pvxs.server.io");
-DEFINE_LOGGER(serversearch, "pvxs.server.search");
+DEFINE_LOGGER(serversetup, "pvxs.svr.init");
+DEFINE_LOGGER(osslsetup, "pvxs.ossl.init");
+DEFINE_LOGGER(watcher, "pvxs.certs.mon");
+DEFINE_LOGGER(filemon, "pvxs.file.mon");
+DEFINE_LOGGER(serverio, "pvxs.svr.io");
+DEFINE_LOGGER(serversearch, "pvxs.svr.search");
 
 // mimic pvAccessCPP server (almost)
 // send a "burst" of beacons, then fallback to a longer interval
 static constexpr timeval beaconIntervalShort{15, 0};
 static constexpr timeval beaconIntervalLong{180, 0};
 
+#ifndef PVXS_ENABLE_OPENSSL
 Server Server::fromEnv()
 {
     return Config::fromEnv().build();
 }
+#else
+Server Server::fromEnv(const bool tls_disabled, const ConfigCommon::ConfigTarget target)
+{
+    return Config::fromEnv(tls_disabled, target).build();
+}
+
+Server Server::fromEnv(CertEventCallback &cert_file_event_callback, const bool tls_disabled, const ConfigCommon::ConfigTarget target)
+{
+    return Config::fromEnv(tls_disabled, target).build(cert_file_event_callback);
+}
+
+Server::Server(const Config &conf, CertEventCallback cert_file_event_callback) {
+    auto internal(std::make_shared<Pvt>(conf, cert_file_event_callback));
+    internal->internal_self = internal;
+
+    // external
+    pvt.reset(internal.get(), [internal](Pvt*) mutable {
+        auto trash(std::move(internal));
+        trash->stop();
+    });
+}
+#endif
 
 Server::Server(const Config& conf)
 {
@@ -71,6 +101,7 @@ Server::Server(const Config& conf)
         auto trash(std::move(internal));
         trash->stop();
     });
+
     // we don't keep a weak_ptr to the external reference.
     // Caller is entirely responsible for keeping this server running
 }
@@ -148,59 +179,6 @@ std::vector<std::pair<std::string, int> > Server::listSource()
     return names;
 }
 
-void Server::reconfigure(const Config& inconf)
-{
-    if(!pvt)
-        throw std::logic_error("NULL Server");
-
-    auto newconf(inconf);
-    newconf.expand(); // maybe catch some errors early
-
-    log_info_printf(serversetup, "Reconfigure%s", "\n");
-
-    // is the current server running?
-
-    Pvt::state_t prev_state;
-    pvt->acceptor_loop.call([this, &prev_state]() {
-        prev_state = pvt->state;
-    });
-
-    bool was_running = prev_state==Pvt::Running || prev_state==Pvt::Starting;
-
-    if(was_running)
-        pvt->stop();
-
-    decltype(pvt->sources) transfers;
-    decltype(pvt->builtinsrc) builtin;
-
-    // copy all Source, including builtin
-    {
-        auto G(pvt->sourcesLock.lockReader());
-
-        transfers = pvt->sources;
-        builtin = pvt->builtinsrc;
-    }
-
-    // completely destroy the current/old server to free up TCP ports
-    pvt.reset();
-
-    // build up a new, empty, server
-    Server newsrv(newconf);
-    pvt = std::move(newsrv.pvt);
-
-    {
-        auto G(pvt->sourcesLock.lockWriter());
-
-        pvt->sources = transfers;
-        pvt->builtinsrc = builtin;
-    }
-
-    if(was_running) {
-        pvt->start();
-        log_info_printf(serversetup, "Resume%s", "\n");
-    }
-}
-
 const Config& Server::config() const
 {
     if(!pvt)
@@ -215,18 +193,34 @@ client::Config Server::clientConfig() const
         throw std::logic_error("NULL Server");
 
     client::Config ret;
-    // do not copy tls_keychain_file
+    // do not copy tls_cert_file
     ret.udp_port = pvt->effective.udp_port;
     ret.tcp_port = pvt->effective.tcp_port;
-    ret.tls_port = pvt->effective.tls_port;
     ret.interfaces = pvt->effective.interfaces;
     ret.addressList = pvt->effective.interfaces;
     ret.autoAddrList = false;
+
+#ifdef PVXS_ENABLE_OPENSSL
+    ret.tls_port = pvt->effective.tls_port;
+    ret.tls_disabled = pvt->effective.tls_disabled;
+    ret.tls_disable_status_check = pvt->effective.tls_disable_status_check;
+    ret.tls_disable_stapling = pvt->effective.tls_disable_stapling;
+#endif
+    ret.is_initialized = true;
 
     return ret;
 }
 
 Server& Server::addPV(const std::string& name, const SharedPV& pv)
+{
+    if(!pvt)
+        throw std::logic_error("NULL Server");
+    pvt->builtinsrc.add(name, pv);
+    pvt->beaconChange++;
+    return *this;
+}
+
+Server& Server::addPV(const std::string& name, const SharedWildcardPV& pv)
 {
     if(!pvt)
         throw std::logic_error("NULL Server");
@@ -379,12 +373,12 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
             strm<<"\n";
 
 #ifdef PVXS_ENABLE_OPENSSL
-            if(serv.pvt->tls_context) {
+            if (serv.pvt->tls_context) {
                 auto cert(serv.pvt->tls_context.certificate0());
                 assert(cert);
-                strm<<indent{}<<"TLS Cert. "<<ossl::ShowX509{cert}<<"\n";
+                strm << indent{} << "TLS Cert. " << ossl::ShowX509{cert} << "\n";
             } else {
-                strm<<indent{}<<"TLS Cert. not loaded\n";
+                strm << indent{} << "TLS Cert. not loaded\n";
             }
 #else
             strm<<indent{}<<"TLS Support not enabled\n";
@@ -399,7 +393,9 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                     <<" backlog="<<conn->backlog.size()
                     <<" TX="<<conn->statTx<<" RX="<<conn->statRx
                     <<" auth="<<conn->cred->method
-                    <<(conn->iface->isTLS ? " TLS" : "")
+#ifdef PVXS_ENABLE_OPENSSL
+                  <<(conn->iface->isTLS ? " TLS" : "")
+#endif
                     <<"\n";
 
                 if(detail<=2)
@@ -409,11 +405,10 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 
                 strm<<indent{}<<"Cred: "<<*conn->cred<<"\n";
 #ifdef PVXS_ENABLE_OPENSSL
-                if(conn->iface->isTLS && conn->connection()) {
+                if (conn->iface->isTLS && conn->connection()) {
                     auto ctx = bufferevent_openssl_get_ssl(conn->connection());
                     assert(ctx);
-                    if(auto cert = SSL_get0_peer_certificate(ctx))
-                        strm<<indent{}<<"Cert: "<<ossl::ShowX509{cert}<<"\n";
+                    if (auto cert = SSL_get0_peer_certificate(ctx)) strm << indent{} << "Cert: " << ossl::ShowX509{cert} << "\n";
                 }
 #endif
 
@@ -455,26 +450,99 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
     return strm;
 }
 
-Server::Pvt::Pvt(const Config &conf)
-    :effective(conf)
-    ,beaconMsg(128)
-    ,acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow-2)
-    ,beaconSender4(AF_INET, SOCK_DGRAM, 0)
-    ,beaconSender6(AF_INET6, SOCK_DGRAM, 0)
-    ,beaconTimer(__FILE__, __LINE__,
-                 event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this))
-    ,searchReply(0x10000)
-    ,builtinsrc(StaticSource::build())
-    ,state(Stopped)
+#ifndef PVXS_ENABLE_OPENSSL
+Server::Pvt::Pvt(const Config& conf)
+#else
+Server::Pvt::Pvt(const Config& conf, CertEventCallback custom_cert_event_callback)
+#endif
+    : effective(conf),
+      beaconMsg(128),
+      acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow - 2),
+      beaconSender4(AF_INET, SOCK_DGRAM, 0),
+      beaconSender6(AF_INET6, SOCK_DGRAM, 0),
+      beaconTimer(__FILE__, __LINE__, event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this)),
+      searchReply(0x10000),
+      builtinsrc(StaticSource::build()),
+      state(Stopped)
+#ifdef PVXS_ENABLE_OPENSSL
+      ,
+      custom_cert_event_callback(custom_cert_event_callback),
+      cert_event_timer(__FILE__, __LINE__, event_new(acceptor_loop.base, -1, EV_TIMEOUT, doCertEventHandler, this)),
+      cert_validity_timer(__FILE__, __LINE__, event_new(acceptor_loop.base, -1, EV_TIMEOUT, doCertStatusValidityEventhandler, this)),
+      file_watcher(filemon, {effective.tls_cert_filename, effective.tls_cert_password, effective.tls_private_key_filename, effective.tls_private_key_password},
+                   [this](bool enable) {
+                       if (enable)
+                           acceptor_loop.dispatch([this]() mutable { enableTls(); });
+                       else
+                           acceptor_loop.dispatch([this]() mutable { disableTls(); });
+                   })
+#endif
 {
     effective.expand();
 
 #ifdef PVXS_ENABLE_OPENSSL
-    if(!effective.tls_keychain_file.empty()) {
+    if (effective.isTlsConfigured()) {
         try {
+            log_debug_printf(osslsetup, "Begin TLS setup with cert file: %s\n", effective.tls_cert_filename.c_str());
             tls_context = ossl::SSLContext::for_server(effective);
-        }catch(std::exception& e){
-            log_err_printf(serversetup, "Unable to setup TLS.  Disabled for server : %s\n", e.what());
+            if (tls_context.has_cert) {
+                if (auto cert_ptr = getCert()) {
+                    if (tls_context.status_check_disabled) {
+                        Guard G(tls_context.lock);
+                        tls_context.cert_is_valid = true;
+                        log_warn_printf(osslsetup, "Certificate status monitoring disabled by config: %s\n", effective.tls_cert_filename.c_str());
+                    } else {
+                        auto cert = ossl_ptr<X509>(X509_dup(cert_ptr));
+                        // For servers, we need to wait for status if status monitoring is enabled
+                        try {
+                            // Subscribe to the server's certificate status and wait until at least first update is received
+                            // TODO change to subscribe() only and then don't respond to SEARCH_REQUEST until status is available
+                            cert_status_manager = certs::CertStatusManager::getAndSubscribe(acceptor_loop, std::move(cert), [this](certs::PVACertificateStatus status) {
+                                Guard G(tls_context.lock);
+                                auto was_good = current_status && current_status->isGood();
+                                current_status = std::make_shared<certs::PVACertificateStatus>(status);
+                                if (current_status && current_status->isGood()) {
+                                    if (!was_good) acceptor_loop.dispatch([this]() mutable { enableTls(); });
+                                } else if (was_good) {
+                                    acceptor_loop.dispatch([this]() mutable { disableTls(); });
+                                }
+                            });
+                            if (current_status && current_status->isGood()) {
+                                Guard G(tls_context.lock);
+                                tls_context.cert_is_valid = true;
+                                log_info_printf(osslsetup, "TLS enabled for server with cert %s with reported %s status\n", effective.tls_cert_filename.c_str(),
+                                                current_status->status.s.c_str());
+                            } else {
+                                if (effective.tls_stop_if_no_cert) {
+                                    log_err_printf(osslsetup, "***EXITING***: Unable to contact PVACMS to verify cert %s\n", effective.tls_cert_filename.c_str());
+                                    exit(1);
+                                } else if (effective.tls_throw_if_no_cert) {
+                                    log_err_printf(osslsetup, "Unable to contact PVACMS to verify cert %s\n", effective.tls_cert_filename.c_str());
+                                    throw(std::runtime_error("Unable to contact PVACMS"));
+                                } else {
+                                    log_info_printf(osslsetup, "TLS disabled for server with reported %s status for cert %s\n", current_status->status.s.c_str(),
+                                                effective.tls_cert_filename.c_str());
+                                }
+                            }
+                        } catch (certs::CertStatusNoExtensionException& e) {
+                            Guard G(tls_context.lock);
+                            tls_context.cert_is_valid = true;
+                            log_info_printf(osslsetup, "TLS enabled for server without status check: %s\n", effective.tls_cert_filename.c_str());
+                        } catch (std::exception& e) {
+                            throw(std::runtime_error(SB() << e.what() << ": Waiting for PVACMS to report status for cert " << effective.tls_cert_filename));
+                        }
+                    }
+                }
+            }
+        } catch (std::exception& e) {
+            if (effective.tls_stop_if_no_cert) {
+                log_err_printf(osslsetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
+                exit(1);
+            } else if (effective.tls_throw_if_no_cert) {
+                throw(std::runtime_error(e.what()));
+            } else {
+                log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
+            }
         }
     }
 #endif
@@ -582,40 +650,35 @@ Server::Pvt::Pvt(const Config &conf)
 #ifdef PVXS_ENABLE_OPENSSL
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
 #endif
+            bool firstiface = true;
+            for (auto& addr : tcpifaces) {
+                if (addr.port() == 0) addr.setPort(effective.tcp_port);
 
-        bool firstiface = true;
-        for(auto& addr : tcpifaces) {
-            if(addr.port()==0)
-                addr.setPort(effective.tcp_port);
+                interfaces.emplace_back(addr, this, firstiface, false);
 
-            interfaces.emplace_back(addr, this, firstiface, false);
-
-            if(firstiface || effective.tcp_port==0)
-                effective.tcp_port = interfaces.back().bind_addr.port();
-            firstiface = false;
-        }
-
-#ifdef PVXS_ENABLE_OPENSSL
-        if(tls_context) {
-            firstiface = true;
-            for(auto& addr : tlsifaces) {
-                // unconditionally set port to avoid clash with plain TCP listener
-                addr.setPort(effective.tls_port);
-
-                interfaces.emplace_back(addr, this, firstiface, true);
-
-                if(firstiface || effective.tls_port==0)
-                    effective.tls_port = interfaces.back().bind_addr.port();
+                if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
                 firstiface = false;
             }
-        }
+
+#ifdef PVXS_ENABLE_OPENSSL
+            if (tls_context && tls_context.cert_is_valid) {
+                firstiface = true;
+                for (auto& addr : tlsifaces) {
+                    // unconditionally set port to avoid clash with plain TCP listener
+                    addr.setPort(effective.tls_port);
+
+                    interfaces.emplace_back(addr, this, firstiface, true);
+
+                    if (firstiface || effective.tls_port == 0) effective.tls_port = interfaces.back().bind_addr.port();
+                    firstiface = false;
+                }
+            }
 #endif
 
-        for(const auto& addr : effective.beaconDestinations) {
-            beaconDest.emplace_back(addr.c_str(), &effective);
-            log_debug_printf(serversetup, "Will send beacons to %s\n",
-                             std::string(SB()<<beaconDest.back()).c_str());
-        }
+            for (const auto& addr : effective.beaconDestinations) {
+                beaconDest.emplace_back(addr.c_str(), &effective);
+                log_debug_printf(serversetup, "Will send beacons to %s\n", std::string(SB() << beaconDest.back()).c_str());
+            }
     });
 
     {
@@ -697,13 +760,16 @@ void Server::Pvt::start()
                 log_err_printf(serversetup, "Error enabling listener on %s\n", iface.name.c_str());
             }
             log_debug_printf(serversetup, "Server enabled%s listener on %s\n",
-                             iface.isTLS ? " TLS" : "", iface.name.c_str());
+#ifdef PVXS_ENABLE_OPENSSL
+                               iface.isTLS ? " TLS" :
+#endif
+                              "", iface.name.c_str());
         }
     });
     if(prev_state!=Stopped)
         return;
 
-    // being processing Searches
+    // begin processing Searches
     for(auto& L : listeners) {
         L->start();
     }
@@ -719,12 +785,34 @@ void Server::Pvt::start()
         state = Running;
     });
 
+    // begin monitoring status
+    acceptor_loop.call([this]()
+    {
+        // monitor first file status with initial delay
+        if(event_add(cert_event_timer.get(), &statusIntervalInitial))
+            log_err_printf(serversetup, "Error enabling file monitor\n%s", "");
+
+        state = Running;
+    });
+
 
 }
 
 void Server::Pvt::stop()
 {
     log_debug_printf(serversetup, "Server Stopping\n%s", "");
+#ifdef PVXS_ENABLE_OPENSSL
+    // Stop status subscription if enabled
+    if (cert_status_manager) {
+        cert_status_manager->unsubscribe();
+        cert_status_manager.reset();
+    }
+
+    // Stop file watcher if enabled
+    if (file_watcher.isRunning()) {
+        file_watcher.stop();
+    }
+#endif
 
     // Stop sending Beacons
     state_t prev_state;
@@ -835,7 +923,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
 #ifdef PVXS_ENABLE_OPENSSL
-    if(msg.protoTLS && tls_context && effective.tls_port) {
+    if(msg.protoTLS && tls_context && effective.tls_port && tls_context.cert_is_valid) {
         to_wire(M, uint16_t(effective.tls_port));
         to_wire(M, "tls");
     } else
@@ -935,6 +1023,153 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
         log_exc_printf(serverio, "Unhandled error in beacon timer callback: %s\n", e.what());
     }
 }
+
+#ifdef PVXS_ENABLE_OPENSSL
+DO_CERT_EVENT_HANDLER(Server::Pvt, serverio, CUSTOM)
+DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(Server::Pvt, getPVAStatus)
+
+void Server::reconfigure(const Config& inconf) {
+    if (!pvt) throw std::logic_error("NULL Server");
+
+    auto newconf(inconf);
+    newconf.expand();  // maybe catch some errors early
+
+    log_info_printf(serversetup, "Reconfiguring Server Context%s", "\n");
+
+    // is the current server running?
+
+    Pvt::state_t prev_state;
+    pvt->acceptor_loop.call([this, &prev_state]() { prev_state = pvt->state; });
+
+    bool was_running = prev_state == Pvt::Running || prev_state == Pvt::Starting;
+
+    if (was_running) pvt->stop();
+
+    decltype(pvt->sources) transfers;
+    decltype(pvt->builtinsrc) builtin;
+
+    // copy all Source, including builtin
+    {
+        auto G(pvt->sourcesLock.lockReader());
+
+        transfers = pvt->sources;
+        builtin = pvt->builtinsrc;
+    }
+
+    // completely destroy the current/old server to free up TCP ports
+    pvt.reset();
+
+    // build up a new, empty, server
+    Server newsrv(newconf);
+    pvt = std::move(newsrv.pvt);
+
+    {
+        auto G(pvt->sourcesLock.lockWriter());
+
+        pvt->sources = transfers;
+        pvt->builtinsrc = builtin;
+    }
+
+    if (was_running) {
+        pvt->start();
+        log_info_printf(serversetup, "Resuming Server after Reconfiguration%s", "\n");
+    }
+}
+
+/**
+ * @brief Enable TLS with the optional config if provided
+ * @param new_config optional config (check the is_initialized flag to see if its blank or not)
+ */
+void Server::Pvt::enableTls(const Config& new_config) {
+    // If already valid then don't do anything
+    if (tls_context.has_cert && tls_context.cert_is_valid) return;
+
+    log_debug_printf(watcher, "Enabling TLS. Certificate file is %s\n", effective.tls_cert_filename.c_str());
+    try {
+        // Exclude PVACMS
+        if (effective.config_target != ConfigCommon::CMS) {
+            Guard G(tls_context.lock);  // We can lock here because `for_server` will create a completely different tls_context
+
+            // if cert isn't valid then get a new one
+            if (!tls_context.has_cert) {
+                log_debug_printf(watcher, "Creating a new Server TLS context from %s\n", effective.tls_cert_filename.c_str());
+                auto new_context = ossl::SSLContext::for_server(new_config.is_initialized ? new_config : effective);
+
+                // If unsuccessful in getting cert or cert is invalid then don't do anything
+                if (!new_context.has_cert || !new_context.cert_is_valid) {
+                    log_debug_printf(watcher, "Failed to create new Server TLS context: TLS disabled: %s\n", effective.tls_cert_filename.c_str());
+                    return;
+                }
+                tls_context = new_context;
+                effective = (new_config.is_initialized ? new_config : effective);
+            }
+
+            // Subscribe to certificate status if not already subscribed
+            if (!cert_status_manager && tls_context.status_check_disabled) {
+                log_debug_printf(watcher, "Subscribing to Server certificate status: %s\n", effective.tls_cert_filename.c_str());
+                subscribeToCertStatus();
+            }
+
+            // All new connections will be able to be TLS
+            // Don't drop any existing connections
+
+            // Set callback for when this status' validity ends
+            if (!tls_context.status_check_disabled) {
+                log_debug_printf(watcher, "Starting server certificate status validity timer after receiving a status update for %s\n",
+                                 effective.tls_cert_filename.c_str());
+                startStatusValidityTimer();
+            }
+
+            tls_context.cert_is_valid = true;
+            log_info_printf(watcher, "TLS enabled for server due to a certificate status update on %s\n", effective.tls_cert_filename.c_str());
+        }
+    } catch (std::exception& e) {
+        log_debug_printf(watcher, "%s: TLS remains disabled for server with %s\n", e.what(), effective.tls_cert_filename.c_str());
+    }
+}
+
+void Server::Pvt::disableTls() {
+    log_debug_printf(watcher, "Disabling TLS%s\n", "");
+    Guard G(tls_context.lock);
+    if (cert_status_manager) {
+        // Stop subscribing to status
+        log_debug_printf(watcher, "Disable TLS: Stopping certificate monitor%s\n", "");
+        cert_status_manager.reset();
+    }
+
+    // Skip if TLS is already disabled
+    if (!tls_context.has_cert || !tls_context.cert_is_valid) return;
+
+    // Remove all tls connections so that clients will reconnect as tcp
+    std::vector<std::weak_ptr<ServerConn>> to_cleanup;
+    // Collect tls connections to clean-up
+    for (auto& pair : connections) {
+        auto conn = pair.first;
+        if (conn && conn->iface->isTLS) {
+            to_cleanup.push_back(pair.second);
+        }
+    }
+
+    log_debug_printf(watcher, "Closing %zu TLS connections\n", to_cleanup.size());
+    // Clean them up
+    for (auto& weak_conn : to_cleanup) {
+        auto conn = weak_conn.lock();
+        if (conn) {
+            conn->cleanup();
+        }
+    }
+
+    tls_context.cert_is_valid = false;
+    tls_context.has_cert = false;
+    log_warn_printf(watcher, "TLS disabled for server%s\n", "");
+}
+
+FILE_EVENT_CALLBACK(Server::Pvt)
+GET_CERT(Server::Pvt)
+START_STATUS_VALIDITY_TIMER(Server::Pvt, acceptor_loop)
+SUBSCRIBE_TO_CERT_STATUS(Server::Pvt, PVACertificateStatus, acceptor_loop)
+
+#endif
 
 Source::~Source() {}
 

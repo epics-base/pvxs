@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
                     break;
                 default:
                     usage(argv[0]);
-                    std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
+                    std::cerr<<"\nUnknown argument: -"<<char(optopt)<<std::endl;
                     return 1;
                 }
             }
@@ -112,8 +112,10 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        auto ctxt(client::Context::fromEnv());
-        auto conf = ctxt.config();
+        // Get the timeout from the environment and build the context
+        auto conf = client::Config::fromEnv();
+        conf.request_timeout_specified = timeout;
+        auto ctxt = conf.build();
 
         epicsEvent done;
         SigInt H([&done]() {

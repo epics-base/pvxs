@@ -3,12 +3,13 @@ TOP=..
 include $(TOP)/configure/CONFIG
 # cfg/ sometimes isn't correctly included due to a Base bug
 # so we do here (maybe again) as workaround
--include $(wildcard $(TOP)/cfg/CONFIG*))
+-include $(wildcard $(TOP)/cfg/CONFIG*)
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
 
 PROD_LIBS += pvxs Com
+USR_CPPFLAGS += -I$(TOP)/src
 
 TESTPROD_HOST += simplesrv
 simplesrv_SRCS += simplesrv.cpp
@@ -34,7 +35,10 @@ rpc_client_SRCS += rpc_client.cpp
 #===========================
 
 include $(TOP)/configure/RULES
--include $(wildcard $(TOP)/cfg/RULES*))
+-include $(wildcard $(TOP)/cfg/RULES*)
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+endif

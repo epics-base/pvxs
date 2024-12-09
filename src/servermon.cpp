@@ -17,7 +17,7 @@
 #include "pvrequest.h"
 
 namespace pvxs { namespace impl {
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
 namespace {

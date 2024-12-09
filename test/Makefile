@@ -3,14 +3,20 @@ TOP=..
 include $(TOP)/configure/CONFIG
 # cfg/ sometimes isn't correctly included due to a Base bug
 # so we do here (maybe again) as workaround
--include $(wildcard $(TOP)/cfg/CONFIG*))
+-include $(wildcard $(TOP)/cfg/CONFIG*)
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
 
-# access to private headers
+# access to private headers and source
 USR_CPPFLAGS += -I$(TOP)/src
 USR_CPPFLAGS += -I$(TOP)/ioc
+
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -I$(TOP)/certs
+SRC_DIRS += $(TOP)/certs
+SRC_DIRS += $(TOP)/src
+endif
 
 PROD_LIBS = pvxs Com
 
@@ -116,15 +122,49 @@ testudpfwd_SRCS += testudpfwd.cpp
 TESTS += testudpfwd
 
 ifdef BASE_3_15
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 TESTPROD_HOST += gen_test_certs
-gen_test_certs += gen_test_certs.cpp
+gen_test_certs_SRCS += gen_test_certs.cpp
+gen_test_certs_SRCS += certfactory.cpp
 
 TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp
 TESTS += testtls
 TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
-endif
+
+TESTPROD_HOST += testtlswithcms
+testtlswithcms_SRCS += testtlswithcms.cpp
+testtlswithcms_SRCS += certstatusfactory.cpp
+testtlswithcms_SRCS += certstatusmanager.cpp
+testtlswithcms_SRCS += certstatus.cpp
+TESTS += testtlswithcms
+TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+
+TESTPROD_HOST += testtlswithcmsandstapling
+testtlswithcmsandstapling_SRCS += testtlswithcmsandstapling.cpp
+testtlswithcmsandstapling_SRCS += certstatusfactory.cpp
+testtlswithcmsandstapling_SRCS += certstatusmanager.cpp
+testtlswithcmsandstapling_SRCS += certstatus.cpp
+TESTS += testtlswithcmsandstapling
+TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+
+TESTPROD_HOST += testtlstime
+testtlstime_SRCS += testtlstime.cpp
+TESTS += testtlstime
+
+TESTPROD_HOST += testtlsstatus
+testtlsstatus_SRCS += testtlsstatus.cpp
+testtlsstatus_SRCS += certstatusfactory.cpp
+testtlsstatus_SRCS += certstatusmanager.cpp
+testtlsstatus_SRCS += certstatus.cpp
+TESTS += testtlsstatus
+
+TESTPROD_HOST += jwtlogintest
+jwtlogintest_SRCS += jwtlogintest.cpp
+jwtlogintest_SYS_LIBS +=curl
+
+endif # EVENT2_HAS_OPENSSL
 endif
 
 ifdef BASE_7_0
@@ -200,7 +240,7 @@ endif
 #===========================
 
 include $(TOP)/configure/RULES
--include $(wildcard $(TOP)/cfg/RULES*))
+-include $(wildcard $(TOP)/cfg/RULES*)
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
@@ -208,7 +248,7 @@ ifdef BASE_3_15
 rtemsTestData.c : $(TESTFILES) $(TOOLS)/epicsMakeMemFs.pl
 	$(PERL) $(TOOLS)/epicsMakeMemFs.pl $@ epicsRtemsFSImage $(TESTFILES)
 
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
 testtls$(EXE): | ca.p12
 
 # generate test certs only with EPICS_HOST_ARCH

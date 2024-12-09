@@ -14,14 +14,23 @@
 
 #include <pvxs/client.h>
 
-#include "evhelper.h"
-#include "dataimpl.h"
-#include "utilpvt.h"
-#include "udp_collector.h"
+#include "certstatus.h"
+#include "certstatusmanager.h"
 #include "conn.h"
+#include "dataimpl.h"
+#include "evhelper.h"
+#include "ownedptr.h"
+#include "p12filewatcher.h"
+#include "udp_collector.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace client {
+
+class MonitorCreationException : public std::runtime_error {
+  public:
+    explicit MonitorCreationException(const std::string& message) : std::runtime_error(message) {}
+};
 
 struct Channel;
 struct ContextImpl;
@@ -50,6 +59,7 @@ struct OperationBase : public Operation
     Value result;
     bool done = false;
     std::shared_ptr<ResultWaiter> waiter;
+    // TODO store the "wants-tls" so that we know what we can bounce when TLS is enabled in enableTls()
 
     OperationBase(operation_t op, const evbase& loop);
     virtual ~OperationBase();
@@ -83,7 +93,9 @@ struct RequestInfo {
 
 struct Connection final : public ConnBase, public std::enable_shared_from_this<Connection> {
     const std::shared_ptr<ContextImpl> context;
+#ifdef PVXS_ENABLE_OPENSSL
     const bool isTLS;
+#endif
 
     // While HoldOff, the time until re-connection
     // While Connected, periodic Echo
@@ -110,14 +122,21 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 
     Connection(const std::shared_ptr<ContextImpl>& context,
                const SockAddr &peerAddr,
-               bool reconn, bool isTLS);
+               bool reconn
+#ifdef PVXS_ENABLE_OPENSSL
+      , bool isTLS
+#endif
+               );
     virtual ~Connection();
 
     static
     std::shared_ptr<Connection> build(const std::shared_ptr<ContextImpl>& context,
                                       const SockAddr& serv,
-                                      bool reconn,
-                                      bool isTLS);
+                                      bool reconn
+#ifdef PVXS_ENABLE_OPENSSL
+                                    , bool isTLS
+#endif
+                                      );
 
 private:
     void startConnecting();
@@ -259,7 +278,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
         Stopped,
     } state = Init;
 
-    const Config effective;
+    Config effective;
 
     const Value caMethod;
 
@@ -309,8 +328,12 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     // chanByName key'd by (pv, forceServer)
     std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
 
+#ifdef PVXS_ENABLE_OPENSSL
     // pair (addr, useTLS)
     std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
+#else
+    std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
+#endif
 
     std::vector<std::pair<SockEndpoint, std::shared_ptr<Connection>>> nameServers;
 
@@ -330,7 +353,23 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent nsChecker;
 
 #ifdef PVXS_ENABLE_OPENSSL
+    inline bool connectionCanProceed() const {
+        return
+             !tls_context                       // If this is not a TLS context then we can proceed immediately without waiting for status
+          || !effective.isTlsConfigured()       // TLS is not configured
+          || !tls_context.has_cert              // If no certificate has been loaded then we can't establish a TLS context, so proceed with tcp
+          || (tls_context.cert_is_valid)        // If we have a cert and have already received status from the CMS, then proceed now
+          || tls_context.status_check_disabled  // or we don't have to wait for status, then proceed now
+          || !cert_status_manager               // If we have no active subscription then we'll never get status so go ahead now with tcp
+          || (cert_status_manager->available(effective.request_timeout_specified));// Finally if the subscription has an available status, or we've waited long enough, then use it
+    }
     ossl::SSLContext tls_context;
+    evevent cert_event_timer;
+    evevent cert_validity_timer;
+    bool first_cert_event{true};
+    std::shared_ptr<certs::CertificateStatus> current_status;
+    certs::P12FileWatcher file_watcher;
+    certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
 #endif
 
     INST_COUNTER(ClientContextImpl);
@@ -362,6 +401,21 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
     void onNSCheck();
     static void onNSCheckS(evutil_socket_t fd, short evt, void *raw);
+
+  private:
+    friend class client::Context;
+
+#ifdef PVXS_ENABLE_OPENSSL
+    static void doCertEventHandler(evutil_socket_t fd, short evt, void *raw);
+    static void doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void *raw);
+    void fileEventCallback(short evt);
+    X509 * getCert(ossl::SSLContext *context = nullptr);
+    void startStatusValidityTimer();
+    void subscribeToCertStatus();
+  public:
+    void disableTls();
+    void enableTls(const Config& new_config = {});
+#endif
 };
 
 struct Context::Pvt {
@@ -374,7 +428,11 @@ public:
 
     INST_COUNTER(ClientPvt);
 
+#ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
+#else
+    Pvt(const Config& conf);
+#endif
     ~Pvt(); // I call ContextImpl::close()
 };
 

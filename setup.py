@@ -45,7 +45,7 @@ eventversion = eventversion()
 
 def cexpand(iname, oname, defs={}, dry_run=False):
     """Expand input file to output file.
-    
+
     defs dict used to expand "@MACRO@", or replace "#cmakedefine MACRO VALUE" lines
     """
     log.info('expand %s -> %s', iname, oname)
@@ -578,7 +578,9 @@ def define_DSOS(self):
     else:
         src_pvxs += ['src/os/default/osdSockExt.cpp']
     if DEFS['EVENT__HAVE_OPENSSL']=='1':
-        src_pvxs += ['src/ossl.cpp']
+        src_pvxs += [
+            'src/openssl.cpp'
+        ]
 
     event_libs = []
     if OS_CLASS=='WIN32':
@@ -664,6 +666,10 @@ def define_DSOS(self):
                 ('PVXS_API_BUILDING', None),
                 ('PVXS_ENABLE_EXPERT_API', None),
                 ('PVXS_ENABLE_SSLKEYLOGFILE', None),
+                ('PVXS_ENABLE_OPENSSL', None),
+                ('PVXS_ENABLE_KRB_AUTH', None),
+                ('PVXS_ENABLE_JWT_AUTH', None),
+                ('PVXS_ENABLE_LDAP_AUTH', None),
             ] + pvxs_tls_macros + get_config_var('CPPFLAGS'),
             include_dirs=[
                 'bundle/libevent/include',

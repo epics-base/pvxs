@@ -7,21 +7,24 @@
 #ifndef SERVERCONN_H
 #define SERVERCONN_H
 
+#include <atomic>
 #include <list>
 #include <map>
 #include <memory>
-#include <atomic>
 
 #include <epicsEvent.h>
 
 #include <pvxs/server.h>
-#include <pvxs/source.h>
 #include <pvxs/sharedpv.h>
-#include "evhelper.h"
-#include "utilpvt.h"
-#include "dataimpl.h"
-#include "udp_collector.h"
+#include <pvxs/source.h>
+
+#include "certstatus.h"
+#include "certstatusmanager.h"
 #include "conn.h"
+#include "dataimpl.h"
+#include "evhelper.h"
+#include "udp_collector.h"
+#include "utilpvt.h"
 
 namespace pvxs {namespace impl {
 
@@ -168,7 +171,9 @@ private:
 struct ServIface
 {
     server::Server::Pvt * const server;
+#ifdef PVXS_ENABLE_OPENSSL
     const bool isTLS;
+#endif
 
     SockAddr bind_addr;
     std::string name;
@@ -254,11 +259,23 @@ struct Server::Pvt
 
 #ifdef PVXS_ENABLE_OPENSSL
     ossl::SSLContext tls_context;
+    CertEventCallback custom_cert_event_callback;
+    evevent cert_event_timer;
+    evevent cert_validity_timer;
+    bool first_cert_event{true};
+    std::shared_ptr<certs::PVACertificateStatus> current_status;
+    certs::P12FileWatcher file_watcher;
+    void* cached_ocsp_response{nullptr};
+    certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
 #endif
 
     INST_COUNTER(ServerPvt);
 
+#ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
+#else
+    Pvt(const Config& conf, CertEventCallback custom_cert_event_callback = nullptr);
+#endif
     ~Pvt();
 
     void start();
@@ -268,6 +285,17 @@ private:
     void onSearch(const UDPManager::Search& msg);
     void doBeacons(short evt);
     static void doBeaconsS(evutil_socket_t fd, short evt, void *raw);
+
+#ifdef PVXS_ENABLE_OPENSSL
+    static void doCertEventHandler(evutil_socket_t fd, short evt, void* raw);
+    static void doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void* raw);
+    void disableTls();
+    void enableTls(const Config& new_config = {});
+    void fileEventCallback(short evt);
+    X509* getCert(ossl::SSLContext* context_ptr = nullptr);
+    void startStatusValidityTimer();
+    void subscribeToCertStatus();
+#endif
 };
 
 }} // namespace pvxs::server

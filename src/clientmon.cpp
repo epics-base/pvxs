@@ -18,8 +18,8 @@ namespace client {
 
 typedef epicsGuard<epicsMutex> Guard;
 
-DEFINE_LOGGER(monevt, "pvxs.client.monitor");
-DEFINE_LOGGER(io, "pvxs.client.io");
+DEFINE_LOGGER(monevt, "pvxs.cli.mon");
+DEFINE_LOGGER(io, "pvxs.cli.io");
 
 namespace {
 struct Entry {
@@ -816,9 +816,8 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     });
 
     auto server(std::move(_server));
-    context->tcp_loop.dispatch([op, context, server]() {
+    context->tcp_loop.dispatch([=]() {
         // on worker
-
         try {
             op->chan = Channel::build(context, op->channelName, server);
 

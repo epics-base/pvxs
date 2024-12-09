@@ -29,37 +29,12 @@
 #include <epicsTime.h>
 
 #include "pvaproto.h"
-#ifdef PVXS_ENABLE_OPENSSL
-#  include "ossl.h"
-#endif
+#include "ownedptr.h"
 
-// hooks for std::unique_ptr
-namespace std {
-template<>
-struct default_delete<event_config> {
-    inline void operator()(event_config* ev) { event_config_free(ev); }
-};
-template<>
-struct default_delete<event_base> {
-    inline void operator()(event_base* ev) { event_base_free(ev); }
-};
-template<>
-struct default_delete<event> {
-    inline void operator()(event* ev) { event_free(ev); }
-};
-template<>
-struct default_delete<evconnlistener> {
-    inline void operator()(evconnlistener* ev) { evconnlistener_free(ev); }
-};
-template<>
-struct default_delete<bufferevent> {
-    inline void operator()(bufferevent* ev) { bufferevent_free(ev); }
-};
-template<>
-struct default_delete<evbuffer> {
-    inline void operator()(evbuffer* ev) { evbuffer_free(ev); }
-};
-}
+#ifdef PVXS_ENABLE_OPENSSL
+#include "openssl.h"
+constexpr timeval status_ready_polling_interval{0, 100000};
+#endif
 
 namespace pvxs {namespace impl {
 
@@ -76,35 +51,6 @@ DEFINE_DELETE(evconnlistener);
 DEFINE_DELETE(bufferevent);
 DEFINE_DELETE(evbuffer);
 #undef DEFINE_DELETE
-
-//! unique_ptr which is never constructed with NULL
-template<typename T, typename D>
-struct owned_ptr : public std::unique_ptr<T, D>
-{
-    typedef std::unique_ptr<T, D> base_t;
-    constexpr owned_ptr() {}
-    constexpr owned_ptr(std::nullptr_t np) : base_t(np) {}
-    explicit owned_ptr(const char* file, int line, T* ptr) : base_t(ptr) {
-        if(!*this)
-            throw loc_bad_alloc(file, line);
-    }
-
-    // for functions which return a pointer in an argument
-    //   int some(T** presult); // store *presult = output
-    // use like
-    //   owned_ptr<T> x;
-    //   some(x.acquire());
-    struct acquisition {
-        base_t* o;
-        T* ptr = nullptr;
-        operator T** () { return &ptr; }
-        constexpr acquisition(base_t* o) :o(o) {}
-        ~acquisition() {
-            o->reset(ptr);
-        }
-    };
-    acquisition acquire() { return acquisition{this}; }
-};
 
 /* It seems that std::function<void()>(Fn&&) from gcc (circa 8.3) and clang (circa 7.0)
  * always copies the functor/lambda.  We can't allow this when transferring ownership
@@ -162,6 +108,14 @@ private:
     std::unique_ptr<mdetail::VFunctor0> fn;
 };
 
+struct DelayedDispatcher {
+    mfunction fn;
+    std::function<bool()> dispatch_when_condition;
+    DelayedDispatcher(mfunction &&fn, const std::function<bool()> &&dispatch_when_condition)
+      : fn(std::move(fn))
+      , dispatch_when_condition(dispatch_when_condition){}
+};
+
 struct PVXS_API evbase {
     evbase() = default;
     explicit evbase(const std::string& name, unsigned prio=0);
@@ -175,6 +129,7 @@ struct PVXS_API evbase {
 
 private:
     bool _dispatch(mfunction&& fn, bool dothrow) const;
+    bool _delayedDispatch(timeval delay, mfunction&& fn, bool dothrow) const;
     bool _call(mfunction&& fn, bool dothrow) const;
 public:
 
@@ -193,6 +148,7 @@ public:
     void dispatch(mfunction&& fn) const {
         _dispatch(std::move(fn), true);
     }
+
     inline
     bool tryDispatch(mfunction&& fn) const {
         return _dispatch(std::move(fn), false);
@@ -204,23 +160,24 @@ public:
         else
             return tryDispatch(std::move(fn));
     }
-
     void assertInLoop() const;
+
     //! Caller must be on the worker, or the worker must be stopped.
     //! @returns true if working is running.
     bool assertInRunningLoop() const;
 
     inline void reset() { pvt.reset(); }
 
-private:
+  private:
     struct Pvt;
     std::shared_ptr<Pvt> pvt;
-public:
+
+  public:
     event_base* base = nullptr;
 };
 
 template<typename T>
-using ev_owned_ptr = owned_ptr<T, ev_delete<T>>;
+using ev_owned_ptr = pvxs::OwnedPtr<T, ev_delete<T>>;
 typedef ev_owned_ptr<event_config> evconfig;
 typedef ev_owned_ptr<event_base> evbaseptr;
 typedef ev_owned_ptr<event> evevent;

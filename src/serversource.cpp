@@ -11,7 +11,7 @@
 namespace pvxs {
 namespace impl {
 
-DEFINE_LOGGER(srvsrc, "pvxs.server.src");
+DEFINE_LOGGER(srvsrc, "pvxs.svr.src");
 
 ServerSource::ServerSource(server::Server::Pvt* serv)
     :name("server")
@@ -29,7 +29,7 @@ void ServerSource::onSearch(Search &op)
 
 void ServerSource::onCreate(std::unique_ptr<server::ChannelControl> &&op)
 {
-    if(op->name()!=name)
+    if(!op || op->name()!=name)
         return;
 
     auto handle = std::move(op); // claim

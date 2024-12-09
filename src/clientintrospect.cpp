@@ -12,8 +12,8 @@
 namespace pvxs {
 namespace client {
 
-DEFINE_LOGGER(setup, "pvxs.client.setup");
-DEFINE_LOGGER(io, "pvxs.client.io");
+DEFINE_LOGGER(setup, "pvxs.cli.init");
+DEFINE_LOGGER(io, "pvxs.cli.io");
 
 namespace {
 
@@ -215,9 +215,8 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
 
     auto name(std::move(_name));
     auto server(std::move(_server));
-    context->tcp_loop.dispatch([op, context, name, server]() {
+    context->tcp_loop.dispatch([=]() {
         // on worker
-
         try {
             op->chan = Channel::build(context, name, server);
 
