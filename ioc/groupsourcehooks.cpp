@@ -16,6 +16,8 @@
 #include <iocsh.h>
 
 #include <initHooks.h>
+#include <iocInit.h>
+#include <dbAccess.h>
 
 #include <pvxs/source.h>
 #include <pvxs/iochooks.h>
@@ -27,6 +29,9 @@
 
 #if EPICS_VERSION_INT < VERSION_INT(7, 0, 3, 1)
 #  define iocshSetError(ret) do { (void)ret; }while(0)
+#endif
+#ifndef ERL_ERROR
+#  define ERL_ERROR "ERROR"
 #endif
 
 // include last to avoid clash of #define printf with other headers
@@ -95,6 +100,24 @@ const auto dbLoadGroupMsg =
 
 long dbLoadGroup(const char* jsonFilename, const char* macros) {
     try {
+        /* getIocState() introduced to the 3.15 branch in R3.15.8
+         *                                 7.0 branch in R7.0.4
+         */
+#if EPICS_VERSION_INT >= VERSION_INT(7, 0, 4, 0) \
+    || (EPICS_VERSION_INT < VERSION_INT(7, 0, 0, 0) && EPICS_VERSION_INT >= VERSION_INT(3, 15, 8, 0))
+        if(getIocState() != iocVoid)
+#else
+        if(interruptAccept)
+#endif
+        {
+            fprintf(stderr,
+                    ERL_ERROR " dbLoadGroup() not allowed in current IOC state (%d).\n"
+                    "              Hint: Move before iocInit()\n",
+                    getIocState()
+                    );
+            return 1;
+        }
+
         if (!jsonFilename || !jsonFilename[0]) {
             fprintf(stderr, "%s\n"
                             "Error: Missing required JSON filename\n", dbLoadGroupMsg);
