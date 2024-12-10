@@ -225,7 +225,7 @@ void GroupConfigProcessor::defineFields(GroupDefinition& groupDefinition, const 
         }
 
         if(fieldName.empty() && fieldConfig.info.type!=MappingInfo::Meta) {
-            fprintf(stderr, "%s.%s Error: only +type:\"meta\" map be mapped at struct top\n",
+            fprintf(stderr, "%s.%s Error: only +type:\"meta\" can be mapped at struct top\n",
                     groupName.c_str(), fieldName.c_str());
             continue;
         }
