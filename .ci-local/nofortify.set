@@ -5,4 +5,4 @@ BASE_REPOOWNER=epics-base
 BASE_VARNAME=EPICS_BASE
 BASE_RECURSIVE=no
 
-BASE_HOOKS=.ci-local/disable-fortify.py
+BASE_HOOK=.ci-local/disable-fortify.py
