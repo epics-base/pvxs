@@ -106,9 +106,6 @@ long dbLoadGroup(const char* jsonFilename, const char* macros) {
 #if EPICS_VERSION_INT >= VERSION_INT(7, 0, 4, 0) \
     || (EPICS_VERSION_INT < VERSION_INT(7, 0, 0, 0) && EPICS_VERSION_INT >= VERSION_INT(3, 15, 8, 0))
         if(getIocState() != iocVoid)
-#else
-        if(interruptAccept)
-#endif
         {
             fprintf(stderr,
                     ERL_ERROR " dbLoadGroup() not allowed in current IOC state (%d).\n"
@@ -117,6 +114,15 @@ long dbLoadGroup(const char* jsonFilename, const char* macros) {
                     );
             return 1;
         }
+#else
+        if(interruptAccept)
+        {
+            fprintf(stderr,
+                    ERL_ERROR " dbLoadGroup() not allowed in current IOC state.\n"
+                    "              Hint: Move before iocInit()\n");
+            return 1;
+        }
+#endif
 
         if (!jsonFilename || !jsonFilename[0]) {
             fprintf(stderr, "%s\n"
