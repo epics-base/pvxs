@@ -40,7 +40,7 @@ static inline void resetGroups() {}
 #if EPICS_VERSION_INT >= VERSION_INT(7, 0, 4, 0)
 #  define USE_DEINIT_HOOKS
 #endif
-#if EPICS_VERSION_INT > VERSION_INT(7, 0, 7, 0)
+#if EPICS_VERSION_INT >= VERSION_INT(7, 0, 8, 0)
 #  define USE_PREPARE_CLEANUP_HOOKS
 #endif
 
