@@ -82,11 +82,16 @@ int main(int argc, char *argv[])
             std::cout<<"Effective config\n"<<conf;
 
         std::list<std::shared_ptr<client::Operation>> ops;
+        std::list<std::shared_ptr<client::Connect>> conns;
 
         std::atomic<int> remaining{argc-optind};
         epicsEvent done;
 
         for(auto n : range(optind, argc)) {
+            if(verbose)
+                conns.push_back(ctxt.connect(argv[n]).onConnect([](const client::Connected& cb) {
+                    std::cout<<"# "<<(*cb.cred)<<"\n";
+                }).exec());
 
             ops.push_back(ctxt.info(argv[n])
                           .result([&argv, n, &remaining, &done](client::Result&& result) {
