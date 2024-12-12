@@ -3,6 +3,14 @@
 Release Notes
 =============
 
+1.3.3 (UNRELEASED)
+------------------
+
+* Client: search retry step reset on channel reconnection (Anze Zagar)
+* Various documentation improvements!  (Érico Nogueira)
+* Fix dbLoadGroups (Érico Nogueira)
+* Fix build with epics-base 7.0.7 (Rémi NICOLE)
+
 1.3.2 (Oct 2024)
 ------------------
 
