@@ -86,6 +86,7 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 
     // While HoldOff, the time until re-connection
     // While Connected, periodic Echo
+    // After early connect() failure, deferred notification
     const evevent echoTimer;
 
     bool ready = false;
