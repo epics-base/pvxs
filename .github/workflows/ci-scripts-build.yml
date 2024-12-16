@@ -209,10 +209,11 @@ jobs:
       run: grep . cfg/*
     - name: Upload tapfiles Artifact
       if: ${{ always() }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: tapfiles ${{ matrix.name }}
         path: '**/O.*/*.tap'
+        if-no-files-found: ignore
 
   docker:
     name: ${{ matrix.name }}
