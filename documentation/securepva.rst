@@ -1756,67 +1756,67 @@ PVACMS Usage
           -h,     --help              Show this message
           -v,     --verbose           Make more noise
           -V,     --version           Print version and exit.
-                  --ck, --ca-keychain TEXT [/Users/george/.epics/certs/ca.pem]
+          -d,     --cert-db TEXT [certs.db]
+                                      Specify cert db file location
+          -c,     --ca-keychain TEXT [ca.p12]
                                       Specify CA keychain file location
-                  --cpk, --ca-private-key TEXT
+                  --ca-private-key TEXT
                                       Specify CA private key file location
-                  --ckp, --ca-keychain-pwd TEXT
+                  --ca-keychain-pwd TEXT
                                       Specify CA keychain password file location
-                  --cpkp, --ca-private-key-pwd TEXT
+                  --ca-private-key-pwd TEXT
                                       Specify CA private key password file location
-                  --pk, --pvacms-keychain TEXT [/Users/george/.epics/certs/pvacms.pem]
-                                      Specify PVACMS keychain file location
-                  --ppk, --pvacms-private-key TEXT
-                                      Specify PVACMS private key file location
-                  --pkp, --pvacms-keychain-pwd TEXT
-                                      Specify PVACMS keychain password file location
-                  --ppkp, --pvacms-private-key-pwd TEXT
-                                      Specify PVACMS private key password file location
-                  --ak, --admin-keychain TEXT
-                                      Specify PVACMS admin user's keychain file location
-                  --apk, --admin-private-key TEXT
-                                      Specify PVACMS admin user's private key file location
-                  --akp, --admin-keychain-pwd TEXT
-                                      Specify PVACMS admin user's keychain password file location
-                  --apkp, --admin-private-key-pwd TEXT
-                                      Specify PVACMS admin user's private key password file location
-                  --cn, --ca-name TEXT [EPICS Root CA]
+                  --ca-name TEXT ["EPICS Test Root CA"]
                                       Specify the CA's name. Used if we need to create a root
                                       certificate
-                  --co, --ca-org TEXT [ca.epics.org]
+                  --ca-org TEXT ["ca.epics.org"]
                                       Specify the CA's Organization. Used if we need to create a root
                                       certificate
-                  --cou, --ca-org-unit TEXT [EPICS Certificate Authority]
+                  --ca-org-unit TEXT ["EPICS Certificate Authority"]
                                       Specify the CA's Organization Unit. Used if we need to create a
                                       root certificate
-                  --cc, --ca-country TEXT
+                  --ca-country TEXT [US]
                                       Specify the CA's Country. Used if we need to create a root
                                       certificate
-                  --pn, --pvacms-name TEXT [PVACMS]
+          -p,     --pvacms-keychain TEXT [pvacms.p12]
+                                      Specify PVACMS keychain file location
+                  --pvacms-private-key TEXT
+                                      Specify PVACMS private key file location
+                  --pvacms-keychain-pwd TEXT
+                                      Specify PVACMS keychain password file location
+                  --pvacms-private-key-pwd TEXT
+                                      Specify PVACMS private key password file location
+                  --pvacms-name TEXT [PVACMS]
                                       Specify the PVACMS name. Used if we need to create a PVACMS
                                       certificate
-                  --po, --pvacms-org TEXT [ca.epics.org]
+                  --pvacms-org TEXT [ca.epics.org]
                                       Specify the PVACMS Organization. Used if we need to create a
                                       PVACMS certificate
-                  --pou, --pvacms-org-unit TEXT [EPICS Certificate Authority]
+                  --pvacms-org-unit TEXT [EPICS Certificate Authority]
                                       Specify the PVACMS Organization Unit. Used if we need to create a
                                       PVACMS certificate
-                  --pc, --pvacms-country TEXT
+                  --pvacms-country TEXT [US]
                                       Specify the PVACMS Country. Used if we need to create a PVACMS
                                       certificate
-          -s,     --acf TEXT [/Users/george/.epics/auth/pvacms.acf]
-                                      Access security Configuration File
-          -d,     --cert-db TEXT [/Users/george/.epics/db/certs.db]
-                                      Specify cert db file location
-                  --client-require-approval BOOLEAN [1]
+          -a,     --admin-keychain TEXT [admin.p12]
+                                      Specify PVACMS admin user's keychain file location
+                  --admin-private-key TEXT
+                                      Specify PVACMS admin user's private key file location
+                  --admin-keychain-pwd TEXT
+                                      Specify PVACMS admin user's keychain password file location
+                  --admin-private-key-pwd TEXT
+                                      Specify PVACMS admin user's private key password file location
+                  --acf TEXT [pvacms.acf]
+                                      Admin Security Configuration File
+                  --client-require-approval [true]
                                       Generate Client Certificates in PENDING_APPROVAL state
-                  --server-require-approval BOOLEAN [1]
+                  --server-require-approval [true]
                                       Generate Server Certificates in PENDING_APPROVAL state
-                  --gateway-require-approval BOOLEAN [1]
+                  --gateway-require-approval [true]
                                       Generate Server Certificates in PENDING_APPROVAL state
-                  --svm, --status-validity-mins UINT [30]
+                  --status-validity-mins UINT [30]
                                       Set Status Validity Time in Minutes
-                  --sme, --status-monitoring-enabled BOOLEAN [1]
+                  --status-monitoring-enabled [true]
                                       Require Peers to monitor Status of Certificates Generated by this
                                       server by default. Can be overridden in each CCR
 

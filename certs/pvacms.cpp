@@ -1663,54 +1663,52 @@ int main(int argc, char *argv[]) {
         app.set_help_flag("-h,--help", "Show this message");
         app.add_flag("-v,--verbose", verbose, "Make more noise");
         app.add_flag("-V,--version", show_version, "Print version and exit.");
-
-        app.add_option("--ck,--ca-keychain", config.ca_cert_filename, "Specify CA keychain file location")->default_val(config.ca_cert_filename);
-        app.add_option("--cpk,--ca-private-key", config.ca_private_key_filename, "Specify CA private key file location");
-        app.add_option("--ckp,--ca-keychain-pwd", ca_password_file, "Specify CA keychain password file location");
-        app.add_option("--cpkp,--ca-private-key-pwd", ca_pk_password_file, "Specify CA private key password file location");
-
-        app.add_option("--pk,--pvacms-keychain", config.tls_cert_filename, "Specify PVACMS keychain file location")->default_val(config.tls_cert_filename);
-        app.add_option("--ppk,--pvacms-private-key", config.tls_private_key_filename, "Specify PVACMS private key file location");
-        app.add_option("--pkp,--pvacms-keychain-pwd", pvacms_password_file, "Specify PVACMS keychain password file location");
-        app.add_option("--ppkp,--pvacms-private-key-pwd", pvacms_pk_password_file, "Specify PVACMS private key password file location");
-
-        app.add_option("--ak,--admin-keychain", config.admin_cert_filename, "Specify PVACMS admin user's keychain file location")
-            ->default_val(config.admin_cert_filename);
-        app.add_option("--apk,--admin-private-key", config.admin_private_key_filename, "Specify PVACMS admin user's private key file location");
-        app.add_option("--akp,--admin-keychain-pwd", admin_password_file, "Specify PVACMS admin user's keychain password file location");
-        app.add_option("--apkp,--admin-private-key-pwd", admin_pk_password_file, "Specify PVACMS admin user's private key password file location");
-
-        app.add_option("--cn,--ca-name", config.ca_name, "Specify the CA's name. Used if we need to create a root certificate")->default_val(config.ca_name);
-        app.add_option("--co,--ca-org", config.ca_organization, "Specify the CA's Organization. Used if we need to create a root certificate")
-            ->default_val("ca.epics.org");
-        app.add_option("--cou,--ca-org-unit", config.ca_organizational_unit, "Specify the CA's Organization Unit. Used if we need to create a root certificate")
-            ->default_val("EPICS Certificate Authority");
-        app.add_option("--cc,--ca-country", config.ca_country, "Specify the CA's Country. Used if we need to create a root certificate")
-            ->default_val(config.ca_country.empty() ? getCountryCode() : config.ca_country);
-
-        app.add_option("--pn,--pvacms-name", config.pvacms_name, "Specify the PVACMS name. Used if we need to create a PVACMS certificate")
-            ->default_val("PVACMS");
-        app.add_option("--po,--pvacms-org", config.pvacms_organization, "Specify the PVACMS Organization. Used if we need to create a PVACMS certificate")
-            ->default_val("ca.epics.org");
-        app.add_option("--pou,--pvacms-org-unit", config.pvacms_organizational_unit,
-                       "Specify the PVACMS Organization Unit. Used if we need to create a PVACMS certificate")
-            ->default_val("EPICS Certificate Authority");
-        app.add_option("--pc,--pvacms-country", config.pvacms_country, "Specify the PVACMS Country. Used if we need to create a PVACMS certificate")
-            ->default_val(config.pvacms_country.empty() ? getCountryCode() : config.pvacms_country);
-
-        app.add_option("-s,--acf", config.ca_acf_filename, "Access security Configuration File")->default_val(config.ca_acf_filename);
         app.add_option("-d,--cert-db", config.ca_db_filename, "Specify cert db file location")->default_val(config.ca_db_filename);
 
-        app.add_option("--client-require-approval", config.cert_client_require_approval, "Generate Client Certificates in PENDING_APPROVAL state")
+       app.add_option("-c,--ca-keychain", config.ca_cert_filename, "Specify CA keychain file location")->default_val(config.ca_cert_filename);
+       app.add_option("--ca-private-key", config.ca_private_key_filename, "Specify CA private key file location");
+       app.add_option("--ca-keychain-pwd", ca_password_file, "Specify CA keychain password file location");
+       app.add_option("--ca-private-key-pwd", ca_pk_password_file, "Specify CA private key password file location");
+       app.add_option("--ca-name", config.ca_name, "Specify the CA's name. Used if we need to create a root certificate")->default_val(config.ca_name);
+       app.add_option("--ca-org", config.ca_organization, "Specify the CA's Organization. Used if we need to create a root certificate")
+          ->default_val("ca.epics.org");
+       app.add_option("--ca-org-unit", config.ca_organizational_unit, "Specify the CA's Organization Unit. Used if we need to create a root certificate")
+          ->default_val("EPICS Certificate Authority");
+       app.add_option("--ca-country", config.ca_country, "Specify the CA's Country. Used if we need to create a root certificate")
+          ->default_val(config.ca_country.empty() ? getCountryCode() : config.ca_country);
+
+        app.add_option("-p,--pvacms-keychain", config.tls_cert_filename, "Specify PVACMS keychain file location")->default_val(config.tls_cert_filename);
+        app.add_option("--pvacms-private-key", config.tls_private_key_filename, "Specify PVACMS private key file location");
+        app.add_option("--pvacms-keychain-pwd", pvacms_password_file, "Specify PVACMS keychain password file location");
+        app.add_option("--pvacms-private-key-pwd", pvacms_pk_password_file, "Specify PVACMS private key password file location");
+        app.add_option("--pvacms-name", config.pvacms_name, "Specify the PVACMS name. Used if we need to create a PVACMS certificate")
+          ->default_val("PVACMS");
+        app.add_option("--pvacms-org", config.pvacms_organization, "Specify the PVACMS Organization. Used if we need to create a PVACMS certificate")
+          ->default_val("ca.epics.org");
+        app.add_option("--pvacms-org-unit", config.pvacms_organizational_unit,
+                       "Specify the PVACMS Organization Unit. Used if we need to create a PVACMS certificate")
+          ->default_val("EPICS Certificate Authority");
+        app.add_option("--pvacms-country", config.pvacms_country, "Specify the PVACMS Country. Used if we need to create a PVACMS certificate")
+          ->default_val(config.pvacms_country.empty() ? getCountryCode() : config.pvacms_country);
+
+
+       app.add_option("-a,--admin-keychain", config.admin_cert_filename, "Specify PVACMS admin user's keychain file location")
+            ->default_val(config.admin_cert_filename);
+       app.add_option("--admin-private-key", config.admin_private_key_filename, "Specify PVACMS admin user's private key file location");
+       app.add_option("--admin-keychain-pwd", admin_password_file, "Specify PVACMS admin user's keychain password file location");
+       app.add_option("--admin-private-key-pwd", admin_pk_password_file, "Specify PVACMS admin user's private key password file location");
+       app.add_option("--acf", config.ca_acf_filename, "Admin Security Configuration File")->default_val(config.ca_acf_filename);
+
+        app.add_flag("--client-require-approval", config.cert_client_require_approval, "Generate Client Certificates in PENDING_APPROVAL state")
             ->default_val(config.cert_client_require_approval);
-        app.add_option("--server-require-approval", config.cert_server_require_approval, "Generate Server Certificates in PENDING_APPROVAL state")
+        app.add_flag("--server-require-approval", config.cert_server_require_approval, "Generate Server Certificates in PENDING_APPROVAL state")
             ->default_val(config.cert_server_require_approval);
-        app.add_option("--gateway-require-approval", config.cert_gateway_require_approval, "Generate Server Certificates in PENDING_APPROVAL state")
+        app.add_flag("--gateway-require-approval", config.cert_gateway_require_approval, "Generate Server Certificates in PENDING_APPROVAL state")
             ->default_val(config.cert_gateway_require_approval);
 
-        app.add_option("--svm,--status-validity-mins", config.cert_status_validity_mins, "Set Status Validity Time in Minutes")
+        app.add_option("--status-validity-mins", config.cert_status_validity_mins, "Set Status Validity Time in Minutes")
             ->default_val(config.cert_status_validity_mins);
-        app.add_option("--sme,--status-monitoring-enabled", config.cert_status_subscription,
+        app.add_flag("--status-monitoring-enabled", config.cert_status_subscription,
                        "Require Peers to monitor Status of Certificates Generated by this server by default.  Can be overridden in each CCR")
             ->default_val(config.cert_status_subscription);
 
