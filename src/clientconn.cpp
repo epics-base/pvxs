@@ -71,8 +71,16 @@ void Connection::startConnecting()
     timeval tmo(totv(context->effective.tcpTimeout));
     bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
-    if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
-        throw std::runtime_error("Unable to begin connecting");
+    if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size())) {
+        // non-blocking connect() failed immediately.
+        // try to defer notification.
+        state = Disconnected;
+        constexpr timeval immediate{0, 0};
+        if(event_add(echoTimer.get(), &immediate))
+            throw std::runtime_error(SB()<<"Unable to begin connecting or schedule deferred notification "<<peerName);
+        log_warn_printf(io, "Unable to connect() to %s\n", peerName.c_str());
+        return;
+    }
 
     connect(std::move(bev));
 
@@ -479,6 +487,11 @@ void Connection::tickEcho()
             log_err_printf(io, "Server %s error Disabling echoTimer\n", peerName.c_str());
 
         startConnecting();
+
+    }else if(state==Disconnected) {
+        // deferred notification of early connect() failure.
+        // TODO: avoid a misleading "closed by peer" error
+        bevEvent(BEV_EVENT_EOF);
 
     } else {
         log_debug_printf(io, "Server %s ping\n", peerName.c_str());
