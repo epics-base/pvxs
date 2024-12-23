@@ -174,7 +174,7 @@ jobs:
       - name: Save Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: epicscorelibs
+          name: "epicscorelibs ${{ matrix.name }}"
           path: dist/*
 
       - name: Check wheels
@@ -382,7 +382,7 @@ jobs:
       - name: Save Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: epicscorelibs
+          name: "epicscorelibs ${{ matrix.name }}"
           path: dist/*
 
       - name: Check wheels
