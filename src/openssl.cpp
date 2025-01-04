@@ -148,7 +148,7 @@ SSLContext::SSLContext(const impl::evbase &loop) : loop(loop) {}
 SSLContext::SSLContext(const SSLContext &o)
     : ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled), loop(o.loop) {
     if (ctx) {
-        auto ret(SSL_CTX_up_ref(ctx));
+        auto ret(SSL_CTX_up_ref(ctx.get()));
         assert(ret == 1);  // can up_ref actually fail?
     }
 }
@@ -194,11 +194,6 @@ void SSLContext::statusValidityExpirationHandler(evutil_socket_t fd, short evt, 
     }
     // Chain another status validity check if new status is valid
     if (self.cert_status.isValid()) self.setStatusValidityCountdown();
-}
-
-SSLContext::~SSLContext() {
-    if (status_validity_timer) (void)event_del(status_validity_timer.get());
-    SSL_CTX_free(ctx);  // If ctx is NULL nothing is done.
 }
 
 namespace {
@@ -359,14 +354,14 @@ void extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr<STACK_OF(
             }
 
             // populate the context's trust store with the self-signed root cert
-            X509_STORE *trusted_store = SSL_CTX_get_cert_store(ctx->ctx);
+            X509_STORE *trusted_store = SSL_CTX_get_cert_store(ctx->ctx.get());
             if (!X509_STORE_add_cert(trusted_store, ca)) throw SSLError("X509_STORE_add_cert");
         } else {
             // signed by another CA
             // note: chain certs added this way are ignored unless SSL_BUILD_CHAIN_FLAG_UNTRUSTED is used
             // appends SSL_CTX::cert::chain
         }
-        if (!SSL_CTX_add0_chain_cert(ctx->ctx, ca)) throw SSLError("SSL_CTX_add0_chain_cert");
+        if (!SSL_CTX_add0_chain_cert(ctx->ctx.get(), ca)) throw SSLError("SSL_CTX_add0_chain_cert");
     }
 }
 
@@ -395,7 +390,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
     tls_context->status_check_disabled = conf.tls_disable_status_check;
     tls_context->stapling_disabled = conf.tls_disable_stapling;
     tls_context->allow_self_signed_ca = conf.allow_self_signed_ca;
-    tls_context->ctx = SSL_CTX_new_ex(ossl_gbl->libctx.get(), NULL, method);
+    tls_context->ctx = ossl_shared_ptr<SSL_CTX>(SSL_CTX_new_ex(ossl_gbl->libctx.get(), NULL, method));
     if (!tls_context->ctx) throw SSLError("Unable to allocate SSL_CTX");
 
     {
@@ -403,18 +398,18 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
         // any time the SSL context is available to provide access to the entity certificate,
         // peer statuses and other custom data.
         std::unique_ptr<CertStatusExData> car{new CertStatusExData(loop, !tls_context->status_check_disabled, tls_context->allow_self_signed_ca)};
-        if (!SSL_CTX_set_ex_data(tls_context->ctx, ossl_gbl->SSL_CTX_ex_idx, car.get())) throw SSLError("SSL_CTX_set_ex_data");
+        if (!SSL_CTX_set_ex_data(tls_context->ctx.get(), ossl_gbl->SSL_CTX_ex_idx, car.get())) throw SSLError("SSL_CTX_set_ex_data");
         car.release();  // SSL_CTX_free() now responsible (using our registered callback `free_SSL_CTX_sidecar`)
     }
 
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
     // Set the keylog callback to log the TLS secrets to the file
-    (void)SSL_CTX_set_keylog_callback(tls_context->ctx, &sslkeylogfile_log);
+    (void)SSL_CTX_set_keylog_callback(tls_context->ctx.get(), &sslkeylogfile_log);
 #endif
 
     // Set minimum and maximum protocol versions.  Version 1.3 is the minimum
-    (void)SSL_CTX_set_min_proto_version(tls_context->ctx, TLS1_3_VERSION);
-    (void)SSL_CTX_set_max_proto_version(tls_context->ctx, 0);
+    (void)SSL_CTX_set_min_proto_version(tls_context->ctx.get(), TLS1_3_VERSION);
+    (void)SSL_CTX_set_max_proto_version(tls_context->ctx.get(), 0);
 
     // If TLS is disabled or not configured then set the context to degraded mode so that
     // only TCP connections are allowed.
@@ -434,20 +429,20 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
     verifyKeyUsage(cert_data.cert, isForClient);
 
     // Use the certificate in the context
-    if (!SSL_CTX_use_certificate(tls_context->ctx, cert_data.cert.get())) throw SSLError("using certificate");
+    if (!SSL_CTX_use_certificate(tls_context->ctx.get(), cert_data.cert.get())) throw SSLError("using certificate");
 
     // Check the private key
     if (!cert_data.key_pair) throw std::runtime_error("No private key");
-    if (!SSL_CTX_use_PrivateKey(tls_context->ctx, cert_data.key_pair->pkey.get())) throw SSLError("using private key");
+    if (!SSL_CTX_use_PrivateKey(tls_context->ctx.get(), cert_data.key_pair->pkey.get())) throw SSLError("using private key");
     extractCAs(tls_context, cert_data.ca);
-    if (!cert_data.key_pair->pkey || !SSL_CTX_check_private_key(tls_context->ctx)) throw SSLError("invalid private key");
+    if (!cert_data.key_pair->pkey || !SSL_CTX_check_private_key(tls_context->ctx.get())) throw SSLError("invalid private key");
 
     // Build the certificate chain and set verification flags
     // Note useful flags are:
     //  SSL_BUILD_CHAIN_FLAG_CHECK - Fully check CA certificate chain and fail if any are not trusted
     //  SSL_BUILD_CHAIN_FLAG_UNTRUSTED - Flag untrusted in build chain but still use it
     //  0 - run defualt checks
-    if (!SSL_CTX_build_cert_chain(tls_context->ctx, SSL_BUILD_CHAIN_FLAG_CHECK))
+    if (!SSL_CTX_build_cert_chain(tls_context->ctx.get(), SSL_BUILD_CHAIN_FLAG_CHECK))
         throw SSLError("invalid cert chain");
 
     // TLS is now configured:
@@ -475,9 +470,9 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
             log_debug_printf(setup, "This Secure PVAccess Server requires an X.509 client certificate%s", "\n");
         }
         // Configure our custom verification function `ossl_verify` to be called by the TLS handshake
-        SSL_CTX_set_verify(tls_context->ctx, mode, &ossl_verify);
+        SSL_CTX_set_verify(tls_context->ctx.get(), mode, &ossl_verify);
         // Configure the maximum depth of the certificate chain to verify
-        SSL_CTX_set_verify_depth(tls_context->ctx, ossl_verify_depth);
+        SSL_CTX_set_verify_depth(tls_context->ctx.get(), ossl_verify_depth);
     }
 
     return tls_context;
@@ -546,8 +541,8 @@ int serverOCSPCallback(SSL *ssl, pvxs::server::Server::Pvt *server) {
  */
 void configureServerOCSPCallback(void *server_ptr, SSL *) {
     auto server = (pvxs::server::Server::Pvt *)server_ptr;
-    SSL_CTX_set_tlsext_status_arg(server->tls_context->ctx, server);
-    SSL_CTX_set_tlsext_status_cb(server->tls_context->ctx, serverOCSPCallback);
+    SSL_CTX_set_tlsext_status_arg(server->tls_context->ctx.get(), server);
+    SSL_CTX_set_tlsext_status_cb(server->tls_context->ctx.get(), serverOCSPCallback);
 }
 
 // Must be set up with correct values after OpenSSL initialisation to retrieve status PV from certs
@@ -755,7 +750,7 @@ CertStatusExData *CertStatusExData::fromSSL_CTX(SSL_CTX *ssl_ctx) {
  *
  * @return the CertStatusExData
  */
-CertStatusExData *SSLContext::getCertStatusExData() const { return CertStatusExData::fromSSL_CTX(ctx); }
+CertStatusExData *SSLContext::getCertStatusExData() const { return CertStatusExData::fromSSL_CTX(ctx.get()); }
 
 /**
  * @brief Get the entity certificate from the custom data in the SSL context
@@ -768,7 +763,7 @@ CertStatusExData *SSLContext::getCertStatusExData() const { return CertStatusExD
 const X509 *SSLContext::getEntityCertificate() const {
     if (!ctx) throw std::invalid_argument("NULL");
 
-    auto car = static_cast<CertStatusExData *>(SSL_CTX_get_ex_data(ctx, ossl_gbl->SSL_CTX_ex_idx));
+    auto car = static_cast<CertStatusExData *>(SSL_CTX_get_ex_data(ctx.get(), ossl_gbl->SSL_CTX_ex_idx));
     return car->cert.get();
 }
 
@@ -847,7 +842,7 @@ bool SSLContext::subscribeToPeerCertStatus(const SSL *ctx, std::function<void(bo
 std::shared_ptr<SSLContext> SSLContext::for_client(const impl::ConfigCommon &conf, const impl::evbase& loop) {
     auto ctx(commonSetup(TLS_client_method(), true, conf, loop));
 
-    if (0 != SSL_CTX_set_alpn_protos(ctx->ctx, pva_alpn, sizeof(pva_alpn) - 1))
+    if (0 != SSL_CTX_set_alpn_protos(ctx->ctx.get(), pva_alpn, sizeof(pva_alpn) - 1))
         throw SSLError("Unable to agree on Application Layer Protocol to use: Both sides should use pva/1");
 
     return ctx;
@@ -856,7 +851,7 @@ std::shared_ptr<SSLContext> SSLContext::for_client(const impl::ConfigCommon &con
 std::shared_ptr<SSLContext>  SSLContext::for_server(const impl::ConfigCommon &conf, const impl::evbase& loop) {
     auto ctx(commonSetup(TLS_server_method(), false, conf, loop));
 
-    SSL_CTX_set_alpn_select_cb(ctx->ctx, &ossl_alpn_select, nullptr);
+    SSL_CTX_set_alpn_select_cb(ctx->ctx.get(), &ossl_alpn_select, nullptr);
 
     return ctx;
 }

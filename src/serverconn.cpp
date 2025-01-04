@@ -85,7 +85,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 #ifdef PVXS_ENABLE_OPENSSL
     if (iface->isTLS) {
         assert(iface->server->tls_context->ctx);
-        auto ssl(SSL_new(iface->server->tls_context->ctx));
+        auto ssl(SSL_new(iface->server->tls_context->ctx.get()));
         if (!ssl) throw ossl::SSLError("SSL_new()");
 
         if (!iface->server->tls_context->stapling_disabled && !iface->server->tls_context->status_check_disabled) {

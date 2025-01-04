@@ -1286,7 +1286,7 @@ void Context::reconfigure(const Config& newconf) {
 
 #ifdef PVXS_ENABLE_OPENSSL
     if (newconf.isTlsConfigured()) {
-        pvt->impl->tls_context->setDegradedMode(true);
+        if (pvt->impl->tls_context) pvt->impl->tls_context->setDegradedMode(true);
         // Force reload of context from cert
         pvt->impl->manager.loop().call([this, &newconf]() mutable { pvt->impl->reloadTlsFromConfig(newconf); });
         pvt->impl->manager.loop().sync();
@@ -1434,7 +1434,7 @@ void ContextImpl::fileEventCallback(short evt) { file_watcher.checkFileStatus();
 X509* ContextImpl::getCert(std::shared_ptr<ossl::SSLContext> context_ptr) {
     auto context = context_ptr == nullptr ? tls_context : context_ptr;
     if (!context->ctx) return nullptr;
-    return SSL_CTX_get0_certificate(context->ctx);
+    return SSL_CTX_get0_certificate(context->ctx.get());
 }
 #endif
 

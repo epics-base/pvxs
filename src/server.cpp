@@ -1161,7 +1161,7 @@ void Server::Pvt::fileEventCallback(short evt) {
 X509* Server::Pvt::getCert(std::shared_ptr<ossl::SSLContext> context_ptr) {
     auto context = context_ptr == nullptr ? tls_context : context_ptr;
     if (!context->ctx) return nullptr;
-    return SSL_CTX_get0_certificate(context->ctx);
+    return SSL_CTX_get0_certificate(context->ctx.get());
 }
 
 #endif

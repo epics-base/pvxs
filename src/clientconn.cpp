@@ -163,7 +163,7 @@ void Connection::startConnecting() {
             return;
         }
 
-        auto ctx(SSL_new(context->tls_context->ctx));
+        auto ctx(SSL_new(context->tls_context->ctx.get()));
         if (!ctx) throw std::runtime_error("SSL_new");
 
         // w/ BEV_OPT_CLOSE_ON_FREE calls SSL_free() on error
@@ -215,9 +215,9 @@ void Connection::configureClientOCSPCallback(SSL* ssl) {
                 throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
             }
             // Set the tls context as the parameter to the callabck
-            SSL_CTX_set_tlsext_status_arg(context->tls_context->ctx, &context->tls_context);
+            SSL_CTX_set_tlsext_status_arg(context->tls_context->ctx.get(), context->tls_context.get());
             // Set the callback
-            SSL_CTX_set_tlsext_status_cb(context->tls_context->ctx, clientOCSPCallback);
+            SSL_CTX_set_tlsext_status_cb(context->tls_context->ctx.get(), clientOCSPCallback);
         }
     }
 }

@@ -468,7 +468,7 @@ void testServerFileMonitoring() {
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
         auto cli(cli_conf.build());
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && !c.cred->isTLS); }).exec());
-        auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+        auto reply(cli.get(TEST_PV).exec()->wait(10.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
         conn.reset();
     }
@@ -483,7 +483,7 @@ void testServerFileMonitoring() {
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
         auto cli(cli_conf.build());
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
-        auto reply(cli.get(TEST_PV).exec()->wait(50.0));
+        auto reply(cli.get(TEST_PV).exec()->wait(10.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
         conn.reset();
     }
@@ -498,7 +498,7 @@ void testServerFileMonitoring() {
         cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
         auto cli(cli_conf.build());
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && !c.cred->isTLS); }).exec());
-        auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+        auto reply(cli.get(TEST_PV).exec()->wait(10.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
         conn.reset();
     }

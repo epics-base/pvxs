@@ -137,15 +137,17 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&&
     try {
         auto cert_status_manager = cert_status_ptr<CertStatusManager>(new CertStatusManager(std::move(ctx_cert), client));
         cert_status_manager->callback_ref = std::move(callback_ptr);
+        std::weak_ptr<CertStatusManager> weak_cert_status_manager = cert_status_manager;
 
         log_debug_printf(status, "Subscribing to status: %p\n", cert_status_manager.get());
         auto sub = client->monitor(uri)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([weak_callback_ptr, cert_status_manager, allow_self_signed_ca](client::Subscription& sub) {
+                       .event([weak_callback_ptr, weak_cert_status_manager, allow_self_signed_ca](client::Subscription& sub) {
                            try {
                                auto callback_ptr = weak_callback_ptr.lock();
-                               if (!callback_ptr ) return;
+                               auto cert_status_manager = weak_cert_status_manager.lock();
+                               if (!callback_ptr || !cert_status_manager) return;
 
                                auto update = sub.pop();
                                if (update) {

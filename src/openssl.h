@@ -343,7 +343,7 @@ std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
 struct SSLContext {
     epicsMutex lock;  // To lock changes to context state that happen as a result of changes to certificate status
     static PVXS_API int NID_PvaCertStatusURI;
-    SSL_CTX* ctx = nullptr;
+    ossl_shared_ptr<SSL_CTX> ctx;
 
     /**
      * @brief The state of the TLS context
@@ -411,7 +411,6 @@ struct SSLContext {
     explicit SSLContext(const impl::evbase& loop);
     SSLContext(const SSLContext& o);
     SSLContext(SSLContext& o) noexcept;
-    ~SSLContext();
 
     SSLContext& operator=(SSLContext&& o) noexcept;
 
@@ -446,7 +445,7 @@ struct SSLContext {
         }
     }
 
-    explicit operator bool() const { return ctx; }
+    explicit operator bool() const { return ctx.get(); }
 
     const X509* getEntityCertificate() const;
 
