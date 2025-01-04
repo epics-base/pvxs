@@ -411,7 +411,7 @@ struct Tester {
         } catch (client::Connected& e) {
             testOk1(e.cred && e.cred->isTLS);
             TEST_COUNTER_EQ(ioc, 1)
-            TEST_COUNTER_EQ(client1, 1)
+            TEST_COUNTER_EQ(client1, 2)
             TEST_COUNTER_EQ(client2, 1)
         } catch (...) {
             testFail("Unexpected exception instead of Connected");
@@ -421,7 +421,7 @@ struct Tester {
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2);
         TEST_COUNTER_EQ(ioc, 1)
-        TEST_COUNTER_EQ(client1, 1)
+        TEST_COUNTER_EQ(client1, 2)
         TEST_COUNTER_EQ(client2, 1)
     }
 
@@ -492,7 +492,7 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
-            TEST_COUNTER_EQ(server1, 1)
+            TEST_COUNTER_EQ(server1, 2)
             TEST_COUNTER_EQ(client1, 1)
             TEST_COUNTER_EQ(ioc, 1)
         }
@@ -500,7 +500,7 @@ struct Tester {
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(server1, 2)
         TEST_COUNTER_EQ(client1, 1)
         TEST_COUNTER_EQ(ioc, 1)
     }
