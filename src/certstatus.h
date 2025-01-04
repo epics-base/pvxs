@@ -28,6 +28,16 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
 
 DEFINE_LOGGER(status_setup, "pvxs.certs.status");
 
+// Define permanently valid status time
+#if defined(__TIME_T_MAX__)
+#define PERMANENTLY_VALID_STATUS __TIME_T_MAX__
+#elif defined(__INT_MAX__)
+#define PERMANENTLY_VALID_STATUS (time_t)(__INT_MAX__)
+#else
+PERMANENTLY_VALID_STATUS(time_t)
+((~(unsigned long long)0) >> 1)
+#endif
+
 namespace pvxs {
 namespace certs {
 
@@ -59,9 +69,9 @@ class CertStatusSubscriptionException : public CertStatusException {
 // All certificate statuses
 #define CERT_STATUS_LIST   \
     X_IT(UNKNOWN)          \
-    X_IT(PENDING_APPROVAL) \
-    X_IT(PENDING)          \
     X_IT(VALID)            \
+    X_IT(PENDING)          \
+    X_IT(PENDING_APPROVAL) \
     X_IT(EXPIRED)          \
     X_IT(REVOKED)
 
@@ -107,16 +117,12 @@ struct CertStatus {
     std::string s;
     // Default constructor
     CertStatus() = default;
+    CertStatus(const CertStatus&) = default;
+    CertStatus& operator=(const CertStatus&) = default;
 
-    // Delete the comparison operators to prevent comparison of CertStatus directly
-    bool operator==(PVACertStatus rhs) = delete;
-    bool operator==(OCSPCertStatus rhs) = delete;
-    bool operator==(ocspcertstatus_t rhs) = delete;
-    bool operator==(certstatus_t rhs) = delete;
-    bool operator!=(PVACertStatus rhs) = delete;
-    bool operator!=(OCSPCertStatus rhs) = delete;
-    bool operator!=(ocspcertstatus_t rhs) = delete;
-    bool operator!=(certstatus_t rhs) = delete;
+    // Move comparison operators to protected
+    bool operator==(const CertStatus& rhs) const { return i == rhs.i; }
+    bool operator!=(const CertStatus& rhs) const { return !(*this == rhs); }
 
     /**
      * @brief The prototype of the data returned for a certificate status request
@@ -250,15 +256,16 @@ struct CertStatus {
      * @param status_string the string representation of the status
      */
     explicit CertStatus(const uint32_t status, std::string status_string) : i(status), s(status_string) {}
+
+    // Friend declarations to allow cross-comparisons only between specific types
+    friend struct PVACertStatus;
+    friend struct OCSPCertStatus;
 };
 
 /**
  * @brief PVA Certificate status values enum and string
  */
 struct PVACertStatus : CertStatus {
-    // Delete the default constructor to prevent instantiation of PVACertStatus without an explicit status
-    PVACertStatus() = delete;
-
     /**
      * @brief Constructor for PVACertStatus
      *
@@ -271,6 +278,10 @@ struct PVACertStatus : CertStatus {
     bool operator==(certstatus_t rhs) const { return this->i == rhs; }
     bool operator!=(PVACertStatus rhs) const { return this->i != rhs.i; }
     bool operator!=(certstatus_t rhs) const { return this->i != rhs; }
+
+   protected:
+    friend struct PVACertificateStatus;
+    PVACertStatus() = default;
 
    private:
     /**
@@ -510,7 +521,9 @@ struct OCSPStatus {
     // revocation date of the certificate if it is revoked
     StatusDate revocation_date;
 
-    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param) : ocsp_bytes(ocsp_bytes_param) { init(); }
+    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param, bool allow_self_signed_ca = false) : ocsp_bytes(ocsp_bytes_param) {
+        init(allow_self_signed_ca);
+    }
 
     // To  set an OCSP UNKNOWN status to indicate errors
     OCSPStatus() : ocsp_status(OCSP_CERTSTATUS_UNKNOWN) {};
@@ -535,12 +548,25 @@ struct OCSPStatus {
      * @brief Verify that the status validity dates are currently valid and the status is known
      * @return true if the status is still valid
      */
-    inline bool isValid() noexcept {
+    inline bool isValid() const noexcept {
         auto now(std::time(nullptr));
         return status_valid_until_date.t > now;
     }
 
-    inline bool isGood() noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
+    /**
+     * @brief Check if the status is permanent
+     *
+     * @return true if the status is permanent, false otherwise
+     */
+    inline bool isPermanent() const noexcept { return status_valid_until_date.t == PERMANENTLY_VALID_STATUS; }
+
+    /**
+     * @brief Check if the status is GOOD
+     *
+     * @return true if the status is GOOD, false otherwise
+     */
+    inline bool isGood() const noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
+
     virtual explicit operator CertificateStatus() const noexcept;
 
    private:
@@ -548,7 +574,7 @@ struct OCSPStatus {
     explicit OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
                         StatusDate revocation_time);
 
-    void init();
+    void init(bool allow_self_signed_ca = false);
 };
 
 bool operator==(ocspcertstatus_t& lhs, OCSPStatus& rhs);
@@ -564,7 +590,10 @@ bool operator!=(certstatus_t& lhs, OCSPStatus& rhs);
  * revocation date.  The status field contains the PVA certificate status in numerical and text form.
  * The ocsp_status field contains the OCSP status in numerical and text form.
  */
+struct UnCertifiedCertificateStatus;
 struct PVACertificateStatus final : public OCSPStatus {
+    explicit PVACertificateStatus(const UnCertifiedCertificateStatus& status);
+
     PVACertStatus status;
     inline bool operator==(const PVACertificateStatus& rhs) const {
         return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
@@ -587,12 +616,14 @@ struct PVACertificateStatus final : public OCSPStatus {
     bool operator==(const CertificateStatus& rhs) const;
     inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs); }
 
-    explicit PVACertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes) : OCSPStatus(ocsp_bytes), status(status) {};
+    explicit PVACertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes, bool allow_self_signed_ca = false)
+        : OCSPStatus(ocsp_bytes, allow_self_signed_ca), status(status) {};
 
-    explicit PVACertificateStatus(const Value& status_value)
-        : PVACertificateStatus(status_value["status.value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>()) {
+    explicit PVACertificateStatus(const Value& status_value, bool allow_self_signed_ca = false)
+        : PVACertificateStatus(status_value["status.value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>(),
+                               allow_self_signed_ca) {
         if (ocsp_bytes.empty()) return;
-        log_debug_println(status_setup, "Value Status: %s\n", (SB() << status_value).str().c_str());
+        log_debug_printf(status_setup, "Value Status: %s\n", (SB() << status_value).str().c_str());
         log_debug_printf(status_setup, "Status Date: %s\n", this->status_date.s.c_str());
         log_debug_printf(status_setup, "Status Validity: %s\n", this->status_valid_until_date.s.c_str());
         log_debug_printf(status_setup, "Revocation Date: %s\n", this->revocation_date.s.c_str());
@@ -680,29 +711,69 @@ bool operator!=(certstatus_t& lhs, PVACertificateStatus& rhs);
  * the OCSP status, the status date, the status valid-until date, and the revocation date.
  */
 struct CertificateStatus {
-    // true if the status is certified
-    const bool certified;
-    // PVA certificate status
-    const PVACertStatus status;
-    // OCSP certificate status
-    const OCSPCertStatus ocsp_status;
-    // status date
-    const StatusDate status_date;
-    // status valid-until date
-    const StatusDate status_valid_until_date;
-    // certificate revocation date if the certificate is revoked
-    const StatusDate revocation_date;
+    virtual ~CertificateStatus() = default;
 
-    CertificateStatus() = delete;
-    ~CertificateStatus() = default;
+    // Enable copying
+    CertificateStatus(const CertificateStatus&) = default;
+    CertificateStatus& operator=(const CertificateStatus&) = default;
+
+    explicit CertificateStatus(PVACertificateStatus cs)
+        : CertificateStatus(true, cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {}
 
     /**
-     * @brief Constructor for CertificateStatus
-     * @param cs PVACertificateStatus object to initialize the CertificateStatus object
+     * @brief Check if the certificate status is GOOD
+     *
+     * First checks if the status is still valid, then checks if the ocsp_status is GOOD
+     *
+     * @return true if the certificate status is GOOD, false otherwise
      */
-    explicit CertificateStatus(PVACertificateStatus cs)
-        : CertificateStatus(true, cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {};
+    inline bool isGood() const noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
 
+    /**
+     * @brief Check if the certificate status is ostensibly GOOD
+     *
+     * This is true if the ocsp_status is GOOD irrespective of whether the status is valid or not.
+     * Useful to determine the status a certificate had before that status' validity expired.
+     *
+     * @return true if the certificate status is ostensibly GOOD, false otherwise
+     */
+    inline bool isOstensiblyGood() const noexcept { return ocsp_status == OCSP_CERTSTATUS_GOOD; }
+
+    /**
+     * @brief Check if the certificate is Expired of Revoked
+     *
+     * @return true if certificate is Expired or Revoked
+     */
+    inline bool isRevokedOrExpired() const noexcept { return status == REVOKED || status == EXPIRED; }
+
+    /**
+     * @brief Verify that the status is currently valid
+     * @return true if the status is still valid
+     */
+    inline bool isValid() const noexcept {
+        auto now(std::time(nullptr));
+        return status_valid_until_date.t > now;
+    }
+
+    StatusDate status_valid_until_date;
+    bool certified;
+    PVACertStatus status;
+    OCSPCertStatus ocsp_status;
+    StatusDate status_date;
+    StatusDate revocation_date;
+
+    /**
+     * @brief Equality operator for PVACertificateStatus
+     * @param rhs PVACertificateStatus object to compare with
+     * @return true if the PVACertificateStatus objects are equal, false otherwise
+     */
+    inline bool operator==(const PVACertificateStatus& rhs) const { return (CertificateStatus)rhs == *this; }
+    /**
+     * @brief Inequality operator for PVACertificateStatus
+     * @param rhs PVACertificateStatus object to compare with
+     * @return true if the PVACertificateStatus objects are not equal, false otherwise
+     */
+    inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs); }
     /**
      * @brief Equality operator for CertificateStatus
      * @param rhs CertificateStatus object to compare with
@@ -713,26 +784,17 @@ struct CertificateStatus {
                this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
     }
 
+   protected:
+    // Protected constructor for derived classes
+    CertificateStatus(bool is_certified, PVACertStatus st, OCSPCertStatus ocsp_st, StatusDate st_date, StatusDate valid_until, StatusDate rev_date)
+        : status_valid_until_date(valid_until), certified(is_certified), status(st), ocsp_status(ocsp_st), status_date(st_date), revocation_date(rev_date) {}
+
     /**
      * @brief Inequality operator for CertificateStatus
      * @param rhs CertificateStatus object to compare with
      * @return true if the CertificateStatus objects are not equal, false otherwise
      */
     inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs); }
-
-    /**
-     * @brief Equality operator for PVACertificateStatus
-     * @param rhs PVACertificateStatus object to compare with
-     * @return true if the PVACertificateStatus objects are equal, false otherwise
-     */
-    inline bool operator==(const PVACertificateStatus& rhs) const { return (CertificateStatus)rhs == *this; }
-
-    /**
-     * @brief Inequality operator for PVACertificateStatus
-     * @param rhs PVACertificateStatus object to compare with
-     * @return true if the PVACertificateStatus objects are not equal, false otherwise
-     */
-    inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs); }
 
     /**
      * @brief Equality operator for certstatus_t
@@ -762,34 +824,10 @@ struct CertificateStatus {
      */
     inline bool operator!=(ocspcertstatus_t& rhs) const { return !(*this == rhs); }
 
-    /**
-     * @brief Verify that the status is currently valid
-     * @return true if the status is still valid
-     */
-    inline bool isValid() const noexcept {
-        auto now(std::time(nullptr));
-        return status_valid_until_date.t > now;
-    }
-
-    /**
-     * @brief Check if the certificate status is GOOD
-     * First checks if the status is still valid, then checks if the ocsp_status is GOOD
-     * @return true if the certificate status is GOOD, false otherwise
-     */
-    inline bool isGood() const noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
-
    private:
     friend struct CertifiedCertificateStatus;
     friend struct UnknownCertificateStatus;
     friend struct UnCertifiedCertificateStatus;
-    explicit CertificateStatus(bool certified, PVACertStatus status, OCSPCertStatus ocsp_status, StatusDate status_date, StatusDate status_valid_until_date,
-                               StatusDate revocation_date)
-        : certified(certified),
-          status(status),
-          ocsp_status(ocsp_status),
-          status_date(status_date),
-          status_valid_until_date(status_valid_until_date),
-          revocation_date(revocation_date) {};
 };
 
 /**
@@ -816,13 +854,12 @@ struct CertifiedCertificateStatus final : public CertificateStatus {
 
 struct UnknownCertificateStatus final : public CertificateStatus {
     UnknownCertificateStatus()
-        : CertificateStatus(false, (PVACertStatus)UNKNOWN, (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN, std::time(nullptr), (time_t)0, (time_t)0) {};
+        : CertificateStatus(false, (PVACertStatus)UNKNOWN, (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN, std::time(nullptr), PERMANENTLY_VALID_STATUS, (time_t)0) {};
 };
 
 struct UnCertifiedCertificateStatus final : public CertificateStatus {
     UnCertifiedCertificateStatus()
-        : CertificateStatus(false, (PVACertStatus)VALID, (OCSPCertStatus)OCSP_CERTSTATUS_GOOD, std::time(nullptr), std::time(nullptr) + 30 * 60 * 60,
-                            (time_t)0) {};
+        : CertificateStatus(false, (PVACertStatus)VALID, (OCSPCertStatus)OCSP_CERTSTATUS_GOOD, std::time(nullptr), PERMANENTLY_VALID_STATUS, (time_t)0) {};
 };
 
 }  // namespace certs

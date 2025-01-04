@@ -99,28 +99,28 @@ size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
     return 8u + blen;
 }
 
-#define CASE(Op) void ConnBase::handle_##Op() {}
-    CASE(ECHO);
-    CASE(CONNECTION_VALIDATION);
-    CASE(CONNECTION_VALIDATED);
-    CASE(SEARCH);
-    CASE(SEARCH_RESPONSE);
-    CASE(AUTHNZ);
+void ConnBase::handle_ECHO() {};
+void ConnBase::handle_SEARCH() {};
+void ConnBase::handle_SEARCH_RESPONSE() {};
 
-    CASE(CREATE_CHANNEL);
-    CASE(DESTROY_CHANNEL);
+void ConnBase::handle_CONNECTION_VALIDATION() {};
+void ConnBase::handle_CONNECTION_VALIDATED() {};
+void ConnBase::handle_AUTHNZ() {};
 
-    CASE(GET);
-    CASE(PUT);
-    CASE(PUT_GET);
-    CASE(MONITOR);
-    CASE(RPC);
-    CASE(CANCEL_REQUEST);
-    CASE(DESTROY_REQUEST);
-    CASE(GET_FIELD);
+void ConnBase::handle_CREATE_CHANNEL() {};
+void ConnBase::handle_DESTROY_CHANNEL() {};
 
-    CASE(MESSAGE);
-#undef CASE
+void ConnBase::handle_GET() {};
+void ConnBase::handle_PUT() {};
+void ConnBase::handle_PUT_GET() {};
+void ConnBase::handle_MONITOR() {};
+void ConnBase::handle_RPC() {};
+void ConnBase::handle_GET_FIELD() {};
+
+void ConnBase::handle_CANCEL_REQUEST() {};
+void ConnBase::handle_DESTROY_REQUEST() {};
+
+void ConnBase::handle_MESSAGE() {};
 
 void ConnBase::bevEvent(short events)
 {
@@ -246,32 +246,34 @@ void ConnBase::bevRead()
             // ready to process segBuf
             try {
                 switch(segCmd) {
-                default:
-                    log_debug_printf(connio, "%s %s Ignore unexpected command 0x%02x\n", peerLabel(), peerName.c_str(), segCmd);
-                    evbuffer_drain(segBuf.get(), evbuffer_get_length(segBuf.get()));
-                    break;
-    #define CASE(OP) case CMD_##OP: handle_##OP(); break
-                    CASE(ECHO);
-                    CASE(CONNECTION_VALIDATION);
-                    CASE(CONNECTION_VALIDATED);
-                    CASE(SEARCH);
-                    CASE(SEARCH_RESPONSE);
-                    CASE(AUTHNZ);
+                    case CMD_ECHO: handle_ECHO(); break;
 
-                    CASE(CREATE_CHANNEL);
-                    CASE(DESTROY_CHANNEL);
+                    case CMD_SEARCH: handle_SEARCH(); break;
+                    case CMD_SEARCH_RESPONSE: handle_SEARCH_RESPONSE(); break;
 
-                    CASE(GET);
-                    CASE(PUT);
-                    CASE(PUT_GET);
-                    CASE(MONITOR);
-                    CASE(RPC);
-                    CASE(CANCEL_REQUEST);
-                    CASE(DESTROY_REQUEST);
-                    CASE(GET_FIELD);
+                    case CMD_CONNECTION_VALIDATION: handle_CONNECTION_VALIDATION(); break;
+                    case CMD_CONNECTION_VALIDATED: handle_CONNECTION_VALIDATED(); break;
+                    case CMD_AUTHNZ: handle_AUTHNZ(); break;
 
-                    CASE(MESSAGE);
-    #undef CASE
+                    case CMD_CREATE_CHANNEL: handle_CREATE_CHANNEL(); break;
+                    case CMD_DESTROY_CHANNEL: handle_DESTROY_CHANNEL(); break;
+
+                    case CMD_GET: handle_GET(); break;
+                    case CMD_PUT: handle_PUT(); break;
+                    case CMD_PUT_GET: handle_PUT_GET(); break;
+                    case CMD_MONITOR: handle_MONITOR(); break;
+                    case CMD_RPC: handle_RPC(); break;
+                    case CMD_GET_FIELD: handle_GET_FIELD(); break;
+
+                    case CMD_CANCEL_REQUEST: handle_CANCEL_REQUEST(); break;
+                    case CMD_DESTROY_REQUEST: handle_DESTROY_REQUEST(); break;
+
+                    case CMD_MESSAGE: handle_MESSAGE(); break;
+
+                    default:
+                        log_debug_printf(connio, "%s %s Ignore unexpected command 0x%02x\n", peerLabel(), peerName.c_str(), segCmd);
+                        evbuffer_drain(segBuf.get(), evbuffer_get_length(segBuf.get()));
+                        break;
                 }
             }catch(std::exception& e){
                 log_exc_printf(connio, "%s Error while processing cmd 0x%02x%s: %s\n",

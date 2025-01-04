@@ -593,10 +593,10 @@ The server transitions based on:
 
 States:
 
-- ``INIT``: Initial state, loads and validates certificates
-- ``TCP_READY``: Responds to TCP protocol requests when certificates are valid
-- ``TLS_READY``: Responds to both TCP and TLS protocol requests
-- ``DEGRADED``: Fallback state for invalid certificates or missing TLS configuration
+- ``Init``: Initial state, loads and validates certificates
+- ``TcpReady``: Responds to TCP protocol requests when certificates are valid
+- ``TlsReady``: Responds to both TCP and TLS protocol requests
+- ``DegradedMode``: Fallback state for invalid certificates or missing TLS configuration
 
 .. image:: spva_tls_context_state_machine.png
    :alt: SPVA Server TLS Context State Machine
@@ -624,9 +624,9 @@ Search Handler State Machines
 
 States:
 
-- ``DEGRADED``: Responds only to TCP protocol requests
-- ``TCP_READY``: Responds only to TCP protocol requests, ignores TLS
-- ``TLS_READY``: Responds to both TCP and TLS protocol requests
+- ``DegradedMode``: Responds only to TCP protocol requests
+- ``TcpReady``: Responds only to TCP protocol requests, ignores TLS
+- ``TlsReady``: Responds to both TCP and TLS protocol requests
 
 .. image:: spva_tls_context_search_states.png
    :alt: SPVA Server TLS Context Search Handler State Machine

@@ -82,11 +82,8 @@ struct Tester {
 
     {
         // Set up the Mock PVACMS server certificate (does not contain custom status extension)
-        auto pvacms_config = server::Config::fromEnv();
+        auto pvacms_config = server::Config::forCms();
         pvacms_config.tls_cert_filename = SUPER_SERVER_CERT_FILE;
-        pvacms_config.tls_disable_status_check = true;
-        pvacms_config.tls_disable_stapling = true;
-        pvacms_config.config_target = pvxs::impl::ConfigCommon::CMS;
         pvacms = pvacms_config.build().addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
         client = pvacms.clientConfig().build();
 
@@ -220,6 +217,7 @@ struct Tester {
             });
 
             pvacms.start();
+            TEST_STATUS_REQUEST(ca)
 
             testDiag("Set up: %s", "Mock PVACMS Server");
         } catch (std::exception& e) {
@@ -331,9 +329,9 @@ struct Tester {
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+
         TEST_COUNTER_EQ(server1, 1)
         TEST_COUNTER_EQ(client1, 1)
-
         conn.reset();
     }
 
@@ -593,7 +591,7 @@ struct Tester {
             try {
                 auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
                 testFail("Unexpected successful creation of server");
-            } catch ( std::runtime_error &e) {
+            } catch (std::runtime_error& e) {
                 testStrEq("Unable to contact PVACMS: Waiting for PVACMS to report status for cert " IOC1_CERT_FILE, e.what());
             }
 
@@ -613,16 +611,16 @@ struct Tester {
             try {
                 auto val(cli.get(TEST_PV1).exec()->wait(1.0));
                 testFail("Unexpected Success");
-            } catch (std::exception &e) {
+            } catch (std::exception& e) {
                 testStrEq("Timeout", e.what());
             }
 
             // Try again with a monitor
             auto sub(cli.monitor(TEST_PV1)
-                       .maskConnected(false)
-                       .maskDisconnected(false)
-                       .event([&client_started_evt](client::Subscription&) { client_started_evt.signal(); })
-                       .exec());
+                         .maskConnected(false)
+                         .maskDisconnected(false)
+                         .event([&client_started_evt](client::Subscription&) { client_started_evt.signal(); })
+                         .exec());
 
             // Wait for the client to fail to connect
             testTrue(!client_started_evt.wait(1.0));
@@ -697,7 +695,7 @@ MAIN(testtlswithcms) {
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }
-    delete(tester);
+    delete (tester);
 
     cleanup_for_valgrind();
 

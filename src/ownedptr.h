@@ -40,6 +40,17 @@ struct sqlite_delete;
 template <typename T>
 struct file_delete;
 
+template <typename T>
+struct regular_delete;
+
+#define DEFINE_REGULAR_DELETER_FOR_(TYPE)            \
+    template <>                                      \
+    struct regular_delete<TYPE> {                    \
+        inline void operator()(TYPE *base_pointer) { \
+            if (base_pointer) delete base_pointer;   \
+        }                                            \
+    }
+
 #define DEFINE_FILE_DELETER_FOR_(TYPE)               \
     template <>                                      \
     struct file_delete<TYPE> {                       \
@@ -107,6 +118,8 @@ struct file_delete;
     }
 
 DEFINE_FILE_DELETER_FOR_(FILE);
+
+DEFINE_REGULAR_DELETER_FOR_(epicsMutex);
 
 #ifdef PVXS_ENABLE_OPENSSL
 DEFINE_BIGNUM_DELETER_FOR_(BIGNUM);
@@ -202,6 +215,8 @@ struct OwnedPtr : public std::unique_ptr<T, D> {
 // Use OwnedPtr to define a manager for a SSL object with all the custom SSL
 // deleters defined above
 using file_ptr = OwnedPtr<FILE, file_delete<FILE>>;
+
+using epicsMutex_ptr = OwnedPtr<epicsMutex, regular_delete<epicsMutex>>;
 
 #ifdef PVXS_ENABLE_OPENSSL
 template <typename T>

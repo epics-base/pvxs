@@ -135,7 +135,7 @@ CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) {
             if (sk_X509_push(chain.get(), chain_cert.get()) != 1) {
                 throw std::runtime_error("Failed to add certificate to chain");
             }
-            chain_cert.release();  // Ownership transferred to stack
+            chain_cert.reset();
         }
     } else {
         // Use certificate pointers
@@ -151,7 +151,7 @@ CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) {
                 if (!int_cert || sk_X509_push(chain.get(), int_cert.get()) != 1) {
                     throw std::runtime_error("Failed to duplicate chain certificate");
                 }
-                int_cert.release();  // Ownership transferred to stack
+                int_cert.reset();
             }
         }
     }

@@ -67,7 +67,7 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<co
  *
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes, std::string custom_ca_dir) {
+PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes, bool allow_self_signed_ca, std::string custom_ca_dir) {
     auto ocsp_response = getOCSPResponse(ocsp_bytes);
 
     // Get the response status
@@ -83,7 +83,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
     }
 
     // Verify signature of OCSP response
-    verifyOCSPResponse(basic_response, custom_ca_dir);
+    verifyOCSPResponse(basic_response, allow_self_signed_ca, custom_ca_dir);
 
     OCSP_SINGLERESP* single_response = OCSP_resp_get0(basic_response.get(), 0);
     if (!single_response) {
@@ -110,22 +110,6 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
 }
 
 /**
- * @brief Subscribe to the certificate status and wait until the status is available
- *
- * @param loop the event loop to use to wait
- * @param ctx_cert the certificate to monitor
- * @param callback the callback to call
- * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
- */
-cert_status_ptr<CertStatusManager> CertStatusManager::getAndSubscribe(evbase loop, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
-    auto cert_status_manager = subscribe(std::move(ctx_cert), std::move(callback));
-
-    // Wait until the status is available
-    cert_status_manager->waitForStatus(loop);
-    return cert_status_manager;
-}
-
-/**
  * @brief Subscribe to status updates for the given certificate,
  * calling the given callback with a CertificateStatus if the status changes.
  * It also sets members with the pva certificate status, the status validity period, and a
@@ -138,28 +122,34 @@ cert_status_ptr<CertStatusManager> CertStatusManager::getAndSubscribe(evbase loo
  * @param callback the callback to call
  * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
  */
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback, bool allow_self_signed_ca) {
     // Construct the URI
     auto uri = CertStatusManager::getStatusPvFromCert(ctx_cert);
     log_debug_printf(status, "Starting Status Subscription: %s\n", uri.c_str());
 
     // Create a shared_ptr to hold the callback
     auto callback_ptr = std::make_shared<StatusCallback>(std::move(callback));
+    std::weak_ptr<StatusCallback> weak_callback_ptr = callback_ptr;
 
     // Subscribe to the service using the constructed URI
     // with TLS disabled to avoid recursive loop
     auto client(std::make_shared<client::Context>(client::Context::fromEnv(true)));
     try {
         auto cert_status_manager = cert_status_ptr<CertStatusManager>(new CertStatusManager(std::move(ctx_cert), client));
+        cert_status_manager->callback_ref = std::move(callback_ptr);
+
         log_debug_printf(status, "Subscribing to status: %p\n", cert_status_manager.get());
         auto sub = client->monitor(uri)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([callback_ptr, cert_status_manager](client::Subscription& sub) {
+                       .event([weak_callback_ptr, cert_status_manager, allow_self_signed_ca](client::Subscription& sub) {
                            try {
+                               auto callback_ptr = weak_callback_ptr.lock();
+                               if (!callback_ptr ) return;
+
                                auto update = sub.pop();
                                if (update) {
-                                   auto status_update((PVACertificateStatus)update);
+                                   auto status_update(PVACertificateStatus(update, allow_self_signed_ca));
                                    log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
                                    cert_status_manager->status_ = std::make_shared<CertificateStatus>(status_update);
                                    (*callback_ptr)(status_update);
@@ -318,7 +308,7 @@ std::shared_ptr<CertificateStatus> CertStatusManager::waitForStatus(const evbase
  *     bool isValid = verifyOCSPResponse(ocsp_bytes, ca_cert); // Verifies the OCSP response
  * @endcode
  */
-bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, std::string custom_ca_dir) {
+bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, bool allow_self_signed_ca, std::string custom_ca_dir) {
     // Get the ca_cert from the response
     pvxs::ossl_ptr<X509> ca_cert;
     OCSP_resp_get0_signer(basic_response.get(), ca_cert.acquire(), nullptr);
@@ -332,7 +322,11 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
     ossl_ptr<STACK_OF(X509)> ca_chain(sk_X509_dup(const_ca_chain_ptr));  // remove const-ness
 
     try {
-        ossl::ensureTrusted(ca_cert, ca_chain);
+        // if configured, accept all self-signed certificates, otherwise ensure they are really trusted
+        if (!allow_self_signed_ca || X509_check_issued(ca_cert.get(), ca_cert.get()) != X509_V_OK) {
+            ossl::ensureTrusted(ca_cert, ca_chain);
+        }
+
     } catch (std::exception& e) {
         throw OCSPParseException(SB() << "verifying OCSP response: " << e.what());
     }
@@ -406,9 +400,9 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
  * @param certificate certificate to check
  * @return true if we should monitor the given certificate
  */
-bool CertStatusManager::shouldMonitor(const ossl_ptr<X509>& certificate) {
-    return (X509_get_ext_by_NID(certificate.get(), ossl::SSLContext::NID_PvaCertStatusURI, -1) >= 0);
-}
+bool CertStatusManager::shouldMonitor(const ossl_ptr<X509>& certificate) { return shouldMonitor(certificate.get()); }
+
+bool CertStatusManager::shouldMonitor(const X509* certificate) { return (X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_PvaCertStatusURI, -1) >= 0); }
 
 /**
  * @brief Get the string value of a custom extension by NID from a certificate.

@@ -25,12 +25,12 @@ OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const ui
       status_valid_until_date(status_valid_until_time),
       revocation_date(revocation_time) {};
 
-void OCSPStatus::init() {
+void OCSPStatus::init(bool allow_self_signed_ca) {
     if (ocsp_bytes.empty()) {
         ocsp_status = (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN;
         status_date = time(nullptr);
     } else {
-        auto parsed_status = CertStatusManager::parse(ocsp_bytes);
+        auto parsed_status = CertStatusManager::parse(ocsp_bytes, allow_self_signed_ca);
         ocsp_status = std::move(parsed_status.ocsp_status);
         status_date = std::move(parsed_status.status_date);
         status_valid_until_date = std::move(parsed_status.status_valid_until_date);
@@ -52,6 +52,9 @@ bool OCSPStatus::operator==(const PVACertificateStatus &rhs) const { return (Cer
 bool PVACertificateStatus::operator==(const CertificateStatus &rhs) const {
     return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
            this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
+}
+PVACertificateStatus::PVACertificateStatus(const UnCertifiedCertificateStatus &uncertified_certificate_status) {
+    status = uncertified_certificate_status.status;
 }
 
 bool operator==(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs == lhs; };

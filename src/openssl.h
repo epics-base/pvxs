@@ -15,8 +15,8 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #else
-#include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #endif
 
 #include <epicsAssert.h>
@@ -30,6 +30,9 @@
 #include <pvxs/client.h>
 #include <pvxs/server.h>
 
+#include "certstatus.h"
+#include "conn.h"
+#include "evhelper.h"
 #include "ownedptr.h"
 #include "p12filewatcher.h"
 
@@ -54,14 +57,16 @@ namespace server {
 struct Config;
 }
 namespace certs {
+struct PVACertificateStatus;
 struct CertificateStatus;
 class CertStatusManager;
+struct CertData;
 template <typename T>
 struct cert_status_delete;
 
 template <typename T>
 using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
-}
+}  // namespace certs
 
 namespace ssl {
 constexpr uint16_t kForClient = 0x01;
@@ -73,15 +78,15 @@ constexpr uint16_t kForCa = 0x10;
 constexpr uint16_t kForClientAndServer = kForClient | kForServer;
 constexpr uint16_t kAnyServer = kForCMS | kForServer;
 
-#define IS_USED_FOR_(USED, USAGE) ((USED & (USAGE)) == USAGE)
-#define IS_FOR_A_SERVER_(USED) ((USED & (ssl::kAnyServer)) != 0x00)
+#define IS_USED_FOR_(USED, USAGE) (((USED) & (USAGE)) == USAGE)
+#define IS_FOR_A_SERVER_(USED) (((USED) & (ssl::kAnyServer)) != 0x00)
 }  // namespace ssl
 
 struct PeerCredentials;
 namespace ossl {
 
 PVXS_API int ossl_verify(int preverify_ok, X509_STORE_CTX* x509_ctx);
-PVXS_API void ensureTrusted(const ossl_ptr<X509> &ca_cert, const ossl_ptr<STACK_OF(X509)> &CAs);
+PVXS_API void ensureTrusted(const ossl_ptr<X509>& ca_cert, const ossl_ptr<STACK_OF(X509)>& CAs);
 
 struct PVXS_API SSLError : public std::runtime_error {
     explicit SSLError(const std::string& msg);
@@ -89,24 +94,106 @@ struct PVXS_API SSLError : public std::runtime_error {
 };
 
 /**
- * @brief Contains peer status and peer status monitor
+ * @brief Contains peer status, peer status monitor, validity timer and function to call when the peer status changes
  *
+ * This is used to store the peer status, the cert status manager, the validity timer and the function to call when the peer status changes.
+ *
+ * The validity timer is used to create a timer for the status validity countdown.
+ *
+ * The function to call when the peer status changes is used to notify the caller when the peer status changes from good to bad or vice versa.
+ * This function should disconnect the TLS connection if status goes from good to bad and should disconnect
+ * a TCP connection so that it can be reconnected as a TLS connection when status goes from bad to good.
+ *
+ * Peer statuses are established when a connection is made and peer status monitoring is enabled.
+ *
+ * Peer statuses are updated when the peer certificate is approved, becomes valid, is revoked, or expires.
+ *
+ * Peer statuses have a validity and when statuses are updated the validity timer is set and will go off when the status becomes invalid so that
+ * we can fetch the status and update the peer status - resetting the timer.
  */
 struct SSLPeerStatus {
+    // The certificate status
     std::shared_ptr<const certs::CertificateStatus> status;
+    // The cert status manager
     certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
+    // The validity timer
+    evevent validity_timer;
+    // The function to call when the peer status changes
+    std::function<void(bool)> fn;
+
+    /**
+     * @brief Constructor
+     * @param status - The certificate status
+     * @param validity_timer - The validity timer
+     * @param fn - The function to call when the status changes
+     */
+    SSLPeerStatus(const std::shared_ptr<const certs::CertificateStatus>& status, evevent&& validity_timer, const std::function<void(bool)>& fn)
+        : status(status), validity_timer(std::move(validity_timer)), fn(fn) {}
 };
 
+struct StatusValidityExpirationHandlerParam;
+
+/**
+ * @brief The custom cert status related data stored in the SSL_CTX
+ *
+ * This is used to store the entity certificate and the certificate statuses for all peers of this context.
+ * It also contains the event loop and the mutex to lock changes to the peer statuses.
+ * The event loop is used to create timers for the status validity countdown.
+ *
+ * The peer statuses are stored in a map with the serial number of the peer's certificate as the key.
+ * The SSLPeerStatus struct contains the certificate status, the cert status manager,
+ * the validity timer and the function to call when the status changes.
+ *
+ * The status validity expiration handler parameters are stored in a map with the serial number of the peer's certificate as the key.
+ * The status validity expiration handler is fed a pointer to data it needs to update the peer status but this
+ * data needs to be kept from going stale.  So we store the parameters in a map and use the serial number as the key.
+ */
 struct CertStatusExData {
-    epicsMutex lock;  // To lock changes to peer statuses
-    ossl_ptr<X509> cert;
+    // To lock changes to peer statuses
+    epicsMutex lock;
+    // The event loop to create timers for the status validity countdown
+    const impl::evbase& loop;
+    // The entity certificate
+    ossl_ptr<X509> cert{};
+    // Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not configured
     const bool status_check_enabled;
-    CertStatusExData(bool status_check_enabled) : status_check_enabled(status_check_enabled) {}
+    // The map of peer statuses, keyed by the serial number of each peer's certificate
+    const bool allow_self_signed_ca;
 
-    std::map<serial_number_t, SSLPeerStatus> peer_statuses;
+    std::map<serial_number_t, SSLPeerStatus> peer_statuses{};
+    // map to keep status validity expiration handler parameters from going stale
+    std::map<serial_number_t, StatusValidityExpirationHandlerParam> sveh_params{};
 
+    /**
+     * @brief Constructor
+     * @param loop - The event loop
+     * @param status_check_enabled - Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not
+     * configured
+     */
+    CertStatusExData(const impl::evbase& loop, bool status_check_enabled, bool allow_self_signed_ca = false)
+        : loop(loop), status_check_enabled(status_check_enabled), allow_self_signed_ca(allow_self_signed_ca) {}
+
+    /**
+     * @brief Returns the CertStatusExData from the SSL_X509_STORE_CTX
+     * Determines the SSL_CTX context from the SSL_X509_STORE_CTX and then calls fromSSL_CTX()
+     *
+     * @param x509_ctx - The SSL_X509_STORE_CTX
+     * @return The CertStatusExData
+     */
     static CertStatusExData* fromSSL_X509_STORE_CTX(X509_STORE_CTX* x509_ctx);
+
+    /**
+     * @brief Returns the CertStatusExData from the SSL_CTX
+     * @param ssl - The SSL_CTX
+     * @return The CertStatusExData
+     */
     static CertStatusExData* fromSSL_CTX(SSL_CTX* ssl);
+
+    /**
+     * @brief Returns the CertStatusExData from the SSL
+     * @param ssl - The SSL
+     * @return The CertStatusExData
+     */
     static CertStatusExData* fromSSL(SSL* ssl);
 
     /**
@@ -114,8 +201,8 @@ struct CertStatusExData {
      * @param cert_ptr - Certificate
      * @return The serial number
      */
-    static inline serial_number_t getSerialNumber(X509 *cert_ptr) {
-        ASN1_INTEGER *serial = X509_get_serialNumber(cert_ptr);
+    static inline serial_number_t getSerialNumber(X509* cert_ptr) {
+        ASN1_INTEGER* serial = X509_get_serialNumber(cert_ptr);
         ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
         if (!bn) {
             return 0;
@@ -134,7 +221,7 @@ struct CertStatusExData {
      * @param status - Certificate status
      * @return The peer status that was set
      */
-    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(X509 *cert_ptr, const certs::CertificateStatus &status) {
+    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(X509* cert_ptr, const certs::CertificateStatus& status) {
         return setCachedPeerStatus(getSerialNumber(cert_ptr), status);
     }
 
@@ -144,16 +231,19 @@ struct CertStatusExData {
      * @param status - Certificate status
      * @return The peer status that was set
      */
-    std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(serial_number_t serial_number, const certs::CertificateStatus &status);
+    std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(serial_number_t serial_number, const certs::CertificateStatus& status,
+                                                                        std::function<void(bool)> fn = nullptr);
 
     /**
      * @brief Sets the peer status for the given certificate
      * @param cert_ptr - Certificate
      * @param status - Certificate status
+     * @param fn - the function to call
      * @return The peer status that was set
      */
-    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(X509 *cert_ptr, std::shared_ptr<const certs::CertificateStatus> status) {
-        return setCachedPeerStatus(getSerialNumber(cert_ptr), status);
+    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(X509* cert_ptr, std::shared_ptr<const certs::CertificateStatus> status,
+                                                                               std::function<void(bool)> fn = nullptr) {
+        return setCachedPeerStatus(getSerialNumber(cert_ptr), status, fn);
     }
 
     /**
@@ -162,20 +252,33 @@ struct CertStatusExData {
      * @param status - Certificate status
      * @return The peer status that was set
      */
-    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(serial_number_t serial_number, const std::shared_ptr<const certs::CertificateStatus> status) {
+    inline std::shared_ptr<const certs::CertificateStatus> setCachedPeerStatus(serial_number_t serial_number,
+                                                                               const std::shared_ptr<const certs::CertificateStatus> status,
+                                                                               std::function<void(bool)> fn = nullptr) {
         Guard G(lock);
-        peer_statuses[serial_number].status = status;
-        return peer_statuses[serial_number].status;
+        auto& peer_status = getOrCreatePeerStatus(serial_number, fn);
+        peer_status.status = status;
+        return peer_status.status;
     }
+
+    /**
+     * @brief Creates a peer status if it does not already exist or returns the existing peer status
+     *
+     * This will initialise the peer status as Unknown and set up a time capable of being used as a status validity timer.  It also
+     * sets up the function to call when the peer status changes. If the peer status already exists then it is returned.
+     *
+     * @param serial_number - Serial number
+     * @param fn - Function to call when the peer status changes
+     * @return The peer status that was created or found
+     */
+    SSLPeerStatus& getOrCreatePeerStatus(serial_number_t serial_number, std::function<void(bool)> fn);
 
     /**
      * @brief Returns the currently cached peer status if any.  Null if none cached
      * @param cert_ptr - Certificate
      * @return The the cached peer status
      */
-    inline std::shared_ptr<const certs::CertificateStatus> getCachedPeerStatus(X509 *cert_ptr) const {
-        return getCachedPeerStatus(getSerialNumber(cert_ptr));
-    }
+    inline std::shared_ptr<const certs::CertificateStatus> getCachedPeerStatus(X509* cert_ptr) const { return getCachedPeerStatus(getSerialNumber(cert_ptr)); }
 
     /**
      * @brief Returns the currently cached peer status if any.  Null if none cached
@@ -195,7 +298,23 @@ struct CertStatusExData {
      * @param cert_ptr - peer certificate status to subscribe to
      * @param fn - Function to call when the peer status changes from good to bad or vice versa
      */
-    void subscribeToCertStatus(X509 *cert_ptr, std::function<void(bool)> fn);
+    void subscribeToPeerCertStatus(X509* cert_ptr, std::function<void(bool)> fn) noexcept;
+
+    void setStatusValidityCountdown(SSLPeerStatus& peer_status);
+    static void statusValidityExpirationHandler(evutil_socket_t fd, short evt, void* raw);
+    void statusValidityExpirationHandler(serial_number_t serial_number);
+};
+
+/**
+ * @brief The parameters for the status validity expiration handler
+ *
+ * This is used to pass the CertStatusExData and the serial number to the status validity expiration handler.
+ * The CertStatusExData contains the peer statuses and the status validity expiration handler is used to update the peer status
+ * when the status validity expires and the validity timer goes off.
+ */
+struct StatusValidityExpirationHandlerParam {
+    CertStatusExData& cert_status_ex_data;
+    serial_number_t serial_number;
 };
 
 struct ShowX509 {
@@ -225,64 +344,79 @@ struct SSLContext {
     epicsMutex lock;  // To lock changes to context state that happen as a result of changes to certificate status
     static PVXS_API int NID_PvaCertStatusURI;
     SSL_CTX* ctx = nullptr;
-    bool has_cert{false};       // set when a certificate has been established
-    bool cert_is_valid{false};  // To signal that cert is valid when we have received the status for the certificate
+
+    /**
+     * @brief The state of the TLS context
+     *
+     * This is used to track the state of the context.
+     *
+     * Init - The context has not been initialised (default)
+     * DegradedMode - The context is in degraded mode.  Only TCP connections are allowed.
+     * TcpReady - The context is ready to accept TCP connections. Only TCP connections are accepted, but TLS connections are deferred until the state is
+     * TlsReady. TlsReady - The context is ready to accept TLS connections.  All connections are accepted.
+     */
+    enum state_t {
+        Init,
+        DegradedMode,
+        TcpReady,
+        TlsReady,
+    } state = Init;
+
+    // Whether status checking is disabled.  Copied from the config
     bool status_check_disabled{false};
+    // Whether stapling is disabled.  Copied from the config
     bool stapling_disabled{false};
+    // Determines whether self-signed certificates are trusted or not - ONLY for testing
+    bool allow_self_signed_ca{false};
 
-    PVXS_API
-    static SSLContext for_client(const impl::ConfigCommon& conf);
-    PVXS_API
-    static SSLContext for_server(const impl::ConfigCommon& conf);
+    // The event loop.  Used to create timers for the status validity countdown
+    const impl::evbase& loop;
+    // The entity certificate status validity timer (peer statuses are stored in the CertStatusExData tied to the SSL_CTX (ctx) created for this context)
+    impl::evevent status_validity_timer{__FILE__, __LINE__, event_new(loop.base, -1, EV_TIMEOUT, statusValidityExpirationHandler, this)};
 
-    CertStatusExData* ex_data() const;
+    /**
+     * @brief Monitors the entity certificate status and sets the state of the TLS context when the status changes
+     * @param cert_data - The certificate data containing the entity certificate
+     */
+    void monitorStatusAndSetState(certs::CertData& cert_data);
+    void setDegradedMode(bool clear = false);
+    void setTlsOrTcpMode();
 
-    SSLContext() = default;
-    inline SSLContext(const SSLContext& o)
-        : ctx(o.ctx),
-          has_cert(o.has_cert),
-          cert_is_valid(o.cert_is_valid),
-          status_check_disabled(o.status_check_disabled),
-          stapling_disabled(o.stapling_disabled) {
-        if (ctx) {
-            auto ret(SSL_CTX_up_ref(ctx));
-            assert(ret == 1);  // can up_ref actually fail?
-        }
-    }
-    inline SSLContext(SSLContext& o) noexcept
-        : ctx(o.ctx),
-          has_cert(o.has_cert),
-          cert_is_valid(o.cert_is_valid),
-          status_check_disabled(o.status_check_disabled),
-          stapling_disabled(o.stapling_disabled) {
-        o.ctx = nullptr;
-    }
-    inline ~SSLContext() {
-        SSL_CTX_free(ctx);  // If ctx is NULL nothing is done.
-    }
-    inline SSLContext& operator=(const SSLContext& o) {
-        if (o.ctx) {
-            auto ret(SSL_CTX_up_ref(o.ctx));
-            assert(ret == 1);  // can up_ref actually fail?
-        }
-        SSL_CTX_free(ctx);
-        ctx = o.ctx;
-        has_cert = o.has_cert;
-        cert_is_valid = o.cert_is_valid;
-        status_check_disabled = o.status_check_disabled;
-        stapling_disabled = o.stapling_disabled;
-        return *this;
-    }
-    inline SSLContext& operator=(SSLContext&& o) {
-        SSL_CTX_free(ctx);
-        ctx = o.ctx;
-        has_cert = o.has_cert;
-        cert_is_valid = o.cert_is_valid;
-        status_check_disabled = o.status_check_disabled;
-        stapling_disabled = o.stapling_disabled;
-        o.ctx = nullptr;
-        return *this;
-    }
+    /**
+     * @brief Creates a client TLS context
+     * @param conf - The client configuration
+     * @param loop - The event loop
+     * @return The client TLS context
+     */
+    static std::shared_ptr<SSLContext> for_client(const impl::ConfigCommon& conf, const impl::evbase& loop);
+
+    /**
+     * @brief Creates a server TLS context
+     * @param conf - The server configuration
+     * @param loop - The event loop
+     * @return The server TLS context
+     */
+    static std::shared_ptr<SSLContext> for_server(const impl::ConfigCommon& conf, const impl::evbase& loop);
+
+    /**
+     * @brief Get the CertStatusExData from the PVXS SSL context
+     *
+     * This function retrieves the CertStatusExData from the SSL context associated with the PVXS SSL context.
+     * This is the custom data that is added to the SSL context during tls context creation.
+     *
+     * @return the CertStatusExData
+     */
+    CertStatusExData* getCertStatusExData() const;
+
+    explicit SSLContext(const impl::evbase& loop);
+    SSLContext(const SSLContext& o);
+    SSLContext(SSLContext& o) noexcept;
+    ~SSLContext();
+
+    SSLContext& operator=(SSLContext&& o) noexcept;
+
+    static void statusValidityExpirationHandler(evutil_socket_t fd, short evt, void* raw);
+    void setStatusValidityCountdown();
 
     /**
      * @brief Initializes the SSL library and sets up the custom certificate status URI OID
@@ -314,12 +448,20 @@ struct SSLContext {
 
     explicit operator bool() const { return ctx; }
 
-    const X509* certificate0() const;
+    const X509* getEntityCertificate() const;
 
-    static bool fill_credentials(PeerCredentials& cred, const SSL* ctx);
+    static bool getPeerCredentials(PeerCredentials& cred, const SSL* ctx);
+    static bool subscribeToPeerCertStatus(const SSL* ctx, std::function<void(bool)> fn);
+    inline const certs::PVACertificateStatus& get_status() { return cert_status; }
+
+   private:
+    // The entity certificate status monitor
+    certs::cert_status_ptr<certs::CertStatusManager> cert_monitor;
+    // The entity certificate status - note that this is a PVA certificate status because we will need the OCSP stapling data if this is a server
+    certs::PVACertificateStatus cert_status{};
 };
 
-PVXS_API void stapleOcspResponse(void* server, SSL* ssl);
+PVXS_API void configureServerOCSPCallback(void* server, SSL* ssl);
 
 struct OCSPStapleData {
     size_t size;

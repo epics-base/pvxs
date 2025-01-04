@@ -82,7 +82,7 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
 
     context->tcp_loop.dispatch([op, context, ping]() {
 
-        if(context->state!=ContextImpl::Running)
+        if(!context->isRunning())
             throw std::logic_error("Context close()d");
 
         bool first = context->discoverers.empty();

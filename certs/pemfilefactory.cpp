@@ -90,8 +90,7 @@ bool PEMFileFactory::createRootPemFile(const std::string& p12_pem_string, bool o
             throw std::runtime_error("Failed to write certificate to file");
         }
 
-        fclose(fp.get());
-        fp.release();
+        fp.reset();
 
         // Verify the file was written correctly
         if (std::ifstream(certs_file).peek() == std::ifstream::traits_type::eof()) {

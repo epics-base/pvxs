@@ -45,9 +45,11 @@ using namespace pvxs::certs;
 #define CA_CERT_FILE_PWD ""
 #define SUPER_SERVER_CERT_FILE "superserver1.p12"
 #define SUPER_SERVER_CERT_FILE_PWD ""
+#define SUPER_SERVER2_CERT_FILE "superserver2.p12"
+#define SUPER_SERVER2_CERT_FILE_PWD ""
 #define INTERMEDIATE_SERVER_CERT_FILE "intermediateCA.p12"
 #define INTERMEDIATE_SERVER_CERT_FILE_PWD ""
-#define SERVER1_CERT_FILE "/Users/george/Projects/com/osprey-dcs/pvxs/test/O.darwin-aarch64/server1.p12"
+#define SERVER1_CERT_FILE "server1.p12"
 #define SERVER1_CERT_FILE_PWD ""
 #define SERVER2_CERT_FILE "server2.p12"
 #define SERVER2_CERT_FILE_PWD ""
@@ -57,6 +59,8 @@ using namespace pvxs::certs;
 #define CLIENT1_CERT_FILE_PWD ""
 #define CLIENT2_CERT_FILE "client2.p12"
 #define CLIENT2_CERT_FILE_PWD "oraclesucks"
+#define CLIENT3_CERT_FILE "client3.p12"
+#define CLIENT3_CERT_FILE_PWD ""
 
 #define WHO_AM_I_PV "whoami"
 #define TLS_METHOD_STRING "x509"
@@ -146,33 +150,30 @@ using namespace pvxs::certs;
  * @param LNAME lowercase name of the certificate
  * @param ACTION post or open depending on whether this is the initial value or subsequent values
  */
-#define POST_VALUE_CASE(LNAME, ACTION)                                                                                                           \
-    case LNAME##_serial:                                                                                                                         \
-        LNAME##_status_response_value.mark();                                                                                                    \
-        pv.ACTION(pv_name, LNAME##_status_response_value);                                                                                       \
-        LNAME##_cert_status_response_counter++;                                                                                                  \
-        testOk(1, "PV: %s / RESPONSE: %d / VALUE: %s", pv_name.c_str(),                                                                          \
-               LNAME##_cert_status_response_counter, LNAME##_cert_status.status.s.c_str());                                                      \
-        {                                                                                                                                        \
-            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));                       \
-            MAKE_STATUS_RESPONSE(LNAME)                                                                                                          \
-        }                                                                                                                                        \
+#define POST_VALUE_CASE(LNAME, ACTION)                                                                                                               \
+    case LNAME##_serial:                                                                                                                             \
+        LNAME##_status_response_value.mark();                                                                                                        \
+        pv.ACTION(pv_name, LNAME##_status_response_value);                                                                                           \
+        LNAME##_cert_status_response_counter++;                                                                                                      \
+        testOk(1, "PV: %s / RESPONSE: %d / VALUE: %s", pv_name.c_str(), LNAME##_cert_status_response_counter, LNAME##_cert_status.status.s.c_str()); \
+        {                                                                                                                                            \
+            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));                        \
+            MAKE_STATUS_RESPONSE(LNAME)                                                                                                              \
+        }                                                                                                                                            \
         break;
 
 /**
  * @brief reset the counter for the given status response
  * @param LNAME the name of the counter to reset
  */
-#define RESET_COUNTER(LNAME) \
-    LNAME##_cert_status_response_counter=0;
+#define RESET_COUNTER(LNAME) LNAME##_cert_status_response_counter = 0;
 
 /**
  * @brief Test that the counter value is correct
  * @param LNAME the name of the counter to test
  * @param VAL the expected value
  */
-#define TEST_COUNTER_EQ(LNAME, VAL)  \
-    testEq(LNAME##_cert_status_response_counter, VAL);
+#define TEST_COUNTER_EQ(LNAME, VAL) testEq(LNAME##_cert_status_response_counter, VAL);
 
 /**
  * @brief Generates the code fragment that will set the member variable holding the certificate status to be
@@ -226,9 +227,9 @@ using namespace pvxs::certs;
         }                                                                                                                                     \
         testDiag("Set up: %s", #LNAME " certificate Status Response");                                                                        \
                                                                                                                                               \
-        auto converted_response = PVACertificateStatus(LNAME##_status_response_value);                                                    \
-        testOk1(converted_response == LNAME##_cert_status);                                                                               \
-        testEq(converted_response.ocsp_bytes.size(), LNAME##_cert_status.ocsp_bytes.size());                                              \
+        auto converted_response = PVACertificateStatus(LNAME##_status_response_value, true);                                                  \
+        testOk1(converted_response == LNAME##_cert_status);                                                                                   \
+        testEq(converted_response.ocsp_bytes.size(), LNAME##_cert_status.ocsp_bytes.size());                                                  \
                                                                                                                                               \
         if (!LNAME##_cert_statuses.empty()) {                                                                                                 \
             LNAME##_cert_statuses.erase(LNAME##_cert_statuses.begin());                                                                       \
@@ -248,7 +249,7 @@ using namespace pvxs::certs;
     try {                                                                                                                \
         testDiag("Sending: %s", "Server Status Request");                                                                \
         auto result = client.get(LNAME##_status_pv_name).exec()->wait(5.0);                                              \
-        auto LNAME##_status_response = PVACertificateStatus(result);                                                     \
+        auto LNAME##_status_response = PVACertificateStatus(result, true);                                               \
         testOk1(LNAME##_status_response == LNAME##_cert_status);                                                         \
         testOk1(LNAME##_status_response == LNAME##_cert_status);                                                         \
         testOk1((CertifiedCertificateStatus)LNAME##_status_response == LNAME##_cert_status);                             \

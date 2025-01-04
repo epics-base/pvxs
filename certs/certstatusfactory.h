@@ -109,6 +109,7 @@ class CertStatusFactory {
     }
 
     static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
+    static uint64_t getSerialNumber(X509* cert);
 
    private:
     const ossl_ptr<X509>& ca_cert_;                          // CA Certificate to encode in the OCSP responses
@@ -129,8 +130,6 @@ class CertStatusFactory {
      * @return a byte array
      */
     static std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
-
-    static uint64_t getSerialNumber(X509* cert);
 
     /**
      * @brief Internal function to convert a PVA serial number into an ASN1_INTEGER

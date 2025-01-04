@@ -59,7 +59,6 @@ struct OperationBase : public Operation
     Value result;
     bool done = false;
     std::shared_ptr<ResultWaiter> waiter;
-    // TODO store the "wants-tls" so that we know what we can bounce when TLS is enabled in enableTls()
 
     OperationBase(operation_t op, const evbase& loop);
     virtual ~OperationBase();
@@ -150,6 +149,10 @@ public:
 
     virtual std::shared_ptr<ConnBase> self_from_this() override final;
     virtual void cleanup() override final;
+
+#ifdef PVXS_ENABLE_OPENSSL
+    void configureClientOCSPCallback(SSL *ssl);
+#endif
 
 #define CASE(Op) virtual void handle_##Op() override final;
     CASE(CONNECTION_VALIDATION);
@@ -274,9 +277,42 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     enum state_t {
         Init,
+        RunningTcpOnly,
+        RunningTcp,
         Running,
         Stopped,
     } state = Init;
+
+    inline bool isRunning() { return state != Stopped && state != Init; }
+    inline bool isReadyForTls() { return state == Running; }
+    inline bool isContextReadyForTls() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
+    inline bool isContextUnfitForTls() {
+        return !tls_context || tls_context->state < ossl::SSLContext::TcpReady || ((certs::CertificateStatus)tls_context->get_status()).isRevokedOrExpired();
+    }
+    inline bool isContextUnfitForTls(std::shared_ptr<ossl::SSLContext> context) {
+        return !context || context->state <= ossl::SSLContext::DegradedMode || ((certs::CertificateStatus)context->get_status()).isRevokedOrExpired();
+    }
+    inline bool isTlsEnabled() { return tls_context && tls_context->state > ossl::SSLContext::DegradedMode; }
+    inline void setStateFrom(std::shared_ptr<ossl::SSLContext> tls_context) {
+        if (!tls_context || !tls_context->ctx) {
+            state = RunningTcpOnly;
+        } else {
+            switch (tls_context->state) {
+                case ossl::SSLContext::DegradedMode:
+                    state = RunningTcpOnly;
+                    break;
+                case ossl::SSLContext::TcpReady:
+                    state = RunningTcp;
+                    break;
+                case ossl::SSLContext::TlsReady:
+                    state = Running;
+                    break;
+                default:
+                    state = Init;
+                    break;
+            }
+        }
+    };
 
     Config effective;
 
@@ -353,23 +389,9 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent nsChecker;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    inline bool connectionCanProceed() const {
-        return
-             !tls_context                       // If this is not a TLS context then we can proceed immediately without waiting for status
-          || !effective.isTlsConfigured()       // TLS is not configured
-          || !tls_context.has_cert              // If no certificate has been loaded then we can't establish a TLS context, so proceed with tcp
-          || (tls_context.cert_is_valid)        // If we have a cert and have already received status from the CMS, then proceed now
-          || tls_context.status_check_disabled  // or we don't have to wait for status, then proceed now
-          || !cert_status_manager               // If we have no active subscription then we'll never get status so go ahead now with tcp
-          || (cert_status_manager->available(effective.request_timeout_specified));// Finally if the subscription has an available status, or we've waited long enough, then use it
-    }
-    ossl::SSLContext tls_context;
+    std::shared_ptr<ossl::SSLContext> tls_context;
     evevent cert_event_timer;
-    evevent cert_validity_timer;
-    bool first_cert_event{true};
-    std::shared_ptr<certs::CertificateStatus> current_status;
-    certs::P12FileWatcher file_watcher;
-    certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
+    certs::TlsConfFileWatcher file_watcher;
 #endif
 
     INST_COUNTER(ClientContextImpl);
@@ -407,14 +429,18 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     static void doCertEventHandler(evutil_socket_t fd, short evt, void *raw);
-    static void doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void *raw);
+    static void doPeerCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void *raw);
     void fileEventCallback(short evt);
-    X509 * getCert(ossl::SSLContext *context = nullptr);
-    void startStatusValidityTimer();
-    void subscribeToCertStatus();
+    X509 * getCert(std::shared_ptr<ossl::SSLContext> context = nullptr);
   public:
-    void disableTls();
-    void enableTls(const Config& new_config = {});
+    void enterDegradedMode();
+    void removePeerTlsConnections(const Connection* client_conn = nullptr);
+    void reloadTlsFromConfig(const Config& new_config = {});
+    void enableTlsForPeerConnection(const Connection* client_conn = nullptr);
+
+    bool canAcceptTlsConnections();
+    bool canAcceptTcpConnections();
+    bool readyToEmitTlsSearch();
 #endif
 };
 

@@ -64,29 +64,29 @@ public:
     void connect(ev_owned_ptr<bufferevent> &&bev);
     void disconnect();
 
-protected:
-#define CASE(Op) virtual void handle_##Op();
-    CASE(ECHO);
-    CASE(CONNECTION_VALIDATION);
-    CASE(CONNECTION_VALIDATED);
-    CASE(SEARCH);
-    CASE(SEARCH_RESPONSE);
-    CASE(AUTHNZ);
+   protected:
+    virtual void handle_ECHO();
+    virtual void handle_SEARCH();
+    virtual void handle_SEARCH_RESPONSE();
 
-    CASE(CREATE_CHANNEL);
-    CASE(DESTROY_CHANNEL);
+    virtual void handle_CONNECTION_VALIDATION();
+    virtual void handle_CONNECTION_VALIDATED();
+    virtual void handle_AUTHNZ();
 
-    CASE(GET);
-    CASE(PUT);
-    CASE(PUT_GET);
-    CASE(MONITOR);
-    CASE(RPC);
-    CASE(CANCEL_REQUEST);
-    CASE(DESTROY_REQUEST);
-    CASE(GET_FIELD);
+    virtual void handle_CREATE_CHANNEL();
+    virtual void handle_DESTROY_CHANNEL();
 
-    CASE(MESSAGE);
-#undef CASE
+    virtual void handle_GET();
+    virtual void handle_PUT();
+    virtual void handle_PUT_GET();
+    virtual void handle_MONITOR();
+    virtual void handle_RPC();
+    virtual void handle_GET_FIELD();
+
+    virtual void handle_CANCEL_REQUEST();
+    virtual void handle_DESTROY_REQUEST();
+
+    virtual void handle_MESSAGE();
 
     virtual std::shared_ptr<ConnBase> self_from_this() =0;
     virtual void cleanup() =0;

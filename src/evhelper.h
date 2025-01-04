@@ -7,32 +7,33 @@
 #ifndef EVHELPER_H
 #define EVHELPER_H
 
-#include <sstream>
 #include <functional>
-#include <memory>
-#include <string>
 #include <map>
+#include <memory>
 #include <set>
+#include <sstream>
+#include <string>
 
-#include <event2/event.h>
 #include <event2/buffer.h>
-#include <event2/listener.h>
 #include <event2/bufferevent.h>
+#include <event2/event.h>
+#include <event2/listener.h>
+
+#include "evhelper.h"
 
 #ifdef PVXS_ENABLE_OPENSSL
-#  include <event2/bufferevent_ssl.h>
+#include <event2/bufferevent_ssl.h>
 #endif
 
-#include <pvxs/version.h>
+#include <epicsTime.h>
 #include <utilpvt.h>
 
-#include <epicsTime.h>
+#include <pvxs/version.h>
 
-#include "pvaproto.h"
 #include "ownedptr.h"
+#include "pvaproto.h"
 
 #ifdef PVXS_ENABLE_OPENSSL
-#include "openssl.h"
 constexpr timeval status_ready_polling_interval{0, 100000};
 #endif
 

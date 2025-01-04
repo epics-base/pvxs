@@ -191,10 +191,13 @@ void ServerConn::handle_SEARCH()
     for(size_t i=0; i<nproto.size && !foundtcp && M.good(); i++) {
         std::string proto;
         from_wire(M, proto);
+#ifndef PVXS_ENABLE_OPENSSL
         if(proto=="tcp")
             foundtcp = true;
-#ifdef PVXS_ENABLE_OPENSSL
-        else if(proto=="tls" && iface->server->tls_context && iface->server->effective.tls_port)
+#else
+        if(proto=="tcp" && iface->server->canRespondToTcpSearch() )
+            foundtcp = true;
+        else if(proto=="tls" && iface->server->canRespondToTlsSearch())
             foundtls = true;
 #endif
     }

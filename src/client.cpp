@@ -191,7 +191,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self) {
 
         log_debug_printf(io, "Server %s detach channel '%s' to re-search\n", current ? current->peerName.c_str() : "<disconnected>", name.c_str());
 
-    } else if (context->state == ContextImpl::Running) {  // reconnect to specific server
+    } else if (context->isRunning()) {  // reconnect to specific server
         conn = Connection::build(context, forcedServer.addr, true
 #ifdef PVXS_ENABLE_OPENSSL
                                  ,
@@ -241,21 +241,20 @@ std::shared_ptr<Connect> ConnectBuilder::exec() {
 
     auto server(std::move(_server));
     context->tcp_loop.dispatch([=]() {
-            // on worker
-            op->chan = Channel::build(context, op->_name, server);
+        // on worker
+        op->chan = Channel::build(context, op->_name, server);
 
-            bool cur = op->_connected = op->chan->state == Channel::Active;
-            if (cur && op->_onConn) {
-                auto& conn = op->chan->conn;
-                Connected evt(conn->peerName, conn->connTime, conn->cred);
-                op->_onConn(evt);
-            } else if (!cur && op->_onDis) {
-                op->_onDis();
-            }
-
-            op->chan->connectors.push_back(op.get());
+        bool cur = op->_connected = op->chan->state == Channel::Active;
+        if (cur && op->_onConn) {
+            auto& conn = op->chan->conn;
+            Connected evt(conn->peerName, conn->connTime, conn->cred);
+            op->_onConn(evt);
+        } else if (!cur && op->_onDis) {
+            op->_onDis();
         }
-    );
+
+        op->chan->connectors.push_back(op.get());
+    });
     return external;
 }
 
@@ -299,7 +298,7 @@ void OperationBase::interrupt() {
 RequestInfo::RequestInfo(uint32_t sid, uint32_t ioid, std::shared_ptr<OperationBase>& handle) : sid(sid), ioid(ioid), op(handle->op), handle(handle) {}
 
 std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& context, const std::string& name, const std::string& server) {
-    if (context->state != ContextImpl::Running) throw std::logic_error("Context close()d");
+    if (!context->isRunning()) throw std::logic_error("Context close()d");
 
     SockEndpoint forceServer;
     decltype(context->chanByName)::key_type namekey(name, server);
@@ -464,6 +463,8 @@ static Value buildCAMethod() {
         .create();
 }
 
+void Context::checkFileStatus() { pvt->impl->file_watcher.checkFileStatus(); }
+
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     : ifmap(IfaceMap::instance()),
       effective([conf]() -> Config {
@@ -485,56 +486,27 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
       nsChecker(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::onNSCheckS, this))
 #ifdef PVXS_ENABLE_OPENSSL
       ,
+      tls_context(nullptr),
       cert_event_timer(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT, doCertEventHandler, this)),
-      cert_validity_timer(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT, doCertStatusValidityEventhandler, this)),
       file_watcher(filemon, {effective.tls_cert_filename, effective.tls_cert_password, effective.tls_private_key_filename, effective.tls_private_key_password},
                    [this](bool enable) {
                        if (enable)
-                           manager.loop().dispatch([this]() mutable { enableTls(); });
+                           manager.loop().dispatch([this]() mutable { reloadTlsFromConfig(); });
                        else
-                           manager.loop().dispatch([this]() mutable { disableTls(); });
+                           manager.loop().dispatch([this]() mutable { enterDegradedMode(); });
                    })
 #endif
 {
 #ifdef PVXS_ENABLE_OPENSSL
-    if (conf.isTlsConfigured()) {
+    if (effective.isTlsConfigured()) {
         try {
-            tls_context = ossl::SSLContext::for_client(effective);
-            if (tls_context.has_cert) {
-                if (auto cert_ptr = getCert()) {
-                    if (tls_context.status_check_disabled) {
-                        Guard G(tls_context.lock);
-                        tls_context.cert_is_valid = true;
-                        log_warn_printf(setup, "Certificate status monitoring disabled by config: %s\n", effective.tls_cert_filename.c_str());
-                    } else {
-                        try {
-                            // Subscribe and set validity when the status is verified
-                            auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));
-                            cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::PVACertificateStatus status) {
-                                Guard G(tls_context.lock);
-                                auto was_good = current_status && current_status->isGood();
-                                current_status = std::make_shared<certs::CertificateStatus>(status);
-                                auto is_good = current_status && current_status->isGood();
-                                UnGuard U(G); // Un-Guard to allow enabling and disabling TLS
-                                if (is_good != was_good) {
-                                    manager.loop().dispatch([this, is_good]() {
-                                        if (is_good) enableTls();
-                                        else disableTls();
-                                    });
-                                }
-                            });
-                            log_info_printf(setup, "TLS enabled for client pending certificate status: %s\n", effective.tls_cert_filename.c_str());
-                        } catch (certs::CertStatusNoExtensionException& e) {
-                            Guard G(tls_context.lock);
-                            tls_context.cert_is_valid = true;
-                            log_info_printf(setup, "TLS enabled for client without status monitoring: %s\n", effective.tls_cert_filename.c_str());
-                        }
-                    }
-                }
-            }
+            tls_context = ossl::SSLContext::for_client(effective, tcp_loop);
         } catch (std::exception& e) {
+            if (tls_context) tls_context->setDegradedMode(true);
             log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
         }
+    } else if (tls_context) {
+        tls_context->setDegradedMode(true);
     }
 #endif
 
@@ -570,12 +542,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
 
     for (auto& addr : effective.addressList) {
         SockEndpoint ep;
-        try {
-            ep = SockEndpoint(addr, nullptr, effective.udp_port);
-        } catch (std::exception& e) {
-            log_warn_printf(setup, "%s  Ignoring malformed address %s\n", e.what(), addr.c_str());
-            continue;
-        }
+        ep = SockEndpoint(addr, nullptr, effective.udp_port);
         assert(ep.addr.family() == AF_INET || ep.addr.family() == AF_INET6);
 
         // if !bcast and !mcast
@@ -628,9 +595,8 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     if (event_add(cacheCleaner.get(), &channelCacheCleanInterval)) log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
 #ifdef PVXS_ENABLE_OPENSSL
     if (event_add(cert_event_timer.get(), &statusIntervalShort)) log_err_printf(setup, "Error enabling cert status timer on\n%s", "");
-    if (event_add(cert_validity_timer.get(), &statusIntervalShort)) log_err_printf(setup, "Error enabling cert status validity timer on\n%s", "");
 #endif
-    state = Running;
+    setStateFrom(tls_context);
 }
 
 ContextImpl::~ContextImpl() {}
@@ -665,10 +631,10 @@ void ContextImpl::close() {
     log_debug_printf(setup, "context %p close\n", this);
 
 #ifdef PVXS_ENABLE_OPENSSL
-    // Stop status subscription if enabled
-    if (cert_status_manager) {
-        cert_status_manager->unsubscribe();
-        cert_status_manager.reset();
+    // Stop status monitoring if it may be enabled
+    if (isTlsEnabled()) {
+        // Degrading service will close any monitoring and clean up cert status
+        tls_context->setDegradedMode(true);
     }
 
     // Stop file watcher if enabled
@@ -689,7 +655,6 @@ void ContextImpl::close() {
         (void)event_del(cacheCleaner.get());
 #ifdef PVXS_ENABLE_OPENSSL
         (void)event_del(cert_event_timer.get());
-        (void)event_del(cert_validity_timer.get());
 #endif
         auto conns(std::move(connByAddr));
         // explicitly break ref. loop of channel cache
@@ -860,8 +825,7 @@ static void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peer
 
 #ifdef PVXS_ENABLE_OPENSSL
     bool isTLS = proto == "tls";
-    if (!self.tls_context && isTLS) return;
-    if (!found || !(isTCP || isTLS))
+    if (!found || !((isTLS && self.canAcceptTlsConnections()) || (isTCP && self.canAcceptTcpConnections())))
 #else
     if (!found || !isTCP)
 #endif
@@ -1039,7 +1003,7 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked) {
             to_wire(M, uint8_t(0u));
 
 #ifdef PVXS_ENABLE_OPENSSL
-        } else if (tls_context) {
+        } else if (readyToEmitTlsSearch()) {
             to_wire(M, uint8_t(2u));
             to_wire(M, "tls");
             to_wire(M, "tcp");
@@ -1305,22 +1269,26 @@ void ContextImpl::cacheCleanS(evutil_socket_t fd, short evt, void* raw) {
     }
 }
 
-#ifndef PVXS_ENABLE_OPENSSL
-Context::Pvt::Pvt(const Config& conf) : loop("PVXCTCP", epicsThreadPriorityCAServerLow), impl(std::make_shared<ContextImpl>(conf, loop.internal())) {}
+#ifdef PVXS_ENABLE_OPENSSL
+Context::Pvt::Pvt(const Config& conf)
+    : loop("PVXCTCP", epicsThreadPriorityCAServerLow),
+      impl(std::make_shared<ContextImpl>(conf, loop.internal()))
 #else
+Context::Pvt::Pvt(const Config& conf) : loop("PVXCTCP", epicsThreadPriorityCAServerLow), impl(std::make_shared<ContextImpl>(conf, loop.internal())) {}
+#endif
+{
+}
 
-DO_CERT_EVENT_HANDLER(ContextImpl, io)
-DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(ContextImpl, getStatus)
+Context::Pvt::~Pvt() { impl->close(); }
 
 void Context::reconfigure(const Config& newconf) {
     if (!pvt) throw std::logic_error("NULL Context");
 
 #ifdef PVXS_ENABLE_OPENSSL
     if (newconf.isTlsConfigured()) {
-        Guard G(pvt->impl->tls_context.lock);
-        pvt->impl->tls_context.has_cert = false;  // Force reload of context from cert
-        UnGuard U(G);
-        pvt->impl->manager.loop().call([this, &newconf]() mutable { pvt->impl->enableTls(newconf); });
+        pvt->impl->tls_context->setDegradedMode(true);
+        // Force reload of context from cert
+        pvt->impl->manager.loop().call([this, &newconf]() mutable { pvt->impl->reloadTlsFromConfig(newconf); });
         pvt->impl->manager.loop().sync();
     }
 #else
@@ -1328,87 +1296,84 @@ void Context::reconfigure(const Config& newconf) {
 #endif
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
+void ContextImpl::doCertEventHandler(int fd, short evt, void* raw) {
+    try {
+        auto pvt = static_cast<ContextImpl*>(raw);
+        pvt->fileEventCallback(evt);
+        timeval interval(statusIntervalShort);
+        if (event_add(pvt->cert_event_timer.get(), &interval)) do {
+                if (auto _log_prefix = ::pvxs::detail::log_prep(io, unsigned(::pvxs::Level::Err)))
+                    ::pvxs::detail::_log_printf(unsigned(::pvxs::Level::Err),
+                                                "%s "
+                                                "Error re-enabling cert file event timer\n%s",
+                                                _log_prefix, "");
+            } while (0);
+    } catch (std::exception& e) {
+        do {
+            if (auto _log_prefix = ::pvxs::detail::log_prep(io, unsigned(unsigned(::pvxs::Level::Crit) | 0x1000)))
+                ::pvxs::detail::_log_printf(unsigned(unsigned(::pvxs::Level::Crit) | 0x1000),
+                                            "%s "
+                                            "Unhandled error in cert file event timer callback: %s\n",
+                                            _log_prefix, e.what());
+        } while (0);
+    }
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
 /**
  * @brief Enable TLS with the optional config if provided
  * @param new_config optional config (check the is_initialized flag to see if its blank or not)
  */
-void ContextImpl::enableTls(const Config& new_config) {
+void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
     // If already valid then don't do anything
-    if (tls_context.has_cert && tls_context.cert_is_valid) return;
+    if (isContextReadyForTls()) return;
 
-    log_debug_printf(watcher, "Enabling TLS. Certificate file is %s\n", effective.tls_cert_filename.c_str());
     try {
-        Guard G(tls_context.lock);  // We can lock here because `for_client` will create a completely different tls_context
-
-        // if we don't have a cert then get a new one
-        if (!tls_context.has_cert) {
-            log_debug_printf(watcher, "Creating a new TLS context using %s\n", effective.tls_cert_filename.c_str());
-            auto new_context = ossl::SSLContext::for_client(new_config.is_initialized ? new_config : effective);
+        // if context is not fit for TLS then try to initialise it
+        if (isContextUnfitForTls()) {
+            const auto& config_to_use = new_config.is_initialized ? new_config : effective;
+            auto new_context = ossl::SSLContext::for_client(config_to_use, tcp_loop);
 
             // If unsuccessful in getting cert then don't do anything
-            if (!new_context.has_cert) {
-                log_debug_printf(watcher, "Failed to create new TLS context: TLS disabled: %s\n", effective.tls_cert_filename.c_str());
-                return;
-            }
+            if (isContextUnfitForTls(new_context)) return;
+
+            enableTlsForPeerConnection();
+
             tls_context = new_context;
-            effective = (new_config.is_initialized ? new_config : effective);
+            effective = config_to_use;
         }
-
-        // Subscribe to certificate status if not already subscribed
-        if (!cert_status_manager && !tls_context.status_check_disabled) {
-            log_debug_printf(watcher, "Subscribing to certificate status for %s\n", effective.tls_cert_filename.c_str());
-            subscribeToCertStatus();  // Sets the cert_status_manager if successfully subscribes
-        }
-
-        log_debug_printf(watcher, "Closing %zu connections to replace with TLS ones\n", connByAddr.size());
-        auto conns(std::move(connByAddr));
-        for (auto& pair : conns) {
-            auto conn = pair.second.lock();
-            if (conn) {
-                conn->cleanup();
-            }
-        }
-        conns.clear();
-
-        // Set callback for when this status' validity ends
-        if (!tls_context.status_check_disabled) {
-            log_debug_printf(watcher, "Starting certificate status validity timer after receiving status for %s\n", effective.tls_cert_filename.c_str());
-            startStatusValidityTimer();
-        }
-
-        tls_context.cert_is_valid = true;
-        log_info_printf(watcher, "TLS enabled for client due to a certificate status change%s\n", "");
     } catch (std::exception& e) {
-        log_debug_printf(watcher, "%s: TLS remains disabled for client: with %s\n", e.what(), effective.tls_cert_filename.c_str());
+        if (tls_context && tls_context->state != ossl::SSLContext::DegradedMode) tls_context->setDegradedMode(true);
     }
 }
+#endif
 
+#ifdef PVXS_ENABLE_OPENSSL
 /**
- * @brief Called to disable TLS - if TLS is not enabled then this will do nothin.  It is idempotent
+ * @brief Enable TLS for the given client peer connection
+ *
+ * This is called when a peer subscription monitor reports a status of GOOD for a peer certificate.
+ * It works by simply removing the specified server connection and waiting for it to be
+ * reconnected again as TLS.  This time the peer credential status will already be cached so
+ * will be validated immediately
+ *
+ * @param client_conn the peer connection to enable TLS for
  */
-void ContextImpl::disableTls() {
-    log_debug_printf(watcher, "Disabling TLS%s\n", "");
-    Guard G(tls_context.lock);
-    if (cert_status_manager) {
-        // Stop subscribing to status
-        log_debug_printf(watcher, "Disable TLS: Stopping certificate monitor%s\n", "");
-        cert_status_manager.reset();
-    }
-
-    // Skip if TLS is already disabled
-    if (!tls_context.has_cert || !tls_context.cert_is_valid) return;
-
-    // Remove all tls connections so that they will reconnect as tcp
-    std::vector<std::weak_ptr<Connection> > to_cleanup;
-    // Collect tls connections to clean-up
-    for (auto& pair : connByAddr) {
+void ContextImpl::enableTlsForPeerConnection(const Connection* client_conn) {
+    // Find the connection(s) to clean-up
+    auto conns(std::move(connByAddr));
+    std::vector<std::weak_ptr<Connection>> to_cleanup;
+    for (auto& pair : conns) {
         auto conn = pair.second.lock();
-        if (conn && conn->isTLS) {
-            to_cleanup.push_back(pair.second);
+        if (conn && (!client_conn || conn.get() == client_conn)) {
+            to_cleanup.push_back(conn);
         }
     }
 
-    log_debug_printf(watcher, "Closing %zu TLS connections to replace with TCP ones\n", to_cleanup.size());
+    log_debug_printf(watcher, "Closing %zu TCP connections to replace with TLS ones\n", to_cleanup.size());
+
     // Clean them up
     for (auto& weak_conn : to_cleanup) {
         auto conn = weak_conn.lock();
@@ -1416,24 +1381,72 @@ void ContextImpl::disableTls() {
             conn->cleanup();
         }
     }
-
-    tls_context.cert_is_valid = false;
-    tls_context.has_cert = false;
-    log_warn_printf(watcher, "TLS disabled for client%s\n", "");
+    if (!client_conn) conns.clear();
+    connByAddr.swap(conns);
 }
-
-FILE_EVENT_CALLBACK(ContextImpl)
-GET_CERT(ContextImpl)
-START_STATUS_VALIDITY_TIMER(ContextImpl, manager.loop())
-SUBSCRIBE_TO_CERT_STATUS(ContextImpl, CertificateStatus, manager.loop())
-
-Context::Pvt::Pvt(const Config& conf)
-    : loop("PVXCTCP", epicsThreadPriorityCAServerLow),
-      impl(std::make_shared<ContextImpl>(conf, loop.internal()))
 #endif
-{}
 
-Context::Pvt::~Pvt() { impl->close(); }
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief Called to disable TLS - if TLS is not enabled then this will do nothing.  It is idempotent
+ */
+void ContextImpl::enterDegradedMode() {
+    if (!isTlsEnabled()) return;
+
+    tls_context->setDegradedMode(true);
+
+    // Remove all TLS peer connections
+    removePeerTlsConnections();
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief Called to disable TLS - if TLS is not enabled then this will do nothing.  It is idempotent
+ */
+void ContextImpl::removePeerTlsConnections(const Connection* client_conn) {
+    // Collect tls connections to clean-up
+    std::vector<std::weak_ptr<Connection>> to_cleanup;
+    for (auto& pair : connByAddr) {
+        auto conn = pair.second.lock();
+        if (conn && conn->isTLS && (!client_conn || conn.get() == client_conn)) {
+            to_cleanup.push_back(pair.second);
+        }
+    }
+
+    log_debug_printf(watcher, "Closing %zu TLS connection(s) to replace with TCP ones\n", to_cleanup.size());
+
+    // Clean them up
+    for (auto& weak_conn : to_cleanup) {
+        auto conn = weak_conn.lock();
+        if (conn) {
+            conn->cleanup();
+        }
+    }
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+void ContextImpl::fileEventCallback(short evt) { file_watcher.checkFileStatus(); }
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+X509* ContextImpl::getCert(std::shared_ptr<ossl::SSLContext> context_ptr) {
+    auto context = context_ptr == nullptr ? tls_context : context_ptr;
+    if (!context->ctx) return nullptr;
+    return SSL_CTX_get0_certificate(context->ctx);
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+bool ContextImpl::canAcceptTlsConnections() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
+
+bool ContextImpl::readyToEmitTlsSearch() { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady; }
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+bool ContextImpl::canAcceptTcpConnections() { return !tls_context || tls_context->state >= ossl::SSLContext::DegradedMode; }
+#endif
 
 }  // namespace client
 

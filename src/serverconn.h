@@ -214,6 +214,7 @@ struct Server::Pvt
     SockAttach attach;
 
     std::weak_ptr<Server::Pvt> internal_self;
+    Server &server;
 
     // "const" after ctor
     Config effective;
@@ -258,15 +259,13 @@ struct Server::Pvt
     } state;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    ossl::SSLContext tls_context;
+    std::shared_ptr<ossl::SSLContext> tls_context;
     CertEventCallback custom_cert_event_callback;
     evevent cert_event_timer;
-    evevent cert_validity_timer;
     bool first_cert_event{true};
-    std::shared_ptr<certs::PVACertificateStatus> current_status;
-    certs::P12FileWatcher file_watcher;
+    certs::TlsConfFileWatcher file_watcher;
     void* cached_ocsp_response{nullptr};
-    certs::cert_status_ptr<certs::CertStatusManager> cert_status_manager;
+    time_t cached_ocsp_status_date;
 #endif
 
     INST_COUNTER(ServerPvt);
@@ -274,14 +273,18 @@ struct Server::Pvt
 #ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
 #else
-    Pvt(const Config& conf, CertEventCallback custom_cert_event_callback = nullptr);
+    Pvt(Server &server, const Config& conf, CertEventCallback custom_cert_event_callback = nullptr);
 #endif
     ~Pvt();
 
     void start();
     void stop();
 
-private:
+    inline bool canRespondToTcpSearch() { return !tls_context || tls_context->state >= ossl::SSLContext::DegradedMode; }
+    inline bool canRespondToTlsSearch() { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady && effective.tls_port; }
+    inline bool isDegraded() { return !tls_context || tls_context->state <= ossl::SSLContext::DegradedMode; }
+
+   private:
     void onSearch(const UDPManager::Search& msg);
     void doBeacons(short evt);
     static void doBeaconsS(evutil_socket_t fd, short evt, void *raw);
@@ -289,12 +292,51 @@ private:
 #ifdef PVXS_ENABLE_OPENSSL
     static void doCertEventHandler(evutil_socket_t fd, short evt, void* raw);
     static void doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void* raw);
-    void disableTls();
-    void enableTls(const Config& new_config = {});
     void fileEventCallback(short evt);
-    X509* getCert(ossl::SSLContext* context_ptr = nullptr);
-    void startStatusValidityTimer();
-    void subscribeToCertStatus();
+    X509* getCert(std::shared_ptr<ossl::SSLContext> context_ptr);
+
+    /**
+     * @brief Can the TLS listener respond with `tcp` to `tcp`-only SEARCH requests
+     *
+     * This is true if TLS is correctly configured, the cert is valid,
+     * the CA chain is valid, and the key usage and other parameters check out.
+     *
+     * If the SEARCH request contains `tcp` only then a SEARCH RESPONSE will be given.
+     * If the SEARCH request contains both `tls` and `tcp` then no response will be given
+     * because CMS will not yet have validated the certificate.
+     *
+     * @note this will return false if the tls context is in a degraded state, responding to all SEARCH requests with `tcp`
+     *
+     * @return True if the TLS listener can respond with `tcp` to `tcp`-only SEARCH requests
+     */
+    inline bool tlsSearchListenerCanRespondWithTcp(std::shared_ptr<ossl::SSLContext> new_context = nullptr) {
+        auto& context_to_use = (new_context == nullptr ? tls_context : new_context);
+        return context_to_use && context_to_use->state >= ossl::SSLContext::TcpReady;
+    }
+
+    /**
+     * @brief Can the TLS listener respond with `tls` to SEARCH requests containing `tls`
+     *
+     * This is true if TLS is correctly configured, the cert is valid,
+     * the CA chain is valid, the key usage and other parameters check out, and either
+     * a) status monitoring is disabled, or
+     * b) the CMS has already responded with a certificate status of GOOD
+     *
+     * If the SEARCH request contains `tcp` only then a `tcp` SEARCH RESPONSE will be given.
+     * If the SEARCH request contains `tls` then a `tls` SEARCH RESPONSE will be given.
+     *
+     * @return True if the TLS listener can respond with `tls` to SEARCH requests containing `tls`
+     */
+    inline bool tlsSearchListenerCanRespondWithTls(std::shared_ptr<ossl::SSLContext> new_context = nullptr) {
+        auto& context_to_use = (new_context == nullptr ? tls_context : new_context);
+        return context_to_use && context_to_use->state == ossl::SSLContext::TlsReady;
+    }
+
+   public:
+    void enterDegradedMode();
+    void removePeerTlsConnections(const ServerConn* server_conn = nullptr);
+    void reloadTlsFromConfig();
+    void enableTlsForPeerConnection(const ServerConn* server_conn = nullptr);
 #endif
 };
 

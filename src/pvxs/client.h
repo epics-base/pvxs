@@ -342,6 +342,7 @@ public:
      * @since UNRELEASED
      */
     void reconfigure(const Config&);
+    void checkFileStatus();
 #endif // PVXS_ENABLE_OPENSSL
 
     //! effective config of running client

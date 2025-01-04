@@ -123,6 +123,7 @@ public:
      * @since UNRELEASED
      */
     void reconfigure(const Config&);
+    void checkFileStatus() ;
 #endif
 
     //! effective config
@@ -246,6 +247,9 @@ public:
     //! Suitable for use in self-contained unit-tests.
     //! @since 0.3.0 Address family argument added.
     static Config isolated(int family=AF_INET);
+
+    //! Configuration limited suitable for use as a Mock CMS in self-contained unit-tests.
+    static Config forCms();
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables.

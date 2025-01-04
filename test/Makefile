@@ -130,6 +130,9 @@ gen_test_certs_SRCS += certfactory.cpp
 
 TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp
+testtls_SRCS += certstatusfactory.cpp
+testtls_SRCS += certstatusmanager.cpp
+testtls_SRCS += certstatus.cpp
 TESTS += testtls
 TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 

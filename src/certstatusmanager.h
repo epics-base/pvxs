@@ -26,95 +26,6 @@
 #include "evhelper.h"
 #include "ownedptr.h"
 
-#define DO_CERT_STATUS_VALIDITY_EVENT_HANDLER(TYPE, STATUS_CALL)                            \
-    void TYPE::doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void* raw) { \
-        auto pvt = static_cast<TYPE*>(raw);                                                 \
-        if (pvt->current_status && pvt->current_status->isValid()) return;                  \
-        if (!pvt->cert_status_manager)                                                      \
-            pvt->disableTls();                                                              \
-        else {                                                                              \
-            try {                                                                           \
-                try {                                                                       \
-                    pvt->current_status = pvt->cert_status_manager->STATUS_CALL();          \
-                    if (pvt->current_status && pvt->current_status->isGood())               \
-                        pvt->startStatusValidityTimer();                                    \
-                    else                                                                    \
-                        pvt->disableTls();                                                  \
-                } catch (certs::CertStatusNoExtensionException & e) {                       \
-                }                                                                           \
-            } catch (...) {                                                                 \
-                pvt->disableTls();                                                          \
-            }                                                                               \
-        }                                                                                   \
-    }
-
-#define CUSTOM_FILE_EVENT_CALL                \
-    if (pvt->custom_cert_event_callback) {    \
-        pvt->custom_cert_event_callback(evt); \
-    }
-
-#define _FILE_EVENT_CALL
-
-#define DO_CERT_EVENT_HANDLER(TYPE, LOG, ...)                                                                                              \
-    void TYPE::doCertEventHandler(evutil_socket_t fd, short evt, void* raw) {                                                              \
-        try {                                                                                                                              \
-            auto pvt = static_cast<TYPE*>(raw);                                                                                            \
-            __VA_ARGS__##_FILE_EVENT_CALL pvt->fileEventCallback(evt);                                                                     \
-            if (pvt->first_cert_event) pvt->first_cert_event = false;                                                                      \
-            timeval interval(statusIntervalShort);                                                                                         \
-            if (event_add(pvt->cert_event_timer.get(), &interval)) log_err_printf(LOG, "Error re-enabling cert file event timer\n%s", ""); \
-        } catch (std::exception & e) {                                                                                                     \
-            log_exc_printf(LOG, "Unhandled error in cert file event timer callback: %s\n", e.what());                                      \
-        }                                                                                                                                  \
-    }
-
-#define FILE_EVENT_CALLBACK(TYPE)                              \
-    void TYPE::fileEventCallback(short evt) {                  \
-        if (!first_cert_event) file_watcher.checkFileStatus(); \
-    }
-
-#define GET_CERT(TYPE)                                                      \
-    X509* TYPE::getCert(ossl::SSLContext* context_ptr) {                    \
-        auto context = context_ptr == nullptr ? &tls_context : context_ptr; \
-        if (!context->ctx) return nullptr;                                  \
-        return SSL_CTX_get0_certificate(context->ctx);                      \
-    }
-
-#define START_STATUS_VALIDITY_TIMER(TYPE, LOOP)                                                                                                               \
-    void TYPE::startStatusValidityTimer() {                                                                                                                   \
-        (LOOP).dispatch([this]() {                                                                                                                            \
-            if (current_status) {                                                                                                                             \
-                auto now = time(nullptr);                                                                                                                     \
-                timeval validity_end = {current_status->status_valid_until_date.t - now, 0};                                                                  \
-                if (event_add(cert_validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting certificate status validity timer\n%s", ""); \
-            }                                                                                                                                                 \
-        });                                                                                                                                                   \
-    }
-
-#define SUBSCRIBE_TO_CERT_STATUS(TYPE, STATUS_TYPE, LOOP)                                                                                   \
-    void TYPE::subscribeToCertStatus() {                                                                                                    \
-        if (auto cert_ptr = getCert()) {                                                                                                    \
-            try {                                                                                                                           \
-                if (cert_status_manager) return;                                                                                            \
-                auto ctx_cert = ossl_ptr<X509>(X509_dup(cert_ptr));                                                                         \
-                cert_status_manager = certs::CertStatusManager::subscribe(std::move(ctx_cert), [this](certs::PVACertificateStatus status) { \
-                    Guard G(tls_context.lock);                                                                                              \
-                    auto was_good = current_status && current_status->isGood();                                                             \
-                    current_status = std::make_shared<certs::STATUS_TYPE>(status);                                                          \
-                    if (current_status && current_status->isGood()) {                                                                       \
-                        if (!was_good) (LOOP).dispatch([this]() mutable { enableTls(); });                                                  \
-                    } else if (was_good) {                                                                                                  \
-                        (LOOP).dispatch([this]() mutable { disableTls(); });                                                                \
-                    }                                                                                                                       \
-                });                                                                                                                         \
-            } catch (certs::CertStatusSubscriptionException & e) {                                                                          \
-                log_warn_printf(watcher, "TLS Disabled: %s\n", e.what());                                                                   \
-            } catch (certs::CertStatusNoExtensionException & e) {                                                                           \
-                log_debug_printf(watcher, "Status monitoring not configured correctly: %s\n", e.what());                                    \
-            }                                                                                                                               \
-        }                                                                                                                                   \
-    }
-
 namespace pvxs {
 
 // Forward def
@@ -177,6 +88,8 @@ class CertStatusManager {
     using StatusCallback = std::function<void(const PVACertificateStatus&)>;
 
     static bool shouldMonitor(const ossl_ptr<X509>& certificate);
+    static bool shouldMonitor(const X509* certificate);
+    std::shared_ptr<StatusCallback> callback_ref{}; // Option placeholder for ref to callback if used
 
     /**
      * @brief Get the status PV from a Cert.
@@ -224,9 +137,7 @@ class CertStatusManager {
      *
      * @see unsubscribe()
      */
-    static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback);
-
-    static cert_status_ptr<CertStatusManager> getAndSubscribe(evbase loop, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback);
+    static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback, bool allow_self_signed_ca = false);
 
     /**
      * @brief Get status for a given certificate.  Does not contain OCSP signed
@@ -311,7 +222,7 @@ class CertStatusManager {
     time_t manager_start_time_{time(nullptr)};
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes);
 
-    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, std::string custom_ca_dir);
+    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, bool allow_self_signed_ca = false, std::string custom_ca_dir = {});
 
     /**
      * @brief To parse OCSP responses
@@ -324,7 +235,7 @@ class CertStatusManager {
      * @return the Parsed OCSP response status
      */
    public:
-    static ParsedOCSPStatus parse(const shared_array<const uint8_t> ocsp_bytes, std::string custom_ca_dir = {});
+    static ParsedOCSPStatus parse(const shared_array<const uint8_t> ocsp_bytes, bool allow_self_signed_ca = false, std::string custom_ca_dir = {});
 
    private:
     std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);

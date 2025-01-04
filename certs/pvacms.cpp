@@ -62,13 +62,13 @@
 #include "certstatus.h"
 #include "certstatusfactory.h"
 #include "configcms.h"
+#include "credentials.h"
 #include "evhelper.h"
 #include "openssl.h"
 #include "ownedptr.h"
+#include "securityclient.h"
 #include "sqlite3.h"
 #include "utilpvt.h"
-#include "securityclient.h"
-#include "credentials.h"
 
 DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
 DEFINE_LOGGER(pvacmsmonitor, "pvxs.certs.stat");
@@ -82,14 +82,12 @@ struct ASMember {
     ASMEMBERPVT mem;
     ASMember() : ASMember("DEFAULT") {}
     ASMember(const std::string &n) : name(n) {
-        if (asAddMember(&mem, name.c_str()))
-            throw std::runtime_error(SB() << "Unable to create ASMember " << n);
+        if (asAddMember(&mem, name.c_str())) throw std::runtime_error(SB() << "Unable to create ASMember " << n);
         // mem references name.c_str()
     }
     ~ASMember() {
         // all clients must be disconnected...
-        if (asRemoveMember(&mem))
-            log_err_printf(pvacms, "Unable to cleanup ASMember %s\n", name.c_str());
+        if (asRemoveMember(&mem)) log_err_printf(pvacms, "Unable to cleanup ASMember %s\n", name.c_str());
     }
 };
 
@@ -214,6 +212,17 @@ void initCertsDatabase(sql_ptr &ca_db, std::string &db_file) {
         if (rc != SQLITE_OK && rc != SQLITE_DONE) {
             throw std::runtime_error(SB() << "Can't initialise certs db file: " << sqlite3_errmsg(ca_db.get()));
         }
+    }
+}
+
+void getWorstCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t &worst_status_so_far, time_t &worst_status_time_so_far) {
+    certstatus_t status;
+    time_t status_date;
+    std::tie(status, status_date) = certs::getCertificateStatus(ca_db, serial);
+    // if worse
+    if (status != UNKNOWN && status > worst_status_so_far) {
+        worst_status_so_far = status;
+        worst_status_time_so_far = status_date;
     }
 }
 
@@ -707,7 +716,10 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
 }
 
 /**
- * Retrieves the status of the certificate identified by the pv_name.  Only called first time
+ * Retrieves the status of the certificate identified by the pv_name.
+ * This will verify the certificate chain back to the root certificate for all certificates that are managed by this PVACMS
+ * so the status returned will certify that the entity cert (and its whole chain)
+ * is valid
  *
  * @param ca_db A pointer to the SQL database object.
  * @param our_issuer_id The issuer ID of the server.  Must match the one provided in pv_name
@@ -724,6 +736,7 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
                  const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                  const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(CertStatus::getStatusPrototype());
+    std::vector<uint64_t> ca_serial_numbers;
     uint64_t serial = 0;
     static auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
@@ -741,6 +754,16 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
         std::tie(status, status_date) = certs::getCertificateStatus(ca_db, serial);
         if (status == UNKNOWN) {
             throw std::runtime_error("Unable to determine certificate status");
+        }
+
+        // Get all other serial numbers to check (CA and CA chain)
+        ca_serial_numbers.push_back(CertStatusFactory::getSerialNumber(ca_cert));
+        for (auto i = 0u; i < sk_X509_num(ca_chain.get()); ++i) {
+            ca_serial_numbers.push_back(CertStatusFactory::getSerialNumber(sk_X509_value(ca_chain.get(), i)));
+        }
+
+        for (auto ca_serial_number : ca_serial_numbers) {
+            certs::getWorstCertificateStatus(ca_db, ca_serial_number, status, status_date);
         }
 
         auto now = std::time(nullptr);
@@ -1035,17 +1058,18 @@ void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert) {
         throw std::runtime_error("Failed to open ACF file for writing: " + config.ca_acf_filename);
     }
 
-    out_file <<
-      "UAG(CMS_ADMIN) {admin}\n"
-      "\n"
-      "ASG(DEFAULT) {\n"
-      "    RULE(0,READ)\n"
-      "    RULE(1,WRITE) {\n"
-      "        UAG(CMS_ADMIN)\n"
-      "        METHOD(\"x509\")\n"
-      "        AUTHORITY(\"" << cn << "\")\n"
-      "    }\n"
-      "}";
+    out_file << "UAG(CMS_ADMIN) {admin}\n"
+                "\n"
+                "ASG(DEFAULT) {\n"
+                "    RULE(0,READ)\n"
+                "    RULE(1,WRITE) {\n"
+                "        UAG(CMS_ADMIN)\n"
+                "        METHOD(\"x509\")\n"
+                "        AUTHORITY(\""
+             << cn
+             << "\")\n"
+                "    }\n"
+                "}";
 
     out_file.close();
     log_info_printf(pvacms, "Created Default ACF file: %s\n", config.ca_acf_filename.c_str());
@@ -1665,39 +1689,37 @@ int main(int argc, char *argv[]) {
         app.add_flag("-V,--version", show_version, "Print version and exit.");
         app.add_option("-d,--cert-db", config.ca_db_filename, "Specify cert db file location")->default_val(config.ca_db_filename);
 
-       app.add_option("-c,--ca-keychain", config.ca_cert_filename, "Specify CA keychain file location")->default_val(config.ca_cert_filename);
-       app.add_option("--ca-private-key", config.ca_private_key_filename, "Specify CA private key file location");
-       app.add_option("--ca-keychain-pwd", ca_password_file, "Specify CA keychain password file location");
-       app.add_option("--ca-private-key-pwd", ca_pk_password_file, "Specify CA private key password file location");
-       app.add_option("--ca-name", config.ca_name, "Specify the CA's name. Used if we need to create a root certificate")->default_val(config.ca_name);
-       app.add_option("--ca-org", config.ca_organization, "Specify the CA's Organization. Used if we need to create a root certificate")
-          ->default_val("ca.epics.org");
-       app.add_option("--ca-org-unit", config.ca_organizational_unit, "Specify the CA's Organization Unit. Used if we need to create a root certificate")
-          ->default_val("EPICS Certificate Authority");
-       app.add_option("--ca-country", config.ca_country, "Specify the CA's Country. Used if we need to create a root certificate")
-          ->default_val(config.ca_country.empty() ? getCountryCode() : config.ca_country);
+        app.add_option("-c,--ca-keychain", config.ca_cert_filename, "Specify CA keychain file location")->default_val(config.ca_cert_filename);
+        app.add_option("--ca-private-key", config.ca_private_key_filename, "Specify CA private key file location");
+        app.add_option("--ca-keychain-pwd", ca_password_file, "Specify CA keychain password file location");
+        app.add_option("--ca-private-key-pwd", ca_pk_password_file, "Specify CA private key password file location");
+        app.add_option("--ca-name", config.ca_name, "Specify the CA's name. Used if we need to create a root certificate")->default_val(config.ca_name);
+        app.add_option("--ca-org", config.ca_organization, "Specify the CA's Organization. Used if we need to create a root certificate")
+            ->default_val("ca.epics.org");
+        app.add_option("--ca-org-unit", config.ca_organizational_unit, "Specify the CA's Organization Unit. Used if we need to create a root certificate")
+            ->default_val("EPICS Certificate Authority");
+        app.add_option("--ca-country", config.ca_country, "Specify the CA's Country. Used if we need to create a root certificate")
+            ->default_val(config.ca_country.empty() ? getCountryCode() : config.ca_country);
 
         app.add_option("-p,--pvacms-keychain", config.tls_cert_filename, "Specify PVACMS keychain file location")->default_val(config.tls_cert_filename);
         app.add_option("--pvacms-private-key", config.tls_private_key_filename, "Specify PVACMS private key file location");
         app.add_option("--pvacms-keychain-pwd", pvacms_password_file, "Specify PVACMS keychain password file location");
         app.add_option("--pvacms-private-key-pwd", pvacms_pk_password_file, "Specify PVACMS private key password file location");
-        app.add_option("--pvacms-name", config.pvacms_name, "Specify the PVACMS name. Used if we need to create a PVACMS certificate")
-          ->default_val("PVACMS");
+        app.add_option("--pvacms-name", config.pvacms_name, "Specify the PVACMS name. Used if we need to create a PVACMS certificate")->default_val("PVACMS");
         app.add_option("--pvacms-org", config.pvacms_organization, "Specify the PVACMS Organization. Used if we need to create a PVACMS certificate")
-          ->default_val("ca.epics.org");
+            ->default_val("ca.epics.org");
         app.add_option("--pvacms-org-unit", config.pvacms_organizational_unit,
                        "Specify the PVACMS Organization Unit. Used if we need to create a PVACMS certificate")
-          ->default_val("EPICS Certificate Authority");
+            ->default_val("EPICS Certificate Authority");
         app.add_option("--pvacms-country", config.pvacms_country, "Specify the PVACMS Country. Used if we need to create a PVACMS certificate")
-          ->default_val(config.pvacms_country.empty() ? getCountryCode() : config.pvacms_country);
+            ->default_val(config.pvacms_country.empty() ? getCountryCode() : config.pvacms_country);
 
-
-       app.add_option("-a,--admin-keychain", config.admin_cert_filename, "Specify PVACMS admin user's keychain file location")
+        app.add_option("-a,--admin-keychain", config.admin_cert_filename, "Specify PVACMS admin user's keychain file location")
             ->default_val(config.admin_cert_filename);
-       app.add_option("--admin-private-key", config.admin_private_key_filename, "Specify PVACMS admin user's private key file location");
-       app.add_option("--admin-keychain-pwd", admin_password_file, "Specify PVACMS admin user's keychain password file location");
-       app.add_option("--admin-private-key-pwd", admin_pk_password_file, "Specify PVACMS admin user's private key password file location");
-       app.add_option("--acf", config.ca_acf_filename, "Admin Security Configuration File")->default_val(config.ca_acf_filename);
+        app.add_option("--admin-private-key", config.admin_private_key_filename, "Specify PVACMS admin user's private key file location");
+        app.add_option("--admin-keychain-pwd", admin_password_file, "Specify PVACMS admin user's keychain password file location");
+        app.add_option("--admin-private-key-pwd", admin_pk_password_file, "Specify PVACMS admin user's private key password file location");
+        app.add_option("--acf", config.ca_acf_filename, "Admin Security Configuration File")->default_val(config.ca_acf_filename);
 
         app.add_flag("--client-require-approval", config.cert_client_require_approval, "Generate Client Certificates in PENDING_APPROVAL state")
             ->default_val(config.cert_client_require_approval);
@@ -1709,7 +1731,7 @@ int main(int argc, char *argv[]) {
         app.add_option("--status-validity-mins", config.cert_status_validity_mins, "Set Status Validity Time in Minutes")
             ->default_val(config.cert_status_validity_mins);
         app.add_flag("--status-monitoring-enabled", config.cert_status_subscription,
-                       "Require Peers to monitor Status of Certificates Generated by this server by default.  Can be overridden in each CCR")
+                     "Require Peers to monitor Status of Certificates Generated by this server by default.  Can be overridden in each CCR")
             ->default_val(config.cert_status_subscription);
 
         CLI11_PARSE(app, argc, argv);
@@ -1839,7 +1861,7 @@ int main(int argc, char *argv[]) {
 
             if (!securityClient.canWrite()) {
                 log_err_printf(pvacms, "PVACMS Client Not Authorised%s", "\n");
-                op->error(pvxs::SB() << state << " operation not authorized on " << issuer_id << ":" << serial );
+                op->error(pvxs::SB() << state << " operation not authorized on " << issuer_id << ":" << serial);
                 return;
             }
 

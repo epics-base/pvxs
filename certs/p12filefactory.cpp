@@ -90,11 +90,10 @@ CertData P12FileFactory::getCertDataFromFile() {
     ossl_ptr<EVP_PKEY> pkey;
 
     // Get cert from configured file
-    auto file(fopen(filename_.c_str(), "rb"));
-    if (!file) {
+    file_ptr fp(fopen(filename_.c_str(), "rb"), false);
+    if (!fp) {
         throw std::runtime_error(SB() << "Error opening certificate file for reading binary contents: \"" << filename_ << "\"");
     }
-    file_ptr fp(file);
 
     ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL), false);
     if (!p12) {
@@ -267,8 +266,8 @@ void P12FileFactory::writePKCS12File() {
     fclose(file.get());
 
     p12_ptr_ = nullptr;
-    p12.release();   // Free up p12 object
-    file.release();  // Close file and release pointer
+    p12.reset();   // Free up p12 object
+    file.reset();  // Close file and release pointer
 
     chmod(filename_.c_str(),
           S_IRUSR | S_IWUSR);  // Protect P12 file

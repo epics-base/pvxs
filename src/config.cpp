@@ -579,6 +579,22 @@ Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
 }
 
 /**
+ * @brief Create a Config object with default values suitable for testing a Mock CMS
+ *
+ * @return Config for CMS
+ */
+Config Config::forCms() {
+    Config ret;
+    ret.config_target = pvxs::impl::ConfigCommon::CMS;
+    ret.tls_disable_status_check = true;
+    ret.tls_disable_stapling = true;
+    ret.allow_self_signed_ca = true;
+
+    ret.is_initialized = true;
+    return ret;
+}
+
+/**
  * @brief Create a Config object with default values suitable for isolated testing
  *
  * @param family AF_INET or AF_INET6
@@ -605,6 +621,7 @@ Config Config::isolated(int family) {
     // For testing purposes disable status checking and stapling when using isolated config
     ret.tls_disable_status_check = true;
     ret.tls_disable_stapling = true;
+    ret.allow_self_signed_ca = true;
 
     ret.is_initialized = true;
     return ret;
