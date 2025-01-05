@@ -701,6 +701,10 @@ void CertStatusExData::setStatusValidityCountdown(std::weak_ptr<SSLPeerStatus> w
     timeval validity_end = {status->status_valid_until_date.t - now, 0};
     if (status_validity_timer) {
         event_del(status_validity_timer.get());
+        // TODO This is probably hiding an error where the lifetime of this validity
+        //  countdown is not constrained by the lifetime of the loop upon which it relies.
+        //  try to track down the hidden relationship and clean up this countdown when the loop dies.
+        if (!loop.base) return;
         if (event_add(status_validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting peer certificate status validity timer\n%s", "");
     }
 }

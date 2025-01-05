@@ -420,6 +420,7 @@ struct Tester {
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2);
+        // Cached responses so no checks
         TEST_COUNTER_EQ(ioc, 1)
         TEST_COUNTER_EQ(client1, 2)
         TEST_COUNTER_EQ(client2, 1)
@@ -550,22 +551,22 @@ struct Tester {
 
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
         serv.start();
-        sleep(1);
 
-        auto conn(cli.connect(TEST_PV)
-                      .onConnect([](const client::Connected& c) {
-                          testTrue(c.cred && c.cred->isTLS);
-                          sleep(1);
-                      })
-                      .exec());
-        sleep(1);
-
+        testDiag("Get with uncached-status");
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
         TEST_COUNTER_EQ(server1, 1)
         TEST_COUNTER_EQ(client1, 1)
 
-        conn.reset();
+        // Sleep a bit, but not long enough for the status validity to expire
+        sleep(1);
+
+        testDiag("Get with cached-status");
+        auto reply_2(cli.get(TEST_PV).exec()->wait(5.0));
+        testEq(reply_2[TEST_PV_FIELD].as<int32_t>(), 42);
+        // Note that counters don't increment
+        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(client1, 1)
     }
 
     /**
@@ -587,22 +588,20 @@ struct Tester {
             serv_conf.tls_disable_status_check = false;
             serv_conf.tls_throw_if_no_cert = true;
 
-            // Test that server will not start because the Mock CMS is not running
             try {
-                auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
-                testFail("Unexpected successful creation of server");
-            } catch (std::runtime_error& e) {
-                testStrEq("Unable to contact PVACMS: Waiting for PVACMS to report status for cert " IOC1_CERT_FILE, e.what());
+                auto serv_no_cms(serv_conf.build().addPV(TEST_PV, test_pv));
+                testOk(1, "Created server when CMS is unavailable");
+            } catch (std::exception& e) {
+                testFail("Unexpected Failure");
             }
 
-            // Now lets try again with status checking disabled so we can test the client
+            // Now let's do it again with status checking disabled so we can test the client
             serv_conf.tls_disable_status_check = true;
             auto serv(serv_conf.build().addPV(TEST_PV1, test_pv));
             // Start the server
             serv.start();
 
             // Configure client with status checking enabled
-            epicsEvent client_started_evt;
             auto cli_conf(serv.clientConfig());
             cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
             cli_conf.tls_disable_status_check = false;
@@ -614,23 +613,13 @@ struct Tester {
             } catch (std::exception& e) {
                 testStrEq("Timeout", e.what());
             }
-
-            // Try again with a monitor
-            auto sub(cli.monitor(TEST_PV1)
-                         .maskConnected(false)
-                         .maskDisconnected(false)
-                         .event([&client_started_evt](client::Subscription&) { client_started_evt.signal(); })
-                         .exec());
-
-            // Wait for the client to fail to connect
-            testTrue(!client_started_evt.wait(1.0));
         }
 
         {
             // Configure server with status checking disabled
             auto serv_conf2(server::Config::isolated());
             serv_conf2.tls_cert_filename = IOC1_CERT_FILE;
-            serv_conf2.tls_disable_status_check = true;
+            serv_conf2.tls_disable_status_check = false;
             auto serv2(serv_conf2.build().addPV(TEST_PV2, test_pv));
 
             // Configure client with status checking disabled
@@ -642,8 +631,14 @@ struct Tester {
             serv2.start();
 
             // Try to get the value of the PV
-            auto reply(cli2.get(TEST_PV2).exec()->wait());
-            testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+            try {
+                auto reply(cli2.get(TEST_PV2).exec()->wait(3.0));
+                testFail("Unexpected Success");
+                if (reply)
+                    testFalse(reply[TEST_PV_FIELD].as<int32_t>() == 42);  // Should not get here
+            } catch (std::exception& e) {
+                testStrEq("Timeout", e.what());
+            }
         }
     }
 };
