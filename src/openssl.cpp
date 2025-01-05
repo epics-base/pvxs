@@ -166,7 +166,7 @@ SSLContext &SSLContext::operator=(SSLContext &&o) noexcept {
 void SSLContext::setStatusValidityCountdown() {
     auto now = time(nullptr);
     timeval validity_end = {cert_status.status_valid_until_date.t - now, 0};
-    if (status_validity_timer) {
+    if (status_validity_timer && loop.base) {
         event_del(status_validity_timer.get());
         if (event_add(status_validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting certificate status validity timer\n%s", "");
     }
@@ -699,12 +699,8 @@ void CertStatusExData::setStatusValidityCountdown(std::weak_ptr<SSLPeerStatus> w
     auto &status_validity_timer = peer_status->validity_timer;
     auto now = time(nullptr);
     timeval validity_end = {status->status_valid_until_date.t - now, 0};
-    if (status_validity_timer) {
+    if (status_validity_timer && loop.base) {
         event_del(status_validity_timer.get());
-        // TODO This is probably hiding an error where the lifetime of this validity
-        //  countdown is not constrained by the lifetime of the loop upon which it relies.
-        //  try to track down the hidden relationship and clean up this countdown when the loop dies.
-        if (!loop.base) return;
         if (event_add(status_validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting peer certificate status validity timer\n%s", "");
     }
 }

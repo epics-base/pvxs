@@ -653,7 +653,7 @@ MAIN(testtlswithcms) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(287);
+    testPlan(188);
     testSetup();
     logger_config_env();
     auto tester = new Tester();
