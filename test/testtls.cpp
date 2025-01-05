@@ -312,9 +312,9 @@ void testClientReconfig() {
     testShow() << __func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_cert_filename = "ioc1.p12";
+    serv_conf.tls_cert_filename = IOC1_CERT_FILE;
 
-    auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
+    auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
     cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
@@ -324,7 +324,7 @@ void testClientReconfig() {
     serv.start();
 
     epicsEvent evt;
-    auto sub(cli.monitor("whoami").maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
+    auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
     Value update;
 
     try {
@@ -333,17 +333,17 @@ void testClientReconfig() {
         testSkip(2, "oops");
     } catch (client::Connected& e) {
         testTrue(e.cred->isTLS);
-        testEq(e.cred->method, "x509");
-        testEq(e.cred->account, "ioc1");
+        testEq(e.cred->method, TLS_METHOD_STRING);
+        testEq(e.cred->account, CERT_CN_IOC1);
     }
     testDiag("Connect");
 
     update = pop(sub, evt);
-    testEq(update[TEST_PV_FIELD].as<std::string>(), "x509/client1");
+    testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
 
     cli_conf = cli.config();
-    cli_conf.tls_cert_filename = "client2.p12";
-    cli_conf.tls_cert_password = "oraclesucks";
+    cli_conf.tls_cert_filename = CLIENT2_CERT_FILE;
+    cli_conf.tls_cert_password = CLIENT2_CERT_FILE_PWD;
     testDiag("cli.reconfigure()");
     cli.reconfigure(cli_conf);
 
@@ -361,7 +361,7 @@ void testClientReconfig() {
     testDiag("Reconnect");
 
     update = pop(sub, evt);
-    if (update.valid()) testEq(update[TEST_PV_FIELD].as<std::string>(), "x509/client2");
+    if (update.valid()) testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2);
 }
 
 /**
@@ -378,17 +378,17 @@ void testServerReconfig() {
     auto serv_conf(server::Config::isolated());
     serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
 
-    auto serv(serv_conf.build().addSource("whoami", std::make_shared<WhoAmI>()));
+    auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = "ioc1.p12";
+    cli_conf.tls_cert_filename = IOC1_CERT_FILE;
 
     auto cli(cli_conf.build());
 
     serv.start();
 
     epicsEvent evt;
-    auto sub(cli.monitor("whoami").maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
+    auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
     Value update;
 
     try {
@@ -397,16 +397,16 @@ void testServerReconfig() {
         testSkip(2, "oops");
     } catch (client::Connected& e) {
         testTrue(e.cred->isTLS);
-        testEq(e.cred->method, "x509");
-        testEq(e.cred->account, "server1");
+        testEq(e.cred->method, TLS_METHOD_STRING);
+        testEq(e.cred->account, CERT_CN_SERVER1);
     }
     testDiag("Connect");
 
     update = pop(sub, evt);
-    testEq(update[TEST_PV_FIELD].as<std::string>(), "x509/ioc1");
+    testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_IOC1);
 
     serv_conf = serv.config();
-    serv_conf.tls_cert_filename = "ioc1.p12";
+    serv_conf.tls_cert_filename = IOC1_CERT_FILE;
     testDiag("serv.reconfigure()");
     serv.reconfigure(serv_conf);
 
@@ -419,13 +419,13 @@ void testServerReconfig() {
         testSkip(2, "oops");
     } catch (client::Connected& e) {
         testTrue(e.cred->isTLS);
-        testEq(e.cred->method, "x509");
-        testEq(e.cred->account, "ioc1");
+        testEq(e.cred->method, TLS_METHOD_STRING);
+        testEq(e.cred->account, CERT_CN_IOC1);
     }
     testDiag("Reconnect");
 
     update = pop(sub, evt);
-    testEq(update[TEST_PV_FIELD].as<std::string>(), "x509/ioc1");
+    testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_IOC1);
 }
 
 /**
@@ -552,7 +552,7 @@ void testClientFileMonitoring() {
         testSkip(2, "oops");
     } catch (client::Connected& e) {
         testTrue(!e.cred->isTLS);
-        testEq(e.cred->method, "anonymous");
+        testEq(e.cred->method, ANON_METHOD_STRING);
         testEq(e.cred->account, "");
     }
 
@@ -573,8 +573,8 @@ void testClientFileMonitoring() {
         testSkip(2, "oops");
     } catch (client::Connected& e) {
         testOk1(e.cred && e.cred->isTLS);
-        testEq(e.cred->method, "x509");
-        testEq(e.cred->account, "superserver1");
+        testEq(e.cred->method, TLS_METHOD_STRING);
+        testEq(e.cred->account, CERT_CN_SUPERSERVER1);
     } catch (...) {
         testFail("Unexpected exception instead of Connected");
         testSkip(2, "oops");
@@ -582,7 +582,7 @@ void testClientFileMonitoring() {
 
     // Verify that the updated value triggers an update of the subscription
     update = pop(sub, evt);
-    if (update.valid()) testEq(update[TEST_PV_FIELD].as<std::string>(), "x509/client1");
+    if (update.valid()) testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
 
     // Remove the cert file referenced by the client configuration
     clearMonitoredFiles();
@@ -598,7 +598,7 @@ void testClientFileMonitoring() {
         testSkip(2, "oops");
     } catch (client::Connected& e) {
         testTrue(!e.cred->isTLS);
-        testEq(e.cred->method, "anonymous");
+        testEq(e.cred->method, ANON_METHOD_STRING);
         testEq(e.cred->account, "");
     }
 

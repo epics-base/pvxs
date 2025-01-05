@@ -160,7 +160,7 @@ struct CertStatusExData {
     // The map of peer statuses, keyed by the serial number of each peer's certificate
     const bool allow_self_signed_ca;
 
-    std::map<serial_number_t, SSLPeerStatus> peer_statuses{};
+    std::map<serial_number_t, std::shared_ptr<SSLPeerStatus>> peer_statuses{};
     // map to keep status validity expiration handler parameters from going stale
     std::map<serial_number_t, StatusValidityExpirationHandlerParam> sveh_params{};
 
@@ -256,9 +256,10 @@ struct CertStatusExData {
                                                                                const std::shared_ptr<const certs::CertificateStatus> status,
                                                                                std::function<void(bool)> fn = nullptr) {
         Guard G(lock);
-        auto& peer_status = getOrCreatePeerStatus(serial_number, fn);
-        peer_status.status = status;
-        return peer_status.status;
+        auto peer_status = getOrCreatePeerStatus(serial_number, fn);
+        if (!peer_status) return nullptr;
+        peer_status->status = status;
+        return peer_status->status;
     }
 
     /**
@@ -271,7 +272,7 @@ struct CertStatusExData {
      * @param fn - Function to call when the peer status changes
      * @return The peer status that was created or found
      */
-    SSLPeerStatus& getOrCreatePeerStatus(serial_number_t serial_number, std::function<void(bool)> fn);
+    std::shared_ptr<SSLPeerStatus> getOrCreatePeerStatus(serial_number_t serial_number, std::function<void(bool)> fn);
 
     /**
      * @brief Returns the currently cached peer status if any.  Null if none cached
@@ -288,7 +289,7 @@ struct CertStatusExData {
     inline std::shared_ptr<const certs::CertificateStatus> getCachedPeerStatus(const serial_number_t serial_number) const {
         auto it = peer_statuses.find(serial_number);
         if (it != peer_statuses.end()) {
-            return it->second.status;
+            return it->second->status;
         }
         return nullptr;
     }
@@ -300,7 +301,7 @@ struct CertStatusExData {
      */
     void subscribeToPeerCertStatus(X509* cert_ptr, std::function<void(bool)> fn) noexcept;
 
-    void setStatusValidityCountdown(SSLPeerStatus& peer_status);
+    void setStatusValidityCountdown(std::weak_ptr<SSLPeerStatus> peer_status);
     static void statusValidityExpirationHandler(evutil_socket_t fd, short evt, void* raw);
     void statusValidityExpirationHandler(serial_number_t serial_number);
 };

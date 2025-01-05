@@ -298,11 +298,21 @@ void Connection::bevEvent(short events)
             auto ctx = bufferevent_openssl_get_ssl(bev.get());
             assert(ctx);
             ossl::SSLContext::getPeerCredentials(*peerCred, ctx);
-            ossl::SSLContext::subscribeToPeerCertStatus(ctx, [=](bool enable) {
-                if (enable)
-                    context->tcp_loop.dispatch([=]() mutable { context->enableTlsForPeerConnection(this); });
-                else
-                    context->tcp_loop.dispatch([=]() mutable { context->removePeerTlsConnections(this); });
+            std::weak_ptr<ContextImpl> weak_context(context);
+            ossl::SSLContext::subscribeToPeerCertStatus(ctx, [weak_context, this](bool enable) {
+                auto context = weak_context.lock();
+                if (context) {
+                    if (enable)
+                        context->tcp_loop.dispatch([weak_context, this]() mutable {
+                            auto context = weak_context.lock();
+                            if (context) context->enableTlsForPeerConnection(this);
+                        });
+                    else
+                        context->tcp_loop.dispatch([weak_context, this]() mutable {
+                            auto context = weak_context.lock();
+                            if (context) context->removePeerTlsConnections(this);
+                        });
+                }
             });
         } else
 #endif

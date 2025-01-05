@@ -129,7 +129,6 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&&
 
     // Create a shared_ptr to hold the callback
     auto callback_ptr = std::make_shared<StatusCallback>(std::move(callback));
-    std::weak_ptr<StatusCallback> weak_callback_ptr = callback_ptr;
 
     // Subscribe to the service using the constructed URI
     // with TLS disabled to avoid recursive loop
@@ -143,11 +142,11 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&&
         auto sub = client->monitor(uri)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([weak_callback_ptr, weak_cert_status_manager, allow_self_signed_ca](client::Subscription& sub) {
+                       .event([weak_cert_status_manager, allow_self_signed_ca](client::Subscription& sub) {
                            try {
-                               auto callback_ptr = weak_callback_ptr.lock();
                                auto cert_status_manager = weak_cert_status_manager.lock();
-                               if (!callback_ptr || !cert_status_manager) return;
+                               if (!cert_status_manager) return;
+                               auto callback_ptr = cert_status_manager->callback_ref;
 
                                auto update = sub.pop();
                                if (update) {
@@ -183,6 +182,8 @@ void CertStatusManager::unsubscribe() {
     client_->hurryUp();
     if (sub_) sub_->cancel();
     if (client_) client_->close();
+    client_.reset();
+    sub_.reset();
 }
 
 /**

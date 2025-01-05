@@ -72,6 +72,7 @@ using namespace pvxs::certs;
 #define CERT_CN_IOC1 "ioc1"
 #define CERT_CN_CLIENT1 "client1"
 #define CERT_CN_CLIENT2 "client2"
+#define CERT_CN_SUPERSERVER1 "superserver1"
 
 #define TEST_PV "TESTPV"
 #define TEST_PV1 "TESTPV1"

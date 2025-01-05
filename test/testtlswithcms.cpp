@@ -680,13 +680,11 @@ MAIN(testtlswithcms) {
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }
-/*
     try {
         tester->testUnCachedStatus();
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }
-*/
     try {
         tester->stopMockCMS();
     } catch (std::runtime_error& e) {
