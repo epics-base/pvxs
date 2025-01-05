@@ -398,7 +398,6 @@ struct Tester {
         cli_conf = cli.config();
         cli_conf.tls_cert_filename = CLIENT2_CERT_FILE;
         cli_conf.tls_cert_password = CLIENT2_CERT_FILE_PWD;
-        cli_conf.tls_disable_stapling = true;
         testDiag("cli.reconfigure()");
         cli.reconfigure(cli_conf);
 

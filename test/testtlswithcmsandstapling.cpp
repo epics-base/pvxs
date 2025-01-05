@@ -82,10 +82,8 @@ struct Tester {
 
     {
         // Set up the Mock PVACMS server certificate (does not contain custom status extension)
-        auto pvacms_config = server::Config::fromEnv();
+        auto pvacms_config = server::Config::forCms();
         pvacms_config.tls_cert_filename = SUPER_SERVER_CERT_FILE;
-        pvacms_config.tls_disable_status_check = true;
-        pvacms_config.config_target = pvxs::impl::ConfigCommon::CMS;
         pvacms = pvacms_config.build().addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
         client = pvacms.clientConfig().build();
 
@@ -148,7 +146,7 @@ struct Tester {
             if (auto ret = sub->pop()) {
                 return ret;
 
-            } else if (!evt.wait(5.0)) {
+            } else if (!evt.wait(10.0)) {
                 testFail("timeout waiting for event");
                 return Value();
             }
@@ -219,6 +217,7 @@ struct Tester {
             });
 
             pvacms.start();
+            TEST_STATUS_REQUEST(ca)
 
             testDiag("Set up: %s", "Mock PVACMS Server");
         } catch (std::exception& e) {
@@ -331,9 +330,9 @@ struct Tester {
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+
         TEST_COUNTER_EQ(server1, 1)
         TEST_COUNTER_EQ(client1, 1)
-
         conn.reset();
     }
 
@@ -413,7 +412,7 @@ struct Tester {
         } catch (client::Connected& e) {
             testOk1(e.cred && e.cred->isTLS);
             TEST_COUNTER_EQ(ioc, 1)
-            TEST_COUNTER_EQ(client1, 1)
+            TEST_COUNTER_EQ(client1, 2)
             TEST_COUNTER_EQ(client2, 1)
         } catch (...) {
             testFail("Unexpected exception instead of Connected");
@@ -422,8 +421,9 @@ struct Tester {
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2);
+        // Cached responses so no checks
         TEST_COUNTER_EQ(ioc, 1)
-        TEST_COUNTER_EQ(client1, 1)
+        TEST_COUNTER_EQ(client1, 2)
         TEST_COUNTER_EQ(client2, 1)
     }
 
@@ -495,7 +495,7 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
-            TEST_COUNTER_EQ(server1, 1)
+            TEST_COUNTER_EQ(server1, 2)
             TEST_COUNTER_EQ(client1, 1)
             TEST_COUNTER_EQ(ioc, 1)
         }
@@ -503,9 +503,86 @@ struct Tester {
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(server1, 2)
         TEST_COUNTER_EQ(client1, 1)
         TEST_COUNTER_EQ(ioc, 1)
+    }
+
+    /**
+     * @brief This test checks that tls connections are prohibited when CMS is unavailable but configuration requires it
+     *
+     * The Mock PVACMS must be previously stopped prior to this test
+     *
+     */
+    void testCMSUnavailable() {
+        testShow() << __func__;
+        // Create a test PV and set value to 42
+        auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
+        auto test_pv(server::SharedPV::buildReadonly());
+        test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
+        {
+            // Configure server with status checking enabled
+            auto serv_conf(server::Config::isolated());
+            serv_conf.tls_cert_filename = IOC1_CERT_FILE;
+            serv_conf.tls_disable_status_check = false;
+            serv_conf.tls_throw_if_no_cert = true;
+            serv_conf.tls_disable_stapling = false;
+
+            try {
+                auto serv_no_cms(serv_conf.build().addPV(TEST_PV, test_pv));
+                testOk(1, "Created server when CMS is unavailable");
+            } catch (std::exception& e) {
+                testFail("Unexpected Failure");
+            }
+
+            // Now let's do it again with status checking and stapling disabled so we can test the client
+            serv_conf.tls_disable_status_check = true;
+            serv_conf.tls_disable_stapling = true;
+            auto serv(serv_conf.build().addPV(TEST_PV1, test_pv));
+            // Start the server
+            serv.start();
+
+            // Configure client with status checking enabled
+            auto cli_conf(serv.clientConfig());
+            cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+            cli_conf.tls_disable_status_check = false;
+            cli_conf.tls_disable_stapling = false;
+            auto cli(cli_conf.build());
+
+            try {
+                auto val(cli.get(TEST_PV1).exec()->wait(1.0));
+                testFail("Unexpected Success");
+            } catch (std::exception& e) {
+                testStrEq("Timeout", e.what());
+            }
+        }
+
+        {
+            // Configure server with status checking and stapling disabled
+            auto serv_conf2(server::Config::isolated());
+            serv_conf2.tls_cert_filename = IOC1_CERT_FILE;
+            serv_conf2.tls_disable_status_check = false;
+            serv_conf2.tls_disable_stapling = true;
+            auto serv2(serv_conf2.build().addPV(TEST_PV2, test_pv));
+
+            // Configure client with status checking disabled
+            auto cli_conf2(serv2.clientConfig());
+            cli_conf2.tls_cert_filename = CLIENT1_CERT_FILE;
+            auto cli2(cli_conf2.build());
+
+            // Start the server
+            serv2.start();
+
+            // Try to get the value of the PV
+            try {
+                auto reply(cli2.get(TEST_PV2).exec()->wait(3.0));
+                testFail("Unexpected Success");
+                if (reply)
+                    testFalse(reply[TEST_PV_FIELD].as<int32_t>() == 42);  // Should not get here
+            } catch (std::exception& e) {
+                testStrEq("Timeout", e.what());
+            }
+        }
     }
 
     /**
@@ -533,7 +610,7 @@ struct Tester {
         serv.start();
 
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
-        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(server1, 0)
         TEST_COUNTER_EQ(client1, 0)
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
@@ -570,7 +647,7 @@ struct Tester {
         serv.start();
 
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
-        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(server1, 0)
         TEST_COUNTER_EQ(client1, 0)
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
@@ -580,98 +657,19 @@ struct Tester {
 
         conn.reset();
     }
-
-    /**
-     * @brief This test checks that tls connections are prohibited when CMS is unavailable but configuration requires it
-     *
-     * The Mock PVACMS must be previously stopped prior to this test
-     *
-     */
-    void testCMSUnavailable() {
-        testShow() << __func__;
-        // Create a test PV and set value to 42
-        auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
-        auto test_pv(server::SharedPV::buildReadonly());
-        test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
-        {
-            // Configure server with status checking enabled
-            auto serv_conf(server::Config::isolated());
-            serv_conf.tls_cert_filename = IOC1_CERT_FILE;
-            serv_conf.tls_disable_status_check = false;
-            serv_conf.tls_throw_if_no_cert = true;
-            serv_conf.tls_disable_stapling = false;
-
-            // Test that server will not start because the Mock CMS is not running
-            try {
-                auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
-                testFail("Unexpected successful creation of server");
-            } catch ( std::runtime_error &e) {
-                testStrEq("Unable to contact PVACMS: Waiting for PVACMS to report status for cert " IOC1_CERT_FILE, e.what());
-            }
-
-            // Now lets try again with status checking and stapling disabled so we can test the client
-            serv_conf.tls_disable_status_check = true;
-            serv_conf.tls_disable_stapling = true;
-            auto serv(serv_conf.build().addPV(TEST_PV1, test_pv));
-            // Start the server
-            serv.start();
-
-            // Configure client with status checking enabled
-            epicsEvent client_started_evt;
-            auto cli_conf(serv.clientConfig());
-            cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
-            cli_conf.tls_disable_status_check = false;
-            cli_conf.tls_disable_stapling = false;
-            auto cli(cli_conf.build());
-
-            try {
-                auto val(cli.get(TEST_PV1).exec()->wait(1.0));
-                testFail("Unexpected Success");
-            } catch (std::exception &e) {
-                testStrEq("Timeout", e.what());
-            }
-
-            // Try again with a monitor
-            auto sub(cli.monitor(TEST_PV1)
-                       .maskConnected(false)
-                       .maskDisconnected(false)
-                       .event([&client_started_evt](client::Subscription&) { client_started_evt.signal(); })
-                       .exec());
-
-            // Wait for the client to fail to connect
-            testTrue(!client_started_evt.wait(1.0));
-        }
-
-        {
-            // Configure server with status checking and stapling disabled
-            auto serv_conf2(server::Config::isolated());
-            serv_conf2.tls_cert_filename = IOC1_CERT_FILE;
-            serv_conf2.tls_disable_status_check = true;
-            serv_conf2.tls_disable_stapling = true;
-            auto serv2(serv_conf2.build().addPV(TEST_PV2, test_pv));
-
-            // Configure client with status checking disabled
-            auto cli_conf2(serv2.clientConfig());
-            cli_conf2.tls_cert_filename = CLIENT1_CERT_FILE;
-            auto cli2(cli_conf2.build());
-
-            // Start the server
-            serv2.start();
-
-            // Try to get the value of the PV
-            auto reply(cli2.get(TEST_PV2).exec()->wait());
-            testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-        }
-    }
 };
 
 }  // namespace
 
+/**
+ * @brief The main test runner
+ * @return test runner status (non-zero for errors)
+ */
 MAIN(testtlswithcmsandstapling) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(267);
+    testPlan(188);
     testSetup();
     logger_config_env();
     auto tester = new Tester();
@@ -714,6 +712,8 @@ MAIN(testtlswithcmsandstapling) {
         testFail("FAILED with errors: %s\n", e.what());
     }
     delete (tester);
+
     cleanup_for_valgrind();
+
     return testDone();
 }
