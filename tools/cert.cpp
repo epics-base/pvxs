@@ -80,6 +80,7 @@ int main(int argc, char* argv[]) {
         uint64_t arrLimit = 20;
         CertAction action{STATUS};
         bool install{false}, approve{false}, revoke{false}, deny{false};
+        std::string issuer_id;
 
         // Add a positional argument
         std::string issuer_serial_string;
@@ -97,7 +98,7 @@ int main(int argc, char* argv[]) {
 
         // Action flags in mutually exclusive group
         auto action_group = app.add_option_group("Actions")->required(false);
-        action_group->add_flag("-I,--install", install, "Download and install the root certificate");
+        action_group->add_option("-I,--install", issuer_id, "Download and install the root certificate identified by the issuer ID");
         action_group->add_flag("-A,--approve", approve, "APPROVE the certificate (ADMIN ONLY)");
         action_group->add_flag("-R,--revoke", revoke, "REVOKE the certificate (ADMIN ONLY)");
         action_group->add_flag("-D,--deny", deny, "DENY the pending certificate (ADMIN ONLY)");
@@ -137,7 +138,7 @@ int main(int argc, char* argv[]) {
             std::cout << std::endl;
         }
 
-        if (install) action = INSTALL;
+        if (!issuer_id.empty()) action = INSTALL;
         if (approve) action = APPROVE;
         if (revoke) action = REVOKE;
         if (deny) action = DENY;
@@ -173,12 +174,19 @@ int main(int argc, char* argv[]) {
             switch (action) {
                 case INSTALL: {
                     ops.push_back(ctxt.get(root_id)
-                                      .result([root_id, &done](client::Result&& result) {
+                                      .result([root_id, &done, &issuer_id](client::Result&& result) {
                                           Indented I(std::cout);
                                           auto value = result();
+
+                                          auto issuer = value["issuer"].as<std::string>();
+                                          if ( issuer != issuer_id ) {
+                                              log_err_printf(certslog, "Error: Issuer ID does not match. Expected: %s, Received: %s\n", issuer_id.c_str(), issuer.c_str());
+                                              done.signal();
+                                              return;
+                                          }
+
                                           uint64_t serial = value["serial"].as<uint64_t>();
                                           auto name = value["name"].as<std::string>();
-                                          auto issuer = value["issuer"].as<std::string>();
                                           auto org = value["org"].as<std::string>();
                                           auto org_unit = value["org_unit"].as<std::string>();
                                           auto pem_string = value["cert"].as<std::string>();
