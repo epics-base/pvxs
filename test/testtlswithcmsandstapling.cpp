@@ -325,6 +325,7 @@ struct Tester {
 
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
         serv.start();
+        sleep(1);
 
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
 
@@ -372,6 +373,7 @@ struct Tester {
         auto cli(cli_conf.build());
 
         serv.start();
+        sleep(1);
 
         epicsEvent evt;
         auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
@@ -454,6 +456,7 @@ struct Tester {
         auto cli(cli_conf.build());
 
         serv.start();
+        sleep(1);
 
         epicsEvent evt;
         auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
@@ -541,6 +544,7 @@ struct Tester {
             auto serv(serv_conf.build().addPV(TEST_PV1, test_pv));
             // Start the server
             serv.start();
+            sleep(1);
 
             // Configure client with status checking enabled
             auto cli_conf(serv.clientConfig());
@@ -608,10 +612,13 @@ struct Tester {
 
         mbox.open(initial.update("value", 42));
         serv.start();
+        sleep(1);
+        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(client1, 1)
 
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
-        TEST_COUNTER_EQ(server1, 0)
-        TEST_COUNTER_EQ(client1, 0)
+        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(client1, 1)
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply["value"].as<int32_t>(), 42);
@@ -645,10 +652,13 @@ struct Tester {
 
         mbox.open(initial.update("value", 42));
         serv.start();
+        sleep(1);
+        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(client1, 1)
 
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
-        TEST_COUNTER_EQ(server1, 0)
-        TEST_COUNTER_EQ(client1, 0)
+        TEST_COUNTER_EQ(server1, 1)
+        TEST_COUNTER_EQ(client1, 1)
 
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply["value"].as<int32_t>(), 42);
@@ -669,7 +679,7 @@ MAIN(testtlswithcmsandstapling) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(188);
+    testPlan(192);
     testSetup();
     logger_config_env();
     auto tester = new Tester();
