@@ -53,8 +53,6 @@ system_certs.txt
 .idea/shelf/statuslistener/shelved.patch
 .idea/shelf/subdirectories_for_each_auth_method1/shelved.patch
 configure/TOOLCHAIN.tmp
-test/testioc.db
-test/testiocg.db
 test/slac-test/Sign In.htm
 test/slac-test/Sign In.mhtml
 test/slac-test/Sign In_files/doe-logo.png
