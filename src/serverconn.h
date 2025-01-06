@@ -282,7 +282,7 @@ struct Server::Pvt
 
     inline bool canRespondToTcpSearch() { return !tls_context || tls_context->state >= ossl::SSLContext::DegradedMode; }
     inline bool canRespondToTlsSearch() { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady && effective.tls_port; }
-    inline bool isDegraded() { return !tls_context || tls_context->state <= ossl::SSLContext::DegradedMode; }
+    inline bool isInDegradedMode() { return !tls_context || tls_context->state <= ossl::SSLContext::DegradedMode; }
 
    private:
     void onSearch(const UDPManager::Search& msg);
@@ -291,9 +291,7 @@ struct Server::Pvt
 
 #ifdef PVXS_ENABLE_OPENSSL
     static void doCertEventHandler(evutil_socket_t fd, short evt, void* raw);
-    static void doCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void* raw);
     void fileEventCallback(short evt);
-    X509* getCert(std::shared_ptr<ossl::SSLContext> context_ptr);
 
     /**
      * @brief Can the TLS listener respond with `tcp` to `tcp`-only SEARCH requests

@@ -1119,7 +1119,7 @@ void Server::Pvt::enableTlsForPeerConnection(const ServerConn* server_conn) {
  *
  */
 void Server::Pvt::enterDegradedMode() {
-    if (isDegraded()) return;
+    if (isInDegradedMode()) return;
 
     tls_context->setDegradedMode(true);
 
@@ -1156,12 +1156,6 @@ void Server::Pvt::removePeerTlsConnections(const ServerConn* server_conn) {
 void Server::Pvt::fileEventCallback(short evt) {
     if (!first_cert_event) file_watcher.checkFileStatus();
     first_cert_event = false;
-}
-
-X509* Server::Pvt::getCert(std::shared_ptr<ossl::SSLContext> context_ptr) {
-    auto context = context_ptr == nullptr ? tls_context : context_ptr;
-    if (!context->ctx) return nullptr;
-    return SSL_CTX_get0_certificate(context->ctx.get());
 }
 
 #endif
