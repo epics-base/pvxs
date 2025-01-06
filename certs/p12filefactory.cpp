@@ -262,12 +262,7 @@ void P12FileFactory::writePKCS12File() {
     // flush the output to the file
     fflush(file.get());
 
-    // close the file
-    fclose(file.get());
-
     p12_ptr_ = nullptr;
-    p12.reset();   // Free up p12 object
-    file.reset();  // Close file and release pointer
 
     chmod(filename_.c_str(),
           S_IRUSR | S_IWUSR);  // Protect P12 file

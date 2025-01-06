@@ -6,6 +6,7 @@
 #ifndef PVXS_OWNED_PTR_H_
 #define PVXS_OWNED_PTR_H_
 
+#include <cstdio>
 #ifdef PVXS_ENABLE_OPENSSL
 #include <openssl/bn.h>
 #include <openssl/conf.h>
@@ -47,7 +48,7 @@ struct regular_delete;
     template <>                                      \
     struct regular_delete<TYPE> {                    \
         inline void operator()(TYPE *base_pointer) { \
-            if (base_pointer) delete base_pointer;   \
+            delete base_pointer;                     \
         }                                            \
     }
 
