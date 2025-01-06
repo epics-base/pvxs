@@ -825,7 +825,7 @@ static void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peer
 
 #ifdef PVXS_ENABLE_OPENSSL
     bool isTLS = proto == "tls";
-    if (!found || !((isTLS && self.canAcceptTlsConnections()) || (isTCP && self.canAcceptTcpConnections())))
+    if (!found || !(isTCP || (isTLS && self.canCreateTlsChannels())))
 #else
     if (!found || !isTCP)
 #endif
@@ -1439,13 +1439,9 @@ X509* ContextImpl::getCert(std::shared_ptr<ossl::SSLContext> context_ptr) {
 #endif
 
 #ifdef PVXS_ENABLE_OPENSSL
-bool ContextImpl::canAcceptTlsConnections() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
+bool ContextImpl::canCreateTlsChannels() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
 
 bool ContextImpl::readyToEmitTlsSearch() { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady; }
-#endif
-
-#ifdef PVXS_ENABLE_OPENSSL
-bool ContextImpl::canAcceptTcpConnections() { return !tls_context || tls_context->state >= ossl::SSLContext::DegradedMode; }
 #endif
 
 }  // namespace client

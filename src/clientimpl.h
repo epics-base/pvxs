@@ -429,7 +429,6 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     static void doCertEventHandler(evutil_socket_t fd, short evt, void *raw);
-    static void doPeerCertStatusValidityEventhandler(evutil_socket_t fd, short evt, void *raw);
     void fileEventCallback(short evt);
     X509 * getCert(std::shared_ptr<ossl::SSLContext> context = nullptr);
   public:
@@ -438,8 +437,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     void reloadTlsFromConfig(const Config& new_config = {});
     void enableTlsForPeerConnection(const Connection* client_conn = nullptr);
 
-    bool canAcceptTlsConnections();
-    bool canAcceptTcpConnections();
+    bool canCreateTlsChannels();
     bool readyToEmitTlsSearch();
 #endif
 };

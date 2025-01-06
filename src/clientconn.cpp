@@ -511,7 +511,7 @@ void Connection::handle_CONNECTION_VALIDATED()
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    ready = context->canAcceptTlsConnections() || (!isTLS && context->canAcceptTcpConnections());
+    ready = !isTLS || context->canCreateTlsChannels();
 #else
     ready = true;
 #endif

@@ -309,7 +309,7 @@ struct Server::Pvt
      *
      * @return True if the TLS listener can respond with `tcp` to `tcp`-only SEARCH requests
      */
-    inline bool tlsSearchListenerCanRespondWithTcp(std::shared_ptr<ossl::SSLContext> new_context = nullptr) {
+    inline bool isInitialisedForTls(std::shared_ptr<ossl::SSLContext> new_context = nullptr) {
         auto& context_to_use = (new_context == nullptr ? tls_context : new_context);
         return context_to_use && context_to_use->state >= ossl::SSLContext::TcpReady;
     }
@@ -327,7 +327,7 @@ struct Server::Pvt
      *
      * @return True if the TLS listener can respond with `tls` to SEARCH requests containing `tls`
      */
-    inline bool tlsSearchListenerCanRespondWithTls(std::shared_ptr<ossl::SSLContext> new_context = nullptr) {
+    inline bool isContextReadyForTls(std::shared_ptr<ossl::SSLContext> new_context = nullptr) {
         auto& context_to_use = (new_context == nullptr ? tls_context : new_context);
         return context_to_use && context_to_use->state == ossl::SSLContext::TlsReady;
     }

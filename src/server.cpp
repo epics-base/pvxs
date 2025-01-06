@@ -1070,14 +1070,14 @@ void Server::Pvt::reloadTlsFromConfig() {
     if (effective.config_target == ConfigCommon::CMS) return;
 
     // If already fully enabled then don't do anything
-    if (tlsSearchListenerCanRespondWithTls()) return;
+    if (isContextReadyForTls()) return;
 
     try {
         // Re-initialise context from configuration, attempting to get a valid certificate etc
         auto new_context = ossl::SSLContext::for_server(effective, acceptor_loop);
 
         // If unsuccessful in initialising context or cert is invalid then don't do anything
-        if (!tlsSearchListenerCanRespondWithTcp(new_context)) return;
+        if (!isInitialisedForTls(new_context)) return;
 
         tls_context = std::move(new_context);
     } catch (std::exception& e) {
