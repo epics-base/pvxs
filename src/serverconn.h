@@ -293,42 +293,8 @@ struct Server::Pvt
     static void doCertEventHandler(evutil_socket_t fd, short evt, void* raw);
     void fileEventCallback(short evt);
 
-    /**
-     * @brief Can the TLS listener respond with `tcp` to `tcp`-only SEARCH requests
-     *
-     * This is true if TLS is correctly configured, the cert is valid,
-     * the CA chain is valid, and the key usage and other parameters check out.
-     *
-     * If the SEARCH request contains `tcp` only then a SEARCH RESPONSE will be given.
-     * If the SEARCH request contains both `tls` and `tcp` then no response will be given
-     * because CMS will not yet have validated the certificate.
-     *
-     * @note this will return false if the tls context is in a degraded state, responding to all SEARCH requests with `tcp`
-     *
-     * @return True if the TLS listener can respond with `tcp` to `tcp`-only SEARCH requests
-     */
-    inline bool isInitialisedForTls(std::shared_ptr<ossl::SSLContext> new_context = nullptr) {
-        auto& context_to_use = (new_context == nullptr ? tls_context : new_context);
-        return context_to_use && context_to_use->state >= ossl::SSLContext::TcpReady;
-    }
-
-    /**
-     * @brief Can the TLS listener respond with `tls` to SEARCH requests containing `tls`
-     *
-     * This is true if TLS is correctly configured, the cert is valid,
-     * the CA chain is valid, the key usage and other parameters check out, and either
-     * a) status monitoring is disabled, or
-     * b) the CMS has already responded with a certificate status of GOOD
-     *
-     * If the SEARCH request contains `tcp` only then a `tcp` SEARCH RESPONSE will be given.
-     * If the SEARCH request contains `tls` then a `tls` SEARCH RESPONSE will be given.
-     *
-     * @return True if the TLS listener can respond with `tls` to SEARCH requests containing `tls`
-     */
-    inline bool isContextReadyForTls(std::shared_ptr<ossl::SSLContext> new_context = nullptr) {
-        auto& context_to_use = (new_context == nullptr ? tls_context : new_context);
-        return context_to_use && context_to_use->state == ossl::SSLContext::TlsReady;
-    }
+    inline bool isContextReadyForTls() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
+    inline bool isInitialisedForTls(std::shared_ptr<ossl::SSLContext> new_context) { return new_context && new_context->state >= ossl::SSLContext::TcpReady; }
 
    public:
     void enterDegradedMode();

@@ -825,7 +825,7 @@ static void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peer
 
 #ifdef PVXS_ENABLE_OPENSSL
     bool isTLS = proto == "tls";
-    if (!found || !(isTCP || (isTLS && self.canCreateTlsChannels())))
+    if (!found || !(isTCP || (isTLS && self.canAcceptTlsConnectionValidation())))
 #else
     if (!found || !isTCP)
 #endif
@@ -1329,21 +1329,17 @@ void ContextImpl::doCertEventHandler(int fd, short evt, void* raw) {
 void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
     // If already valid then don't do anything
     if (isContextReadyForTls()) return;
-
     try {
-        // if context is not fit for TLS then try to initialise it
-        if (isContextUnfitForTls()) {
-            const auto& config_to_use = new_config.is_initialized ? new_config : effective;
-            auto new_context = ossl::SSLContext::for_client(config_to_use, tcp_loop);
+        const auto& config_to_use = new_config.is_initialized ? new_config : effective;
+        auto new_context = ossl::SSLContext::for_client(config_to_use, tcp_loop);
 
-            // If unsuccessful in getting cert then don't do anything
-            if (isContextUnfitForTls(new_context)) return;
+        // If unsuccessful in getting cert then don't do anything
+        if (!isInitialisedForTls(new_context)) return;
 
-            enableTlsForPeerConnection();
+        enableTlsForPeerConnection();
 
-            tls_context = new_context;
-            effective = config_to_use;
-        }
+        tls_context = new_context;
+        effective = config_to_use;
     } catch (std::exception& e) {
         if (tls_context && tls_context->state != ossl::SSLContext::DegradedMode) tls_context->setDegradedMode(true);
     }
@@ -1428,20 +1424,6 @@ void ContextImpl::removePeerTlsConnections(const Connection* client_conn) {
 
 #ifdef PVXS_ENABLE_OPENSSL
 void ContextImpl::fileEventCallback(short evt) { file_watcher.checkFileStatus(); }
-#endif
-
-#ifdef PVXS_ENABLE_OPENSSL
-X509* ContextImpl::getCert(std::shared_ptr<ossl::SSLContext> context_ptr) {
-    auto context = context_ptr == nullptr ? tls_context : context_ptr;
-    if (!context->ctx) return nullptr;
-    return SSL_CTX_get0_certificate(context->ctx.get());
-}
-#endif
-
-#ifdef PVXS_ENABLE_OPENSSL
-bool ContextImpl::canCreateTlsChannels() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
-
-bool ContextImpl::readyToEmitTlsSearch() { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady; }
 #endif
 
 }  // namespace client

@@ -281,13 +281,10 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
         Stopped,
     } state = Init;
 
-    inline bool isRunning() { return state == Running; }
+    inline bool isRunning() const { return state == Running; }
     inline bool isContextReadyForTls() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
-    inline bool isContextUnfitForTls() {
-        return !tls_context || tls_context->state < ossl::SSLContext::TcpReady || ((certs::CertificateStatus)tls_context->get_status()).isRevokedOrExpired();
-    }
-    inline bool isContextUnfitForTls(std::shared_ptr<ossl::SSLContext> context) {
-        return !context || context->state <= ossl::SSLContext::DegradedMode || ((certs::CertificateStatus)context->get_status()).isRevokedOrExpired();
+    inline bool isInitialisedForTls(std::shared_ptr<ossl::SSLContext> context) {
+        return context && context->state >= ossl::SSLContext::TcpReady && !((certs::CertificateStatus)context->get_status()).isRevokedOrExpired();
     }
     inline bool isTlsEnabled() { return tls_context && tls_context->state > ossl::SSLContext::DegradedMode; }
     inline void initialiseState() {
@@ -423,15 +420,14 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 #ifdef PVXS_ENABLE_OPENSSL
     static void doCertEventHandler(evutil_socket_t fd, short evt, void *raw);
     void fileEventCallback(short evt);
-    X509 * getCert(std::shared_ptr<ossl::SSLContext> context = nullptr);
   public:
     void enterDegradedMode();
     void removePeerTlsConnections(const Connection* client_conn = nullptr);
     void reloadTlsFromConfig(const Config& new_config = {});
     void enableTlsForPeerConnection(const Connection* client_conn = nullptr);
 
-    bool canCreateTlsChannels();
-    bool readyToEmitTlsSearch();
+    inline bool canAcceptTlsConnectionValidation() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
+    inline bool readyToEmitTlsSearch() { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady; }
 #endif
 };
 
