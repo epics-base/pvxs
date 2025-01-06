@@ -327,11 +327,15 @@ struct Tester {
 
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
 
-        auto reply(cli.get(TEST_PV).exec()->wait(5.0));
-        testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+        try {
+            auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+            testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+            TEST_COUNTER_EQ(server1, 1)
+            TEST_COUNTER_EQ(client1, 1)
+        } catch (std::exception& e) {
+            testFail("Timeout", e.what());
+        }
 
-        TEST_COUNTER_EQ(server1, 1)
-        TEST_COUNTER_EQ(client1, 1)
         conn.reset();
     }
 
