@@ -596,7 +596,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
 #ifdef PVXS_ENABLE_OPENSSL
     if (event_add(cert_event_timer.get(), &statusIntervalShort)) log_err_printf(setup, "Error enabling cert status timer on\n%s", "");
 #endif
-    setStateFrom(tls_context);
+    initialiseState();
 }
 
 ContextImpl::~ContextImpl() {}

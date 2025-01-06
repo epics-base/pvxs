@@ -277,14 +277,11 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     enum state_t {
         Init,
-        RunningTcpOnly,
-        RunningTcp,
         Running,
         Stopped,
     } state = Init;
 
-    inline bool isRunning() { return state != Stopped && state != Init; }
-    inline bool isReadyForTls() { return state == Running; }
+    inline bool isRunning() { return state == Running; }
     inline bool isContextReadyForTls() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
     inline bool isContextUnfitForTls() {
         return !tls_context || tls_context->state < ossl::SSLContext::TcpReady || ((certs::CertificateStatus)tls_context->get_status()).isRevokedOrExpired();
@@ -293,17 +290,13 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
         return !context || context->state <= ossl::SSLContext::DegradedMode || ((certs::CertificateStatus)context->get_status()).isRevokedOrExpired();
     }
     inline bool isTlsEnabled() { return tls_context && tls_context->state > ossl::SSLContext::DegradedMode; }
-    inline void setStateFrom(std::shared_ptr<ossl::SSLContext> tls_context) {
+    inline void initialiseState() {
         if (!tls_context || !tls_context->ctx) {
-            state = RunningTcpOnly;
+            state = Running;
         } else {
             switch (tls_context->state) {
                 case ossl::SSLContext::DegradedMode:
-                    state = RunningTcpOnly;
-                    break;
                 case ossl::SSLContext::TcpReady:
-                    state = RunningTcp;
-                    break;
                 case ossl::SSLContext::TlsReady:
                     state = Running;
                     break;
