@@ -17,6 +17,8 @@ SRCS += p12filefactory.cpp
 SRCS += pemfilefactory.cpp
 SRCS += certfilefactory.cpp
 SRCS += certfactory.cpp
+SRCS += certstatusfactory.cpp
+SRCS += certstatus.cpp
 
 PROD_LIBS = pvxs Com
 
