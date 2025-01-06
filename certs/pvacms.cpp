@@ -27,6 +27,8 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <sstream>
+#include <string>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -1052,38 +1054,68 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
 void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert) {
     auto cn = CertStatus::getCommonName(ca_cert);
 
-    // Write the final string to the specified file
+    std::string extension = config.ca_acf_filename.substr(config.ca_acf_filename.find_last_of(".") + 1);
+    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
     std::ofstream out_file(config.ca_acf_filename, std::ios::out | std::ios::trunc);
     if (!out_file) {
         throw std::runtime_error("Failed to open ACF file for writing: " + config.ca_acf_filename);
     }
 
-    out_file << "UAG(CMS_ADMIN) {admin}\n"
-                "\n"
-                "ASG(DEFAULT) {\n"
-                "    RULE(0,READ)\n"
-                "    RULE(1,WRITE) {\n"
-                "        UAG(CMS_ADMIN)\n"
-                "        METHOD(\"x509\")\n"
-                "        AUTHORITY(\""
-             << cn
-             << "\")\n"
-                "    }\n"
-                "}";
+    auto const acf_file = (
+      SB()  << "UAG(CMS_ADMIN) {admin}\n"
+               "\n"
+               "ASG(DEFAULT) {\n"
+               "    RULE(0,READ)\n"
+               "    RULE(1,WRITE) {\n"
+               "        UAG(CMS_ADMIN)\n"
+               "        METHOD(\"x509\")\n"
+               "        AUTHORITY(\""
+            << cn
+            << "\")\n"
+               "    }\n"
+               "}").str();
+
+    auto const yaml_file = (
+      SB()  << "# EPICS YAML\n"
+               "version: 1.0\n"
+               "$schema: https://json-schema.org/draft/2020-12/schema\n"
+               "# yaml-language-server: $schema=epics-base/modules/libcom/src/as/epics-access-security-schema.yaml\n"
+               "\n"
+               "# user access groups\n"
+               "uags:\n"
+               "  - name: CMS_ADMIN\n"
+               "    users:\n"
+               "      - admin\n"
+               "\n"
+               "# Access security group definitions\n"
+               "asgs:\n"
+               "  - name: DEFAULT\n"
+               "    rules:\n"
+               "      - level: 0\n"
+               "        access: READ\n"
+               "      - level: 1\n"
+               "        access: WRITE\n"
+               "        uags:\n"
+               "          - CMS_ADMIN\n"
+               "        methods:\n"
+               "          - x509\n"
+               "        authorities:\n"
+               "          - "
+            << cn).str();
+
+    auto out_string = (((extension == "yaml" || extension == "yml")) ? yaml_file : acf_file);
+    out_file << out_string;
 
     out_file.close();
+
     log_info_printf(pvacms, "Created Default ACF file: %s\n", config.ca_acf_filename.c_str());
     log_info_printf(pvacms, "--------------------------------------%s", "\n");
-    log_info_printf(pvacms, "UAG(CMS_ADMIN) {admin}%s", "\n");
-    log_info_printf(pvacms, "%s", "\n");
-    log_info_printf(pvacms, "ASG(DEFAULT) {%s", "\n");
-    log_info_printf(pvacms, "    RULE(0,READ)%s", "\n");
-    log_info_printf(pvacms, "    RULE(1,WRITE) {%s", "\n");
-    log_info_printf(pvacms, "        UAG(CMS_ADMIN)%s", "\n");
-    log_info_printf(pvacms, "        METHOD(\"x509\")%s", "\n");
-    log_info_printf(pvacms, "        AUTHORITY(\"%s\")%s", cn.c_str(), "\n");
-    log_info_printf(pvacms, "    }%s", "\n");
-    log_info_printf(pvacms, "}%s", "\n");
+    std::istringstream iss(out_string);
+    std::string line;
+    while (std::getline(iss, line)) {
+        log_info_printf(pvacms, "%s\n", line.c_str());
+    }
 }
 
 void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
@@ -1097,7 +1129,7 @@ void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EV
     auto organization = "";
     auto organization_unit = "";
     time_t not_before(time(nullptr));
-    time_t not_after(not_before + (4 * 365 + 1) * 24 * 60 * 60);  // 4yrs
+    time_t not_after(not_before + (365 + 1) * 24 * 60 * 60);  // 1yrs
 
     // Create a certificate factory
     auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, ssl::kForClient, true,
@@ -1891,6 +1923,7 @@ int main(int argc, char *argv[]) {
 
         try {
             log_info_printf(pvacms, "PVACMS Running%s", "\n");
+            std::cout << "PVACMS: issuer-id [" << our_issuer_id << "]" << std::endl;
             pva_server.run();
             log_info_printf(pvacms, "PVACMS Exiting%s", "\n");
         } catch (const std::exception &e) {
