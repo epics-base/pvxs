@@ -16,7 +16,6 @@
 #include "openssl.h"
 #include "p12filefactory.h"
 #include "utilpvt.h"
-#include "certstatusfactory.h"
 
 DEFINE_LOGGER(auths, "pvxs.auth.std");
 
@@ -452,15 +451,8 @@ int main(int argc, char *argv[]) {
                                                           key_pair, nullptr, nullptr, "certificate", p12_pem_string);
                 file_factory->writeIdentityFile();
 
-                // Read file back for info
-                auto cert_data = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getCertDataFromFile();
-                auto serial_number = CertStatusFactory::getSerialNumber(cert_data.cert);
-                auto issuer_id = CertStatus::getIssuerId(cert_data.cert.get());
-
                 std::string from = std::ctime(&credentials->not_before);
                 std::string to = std::ctime(&credentials->not_after);
-                log_info_printf(auths, "%s\n",
-                                (pvxs::SB() << "CERT_ID: " << issuer_id << ":" << serial_number).str().c_str());
                 log_info_printf(auths, "%s\n",
                                 (pvxs::SB() << "TYPE: " << ((authenticator.type_ == PVXS_DEFAULT_AUTH_TYPE) ? "basic" : authenticator.type_)).str().c_str());
                 log_info_printf(auths, "%s\n",
@@ -476,8 +468,6 @@ int main(int argc, char *argv[]) {
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "COUNTRY: " << credentials->country).str().c_str());
                 log_info_printf(auths, "%s\n",
                                 (pvxs::SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1)).str().c_str());
-                std::cout << "Certificate created: " << issuer_id << ":" << serial_number << std::endl;
-
                 log_info_printf(auths, "--------------------------------------%s", "\n");
 
                 // Create the root certificate if it is not already there so
