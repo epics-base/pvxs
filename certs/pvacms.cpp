@@ -1079,8 +1079,6 @@ void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert) {
     auto const yaml_file = (
       SB()  << "# EPICS YAML\n"
                "version: 1.0\n"
-               "$schema: https://json-schema.org/draft/2020-12/schema\n"
-               "# yaml-language-server: $schema=epics-base/modules/libcom/src/as/epics-access-security-schema.yaml\n"
                "\n"
                "# user access groups\n"
                "uags:\n"
@@ -1922,10 +1920,9 @@ int main(int argc, char *argv[]) {
         }
 
         try {
-            log_info_printf(pvacms, "PVACMS Running%s", "\n");
-            std::cout << "PVACMS: issuer-id [" << our_issuer_id << "]" << std::endl;
+            std::cout << "PVACMS ["<< our_issuer_id << "] Service Running" << std::endl;
             pva_server.run();
-            log_info_printf(pvacms, "PVACMS Exiting%s", "\n");
+            std::cout << "PVACMS ["<< our_issuer_id << "] Service Exiting" << std::endl;
         } catch (const std::exception &e) {
             log_err_printf(pvacms, "PVACMS error: %s\n", e.what());
         }
