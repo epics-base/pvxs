@@ -491,7 +491,6 @@ Server::Pvt::Pvt(Server &svr, const Config& conf, CertEventCallback custom_cert_
                 log_err_printf(osslsetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
                 exit(1);
             }
-            if (tls_context) tls_context->setDegradedMode(true);
             if (effective.tls_throw_if_no_cert) {
                 throw(std::runtime_error(e.what()));
             } else {

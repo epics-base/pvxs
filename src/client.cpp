@@ -358,7 +358,7 @@ Context Context::fromEnv() { return Config::fromEnv().build(); }
 #else
 Context Context::fromEnv(const bool tls_disabled) { return Config::fromEnv(tls_disabled).build(); }
 Context Context::forCMS() {
-    auto env_config = Config::fromEnv(true);
+    auto env_config = Config::fromEnv();
     auto config_to_use = Config{};
     config_to_use.udp_port = env_config.udp_port;
     config_to_use.tcp_port = env_config.tcp_port;

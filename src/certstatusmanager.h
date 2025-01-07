@@ -140,66 +140,11 @@ class CertStatusManager {
     static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback, bool allow_self_signed_ca = false);
 
     /**
-     * @brief Get status for a given certificate.  Does not contain OCSP signed
-     * status data so use for client status.
-     *
-     * @param cert the certificate for which you want to get status
-     * @return std::shared_ptr<CertificateStatus>
-     */
-    static std::shared_ptr<CertificateStatus> getStatus(const ossl_ptr<X509>& cert);
-
-    /**
-     * @brief Get status for a given uri.  Does not contain OCSP signed
-     * status data.
-     *
-     * @param uri the certificate status PV to get status from
-     * @return std::shared_ptr<CertificateStatus>
-     */
-    static std::shared_ptr<CertificateStatus> getStatus(const std::string uri);
-
-    /**
-     * @brief Get status for a given certificate.  This status contains the OCSP signed
-     * status data so can be used for stapling.  Use this for server status.
-     *
-     * @param cert the certificate for which you want to get status
-     * @return ::shared_ptr<PVACertificateStatus>
-     */
-    static std::shared_ptr<PVACertificateStatus> getPVAStatus(const ossl_ptr<X509>& cert);
-
-    /**
-     * @brief Get status from the given uri.  This status contains the OCSP signed
-     * status data so can be used for stapling.
-     *
-     * @param uri the uri to GET status from
-     * @return ::shared_ptr<PVACertificateStatus>
-     */
-    static std::shared_ptr<PVACertificateStatus> getPVAStatus(const std::string uri);
-
-    /**
-     * @brief Wait for status to become available or return the current status if it is still valid
-     * @param loop the event loop base to use to wait
-     * @return the status
-     */
-    std::shared_ptr<CertificateStatus> waitForStatus(const evbase& loop);
-
-    /**
      * @brief Unsubscribe from listening to certificate status
      *
      * This function idempotent unsubscribe from the certificate status updates
      */
     void unsubscribe();
-
-    /**
-     * @brief Get status for a currently subscribed certificate
-     * @return CertificateStatus
-     */
-    std::shared_ptr<CertificateStatus> getStatus();
-
-    /**
-     * @brief Get status for a currently subscribed certificate
-     * @return CertificateStatus
-     */
-    std::shared_ptr<PVACertificateStatus> getPVAStatus();
 
     inline bool available(double timeout = 5.0) noexcept { return isValid() || waitedTooLong(timeout); }
 

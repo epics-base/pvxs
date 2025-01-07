@@ -333,7 +333,7 @@ struct Tester {
             TEST_COUNTER_EQ(server1, 1)
             TEST_COUNTER_EQ(client1, 1)
         } catch (std::exception& e) {
-            testFail("Timeout", e.what());
+            testFail("Timeout: %s", e.what());
         }
 
         conn.reset();

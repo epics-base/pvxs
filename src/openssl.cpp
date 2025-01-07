@@ -177,13 +177,11 @@ void SSLContext::statusValidityExpirationHandler(evutil_socket_t fd, short evt, 
     if (!self.cert_status.isValid()) {
         {
             Guard G(self.lock);
-            // We need to get the PVAStatus because we may need the OCSP stapling data if this is a server
-            self.cert_status = *self.cert_monitor->getPVAStatus();
+            // Therefore the status should be set to
+            self.cert_status = certs::PVACertificateStatus();
         }
         self.setTlsOrTcpMode();
     }
-    // Chain another status validity check if new status is valid
-    if (self.cert_status.isValid()) self.setStatusValidityCountdown();
 }
 
 namespace {
@@ -744,7 +742,7 @@ void CertStatusExData::statusValidityExpirationHandler(serial_number_t serial_nu
     if (!status) return;
     auto &fn = peer_status->fn;
     auto was_good = status->isOstensiblyGood();
-    setCachedPeerStatus(serial_number, peer_status->cert_status_manager->getStatus(), fn);
+    setCachedPeerStatus(serial_number, certs::PVACertificateStatus(), fn);
     auto is_good = status->isGood();
     if (is_good != was_good && fn) {
         fn(is_good);
