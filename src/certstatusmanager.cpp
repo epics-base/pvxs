@@ -67,7 +67,7 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<co
  *
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes, std::string custom_ca_dir) {
+PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes) {
     auto ocsp_response = getOCSPResponse(ocsp_bytes);
 
     // Get the response status
@@ -83,7 +83,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
     }
 
     // Verify signature of OCSP response
-    verifyOCSPResponse(basic_response, custom_ca_dir);
+    verifyOCSPResponse(basic_response);
 
     OCSP_SINGLERESP* single_response = OCSP_resp_get0(basic_response.get(), 0);
     if (!single_response) {
@@ -207,7 +207,7 @@ void CertStatusManager::unsubscribe() {
  *     bool isValid = verifyOCSPResponse(ocsp_bytes, ca_cert); // Verifies the OCSP response
  * @endcode
  */
-bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, std::string custom_ca_dir) {
+bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response) {
     // Get the ca_cert from the response
     pvxs::ossl_ptr<X509> ca_cert;
     OCSP_resp_get0_signer(basic_response.get(), ca_cert.acquire(), nullptr);
@@ -228,15 +228,9 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
         throw OCSPParseException("Failed to create X509_STORE to verify OCSP response");
     }
 
-    // Load trusted root CAs from a predefined location
+    // Load trusted root CAs from default location
     if (X509_STORE_set_default_paths(store.get()) != 1) {
         throw OCSPParseException("Failed to load system default CA certificates to verify OCSP response");
-    }
-
-    if (!custom_ca_dir.empty()) {
-        if (X509_STORE_load_locations(store.get(), nullptr, custom_ca_dir.c_str()) != 1) {
-            throw OCSPParseException(SB() << "Failed to load CA certificates from custom directory: " << custom_ca_dir);
-        }
     }
 
     // Set up the store context for verification
