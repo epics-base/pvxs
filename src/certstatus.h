@@ -521,8 +521,8 @@ struct OCSPStatus {
     // revocation date of the certificate if it is revoked
     StatusDate revocation_date;
 
-    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param, bool allow_self_signed_ca = false) : ocsp_bytes(ocsp_bytes_param) {
-        init(allow_self_signed_ca);
+    explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param) : ocsp_bytes(ocsp_bytes_param) {
+        init();
     }
 
     // To  set an OCSP UNKNOWN status to indicate errors
@@ -574,7 +574,7 @@ struct OCSPStatus {
     explicit OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
                         StatusDate revocation_time);
 
-    void init(bool allow_self_signed_ca = false);
+    void init();
 };
 
 bool operator==(ocspcertstatus_t& lhs, OCSPStatus& rhs);
@@ -616,12 +616,11 @@ struct PVACertificateStatus final : public OCSPStatus {
     bool operator==(const CertificateStatus& rhs) const;
     inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs); }
 
-    explicit PVACertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes, bool allow_self_signed_ca = false)
-        : OCSPStatus(ocsp_bytes, allow_self_signed_ca), status(status) {};
+    explicit PVACertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes)
+        : OCSPStatus(ocsp_bytes), status(status) {};
 
-    explicit PVACertificateStatus(const Value& status_value, bool allow_self_signed_ca = false)
-        : PVACertificateStatus(status_value["status.value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>(),
-                               allow_self_signed_ca) {
+    explicit PVACertificateStatus(const Value& status_value)
+        : PVACertificateStatus(status_value["status.value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>()) {
         if (ocsp_bytes.empty()) return;
         log_debug_printf(status_setup, "Value Status: %s\n", (SB() << status_value).str().c_str());
         log_debug_printf(status_setup, "Status Date: %s\n", this->status_date.s.c_str());

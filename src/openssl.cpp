@@ -49,39 +49,6 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
     return preverify_ok;
 }
 
-void ensureTrusted(const ossl_ptr<X509> &ca_cert, const ossl_ptr<STACK_OF(X509)> &CAs) {
-    // Create a new X509_STORE with trusted root CAs
-    ossl_ptr<X509_STORE> store(X509_STORE_new(), false);
-    if (!store) {
-        throw std::runtime_error("Failed to create X509_STORE to verify CA trust");
-    }
-
-    // Load trusted root CAs from a predefined location
-    if (X509_STORE_set_default_paths(store.get()) != 1) {
-        throw std::runtime_error("Failed to load system default CA certificates to verify CA trust");
-    }
-
-    // Set up a store context for verification
-    ossl_ptr<X509_STORE_CTX> ctx(X509_STORE_CTX_new(), false);
-    if (!ctx) {
-        throw std::runtime_error("Failed to create X509_STORE_CTX to verify CA trust");
-    }
-
-    if (X509_STORE_CTX_init(ctx.get(), store.get(), ca_cert.get(), CAs.get()) != 1) {
-        throw std::runtime_error("Failed to initialize X509_STORE_CTX to verify CA certificate");
-    }
-
-    // Set parameters for verification of the CA certificate
-    X509_STORE_CTX_set_flags(ctx.get(),
-                             X509_V_FLAG_PARTIAL_CHAIN |           // Succeed as soon as at least one intermediary is trusted
-                                 X509_V_FLAG_CHECK_SS_SIGNATURE |  // Allow self-signed root CA
-                                 X509_V_FLAG_TRUSTED_FIRST         // Check the trusted locations first
-    );
-    if (X509_verify_cert(ctx.get()) != 1) {
-        throw std::runtime_error("Certificate is not trusted by this host");
-    }
-}
-
 /**
  * @brief Check cert status and set the TLS context state to TCP_READY or TLS_READY
  *
@@ -103,7 +70,7 @@ void SSLContext::monitorStatusAndSetState(certs::CertData &cert_data) {
 
                 // Start validity timer for status
                 setStatusValidityCountdown();
-            }, allow_self_signed_ca);
+            });
         } else {
             Guard G(lock);
             cert_status = certs::PVACertificateStatus(certs::UnCertifiedCertificateStatus());
@@ -392,10 +359,6 @@ void extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr<STACK_OF(
         if (flags & EXFLAG_SS && !isTrusted(ca)) {        // self-signed (aka. root)
             assert(flags & EXFLAG_SI);  // circa OpenSSL, self-signed implies self-issued
 
-            if (!ctx->allow_self_signed_ca) {
-                throw std::runtime_error(SB() << "Self-signed certificate: "  << ShowX509{ca});
-            }
-
             // populate the context's trust store with the self-signed root cert
             X509_STORE *trusted_store = SSL_CTX_get_cert_store(ctx->ctx.get());
             if (!X509_STORE_add_cert(trusted_store, ca)) throw SSLError("X509_STORE_add_cert");
@@ -432,7 +395,6 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
     auto tls_context = std::make_shared<SSLContext>(SSLContext(loop));
     tls_context->status_check_disabled = conf.tls_disable_status_check;
     tls_context->stapling_disabled = conf.tls_disable_stapling;
-    tls_context->allow_self_signed_ca = conf.allow_self_signed_ca;
     tls_context->ctx = ossl_shared_ptr<SSL_CTX>(SSL_CTX_new_ex(ossl_gbl->libctx.get(), NULL, method));
     if (!tls_context->ctx) throw SSLError("Unable to allocate SSL_CTX");
 
@@ -440,7 +402,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
         // Add the CertStatusExData to the SSL context so that it will be available
         // any time the SSL context is available to provide access to the entity certificate,
         // peer statuses and other custom data.
-        std::unique_ptr<CertStatusExData> car{new CertStatusExData(loop, !tls_context->status_check_disabled, tls_context->allow_self_signed_ca)};
+        std::unique_ptr<CertStatusExData> car{new CertStatusExData(loop, !tls_context->status_check_disabled)};
         if (!SSL_CTX_set_ex_data(tls_context->ctx.get(), ossl_gbl->SSL_CTX_ex_idx, car.get())) throw SSLError("SSL_CTX_set_ex_data");
         car.release();  // SSL_CTX_free() now responsible (using our registered callback `free_SSL_CTX_sidecar`)
     }
@@ -675,7 +637,7 @@ void CertStatusExData::subscribeToPeerCertStatus(X509 *cert_ptr, std::function<v
                     fn(is_good);
                 }
                 if (status.isValid() && !status.isPermanent()) setStatusValidityCountdown(peer_status);
-            }, allow_self_signed_ca);
+            });
     } catch (...) {
     }
 }

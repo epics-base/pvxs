@@ -197,11 +197,6 @@ struct PVXS_API ConfigCommon {
     bool tls_disable_stapling{false};
 
     /**
-     * @brief True if self-signed certificates are to be trusted (TESTING ONLY)
-     */
-    bool allow_self_signed_ca{false};
-
-    /**
      * @brief True if we want to throw an exception if we can't verify a cert with the
      * PVACMS, otherwise we downgrade to a tcp connection
      */

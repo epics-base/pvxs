@@ -205,7 +205,6 @@ client::Config Server::clientConfig() const
     ret.tls_disabled = pvt->effective.tls_disabled;
     ret.tls_disable_status_check = pvt->effective.tls_disable_status_check;
     ret.tls_disable_stapling = pvt->effective.tls_disable_stapling;
-    ret.allow_self_signed_ca = pvt->effective.allow_self_signed_ca;
 #endif
     ret.is_initialized = true;
 

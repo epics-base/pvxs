@@ -86,7 +86,6 @@ struct PeerCredentials;
 namespace ossl {
 
 PVXS_API int ossl_verify(int preverify_ok, X509_STORE_CTX* x509_ctx);
-PVXS_API void ensureTrusted(const ossl_ptr<X509>& ca_cert, const ossl_ptr<STACK_OF(X509)>& CAs);
 
 struct PVXS_API SSLError : public std::runtime_error {
     explicit SSLError(const std::string& msg);
@@ -158,8 +157,6 @@ struct CertStatusExData {
     // Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not configured
     const bool status_check_enabled;
     // The map of peer statuses, keyed by the serial number of each peer's certificate
-    const bool allow_self_signed_ca;
-
     std::map<serial_number_t, std::shared_ptr<SSLPeerStatus>> peer_statuses{};
     // map to keep status validity expiration handler parameters from going stale
     std::map<serial_number_t, StatusValidityExpirationHandlerParam> sveh_params{};
@@ -170,8 +167,8 @@ struct CertStatusExData {
      * @param status_check_enabled - Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not
      * configured
      */
-    CertStatusExData(const impl::evbase& loop, bool status_check_enabled, bool allow_self_signed_ca = false)
-        : loop(loop), status_check_enabled(status_check_enabled), allow_self_signed_ca(allow_self_signed_ca) {}
+    CertStatusExData(const impl::evbase& loop, bool status_check_enabled)
+        : loop(loop), status_check_enabled(status_check_enabled) {}
 
     /**
      * @brief Returns the CertStatusExData from the SSL_X509_STORE_CTX
@@ -367,8 +364,6 @@ struct SSLContext {
     bool status_check_disabled{false};
     // Whether stapling is disabled.  Copied from the config
     bool stapling_disabled{false};
-    // Determines whether self-signed certificates are trusted or not - ONLY for testing
-    bool allow_self_signed_ca{false};
 
     // The event loop.  Used to create timers for the status validity countdown
     const impl::evbase& loop;

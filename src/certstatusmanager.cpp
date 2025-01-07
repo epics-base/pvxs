@@ -67,7 +67,7 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<co
  *
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes, bool allow_self_signed_ca, std::string custom_ca_dir) {
+PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes, std::string custom_ca_dir) {
     auto ocsp_response = getOCSPResponse(ocsp_bytes);
 
     // Get the response status
@@ -83,7 +83,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
     }
 
     // Verify signature of OCSP response
-    verifyOCSPResponse(basic_response, allow_self_signed_ca, custom_ca_dir);
+    verifyOCSPResponse(basic_response, custom_ca_dir);
 
     OCSP_SINGLERESP* single_response = OCSP_resp_get0(basic_response.get(), 0);
     if (!single_response) {
@@ -122,7 +122,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
  * @param callback the callback to call
  * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
  */
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback, bool allow_self_signed_ca) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
     // Construct the URI
     auto uri = CertStatusManager::getStatusPvFromCert(ctx_cert);
     log_debug_printf(status, "Starting Status Subscription: %s\n", uri.c_str());
@@ -142,7 +142,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&&
         auto sub = client->monitor(uri)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([weak_cert_status_manager, allow_self_signed_ca](client::Subscription& sub) {
+                       .event([weak_cert_status_manager](client::Subscription& sub) {
                            try {
                                auto cert_status_manager = weak_cert_status_manager.lock();
                                if (!cert_status_manager) return;
@@ -150,7 +150,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&&
 
                                auto update = sub.pop();
                                if (update) {
-                                   auto status_update(PVACertificateStatus(update, allow_self_signed_ca));
+                                   auto status_update{PVACertificateStatus(update)};
                                    log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
                                    cert_status_manager->status_ = std::make_shared<CertificateStatus>(status_update);
                                    (*callback_ptr)(status_update);
@@ -207,7 +207,7 @@ void CertStatusManager::unsubscribe() {
  *     bool isValid = verifyOCSPResponse(ocsp_bytes, ca_cert); // Verifies the OCSP response
  * @endcode
  */
-bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, bool allow_self_signed_ca, std::string custom_ca_dir) {
+bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, std::string custom_ca_dir) {
     // Get the ca_cert from the response
     pvxs::ossl_ptr<X509> ca_cert;
     OCSP_resp_get0_signer(basic_response.get(), ca_cert.acquire(), nullptr);
@@ -220,15 +220,7 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
     auto const_ca_chain_ptr = OCSP_resp_get0_certs(basic_response.get());
     ossl_ptr<STACK_OF(X509)> ca_chain(sk_X509_dup(const_ca_chain_ptr));  // remove const-ness
 
-    try {
-        // if configured, accept all self-signed certificates, otherwise ensure they are really trusted
-        if (!allow_self_signed_ca || X509_check_issued(ca_cert.get(), ca_cert.get()) != X509_V_OK) {
-            ossl::ensureTrusted(ca_cert, ca_chain);
-        }
-
-    } catch (std::exception& e) {
-        throw OCSPParseException(SB() << "verifying OCSP response: " << e.what());
-    }
+    // TODO Ensure CA cert is trusted by verifying that it is in the tls_context
 
     // Create a new X509_STORE with trusted root CAs
     ossl_ptr<X509_STORE> store(X509_STORE_new(), false);

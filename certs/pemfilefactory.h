@@ -19,8 +19,6 @@ class PEMFileFactory : public IdFileFactory {
                             const std::string& pem_string = "", bool certs_only = false)
         : IdFileFactory(filename, password, key_pair, nullptr, nullptr, "certificate", pem_string, certs_only), password_(password) {}
 
-    static bool createRootPemFile(const std::string& pemString, bool overwrite = false);
-
     std::shared_ptr<KeyPair> getKeyFromFile() override;
     CertData getCertDataFromFile() override;
 

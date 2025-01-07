@@ -228,7 +228,7 @@ using namespace pvxs::certs;
         }                                                                                                                                     \
         testDiag("Set up: %s", #LNAME " certificate Status Response");                                                                        \
                                                                                                                                               \
-        auto converted_response = PVACertificateStatus(LNAME##_status_response_value, true);                                                  \
+        auto converted_response = PVACertificateStatus(LNAME##_status_response_value);                                                  \
         testOk1(converted_response == LNAME##_cert_status);                                                                                   \
         testEq(converted_response.ocsp_bytes.size(), LNAME##_cert_status.ocsp_bytes.size());                                                  \
                                                                                                                                               \
@@ -250,7 +250,7 @@ using namespace pvxs::certs;
     try {                                                                                                                \
         testDiag("Sending: %s", "Server Status Request");                                                                \
         auto result = client.get(LNAME##_status_pv_name).exec()->wait(5.0);                                              \
-        auto LNAME##_status_response = PVACertificateStatus(result, true);                                               \
+        auto LNAME##_status_response = PVACertificateStatus(result);                                               \
         testOk1(LNAME##_status_response == LNAME##_cert_status);                                                         \
         testOk1(LNAME##_status_response == LNAME##_cert_status);                                                         \
         testOk1((CertifiedCertificateStatus)LNAME##_status_response == LNAME##_cert_status);                             \

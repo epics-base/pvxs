@@ -185,17 +185,10 @@ int main(int argc, char* argv[]) {
                                               return;
                                           }
 
-                                          uint64_t serial = value["serial"].as<uint64_t>();
                                           auto name = value["name"].as<std::string>();
                                           auto org = value["org"].as<std::string>();
                                           auto org_unit = value["org_unit"].as<std::string>();
                                           auto pem_string = value["cert"].as<std::string>();
-
-                                          std::cout << "Installing Root CA Certificate" << std::endl;
-                                          certs::PEMFileFactory::createRootPemFile(pem_string, true);
-                                          std::cout << "\t------------------------------------------------\n"
-                                                    << "\tNAME:\t\t\t" << name << "\n\tORGANIZATION:\t\t" << org << "\n\tORGANIZATIONAL UNIT:\t" << org_unit
-                                                    << "\n\tISSUER:\t\t\t" << issuer << "\n\tSERIAL:\t\t\t" << serial << std::endl;
 
                                           done.signal();
                                       })
