@@ -53,10 +53,9 @@ Value::Fmt::format_t stringToFormat(const std::string& formatStr) {
 
 }  // namespace
 
-enum CertAction { STATUS, INSTALL, APPROVE, DENY, REVOKE };
+enum CertAction { STATUS, APPROVE, DENY, REVOKE };
 std::string actionToString(CertAction& action) {
     return (action == STATUS    ? "Get Status"
-            : action == INSTALL ? "Install Root Certificate"
             : action == APPROVE ? "Approve"
             : action == REVOKE  ? "Revoke"
                                 : "Deny");
@@ -79,8 +78,7 @@ int main(int argc, char* argv[]) {
         std::string format_str;
         uint64_t arrLimit = 20;
         CertAction action{STATUS};
-        bool install{false}, approve{false}, revoke{false}, deny{false};
-        std::string issuer_id;
+        bool approve{false}, revoke{false}, deny{false};
 
         // Add a positional argument
         std::string issuer_serial_string;
@@ -98,7 +96,6 @@ int main(int argc, char* argv[]) {
 
         // Action flags in mutually exclusive group
         auto action_group = app.add_option_group("Actions")->required(false);
-        action_group->add_option("-I,--install", issuer_id, "Download and install the root certificate identified by the issuer ID");
         action_group->add_flag("-A,--approve", approve, "APPROVE the certificate (ADMIN ONLY)");
         action_group->add_flag("-R,--revoke", revoke, "REVOKE the certificate (ADMIN ONLY)");
         action_group->add_flag("-D,--deny", deny, "DENY the pending certificate (ADMIN ONLY)");
@@ -119,7 +116,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        if (!cert_file.empty() && (install || approve || revoke || deny)) {
+        if (!cert_file.empty() && (approve || revoke || deny)) {
             log_err_printf(certslog, "Error: -I, -A, -R, or -D cannot be used with -f.%s", "\n");
             return 2;
         }
@@ -138,7 +135,6 @@ int main(int argc, char* argv[]) {
             std::cout << std::endl;
         }
 
-        if (!issuer_id.empty()) action = INSTALL;
         if (approve) action = APPROVE;
         if (revoke) action = REVOKE;
         if (deny) action = DENY;
@@ -162,38 +158,12 @@ int main(int argc, char* argv[]) {
                 return 3;
             }
         } else {
-            if (action == INSTALL) {
-                root_id = "CERT:ROOT";
-            } else {
-                cert_id = "CERT:STATUS:" + issuer_serial_string;
-            }
+            cert_id = "CERT:STATUS:" + issuer_serial_string;
         }
 
         try {
-            if (action != INSTALL) std::cout << actionToString(action) << " ==> " << ((!root_id.empty()) ? root_id : cert_id) << "\n";
+            std::cout << actionToString(action) << " ==> " << ((!root_id.empty()) ? root_id : cert_id) << "\n";
             switch (action) {
-                case INSTALL: {
-                    ops.push_back(ctxt.get(root_id)
-                                      .result([root_id, &done, &issuer_id](client::Result&& result) {
-                                          Indented I(std::cout);
-                                          auto value = result();
-
-                                          auto issuer = value["issuer"].as<std::string>();
-                                          if ( issuer != issuer_id ) {
-                                              log_err_printf(certslog, "Error: Issuer ID does not match. Expected: %s, Received: %s\n", issuer_id.c_str(), issuer.c_str());
-                                              done.signal();
-                                              return;
-                                          }
-
-                                          auto name = value["name"].as<std::string>();
-                                          auto org = value["org"].as<std::string>();
-                                          auto org_unit = value["org_unit"].as<std::string>();
-                                          auto pem_string = value["cert"].as<std::string>();
-
-                                          done.signal();
-                                      })
-                                      .exec());
-                } break;
                 case STATUS: {
                     ops.push_back(ctxt.get(cert_id)
                                       .result([cert_id, &done, format, arrLimit](client::Result&& result) {
