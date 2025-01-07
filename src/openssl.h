@@ -171,15 +171,6 @@ struct CertStatusExData {
         : loop(loop), status_check_enabled(status_check_enabled) {}
 
     /**
-     * @brief Returns the CertStatusExData from the SSL_X509_STORE_CTX
-     * Determines the SSL_CTX context from the SSL_X509_STORE_CTX and then calls fromSSL_CTX()
-     *
-     * @param x509_ctx - The SSL_X509_STORE_CTX
-     * @return The CertStatusExData
-     */
-    static CertStatusExData* fromSSL_X509_STORE_CTX(X509_STORE_CTX* x509_ctx);
-
-    /**
      * @brief Returns the CertStatusExData from the SSL_CTX
      * @param ssl - The SSL_CTX
      * @return The CertStatusExData

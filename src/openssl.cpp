@@ -243,26 +243,6 @@ int ossl_alpn_select(SSL *, const unsigned char **out, unsigned char *outlen, co
 }
 
 /**
- * @brief Get the error string from the error queue
- *
- * This function retrieves all error codes from the OpenSSL error queue and constructs a string containing the error messages.
- *
- * @return the error string
- */
-std::string getError() {
-    unsigned long err;
-    std::string error_string;
-    std::string sep;
-    while ((err = ERR_get_error())) {
-        char buffer[256];
-        ERR_error_string_n(err, buffer, sizeof(buffer));
-        error_string += sep + buffer;
-        sep = ", ";
-    }
-    return error_string;
-}
-
-/**
  * @brief Verifies the key usage of a given certificate.
  *
  * This function checks the key usage extension of the specified certificate
@@ -676,20 +656,6 @@ void CertStatusExData::statusValidityExpirationHandler(serial_number_t serial_nu
     }
     // Chain another status validity check if new status is valid
     if (status->isValid()) setStatusValidityCountdown(peer_status);
-}
-
-/**
- * @brief Get the CertStatusExData from the given X509 store context
- *
- * This function retrieves the CertStatusExData from the SSL context associated with the given X509 store context.
- * This is the custom data that is added to the SSL context during tls context creation.
- *
- * @param x509_ctx the X509_STORE_CTX to get the SSL context and subsequently the CertStatusExData from
- * @return the CertStatusExData
- */
-CertStatusExData *CertStatusExData::fromSSL_X509_STORE_CTX(X509_STORE_CTX *x509_ctx) {
-    SSL *ssl = (SSL *)X509_STORE_CTX_get_ex_data(x509_ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
-    return fromSSL(ssl);
 }
 
 /**

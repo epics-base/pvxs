@@ -180,10 +180,7 @@ class CertStatusManager {
      * @return the Parsed OCSP response status
      */
    public:
-    static ParsedOCSPStatus parse(const shared_array<const uint8_t> ocsp_bytes);
-
-   private:
-    std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
+    static ParsedOCSPStatus parse(shared_array<const uint8_t> ocsp_bytes);
 };
 
 template <>
