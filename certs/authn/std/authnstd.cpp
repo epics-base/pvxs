@@ -479,14 +479,7 @@ int main(int argc, char *argv[]) {
                 std::cout << "Certificate created: " << issuer_id << ":" << serial_number << std::endl;
 
                 log_info_printf(auths, "--------------------------------------%s", "\n");
-
-                // Create the root certificate if it is not already there so
-                // that the user can trust it
-                if (file_factory->writeRootPemFile(p12_pem_string)) {
-                    return CertAvailability::OK;
-                } else {
-                    return CertAvailability::ROOT_CERT_INSTALLED;
-                }
+                return CertAvailability::OK;
             }
         }
     } catch (std::exception &e) {

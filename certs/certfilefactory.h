@@ -112,12 +112,6 @@ class IdFileFactory {
      */
     static std::shared_ptr<KeyPair> createKeyPair();
 
-    /**
-     * @brief Writes a root PEM file.
-     *
-     * This method writes a root PEM file
-     */
-    bool writeRootPemFile(const std::string& pem_string, bool overwrite = false);
     CertData getCertData(const std::shared_ptr<KeyPair>& key_pair);
 
    protected:

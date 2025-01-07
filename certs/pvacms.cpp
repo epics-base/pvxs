@@ -1280,11 +1280,6 @@ CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<
 
     cert_file_factory->writeIdentityFile();
 
-    // Create the root certificate (overwrite existing)
-    // The user must re-trust it if it already trusted
-    if (!cert_file_factory->writeRootPemFile(pem_string, true)) {
-        exit(0);
-    }
     return cert_file_factory->getCertData(key_pair);
 }
 

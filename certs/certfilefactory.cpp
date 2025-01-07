@@ -79,21 +79,6 @@ void IdFileFactory::chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cer
 }
 
 /**
- * @brief Writes a root PEM file.
- *
- * This method writes a root PEM file.
- * It is used to create the CA certificate file for agents that don't already have one.
- *
- * If it already exists it will be overwritten if overwrite is true.
- * If a file is created then instructions on how to trust the certificate are printed to the log.
- *
- * @param pem_string The PEM string to write to the file.
- * @param overwrite Whether to overwrite the file if it already exists.
- * @return true if the file was created, false if it already exists.
- */
-bool IdFileFactory::writeRootPemFile(const std::string& pem_string, const bool overwrite) { return PEMFileFactory::createRootPemFile(pem_string, overwrite); }
-
-/**
  * @brief Gets the certificate data.
  *
  * This method gets the certificate data.  This can only be called if a certificate is available after a call to writeIdentityFile.
