@@ -293,41 +293,6 @@ void verifyKeyUsage(const ossl_ptr<X509> &cert,
 }
 
 /**
- * @brief Check if a CA certificate is trusted
- *
- * This function checks if a CA certificate is trusted by verifying it against the system's trusted CA certificates.
- * It allows for self-signed CA certificates to be trusted if they are installed in the system's trusted CA certificates store.
- *
- * @param ca The CA certificate to check
- * @return true if the CA certificate is trusted, false otherwise
- */
-bool isTrusted(X509 *ca) {
-    // Initialize the store
-    auto store = ossl_ptr<X509_STORE>(X509_STORE_new(), false);
-    if (!store) throw std::runtime_error(SB() << "Unable to create trust store to verify CA: " << getError());
-
-    if (X509_STORE_set_default_paths(store.get()) != 1) {
-        throw std::runtime_error(SB() << "Unable to load trusted certs from trusted locations to verify CA: " << getError());
-    }
-
-    // Initialize the store context
-    auto store_ctx = ossl_ptr<X509_STORE_CTX>(X509_STORE_CTX_new());
-    if (!X509_STORE_CTX_init(store_ctx.get(), store.get(), ca, nullptr)) {
-        throw std::runtime_error(SB() << "Error initializing store context to verify CA: " << getError());
-    }
-
-    // Verification parameters
-    X509_STORE_CTX_set_flags(store_ctx.get(),
-                             X509_V_FLAG_PARTIAL_CHAIN |           // Succeed as soon as at least one intermediary is trusted
-                                 X509_V_FLAG_CHECK_SS_SIGNATURE |  // Allow self-signed root CA
-                                 X509_V_FLAG_TRUSTED_FIRST         // Check the trusted locations first
-    );
-
-    // Verify the certificate
-    return X509_verify_cert(store_ctx.get()) == 1;
-}
-
-/**
  * @brief Extracts the certificate authorities from the provided CAs and
  * adds them to the given context.
  *
@@ -356,7 +321,7 @@ void extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr<STACK_OF(
             throw std::runtime_error(SB() << "non-CA certificate found in keychain");
         }
 
-        if (flags & EXFLAG_SS && !isTrusted(ca)) {        // self-signed (aka. root)
+        if (flags & EXFLAG_SS) {        // self-signed (aka. root)
             assert(flags & EXFLAG_SI);  // circa OpenSSL, self-signed implies self-issued
 
             // populate the context's trust store with the self-signed root cert
