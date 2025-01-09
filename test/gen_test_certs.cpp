@@ -311,7 +311,7 @@ struct CertCreator {
 void usage(const char* argv0) {
     std::cerr<<"Usage: "<<argv0<<" [-O <outdir>]\n"
                "\n"
-               "    Write out a test of Certificate files for testing.\n"
+               "    Write out a set of keychain files for testing.\n"
                "\n"
                "    -O <outdir>  - Write files to this directory.  (default: .)\n"
                ;

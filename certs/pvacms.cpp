@@ -74,7 +74,6 @@
 
 DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
 DEFINE_LOGGER(pvacmsmonitor, "pvxs.certs.stat");
-DEFINE_LOGGER(pvafms, "pvxs.certs.fms");
 
 namespace pvxs {
 namespace certs {
@@ -970,78 +969,30 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
  */
 void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    // Get key pair if specified
     std::shared_ptr<KeyPair> key_pair;
-    try {
-        if (!config.ca_private_key_filename.empty()) {
-            // Check if the CA key exists
-            key_pair = IdFileFactory::create(config.ca_private_key_filename, config.ca_private_key_password)->getKeyFromFile();
-        }
-    } catch (std::exception &e) {
-        // Error getting key pair
-        // Make a new key pair file
-        try {
-            log_warn_printf(pvafms, "%s\n", e.what());
-            key_pair = createCaKey(config);
-        } catch (std::exception &e) {
-            throw(std::runtime_error(SB() << "Error creating CA key: " << e.what()));
-        }
-    }
 
-    // At this point if a separate key was configured then we will have one, or we will have thrown an exception
-    // If we don't have one then it's because it was configured to be in the same file as the certificate
-
-    // Get certificate
+    // Get key and certificate
     try {
         // Check if the CA certificates exist
         auto cert_data = IdFileFactory::create(config.ca_cert_filename, config.ca_cert_password)->getCertDataFromFile();
-        if (!key_pair) key_pair = cert_data.key_pair;
+        key_pair = cert_data.key_pair;
+        if (!key_pair && cert_data.cert)
+            throw(std::runtime_error("Keychain file contains a certificate but no key: "));
 
-        // If we have a key
-        if (key_pair) {
-            // And we have a cert
-            if (cert_data.cert) {
-                // all is ok
-                ca_pkey = std::move(key_pair->pkey);
-                ca_cert = std::move(cert_data.cert);
-                ca_chain = cert_data.ca;
-                return;
-            }
-            // We have keys but no cert then create the cert file
-            throw(std::runtime_error("Certificate file does not contain a certificate: "));
-        }
-        // We don't have keys so create a key in a combined cert and key file
-        key_pair = IdFileFactory::createKeyPair();
-        throw(std::runtime_error("Certificate file does not contain a certificate: "));
+        if (!key_pair)
+            key_pair = IdFileFactory::createKeyPair();
+
+        if (!cert_data.cert)
+            cert_data = createCaCertificate(config, ca_db, key_pair);
+
+        ca_pkey = std::move(cert_data.key_pair->pkey);
+        ca_cert = std::move(cert_data.cert);
+        ca_chain = cert_data.ca;
+
+        createDefaultAdminACF(config, ca_cert);
+        createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain);
     } catch (std::exception &e) {
-        // Error getting certs file, or certs file invalid
-        // Make a new CA Certificate
-        try {
-            log_warn_printf(pvafms, "%s\n", e.what());
-            if (!key_pair) key_pair = IdFileFactory::createKeyPair();
-
-            auto cert_data = createCaCertificate(config, ca_db, key_pair);
-            // all is ok
-            ca_pkey = std::move(key_pair->pkey);
-            ca_cert = std::move(cert_data.cert);
-            ca_chain = cert_data.ca;
-
-            // If we had to make a new certificate then we need to make a new ACF and admin client cert
-            try {
-                createDefaultAdminACF(config, ca_cert);
-            } catch (std::exception &e) {
-                log_err_printf(pvacms, "Error creating ACF file: %s\n", e.what());
-            }
-
-            try {
-                createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain);
-            } catch (std::exception &e) {
-                log_err_printf(pvacms, "Error creating admin client keychain: %s\n", e.what());
-            }
-
-        } catch (std::exception &e) {
-            throw(std::runtime_error(SB() << "Error creating CA certificate: " << e.what()));
-        }
+        throw(std::runtime_error(SB() << "Error creating CA certificate: " << e.what()));
     }
 }
 
@@ -1136,14 +1087,11 @@ void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EV
     // Create the certificate using the certificate factory, store it in the database and return the PEM string
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
-    // If there is a separate key file then write that first
-    if (!config.admin_private_key_filename.empty()) {
-        auto cert_file_factory = IdFileFactory::create(config.admin_private_key_filename, config.admin_private_key_password, key_pair);
-        cert_file_factory->writeIdentityFile();
-        log_warn_printf(pvacms, "Created private key file for default PVACMS admin user: %s\n", config.admin_private_key_filename.c_str());
-    }
-
-    auto cert_file_factory = IdFileFactory::create(config.admin_cert_filename, config.admin_cert_password, key_pair, nullptr, nullptr, "certificate",
+    auto cert_file_factory = IdFileFactory::create(config.admin_cert_filename,
+                                                   config.admin_cert_password,
+                                                   key_pair,
+                                                   nullptr,
+                                                   nullptr,
                                                    pem_string);
     cert_file_factory->writeIdentityFile();
 
@@ -1181,72 +1129,22 @@ void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EV
  */
 void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                                    const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
-    // Get key pair if specified
     std::shared_ptr<KeyPair> key_pair;
-    try {
-        if (!config.tls_private_key_filename.empty()) {
-            // Check if the server key pair exists
-            key_pair = IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password)->getKeyFromFile();
-        }
-    } catch (std::exception &e) {
-        // Error getting key pair
-        // Make a new key pair file
-        try {
-            log_warn_printf(pvacms, "%s\n", e.what());
-            key_pair = createServerKey(config);
-        } catch (std::exception &e) {
-            throw(std::runtime_error(SB() << "Error creating server key: " << e.what()));
-        }
-    }
-
-    // At this point if a separate key was configured then we will have one, or we will have thrown an exception
-    // If we don't have one then it's because it was configured to be in the same file as the certificate
-
-    // Get certificate
     try {
         // Check if the server certificates exist
         auto cert_data = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getCertDataFromFile();
-        if (!key_pair) key_pair = cert_data.key_pair;
+        key_pair = cert_data.key_pair;
+        if (!key_pair && cert_data.cert)
+            throw(std::runtime_error("Keychain file contains a certificate but no key: "));
 
-        // If we have a key
-        if (key_pair) {
-            // And we have a cert
-            if (cert_data.cert) {
-                // all is ok
-                return;
-            }
-            // We don't have keys so create a key in a combined cert and key file
-            throw(std::runtime_error("Certificate file does not contain a certificate"));
-        }
-        throw(std::runtime_error("Certificate file does not contain a private key"));
-    } catch (std::exception &e) {
-        // Error getting certs file, or certs file invalid
-        // Make a new server Certificate
-        try {
-            log_warn_printf(pvacms, "%s\n", e.what());
-            if (!key_pair) key_pair = IdFileFactory::createKeyPair();
+        if (!key_pair)
+            key_pair = IdFileFactory::createKeyPair();
 
+        if (!cert_data.cert)
             createServerCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain, key_pair);
-            // All is ok
-        } catch (std::exception &e) {
-            throw(std::runtime_error(SB() << "Error creating server certificate: " << e.what()));
-        }
+    } catch (std::exception &e) {
+        throw(std::runtime_error(SB() << "Error creating server certificate: " << e.what()));
     }
-}
-
-/**
- * @brief Create a CA key
- *
- * @param config the configuration to use to get the parameters to create cert
- * @return the key pair
- */
-std::shared_ptr<KeyPair> createCaKey(ConfigCms &config) {
-    // Create a key pair
-    const auto key_pair = IdFileFactory::createKeyPair();
-
-    // Create key file containing private key
-    IdFileFactory::create(config.ca_private_key_filename, config.ca_private_key_password, key_pair)->writeIdentityFile();
-    return key_pair;
 }
 
 /**
@@ -1275,24 +1173,16 @@ CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
     // Create keychain file containing certs, private key and chain
-    auto cert_file_factory = IdFileFactory::create(config.ca_cert_filename, config.ca_cert_password, key_pair, nullptr, nullptr, "certificate", pem_string);
+    auto cert_file_factory = IdFileFactory::create(config.ca_cert_filename,
+                                                   config.ca_cert_password,
+                                                   key_pair,
+                                                   nullptr,
+                                                   nullptr,
+                                                   pem_string);
 
     cert_file_factory->writeIdentityFile();
 
     return cert_file_factory->getCertData(key_pair);
-}
-
-/**
- * @brief Create a PVACMS server key
- * @param config the configuration use to get the parameters to create cert
- */
-std::shared_ptr<KeyPair> createServerKey(const ConfigCms &config) {
-    // Create a key pair
-    const auto key_pair(IdFileFactory::createKeyPair());
-
-    // Create private key file containing private key
-    IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password, key_pair)->writeIdentityFile();
-    return key_pair;
 }
 
 /**
@@ -1320,7 +1210,11 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
 
     // Create keychain file containing certs, private key and null chain
     auto pem_string = CertFactory::certAndCasToPemString(cert, certificate_factory.certificate_chain_.get());
-    auto cert_file_factory = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr, nullptr, "PVACMS server certificate",
+    auto cert_file_factory = IdFileFactory::create(config.tls_cert_filename,
+                                                   config.tls_cert_password,
+                                                   key_pair,
+                                                   nullptr,
+                                                   nullptr,
                                                    pem_string);
 
     cert_file_factory->writeIdentityFile();
@@ -1705,7 +1599,6 @@ int main(int argc, char *argv[]) {
         bool show_version = false;
 
         std::string ca_password_file, pvacms_password_file, admin_password_file;
-        std::string ca_pk_password_file, pvacms_pk_password_file, admin_pk_password_file;
 
         // Define options
         app.set_help_flag("-h,--help", "Show this message");
@@ -1714,9 +1607,7 @@ int main(int argc, char *argv[]) {
         app.add_option("-d,--cert-db", config.ca_db_filename, "Specify cert db file location")->default_val(config.ca_db_filename);
 
         app.add_option("-c,--ca-keychain", config.ca_cert_filename, "Specify CA keychain file location")->default_val(config.ca_cert_filename);
-        app.add_option("--ca-private-key", config.ca_private_key_filename, "Specify CA private key file location");
         app.add_option("--ca-keychain-pwd", ca_password_file, "Specify CA keychain password file location");
-        app.add_option("--ca-private-key-pwd", ca_pk_password_file, "Specify CA private key password file location");
         app.add_option("--ca-name", config.ca_name, "Specify the CA's name. Used if we need to create a root certificate")->default_val(config.ca_name);
         app.add_option("--ca-org", config.ca_organization, "Specify the CA's Organization. Used if we need to create a root certificate")
             ->default_val("ca.epics.org");
@@ -1726,9 +1617,7 @@ int main(int argc, char *argv[]) {
             ->default_val(config.ca_country.empty() ? getCountryCode() : config.ca_country);
 
         app.add_option("-p,--pvacms-keychain", config.tls_cert_filename, "Specify PVACMS keychain file location")->default_val(config.tls_cert_filename);
-        app.add_option("--pvacms-private-key", config.tls_private_key_filename, "Specify PVACMS private key file location");
         app.add_option("--pvacms-keychain-pwd", pvacms_password_file, "Specify PVACMS keychain password file location");
-        app.add_option("--pvacms-private-key-pwd", pvacms_pk_password_file, "Specify PVACMS private key password file location");
         app.add_option("--pvacms-name", config.pvacms_name, "Specify the PVACMS name. Used if we need to create a PVACMS certificate")->default_val("PVACMS");
         app.add_option("--pvacms-org", config.pvacms_organization, "Specify the PVACMS Organization. Used if we need to create a PVACMS certificate")
             ->default_val("ca.epics.org");
@@ -1740,9 +1629,7 @@ int main(int argc, char *argv[]) {
 
         app.add_option("-a,--admin-keychain", config.admin_cert_filename, "Specify PVACMS admin user's keychain file location")
             ->default_val(config.admin_cert_filename);
-        app.add_option("--admin-private-key", config.admin_private_key_filename, "Specify PVACMS admin user's private key file location");
         app.add_option("--admin-keychain-pwd", admin_password_file, "Specify PVACMS admin user's keychain password file location");
-        app.add_option("--admin-private-key-pwd", admin_pk_password_file, "Specify PVACMS admin user's private key password file location");
         app.add_option("--acf", config.ca_acf_filename, "Admin Security Configuration File")->default_val(config.ca_acf_filename);
 
         app.add_flag("--client-require-approval", config.cert_client_require_approval, "Generate Client Certificates in PENDING_APPROVAL state")
@@ -1762,32 +1649,23 @@ int main(int argc, char *argv[]) {
 
         // Make sure some directories exist
         if (!config.ca_cert_filename.empty()) config.ensureDirectoryExists(config.ca_cert_filename);
-        if (!config.ca_private_key_filename.empty()) config.ensureDirectoryExists(config.ca_private_key_filename);
 
         if (!config.tls_cert_filename.empty()) config.ensureDirectoryExists(config.tls_cert_filename);
-        if (!config.tls_private_key_filename.empty()) config.ensureDirectoryExists(config.tls_private_key_filename);
 
         if (!config.ca_acf_filename.empty()) config.ensureDirectoryExists(config.ca_acf_filename);
 
         if (!config.admin_cert_filename.empty()) config.ensureDirectoryExists(config.admin_cert_filename);
-        if (!config.admin_private_key_filename.empty()) config.ensureDirectoryExists(config.admin_private_key_filename);
 
         if (!config.ca_db_filename.empty()) config.ensureDirectoryExists(config.ca_db_filename);
 
         if (!ca_password_file.empty()) config.ensureDirectoryExists(ca_password_file);
-        if (!ca_pk_password_file.empty()) config.ensureDirectoryExists(ca_pk_password_file);
         if (!pvacms_password_file.empty()) config.ensureDirectoryExists(pvacms_password_file);
-        if (!pvacms_pk_password_file.empty()) config.ensureDirectoryExists(pvacms_pk_password_file);
         if (!admin_password_file.empty()) config.ensureDirectoryExists(admin_password_file);
-        if (!admin_pk_password_file.empty()) config.ensureDirectoryExists(admin_pk_password_file);
 
         // Read in some passwords from files
         if (!ca_password_file.empty()) config.ca_cert_password = config.getFileContents(ca_password_file);
-        if (!ca_pk_password_file.empty()) config.ca_private_key_password = config.getFileContents(ca_pk_password_file);
         if (!pvacms_password_file.empty()) config.tls_cert_filename = config.getFileContents(pvacms_password_file);
-        if (!pvacms_pk_password_file.empty()) config.tls_private_key_password = config.getFileContents(pvacms_pk_password_file);
         if (!admin_password_file.empty()) config.admin_cert_password = config.getFileContents(admin_password_file);
-        if (!admin_pk_password_file.empty()) config.admin_private_key_password = config.getFileContents(admin_pk_password_file);
 
         // Override some settings for PVACMS
         config.tls_stop_if_no_cert = true;

@@ -37,15 +37,11 @@ struct CertData {
 };
 
 /**
- * @brief The availability of a certificate file
+ * @brief The availability of a keychain file
  *
- * This is returned when when authentication daemons are trying to provision the configured certificate files.
- *  - `NOT_AVAILABLE` is returned if the file does not exist and can't be provisioned.
- *  - `ROOT_CERT_INSTALLED` is returned if the file exists or has been provisioned but
- *     the root CA certificate was downloaded and installed during the call.  This signals to the caller
- *     the configured certificate will be unusable until the user trusts the root CA certificate.
- *  - `AVAILABLE` is returned if the file already exists.
- *  - `OK` is returned if the certificate file was provisioned and is ready for use.
+ * This is returned when when authentication daemons are trying to provision the configured keychain file.
+ *  - `!OK` is returned if the file does not exist and can't be provisioned.
+ *  - `OK` is returned if the keychain file was provisioned and is ready for use.
  */
 enum CertAvailability {
     OK,
@@ -64,8 +60,7 @@ class IdFileFactory {
      * This method creates a new CertFileFactory object.
      */
     static cert_factory_ptr create(const std::string& filename, const std::string& password = "", const std::shared_ptr<KeyPair>& key_pair = nullptr,
-                                   X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
-                                   const std::string& pem_string = "");
+                                   X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& pem_string = "");
 
     static cert_factory_ptr createReader(const std::string& filename, const std::string& password = "") { return create(filename, password); }
 
@@ -109,13 +104,12 @@ class IdFileFactory {
 
    protected:
     IdFileFactory(const std::string& filename, const std::string& password = "", const std::shared_ptr<KeyPair>& key_pair = nullptr, X509* cert_ptr = nullptr,
-                  STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate", const std::string& pem_string = "")
+                  STACK_OF(X509) * certs_ptr = nullptr, const std::string& pem_string = "")
         : filename_(filename),
           password_(password),
           key_pair_(key_pair),
           cert_ptr_(cert_ptr),
           certs_ptr_(certs_ptr),
-          usage_(usage),
           pem_string_(pem_string) {}
 
     const std::string filename_{};
@@ -123,7 +117,6 @@ class IdFileFactory {
     const std::shared_ptr<KeyPair> key_pair_;
     X509* cert_ptr_{nullptr};
     STACK_OF(X509) * certs_ptr_ { nullptr };
-    const std::string usage_{};
     const std::string pem_string_{};
 
     static void backupFileIfExists(const std::string& filename);

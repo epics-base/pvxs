@@ -90,7 +90,7 @@ int main(int argc, char* argv[]) {
 
         // Define options
         app.add_option("-w,--timeout", conf.request_timeout_specified);
-        app.add_option("-f,--file", cert_file, "The certificate file to read if no Certificate ID specified");
+        app.add_option("-f,--file", cert_file, "The keychain file to read if no Certificate ID specified");
         app.add_option("-#,--limit", arrLimit)->default_val(20);
         app.add_option("-F,--format", format_str);
 
@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
                       << "  where <issuer> is the first 8 hex digits of the subject key identifier of the issuer and <serial>\n"
                       << "  is the serial number of the certificate. e.g. 27975e6b:7246297371190731775.\n"
                       << std::endl
-                      << "  Get certificate status from certificate file: The certificate file must be a PKCS12 file.\n"
+                      << "  Get certificate status from keychain file: The keychain file must be a PKCS#12 file.\n"
                       << std::endl
                       << "  APPROVAL and DENIAL of pending certificate approval requests: Can only be made by administrators.\n"
                       << std::endl

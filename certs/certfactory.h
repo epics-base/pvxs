@@ -139,7 +139,7 @@ class PVXS_API CertFactory {
     static inline std::string getCertHashName(const std::string &cert_path) {
         std::ifstream cert_file(cert_path, std::ios::binary);
         if (!cert_file) {
-            throw std::runtime_error("Unable to open certificate file");
+            throw std::runtime_error("Unable to open keychain file");
         }
 
         std::string cert_data((std::istreambuf_iterator<char>(cert_file)), std::istreambuf_iterator<char>());

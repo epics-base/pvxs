@@ -181,14 +181,12 @@ class StatusMonitor {
 
 void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory);
 
-std::shared_ptr<KeyPair> createCaKey(ConfigCms &config);
 CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<KeyPair> &key_pair);
 
 ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
 
 std::string createCertificatePemString(sql_ptr &ca_db, CertFactory &cert_factory);
 
-std::shared_ptr<KeyPair> createServerKey(const ConfigCms &config);
 void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                              const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, std::shared_ptr<KeyPair> &key_pair);
 

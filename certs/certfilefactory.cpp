@@ -144,18 +144,16 @@ CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) {
 }
 
 cert_factory_ptr IdFileFactory::create(const std::string& filename, const std::string& password, const std::shared_ptr<KeyPair>& key_pair, X509* cert_ptr,
-                                       STACK_OF(X509) * certs_ptr, const std::string& usage, const std::string& pem_string) {
+                                       STACK_OF(X509) * certs_ptr, const std::string& pem_string) {
     std::string ext = getExtension(filename);
     if (ext == "p12" || ext == "pfx") {
-        if (!pem_string.empty()) {
-            return make_factory_ptr<P12FileFactory>(filename, password, key_pair, pem_string);
-        } else if (cert_ptr) {
+        if (cert_ptr)
             return make_factory_ptr<P12FileFactory>(filename, password, key_pair, cert_ptr, certs_ptr);
-        } else {
-            return make_factory_ptr<P12FileFactory>(filename, password, key_pair);
-        }
+        else
+            return make_factory_ptr<P12FileFactory>(filename, password, key_pair, pem_string);
+
     }
-    throw std::runtime_error(SB() << usage << ": Unsupported certificate file extension: " << (ext.empty() ? "<none>" : ext));
+    throw std::runtime_error(SB() << ": Unsupported keychain file extension (expected p12 or pfx): \"" << (ext.empty() ? "<none>" : ext) << "\"");
 }
 
 /**

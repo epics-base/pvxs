@@ -92,17 +92,17 @@ CertData P12FileFactory::getCertDataFromFile() {
     // Get cert from configured file
     file_ptr fp(fopen(filename_.c_str(), "rb"), false);
     if (!fp) {
-        throw std::runtime_error(SB() << "Error opening certificate file for reading binary contents: \"" << filename_ << "\"");
+        throw std::runtime_error(SB() << "Error opening keychain file for reading binary contents: \"" << filename_ << "\"");
     }
 
     ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL), false);
     if (!p12) {
-        throw std::runtime_error(SB() << "Error opening certificate file as a PKCS#12 object: " << filename_);
+        throw std::runtime_error(SB() << "Error opening keychain file as a PKCS#12 object: " << filename_);
     }
 
     // Try to get private key and certificate
     if (!PKCS12_parse(p12.get(), password_.c_str(), pkey.acquire(), cert.acquire(), &chain_ptr)) {
-        throw std::runtime_error(SB() << "Error parsing certificate file: " << filename_);
+        throw std::runtime_error(SB() << "Error parsing keychain file: " << filename_);
     }
 
     ossl_shared_ptr<STACK_OF(X509)> chain;
@@ -239,7 +239,7 @@ void P12FileFactory::writePKCS12File() {
     }
 
     // Write PKCS12 object to file
-    if (i2d_PKCS12_fp(file.get(), p12_ptr_) != 1) throw std::runtime_error(SB() << "Error writing " << usage_ << " data to file: " << filename_);
+    if (i2d_PKCS12_fp(file.get(), p12_ptr_) != 1) throw std::runtime_error(SB() << "Error writing keychain data to file: " << filename_);
 
     // flush the output to the file
     fflush(file.get());
@@ -248,7 +248,7 @@ void P12FileFactory::writePKCS12File() {
 
     chmod(filename_.c_str(),
           S_IRUSR | S_IWUSR);  // Protect P12 file
-    log_info_printf(certs, "%s file Created: %s\n", usage_.c_str(), filename_.c_str());
+    log_info_printf(certs, "keychain file Created: %s\n", filename_.c_str());
 }
 }  // namespace certs
 }  // namespace pvxs

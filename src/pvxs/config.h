@@ -130,31 +130,21 @@ struct PVXS_API ConfigCommon {
     unsigned short tls_port = 5076;
 
     /**
-     * @brief If TLS is disabled this is set to true.  This can happen
-     * if no certificate file is found and can't be configured and this is a
+     * @brief Set to true to disable TLS.  This will override the environment TLS configuration
+     * settings and will also override config TLS configuration fields.  Suitable fot testing.
      * server
      */
     bool tls_disabled = false;
 
-    /** Path to keychain file containing certificates and optional keys.
+    /** Path to keychain file containing certificates and private key.
      *  @since UNRELEASED
      */
     std::string tls_cert_filename;
 
-    /** Path to file containing password for certificate file.
+    /** Path to file containing password for keychain file.
      *  @since UNRELEASED
      */
     std::string tls_cert_password;
-
-    /** Path to private key file containing key.
-     *  @since UNRELEASED
-     */
-    std::string tls_private_key_filename;
-
-    /** Path to file containing password for the private key file.
-     *  @since UNRELEASED
-     */
-    std::string tls_private_key_password;
 
     /** Client certificate request during TLS handshake.
      *
@@ -210,10 +200,10 @@ struct PVXS_API ConfigCommon {
 
     /**
      * True if the environment is configured for TLS.  All this means is that
-     * the location of the certificate file has been specified in
-     * EPICS_PVA_TLS_KEYCHAIN, and EPICS_PVA_TLS_PKEY.
+     * the location of the keychain file has been specified in
+     * EPICS_PVA_TLS_KEYCHAIN.
      *
-     * @return true if the location of the certificate file has been specified,
+     * @return true if the location of the keychain file has been specified,
      * false otherwise
      */
     inline bool isTlsConfigured() const { return !tls_disabled && !tls_cert_filename.empty(); }

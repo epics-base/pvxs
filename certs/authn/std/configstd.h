@@ -54,9 +54,7 @@ class ConfigStd : public pvxs::client::Config {
     std::string server_country;
 
     std::string tls_srv_cert_filename;
-    std::string tls_srv_private_key_filename;
     std::string tls_srv_cert_password;
-    std::string tls_srv_private_key_password;
 
     void fromStdEnv(const std::map<std::string, std::string>& defs);
 };

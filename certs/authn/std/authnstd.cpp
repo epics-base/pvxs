@@ -98,14 +98,10 @@ void usage(const char *argv0) {
                  "  -C <name>  Override the C subject field\n"
                  "  \n"
                  "ENVIRONMENT VARIABLES: at least one mandatory variable must be set\n"
-                 "\tEPICS_PVA_TLS_KEYCHAIN\t\t\tSet name and location of client certificate file (mandatory for clients)\n"
-                 "\tEPICS_PVAS_TLS_KEYCHAIN\t\t\tSet name and location of server certificate file (mandatory for server)\n"
-                 "\tEPICS_PVA_TLS_KEYCHAIN_PWD_FILE\t\tSet name and location of client certificate password file (optional)\n"
-                 "\tEPICS_PVAS_TLS_KEYCHAIN_PWD_FILE\tSet name and location of server certificate password file (optional)\n"
-                 "\tEPICS_PVA_TLS_PKEY\t\t\tSet name and location of client private key file (optional)\n"
-                 "\tEPICS_PVAS_TLS_PKEY\t\t\tSet name and location of server private key file (optional)\n"
-                 "\tEPICS_PVA_TLS_PKEY_PWD_FILE\t\tSet name and location of client private key password file (optional)\n"
-                 "\tEPICS_PVAS_TLS_PKEY_PWD_FILE\t\tSet name and location of server private key password file (optional)\n";
+                 "\tEPICS_PVA_TLS_KEYCHAIN\t\t\tSet name and location of client keychain file (mandatory for clients)\n"
+                 "\tEPICS_PVAS_TLS_KEYCHAIN\t\t\tSet name and location of server keychain file (mandatory for server)\n"
+                 "\tEPICS_PVA_TLS_KEYCHAIN_PWD_FILE\t\tSet name and location of client keychain password file (optional)\n"
+                 "\tEPICS_PVAS_TLS_KEYCHAIN_PWD_FILE\tSet name and location of server keychain password file (optional)\n";
 }
 
 /**
@@ -148,9 +144,7 @@ int readOptions(ConfigStd &config, int argc, char *argv[], bool &verbose, uint16
                 if (usage_str == "gateway" || usage_str == "server") {
                     // Use the Server versions of environment variables
                     config.tls_cert_filename = config.tls_srv_cert_filename;
-                    config.tls_private_key_filename = config.tls_srv_private_key_filename;
                     config.tls_cert_password = config.tls_srv_cert_password;
-                    config.tls_private_key_password = config.tls_srv_private_key_password;
                     config.name = config.server_name;
                     config.organization = config.server_organization;
                     config.organizational_unit = config.server_organizational_unit;
@@ -376,14 +370,10 @@ int main(int argc, char *argv[]) {
 
         if (config.tls_cert_filename.empty()) {
             std::cerr << "You must set at least one mandatory environment variables to create certificates: " << std::endl;
-            std::cerr << "\tEPICS_PVA_TLS_KEYCHAIN\t\t\tSet name and location of client certificate file (mandatory for clients)" << std::endl;
-            std::cerr << "\tEPICS_PVAS_TLS_KEYCHAIN\t\t\tSet name and location of server certificate file (mandatory for server)" << std::endl;
-            std::cerr << "\tEPICS_PVA_TLS_KEYCHAIN_PWD_FILE\t\tSet name and location of client certificate password file (optional)" << std::endl;
-            std::cerr << "\tEPICS_PVAS_TLS_KEYCHAIN_PWD_FILE\tSet name and location of server certificate password file (optional)" << std::endl;
-            std::cerr << "\tEPICS_PVA_TLS_PKEY\t\t\tSet name and location of client private key file (optional)" << std::endl;
-            std::cerr << "\tEPICS_PVAS_TLS_PKEY\t\t\tSet name and location of server private key file (optional)" << std::endl;
-            std::cerr << "\tEPICS_PVA_TLS_PKEY_PWD_FILE\t\tSet name and location of client private key password file (optional)" << std::endl;
-            std::cerr << "\tEPICS_PVAS_TLS_PKEY_PWD_FILE\t\tSet name and location of server private key password file (optional)" << std::endl;
+            std::cerr << "\tEPICS_PVA_TLS_KEYCHAIN\t\t\tSet name and location of client keychain file (mandatory for clients)" << std::endl;
+            std::cerr << "\tEPICS_PVAS_TLS_KEYCHAIN\t\t\tSet name and location of server keychain file (mandatory for server)" << std::endl;
+            std::cerr << "\tEPICS_PVA_TLS_KEYCHAIN_PWD_FILE\t\tSet name and location of client keychain password file (optional)" << std::endl;
+            std::cerr << "\tEPICS_PVAS_TLS_KEYCHAIN_PWD_FILE\tSet name and location of server keychain password file (optional)" << std::endl;
             return 10;
         }
         if (verbose) logger_level_set("pvxs.auth.std*", pvxs::Level::Info);
@@ -417,11 +407,7 @@ int main(int argc, char *argv[]) {
             // Get key pair
             try {
                 // Check if the key pair exists
-                if ( config.tls_private_key_filename.empty() ) {
-                    key_pair = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getKeyFromFile();
-                } else {
-                    key_pair = IdFileFactory::create(config.tls_private_key_filename, config.tls_private_key_password)->getKeyFromFile();
-                }
+                key_pair = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getKeyFromFile();
             } catch (std::exception &e) {
                 // Make a new key pair file
                 try {
@@ -448,8 +434,8 @@ int main(int argc, char *argv[]) {
 
                 // Attempt to write the certificate and private key
                 // to a cert file protected by the configured password
-                auto file_factory = IdFileFactory::create((cert_usage ? config.tls_cert_filename : config.tls_cert_filename), config.tls_cert_password,
-                                                          key_pair, nullptr, nullptr, "certificate", p12_pem_string);
+                auto file_factory = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password,
+                                                          key_pair, nullptr, nullptr, p12_pem_string);
                 file_factory->writeIdentityFile();
 
                 // Read file back for info
@@ -459,17 +445,9 @@ int main(int argc, char *argv[]) {
 
                 std::string from = std::ctime(&credentials->not_before);
                 std::string to = std::ctime(&credentials->not_after);
-                log_info_printf(auths, "%s\n",
-                                (pvxs::SB() << "CERT_ID: " << issuer_id << ":" << serial_number).str().c_str());
-                log_info_printf(auths, "%s\n",
-                                (pvxs::SB() << "TYPE: " << ((authenticator.type_ == PVXS_DEFAULT_AUTH_TYPE) ? "basic" : authenticator.type_)).str().c_str());
-                log_info_printf(auths, "%s\n",
-                                (pvxs::SB() << "OUTPUT TO: " << config.tls_cert_filename
-                                            << (config.tls_private_key_filename.empty() or config.tls_private_key_filename == config.tls_cert_filename
-                                                    ? ""
-                                                    : " and " + config.tls_private_key_filename))
-                                    .str()
-                                    .c_str());
+                log_info_printf(auths, "%s\n", (pvxs::SB() << "CERT_ID: " << issuer_id << ":" << serial_number).str().c_str());
+                log_info_printf(auths, "%s\n", (pvxs::SB() << "TYPE: " << ((authenticator.type_ == PVXS_DEFAULT_AUTH_TYPE) ? "basic" : authenticator.type_)).str().c_str());
+                log_info_printf(auths, "%s\n", (pvxs::SB() << "OUTPUT TO: " << config.tls_cert_filename).str().c_str());
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "NAME: " << credentials->name).str().c_str());
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "ORGANIZATION: " << credentials->organization).str().c_str());
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "ORGANIZATIONAL UNIT: " << credentials->organization_unit).str().c_str());

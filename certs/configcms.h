@@ -123,22 +123,6 @@ class ConfigCms : public pvxs::server::Config {
 
     /**
      * @brief This is the string that determines
-     * the fully qualified path to the private key file that contains
-     * the private keys.
-     *
-     * This is optional.  If not specified, the `ca_cert_filename` is used.
-     */
-    std::string ca_private_key_filename;
-
-    /**
-     * @brief This is the string that determines
-     * the fully qualified path to a file that contains the password that
-     * unlocks the `ca_pkey_filename`.
-     */
-    std::string ca_private_key_password;
-
-    /**
-     * @brief This is the string that determines
      * the fully qualified path to the keychain file that contains
      * the admin user's certificate, and public and private keys.
      */
@@ -150,20 +134,6 @@ class ConfigCms : public pvxs::server::Config {
      * unlocks the admin user's keychain file.
      */
     std::string admin_cert_password;
-
-    /**
-     * @brief This is the string that determines
-     * the fully qualified path to the admin user's private key file that contains
-     * the private keys.
-     */
-    std::string admin_private_key_filename;
-
-    /**
-     * @brief This is the string that determines
-     * the fully qualified path to a file that contains the password that
-     * unlocks the admin user's private key file.
-     */
-    std::string admin_private_key_password;
 
     /**
      * @brief This is the string that determines the
