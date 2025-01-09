@@ -28,7 +28,6 @@
 
 #include "certstatusmanager.h"
 #include "evhelper.h"
-#include "p12filewatcher.h"
 #include "serverconn.h"
 #include "udp_collector.h"
 #include "utilpvt.h"
@@ -43,7 +42,6 @@ using namespace impl;
 DEFINE_LOGGER(serversetup, "pvxs.svr.init");
 DEFINE_LOGGER(osslsetup, "pvxs.ossl.init");
 DEFINE_LOGGER(watcher, "pvxs.certs.mon");
-DEFINE_LOGGER(filemon, "pvxs.file.mon");
 DEFINE_LOGGER(serverio, "pvxs.svr.io");
 DEFINE_LOGGER(serversearch, "pvxs.svr.search");
 
@@ -63,12 +61,12 @@ Server Server::fromEnv(const bool tls_disabled, const ConfigCommon::ConfigTarget
     return Config::fromEnv(tls_disabled, target).build();
 }
 
-Server Server::fromEnv(CertEventCallback &cert_file_event_callback, const bool tls_disabled, const ConfigCommon::ConfigTarget target)
+Server Server::fromEnv(CustomServerCallback &cert_file_event_callback, const bool tls_disabled, const ConfigCommon::ConfigTarget target)
 {
     return Config::fromEnv(tls_disabled, target).build(cert_file_event_callback);
 }
 
-Server::Server(const Config &conf, CertEventCallback cert_file_event_callback) {
+Server::Server(const Config &conf, CustomServerCallback cert_file_event_callback) {
     auto internal(std::make_shared<Pvt>(*this, conf, cert_file_event_callback));
     internal->internal_self = internal;
 
@@ -453,7 +451,7 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 #ifndef PVXS_ENABLE_OPENSSL
 Server::Pvt::Pvt(Server& server, const Config& conf)
 #else
-Server::Pvt::Pvt(Server &svr, const Config& conf, CertEventCallback custom_cert_event_callback)
+Server::Pvt::Pvt(Server &svr, const Config& conf, CustomServerCallback custom_cert_event_callback)
 #endif
     : server(svr),
       effective(conf),
@@ -468,15 +466,8 @@ Server::Pvt::Pvt(Server &svr, const Config& conf, CertEventCallback custom_cert_
 #ifdef PVXS_ENABLE_OPENSSL
       ,
       tls_context(nullptr),
-      custom_cert_event_callback(custom_cert_event_callback),
-      cert_event_timer(__FILE__, __LINE__, event_new(acceptor_loop.base, -1, EV_TIMEOUT, doCertEventHandler, this)),
-      file_watcher(filemon, {effective.tls_keychain_file, effective.tls_keychain_pwd},
-                   [this](bool enable) {
-                       if (enable)
-                           acceptor_loop.dispatch([this]() mutable { reloadTlsFromConfig(); });
-                       else
-                           acceptor_loop.dispatch([this]() mutable { enterDegradedMode(); });
-                   })
+      custom_server_callback(custom_cert_event_callback),
+      custom_server_callback_timer(__FILE__, __LINE__, event_new(acceptor_loop.base, -1, EV_TIMEOUT, doCustomServerCallback, this))
 #endif
 {
     effective.expand();
@@ -742,15 +733,14 @@ void Server::Pvt::start()
         state = Running;
     });
 
-    // begin monitoring cert file status
-    acceptor_loop.call([this]()
-    {
-        // monitor first file status with initial delay
-        if(event_add(cert_event_timer.get(), &statusIntervalInitial))
-            log_err_printf(serversetup, "Error enabling file monitor\n%s", "");
-
-        state = Running;
-    });
+    // begin running custom server callback if configured
+   if ( custom_server_callback )
+       acceptor_loop.call([this]()
+       {
+            // Trigger the first custom server callback, with the initial interval period
+            if(event_add(custom_server_callback_timer.get(), &kCustomCallbackIntervalInitial))
+                log_err_printf(serversetup, "Error enabling file monitor\n%s", "");
+       });
 
 
 }
@@ -758,12 +748,15 @@ void Server::Pvt::start()
 void Server::Pvt::stop()
 {
     log_debug_printf(serversetup, "Server Stopping\n%s", "");
-#ifdef PVXS_ENABLE_OPENSSL
-    // Stop file watcher if enabled
-    if (file_watcher.isRunning()) {
-        file_watcher.stop();
-    }
-#endif
+
+    acceptor_loop.call([this]()
+    {
+        if (custom_server_callback_timer) {
+            if (event_del(custom_server_callback_timer.get()))
+                log_warn_printf(serversetup, "Error disabling custom server callback timer\n%s", "");
+        }
+
+    });
 
     // Stop sending Beacons
     state_t prev_state;
@@ -777,7 +770,7 @@ void Server::Pvt::stop()
         state = Stopping;
 
         if(event_del(beaconTimer.get()))
-            log_err_printf(serversetup, "Error disabling beacon timer on\n%s", "");
+            log_err_printf(serversetup, "Error disabling beacon timer\n%s", "");
     });
     if(prev_state!=Running)
         return;
@@ -988,18 +981,17 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-void Server::Pvt::doCertEventHandler(int fd, short evt, void *raw) {
+void Server::Pvt::doCustomServerCallback(int fd, short evt, void *raw) {
     try {
         auto pvt = static_cast<Server::Pvt *>(raw);
-        if (pvt->custom_cert_event_callback) {
-            pvt->custom_cert_event_callback(evt);
+        if (pvt && pvt->custom_server_callback) {
+            pvt->custom_server_callback(evt);
+            timeval interval(kCustomCallbackInterval);
+            if (event_add(pvt->custom_server_callback_timer. get(), &interval))
+                log_err_printf(serverio, "Error re-enabling custom server callback%s\n", "");
         }
-        pvt->fileEventCallback(evt);
-        timeval interval(statusIntervalShort);
-        if (event_add(pvt->cert_event_timer. get(), &interval))
-            log_err_printf(serverio, "Error re-enabling cert file event timer%s\n", "");
     } catch (std::exception &e) {
-        log_err_printf(serverio, "Unhandled error in cert file event timer callback: %s\n", e.what());
+        log_err_printf(serverio, "Unhandled error in custom server callback: %s\n", e.what());
     }
 }
 
@@ -1055,34 +1047,6 @@ void Server::reconfigure(const Config& inconf) {
     }
 }
 
-void Server::checkFileStatus() { pvt->file_watcher.checkFileStatus(); }
-
-/**
- * @brief Reload TLS from configuration
- *
- * This is called when a TLS configuration file is changed which may affect TLS configuration.
- * If TLS is already configured then we don't do anything but otherwise we try to reload the config
- */
-void Server::Pvt::reloadTlsFromConfig() {
-    // For CMS servers we can't upgrade (because we can't even start without a valid cert)
-    if (effective.config_target == ConfigCommon::CMS) return;
-
-    // If already fully enabled then don't do anything
-    if (isContextReadyForTls()) return;
-
-    try {
-        // Re-initialise context from configuration, attempting to get a valid certificate etc
-        auto new_context = ossl::SSLContext::for_server(effective, acceptor_loop);
-
-        // If unsuccessful in initialising context or cert is invalid then don't do anything
-        if (!isInitialisedForTls(new_context)) return;
-
-        tls_context = std::move(new_context);
-    } catch (std::exception& e) {
-        if (tls_context && tls_context->state != ossl::SSLContext::DegradedMode) tls_context->setDegradedMode(true);
-    }
-}
-
 /**
  * @brief Enable TLS for the given server peer connection
  *
@@ -1113,19 +1077,6 @@ void Server::Pvt::enableTlsForPeerConnection(const ServerConn* server_conn) {
 }
 
 /**
- * @brief Degrade the tls context to tcp-only mode
- *
- */
-void Server::Pvt::enterDegradedMode() {
-    if (isInDegradedMode()) return;
-
-    tls_context->setDegradedMode(true);
-
-    // Remove all TLS peer connections
-    removePeerTlsConnections();
-}
-
-/**
  * @brief Remove one or more peer TLS connections so that it will reconnect in degraded mode
  *
  * @param server_conn optionally specified peer server connection to remove
@@ -1150,12 +1101,6 @@ void Server::Pvt::removePeerTlsConnections(const ServerConn* server_conn) {
         }
     }
 }
-
-void Server::Pvt::fileEventCallback(short evt) {
-    if (!first_cert_event) file_watcher.checkFileStatus();
-    first_cert_event = false;
-}
-
 #endif
 
 Source::~Source() {}

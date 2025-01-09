@@ -260,10 +260,8 @@ struct Server::Pvt
 
 #ifdef PVXS_ENABLE_OPENSSL
     std::shared_ptr<ossl::SSLContext> tls_context;
-    CertEventCallback custom_cert_event_callback;
-    evevent cert_event_timer;
-    bool first_cert_event{true};
-    certs::TlsConfFileWatcher file_watcher;
+    CustomServerCallback custom_server_callback;
+    evevent custom_server_callback_timer;
     void* cached_ocsp_response{nullptr};
     time_t cached_ocsp_status_date;
 #endif
@@ -273,7 +271,7 @@ struct Server::Pvt
 #ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
 #else
-    Pvt(Server &server, const Config& conf, CertEventCallback custom_cert_event_callback = nullptr);
+    Pvt(Server &server, const Config& conf, CustomServerCallback custom_cert_event_callback = nullptr);
 #endif
     ~Pvt();
 
@@ -290,16 +288,11 @@ struct Server::Pvt
     static void doBeaconsS(evutil_socket_t fd, short evt, void *raw);
 
 #ifdef PVXS_ENABLE_OPENSSL
-    static void doCertEventHandler(evutil_socket_t fd, short evt, void* raw);
-    void fileEventCallback(short evt);
-
+    static void doCustomServerCallback(evutil_socket_t fd, short evt, void* raw);
     inline bool isContextReadyForTls() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
-    inline bool isInitialisedForTls(std::shared_ptr<ossl::SSLContext> new_context) { return new_context && new_context->state >= ossl::SSLContext::TcpReady; }
 
-   public:
-    void enterDegradedMode();
+  public:
     void removePeerTlsConnections(const ServerConn* server_conn = nullptr);
-    void reloadTlsFromConfig();
     void enableTlsForPeerConnection(const ServerConn* server_conn = nullptr);
 #endif
 };

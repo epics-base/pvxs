@@ -34,7 +34,6 @@
 #include "conn.h"
 #include "evhelper.h"
 #include "ownedptr.h"
-#include "p12filewatcher.h"
 
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;

@@ -88,40 +88,6 @@ Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt) {
 }
 
 /**
- * @brief clearMonitoredFiles is a helper function that clears the monitored cert files
- *
- * For testing changes to cert files that are referenced by server or client configurations.
- * The test will verify that when the cert files are changed, the server or client will be reconfigured
- * and the changes will take effect.
- *
- * This function is used to clear the cert files, triggering the reconfiguration.
- */
-void clearMonitoredFiles() {
-    // remove any file monitoring cert files that are left over from other tests
-    std::remove(SUPER_SERVER2_CERT_FILE);
-    std::remove(CLIENT3_CERT_FILE);
-}
-
-/**
- * @brief addMonitoredCertFiles is a helper function that adds the cert files to be monitored
- *
- * For testing changes to cert files that are referenced by server or client configurations.
- * The test will verify that when the cert files are changed, the server or client will be reconfigured
- * and the changes will take effect.
- *
- * This function is used to add the cert files, triggering the reconfiguration.
- */
-void addMonitoredCertFiles() {
-    std::ifstream serv_src(SUPER_SERVER_CERT_FILE, std::ios::binary);
-    std::ofstream serv_dst(SUPER_SERVER2_CERT_FILE, std::ios::binary);
-    serv_dst << serv_src.rdbuf();
-
-    std::ifstream cli_src(CLIENT1_CERT_FILE, std::ios::binary);
-    std::ofstream cli_dst(CLIENT3_CERT_FILE, std::ios::binary);
-    cli_dst << cli_src.rdbuf();
-}
-
-/**
  * @brief testLegacyMode is a test that verifies the legacy mode of the client and server still works
  *
  */
@@ -428,189 +394,10 @@ void testServerReconfig() {
     testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_IOC1);
 }
 
-/**
- * @brief testServerFileMonitoring is a test that verifies changes to server cert files
- *
- * This is used to verify that changes to server cert files will be detected and the server will be reconfigured.
- * Existing connections will not disconnected but new connections will use the new configuration.
- * The test will :
- * - configer the server with a non-existent cert file
- * - connect to the server and verify the connection is successful but is not TLS
- * - add the cert file that is referenced by the server configuration
- * - verify the server is reconfigured and the connection is successful and is TLS
- * - remove the cert file from being monitored
- * - verify the server is reconfigured and the connection is successful and is not TLS
- *
- * @note that the checkFileStatus() function is used to trigger the reconfiguration
- * rather than waiting for the file monitor to notice the change and trigger the reconfiguration.
- */
-void testServerFileMonitoring() {
-    testShow() << __func__;
-
-    clearMonitoredFiles();
-    testDiag("Server Configured without cert file");
-
-    // Initial test setup
-    auto initial(nt::NTScalar{TypeCode::Int32}.create());
-    auto mbox(server::SharedPV::buildReadonly());
-
-    // Setup the server with a non-existent cert file
-    auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SUPER_SERVER2_CERT_FILE;
-
-    auto serv(serv_conf.build().addPV(TEST_PV, mbox));
-    auto cli_conf(serv.clientConfig());
-    mbox.open(initial.update(TEST_PV_FIELD, 42));
-    serv.start();
-
-    // Connect to the server and verify the connection is successful but is not TLS
-    {
-        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
-        auto cli(cli_conf.build());
-        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && !c.cred->isTLS); }).exec());
-        auto reply(cli.get(TEST_PV).exec()->wait(10.0));
-        testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-        conn.reset();
-    }
-
-    // Add the cert file that is referenced by the server configuration
-    addMonitoredCertFiles();
-    serv.checkFileStatus();
-    testDiag("Server Reconfigured with cert file");
-
-    // Verify the server is reconfigured and the connection is successful and is TLS
-    {
-        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
-        auto cli(cli_conf.build());
-        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
-        auto reply(cli.get(TEST_PV).exec()->wait(10.0));
-        testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-        conn.reset();
-    }
-
-    // Remove the cert file from being monitored
-    clearMonitoredFiles();
-    serv.checkFileStatus();
-    testDiag("Server Reconfigured without cert file");
-
-    // Verify the server is reconfigured and the connection is successful and is not TLS
-    {
-        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
-        auto cli(cli_conf.build());
-        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && !c.cred->isTLS); }).exec());
-        auto reply(cli.get(TEST_PV).exec()->wait(10.0));
-        testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-        conn.reset();
-    }
-}
-
-/**
- * @brief testClientFileMonitoring is a test that verifies changes to client cert files will be detected and the client will be reconfigured.
- *
- * This is used to verify that changes to client cert files will be detected and the client will be reconfigured.
- * Existing connections will be disconnected and new connections will use the new configuration.
- * The test will :
- * - configure the client with a non-existent cert file
- * - monitor PV on the server and verify the connection is successful but is not TLS
- * - add the cert file that is referenced by the client configuration
- * - verify the client connection is reconfigured, the existing connection dropped, and the new connection is successful and is TLS
- * - remove the cert file from being monitored
- * - verify the client connection is reconfigured, the existing connection dropped, and the new connection is successful and is not TLS
- *
- * @note that the checkFileStatus() function is used to trigger the reconfiguration
- * rather than waiting for the file monitor to notice the change and trigger the reconfiguration.
- */
-void testClientFileMonitoring() {
-    testShow() << __func__;
-
-    // Initial test setup
-    clearMonitoredFiles();
-
-    // Setup the server with a cert file
-    auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SUPER_SERVER_CERT_FILE;
-
-    auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
-
-    // Setup the client with a non-existent cert file
-    auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CLIENT3_CERT_FILE;
-    testDiag("Client configured without cert file");
-
-    auto cli(cli_conf.build());
-
-    serv.start();
-
-    // Start monitoring the PV on the server and verify the connection is successful but is not TLS
-    epicsEvent evt;
-    auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
-    Value update;
-
-    try {
-        pop(sub, evt);
-        testFail("Unexpected success");
-        testSkip(2, "oops");
-    } catch (client::Connected& e) {
-        testTrue(!e.cred->isTLS);
-        testEq(e.cred->method, ANON_METHOD_STRING);
-        testEq(e.cred->account, "");
-    }
-
-    // Verify that the updated value triggers an update of the subscription
-    update = pop(sub, evt);
-    if (update.valid()) testEq(update[TEST_PV_FIELD].as<std::string>().find("ca/"), 0);
-
-    addMonitoredCertFiles();
-    cli.checkFileStatus();
-    testDiag("Client reconfigured with cert file");
-
-    // Verify that the existing connection is disconnected and the new connection is successful and is TLS
-    testThrows<client::Disconnect>([&sub, &evt] { pop(sub, evt); });
-
-    try {
-        (void)pop(sub, evt);
-        testFail("Unexpected success");
-        testSkip(2, "oops");
-    } catch (client::Connected& e) {
-        testOk1(e.cred && e.cred->isTLS);
-        testEq(e.cred->method, TLS_METHOD_STRING);
-        testEq(e.cred->account, CERT_CN_SUPERSERVER1);
-    } catch (...) {
-        testFail("Unexpected exception instead of Connected");
-        testSkip(2, "oops");
-    }
-
-    // Verify that the updated value triggers an update of the subscription
-    update = pop(sub, evt);
-    if (update.valid()) testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-
-    // Remove the cert file referenced by the client configuration
-    clearMonitoredFiles();
-    cli.checkFileStatus();
-    testDiag("Client reconfigured without cert file again");
-
-    // Verify that the existing connection is disconnected and the new connection is successful and is not TLS
-    testThrows<client::Disconnect>([&sub, &evt] { pop(sub, evt); });
-
-    try {
-        (void)pop(sub, evt);
-        testFail("Missing expected Connected");
-        testSkip(2, "oops");
-    } catch (client::Connected& e) {
-        testTrue(!e.cred->isTLS);
-        testEq(e.cred->method, ANON_METHOD_STRING);
-        testEq(e.cred->account, "");
-    }
-
-    // Verify that the updated value triggers an update of the subscription
-    update = pop(sub, evt);
-    if (update.valid()) testEq(update[TEST_PV_FIELD].as<std::string>().find("ca/"), 0);
-}
-
 }  // namespace
 
 MAIN(testtls) {
-    testPlan(48);
+    testPlan(28);
     testSetup();
     logger_config_env();
     testLegacyMode();
@@ -621,8 +408,6 @@ MAIN(testtls) {
     testGetNameServer();
     testClientReconfig();
     testServerReconfig();
-    testServerFileMonitoring();
-    testClientFileMonitoring();
     cleanup_for_valgrind();
     return testDone();
 }

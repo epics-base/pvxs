@@ -74,7 +74,6 @@ INC += pvxs/unittest.h
 INC += pvxs/util.h
 INC += pvxs/version.h
 INC += pvxs/versionNum.h
-INC += p12filewatcher.h
 
 LIBRARY = pvxs
 

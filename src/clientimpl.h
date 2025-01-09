@@ -20,17 +20,11 @@
 #include "dataimpl.h"
 #include "evhelper.h"
 #include "ownedptr.h"
-#include "p12filewatcher.h"
 #include "udp_collector.h"
 #include "utilpvt.h"
 
 namespace pvxs {
 namespace client {
-
-class MonitorCreationException : public std::runtime_error {
-  public:
-    explicit MonitorCreationException(const std::string& message) : std::runtime_error(message) {}
-};
 
 struct Channel;
 struct ContextImpl;
@@ -283,6 +277,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     inline bool isRunning() const { return state == Running; }
 
+#ifdef PVXS_ENABLE_OPENSSL
     inline bool isContextReadyForTls() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
     inline bool isInitialisedForTls(std::shared_ptr<ossl::SSLContext> context) {
         return context && context->state >= ossl::SSLContext::TcpReady && !((certs::CertificateStatus)context->get_status()).isRevokedOrExpired();
@@ -304,6 +299,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
             }
         }
     };
+#endif
 
     Config effective;
 
@@ -381,8 +377,6 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
 #ifdef PVXS_ENABLE_OPENSSL
     std::shared_ptr<ossl::SSLContext> tls_context;
-    evevent cert_event_timer;
-    certs::TlsConfFileWatcher file_watcher;
 #endif
 
     INST_COUNTER(ClientContextImpl);
@@ -415,13 +409,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     void onNSCheck();
     static void onNSCheckS(evutil_socket_t fd, short evt, void *raw);
 
-  private:
-    friend class client::Context;
-
 #ifdef PVXS_ENABLE_OPENSSL
-    static void doCertEventHandler(evutil_socket_t fd, short evt, void *raw);
-    void fileEventCallback(short evt);
-  public:
     void enterDegradedMode();
     void removePeerTlsConnections(const Connection* client_conn = nullptr);
     void reloadTlsFromConfig(const Config& new_config = {});

@@ -75,7 +75,7 @@ public:
     explicit Server(const Config&);
 
 #ifdef PVXS_ENABLE_OPENSSL
-    Server(const Config &config, CertEventCallback cert_file_event_callback);
+    Server(const Config &config, CustomServerCallback cert_file_event_callback);
 #endif
     Server(const Server&) = default;
     Server(Server&& o) = default;
@@ -93,7 +93,7 @@ public:
     Server fromEnv();
 #else
     Server fromEnv(bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
-    Server fromEnv(CertEventCallback &cert_file_event_callback, bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
+    Server fromEnv(CustomServerCallback &cert_file_event_callback, bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
 #endif // PVXS_ENABLE_OPENSSL
 
     //! Begin serving.  Does not block.
@@ -123,7 +123,6 @@ public:
      * @since UNRELEASED
      */
     void reconfigure(const Config&);
-    void checkFileStatus() ;
 #endif
 
     //! effective config
@@ -276,7 +275,7 @@ public:
     }
 
     //! Create a new Server using the current configuration with a custom file event callback
-    inline Server build(CertEventCallback &cert_file_event_callback) const {
+    inline Server build(CustomServerCallback &cert_file_event_callback) const {
         return Server(*this, cert_file_event_callback);
     }
 

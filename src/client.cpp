@@ -16,12 +16,8 @@
 
 #include <pvxs/log.h>
 
-#include "certstatusmanager.h"
-#include "p12filewatcher.h"
-
 DEFINE_LOGGER(setup, "pvxs.cli.init");
 DEFINE_LOGGER(watcher, "pvxs.certs.mon");
-DEFINE_LOGGER(filemon, "pvxs.file.mon");
 DEFINE_LOGGER(io, "pvxs.cli.io");
 DEFINE_LOGGER(beacon, "pvxs.cli.beacon");
 DEFINE_LOGGER(duppv, "pvxs.cli.dup");
@@ -463,8 +459,6 @@ static Value buildCAMethod() {
         .create();
 }
 
-void Context::checkFileStatus() { pvt->impl->file_watcher.checkFileStatus(); }
-
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     : ifmap(IfaceMap::instance()),
       effective([conf]() -> Config {
@@ -486,15 +480,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
       nsChecker(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::onNSCheckS, this))
 #ifdef PVXS_ENABLE_OPENSSL
       ,
-      tls_context(nullptr),
-      cert_event_timer(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT, doCertEventHandler, this)),
-      file_watcher(filemon, {effective.tls_keychain_file, effective.tls_keychain_pwd},
-                   [this](bool enable) {
-                       if (enable)
-                           manager.loop().dispatch([this]() mutable { reloadTlsFromConfig(); });
-                       else
-                           manager.loop().dispatch([this]() mutable { enterDegradedMode(); });
-                   })
+      tls_context(nullptr)
 #endif
 {
 #ifdef PVXS_ENABLE_OPENSSL
@@ -593,10 +579,11 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     if (event_add(searchRx6.get(), nullptr)) log_err_printf(setup, "Error enabling search RX6\n%s", "");
     if (event_add(beaconCleaner.get(), &beaconCleanInterval)) log_err_printf(setup, "Error enabling beacon clean timer on\n%s", "");
     if (event_add(cacheCleaner.get(), &channelCacheCleanInterval)) log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
-#ifdef PVXS_ENABLE_OPENSSL
-    if (event_add(cert_event_timer.get(), &statusIntervalShort)) log_err_printf(setup, "Error enabling cert status timer on\n%s", "");
-#endif
+#ifndef PVXS_ENABLE_OPENSSL
+    state = Running;
+#else
     initialiseState();
+#endif
 }
 
 ContextImpl::~ContextImpl() {}
@@ -636,11 +623,6 @@ void ContextImpl::close() {
         // Degrading service will close any monitoring and clean up cert status
         tls_context->setDegradedMode(true);
     }
-
-    // Stop file watcher if enabled
-    if (file_watcher.isRunning()) {
-        file_watcher.stop();
-    }
 #endif
 
     // terminate all active connections
@@ -653,9 +635,6 @@ void ContextImpl::close() {
         (void)event_del(searchRx6.get());
         (void)event_del(beaconCleaner.get());
         (void)event_del(cacheCleaner.get());
-#ifdef PVXS_ENABLE_OPENSSL
-        (void)event_del(cert_event_timer.get());
-#endif
         auto conns(std::move(connByAddr));
         // explicitly break ref. loop of channel cache
         auto chans(std::move(chanByName));
@@ -1281,45 +1260,20 @@ Context::Pvt::Pvt(const Config& conf) : loop("PVXCTCP", epicsThreadPriorityCASer
 
 Context::Pvt::~Pvt() { impl->close(); }
 
-void Context::reconfigure(const Config& newconf) {
+void Context::reconfigure(const Config& new_conf) {
     if (!pvt) throw std::logic_error("NULL Context");
 
 #ifdef PVXS_ENABLE_OPENSSL
-    if (newconf.isTlsConfigured()) {
+    if (new_conf.isTlsConfigured()) {
         if (pvt->impl->tls_context) pvt->impl->tls_context->setDegradedMode(true);
         // Force reload of context from cert
-        pvt->impl->manager.loop().call([this, &newconf]() mutable { pvt->impl->reloadTlsFromConfig(newconf); });
+        pvt->impl->manager.loop().call([this, &new_conf]() mutable { pvt->impl->reloadTlsFromConfig(new_conf); });
         pvt->impl->manager.loop().sync();
     }
 #else
     pvt->impl->manager.loop().sync();
 #endif
 }
-
-#ifdef PVXS_ENABLE_OPENSSL
-void ContextImpl::doCertEventHandler(int fd, short evt, void* raw) {
-    try {
-        auto pvt = static_cast<ContextImpl*>(raw);
-        pvt->fileEventCallback(evt);
-        timeval interval(statusIntervalShort);
-        if (event_add(pvt->cert_event_timer.get(), &interval)) do {
-                if (auto _log_prefix = ::pvxs::detail::log_prep(io, unsigned(::pvxs::Level::Err)))
-                    ::pvxs::detail::_log_printf(unsigned(::pvxs::Level::Err),
-                                                "%s "
-                                                "Error re-enabling cert file event timer\n%s",
-                                                _log_prefix, "");
-            } while (0);
-    } catch (std::exception& e) {
-        do {
-            if (auto _log_prefix = ::pvxs::detail::log_prep(io, unsigned(unsigned(::pvxs::Level::Crit) | 0x1000)))
-                ::pvxs::detail::_log_printf(unsigned(unsigned(::pvxs::Level::Crit) | 0x1000),
-                                            "%s "
-                                            "Unhandled error in cert file event timer callback: %s\n",
-                                            _log_prefix, e.what());
-        } while (0);
-    }
-}
-#endif
 
 #ifdef PVXS_ENABLE_OPENSSL
 /**
@@ -1421,11 +1375,6 @@ void ContextImpl::removePeerTlsConnections(const Connection* client_conn) {
     }
 }
 #endif
-
-#ifdef PVXS_ENABLE_OPENSSL
-void ContextImpl::fileEventCallback(short evt) { file_watcher.checkFileStatus(); }
-#endif
-
 }  // namespace client
 
 }  // namespace pvxs
