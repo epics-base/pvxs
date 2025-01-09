@@ -1144,7 +1144,7 @@ void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EV
     }
 
     auto cert_file_factory = IdFileFactory::create(config.admin_cert_filename, config.admin_cert_password, key_pair, nullptr, nullptr, "certificate",
-                                                   pem_string, !config.admin_private_key_filename.empty());
+                                                   pem_string);
     cert_file_factory->writeIdentityFile();
 
     std::string from = std::ctime(&certificate_factory.not_before_);
@@ -1275,8 +1275,7 @@ CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
     // Create keychain file containing certs, private key and chain
-    auto cert_file_factory = IdFileFactory::create(config.ca_cert_filename, config.ca_cert_password, key_pair, nullptr, nullptr, "certificate", pem_string,
-                                                   !config.ca_private_key_filename.empty());
+    auto cert_file_factory = IdFileFactory::create(config.ca_cert_filename, config.ca_cert_password, key_pair, nullptr, nullptr, "certificate", pem_string);
 
     cert_file_factory->writeIdentityFile();
 
@@ -1322,7 +1321,7 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
     // Create keychain file containing certs, private key and null chain
     auto pem_string = CertFactory::certAndCasToPemString(cert, certificate_factory.certificate_chain_.get());
     auto cert_file_factory = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password, key_pair, nullptr, nullptr, "PVACMS server certificate",
-                                                   pem_string, !config.tls_private_key_filename.empty());
+                                                   pem_string);
 
     cert_file_factory->writeIdentityFile();
 }

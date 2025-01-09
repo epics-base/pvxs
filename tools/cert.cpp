@@ -21,7 +21,6 @@
 #include "certfilefactory.h"
 #include "certstatusmanager.h"
 #include "p12filefactory.h"
-#include "pemfilefactory.h"
 
 using namespace pvxs;
 

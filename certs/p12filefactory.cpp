@@ -138,7 +138,7 @@ CertData P12FileFactory::getCertDataFromFile() {
  * @return an owned pointer to the PKCS12 object
  * @throw std::runtime_error if the PEM string cannot be parsed
  */
-ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string, bool certs_only) {
+ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string) {
     // Read PEM data into a new BIO
     ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string.c_str(), -1), false);
     if (!bio) {
@@ -164,7 +164,7 @@ ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *
         sk_X509_push(certs.get(), ca.release());
     }
 
-    return toP12(password, keys_ptr, cert.get(), certs.get(), certs_only);
+    return toP12(password, keys_ptr, cert.get(), certs.get());
 }
 
 /**
@@ -174,21 +174,15 @@ ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *
  * @param keys_ptr the private key to include in the p12 object.  Note that this is required if there are any certificates in the PEM string.
  * @param cert_ptr the entity (subject) certificate of the p12 object
  * @param cert_chain_ptr the chain of certificates to include in the p12 object
- * @param certs_only if true then only the certificates are included in the p12 object.
- *                   Note that this is likely to produce p12 objects that are incompatible with some applications.
- *                   It is not recommended unless there is a specific reason for this.
  * @return a shared pointer to the PKCS12 object
  * @throw std::runtime_error if the certificate and key cannot be found or an error occurs
  */
-ossl_ptr<PKCS12> P12FileFactory::toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) * cert_chain_ptr, bool certs_only) {
+ossl_ptr<PKCS12> P12FileFactory::toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) * cert_chain_ptr) {
     // Get the subject name of the certificate
     if (!cert_ptr && !keys_ptr) throw std::runtime_error("No certificate or key provided");
 
     ossl_ptr<PKCS12> p12;
     if (!cert_ptr) {
-        if (certs_only) {
-            throw std::runtime_error("Unable to create p12 no certificates and no keys");
-        }
         p12.reset(PKCS12_create_ex2(password.c_str(), nullptr, keys_ptr, nullptr, nullptr, 0, 0, 0, 0, 0, nullptr, nullptr, nullptr, nullptr));
     } else {
         auto subject_name(X509_get_subject_name(cert_ptr));
@@ -204,10 +198,10 @@ ossl_ptr<PKCS12> P12FileFactory::toP12(std::string password, EVP_PKEY *keys_ptr,
             chainFromRootCertPtr(cert_chain_ptr, cert_ptr);
             ERR_clear_error();
             // TODO find a way to write cert-only p12 files
-            p12.reset(PKCS12_create_ex2(password.c_str(), subject.get(), (certs_only) ? nullptr : keys_ptr, nullptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr,
+            p12.reset(PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, nullptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr,
                                         nullptr, &jdkTrust, nullptr));
         } else {
-            p12.reset(PKCS12_create_ex2(password.c_str(), subject.get(), (certs_only) ? nullptr : keys_ptr, cert_ptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr,
+            p12.reset(PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, cert_ptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr,
                                         nullptr, &jdkTrust, nullptr));
         }
     }
@@ -237,7 +231,7 @@ void P12FileFactory::writePKCS12File() {
         p12 = pemStringToP12(password_, key_pair_->pkey.get(), pem_string_);
     } else if (cert_ptr_) {
         // If a cert has been specified then convert to p12
-        p12 = toP12(password_, key_pair_->pkey.get(), cert_ptr_, certs_ptr_, certs_only_);
+        p12 = toP12(password_, key_pair_->pkey.get(), cert_ptr_, certs_ptr_);
     } else if (key_pair_->pkey.get()) {
         // If private key only
         p12 = toP12(password_, key_pair_->pkey.get(), nullptr, nullptr);

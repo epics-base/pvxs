@@ -119,7 +119,6 @@ LIB_SRCS += util.cpp
 LIB_SRCS += certfactory.cpp
 LIB_SRCS += certfilefactory.cpp
 LIB_SRCS += p12filefactory.cpp
-LIB_SRCS += pemfilefactory.cpp
 
 LIB_LIBS += Com
 

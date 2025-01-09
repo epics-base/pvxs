@@ -20,7 +20,6 @@ USR_CPPFLAGS += -I$(TOP)/certs -I$(TOP)/bundle/CLI11/include
 PROD += pvxcert
 pvxcert_SRCS += cert.cpp
 pvxcert_SRCS += p12filefactory.cpp
-pvxcert_SRCS += pemfilefactory.cpp
 pvxcert_SRCS += certfilefactory.cpp
 pvxcert_SRCS += certfactory.cpp
 pvxcert_SRCS += certstatus.cpp

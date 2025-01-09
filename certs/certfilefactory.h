@@ -17,7 +17,6 @@ namespace certs {
 
 // Forward declarations
 class P12FileFactory;
-class PEMFileFactory;
 class IdFileFactory;
 
 // C++11 implementation of make_unique
@@ -66,7 +65,7 @@ class IdFileFactory {
      */
     static cert_factory_ptr create(const std::string& filename, const std::string& password = "", const std::shared_ptr<KeyPair>& key_pair = nullptr,
                                    X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
-                                   const std::string& pem_string = "", bool certs_only = false);
+                                   const std::string& pem_string = "");
 
     static cert_factory_ptr createReader(const std::string& filename, const std::string& password = "", const std::string& key_filename = "",
                                          const std::string& key_password = "") {
@@ -116,15 +115,14 @@ class IdFileFactory {
 
    protected:
     IdFileFactory(const std::string& filename, const std::string& password = "", const std::shared_ptr<KeyPair>& key_pair = nullptr, X509* cert_ptr = nullptr,
-                  STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate", const std::string& pem_string = "", bool certs_only = false)
+                  STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate", const std::string& pem_string = "")
         : filename_(filename),
           password_(password),
           key_pair_(key_pair),
           cert_ptr_(cert_ptr),
           certs_ptr_(certs_ptr),
           usage_(usage),
-          pem_string_(pem_string),
-          certs_only_(certs_only) {}
+          pem_string_(pem_string) {}
 
     const std::string filename_{};
     std::string password_{};
@@ -133,7 +131,6 @@ class IdFileFactory {
     STACK_OF(X509) * certs_ptr_ { nullptr };
     const std::string usage_{};
     const std::string pem_string_{};
-    const bool certs_only_{false};
     std::unique_ptr<IdFileFactory> key_file_;
 
     static void backupFileIfExists(const std::string& filename);

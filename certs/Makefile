@@ -14,7 +14,6 @@ AUTHN = $(TOP)/certs/authn
 SRC_DIRS += $(TOP)/src
 SRC_DIRS += $(TOP)/ioc
 SRCS += p12filefactory.cpp
-SRCS += pemfilefactory.cpp
 SRCS += certfilefactory.cpp
 SRCS += certfactory.cpp
 
