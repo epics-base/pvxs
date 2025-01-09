@@ -100,17 +100,9 @@ CertData P12FileFactory::getCertDataFromFile() {
         throw std::runtime_error(SB() << "Error opening certificate file as a PKCS#12 object: " << filename_);
     }
 
-    // Try to get private key and certificate but if we can't then try only certs
+    // Try to get private key and certificate
     if (!PKCS12_parse(p12.get(), password_.c_str(), pkey.acquire(), cert.acquire(), &chain_ptr)) {
-        if (!PKCS12_parse(p12.get(), password_.c_str(), nullptr, cert.acquire(), &chain_ptr)) {
-            throw std::runtime_error(SB() << "Error parsing certificate file: " << filename_);
-        }
-    }
-
-    // Try to get key from file if we didn't already get it and it is configured
-    if (!pkey && key_file_) {
-        key_pair = key_file_->getKeyFromFile();
-        pkey = std::move(key_pair->pkey);
+        throw std::runtime_error(SB() << "Error parsing certificate file: " << filename_);
     }
 
     ossl_shared_ptr<STACK_OF(X509)> chain;
@@ -119,11 +111,7 @@ CertData P12FileFactory::getCertDataFromFile() {
     else
         chain = ossl_shared_ptr<STACK_OF(X509)>(sk_X509_new_null());
 
-    if (pkey) {
-        return CertData(cert, chain, std::make_shared<KeyPair>(std::move(pkey)));
-    } else {
-        return CertData(cert, chain);
-    }
+    return CertData(cert, chain, std::make_shared<KeyPair>(std::move(pkey)));
 }
 
 /**

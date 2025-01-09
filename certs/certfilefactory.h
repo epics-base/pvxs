@@ -67,13 +67,7 @@ class IdFileFactory {
                                    X509* cert_ptr = nullptr, STACK_OF(X509) * certs_ptr = nullptr, const std::string& usage = "certificate",
                                    const std::string& pem_string = "");
 
-    static cert_factory_ptr createReader(const std::string& filename, const std::string& password = "", const std::string& key_filename = "",
-                                         const std::string& key_password = "") {
-        auto cert_file_factory = create(filename, password);
-        if (!key_filename.empty()) cert_file_factory->key_file_ = create(key_filename, key_password);
-
-        return cert_file_factory;
-    }
+    static cert_factory_ptr createReader(const std::string& filename, const std::string& password = "") { return create(filename, password); }
 
     virtual ~IdFileFactory() = default;
 
@@ -131,7 +125,6 @@ class IdFileFactory {
     STACK_OF(X509) * certs_ptr_ { nullptr };
     const std::string usage_{};
     const std::string pem_string_{};
-    std::unique_ptr<IdFileFactory> key_file_;
 
     static void backupFileIfExists(const std::string& filename);
     static void chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cert_ptr);

@@ -372,7 +372,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
     const std::string &filename = conf.tls_cert_filename, &password = conf.tls_cert_password;
     auto key_filename = conf.tls_private_key_filename.empty() ? filename : conf.tls_private_key_filename;
     auto key_password = conf.tls_private_key_password.empty() ? password : conf.tls_private_key_password;
-    auto cert_data = certs::IdFileFactory::createReader(filename, password, key_filename, key_password)->getCertDataFromFile();
+    auto cert_data = certs::IdFileFactory::createReader(filename, password)->getCertDataFromFile();
     if (!cert_data.cert) throw std::runtime_error("No Certificate");
 
     // Verify the key usage of the certificate

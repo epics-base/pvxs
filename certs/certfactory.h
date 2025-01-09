@@ -106,8 +106,6 @@ class PVXS_API CertFactory {
 
     static std::string PVXS_API certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * ca);
 
-    static std::string getCertsDirectory();
-
     //    static bool PVXS_API verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data, const std::string &signature);
 
     //    static std::string sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data);
@@ -216,8 +214,6 @@ class PVXS_API CertFactory {
         }
     }
 
-    static bool isSelfSigned(X509 *cert);
-
     void setSubject(const ossl_ptr<X509> &certificate);
 
     void setValidity(const ossl_ptr<X509> &certificate) const;
@@ -235,14 +231,6 @@ class PVXS_API CertFactory {
     static void writeCertsToBio(const ossl_ptr<BIO> &bio, const STACK_OF(X509) * certs);
 
     static ossl_ptr<BIO> newBio();
-
-    static void writeP12ToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<PKCS12> &p12, std::string password, bool root_only = false);
-
-    static std::string certAndP12ToPemString(const ossl_ptr<PKCS12> &p12, const ossl_ptr<X509> &new_cert, std::string password);
-
-    static std::string p12ToPemString(ossl_ptr<PKCS12> &p12, std::string password);
-
-    static std::string rootCertToString(ossl_ptr<PKCS12> &p12, std::string password);
 
     void set_skid(ossl_ptr<X509> &certificate);
 };

@@ -27,7 +27,6 @@
 
 #include <epicsGetopt.h>
 
-#include "p12filefactory.h"
 #include "certfactory.h"
 #include "ownedptr.h"
 #include "openssl.h"
@@ -317,45 +316,6 @@ void usage(const char* argv0) {
                "    -O <outdir>  - Write files to this directory.  (default: .)\n"
                ;
 }
-
-std::string writeCertToTempFile(pvxs::ossl_ptr<X509> &cert) {
-    std::string temp_file_path = "ca_cert.pem";
-
-    FILE* temp_file = fopen(temp_file_path.c_str(), "w");
-    if (!temp_file) {
-        throw std::runtime_error("Failed to open temporary file");
-    }
-
-    if (!PEM_write_X509(temp_file, cert.get())) {
-        fclose(temp_file);
-        throw std::runtime_error("Failed to write certificate to temporary file");
-    }
-
-    fclose(temp_file);
-    return temp_file_path;
-}
-
-void addCertToTruststore(const std::string& cert_path) {
-    std::string command;
-#ifdef __APPLE__
-    // macOS
-    command = "sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain " + cert_path;
-#elif defined(__linux__)
-    // Linux
-    command = "sudo cp " + cert_path + " /usr/local/share/ca-certificates/ && sudo update-ca-certificates";
-#elif defined(_WIN32) || defined(_WIN64)
-    // Windows
-    command = "certutil -addstore -f \"Root\" " + cert_path;
-#else
-    throw std::runtime_error("Unsupported platform");
-#endif
-
-    std::cout << "Root Certificate Created." << std::endl << "Run the following to trust it: " << std::endl << command << std::endl;
-//    int ret = std::system(command.c_str());
-//    if (ret != 0) {
-//        throw std::runtime_error("Failed to add certificate to trust store");
-//    }
-}
 } // namespace
 
 int main(int argc, char *argv[])
@@ -410,11 +370,6 @@ int main(int argc, char *argv[])
             p12.key = root_key.get();
             MUST(1, sk_X509_push(p12.cacerts.get(), root_cert.get()));
             p12.write("ca.p12");
-
-            std::string temp_cert_path = writeCertToTempFile(root_cert);
-            addCertToTruststore(temp_cert_path);
-            pvxs::certs::CertFactory::createCertSymlink(temp_cert_path);
-            std::cout << "CA Certificate added to trust store successfully." << std::endl;
         }
 
         // a server-type cert. issued directly from the root

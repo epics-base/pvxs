@@ -376,35 +376,6 @@ void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int
 }
 
 /**
- * This function determines the location of the certificate directory.
- *
- * In openssl installations there is a directory that contains the PEM files
- * that are the filesystem representation of the certificate. When we
- * automatically create a root CA certificate, we place the new certificate in
- * this folder.
- *
- * An administrator must trust all the root certificates it finds in this
- * location before they are accepted.
- *
- * @return location of certs directory
- */
-std::string CertFactory::getCertsDirectory() {
-    // Get openssl directory
-    const char *openssl_dir = OpenSSL_version(OPENSSL_DIR);
-
-    // Construct the certs directory path in an operating specific way
-    std::string dir(openssl_dir);
-
-    // certs dir returns "OPENSSLDIR: \"/opt/homebrew/etc/openssl@3\""
-    auto begin = dir.find("\"") + 1;
-    auto end = dir.find("\"", begin);
-    dir = std::string(dir.c_str(), begin, end - begin);
-    std::string certs_dir = SB() << dir << OSI_PATH_SEPARATOR << "certs";
-
-    return certs_dir;
-}
-
-/**
  * @brief HELPER FUNCTION: Create a new managed Basic Input Output
  * object that can be used to output in various forms, throw for errors
  *
@@ -469,88 +440,6 @@ void CertFactory::writeCertsToBio(const ossl_ptr<BIO> &bio, const STACK_OF(X509)
             }
         }
     }
-}
-
-/**
- * @brief Write a PKCS12 object into the given BIO stream in the PEM format .
- *
- * This function writes the content of a PKCS12 object to the specified BIO
- * stream. Notably it copies:
- *  1. The main certificate
- *  2. Certificate chain:
- *     - default: copy all the certs in the chain, including the root
- * certificate.
- *     - `root_only` true: only the root certificate is copied
- *
- * Usage:
- *  Use case 1: Create a CA certificate:  A CA Certificate   needs to contain
- * the certificate as well as the whole certificate chain and the root
- * certificate (self signed in our case)
- *
- *  Use case 2: Create a
- *
- * @param bio The BIO output stream to save the PEM file content to.
- * @param p12 The PKCS12 content to be written.
- * @param root_only Flag indicating whether only the root certificate should be
- * included.
- */
-void CertFactory::writeP12ToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<PKCS12> &p12, std::string password, const bool root_only) {
-    ossl_ptr<STACK_OF(X509)> ca;
-    ossl_ptr<X509> cert;
-
-    if (!PKCS12_parse(p12.get(), password.c_str(), NULL, cert.acquire(), ca.acquire())) {
-        throw std::runtime_error("Error: Parsing PKCS#12 failed. \n");
-    }
-
-    // Write the certificates to the PEM output
-    PEM_write_bio_X509(bio.get(), cert.get());
-
-    if (ca && sk_X509_num(ca.get()) > 0) {
-        auto count = sk_X509_num(ca.get());
-        for (int i = root_only ? count - 1 : 0; i < count; i++) {
-            PEM_write_bio_X509(bio.get(), sk_X509_value(ca.get(), i));
-        }
-    }
-}
-
-std::string CertFactory::certAndP12ToPemString(const ossl_ptr<PKCS12> &p12, const ossl_ptr<X509> &new_cert, std::string password) {
-    auto bio = newBio();
-
-    // Write the newly created certificate and the PKCS12 certificates to the
-    // output
-    writeCertToBio(bio, new_cert);
-    writeP12ToBio(bio, p12, password);
-
-    return bioToString(bio);
-}
-
-std::string CertFactory::p12ToPemString(ossl_ptr<PKCS12> &p12, std::string password) {
-    auto bio = newBio();
-
-    // Write the PKCS12 contents to the output
-    writeP12ToBio(bio, p12, password);
-
-    return bioToString(bio);
-}
-
-bool CertFactory::isSelfSigned(X509 *cert) {
-    /* Get the issuer name. */
-    X509_NAME *issuer_name = X509_get_issuer_name(cert);
-
-    /* Get the subject name. */
-    X509_NAME *subject_name = X509_get_subject_name(cert);
-
-    /* Compare the two names. */
-    return (X509_NAME_cmp(issuer_name, subject_name) == 0);
-}
-
-std::string CertFactory::rootCertToString(ossl_ptr<PKCS12> &p12, std::string password) {
-    auto bio = newBio();
-
-    // Write the PKCS12 certificates to the output
-    writeP12ToBio(bio, p12, password, true);
-
-    return bioToString(bio);
 }
 
 std::string CertFactory::certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * ca) {
