@@ -369,7 +369,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
     }
 
     // TLS is configured, so get the key and certificate from the file or files
-    const std::string &filename = conf.tls_cert_filename, &password = conf.tls_cert_password;
+    const std::string &filename = conf.tls_keychain_file, &password = conf.tls_keychain_pwd;
     auto cert_data = certs::IdFileFactory::createReader(filename, password)->getCertDataFromFile();
     if (!cert_data.cert) throw std::runtime_error("No Certificate");
 

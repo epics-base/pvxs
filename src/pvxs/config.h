@@ -139,12 +139,12 @@ struct PVXS_API ConfigCommon {
     /** Path to keychain file containing certificates and private key.
      *  @since UNRELEASED
      */
-    std::string tls_cert_filename;
+    std::string tls_keychain_file;
 
     /** Path to file containing password for keychain file.
      *  @since UNRELEASED
      */
-    std::string tls_cert_password;
+    std::string tls_keychain_pwd;
 
     /** Client certificate request during TLS handshake.
      *
@@ -206,7 +206,7 @@ struct PVXS_API ConfigCommon {
      * @return true if the location of the keychain file has been specified,
      * false otherwise
      */
-    inline bool isTlsConfigured() const { return !tls_disabled && !tls_cert_filename.empty(); }
+    inline bool isTlsConfigured() const { return !tls_disabled && !tls_keychain_file.empty(); }
 #endif  // PVXS_ENABLE_OPENSSL
 
     inline std::string getFileContents(const std::string &file_name) {

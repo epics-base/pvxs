@@ -65,12 +65,12 @@ void ConfigStd::fromStdEnv(const std::map<std::string, std::string> &defs) {
 
     // EPICS_PVAS_TLS_KEYCHAIN
     if (pickone({"EPICS_PVAS_TLS_KEYCHAIN"})) {
-        ensureDirectoryExists(tls_srv_cert_filename = pickone.val);
+        ensureDirectoryExists(tls_srv_keychain_file = pickone.val);
     }
 
     // EPICS_PVAS_TLS_KEYCHAIN
     if (pickone({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"})) {
-        tls_srv_cert_password = getFileContents(pickone.val);
+        tls_srv_keychain_pwd = getFileContents(pickone.val);
     }
 }
 

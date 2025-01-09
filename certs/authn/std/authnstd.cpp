@@ -143,8 +143,8 @@ int readOptions(ConfigStd &config, int argc, char *argv[], bool &verbose, uint16
                 std::string usage_str = optarg;
                 if (usage_str == "gateway" || usage_str == "server") {
                     // Use the Server versions of environment variables
-                    config.tls_cert_filename = config.tls_srv_cert_filename;
-                    config.tls_cert_password = config.tls_srv_cert_password;
+                    config.tls_keychain_file = config.tls_srv_keychain_file;
+                    config.tls_keychain_pwd = config.tls_srv_keychain_pwd;
                     config.name = config.server_name;
                     config.organization = config.server_organization;
                     config.organizational_unit = config.server_organizational_unit;
@@ -368,7 +368,7 @@ int main(int argc, char *argv[]) {
             return exit_status - 1;
         }
 
-        if (config.tls_cert_filename.empty()) {
+        if (config.tls_keychain_file.empty()) {
             std::cerr << "You must set at least one mandatory environment variables to create certificates: " << std::endl;
             std::cerr << "\tEPICS_PVA_TLS_KEYCHAIN\t\t\tSet name and location of client keychain file (mandatory for clients)" << std::endl;
             std::cerr << "\tEPICS_PVAS_TLS_KEYCHAIN\t\t\tSet name and location of server keychain file (mandatory for server)" << std::endl;
@@ -407,7 +407,7 @@ int main(int argc, char *argv[]) {
             // Get key pair
             try {
                 // Check if the key pair exists
-                key_pair = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getKeyFromFile();
+                key_pair = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd)->getKeyFromFile();
             } catch (std::exception &e) {
                 // Make a new key pair file
                 try {
@@ -434,12 +434,12 @@ int main(int argc, char *argv[]) {
 
                 // Attempt to write the certificate and private key
                 // to a cert file protected by the configured password
-                auto file_factory = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password,
+                auto file_factory = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd,
                                                           key_pair, nullptr, nullptr, p12_pem_string);
                 file_factory->writeIdentityFile();
 
                 // Read file back for info
-                auto cert_data = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getCertDataFromFile();
+                auto cert_data = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd)->getCertDataFromFile();
                 auto serial_number = CertStatusFactory::getSerialNumber(cert_data.cert);
                 auto issuer_id = CertStatus::getIssuerId(cert_data.cert.get());
 
@@ -447,7 +447,7 @@ int main(int argc, char *argv[]) {
                 std::string to = std::ctime(&credentials->not_after);
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "CERT_ID: " << issuer_id << ":" << serial_number).str().c_str());
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "TYPE: " << ((authenticator.type_ == PVXS_DEFAULT_AUTH_TYPE) ? "basic" : authenticator.type_)).str().c_str());
-                log_info_printf(auths, "%s\n", (pvxs::SB() << "OUTPUT TO: " << config.tls_cert_filename).str().c_str());
+                log_info_printf(auths, "%s\n", (pvxs::SB() << "OUTPUT TO: " << config.tls_keychain_file).str().c_str());
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "NAME: " << credentials->name).str().c_str());
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "ORGANIZATION: " << credentials->organization).str().c_str());
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "ORGANIZATIONAL UNIT: " << credentials->organization_unit).str().c_str());

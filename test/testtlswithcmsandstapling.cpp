@@ -83,7 +83,7 @@ struct Tester {
     {
         // Set up the Mock PVACMS server certificate (does not contain custom status extension)
         auto pvacms_config = server::Config::forCms();
-        pvacms_config.tls_cert_filename = SUPER_SERVER_CERT_FILE;
+        pvacms_config.tls_keychain_file = SUPER_SERVER_CERT_FILE;
         pvacms = pvacms_config.build().addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
         client = pvacms.clientConfig().build();
 
@@ -314,13 +314,13 @@ struct Tester {
         auto test_pv(server::SharedPV::buildReadonly());
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+        serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
         serv_conf.tls_disable_status_check = false;
         serv_conf.tls_disable_stapling = false;
         auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
         auto cli(cli_conf.build());
 
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
@@ -361,14 +361,14 @@ struct Tester {
         RESET_COUNTER(client2)
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = IOC1_CERT_FILE;
+        serv_conf.tls_keychain_file = IOC1_CERT_FILE;
         serv_conf.tls_disable_status_check = false;
         serv_conf.tls_disable_stapling = false;
 
         auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
 
         auto cli(cli_conf.build());
 
@@ -400,8 +400,8 @@ struct Tester {
         TEST_COUNTER_EQ(client2, 0)
 
         cli_conf = cli.config();
-        cli_conf.tls_cert_filename = CLIENT2_CERT_FILE;
-        cli_conf.tls_cert_password = CLIENT2_CERT_FILE_PWD;
+        cli_conf.tls_keychain_file = CLIENT2_CERT_FILE;
+        cli_conf.tls_keychain_pwd = CLIENT2_CERT_FILE_PWD;
         testDiag("cli.reconfigure()");
         cli.reconfigure(cli_conf);
 
@@ -444,14 +444,14 @@ struct Tester {
         RESET_COUNTER(ioc)
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+        serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
         serv_conf.tls_disable_status_check = false;
         serv_conf.tls_disable_stapling = false;
 
         auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
 
         auto cli(cli_conf.build());
 
@@ -483,7 +483,7 @@ struct Tester {
         TEST_COUNTER_EQ(ioc, 0)
 
         serv_conf = serv.config();
-        serv_conf.tls_cert_filename = IOC1_CERT_FILE;
+        serv_conf.tls_keychain_file = IOC1_CERT_FILE;
         testDiag("serv.reconfigure()");
         serv.reconfigure(serv_conf);
 
@@ -526,7 +526,7 @@ struct Tester {
         {
             // Configure server with status checking enabled
             auto serv_conf(server::Config::isolated());
-            serv_conf.tls_cert_filename = IOC1_CERT_FILE;
+            serv_conf.tls_keychain_file = IOC1_CERT_FILE;
             serv_conf.tls_disable_status_check = false;
             serv_conf.tls_throw_if_no_cert = true;
             serv_conf.tls_disable_stapling = false;
@@ -548,7 +548,7 @@ struct Tester {
 
             // Configure client with status checking enabled
             auto cli_conf(serv.clientConfig());
-            cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+            cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
             cli_conf.tls_disable_status_check = false;
             cli_conf.tls_disable_stapling = false;
             auto cli(cli_conf.build());
@@ -564,14 +564,14 @@ struct Tester {
         {
             // Configure server with status checking and stapling disabled
             auto serv_conf2(server::Config::isolated());
-            serv_conf2.tls_cert_filename = IOC1_CERT_FILE;
+            serv_conf2.tls_keychain_file = IOC1_CERT_FILE;
             serv_conf2.tls_disable_status_check = false;
             serv_conf2.tls_disable_stapling = true;
             auto serv2(serv_conf2.build().addPV(TEST_PV2, test_pv));
 
             // Configure client with status checking disabled
             auto cli_conf2(serv2.clientConfig());
-            cli_conf2.tls_cert_filename = CLIENT1_CERT_FILE;
+            cli_conf2.tls_keychain_file = CLIENT1_CERT_FILE;
             auto cli2(cli_conf2.build());
 
             // Start the server
@@ -601,12 +601,12 @@ struct Tester {
         auto mbox(server::SharedPV::buildReadonly());
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+        serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
         serv_conf.tls_disable_status_check = false;
         auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
         cli_conf.tls_disable_stapling = false;
         auto cli(cli_conf.build());
 
@@ -640,13 +640,13 @@ struct Tester {
         auto mbox(server::SharedPV::buildReadonly());
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+        serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
         serv_conf.tls_disable_status_check = false;
         serv_conf.tls_disable_stapling = false;
         auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
         cli_conf.tls_disable_stapling = true;
         auto cli(cli_conf.build());
 

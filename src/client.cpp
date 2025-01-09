@@ -488,7 +488,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
       ,
       tls_context(nullptr),
       cert_event_timer(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT, doCertEventHandler, this)),
-      file_watcher(filemon, {effective.tls_cert_filename, effective.tls_cert_password},
+      file_watcher(filemon, {effective.tls_keychain_file, effective.tls_keychain_pwd},
                    [this](bool enable) {
                        if (enable)
                            manager.loop().dispatch([this]() mutable { reloadTlsFromConfig(); });

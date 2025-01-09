@@ -161,7 +161,7 @@ void testClientBackwardsCompatibility() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_cert_filename = SUPER_SERVER_CERT_FILE;
+    serv_conf.tls_keychain_file = SUPER_SERVER_CERT_FILE;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
@@ -195,7 +195,7 @@ void testServerBackwardsCompatibility() {
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
 
     auto cli(cli_conf.build());
 
@@ -221,12 +221,12 @@ void testGetSuper() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_cert_filename = SUPER_SERVER_CERT_FILE;
+    serv_conf.tls_keychain_file = SUPER_SERVER_CERT_FILE;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
 
     auto cli(cli_conf.build());
 
@@ -252,12 +252,12 @@ void testGetIntermediate() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+    serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
 
     auto cli(cli_conf.build());
 
@@ -278,12 +278,12 @@ void testGetNameServer() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+    serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
 
     for (auto& addr : cli_conf.addressList) cli_conf.nameServers.push_back(SB() << "pvas://" << addr /*<<':'<<cli_conf.tls_port*/);
     cli_conf.autoAddrList = false;
@@ -312,12 +312,12 @@ void testClientReconfig() {
     testShow() << __func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_cert_filename = IOC1_CERT_FILE;
+    serv_conf.tls_keychain_file = IOC1_CERT_FILE;
 
     auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
 
     auto cli(cli_conf.build());
 
@@ -342,8 +342,8 @@ void testClientReconfig() {
     testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
 
     cli_conf = cli.config();
-    cli_conf.tls_cert_filename = CLIENT2_CERT_FILE;
-    cli_conf.tls_cert_password = CLIENT2_CERT_FILE_PWD;
+    cli_conf.tls_keychain_file = CLIENT2_CERT_FILE;
+    cli_conf.tls_keychain_pwd = CLIENT2_CERT_FILE_PWD;
     testDiag("cli.reconfigure()");
     cli.reconfigure(cli_conf);
 
@@ -376,12 +376,12 @@ void testServerReconfig() {
     testShow() << __func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_cert_filename = SERVER1_CERT_FILE;
+    serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
 
     auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = IOC1_CERT_FILE;
+    cli_conf.tls_keychain_file = IOC1_CERT_FILE;
 
     auto cli(cli_conf.build());
 
@@ -406,7 +406,7 @@ void testServerReconfig() {
     testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_IOC1);
 
     serv_conf = serv.config();
-    serv_conf.tls_cert_filename = IOC1_CERT_FILE;
+    serv_conf.tls_keychain_file = IOC1_CERT_FILE;
     testDiag("serv.reconfigure()");
     serv.reconfigure(serv_conf);
 
@@ -456,7 +456,7 @@ void testServerFileMonitoring() {
 
     // Setup the server with a non-existent cert file
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_cert_filename = SUPER_SERVER2_CERT_FILE;
+    serv_conf.tls_keychain_file = SUPER_SERVER2_CERT_FILE;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
     auto cli_conf(serv.clientConfig());
@@ -465,7 +465,7 @@ void testServerFileMonitoring() {
 
     // Connect to the server and verify the connection is successful but is not TLS
     {
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
         auto cli(cli_conf.build());
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && !c.cred->isTLS); }).exec());
         auto reply(cli.get(TEST_PV).exec()->wait(10.0));
@@ -480,7 +480,7 @@ void testServerFileMonitoring() {
 
     // Verify the server is reconfigured and the connection is successful and is TLS
     {
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
         auto cli(cli_conf.build());
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
         auto reply(cli.get(TEST_PV).exec()->wait(10.0));
@@ -495,7 +495,7 @@ void testServerFileMonitoring() {
 
     // Verify the server is reconfigured and the connection is successful and is not TLS
     {
-        cli_conf.tls_cert_filename = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
         auto cli(cli_conf.build());
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && !c.cred->isTLS); }).exec());
         auto reply(cli.get(TEST_PV).exec()->wait(10.0));
@@ -528,13 +528,13 @@ void testClientFileMonitoring() {
 
     // Setup the server with a cert file
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_cert_filename = SUPER_SERVER_CERT_FILE;
+    serv_conf.tls_keychain_file = SUPER_SERVER_CERT_FILE;
 
     auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
     // Setup the client with a non-existent cert file
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_cert_filename = CLIENT3_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT3_CERT_FILE;
     testDiag("Client configured without cert file");
 
     auto cli(cli_conf.build());

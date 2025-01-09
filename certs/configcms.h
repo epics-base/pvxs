@@ -109,31 +109,31 @@ class ConfigCms : public pvxs::server::Config {
      *
      * Note: This certificate needs to be trusted by all EPICS agents.
      */
-    std::string ca_cert_filename;
+    std::string ca_keychain_file;
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to a file that contains the password that
-     * unlocks the `ca_cert_filename`.
+     * unlocks the `ca_keychain_file`.
      *
-     * This is optional.  If not specified, the `ca_cert_filename`
+     * This is optional.  If not specified, the `ca_keychain_file`
      * contents will not be encrypted.
      */
-    std::string ca_cert_password;
+    std::string ca_keychain_pwd;
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to the keychain file that contains
      * the admin user's certificate, and public and private keys.
      */
-    std::string admin_cert_filename;
+    std::string admin_keychain_file;
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to a file that contains the password that
      * unlocks the admin user's keychain file.
      */
-    std::string admin_cert_password;
+    std::string admin_keychain_pwd;
 
     /**
      * @brief This is the string that determines the

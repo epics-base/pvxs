@@ -29,17 +29,17 @@ class ConfigCms : public Config {
      *
      * Note: This certificate needs to be trusted by all EPICS agents.
      */
-    std::string ca_cert_filename;
+    std::string ca_keychain_file;
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to a file that contains the password that
-     * unlocks the `ca_cert_filename`.
+     * unlocks the `ca_keychain_file`.
      *
-     * This is optional.  If not specified, the `ca_cert_filename`
+     * This is optional.  If not specified, the `ca_keychain_file`
      * contents will not be encrypted.
      */
-    std::string ca_cert_password;
+    std::string ca_keychain_pwd;
 };
 
 class ConfigCmsFactory : public ConfigFactoryInterface {

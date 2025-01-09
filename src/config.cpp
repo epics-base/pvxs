@@ -507,7 +507,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVAS_TLS_KEYCHAIN
     if (pickone({"EPICS_PVAS_TLS_KEYCHAIN", "EPICS_PVA_TLS_KEYCHAIN"})) {
-        self.ensureDirectoryExists(self.tls_cert_filename = pickone.val);
+        self.ensureDirectoryExists(self.tls_keychain_file = pickone.val);
         // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
         std::string password_filename;
         if (pickone.name == "EPICS_PVAS_TLS_KEYCHAIN") {
@@ -519,7 +519,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         }
         self.ensureDirectoryExists(password_filename);
         try {
-            self.tls_cert_password = self.getFileContents(password_filename);
+            self.tls_keychain_pwd = self.getFileContents(password_filename);
         } catch (std::exception& e) {
             log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
@@ -622,10 +622,10 @@ void Config::updateDefs(defs_t& defs) const {
 
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVAS_TLS_KEYCHAIN
-    if (!tls_cert_filename.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN"] = tls_cert_filename;
+    if (!tls_keychain_file.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN"] = tls_keychain_file;
 
     // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
-    if (!tls_cert_password.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
+    if (!tls_keychain_pwd.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
 
     // EPICS_PVAS_TLS_OPTIONS
     defs["EPICS_PVAS_TLS_OPTIONS"] = printTLSOptions(*this);
@@ -758,7 +758,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVA_TLS_KEYCHAIN
     if (pickone({"EPICS_PVA_TLS_KEYCHAIN"})) {
-        self.ensureDirectoryExists(self.tls_cert_filename = pickone.val);
+        self.ensureDirectoryExists(self.tls_keychain_file = pickone.val);
     }
 
     // EPICS_PVA_TLS_KEYCHAIN_PWD_FILE
@@ -766,7 +766,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         std::string password_filename(pickone.val);
         try {
             self.ensureDirectoryExists(password_filename);
-            self.tls_cert_password = self.getFileContents(password_filename);
+            self.tls_keychain_pwd = self.getFileContents(password_filename);
         } catch (std::exception& e) {
             log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
@@ -821,10 +821,10 @@ void Config::updateDefs(defs_t& defs) const {
 
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVA_TLS_KEYCHAIN
-    if (!tls_cert_filename.empty()) defs["EPICS_PVA_TLS_KEYCHAIN"] = tls_cert_filename;
+    if (!tls_keychain_file.empty()) defs["EPICS_PVA_TLS_KEYCHAIN"] = tls_keychain_file;
 
     // EPICS_PVA_TLS_KEYCHAIN_PWD_FILE
-    if (!tls_cert_password.empty()) defs["EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
+    if (!tls_keychain_pwd.empty()) defs["EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
 
     // EPICS_PVA_TLS_OPTIONS
     defs["EPICS_PVA_TLS_OPTIONS"] = printTLSOptions(*this);

@@ -974,7 +974,7 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
     // Get key and certificate
     try {
         // Check if the CA certificates exist
-        auto cert_data = IdFileFactory::create(config.ca_cert_filename, config.ca_cert_password)->getCertDataFromFile();
+        auto cert_data = IdFileFactory::create(config.ca_keychain_file, config.ca_keychain_pwd)->getCertDataFromFile();
         key_pair = cert_data.key_pair;
         if (!key_pair && cert_data.cert)
             throw(std::runtime_error("Keychain file contains a certificate but no key: "));
@@ -1087,8 +1087,8 @@ void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EV
     // Create the certificate using the certificate factory, store it in the database and return the PEM string
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
-    auto cert_file_factory = IdFileFactory::create(config.admin_cert_filename,
-                                                   config.admin_cert_password,
+    auto cert_file_factory = IdFileFactory::create(config.admin_keychain_file,
+                                                   config.admin_keychain_pwd,
                                                    key_pair,
                                                    nullptr,
                                                    nullptr,
@@ -1097,7 +1097,7 @@ void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EV
 
     std::string from = std::ctime(&certificate_factory.not_before_);
     std::string to = std::ctime(&certificate_factory.not_after_);
-    log_info_printf(pvacms, "Created Keychain file for default PVACMS admin user: %s\n", config.admin_cert_filename.c_str());
+    log_info_printf(pvacms, "Created Keychain file for default PVACMS admin user: %s\n", config.admin_keychain_file.c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "NAME: " << certificate_factory.name_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATION: " << certificate_factory.org_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_).str().c_str());
@@ -1132,7 +1132,7 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
     std::shared_ptr<KeyPair> key_pair;
     try {
         // Check if the server certificates exist
-        auto cert_data = IdFileFactory::create(config.tls_cert_filename, config.tls_cert_password)->getCertDataFromFile();
+        auto cert_data = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd)->getCertDataFromFile();
         key_pair = cert_data.key_pair;
         if (!key_pair && cert_data.cert)
             throw(std::runtime_error("Keychain file contains a certificate but no key: "));
@@ -1173,8 +1173,8 @@ CertData createCaCertificate(ConfigCms &config, sql_ptr &ca_db, std::shared_ptr<
     auto pem_string = createCertificatePemString(ca_db, certificate_factory);
 
     // Create keychain file containing certs, private key and chain
-    auto cert_file_factory = IdFileFactory::create(config.ca_cert_filename,
-                                                   config.ca_cert_password,
+    auto cert_file_factory = IdFileFactory::create(config.ca_keychain_file,
+                                                   config.ca_keychain_pwd,
                                                    key_pair,
                                                    nullptr,
                                                    nullptr,
@@ -1210,8 +1210,8 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
 
     // Create keychain file containing certs, private key and null chain
     auto pem_string = CertFactory::certAndCasToPemString(cert, certificate_factory.certificate_chain_.get());
-    auto cert_file_factory = IdFileFactory::create(config.tls_cert_filename,
-                                                   config.tls_cert_password,
+    auto cert_file_factory = IdFileFactory::create(config.tls_keychain_file,
+                                                   config.tls_keychain_pwd,
                                                    key_pair,
                                                    nullptr,
                                                    nullptr,
@@ -1606,7 +1606,7 @@ int main(int argc, char *argv[]) {
         app.add_flag("-V,--version", show_version, "Print version and exit.");
         app.add_option("-d,--cert-db", config.ca_db_filename, "Specify cert db file location")->default_val(config.ca_db_filename);
 
-        app.add_option("-c,--ca-keychain", config.ca_cert_filename, "Specify CA keychain file location")->default_val(config.ca_cert_filename);
+        app.add_option("-c,--ca-keychain", config.ca_keychain_file, "Specify CA keychain file location")->default_val(config.ca_keychain_file);
         app.add_option("--ca-keychain-pwd", ca_password_file, "Specify CA keychain password file location");
         app.add_option("--ca-name", config.ca_name, "Specify the CA's name. Used if we need to create a root certificate")->default_val(config.ca_name);
         app.add_option("--ca-org", config.ca_organization, "Specify the CA's Organization. Used if we need to create a root certificate")
@@ -1616,7 +1616,7 @@ int main(int argc, char *argv[]) {
         app.add_option("--ca-country", config.ca_country, "Specify the CA's Country. Used if we need to create a root certificate")
             ->default_val(config.ca_country.empty() ? getCountryCode() : config.ca_country);
 
-        app.add_option("-p,--pvacms-keychain", config.tls_cert_filename, "Specify PVACMS keychain file location")->default_val(config.tls_cert_filename);
+        app.add_option("-p,--pvacms-keychain", config.tls_keychain_file, "Specify PVACMS keychain file location")->default_val(config.tls_keychain_file);
         app.add_option("--pvacms-keychain-pwd", pvacms_password_file, "Specify PVACMS keychain password file location");
         app.add_option("--pvacms-name", config.pvacms_name, "Specify the PVACMS name. Used if we need to create a PVACMS certificate")->default_val("PVACMS");
         app.add_option("--pvacms-org", config.pvacms_organization, "Specify the PVACMS Organization. Used if we need to create a PVACMS certificate")
@@ -1627,8 +1627,8 @@ int main(int argc, char *argv[]) {
         app.add_option("--pvacms-country", config.pvacms_country, "Specify the PVACMS Country. Used if we need to create a PVACMS certificate")
             ->default_val(config.pvacms_country.empty() ? getCountryCode() : config.pvacms_country);
 
-        app.add_option("-a,--admin-keychain", config.admin_cert_filename, "Specify PVACMS admin user's keychain file location")
-            ->default_val(config.admin_cert_filename);
+        app.add_option("-a,--admin-keychain", config.admin_keychain_file, "Specify PVACMS admin user's keychain file location")
+            ->default_val(config.admin_keychain_file);
         app.add_option("--admin-keychain-pwd", admin_password_file, "Specify PVACMS admin user's keychain password file location");
         app.add_option("--acf", config.ca_acf_filename, "Admin Security Configuration File")->default_val(config.ca_acf_filename);
 
@@ -1648,13 +1648,13 @@ int main(int argc, char *argv[]) {
         CLI11_PARSE(app, argc, argv);
 
         // Make sure some directories exist
-        if (!config.ca_cert_filename.empty()) config.ensureDirectoryExists(config.ca_cert_filename);
+        if (!config.ca_keychain_file.empty()) config.ensureDirectoryExists(config.ca_keychain_file);
 
-        if (!config.tls_cert_filename.empty()) config.ensureDirectoryExists(config.tls_cert_filename);
+        if (!config.tls_keychain_file.empty()) config.ensureDirectoryExists(config.tls_keychain_file);
 
         if (!config.ca_acf_filename.empty()) config.ensureDirectoryExists(config.ca_acf_filename);
 
-        if (!config.admin_cert_filename.empty()) config.ensureDirectoryExists(config.admin_cert_filename);
+        if (!config.admin_keychain_file.empty()) config.ensureDirectoryExists(config.admin_keychain_file);
 
         if (!config.ca_db_filename.empty()) config.ensureDirectoryExists(config.ca_db_filename);
 
@@ -1663,9 +1663,9 @@ int main(int argc, char *argv[]) {
         if (!admin_password_file.empty()) config.ensureDirectoryExists(admin_password_file);
 
         // Read in some passwords from files
-        if (!ca_password_file.empty()) config.ca_cert_password = config.getFileContents(ca_password_file);
-        if (!pvacms_password_file.empty()) config.tls_cert_filename = config.getFileContents(pvacms_password_file);
-        if (!admin_password_file.empty()) config.admin_cert_password = config.getFileContents(admin_password_file);
+        if (!ca_password_file.empty()) config.ca_keychain_pwd = config.getFileContents(ca_password_file);
+        if (!pvacms_password_file.empty()) config.tls_keychain_file = config.getFileContents(pvacms_password_file);
+        if (!admin_password_file.empty()) config.admin_keychain_pwd = config.getFileContents(admin_password_file);
 
         // Override some settings for PVACMS
         config.tls_stop_if_no_cert = true;

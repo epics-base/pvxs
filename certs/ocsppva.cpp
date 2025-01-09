@@ -134,8 +134,8 @@ int ocspService(client::Context &pva_client, std::string &port, bool verbose) {
     OpenSSL_add_all_ciphers();
 
     auto config = clientConfig().get();
-    auto cert_filename = config->tls_cert_filename;
-    auto cert_password = config->tls_cert_password;
+    auto cert_filename = config->tls_keychain_file;
+    auto cert_password = config->tls_keychain_pwd;
 
     auto key_chain_data = security::KeychainFactory::getKeychainDataFromKeychainFile(cert_filename, cert_password);
     const ossl_ptr<EVP_PKEY> ca_pkey(std::move(key_chain_data.pkey));

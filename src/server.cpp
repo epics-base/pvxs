@@ -470,7 +470,7 @@ Server::Pvt::Pvt(Server &svr, const Config& conf, CertEventCallback custom_cert_
       tls_context(nullptr),
       custom_cert_event_callback(custom_cert_event_callback),
       cert_event_timer(__FILE__, __LINE__, event_new(acceptor_loop.base, -1, EV_TIMEOUT, doCertEventHandler, this)),
-      file_watcher(filemon, {effective.tls_cert_filename, effective.tls_cert_password},
+      file_watcher(filemon, {effective.tls_keychain_file, effective.tls_keychain_pwd},
                    [this](bool enable) {
                        if (enable)
                            acceptor_loop.dispatch([this]() mutable { reloadTlsFromConfig(); });
