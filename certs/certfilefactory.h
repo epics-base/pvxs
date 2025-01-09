@@ -36,20 +36,6 @@ struct CertData {
         : cert(std::move(newCert)), ca(newCa), key_pair(key_pair) {}
 };
 
-/**
- * @brief The availability of a keychain file
- *
- * This is returned when when authentication daemons are trying to provision the configured keychain file.
- *  - `!OK` is returned if the file does not exist and can't be provisioned.
- *  - `OK` is returned if the keychain file was provisioned and is ready for use.
- */
-enum CertAvailability {
-    OK,
-    NOT_AVAILABLE,
-    ROOT_CERT_INSTALLED,
-    AVAILABLE,
-};
-
 typedef std::unique_ptr<IdFileFactory> cert_factory_ptr;
 
 class IdFileFactory {

@@ -457,7 +457,6 @@ int main(int argc, char *argv[]) {
                 std::cout << "Certificate created: " << issuer_id << ":" << serial_number << std::endl;
 
                 log_info_printf(auths, "--------------------------------------%s", "\n");
-                return CertAvailability::OK;
             }
         }
     } catch (std::exception &e) {
