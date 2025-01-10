@@ -124,6 +124,12 @@ struct PVXS_API ConfigCommon {
     //! @since 0.2.0
     double tcpTimeout = 40.0;
 
+    static const std::string home;
+    static const std::string config_home;
+    static const std::string data_home;
+
+    static const std::string version;
+
 #ifdef PVXS_ENABLE_OPENSSL
     //! TCP port to bind for TLS traffic.  Default is 5076
     //! @since UNRELEASED
@@ -206,7 +212,22 @@ struct PVXS_API ConfigCommon {
      * @return true if the location of the keychain file has been specified,
      * false otherwise
      */
-    inline bool isTlsConfigured() const { return !tls_disabled && !tls_keychain_file.empty(); }
+    inline bool isTlsConfigured() const {
+        static std::once_flag flag;
+        static bool result;
+        std::call_once(flag, [&]() {
+            result = !(tls_disabled || tls_keychain_file.empty());
+            if (result) {
+                std::ifstream file(tls_keychain_file.c_str());
+                if (file.bad()){
+                    std::string& modifiable = const_cast<std::string&>(tls_keychain_file);
+                    modifiable.clear();
+                    result = false;
+                }
+            }
+        });
+        return result;
+    }
 #endif  // PVXS_ENABLE_OPENSSL
 
     inline std::string getFileContents(const std::string &file_name) {

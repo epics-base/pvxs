@@ -25,6 +25,7 @@
 #include <pvxs/log.h>
 
 #include <sys/stat.h>
+#include <cstdlib>
 
 #include "clientimpl.h"
 #include "evhelper.h"
@@ -38,8 +39,42 @@ DEFINE_LOGGER(config, "pvxs.config");
 namespace pvxs {
 
 namespace impl {
-ConfigCommon::~ConfigCommon() {}
+std::string getHomeDir() {
+#ifdef _WIN32
+    const char* home = getenv("USERPROFILE");
+#else
+    const char* home = getenv("HOME");
+#endif
+    return home ? std::string(home) : std::string("");
+}
 
+std::string getXdgConfigHome(std::string default_home) {
+    const std::string suffix = SB() << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << ConfigCommon::version ;
+    const char* config_home = getenv("XDG_CONFIG_HOME");
+    return SB() << (config_home ? config_home : default_home) << suffix;
+}
+
+std::string getXdgDataHome(std::string default_home) {
+    const std::string suffix = SB() << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << ConfigCommon::version ;
+    const char* data_home = getenv("XDG_DATA_HOME");
+    return SB() << (data_home ? data_home : default_home) << suffix;
+}
+
+ConfigCommon::~ConfigCommon() {}
+#define stringifyX(X) #X
+#define stringify(X) stringifyX(X)
+
+const std::string ConfigCommon::home = getHomeDir();
+const std::string ConfigCommon::version = stringify(PVXS_MAJOR_VERSION) "."  stringify(PVXS_MINOR_VERSION);
+#ifdef _WIN32
+const std::string ConfigCommon::config_home = SB() << home << "\\PVA\\" << version;
+const std::string ConfigCommon::data_home = SB() << "C:\\ProgramData\\PVA\\" << version;
+#else
+const std::string ConfigCommon::config_home = getXdgConfigHome(SB() << home << "/.config");
+const std::string ConfigCommon::data_home = getXdgDataHome(SB() << home << "/.local/share");
+#endif
+#undef stringifyX
+#undef stringify
 }  // namespace impl
 
 SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint16_t defdefport) {
@@ -523,6 +558,9 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         } catch (std::exception& e) {
             log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
+    } else {
+        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "server.p12";
+        ensureDirectoryExists(self.tls_keychain_file = filename);
     }
 
     // EPICS_PVAS_TLS_OPTIONS
@@ -620,6 +658,9 @@ void Config::updateDefs(defs_t& defs) const {
     if (!ignoreAddrs.empty()) defs["EPICS_PVAS_IGNORE_ADDR_LIST"] = join_addr(ignoreAddrs);
     defs["EPICS_PVA_CONN_TMO"] = SB() << tcpTimeout / tmoScale;
 
+    defs["EPICS_XDG_DATA_HOME"] = data_home;
+    defs["EPICS_XDG_CONFIG_HOME"] = config_home;
+
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVAS_TLS_KEYCHAIN
     if (!tls_keychain_file.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN"] = tls_keychain_file;
@@ -682,6 +723,7 @@ void Config::expand() {
     enforceTimeout(tcpTimeout);
 }
 
+#define MATCHING_DEF(D) (pair.first.size() >= sizeof(D##prefix) - 1u && strncmp(pair.first.c_str(), D##prefix, sizeof(D##prefix) - 1u) == 0)
 std::ostream& operator<<(std::ostream& strm, const Config& conf) {
     Config::defs_t defs;
     conf.updateDefs(defs);
@@ -694,16 +736,12 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf) {
         static const char ocsp_prefix[] = "EPICS_OCSP_";
         static const char auth_prefix[] = "EPICS_AUTH_";
 
-        if ((pair.first.size() >= sizeof(prefix) - 1u && strncmp(pair.first.c_str(), prefix, sizeof(prefix) - 1u) == 0) ||
-            (pair.first.size() >= sizeof(ca_prefix) - 1u && strncmp(pair.first.c_str(), ca_prefix, sizeof(ca_prefix) - 1u) == 0) ||
-            (pair.first.size() >= sizeof(pvacms_prefix) - 1u && strncmp(pair.first.c_str(), pvacms_prefix, sizeof(pvacms_prefix) - 1u) == 0) ||
-            (pair.first.size() >= sizeof(ocsp_prefix) - 1u && strncmp(pair.first.c_str(), ocsp_prefix, sizeof(ocsp_prefix) - 1u) == 0) ||
-            (pair.first.size() >= sizeof(auth_prefix) - 1u && strncmp(pair.first.c_str(), auth_prefix, sizeof(auth_prefix) - 1u) == 0))
+        if (MATCHING_DEF() || MATCHING_DEF(ca_) || MATCHING_DEF(pvacms_) || MATCHING_DEF(ocsp_) || MATCHING_DEF(auth_))
             strm << indent{} << pair.first << '=' << pair.second << '\n';
     }
     return strm;
 }
-
+#undef MATCHING_DEF
 }  // namespace server
 
 namespace client {
@@ -759,6 +797,9 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     // EPICS_PVA_TLS_KEYCHAIN
     if (pickone({"EPICS_PVA_TLS_KEYCHAIN"})) {
         self.ensureDirectoryExists(self.tls_keychain_file = pickone.val);
+    } else {
+        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "client.p12";
+        ensureDirectoryExists(self.tls_keychain_file = filename);
     }
 
     // EPICS_PVA_TLS_KEYCHAIN_PWD_FILE
@@ -818,6 +859,9 @@ void Config::updateDefs(defs_t& defs) const {
     if (!interfaces.empty()) defs["EPICS_PVA_INTF_ADDR_LIST"] = join_addr(interfaces);
     defs["EPICS_PVA_CONN_TMO"] = SB() << tcpTimeout / tmoScale;
     if (!nameServers.empty()) defs["EPICS_PVA_NAME_SERVERS"] = join_addr(nameServers);
+
+    defs["XDG_DATA_HOME"] = data_home;
+    defs["XDG_CONFIG_HOME"] = config_home;
 
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVA_TLS_KEYCHAIN

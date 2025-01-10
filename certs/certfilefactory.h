@@ -34,6 +34,7 @@ struct CertData {
     CertData(ossl_ptr<X509>& newCert, ossl_shared_ptr<STACK_OF(X509)>& newCa) : cert(std::move(newCert)), ca(newCa) {}
     CertData(ossl_ptr<X509>& newCert, ossl_shared_ptr<STACK_OF(X509)>& newCa, std::shared_ptr<KeyPair> key_pair)
         : cert(std::move(newCert)), ca(newCa), key_pair(key_pair) {}
+    CertData() = default;
 };
 
 typedef std::unique_ptr<IdFileFactory> cert_factory_ptr;

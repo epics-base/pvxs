@@ -36,6 +36,9 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         } catch (std::exception &e) {
             log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
+    } else {
+        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << ConfigCommon::version << OSI_PATH_SEPARATOR << "pvacms.p12";
+        ensureDirectoryExists(tls_keychain_file = filename);
     }
 
     // EPICS_PVAS_TLS_STOP_IF_NO_CERT
@@ -46,11 +49,18 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     // EPICS_PVACMS_ACF
     if (pickone({"EPICS_PVACMS_ACF"})) {
         ensureDirectoryExists(ca_acf_filename = pickone.val);
+    } else {
+        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "pvacms.acf";
+        ensureDirectoryExists(ca_acf_filename = filename);
     }
 
     // EPICS_PVACMS_DB
     if (pickone({"EPICS_PVACMS_DB"})) {
         ensureDirectoryExists(ca_db_filename = pickone.val);
+    } else {
+        std::string filename = SB() << data_home << OSI_PATH_SEPARATOR << "certs.db";
+        ensureDirectoryExists(filename);
+        ca_db_filename = filename;
     }
 
     // EPICS_CA_KEYCHAIN
@@ -68,6 +78,9 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
                 log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
             }
         }
+    } else {
+        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "ca.p12";
+        ensureDirectoryExists(ca_keychain_file = filename);
     }
 
     // EPICS_ADMIN_TLS_KEYCHAIN
@@ -85,6 +98,9 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
                 log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
             }
         }
+    } else {
+        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "admin.p12";
+        ensureDirectoryExists(admin_keychain_file = filename);
     }
 
     // EPICS_CA_NAME

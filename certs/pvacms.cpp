@@ -970,30 +970,29 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
 void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     std::shared_ptr<KeyPair> key_pair;
-
-    // Get key and certificate
+    CertData cert_data;
     try {
-        // Check if the CA certificates exist
-        auto cert_data = IdFileFactory::create(config.ca_keychain_file, config.ca_keychain_pwd)->getCertDataFromFile();
-        key_pair = cert_data.key_pair;
-        if (!key_pair && cert_data.cert)
-            throw(std::runtime_error("Keychain file contains a certificate but no key: "));
+        cert_data = IdFileFactory::create(config.ca_keychain_file, config.ca_keychain_pwd)->getCertDataFromFile();
+    } catch (...) {
+    }
+    key_pair = cert_data.key_pair;
+    if (!key_pair && cert_data.cert)
+        throw(std::runtime_error("Keychain file contains a certificate but no key: "));
 
-        if (!key_pair)
-            key_pair = IdFileFactory::createKeyPair();
+    if (!key_pair)
+        key_pair = IdFileFactory::createKeyPair();
 
-        if (!cert_data.cert)
-            cert_data = createCaCertificate(config, ca_db, key_pair);
 
-        ca_pkey = std::move(cert_data.key_pair->pkey);
-        ca_cert = std::move(cert_data.cert);
-        ca_chain = cert_data.ca;
-
+    if (!cert_data.cert) {
+        cert_data = createCaCertificate(config, ca_db, key_pair);
         createDefaultAdminACF(config, ca_cert);
         createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain);
-    } catch (std::exception &e) {
-        throw(std::runtime_error(SB() << "Error creating CA certificate: " << e.what()));
     }
+
+    ca_pkey = std::move(key_pair->pkey);
+    ca_cert = std::move(cert_data.cert);
+    ca_chain = cert_data.ca;
+
 }
 
 /**
@@ -1130,21 +1129,20 @@ void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EV
 void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                                    const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     std::shared_ptr<KeyPair> key_pair;
+    CertData cert_data;
     try {
-        // Check if the server certificates exist
-        auto cert_data = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd)->getCertDataFromFile();
-        key_pair = cert_data.key_pair;
-        if (!key_pair && cert_data.cert)
-            throw(std::runtime_error("Keychain file contains a certificate but no key: "));
-
-        if (!key_pair)
-            key_pair = IdFileFactory::createKeyPair();
-
-        if (!cert_data.cert)
-            createServerCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain, key_pair);
-    } catch (std::exception &e) {
-        throw(std::runtime_error(SB() << "Error creating server certificate: " << e.what()));
+        cert_data = IdFileFactory::create(config.ca_keychain_file, config.ca_keychain_pwd)->getCertDataFromFile();
+    } catch (...) {
     }
+    key_pair = cert_data.key_pair;
+    if (!key_pair && cert_data.cert)
+        throw(std::runtime_error("Keychain file contains a certificate but no key: "));
+
+    if (!key_pair)
+        key_pair = IdFileFactory::createKeyPair();
+
+    if (!cert_data.cert)
+        createServerCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain, key_pair);
 }
 
 /**

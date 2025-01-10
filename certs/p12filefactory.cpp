@@ -100,7 +100,7 @@ CertData P12FileFactory::getCertDataFromFile() {
         throw std::runtime_error(SB() << "Error opening keychain file as a PKCS#12 object: " << filename_);
     }
 
-    // Try to get private key and certificate
+    // Try to get private key and certificates
     if (!PKCS12_parse(p12.get(), password_.c_str(), pkey.acquire(), cert.acquire(), &chain_ptr)) {
         throw std::runtime_error(SB() << "Error parsing keychain file: " << filename_);
     }
