@@ -21,7 +21,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_PVACMS_TLS_KEYCHAIN", "EPICS_PVAS_TLS_KEYCHAIN"})) {
         ensureDirectoryExists(tls_keychain_file = pickone.val);
 
-        // EPICS_CA_KEYCHAIN_PWD_FILE
+        // EPICS_CA_TLS_KEYCHAIN_PWD_FILE
         std::string password_filename;
         if (pickone.name == "EPICS_PVACMS_TLS_KEYCHAIN") {
             pick_another_one({"EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE"});
@@ -63,13 +63,13 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         ca_db_filename = filename;
     }
 
-    // EPICS_CA_KEYCHAIN
-    if (pickone({"EPICS_CA_KEYCHAIN"})) {
+    // EPICS_CA_TLS_KEYCHAIN
+    if (pickone({"EPICS_CA_TLS_KEYCHAIN"})) {
         ensureDirectoryExists(ca_keychain_file = pickone.val);
 
-        // EPICS_CA_KEYCHAIN_PWD_FILE
-        if (pickone.name == "EPICS_CA_KEYCHAIN") {
-            pick_another_one({"EPICS_CA_KEYCHAIN_PWD_FILE"});
+        // EPICS_CA_TLS_KEYCHAIN_PWD_FILE
+        if (pickone.name == "EPICS_CA_TLS_KEYCHAIN") {
+            pick_another_one({"EPICS_CA_TLS_KEYCHAIN_PWD_FILE"});
             std::string password_filename = pick_another_one.val;
             ensureDirectoryExists(password_filename);
             try {
@@ -87,7 +87,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_ADMIN_TLS_KEYCHAIN"})) {
         ensureDirectoryExists(admin_keychain_file = pickone.val);
 
-        // EPICS_CA_KEYCHAIN_PWD_FILE
+        // EPICS_CA_TLS_KEYCHAIN_PWD_FILE
         if (pickone.name == "EPICS_ADMIN_TLS_KEYCHAIN") {
             pick_another_one({"EPICS_ADMIN_TLS_KEYCHAIN_PWD_FILE"});
             std::string password_filename = pick_another_one.val;
