@@ -43,6 +43,7 @@ Environment variables
 
 This table lists all of the ``$EPICS_PVA*`` environment variables understood by PVXS.
 See Client :ref:`clientconf` and Server :ref:`serverconf` for detailed explanations.
+For additional environment variables used for Secure PVAccess see :ref:`environment_variables`.
 
 Many variables come in pairs of ``$EPICS_PVA_*`` and ``$EPICS_PVAS_*``.
 A Client will look at only ``$EPICS_PVA_*``.

@@ -40,6 +40,7 @@ See :ref:`relpolicy` for details.
 
    overview
    netconfig
+   spvaqstart
    securepva
    example
    building
