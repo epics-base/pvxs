@@ -66,8 +66,9 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<co
  * Then parse it and read out the status and the status times
  *
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
+ * @param trusted_root_ca The trusted root CA to be used instead of the root ca in the OCSP response
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes) {
+PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes, const ossl_ptr<X509> &trusted_root_ca) {
     auto ocsp_response = getOCSPResponse(ocsp_bytes);
 
     // Get the response status
@@ -82,8 +83,8 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
         throw OCSPParseException("Failed to get basic OCSP response");
     }
 
-    // Verify signature of OCSP response
-    verifyOCSPResponse(basic_response);
+    // Verify OCSP response is signed by provided trusted root CA
+    verifyOCSPResponse(basic_response, trusted_root_ca);
 
     OCSP_SINGLERESP* single_response = OCSP_resp_get0(basic_response.get(), 0);
     if (!single_response) {
@@ -118,11 +119,17 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
  * It will not call the callback unless the status update has been verified and
  * all errors are ignored.
  *
+ * Important Note: This implementation relies on trusted_root being stored in the context and
+ * so having a longer scope than the subscription in that same context or the peer status
+ * subscriptions in the same context too.  The reference needs to remain valid until the subscription
+ * is cancelled.
+ *
  * @param ctx_cert the certificate to monitor
  * @param callback the callback to call
+ * @param trusted_root_ca the trusted root ca to verify the status response against
  * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
  */
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509> &trusted_root_ca, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
     // Construct the URI
     auto uri = CertStatusManager::getStatusPvFromCert(ctx_cert);
     log_debug_printf(status, "Starting Status Subscription: %s\n", uri.c_str());
@@ -142,7 +149,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&&
         auto sub = client->monitor(uri)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([weak_cert_status_manager](client::Subscription& sub) {
+                       .event([weak_cert_status_manager, &trusted_root_ca](client::Subscription& sub) {
                            try {
                                auto cert_status_manager = weak_cert_status_manager.lock();
                                if (!cert_status_manager) return;
@@ -150,7 +157,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509>&&
 
                                auto update = sub.pop();
                                if (update) {
-                                   auto status_update{PVACertificateStatus(update)};
+                                   auto status_update{PVACertificateStatus(update, trusted_root_ca)};
                                    log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
                                    cert_status_manager->status_ = std::make_shared<CertificateStatus>(status_update);
                                    (*callback_ptr)(status_update);
@@ -207,20 +214,10 @@ void CertStatusManager::unsubscribe() {
  *     bool isValid = verifyOCSPResponse(ocsp_bytes, ca_cert); // Verifies the OCSP response
  * @endcode
  */
-bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response) {
-    // Get the ca_cert from the response
-    pvxs::ossl_ptr<X509> ca_cert;
-    OCSP_resp_get0_signer(basic_response.get(), ca_cert.acquire(), nullptr);
-
-    if (!ca_cert) {
-        throw OCSPParseException("Failed to get signer certificate from OCSP response");
-    }
-
-    // get ca_chain
+bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, const ossl_ptr<X509> &trusted_root_ca) {
+    // get ca_chain from the response (will be verified to see if it's ultimately signed by our trusted root ca)
     auto const_ca_chain_ptr = OCSP_resp_get0_certs(basic_response.get());
     ossl_ptr<STACK_OF(X509)> ca_chain(sk_X509_dup(const_ca_chain_ptr));  // remove const-ness
-
-    // TODO Ensure CA cert is trusted by verifying that it is in the tls_context
 
     // Create a new X509_STORE with trusted root CAs
     ossl_ptr<X509_STORE> store(X509_STORE_new(), false);
@@ -239,8 +236,8 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
         throw OCSPParseException("Failed to create X509_STORE_CTX to verify OCSP response");
     }
 
-    if (X509_STORE_CTX_init(ctx.get(), store.get(), ca_cert.get(), ca_chain.get()) != 1) {
-        throw OCSPParseException("Failed to initialize X509_STORE_CTX to verify CA certificate");
+    if (X509_STORE_CTX_init(ctx.get(), store.get(), trusted_root_ca.get(), ca_chain.get()) != 1) {
+        throw OCSPParseException("Failed to initialize X509_STORE_CTX to verify OCSP response");
     }
 
     // Verification parameters
@@ -250,8 +247,8 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
                                  X509_V_FLAG_TRUSTED_FIRST         // Check the trusted locations first
     );
 
-    // Add the now trusted ca certificate from the response to the store
-    if (X509_STORE_add_cert(store.get(), ca_cert.get()) != 1) {
+    // Add the now trusted Root CA to the store
+    if (X509_STORE_add_cert(store.get(), trusted_root_ca.get()) != 1) {
         throw OCSPParseException("Failed to add issuer certificate to X509_STORE to verify OCSP response");
     }
 
@@ -285,8 +282,6 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
  * @param certificate certificate to check
  * @return true if we should monitor the given certificate
  */
-bool CertStatusManager::shouldMonitor(const ossl_ptr<X509>& certificate) { return shouldMonitor(certificate.get()); }
-
 bool CertStatusManager::shouldMonitor(const X509* certificate) { return (X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_PvaCertStatusURI, -1) >= 0); }
 
 /**

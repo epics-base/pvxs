@@ -153,6 +153,8 @@ struct CertStatusExData {
     const impl::evbase& loop;
     // The entity certificate
     ossl_ptr<X509> cert{};
+    // The Trusted Root CA
+    ossl_ptr<X509> trusted_root_ca{};
     // Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not configured
     const bool status_check_enabled;
     // The map of peer statuses, keyed by the serial number of each peer's certificate
@@ -362,9 +364,10 @@ struct SSLContext {
 
     /**
      * @brief Monitors the entity certificate status and sets the state of the TLS context when the status changes
-     * @param cert_data - The certificate data containing the entity certificate
+     * @param cert the entity certificate
+     * @param trusted_root_ca the trusted root to verify OCSP status with
      */
-    void monitorStatusAndSetState(certs::CertData& cert_data);
+    void monitorStatusAndSetState(const ossl_ptr<X509>&cert,ossl_ptr<X509>&trusted_root_ca);
     void setDegradedMode(bool clear = false);
     void setTlsOrTcpMode();
 

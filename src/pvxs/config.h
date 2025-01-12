@@ -213,20 +213,7 @@ struct PVXS_API ConfigCommon {
      * false otherwise
      */
     inline bool isTlsConfigured() const {
-        static std::once_flag flag;
-        static bool result;
-        std::call_once(flag, [&]() {
-            result = !(tls_disabled || tls_keychain_file.empty());
-            if (result) {
-                std::ifstream file(tls_keychain_file.c_str());
-                if (file.bad()){
-                    std::string& modifiable = const_cast<std::string&>(tls_keychain_file);
-                    modifiable.clear();
-                    result = false;
-                }
-            }
-        });
-        return result;
+        return !tls_disabled && !tls_keychain_file.empty();
     }
 #endif  // PVXS_ENABLE_OPENSSL
 

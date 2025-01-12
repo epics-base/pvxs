@@ -560,7 +560,8 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         }
     } else {
         std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "server.p12";
-        ensureDirectoryExists(self.tls_keychain_file = filename);
+        std::ifstream file(filename.c_str());
+        if (file.good()) tls_keychain_file = filename;
     }
 
     // EPICS_PVAS_TLS_OPTIONS
@@ -799,7 +800,8 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         self.ensureDirectoryExists(self.tls_keychain_file = pickone.val);
     } else {
         std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "client.p12";
-        ensureDirectoryExists(self.tls_keychain_file = filename);
+        std::ifstream file(filename.c_str());
+        if (file.good()) tls_keychain_file = filename;
     }
 
     // EPICS_PVA_TLS_KEYCHAIN_PWD_FILE

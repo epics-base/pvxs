@@ -228,7 +228,7 @@ using namespace pvxs::certs;
         }                                                                                                                                     \
         testDiag("Set up: %s", #LNAME " certificate Status Response");                                                                        \
                                                                                                                                               \
-        auto converted_response = PVACertificateStatus(LNAME##_status_response_value);                                                  \
+        auto converted_response = PVACertificateStatus(LNAME##_status_response_value, ca_cert.cert);                                                  \
         testOk1(converted_response == LNAME##_cert_status);                                                                                   \
         testEq(converted_response.ocsp_bytes.size(), LNAME##_cert_status.ocsp_bytes.size());                                                  \
                                                                                                                                               \
@@ -250,7 +250,7 @@ using namespace pvxs::certs;
     try {                                                                                                                \
         testDiag("Sending: %s", "Server Status Request");                                                                \
         auto result = client.get(LNAME##_status_pv_name).exec()->wait(5.0);                                              \
-        auto LNAME##_status_response = PVACertificateStatus(result);                                               \
+        auto LNAME##_status_response = PVACertificateStatus(result, ca_cert.cert);                                       \
         testOk1(LNAME##_status_response == LNAME##_cert_status);                                                         \
         testOk1(LNAME##_status_response == LNAME##_cert_status);                                                         \
         testOk1((CertifiedCertificateStatus)LNAME##_status_response == LNAME##_cert_status);                             \
@@ -309,7 +309,7 @@ struct TestCert {
     ossl_shared_ptr<STACK_OF(X509)> chain;
     ossl_ptr<EVP_PKEY> pkey;
 
-    TestCert(ossl_ptr<X509> cert, ossl_shared_ptr<stack_st_X509> chain, ossl_ptr<EVP_PKEY> pkey)
+    TestCert(ossl_ptr<X509> cert=nullptr, ossl_shared_ptr<stack_st_X509> chain=nullptr, ossl_ptr<EVP_PKEY> pkey=nullptr)
         : cert(std::move(cert)), chain(std::move(chain)), pkey(std::move(pkey)) {}
 };
 
@@ -358,14 +358,14 @@ TestCert getTestCert(std::string filename, std::string password) {
     file_ptr fp(fopen(filename.c_str(), "rb"), false);
     if (!fp) {
         testFail("Error opening certs file for reading binary contents: %s", filename.c_str());
-        return TestCert(nullptr, nullptr, nullptr);
+        return {};
     }
 
     testDiag("Opening %s certs file as a PKCS#12 object", filename.c_str());
     ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL));
     if (!p12) {
         testFail("Error opening certs file as a PKCS#12 object: %s", filename.c_str());
-        return TestCert(nullptr, nullptr, nullptr);
+        return {};
     }
 
     ossl_ptr<X509> cert;
@@ -375,7 +375,7 @@ TestCert getTestCert(std::string filename, std::string password) {
     testDiag("Parsing PKCS#12 object to get certificate, key and chain");
     if (!PKCS12_parse(p12.get(), password.c_str(), pkey.acquire(), cert.acquire(), &chain_ptr)) {
         testFail("Error Parsing PKCS#12 object: %s", filename.c_str());
-        return TestCert(nullptr, nullptr, nullptr);
+        return {};
     }
 
     testTrue(cert.get());
@@ -383,7 +383,7 @@ TestCert getTestCert(std::string filename, std::string password) {
 
     if (!cert || !pkey) {
         testFail("Error loading certificate: %s", filename.c_str());
-        return TestCert(nullptr, nullptr, nullptr);
+        return {};
     }
 
     if (chain_ptr) {

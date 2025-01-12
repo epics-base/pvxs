@@ -61,7 +61,7 @@ static int clientOCSPCallback(SSL* ctx, ossl::SSLContext* tls_context) {
 
         // Replace cached peer cert with received OCSP response.  Throws if parsing error and catch sets invalid status
         const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
-        auto status = (certs::CertificateStatus)(certs::OCSPStatus(ocsp_bytes));
+        auto status = (certs::CertificateStatus)(certs::OCSPStatus(ocsp_bytes, tls_context->getCertStatusExData()->trusted_root_ca));
         ex_data->setCachedPeerStatus(peer_cert, status);
 
         // If status is valid return success

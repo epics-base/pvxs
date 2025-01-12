@@ -56,11 +56,11 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
  *
  * @param cert_data
  */
-void SSLContext::monitorStatusAndSetState(certs::CertData &cert_data) {
+void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509>&cert,ossl_ptr<X509>&trusted_root_ca) {
     if (!status_check_disabled) {
-        if (certs::CertStatusManager::shouldMonitor(cert_data.cert.get())) {
-            auto cert_to_monitor = ossl_ptr<X509>(X509_dup(cert_data.cert.get()));
-            cert_monitor = certs::CertStatusManager::subscribe(std::move(cert_to_monitor), [=](const certs::PVACertificateStatus &pva_status) {
+        if (certs::CertStatusManager::shouldMonitor(cert.get())) {
+            auto cert_to_monitor = ossl_ptr<X509>(X509_dup(cert.get()));
+            cert_monitor = certs::CertStatusManager::subscribe(trusted_root_ca, std::move(cert_to_monitor), [=](const certs::PVACertificateStatus &pva_status) {
                 {
                     Guard G(lock);
                     cert_status = pva_status;
@@ -287,7 +287,8 @@ void verifyKeyUsage(const ossl_ptr<X509> &cert,
  * @param ctx the context to add the CAs to
  * @param CAs the stack of X509 CA certificates
  */
-void extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr<STACK_OF(X509)> &CAs) {
+ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr<STACK_OF(X509)> &CAs) {
+    ossl_ptr<X509> trusted_root_ca{};
     for (int i = 0, N = sk_X509_num(CAs.get()); i < N; i++) {
         auto ca = sk_X509_value(CAs.get(), i);
 
@@ -301,7 +302,8 @@ void extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr<STACK_OF(
             throw std::runtime_error(SB() << "non-CA certificate found in keychain");
         }
 
-        if (flags & EXFLAG_SS) {        // self-signed (aka. root)
+        if (flags & EXFLAG_SS) {  // self-signed (aka. root)
+            trusted_root_ca = ossl_ptr<X509>(X509_dup(ca));
             assert(flags & EXFLAG_SI);  // circa OpenSSL, self-signed implies self-issued
 
             // populate the context's trust store with the self-signed root cert
@@ -314,6 +316,7 @@ void extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr<STACK_OF(
         }
         if (!SSL_CTX_add0_chain_cert(ctx->ctx.get(), ca)) throw SSLError("SSL_CTX_add0_chain_cert");
     }
+    return trusted_root_ca;
 }
 
 /**
@@ -382,8 +385,13 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
     // Check the private key
     if (!cert_data.key_pair) throw std::runtime_error("No private key");
     if (!SSL_CTX_use_PrivateKey(tls_context->ctx.get(), cert_data.key_pair->pkey.get())) throw SSLError("using private key");
-    extractCAs(tls_context, cert_data.ca);
+    ossl_ptr<X509>trusted_root_ca(extractCAs(tls_context, cert_data.ca));
+    if (!trusted_root_ca) throw SSLError("Could not find Trusted Root CA Certificate in keychain");
     if (!cert_data.key_pair->pkey || !SSL_CTX_check_private_key(tls_context->ctx.get())) throw SSLError("invalid private key");
+
+    // Add the trusted root CA to the context so that any peer certs signed with it will automatically pass verification
+    X509_STORE* store_ptr = SSL_CTX_get_cert_store(tls_context->ctx.get());
+    X509_STORE_add_cert(store_ptr, trusted_root_ca.get());
 
     // Build the certificate chain and set verification flags
     // Note useful flags are:
@@ -393,18 +401,18 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
     if (!SSL_CTX_build_cert_chain(tls_context->ctx.get(), SSL_BUILD_CHAIN_FLAG_CHECK))
         throw SSLError("invalid cert chain");
 
+    // Move entity certificate to the custom data in the SSL context
+    auto cert_status_ex_data = tls_context->getCertStatusExData();
+    cert_status_ex_data->cert = std::move(cert_data.cert);
+    cert_status_ex_data->trusted_root_ca = std::move(trusted_root_ca);
+
     // TLS is now configured:
     //  - Entity certificate valid,
     //  - CA certificate valid,
     //  - CA certificate chain valid,
-    //  - CA certificate trusted,
     //  - Private key valid
     // Start monitoring entity certificate status and set TLS context state accordingly
-    tls_context->monitorStatusAndSetState(cert_data);
-
-    // Move entity certificate to the custom data in the SSL context
-    auto cert_status_ex_data = tls_context->getCertStatusExData();
-    cert_status_ex_data->cert = std::move(cert_data.cert);
+    tls_context->monitorStatusAndSetState(cert_status_ex_data->cert, cert_status_ex_data->trusted_root_ca);
 
     // Configure what and how to verify certificates in the TLS handshake
     // Note useful mode flags are:
@@ -563,7 +571,7 @@ void CertStatusExData::subscribeToPeerCertStatus(X509 *cert_ptr, std::function<v
         // Subscribe to the certificate status
         std::weak_ptr<SSLPeerStatus> weak_peer_status = peer_status;
         cert_status_manager =
-            certs::CertStatusManager::subscribe(std::move(cert_to_monitor), [this, weak_peer_status, serial_number, fn](certs::PVACertificateStatus status) {
+            certs::CertStatusManager::subscribe(trusted_root_ca, std::move(cert_to_monitor), [this, weak_peer_status, serial_number, fn](certs::PVACertificateStatus status) {
                 auto peer_status = weak_peer_status.lock();
                 if ( !peer_status ) return;
 

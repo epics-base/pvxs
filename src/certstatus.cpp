@@ -17,6 +17,15 @@
 namespace pvxs {
 namespace certs {
 
+/**
+ * @brief Constructor for the OCSPStatus class
+ *
+ * @param ocsp_status the OCSP status
+ * @param ocsp_bytes the OCSP response bytes
+ * @param status_date the date of the OCSP certificate status
+ * @param status_valid_until_time the valid-until date of the OCSP certificate status
+ * @param revocation_time the revocation date of the certificate if it is revoked
+ */
 OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t> &ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
                        StatusDate revocation_time)
     : ocsp_bytes(ocsp_bytes),
@@ -25,12 +34,17 @@ OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const ui
       status_valid_until_date(status_valid_until_time),
       revocation_date(revocation_time) {};
 
-void OCSPStatus::init() {
+/**
+ * @brief Initialise the OCSPStatus object
+ *
+ * @param trusted_root_ca the trusted root CA certificate to use for parsing the OCSP response
+ */
+void OCSPStatus::init(const ossl_ptr<X509> &trusted_root_ca) {
     if (ocsp_bytes.empty()) {
         ocsp_status = (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN;
         status_date = time(nullptr);
     } else {
-        auto parsed_status = CertStatusManager::parse(ocsp_bytes);
+        auto parsed_status = CertStatusManager::parse(ocsp_bytes, trusted_root_ca);
         ocsp_status = std::move(parsed_status.ocsp_status);
         status_date = std::move(parsed_status.status_date);
         status_valid_until_date = std::move(parsed_status.status_valid_until_date);

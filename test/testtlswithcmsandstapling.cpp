@@ -96,7 +96,7 @@ struct Tester {
         testShow() << "Loaded all test certs\n";
     }
 
-    ~Tester() {};
+    ~Tester() = default;
 
     /**
      * @brief Creates certificate statuses.
@@ -126,6 +126,7 @@ struct Tester {
     void makeStatusResponses() {
         testShow() << __func__;
         auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
+
         MAKE_STATUS_RESPONSE(ca)
         MAKE_STATUS_RESPONSE(intermediate_server)
         MAKE_STATUS_RESPONSE(server1)

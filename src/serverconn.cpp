@@ -265,13 +265,14 @@ void ServerConn::handle_CONNECTION_VALIDATION()
                 auto ctx = bufferevent_openssl_get_ssl(bev.get());
                 assert(ctx);
                 auto server = iface->server;
-                ossl::SSLContext::getPeerCredentials(*C, ctx);
-                ossl::SSLContext::subscribeToPeerCertStatus(ctx, [=](bool enable) {
-                    if (enable)
-                        server->acceptor_loop.dispatch([this, server]() mutable { server->enableTlsForPeerConnection(this); });
-                    else
-                        server->acceptor_loop.dispatch([this, server]() mutable { server->removePeerTlsConnections(this); });
-                });
+                if (ossl::SSLContext::getPeerCredentials(*C, ctx) ) {
+                    ossl::SSLContext::subscribeToPeerCertStatus(ctx, [=](bool enable) {
+                        if (enable)
+                            server->acceptor_loop.dispatch([this, server]() mutable { server->enableTlsForPeerConnection(this); });
+                        else
+                            server->acceptor_loop.dispatch([this, server]() mutable { server->removePeerTlsConnections(this); });
+                    });
+                }
             }
 #endif
             if(C->method.empty()) {

@@ -87,7 +87,6 @@ class CertStatusManager {
 
     using StatusCallback = std::function<void(const PVACertificateStatus&)>;
 
-    static bool shouldMonitor(const ossl_ptr<X509>& certificate);
     static bool shouldMonitor(const X509* certificate);
     std::shared_ptr<StatusCallback> callback_ref{}; // Option placeholder for ref to callback if used
 
@@ -132,12 +131,13 @@ class CertStatusManager {
      * @brief Used to create a helper that you can use to subscribe to certificate status with
      * Subsequently call subscribe() to subscribe
      *
+     * @param trusted_root_ca the trusted root CA that we'll use to verify the OCSP responses recieved
      * @param ctx_cert certificate you want to subscribe to
      * @param callback the callback to call when a status change has appeared
      *
      * @see unsubscribe()
      */
-    static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback);
+    static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509> &trusted_root_ca, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback);
 
     /**
      * @brief Unsubscribe from listening to certificate status
@@ -167,7 +167,7 @@ class CertStatusManager {
     time_t manager_start_time_{time(nullptr)};
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes);
 
-    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response);
+    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, const ossl_ptr<X509> &trusted_root_ca);
 
     /**
      * @brief To parse OCSP responses
@@ -180,7 +180,7 @@ class CertStatusManager {
      * @return the Parsed OCSP response status
      */
    public:
-    static ParsedOCSPStatus parse(shared_array<const uint8_t> ocsp_bytes);
+    static ParsedOCSPStatus parse(shared_array<const uint8_t> ocsp_bytes, const ossl_ptr<X509> &trusted_root_ca);
 };
 
 template <>
