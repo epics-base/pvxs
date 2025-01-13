@@ -617,14 +617,6 @@ void ContextImpl::startNS() {
 void ContextImpl::close() {
     log_debug_printf(setup, "context %p close\n", this);
 
-#ifdef PVXS_ENABLE_OPENSSL
-    // Stop status monitoring if it may be enabled
-    if (isTlsEnabled()) {
-        // Degrading service will close any monitoring and clean up cert status
-        tls_context->setDegradedMode(true);
-    }
-#endif
-
     // terminate all active connections
     tcp_loop.call([this]() {
         if (state == Stopped) return;

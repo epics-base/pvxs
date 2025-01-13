@@ -143,23 +143,21 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509> &
     try {
         auto cert_status_manager = cert_status_ptr<CertStatusManager>(new CertStatusManager(std::move(ctx_cert), client));
         cert_status_manager->callback_ref = std::move(callback_ptr);
-        std::weak_ptr<CertStatusManager> weak_cert_status_manager = cert_status_manager;
+        CertStatusManager * cert_status_manager_ptr = cert_status_manager.get();
 
         log_debug_printf(status, "Subscribing to status: %p\n", cert_status_manager.get());
         auto sub = client->monitor(uri)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([weak_cert_status_manager, &trusted_root_ca](client::Subscription& sub) {
+                       .event([cert_status_manager_ptr, &trusted_root_ca](client::Subscription& sub) {
                            try {
-                               auto cert_status_manager = weak_cert_status_manager.lock();
-                               if (!cert_status_manager) return;
-                               auto callback_ptr = cert_status_manager->callback_ref;
+                               auto callback_ptr = cert_status_manager_ptr->callback_ref;
 
                                auto update = sub.pop();
                                if (update) {
                                    auto status_update{PVACertificateStatus(update, trusted_root_ca)};
                                    log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
-                                   cert_status_manager->status_ = std::make_shared<CertificateStatus>(status_update);
+                                   cert_status_manager_ptr->status_ = std::make_shared<CertificateStatus>(status_update);
                                    (*callback_ptr)(status_update);
                                }
                            } catch (client::Finished& conn) {
