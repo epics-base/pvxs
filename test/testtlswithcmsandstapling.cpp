@@ -533,7 +533,7 @@ struct Tester {
             serv_conf.tls_disable_stapling = false;
 
             try {
-                [[maybe_unused]] auto serv_no_cms(serv_conf.build().addPV(TEST_PV, test_pv));
+                auto serv_no_cms(serv_conf.build().addPV(TEST_PV, test_pv));
                 testOk(1, "Created server when CMS is unavailable");
             } catch (std::exception& e) {
                 testFail("Unexpected Failure");
@@ -555,7 +555,7 @@ struct Tester {
             auto cli(cli_conf.build());
 
             try {
-                [[maybe_unused]] auto val(cli.get(TEST_PV1).exec()->wait(1.0));
+                auto val(cli.get(TEST_PV1).exec()->wait(1.0));
                 testFail("Unexpected Success");
             } catch (std::exception& e) {
                 testStrEq("Timeout", e.what());

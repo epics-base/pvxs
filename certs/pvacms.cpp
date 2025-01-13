@@ -512,7 +512,7 @@ void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory) {
  */
 ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factory) {
     // Check validity falls within acceptable range
-    if (certificate_factory.issuer_certificate_) ensureValidityCompatible(certificate_factory);
+    if (certificate_factory.issuer_certificate_ptr_) ensureValidityCompatible(certificate_factory);
 
     auto certificate = certificate_factory.create();
 
@@ -541,7 +541,7 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factor
     log_info_printf(pvacms, "%s\n", cert_description.c_str());
     log_info_printf(
         pvacms, "%s\n",
-        (SB() << "CERT_ID: " << getCertId(CertStatus::getIssuerId(certificate_factory.issuer_certificate_), certificate_factory.serial_)).str().c_str());
+        (SB() << "CERT_ID: " << getCertId(CertStatus::getIssuerId(certificate_factory.issuer_certificate_ptr_), certificate_factory.serial_)).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "NAME: " << certificate_factory.name_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATION: " << certificate_factory.org_).str().c_str());
     log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_).str().c_str());
@@ -1214,8 +1214,8 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X
  * @param cert_factory the cert factory to check
  */
 void ensureValidityCompatible(CertFactory &cert_factory) {
-    time_t ca_not_before = getNotBeforeTimeFromCert(cert_factory.issuer_certificate_);
-    time_t ca_not_after = getNotAfterTimeFromCert(cert_factory.issuer_certificate_);
+    time_t ca_not_before = getNotBeforeTimeFromCert(cert_factory.issuer_certificate_ptr_);
+    time_t ca_not_after = getNotAfterTimeFromCert(cert_factory.issuer_certificate_ptr_);
 
     if (cert_factory.not_before_ < ca_not_before) {
         throw std::runtime_error("Not before time is before CA's not before time");
@@ -1279,7 +1279,6 @@ std::string getCountryCode() {
  *
  * @return the time_t representation of the not after time in the certificate
  */
-time_t getNotAfterTimeFromCert(const ossl_ptr<X509> &cert) {return getNotAfterTimeFromCert(cert.get());}
 time_t getNotAfterTimeFromCert(const X509 *cert) {
     ASN1_TIME *cert_not_after = X509_get_notAfter(cert);
     time_t not_after = StatusDate::asn1TimeToTimeT(cert_not_after);
@@ -1292,8 +1291,6 @@ time_t getNotAfterTimeFromCert(const X509 *cert) {
  *
  * @return the time_t representation of the not before time in the certificate
  */
-
-time_t getNotBeforeTimeFromCert(const ossl_ptr<X509> &cert) {return getNotBeforeTimeFromCert(cert.get());}
 time_t getNotBeforeTimeFromCert(const X509 *cert) {
     ASN1_TIME *cert_not_before = X509_get_notBefore(cert);
     time_t not_before = StatusDate::asn1TimeToTimeT(cert_not_before);
