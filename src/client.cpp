@@ -47,7 +47,7 @@ constexpr size_t nBuckets = 30u;
 /* our limit for UDP packet payload.
  * try not to fragment with usual MTU==1500 allowing for some overhead
  * by transport protocols.  Ethernet+ip+udp headers add >= 42 bytes.
- * May be more with eg. IP header options, VLAN tag, etc.
+ * May be more with e.g. IP header options, VLAN tag, etc.
  */
 constexpr size_t maxSearchPayload = 1400;
 
@@ -75,24 +75,24 @@ constexpr uint32_t search_seq{0x66696e64};  // "find"
 
 Disconnect::Disconnect() : std::runtime_error("Disconnected"), time(epicsTime::getCurrent()) {}
 
-Disconnect::~Disconnect() {}
+Disconnect::~Disconnect() = default;
 
 RemoteError::RemoteError(const std::string& msg) : std::runtime_error(msg) {}
 
-RemoteError::~RemoteError() {}
+RemoteError::~RemoteError() = default;
 
-Finished::~Finished() {}
+Finished::~Finished() = default;
 
 Connected::Connected(const std::string& peerName, const epicsTime& time, const std::shared_ptr<const pvxs::client::ServerCredentials>& cred)
     : std::runtime_error("Connected"), peerName(peerName), time(time), cred(cred) {}
 
-Connected::~Connected() {}
+Connected::~Connected() = default;
 
 Interrupted::Interrupted() : std::runtime_error("Interrupted") {}
-Interrupted::~Interrupted() {}
+Interrupted::~Interrupted() = default;
 
 Timeout::Timeout() : std::runtime_error("Timeout") {}
-Timeout::~Timeout() {}
+Timeout::~Timeout() = default;
 
 Channel::Channel(const std::shared_ptr<ContextImpl>& context, const std::string& name, uint32_t cid) : context(context), name(name), cid(cid) {}
 
@@ -202,9 +202,9 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self) {
     }
 }
 
-Connect::~Connect() {}
+Connect::~Connect() = default;
 
-ConnectImpl::~ConnectImpl() {}
+ConnectImpl::~ConnectImpl() = default;
 
 const std::string& ConnectImpl::name() const { return _name; }
 bool ConnectImpl::connected() const { return _connected.load(std::memory_order_relaxed); }
@@ -278,7 +278,7 @@ void ResultWaiter::complete(Result&& result, bool interrupt) {
 
 OperationBase::OperationBase(operation_t op, const evbase& loop) : Operation(op), loop(loop) {}
 
-OperationBase::~OperationBase() {}
+OperationBase::~OperationBase() = default;
 
 const std::string& OperationBase::name() { return chan->name; }
 
@@ -345,7 +345,7 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
     return chan;
 }
 
-Operation::~Operation() {}
+Operation::~Operation() = default;
 
 Subscription::~Subscription() {}
 
@@ -371,7 +371,7 @@ Context::Context(const Config& conf, const std::function<int(int)>& fn) : pvt(st
 
 Context::Context(const Config& conf) : pvt(std::make_shared<Pvt>(conf)) { pvt->impl->startNS(); }
 
-Context::~Context() {}
+Context::~Context() = default;
 
 const Config& Context::config() const {
     if (!pvt) throw std::logic_error("NULL Context");
@@ -586,7 +586,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
 #endif
 }
 
-ContextImpl::~ContextImpl() {}
+ContextImpl::~ContextImpl() = default;
 
 void ContextImpl::startNS() {
     if (nameServers.empty())  // vector size const after ctor, contents remain mutable

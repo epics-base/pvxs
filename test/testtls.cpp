@@ -8,7 +8,7 @@
 #include <sstream>
 
 #include <epicsUnitTest.h>
-#include <string.h>
+#include <cstring>
 #include <testMain.h>
 
 #include <pvxs/client.h>
@@ -37,13 +37,13 @@ struct WhoAmI final : public server::Source {
 
     WhoAmI() : resultType(nt::NTScalar(TypeCode::String).create()) {}
 
-    virtual void onSearch(Search& op) override final {
+    void onSearch(Search& op) final {
         for (auto& pv : op) {
             if (strcmp(pv.name(), WHO_AM_I_PV) == 0) pv.claim();
         }
     }
 
-    virtual void onCreate(std::unique_ptr<server::ChannelControl>&& op) override final {
+    void onCreate(std::unique_ptr<server::ChannelControl>&& op) final {
         if (op->name() != WHO_AM_I_PV) return;
 
         op->onOp([this](std::unique_ptr<server::ConnectOp>&& cop) {
@@ -82,7 +82,7 @@ Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt) {
 
         } else if (!evt.wait(5.0)) {
             testFail("timeout waiting for event");
-            return Value();
+            return {};
         }
     }
 }

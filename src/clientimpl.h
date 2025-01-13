@@ -255,7 +255,7 @@ struct Discovery final : public OperationBase
 
     virtual bool cancel() override final;
 private:
-    bool _cancel(bool implicit);
+    bool _cancel();
 
     // unused for this special case
     virtual void _reExecGet(std::function<void (Result &&)> &&resultcb) override final;

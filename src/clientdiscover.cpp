@@ -22,7 +22,7 @@ Discovery::Discovery(const std::shared_ptr<ContextImpl> &context)
 
 Discovery::~Discovery() {
     if(loop.assertInRunningLoop())
-        _cancel(true);
+        _cancel();
 }
 
 bool Discovery::cancel()
@@ -30,14 +30,14 @@ bool Discovery::cancel()
     decltype (notify) junk;
     bool ret;
     loop.call([this, &junk, &ret](){
-        ret = _cancel(false);
+        ret = _cancel();
         junk = std::move(notify);
         // leave opByIOID for GC
     });
     return ret;
 }
 
-bool Discovery::_cancel(bool implicit) {
+bool Discovery::_cancel() {
     bool active = running;
 
     if(active) {

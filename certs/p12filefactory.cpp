@@ -59,7 +59,7 @@ std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
         throw std::runtime_error(SB() << "Error getting private key from file: \"" << filename_ << "\": " << strerror(errno));
     }
 
-    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL), false);
+    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr), false);
     if (!p12) {
         throw std::runtime_error(SB() << "Error opening private key file as a PKCS#12 object: " << filename_);
     }
@@ -93,7 +93,7 @@ CertData P12FileFactory::getCertDataFromFile() {
         throw std::runtime_error(SB() << "Error opening keychain file for reading binary contents: \"" << filename_ << "\"");
     }
 
-    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL), false);
+    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr), false);
     if (!p12) {
         throw std::runtime_error(SB() << "Error opening keychain file as a PKCS#12 object: " << filename_);
     }
@@ -109,7 +109,7 @@ CertData P12FileFactory::getCertDataFromFile() {
     else
         chain = ossl_shared_ptr<STACK_OF(X509)>(sk_X509_new_null());
 
-    return CertData(cert, chain, std::make_shared<KeyPair>(std::move(pkey)));
+    return {cert, chain, std::make_shared<KeyPair>(std::move(pkey))};
 }
 
 /**
@@ -124,7 +124,7 @@ CertData P12FileFactory::getCertDataFromFile() {
  * @return an owned pointer to the PKCS12 object
  * @throw std::runtime_error if the PEM string cannot be parsed
  */
-ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string) {
+ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(const std::string &password, EVP_PKEY *keys_ptr, const std::string &pem_string) {
     // Read PEM data into a new BIO
     ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string.c_str(), -1), false);
     if (!bio) {
@@ -132,7 +132,7 @@ ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *
     }
 
     // Get first Cert as Certificate
-    ossl_ptr<X509> cert(PEM_read_bio_X509_AUX(bio.get(), NULL, NULL, (void *)password.c_str()), false);
+    ossl_ptr<X509> cert(PEM_read_bio_X509_AUX(bio.get(), nullptr, nullptr, (void *)password.c_str()), false);
     if (!cert) {
         throw std::runtime_error("Unable to read certificate");
     }
@@ -145,7 +145,7 @@ ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *
 
     // Get whole of certificate chain and push to certs
     ossl_ptr<X509> ca;
-    while (X509 *ca_ptr = PEM_read_bio_X509(bio.get(), NULL, NULL, (void *)password.c_str())) {
+    while (X509 *ca_ptr = PEM_read_bio_X509(bio.get(), nullptr, nullptr, (void *)password.c_str())) {
         ca = ossl_ptr<X509>(ca_ptr);
         sk_X509_push(certs.get(), ca.release());
     }
@@ -163,7 +163,7 @@ ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(std::string password, EVP_PKEY *
  * @return a shared pointer to the PKCS12 object
  * @throw std::runtime_error if the certificate and key cannot be found or an error occurs
  */
-ossl_ptr<PKCS12> P12FileFactory::toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) * cert_chain_ptr) {
+ossl_ptr<PKCS12> P12FileFactory::toP12(const std::string &password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) * cert_chain_ptr) {
     // Get the subject name of the certificate
     if (!cert_ptr && !keys_ptr) throw std::runtime_error("No certificate or key provided");
 

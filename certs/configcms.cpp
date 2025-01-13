@@ -8,7 +8,7 @@
 
 #include <pvxs/log.h>
 
-DEFINE_LOGGER(_logname, "pvxs.certs.cfg");
+DEFINE_LOGGER(cert_cfg, "pvxs.certs.cfg");
 
 namespace pvxs {
 namespace certs {
@@ -34,7 +34,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         try {
             tls_keychain_pwd = getFileContents(password_filename);
         } catch (std::exception &e) {
-            log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+            log_err_printf(cert_cfg, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
     } else {
         std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "pvacms.p12";
@@ -75,7 +75,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
             try {
                 ca_keychain_pwd = getFileContents(password_filename);
             } catch (std::exception &e) {
-                log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+                log_err_printf(cert_cfg, "error reading password file: %s. %s", password_filename.c_str(), e.what());
             }
         }
     } else {
@@ -95,7 +95,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
             try {
                 ca_keychain_pwd = getFileContents(password_filename);
             } catch (std::exception &e) {
-                log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+                log_err_printf(cert_cfg, "error reading password file: %s. %s", password_filename.c_str(), e.what());
             }
         }
     } else {
@@ -128,7 +128,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         try {
             cert_status_validity_mins = parseTo<uint64_t>(pickone.val);
         } catch (std::exception &e) {
-            log_err_printf(_logname, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+            log_err_printf(cert_cfg, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
 

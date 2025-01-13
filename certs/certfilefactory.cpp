@@ -142,7 +142,7 @@ CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) {
         }
     }
 
-    return CertData(cert, chain, key_pair);
+    return {cert, chain, key_pair};
 }
 
 cert_factory_ptr IdFileFactory::create(const std::string& filename, const std::string& password, const std::shared_ptr<KeyPair>& key_pair, X509* cert_ptr,

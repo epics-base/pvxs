@@ -177,8 +177,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         throw std::logic_error("Unable to enable BEV");
 }
 
-ServerConn::~ServerConn()
-{}
+ServerConn::~ServerConn() = default;
 
 const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
 {

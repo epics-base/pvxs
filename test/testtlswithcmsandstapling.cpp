@@ -149,7 +149,7 @@ struct Tester {
 
             } else if (!evt.wait(10.0)) {
                 testFail("timeout waiting for event");
-                return Value();
+                return {};
             }
         }
     }
@@ -258,13 +258,13 @@ struct Tester {
 
         WhoAmI() : resultType(nt::NTScalar(TypeCode::String).create()) {}
 
-        virtual void onSearch(Search& op) override final {
+        void onSearch(Search& op) final {
             for (auto& pv : op) {
                 if (strcmp(pv.name(), WHO_AM_I_PV) == 0) pv.claim();
             }
         }
 
-        virtual void onCreate(std::unique_ptr<server::ChannelControl>&& op) override final {
+        void onCreate(std::unique_ptr<server::ChannelControl>&& op) final {
             if (op->name() != WHO_AM_I_PV) return;
 
             // Handle GET
@@ -283,7 +283,7 @@ struct Tester {
         }
 
         // Create the concatenated whoami response string from the `method` and `account`
-        inline Value getWhoAmIValue(std::shared_ptr<const server::ClientCredentials> cred) {
+        inline Value getWhoAmIValue(const std::shared_ptr<const server::ClientCredentials> &cred) {
             std::ostringstream strm;
             strm << cred->method << '/' << cred->account;
             return resultType.cloneEmpty().update(TEST_PV_FIELD, strm.str());

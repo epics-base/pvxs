@@ -14,7 +14,7 @@ name=$1
 org=$2
 usage=$3
 short=$4
-if [ $usage == 1 ]
+if [ "$usage" == 1 ]
 then
   target="client"
 else
@@ -23,7 +23,7 @@ fi
 PRIVATE_KEY_FILE="$HOME/.epics/keys/${target}_priv_key_tmp.pem"
 PUBLIC_KEY_FILE="$HOME/.epics/keys/${target}_pub_key.pem"
 P12_KEY_FILE="$HOME/.epics/keys/${target}.p12"
-P12_PASSWORD="$(cat $HOME/.epics/passwords/${target}.pass)"
+P12_PASSWORD="$(cat "$HOME"/.epics/passwords/${target}.pass)"
 
 CERT_FILE="$HOME/.epics/keys/${target}_cert.pem"
 ROOT_FILE="$HOME/.epics/keys/${target}_root.pem"
@@ -42,7 +42,7 @@ fi
 
 # Check if the P12 key file exists to determine if keys need to be generated
 if [ ! -f "$P12_KEY_FILE" ]; then
-  echo Creating ... $P12_KEY_FILE $PUBLIC_KEY_FILE
+  echo Creating ... "$P12_KEY_FILE" "$PUBLIC_KEY_FILE"
 
   # Generate a new private key in PEM format (temporary)
   openssl genrsa -out "$PRIVATE_KEY_FILE" 2048
@@ -51,7 +51,7 @@ if [ ! -f "$P12_KEY_FILE" ]; then
   openssl rsa -in "$PRIVATE_KEY_FILE" -pubout -outform PEM -out "$PUBLIC_KEY_FILE" 2>/dev/null
 
   # Create a P12 file containing only the private key
-  openssl pkcs12 -export -inkey "$PRIVATE_KEY_FILE" -nocerts -out "$P12_KEY_FILE" -passout pass:$P12_PASSWORD
+  openssl pkcs12 -export -inkey "$PRIVATE_KEY_FILE" -nocerts -out "$P12_KEY_FILE" -passout pass:"$P12_PASSWORD"
 
   # Remove the temporary PEM private key file
   rm "$PRIVATE_KEY_FILE"
@@ -59,10 +59,10 @@ if [ ! -f "$P12_KEY_FILE" ]; then
   # Set secure file permissions for the P12 file and public key file
   chmod 400 "$P12_KEY_FILE" "$PUBLIC_KEY_FILE"
 fi
-pub_key=$(cat $PUBLIC_KEY_FILE)
+pub_key=$(cat "$PUBLIC_KEY_FILE")
 
-echo pvxcall "CERT:CREATE" type="x509" name="$name" country="US" organization="$org" organization_unit=""  not_before=$not_before not_after=$not_after usage=$usage
-result=$(pvxcall "CERT:CREATE" type="x509" name="$name" country="US" organization="$org" organization_unit=""  not_before=$not_before not_after=$not_after usage=$usage pub_key="${pub_key}")
+echo pvxcall "CERT:CREATE" type="x509" name="$name" country="US" organization="$org" organization_unit=""  not_before=$not_before not_after=$not_after usage="$usage"
+result=$(pvxcall "CERT:CREATE" type="x509" name="$name" country="US" organization="$org" organization_unit=""  not_before=$not_before not_after=$not_after usage="$usage" pub_key="${pub_key}")
 
 # Capture the exit status of the pvxcall command
 status=$?
@@ -99,9 +99,9 @@ cat "$CERT_FILE" "$ROOT_FILE" > "$CHAIN_FILE"
 # Create the PKCS#12 (.p12) file
 openssl pkcs12 -export \
   -in "$CERT_FILE" \
-  -inkey <(openssl pkcs12 -in "$P12_KEY_FILE" -nocerts -nodes -passin pass:$P12_PASSWORD) \
+  -inkey <(openssl pkcs12 -in "$P12_KEY_FILE" -nocerts -nodes -passin pass:"$P12_PASSWORD") \
   -certfile "$CHAIN_FILE" \
   -out "$P12_FILE" \
-  -passout pass:$P12_PASSWORD
+  -passout pass:"$P12_PASSWORD"
 
 echo "Created: ${P12_FILE}.  ${target} certificate: ${issuer}:${serial}"

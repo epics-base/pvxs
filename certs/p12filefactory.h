@@ -54,9 +54,9 @@ class P12FileFactory : public IdFileFactory {
    private:
     PKCS12 *p12_ptr_{};
 
-    static ossl_ptr<PKCS12> pemStringToP12(std::string password, EVP_PKEY *keys_ptr, std::string pem_string);
+    static ossl_ptr<PKCS12> pemStringToP12(const std::string &password, EVP_PKEY *keys_ptr, const std::string &pem_string);
 
-    static ossl_ptr<PKCS12> toP12(std::string password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) *cert_chain_ptr = nullptr);
+    static ossl_ptr<PKCS12> toP12(const std::string &password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) *cert_chain_ptr = nullptr);
 
 #ifdef NID_oracle_jdk_trustedkeyusage
     /**

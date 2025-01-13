@@ -229,7 +229,7 @@ void CertFactory::setValidity(const ossl_ptr<X509> &certificate) const {
  *
  * @param certificate The certificate whose serial number is to be
  */
-void CertFactory::setSerialNumber(const ossl_ptr<X509> &certificate) {  //
+void CertFactory::setSerialNumber(const ossl_ptr<X509> &certificate) const {
     ossl_ptr<ASN1_INTEGER> serial_number(ASN1_INTEGER_new());
     if (ASN1_INTEGER_set_uint64(serial_number.get(), serial_) != 1) {
         throw std::runtime_error("Failed to create certificate serial number.");
@@ -334,7 +334,7 @@ void CertFactory::addExtension(const ossl_ptr<X509> &certificate, int nid, const
  * Add a string extension by NID to certificate.
  *
  */
-void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value, const X509 *issuer_certificate_ptr) {
+void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, const std::string &value, const X509 *issuer_certificate_ptr) {
     char err_msg[256];
     X509V3_CTX context;
     X509V3_set_ctx_nodb(&context);
@@ -371,7 +371,7 @@ void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int
     log_debug_printf(certs, "Extension [%*d]: %-*s = \"%s\"\n", 3, nid, 32, nid2String(nid), value.c_str());
 }
 
-void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value) {
+void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value) const {
     addCustomExtensionByNid(certificate, nid, value, issuer_certificate_.get());
 }
 
@@ -460,7 +460,7 @@ void CertFactory::set_skid(ossl_ptr<X509> &certificate) {
 
     ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING *>(X509V3_EXT_d2i(ex)), false);
 
-    if (skid != NULL) {
+    if (skid != nullptr) {
         // Convert to hexadecimal string
         for (int i = 0; i < skid->length; i++) {
             skid_ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(skid->data[i]);
