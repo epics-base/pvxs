@@ -209,6 +209,10 @@ Value getCreatePrototype();
 
 std::string getIPAddress();
 
+time_t getNotAfterTimeFromCert(const ossl_ptr<X509> &cert);
+
+time_t getNotBeforeTimeFromCert(const ossl_ptr<X509> &cert);
+
 time_t getNotAfterTimeFromCert(const X509 *cert);
 
 time_t getNotBeforeTimeFromCert(const X509 *cert);

@@ -94,7 +94,7 @@ void registerICount(const char *name, std::atomic<size_t>& Cnt)
     threadOnce<&ICountInit>();
     auto& gbl = *ICountGbl;
     try {
-        auto L(gbl.lock.lockWriter());
+        [[maybe_unused]] auto L(gbl.lock.lockWriter());
         if(!gbl.counters.emplace(name, &Cnt).second) { // duplicate name
             return;
         }
@@ -111,7 +111,7 @@ std::map<std::string, size_t> instanceSnapshot()
     {
         threadOnce<&ICountInit>();
         auto& gbl = *ICountGbl;
-        auto L(gbl.lock.lockReader());
+        [[maybe_unused]] auto L(gbl.lock.lockReader());
         for(auto& pair : gbl.counters) {
             // remove -1 bias for initialized counter
             ret.emplace(pair.first, pair.second->load(std::memory_order_relaxed)-1u);

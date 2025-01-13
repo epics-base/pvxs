@@ -51,9 +51,9 @@ class PVXS_API CertFactory {
     const time_t not_before_;
     const time_t not_after_;
     const uint16_t usage_;
-    X509 *issuer_certificate_ptr_;       // Will point to the issuer certificate when created
-    EVP_PKEY *issuer_pkey_ptr_;          // Will point to the issuer private key when created
-    STACK_OF(X509) * issuer_chain_ptr_;  // issuer cert chain
+    ossl_ptr<X509> issuer_certificate_;   // Will be the issuer certificate when created
+    ossl_ptr<EVP_PKEY> issuer_pkey_;      // Will point to the issuer private key when created
+    ossl_shared_ptr<STACK_OF(X509)> issuer_chain_;  // issuer cert chain
     const ossl_shared_ptr<STACK_OF(X509)> certificate_chain_;
     bool cert_status_subscription_required_;
     std::string skid_;
@@ -94,9 +94,9 @@ class PVXS_API CertFactory {
           not_before_(not_before),
           not_after_(not_after),
           usage_(usage),
-          issuer_certificate_ptr_(issuer_certificate_ptr),
-          issuer_pkey_ptr_(issuer_pkey_ptr),
-          issuer_chain_ptr_(issuer_chain_ptr),
+          issuer_certificate_(issuer_certificate_ptr, false),
+          issuer_pkey_(issuer_pkey_ptr, false),
+          issuer_chain_(issuer_chain_ptr),
           certificate_chain_(sk_X509_new_null()),
           initial_status_(initial_status) {
         cert_status_subscription_required_ = cert_status_subscription_required;

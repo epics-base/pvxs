@@ -50,11 +50,11 @@ ossl_ptr<X509> CertFactory::create() {
     ossl_ptr<X509> certificate(X509_new());
 
     // 2. Determine issuer: If no issuer then self sign, or specify cert & key
-    if (!issuer_certificate_ptr_) {
-        issuer_certificate_ptr_ = certificate.get();
-        issuer_pkey_ptr_ = key_pair_->pkey.get();
-        issuer_chain_ptr_ = nullptr;
-    } else if (!issuer_pkey_ptr_) {
+    if (!issuer_certificate_) {
+        issuer_certificate_ = ossl_ptr<X509>(X509_dup(certificate.get()));
+        issuer_pkey_ = ossl_ptr<EVP_PKEY>(EVP_PKEY_dup(key_pair_->pkey.get()));
+        issuer_chain_ = nullptr;
+    } else if (!issuer_pkey_) {
         throw std::runtime_error("Issuer' private key not provided for signing the certificate");
     }
 
@@ -75,7 +75,7 @@ ossl_ptr<X509> CertFactory::create() {
     setSubject(certificate);
 
     // 6. Set the issuer symbolic name
-    if (X509_set_issuer_name(certificate.get(), X509_get_subject_name(issuer_certificate_ptr_)) != 1) {
+    if (X509_set_issuer_name(certificate.get(), X509_get_subject_name(issuer_certificate_.get())) != 1) {
         throw std::runtime_error("Failed to set issuer name.");
     }
     log_debug_printf(certs, "Issuer Name: %s\n", "<set>");
@@ -95,29 +95,29 @@ ossl_ptr<X509> CertFactory::create() {
 
     // 11. Add EPICS subscription status subscription extension, if required and is not CMS itself
     if (cert_status_subscription_required_ && !IS_USED_FOR_(usage_, ssl::kForCMS)) {
-        auto issuerId = CertStatus::getIssuerId(issuer_certificate_ptr_);
+        auto issuerId = CertStatus::getIssuerId(issuer_certificate_);
         addCustomExtensionByNid(certificate, ossl::SSLContext::NID_PvaCertStatusURI, CertStatus::makeStatusURI(issuerId, serial_));
     }
 
     // 12. Create cert chain from issuer's chain and issuer's cert
-    if (issuer_chain_ptr_) {
+    if (issuer_chain_) {
         // Fill with issuer chain certificates if supplied
-        int num_certs = sk_X509_num(issuer_chain_ptr_);
+        int num_certs = sk_X509_num(issuer_chain_.get());
         log_debug_printf(certs, "Creating Certificate Chain with %d entries\n", num_certs + 1);
         for (int i = 0; i < num_certs; ++i) {
-            if (sk_X509_push(certificate_chain_.get(), sk_X509_value(issuer_chain_ptr_, i)) != 1) {
+            if (sk_X509_push(certificate_chain_.get(), sk_X509_value(issuer_chain_.get(), i)) != 1) {
                 throw std::runtime_error(SB() << "Failed create certificate chain for new certificate");
             }
         }
         // Add the issuer's certificate too
-        if (sk_X509_push(certificate_chain_.get(), issuer_certificate_ptr_) != 1) {
+        if (sk_X509_push(certificate_chain_.get(), issuer_certificate_.get()) != 1) {
             throw std::runtime_error(SB() << "Failed add issuer certificate to certificate chain");
         }
     } else
         log_debug_printf(certs, "Creating %s Certificate Chain\n", "*EMPTY*");
 
     // 13. Sign the certificate with the private key of the issuer
-    if (!X509_sign(certificate.get(), issuer_pkey_ptr_, EVP_sha256())) {
+    if (!X509_sign(certificate.get(), issuer_pkey_.get(), EVP_sha256())) {
         throw std::runtime_error(SB() << "Failed to sign the certificate");
     }
     log_debug_printf(certs, "Certificate: %s\n", "<SIGNED>");
@@ -314,7 +314,7 @@ void CertFactory::addExtension(const ossl_ptr<X509> &certificate, int nid, const
 
     X509V3_CTX context;
     X509V3_set_ctx_nodb(&context);
-    X509V3_set_ctx(&context, const_cast<X509 *>(issuer_certificate_ptr_), const_cast<X509 *>(subject), nullptr, nullptr, 0);
+    X509V3_set_ctx(&context, issuer_certificate_.get(), const_cast<X509 *>(subject), nullptr, nullptr, 0);
 
     ossl_ptr<X509_EXTENSION> extension(X509V3_EXT_conf_nid(nullptr, &context, nid, value), false);
     if (!extension) {
@@ -372,7 +372,7 @@ void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int
 }
 
 void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value) {
-    addCustomExtensionByNid(certificate, nid, value, issuer_certificate_ptr_);
+    addCustomExtensionByNid(certificate, nid, value, issuer_certificate_.get());
 }
 
 /**
