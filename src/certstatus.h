@@ -166,6 +166,34 @@ struct CertStatus {
     static inline std::string getIssuerId(const ossl_ptr<X509>& ca_cert) { return getIssuerId(ca_cert.get()); }
 
     /**
+     * @brief  Get the issuer ID which is the first 8 hex digits of the hex SKID (subject key identifier)
+     *
+     * First determine the CA certificate then get the skid
+     *
+     * @return first 8 hex digits of the hex SKID (subject key identifier)
+     */
+    static inline std::string getIssuerId(const ossl_shared_ptr<STACK_OF(X509)>& chain) { return getIssuerId(getRootCa(chain)); }
+
+    /**
+     * @brief Get Root Certificate Authority from a CA chain
+     * @param chain the CA chain
+     * @return the Root CA
+     */
+    static inline X509* getRootCa(const ossl_shared_ptr<STACK_OF(X509)>& chain) {
+        if(!chain || sk_X509_num(chain.get()) <= 0) {
+            throw std::runtime_error("Invalid certificate chain");
+        }
+
+        X509* root_ca = sk_X509_value(chain.get(), sk_X509_num(chain.get()) - 1);
+
+        if(root_ca == nullptr) {
+            throw std::runtime_error("Failed to retrieve root certificate");
+        }
+
+        return root_ca;
+    }
+
+    /**
      * @brief Get the issuer ID which is the first 8 hex digits of the hex SKID (subject key identifier)
      *
      * Note that the given cert must contain the SKID extension in the first place

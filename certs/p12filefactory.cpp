@@ -58,7 +58,7 @@ DEFINE_LOGGER(certs, "pvxs.certs.fms");
 std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
     file_ptr fp(fopen(filename_.c_str(), "rb"), false);
     if (!fp) {
-        throw std::runtime_error(SB() << "Error opening private key file: \"" << filename_ << "\": " << strerror(errno));
+        throw std::runtime_error(SB() << "Error getting private key from file: \"" << filename_ << "\": " << strerror(errno));
     }
 
     ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL), false);

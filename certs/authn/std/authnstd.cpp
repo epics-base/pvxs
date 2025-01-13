@@ -440,7 +440,7 @@ int main(int argc, char *argv[]) {
                 // Read file back for info
                 auto cert_data = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd)->getCertDataFromFile();
                 auto serial_number = CertStatusFactory::getSerialNumber(cert_data.cert);
-                auto issuer_id = CertStatus::getIssuerId(cert_data.cert.get());
+                auto issuer_id = CertStatus::getIssuerId(cert_data.ca);
 
                 std::string from = std::ctime(&credentials->not_before);
                 std::string to = std::ctime(&credentials->not_after);
