@@ -985,14 +985,13 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
 
     if (!cert_data.cert) {
         cert_data = createCaCertificate(config, ca_db, key_pair);
-        createDefaultAdminACF(config, ca_cert);
-        createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain);
+        createDefaultAdminACF(config, cert_data.cert);
+        createDefaultAdminClientCert(config, ca_db, key_pair->pkey, cert_data.cert, cert_data.ca);
     }
 
     ca_pkey = std::move(key_pair->pkey);
     ca_cert = std::move(cert_data.cert);
     ca_chain = cert_data.ca;
-
 }
 
 /**
