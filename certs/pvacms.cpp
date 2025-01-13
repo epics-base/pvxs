@@ -1056,8 +1056,7 @@ void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert) {
 
     out_file.close();
 
-    log_info_printf(pvacms, "Created Default ACF file: %s\n", config.ca_acf_filename.c_str());
-    log_info_printf(pvacms, "--------------------------------------%s", "\n");
+    std::cout << "Created Default ACF file: " << config.ca_acf_filename << std::endl;
     std::istringstream iss(out_string);
     std::string line;
     while (std::getline(iss, line)) {

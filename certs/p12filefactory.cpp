@@ -248,7 +248,7 @@ void P12FileFactory::writePKCS12File() {
 
     chmod(filename_.c_str(),
           S_IRUSR | S_IWUSR);  // Protect P12 file
-    log_info_printf(certs, "keychain file Created: %s\n", filename_.c_str());
+    std::cout << "Keychain file Created: " << filename_ << std::endl;
 }
 }  // namespace certs
 }  // namespace pvxs

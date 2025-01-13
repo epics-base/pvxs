@@ -18,9 +18,11 @@ namespace certs {
 DEFINE_LOGGER(certs, "pvxs.certs.file");
 
 /**
- * @brief Backs up a file if it exists.
+ * @brief Backs-up a file if it exists.
  *
- * This method creates a backup of the file by renaming it with a timestamp.
+ * This method creates a backup of the file by renaming it with a timestamp
+ * if the file is non-existent it does nothing, if the file is empty it deletes it
+ * then does nothing else.
  *
  * @param filename The filename and path of the file to backup.
  */
@@ -29,6 +31,14 @@ void IdFileFactory::backupFileIfExists(const std::string& filename) {
     if (!file.is_open())
         // File does not exist, return
         return;
+
+    file.seekg(0, std::ios::end);
+    if (file.tellg() == 0) {
+        // File is empty
+        file.close();
+        std::remove(filename.c_str());
+        return;
+    }
 
     file.close();
 
