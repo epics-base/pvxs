@@ -206,7 +206,6 @@ what you want it to contain.
         # Default    : ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
         # export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
 
-    .. code-block:: sh
 
 5. Run PVACMS
 ^^^^^^^^^^^^^^^

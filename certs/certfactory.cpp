@@ -51,8 +51,8 @@ ossl_ptr<X509> CertFactory::create() {
 
     // 2. Determine issuer: If no issuer then self sign, or specify cert & key
     if (!issuer_certificate_) {
-        issuer_certificate_ = ossl_ptr<X509>(X509_dup(certificate.get()));
-        issuer_pkey_ = ossl_ptr<EVP_PKEY>(EVP_PKEY_dup(key_pair_->pkey.get()));
+        issuer_certificate_ = ossl_ptr<X509>(X509_dup(certificate.get()), false);
+        issuer_pkey_ = ossl_ptr<EVP_PKEY>(EVP_PKEY_dup(key_pair_->pkey.get()), false);
         issuer_chain_ = nullptr;
     } else if (!issuer_pkey_) {
         throw std::runtime_error("Issuer' private key not provided for signing the certificate");
