@@ -410,7 +410,7 @@ int main(int argc, char *argv[]) {
             } catch (std::exception &e) {
                 // Make a new key pair file
                 try {
-                    log_warn_printf(auths, "%s\n", e.what());
+                    log_debug_printf(auths, "%s\n", e.what());
                     key_pair = authenticator.createKeyPair(config);
                 } catch (std::exception &e) {
                     throw(std::runtime_error(pvxs::SB() << "Error creating client key: " << e.what()));
