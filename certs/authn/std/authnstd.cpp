@@ -453,7 +453,7 @@ int main(int argc, char *argv[]) {
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "COUNTRY: " << credentials->country).str().c_str());
                 log_info_printf(auths, "%s\n",
                                 (pvxs::SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1)).str().c_str());
-                std::cout << "Certificate created: " << issuer_id << ":" << serial_number << std::endl;
+                std::cout << "Certificate created     : " << issuer_id << ":" << serial_number << std::endl;
 
                 log_info_printf(auths, "--------------------------------------%s", "\n");
             }
