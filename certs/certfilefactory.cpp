@@ -32,14 +32,6 @@ void IdFileFactory::backupFileIfExists(const std::string& filename) {
         // File does not exist, return
         return;
 
-    file.seekg(0, std::ios::end);
-    if (file.tellg() == 0) {
-        // File is empty
-        file.close();
-        std::remove(filename.c_str());
-        return;
-    }
-
     file.close();
 
     auto t = std::time(nullptr);

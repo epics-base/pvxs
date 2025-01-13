@@ -65,8 +65,6 @@ class Auth {
 
     virtual std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr) const;
 
-    std::shared_ptr<KeyPair> createKeyPair(const ConfigCommon &config);
-
    protected:
     // Called to have a standard presentation of the CCR for the
     // purposes of generating and verifying signatures

@@ -411,7 +411,7 @@ int main(int argc, char *argv[]) {
                 // Make a new key pair file
                 try {
                     log_debug_printf(auths, "%s\n", e.what());
-                    key_pair = authenticator.createKeyPair(config);
+                    key_pair = IdFileFactory::createKeyPair();
                 } catch (std::exception &e) {
                     throw(std::runtime_error(pvxs::SB() << "Error creating client key: " << e.what()));
                 }
@@ -453,7 +453,7 @@ int main(int argc, char *argv[]) {
                 log_info_printf(auths, "%s\n", (pvxs::SB() << "COUNTRY: " << credentials->country).str().c_str());
                 log_info_printf(auths, "%s\n",
                                 (pvxs::SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1)).str().c_str());
-                std::cout << "Certificate created     : " << issuer_id << ":" << serial_number << std::endl;
+                std::cout << "Certificate identifier  : " << issuer_id << ":" << serial_number << std::endl;
 
                 log_info_printf(auths, "--------------------------------------%s", "\n");
             }

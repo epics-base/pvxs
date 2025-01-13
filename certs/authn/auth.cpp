@@ -76,14 +76,5 @@ std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCr
     std::string p12_pem_string(ccr_manager_.createCertificate(cert_creation_request));
     return p12_pem_string;
 }
-
-std::shared_ptr<KeyPair> Auth::createKeyPair(const ConfigCommon &config) {
-    // Create a key pair
-    const auto key_pair(IdFileFactory::createKeyPair());
-
-    // Create keychain file containing private key
-    IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd, key_pair)->writeIdentityFile();
-    return key_pair;
-}
 }  // namespace certs
 }  // namespace pvxs
