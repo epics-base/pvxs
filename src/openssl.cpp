@@ -55,12 +55,13 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
  * Monitor all certs that need monitoring and then set the TCP/TLS status appropriately
  *
  * @param cert_data
+ * @param trusted_store_ptr the trusted store that we'll use to verify the peer OCSP status responses
  */
-void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509>&cert,ossl_ptr<X509>&trusted_root_ca) {
+void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509>&cert,X509_STORE *trusted_store_ptr) {
     if (!status_check_disabled) {
         if (certs::CertStatusManager::shouldMonitor(cert.get())) {
             auto cert_to_monitor = ossl_ptr<X509>(X509_dup(cert.get()));
-            cert_monitor = certs::CertStatusManager::subscribe(trusted_root_ca, std::move(cert_to_monitor), [=](const certs::PVACertificateStatus &pva_status) {
+            cert_monitor = certs::CertStatusManager::subscribe(trusted_store_ptr, std::move(cert_to_monitor), [=](const certs::PVACertificateStatus &pva_status) {
                 {
                     Guard G(lock);
                     cert_status = pva_status;
@@ -389,22 +390,21 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
     if (!trusted_root_ca) throw SSLError("Could not find Trusted Root CA Certificate in keychain");
     if (!cert_data.key_pair->pkey || !SSL_CTX_check_private_key(tls_context->ctx.get())) throw SSLError("invalid private key");
 
-    // Add the trusted root CA to the context so that any peer certs signed with it will automatically pass verification
+    // Get the context's trust store
     X509_STORE* store_ptr = SSL_CTX_get_cert_store(tls_context->ctx.get());
-    X509_STORE_add_cert(store_ptr, trusted_root_ca.get());
 
     // Build the certificate chain and set verification flags
     // Note useful flags are:
     //  SSL_BUILD_CHAIN_FLAG_CHECK - Fully check CA certificate chain and fail if any are not trusted
     //  SSL_BUILD_CHAIN_FLAG_UNTRUSTED - Flag untrusted in build chain but still use it
-    //  0 - run defualt checks
+    //  0 - run default checks
     if (!SSL_CTX_build_cert_chain(tls_context->ctx.get(), SSL_BUILD_CHAIN_FLAG_CHECK))
         throw SSLError("invalid cert chain");
 
     // Move entity certificate to the custom data in the SSL context
     auto cert_status_ex_data = tls_context->getCertStatusExData();
     cert_status_ex_data->cert = std::move(cert_data.cert);
-    cert_status_ex_data->trusted_root_ca = std::move(trusted_root_ca);
+    cert_status_ex_data->trusted_store_ptr = store_ptr;
 
     // TLS is now configured:
     //  - Entity certificate valid,
@@ -412,7 +412,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
     //  - CA certificate chain valid,
     //  - Private key valid
     // Start monitoring entity certificate status and set TLS context state accordingly
-    tls_context->monitorStatusAndSetState(cert_status_ex_data->cert, cert_status_ex_data->trusted_root_ca);
+    tls_context->monitorStatusAndSetState(cert_status_ex_data->cert, store_ptr);
 
     // Configure what and how to verify certificates in the TLS handshake
     // Note useful mode flags are:
@@ -571,7 +571,7 @@ void CertStatusExData::subscribeToPeerCertStatus(X509 *cert_ptr, std::function<v
         // Subscribe to the certificate status
         std::weak_ptr<SSLPeerStatus> weak_peer_status = peer_status;
         cert_status_manager =
-            certs::CertStatusManager::subscribe(trusted_root_ca, std::move(cert_to_monitor), [this, weak_peer_status, serial_number, fn](certs::PVACertificateStatus status) {
+            certs::CertStatusManager::subscribe(trusted_store_ptr, std::move(cert_to_monitor), [this, weak_peer_status, serial_number, fn](certs::PVACertificateStatus status) {
                 auto peer_status = weak_peer_status.lock();
                 if ( !peer_status ) return;
 

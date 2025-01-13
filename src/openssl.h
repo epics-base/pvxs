@@ -154,7 +154,7 @@ struct CertStatusExData {
     // The entity certificate
     ossl_ptr<X509> cert{};
     // The Trusted Root CA
-    ossl_ptr<X509> trusted_root_ca{};
+    X509_STORE* trusted_store_ptr;
     // Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not configured
     const bool status_check_enabled;
     // The map of peer statuses, keyed by the serial number of each peer's certificate
@@ -367,7 +367,7 @@ struct SSLContext {
      * @param cert the entity certificate
      * @param trusted_root_ca the trusted root to verify OCSP status with
      */
-    void monitorStatusAndSetState(const ossl_ptr<X509>&cert,ossl_ptr<X509>&trusted_root_ca);
+    void monitorStatusAndSetState(const ossl_ptr<X509>&cert, X509_STORE *trusted_store_ptr);
     void setDegradedMode(bool clear = false);
     void setTlsOrTcpMode();
 

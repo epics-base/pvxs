@@ -228,7 +228,7 @@ using namespace pvxs::certs;
         }                                                                                                                                     \
         testDiag("Set up: %s", #LNAME " certificate Status Response");                                                                        \
                                                                                                                                               \
-        auto converted_response = PVACertificateStatus(LNAME##_status_response_value, ca_cert.cert);                                                  \
+        auto converted_response = PVACertificateStatus(LNAME##_status_response_value, trusted_store.get());                                                  \
         testOk1(converted_response == LNAME##_cert_status);                                                                                   \
         testEq(converted_response.ocsp_bytes.size(), LNAME##_cert_status.ocsp_bytes.size());                                                  \
                                                                                                                                               \
@@ -250,7 +250,7 @@ using namespace pvxs::certs;
     try {                                                                                                                \
         testDiag("Sending: %s", "Server Status Request");                                                                \
         auto result = client.get(LNAME##_status_pv_name).exec()->wait(5.0);                                              \
-        auto LNAME##_status_response = PVACertificateStatus(result, ca_cert.cert);                                       \
+        auto LNAME##_status_response = PVACertificateStatus(result, trusted_store.get());                                       \
         testOk1(LNAME##_status_response == LNAME##_cert_status);                                                         \
         testOk1(LNAME##_status_response == LNAME##_cert_status);                                                         \
         testOk1((CertifiedCertificateStatus)LNAME##_status_response == LNAME##_cert_status);                             \
@@ -311,6 +311,13 @@ struct TestCert {
 
     TestCert(ossl_ptr<X509> cert=nullptr, ossl_shared_ptr<stack_st_X509> chain=nullptr, ossl_ptr<EVP_PKEY> pkey=nullptr)
         : cert(std::move(cert)), chain(std::move(chain)), pkey(std::move(pkey)) {}
+
+    inline ossl_ptr<X509_STORE>createTrustStore() const {
+        auto trusted_store = ossl_ptr<X509_STORE>(X509_STORE_new(), false);
+        if (!trusted_store) throw std::runtime_error("X509_STORE_add_cert");
+        if (!X509_STORE_add_cert(trusted_store.get(), cert.get())) throw std::runtime_error("X509_STORE_add_cert");
+        return trusted_store;
+    }
 };
 
 /**

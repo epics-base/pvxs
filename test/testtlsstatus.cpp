@@ -40,6 +40,8 @@ struct Tester {
     DEFINE_MEMBERS(ca)
     DEFINE_MEMBERS(server1)
     DEFINE_MEMBERS(client1)
+    ossl_ptr<X509_STORE> trusted_store{ca_cert.createTrustStore()};
+
     server::SharedWildcardPV status_pv{server::SharedWildcardPV::buildMailbox()};
     server::Server pvacms{server::Config::forCms().build().addPV(GET_MONITOR_CERT_STATUS_PV, status_pv)};
     client::Context client{pvacms.clientConfig().build()};
@@ -80,7 +82,7 @@ struct Tester {
         testShow() << __func__;
         try {
             testDiag("Parsing OCSP Response: %s", "Client certificate");
-            auto parsed_response = CertStatusManager::parse(client1_cert_status.ocsp_bytes, ca_cert.cert);
+            auto parsed_response = CertStatusManager::parse(client1_cert_status.ocsp_bytes, trusted_store.get());
             testDiag("Parsed OCSP Response: %s", "Client certificate");
 
             testEq(parsed_response.serial, client1_serial);
@@ -94,7 +96,7 @@ struct Tester {
 
         try {
             testDiag("Parsing OCSP Response: %s", "Server certificate");
-            auto parsed_response = CertStatusManager::parse(server1_cert_status.ocsp_bytes, ca_cert.cert);
+            auto parsed_response = CertStatusManager::parse(server1_cert_status.ocsp_bytes, trusted_store.get());
             testDiag("Parsed OCSP Response: %s", "Server certificate");
 
             testEq(parsed_response.serial, server1_serial);
@@ -108,7 +110,7 @@ struct Tester {
 
         try {
             testDiag("Parsing OCSP Response: %s", "CA certificate");
-            auto parsed_response = CertStatusManager::parse(ca_cert_status.ocsp_bytes, ca_cert.cert);
+            auto parsed_response = CertStatusManager::parse(ca_cert_status.ocsp_bytes, trusted_store.get());
             testDiag("Parsed OCSP Response: %s", "CA certificate");
 
             testEq(parsed_response.serial, ca_serial);

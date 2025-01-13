@@ -66,9 +66,9 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<co
  * Then parse it and read out the status and the status times
  *
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
- * @param trusted_root_ca The trusted root CA to be used instead of the root ca in the OCSP response
+ * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes, const ossl_ptr<X509> &trusted_root_ca) {
+PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes, X509_STORE *trusted_store_ptr) {
     auto ocsp_response = getOCSPResponse(ocsp_bytes);
 
     // Get the response status
@@ -84,7 +84,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
     }
 
     // Verify OCSP response is signed by provided trusted root CA
-    verifyOCSPResponse(basic_response, trusted_root_ca);
+    verifyOCSPResponse(basic_response, trusted_store_ptr);
 
     OCSP_SINGLERESP* single_response = OCSP_resp_get0(basic_response.get(), 0);
     if (!single_response) {
@@ -126,10 +126,10 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
  *
  * @param ctx_cert the certificate to monitor
  * @param callback the callback to call
- * @param trusted_root_ca the trusted root ca to verify the status response against
+ * @param trusted_store_ptr the trusted store to verify the status response against
  * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
  */
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509> &trusted_root_ca, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509_STORE *trusted_store_ptr, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
     // Construct the URI
     auto uri = CertStatusManager::getStatusPvFromCert(ctx_cert);
     log_debug_printf(status, "Starting Status Subscription: %s\n", uri.c_str());
@@ -149,13 +149,13 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(ossl_ptr<X509> &
         auto sub = client->monitor(uri)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([cert_status_manager_ptr, &trusted_root_ca](client::Subscription& sub) {
+                       .event([cert_status_manager_ptr, trusted_store_ptr](client::Subscription& sub) {
                            try {
                                auto callback_ptr = cert_status_manager_ptr->callback_ref;
 
                                auto update = sub.pop();
                                if (update) {
-                                   auto status_update{PVACertificateStatus(update, trusted_root_ca)};
+                                   auto status_update{PVACertificateStatus(update, trusted_store_ptr)};
                                    log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
                                    cert_status_manager_ptr->status_ = std::make_shared<CertificateStatus>(status_update);
                                    (*callback_ptr)(status_update);
@@ -212,57 +212,13 @@ void CertStatusManager::unsubscribe() {
  *     bool isValid = verifyOCSPResponse(ocsp_bytes, ca_cert); // Verifies the OCSP response
  * @endcode
  */
-bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, const ossl_ptr<X509> &trusted_root_ca) {
+bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, X509_STORE *trusted_store_ptr) {
     // get ca_chain from the response (will be verified to see if it's ultimately signed by our trusted root ca)
     auto const_ca_chain_ptr = OCSP_resp_get0_certs(basic_response.get());
     ossl_ptr<STACK_OF(X509)> ca_chain(sk_X509_dup(const_ca_chain_ptr));  // remove const-ness
 
-    // Create a new X509_STORE with trusted root CAs
-    ossl_ptr<X509_STORE> store(X509_STORE_new(), false);
-    if (!store) {
-        throw OCSPParseException("Failed to create X509_STORE to verify OCSP response");
-    }
-
-    // Load trusted root CAs from default location
-    if (X509_STORE_set_default_paths(store.get()) != 1) {
-        throw OCSPParseException("Failed to load system default CA certificates to verify OCSP response");
-    }
-
-    // Set up the store context for verification
-    ossl_ptr<X509_STORE_CTX> ctx(X509_STORE_CTX_new(), false);
-    if (!ctx) {
-        throw OCSPParseException("Failed to create X509_STORE_CTX to verify OCSP response");
-    }
-
-    if (X509_STORE_CTX_init(ctx.get(), store.get(), trusted_root_ca.get(), ca_chain.get()) != 1) {
-        throw OCSPParseException("Failed to initialize X509_STORE_CTX to verify OCSP response");
-    }
-
-    // Verification parameters
-    X509_STORE_CTX_set_flags(ctx.get(),
-                             X509_V_FLAG_PARTIAL_CHAIN |           // Succeed as soon as at least one intermediary is trusted
-                                 X509_V_FLAG_CHECK_SS_SIGNATURE |  // Allow self-signed root CA
-                                 X509_V_FLAG_TRUSTED_FIRST         // Check the trusted locations first
-    );
-
-    // Add the now trusted Root CA to the store
-    if (X509_STORE_add_cert(store.get(), trusted_root_ca.get()) != 1) {
-        throw OCSPParseException("Failed to add issuer certificate to X509_STORE to verify OCSP response");
-    }
-
-    // Add certificates from ca_chain to the store
-    if (ca_chain) {
-        for (int i = 0; i < sk_X509_num(ca_chain.get()); i++) {
-            X509* cert = sk_X509_value(ca_chain.get(), i);
-            if (X509_STORE_add_cert(store.get(), cert) != 1) {
-                // Log warning but continue
-                log_warn_printf(status, "Failed to add certificate from chain to X509_STORE%s\n", "");
-            }
-        }
-    }
-
-    // Now that we've verified the CA cert, we can use it to verify the OCSP response.  Values greater than 0 mean verified
-    int verify_result = OCSP_basic_verify(basic_response.get(), ca_chain.get(), store.get(), 0);
+    // Verify the OCSP response.  Values greater than 0 mean verified
+    int verify_result = OCSP_basic_verify(basic_response.get(), ca_chain.get(), trusted_store_ptr, 0);
     if (verify_result <= 0) {
         throw OCSPParseException("OCSP_basic_verify failed");
     }

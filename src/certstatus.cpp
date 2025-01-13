@@ -37,14 +37,14 @@ OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const ui
 /**
  * @brief Initialise the OCSPStatus object
  *
- * @param trusted_root_ca the trusted root CA certificate to use for parsing the OCSP response
+ * @param trusted_store_ptr the trusted store to use for parsing the OCSP response
  */
-void OCSPStatus::init(const ossl_ptr<X509> &trusted_root_ca) {
+void OCSPStatus::init(X509_STORE *trusted_store_ptr) {
     if (ocsp_bytes.empty()) {
         ocsp_status = (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN;
         status_date = time(nullptr);
     } else {
-        auto parsed_status = CertStatusManager::parse(ocsp_bytes, trusted_root_ca);
+        auto parsed_status = CertStatusManager::parse(ocsp_bytes, trusted_store_ptr);
         ocsp_status = std::move(parsed_status.ocsp_status);
         status_date = std::move(parsed_status.status_date);
         status_valid_until_date = std::move(parsed_status.status_valid_until_date);

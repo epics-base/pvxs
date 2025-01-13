@@ -66,6 +66,8 @@ struct Tester {
     DEFINE_MEMBERS(client1)
     DEFINE_MEMBERS(client2)
 
+    ossl_ptr<X509_STORE> trusted_store{ca_cert.createTrustStore()};
+
     server::SharedWildcardPV status_pv{server::SharedWildcardPV::buildMailbox()};
     server::Server pvacms;
     client::Context client;

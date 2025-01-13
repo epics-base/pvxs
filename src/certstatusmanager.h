@@ -131,13 +131,13 @@ class CertStatusManager {
      * @brief Used to create a helper that you can use to subscribe to certificate status with
      * Subsequently call subscribe() to subscribe
      *
-     * @param trusted_root_ca the trusted root CA that we'll use to verify the OCSP responses recieved
+     * @param trusted_store_ptr the trusted store that we'll use to verify the OCSP responses received
      * @param ctx_cert certificate you want to subscribe to
      * @param callback the callback to call when a status change has appeared
      *
      * @see unsubscribe()
      */
-    static cert_status_ptr<CertStatusManager> subscribe(ossl_ptr<X509> &trusted_root_ca, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback);
+    static cert_status_ptr<CertStatusManager> subscribe(X509_STORE *trusted_store_ptr, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback);
 
     /**
      * @brief Unsubscribe from listening to certificate status
@@ -167,7 +167,7 @@ class CertStatusManager {
     time_t manager_start_time_{time(nullptr)};
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes);
 
-    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, const ossl_ptr<X509> &trusted_root_ca);
+    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, X509_STORE *trusted_store_ptr);
 
     /**
      * @brief To parse OCSP responses
@@ -177,10 +177,11 @@ class CertStatusManager {
      * is well formed, and then will return the `ParsedOCSPStatus` it indicates.
      *
      * @param ocsp_bytes the ocsp response
+     * @param trusted_store_ptr the trusted store that we'll use to verify the OCSP response
      * @return the Parsed OCSP response status
      */
    public:
-    static ParsedOCSPStatus parse(shared_array<const uint8_t> ocsp_bytes, const ossl_ptr<X509> &trusted_root_ca);
+    static ParsedOCSPStatus parse(shared_array<const uint8_t> ocsp_bytes, X509_STORE *trusted_store_ptr);
 };
 
 template <>
