@@ -64,7 +64,6 @@ int main(int argc, char* argv[]) {
     try {
         logger_config_env();  // from $PVXS_LOG
         auto conf = client::Config::fromEnv();
-        conf.tls_disabled = true; // Don't use a TLS connection to do this
         auto program_name = argv[0];
 
         // Variables to store options
@@ -171,9 +170,15 @@ int main(int argc, char* argv[]) {
             std::cout << std::endl;
         }
 
-        if (approve) action = APPROVE;
-        if (revoke) action = REVOKE;
-        if (deny) action = DENY;
+        if (approve) {
+            action = APPROVE;
+        } else if (revoke)
+            action = REVOKE;
+        else if (deny) {
+            action = DENY;
+        } else {
+            conf.tls_disabled = false;
+        }
 
         auto ctxt = conf.build();
 
