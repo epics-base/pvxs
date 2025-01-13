@@ -45,8 +45,6 @@
 namespace pvxs {
 namespace certs {
 
-DEFINE_LOGGER(certs, "pvxs.certs.fms");
-
 /**
  * @brief Get a key pair from a P12 file
  *
@@ -58,6 +56,15 @@ DEFINE_LOGGER(certs, "pvxs.certs.fms");
 std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
     file_ptr fp(fopen(filename_.c_str(), "rb"), false);
     if (!fp) {
+        // Delete file if it has just created an empty file
+        std::fstream file(filename_, std::ios_base::in);
+        file.seekg(0, std::ios::end);
+        if (file.tellg() == 0) {
+            // File is empty
+            file.close();
+            std::remove(filename_.c_str());
+        }
+
         throw std::runtime_error(SB() << "Error getting private key from file: \"" << filename_ << "\": " << strerror(errno));
     }
 
