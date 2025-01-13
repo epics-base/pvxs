@@ -89,7 +89,6 @@ void usage(const char *argv0) {
                  "  -v         Make more noise.\n"
                  "  -h         Show this help message and exit\n"
                  "  -d         Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.\n"
-                 "  -D         Run in Daemon mode.  Monitors and updates certs as needed\n"
                  "  -V         Show version and exit\n"
                  "  -u <use>   Usage. client, server, or gateway\n"
                  "  -N <name>  Name override the CN subject field\n"

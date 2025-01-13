@@ -37,7 +37,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
             log_err_printf(_logname, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
     } else {
-        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << ConfigCommon::version << OSI_PATH_SEPARATOR << "pvacms.p12";
+        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "pvacms.p12";
         ensureDirectoryExists(tls_keychain_file = filename);
     }
 
