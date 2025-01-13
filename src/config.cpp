@@ -8,6 +8,10 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <sys/types.h>
+#include <pwd.h>
+#include <unistd.h>
+#include <stdexcept>
 
 #ifdef __unix__
 #include <pwd.h>
@@ -43,7 +47,12 @@ std::string getHomeDir() {
 #ifdef _WIN32
     const char* home = getenv("USERPROFILE");
 #else
-    const char* home = getenv("HOME");
+    struct passwd *pw = getpwuid(getuid());
+
+    if (pw == nullptr) {
+        throw std::runtime_error("Failed to get home directory");
+    }
+    const char * home = pw->pw_dir;
 #endif
     return home ? std::string(home) : std::string("");
 }

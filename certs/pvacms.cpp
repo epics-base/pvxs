@@ -207,7 +207,7 @@ Value getRootValue(const std::string &issuer_id, const ossl_ptr<X509> &ca_cert, 
  */
 void initCertsDatabase(sql_ptr &ca_db, std::string &db_file) {
     if ((sqlite3_open(db_file.c_str(), ca_db.acquire()) != SQLITE_OK)) {
-        throw std::runtime_error(SB() << "Can't open certs db file: " << sqlite3_errmsg(ca_db.get()));
+        throw std::runtime_error(SB() << "Can't open certs db file for writing: " << sqlite3_errmsg(ca_db.get()));
     } else {
         int rc = sqlite3_exec(ca_db.get(), SQL_CREATE_DB_FILE, 0, 0, 0);
         if (rc != SQLITE_OK && rc != SQLITE_DONE) {
@@ -1096,14 +1096,6 @@ void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EV
 
     std::string from = std::ctime(&certificate_factory.not_before_);
     std::string to = std::ctime(&certificate_factory.not_after_);
-    log_info_printf(pvacms, "Created Keychain file for default PVACMS admin user: %s\n", config.admin_keychain_file.c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "NAME: " << certificate_factory.name_).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATION: " << certificate_factory.org_).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "COUNTRY: " << certificate_factory.country_).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "STATUS: " << CERT_STATE(VALID)).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1)).str().c_str());
-    log_info_printf(pvacms, "--------------------------------------%s", "\n");
 }
 
 /**
@@ -1131,7 +1123,7 @@ void ensureServerCertificateExists(ConfigCms config, sql_ptr &ca_db, ossl_ptr<X5
     std::shared_ptr<KeyPair> key_pair;
     CertData cert_data;
     try {
-        cert_data = IdFileFactory::create(config.ca_keychain_file, config.ca_keychain_pwd)->getCertDataFromFile();
+        cert_data = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd)->getCertDataFromFile();
     } catch (...) {
     }
     key_pair = cert_data.key_pair;
@@ -1698,7 +1690,6 @@ int main(int argc, char *argv[]) {
 
         // Set security if configured
         if (!config.ca_acf_filename.empty()) {
-            log_warn_printf(pvacms, "PVACMS secured with %s\n", config.ca_acf_filename.c_str());
             asInitFile(config.ca_acf_filename.c_str(), "");
         } else {
             log_err_printf(pvacms, "****EXITING****: PVACMS Access Security Policy File Required%s", "\n");
