@@ -158,7 +158,7 @@ The following are new configuration options now available
 in both the `pvxs::server::Config` and `pvxs::client::Config` classes,
 via their public base `pvxs::impl::ConfigCommon` class:
 
-- `pvxs::impl::ConfigCommon::expiration_behaviour` - Set the certificate expiration behavior
+- `pvxs::impl::ConfigCommon::expiration_behaviour` - Set certificate expiration behavior
 - `pvxs::impl::ConfigCommon::tls_keychain_file` - Set keychain file path
 - `pvxs::impl::ConfigCommon::tls_keychain_pwd` - Set keychain file password
 - `pvxs::impl::ConfigCommon::tls_client_cert_required` - Control client certificate requirements
@@ -198,38 +198,6 @@ and keys exist, loading and verifying them, checking for status and status of pe
         cli_conf.tls_keychain_file = "client2.p12";
         cli_conf.tls_keychain_pwd = "pwd";
         cli.reconfigure(cli_conf);
-
-Creation of client to PVACMS
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Internally SPVA needs to create a special client when it is connecting to :ref:`pvacms` to check status.  This
-client can't work in the normal way, checking for certificate status because it would become
-endlessly recursive,
-
- - An EPICS agent creating a new connection would try try to verify its certificate
-
-   - so it would open a connection to :ref:`pvacms` to try to check status of that certificate,
-   - but that connection would need to have its certificate verified
-
-     - so it would open a connection to :ref:`pvacms` to try to check status of that certificate,
-     - but that connection would need to have its certificate verified
-
-       - so it would open a connection to :ref:`pvacms` to try to check status of that certificate,
-       - ... infinitely
-
-To avoid this a special client can be created with this API.  Normally you won't need to check
-certificate status yourself but if you do use this API to create the client context.
-
-`pvxs::client::Context::forCMS` creates an isolated client context appropriately configured to access :ref:`pvacms` without recursion:
-
-    .. code-block:: c++
-
-        Value getPVAStatus(const std::string cert_status_uri) {
-            auto client(client::Context::forCMS());
-            Value result = client.get(cert_status_uri).exec()->wait();
-            client.close();
-            return result;
-        }
 
 Wildcard PV Support
 ~~~~~~~~~~~~~~~~~~~

@@ -332,7 +332,6 @@ public:
 #else
     Context(const Config &, const std::function<int(int)>&);
     static Context fromEnv(const bool tls_disabled = false);
-    static Context forCMS();
 
     /** Apply (in part) updated configuration
      *
