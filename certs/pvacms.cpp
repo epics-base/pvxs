@@ -214,6 +214,7 @@ void initCertsDatabase(sql_ptr &ca_db, std::string &db_file) {
             throw std::runtime_error(SB() << "Can't initialise certs db file: " << sqlite3_errmsg(ca_db.get()));
         }
     }
+    std::cout << "Certificate DB created  : " << db_file << std::endl;
 }
 
 void getWorstCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t &worst_status_so_far, time_t &worst_status_time_so_far) {

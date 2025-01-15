@@ -39,6 +39,8 @@ Secure PVAccess (SPVA) is the new version of the PVA protocol which supports TLS
 It maintains the same basic operations (Get, Put, Monitor, RPC) as PVA, but with the addition of :ref:`transport_layer_security`,
 and :ref:`certificate_management`.
 
+See :ref:`quick_start` to get started!
+
 What is a PV?
 ^^^^^^^^^^^^^
 

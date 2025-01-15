@@ -22,8 +22,8 @@ Build & Deploy
     .. code-block:: sh
 
         # Set up data and configuration home if not already set
-        # export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
-        # export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+        export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+        export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
         # mkdir -p ${XDG_DATA_HOME}/pva/1.3 ${XDG_CONFIG_HOME}/pva/1.3
 
         # Make working directory for building project files
@@ -35,6 +35,7 @@ Build & Deploy
 
     .. code-block:: sh
 
+        #############
         # For Debian/Ubuntu
 
         apt-get update
@@ -46,9 +47,9 @@ Build & Deploy
             libevent-dev \
             libsqlite3-dev \
             libcurl4-openssl-dev \
-            pkg-config \
-            zsh
+            pkg-config
 
+        #############
         # For RHEL/CentOS/Rocky/Alma Linux/Fedora
 
         dnf install -y \
@@ -59,20 +60,23 @@ Build & Deploy
             libevent-devel \
             sqlite-devel \
             libcurl-devel \
-            pkg-config \
-            zsh
+            pkg-config
 
+        #############
         # For macOS
+        # Install Homebrew if not already installed
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
+        # Update Homebrew and install dependencies
         brew update
         brew install \
             openssl@3 \
             libevent \
             sqlite3 \
             curl \
-            pkg-config \
-            zsh
+            pkg-config
 
+        #############
         # For Alpine Linux
 
         apk add --no-cache \
@@ -82,9 +86,9 @@ Build & Deploy
             libevent-dev \
             sqlite-dev \
             curl-dev \
-            pkgconfig \
-            zsh
+            pkgconfig
 
+        #############
         # For RTEMS
         # First install RTEMS toolchain from https://docs.rtems.org/branches/master/user/start/
         # Then ensure these are built into your BSP:
@@ -93,6 +97,61 @@ Build & Deploy
         #   - sqlite
         #   - libcurl
         # Note: RTEMS support requires additional configuration. See RTEMS-specific documentation.
+
+
+Note for MacOS users
+~~~~~~~~~~~~~~~~~~~~
+
+If you don't have homebrew and don't want to install it, here's how you would install the prerequisites.
+
+    .. code-block:: sh
+
+        # Ensure Xcode Command Line Tools are installed
+        xcode-select --install
+
+        # Install OpenSSL
+        curl -O https://www.openssl.org/source/openssl-3.1.2.tar.gz
+        tar -xzf openssl-3.1.2.tar.gz
+        cd openssl-3.1.2
+        ./Configure darwin64-x86_64-cc
+        make
+        sudo make install
+
+        # Install libevent
+        curl -O https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
+        tar -xzf libevent-2.1.12-stable.tar.gz
+        cd libevent-2.1.12-stable
+        ./configure
+        make
+        sudo make install
+
+        # Install SQLite
+        curl -O https://sqlite.org/2023/sqlite-autoconf-3430200.tar.gz
+        tar -xzf sqlite-autoconf-3430200.tar.gz
+        cd sqlite-autoconf-3430200
+        ./configure
+        make
+        sudo make install
+
+        # Install cURL
+        # check if its already there
+        curl --version
+        # If not then install like this:
+        curl -O https://curl.se/download/curl-8.1.2.tar.gz
+        tar -xzf curl-8.1.2.tar.gz
+        cd curl-8.1.2
+        ./configure
+        make
+        sudo make install
+
+        # Install pkg-config
+        curl -O https://pkgconfig.freedesktop.org/releases/pkg-config-0.29.2.tar.gz
+        tar -xzf pkg-config-0.29.2.tar.gz
+        cd pkg-config-0.29.2
+        ./configure --with-internal-glib
+        make
+        sudo make install
+
 
 3. Build epics-base
 ^^^^^^^^^^^^^^^^
@@ -138,6 +197,8 @@ Build & Deploy
 
         make -j10 all
         cd ${PROJECT_HOME}
+
+
 
 .. _spva_qs_pvacms:
 
@@ -239,18 +300,15 @@ what you want it to contain.
         #
         # 6. Start PVACMS service with verbose logging
 
-        ${PROJECT_HOME}/pvxs/bin/*/pvacms -v
+        ${PROJECT_HOME}/pvxs/bin/*/pvacms
 
         ...
 
-        Effective config
-        EPICS_PVAS_AUTO_BEACON_ADDR_LIST=YES
-        EPICS_PVAS_BROADCAST_PORT=5076
-        EPICS_PVAS_SERVER_PORT=5075
-        EPICS_PVAS_TLS_KEYCHAIN=/root/.config/pva/1.3/pvacms.p12
-        EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check on_no_cms=fallback-to-tcp
-        EPICS_PVAS_TLS_PORT=5076
-        EPICS_PVAS_TLS_STOP_IF_NO_CERT=YES
+        Keychain file created   : /root/.config/pva/1.3/ca.p12
+        Created Default ACF file: /root/.config/pva/1.3/pvacms.acf
+        Keychain file created   : /root/.config/pva/1.3/admin.p12
+        Keychain file created   : /root/.config/pva/1.3/pvacms.p12
+        Certificate DB created  : /root/.local/share/pva/1.3/certs.db
         PVACMS [6caf749c] Service Running
 
 Note the `6caf749c` is the issuer ID which is comprised of the first 8 characters
@@ -279,21 +337,22 @@ SPVA Server
 
         #### 1. Create a new server private key and certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
 
-        ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u server \
+        ${PROJECT_HOME}/pvxs/bin/*/authnstd -u server \
           -N "IOC1" \
           -O "KLI:LI01:10" \
           -o "FACET"
 
         ...
 
-        Certificate created: 6caf749c:853259638908858244
+        Keychain file created   : /root/.config/pva/1.3/server.p12
+        Certificate identifier  : 6caf749c:853259638908858244
 
         ...
 
 Note the certificate ID `6caf749c:853259638908858244`.
 You will need ID to carry out operations on this certificate including APPROVING it.
 
-3. PENDING_APPROVAL check
+3. Check Certificate Status
 ^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -302,19 +361,6 @@ You will need ID to carry out operations on this certificate including APPROVING
 
         ${PROJECT_HOME}/pvxs/bin/*/pvxcert 6caf749c:853259638908858244
 
-        Get Status ==> CERT:STATUS:6caf749c:853259638908858244
-            status.value.index int32_t = 1
-            status.value.choices string[] = {6}["UNKNOWN", "PENDING_APPROVAL", "PENDING", "VALID", "EXPIRED", "REVOKED"]
-            status.timeStamp.secondsPastEpoch int64_t = 1732078162
-            serial uint64_t = 853259638908858244
-            state string = "PENDING_APPROVAL"
-            ocsp_status.value.choices string[] = {3}["OCSP_CERTSTATUS_GOOD", "OCSP_CERTSTATUS_REVOKED", "OCSP_CERTSTATUS_UNKNOWN"]
-            ocsp_status.timeStamp.secondsPastEpoch int64_t = 1732078162
-            ocsp_state string = "OCSP_CERTSTATUS_UNKNOWN"
-            ocsp_status_date string = "Wed Nov 20 04:49:22 2024 UTC"
-            ocsp_certified_until string = "Wed Nov 20 05:19:22 2024 UTC"
-            ocsp_revocation_date string = "Thu Jan 01 00:00:00 1970 UTC"
-            ocsp_response uint8_t[] = {1607}[48, 130, 6, 67, 10, 1, 0, 160, 130, 6, 60, 48, 130, 6, 56, 6, 9, 43, 6, 1, ...]
 
 4. APPROVE certificate
 ^^^^^^^^^^^^^^^^^^^^
@@ -323,8 +369,8 @@ You will need ID to carry out operations on this certificate including APPROVING
 
         #### 1. Use a user that has access to the admin certificate and point EPICS_PVA_TLS_KEYCHAIN to it
         # Environment: EPICS_PVA_TLS_KEYCHAIN
-        # Default    : ${XDG_CONFIG_HOME}/pva/1.3/admin.p12
-        # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
+        # Default    : ${XDG_CONFIG_HOME}/pva/1.3/client.p12
+        export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
 
         #### 2. Approve the certificate
         ${PROJECT_HOME}/pvxs/bin/*/pvxcert --approve 6caf749c:853259638908858244
@@ -390,14 +436,14 @@ SPVA Client
 
         #### 1. Create client key and certificate at location specified by EPICS_PVA_TLS_KEYCHAIN
 
-        ${PROJECT_HOME}/pvxs/bin/*/authnstd -v -u client \
+        ${PROJECT_HOME}/pvxs/bin/*/authnstd -u client \
           -N "greg" \
           -O "SLAC.STANFORD.EDU" \
           -o "Controls"
 
         ...
-
-        Certificate created: 6caf749c:389088582448532596
+        Keychain file created   : /root/.config/pva/1.3/client.p12
+        Certificate identifier  : 6caf749c:389088582448532596
 
         ...
 

@@ -41,10 +41,23 @@
 namespace pvxs {
 namespace impl {
 
+/**
+ * @brief Common configuration for the client and server
+ */
 struct PVXS_API ConfigCommon {
+    /**
+     * @brief True if the configuration has been initialised
+     */
     bool is_initialized{false};
+
+    /**
+     * @brief The target of the configuration.  This is used to determine the type of configuration that is being created
+     */
     enum ConfigTarget { CLIENT, SERVER, GATEWAY, CMS, OCSP } config_target = CLIENT;
 
+    /**
+     * @brief Destructor for the ConfigCommon class
+     */
     virtual ~ConfigCommon() = 0;
 
 #ifdef PVXS_ENABLE_OPENSSL

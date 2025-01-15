@@ -11,13 +11,13 @@ For a glossary of terms see: :ref:`glossary`
 
 Key Features:
 
-- Encrypted communication using TLS 1.3
+- Encrypted communication using ``TLS 1.3``
 - Certificate-based authentication
 - Comprehensive certificate lifecycle management
 - Backward compatibility with existing PVAccess deployments
 - Integration with site authentication systems
 
-In SPVA terminology, an 'EPICS Agent' refers to any PVAccess network client.
+In SPVA terminology, an `EPICS Agent` refers to any PVAccess network client.
 
 Note: This release requires specific unmerged changes to epics-base.
 
@@ -26,18 +26,18 @@ See :ref:`quick_start` to get started.
 .. _transport_layer_security:
 
 Transport Layer Security
-----------------------
+------------------------
 
-SPVA uses TLS 1.3 to establish secure connections between EPICS agents. Both client and server
-can authenticate their peer using X.509 certificates. Key features of the TLS implementation:
+``SPVA`` uses ``TLS 1.3`` to establish secure connections between EPICS agents. Both client and server
+can authenticate their peer using ``X.509`` certificates. Key features of the TLS implementation:
 
 - Mutual authentication when both peers present valid certificates
 - Server-only authentication when only the server presents a certificate
-- Fallback to TCP when TLS is not configured or certificates are invalid
+- Fallback to ``TCP`` when ``TLS`` is not configured or certificates are invalid
 - Certificate status verification during connection establishment
 
 Supported Keychain-File Formats, Encodings and File Types
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 +-----------+----------------------+-----------+-------------------------+------------------------------+-------------------------+
 | File Type | Extension            | Encoding  | Includes Private Key?   | Includes Certificate Chain?  |     Common Usage        |
@@ -48,7 +48,7 @@ Supported Keychain-File Formats, Encodings and File Types
 To use any of these formats just use the appropriate file extension when specifying the keychain file.
 
 Unsupported Certificate Formats, Encodings and File Types
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 +-----------+----------------------+-----------+-------------------------+------------------------------+-------------------------+
 | File Type | Extension            | Encoding  | Includes Private Key?   | Includes Certificate Chain?  |     Common Usage        |
@@ -60,13 +60,13 @@ Unsupported Certificate Formats, Encodings and File Types
 +-----------+----------------------+-----------+-------------------------+------------------------------+-------------------------+
 
 TLS encapsulation of the PVAccess protocol
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In network protocols, encapsulation is used to transport a higher layer protocol over a lower layer protocol, e.g., TCP over IP.
-In the context of TLS, PVAccess messages are encapsulated within TLS records for secure transport.
+In network protocols, encapsulation is used to transport a higher layer protocol over a lower layer protocol, e.g., ``TCP`` over ``IP``.
+In the context of TLS, PVAccess messages are encapsulated within ``TLS`` records for secure transport.
 
 Encapsulation involves wrapping the higher-layer protocol's data within the lower-layer protocol's format.
-TLS is so named because it wraps all data above the `Transport Layer` in an impermeable `Security` layer.
+TLS is so named because it wraps all data above the ``Transport Layer`` in an impermeable ``Security`` layer.
 For SPVA, this means PVAccess messages are wrapped in TLS records that include headers specifying
 content type, protocol version, and length, followed by the encrypted PVAccess data as the payload.
 
@@ -74,14 +74,14 @@ content type, protocol version, and length, followed by the encrypted PVAccess d
    :alt: TLS Encapsulation of PVAccess
    :align: center
 
-Note: We use TLS version 1.3 for Secure PVAccess. This version deprecates support for connection renegotiation which is a security risk. So any
+Note: We use ``TLS version 1.3`` for Secure PVAccess. This version deprecates support for connection renegotiation which is a security risk. So any
 connections that are established using Secure PVAccess will not be renegotiated but will be closed if a certificate is revoked or needs to be renewed.
 
 
 .. _environment_variables:
 
 Environment Variables
-^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 The following environment variables control SPVA behavior:
 
 .. note::
@@ -97,15 +97,15 @@ The following environment variables control SPVA behavior:
 +==========================+============================+=====================================+===============================================================+
 | EPICS_PVA_TLS_KEYCHAIN   | {fully qualified path  to keychain file}                         | This is the string that determines the fully qualified path   |
 +--------------------------+                                                                  | to the keychain file that contains the certificate,           |
-| EPICS_PVAS_TLS_KEYCHAIN  | e.g. ``~/.config/client.p12``                                    | and private keys used in the TLS handshake.                   |
-|                          | e.g. ``~/.config/server.p12``                                    | Note: If not specified then TLS is disabled                   |
+| EPICS_PVAS_TLS_KEYCHAIN  | e.g. ``~/.config/client.p12``,                                   | and private keys used in the TLS handshake.                   |
+|                          | ``~/.config/server.p12``                                         | Note: If not specified then TLS is disabled                   |
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_KEYCHAIN   | {fully qualified path to keychain password file}                 | This is the string that determines the fully qualified path   |
 | _PWD_FILE                |                                                                  | to a file that contains the password that unlocks the         |
-+--------------------------+ e.g. ``~/.config/client.pass``                                   | keychain file.  This is optional.  If not specified, the      |
-| EPICS_PVAS_TLS_KEYCHAIN  | e.g. ``~/.config/server.pass``                                   | keychain file contents will not be encrypted. It is not       |
++--------------------------+ e.g. ``~/.config/client.pass``,                                  | keychain file.  This is optional.  If not specified, the      |
+| EPICS_PVAS_TLS_KEYCHAIN  | ``~/.config/server.pass``                                        | keychain file contents will not be encrypted. It is not       |
 | _PWD_FILE                |                                                                  | recommended to not specify a password file.                   |
-+--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
++--------------------------+----------------------------+-------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_OPTIONS    | ``client_cert``            | ``optional`` (default)              | Require client certificate to be presented.                   |
 |                          |                            |                                     |                                                               |
 |                          | Determines whether client  +-------------------------------------+---------------------------------------------------------------+
@@ -143,21 +143,22 @@ The following environment variables control SPVA behavior:
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | SSLKEYLOGFILE            | {fully qualified path to key log file}                           | This is the path to the SSL key log file that, in conjunction |
 |                          |                                                                  | with the build-time macro `PVXS_ENABLE_SSLKEYLOGFILE`,        |
-|                          | e.g. ``~/.config/keylog``                                         | controls where and whether we store the session key for TLS  |
+|                          | e.g. ``~/.config/keylog``                                        | controls where and whether we store the session key for TLS   |
 |                          |                                                                  | sessions in a file.  If it is defined, then the code will     |
 |                          |                                                                  | contain the calls to save the keys in the file specified      |
 |                          |                                                                  | by this variable.                                             |
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 
+.. _configuration:
 
 API Configuration Options
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The following are new configuration options now available
 in both the `pvxs::server::Config` and `pvxs::client::Config` classes,
 via their public base `pvxs::impl::ConfigCommon` class:
 
-- `pvxs::impl::ConfigCommon::expiration_behaviour` - Set certificate expiration behavior
+- `pvxs::impl::ConfigCommon::expiration_behaviour` - Set the certificate expiration behavior
 - `pvxs::impl::ConfigCommon::tls_keychain_file` - Set keychain file path
 - `pvxs::impl::ConfigCommon::tls_keychain_pwd` - Set keychain file password
 - `pvxs::impl::ConfigCommon::tls_client_cert_required` - Control client certificate requirements
@@ -174,10 +175,10 @@ Here are server-specific configuration options:
 
 
 API Additions for Secure PVAccess
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Runtime Reconfiguration
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
 
 Allows runtime reconfiguration of a TLS connection.  It does this by dropping all TLS connections and
 then re-initialising them using the given configuration.  This means checking if the certificates
@@ -199,7 +200,7 @@ and keys exist, loading and verifying them, checking for status and status of pe
         cli.reconfigure(cli_conf);
 
 Creation of client to PVACMS
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Internally SPVA needs to create a special client when it is connecting to :ref:`pvacms` to check status.  This
 client can't work in the normal way, checking for certificate status because it would become
@@ -231,7 +232,7 @@ certificate status yourself but if you do use this API to create the client cont
         }
 
 Wildcard PV Support
-~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 This addition is based on the Wildcard PV support included in epics-base since version 3.  It
 extends this support to pvxs allowing PVs to be specified as wildcard patterns.  We use this
@@ -271,12 +272,12 @@ to provide individualised PVs for each certificate's status management.
 .. _protocol_operation:
 
 Protocol Operation
-----------------
+------------------
 
 .. _connection_establishment:
 
 Connection Establishment
-^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 Connections are established using TLS if at least the server side is configured for TLS.
 
@@ -301,7 +302,7 @@ After the TLS handshake:
 .. _state_machines:
 
 State Machines
-^^^^^^^^^^^^
+^^^^^^^^^^^^^^
 
 *Server TLS Context State Machine:*
 
@@ -339,7 +340,7 @@ Similar to server state machine but
 .. _tls_context_search_state_machine:
 
 Search Handler State Machines
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 *Server Search Handler:*
 
@@ -366,7 +367,7 @@ States:
 .. _connection_state_machine:
 
 Connection State Machines
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 *Server Connection:*
 
@@ -392,7 +393,7 @@ Connection State Machines
 .. _tls_handshake:
 
 TLS Handshake
-~~~~~~~~~~~~
+~~~~~~~~~~~~~
 
 The following diagram shows the simplified TLS handshake sequence between server and client:
 
@@ -400,7 +401,7 @@ The following diagram shows the simplified TLS handshake sequence between server
    :alt: SPVA Sequence Diagram
    :align: center
 
-1. Each agent uses an X.509 certificate for peer authentication
+1. Each agent uses an ``X.509`` certificate for peer authentication
 2. During handshake:
 
    - Certificates are exchanged
@@ -423,12 +424,12 @@ The following diagram shows the simplified TLS handshake sequence between server
 .. _online_certificate_status_protocol_OCSP:
 
 OCSP and Status Verification
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. _ocsp_stapling:
 
 OCSP Stapling
-^^^^^^^^^^^^
+^^^^^^^^^^^^^
 
 OCSP Stapling optimizes certificate status verification during TLS handshake:
 
@@ -443,7 +444,7 @@ OCSP Stapling optimizes certificate status verification during TLS handshake:
 .. _status_verification:
 
 Status Verification
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 Certificate status verification occurs at several points:
 
@@ -492,7 +493,7 @@ Certificate status verification occurs at several points:
 .. _status_caching:
 
 Status Caching
-^^^^^^^^^^^^
+^^^^^^^^^^^^^^
 
 - Agents subscribe to peer certificate and chain status
 - Status transitions trigger connection status re-evaluation
@@ -523,10 +524,10 @@ PVAccess Beacon Messages have not been upgraded to TLS support. Important consid
 .. _protocol_debugging:
 
 Protocol Debugging
-----------------
+------------------
 
 TLS Packet Inspection
-^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 For detailed TLS traffic analysis:
 
@@ -547,7 +548,7 @@ For detailed TLS traffic analysis:
    - TLS traffic will now be decrypted in Wireshark
 
 Debug Logging
-^^^^^^^^^^^
+^^^^^^^^^^^^^
 
 Enable detailed PVXS debug logging:
 
@@ -580,7 +581,7 @@ New Debug Categories:
 - ``pvxs.stapling``            - OCSP stapling
 
 Connection Tracing
-^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 
 Monitor connection state transitions:
 
@@ -600,10 +601,10 @@ Monitor connection state transitions:
 .. _network_deployment:
 
 Network Deployment
-----------------
+------------------
 
 Deployment Patterns
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 1. Standard Network Deployment
 
@@ -624,7 +625,7 @@ Deployment Patterns
    - Consistent :ref:`certificate_management` across node types
 
 Certificate Storage
-^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 Standard Nodes:
 
@@ -638,7 +639,7 @@ Diskless Nodes:
 - Optional password protection via diskless server
 
 Trust Establishment
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 1. Root Certificate Distribution:
 
