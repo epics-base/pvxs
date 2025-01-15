@@ -16,6 +16,7 @@
 #include <pvxs/log.h>
 
 #include <CLI/CLI.hpp>
+#include <cstdlib>
 
 #include "certfactory.h"
 #include "certfilefactory.h"
@@ -59,6 +60,88 @@ std::string actionToString(CertAction& action) {
             : action == REVOKE  ? "Revoke"
                                 : "Deny");
 }
+int readParameters(int argc, char* argv[], const char *program_name, client::Config &conf, CertAction &action, Value::Fmt::format_t &format,
+                    bool &approve, bool &revoke, bool &deny, bool &debug, bool &password_flag, bool &verbose,
+                    std::string &cert_file, std::string &password, std::string &format_str, std::string &issuer_serial_string,
+                    uint64_t &arrLimit) {
+
+    bool show_version{false}, help{false};
+
+    // Argument configuration
+    CLI::App app{"Certificate Management Utility for PVXS"};
+    app.set_help_flag("", ""); // deactivate built-in help
+
+    // Add a positional argument
+    app.add_option("cert_id", issuer_serial_string)->required(false);
+
+    // Define flags
+    app.add_flag("-h,--help", help);
+    app.add_flag("-v,--verbose", verbose);
+    app.add_flag("-d,--debug", debug);
+    app.add_flag("-p,--password", password_flag);
+    app.add_flag("-V,--version", show_version);
+
+    // Define options
+    app.add_option("-w,--timeout", conf.request_timeout_specified);
+    app.add_option("-f,--file", cert_file, "The keychain file to read if no Certificate ID specified");
+    app.add_option("-#,--limit", arrLimit)->default_val(20);
+    app.add_option("-F,--format", format_str);
+
+    // Action flags in mutually exclusive group
+    app.add_flag("-A,--approve", approve);
+    app.add_flag("-R,--revoke", revoke);
+    app.add_flag("-D,--deny", deny);
+
+    CLI11_PARSE(app, argc, argv);
+
+    if (help) {
+        std::cout << "Certificate management utility for PVXS\n"
+                  << std::endl
+                  << "Gets the STATUS of a certificate, REVOKES a certificate, or APPROVES or DENIES a pending certificate approval.\n"
+                  << std::endl
+                  << "  Get certificate status from serial number: The certificate ID is specified as <issuer>:<serial>, \n"
+                  << "  where <issuer> is the first 8 hex digits of the subject key identifier of the issuer and <serial>\n"
+                  << "  is the serial number of the certificate. e.g. 27975e6b:7246297371190731775.\n"
+                  << std::endl
+                  << "  Get certificate status from keychain file: The keychain file must be a PKCS#12 file.\n"
+                  << std::endl
+                  << "  APPROVAL and DENIAL of pending certificate approval requests: Can only be made by administrators.\n"
+                  << std::endl
+                  << "  REVOCATION of a certificate: Can only be made by an administrator.\n"
+                  << std::endl
+                  <<  "usage:\n"
+                  <<  "  " << program_name << " [options] <cert_id>                Get certificate status\n"
+                  <<  "  " << program_name << " [options] -f, --file <cert_file>   Get certificate information from the specified cert file\n"
+                  <<  "  " << program_name << " [options] -A, --approve <cert_id>  APPROVE pending certificate approval request (ADMIN ONLY)\n"
+                  <<  "  " << program_name << " [options] -D, --deny <cert_id>     DENY pending certificate approval request (ADMIN ONLY)\n"
+                  <<  "  " << program_name << " [options] -R, --revoke <cert_id>   REVOKE certificate (ADMIN ONLY)\n"
+                  <<  "  " << program_name << " -h, --help                         Show this help message and exit\n"
+                  <<  "  " << program_name << " -V, --verbose                      Print version and exit\n"
+                  << std::endl
+                  <<  "options:\n"
+                  <<  "  -w, --timeout FLOAT [5]\n"
+                  <<  "                                             Operation timeout in seconds.  Default 5.0s\n"
+                  <<  "  -p, --password                             Prompt for password\n"
+                  <<  "  -F, --format [ delta | tree ]              Output format mode: delta (default), or tree\n"
+                  <<  "  -#, --limit <max_elements>                 Maximum number of elements to print for each array field. Set to\n"
+                  <<  "                                             zero 0 for unlimited.  Default 20\n"
+                  <<  "  -d, --debug                                Debug mode: Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\"\n"
+                  <<  "  -v                                         Verbose mode\n"
+                  << std::endl;
+        exit(0);
+    }
+
+    if (show_version) {
+        if (argc > 2) {
+            std::cerr << "Error: -V option cannot be used with any other options.\n";
+            exit(1);
+        }
+        std::cout << pvxs::version_information;
+        exit(0);
+    }
+
+    return 0;
+}
 
 int main(int argc, char* argv[]) {
     try {
@@ -69,82 +152,14 @@ int main(int argc, char* argv[]) {
         // Variables to store options
         CertAction action{STATUS};
         Value::Fmt::format_t format = Value::Fmt::Delta;
-        bool approve{false}, revoke{false}, deny{false}, debug{false}, password_flag{false}, show_version{false}, verbose{false}, help{false};
+        bool approve{false}, revoke{false}, deny{false}, debug{false}, password_flag{false}, verbose{false};
         std::string cert_file, password, format_str, issuer_serial_string;
         uint64_t arrLimit = 20;
 
-        // Argument configuration
-        CLI::App app{"Certificate Management Utility for PVXS"};
-        app.set_help_flag("", ""); // deactivate built-in help
+        auto parse_result = readParameters(argc, argv, program_name, conf, action, format, approve, revoke, deny, debug, password_flag,
+                                           verbose, cert_file, password, format_str, issuer_serial_string, arrLimit);
+        if (parse_result) exit(parse_result);
 
-        // Add a positional argument
-        app.add_option("cert_id", issuer_serial_string)->required(false);
-
-        // Define flags
-        app.add_flag("-h,--help", help);
-        app.add_flag("-v,--verbose", verbose);
-        app.add_flag("-d,--debug", debug);
-        app.add_flag("-p,--password", password_flag);
-        app.add_flag("-V,--version", show_version);
-
-        // Define options
-        app.add_option("-w,--timeout", conf.request_timeout_specified);
-        app.add_option("-f,--file", cert_file, "The keychain file to read if no Certificate ID specified");
-        app.add_option("-#,--limit", arrLimit)->default_val(20);
-        app.add_option("-F,--format", format_str);
-
-        // Action flags in mutually exclusive group
-        app.add_flag("-A,--approve", approve);
-        app.add_flag("-R,--revoke", revoke);
-        app.add_flag("-D,--deny", deny);
-
-        CLI11_PARSE(app, argc, argv);
-
-        if (help) {
-            std::cout << "Certificate management utility for PVXS\n"
-                      << std::endl
-                      << "Gets the STATUS of a certificate, REVOKES a certificate, or APPROVES or DENIES a pending certificate approval.\n"
-                      << std::endl
-                      << "  Get certificate status from serial number: The certificate ID is specified as <issuer>:<serial>, \n"
-                      << "  where <issuer> is the first 8 hex digits of the subject key identifier of the issuer and <serial>\n"
-                      << "  is the serial number of the certificate. e.g. 27975e6b:7246297371190731775.\n"
-                      << std::endl
-                      << "  Get certificate status from keychain file: The keychain file must be a PKCS#12 file.\n"
-                      << std::endl
-                      << "  APPROVAL and DENIAL of pending certificate approval requests: Can only be made by administrators.\n"
-                      << std::endl
-                      << "  REVOCATION of a certificate: Can only be made by an administrator.\n"
-                      << std::endl
-                      <<  "usage:\n"
-                      <<  "  " << program_name << " [options] <cert_id>                Get certificate status\n"
-                      <<  "  " << program_name << " [options] -f, --file <cert_file>   Get certificate information from the specified cert file\n"
-                      <<  "  " << program_name << " [options] -A, --approve <cert_id>  APPROVE pending certificate approval request (ADMIN ONLY)\n"
-                      <<  "  " << program_name << " [options] -D, --deny <cert_id>     DENY pending certificate approval request (ADMIN ONLY)\n"
-                      <<  "  " << program_name << " [options] -R, --revoke <cert_id>   REVOKE certificate (ADMIN ONLY)\n"
-                      <<  "  " << program_name << " -h, --help                         Show this help message and exit\n"
-                      <<  "  " << program_name << " -V, --verbose                      Print version and exit\n"
-                      << std::endl
-                      <<  "options:\n"
-                      <<  "  -w, --timeout FLOAT [5]\n"
-                      <<  "                                             Operation timeout in seconds.  Default 5.0s\n"
-                      <<  "  -p, --password                             Prompt for password\n"
-                      <<  "  -F, --format [ delta | tree ]              Output format mode: delta (default), or tree\n"
-                      <<  "  -#, --limit <max_elements>                 Maximum number of elements to print for each array field. Set to\n"
-                      <<  "                                             zero 0 for unlimited.  Default 20\n"
-                      <<  "  -d, --debug                                Debug mode: Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\"\n"
-                      <<  "  -v                                         Verbose mode\n"
-                      << std::endl;
-            exit(0);
-        }
-
-        if (show_version) {
-            if (argc > 2) {
-                std::cerr << "Error: -V option cannot be used with any other options.\n";
-                return 1;
-            }
-            std::cout << pvxs::version_information;
-            return 0;
-        }
 
         if (password_flag && cert_file.empty()) {
             log_err_printf(certslog, "Error: -p must only be used with -f.%s", "\n");
@@ -177,7 +192,7 @@ int main(int argc, char* argv[]) {
         else if (deny) {
             action = DENY;
         } else {
-            conf.tls_disabled = false;
+            conf.tls_disabled = true;
         }
 
         auto ctxt = conf.build();
@@ -188,7 +203,7 @@ int main(int argc, char* argv[]) {
 
         epicsEvent done;
 
-        std::string cert_id, root_id;
+        std::string cert_id;
 
         if (!cert_file.empty()) {
             try {
@@ -203,7 +218,7 @@ int main(int argc, char* argv[]) {
         }
 
         try {
-            std::cout << actionToString(action) << " ==> " << ((!root_id.empty()) ? root_id : cert_id) << "\n";
+            std::cout << actionToString(action) << " ==> " << cert_id << "\n";
             switch (action) {
                 case STATUS: {
                     ops.push_back(ctxt.get(cert_id)
