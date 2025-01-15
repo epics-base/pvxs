@@ -331,8 +331,13 @@ std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
  * certificate management, and peer status tracking.
  */
 struct SSLContext {
-    epicsMutex lock;  // To lock changes to context state that happen as a result of changes to certificate status
+    // To lock changes to context state that happen as a result of changes to certificate status
+    epicsMutex lock;
+    // The event loop.  Used to create timers for the status validity countdown
+    const impl::evbase& loop;
+
     static PVXS_API int NID_PvaCertStatusURI;
+
     ossl_shared_ptr<SSL_CTX> ctx;
 
     /**
@@ -357,8 +362,6 @@ struct SSLContext {
     // Whether stapling is disabled.  Copied from the config
     bool stapling_disabled{false};
 
-    // The event loop.  Used to create timers for the status validity countdown
-    const impl::evbase& loop;
     // The entity certificate status validity timer (peer statuses are stored in the CertStatusExData tied to the SSL_CTX (ctx) created for this context)
     impl::evevent status_validity_timer{__FILE__, __LINE__, event_new(loop.base, -1, EV_TIMEOUT, statusValidityExpirationHandler, this)};
 
@@ -400,8 +403,6 @@ struct SSLContext {
     explicit SSLContext(const impl::evbase& loop);
     SSLContext(const SSLContext& o);
     SSLContext(SSLContext& o) noexcept;
-
-    SSLContext& operator=(SSLContext&& o) noexcept;
 
     static void statusValidityExpirationHandler(evutil_socket_t fd, short evt, void* raw);
     void setStatusValidityCountdown();

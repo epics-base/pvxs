@@ -113,22 +113,11 @@ void SSLContext::setTlsOrTcpMode() {
 SSLContext::SSLContext(const impl::evbase &loop) : loop(loop) {}
 
 SSLContext::SSLContext(const SSLContext &o)
-    : ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled), loop(o.loop) {
+    : loop(o.loop), ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) {
 }
 
 SSLContext::SSLContext(SSLContext &o) noexcept
-    : ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled), loop(o.loop) {
-}
-
-SSLContext &SSLContext::operator=(SSLContext &&o) noexcept {
-    ctx = std::move(o.ctx);
-    state = o.state;
-    status_check_disabled = o.status_check_disabled;
-    stapling_disabled = o.stapling_disabled;
-    cert_status = o.cert_status;
-    status_validity_timer = std::move(o.status_validity_timer);
-    cert_monitor = std::move(o.cert_monitor);
-    return *this;
+    : loop(o.loop), ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) {
 }
 
 void SSLContext::setStatusValidityCountdown() {
