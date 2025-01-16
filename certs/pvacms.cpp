@@ -371,7 +371,7 @@ void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_
     if (sql_status == SQLITE_DONE) {
         int rows_affected = sqlite3_changes(ca_db.get());
         if (rows_affected == 0) {
-            throw std::runtime_error("No certificate found");
+            throw std::runtime_error("Invalid state transition or invalid serial number");
         }
     } else {
         throw std::runtime_error(SB() << "Failed to set cert status: " << sqlite3_errmsg(ca_db.get()));
@@ -782,7 +782,7 @@ void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issue
         auto cert_status = cert_status_creator.createPVACertificateStatus(serial, status, now, status_date);
         postCertificateStatus(status_pv, pv_name, serial, cert_status);
     } catch (std::exception &e) {
-        log_err_printf(pvacms, "PVACMS Error getting status: %s\n", e.what());
+        log_err_printf(pvacms, "PVACMS: %s\n", e.what());
         postCertificateStatus(status_pv, pv_name, serial);
     }
 }
@@ -1772,7 +1772,7 @@ int main(int argc, char *argv[]) {
             } else if (state == "DENIED") {
                 onDeny(config, ca_db, our_issuer_id, pv, std::move(op), pv_name, parameters, ca_pkey, ca_cert, ca_chain);
             } else {
-                postCertificateErrorStatus(pv, std::move(op), our_issuer_id, serial, 1, 1, pvxs::SB() << "Invalid certificate state requested: " << state);
+                op->error(pvxs::SB() << "Invalid certificate state requested: " << state);
             }
         });
 

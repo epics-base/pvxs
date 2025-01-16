@@ -71,9 +71,9 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
  * cert_creation_request object is valid and contains the required information
  * before calling this function.
  */
-std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &cert_creation_request) const {
+std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &cert_creation_request, double timeout) const {
     // Forward the ccr to the certificate management service
-    std::string p12_pem_string(ccr_manager_.createCertificate(cert_creation_request));
+    std::string p12_pem_string(ccr_manager_.createCertificate(cert_creation_request, timeout));
     return p12_pem_string;
 }
 }  // namespace certs

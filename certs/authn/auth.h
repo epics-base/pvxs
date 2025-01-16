@@ -63,7 +63,7 @@ class Auth {
     // subclasses if needed
     virtual bool signCcrPayloadIfNeeded(const Value ccr, std::string &signature) const { return false; };
 
-    virtual std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr) const;
+    virtual std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, double timeout) const;
 
    protected:
     // Called to have a standard presentation of the CCR for the

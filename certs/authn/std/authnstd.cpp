@@ -425,7 +425,7 @@ int main(int argc, char *argv[]) {
 
             // Attempt to create a certificate with the certificate creation
             // request
-            auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request);
+            auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request, config.request_timeout_specified);
 
             // If the certificate was created successfully,
             if (!p12_pem_string.empty()) {

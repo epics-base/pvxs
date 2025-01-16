@@ -15,7 +15,7 @@ namespace certs {
 
 using namespace members;
 
-std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequest> &cert_creation_request) const {
+std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequest> &cert_creation_request, double timeout) const {
     auto uri = nt::NTURI({}).build();
     uri += {Struct("query", CCR_PROTOTYPE(cert_creation_request->verifier_fields))};
     auto arg = uri.create();
@@ -24,8 +24,10 @@ std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequ
     arg["path"] = RPC_CERT_CREATE;
     arg["query"].from(cert_creation_request->ccr);
 
-    auto ctxt(client::Context::fromEnv());
-    auto value(ctxt.rpc(RPC_CERT_CREATE, arg).exec()->wait(5.0));
+    auto conf = client::Config::fromEnv();
+    conf.tls_disabled = true;
+    auto client = conf.build();
+    auto value(client.rpc(RPC_CERT_CREATE, arg).exec()->wait(timeout));
 
     log_info_printf(auths, "X.509 CLIENT certificate%s\n", "");
     log_info_printf(auths, "%s\n", value["status.value.index"].as<std::string>().c_str());

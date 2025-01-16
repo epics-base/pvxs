@@ -134,7 +134,7 @@ int readParameters(int argc, char* argv[], const char *program_name, client::Con
     if (show_version) {
         if (argc > 2) {
             std::cerr << "Error: -V option cannot be used with any other options.\n";
-            exit(1);
+            exit(10);
         }
         std::cout << pvxs::version_information;
         exit(0);
@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
             conf.tls_disabled = true;
         }
 
-        auto ctxt = conf.build();
+        auto client = conf.build();
 
         if (verbose) std::cout << "Effective config\n" << conf;
 
@@ -219,74 +219,34 @@ int main(int argc, char* argv[]) {
 
         try {
             std::cout << actionToString(action) << " ==> " << cert_id << "\n";
+            Value result;
             switch (action) {
-                case STATUS: {
-                    ops.push_back(ctxt.get(cert_id)
-                                      .result([cert_id, &done, format, arrLimit](client::Result&& result) {
-                                          Indented I(std::cout);
-                                          std::cout << result().format().format(format).arrayLimit(arrLimit);
-                                          done.signal();
-                                      })
-                                      .exec());
-                } break;
-                case APPROVE: {
-                    ops.push_back(ctxt.put(cert_id)
-                                      .set("state", "APPROVED")
-                                      .result([cert_id, &done, format, arrLimit](client::Result&& result) {
-                                          Indented I(std::cout);
-                                          if (result) std::cout << result().format().format(format).arrayLimit(arrLimit);
-                                          done.signal();
-                                      })
-                                      .exec());
-                } break;
-                case DENY: {
-                    ops.push_back(ctxt.put(cert_id)
-                                      .set("state", "DENIED")
-                                      .result([cert_id, &done, format, arrLimit](client::Result&& result) {
-                                          Indented I(std::cout);
-                                          if (result) std::cout << result().format().format(format).arrayLimit(arrLimit);
-                                          done.signal();
-                                      })
-                                      .exec());
-                } break;
-                case REVOKE: {
-                    ops.push_back(ctxt.put(cert_id)
-                                      .set("state", "REVOKED")
-                                      .result([cert_id, &done, format, arrLimit](client::Result&& result) {
-                                          Indented I(std::cout);
-                                          if (result) std::cout << result().format().format(format).arrayLimit(arrLimit);
-                                          done.signal();
-                                      })
-                                      .exec());
-                } break;
+                case STATUS:
+                    result = client.get(cert_id).exec()->wait(conf.request_timeout_specified);
+                    break;
+                case APPROVE:
+                    result = client.put(cert_id).set("state", "APPROVED").exec()->wait(conf.request_timeout_specified);
+                    break;
+                case DENY:
+                    result = client.put(cert_id).set("state", "DENIED").exec()->wait(conf.request_timeout_specified);
+                    break;
+                case REVOKE:
+                    result = client.put(cert_id).set("state", "REVOKED").exec()->wait(conf.request_timeout_specified);
+                    break;
             }
+            Indented I(std::cout);
+            if (result)
+                std::cout << result.format().format(format).arrayLimit(arrLimit);
+            else if (action != STATUS)
+                std::cout << "Success\n";
         } catch (std::exception& e) {
-            log_err_printf(certslog, "Unable to %s ==> %s %s", actionToString(action).c_str(), cert_id.c_str(), "\n");
-            ctxt.close();
-            return 3;
-        }
-
-        // expedite search after starting all requests
-        ctxt.hurryUp();
-
-        SigInt sig([&done]() { done.signal(); });
-
-        bool waited = done.wait(conf.request_timeout_specified);
-        ops.clear();  // implied cancel
-
-        if (!waited) {
-            log_err_printf(certslog, "Could not contact PVACMS: Timeout%s", "\n");
+            log_err_printf(certslog, "Unable to %s ==> %s\n", actionToString(action).c_str(), cert_id.c_str());
+            log_err_printf(certslog, "%s\n", e.what());
             return 4;
-
-        } else if (issuer_serial_string.empty()) {
-            return 0;
-
-        } else {
-            if (verbose) log_err_printf(certslog, "Interrupted.%s", "\n");
-            return 5;
         }
+
     } catch (std::exception& e) {
         log_err_printf(certslog, "Error: %s%s", e.what(), "\n");
-        return 6;
+        return 5;
     }
 }
