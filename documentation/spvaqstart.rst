@@ -1,7 +1,7 @@
 .. _quick_start:
 
 Secure PVA Quick Start
-================
+======================
 
 This section contains quick start guides for common Secure PVAccess
 tasks. See :ref:`secure_pvaccess` for general documentation on Secure PVAccess.
@@ -13,11 +13,11 @@ In this section you'll find quick starts for :ref:`spva_qs_build_and_deploy`,
 .. _spva_qs_build_and_deploy:
 
 Build & Deploy
-----------------
+--------------
 
 
 1. Initialise Environment
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -154,7 +154,7 @@ If you don't have homebrew and don't want to install it, here's how you would in
 
 
 3. Build epics-base
-^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -185,7 +185,7 @@ If you don't have homebrew and don't want to install it, here's how you would in
         #EOF
 
 5. Build PVXS
-^^^^^^^^^^^^
+^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -206,7 +206,7 @@ PVACMS
 ---------------
 
 1. Database configuration
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -217,7 +217,7 @@ PVACMS
 
 
 2. Certificate Authority
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -242,7 +242,7 @@ what you want it to contain.
 
 
 3. Server Certificate
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -253,7 +253,7 @@ what you want it to contain.
 
 
 4. Admin User
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -311,7 +311,7 @@ what you want it to contain.
         Keychain file created   : /root/.config/pva/1.3/pvacms.p12
         PVACMS [6caf749c] Service Running
 
-Note the `6caf749c` is the issuer ID which is comprised of the first 8 characters
+Note the ``6caf749c`` is the issuer ID which is comprised of the first 8 characters
 of the hex Subject Key Identifier of the CA certificate.
 
 .. _spva_qs_server:
@@ -331,7 +331,7 @@ SPVA Server
         # export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/server.p12
 
 2. Create Certificate
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -349,11 +349,11 @@ SPVA Server
 
         ...
 
-Note the certificate ID `6caf749c:853259638908858244`.
+Note the certificate ID ``6caf749c:853259638908858244``.
 You will need ID to carry out operations on this certificate including APPROVING it.
 
 3. Check Certificate Status
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -363,7 +363,7 @@ You will need ID to carry out operations on this certificate including APPROVING
 
 
 4. APPROVE certificate
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -400,7 +400,7 @@ You will need ID to carry out operations on this certificate including APPROVING
             ocsp_response uint8_t[] = {1607}[48, 130, 6, 67, 10, 1, 0, 160, 130, 6, 60, 48, 130, 6, 56, 6, 9, 43, 6, 1, ...]
 
 6. Run an SPVA Service
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -430,7 +430,7 @@ SPVA Client
         # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
 2. Create Certificate
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -449,7 +449,7 @@ SPVA Client
 
 
 3. APPROVE certificate
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -463,7 +463,7 @@ SPVA Client
 
 
 4. Run an SPVA Client
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
