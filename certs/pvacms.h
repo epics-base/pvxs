@@ -59,6 +59,12 @@
     ");"                                \
     "COMMIT;"
 
+#define SQL_CHECK_EXISTS_DB_FILE        \
+    "SELECT name "                      \
+    "FROM sqlite_master "               \
+    "WHERE type='table' "               \
+    "  AND name='certs';"
+
 #define SQL_CREATE_CERT    \
     "INSERT INTO certs ( " \
     "     serial,"         \

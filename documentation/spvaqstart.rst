@@ -304,11 +304,11 @@ what you want it to contain.
 
         ...
 
+        Certificate DB created  : /root/.local/share/pva/1.3/certs.db
         Keychain file created   : /root/.config/pva/1.3/ca.p12
         Created Default ACF file: /root/.config/pva/1.3/pvacms.acf
         Keychain file created   : /root/.config/pva/1.3/admin.p12
         Keychain file created   : /root/.config/pva/1.3/pvacms.p12
-        Certificate DB created  : /root/.local/share/pva/1.3/certs.db
         PVACMS [6caf749c] Service Running
 
 Note the `6caf749c` is the issuer ID which is comprised of the first 8 characters

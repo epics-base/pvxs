@@ -209,12 +209,22 @@ void initCertsDatabase(sql_ptr &ca_db, std::string &db_file) {
     if ((sqlite3_open(db_file.c_str(), ca_db.acquire()) != SQLITE_OK)) {
         throw std::runtime_error(SB() << "Can't open certs db file for writing: " << sqlite3_errmsg(ca_db.get()));
     } else {
-        int rc = sqlite3_exec(ca_db.get(), SQL_CREATE_DB_FILE, 0, 0, 0);
-        if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-            throw std::runtime_error(SB() << "Can't initialise certs db file: " << sqlite3_errmsg(ca_db.get()));
+        sqlite3_stmt *statement;
+        if (sqlite3_prepare_v2(ca_db.get(), SQL_CHECK_EXISTS_DB_FILE, -1, &statement, NULL) != SQLITE_OK) {
+            throw std::runtime_error(SB() << "Failed to check if certs db exists: " << sqlite3_errmsg(ca_db.get()));
+        }
+
+        bool table_exists = (sqlite3_step(statement) == SQLITE_ROW); // table exists if a row was returned
+        sqlite3_finalize(statement);
+
+        if (!table_exists) {
+            auto sql_status = sqlite3_exec(ca_db.get(), SQL_CREATE_DB_FILE, 0, 0, 0);
+            if (sql_status != SQLITE_OK && sql_status != SQLITE_DONE) {
+                throw std::runtime_error(SB() << "Can't initialize certs db file: " << sqlite3_errmsg(ca_db.get()));
+            }
+            std::cout << "Certificate DB created : " << db_file << std::endl;
         }
     }
-    std::cout << "Certificate DB created  : " << db_file << std::endl;
 }
 
 void getWorstCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t &worst_status_so_far, time_t &worst_status_time_so_far) {
