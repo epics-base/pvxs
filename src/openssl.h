@@ -334,7 +334,7 @@ struct SSLContext {
     // To lock changes to context state that happen as a result of changes to certificate status
     epicsMutex lock;
     // The event loop.  Used to create timers for the status validity countdown
-    const impl::evbase& loop;
+    const impl::evbase loop;
 
     static PVXS_API int NID_PvaCertStatusURI;
 
@@ -388,7 +388,7 @@ struct SSLContext {
      * @param loop - The event loop
      * @return The server TLS context
      */
-    static std::shared_ptr<SSLContext> for_server(const impl::ConfigCommon& conf, const impl::evbase loop);
+    static std::shared_ptr<SSLContext> for_server(const impl::ConfigCommon& conf, impl::evbase loop);
 
     /**
      * @brief Get the CertStatusExData from the PVXS SSL context
@@ -400,7 +400,7 @@ struct SSLContext {
      */
     CertStatusExData* getCertStatusExData() const;
 
-    explicit SSLContext(const impl::evbase& loop);
+    explicit SSLContext(impl::evbase loop);
     SSLContext(const SSLContext& o);
     SSLContext(SSLContext& o) noexcept;
 

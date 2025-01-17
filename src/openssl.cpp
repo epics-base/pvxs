@@ -110,7 +110,7 @@ void SSLContext::setTlsOrTcpMode() {
     if (state == TlsReady && !cert_status.isGood()) state = TcpReady;
 }
 
-SSLContext::SSLContext(const impl::evbase &loop) : loop(loop) {}
+SSLContext::SSLContext(const impl::evbase loop) : loop(loop) {}
 
 SSLContext::SSLContext(const SSLContext &o)
     : loop(o.loop), ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) {
