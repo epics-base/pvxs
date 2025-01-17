@@ -92,7 +92,7 @@ struct PVXS_API SSLError : public std::runtime_error {
 };
 
 /**
- * @brief Contains peer status, peer status monitor, validity timer and function to call when the peer status changes
+ * @brief A peer status monitor: containing a monitor and function to call when the peer status changes, the current status, and a status validity timer
  *
  * This is used to store the peer status, the cert status manager, the validity timer and the function to call when the peer status changes.
  *
@@ -109,7 +109,7 @@ struct PVXS_API SSLError : public std::runtime_error {
  * Peer statuses have a validity and when statuses are updated the validity timer is set and will go off when the status becomes invalid so that
  * we can fetch the status and update the peer status - resetting the timer.
  */
-struct SSLPeerStatus {
+struct SSLPeerStatusMonitor {
     // The certificate status
     std::shared_ptr<const certs::CertificateStatus> status;
     // The cert status manager
@@ -125,7 +125,7 @@ struct SSLPeerStatus {
      * @param validity_timer - The validity timer
      * @param fn - The function to call when the status changes
      */
-    SSLPeerStatus(const std::shared_ptr<const certs::CertificateStatus>& status, evevent&& validity_timer, const std::function<void(bool)>& fn)
+    SSLPeerStatusMonitor(const std::shared_ptr<const certs::CertificateStatus>& status, evevent&& validity_timer, const std::function<void(bool)>& fn)
         : status(status), validity_timer(std::move(validity_timer)), fn(fn) {}
 };
 
@@ -157,8 +157,8 @@ struct CertStatusExData {
     X509_STORE* trusted_store_ptr;
     // Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not configured
     const bool status_check_enabled;
-    // The map of peer statuses, keyed by the serial number of each peer's certificate
-    std::map<serial_number_t, std::shared_ptr<SSLPeerStatus>> peer_statuses{};
+    // The map of Peer Status Monitors, keyed by the serial number of each peer's certificate
+    std::map<serial_number_t, std::shared_ptr<SSLPeerStatusMonitor>> peer_status_monitors{};
     // map to keep status validity expiration handler parameters from going stale
     std::map<serial_number_t, StatusValidityExpirationHandlerParam> sveh_params{};
 
@@ -261,7 +261,7 @@ struct CertStatusExData {
      * @param fn - Function to call when the peer status changes
      * @return The peer status that was created or found
      */
-    std::shared_ptr<SSLPeerStatus> getOrCreatePeerStatus(serial_number_t serial_number, std::function<void(bool)> fn);
+    std::shared_ptr<SSLPeerStatusMonitor> getOrCreatePeerStatus(serial_number_t serial_number, std::function<void(bool)> fn);
 
     /**
      * @brief Returns the currently cached peer status if any.  Null if none cached
@@ -276,8 +276,8 @@ struct CertStatusExData {
      * @return The cached peer status
      */
     inline std::shared_ptr<const certs::CertificateStatus> getCachedPeerStatus(const serial_number_t serial_number) const {
-        auto it = peer_statuses.find(serial_number);
-        if (it != peer_statuses.end()) {
+        auto it = peer_status_monitors.find(serial_number);
+        if (it != peer_status_monitors.end()) {
             return it->second->status;
         }
         return nullptr;
@@ -290,7 +290,7 @@ struct CertStatusExData {
      */
     void subscribeToPeerCertStatus(X509* cert_ptr, std::function<void(bool)> fn) noexcept;
 
-    void setStatusValidityCountdown(std::weak_ptr<SSLPeerStatus> peer_status);
+    void setStatusValidityCountdown(std::weak_ptr<SSLPeerStatusMonitor> peer_status);
     static void statusValidityExpirationHandler(evutil_socket_t fd, short evt, void* raw);
     void statusValidityExpirationHandler(serial_number_t serial_number);
 };

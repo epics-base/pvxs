@@ -541,16 +541,19 @@ struct OCSPStatus {
     // raw OCSP response bytes
     shared_array<const uint8_t> ocsp_bytes;
     // OCSP status of the certificate
-    OCSPCertStatus ocsp_status;
+    OCSPCertStatus ocsp_status{OCSP_CERTSTATUS_UNKNOWN};
     // date of the OCSP certificate status
     StatusDate status_date;
     // valid-until date of the OCSP certificate status
-    StatusDate status_valid_until_date;
+    StatusDate status_valid_until_date{(time_t)0};
     // revocation date of the certificate if it is revoked
     StatusDate revocation_date;
 
     // Constructor from a PKCS#7 OCSP response that must be signed by the given trusted store.
     explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param, X509_STORE *trusted_store_ptr) : ocsp_bytes(ocsp_bytes_param) {
+        if (!trusted_store_ptr) {
+            throw std::invalid_argument("Trusted store pointer is null");
+        }
         init(trusted_store_ptr);
     }
 
@@ -594,7 +597,9 @@ struct OCSPStatus {
      *
      * @return true if the status is GOOD, false otherwise
      */
-    inline bool isGood() const noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
+    inline bool isGood() const noexcept {
+        return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD;
+    }
 
     virtual explicit operator CertificateStatus() const noexcept;
 

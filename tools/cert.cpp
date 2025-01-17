@@ -110,23 +110,29 @@ int readParameters(int argc, char* argv[], const char *program_name, client::Con
                   << "  REVOCATION of a certificate: Can only be made by an administrator.\n"
                   << std::endl
                   <<  "usage:\n"
-                  <<  "  " << program_name << " [options] <cert_id>                Get certificate status\n"
-                  <<  "  " << program_name << " [options] -f, --file <cert_file>   Get certificate information from the specified cert file\n"
-                  <<  "  " << program_name << " [options] -A, --approve <cert_id>  APPROVE pending certificate approval request (ADMIN ONLY)\n"
-                  <<  "  " << program_name << " [options] -D, --deny <cert_id>     DENY pending certificate approval request (ADMIN ONLY)\n"
-                  <<  "  " << program_name << " [options] -R, --revoke <cert_id>   REVOKE certificate (ADMIN ONLY)\n"
-                  <<  "  " << program_name << " -h, --help                         Show this help message and exit\n"
-                  <<  "  " << program_name << " -V, --verbose                      Print version and exit\n"
+                  <<  "  " << program_name << " [display_options] [options] <cert_id>\n"
+                  <<  "                                             Get certificate status\n"
+                  <<  "  " << program_name << " [display_options] [file_options] [options] (-f | --file) <cert_file>\n"
+                  <<  "                                             Get certificate information from the specified cert file\n"
+                  <<  "  " << program_name << " [options] (-A | --approve) <cert_id>\n"
+                  <<  "                                             APPROVE pending certificate approval request (ADMIN ONLY)\n"
+                  <<  "  " << program_name << " [options] (-D | --deny) <cert_id>  DENY pending certificate approval request (ADMIN ONLY)\n"
+                  <<  "  " << program_name << " [options] (-R | --revoke) <cert_id>\n"
+                  <<  "                                             REVOKE certificate (ADMIN ONLY)\n"
+                  <<  "  " << program_name << " (-h | --help)                      Show this help message and exit\n"
+                  <<  "  " << program_name << " (-V | --verbose)                   Print version and exit\n"
                   << std::endl
-                  <<  "options:\n"
-                  <<  "  -w, --timeout FLOAT [5]\n"
-                  <<  "                                             Operation timeout in seconds.  Default 5.0s\n"
-                  <<  "  -p, --password                             Prompt for password\n"
-                  <<  "  -F, --format [ delta | tree ]              Output format mode: delta (default), or tree\n"
-                  <<  "  -#, --limit <max_elements>                 Maximum number of elements to print for each array field. Set to\n"
+                  <<  "display_options:\n"
+                  <<  "  (-F | --format) (delta | tree)             Output format mode: delta (default), or tree\n"
+                  <<  "  (-# | --limit) <max_elements>              Maximum number of elements to print for each array field. Set to\n"
                   <<  "                                             zero 0 for unlimited.  Default 20\n"
-                  <<  "  -d, --debug                                Debug mode: Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\"\n"
-                  <<  "  -v                                         Verbose mode\n"
+                  <<  "file_options:\n"
+                  <<  "  (-p | --password)                          Prompt for password\n"
+                  <<  "\n"
+                  <<  "options:\n"
+                  <<  "  (-w | --timeout) <timout_secs>             Operation timeout in seconds.  Default 5.0s\n"
+                  <<  "  (-d | --debug)                             Debug mode: Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\"\n"
+                  <<  "  (-v | --verbose)                           Verbose mode\n"
                   << std::endl;
         exit(0);
     }
@@ -218,7 +224,7 @@ int main(int argc, char* argv[]) {
         }
 
         try {
-            std::cout << actionToString(action) << " ==> " << cert_id << "\n";
+            std::cout << actionToString(action) << " ==> " << cert_id ;
             Value result;
             switch (action) {
                 case STATUS:
@@ -236,11 +242,11 @@ int main(int argc, char* argv[]) {
             }
             Indented I(std::cout);
             if (result)
-                std::cout << result.format().format(format).arrayLimit(arrLimit);
+                std::cout << std::endl << result.format().format(format).arrayLimit(arrLimit);
             else if (action != STATUS)
-                std::cout << "Success\n";
+                std::cout << " ==> Completed Successfully\n";
         } catch (std::exception& e) {
-            log_err_printf(certslog, "Unable to %s ==> %s\n", actionToString(action).c_str(), cert_id.c_str());
+            std::cout << std::endl;
             log_err_printf(certslog, "%s\n", e.what());
             return 4;
         }
