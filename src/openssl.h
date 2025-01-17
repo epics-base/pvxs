@@ -380,7 +380,7 @@ struct SSLContext {
      * @param loop - The event loop
      * @return The client TLS context
      */
-    static std::shared_ptr<SSLContext> for_client(const impl::ConfigCommon& conf, const impl::evbase& loop);
+    static std::shared_ptr<SSLContext> for_client(const impl::ConfigCommon& conf, const impl::evbase loop);
 
     /**
      * @brief Creates a server TLS context
@@ -388,7 +388,7 @@ struct SSLContext {
      * @param loop - The event loop
      * @return The server TLS context
      */
-    static std::shared_ptr<SSLContext> for_server(const impl::ConfigCommon& conf, const impl::evbase& loop);
+    static std::shared_ptr<SSLContext> for_server(const impl::ConfigCommon& conf, const impl::evbase loop);
 
     /**
      * @brief Get the CertStatusExData from the PVXS SSL context

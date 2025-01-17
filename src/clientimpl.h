@@ -360,7 +360,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     std::vector<std::pair<SockEndpoint, std::shared_ptr<Connection>>> nameServers;
 
-    evbase tcp_loop;
+    const evbase tcp_loop;
     const evevent searchRx4, searchRx6;
     const evevent searchTimer;
     const evevent initialSearcher;
@@ -381,7 +381,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     INST_COUNTER(ClientContextImpl);
 
-    ContextImpl(const Config& conf, const evbase &tcp_loop);
+    ContextImpl(const Config& conf, evbase tcp_loop);
     ~ContextImpl();
 
     void startNS();

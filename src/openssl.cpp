@@ -783,7 +783,7 @@ bool SSLContext::subscribeToPeerCertStatus(const SSL *ctx, std::function<void(bo
     }
 }
 
-std::shared_ptr<SSLContext> SSLContext::for_client(const impl::ConfigCommon &conf, const impl::evbase& loop) {
+std::shared_ptr<SSLContext> SSLContext::for_client(const impl::ConfigCommon &conf, const impl::evbase loop) {
     auto ctx(commonSetup(TLS_client_method(), true, conf, loop));
 
     if (0 != SSL_CTX_set_alpn_protos(ctx->ctx.get(), pva_alpn, sizeof(pva_alpn) - 1))
@@ -792,7 +792,7 @@ std::shared_ptr<SSLContext> SSLContext::for_client(const impl::ConfigCommon &con
     return ctx;
 }
 
-std::shared_ptr<SSLContext>  SSLContext::for_server(const impl::ConfigCommon &conf, const impl::evbase& loop) {
+std::shared_ptr<SSLContext>  SSLContext::for_server(const impl::ConfigCommon &conf, const impl::evbase loop) {
     auto ctx(commonSetup(TLS_server_method(), false, conf, loop));
 
     SSL_CTX_set_alpn_select_cb(ctx->ctx.get(), &ossl_alpn_select, nullptr);

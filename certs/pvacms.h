@@ -32,16 +32,6 @@
 
 #define RPC_CERT_CREATE "CERT:CREATE"
 
-#define DEFAULT_KEYCHAIN_FILE "server.p12"
-#define DEFAULT_CA_KEYCHAIN_FILE "ca.p12"
-#define DEFAULT_ACF_FILE "pvacms.acf"
-
-#define RPC_CERT_REVOKE_ROOT "CERT:REVOKE"
-
-#define CERT_MONITOR_POLLING_INTERVAL_SECS 10
-
-#define PVXS_HOSTNAME_MAX 1024
-
 #define SQL_CREATE_DB_FILE              \
     "BEGIN TRANSACTION;"                \
     "CREATE TABLE IF NOT EXISTS certs(" \

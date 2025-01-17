@@ -12,6 +12,28 @@ In this section you'll find quick starts for :ref:`spva_qs_build_and_deploy`,
 
 .. _spva_qs_build_and_deploy:
 
+If you're going to test this in a VM
+------------------------------------
+
+    .. code-block:: sh
+
+        # Create docker container and open a bash shell into it
+        # Do the building and approving from this shell
+        docker run -it --name ubuntu_pvxs ubuntu:latest /bin/bash
+
+        # In this shell modify the shell startup script so that it will set the appropriate variables
+        cat >> ~/.bashrc <<EOF
+
+        export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+        export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+        export PROJECT_HOME=~/src
+        EOF
+
+
+        # Make three other shells (in different terminals) for running PVACMS, a server, and a client
+        docker exec -it ubuntu_pvxs /bin/bash
+
+
 Build & Deploy
 --------------
 
@@ -24,7 +46,6 @@ Build & Deploy
         # Set up data and configuration home if not already set
         export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
         export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
-        # mkdir -p ${XDG_DATA_HOME}/pva/1.3 ${XDG_CONFIG_HOME}/pva/1.3
 
         # Make working directory for building project files
         export PROJECT_HOME=~/src
@@ -314,6 +335,8 @@ what you want it to contain.
 Note the ``6caf749c`` is the issuer ID which is comprised of the first 8 characters
 of the hex Subject Key Identifier of the CA certificate.
 
+Leave this PVACMS service running for while running server and client below.
+
 .. _spva_qs_server:
 
 SPVA Server
@@ -328,7 +351,7 @@ SPVA Server
         # An EPICS server agent Key and Certificate combined
         # Environment: EPICS_PVAS_TLS_KEYCHAIN
         # Default    : ${XDG_CONFIG_HOME}/pva/1.3/server.p12
-        # export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/server.p12
+        export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/server.p12
 
 2. Create Certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -352,8 +375,8 @@ SPVA Server
 Note the certificate ID ``6caf749c:853259638908858244``.
 You will need ID to carry out operations on this certificate including APPROVING it.
 
-3. Check Certificate Status
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+3. Verify that certificate is created pending approval
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -362,7 +385,7 @@ You will need ID to carry out operations on this certificate including APPROVING
         ${PROJECT_HOME}/pvxs/bin/*/pvxcert 6caf749c:853259638908858244
 
 
-4. APPROVE certificate
+4. Approve certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -376,8 +399,8 @@ You will need ID to carry out operations on this certificate including APPROVING
         ${PROJECT_HOME}/pvxs/bin/*/pvxcert --approve 6caf749c:853259638908858244
 
 
-5. VALID check
-^^^^^^^^^^^^^^^^^^^^
+5. Check the certificate status has changed
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -385,19 +408,6 @@ You will need ID to carry out operations on this certificate including APPROVING
 
         ${PROJECT_HOME}/pvxs/bin/*/pvxcert 6caf749c:853259638908858244
 
-        Get Status ==> CERT:STATUS:6caf749c:853259638908858244
-            status.value.index int32_t = 3
-            status.value.choices string[] = {6}["UNKNOWN", "PENDING_APPROVAL", "PENDING", "VALID", "EXPIRED", "REVOKED"]
-            status.timeStamp.secondsPastEpoch int64_t = 1732078162
-            serial uint64_t = 853259638908858244
-            state string = "VALID"
-            ocsp_status.value.choices string[] = {3}["OCSP_CERTSTATUS_GOOD", "OCSP_CERTSTATUS_REVOKED", "OCSP_CERTSTATUS_UNKNOWN"]
-            ocsp_status.timeStamp.secondsPastEpoch int64_t = 1732078162
-            ocsp_state string = "OCSP_CERTSTATUS_GOOD"
-            ocsp_status_date string = "Wed Nov 20 04:49:22 2024 UTC"
-            ocsp_certified_until string = "Wed Nov 20 05:19:22 2024 UTC"
-            ocsp_revocation_date string = "Thu Jan 01 00:00:00 1970 UTC"
-            ocsp_response uint8_t[] = {1607}[48, 130, 6, 67, 10, 1, 0, 160, 130, 6, 60, 48, 130, 6, 56, 6, 9, 43, 6, 1, ...]
 
 6. Run an SPVA Service
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -427,7 +437,7 @@ SPVA Client
         # An EPICS client agent certificate if required
         # Environment: EPICS_PVA_TLS_KEYCHAIN
         # Default    : ${XDG_CONFIG_HOME}/pva/1.3/client.p12
-        # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
+        export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
 2. Create Certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -441,14 +451,8 @@ SPVA Client
           -O "SLAC.STANFORD.EDU" \
           -o "Controls"
 
-        ...
-        Keychain file created   : /root/.config/pva/1.3/client.p12
-        Certificate identifier  : 6caf749c:389088582448532596
 
-        ...
-
-
-3. APPROVE certificate
+3. Approve certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -456,7 +460,7 @@ SPVA Client
         #### 1. Use a user that has access to the admin certificate and point EPICS_PVA_TLS_KEYCHAIN to it
         # Environment: EPICS_PVA_TLS_KEYCHAIN
         # Default    : ${XDG_CONFIG_HOME}/pva/1.3/admin.p12
-        # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
+        export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
 
         #### 2. Approve the certificate
         ${PROJECT_HOME}/pvxs/bin/*/pvxcert --approve 6caf749c:389088582448532596
@@ -467,4 +471,6 @@ SPVA Client
 
     .. code-block:: sh
 
-        ${PROJECT_HOME}/pvxs/bin/*/pvxget test:structExample
+        export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
+
+        ${PROJECT_HOME}/pvxs/bin/*/pvxget test:structExample -F tree

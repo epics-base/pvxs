@@ -447,7 +447,7 @@ static Value buildCAMethod() {
         .create();
 }
 
-ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
+ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
     : ifmap(IfaceMap::instance()),
       effective([conf]() -> Config {
           Config eff(conf);

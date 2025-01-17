@@ -82,8 +82,7 @@ class CertStatusManager {
    public:
     friend struct OCSPStatus;
     CertStatusManager() = delete;
-
-    virtual ~CertStatusManager() = default;
+    ~CertStatusManager() = default;
 
     using StatusCallback = std::function<void(const PVACertificateStatus&)>;
 
