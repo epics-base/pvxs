@@ -49,10 +49,10 @@
     ");"                                \
     "COMMIT;"
 
-#define SQL_CHECK_EXISTS_DB_FILE        \
-    "SELECT name "                      \
-    "FROM sqlite_master "               \
-    "WHERE type='table' "               \
+#define SQL_CHECK_EXISTS_DB_FILE \
+    "SELECT name "               \
+    "FROM sqlite_master "        \
+    "WHERE type='table' "        \
     "  AND name='certs';"
 
 #define SQL_CREATE_CERT    \
@@ -127,6 +127,11 @@
     "WHERE not_before <= strftime('%s', 'now') " \
     "  AND not_after > strftime('%s', 'now') "
 
+#define SQL_CERT_BECOMING_INVALID \
+    "SELECT serial, status "      \
+    "FROM certs "                 \
+    "WHERE "
+
 #define SQL_CERT_TO_EXPIRED \
     "SELECT serial "        \
     "FROM certs "           \
@@ -168,11 +173,44 @@ class StatusMonitor {
     pvxs::ossl_ptr<X509> &ca_cert_;
     pvxs::ossl_ptr<EVP_PKEY> &ca_pkey_;
     pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain_;
+    std::map<serial_number_t, time_t> &active_status_validity_;
 
    public:
     StatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &issuer_id, server::SharedWildcardPV &status_pv, ossl_ptr<X509> &ca_cert,
-                  ossl_ptr<EVP_PKEY> &ca_pkey, ossl_shared_ptr<STACK_OF(X509)> &ca_chain)
-        : config_(config), ca_db_(ca_db), issuer_id_(issuer_id), status_pv_(status_pv), ca_cert_(ca_cert), ca_pkey_(ca_pkey), ca_chain_(ca_chain) {}
+                  ossl_ptr<EVP_PKEY> &ca_pkey, ossl_shared_ptr<STACK_OF(X509)> &ca_chain, std::map<serial_number_t, time_t> &active_status_validity)
+        : config_(config),
+          ca_db_(ca_db),
+          issuer_id_(issuer_id),
+          status_pv_(status_pv),
+          ca_cert_(ca_cert),
+          ca_pkey_(ca_pkey),
+          ca_chain_(ca_chain),
+          active_status_validity_(active_status_validity) {}
+
+    std::vector<serial_number_t> getActiveSerials() {
+        auto cutoff{time(nullptr) - (uint64_t)config_.request_timeout_specified};
+        std::vector<serial_number_t> result;
+        for (const auto &pair : active_status_validity_) {
+            if (pair.second > cutoff) {
+                result.push_back(pair.first);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @brief Set the new validity timeout after we've updated the database
+     * Note that its possible that the serial has been removed by another thread during the operation
+     * TODO make threadsafe
+     * @param serial the serial number of the validity we need to update
+     * @param validity_date the new validity date
+     */
+    void setValidity(serial_number_t serial, time_t validity_date) {
+        auto it = active_status_validity_.find(serial);
+        if (it != active_status_validity_.end()) {
+            it->second = validity_date;
+        }
+    }
 };
 
 void checkForDuplicates(sql_ptr &ca_db, CertFactory &cert_factory);
@@ -226,7 +264,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
 bool getPriorApprovalStatus(sql_ptr &ca_db, std::string &name, std::string &country, std::string &organization, std::string &organization_unit);
 
 void onGetStatus(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name,
-                 const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
+                 serial_number_t serial, const std::string &issuer_id, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
                  const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
 
 void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
@@ -262,7 +300,7 @@ void bindValidStatusClauses(sqlite3_stmt *sql_statement, std::vector<certstatus_
 std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &parameters);
 
 template <typename T>
-void setValue(Value &target, const std::string &field, const T &source);
+void setValue(Value &target, const std::string &field, const T &new_value);
 
 }  // namespace certs
 }  // namespace pvxs

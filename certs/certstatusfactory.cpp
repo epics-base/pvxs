@@ -64,7 +64,7 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_pt
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-PVACertificateStatus CertStatusFactory::createPVACertificateStatus(uint64_t serial, certstatus_t status, StatusDate this_status_update,
+PVACertificateStatus CertStatusFactory::createPVACertificateStatus(serial_number_t serial, certstatus_t status, StatusDate this_status_update,
                                                                    StatusDate predicated_revocation_time) const {
     // Create OCSP response
     ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
@@ -119,7 +119,7 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(uint64_t seri
     log_debug_printf(status_setup, "Status: %d\n", status);
     log_debug_printf(status_setup, "OCSP Status: %d\n", ocsp_status);
     log_debug_printf(status_setup, "Status Date: %s\n", this_status_update.s.c_str());
-    log_debug_printf(status_setup, "Status Vaidity: %s\n", status_valid_until_time.s.c_str());
+    log_debug_printf(status_setup, "Status Validity: %s\n", status_valid_until_time.s.c_str());
     log_debug_printf(status_setup, "Revocation Date: %s\n", revocation_time_to_use.s.c_str());
 
     return PVACertificateStatus(status, ocsp_status, ocsp_bytes, this_status_update, status_valid_until_time, revocation_time_to_use);

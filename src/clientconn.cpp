@@ -39,6 +39,7 @@ DEFINE_LOGGER(stapling, "pvxs.stapling");
  * or SSL_TLSEXT_ERR_ALERT_FATAL of the OCSP validation.
  */
 static int clientOCSPCallback(SSL* ctx, ossl::SSLContext* tls_context) {
+    log_debug_printf(stapling, "Entering clientOCSPCallback  %s\n", "client");
     // Find out what the peer cert we're verifying is
     X509* peer_cert = SSL_get_peer_certificate(ctx);
 
@@ -62,18 +63,21 @@ static int clientOCSPCallback(SSL* ctx, ossl::SSLContext* tls_context) {
         // Replace cached peer cert with received OCSP response.  Throws if parsing error and catch sets invalid status
         const shared_array<const uint8_t> ocsp_bytes(ocsp_response_ptr, len);
         auto status = (certs::CertificateStatus)(certs::OCSPStatus(ocsp_bytes, ex_data->trusted_store_ptr));
-        ex_data->setCachedPeerStatus(peer_cert, status);
+        ex_data->setPeerStatus(peer_cert, certs::UnknownCertificateStatus());
 
         // If status is valid return success
-        if (status.isValid()) {
+        if (status.isValid() && status.isCertified()) {
+            ex_data->setPeerStatus(peer_cert, status);
             log_debug_printf(stapling, "Client OCSP stapled response is: %s\n", status.ocsp_status.s.c_str());
             log_debug_printf(stapling, "Client OCSP stapled status date: %s\n", status.status_date.s.c_str());
             log_debug_printf(stapling, "Client OCSP stapled status valid until: %s\n", status.status_valid_until_date.s.c_str());
             log_debug_printf(stapling, "Client OCSP stapled revocation date: %s\n", status.revocation_date.s.c_str());
             return SSL_TLSEXT_ERR_OK;
         }
+        log_debug_printf(stapling, "Stapled OCSP response invalid %s\n", "");
+        return SSL_TLSEXT_ERR_NOACK;
     } catch (std::exception& e) {
-        ex_data->setCachedPeerStatus(peer_cert, certs::UnknownCertificateStatus());
+        ex_data->setPeerStatus(peer_cert, certs::UnknownCertificateStatus());
         log_err_printf(stapling, "Stapled OCSP response: %s\n", e.what());
     }
     return SSL_TLSEXT_ERR_ALERT_FATAL;
@@ -95,13 +99,13 @@ Connection::Connection(const std::shared_ptr<ContextImpl>& context,
                      , bool isTLS
 #endif
                        )
-    :ConnBase (true, context->effective.sendBE(),
-               nullptr,
-               peerAddr)
-    ,context(context)
+    :
 #ifdef PVXS_ENABLE_OPENSSL
-    ,isTLS(isTLS)
+    ConnBase (true, isTLS, context->effective.sendBE(), nullptr, peerAddr)
+#else
+    ConnBase (true, context->effective.sendBE(), nullptr, peerAddr)
 #endif
+    ,context(context)
     ,echoTimer(__FILE__, __LINE__,
                event_new(context->tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &tickEchoS, this))
 {
@@ -124,6 +128,11 @@ Connection::~Connection()
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
+
+ossl::CertStatusExData *Connection::getCertStatusExData() {
+    return context->tls_context->getCertStatusExData();
+}
+
 std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
                                               const SockAddr& serv, bool reconn, bool tls)
 #else
@@ -206,7 +215,8 @@ void Connection::configureClientOCSPCallback(SSL* ssl) {
     // If stapling is not disabled
     if (!context->tls_context->stapling_disabled) {
         // And client was not previously set to request the stapled OCSP Response
-        if (SSL_get_tlsext_status_type(ssl) != -1) {
+        if (SSL_get_tlsext_status_type(ssl) == -1) {
+/*
             // Then enable OCSP status request extension
             log_debug_printf(stapling, "Client OCSP Stapling: Setting up request%s\n", "");
             if (SSL_set_tlsext_status_type(ssl, TLSEXT_STATUSTYPE_ocsp)) {
@@ -218,6 +228,7 @@ void Connection::configureClientOCSPCallback(SSL* ssl) {
             SSL_CTX_set_tlsext_status_arg(context->tls_context->ctx.get(), context->tls_context.get());
             // Set the callback
             SSL_CTX_set_tlsext_status_cb(context->tls_context->ctx.get(), clientOCSPCallback);
+*/
         }
     }
 }
@@ -272,17 +283,26 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
 
 }
 
-void Connection::bevEvent(short events)
-{
+void Connection::bevEvent(short events) {
 #ifdef PVXS_ENABLE_OPENSSL
-    if ((events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) && isTLS && bev) {
-        while (auto err = bufferevent_get_openssl_error(bev.get())) {
-            auto error_reason = ERR_reason_error_string(err);
-            if (error_reason) log_err_printf(io, "Client: TLS Error (0x%lx) %s\n", err, ERR_reason_error_string(err));
+    ConnBase::bevEvent(events, [=](bool enable) {
+        if (context) {
+            std::weak_ptr<ContextImpl> weak_context(context);
+            if (enable)
+                context->tcp_loop.dispatch([weak_context, this]() mutable {
+                    auto context = weak_context.lock();
+                    if (context) context->enableTlsForPeerConnection(this);
+                });
+            else
+                context->tcp_loop.dispatch([weak_context, this]() mutable {
+                    auto context = weak_context.lock();
+                    if (context) context->removePeerTlsConnections(this);
+                });
         }
-    }
-#endif
+    });
+#else
     ConnBase::bevEvent(events);
+#endif
     // called Connection::cleanup()
 
     if(bev && (events&BEV_EVENT_CONNECTED)) {
@@ -291,6 +311,7 @@ void Connection::bevEvent(short events)
 
         auto peerCred(std::make_shared<ServerCredentials>());
         peerCred->peer = peerName;
+        peerCred->method = "anonymous";
 #ifdef PVXS_ENABLE_OPENSSL
         peerCred->isTLS = isTLS;
 
@@ -298,27 +319,8 @@ void Connection::bevEvent(short events)
             auto ctx = bufferevent_openssl_get_ssl(bev.get());
             assert(ctx);
             ossl::SSLContext::getPeerCredentials(*peerCred, ctx);
-            std::weak_ptr<ContextImpl> weak_context(context);
-            ossl::SSLContext::subscribeToPeerCertStatus(ctx, [weak_context, this](bool enable) {
-                auto context = weak_context.lock();
-                if (context) {
-                    if (enable)
-                        context->tcp_loop.dispatch([weak_context, this]() mutable {
-                            auto context = weak_context.lock();
-                            if (context) context->enableTlsForPeerConnection(this);
-                        });
-                    else
-                        context->tcp_loop.dispatch([weak_context, this]() mutable {
-                            auto context = weak_context.lock();
-                            if (context) context->removePeerTlsConnections(this);
-                        });
-                }
-            });
-        } else
-#endif
-        {
-            peerCred->method = "anonymous";
         }
+#endif
         cred = std::move(peerCred);
 
         {

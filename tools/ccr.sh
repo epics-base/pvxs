@@ -81,7 +81,7 @@ cert=$(echo "$certs_block" | awk 'BEGIN {RS="-----END CERTIFICATE-----\n"} NR==1
 root_cert=$(echo "$certs_block" | awk 'BEGIN {RS="-----END CERTIFICATE-----\n"} {last=$0} END {print last "-----END CERTIFICATE-----"}')
 
 # Extract the serial number using awk
-serial=$(echo "$result" | awk -F 'uint64_t serial = ' '{print $2}' | awk '{print $1}' | sed '/^\s*$/d')
+serial=$(echo "$result" | awk -F 'serial_number_t serial = ' '{print $2}' | awk '{print $1}' | sed '/^\s*$/d')
 
 # Extract the issuer using awk
 issuer=$(echo "$result" | awk -F 'string issuer = "' '{print $2}' | awk -F '"' '{print $1}' | sed '/^\s*$/d')

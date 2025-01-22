@@ -41,7 +41,7 @@ DEFINE_LOGGER(status, "pvxs.certs.status");
  * @param ocsp_bytes A shared_array of bytes representing the OCSP response.
  * @return The OCSP response as a data structure.
  */
-ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes) {
+ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<const uint8_t> &ocsp_bytes) {
     // Create a BIO for the OCSP response
     ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())), false);
     if (!bio) {
@@ -86,7 +86,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
     // Verify OCSP response is signed by provided trusted root CA
     verifyOCSPResponse(basic_response, trusted_store_ptr);
 
-    OCSP_SINGLERESP* single_response = OCSP_resp_get0(basic_response.get(), 0);
+    OCSP_SINGLERESP *single_response = OCSP_resp_get0(basic_response.get(), 0);
     if (!single_response) {
         throw OCSPParseException("No entries found in OCSP response");
     }
@@ -95,9 +95,9 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
     int reason = 0;
 
     // Get the OCSP_CERTID from the single response and extract the serial number
-    const OCSP_CERTID* cert_id = OCSP_SINGLERESP_get0_id(single_response);
-    ASN1_INTEGER* serial = nullptr;
-    OCSP_id_get0_info(nullptr, nullptr, nullptr, &serial, const_cast<OCSP_CERTID*>(cert_id));
+    const OCSP_CERTID *cert_id = OCSP_SINGLERESP_get0_id(single_response);
+    ASN1_INTEGER *serial = nullptr;
+    OCSP_id_get0_info(nullptr, nullptr, nullptr, &serial, const_cast<OCSP_CERTID *>(cert_id));
 
     auto ocsp_status = static_cast<ocspcertstatus_t>(OCSP_single_get0_status(single_response, &reason, &revocation_time, &this_update, &next_update));
     // Check status validity: less than 5 seconds old
@@ -129,53 +129,57 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
  * @param trusted_store_ptr the trusted store to verify the status response against
  * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
  */
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509_STORE *trusted_store_ptr, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509_STORE *trusted_store_ptr, const std::string &status_pv, StatusCallback &&callback) {
     // Construct the URI
-    auto uri = CertStatusManager::getStatusPvFromCert(ctx_cert);
-    log_debug_printf(status, "Starting Status Subscription: %s\n", uri.c_str());
+    log_debug_printf(status, "Starting Status Subscription: %s\n", status_pv.c_str());
 
     // Create a shared_ptr to hold the callback
-    auto callback_ptr = std::make_shared<StatusCallback>(std::move(callback));
+    auto fn = std::make_shared<StatusCallback>(std::move(callback));
 
-    // Subscribe to the service using the constructed URI
-    // with TLS disabled to avoid recursive loop
-    auto client(std::make_shared<client::Context>(client::Context::fromEnv(true)));
     try {
-        auto cert_status_manager = cert_status_ptr<CertStatusManager>(new CertStatusManager(std::move(ctx_cert), client));
-        cert_status_manager->callback_ref = std::move(callback_ptr);
-        CertStatusManager * cert_status_manager_ptr = cert_status_manager.get();
+        // Subscribe to the service using the constructed URI
+        // with TLS disabled to avoid recursive loop
+        auto client(std::make_shared<client::Context>(client::Context::fromEnv(true)));
+        cert_status_ptr<CertStatusManager> cert_status_manager(new CertStatusManager(std::move(client)));
+        cert_status_manager->callback_ref = std::move(fn);
+        std::weak_ptr<CertStatusManager> weak_cert_status_manager(cert_status_manager);
 
-        log_debug_printf(status, "Subscribing to status: %p\n", cert_status_manager.get());
-        auto sub = client->monitor(uri)
-                       .maskConnected(true)
-                       .maskDisconnected(true)
-                       .event([cert_status_manager_ptr, trusted_store_ptr](client::Subscription& sub) {
-                           try {
-                               auto callback_ptr = cert_status_manager_ptr->callback_ref;
-
-                               auto update = sub.pop();
-                               if (update) {
-                                   auto status_update{PVACertificateStatus(update, trusted_store_ptr)};
-                                   log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
-                                   cert_status_manager_ptr->status_ = std::make_shared<CertificateStatus>(status_update);
-                                   (*callback_ptr)(status_update);
-                               }
-                           } catch (client::Finished& conn) {
-                               log_debug_printf(status, "Subscription Finished: %s\n", conn.what());
-                           } catch (client::Connected& conn) {
-                               log_debug_printf(status, "Connected Subscription: %s\n", conn.peerName.c_str());
-                           } catch (client::Disconnect& conn) {
-                               log_debug_printf(status, "Disconnected Subscription: %s\n", conn.what());
-                           } catch (std::exception& e) {
-                               log_err_printf(status, "Error Getting Subscription: %s\n", e.what());
-                           }
-                       })
-                       .exec();
+        log_debug_printf(status, "Subscribing to peer status: %s", "");
+        auto sub = cert_status_manager->client_->monitor(status_pv).maskConnected(true).maskDisconnected(true).event(
+          [trusted_store_ptr, weak_cert_status_manager](client::Subscription &sub) {
+              try {
+                  auto cert_status_manager = weak_cert_status_manager.lock();
+                  if (!cert_status_manager) return;
+                  auto update = sub.pop();
+                  if (update) {
+                      try {
+                          auto status_update{PVACertificateStatus(update, trusted_store_ptr)};
+                          log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
+                          cert_status_manager->status_ = std::make_shared<CertificateStatus>(status_update);
+                          (*cert_status_manager->callback_ref)(status_update);
+                      } catch (OCSPParseException &e) {
+                          log_debug_printf(status, "Ignoring invalid status update: %s\n", e.what());
+                      } catch (std::invalid_argument &e) {
+                          log_debug_printf(status, "Ignoring invalid status update: %s\n", e.what());
+                      } catch (std::exception &e) {
+                          log_err_printf(status, "%s\n", e.what());
+                      }
+                  }
+              } catch (client::Finished &conn) {
+                  log_debug_printf(status, "Subscription Finished: %s\n", conn.what());
+              } catch (client::Connected &conn) {
+                  log_debug_printf(status, "Connected Subscription: %s\n", conn.peerName.c_str());
+              } catch (client::Disconnect &conn) {
+                  log_debug_printf(status, "Disconnected Subscription: %s\n", conn.what());
+              } catch (std::exception &e) {
+                  log_err_printf(status, "Error Getting Subscription: %s\n", e.what());
+              }
+          }).exec();
         cert_status_manager->subscribe(sub);
         log_debug_printf(status, "subscription address: %p\n", cert_status_manager.get());
         return cert_status_manager;
-    } catch (std::exception& e) {
-        log_err_printf(status, "Error subscribing to certificate status: %s\n", e.what());
+    } catch (std::exception &e) {
+        log_debug_printf(status, "Error subscribing to certificate status: %s\n", e.what());
         throw CertStatusSubscriptionException(SB() << "Error subscribing to certificate status: " << e.what());
     }
 }
@@ -184,11 +188,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509_STORE *trus
  * @brief Unsubscribe from the certificate status monitoring
  */
 void CertStatusManager::unsubscribe() {
-    client_->hurryUp();
     if (sub_) sub_->cancel();
-    if (client_) client_->close();
-    client_.reset();
-    sub_.reset();
 }
 
 /**
@@ -212,7 +212,7 @@ void CertStatusManager::unsubscribe() {
  *     bool isValid = verifyOCSPResponse(ocsp_bytes, ca_cert); // Verifies the OCSP response
  * @endcode
  */
-bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, X509_STORE *trusted_store_ptr) {
+bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic_response, X509_STORE *trusted_store_ptr) {
     // get ca_chain from the response (will be verified to see if it's ultimately signed by our trusted root ca)
     auto const_ca_chain_ptr = OCSP_resp_get0_certs(basic_response.get());
     ossl_ptr<STACK_OF(X509)> ca_chain(sk_X509_dup(const_ca_chain_ptr));  // remove const-ness
@@ -227,18 +227,6 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic
 }
 
 /**
- * @brief Call this method to see if we should monitor the given certificate
- * This will return true if there is our custom extension in the certificate.
- * It will produce various exceptions to tell you if it failed to look.
- * Otherwise the boolean returned indicates whether the certificate status is
- * valid only when monitored.
- *
- * @param certificate certificate to check
- * @return true if we should monitor the given certificate
- */
-bool CertStatusManager::shouldMonitor(const X509* certificate) { return (X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_PvaCertStatusURI, -1) >= 0); }
-
-/**
  * @brief Get the string value of a custom extension by NID from a certificate.
  * This will return the PV name to monitor for status of the given certificate.
  * It is stored in the certificate using a custom extension.
@@ -247,24 +235,7 @@ bool CertStatusManager::shouldMonitor(const X509* certificate) { return (X509_ge
  * @param certificate the certificate to examine
  * @return the PV name to call for status on that certificate
  */
-std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509>& certificate) { return getStatusPvFromCert(certificate.get()); }
-
-/**
- * @brief Check if status monitoring is required for the given certificate.
- * This method checks if the given certificate has the custom extension with the NID_PvaCertStatusURI.
- * If such an extension is found, it returns true, indicating that status monitoring is required.
- * If no such extension is found, it returns false, indicating that status monitoring is not required.
- * @param certificate the certificate to check for status monitoring requirement
- * @return true if status monitoring is required, false otherwise
- */
-bool CertStatusManager::statusMonitoringRequired(const X509* certificate) {
-    try {
-        getExtension(certificate);
-        return true;
-    } catch (...) {
-    }
-    return false;
-}
+std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509> &certificate) { return getStatusPvFromCert(certificate.get()); }
 
 /**
  * @brief Get the extension from the certificate.
@@ -273,12 +244,12 @@ bool CertStatusManager::statusMonitoringRequired(const X509* certificate) {
  * @param certificate the certificate to retrieve the extension from
  * @return the X509_EXTENSION object if found, otherwise throws an exception
  */
-X509_EXTENSION* CertStatusManager::getExtension(const X509* certificate) {
+X509_EXTENSION *CertStatusManager::getExtension(const X509 *certificate) {
     int extension_index = X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_PvaCertStatusURI, -1);
     if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find Certificate-Status-PV extension in certificate.");
 
     // Get the extension object from the certificate
-    X509_EXTENSION* extension = X509_get_ext(certificate, extension_index);
+    X509_EXTENSION *extension = X509_get_ext(certificate, extension_index);
     if (!extension) {
         throw CertStatusNoExtensionException("Failed to get Certificate-Status-PV extension from the certificate.");
     }
@@ -287,35 +258,31 @@ X509_EXTENSION* CertStatusManager::getExtension(const X509* certificate) {
 
 /**
  * @brief Get the string value of a custom extension by NID from a certificate.
+ *
  * This will return the PV name to monitor for status of the given certificate.
  * It is stored in the certificate using a custom extension.
  * Exceptions are thrown if it is unable to retrieve the value of the extension
  * or it does not exist.
+ *
  * @param certificate the certificate to examine
  * @return the PV name to call for status on that certificate
  */
-std::string CertStatusManager::getStatusPvFromCert(const X509* certificate) {
+std::string CertStatusManager::getStatusPvFromCert(const X509 *certificate) {
     auto extension = getExtension(certificate);
 
     // Retrieve the extension data which is an ASN1_OCTET_STRING object
-    ASN1_OCTET_STRING* ext_data = X509_EXTENSION_get_data(extension);
-    if (!ext_data) {
-        throw CertStatusNoExtensionException("Failed to get data from the Certificate-Status-PV extension.");
-    }
+    ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
+    if (!ext_data) throw CertStatusNoExtensionException("Failed to get data from the Certificate-Status-PV extension.");
 
     // Get the data as a string
-    const unsigned char* data = ASN1_STRING_get0_data(ext_data);
-    if (!data) {
-        throw CertStatusNoExtensionException("Failed to extract data from ASN1_STRING.");
-    }
+    const unsigned char *data = ASN1_STRING_get0_data(ext_data);
+    if (!data) throw CertStatusNoExtensionException("Failed to extract data from ASN1_STRING.");
 
     int length = ASN1_STRING_length(ext_data);
-    if (length < 0) {
-        throw CertStatusNoExtensionException("Invalid length of ASN1_STRING data.");
-    }
+    if (length < 0) throw CertStatusNoExtensionException("Invalid length of ASN1_STRING data.");
 
     // Return the data as a std::string
-    return std::string(reinterpret_cast<const char*>(data), length);
+    return std::string(reinterpret_cast<const char *>(data), length);
 }
 }  // namespace certs
 }  // namespace pvxs

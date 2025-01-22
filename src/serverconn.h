@@ -135,6 +135,9 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
 
     const std::shared_ptr<ServerChan>& lookupSID(uint32_t sid);
 
+#ifdef PVXS_ENABLE_OPENSSL
+    virtual ossl::CertStatusExData *getCertStatusExData() final;
+#endif
 private:
 #define CASE(Op) virtual void handle_##Op() override final;
     CASE(ECHO);
@@ -230,11 +233,26 @@ struct Server::Pvt
     // accept new connections and send beacons
     evbase acceptor_loop;
 
+#ifdef PVXS_ENABLE_OPENSSL
+    // @note order member `pvxs::client::ContextImpl::connections` after
+    //      `pvxs::client::ContextImpl::tls_context` so that
+    //       destruction order will be `connections`'s `ServerConn`
+    //       then `tls_context`'s `SSL_CTX ctx`.
+    //       ~ServerConn() will clean up ALL the `SSLPeerStatusAndMonitor`s
+    //       stored in `CertStatusExData` which is attached to the SSL_CTX,
+    //       so that by time SSL_CTX is freed there won't be any peer statuses
+    //       left
+    // @brief the server's tls context object
+    std::shared_ptr<ossl::SSLContext> tls_context;
+#endif
+
+    // The server listeners (@see pvxs::client::ContextImpl::tls_context)
     std::list<std::unique_ptr<UDPListener> > listeners;
     std::vector<SockEndpoint> beaconDest;
     std::vector<SockAddr> ignoreList;
 
     std::list<ServIface> interfaces;
+    // The server connections (@see pvxs::client::ContextImpl::tls_context)
     std::map<ServerConn*, std::shared_ptr<ServerConn> > connections;
 
     evsocket beaconSender4, beaconSender6;
@@ -259,7 +277,6 @@ struct Server::Pvt
     } state;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    std::shared_ptr<ossl::SSLContext> tls_context;
     CustomServerCallback custom_server_callback;
     evevent custom_server_callback_timer;
     void* cached_ocsp_response{nullptr};

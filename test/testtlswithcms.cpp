@@ -185,7 +185,7 @@ struct Tester {
             status_pv.onFirstConnect([this](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>& parameters) {
                 auto it = parameters.begin();
                 const std::string& serial_string = *++it;
-                uint64_t serial = std::stoull(serial_string);
+                serial_number_t serial = std::stoull(serial_string);
 
                 if (pv.isOpen(pv_name)) {
                     switch (serial) {
@@ -416,7 +416,7 @@ struct Tester {
         } catch (client::Connected& e) {
             testOk1(e.cred && e.cred->isTLS);
             TEST_COUNTER_EQ(ioc, 1)
-            TEST_COUNTER_EQ(client1, 2)
+            TEST_COUNTER_EQ(client1, 1)
             TEST_COUNTER_EQ(client2, 1)
         } catch (...) {
             testFail("Unexpected exception instead of Connected");
@@ -427,7 +427,7 @@ struct Tester {
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2);
         // Cached responses so no checks
         TEST_COUNTER_EQ(ioc, 1)
-        TEST_COUNTER_EQ(client1, 2)
+        TEST_COUNTER_EQ(client1, 1)
         TEST_COUNTER_EQ(client2, 1)
     }
 
@@ -498,7 +498,7 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
-            TEST_COUNTER_EQ(server1, 2)
+            TEST_COUNTER_EQ(server1, 1)
             TEST_COUNTER_EQ(client1, 1)
             TEST_COUNTER_EQ(ioc, 1)
         }
@@ -506,7 +506,7 @@ struct Tester {
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        TEST_COUNTER_EQ(server1, 2)
+        TEST_COUNTER_EQ(server1, 1)
         TEST_COUNTER_EQ(client1, 1)
         TEST_COUNTER_EQ(ioc, 1)
     }
@@ -658,7 +658,7 @@ MAIN(testtlswithcms) {
     // Initialize SSL
     pvxs::ossl::SSLContext::sslInit();
 
-    testPlan(188);
+    testPlan(180);
     testSetup();
     logger_config_env();
     auto tester = new Tester();

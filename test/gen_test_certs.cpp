@@ -195,7 +195,7 @@ struct CertCreator {
     // expiration
     unsigned expire_days = 365*10;
     // cert. serial number
-    uint64_t serial = 0;
+    serial_number_t serial = 0;
     // extensions
     const char *key_usage = nullptr;
     const char *extended_key_usage = nullptr;
@@ -351,7 +351,7 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        uint64_t serial = TEST_FIRST_SERIAL;
+        serial_number_t serial = TEST_FIRST_SERIAL;
 
         // The root certificate authority
         pvxs::ossl_ptr<X509> root_cert;

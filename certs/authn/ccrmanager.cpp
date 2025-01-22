@@ -15,6 +15,13 @@ namespace certs {
 
 using namespace members;
 
+/**
+ * @brief Create a certificate
+ *
+ * @param cert_creation_request Certificate creation request
+ * @param timeout Timeout for the request
+ * @return std::string PEM format Certificate.
+ */
 std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequest> &cert_creation_request, double timeout) const {
     auto uri = nt::NTURI({}).build();
     uri += {Struct("query", CCR_PROTOTYPE(cert_creation_request->verifier_fields))};
@@ -32,7 +39,7 @@ std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequ
     log_info_printf(auths, "X.509 CLIENT certificate%s\n", "");
     log_info_printf(auths, "%s\n", value["status.value.index"].as<std::string>().c_str());
     log_info_printf(auths, "%s\n", value["state"].as<std::string>().c_str());
-    log_info_printf(auths, "%llu\n", value["serial"].as<uint64_t>());
+    log_info_printf(auths, "%llu\n", value["serial"].as<serial_number_t>());
     log_info_printf(auths, "%s\n", value["issuer"].as<std::string>().c_str());
     log_info_printf(auths, "%s\n", value["certid"].as<std::string>().c_str());
     log_info_printf(auths, "%s\n", value["statuspv"].as<std::string>().c_str());

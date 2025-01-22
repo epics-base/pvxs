@@ -473,4 +473,4 @@ SPVA Client
 
         export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
-        ${PROJECT_HOME}/pvxs/bin/*/pvxget test:structExample -F tree
+        ${PROJECT_HOME}/pvxs/bin/*/pvxget -F tree test:structExample

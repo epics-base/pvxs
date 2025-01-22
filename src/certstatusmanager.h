@@ -31,16 +31,16 @@ namespace pvxs {
 // Forward def
 namespace client {
 class Context;
+
 struct Subscription;
 }  // namespace client
 
 namespace certs {
 
-template <typename T>
+template<typename T>
 struct cert_status_delete;
 
-template <typename T>
-using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
+template<typename T> using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
 
 /**
  * @brief This class is used to parse OCSP responses and to get/subscribe to certificate status
@@ -79,94 +79,13 @@ using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
  * @endcode
  */
 class CertStatusManager {
-   public:
+  public:
     friend struct OCSPStatus;
+    using StatusCallback = std::function<void(const PVACertificateStatus &)>;
+
     CertStatusManager() = delete;
+
     ~CertStatusManager() = default;
-
-    using StatusCallback = std::function<void(const PVACertificateStatus&)>;
-
-    static bool shouldMonitor(const X509* certificate);
-    std::shared_ptr<StatusCallback> callback_ref{}; // Option placeholder for ref to callback if used
-
-    /**
-     * @brief Get the status PV from a Cert.
-     * This function gets the PVA extension that stores the status PV in the certificate
-     * if the certificate must be used in conjunction with a status monitor to check for
-     * revoked status.
-     * @param cert the certificate to check for the status PV extension
-     * @return a blank string if no extension exists, otherwise contains the status PV
-     *         e.g. CERT:STATUS:0293823f:098294739483904875
-     */
-    static std::string getStatusPvFromCert(const ossl_ptr<X509>& cert);
-
-    /**
-     * @brief Get the custom status extension from the given certificate
-     * @param certificate the certificate to retrieve the status extension from
-     * @return the extension
-     * @throws CertStatusNoExtensionException if no extension is present in the certificate
-     */
-    static X509_EXTENSION* getExtension(const X509* certificate);
-
-    /**
-     * @brief Determine if status monitoring is required for the given certificate
-     * @param certificate the certificate to check
-     * @return true if certificate monitoring is required
-     */
-    static bool statusMonitoringRequired(const X509* certificate);
-
-    /**
-     * @brief Get the status PV from a Cert.
-     * This function gets the PVA extension that stores the status PV in the certificate
-     * if the certificate must be used in conjunction with a status monitor to check for
-     * revoked status.
-     * @param cert the certificate to check for the status PV extension
-     * @return a blank string if no extension exists, otherwise contains the status PV
-     *         e.g. CERT:STATUS:0293823f:098294739483904875
-     */
-    static std::string getStatusPvFromCert(const X509* cert);
-
-    /**
-     * @brief Used to create a helper that you can use to subscribe to certificate status with
-     * Subsequently call subscribe() to subscribe
-     *
-     * @param trusted_store_ptr the trusted store that we'll use to verify the OCSP responses received
-     * @param ctx_cert certificate you want to subscribe to
-     * @param callback the callback to call when a status change has appeared
-     *
-     * @see unsubscribe()
-     */
-    static cert_status_ptr<CertStatusManager> subscribe(X509_STORE *trusted_store_ptr, ossl_ptr<X509>&& ctx_cert, StatusCallback&& callback);
-
-    /**
-     * @brief Unsubscribe from listening to certificate status
-     *
-     * This function idempotent unsubscribe from the certificate status updates
-     */
-    void unsubscribe();
-
-    inline bool available(double timeout = 5.0) noexcept { return isValid() || waitedTooLong(timeout); }
-
-    inline bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t)timeout) < std::time(nullptr); }
-
-    inline bool isValid() noexcept { return status_ && status_->isValid(); }
-
-   private:
-    CertStatusManager(ossl_ptr<X509>&& cert, std::shared_ptr<client::Context>& client, std::shared_ptr<client::Subscription>& sub)
-        : cert_(std::move(cert)), client_(client), sub_(sub) {};
-    CertStatusManager(ossl_ptr<X509>&& cert, std::shared_ptr<client::Context>& client) : cert_(std::move(cert)), client_(client) {};
-    inline void subscribe(std::shared_ptr<client::Subscription>& sub) { sub_ = sub; }
-    inline bool isGood() noexcept { return status_ && status_->isGood(); }
-
-    const ossl_ptr<X509> cert_;
-    std::shared_ptr<client::Context> client_;
-    std::shared_ptr<client::Subscription> sub_;
-    std::shared_ptr<CertificateStatus> status_;
-    std::shared_ptr<PVACertificateStatus> pva_status_;
-    time_t manager_start_time_{time(nullptr)};
-    static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t>& ocsp_bytes);
-
-    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP>& basic_response, X509_STORE *trusted_store_ptr);
 
     /**
      * @brief To parse OCSP responses
@@ -179,20 +98,88 @@ class CertStatusManager {
      * @param trusted_store_ptr the trusted store that we'll use to verify the OCSP response
      * @return the Parsed OCSP response status
      */
-   public:
     static ParsedOCSPStatus parse(shared_array<const uint8_t> ocsp_bytes, X509_STORE *trusted_store_ptr);
+
+    /**
+     * @brief Get the status PV from a Cert.
+     * This function gets the PVA extension that stores the status PV in the certificate
+     * if the certificate must be used in conjunction with a status monitor to check for
+     * revoked status.
+     * @param cert the certificate to check for the status PV extension
+     * @return a blank string if no extension exists, otherwise contains the status PV
+     *         e.g. CERT:STATUS:0293823f:098294739483904875
+     */
+    static std::string getStatusPvFromCert(const ossl_ptr<X509> &cert);
+
+    /**
+     * @brief Get the status PV from a Cert.
+     * This function gets the PVA extension that stores the status PV in the certificate
+     * if the certificate must be used in conjunction with a status monitor to check for
+     * revoked status.
+     * @param cert the certificate to check for the status PV extension
+     * @return a blank string if no extension exists, otherwise contains the status PV
+     *         e.g. CERT:STATUS:0293823f:098294739483904875
+     */
+    static std::string getStatusPvFromCert(const X509 *cert);
+
+    /**
+     * @brief Used to create a helper that you can use to subscribe to certificate status with
+     * Subsequently call subscribe() to subscribe
+     *
+     * @param trusted_store_ptr the trusted store that we'll use to verify the OCSP responses received
+     * @param ctx_cert certificate you want to subscribe to
+     * @param callback the callback to call when a status change has appeared
+     *
+     * @see unsubscribe()
+     */
+    static cert_status_ptr<CertStatusManager> subscribe(X509_STORE *trusted_store_ptr, const std::string &status_pv, StatusCallback &&callback);
+
+    /**
+     * @brief Unsubscribe from listening to certificate status
+     *
+     * This function idempotent unsubscribe from the certificate status updates
+     */
+    void unsubscribe();
+
+    inline bool available(double timeout = 5.0) noexcept { return isValid() || waitedTooLong(timeout); }
+    inline bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t) timeout) < std::time(nullptr); }
+    inline bool isValid() noexcept { return status_ && status_->isValid(); }
+
+  private:
+    CertStatusManager(std::shared_ptr<client::Context> &&client, std::shared_ptr<client::Subscription> sub) : client_(std::move(client)), sub_(sub) {};
+    explicit CertStatusManager(std::shared_ptr<client::Context> &&client) : client_(std::move(client)), sub_{} {};
+
+    inline void subscribe(std::shared_ptr<client::Subscription> &sub) { sub_ = sub; }
+
+    std::shared_ptr<StatusCallback> callback_ref{}; // Option placeholder for ref to callback if used
+    std::shared_ptr<client::Context> client_;
+    std::shared_ptr<client::Subscription> sub_;
+    std::shared_ptr<CertificateStatus> status_;
+    std::shared_ptr<PVACertificateStatus> pva_status_;
+    time_t manager_start_time_{time(nullptr)};
+
+    /**
+     * @brief Get the custom status extension from the given certificate
+     * @param certificate the certificate to retrieve the status extension from
+     * @return the extension
+     * @throws CertStatusNoExtensionException if no extension is present in the certificate
+     */
+    static X509_EXTENSION *getExtension(const X509 *certificate);
+
+    static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t> &ocsp_bytes);
+
+    static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic_response, X509_STORE *trusted_store_ptr);
 };
 
-template <>
+template<>
 struct cert_status_delete<CertStatusManager> {
-    inline void operator()(CertStatusManager* base_pointer) {
+    inline void operator()(CertStatusManager *base_pointer) {
         if (base_pointer) {
             base_pointer->unsubscribe();  // Idempotent unsubscribe
             delete base_pointer;
         }
     }
 };
-
 }  // namespace certs
 }  // namespace pvxs
 

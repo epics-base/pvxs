@@ -626,8 +626,6 @@ bool operator!=(certstatus_t& lhs, OCSPStatus& rhs);
  */
 struct UnCertifiedCertificateStatus;
 struct PVACertificateStatus final : public OCSPStatus {
-    explicit PVACertificateStatus(const UnCertifiedCertificateStatus& status);
-
     PVACertStatus status;
     inline bool operator==(const PVACertificateStatus& rhs) const {
         return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
@@ -745,13 +743,14 @@ bool operator!=(certstatus_t& lhs, PVACertificateStatus& rhs);
  */
 struct CertificateStatus {
     virtual ~CertificateStatus() = default;
+    CertificateStatus() : CertificateStatus(false, (PVACertStatus)UNKNOWN, (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN, std::time(nullptr), PERMANENTLY_VALID_STATUS, (time_t)0) {};
 
     // Enable copying
     CertificateStatus(const CertificateStatus&) = default;
     CertificateStatus& operator=(const CertificateStatus&) = default;
 
     explicit CertificateStatus(PVACertificateStatus cs)
-        : CertificateStatus(true, cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {}
+        : CertificateStatus(cs.status != UNKNOWN && !cs.ocsp_bytes.empty(), cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {}
 
     /**
      * @brief Check if the certificate status is GOOD
@@ -786,6 +785,14 @@ struct CertificateStatus {
     inline bool isValid() const noexcept {
         auto now(std::time(nullptr));
         return status_valid_until_date.t > now;
+    }
+
+    inline bool isCertified() const noexcept {
+        return certified;
+    }
+
+    inline bool isPermanent() const noexcept {
+        return status_valid_until_date.t == PERMANENTLY_VALID_STATUS;
     }
 
     StatusDate status_valid_until_date;

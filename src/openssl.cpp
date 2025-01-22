@@ -59,9 +59,9 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
  */
 void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509>&cert,X509_STORE *trusted_store_ptr) {
     if (!status_check_disabled) {
-        if (certs::CertStatusManager::shouldMonitor(cert.get())) {
-            auto cert_to_monitor = ossl_ptr<X509>(X509_dup(cert.get()));
-            cert_monitor = certs::CertStatusManager::subscribe(trusted_store_ptr, std::move(cert_to_monitor), [=](const certs::PVACertificateStatus &pva_status) {
+        try {
+            auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
+            cert_monitor = certs::CertStatusManager::subscribe(trusted_store_ptr, status_pv, [=](const certs::PVACertificateStatus &pva_status) {
                 {
                     Guard G(lock);
                     cert_status = pva_status;
@@ -72,10 +72,11 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509>&cert,X509_STORE *
                 // Start validity timer for status
                 setStatusValidityCountdown();
             });
-        } else {
-            Guard G(lock);
-            cert_status = certs::PVACertificateStatus(certs::UnCertifiedCertificateStatus());
+        } catch (certs::CertStatusNoExtensionException &e) {
+            log_debug_printf(watcher, "No certificate status extension found in certificate%s", "\n");
         }
+    } else {
+        log_debug_printf(watcher, "Status check is disabled%s", "\n");
     }
 
     // Set the state
@@ -129,12 +130,20 @@ void SSLContext::setStatusValidityCountdown() {
     }
 }
 
-void SSLContext::statusValidityExpirationHandler(evutil_socket_t fd, short evt, void *raw) {
+/**
+ * @brief Respond to status validity expiration events for the entity certificate of the given tls context
+ *
+ * Set the status to an uncertified UNKNOWN status and then set the appropriate TLS or TCP mode to reflect this UNKNOWN status
+ * If this status is valid then we should not have gotten an event
+ * @param raw the raw pointer to the SSLContext object where the status is to be updated and state set
+ */
+void SSLContext::statusValidityExpirationHandler(evutil_socket_t, short, void *raw) {
     auto self = *static_cast<SSLContext *>(raw);
-    if (!self.cert_status.isValid()) {
+    if (self.cert_status.isValid()) {
+        log_debug_printf(watcher, "Validity Timer expired but status is still valid%s", "\n");
+    } else {
         {
             Guard G(self.lock);
-            // Therefore the status should be set to
             self.cert_status = certs::PVACertificateStatus();
         }
         self.setTlsOrTcpMode();
@@ -443,11 +452,16 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
  *         SSL_TLSEXT_ERR_NOACK if the OCSP response was not added - no status available to staple at this time
  *         SSL_TLSEXT_ERR_ALERT_FATAL if the OCSP response was not added - some error occurred adding the OCSP response
  */
-int serverOCSPCallback(SSL *ssl, pvxs::server::Server::Pvt *server) {
+int serverOCSPCallback(SSL *ssl,void *raw) {
+    auto server = static_cast<pvxs::server::Server::Pvt *>(raw);
+    log_debug_printf(stapling, "Server OCSP Stapling: %s\n", "serverOCSPCallback");
+/*
     if (SSL_get_tlsext_status_type(ssl) != -1) {
         // Should never be triggered.  Because the callback should only be called when the client has requested stapling.
+        log_debug_printf(stapling, "Server OCSP Stapling: %s\n", "not requested");
         return SSL_TLSEXT_ERR_ALERT_WARNING;
     }
+*/
 
     if (!((certs::CertificateStatus)server->tls_context->get_status()).isValid()) {
         log_warn_printf(stapling, "Server OCSP Stapling: No server status to staple%s\n", "");
@@ -502,132 +516,113 @@ void configureServerOCSPCallback(void *server_ptr, SSL *) {
 int SSLContext::NID_PvaCertStatusURI = NID_undef;
 
 /**
- * @brief Sets the peer status for the given serial number
- *
- * This function sets the peer status for the certificate identified by the given serial number.
- * Only call this function if the status has changed or the status has expired.
- *
- * Peer status is cached in the CertStatusExData associated with the SSL context.
- * Each peer status associated with the TLS context is stored in a map with the serial number as the key.
- * Statuses have a validity period so the cached value is not updated until the validity period has expired.
- *
- * @param serial_number - Serial number
- * @param status - Certificate status
+ * @brief Called when last  peer connection is being destroyed to remove the
+ * peer status and monitor from the tls context's list of statuses and monitors
+ */
+SSLPeerStatusAndMonitor::~SSLPeerStatusAndMonitor() {
+    // Remove self from global list of peer statuses
+    ex_data_ptr->removePeerStatusAndMonitor(serial_number);
+}
+
+/**
+ * @brief Sets the peer status for the given peer certificate
+ * @param peer_cert_ptr - Peer certificate pointer
+ * @param new_status - Certificate status
+ * @fn function to be configured to be called for updates
  * @return The peer status that was set
  */
-std::shared_ptr<const certs::CertificateStatus> CertStatusExData::setCachedPeerStatus(serial_number_t serial_number, const certs::CertificateStatus &status, std::function<void(bool)> fn) {
-    return setCachedPeerStatus(serial_number, std::make_shared<certs::CertificateStatus>(status), fn);
-}
-
-/**
- * @brief Creates a peer status if it does not already exist or returns the existing peer status
- *
- * This will initialise the peer status as Unknown and set up a time capable of being used as a status validity timer.  It also
- * sets up the function to call when the peer status changes. If the peer status already exists then it is returned.
- *
- * @param serial_number - Serial number
- * @param fn - Function to call when the peer status changes
- * @return The peer status that was created or found
- */
-std::shared_ptr<SSLPeerStatusMonitor> CertStatusExData::getOrCreatePeerStatus(serial_number_t serial_number, std::function<void(bool)> fn) {
-    Guard G(lock); // Acquire the lock
-
-    // Check if the Peer Status Monitor already exists
-    auto it = peer_status_monitors.find(serial_number);
-    if (it != peer_status_monitors.end()) {
-        return it->second; // Return the existing Peer Status Monitor
-    }
-
-    // Create a new Peer Status Monitor
-    auto sveh_param = sveh_params.emplace(serial_number, StatusValidityExpirationHandlerParam{*this, serial_number}).second;
-    auto validity_timer = impl::evevent(
-        __FILE__, __LINE__, event_new(loop.base, -1, EV_TIMEOUT, statusValidityExpirationHandler, &sveh_param)
-    );
-
-    auto peer_status_monitor = std::make_shared<SSLPeerStatusMonitor>(
-        SSLPeerStatusMonitor{
-            std::make_shared<certs::CertificateStatus>(certs::UnknownCertificateStatus()),
-            std::move(validity_timer), // Move the validity timer into the peer status
-            fn
-        }
-    );
-
-    // Store the Peer Status Monitor in the map
-    peer_status_monitors.emplace(serial_number, peer_status_monitor);
-    return peer_status_monitor; // Return the newly created Peer Status Monitor
-}
-
-/**
- * @brief Subscribes to cert status if not already monitoring
- *
- * Subscribe to status is not already monitoring.
- * @param cert_ptr - Certificate status to subscribe to
- * @param fn - Function to call when the certificate status changes from good to bad or vice versa
- */
-void CertStatusExData::subscribeToPeerCertStatus(X509 *cert_ptr, std::function<void(bool)> fn) noexcept {
-    if (!cert_ptr) return;  // Nothing to subscribe to
-    auto serial_number = getSerialNumber(cert_ptr);
-    auto peer_status = getOrCreatePeerStatus(serial_number, fn);
-    if (!peer_status) return;
-    auto &cert_status_manager = peer_status->cert_status_manager;
-    if (cert_status_manager) return;  // Already subscribed
-
-    if (!status_check_enabled) {
-        // If we are subscribing to certificate status then we know the cert was VALID to make the connection
-        // so if status checking is disabled we set it to be permanently VALID without getting further certification from PVACMS
-        auto cached_peer_status = getCachedPeerStatus(serial_number);
-        if (!cached_peer_status->isGood()) setCachedPeerStatus(serial_number, certs::UnCertifiedCertificateStatus());
-        return;
-    }
-
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *peer_cert_ptr,
+                                                                         const certs::CertificateStatus &new_status,
+                                                                               std::function<void(bool)> fn) {
+    auto serial_number = getSerialNumber(peer_cert_ptr);
+    std::shared_ptr<SSLPeerStatusAndMonitor> peer_status_and_monitor;
     try {
-        auto cert_to_monitor = ossl_ptr<X509>(X509_dup(cert_ptr));
-        // Subscribe to the certificate status
-        std::weak_ptr<SSLPeerStatusMonitor> weak_peer_status = peer_status;
-        cert_status_manager =
-            certs::CertStatusManager::subscribe(trusted_store_ptr, std::move(cert_to_monitor), [this, weak_peer_status, serial_number, fn](certs::PVACertificateStatus status) {
-                auto peer_status = weak_peer_status.lock();
-                if ( !peer_status ) return;
-
-                // Get the previous status
-                auto previous_status = getCachedPeerStatus(serial_number);
-                auto was_good = previous_status && previous_status->isGood();
-
-                // Update the cached state
-                setCachedPeerStatus(serial_number, status, fn);
-
-                // Call the callback if there has been any state change
-                bool is_good = status.isGood();
-                if (is_good != was_good) {
-                    fn(is_good);
-                }
-                if (status.isValid() && !status.isPermanent()) setStatusValidityCountdown(peer_status);
-            });
-    } catch (...) {
+        if ( status_check_enabled && fn) {
+            auto status_pv = certs::CertStatusManager::getStatusPvFromCert(peer_cert_ptr);
+            peer_status_and_monitor = getOrCreatePeerStatus(serial_number, status_pv, fn);
+        } else {
+            peer_status_and_monitor = getOrCreatePeerStatus(serial_number);
+        }
+    } catch (certs::CertStatusNoExtensionException &e) {
+        peer_status_and_monitor = getOrCreatePeerStatus(serial_number);
     }
+
+    peer_status_and_monitor->updateStatus(new_status);
+    return peer_status_and_monitor;
+}
+
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(serial_number_t serial_number,
+                                                                                 const std::string &status_pv,
+                                                                                 std::function<void(bool)> fn) {
+    // Create holder for peer status or return current holder if already exists
+    auto peer_status = createPeerStatus(serial_number, fn);
+
+    // Subscribe if we have a function and we're not already subscribed
+    if (fn && status_check_enabled && !peer_status->isSubscribed()) {
+        // Subscribe to certificate status updates
+        std::weak_ptr<SSLPeerStatusAndMonitor> weak_peer_status = peer_status;
+        Guard G(peer_status->lock);
+        peer_status->cert_status_manager =
+          certs::CertStatusManager::subscribe(trusted_store_ptr, status_pv, [ weak_peer_status, fn](certs::PVACertificateStatus status) {
+              auto peer_status = weak_peer_status.lock();
+              // Update the cached state
+              if (peer_status)
+                  peer_status->updateStatus(status);
+          });
+    }
+    return peer_status;
 }
 
 /**
- * @brief Set the status validity countdown
- *
- * This sets the status validity countdown for the given peer status.  It also cancels any existing timer and starts a new one.
- * The timer is set to expire when the status validity period ends.
- *
- * @param peer_status - The peer status to set the validity countdown for
+ * @brief Create a peer status in the list of statuses or return existing one
+ * @param serial_number teh serial number to index into the list
+ * @param fn optional function that will be called as status changes if provided
+ * @return the existing or new peer status
  */
-void CertStatusExData::setStatusValidityCountdown(std::weak_ptr<SSLPeerStatusMonitor> weak_peer_status) {
-    auto peer_status = weak_peer_status.lock();
-    if (!peer_status) return;
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(serial_number_t serial_number, const std::function<void(bool)> fn) {
+    auto existing_peer_status_entry = peer_statuses.find(serial_number);
+    if ( existing_peer_status_entry != peer_statuses.end() ) return existing_peer_status_entry->second.lock();
 
-    Guard G(lock);
-    auto &status = peer_status->status;
-    auto &status_validity_timer = peer_status->validity_timer;
-    auto now = time(nullptr);
-    timeval validity_end = {status->status_valid_until_date.t - now, 0};
-    if (status_validity_timer && loop.base) {
-        event_del(status_validity_timer.get());
-        if (event_add(status_validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting peer certificate status validity timer\n%s", "");
+    std::shared_ptr<SSLPeerStatusAndMonitor> new_peer_status;
+    if ( fn ) {
+        auto validity_timer = impl::evevent(__FILE__, __LINE__, event_new(loop.base, -1, EV_TIMEOUT, peersStatusValidityExpirationHandler, this));
+        new_peer_status = std::make_shared<SSLPeerStatusAndMonitor>(serial_number, this, std::move(validity_timer), fn);
+    } else {
+        new_peer_status = std::make_shared<SSLPeerStatusAndMonitor>(serial_number, this, nullptr, nullptr);
     }
+    peer_statuses.emplace(serial_number, new_peer_status);
+    return new_peer_status;
+};
+
+/**
+ * @brief Update the status with the given value and call the callback if supplied and restart the status validity timer
+ * @param new_status the new status to set
+ */
+void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_status) {
+    // Update the status
+    Guard G(lock);
+    auto was_good = status.isOstensiblyGood();
+    status = new_status;
+
+    // Call the callback if there has been any state change
+    bool is_good = status.isGood();
+    if (fn && is_good != was_good) {
+        fn(is_good);
+    }
+
+    if (fn && status.isValid() && !status.isPermanent()) {
+        // Start validity timer
+        restartPeerStatusValidityCountdown();
+    }
+}
+
+
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::subscribeToPeerCertStatus(X509* cert_ptr, std::function<void(bool)> fn) noexcept {
+    assert(cert_ptr && "Peer Cert NULL");
+    auto serial_number = getSerialNumber(cert_ptr);
+    assert(serial_number && "Peer Cert has no serial number");
+
+    return setPeerStatus(cert_ptr, fn);
 }
 
 /**
@@ -639,43 +634,40 @@ void CertStatusExData::setStatusValidityCountdown(std::weak_ptr<SSLPeerStatusMon
  *
  * @param raw - The parameter for the event handler
  */
-void CertStatusExData::statusValidityExpirationHandler(evutil_socket_t, short, void *raw) {
-    auto sve_param = static_cast<StatusValidityExpirationHandlerParam *>(raw);
-    auto &cert_status_ex_data = sve_param->cert_status_ex_data;
-    cert_status_ex_data.statusValidityExpirationHandler(sve_param->serial_number);
+void CertStatusExData::peersStatusValidityExpirationHandler(evutil_socket_t, short, void *raw) {
+    auto self = static_cast<SSLPeerStatusAndMonitor *>(raw);
+    self->peersStatusValidityExpirationHandler();
 }
 
 /**
- * @brief The status validity expiration handler
+ * @brief The peer status validity expiration handler
  *
- * This is the status validity expiration handler.  It is called when the timer expires and
- * the status validity period has ended.  It finds the peer status using the serial number and then
+ * This is the peer status validity expiration handler.  It is called when the timer expires and
+ * the peer status validity period has ended.  It finds the peer status using the serial number and then
  * updates the status and calls the callback if the status has changed and a callback is set.
  *
  * @param serial_number - The serial number of the peer status that expired
  */
-void CertStatusExData::statusValidityExpirationHandler(serial_number_t serial_number) {
-    auto it = peer_status_monitors.find(serial_number);
-    if (it == peer_status_monitors.end()) {
-        log_warn_printf(watcher, "Status Validation Expiration Handler called for certificate that is not monitored: %llu\n", serial_number);
-        return;  // should never happen
+void SSLPeerStatusAndMonitor::peersStatusValidityExpirationHandler() {
+    if (status.isValid()) {
+        log_debug_printf(watcher, "Validity Timer expired but status is still valid%s", "\n");
+        restartPeerStatusValidityCountdown();
+    } else {
+        {
+            Guard G(lock);
+            status = certs::CertificateStatus();
+        }
+        if (fn) fn(false);
     }
-    std::weak_ptr<SSLPeerStatusMonitor> weak_peer_status = it->second;
-    auto peer_status = weak_peer_status.lock();
-    if (!peer_status) return;
+}
 
-    std::weak_ptr<const certs::CertificateStatus> weak_status = peer_status->status;
-    auto status = weak_status.lock();
-    if (!status) return;
-    auto &fn = peer_status->fn;
-    auto was_good = status->isOstensiblyGood();
-    setCachedPeerStatus(serial_number, certs::PVACertificateStatus(), fn);
-    auto is_good = status->isGood();
-    if (is_good != was_good && fn) {
-        fn(is_good);
+void SSLPeerStatusAndMonitor::restartPeerStatusValidityCountdown() {
+    auto now = time(nullptr);
+    timeval validity_end = {status.status_valid_until_date.t - now, 0};
+    if (validity_timer && ex_data_ptr->loop.base) {
+        event_del(validity_timer.get());
+        if (event_add(validity_timer.get(), &validity_end)) log_err_printf(watcher, "Error starting peer certificate status validity timer\n%s", "");
     }
-    // Chain another status validity check if new status is valid
-    if (status->isValid()) setStatusValidityCountdown(peer_status);
 }
 
 /**

@@ -210,7 +210,8 @@ const std::string& ConnectImpl::name() const { return _name; }
 bool ConnectImpl::connected() const { return _connected.load(std::memory_order_relaxed); }
 
 std::shared_ptr<Connect> ConnectBuilder::exec() {
-    if (!ctx) throw std::logic_error("NULL Builder");
+    if (!ctx)
+        throw std::logic_error("NULL Builder");
 
     auto syncCancel(_syncCancel);
     auto context(ctx->impl->shared_from_this());
@@ -457,6 +458,9 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
       caMethod(buildCAMethod()),
       searchTx4(AF_INET, SOCK_DGRAM, 0),
       searchTx6(AF_INET6, SOCK_DGRAM, 0),
+#ifdef PVXS_ENABLE_OPENSSL
+      tls_context(nullptr),
+#endif
       tcp_loop(tcp_loop),
       searchRx4(__FILE__, __LINE__, event_new(tcp_loop.base, searchTx4.sock, EV_READ | EV_PERSIST, &ContextImpl::onSearchS, this)),
       searchRx6(__FILE__, __LINE__, event_new(tcp_loop.base, searchTx6.sock, EV_READ | EV_PERSIST, &ContextImpl::onSearchS, this)),
@@ -466,10 +470,6 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
       beaconCleaner(__FILE__, __LINE__, event_new(manager.loop().base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::tickBeaconCleanS, this)),
       cacheCleaner(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::cacheCleanS, this)),
       nsChecker(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::onNSCheckS, this))
-#ifdef PVXS_ENABLE_OPENSSL
-      ,
-      tls_context(nullptr)
-#endif
 {
 #ifdef PVXS_ENABLE_OPENSSL
     if (effective.isTlsConfigured()) {

@@ -85,10 +85,7 @@ struct RequestInfo {
 };
 
 struct Connection final : public ConnBase, public std::enable_shared_from_this<Connection> {
-    const std::shared_ptr<ContextImpl> context;
-#ifdef PVXS_ENABLE_OPENSSL
-    const bool isTLS;
-#endif
+    std::shared_ptr<ContextImpl> context;
 
     // While HoldOff, the time until re-connection
     // While Connected, periodic Echo
@@ -131,17 +128,19 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 #endif
                                       );
 
+#ifdef PVXS_ENABLE_OPENSSL
+    virtual ossl::CertStatusExData *getCertStatusExData() final;
+#endif
 private:
     void startConnecting();
+    virtual void bevEvent(short events) override final;
 public:
 
     void createChannels();
 
     void sendDestroyRequest(uint32_t sid, uint32_t ioid);
 
-    virtual void bevEvent(short events) override final;
-
-    virtual std::shared_ptr<ConnBase> self_from_this() override final;
+    virtual std::shared_ptr<ConnBase> self_from_this() override;
     virtual void cleanup() override final;
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -352,7 +351,17 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
 
 #ifdef PVXS_ENABLE_OPENSSL
+    std::shared_ptr<ossl::SSLContext> tls_context;
+
     // pair (addr, useTLS)
+    // @note order member `pvxs::client::ContextImpl::connByAddr` after
+    //      `pvxs::client::ContextImpl::tls_context` so that
+    //       destruction order will be `connByAddr`'s `Connections`
+    //       then `tls_context`'s `SSL_CTX ctx` .
+    //       ~Connection() will clean up ALL the `SSLPeerStatusAndMonitor`s
+    //       stored in `CertStatusExData` which is attached to the SSL_CTX,
+    //       so that by time SSL_CTX is freed there won't be any peer statuses
+    //       left
     std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
 #else
     std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
@@ -374,10 +383,6 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent beaconCleaner;
     const evevent cacheCleaner;
     const evevent nsChecker;
-
-#ifdef PVXS_ENABLE_OPENSSL
-    std::shared_ptr<ossl::SSLContext> tls_context;
-#endif
 
     INST_COUNTER(ClientContextImpl);
 
@@ -430,11 +435,7 @@ public:
 
     INST_COUNTER(ClientPvt);
 
-#ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
-#else
-    Pvt(const Config& conf);
-#endif
     ~Pvt(); // I call ContextImpl::close()
 };
 

@@ -52,33 +52,126 @@ void OCSPStatus::init(X509_STORE *trusted_store_ptr) {
     }
 }
 
+/**
+ * @brief Convert a PVACertificateStatus to a CertificateStatus
+ *
+ * @param rhs The PVACertificateStatus to convert
+ * @return CertificateStatus The converted CertificateStatus
+ */
 PVACertificateStatus::operator CertificateStatus() const noexcept {
     return (status == UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this};
 }
+
+/**
+ * @brief Convert an OCSPStatus to a CertificateStatus
+ *
+ * @param rhs The OCSPStatus to convert
+ * @return CertificateStatus The converted CertificateStatus
+ */
 OCSPStatus::operator CertificateStatus() const noexcept {
     return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this};
 }
+
+/**
+ * @brief Compare an OCSPStatus with a CertificateStatus
+ *
+ * @param rhs The CertificateStatus to compare with
+ * @return bool True if the OCSPStatus is equal to the CertificateStatus, false otherwise
+ */
 bool OCSPStatus::operator==(const CertificateStatus &rhs) const {
     return this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date &&
            this->revocation_date == rhs.revocation_date;
 }
+
+/**
+ * @brief Compare an OCSPStatus with a PVACertificateStatus
+ *
+ * @param rhs The PVACertificateStatus to compare with
+ * @return bool True if the OCSPStatus is equal to the PVACertificateStatus, false otherwise
+ */
 bool OCSPStatus::operator==(const PVACertificateStatus &rhs) const { return (CertificateStatus) * this == rhs; }
+
+/**
+ * @brief Compare a PVACertificateStatus with a CertificateStatus
+ *
+ * @param rhs The CertificateStatus to compare with
+ * @return bool True if the PVACertificateStatus is equal to the CertificateStatus, false otherwise
+ */
 bool PVACertificateStatus::operator==(const CertificateStatus &rhs) const {
     return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
            this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
 }
-PVACertificateStatus::PVACertificateStatus(const UnCertifiedCertificateStatus &uncertified_certificate_status) {
-    status = uncertified_certificate_status.status;
-}
 
+/**
+ * @brief Compare an OCSPStatus with a PVACertificateStatus
+ *
+ * @param lhs The OCSPStatus to compare with
+ * @param rhs The PVACertificateStatus to compare with
+ * @return bool True if the OCSPStatus is equal to the PVACertificateStatus, false otherwise
+ */
 bool operator==(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs == lhs; };
+
+/**
+ * @brief Compare an OCSPStatus with a PVACertificateStatus
+ *
+ * @param lhs The OCSPStatus to compare with
+ * @param rhs The PVACertificateStatus to compare with
+ * @return bool True if the OCSPStatus is not equal to the PVACertificateStatus, false otherwise
+ */ 
 bool operator!=(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs != lhs; };
+
+/**
+ * @brief Compare a CertificateStatus with a PVACertificateStatus
+ *
+ * @param lhs The CertificateStatus to compare with
+ * @param rhs The PVACertificateStatus to compare with
+ * @return bool True if the CertificateStatus is equal to the PVACertificateStatus, false otherwise
+ */
 bool operator==(certstatus_t &lhs, PVACertificateStatus &rhs) { return rhs == lhs; };
+
+/**
+ * @brief Compare a CertificateStatus with a PVACertificateStatus
+ *
+ * @param lhs The CertificateStatus to compare with
+ * @param rhs The PVACertificateStatus to compare with
+ * @return bool True if the CertificateStatus is not equal to the PVACertificateStatus, false otherwise
+ */
 bool operator!=(certstatus_t &lhs, PVACertificateStatus &rhs) { return rhs != lhs; };
 
+/**
+ * @brief Compare an OCSPStatus with a CertificateStatus
+ *
+ * @param lhs The OCSPStatus to compare with
+ * @param rhs The CertificateStatus to compare with
+ * @return bool True if the OCSPStatus is equal to the CertificateStatus, false otherwise
+ */
 bool operator==(ocspcertstatus_t &lhs, OCSPStatus &rhs) { return rhs == lhs; };
+
+/**
+ * @brief Compare an OCSPStatus with a CertificateStatus
+ *
+ * @param lhs The OCSPStatus to compare with
+ * @param rhs The CertificateStatus to compare with
+ * @return bool True if the OCSPStatus is not equal to the CertificateStatus, false otherwise
+ */
 bool operator!=(ocspcertstatus_t &lhs, OCSPStatus &rhs) { return rhs != lhs; };
+
+/**
+ * @brief Compare a CertificateStatus with an OCSPStatus
+ *
+ * @param lhs The CertificateStatus to compare with
+ * @param rhs The OCSPStatus to compare with
+ * @return bool True if the CertificateStatus is equal to the OCSPStatus, false otherwise
+ */
 bool operator==(certstatus_t &lhs, OCSPStatus &rhs) { return rhs == lhs; };
+
+/**
+ * @brief Compare a CertificateStatus with an OCSPStatus
+ *
+ * @param lhs The CertificateStatus to compare with
+ * @param rhs The OCSPStatus to compare with
+ * @return bool True if the CertificateStatus is not equal to the OCSPStatus, false otherwise
+ */
 bool operator!=(certstatus_t &lhs, OCSPStatus &rhs) { return rhs != lhs; };
 
 }  // namespace certs

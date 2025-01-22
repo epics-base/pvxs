@@ -457,6 +457,9 @@ Server::Pvt::Pvt(Server &svr, const Config& conf, CustomServerCallback custom_ce
       effective(conf),
       beaconMsg(128),
       acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow - 2),
+#ifdef PVXS_ENABLE_OPENSSL
+      tls_context(nullptr),
+#endif
       beaconSender4(AF_INET, SOCK_DGRAM, 0),
       beaconSender6(AF_INET6, SOCK_DGRAM, 0),
       beaconTimer(__FILE__, __LINE__, event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this)),
@@ -465,7 +468,6 @@ Server::Pvt::Pvt(Server &svr, const Config& conf, CustomServerCallback custom_ce
       state(Stopped)
 #ifdef PVXS_ENABLE_OPENSSL
       ,
-      tls_context(nullptr),
       custom_server_callback(custom_cert_event_callback),
       custom_server_callback_timer(__FILE__, __LINE__, event_new(acceptor_loop.base, -1, EV_TIMEOUT, doCustomServerCallback, this))
 #endif

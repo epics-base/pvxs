@@ -11,6 +11,10 @@
 #include <pvxs/log.h>
 #include "conn.h"
 
+#ifdef PVXS_ENABLE_OPENSSL
+#include "openssl.h"
+#endif
+
 DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 
@@ -26,10 +30,17 @@ namespace impl {
 static
 constexpr size_t tcp_readahead_mult = 2u;
 
+#ifdef PVXS_ENABLE_OPENSSL
+ConnBase::ConnBase(bool isClient, bool isTLS, bool sendBE, evbufferevent&& bev, const SockAddr& peerAddr)
+#else
 ConnBase::ConnBase(bool isClient, bool sendBE, evbufferevent&& bev, const SockAddr& peerAddr)
+#endif
     :peerAddr(peerAddr)
     ,peerName(peerAddr.tostring())
-    ,isClient(isClient)
+#ifdef PVXS_ENABLE_OPENSSL
+    ,isTLS(isTLS)
+#endif
+    ,isClient(isTLS)
     ,sendBE(sendBE)
     ,peerBE(true) // arbitrary choice, default should be overwritten before use
     ,expectSeg(false)
@@ -122,25 +133,57 @@ void ConnBase::handle_DESTROY_REQUEST() {};
 
 void ConnBase::handle_MESSAGE() {};
 
+#ifndef PVXS_ENABLE_OPENSSL
 void ConnBase::bevEvent(short events)
+#else
+void ConnBase::bevEvent(short events, std::function<void(bool)> fn)
+#endif
 {
-    if(events&(BEV_EVENT_EOF|BEV_EVENT_ERROR|BEV_EVENT_TIMEOUT)) {
-        if(events&BEV_EVENT_ERROR) {
+
+    if (bev && isTLS) {
+        if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
+            while (auto err = bufferevent_get_openssl_error(bev.get())) {
+                auto error_reason = ERR_reason_error_string(err);
+                if (error_reason) log_err_printf(connio, "%s: TLS Error (0x%lx) %s\n", peerLabel(), err, error_reason);
+            }
+        }
+
+#ifndef PVXS_ENABLE_OPENSSL
+        // If this is a connect then subscribe to peer status is required
+        if (events & BEV_EVENT_CONNECTED) {
+            auto ctx = bufferevent_openssl_get_ssl(bev.get());
+            assert(ctx);
+            try {
+                if (!ossl::SSLContext::subscribeToPeerCertStatus(ctx, fn)) {
+                    log_warn_printf(connio, "unable to subscribe to %s %s certificate status\n", peerLabel(), peerName.c_str());
+                }
+            } catch (certs::CertStatusNoExtensionException &e) {
+                log_debug_printf(connio, "status monitoring not required for %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
+            } catch (std::exception &e) {
+                log_debug_printf(connio, "unexpected error subscribing to %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
+            }
+        }
+#endif
+    }
+
+    // If any socket warnings / errors then log and disconnect
+    if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT)) {
+        if (events & BEV_EVENT_ERROR) {
             int err = EVUTIL_SOCKET_ERROR();
             const char *msg = evutil_socket_error_to_string(err);
             log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
         }
-        if(events&BEV_EVENT_EOF) {
+        if (events & BEV_EVENT_EOF) {
             log_debug_printf(connio, "connection to %s %s closed by peer\n", peerLabel(), peerName.c_str());
         }
-        if(events&BEV_EVENT_TIMEOUT) {
+        if (events & BEV_EVENT_TIMEOUT) {
             log_warn_printf(connio, "connection to %s %s timeout\n", peerLabel(), peerName.c_str());
         }
         state = Disconnected;
         bev.reset();
     }
 
-    if(!bev)
+    if (!bev)
         cleanup();
 }
 
@@ -155,13 +198,14 @@ void ConnBase::bevRead()
         auto ret = evbuffer_copyout(rx, header, sizeof(header));
         assert(ret==sizeof(header)); // previously verified
 
-        if(header[0]!=0xca || header[1]==0
-                || (isClient ^ !!(header[2]&pva_flags::Server))) {
+/*
+        if(header[0]!=0xca || header[1]==0 || (isClient ^ !!(header[2]&pva_flags::Server))) {
             log_hex_printf(connio, Level::Err, header, sizeof(header),
                            "%s %s Protocol decode fault.  Force disconnect.\n", peerLabel(), peerName.c_str());
             bev.reset();
             break;
         }
+*/
         log_hex_printf(connio, Level::Debug, header, sizeof(header),
                        "%s %s Receive header\n", peerLabel(), peerName.c_str());
 

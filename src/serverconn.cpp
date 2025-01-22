@@ -61,11 +61,13 @@ DEFINE_LOGGER(stapling, "pvxs.stapling");
 DEFINE_LOGGER(remote, "pvxs.remote.log");
 
 ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen)
-    :ConnBase(false, iface->server->effective.sendBE(),
-              evbufferevent(__FILE__, __LINE__,
-                bufferevent_socket_new(iface->server->acceptor_loop.base, sock, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS)
-              ),
-              SockAddr(peer))
+  : ConnBase(false,
+#ifdef PVXS_ENABLE_OPENSSL
+           iface->isTLS,
+#endif
+           iface->server->effective.sendBE(),
+            evbufferevent(__FILE__, __LINE__, bufferevent_socket_new(iface->server->acceptor_loop.base, sock, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS)),
+            SockAddr(peer))
     ,iface(iface)
     ,tcp_tx_limit(evsocket::get_buffer_size(sock, true) * tcp_tx_limit_mult)
 {
@@ -208,6 +210,13 @@ void ServerConn::handle_ECHO()
     statTx += 8u + len;
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
+ossl::CertStatusExData *ServerConn::getCertStatusExData() {
+    return iface->server->tls_context->getCertStatusExData();
+}
+#endif
+
+
 static
 void auth_complete(ServerConn *self, const Status& sts)
 {
@@ -263,15 +272,7 @@ void ServerConn::handle_CONNECTION_VALIDATION()
             else if (iface->isTLS && selected == "x509" && bev) {
                 auto ctx = bufferevent_openssl_get_ssl(bev.get());
                 assert(ctx);
-                auto server = iface->server;
-                if (ossl::SSLContext::getPeerCredentials(*C, ctx) ) {
-                    ossl::SSLContext::subscribeToPeerCertStatus(ctx, [=](bool enable) {
-                        if (enable)
-                            server->acceptor_loop.dispatch([this, server]() mutable { server->enableTlsForPeerConnection(this); });
-                        else
-                            server->acceptor_loop.dispatch([this, server]() mutable { server->removePeerTlsConnections(this); });
-                    });
-                }
+                ossl::SSLContext::getPeerCredentials(*C, ctx);
             }
 #endif
             if(C->method.empty()) {
@@ -432,16 +433,17 @@ void ServerConn::cleanup()
     }
 }
 
-void ServerConn::bevEvent(short events)
-{
+void ServerConn::bevEvent(short events) {
 #ifdef PVXS_ENABLE_OPENSSL
-    if((events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) && iface->isTLS && bev) {
-        while(auto err = bufferevent_get_openssl_error(bev.get())) {
-            log_err_printf(connio, "Server: TLS Error (0x%lx) %s\n", err, ERR_reason_error_string(err));
-        }
-    }
-#endif
+    ConnBase::bevEvent(events, [=](bool enable) {
+        if (enable)
+            iface->server->acceptor_loop.dispatch([this]() mutable { iface->server->enableTlsForPeerConnection(this); });
+        else
+            iface->server->acceptor_loop.dispatch([this]() mutable { iface->server->removePeerTlsConnections(this); });
+    });
+#else
     ConnBase::bevEvent(events);
+#endif
 }
 
 void ServerConn::bevRead()
