@@ -40,7 +40,7 @@ ConnBase::ConnBase(bool isClient, bool sendBE, evbufferevent&& bev, const SockAd
 #ifdef PVXS_ENABLE_OPENSSL
     ,isTLS(isTLS)
 #endif
-    ,isClient(isTLS)
+    ,isClient(isClient)
     ,sendBE(sendBE)
     ,peerBE(true) // arbitrary choice, default should be overwritten before use
     ,expectSeg(false)
@@ -198,14 +198,12 @@ void ConnBase::bevRead()
         auto ret = evbuffer_copyout(rx, header, sizeof(header));
         assert(ret==sizeof(header)); // previously verified
 
-/*
         if(header[0]!=0xca || header[1]==0 || (isClient ^ !!(header[2]&pva_flags::Server))) {
             log_hex_printf(connio, Level::Err, header, sizeof(header),
                            "%s %s Protocol decode fault.  Force disconnect.\n", peerLabel(), peerName.c_str());
             bev.reset();
             break;
         }
-*/
         log_hex_printf(connio, Level::Debug, header, sizeof(header),
                        "%s %s Receive header\n", peerLabel(), peerName.c_str());
 

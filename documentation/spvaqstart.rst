@@ -28,7 +28,7 @@ If you're going to test this in a VM
         export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
         export PROJECT_HOME=~/src
         EOF
-
+        source ~/.bashrc
 
         # Make three other shells (in different terminals) for running PVACMS, a server, and a client
         docker exec -it ubuntu_pvxs /bin/bash
@@ -48,6 +48,8 @@ Build & Deploy
         export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
 
         # Make working directory for building project files
+        export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+        export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
         export PROJECT_HOME=~/src
         mkdir -p ${PROJECT_HOME}
 
