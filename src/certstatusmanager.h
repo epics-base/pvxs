@@ -88,17 +88,44 @@ class CertStatusManager {
     ~CertStatusManager() = default;
 
     /**
-     * @brief To parse OCSP responses
+     * Parse OCSP responses from the provided ocsp_bytes response
+     * and return the parsed out status of the certificate which is the subject of the ocsp byte array.
      *
-     * Parsing OCSP responses is carried out by providing the OCSP response buffer.
-     * This function will verify the response comes from a trusted source,
-     * is well formed, and then will return the `ParsedOCSPStatus` it indicates.
+     * First Verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well formed.
      *
-     * @param ocsp_bytes the ocsp response
-     * @param trusted_store_ptr the trusted store that we'll use to verify the OCSP response
-     * @return the Parsed OCSP response status
+     * Then parse it and read out the status and the status times
+     *
+     * @param ocsp_bytes The input byte array containing the OCSP responses data.
+     * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
      */
     static ParsedOCSPStatus parse(shared_array<const uint8_t> ocsp_bytes, X509_STORE *trusted_store_ptr);
+
+    /**
+     * Parse OCSP responses from the provided ocsp_bytes response
+     * and return the parsed out status of the certificate which is the subject of the ocsp byte array.
+     *
+     * First Verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well formed.
+     *
+     * Then parse it and read out the status and the status times
+     *
+     * @param ocsp_bytes The input byte buffer pointer containing the OCSP responses data.
+     * @ocsp_bytes_len the length of the byte buffer
+     * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
+     */
+    static ParsedOCSPStatus parse(const uint8_t* ocsp_bytes, size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr);
+
+    /**
+     * Parse OCSP responses from the provided OCSP response object
+     * and return the parsed out status of the certificate which is the subject of the OCSP response.
+     *
+     * First verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well formed.
+     *
+     * Then parse it and read out the status and the status times
+     *
+     * @param ocsp_response An OCSP response object.
+     * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
+     */
+    static ParsedOCSPStatus parse(ossl_ptr<OCSP_RESPONSE> &ocsp_response, X509_STORE *trusted_store_ptr);
 
     /**
      * @brief Get the status PV from a Cert.
@@ -167,7 +194,7 @@ class CertStatusManager {
     static X509_EXTENSION *getExtension(const X509 *certificate);
 
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t> &ocsp_bytes);
-
+    static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const uint8_t* ocsp_bytes, const size_t ocsp_bytes_len);
     static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic_response, X509_STORE *trusted_store_ptr);
 };
 

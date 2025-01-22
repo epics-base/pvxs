@@ -493,6 +493,7 @@ struct StatusDate {
  * to store the serial number, the OCSP status, the status date, the status
  * valid-until date, and the revocation date.
  */
+struct CertificateStatus;
 struct ParsedOCSPStatus {
     // serial number of the certificate
     const uint64_t serial;
@@ -521,6 +522,8 @@ struct ParsedOCSPStatus {
           status_date(status_date),
           status_valid_until_date(status_valid_until_date),
           revocation_date(revocation_date) {}
+
+    CertificateStatus status();
 };
 
 // Forward declarations of the certificate status structures
@@ -551,6 +554,13 @@ struct OCSPStatus {
 
     // Constructor from a PKCS#7 OCSP response that must be signed by the given trusted store.
     explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param, X509_STORE *trusted_store_ptr) : ocsp_bytes(ocsp_bytes_param) {
+        if (!trusted_store_ptr) {
+            throw std::invalid_argument("Trusted store pointer is null");
+        }
+        init(trusted_store_ptr);
+    }
+
+    explicit OCSPStatus(const uint8_t * ocsp_bytes_ptr, size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr) : ocsp_bytes(ocsp_bytes_ptr, ocsp_bytes_len) {
         if (!trusted_store_ptr) {
             throw std::invalid_argument("Trusted store pointer is null");
         }
@@ -824,6 +834,7 @@ struct CertificateStatus {
                this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
     }
 
+    friend ParsedOCSPStatus;
    protected:
     // Protected constructor for derived classes
     CertificateStatus(bool is_certified, PVACertStatus st, OCSPCertStatus ocsp_st, StatusDate st_date, StatusDate valid_until, StatusDate rev_date)

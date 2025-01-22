@@ -117,7 +117,7 @@ bool operator==(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs =
  * @param lhs The OCSPStatus to compare with
  * @param rhs The PVACertificateStatus to compare with
  * @return bool True if the OCSPStatus is not equal to the PVACertificateStatus, false otherwise
- */ 
+ */
 bool operator!=(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs != lhs; };
 
 /**
@@ -174,5 +174,8 @@ bool operator==(certstatus_t &lhs, OCSPStatus &rhs) { return rhs == lhs; };
  */
 bool operator!=(certstatus_t &lhs, OCSPStatus &rhs) { return rhs != lhs; };
 
+CertificateStatus ParsedOCSPStatus::status() {
+    return {true, (PVACertStatus)(ocsp_status == OCSP_CERTSTATUS_GOOD ? VALID : UNKNOWN), ocsp_status, status_date, status_valid_until_date, revocation_date};
+}
 }  // namespace certs
 }  // namespace pvxs

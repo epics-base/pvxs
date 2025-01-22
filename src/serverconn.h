@@ -279,7 +279,7 @@ struct Server::Pvt
 #ifdef PVXS_ENABLE_OPENSSL
     CustomServerCallback custom_server_callback;
     evevent custom_server_callback_timer;
-    void* cached_ocsp_response{nullptr};
+    ossl_ptr<uint8_t> cached_ocsp_response;
     time_t cached_ocsp_status_date;
 #endif
 

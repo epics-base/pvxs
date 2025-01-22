@@ -23,6 +23,12 @@
 #include "udp_collector.h"
 #include "utilpvt.h"
 
+#ifdef PVXS_ENABLE_OPENSSL
+#define PVXS_OCSP_STAPLING_OK 1
+#define PVXS_OCSP_STAPLING_ERR -1
+#define PVXS_OCSP_STAPLING_NAK 0
+#endif
+
 namespace pvxs {
 namespace client {
 

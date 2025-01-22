@@ -574,7 +574,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
 #endif
 }
 
-ContextImpl::~ContextImpl() = default;
+ContextImpl::~ContextImpl() { tcp_loop.sync(); };
 
 void ContextImpl::startNS() {
     if (nameServers.empty())  // vector size const after ctor, contents remain mutable

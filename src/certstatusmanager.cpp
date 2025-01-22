@@ -42,8 +42,23 @@ DEFINE_LOGGER(status, "pvxs.certs.status");
  * @return The OCSP response as a data structure.
  */
 ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<const uint8_t> &ocsp_bytes) {
+    return getOCSPResponse(ocsp_bytes.data(), ocsp_bytes.size());
+}
+
+/**
+ * @brief Retrieves the Online Certificate Status Protocol (OCSP) response from the given byte array.
+ *
+ * The getOCSPResponse function takes a shared_array of uint8_t bytes as input and returns the OCSP response.
+ * The OCSP response is a data structure used to validate the status of an SSL certificate. It contains information
+ * about the certificate, including its validity and revocation status.
+ *
+ * @param ocsp_bytes A pointer to a byte buffer representing the OCSP response.
+ * @param ocsp_bytes_len the length of the buffer
+ * @return The OCSP response as a data structure.
+ */
+ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const uint8_t* ocsp_bytes, const size_t ocsp_bytes_len) {
     // Create a BIO for the OCSP response
-    ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes.data(), static_cast<int>(ocsp_bytes.size())), false);
+    ossl_ptr<BIO> bio(BIO_new_mem_buf(ocsp_bytes, static_cast<int>(ocsp_bytes_len)), false);
     if (!bio) {
         throw OCSPParseException("Failed to create BIO for OCSP response");
     }
@@ -58,8 +73,25 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<co
 }
 
 /**
- * Parse OCSP responses from the provided ocsp_bytes response and store the parsed times in the given vectors
- * and return the statuses of each certificate contained in the ocsp_bytes response.
+ * Parse OCSP responses from the provided ocsp_bytes response
+ * and return the parsed out status of the certificate which is the subject of the ocsp byte array.
+ *
+ * First Verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well formed.
+ *
+ * Then parse it and read out the status and the status times
+ *
+ * @param ocsp_bytes The input byte buffer pointer containing the OCSP responses data.
+ * @ocsp_bytes_len the length of the byte buffer
+ * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
+ */
+PVXS_API ParsedOCSPStatus CertStatusManager::parse(const uint8_t* ocsp_bytes, const size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr) {
+    auto ocsp_response = getOCSPResponse(ocsp_bytes, ocsp_bytes_len);
+    return parse(ocsp_response, trusted_store_ptr);
+}
+
+/**
+ * Parse OCSP responses from the provided ocsp_bytes response
+ * and return the parsed out status of the certificate which is the subject of the ocsp byte array.
  *
  * First Verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well formed.
  *
@@ -70,7 +102,21 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const shared_array<co
  */
 PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> ocsp_bytes, X509_STORE *trusted_store_ptr) {
     auto ocsp_response = getOCSPResponse(ocsp_bytes);
+    return parse(ocsp_response, trusted_store_ptr);
+}
 
+/**
+ * Parse OCSP responses from the provided OCSP response object
+ * and return the parsed out status of the certificate which is the subject of the OCSP response.
+ *
+ * First verify the ocsp response.  Check that it is signed by a trusted issuer and that it is well formed.
+ *
+ * Then parse it and read out the status and the status times
+ *
+ * @param ocsp_response An OCSP response object.
+ * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
+ */
+PVXS_API ParsedOCSPStatus CertStatusManager::parse(ossl_ptr<OCSP_RESPONSE> &ocsp_response, X509_STORE *trusted_store_ptr) {
     // Get the response status
     int response_status = OCSP_response_status(ocsp_response.get());
     if (response_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {

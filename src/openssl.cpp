@@ -18,6 +18,8 @@
 #include <openssl/pkcs12.h>
 
 #include <pvxs/log.h>
+#include <cstring>
+#include <cstdint>
 
 #include "certfilefactory.h"
 #include "certstatus.h"
@@ -453,46 +455,44 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
  *         SSL_TLSEXT_ERR_ALERT_FATAL if the OCSP response was not added - some error occurred adding the OCSP response
  */
 int serverOCSPCallback(SSL *ssl,void *raw) {
+    auto ret_val = SSL_TLSEXT_ERR_OK;
     auto server = static_cast<pvxs::server::Server::Pvt *>(raw);
     log_debug_printf(stapling, "Server OCSP Stapling: %s\n", "serverOCSPCallback");
-/*
-    if (SSL_get_tlsext_status_type(ssl) != -1) {
-        // Should never be triggered.  Because the callback should only be called when the client has requested stapling.
-        log_debug_printf(stapling, "Server OCSP Stapling: %s\n", "not requested");
-        return SSL_TLSEXT_ERR_ALERT_WARNING;
-    }
-*/
 
-    if (!((certs::CertificateStatus)server->tls_context->get_status()).isValid()) {
-        log_warn_printf(stapling, "Server OCSP Stapling: No server status to staple%s\n", "");
-        return SSL_TLSEXT_ERR_NOACK;
-    }
+    if ( auto& tls_context = server->tls_context ) {
+        auto &current_status = tls_context->get_status();
+        if (current_status.isValid()) {
+            auto ocsp_data_ptr = (void *)current_status.ocsp_bytes.data();
+            auto ocsp_data_len = current_status.ocsp_bytes.size();
+            uint8_t *ocsp_data_ptr_copy = nullptr;
 
-    auto& current_status = server->tls_context->get_status();
-    auto ocsp_data_ptr = (void *)current_status.ocsp_bytes.data();
-    auto ocsp_data_len = current_status.ocsp_bytes.size();
+            // Allocate a new one and copy in the response data
+            // TODO Verify that this is really freed up by the framework after it is stapled
+            ocsp_data_ptr_copy = (uint8_t*)OPENSSL_malloc(ocsp_data_len);
+            memcpy(ocsp_data_ptr_copy, ocsp_data_ptr, ocsp_data_len);
 
-    if (!server->cached_ocsp_response || server->cached_ocsp_status_date != current_status.status_date.t) {
-        // if status has changed
-        Guard G(server->tls_context->lock);
-
-        // Free up response
-        if (server->cached_ocsp_response) {
-            OPENSSL_free(server->cached_ocsp_response);
+            if ( ocsp_data_ptr_copy ) {
+                // Staple the data as the OCSP response for the TLS handshake
+                if (SSL_set_tlsext_status_ocsp_resp(ssl, ocsp_data_ptr_copy, ocsp_data_len) != 1) {
+                    log_warn_printf(stapling, "Server OCSP Stapling: %s\n", "unable to staple server status");
+                    ret_val = SSL_TLSEXT_ERR_NOACK;
+                } else {
+                    log_info_printf(stapling, "Server OCSP Stapling: %s\n", "server status stapled");
+                }
+            } else {
+                log_warn_printf(stapling, "Server OCSP Stapling: %s\n", "Unable to allocate memory for OCSP response");
+                ret_val = SSL_TLSEXT_ERR_NOACK;
+            }
+        } else {
+            log_warn_printf(stapling, "Server OCSP Stapling: %s\n", "Server status not valid");
+            ret_val = SSL_TLSEXT_ERR_NOACK;
         }
-        // Allocate a new one and copy in the response data
-        server->cached_ocsp_response = OPENSSL_malloc(ocsp_data_len);
-        memcpy(server->cached_ocsp_response, ocsp_data_ptr, ocsp_data_len);
-        server->cached_ocsp_status_date = current_status.status_date.t;
-
-        // Staple the data as the OCSP response for the TLS handshake
-        if (SSL_set_tlsext_status_ocsp_resp(ssl, server->cached_ocsp_response, ocsp_data_len) != 1) {
-            log_warn_printf(stapling, "Server OCSP Stapling: unable to staple server status%s\n", "");
-            return SSL_TLSEXT_ERR_ALERT_FATAL;
-        } else
-            log_info_printf(stapling, "Server OCSP Stapling: server status stapled%s\n", "");
+    } else {
+        log_warn_printf(stapling, "Server OCSP Stapling: %s\n", "No server status to staple");
+        ret_val = SSL_TLSEXT_ERR_NOACK;
     }
-    return SSL_TLSEXT_ERR_OK;
+
+    return ret_val;
 }
 
 /**
