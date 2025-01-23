@@ -589,7 +589,9 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factor
     std::string from = std::ctime(&certificate_factory.not_before_);
     std::string to = std::ctime(&certificate_factory.not_after_);
 
-    log_info_printf(pvacms, "--------------------------------------%s", "\n");
+    auto cert_id = getCertId(CertStatus::getIssuerId(certificate_factory.issuer_certificate_ptr_), certificate_factory.serial_);
+    log_info_printf(pvacms, "%s *=> %s\n", cert_id.c_str(), CERT_STATE(effective_status));
+    log_debug_printf(pvacms, "--------------------------------------%s", "\n");
     auto cert_description = (SB() << "X.509 "
                                   << (IS_USED_FOR_(certificate_factory.usage_, ssl::kForIntermediateCa)
                                           ? "INTERMEDIATE CA"
@@ -604,17 +606,15 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factor
                                                                       : (IS_USED_FOR_(certificate_factory.usage_, ssl::kForCa) ? "CA" : "STRANGE"))))))
                                   << " certificate")
                                 .str();
-    log_info_printf(pvacms, "%s\n", cert_description.c_str());
-    log_info_printf(
-        pvacms, "%s\n",
-        (SB() << "CERT_ID: " << getCertId(CertStatus::getIssuerId(certificate_factory.issuer_certificate_ptr_), certificate_factory.serial_)).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "NAME: " << certificate_factory.name_).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATION: " << certificate_factory.org_).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "COUNTRY: " << certificate_factory.country_).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "STATUS: " << CERT_STATE(effective_status)).str().c_str());
-    log_info_printf(pvacms, "%s\n", (SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1)).str().c_str());
-    log_info_printf(pvacms, "--------------------------------------%s", "\n");
+    log_debug_printf(pvacms, "%s\n", cert_description.c_str());
+    log_debug_printf(pvacms, "%s\n", (SB() << "NAME: " << certificate_factory.name_).str().c_str());
+    log_debug_printf(pvacms, "%s\n", (SB() << "CERT_ID: " << cert_id).str().c_str());
+    log_debug_printf(pvacms, "%s\n", (SB() << "ORGANIZATION: " << certificate_factory.org_).str().c_str());
+    log_debug_printf(pvacms, "%s\n", (SB() << "ORGANIZATIONAL UNIT: " << certificate_factory.org_unit_).str().c_str());
+    log_debug_printf(pvacms, "%s\n", (SB() << "COUNTRY: " << certificate_factory.country_).str().c_str());
+    log_debug_printf(pvacms, "%s\n", (SB() << "STATUS: " << CERT_STATE(effective_status)).str().c_str());
+    log_debug_printf(pvacms, "%s\n", (SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1)).str().c_str());
+    log_debug_printf(pvacms, "--------------------------------------%s", "\n");
 
     return certificate;
 }
@@ -888,7 +888,7 @@ void onRevoke(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_i
         auto revocation_date = std::time(nullptr);
         auto ocsp_status = cert_status_creator.createPVACertificateStatus(serial, REVOKED, revocation_date, revocation_date);
         postCertificateStatus(status_pv, pv_name, serial, ocsp_status);
-        log_info_printf(pvacms, "Certificate %s:%llu has been REVOKED\n", issuer_id.c_str(), serial);
+        log_info_printf(pvacms, "%s ==> REVOKED\n", getCertId(issuer_id, serial).c_str());
         op->reply();
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error revoking certificate: %s\n", e.what());
@@ -937,13 +937,13 @@ void onApprove(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_
         postCertificateStatus(status_pv, pv_name, serial, cert_status);
         switch (new_state) {
             case VALID:
-                log_info_printf(pvacms, "Certificate %s:%llu has been APPROVED\n", issuer_id.c_str(), serial);
+                log_info_printf(pvacms, "%s ==> APPROVED\n", getCertId(issuer_id, serial).c_str());
                 break;
             case EXPIRED:
-                log_info_printf(pvacms, "Certificate %s:%llu has EXPIRED\n", issuer_id.c_str(), serial);
+                log_info_printf(pvacms, "%s ==> EXPIRED\n", getCertId(issuer_id, serial).c_str());
                 break;
             case PENDING:
-                log_info_printf(pvacms, "Certificate %s:%llu is now PENDING\n", issuer_id.c_str(), serial);
+                log_info_printf(pvacms, "%s ==> PENDING\n", getCertId(issuer_id, serial).c_str());
                 break;
             default:
                 break;
@@ -991,7 +991,7 @@ void onDeny(ConfigCms &config, sql_ptr &ca_db, const std::string &our_issuer_id,
         auto revocation_date = std::time(nullptr);
         auto cert_status = cert_status_creator.createPVACertificateStatus(serial, REVOKED, revocation_date, revocation_date);
         postCertificateStatus(status_pv, pv_name, serial, cert_status);
-        log_info_printf(pvacms, "Certificate %s:%llu request has been DENIED\n", issuer_id.c_str(), serial);
+        log_info_printf(pvacms, "%s ==> REVOKED (Approval Request Denied)\n", getCertId(issuer_id, serial).c_str());
         op->reply();
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error denying certificate request: %s\n", e.what());
@@ -1135,7 +1135,7 @@ void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert) {
     std::istringstream iss(out_string);
     std::string line;
     while (std::getline(iss, line)) {
-        log_info_printf(pvacms, "%s\n", line.c_str());
+        log_debug_printf(pvacms, "%s\n", line.c_str());
     }
 }
 
@@ -1618,7 +1618,7 @@ void postUpdateToNextCertBecomingValid(const CertStatusFactory &cert_status_crea
                 auto status_date = std::time(nullptr);
                 auto cert_status = cert_status_creator.createPVACertificateStatus(serial, VALID, status_date);
                 postCertificateStatus(status_monitor_params.status_pv_, pv_name, serial, cert_status);
-                log_info_printf(pvacmsmonitor, "Certificate %s:%llu has become VALID\n", status_monitor_params.issuer_id_.c_str(), serial);
+                log_info_printf(pvacmsmonitor, "%s ==> VALID\n", getCertId(status_monitor_params.issuer_id_, serial).c_str());
             } catch (const std::runtime_error &e) {
                 log_err_printf(pvacmsmonitor, "PVACMS Certificate Monitor Error: %s\n", e.what());
             }
@@ -1660,7 +1660,7 @@ void postUpdateToNextCertToExpire(const CertStatusFactory &cert_status_creator, 
                 auto status_date = std::time(nullptr);
                 auto cert_status = cert_status_creator.createPVACertificateStatus(serial, EXPIRED, status_date);
                 postCertificateStatus(status_monitor_params.status_pv_, pv_name, serial, cert_status);
-                log_info_printf(pvacmsmonitor, "Certificate %s:%llu has EXPIRED\n", status_monitor_params.issuer_id_.c_str(), serial);
+                log_info_printf(pvacmsmonitor, "%s ==> EXPIRED\n", getCertId(status_monitor_params.issuer_id_, serial).c_str());
             } catch (const std::runtime_error &e) {
                 log_err_printf(pvacmsmonitor, "PVACMS Certificate Monitor Error: %s\n", e.what());
             }
@@ -1708,7 +1708,7 @@ void postUpdatesToExpiredStatuses(const CertStatusFactory &cert_status_creator, 
                 auto cert_status = cert_status_creator.createPVACertificateStatus(serial, (certstatus_t)status, status_date);
                 postCertificateStatus(status_monitor_params.status_pv_, pv_name, serial, cert_status);
                 status_monitor_params.setValidity(serial, cert_status.status_valid_until_date.t);
-                log_info_printf(pvacmsmonitor, "Certificate %s:%llu status validity updated\n", status_monitor_params.issuer_id_.c_str(), serial);
+                log_debug_printf(pvacmsmonitor, "%s ==> \u21BA \n", getCertId(status_monitor_params.issuer_id_, serial).c_str());
             } catch (const std::runtime_error &e) {
                 log_err_printf(pvacmsmonitor, "PVACMS Certificate Monitor Error: %s\n", e.what());
             }
