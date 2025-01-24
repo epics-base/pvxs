@@ -15,12 +15,76 @@ In this section you'll find quick starts for :ref:`spva_qs_build_and_deploy`,
 If you're going to test this in a VM
 ------------------------------------
 
+1. For Ubuntu
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
     .. code-block:: sh
 
-        # Create docker container and open a bash shell into it
-        # Do the building and approving from this shell
         docker run -it --name ubuntu_pvxs ubuntu:latest /bin/bash
 
+
+2. For RHEL
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        docker run -it --name rhel_pvxs registry.access.redhat.com/ubi8/ubi:latest /bin/bash
+
+
+3. For CentOS
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        docker run -it --name centos_pvxs centos:latest /bin/bash
+
+
+4. For Rocky Linux
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        docker run -it --name rocky_pvxs rockylinux:latest /bin/bash
+
+
+5. For Rocky Linux
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        docker run -it --name rocky_pvxs rockylinux:latest /bin/bash
+
+
+6. For AlmaLinux
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        docker run -it --name alma_pvxs almalinux:latest /bin/bash
+
+
+7. For Fedora
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        docker run -it --name fedora_pvxs fedora:latest /bin/bash
+
+
+7. For Alpine Linux
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        docker run -it --name alpine_pvxs alpine:latest /bin/sh
+
+
+8. In shell set up environment and startup script
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        # Do the building and approving from this shell
         # In this shell modify the shell startup script so that it will set the appropriate variables
         cat >> ~/.bashrc <<EOF
 
@@ -30,8 +94,13 @@ If you're going to test this in a VM
         EOF
         source ~/.bashrc
 
-        # Make three other shells (in different terminals) for running PVACMS, a server, and a client
-        docker exec -it ubuntu_pvxs /bin/bash
+9. Start three other shells for PVACMS, a sample server and a client
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. code-block:: sh
+
+        # In the three other shells (in different terminals) for running PVACMS, a server, and a client
+        docker exec -it <distro> /bin/bash
 
 
 Build & Deploy
@@ -374,7 +443,7 @@ SPVA Server
 
         ...
 
-Note the certificate ID ``6caf749c:853259638908858244``.
+Note the certificate ID ``6caf749c:853259638908858244`` (<issuer_id>:<serial_number>).
 You will need ID to carry out operations on this certificate including APPROVING it.
 
 3. Verify that certificate is created pending approval
@@ -384,7 +453,7 @@ You will need ID to carry out operations on this certificate including APPROVING
 
         #### 1. Get the current status of a certificate
 
-        ${PROJECT_HOME}/pvxs/bin/*/pvxcert 6caf749c:853259638908858244
+        ${PROJECT_HOME}/pvxs/bin/*/pvxcert <issuer_id>:<serial_number>
 
 
 4. Approve certificate
@@ -398,7 +467,7 @@ You will need ID to carry out operations on this certificate including APPROVING
         export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
 
         #### 2. Approve the certificate
-        ${PROJECT_HOME}/pvxs/bin/*/pvxcert --approve 6caf749c:853259638908858244
+        ${PROJECT_HOME}/pvxs/bin/*/pvxcert --approve <issuer_id>:<serial_number>
 
 
 5. Check the certificate status has changed
@@ -408,7 +477,7 @@ You will need ID to carry out operations on this certificate including APPROVING
 
         #### 1. Get the current status of a certificate
 
-        ${PROJECT_HOME}/pvxs/bin/*/pvxcert 6caf749c:853259638908858244
+        ${PROJECT_HOME}/pvxs/bin/*/pvxcert <issuer_id>:<serial_number>
 
 
 6. Run an SPVA Service
@@ -465,7 +534,7 @@ SPVA Client
         export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
 
         #### 2. Approve the certificate
-        ${PROJECT_HOME}/pvxs/bin/*/pvxcert --approve 6caf749c:389088582448532596
+        ${PROJECT_HOME}/pvxs/bin/*/pvxcert --approve <issuer_id>:<serial_number>
 
 
 4. Run an SPVA Client

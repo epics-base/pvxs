@@ -183,7 +183,6 @@ ossl_ptr<PKCS12> P12FileFactory::toP12(const std::string &password, EVP_PKEY *ke
             // Use null cert and construct chain from cert
             chainFromRootCertPtr(cert_chain_ptr, cert_ptr);
             ERR_clear_error();
-            // TODO find a way to write cert-only p12 files
             p12.reset(PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, nullptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr,
                                         nullptr, &jdkTrust, nullptr));
         } else {

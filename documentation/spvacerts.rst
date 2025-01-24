@@ -8,8 +8,8 @@ Certificate States
 
 .. figure:: certificate_states.png
     :alt: Certificate States
-    :width: 800px
-    :align: center
+    :width: 75%
+    :align: left
     :name: certificate-states
 
 - ``PENDING_APPROVAL``: Certificate awaiting administrative approval
