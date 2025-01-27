@@ -295,7 +295,7 @@ Add Quick Start Users
         # export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
 
         # set path
-        export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+        export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
 
         cd ~
         EOF
@@ -332,7 +332,7 @@ Add Quick Start Users
         # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
         # set path
-        export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+        export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
 
         cd ~
         EOF
@@ -368,7 +368,7 @@ Add Quick Start Users
         export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/server.p12
 
         # set path
-        export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+        export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
 
         cd ~
         EOF
@@ -403,7 +403,7 @@ Add Quick Start Users
         export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
         # set path
-        export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+        export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
 
         cd ~
         EOF
