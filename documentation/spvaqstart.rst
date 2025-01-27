@@ -255,21 +255,21 @@ Add Quick Start Users
 
         cat >> ~/.bashrc <<EOF
 
-        export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
-        export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+        export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}
+        export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}
         export PROJECT_HOME=/opt/epics
 
         #### [optional] Set path and name of the CA database file (default: ./certs.db)
         # Environment: EPICS_PVACMS_DB
-        # Default    : ${XDG_DATA_HOME}/pva/1.3/certs.db
-        # export EPICS_PVACMS_DB=${XDG_DATA_HOME}/pva/1.3/certs.db
+        # Default    : \${XDG_DATA_HOME}/pva/1.3/certs.db
+        # export EPICS_PVACMS_DB=\${XDG_DATA_HOME}/pva/1.3/certs.db
 
         #### SETUP CA KEYCHAIN FILE
         # Place your CA's certificate and key in this file if you have one
         # otherwise the CA certificate will be created by PVACMS
         # Environment: EPICS_CA_TLS_KEYCHAIN
-        # Default    : ${XDG_CONFIG_HOME}/pva/1.3/ca.p12
-        # export EPICS_CA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/ca.p12
+        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/ca.p12
+        # export EPICS_CA_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/ca.p12
 
         # Specify the name of your CA
         # Environment: EPICS_CA_NAME, EPICS_CA_ORGANIZATION, EPICS_CA_ORGANIZATIONAL_UNIT
@@ -280,19 +280,19 @@ Add Quick Start Users
 
         #### SETUP PVACMS KEYCHAIN FILE
         # Environment: EPICS_PVACMS_TLS_KEYCHAIN
-        # Default    : ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
-        # export EPICS_PVACMS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
+        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
+        # export EPICS_PVACMS_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
 
         # Configure ADMIN user client certificate (will be created for you)
         # This file will be copied to the admin user
         # Environment: EPICS_ADMIN_TLS_KEYCHAIN
-        # Default    : ${XDG_CONFIG_HOME}/pva/1.3/admin.p12
-        # export EPICS_ADMIN_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
+        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/admin.p12
+        # export EPICS_ADMIN_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/admin.p12
 
         # Configure PVACMS ADMIN user access control file
         # Environment: EPICS_PVACMS_ACF
-        # Default    : ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
-        # export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
+        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
+        # export EPICS_PVACMS_ACF=\${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
 
         # set path
         export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
@@ -322,14 +322,14 @@ Add Quick Start Users
 
         cat >> ~/.bashrc <<EOF
 
-        export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
-        export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+        export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}
+        export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}
         export PROJECT_HOME=/opt/epics
 
         #### SETUP ADMIN KEYCHAIN FILE (will be copied from PVACMS)
         # Environment: EPICS_PVA_TLS_KEYCHAIN
-        # Default    : ${XDG_CONFIG_HOME}/pva/1.3/client.p12
-        # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
+        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/client.p12
+        # export EPICS_PVA_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
         # set path
         export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
@@ -358,14 +358,14 @@ Add Quick Start Users
 
         cat >> ~/.bashrc <<EOF
 
-        export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
-        export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+        export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}
+        export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}
         export PROJECT_HOME=/opt/epics
 
         #### SETUP SOFTIOC KEYCHAIN FILE
         # Environment: EPICS_PVAS_TLS_KEYCHAIN
-        # Default    : ${XDG_CONFIG_HOME}/pva/1.3/server.p12
-        export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/server.p12
+        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/server.p12
+        export EPICS_PVAS_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/server.p12
 
         # set path
         export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
@@ -393,14 +393,14 @@ Add Quick Start Users
 
         cat >> ~/.bashrc <<EOF
 
-        export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
-        export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+        export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}
+        export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}
         export PROJECT_HOME=/opt/epics
 
         #### SETUP SPVA Client KEYCHAIN FILE
         # Environment: EPICS_PVA_TLS_KEYCHAIN
-        # Default    : ${XDG_CONFIG_HOME}/pva/1.3/client.p12
-        export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
+        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/client.p12
+        export EPICS_PVA_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
         # set path
         export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
