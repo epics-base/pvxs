@@ -622,4 +622,4 @@ SPVA Client
         pvxinfo -v test:enumExample
 
         #### 3. Show a connection without TLS
-        env -u EPICS_PVA_TLS_KEYCHAIN pvxinfo -v test:enumExample
+        env EPICS_PVA_TLS_KEYCHAIN= pvxinfo -v test:enumExample
