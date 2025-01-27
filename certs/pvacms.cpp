@@ -224,7 +224,7 @@ void initCertsDatabase(sql_ptr &ca_db, std::string &db_file) {
             if (sql_status != SQLITE_OK && sql_status != SQLITE_DONE) {
                 throw std::runtime_error(SB() << "Can't initialize certs db file: " << sqlite3_errmsg(ca_db.get()));
             }
-            std::cout << "Certificate DB created : " << db_file << std::endl;
+            std::cout << "Certificate DB created  : " << db_file << std::endl;
         }
     }
 }

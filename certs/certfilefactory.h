@@ -98,7 +98,7 @@ class IdFileFactory {
           certs_ptr_(certs_ptr),
           pem_string_(pem_string) {}
 
-    const std::string filename_{};
+    std::string filename_{};
     std::string password_{};
     const std::shared_ptr<KeyPair> key_pair_;
     X509* cert_ptr_{nullptr};
