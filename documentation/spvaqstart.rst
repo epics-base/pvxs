@@ -545,3 +545,9 @@ SPVA Client
         export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
         ${PROJECT_HOME}/pvxs/bin/*/pvxget -F tree test:structExample
+
+        # This example will show that the configuration is using TLS
+        ${PROJECT_HOME}/pvxs/bin/*/pvxinfo -v test:enumExample
+
+        # And here a connection without TLS
+        env -u EPICS_PVA_TLS_KEYCHAIN ${PROJECT_HOME}/pvxs/bin/*/pvxinfo -v test:enumExample
