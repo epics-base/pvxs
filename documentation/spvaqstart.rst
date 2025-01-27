@@ -294,6 +294,9 @@ Add Quick Start Users
         # Default    : ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
         # export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
 
+        # set path
+        export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+
         cd ~
         EOF
 
@@ -328,6 +331,9 @@ Add Quick Start Users
         # Default    : ${XDG_CONFIG_HOME}/pva/1.3/client.p12
         # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
+        # set path
+        export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+
         cd ~
         EOF
 
@@ -361,6 +367,9 @@ Add Quick Start Users
         # Default    : ${XDG_CONFIG_HOME}/pva/1.3/server.p12
         export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/server.p12
 
+        # set path
+        export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+
         cd ~
         EOF
 
@@ -393,6 +402,9 @@ Add Quick Start Users
         # Default    : ${XDG_CONFIG_HOME}/pva/1.3/client.p12
         export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
+        # set path
+        export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+
         cd ~
         EOF
 
@@ -404,7 +416,7 @@ Add Quick Start Users
 PVACMS
 ---------------
 
-1. Login as PVACMS in a new shell
+1. Login as pvacms in a new shell
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -445,7 +457,7 @@ PVACMS
         #
         # 6. Start PVACMS service with verbose logging
 
-        ${PROJECT_HOME}/pvxs/bin/*/pvacms
+        pvacms
 
         ...
 
@@ -483,6 +495,7 @@ Secure PV Access SoftIOC Server
 ^^^^^^^^^^^^^^^
 
     .. code-block:: sh
+
         # If you're using docker
         docker exec -it --user softioc ubuntu_pvxs /bin/bash
 
@@ -494,7 +507,7 @@ Secure PV Access SoftIOC Server
 
         #### 1. Create a new server private key and certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
 
-        ${PROJECT_HOME}/pvxs/bin/*/authnstd -u server \
+        authnstd -u server \
           -N "IOC1" \
           -O "KLI:LI01:10" \
           -o "FACET"
@@ -507,7 +520,7 @@ Secure PV Access SoftIOC Server
         ...
 
 Note the certificate ID ``6caf749c:853259638908858244`` (<issuer_id>:<serial_number>).
-You will need ID to carry out operations on this certificate including APPROVING it.
+You will need this ID to carry out operations on this certificate including APPROVING it.
 
 3. Verify that certificate is created pending approval
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -516,7 +529,7 @@ You will need ID to carry out operations on this certificate including APPROVING
 
         #### 1. Get the current status of a certificate
 
-        ${PROJECT_HOME}/pvxs/bin/*/pvxcert <issuer_id>:<serial_number>
+        pvxcert <issuer_id>:<serial_number>
 
 
 4. Approve certificate
@@ -524,11 +537,12 @@ You will need ID to carry out operations on this certificate including APPROVING
 
 
     .. code-block:: sh
+
         #### 1. Login as admin in a new shell
         docker exec -it --user admin ubuntu_pvxs /bin/bash
 
         #### 2. Approve the certificate
-        ${PROJECT_HOME}/pvxs/bin/*/pvxcert --approve <issuer_id>:<serial_number>
+        pvxcert --approve <issuer_id>:<serial_number>
 
 
 5. Check the certificate status has changed
@@ -538,7 +552,7 @@ You will need ID to carry out operations on this certificate including APPROVING
 
         #### 1. Back in softIOC shell, get the current status of a certificate
 
-        ${PROJECT_HOME}/pvxs/bin/*/pvxcert <issuer_id>:<serial_number>
+        pvxcert <issuer_id>:<serial_number>
 
 
 6. Run an SPVA Service
@@ -546,7 +560,7 @@ You will need ID to carry out operations on this certificate including APPROVING
 
     .. code-block:: sh
 
-        ${PROJECT_HOME}/pvxs/bin/*/softIocPVX \
+        softIocPVX \
             -m user=test,N=tst,P=tst \
             -d ${PROJECT_HOME}/pvxs/test/testioc.db \
             -d ${PROJECT_HOME}/pvxs/test/testiocg.db \
@@ -564,6 +578,7 @@ SPVA Client
 ^^^^^^^^^^^^^^^
 
     .. code-block:: sh
+
         # If you're using docker
         docker exec -it --user client ubuntu_pvxs /bin/bash
 
@@ -576,7 +591,7 @@ SPVA Client
 
         #### 1. Create client key and certificate at location specified by EPICS_PVA_TLS_KEYCHAIN
 
-        ${PROJECT_HOME}/pvxs/bin/*/authnstd -u client \
+        authnstd -u client \
           -N "greg" \
           -O "SLAC.STANFORD.EDU" \
           -o "Controls"
@@ -587,10 +602,11 @@ SPVA Client
 
 
     .. code-block:: sh
+
         #### 1. Switch back to admin shell
 
         #### 2. Approve the certificate
-        ${PROJECT_HOME}/pvxs/bin/*/pvxcert --approve <issuer_id>:<serial_number>
+        pvxcert --approve <issuer_id>:<serial_number>
 
 
 4. Run an SPVA Client
@@ -600,10 +616,10 @@ SPVA Client
 
         #### 1. Back in client shell, get a value from the SoftIOC
 
-        ${PROJECT_HOME}/pvxs/bin/*/pvxget -F tree test:structExample
+        pvxget -F tree test:structExample
 
         #### 2. Show that the configuration is using TLS
-        ${PROJECT_HOME}/pvxs/bin/*/pvxinfo -v test:enumExample
+        pvxinfo -v test:enumExample
 
         #### 3. Show a connection without TLS
-        env -u EPICS_PVA_TLS_KEYCHAIN ${PROJECT_HOME}/pvxs/bin/*/pvxinfo -v test:enumExample
+        env -u EPICS_PVA_TLS_KEYCHAIN pvxinfo -v test:enumExample
