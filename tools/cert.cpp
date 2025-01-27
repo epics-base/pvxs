@@ -120,7 +120,7 @@ int readParameters(int argc, char* argv[], const char *program_name, client::Con
                   <<  "  " << program_name << " [options] (-R | --revoke) <cert_id>\n"
                   <<  "                                             REVOKE certificate (ADMIN ONLY)\n"
                   <<  "  " << program_name << " (-h | --help)                      Show this help message and exit\n"
-                  <<  "  " << program_name << " (-V | --verbose)                   Print version and exit\n"
+                  <<  "  " << program_name << " (-V | --version)                   Print version and exit\n"
                   << std::endl
                   <<  "display_options:\n"
                   <<  "  (-F | --format) (delta | tree)             Output format mode: delta (default), or tree\n"
