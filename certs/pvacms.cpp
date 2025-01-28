@@ -1931,17 +1931,15 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
                   << "Also can be used to re-generate the admin certificate that is required to administer the certificates.\n"
                   << std::endl
                   << "usage:\n"
-                  << "  " << program_name << " [options]                          Run PVACMS.  Interrupt to quit\n"
+                  << "  " << program_name << " [admin options] [options]          Run PVACMS.  Interrupt to quit\n"
                   << "  " << program_name << " (-h | --help)                      Show this help message and exit\n"
                   << "  " << program_name << " (-V | --version)                   Print version and exit\n"
-                  << "  " << program_name << " --admin-keychain-new <new_name>    Generate a new Admin User's keychain file, update the ACF file, and exit\n"
+                  << "  " << program_name << " [admin options] --admin-keychain-new <new_name>\n"
+                  << "                                             Generate a new Admin User's keychain file, update the ACF file, and exit\n"
                   << std::endl
                   << "options:\n"
-                  << "        --acf <acf_file>                     Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf\n"
-                  << "  (-a | --admin-keychain) <admin_keychain>   Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/admin.p12\n"
-                  << "        --admin-keychain-pwd <password>      Specify Admin User keychain file's password\n"
                   << "  (-c | --ca-keychain) <ca_keychain>         Specify CA keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/ca.p12\n"
-                  << "        --ca-keychain-pwd <password>         Specify CA keychain file's password\n"
+                  << "        --ca-keychain-pwd <file>             Specify location of file containing CA keychain file's password\n"
                   << "        --ca-name <name>                     Specify name (CN) to be used for CA certificate. Default `EPICS Root CA`\n"
                   << "        --ca-org <name>                      Specify organisation (O) to be used for CA certificate. Default `ca.epics.org`\n"
                   << "        --ca-org-unit <name>                 Specify organisational unit (OU) to be used for CA certificate. Default `EPICS Certificate "
@@ -1949,7 +1947,7 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
                   << "        --ca-country <name>                  Specify country (C) to be used for CA certificate. Default `US`\n"
                   << "  (-d | --cert-db) <db_name>                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.3/certs.db\n"
                   << "  (-p | --pvacms-keychain) <pvacms_keychain> Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12\n"
-                  << "        --pvacms-keychain-pwd <password>     Specify PVACMS keychain file's password\n"
+                  << "        --pvacms-keychain-pwd <file>         Specify location of file containing PVACMS keychain file's password\n"
                   << "        --pvacms-name <name>                 Specify name (CN) to be used for PVACMS certificate. Default `PVACMS Service`\n"
                   << "        --pvacms-org <name>                  Specify organisation (O) to be used for PVACMS certificate. Default `ca.epics.org`\n"
                   << "        --pvacms-org-unit <name>             Specify organisational unit (OU) to be used for PVACMS certificate. Default `EPICS PVA "
@@ -1962,6 +1960,11 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
                   << "                                             server by default. Can be overridden in each CCR\n"
                   << "        --status-validity-mins               Set Status Validity Time in Minutes\n"
                   << "  (-v | --verbose)                           Verbose mode\n"
+                  << std::endl
+                  << "admin options:\n"
+                  << "        --acf <acf_file>                     Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf\n"
+                  << "  (-a | --admin-keychain) <admin_keychain>   Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/admin.p12\n"
+                  << "        --admin-keychain-pwd <file>          Specify location of file containing Admin User's keychain file password\n"
                   << std::endl;
         exit(0);
     }
