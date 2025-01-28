@@ -27,7 +27,9 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <regex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -1084,58 +1086,185 @@ void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert) {
         throw std::runtime_error("Failed to open ACF file for writing: " + config.ca_acf_filename);
     }
 
-    auto const acf_file = (SB() << ""
-                                   "UAG(CMS_ADMIN) {admin}\n"
-                                   "\n"
-                                   "ASG(DEFAULT) {\n"
-                                   "    RULE(0,READ)\n"
-                                   "    RULE(1,WRITE) {\n"
-                                   "        UAG(CMS_ADMIN)\n"
-                                   "        METHOD(\"x509\")\n"
-                                   "        AUTHORITY(\""
-                                << cn
-                                << "\")\n"
-                                   "    }\n"
-                                   "}")
-                              .str();
-
-    auto const yaml_file = (SB() << ""
-                                    "# EPICS YAML\n"
-                                    "version: 1.0\n"
-                                    "\n"
-                                    "# user access groups\n"
-                                    "uags:\n"
-                                    "  - name: CMS_ADMIN\n"
-                                    "    users:\n"
-                                    "      - admin\n"
-                                    "\n"
-                                    "# Access security group definitions\n"
-                                    "asgs:\n"
-                                    "  - name: DEFAULT\n"
-                                    "    rules:\n"
-                                    "      - level: 0\n"
-                                    "        access: READ\n"
-                                    "      - level: 1\n"
-                                    "        access: WRITE\n"
-                                    "        uags:\n"
-                                    "          - CMS_ADMIN\n"
-                                    "        methods:\n"
-                                    "          - x509\n"
-                                    "        authorities:\n"
-                                    "          - "
-                                 << cn)
-                               .str();
-
-    auto out_string = (((extension == "yaml" || extension == "yml")) ? yaml_file : acf_file);
-    out_file << out_string;
+    (extension == "yaml" || extension == "yml") ? out_file << "# EPICS YAML\n"
+                                                              "version: 1.0\n"
+                                                              "\n"
+                                                              "# user access groups\n"
+                                                              "uags:\n"
+                                                              "  - name: CMS_ADMIN\n"
+                                                              "    users:\n"
+                                                              "      - admin\n"
+                                                              "\n"
+                                                              "# Access security group definitions\n"
+                                                              "asgs:\n"
+                                                              "  - name: DEFAULT\n"
+                                                              "    rules:\n"
+                                                              "      - level: 0\n"
+                                                              "        access: READ\n"
+                                                              "      - level: 1\n"
+                                                              "        access: WRITE\n"
+                                                              "        uags:\n"
+                                                              "          - CMS_ADMIN\n"
+                                                              "        methods:\n"
+                                                              "          - x509\n"
+                                                              "        authorities:\n"
+                                                              "          - "
+                                                           << cn << std::endl
+                                                : out_file << "UAG(CMS_ADMIN) {admin}\n"
+                                                              "\n"
+                                                              "ASG(DEFAULT) {\n"
+                                                              "    RULE(0,READ)\n"
+                                                              "    RULE(1,WRITE) {\n"
+                                                              "        UAG(CMS_ADMIN)\n"
+                                                              "        METHOD(\"x509\")\n"
+                                                              "        AUTHORITY(\""
+                                                           << cn
+                                                           << "\")\n"
+                                                              "    }\n"
+                                                              "}"
+                                                           << std::endl;
 
     out_file.close();
 
     std::cout << "Created Default ACF file: " << config.ca_acf_filename << std::endl;
-    std::istringstream iss(out_string);
-    std::string line;
-    while (std::getline(iss, line)) {
-        log_debug_printf(pvacms, "%s\n", line.c_str());
+}
+
+/**
+ * @brief Add a new admin user to the ACF file
+ *
+ * @param filename The path to the ACF file
+ * @param admin_name The name of the new admin to add
+ */
+void addNewAdminToAcfFile(const std::string &filename, const std::string &admin_name) {
+    std::ifstream infile(filename);
+    if (!infile.is_open()) {
+        throw std::runtime_error("Failed to open file: " + filename);
+    }
+
+    // Read the file into a string
+    std::ostringstream buffer;
+    buffer << infile.rdbuf();
+    std::string content = buffer.str();
+    infile.close();
+
+    // Regex to find and update the UAG(CMS_ADMIN) block
+    std::regex uag_regex(R"(UAG\(CMS_ADMIN\)\s*\{([^}]*)\})");
+    std::smatch match;
+
+    // Check if the UAG(CMS_ADMIN) block exists
+    if (std::regex_search(content, match, uag_regex)) {
+        std::string admins = match[1].str();
+
+        // Split the admins string into a list of admin names
+        std::vector<std::string> admin_list;
+        size_t start = 0, end;
+        while ((end = admins.find(", ", start)) != std::string::npos) {
+            admin_list.push_back(admins.substr(start, end - start));
+            start = end + 2;
+        }
+        if (start < admins.size()) {
+            admin_list.push_back(admins.substr(start));
+        }
+
+        // Check if admin_name is already in the list
+        if (std::find(admin_list.begin(), admin_list.end(), admin_name) == admin_list.end()) {
+            admin_list.push_back(admin_name);
+        }
+
+        // Rebuild the admins string with ", " separation
+        admins = "";
+        for (size_t i = 0; i < admin_list.size(); ++i) {
+            if (i > 0) {
+                admins += ", ";
+            }
+            admins += admin_list[i];
+        }
+
+        // Replace the matched UAG block with the updated list
+        content = std::regex_replace(content, uag_regex, "UAG(CMS_ADMIN) {" + admins + "}");
+    } else {
+        throw std::runtime_error("UAG(CMS_ADMIN) block not found in file: " + filename);
+    }
+
+    // Write back to the file
+    std::ofstream outfile(filename);
+    if (!outfile.is_open()) {
+        throw std::runtime_error("Failed to open file for writing: " + filename);
+    }
+    outfile << content;
+    outfile.close();
+}
+
+/**
+ * @brief Adds a new admin entry to a YAML file.
+ *
+ * This method modifies the specified YAML file by adding a new admin user to the
+ * users list in the CMS_ADMIN user access group
+ *
+ * @param filename The path to the YAML file where the admin information will be added.
+ * @param admin_name The name of the new admin to be added.
+ */
+void addNewAdminToYamlFile(const std::string &filename, const std::string &admin_name) {
+    std::ifstream infile(filename);
+    if (!infile.is_open()) {
+        throw std::runtime_error("Failed to open file: " + filename);
+    }
+
+    std::ostringstream buffer;
+    buffer << infile.rdbuf();
+    std::string content = buffer.str();
+    infile.close();
+
+    // Regex to find the `CMS_ADMIN` section and `users` list
+    std::regex yaml_regex(R"(- name:\s*CMS_ADMIN\s*[\r\n]+[^\S\r\n]*users:\s*[\r\n]+((?:[^\S]*-\s+[^\r\n]+[\r\n]*)*))");
+    std::smatch match;
+
+    if (std::regex_search(content, match, yaml_regex)) {
+        std::string users_block = match[1].str();  // The captured `users` list (indented list of users)
+
+        // Check if `admin_name` is already in the list
+        std::regex user_regex("-\\s+" + std::regex_replace(admin_name, std::regex(R"([\\.^$|()\[\]{}*+?])"), R"(\\$&)"));
+        if (!std::regex_search(users_block, user_regex)) {
+            // Append the new admin with correct indentation
+            users_block = users_block.substr(0, users_block.length() - 1);
+            users_block += "      - " + admin_name + "\n\n";
+        }
+
+        // Replace the matched users block with the updated block
+        content.replace(match.position(1), match.length(1), users_block);
+
+        // Write back the updated YAML
+        std::ofstream outfile(filename);
+        if (!outfile.is_open()) {
+            throw std::runtime_error("Failed to open file for writing: " + filename);
+        }
+        outfile << content;
+        outfile.close();
+
+        std::cout << "Admin user '" << admin_name << "' successfully added to 'CMS_ADMIN'." << std::endl;
+    } else {
+        throw std::runtime_error("CMS_ADMIN users list not found in YAML file: " + filename);
+    }
+}
+
+/**
+ * @brief Add new admin user to the existing ACF file
+ *
+ * Handles both legacy and new yaml format
+ *
+ * @param config the config to read to find out the name of the acf file
+ * @param admin_name the admin name to add
+ */
+void addNewAdminToAcf(const ConfigCms &config, const std::string &admin_name) {
+    std::string extension = config.ca_acf_filename.substr(config.ca_acf_filename.find_last_of(".") + 1);
+    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+    if (extension == "acf") {
+        addNewAdminToAcfFile(config.ca_acf_filename, admin_name);
+    } else if (extension == "yaml" || extension == "yml") {
+        addNewAdminToYamlFile(config.ca_acf_filename, admin_name);
+    } else {
+        throw std::invalid_argument("Unsupported file extension: " + extension);
     }
 }
 
@@ -1147,10 +1276,11 @@ void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert) {
  * @param ca_pkey The CA's private key to sign the certificate
  * @param ca_cert The CA's certificate
  * @param ca_chain The CA's certificate chain
- * @param key_pair The key pair to use to create the certificate
+ * @param ca_pkey The CA's key pair to use to create the certificate
+ * @param admin_name The optional name of the administrator (defaults to admin if not specified)
  */
 void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
-                                  ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string admin_name) {
+                                  ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name) {
     auto key_pair = IdFileFactory::createKeyPair();
     auto serial = generateSerial();
 
@@ -1748,19 +1878,18 @@ bool statusMonitor(StatusMonitor &status_monitor_params) {
     return true;  // We're not done - check files too
 }
 
-int readParameters(int argc, char* argv[], const char *program_name, ConfigCms &config, bool &verbose, std::string &ca_password_file, std::string &pvacms_password_file, std::string &admin_password_file, std::string &admin_name) {
-
+int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &config, bool &verbose, std::string &ca_password_file,
+                   std::string &pvacms_password_file, std::string &admin_password_file, std::string &admin_name) {
     bool show_version{false}, help{false};
 
     CLI::App app{"PVACMS - Certificate Management Service"};
 
     // Define options
-    app.set_help_flag("", ""); // deactivate built-in help
+    app.set_help_flag("", "");  // deactivate built-in help
 
     app.add_flag("-h,--help", help);
     app.add_flag("-v,--verbose", verbose, "Make more noise");
     app.add_flag("-V,--version", show_version, "Print version and exit.");
-    app.add_option("--admin-keychain-regen", admin_name, "Generate a new admin keychain and exit.");
 
     app.add_option("-c,--ca-keychain", config.ca_keychain_file, "Specify CA keychain file location");
     app.add_option("--ca-keychain-pwd", ca_password_file, "Specify CA keychain password file location");
@@ -1774,10 +1903,12 @@ int readParameters(int argc, char* argv[], const char *program_name, ConfigCms &
     app.add_option("--pvacms-keychain-pwd", pvacms_password_file, "Specify PVACMS keychain password file location");
     app.add_option("--pvacms-name", config.pvacms_name, "Specify the PVACMS name. Used if we need to create a PVACMS certificate");
     app.add_option("--pvacms-org", config.pvacms_organization, "Specify the PVACMS Organization. Used if we need to create a PVACMS certificate");
-    app.add_option("--pvacms-org-unit", config.pvacms_organizational_unit, "Specify the PVACMS Organization Unit. Used if we need to create a PVACMS certificate");
+    app.add_option("--pvacms-org-unit", config.pvacms_organizational_unit,
+                   "Specify the PVACMS Organization Unit. Used if we need to create a PVACMS certificate");
     app.add_option("--pvacms-country", config.pvacms_country, "Specify the PVACMS Country. Used if we need to create a PVACMS certificate");
 
     app.add_option("-a,--admin-keychain", config.admin_keychain_file, "Specify PVACMS admin user's keychain file location");
+    app.add_option("--admin-keychain-new", admin_name, "Generate a new admin keychain and exit.");
     app.add_option("--admin-keychain-pwd", admin_password_file, "Specify PVACMS admin user's keychain password file location");
     app.add_option("--acf", config.ca_acf_filename, "Admin Security Configuration File");
 
@@ -1799,36 +1930,38 @@ int readParameters(int argc, char* argv[], const char *program_name, ConfigCms &
                   << std::endl
                   << "Also can be used to re-generate the admin certificate that is required to administer the certificates.\n"
                   << std::endl
-                  <<  "usage:\n"
-                  <<  "  " << program_name << " [options]                          Run PVACMS.  Interrupt to quit\n"
-                  <<  "  " << program_name << " (-h | --help)                      Show this help message and exit\n"
-                  <<  "  " << program_name << " (-V | --version)                   Print version and exit\n"
-                  <<  "  " << program_name << " --admin-keychain-regen <new_name>  Regenerate the Admin User's keychain file and exit\n"
+                  << "usage:\n"
+                  << "  " << program_name << " [options]                          Run PVACMS.  Interrupt to quit\n"
+                  << "  " << program_name << " (-h | --help)                      Show this help message and exit\n"
+                  << "  " << program_name << " (-V | --version)                   Print version and exit\n"
+                  << "  " << program_name << " --admin-keychain-new <new_name>    Generate a new Admin User's keychain file, update the ACF file, and exit\n"
                   << std::endl
-                  <<  "options:\n"
-                  <<  "        --acf <acf_file>                     Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf\n"
-                  <<  "  (-a | --admin-keychain) <admin_keychain>   Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/admin.p12\n"
-                  <<  "        --admin-keychain-pwd <password>      Specify Admin User keychain file's password\n"
-                  <<  "  (-c | --ca-keychain) <ca_keychain>         Specify CA keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/ca.p12\n"
-                  <<  "        --ca-keychain-pwd <password>         Specify CA keychain file's password\n"
-                  <<  "        --ca-name <name>                     Specify name (CN) to be used for CA certificate. Default `EPICS Root CA`\n"
-                  <<  "        --ca-org <name>                      Specify organisation (O) to be used for CA certificate. Default `ca.epics.org`\n"
-                  <<  "        --ca-org-unit <name>                 Specify organisational unit (OU) to be used for CA certificate. Default `EPICS Certificate Authority`\n"
-                  <<  "        --ca-country <name>                  Specify country (C) to be used for CA certificate. Default `US`\n"
-                  <<  "  (-d | --cert-db) <db_name>                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.3/certs.db\n"
-                  <<  "  (-p | --pvacms-keychain) <pvacms_keychain> Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12\n"
-                  <<  "        --pvacms-keychain-pwd <password>     Specify PVACMS keychain file's password\n"
-                  <<  "        --pvacms-name <name>                 Specify name (CN) to be used for PVACMS certificate. Default `PVACMS Service`\n"
-                  <<  "        --pvacms-org <name>                  Specify organisation (O) to be used for PVACMS certificate. Default `ca.epics.org`\n"
-                  <<  "        --pvacms-org-unit <name>             Specify organisational unit (OU) to be used for PVACMS certificate. Default `EPICS PVA Certificate Management Service`\n"
-                  <<  "        --pvacms-country <name>              Specify country (C) to be used for PVACMS certificate. Default US\n"
-                  <<  "        --client-require-approval            Generate Client Certificates in PENDING_APPROVAL state\n"
-                  <<  "        --gateway-require-approval           Generate Gateway Certificates in PENDING_APPROVAL state\n"
-                  <<  "        --server-require-approval            Generate Server Certificates in PENDING_APPROVAL state\n"
-                  <<  "        --status-monitoring-enabled          Require Peers to monitor Status of Certificates Generated by this\n"
-                  <<  "                                             server by default. Can be overridden in each CCR\n"
-                  <<  "        --status-validity-mins               Set Status Validity Time in Minutes\n"
-                  <<  "  (-v | --verbose)                           Verbose mode\n"
+                  << "options:\n"
+                  << "        --acf <acf_file>                     Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf\n"
+                  << "  (-a | --admin-keychain) <admin_keychain>   Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/admin.p12\n"
+                  << "        --admin-keychain-pwd <password>      Specify Admin User keychain file's password\n"
+                  << "  (-c | --ca-keychain) <ca_keychain>         Specify CA keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/ca.p12\n"
+                  << "        --ca-keychain-pwd <password>         Specify CA keychain file's password\n"
+                  << "        --ca-name <name>                     Specify name (CN) to be used for CA certificate. Default `EPICS Root CA`\n"
+                  << "        --ca-org <name>                      Specify organisation (O) to be used for CA certificate. Default `ca.epics.org`\n"
+                  << "        --ca-org-unit <name>                 Specify organisational unit (OU) to be used for CA certificate. Default `EPICS Certificate "
+                     "Authority`\n"
+                  << "        --ca-country <name>                  Specify country (C) to be used for CA certificate. Default `US`\n"
+                  << "  (-d | --cert-db) <db_name>                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.3/certs.db\n"
+                  << "  (-p | --pvacms-keychain) <pvacms_keychain> Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12\n"
+                  << "        --pvacms-keychain-pwd <password>     Specify PVACMS keychain file's password\n"
+                  << "        --pvacms-name <name>                 Specify name (CN) to be used for PVACMS certificate. Default `PVACMS Service`\n"
+                  << "        --pvacms-org <name>                  Specify organisation (O) to be used for PVACMS certificate. Default `ca.epics.org`\n"
+                  << "        --pvacms-org-unit <name>             Specify organisational unit (OU) to be used for PVACMS certificate. Default `EPICS PVA "
+                     "Certificate Management Service`\n"
+                  << "        --pvacms-country <name>              Specify country (C) to be used for PVACMS certificate. Default US\n"
+                  << "        --client-require-approval            Generate Client Certificates in PENDING_APPROVAL state\n"
+                  << "        --gateway-require-approval           Generate Gateway Certificates in PENDING_APPROVAL state\n"
+                  << "        --server-require-approval            Generate Server Certificates in PENDING_APPROVAL state\n"
+                  << "        --status-monitoring-enabled          Require Peers to monitor Status of Certificates Generated by this\n"
+                  << "                                             server by default. Can be overridden in each CCR\n"
+                  << "        --status-validity-mins               Set Status Validity Time in Minutes\n"
+                  << "  (-v | --verbose)                           Verbose mode\n"
                   << std::endl;
         exit(0);
     }
@@ -1842,10 +1975,17 @@ int readParameters(int argc, char* argv[], const char *program_name, ConfigCms &
         exit(0);
     }
 
+    // New admin can only be specified with --acf and/or --admin-keychain-pwd, and/or --admin-keychain-pwd
     if (!admin_name.empty()) {
-        if (argc > 3) {
-            std::cerr << "Error: --admin-keychain-regen option cannot be used with any other options.\n";
-            exit(11);
+        for (auto arg = 1; arg < argc; ++arg) {
+            const std::string option = argv[arg];
+            if (option == "-a" || option == "--admin-keychain" || option == "--admin-keychain-pwd" || option == "--acf" || option == "--admin-keychain-new") {
+                arg++;
+            } else {
+                std::cerr
+                    << "Error: --admin-keychain-new option cannot be used with any options other than -a, --admin-keychain, --admin-keychain-pwd, or --acf.\n";
+                exit(11);
+            }
         }
     }
 
@@ -1910,8 +2050,11 @@ int main(int argc, char *argv[]) {
         getOrCreateCaCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain);
         auto our_issuer_id = CertStatus::getIssuerId(ca_cert);
 
-        if ( !admin_name.empty() ) {
+        if (!admin_name.empty()) {
             createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain, admin_name);
+            addNewAdminToAcf(config, admin_name);
+            std::cout << "Admin user \"" << admin_name << "\" has been added to list of administrators of this PVACMS" << std::endl;
+            std::cout << "Restart the PVACMS for it to take effect" << std::endl;
             exit(0);
         }
 
