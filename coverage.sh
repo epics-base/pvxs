@@ -5,6 +5,9 @@ set -e -u -x
 # as well https://github.com/gcovr/gcovr
 
 gcovr --version
+jq --version
+sed --version
+mktemp --version
 
 REV="${1:-HEAD}"
 
@@ -31,6 +34,7 @@ make -C "$TDIR" -j8 \
  CMD_LDFLAGS='-fprofile-arcs -ftest-coverage' \
  test
 
+# run tests, which write .gcdc/gcno files
 make -C "$TDIR" -j8 \
  CROSS_COMPILER_TARGET_ARCHS= \
  CMD_CXXFLAGS='-fprofile-arcs -ftest-coverage -O0' \
@@ -40,11 +44,20 @@ make -C "$TDIR" -j8 \
 OUTDIR="$PWD"/coverage
 install -d "$OUTDIR"
 
-cd "$TDIR"/src/O.linux-*
-gcovr --gcov-ignore-parse-errors -v -r .. --html --html-details -o "$OUTDIR"/coverage.html
+# pre-process for each directory, correcting "file" relative to repo root
+for dir in src ioc
+do
+    ( cd "$TDIR"/$dir/O.linux-* \
+    && gcovr --gcov-ignore-parse-errors -v -r .. --json \
+    | jq '.files[].file |= "'${dir}'/" + .' ) \
+    > "$TDIR"/${dir}.json
+done
 
-cd "$TDIR"/ioc/O.linux-*
-gcovr --gcov-ignore-parse-errors -v -r .. --html --html-details -o "$OUTDIR"/coverage-ioc.html
+# aggregate and summarize
+gcovr \
+ --add-tracefile "$TDIR"/src.json \
+ --add-tracefile "$TDIR"/ioc.json \
+ --html --html-details -o "$OUTDIR"/coverage.html
 
 cd "$OUTDIR"
 tar -cavf coverage.tar.bz2 coverage*.html
