@@ -6,15 +6,20 @@ Secure PVA Quick Start
 This section contains quick start guides for common Secure PVAccess
 tasks. See :ref:`secure_pvaccess` for general documentation on Secure PVAccess.
 
-In this section you'll find quick starts for :ref:`spva_qs_build_and_deploy`,
-:ref:`spva_qs_pvacms`, :ref:`spva_qs_server` and :ref:`spva_qs_client`
+In this section you'll find quick starts for
 
+- :ref:`Building and Deploying epics-base and the PVXS libraries and executables <spva_qs_build_and_deploy>`,
+- :ref:`Configuring EPICS Agents to access a Secure PVAccess Network <spva_qs_add_users>`,
+- :ref:`Configuring and running PVACMS <spva_qs_pvacms>`,
+- :ref:`Configuring and running a Secure PVAccess Server<spva_qs_server>` and
+- :ref:`Connecting a Client to an SPVA Server<spva_qs_client>`
 
-.. _spva_qs_build_and_deploy:
 
 If you're going to test this in a VM
 ------------------------------------
 
+1. Locate the image below
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 +--------------+----------------+--------------------------------------------+
 | Distribution | container name | image                                      |
@@ -35,7 +40,7 @@ If you're going to test this in a VM
 +--------------+----------------+--------------------------------------------+
 
 
-1. Create a container from the image
+2. Create a container from the image
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
@@ -44,8 +49,10 @@ If you're going to test this in a VM
         docker run -it --name ubuntu_pvxs ubuntu:latest /bin/bash
 
 
-Build & Deploy
---------------
+.. _spva_qs_build_and_deploy:
+
+Build & Deploy epics-base and PVXS
+----------------------------------
 
 
 1. Initialise Environment
@@ -230,12 +237,17 @@ If you don't have homebrew and don't want to install it, here's how you would in
 .. _spva_qs_add_users:
 
 
-Add Quick Start Users
----------------------
+Configure EPICS Agents
+-----------------------
+
+This section shows you what basic configuration you'll need for each type of EPICS agent.
+Look at the environment variable settings and the file locations referenced by
+this configuration to understand how to configure EPICS agents in
+your environment.
 
 
-1. Add pvacms user
-^^^^^^^^^^^^^^^^^^^^^^^^^
+1. Add a PVACMS EPICS Agent
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -247,7 +259,7 @@ Add Quick Start Users
     .. code-block:: sh
 
 
-        # Set up environment for pvacms server
+        # Set up environment for a PVACMS server
         su - pvacms
 
 
@@ -303,8 +315,8 @@ Add Quick Start Users
         exit
 
 
-2. Add admin user
-^^^^^^^^^^^^^^^^^^^^^^^^^
+2. Add a PVACMS Administrator EPICS agent
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -339,8 +351,8 @@ Add Quick Start Users
 
         exit
 
-3. Add Soft IOC user
-^^^^^^^^^^^^^^^^^^^^^^^^^
+3. Add a Secure EPICS Server Agent - SoftIOC
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -375,8 +387,8 @@ Add Quick Start Users
 
         exit
 
-4. Add SPVA Client user
-^^^^^^^^^^^^^^^^^^^^^^^^^
+4. Add a Secure EPICS Client agent
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -413,7 +425,7 @@ Add Quick Start Users
 
 .. _spva_qs_pvacms:
 
-PVACMS
+Running PVACMS
 ---------------
 
 1. Login as pvacms in a new shell
@@ -425,8 +437,8 @@ PVACMS
         docker exec -it --user pvacms ubuntu_pvxs /bin/bash
 
 
-2. Run PVACMS
-^^^^^^^^^^^^^^^
+2. Running PVACMS and sharing its ADMIN certificate
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -474,7 +486,7 @@ of the hex Subject Key Identifier of the CA certificate.
 Leave this PVACMS service running while running SoftIOC and SPVA client below.
 
 3. Copy Admin Certificate to Admin user
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the root shell (not PVACMS shell)
 
@@ -488,11 +500,11 @@ In the root shell (not PVACMS shell)
 
 .. _spva_qs_server:
 
-Secure PV Access SoftIOC Server
+Secure PVAccess SoftIOC Server
 -------------------------------
 
 1. Login as softioc in a new shell
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 
@@ -575,7 +587,7 @@ SPVA Client
 ---------------
 
 1. Login as client in a new shell
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     .. code-block:: sh
 

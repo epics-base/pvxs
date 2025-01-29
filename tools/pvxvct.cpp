@@ -81,7 +81,7 @@ void usage(const char *name)
 {
     std::cerr<<"Usage: "<<name<<" [-C|-S] [-B hostip[:port]] [-H hostip]\n"
                "\n"
-               "PV Access Virtual Cable Tester\n"
+               "PVAccess Virtual Cable Tester\n"
                "\n"
                "Assist in troubleshooting network (mis)configuration by listening\n"
                "for (some) PVA client/server UDP traffic.\n"

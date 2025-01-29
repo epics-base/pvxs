@@ -6,7 +6,7 @@ PVA Network Configuration
 Big Picture
 -----------
 
-A PV Access network protocol operation proceeds in two phases:
+A PVAccess network protocol operation proceeds in two phases:
 PV name resolution, and data transfer.
 Name resolution is the process is determining which PVA server claims to provide each PV name.
 Once this is known, a TCP connection is open to that server, and the operation(s) are executed.
