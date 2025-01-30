@@ -248,7 +248,7 @@ time_t getNotAfterTimeFromCert(const X509 *cert);
 time_t getNotBeforeTimeFromCert(const X509 *cert);
 
 void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
-                              ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+                              ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool &is_initialising);
 
 void createDefaultAdminACF(ConfigCms &config, ossl_ptr<X509> &ca_cert);
 

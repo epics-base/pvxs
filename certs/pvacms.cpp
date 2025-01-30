@@ -1046,7 +1046,7 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
  * @param ca_chain reference to the certificate chain of the returned cert
  */
 void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
-                              ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
+                              ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool &is_initialising) {
     std::shared_ptr<KeyPair> key_pair;
     CertData cert_data;
     try {
@@ -1059,6 +1059,7 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
     if (!key_pair) key_pair = IdFileFactory::createKeyPair();
 
     if (!cert_data.cert) {
+        is_initialising = true;
         cert_data = createCaCertificate(config, ca_db, key_pair);
         createDefaultAdminACF(config, cert_data.cert);
         createDefaultAdminClientCert(config, ca_db, key_pair->pkey, cert_data.cert, cert_data.ca);
@@ -2050,14 +2051,20 @@ int main(int argc, char *argv[]) {
         pvxs::ossl_shared_ptr<STACK_OF(X509)> ca_chain;
 
         // Get or create CA certificate
-        getOrCreateCaCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain);
+        auto is_initialising{false};
+        getOrCreateCaCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain, is_initialising);
         auto our_issuer_id = CertStatus::getIssuerId(ca_cert);
 
         if (!admin_name.empty()) {
-            createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain, admin_name);
-            addNewAdminToAcf(config, admin_name);
-            std::cout << "Admin user \"" << admin_name << "\" has been added to list of administrators of this PVACMS" << std::endl;
-            std::cout << "Restart the PVACMS for it to take effect" << std::endl;
+            try {
+                createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain, admin_name);
+                addNewAdminToAcf(config, admin_name);
+                std::cout << "Admin user \"" << admin_name << "\" has been added to list of administrators of this PVACMS" << std::endl;
+                std::cout << "Restart the PVACMS for it to take effect" << std::endl;
+            } catch (const std::runtime_error &e) {
+                if (!is_initialising)
+                    throw std::runtime_error(std::string("Error creating admin user certificate: ") + e.what());
+            }
             exit(0);
         }
 
