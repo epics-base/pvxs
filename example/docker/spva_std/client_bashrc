@@ -1,0 +1,14 @@
+
+export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+export PROJECT_HOME=/opt/epics
+
+#### SETUP SPVA Client KEYCHAIN FILE
+# Environment: EPICS_PVA_TLS_KEYCHAIN
+# Default    : ${XDG_CONFIG_HOME}/pva/1.3/client.p12
+export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
+
+# set path
+export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+
+cd ~
