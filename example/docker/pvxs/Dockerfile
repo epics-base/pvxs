@@ -18,8 +18,7 @@ RUN apt-get update && \
             adduser \
             sudo \
             supervisor && \
-    mkdir -p ${PROJECT_HOME} && \
-    mkdir -p /etc/skel/.config/pva/1.3
+    mkdir -p ${PROJECT_HOME}
 
 # Clone and build EPICS Base
 WORKDIR ${PROJECT_HOME}
