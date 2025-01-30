@@ -14,9 +14,37 @@ In this section you'll find quick starts for
 - :ref:`Configuring and running a Secure PVAccess Server<spva_qs_server>` and
 - :ref:`Connecting a Client to an SPVA Server<spva_qs_client>`
 
+If you want a pre-setup quick-start environment to play around in try this:
 
-If you're going to test this in a VM
-------------------------------------
+    .. code-block:: sh
+
+        # Term #1
+        docker run -it --name ubuntu_pvxs georgeleveln/spva_qs:latest /bin/bash
+
+        # Term #2
+        docker exec -it --user admin ubuntu_pvxs /bin/bash
+
+        # Term #3
+        docker exec -it --user pvacms ubuntu_pvxs /bin/bash
+        pvacms
+
+        # Term #4
+        docker exec -it --user softioc ubuntu_pvxs /bin/bash
+        softIocPVX \
+         -m user=test,N=tst,P=tst \
+         -d ${PROJECT_HOME}/pvxs/test/testioc.db \
+         -d ${PROJECT_HOME}/pvxs/test/testiocg.db \
+         -d ${PROJECT_HOME}/pvxs/test/image.db \
+         -G ${PROJECT_HOME}/pvxs/test/image.json \
+         -a ${PROJECT_HOME}/pvxs/test/testioc.acf
+
+        # Term 5
+        docker exec -it --user client ubuntu_pvxs /bin/bash
+        pvxinfo -v test:enumExample
+
+
+Create VM for Quick Start
+-------------------------
 
 1. Locate the image below
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
