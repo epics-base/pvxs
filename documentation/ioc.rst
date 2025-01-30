@@ -128,6 +128,22 @@ Currently supported format hints are:
 - Exponential
 - Engineering
 
+When subscribing, the client provided ``pvRequest`` Value may contain the field
+``records._options.DBE`` with a string or unsigned integer.
+This value is mapped to a DataBase Event (DBE) bit mask.
+
+``DBE`` may be either a string or an unsigned integer.
+Use of an integer is recommended.
+The ``DBE_*`` macros from the ``caeventmask.h`` header may be used
+(``DBE_VALUE=1``, ``DBE_ARCHIVE=2``, ``DBE_ALARM=4``).
+``DBE_PROPERTY`` will be ignored if given as this event is always
+handled specially.
+Alternately, ``DBE`` may be a string using the old caProvider "parsing"
+rules.  This is not recommended.
+
+Until UNRELEASED ``DBE_ARCHIVE`` was not handled correctly.
+
+
 Group PV
 ^^^^^^^^
 

@@ -390,11 +390,21 @@ void testArgs()
     );
 }
 
+void testDBE()
+{
+    testShow()<<__func__;
+
+    {
+        auto v(client::Context::request().pvRequest("record[DBE=VALUE]").build());
+        testEq(v["record._options.DBE"].as<std::string>(), "VALUE");
+    }
+}
+
 } // namespace
 
 MAIN(testpvreq)
 {
-    testPlan(38);
+    testPlan(39);
     testSetup();
     logger_config_env();
     testPvRequest();
@@ -409,6 +419,7 @@ MAIN(testpvreq)
     testError();
     testBuilder();
     testArgs();
+    testDBE();
     cleanup_for_valgrind();
     return testDone();
 }
