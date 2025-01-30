@@ -75,14 +75,18 @@ void subscriptionValueCallback(void* userArg, struct dbChannel* pChannel,
                                int, struct db_field_log* pDbFieldLog) noexcept {
     auto subscriptionContext = (SingleSourceSubscriptionCtx*)userArg;
     subscriptionContext->hadValueEvent = true;
-    auto change = UpdateType::type(UpdateType::Value | UpdateType::Alarm);
+    auto change = subscriptionContext->pValueEventSubscription.mask;
 #if EPICS_VERSION_INT >= VERSION_INT(7, 0, 6, 0)
     if(pDbFieldLog) {
         // when available, use DBE mask from db_field_log
-        change = UpdateType::type(pDbFieldLog->mask & UpdateType::Everything);
+        change = pDbFieldLog->mask;
     }
 #endif
-    subscriptionCallback(subscriptionContext, change, pChannel, pDbFieldLog);
+    // ARCHIVE events will get the same data fields as VALUE
+    if(change & DBE_ARCHIVE)
+        change = (change&~DBE_ARCHIVE)|DBE_VALUE;
+    change &= UpdateType::Everything; // does not include DBE_ARCHIVE
+    subscriptionCallback(subscriptionContext, UpdateType::type(change), pChannel, pDbFieldLog);
 }
 
 void subscriptionPropertiesCallback(void* userArg, struct dbChannel* pChannel, int,

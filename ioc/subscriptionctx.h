@@ -25,6 +25,7 @@ namespace ioc {
 class Subscription {
     std::shared_ptr<std::remove_pointer<dbEventSubscription>::type> sub; // holds void* returned by db_add_event()
 public:
+    unsigned mask=0;
     /* Add a subscription event by calling db_add_event using the given subscriptionCtx
      * and selecting the correct elements based on the given type of event being added.
      * You need to specify the correct options that correspond to the event type.
@@ -45,6 +46,7 @@ public:
         });
         if(!sub)
             throw std::runtime_error("Failed to create db subscription");
+        mask = select;
     }
     void cancel() {
         sub.reset();
