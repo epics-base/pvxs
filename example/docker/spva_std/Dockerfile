@@ -1,3 +1,4 @@
+# FROM image built from /example/docker/pvxs
 FROM georgeleveln/pvxs_spva:latest
 
 # Set environment variables

@@ -370,6 +370,24 @@ Credentials Verifier for :ref:`pvacms` at runtime.
 || _REALM         || e.g. ``SLAC.STANFORD.EDU``          || Overrides the verifier fields if specified.                        |
 +-----------------+--------------------------------------+---------------------------------------------------------------------+
 
+**Setup of Kerberos in Docker Container for testing**
+
+In the source code under /examples/docker/spva_krb you'll find a Dockerfile and supporting resources for creating an environment
+that contains a working kerberos KDC with the following characteristics:
+
+- users (both unix and kerberos principals)
+
+  - pvacms - service principal with private keytab file for authentication in ~/.config
+  - admin - principal with password "secret" (includes a configured PVACMS administrator certificate)
+  - softioc - service principal with password "secret"
+  - client - principal with password "secret"
+
+- services
+
+  - KDC
+  - kadmin Daemon
+  - PVACMS
+
 
 authldap Configuration and Usage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

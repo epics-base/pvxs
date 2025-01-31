@@ -1,3 +1,4 @@
+# FROM image built from /example/docker/spva_std
 FROM georgeleveln/spva_std:latest
 
 RUN apt-get update && \
