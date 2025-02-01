@@ -459,23 +459,18 @@ void Connection::handle_MESSAGE()
     if(!M.good())
         throw std::runtime_error(SB()<<M.file()<<':'<<M.line()<<" Decode error for Message");
 
-    auto it = opByIOID.find(ioid);
-    if(it==opByIOID.end()) {
-        log_debug_printf(connsetup, "Server %s Message on non-existent ioid\n", peerName.c_str());
-        return;
-    }
-    auto op = it->second.handle.lock();
+    auto lvl(mtype2level(mtype));
+    const char *chan = "<no channel>";
 
-    Level lvl;
-    switch(mtype) {
-    case 0:  lvl = Level::Info; break;
-    case 1:  lvl = Level::Warn; break;
-    case 2:  lvl = Level::Err; break;
-    default: lvl = Level::Crit; break;
+    auto it = opByIOID.find(ioid);
+    if(it!=opByIOID.end()) {
+        if(auto op = it->second.handle.lock()) {
+            chan = op->chan->name.c_str();
+        }
     }
 
     log_printf(remote, lvl, "%s : %s\n",
-               op && op->chan ? op->chan->name.c_str() : "<dead>", msg.c_str());
+               chan, msg.c_str());
 }
 
 void Connection::tickEcho()

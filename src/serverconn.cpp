@@ -140,6 +140,23 @@ const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
     return it->second;
 }
 
+void ServerConn::logRemote(uint32_t ioid, Level lvl, const std::string& msg)
+{
+    // TODO: respect TX throttle
+    if(!connection())
+        return;
+    {
+        (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
+
+        EvOutBuf R(sendBE, txBody.get());
+        to_wire(R, ioid);
+        to_wire(R, level2mtype(lvl));
+        to_wire(R, msg);
+    }
+
+    enqueueTxBody(CMD_MESSAGE);
+}
+
 void ServerConn::handle_ECHO()
 {
     // Client requests echo as a keep-alive check

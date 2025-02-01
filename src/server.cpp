@@ -846,6 +846,7 @@ void Source::show(std::ostream& strm)
 }
 
 OpBase::~OpBase() {}
+RemoteLogger::~RemoteLogger() {}
 
 ChannelControl::~ChannelControl() {}
 
