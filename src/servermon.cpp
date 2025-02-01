@@ -501,50 +501,73 @@ void ServerConn::handle_MONITOR()
         chan->statRx += rxlen;
 
         auto op(std::make_shared<MonitorOp>(chan, ioid));
-        op->window = nack;
-        (void)pvRequest["record._options.pipeline"].as(op->pipeline);
-
-        pvRequest["record._options.queueSize"].as<uint32_t>([&op](size_t qSize){
-            op->limit = qSize;
-        });
-
-        if(op->limit < op->window)
-            op->limit = op->window;
-
-        if(!op->limit)
-            op->limit = 1u;
-
-        auto ackAny = pvRequest["record._options.ackAny"];
-        if(ackAny.type()==TypeCode::String) {
-            auto sval = ackAny.as<std::string>();
-            if(sval.size()>1 && sval.back()=='%') {
-                try {
-                    auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
-                    op->ackAt = std::max(0.0, std::min(percent, 100.0)) * op->limit;
-                }catch(std::exception&){
-                    log_warn_printf(connio, "Error parsing as percent ackAny: \"%s\"\n", sval.c_str());
-                }
-            }
-
-        }
-
-        if(op->ackAt==0u){
-            uint32_t count=0u;
-
-            if(ackAny.as(count)) {
-                op->ackAt = count;
-            }
-        }
-
-        if(op->ackAt==0u){
-            op->ackAt = op->limit/2u;
-        }
-
-        op->ackAt = std::max<size_t>(1u, std::min(op->ackAt, op->limit));
-
         std::unique_ptr<ServerMonitorSetup> ctrl(new ServerMonitorSetup(this, iface->server->internal_self, chan->name, pvRequest, op));
 
         op->state = ServerOp::Creating;
+        op->window = nack;
+
+        // process pvRequest
+
+        if(auto pipeline = pvRequest["record._options.pipeline"]) {
+            bool v;
+            if(pipeline.as(v)) {
+                op->pipeline = v;
+
+            } else {
+                logRemote(ioid, Level::Warn, SB()<<"Unable to parse "<<pvRequest.nameOf(pipeline)<<" : "<<pipeline);
+            }
+        }
+
+        if(auto queueSize = pvRequest["record._options.queueSize"]) {
+            uint32_t qSize = op->limit;
+            if(queueSize.as(qSize) && qSize>=2) {
+                op->limit = qSize;
+            } else if(op->pipeline) {
+                // pipeline sub-protocol requires agreement on queueSize.
+                ctrl->error(SB()<<"can not pipeline invalid queueSize : "<<queueSize);
+                return;
+            } else {
+                logRemote(ioid, Level::Warn, SB()<<"Unable to use "<<pvRequest.nameOf(queueSize)<<" : "<<queueSize);
+            }
+        }
+
+        if(op->pipeline) {
+            if(!nack) {
+                // before UNRELEASED initial nack=0 clamped the window size to zero!
+                log_err_printf(connsetup,
+                               "Client %s \"%s\" pipeline monitor w/o initial nack incompatible\n",
+                               peerName.c_str(), chan->name.c_str());
+            }
+
+            if(auto ackAny = pvRequest["record._options.ackAny"]) {
+                uint32_t ival;
+                auto sval = ackAny.as<std::string>();
+                if(ackAny.as(ival)) { // plain integer
+                    op->ackAt = ival;
+
+                } else if(ackAny.as(sval)) { // maybe given as a percentage
+                    if(sval.size()>1 && sval.back()=='%') {
+                        try {
+                            auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
+                            op->ackAt = std::max(0.0, std::min(percent, 100.0)) * op->limit;
+                        }catch(std::exception& e){
+                            logRemote(ioid, Level::Crit,
+                                      SB()<<"Unable to parse% "<<pvRequest.nameOf(ackAny)<<" : "<<sval<<" : "<<e.what());
+                        }
+                    }
+                } else {
+                    logRemote(ioid, Level::Crit,
+                              SB()<<"Unable to parse "<<pvRequest.nameOf(ackAny)<<" : "<<ackAny);
+                }
+
+            }
+
+            if(op->ackAt==0u){
+                op->ackAt = op->limit/2u;
+            }
+
+            op->ackAt = std::max<size_t>(1u, std::min(op->ackAt, op->limit));
+        } // pipeline
 
         opByIOID[ioid] = op;
         chan->opByIOID[ioid] = op;
