@@ -355,6 +355,11 @@ struct ServerMonitorControl : public server::MonitorControlOp
         });
     }
 
+    virtual void logRemote(Level lvl, const std::string& msg) override final
+    {
+        doLogRemote(this, lvl, msg);
+    }
+
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<MonitorOp> op;
 
@@ -430,6 +435,11 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
             if(auto oper = op.lock())
                 oper->onClose = std::move(fn);
         });
+    }
+
+    virtual void logRemote(Level lvl, const std::string& msg) override final
+    {
+        doLogRemote(this, lvl, msg);
     }
 
     const std::weak_ptr<server::Server::Pvt> server;

@@ -20,6 +20,7 @@
 #include <pvxs/data.h>
 
 namespace pvxs {
+enum struct Level;
 namespace server {
 
 /** Credentials presented by a client.
@@ -91,9 +92,16 @@ public:
     OpBase& operator=(const OpBase&) = delete;
     virtual ~OpBase() =0;
 };
+struct PVXS_API RemoteLogger {
+    virtual ~RemoteLogger() =0;
+
+    //! Request log message to peer
+    //! @since UNRELEASED
+    virtual void logRemote(Level lvl, const std::string& msg) =0;
+};
 
 //! Handle when an operation is being executed
-struct PVXS_API ExecOp : public OpBase {
+struct PVXS_API ExecOp : public OpBase, public RemoteLogger {
     //! Issue a reply without data.  (eg. to complete a PUT)
     virtual void reply() =0;
     //! Issue a reply with data.  For a GET or RPC  (or PUT/Get)
