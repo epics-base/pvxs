@@ -120,6 +120,10 @@ void onSubscribe(const std::shared_ptr<SingleSourceSubscriptionCtx>& subscriptio
             CASE(ALARM);
 //            CASE(PROPERTY); // handled as special case
 #undef CASE
+            if(!dbe && !mask.empty()) {
+                subscriptionOperation->logRemote(Level::Warn,
+                                                 SB()<<pvReq.nameOf(fld)<<"=\""<<mask<<"\" selects empty mask");
+            }
             break;
         }
         case Kind::Integer:
