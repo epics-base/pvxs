@@ -62,7 +62,9 @@ public:
     // Utility function to get the TypeCode that the given database channel is configured for
     static TypeCode getChannelValueType(const Channel &pDbChannel, bool errOnLinks = false);
     static void
-    setForceProcessingFlag(const Value& pvRequest, const std::shared_ptr<SecurityControlObject>& securityControlObject);
+    setForceProcessingFlag(server::RemoteLogger *op,
+                           const Value& pvRequest,
+                           const std::shared_ptr<SecurityControlObject>& securityControlObject);
 };
 
 struct CurrentOp {

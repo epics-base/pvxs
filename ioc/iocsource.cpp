@@ -426,32 +426,27 @@ void IOCSource::doPostProcessing(dbChannel* pDbChannel, TriState forceProcessing
  * @param pvRequest the request
  * @param securityControlObject the security control object to update
  */
-void IOCSource::setForceProcessingFlag(const Value& pvRequest,
+void IOCSource::setForceProcessingFlag(server::RemoteLogger *op, const Value& pvRequest,
                                        const std::shared_ptr<SecurityControlObject>& securityControlObject)
 {
     auto proc = pvRequest["record._options.process"];
-    switch(proc.type().code) {
-    case TypeCode::String: {
-        auto val(proc.as<std::string>());
-        if (val == "true") {
-            securityControlObject->forceProcessing = True;
-        } else if (val == "false") {
-            securityControlObject->forceProcessing = False;
-        } else if (val == "passive") {
+    bool b;
+    std::string s;
+    if(!proc) {
+        return; // not provided
+
+    } else if(proc.as(b)) { // actual bool, integer, or string parsable to bool
+        securityControlObject->forceProcessing = b ? True : False;
+        return;
+
+    } else if(proc.as(s)) {
+        if(s=="passive") {
             securityControlObject->forceProcessing = Unset;
-        } else {
-            log_warn_printf(_log, "Ignoring unsupported record._options.process='%s'", val.c_str());
+            return;
         }
-        break;
     }
-    case TypeCode::Bool:
-        securityControlObject->forceProcessing = proc.as<bool>() ? True : False;
-        break;
-    default:
-        log_warn_printf(_log, "Ignoring unsupported record._options.process type %s", proc.type().name());
-    case TypeCode::Null:
-        break;
-    }
+    // oops, unsupported type or unexpected value
+    op->logRemote(Level::Warn, SB()<<"Ignoring unsupported "<<pvRequest.nameOf(proc)<<": "<<proc);
 }
 
 static

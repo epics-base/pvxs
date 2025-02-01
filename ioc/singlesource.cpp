@@ -333,7 +333,7 @@ void onOp(const std::shared_ptr<SingleInfo>& sInfo, const Value& valuePrototype,
 
                         auto& pvRequest = putOperation->pvRequest();
                         pvRequest["record._options.block"].as<bool>(putOperationCache->doWait);
-                        IOCSource::setForceProcessingFlag(pvRequest, putOperationCache);
+                        IOCSource::setForceProcessingFlag(putOperation.get(), pvRequest, putOperationCache);
                         if (putOperationCache->forceProcessing) {
                             putOperationCache->doWait = false; // no point in waiting
                         }
