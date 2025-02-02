@@ -5,7 +5,8 @@ RUN apt-get update && \
     apt-get -y install \
             --no-install-recommends \
             krb5-admin-server \
-            krb5-kdc supervisor
+            krb5-kdc supervisor \
+            libkrb5-dev
 
 COPY kadm5.acl kdc.conf badpass.txt /etc/krb5kdc/
 
