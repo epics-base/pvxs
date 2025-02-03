@@ -13,18 +13,21 @@ void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string> &defs) {
     PickOne pickone{defs, true};
 
     // KRB5_KTNAME
-    // This is the evironment variable defined by krb5
-    if (pickone({"KRB5_KTNAME"})) {
+    // This is the environment variable defined by krb5
+    if (pickone({"KRB5_KTNAME", "KRB5_CLIENT_KTNAME"})) {
+        std::cout << pickone.name << " = " << pickone.val << std::endl;
         krb_keytab = pickone.val;
     }
 
     // EPICS_AUTH_KRB_REALM
     if (pickone({"EPICS_AUTH_KRB_VALIDATOR_SERVICE"})) {
+        std::cout << pickone.name << " = " << pickone.val << std::endl;
         krb_validator_service = pickone.val;
     }
 
     // EPICS_AUTH_KRB_REALM
     if (pickone({"EPICS_AUTH_KRB_REALM"})) {
+        std::cout << pickone.name << " = " << pickone.val << std::endl;
         krb_realm = pickone.val;
     }
 
