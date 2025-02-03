@@ -151,6 +151,9 @@ int readParameters(int argc, char* argv[], const char *program_name, client::Con
 
 int main(int argc, char* argv[]) {
     try {
+#ifdef PVXS_ENABLE_OPENSSL
+        ossl::SSLContext::sslInit();
+#endif
         logger_config_env();  // from $PVXS_LOG
         auto conf = client::Config::fromEnv();
         auto program_name = argv[0];
@@ -214,17 +217,27 @@ int main(int argc, char* argv[]) {
         if (!cert_file.empty()) {
             try {
                 auto cert_data = certs::IdFileFactory::create(cert_file, password)->getCertDataFromFile();
+                std::cout
+                << "Certificate Details: " << std::endl
+                << "============================================" << std::endl
+                << ossl::ShowX509{cert_data.cert.get()} << std::endl
+                << "--------------------------------------------\n" << std::endl;
                 cert_id = certs::CertStatusManager::getStatusPvFromCert(cert_data.cert);
             } catch (std::exception& e) {
-                log_err_printf(certslog, "Unable to get cert from cert file: %s\n", e.what());
-                return 3;
+                std::cout
+                << "Online Certificate Status: " << std::endl
+                << "============================================" << std::endl
+                << "Not configured: " << e.what() << std::endl;
+                return 0;
             }
         } else {
             cert_id = "CERT:STATUS:" + issuer_serial_string;
         }
 
         try {
-            std::cout << actionToString(action) << " ==> " << cert_id ;
+            if (action != STATUS) {
+                std::cout << actionToString(action) << " ==> " << cert_id ;
+            }
             Value result;
             switch (action) {
                 case STATUS:
@@ -241,8 +254,19 @@ int main(int argc, char* argv[]) {
                     break;
             }
             Indented I(std::cout);
-            if (result)
-                std::cout << std::endl << result.format().format(format).arrayLimit(arrLimit);
+            if (result) {
+                std::cout
+                << "Certificate Status: " << std::endl
+                << "============================================" << std::endl
+                << "Certificate ID: " << cert_id.substr(cert_id.rfind(':')-8) << std::endl
+                << "Status        : " << result["state"].as<std::string>() << std::endl
+                << "Status Issued : " << result["ocsp_status_date"].as<std::string>() << std::endl
+                << "Status Expires: " << result["ocsp_certified_until"].as<std::string>() << std::endl ;
+                if ( result["status.value.index"].as<uint32_t>() == certs::REVOKED ) {
+                    std::cout << "Revocation Date: " << result["ocsp_revocation_date"].as<std::string>() << std::endl ;
+                }
+                std::cout << "--------------------------------------------\n" << std::endl;
+            }
             else if (action != STATUS)
                 std::cout << " ==> Completed Successfully\n";
         } catch (std::exception& e) {

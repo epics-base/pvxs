@@ -18,6 +18,7 @@
 #include <epicsVersion.h>
 #include <epicsEvent.h>
 #include <epicsGetopt.h>
+#include <openssl.h>
 #include <osiSock.h>
 
 #include <pvxs/log.h>
@@ -101,6 +102,9 @@ void usage(const char *name)
 int main(int argc, char *argv[])
 {
     try {
+#ifdef PVXS_ENABLE_OPENSSL
+        pvxs::ossl::SSLContext::sslInit();
+#endif
         // group options used from callback
         struct {
             bool verbose = false;

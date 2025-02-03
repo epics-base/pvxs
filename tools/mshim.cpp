@@ -238,6 +238,9 @@ struct App {
 int main(int argc, char *argv[])
 {
     try {
+#ifdef PVXS_ENABLE_OPENSSL
+        ossl::SSLContext::sslInit();
+#endif
         SockAttach attach;
         logger_config_env();
         App app;

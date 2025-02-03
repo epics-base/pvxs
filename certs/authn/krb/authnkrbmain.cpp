@@ -125,6 +125,7 @@ using namespace pvxs::certs;
  * @return the exit status
  */
 int main(int argc, char *argv[]) {
+    pvxs::ossl::SSLContext::sslInit();
     pvxs::logger_config_env();
     bool retrieved_credentials{false};
 

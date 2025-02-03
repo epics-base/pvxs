@@ -65,6 +65,7 @@ void handle_request(int client_socket) {
 }  // namespace pvxs
 
 int main() {
+    pvxs::ossl::SSLContext::sslInit();
     int server_fd, new_socket;
     struct sockaddr_in address;
     int addrlen = sizeof(address);

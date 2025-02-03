@@ -841,17 +841,19 @@ std::ostream &operator<<(std::ostream &strm, const ShowX509 &cert) {
         auto issuer = X509_get_issuer_name(cert.cert);
         assert(name);
         ossl_ptr<BIO> io(__FILE__, __LINE__, BIO_new(BIO_s_mem()));
-        (void)BIO_printf(io.get(), "subject:");
+        (void)BIO_printf(io.get(), "Subject        : ");
         (void)X509_NAME_print(io.get(), name, 1024);
-        (void)BIO_printf(io.get(), " issuer:");
+        (void)BIO_printf(io.get(), "\nIssuer         : ");
         (void)X509_NAME_print(io.get(), issuer, 1024);
         if (auto atm = X509_get0_notBefore(cert.cert)) {
-            (void)BIO_printf(io.get(), " from: ");
-            ASN1_TIME_print(io.get(), atm);
+            certs::StatusDate the_date(atm);
+            (void)BIO_printf(io.get(), "\nValid from     : ");
+            (void)BIO_printf(io.get(), the_date.s.c_str());
         }
         if (auto atm = X509_get0_notAfter(cert.cert)) {
-            (void)BIO_printf(io.get(), " until: ");
-            ASN1_TIME_print(io.get(), atm);
+            certs::StatusDate the_date(atm);
+            (void)BIO_printf(io.get(), "\nCert Expires   : ");
+            (void)BIO_printf(io.get(), the_date.s.c_str());
         }
         {
             char *str = nullptr;
