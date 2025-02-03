@@ -43,7 +43,7 @@ class Auth {
 
     virtual std::string getOptionsText() = 0;
     virtual std::string getParameterHelpText() = 0;
-    virtual void addParameters(CLI::App & app, const std::map<const std::string, client::Config> & authn_config_map) = 0;
+    virtual void addParameters(CLI::App & app, const std::map<const std::string, std::unique_ptr<client::Config>> & authn_config_map) = 0;
 
     // Registration of all supported auth methods
     static std::map<const std::string, std::shared_ptr<Auth>> auths;
@@ -73,7 +73,7 @@ class Auth {
     static Auth *getAuth(const std::string & type);
 
     virtual void configure(const client::Config &config) = 0;
-    virtual client::Config fromEnv() = 0;
+    virtual void fromEnv(std::unique_ptr<client::Config> &config) = 0;
 
     std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, double timeout) const;
 

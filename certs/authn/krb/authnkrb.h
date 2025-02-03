@@ -70,13 +70,13 @@ class AuthNKrb : public Auth {
 
     bool verify( Value ccr, std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const override;
 
-    client::Config fromEnv() override {
-        return static_cast<client::Config>(ConfigKrb::fromEnv());
+    void fromEnv(std::unique_ptr<client::Config> &config) override {
+        config.reset(new ConfigKrb(ConfigKrb::fromEnv()));
     };
 
     void configure(const client::Config &config) override {
-        auto &config_krb = static_cast<const ConfigKrb&>(config);
-        krb_validator_service_name = config_krb.krb_validator_service + "/cluster@" + config_krb.krb_realm;
+        auto &config_krb = dynamic_cast<const ConfigKrb&>(config);
+        krb_validator_service_name = SB() << config_krb.krb_validator_service <<  "/cluster@" << config_krb.krb_realm;
         krb_realm = config_krb.krb_realm;
         krb_keytab_file = config_krb.krb_keytab;
     };
@@ -86,9 +86,9 @@ class AuthNKrb : public Auth {
                                               "kerberos options\n"
                                               "        --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`\n"
                                               "        --krb-service <service>              pvacms kerberos service name.  Default `pvacms`\n";}
-    void addParameters(CLI::App & app, const std::map<const std::string, client::Config> & authn_config_map) override {
+    void addParameters(CLI::App & app, const std::map<const std::string, std::unique_ptr<client::Config>> & authn_config_map) override {
         auto &config = authn_config_map.at(PVXS_KRB_AUTH_TYPE);
-        auto config_krb = static_cast<const ConfigKrb &>(config);
+        auto config_krb = dynamic_cast<const ConfigKrb &>(*config);
         app.add_option("--krb-realm", config_krb.krb_realm, "kerberos realm.");
         app.add_option("--krb-service", config_krb.krb_validator_service, "pvacms kerberos service name");
     }

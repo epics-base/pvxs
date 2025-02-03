@@ -29,7 +29,7 @@ class ConfigCms : public pvxs::server::Config {
      *
      * @return ConfigCms
      */
-    static inline ConfigCms fromEnv() {
+    static ConfigCms fromEnv() {
         // Get default config
         auto config = ConfigCms{}.applyEnv();
 

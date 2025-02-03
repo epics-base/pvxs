@@ -60,7 +60,7 @@ class AuthNJwt : public Auth {
 
     bool verify(const Value ccr, std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const override;
 
-    client::Config fromEnv() {
+    void fromEnv(std::unique_ptr<client::Config> &config) {
         return static_cast<client::Config>(ConfigJwt::fromEnv());
     };
 

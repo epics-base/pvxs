@@ -348,7 +348,7 @@ bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, c
             << gssErrorDescription(major_status, minor_status));
     }
 
-    std::string peer_principal(static_cast<char *>(peer_name_buffer.value), peer_name_buffer.length);
+    std::string ctx_principal(static_cast<char *>(peer_name_buffer.value), peer_name_buffer.length);
     gss_release_buffer(&minor_status, &peer_name_buffer);
     gss_release_name(&minor_status, &initiator_name);
 
@@ -358,13 +358,7 @@ bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, c
     // contains the ticket expiration time
 
     // Split out name and organization if the principal has an at sign
-    std::size_t found;
-    auto peer_principal_name(ccr["name"].as<std::string>());
-    std::string peer_principal_organization;
-    if ((found = peer_principal_name.find('@')) != std::string::npos) {
-        peer_principal_organization = peer_principal_name.substr(found + 1);
-        peer_principal_name.resize(found);
-    }
+    auto peer_principal_name(ccr["name"].as<std::string>() + "@" + ccr["organization"].as<std::string>());
 
 
     log_debug_printf(auth, "Check against CCR: %s", "\n");
@@ -377,12 +371,9 @@ bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, c
     //   ccr["type"] == "krb"
     //   ccr["not_before"] < now+peer_lifetime
     //   ccr["not_after"] <= now+peer_lifetime
-    if (peer_principal_name.compare(ccr["name"].as<std::string>()) != 0) {
-        throw std::runtime_error(SB() << "Verify Credentials: Kerberos name does not match name in CCR");
-    }
-    if (peer_principal_organization.compare(ccr["organization"].as<std::string>()) != 0) {
-        throw std::runtime_error(SB() << "Verify Credentials: Kerberos organization "
-            "does not match name in CCR");
+    ;
+    if (peer_principal_name != ctx_principal) {
+        throw std::runtime_error(SB() << "Verify Credentials: Kerberos name does not match name in CCR: " << peer_principal_name << " != " << ctx_principal);
     }
     if (!ccr["organization_unit"].as<std::string>().empty()) {
         throw std::runtime_error(SB() << "Verify Credentials: Organization Unit in CCR not blank");

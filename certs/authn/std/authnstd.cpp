@@ -157,7 +157,7 @@ std::string getIPAddress() {
  * certificate.
  */
 std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &config) const {
-    auto const std_config = dynamic_cast<const ConfigStd&>(config);
+    const auto & std_config = dynamic_cast<const ConfigStd&>(config);
 
     log_debug_printf(auth,
                      "\n******************************************\nDefault, "
