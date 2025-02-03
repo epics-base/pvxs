@@ -27,7 +27,7 @@ RUN service krb5-kdc start && service krb5-admin-server start
 # - note clear passwords for testing purposes only
 RUN kdb5_util create -s -P secret \
  && kadmin.local -q 'addprinc -pw secret -allow_svr admin' \
- && kadmin.local -q 'addprinc -randkey -allow_svr pvacms/cluster@EPICS.ORG' \
+ && kadmin.local -q 'addprinc -randkey pvacms/cluster@EPICS.ORG' \
  && kadmin.local -q 'addprinc -pw secret -allow_svr softioc' \
  && kadmin.local -q 'addprinc -pw secret client'
 
