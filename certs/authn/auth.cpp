@@ -12,6 +12,7 @@
 
 #include <pvxs/log.h>
 
+#include "authregistry.h"
 #include "ccrmanager.h"
 #include "certfactory.h"
 #include "ownedptr.h"
@@ -52,6 +53,14 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
     cert_creation_request->ccr["not_after"] = credentials->not_after;
     cert_creation_request->ccr["pub_key"] = key_pair->public_key;
     return cert_creation_request;
+}
+
+Auth *Auth::getAuth(const std::string &type) {
+    auto auth = AuthRegistry::instance().getAuth(type);
+    if ( auth == nullptr ) {
+        throw std::logic_error("Auth::getAuth: no such auth type");
+    }
+    return auth;
 }
 
 /**

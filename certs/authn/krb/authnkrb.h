@@ -7,110 +7,104 @@
 #ifndef PVXS_AUTH_KERB_H
 #define PVXS_AUTH_KERB_H
 
+#include <configkrb.h>
 #include <functional>
-#include <memory>
 #include <string>
 
+#ifdef __APPLE__
+#include <GSS/gssapi_krb5.h>
+#else
+#include <gssapi/gssapi.h>
 #include <gssapi/gssapi_krb5.h>
+static gss_OID_desc krb5_mech_oid_desc = {
+    9,  // length in bytes of the OID value below
+    (void *)"\x2a\x86\x48\x86\xf7\x12\x01\x02\x02"
+};
+#ifndef GSS_KRB5_MECHANISM
+#define GSS_KRB5_MECHANISM (&krb5_mech_oid_desc)
+#endif
+#endif
 
-#include <pvxs/config.h>
 #include <pvxs/data.h>
-#include <pvxs/version.h>
 
 #include "auth.h"
-#include "authregistry.h"
-#include "ownedptr.h"
 #include "security.h"
 
 #define PVXS_KRB_AUTH_TYPE "krb"
 #define GSS_STATUS_BUFFER_LEN 1024
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
 // Declarations
 extern gss_OID_desc krb5_oid_desc;
 extern gss_OID krb5_oid;
 
-// Get rid of OSX 10.7 and greater deprecation warnings.
-#if defined(__APPLE__) && defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-
 /**
- * The subclass of Credentials that contains the KrbAuth specific
+ * The subclass of Credentials that contains the AuthNKrb specific
  * identification object
  */
-struct KrbCredentials : public Credentials {
+struct KrbCredentials : Credentials {
     // gss-api token for default Kerberos Ticket Granting Ticket
     // (TGT) on the system, stored as a byte array
-    std::vector<uint8_t> token;
-
-    KrbCredentials() {}
-
-    ~KrbCredentials() {}
+    std::vector<uint8_t> token{};
 };
 
-/**
- * @class KrbAuth
- * @brief The KrbAuth class provides Kerberos authentication
- * functionality.
- *
- * This class is responsible for retrieving credentials for users that have been
- * authenticated against a Kerberos server. It inherits from the Auth
- * base class.
- *
- * In order to use the KrbAuth, it must be registered with the
- * CertFactory using the REGISTER_AUTHENTICATOR() macro.
- *
- * The KrbAuth class implements the getCredentials() and
- * createCertCreationRequest() methods. The getCredentials() method returns the
- * credentials used for authentication. The createCertCreationRequest() method
- * creates a kerberos specific certificate creation request using the provided
- * credentials.
- */
-class KrbAuth : public Auth {
+class AuthNKrb : public Auth {
    public:
-    REGISTER_AUTHENTICATOR();
 
     // Constructor.  Adds in kerberos specific fields (ticket) to the verifier
     // field of the ccr
-    KrbAuth()
+    explicit AuthNKrb()
         : Auth(PVXS_KRB_AUTH_TYPE, {Member(TypeCode::Int8A, "token")}),
           krb5_oid(&krb5_oid_desc),
           krb5_oid_ptr(&krb5_oid) {
         krb5_oid_desc.length = 9;
-        krb5_oid_desc.elements = (void *)"\x2a\x86\x48\x86\xf7\x12\x01\x02\x02";
+        krb5_oid_desc.elements = const_cast<char*>("\x2a\x86\x48\x86\xf7\x12\x01\x02\x02");
     };
-    ~KrbAuth() override = default;
+    ~AuthNKrb() override = default;
+    void init(const ConfigKrb &config) {krb_validator_service_name = config.krb_validator_service + "/cluster@" + config.krb_realm;}
 
-    gss_OID krb5_oid;
-    gss_OID *krb5_oid_ptr;
+    gss_OID krb5_oid{GSS_KRB5_MECHANISM};
+    gss_OID *krb5_oid_ptr{};
 
-    std::shared_ptr<Credentials> getCredentials(const impl::ConfigCommon &config) const override;
+    std::shared_ptr<Credentials> getCredentials(const client::Config &config) const override;
 
     std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
                                                                    const std::shared_ptr<KeyPair> &key_pair,
                                                                    const uint16_t &usage) const override;
 
-    bool verify(
-        const Value ccr,
-        std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const override;
+    bool verify( Value ccr, std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const override;
 
-   private:
-    gss_OID_desc krb5_oid_desc;
+    client::Config fromEnv() override {
+        return static_cast<client::Config>(ConfigKrb::fromEnv());
+    };
 
-    std::string gssErrorDescription(OM_uint32 major_status, OM_uint32 minor_status) const;
+    std::string getOptionsText() override {return " [kerberos options]";}
+    std::string getParameterHelpText() override {return  "\n"
+                                              "kerberos options\n"
+                                              "        --krb-keytab <keytab>                pvacms keytab file location\n"
+                                              "        --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`\n"
+                                              "        --krb-service <service>              pvacms kerberos service name.  Default `pvacms`\n";}
+    void addParameters(CLI::App & app, const std::map<const std::string, client::Config> & authn_config_map) override {
+        // TODO ADD THESE OPTIONS - find out whats wrong
+        // auto &config = authn_config_map.at(PVXS_KRB_AUTH_TYPE);
+        // auto config_krb = static_cast<const ConfigKrb &>(config);
+        // app.add_option("--krb-keytab", config_krb.krb_keytab, "Specify a pvacms keytab file to be used to verify kerberos CCR requests");
+        // app.add_option("--krb-realm", config_krb.krb_realm, "kerberos realm.");
+        // app.add_option("--krb-service", config_krb.krb_validator_service, "pvacms kerberos service name");
+    }
 
-    void gssNameFromString(const std::string &name, gss_name_t &target_name) const;
+    private:
+    gss_OID_desc krb5_oid_desc{};
+    std::string krb_validator_service_name{"pvacms/cluster@EPICS.ORG"};
+
+    static std::string gssErrorDescription(OM_uint32 major_status, OM_uint32 minor_status);
+
+    static void gssNameFromString(const std::string &name, gss_name_t &target_name);
 };
 
-#if defined(__APPLE__) && defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
-
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs
 
 #endif  // PVXS_AUTH_KERB_H

@@ -6,37 +6,39 @@
 
 #include "configjwt.h"
 
-std::unique_ptr<ConfigFactoryInterface> getConfigFactory() {
-    struct ConfigCmsFactory : public ConfigFactoryInterface {
-        std::unique_ptr<Config> create() override {
-            // EPICS_AUTH_JWT_REQUEST_FORMAT
-            if (pickone({"EPICS_AUTH_JWT_REQUEST_FORMAT"})) {
-                self.jwt_request_format = pickone.val;
-            }
+DEFINE_LOGGER(cfg, "pvxs.certs.cfg");
 
-            // EPICS_AUTH_JWT_REQUEST_METHOD
-            if (pickone({"EPICS_AUTH_JWT_REQUEST_METHOD"})) {
-                self.jwt_request_method = pickone.val == "POST" ? Config::POST : Config::GET;
-            }
+namespace pvxs {
+namespace certs {
 
-            // EPICS_AUTH_JWT_RESPONSE_FORMAT
-            if (pickone({"EPICS_AUTH_JWT_RESPONSE_FORMAT"})) {
-                self.jwt_response_format = pickone.val;
-            }
+void ConfigJwt::fromJwtEnv(const std::map<std::string, std::string> &defs) {
+    PickOne pickone{defs, true};
 
-            // EPICS_AUTH_JWT_TRUSTED_URI
-            if (pickone({"EPICS_AUTH_JWT_TRUSTED_URI"})) {
-                self.jwt_trusted_uri = pickone.val;
-            }
+    // EPICS_AUTH_JWT_REQUEST_FORMAT
+    if (pickone({"EPICS_AUTH_JWT_REQUEST_FORMAT"})) {
+        jwt_request_format = pickone.val;
+    }
 
-            // EPICS_AUTH_JWT_USE_RESPONSE_CODE
-            if (pickone({"EPICS_AUTH_JWT_USE_RESPONSE_CODE"})) {
-                self.jwt_use_response_code = parseTo<bool>(pickone.val);
-            }
+    // EPICS_AUTH_JWT_REQUEST_METHOD
+    if (pickone({"EPICS_AUTH_JWT_REQUEST_METHOD"})) {
+        jwt_request_method = pickone.val;
+    }
 
-            return std::make_unique<ConfigCms>();
-        }
-    };
+    // EPICS_AUTH_JWT_RESPONSE_FORMAT
+    if (pickone({"EPICS_AUTH_JWT_RESPONSE_FORMAT"})) {
+        jwt_response_format = pickone.val;
+    }
 
-    return std::make_unique<ConfigCmsFactory>();
+    // EPICS_AUTH_JWT_TRUSTED_URI
+    if (pickone({"EPICS_AUTH_JWT_TRUSTED_URI"})) {
+        jwt_trusted_uri = pickone.val;
+    }
+
+    // EPICS_AUTH_JWT_USE_RESPONSE_CODE
+    if (pickone({"EPICS_AUTH_JWT_USE_RESPONSE_CODE"})) {
+        jwt_use_response_code = parseTo<bool>(pickone.val);
+    }
 }
+
+} // certs
+} // pvxs

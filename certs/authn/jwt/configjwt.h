@@ -7,25 +7,43 @@
 #ifndef PVXS_CONFIGJWT_H_
 #define PVXS_CONFIGJWT_H_
 
-#include <memory>
+#include <pvxs/config.h>
+#include <pvxs/client.h>
+#include "configauthn.h"
 
-#include "ownedptr.h"
+namespace pvxs {
+namespace certs {
 
-#include "certconfig.h"
-
-class ConfigJwt : public Config {
+class ConfigJwt : public ConfigAuthN {
   public:
+    ConfigJwt& applyEnv() {
+        Config::applyEnv(true, CLIENT);
+        return *this;
+    }
+
+    static ConfigJwt fromEnv() {
+        auto config = ConfigJwt{}.applyEnv();
+        auto defs = std::map<std::string, std::string>();
+        config.fromAuthNEnv(defs);
+        config.fromJwtEnv(defs);
+        return config;
+    }
+
+
     /**
      * @brief The JWT token
      */
-    std::string jwt_token;
+    std::string jwt_token{};
+    std::string jwt_request_format{};
+    std::string jwt_request_method{};
+    std::string jwt_response_format{};
+    std::string jwt_trusted_uri{};
+    bool jwt_use_response_code{false};
+
+    void fromJwtEnv(const std::map<std::string, std::string> &defs);
 };
 
-class ConfigJwtFactory : public ConfigFactoryInterface {
-  public:
-    std::unique_ptr<Config> create() override {
-        return std::make_unique<ConfigJwt>();
-    }
-};
+}  // namespace certs
+}  // namespace pvxs
 
 #endif //PVXS_CONFIGJWT_H_

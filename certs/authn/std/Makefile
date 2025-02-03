@@ -3,10 +3,11 @@
 SRC_DIRS += $(AUTHN)/std
 
 PROD += authnstd
-authnstd_INC += authnstd.h
-authnstd_INC += configstd.h
-
 authnstd_SRCS += authnstd.cpp
+authnstd_SRCS += authnstdmain.cpp
 authnstd_SRCS += configstd.cpp
 authnstd_SRCS += certstatusfactory.cpp
 authnstd_SRCS += certstatus.cpp
+
+pvacms_SRCS += authnstd.cpp
+pvacms_SRCS += configstd.cpp

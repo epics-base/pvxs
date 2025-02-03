@@ -6,47 +6,49 @@
 
 #include "configldap.h"
 
-std::unique_ptr<ConfigFactoryInterface> getConfigFactory() {
-    struct ConfigCmsFactory : public ConfigFactoryInterface {
-        std::unique_ptr<Config> create() override {
-            // EPICS_AUTH_LDAP_ACCOUNT
-            if (pickone({"EPICS_AUTH_LDAP_ACCOUNT"})) {
-                self.ldap_account = pickone.val;
-            }
+DEFINE_LOGGER(cfg, "pvxs.certs.cfg");
 
-            // EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE
-            if (pickone({"EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE"})) {
-                auto filepath = pickone.val;
-                self.ensureDirectoryExists(filepath);
-                try {
-                    self.ldap_account_password = self.getFileContents(filepath);
-                } catch (std::exception &e) {
-                    log_err_printf(serversetup, "error reading password file: %s. %s", filepath.c_str(), e.what());
-                }
-            }
+namespace pvxs {
+namespace certs {
 
-            // EPICS_AUTH_LDAP_HOST
-            if (pickone({"EPICS_AUTH_LDAP_HOST"})) {
-                self.ldap_host = pickone.val;
-            }
+void ConfigLdap::fromLdapEnv(const std::map<std::string, std::string> &defs) {
+    PickOne pickone{defs, true};
 
-            // EPICS_AUTH_LDAP_PORT
-            if (pickone({"EPICS_AUTH_LDAP_PORT"})) {
-                try {
-                    self.ldap_port = parseTo<uint64_t>(pickone.val);
-                } catch (std::exception &e) {
-                    log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
-                }
-            }
+    // EPICS_AUTH_LDAP_ACCOUNT
+    if (pickone({"EPICS_AUTH_LDAP_ACCOUNT"})) {
+        ldap_account = pickone.val;
+    }
 
-            // EPICS_AUTH_LDAP_SEARCH_ROOT
-            if (pickone({"EPICS_AUTH_LDAP_SEARCH_ROOT"})) {
-                self.ldap_search_root = pickone.val;
-            }
-
-            return std::make_unique<ConfigCms>();
+    // EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE
+    if (pickone({"EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE"})) {
+        auto filepath = pickone.val;
+        ensureDirectoryExists(filepath);
+        try {
+            ldap_account_password = getFileContents(filepath);
+        } catch (std::exception &e) {
+            log_err_printf(cfg, "error reading password file: %s. %s", filepath.c_str(), e.what());
         }
-    };
+    }
 
-    return std::make_unique<ConfigCmsFactory>();
+    // EPICS_AUTH_LDAP_HOST
+    if (pickone({"EPICS_AUTH_LDAP_HOST"})) {
+        ldap_host = pickone.val;
+    }
+
+    // EPICS_AUTH_LDAP_PORT
+    if (pickone({"EPICS_AUTH_LDAP_PORT"})) {
+        try {
+            ldap_port = parseTo<uint64_t>(pickone.val);
+        } catch (std::exception &e) {
+            log_err_printf(cfg, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+        }
+    }
+
+    // EPICS_AUTH_LDAP_SEARCH_ROOT
+    if (pickone({"EPICS_AUTH_LDAP_SEARCH_ROOT"})) {
+        ldap_search_root = pickone.val;
+    }
 }
+
+}  // namespace certs
+}  // namespace pvxs

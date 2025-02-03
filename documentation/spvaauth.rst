@@ -239,14 +239,14 @@ and password file locations.
 
         Usage: authnstd <opts>
 
-          -v         Make more noise.
-          -h         Show this help message and exit
-          -d         Shorthand for $PVXS_LOG="pvxs.*=DEBUG".  Make a lot of noise.
-          -V         Show version and exit
-          -u <use>   Usage. client, server, or gateway
-          -N <name>  Name override the CN subject field
-          -O <name>  Org override the O subject field
-          -o <name>  Override the OU subject field
+          -v          Make more noise.
+          -h          Show this help message and exit
+          -d          Shorthand for $PVXS_LOG="pvxs.*=DEBUG".  Make a lot of noise.
+          -V          Show version and exit
+          -u <usage>  Usage. client, server, or hybrid
+          -n <name>   Name override the CN subject field
+          -o <name>   Org override the O subject field
+          --ou <name> Override the OU subject field
 
         ENVIRONMENT VARIABLES: at least one mandatory variable must be set
             EPICS_PVA_TLS_KEYCHAIN              Set name and location of client keychain file (mandatory for clients)
@@ -304,18 +304,18 @@ and password file locations.
     .. code-block:: sh
 
         # create a client certificate for greg@slac.stanford.edu
-        authnstd -u client -N greg -O slac.stanford.edu
+        authnstd -u client -n greg -o slac.stanford.edu
 
     .. code-block:: sh
 
         # create a server certificate for IOC1
-        authnstd -u server -N IOC1 -O "KLI:LI01:10" -o "FACET"
+        authnstd -u server -n IOC1 -o "KLI:LI01:10" --ou "FACET"
 
 
     .. code-block:: sh
 
-        # create a gateway certificate for gateway1
-        authnstd -u gateway -N gateway1 -O bridge.ornl.gov -o "Networking"
+        # create a hybrid certificate for gateway1
+        authnstd -u hybrid -n gateway1 -o bridge.ornl.gov --ou "Networking"
 
 
 authkrb Configuration and Usage

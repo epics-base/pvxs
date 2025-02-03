@@ -6,6 +6,7 @@
 
 #include "authnldap.h"
 
+#include <configldap.h>
 #include <memory>
 #include <string>
 
@@ -13,17 +14,25 @@
 
 #include "auth.h"
 #include "authregistry.h"
-#include "security.h"
+
+DEFINE_LOGGER(auth, "pvxs.auth.ldap");
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
-DEFINE_LOGGER(auths, "pvxs.security.auth.LDAP");
+struct AuthNLdapRegistrar {
+    AuthNLdapRegistrar() { // NOLINT(*-use-equals-default)
+        AuthRegistry::instance().registerAuth(PVXS_LDAP_AUTH_TYPE, std::unique_ptr<Auth>(new AuthNLdap()));
+    }
+    // ReSharper disable once CppDeclaratorNeverUsed
+} auth_n_ldap_registrar;
 
-std::shared_ptr<Credentials> LdapAuth::getCredentials(const impl::ConfigCommon &config) const {
-    log_debug_printf(auths,
-                     "\n******************************************\nLDAP "
-                     "Authenticator: %s\n",
+std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &config) const {
+    auto ldap_config = dynamic_cast<const ConfigLdap&>(config);
+
+    log_debug_printf(auth,
+                     "\n******************************************\n"
+                     "LDAP Authenticator: %s\n",
                      "Begin acquisition");
 
     auto ldap_credentials = std::make_shared<LdapCredentials>();
@@ -31,7 +40,7 @@ std::shared_ptr<Credentials> LdapAuth::getCredentials(const impl::ConfigCommon &
     return ldap_credentials;
 };
 
-std::shared_ptr<CertCreationRequest> LdapAuth::createCertCreationRequest(
+std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
     const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const {
     auto ldap_credentials = castAs<LdapCredentials, Credentials>(credentials);
 
@@ -40,12 +49,7 @@ std::shared_ptr<CertCreationRequest> LdapAuth::createCertCreationRequest(
     return cert_creation_request;
 };
 
-std::string LdapAuth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr) const {
-    throw std::runtime_error("Custom Signer: Failed to sign certificate.");
-    return nullptr;
-}
-
-bool LdapAuth::verify(const Value ccr,
+bool AuthNLdap::verify(const Value ccr,
                       std::function<bool(const std::string &, const std::string &)> signature_verifier) const {
     // Verify that the signature provided in the CCR that was established in the
     // GSSAPI session was validated and signed

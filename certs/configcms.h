@@ -20,7 +20,7 @@ namespace certs {
 class ConfigCms : public pvxs::server::Config {
    public:
     ConfigCms& applyEnv() {
-        pvxs::server::Config::applyEnv();
+        Config::applyEnv();
         return *this;
     }
 
@@ -68,11 +68,11 @@ class ConfigCms : public pvxs::server::Config {
 
     /**
      * @brief When basic credentials are used then set to true
-     * to request administrator approval to issue gateway certificates.
+     * to request administrator approval to issue hybrid certificates.
      *
      * All other auth methods will never require administrator approval.
      */
-    bool cert_gateway_require_approval = true;
+    bool cert_hybrid_require_approval = true;
 
     /**
      * @brief This flag is used to indicate that a certificate user must subscribe

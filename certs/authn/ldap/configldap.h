@@ -7,26 +7,39 @@
 #ifndef PVXS_CONFIGLDAP_H_
 #define PVXS_CONFIGLDAP_H_
 
-#include <memory>
+#include <pvxs/config.h>
+#include <pvxs/client.h>
 
-#include "ownedptr.h"
+#include "configauthn.h"
 
-#include "certconfig.h"
+namespace pvxs {
+namespace certs {
 
-class ConfigLdap : public Config {
+class ConfigLdap : public ConfigAuthN {
   public:
-    std::string ldap_account;
-    std::string ldap_account_password;
-    std::string ldap_host;
-    unsigned short ldap_port;
-    std::string ldap_search_root;
-};
-
-class ConfigLdapFactory : public ConfigFactoryInterface {
-  public:
-    std::unique_ptr<Config> create() override {
-        return std::make_unique<ConfigLdap>();
+    ConfigLdap& applyEnv() {
+        Config::applyEnv(true, CLIENT);
+        return *this;
     }
+
+    static ConfigLdap fromEnv() {
+        auto config = ConfigLdap{}.applyEnv();
+        auto defs = std::map<std::string, std::string>();
+        config.fromAuthNEnv(defs);
+        config.fromLdapEnv(defs);
+        return config;
+    }
+
+    std::string ldap_account{};
+    std::string ldap_account_password{};
+    std::string ldap_host{"localhost"};
+    unsigned short ldap_port{389};
+    std::string ldap_search_root{"dc=epics,dc=org"};
+
+    void fromLdapEnv(const std::map<std::string, std::string>& defs);
 };
+
+}  // namespace certs
+}  // namespace pvxs
 
 #endif //PVXS_CONFIGLDAP_H_

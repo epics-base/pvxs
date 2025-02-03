@@ -142,9 +142,9 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         cert_server_require_approval = parseTo<bool>(pickone.val);
     }
 
-    // EPICS_PVACMS_REQUIRE_SERVER_APPROVAL
-    if (pickone({"EPICS_PVACMS_REQUIRE_GATEWAY_APPROVAL", "EPICS_PVACMS_REQUIRE_SERVER_APPROVAL", "EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"})) {
-        cert_gateway_require_approval = parseTo<bool>(pickone.val);
+    // EPICS_PVACMS_REQUIRE_HYBRID_APPROVAL
+    if (pickone({"EPICS_PVACMS_REQUIRE_HYBRID_APPROVAL", "EPICS_PVACMS_REQUIRE_SERVER_APPROVAL", "EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"})) {
+        cert_hybrid_require_approval = parseTo<bool>(pickone.val);
     }
 
     // EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION

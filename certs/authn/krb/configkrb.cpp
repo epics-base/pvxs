@@ -6,22 +6,28 @@
 
 #include "configkrb.h"
 
-std::unique_ptr<ConfigFactoryInterface> getConfigFactory() {
-    struct ConfigCmsFactory : public ConfigFactoryInterface {
-        std::unique_ptr<Config> create() override {
-            // EPICS_AUTH_KRB_KEYTAB
-            if (pickone({"EPICS_AUTH_KRB_KEYTAB"})) {
-                self.krb_keytab = pickone.val;
-            }
+namespace pvxs {
+namespace certs {
 
-            // EPICS_AUTH_KRB_REALM
-            if (pickone({"EPICS_AUTH_KRB_REALM"})) {
-                self.krb_realm = pickone.val;
-            }
+void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string> &defs) {
+    PickOne pickone{defs, true};
 
-            return std::make_unique<ConfigCms>();
-        }
-    };
+    // EPICS_AUTH_KRB_KEYTAB
+    if (pickone({"EPICS_AUTH_KRB_KEYTAB"})) {
+        krb_keytab = pickone.val;
+    }
 
-    return std::make_unique<ConfigCmsFactory>();
+    // EPICS_AUTH_KRB_REALM
+    if (pickone({"EPICS_AUTH_KRB_VALIDATOR_SERVICE"})) {
+        krb_validator_service = pickone.val;
+    }
+
+    // EPICS_AUTH_KRB_REALM
+    if (pickone({"EPICS_AUTH_KRB_REALM"})) {
+        krb_realm = pickone.val;
+    }
+
 }
+
+}  // namespace certs
+}  // namespace pvxs

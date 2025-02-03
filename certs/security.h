@@ -52,7 +52,7 @@ struct CertCreationRequest final {
     std::shared_ptr<Credentials> credentials;
 
     // Type of authenticator to use to verify this certificate creation request:
-    // "x509", "krb", etc
+    // "std", "krb", etc
     std::string type;
 
     // PVStructure containing the authentication type specific CSR to be

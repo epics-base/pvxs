@@ -151,9 +151,7 @@ std::string CertFactory::sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string 
 }
 */
 
-/*
-bool CertFactory::verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data,
-                                  const std::string &signature) {
+bool CertFactory::verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data, const std::string &signature) {
     const ossl_ptr<EVP_MD_CTX> message_digest_context(EVP_MD_CTX_new());
     assert(message_digest_context.get() != nullptr);
 
@@ -170,7 +168,6 @@ bool CertFactory::verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::str
         return false;
     }
 }
-*/
 
 /**
  * Set the subject of the provided certificate.

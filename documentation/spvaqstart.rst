@@ -548,9 +548,9 @@ Secure PVAccess SoftIOC Server
         #### 1. Create a new server private key and certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
 
         authnstd -u server \
-          -N "IOC1" \
-          -O "KLI:LI01:10" \
-          -o "FACET"
+          -n "IOC1" \
+          -o "KLI:LI01:10" \
+          --ou "FACET"
 
         ...
 
@@ -632,9 +632,9 @@ SPVA Client
         #### 1. Create client key and certificate at location specified by EPICS_PVA_TLS_KEYCHAIN
 
         authnstd -u client \
-          -N "greg" \
-          -O "SLAC.STANFORD.EDU" \
-          -o "Controls"
+          -n "greg" \
+          -o "SLAC.STANFORD.EDU" \
+          --ou "Controls"
 
 
 4. Approve certificate

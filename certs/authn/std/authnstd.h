@@ -5,7 +5,7 @@
  */
 
 /**
- * @file Defines the Default Authenticator.
+ * @file authnstd.h the Default Authenticator.
  *
  * Provides class to encapsulate the Default Authenticator and defines custom
  * credentials for use with the authenticator.
@@ -50,6 +50,7 @@
 #include <pvxs/version.h>
 
 #include "auth.h"
+#include "authregistry.h"
 #include "certfactory.h"
 #include "configstd.h"
 #include "ownedptr.h"
@@ -63,40 +64,26 @@ namespace pvxs {
 namespace certs {
 
 /**
- * The subclass of Credentials that contains the DefaultAuth specific
+ * The subclass of Credentials that contains the AuthNStd specific
  * identification object
  */
-struct DefaultCredentials : public Credentials {};
+struct DefaultCredentials : Credentials {};
 
-/**
- * @class DefaultAuth
- * @brief The DefaultAuth class provides default authentication
- * functionality that simply uses an X.509 certificate without any site specific
- * authentication.
- *
- * It inherits from the Auth base class.
- *
- * The DefaultAuth MUST NOT be registered with the CertFactory
- * using the REGISTER_AUTHENTICATOR() macro.
- *
- * The DefaultAuth class implements the getCredentials() and
- * createCertCreationRequest() methods. The getCredentials() method returns the
- * credentials containing the subject name to be used in the certificate The
- * createCertCreationRequest() method creates a signed certificate using the
- * provided credentials.
- */
-class AuthStd : public Auth {
+class AuthNStd : public Auth {
    public:
     // Constructor
-    AuthStd() : Auth(PVXS_DEFAULT_AUTH_TYPE, {}) {};
-    ~AuthStd() override = default;
+    AuthNStd() : Auth(PVXS_DEFAULT_AUTH_TYPE, {}) {}
+    ~AuthNStd() override = default;
 
-    std::shared_ptr<Credentials> getCredentials(const ConfigStd &config) const override;
-
+    std::shared_ptr<Credentials> getCredentials(const client::Config &config) const override;
     std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
                                                                    const uint16_t &usage) const override;
 
-    bool verify(const Value ccr, std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const override;
+    bool verify(Value ccr, std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const override;
+    client::Config fromEnv() override { return static_cast<client::Config>(ConfigStd::fromEnv()); }
+    std::string getOptionsText() override {return {};}
+    std::string getParameterHelpText() override {return {};}
+    void addParameters(CLI::App & app, const std::map<const std::string, client::Config> & authn_config_map) override {}
 };
 
 }  // namespace certs

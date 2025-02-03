@@ -27,9 +27,9 @@
 namespace pvxs {
 namespace certs {
 
-#define PVXS_DEFAULT_AUTH_TYPE "x509"
+#define PVXS_DEFAULT_AUTH_TYPE "std"
 
-#define METHOD_STRING(type) (((type).compare(PVXS_DEFAULT_AUTH_TYPE) == 0) ? "default credentials" : ((type) + " credentials"))
+#define METHOD_STRING(type) ((type) + " credentials"))
 #define NAME_STRING(name, org) name + (org.empty() ? "" : ("@" + (org)))
 
 /**
@@ -130,6 +130,8 @@ class PVXS_API CertFactory {
 
     static std::string bioToString(const ossl_ptr<BIO> &bio);
     static void addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, const std::string &value, const X509 *issuer_certificate_ptr);
+    static bool verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data, const std::string &signature);
+
 
   private:
     /**

@@ -2,13 +2,15 @@
 
 SRC_DIRS += $(AUTHN)
 
-#--------------------------------------------
-#  ADD AUTHENTICATION PLUGINS AFTER THIS LINE
-
 SRCS += auth.cpp
+SRCS += configauthn.cpp
 SRCS += ccrmanager.cpp
+SRCS += authregistry.cpp
 
 include $(AUTHN)/std/Makefile
+
+#--------------------------------------------
+#  ADD AUTHENTICATION PLUGINS AFTER THIS LINE
 
 ifeq ($(PVXS_ENABLE_JWT_AUTH),YES)
 include $(AUTHN)/jwt/Makefile

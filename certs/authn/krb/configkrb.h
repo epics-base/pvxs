@@ -7,40 +7,36 @@
 #ifndef PVXS_CONFIGKRB_H_
 #define PVXS_CONFIGKRB_H_
 
-#include <memory>
+#include <pvxs/config.h>
+#include <pvxs/client.h>
+#include "configauthn.h"
 
-#include "ownedptr.h"
+namespace pvxs {
+namespace certs {
 
-#include "certconfig.h"
-
-class ConfigKrb : public Config {
+class ConfigKrb : public ConfigAuthN {
   public:
-    /**
-     * @brief This is the string to which PVACMS/CLUSTER is prepended to
-     * create the service principal to be added to the Kerberos KDC to
-     * enable Kerberos ticket verification by the PVACMS.
-     *
-     * It is used in an EPICS agent when creating a GSSAPI context to
-     * create a token to send to the PVACMS to be validated, and used by
-     * the PVACMS to create another GSSAPI context to decode the token
-     * and validate the CCR.
-     *
-     * There is no default so this value *must* be
-     * specified if Kerberos support is configured.
-     *
-     * The KDC will share a keytab file containing the secret key
-     * for the PVACMS/CLUSTER service and it will be made available to
-     * all members of the cluster but protected so no other processes
-     * or users can access it.
-     */
-    std::string krb_realm;
-};
-
-class ConfigKrbFactory : public ConfigFactoryInterface {
-  public:
-    std::unique_ptr<Config> create() override {
-        return std::make_unique<ConfigKrb>();
+    ConfigKrb& applyEnv() {
+        Config::applyEnv(true, CLIENT);
+        return *this;
     }
+
+    static ConfigKrb fromEnv() {
+        auto config = ConfigKrb{}.applyEnv();
+        auto defs = std::map<std::string, std::string>();
+        config.fromAuthNEnv(defs);
+        config.fromKrbEnv(defs);
+        return config;
+    }
+
+    std::string krb_validator_service{"pvacms"};
+    std::string krb_realm{"EPICS.ORG"};
+    std::string krb_keytab{};
+
+    void fromKrbEnv(const std::map<std::string, std::string>& defs);
 };
+
+}  // namespace certs
+}  // namespace pvxs
 
 #endif //PVXS_CONFIGKRB_H_

@@ -10,13 +10,13 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <CLI/App.hpp>
 
 #include <pvxs/data.h>
 
 #include "ccrmanager.h"
 #include "certfactory.h"
 #include "configstd.h"
-#include "ownedptr.h"
 #include "security.h"
 
 namespace pvxs {
@@ -41,13 +41,20 @@ class Auth {
     Auth(const std::string &type, const std::vector<Member> &verifier_fields) : type_(type), verifier_fields_(verifier_fields) {};
     virtual ~Auth() = default;
 
-    virtual std::shared_ptr<Credentials> getCredentials(const ConfigStd &config) const = 0;
+    virtual std::string getOptionsText() = 0;
+    virtual std::string getParameterHelpText() = 0;
+    virtual void addParameters(CLI::App & app, const std::map<const std::string, client::Config> & authn_config_map) = 0;
+
+    // Registration of all supported auth methods
+    static std::map<const std::string, std::shared_ptr<Auth>> auths;
+
+    virtual std::shared_ptr<Credentials> getCredentials(const client::Config &config) const = 0;
     virtual std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
                                                                            const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const;
     // Called inside PVACMS to verify request
     // if an out-of-band authentication is used then it will check the signature
     // established by the signCcrPayloadIfNeeded() method
-    virtual bool verify(const Value ccr, std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const = 0;
+    virtual bool verify(Value ccr, std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const = 0;
     // @brief: If implemented, signCcrPayloadIfNeeded(), will make a call to
     // PVACMS server through an authentication-method specific API to verify the
     // contents of the CCR match the authentication-method's credentials On the
@@ -61,14 +68,18 @@ class Auth {
     //
     // Return false if we don't need this (default) - only implement in
     // subclasses if needed
-    virtual bool signCcrPayloadIfNeeded(const Value ccr, std::string &signature) const { return false; };
+    virtual bool signCcrPayloadIfNeeded(const Value ccr, std::string &signature) const { return false; }
 
-    virtual std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, double timeout) const;
+    static Auth *getAuth(const std::string & type);
+
+    virtual client::Config fromEnv() = 0;
+
+    std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, double timeout) const;
 
    protected:
     // Called to have a standard presentation of the CCR for the
     // purposes of generating and verifying signatures
-    inline const std::string ccrToString(const Value &ccr) const {
+    static std::string ccrToString(const Value &ccr) {
         return SB() << ccr["type"].as<std::string>() << ccr["name"].as<std::string>() << ccr["country"].as<std::string>()
                     << ccr["organization"].as<std::string>() << ccr["organization_unit"].as<std::string>() << ccr["not_before"].as<time_t>()
                     << ccr["not_after"].as<time_t>() << ccr["usage"].as<uint16_t>();

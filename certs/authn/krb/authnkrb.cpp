@@ -7,39 +7,108 @@
 #include "authnkrb.h"
 
 #include <cstring>
-#include <memory>
 #include <stdexcept>
 #include <string>
 
+#ifdef __APPLE__
+#include <GSS/gssapi.h>
+#else
 #include <gssapi/gssapi.h>
-#include <gssapi/gssapi_generic.h>
 #include <gssapi/gssapi_krb5.h>
+#endif
+
+
+#include <CLI/CLI.hpp>
 
 #include <pvxs/config.h>
 
-#include "auth.h"
 #include "authregistry.h"
-#include "security.h"
+#include "certfilefactory.h"
+#include "configkrb.h"
+#include "openssl.h"
+#include "p12filefactory.h"
+#include "utilpvt.h"
+#include "certstatusfactory.h"
+
+DEFINE_LOGGER(auth, "pvxs.auth.krb");
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
-DEFINE_LOGGER(auths, "pvxs.security.auth.krb");
+struct AuthNKrbRegistrar {
+    AuthNKrbRegistrar() { // NOLINT(*-use-equals-default)
+        AuthRegistry::instance().registerAuth(PVXS_KRB_AUTH_TYPE, std::unique_ptr<Auth>(new AuthNKrb()));
+    }
+    // ReSharper disable once CppDeclaratorNeverUsed
+} auth_n_krb_registrar;
 
-// Get rid of OSX 10.7 and greater deprecation warnings.
-#if defined(__APPLE__) && defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-
-std::shared_ptr<Credentials> KrbAuth::getCredentials(const impl::ConfigCommon &config) const {
-    log_debug_printf(auths,
-                     "\n******************************************\nKerberos "
-                     "Authenticator: %s\n",
+std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &) const {
+    log_debug_printf(auth,
+                     "\n******************************************\n"
+                     "Kerberos Authenticator: %s\n",
                      "Begin acquisition");
 
     // Create KrbCredentials shared_ptr
     auto kerberos_credentials = std::make_shared<KrbCredentials>();
+
+    // Initialize GSSAPI structures
+    OM_uint32 minor_status, major_status;
+    gss_name_t name = GSS_C_NO_NAME;
+    gss_buffer_desc name_buffer = GSS_C_EMPTY_BUFFER;
+    gss_cred_id_t cred_handle = GSS_C_NO_CREDENTIAL;
+    OM_uint32 lifetime;
+
+
+    // Acquire the default credential handle
+    log_debug_printf(auth, "gss_acquire_cred: GSS_C_NO_NAME, GSS_C_INDEFINITE, GSS_C_NO_OID_SET, GSS_C_ACCEPT%s", "\n");
+    major_status = gss_acquire_cred(&minor_status, GSS_C_NO_NAME, GSS_C_INDEFINITE,
+                                    GSS_C_NO_OID_SET, GSS_C_INITIATE, &cred_handle, nullptr, nullptr);
+    if (major_status != GSS_S_COMPLETE) throw std::runtime_error(SB() << "getCredentials: Failed to acquire credentials: " << gssErrorDescription(major_status, minor_status));
+
+
+    // Get the principal name associated with the credential
+    log_debug_printf(auth, "gss_inquire_cred%s", "\n");
+    major_status = gss_inquire_cred(&minor_status, cred_handle, &name, &lifetime, nullptr, nullptr);
+    if (major_status != GSS_S_COMPLETE) {
+        gss_release_cred(&minor_status, &cred_handle);
+        throw std::runtime_error(SB() << "getCredentials: Failed to inquire credentials: " << gssErrorDescription(major_status, minor_status));
+    }
+
+
+    // Convert the principal name to a string
+    log_debug_printf(auth, "gss_display_name%s", "\n");
+    major_status = gss_display_name(&minor_status, name, &name_buffer, nullptr);
+    if (major_status != GSS_S_COMPLETE) {
+        gss_release_name(&minor_status, &name);
+        gss_release_cred(&minor_status, &cred_handle);
+        throw std::runtime_error(SB() << "getCredentials: Failed to get principal name: " << gssErrorDescription(major_status, minor_status));
+    }
+
+    std::string principal_name(static_cast<char*>(name_buffer.value), name_buffer.length);
+    gss_release_buffer(&minor_status, &name_buffer);
+    gss_release_name(&minor_status, &name);
+
+    log_debug_printf(auth, "Set Credentials%s", "\n");
+    // Split the principal name into name and organization
+    size_t at_pos = principal_name.find('@');
+    if (at_pos == std::string::npos) {
+        gss_release_cred(&minor_status, &cred_handle);
+        throw std::runtime_error(SB() << "getCredentials: Invalid principal name format: " << principal_name.c_str());
+    }
+
+    kerberos_credentials->name = principal_name.substr(0, at_pos);
+    kerberos_credentials->organization = principal_name.substr(at_pos + 1);
+    kerberos_credentials->organization_unit = {};
+    kerberos_credentials->country = {};
+
+    // Get the current time and the ticket's expiration time
+    time_t now = time(nullptr);
+    kerberos_credentials->not_before = now;
+    kerberos_credentials->not_after = now + lifetime;
+    log_debug_printf(auth, "\nName: %s, \nOrg: %s, \nnot_before: %lu, \nnot_after: %lu\n", kerberos_credentials->name.c_str(), kerberos_credentials->organization.c_str(), kerberos_credentials->not_before, kerberos_credentials->not_after);
+
+    // Release the credential handle
+    gss_release_cred(&minor_status, &cred_handle);
 
     return kerberos_credentials;
 }
@@ -57,35 +126,53 @@ std::shared_ptr<Credentials> KrbAuth::getCredentials(const impl::ConfigCommon &c
  * @param usage the desired certificate usage bitmask
  * @return The certificate creation request.
  */
-std::shared_ptr<CertCreationRequest> KrbAuth::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
+std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
                                                                         const std::shared_ptr<KeyPair> &key_pair,
                                                                         const uint16_t &usage) const {
     auto krb_credentials = castAs<KrbCredentials, Credentials>(credentials);
 
     // Call subclass to set up common CSR fields
     auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage);
+    log_debug_printf(auth, "CCR: created%s", "\n");
 
-    OM_uint32 major_status, minor_status;
+    OM_uint32 minor_status;
     gss_ctx_id_t context = GSS_C_NO_CONTEXT;
 
     // We use GSS_C_NO_CREDENTIAL to specify that we want to use the default
     // credentials Usually, the default credential is obtained from the system's
     // Kerberos TGT
 
-    // Similarly, for the target name, it will be of the format service@hostname
+    // Similarly, for the target name, it will be of the format service@hostname (default: pvacms/cluster@EPICS.ORG)
+    log_debug_printf(auth, "Getting Target Name: %s\n", krb_validator_service_name.c_str());
     gss_name_t target_name;
-    // TODO remove server hardcoding.  Determine target PVACMS server by config
-    gssNameFromString("PVACMS@SLAC.STANFORD.EDU", target_name);
+    gssNameFromString(krb_validator_service_name, target_name);
 
     // Initialize the context from a kerberos ticket
+    log_debug_printf(auth, "gss_init_sec_context%s", "\n");
     gss_buffer_desc output_token = GSS_C_EMPTY_BUFFER;
-    major_status = gss_init_sec_context(&minor_status, GSS_C_NO_CREDENTIAL, &context, target_name,
-                                        krb5_oid,  // Kerberos 5 credentials only
-                                        GSS_C_MUTUAL_FLAG | GSS_C_REPLAY_FLAG, 0, GSS_C_NO_CHANNEL_BINDINGS,
-                                        GSS_C_NO_BUFFER, /* No input token provided because we haven't got
-                                                        anything from other side, and we won't use it
-                                                        anyway*/
-                                        NULL, &output_token, NULL, NULL);
+
+    OM_uint32 major_status = gss_init_sec_context(
+        &minor_status,
+        GSS_C_NO_CREDENTIAL,
+        &context,
+        target_name,
+        krb5_oid,
+        0,                         // minimal flags
+        GSS_C_INDEFINITE,          // use indefinite lifetime
+        GSS_C_NO_CHANNEL_BINDINGS,
+        GSS_C_NO_BUFFER,
+        nullptr,
+        &output_token,
+        nullptr,
+        nullptr);
+
+    /*
+    OM_uint32 major_status = gss_init_sec_context(&minor_status, GSS_C_NO_CREDENTIAL, &context, target_name, krb5_oid,
+                                                  0, // no flags or only the minimal flags required
+                                                  0, GSS_C_NO_CHANNEL_BINDINGS, GSS_C_NO_BUFFER, nullptr, &output_token,
+                                                  nullptr, nullptr);
+
+    */
 
     if (GSS_ERROR(major_status)) {
         throw std::runtime_error(SB() << "Failed to initialize kerberos security context: "
@@ -93,13 +180,16 @@ std::shared_ptr<CertCreationRequest> KrbAuth::createCertCreationRequest(const st
     }
 
     // Add token to credentials
+    log_debug_printf(auth, "Got Security Token%s", "\n");
     krb_credentials->token = std::vector<uint8_t>(static_cast<uint8_t *>(output_token.value),
                                                   static_cast<uint8_t *>(output_token.value) + output_token.length);
 
     // Clean up
+    log_debug_printf(auth, "Deleting Security Context%s", "\n");
     gss_delete_sec_context(&minor_status, &context, &output_token);
 
     // KRB specific fields
+    log_debug_printf(auth, "Setting token in CCR%s", "\n");
     shared_array<const uint8_t> token_bytes(krb_credentials->token.begin(), krb_credentials->token.end());
     cert_creation_request->credentials = krb_credentials;
     cert_creation_request->ccr["verifier.token"] = token_bytes;
@@ -107,6 +197,46 @@ std::shared_ptr<CertCreationRequest> KrbAuth::createCertCreationRequest(const st
     return cert_creation_request;
 }
 
+void AuthNKrb::gssNameFromString(const std::string &name, gss_name_t &target_name) {
+    OM_uint32 minor_status;
+    gss_buffer_desc name_buf;
+    gss_OID name_type = GSS_KRB5_NT_PRINCIPAL_NAME;
+
+    /* initialize the name buffer */
+    name_buf.value = const_cast<char *>(name.c_str());
+    name_buf.length = name.size() + 1;
+
+    /* import the name */
+    OM_uint32 major_status = gss_import_name(&minor_status, &name_buf, name_type, &target_name);
+    if (GSS_ERROR(major_status)) {
+        throw std::runtime_error(SB() << "Kerberos can't create name from \"" << name
+                                      << "\" : " << gssErrorDescription(major_status, minor_status));
+    }
+}
+
+std::string AuthNKrb::gssErrorDescription(OM_uint32 major_status, OM_uint32 minor_status) {
+    OM_uint32 msg_ctx;
+    OM_uint32 minor;
+    gss_buffer_desc status_string;
+    auto error_description = SB();
+    char context[GSS_STATUS_BUFFER_LEN] = "";
+
+    msg_ctx = 0;
+    while (!gss_display_status(&minor, major_status, GSS_C_GSS_CODE, GSS_C_NO_OID, &msg_ctx, &status_string)) {
+        snprintf(context, GSS_STATUS_BUFFER_LEN, "%.*s\n", static_cast<int>(status_string.length), static_cast<char *>(status_string.value));
+        error_description << context;
+        gss_release_buffer(&minor, &status_string);
+    }
+
+    msg_ctx = 0;
+    while (!gss_display_status(&minor, minor_status, GSS_C_MECH_CODE, GSS_C_NULL_OID, &msg_ctx, &status_string)) {
+        snprintf(context, GSS_STATUS_BUFFER_LEN, "%.*s\n", static_cast<int>(status_string.length), static_cast<char *>(status_string.value));
+        error_description << context;
+        gss_release_buffer(&minor, &status_string);
+    }
+
+    return error_description.str();
+}
 /**
  * @brief Verify the Kerberos authentication against the provided CCR.
  *
@@ -115,14 +245,12 @@ std::shared_ptr<CertCreationRequest> KrbAuth::createCertCreationRequest(const st
  * verifier.token.
  *
  * @param ccr The CCR which includes the information required in the certificate
- * as well as the verifier.token created in the client capturing the kerberos
+ * as well as the `verifier.token` created in the client capturing the kerberos
  * ticket and wrapping it as a GSS-API token
- * @param compareFunc We don't use the side-band verification with kerberos so
- * we won't use this callback.
  * @return True if the kerberos credentials extracted from the token and
  * validated by the KDC match those in the CCR, false otherwise.
  */
-bool KrbAuth::verify(const Value ccr, std::function<bool(const std::string &, const std::string &)>) const {
+bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, const std::string &)>) const {
     // Verify that the token in the ccr is created from a ticket generated by
     // the same KDC I'm configured in as a service
 
@@ -140,19 +268,17 @@ bool KrbAuth::verify(const Value ccr, std::function<bool(const std::string &, co
     // Get ready for accepting the client's token
     gss_ctx_id_t context = GSS_C_NO_CONTEXT;
     gss_buffer_desc server_token;
-    OM_uint32 major_status;
     OM_uint32 minor_status;
 
     // The server accepts the context using the client's token
-    major_status = gss_accept_sec_context(&minor_status, &context,
-                                          GSS_C_NO_CREDENTIAL,  // use the default credential
-                                          &client_token, GSS_C_NO_CHANNEL_BINDINGS,
-                                          NULL,          // don't need the name of client
-                                          krb5_oid_ptr,  // Kerberos 5 credentials only
-                                          &server_token,
-                                          NULL,  // don't care about ret_flags
-                                          NULL,  // ignore time_rec
-                                          NULL   // ignore delegated_cred_handle
+    OM_uint32 major_status = gss_accept_sec_context(&minor_status, &context, GSS_C_NO_CREDENTIAL,
+                                                    // use the default credential
+                                                    &client_token, GSS_C_NO_CHANNEL_BINDINGS, nullptr,
+                                                    // don't need the name of client
+                                                    krb5_oid_ptr, // Kerberos 5 credentials only
+                                                    &server_token, nullptr, // don't care about ret_flags
+                                                    nullptr, // ignore time_rec
+                                                    nullptr // ignore delegated_cred_handle
     );
 
     // Note: If the context is not fully established, major_status will be
@@ -165,7 +291,7 @@ bool KrbAuth::verify(const Value ccr, std::function<bool(const std::string &, co
 
     if (GSS_ERROR(major_status)) {
         throw std::runtime_error(SB() << "Verify Credentials: Failed to validate kerberos token: "
-                                      << gssErrorDescription(major_status, minor_status));
+            << gssErrorDescription(major_status, minor_status));
     }
 
     // Now get the peer credentials information from the context
@@ -175,20 +301,21 @@ bool KrbAuth::verify(const Value ccr, std::function<bool(const std::string &, co
     OM_uint32 peer_lifetime;
     gss_OID_set peer_mechanisms;
     int peer_credential_usage;
-    time_t now = time(NULL);
+    time_t now = time(nullptr);
 
     major_status =
         gss_inquire_cred(&minor_status, nullptr, &peer_name, &peer_lifetime, &peer_credential_usage, &peer_mechanisms);
-    throw std::runtime_error(SB() << "Verify Credentials: Failed to inquire credentials: "
-                                  << gssErrorDescription(major_status, minor_status));
+    if ( GSS_ERROR(major_status) )
+        throw std::runtime_error(SB() << "Verify Credentials: Failed to inquire credentials: "
+            << gssErrorDescription(major_status, minor_status));
 
     // Get the principal name
     gss_buffer_desc peer_name_buffer;
-    major_status = gss_display_name(&minor_status, peer_name, &peer_name_buffer, NULL);
+    major_status = gss_display_name(&minor_status, peer_name, &peer_name_buffer, nullptr);
     if (GSS_ERROR(major_status)) {
         gss_release_name(&minor_status, &peer_name);
         throw std::runtime_error(SB() << "Verify Credentials: Failed to get principal name: "
-                                      << gssErrorDescription(major_status, minor_status));
+            << gssErrorDescription(major_status, minor_status));
     }
 
     std::string peer_principal(static_cast<char *>(peer_name_buffer.value), peer_name_buffer.length);
@@ -198,8 +325,8 @@ bool KrbAuth::verify(const Value ccr, std::function<bool(const std::string &, co
     // Check if the credentials are for Kerberos
     if (peer_mechanisms->elements != krb5_oid) {
         throw std::runtime_error(SB() << "Verify Credentials: Client credentials are not for Kerberos "
-                                         "mechanism: "
-                                      << gssErrorDescription(major_status, minor_status));
+            "mechanism: "
+            << gssErrorDescription(major_status, minor_status));
     }
 
     // Now, 'principal' contains the principal name, 'lifetime' contains the
@@ -229,7 +356,7 @@ bool KrbAuth::verify(const Value ccr, std::function<bool(const std::string &, co
     }
     if (peer_principal_organization.compare(ccr["organization"].as<std::string>()) != 0) {
         throw std::runtime_error(SB() << "Verify Credentials: Kerberos organization "
-                                         "does not match name in CCR");
+            "does not match name in CCR");
     }
     if (!ccr["organization_unit"].as<std::string>().empty()) {
         throw std::runtime_error(SB() << "Verify Credentials: Organization Unit in CCR not blank");
@@ -242,61 +369,15 @@ bool KrbAuth::verify(const Value ccr, std::function<bool(const std::string &, co
     }
     if (ccr["not_before"].as<uint32_t>() >= now + peer_lifetime) {
         throw std::runtime_error(SB() << "Verify Credentials: CCR not_before after "
-                                         "end of kerberos ticket lifetime");
+            "end of kerberos ticket lifetime");
     }
-
     if (ccr["not_after"].as<uint32_t>() > now + peer_lifetime) {
         throw std::runtime_error(SB() << "Verify Credentials: CCR not_after after "
-                                         "end of kerberos ticket lifetime");
+            "end of kerberos ticket lifetime");
     }
 
     return true;
 }
-
-void KrbAuth::gssNameFromString(const std::string &name, gss_name_t &target_name) const {
-    OM_uint32 major_status, minor_status;
-    gss_buffer_desc name_buf;
-    gss_OID name_type = GSS_C_NT_HOSTBASED_SERVICE;
-
-    /* initialize the name buffer */
-    name_buf.value = (void *)name.c_str();
-    name_buf.length = name.size() + 1;
-
-    /* import the name */
-    major_status = gss_import_name(&minor_status, &name_buf, name_type, &target_name);
-    if (GSS_ERROR(major_status)) {
-        throw std::runtime_error(SB() << "Kerberos can't create name from \"" << name
-                                      << "\" : " << gssErrorDescription(major_status, minor_status));
-    }
-}
-
-std::string KrbAuth::gssErrorDescription(OM_uint32 major_status, OM_uint32 minor_status) const {
-    OM_uint32 msg_ctx;
-    OM_uint32 minor;
-    gss_buffer_desc status_string;
-    auto error_description = SB();
-    char context[GSS_STATUS_BUFFER_LEN] = "";
-
-    msg_ctx = 0;
-    while (!gss_display_status(&minor, major_status, GSS_C_GSS_CODE, GSS_C_NO_OID, &msg_ctx, &status_string)) {
-        snprintf(context, GSS_STATUS_BUFFER_LEN, "%.*s\n", (int)status_string.length, (char *)status_string.value);
-        error_description << context;
-        gss_release_buffer(&minor, &status_string);
-    }
-
-    msg_ctx = 0;
-    while (!gss_display_status(&minor, minor_status, GSS_C_MECH_CODE, GSS_C_NULL_OID, &msg_ctx, &status_string)) {
-        snprintf(context, GSS_STATUS_BUFFER_LEN, "%.*s\n", (int)status_string.length, (char *)status_string.value);
-        error_description << context;
-        gss_release_buffer(&minor, &status_string);
-    }
-
-    return error_description.str();
-}
-
-#if defined(__APPLE__) && defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 
 }  // namespace security
 }  // namespace pvxs

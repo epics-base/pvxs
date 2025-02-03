@@ -231,7 +231,7 @@ void ensureValidityCompatible(CertFactory &cert_factory);
 
 uint64_t generateSerial();
 
-std::tuple<certstatus_t, time_t> getCertificateStatus(sql_ptr &ca_db, uint64_t serial);
+std::tuple<certstatus_t, time_t> getCertificateStatus(const sql_ptr &ca_db, uint64_t serial);
 void getWorstCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t &worst_status_so_far, time_t &worst_status_time_so_far);
 std::tuple<time_t, time_t> getCertificateValidity(sql_ptr &ca_db, uint64_t serial);
 

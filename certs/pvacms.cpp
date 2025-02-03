@@ -36,6 +36,8 @@
 #include <vector>
 
 #include <asDbLib.h>
+#include <auth.h>
+#include <authregistry.h>
 #include <epicsGetopt.h>
 #include <epicsThread.h>
 #include <epicsTime.h>
@@ -222,7 +224,7 @@ void initCertsDatabase(sql_ptr &ca_db, std::string &db_file) {
         sqlite3_finalize(statement);
 
         if (!table_exists) {
-            auto sql_status = sqlite3_exec(ca_db.get(), SQL_CREATE_DB_FILE, 0, 0, 0);
+            auto sql_status = sqlite3_exec(ca_db.get(), SQL_CREATE_DB_FILE, nullptr, nullptr, 0);
             if (sql_status != SQLITE_OK && sql_status != SQLITE_DONE) {
                 throw std::runtime_error(SB() << "Can't initialize certs db file: " << sqlite3_errmsg(ca_db.get()));
             }
@@ -272,7 +274,7 @@ void getWorstCertificateStatus(sql_ptr &ca_db, serial_number_t serial, certstatu
  * @throw std::runtime_error If there is an error preparing the SQL statement or
  * retrieving the certificate status.
  */
-std::tuple<certstatus_t, time_t> getCertificateStatus(sql_ptr &ca_db, serial_number_t serial) {
+std::tuple<certstatus_t, time_t> getCertificateStatus(const sql_ptr &ca_db, serial_number_t serial) {
     int cert_status = UNKNOWN;
     time_t status_date = std::time(nullptr);
 
@@ -721,8 +723,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
         certstatus_t state = UNKNOWN;
         // Call the authenticator specific verifier if not the default type
         if (type.compare(PVXS_DEFAULT_AUTH_TYPE) != 0) {
-            /*
-                        const auto &authenticator = KeychainFactory::getAuth(type);
+                        const auto authenticator = certs::Auth::getAuth(type);
                         if (!authenticator->verify(ccr,
                                                    [&ca_pub_key](const std::string &data,
                                                                  const std::string &signature) {
@@ -733,11 +734,10 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
                                                    })) {
                             throw std::runtime_error("CCR claims are invalid");
                         }
-            */
             state = VALID;
         } else {
             state = PENDING_APPROVAL;
-            if ((IS_USED_FOR_(usage, ssl::kForClientAndServer) && !config.cert_gateway_require_approval) ||
+            if ((IS_USED_FOR_(usage, ssl::kForClientAndServer) && !config.cert_hybrid_require_approval) ||
                 (IS_USED_FOR_(usage, ssl::kForClient) && !config.cert_client_require_approval) ||
                 (IS_USED_FOR_(usage, ssl::kForServer) && !config.cert_server_require_approval)) {
                 state = VALID;
@@ -1016,9 +1016,9 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
     uint64_t serial;
     try {
         serial = std::stoull(serial_string);
-    } catch (const std::invalid_argument &e) {
+    } catch (std::invalid_argument) {
         throw std::runtime_error(SB() << "Conversion error: Invalid argument. Serial in PV name is not a number: " << serial_string);
-    } catch (const std::out_of_range &e) {
+    } catch (std::out_of_range) {
         throw std::runtime_error(SB() << "Conversion error: Out of range. Serial is too large: " << serial_string);
     }
 
@@ -1501,64 +1501,6 @@ time_t getNotBeforeTimeFromCert(const X509 *cert) {
 }
 
 /**
- * @brief Get the IP address of the current process' host.
- *
- * This will return the IP address based on the following rules.  It will
- * look through all the network interfaces and will skip local and self
- * assigned addresses.  Then it will select any public IP address.
- * if no public IP addresses are found then it will return
- * the first private IP address that it finds
- *
- * @return the IP address of the current process' host
- */
-std::string getIPAddress() {
-    struct ifaddrs *if_addr_struct = nullptr;
-    struct ifaddrs *ifa;
-    void *tmp_addr_ptr;
-    std::string chosen_ip;
-    std::string private_ip;
-
-    getifaddrs(&if_addr_struct);
-
-    std::regex local_address_pattern(R"(^(127\.)|(169\.254\.))");
-    std::regex private_address_pattern(R"(^(10\.)|(172\.1[6-9]\.)|(172\.2[0-9]\.)|(172\.3[0-1]\.)|(192\.168\.))");
-
-    for (ifa = if_addr_struct; ifa != nullptr; ifa = ifa->ifa_next) {
-        if (!ifa->ifa_addr) {
-            continue;
-        }
-        if (ifa->ifa_addr->sa_family == AF_INET) {
-            // is a valid IPv4 Address
-            tmp_addr_ptr = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
-            char address_buffer[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, tmp_addr_ptr, address_buffer, INET_ADDRSTRLEN);
-
-            // Skip local or self-assigned address. If it's a private address,
-            // remember it.
-            if (!std::regex_search(address_buffer, local_address_pattern)) {
-                if (std::regex_search(address_buffer, private_address_pattern)) {
-                    if (private_ip.empty()) {
-                        private_ip = address_buffer;
-                    }
-                } else {
-                    chosen_ip = address_buffer;
-                    break;  // If a public address is found, exit the loop
-                }
-            }
-        }
-    }
-    if (if_addr_struct != nullptr) freeifaddrs(if_addr_struct);
-
-    // If no public IP addresses were found, use the first private IP that was
-    // found.
-    if (chosen_ip.empty()) {
-        chosen_ip = private_ip;
-    }
-
-    return chosen_ip;
-}
-
-/**
  * @brief Set a value in a Value object marking any changes to the field if the values changed and if not then
  * the field is unmarked.  Doesn't work for arrays or enums so you need to do that manually.
  *
@@ -1879,8 +1821,17 @@ bool statusMonitor(StatusMonitor &status_monitor_params) {
     return true;  // We're not done - check files too
 }
 
-int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &config, bool &verbose, std::string &ca_password_file,
-                   std::string &pvacms_password_file, std::string &admin_password_file, std::string &admin_name) {
+std::map<const std::string, client::Config> getAuthNConfigMap() {
+    std::map<const std::string, client::Config> authn_config_map;
+
+    for (auto &authn_entry : AuthRegistry::getRegistry()) {
+        authn_config_map[authn_entry.first] = authn_entry.second->fromEnv();
+    }
+    return authn_config_map;
+}
+
+int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &config, std::map<const std::string, client::Config> &authn_config_map, bool &verbose, std::string &admin_name) {
+    std::string ca_password_file, pvacms_password_file, admin_password_file;
     bool show_version{false}, help{false};
 
     CLI::App app{"PVACMS - Certificate Management Service"};
@@ -1915,15 +1866,23 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
 
     app.add_flag("--client-require-approval", config.cert_client_require_approval, "Generate Client Certificates in PENDING_APPROVAL state");
     app.add_flag("--server-require-approval", config.cert_server_require_approval, "Generate Server Certificates in PENDING_APPROVAL state");
-    app.add_flag("--gateway-require-approval", config.cert_gateway_require_approval, "Generate Server Certificates in PENDING_APPROVAL state");
+    app.add_flag("--hybrid-require-approval", config.cert_hybrid_require_approval, "Generate Hybrid Certificates in PENDING_APPROVAL state");
 
     app.add_option("--status-validity-mins", config.cert_status_validity_mins, "Set Status Validity Time in Minutes");
     app.add_flag("--status-monitoring-enabled", config.cert_status_subscription,
                  "Require Peers to monitor Status of Certificates Generated by this server by default.  Can be overridden in each CCR");
 
+    // Add any parameters for any registered authn methods
+    for (auto & authn_entry : AuthRegistry::getRegistry())
+        authn_entry.second->addParameters(app, authn_config_map);
+
     CLI11_PARSE(app, argc, argv);
 
     if (help) {
+        std::string authn_help, authn_options;
+        for (auto & authn_entry : AuthRegistry::getRegistry()) authn_options += authn_entry.second->getOptionsText();
+        for (auto & authn_entry : AuthRegistry::getRegistry()) authn_help += authn_entry.second->getParameterHelpText();
+
         std::cout << "PVACMS: PVAccess Certificate Management Service\n"
                   << std::endl
                   << "Manages Certificates for a Secure PVAccess network.  The Certificate Authority.  Handles Create \n"
@@ -1932,9 +1891,10 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
                   << "Also can be used to re-generate the admin certificate that is required to administer the certificates.\n"
                   << std::endl
                   << "usage:\n"
-                  << "  " << program_name << " [admin options] [options]          Run PVACMS.  Interrupt to quit\n"
-                  << "  " << program_name << " (-h | --help)                      Show this help message and exit\n"
-                  << "  " << program_name << " (-V | --version)                   Print version and exit\n"
+                  << "  " << program_name << " [admin options]" << authn_options << " [options]\n"
+                  << "                                             Run PVACMS.  Interrupt to quit\n"
+                  << "  " << program_name << " (-h | --help)                       Show this help message and exit\n"
+                  << "  " << program_name << " (-V | --version)                    Print version and exit\n"
                   << "  " << program_name << " [admin options] --admin-keychain-new <new_name>\n"
                   << "                                             Generate a new Admin User's keychain file, update the ACF file, and exit\n"
                   << std::endl
@@ -1955,7 +1915,7 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
                      "Certificate Management Service`\n"
                   << "        --pvacms-country <name>              Specify country (C) to be used for PVACMS certificate. Default US\n"
                   << "        --client-require-approval            Generate Client Certificates in PENDING_APPROVAL state\n"
-                  << "        --gateway-require-approval           Generate Gateway Certificates in PENDING_APPROVAL state\n"
+                  << "        --hybrid-require-approval           Generate Gateway Certificates in PENDING_APPROVAL state\n"
                   << "        --server-require-approval            Generate Server Certificates in PENDING_APPROVAL state\n"
                   << "        --status-monitoring-enabled          Require Peers to monitor Status of Certificates Generated by this\n"
                   << "                                             server by default. Can be overridden in each CCR\n"
@@ -1966,6 +1926,7 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
                   << "        --acf <acf_file>                     Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf\n"
                   << "  (-a | --admin-keychain) <admin_keychain>   Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/admin.p12\n"
                   << "        --admin-keychain-pwd <file>          Specify location of file containing Admin User's keychain file password\n"
+                  << authn_help
                   << std::endl;
         exit(0);
     }
@@ -1993,6 +1954,29 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
         }
     }
 
+    // Make sure some directories exist and read some passwords
+    if (!config.ca_keychain_file.empty()) config.ensureDirectoryExists(config.ca_keychain_file);
+    if (!config.tls_keychain_file.empty()) config.ensureDirectoryExists(config.tls_keychain_file);
+    if (!config.ca_acf_filename.empty()) config.ensureDirectoryExists(config.ca_acf_filename);
+    if (!config.admin_keychain_file.empty()) config.ensureDirectoryExists(config.admin_keychain_file);
+    if (!config.ca_db_filename.empty()) config.ensureDirectoryExists(config.ca_db_filename);
+    if (!ca_password_file.empty()) {
+        config.ensureDirectoryExists(ca_password_file);
+        config.ca_keychain_pwd = config.getFileContents(ca_password_file);
+    };
+    if (!pvacms_password_file.empty()) {
+        config.ensureDirectoryExists(pvacms_password_file);
+        config.tls_keychain_pwd = config.getFileContents(pvacms_password_file);
+    };
+    if (!admin_password_file.empty()) {
+        config.ensureDirectoryExists(admin_password_file);
+        config.admin_keychain_pwd = config.getFileContents(admin_password_file);
+    };
+
+    // Override some settings for PVACMS
+    config.tls_stop_if_no_cert = true;
+    config.tls_client_cert_required = pvxs::impl::ConfigCommon::Optional;
+
     return 0;
 }
 
@@ -2008,32 +1992,16 @@ int main(int argc, char *argv[]) {
     try {
         // Get config
         auto config = ConfigCms::fromEnv();
+        // And, get all configured authn configs
+        auto authn_config_map = getAuthNConfigMap();
+
         pvxs::sql_ptr ca_db;
         auto program_name = argv[0];
         bool verbose = false;
         std::string ca_password_file, pvacms_password_file, admin_password_file, admin_name;
 
-        auto parse_result = readParameters(argc, argv, program_name, config, verbose, ca_password_file, pvacms_password_file, admin_password_file, admin_name);
+        auto parse_result = readParameters(argc, argv, program_name, config, authn_config_map, verbose, admin_name);
         if (parse_result) exit(parse_result);
-
-        // Make sure some directories exist
-        if (!config.ca_keychain_file.empty()) config.ensureDirectoryExists(config.ca_keychain_file);
-        if (!config.tls_keychain_file.empty()) config.ensureDirectoryExists(config.tls_keychain_file);
-        if (!config.ca_acf_filename.empty()) config.ensureDirectoryExists(config.ca_acf_filename);
-        if (!config.admin_keychain_file.empty()) config.ensureDirectoryExists(config.admin_keychain_file);
-        if (!config.ca_db_filename.empty()) config.ensureDirectoryExists(config.ca_db_filename);
-        if (!ca_password_file.empty()) config.ensureDirectoryExists(ca_password_file);
-        if (!pvacms_password_file.empty()) config.ensureDirectoryExists(pvacms_password_file);
-        if (!admin_password_file.empty()) config.ensureDirectoryExists(admin_password_file);
-
-        // Read in some passwords from files
-        if (!ca_password_file.empty()) config.ca_keychain_pwd = config.getFileContents(ca_password_file);
-        if (!pvacms_password_file.empty()) config.tls_keychain_file = config.getFileContents(pvacms_password_file);
-        if (!admin_password_file.empty()) config.admin_keychain_pwd = config.getFileContents(admin_password_file);
-
-        // Override some settings for PVACMS
-        config.tls_stop_if_no_cert = true;
-        config.tls_client_cert_required = pvxs::impl::ConfigCommon::Optional;
 
         // Initialize SSL
         pvxs::ossl::SSLContext::sslInit();

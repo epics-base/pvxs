@@ -258,8 +258,8 @@ PVACMS Usage
                                       Generate Client Certificates in PENDING_APPROVAL state
                   --server-require-approval [true]
                                       Generate Server Certificates in PENDING_APPROVAL state
-                  --gateway-require-approval [true]
-                                      Generate Server Certificates in PENDING_APPROVAL state
+                  --hybrid-require-approval [true]
+                                      Generate Hybrid Certificates in PENDING_APPROVAL state
                   --status-validity-mins UINT [30]
                                       Set Status Validity Time in Minutes
                   --status-monitoring-enabled [true]
@@ -311,7 +311,7 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 || EPICS_PVACMS_CERT     || <number of minutes>                       || Minutes that the ocsp status response will                              |
 || _STATUS_VALIDITY_MINS || e.g. ``30``                               || be valid before a client must re-request an update                      |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERTS    || {``true`` (default) or ``false``}         || For authnstd: ``true`` if we require peers to                           |
+|| EPICS_PVACMS_CERTS    || {``true`` (default) or ``false``}         || ``true`` if we require peers to                                         |
 || _REQUIRE_SUBSCRIPTION ||                                           || subscribe to certificate status for certificates to                     |
 ||                       ||                                           || be deemed VALID. Adds extension to new certificates                     |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
@@ -321,8 +321,8 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 || EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false`` }        || ``true`` if server should generate new client certificates in the       |
 || _CLIENT_APPROVAL      ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false`` }        || ``true`` if server should generate new gateway certificates in the      |
-|| _GATEWAY_APPROVAL     ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
+|| EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false`` }        || ``true`` if server should generate new hybrid certificates in the       |
+|| _HYBRID_APPROVAL      ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false`` }        || ``true`` if server should generate new server certificates in the       |
 || _SERVER_APPROVAL      ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |

@@ -7,6 +7,7 @@
 #ifndef PVXS_AUTH_LDAP_H
 #define PVXS_AUTH_LDAP_H
 
+#include <configldap.h>
 #include <functional>
 #include <memory>
 #include <string>
@@ -16,58 +17,34 @@
 #include <pvxs/version.h>
 
 #include "auth.h"
-#include "authregistry.h"
 #include "certfactory.h"
-#include "ownedptr.h"
 #include "security.h"
 
 #define PVXS_LDAP_AUTH_TYPE "ldap"
 
 namespace pvxs {
-namespace security {
+namespace certs {
 
-/**
- * Definition of the LDAP identification type containing all required LDAP
- * credential information.
- */
 struct LdapId {
     int i;  // TODO placeholder
 };
 
 /**
- * The subclass of Credentials that contains the LdapAuth specific
+ * The subclass of Credentials that contains the AuthNLdap specific
  * identification object
  */
 struct LdapCredentials : Credentials {
     LdapId id;  // LDAP ID
 };
 
-/**
- * @class LdapAuth
- * @brief The LdapAuth class provides LDAP authentication
- * functionality.
- *
- * This class is responsible for retrieving credentials for users that have been
- * authenticated against an LDAP server. It inherits from the Auth base
- * class.
- *
- * In order to use the LdapAuth, it must be registered with the
- * CertFactory using the REGISTER_AUTHENTICATOR() macro.
- *
- * The LdapAuth class implements the getCredentials() and
- * createCertCreationRequest() methods. The getCredentials() method returns the
- * credentials used for authentication. The createCertCreationRequest() method
- * creates a signed certificate using the provided credentials.
- */
-class LdapAuth : public Auth {
+class AuthNLdap : public Auth {
    public:
-    REGISTER_AUTHENTICATOR();
 
     // Constructor
-    LdapAuth() : Auth(PVXS_LDAP_AUTH_TYPE, {}) {};
-    ~LdapAuth() override = default;
+    AuthNLdap() : Auth(PVXS_LDAP_AUTH_TYPE, {}) {};
+    ~AuthNLdap() override = default;
 
-    std::shared_ptr<Credentials> getCredentials(const impl::ConfigCommon &config) const override;
+    std::shared_ptr<Credentials> getCredentials(const client::Config &config) const override;
 
     std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
                                                                    const std::shared_ptr<KeyPair> &key_pair,
@@ -77,10 +54,31 @@ class LdapAuth : public Auth {
         const Value ccr,
         std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const override;
 
-    std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr) const override;
+    client::Config fromEnv() {
+        return static_cast<client::Config>(ConfigLdap::fromEnv());
+    };
+
+    std::string getOptionsText() {return " [ldap options]";}
+    std::string getParameterHelpText() {return  "\n"
+                                              "ldap options\n"
+                                              "        --ldap-admin-account <name>          LDAP Admin account name\n"
+                                              "        --ldap-admin-pwd <file>              LDAP Admin account's password file\n"
+                                              "        --ldap-host <host>                   LDAP Host.  Default localhost\n"
+                                              "        --ldap-port <port>                   LDAP port.  Default 389\n"
+                                              "        --ldap-search-root <root>            LDAP search root.  Default dc=epics,dc=org\n";}
+
+    void addParameters(CLI::App & app, const std::map<const std::string, client::Config> & authn_config_map) {
+        auto &config = authn_config_map.at(PVXS_LDAP_AUTH_TYPE);
+        auto config_ldap = static_cast<const ConfigLdap&>(config);
+        app.add_option("--ldap-admin-account", config_ldap.ldap_account, "Specify LDAP account name");
+        app.add_option("--ldap-admin-pwd", config_ldap.ldap_account_password, "Specify LDAP account's password file");
+        app.add_option("--ldap-host", config_ldap.ldap_host, "Specify LDAP hostname or IP address");
+        app.add_option("--ldap-port", config_ldap.ldap_port, "Specify LDAP port number");
+        app.add_option("--ldap-search-root", config_ldap.ldap_search_root, "Specify LDAP search root");
+    }
 };
 
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs
 
 #endif  // PVXS_AUTH_LDAP_H
