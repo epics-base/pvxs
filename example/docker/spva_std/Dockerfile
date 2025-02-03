@@ -1,5 +1,5 @@
 # FROM image built from /example/docker/pvxs
-FROM georgeleveln/pvxs_spva:latest
+FROM georgeleveln/pvxs:latest
 
 # Set environment variables
 ENV PROJECT_HOME=/opt/epics

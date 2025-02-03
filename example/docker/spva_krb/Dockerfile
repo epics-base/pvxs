@@ -5,7 +5,7 @@ RUN apt-get update && \
     apt-get -y install \
             --no-install-recommends \
             krb5-admin-server \
-            krb5-kdc supervisor \
+            krb5-kdc \
             libkrb5-dev
 
 COPY kadm5.acl kdc.conf badpass.txt /etc/krb5kdc/
@@ -27,12 +27,12 @@ RUN service krb5-kdc start && service krb5-admin-server start
 # - note clear passwords for testing purposes only
 RUN kdb5_util create -s -P secret \
  && kadmin.local -q 'addprinc -pw secret -allow_svr admin' \
- && kadmin.local -q 'addprinc -randkey -allow_svr pvacms' \
+ && kadmin.local -q 'addprinc -randkey -allow_svr pvacms/cluster@EPICS.ORG' \
  && kadmin.local -q 'addprinc -pw secret -allow_svr softioc' \
  && kadmin.local -q 'addprinc -pw secret client'
 
 # Create PVACMS keytab
-RUN kadmin.local -q 'ktadd -k /home/pvacms/.config/krb5/pvacms.keytab pvacms' \
+RUN kadmin.local -q 'ktadd -k /home/pvacms/.config/krb5/pvacms.keytab pvacms/cluster@EPICS.ORG' \
  && chown pvacms:pvacms /home/pvacms/.config/krb5/pvacms.keytab \
  && chmod 600 /home/pvacms/.config/krb5/pvacms.keytab
 
