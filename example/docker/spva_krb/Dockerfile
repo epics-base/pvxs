@@ -1,12 +1,25 @@
 # FROM image built from /example/docker/spva_std
 FROM georgeleveln/spva_std:latest
 
+# Set environment variables
+ENV PROJECT_HOME=/opt/epics
+
+# Add kerberos dependencies
 RUN apt-get update && \
     apt-get -y install \
             --no-install-recommends \
             krb5-admin-server \
             krb5-kdc \
             libkrb5-dev
+
+# Set up CONFIG_SITE.local
+WORKDIR ${PROJECT_HOME}
+RUN echo "EVENT2_HAS_OPENSSL = YES" >> ${PROJECT_HOME}/CONFIG_SITE.local
+RUN echo "PVXS_ENABLE_KRB_AUTH = YES" >> ${PROJECT_HOME}/CONFIG_SITE.local
+
+# Rebuild PVXS with kerberos support
+RUN cd pvxs && \
+    make -j10 all
 
 COPY kadm5.acl kdc.conf badpass.txt /etc/krb5kdc/
 

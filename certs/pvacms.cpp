@@ -36,8 +36,6 @@
 #include <vector>
 
 #include <asDbLib.h>
-#include <auth.h>
-#include <authregistry.h>
 #include <epicsGetopt.h>
 #include <epicsThread.h>
 #include <epicsTime.h>
@@ -63,6 +61,8 @@
 
 #include <CLI/CLI.hpp>
 
+#include "auth.h"
+#include "authregistry.h"
 #include "certfactory.h"
 #include "certfilefactory.h"
 #include "certstatus.h"
