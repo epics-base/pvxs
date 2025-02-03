@@ -16,13 +16,6 @@
 #else
 #include <gssapi/gssapi.h>
 #include <gssapi/gssapi_krb5.h>
-static gss_OID_desc krb5_mech_oid_desc = {
-    9,  // length in bytes of the OID value below
-    (void *)"\x2a\x86\x48\x86\xf7\x12\x01\x02\x02"
-};
-#ifndef GSS_KRB5_MECHANISM
-#define GSS_KRB5_MECHANISM (&krb5_mech_oid_desc)
-#endif
 #endif
 
 #include <pvxs/data.h>
@@ -62,11 +55,12 @@ class AuthNKrb : public Auth {
         krb5_oid_desc.length = 9;
         krb5_oid_desc.elements = const_cast<char*>("\x2a\x86\x48\x86\xf7\x12\x01\x02\x02");
     };
+
     ~AuthNKrb() override = default;
     void init(const ConfigKrb &config) {krb_validator_service_name = config.krb_validator_service + "/cluster@" + config.krb_realm;}
 
-    gss_OID krb5_oid{GSS_KRB5_MECHANISM};
-    gss_OID *krb5_oid_ptr{};
+    gss_OID krb5_oid;
+    gss_OID *krb5_oid_ptr;
 
     std::shared_ptr<Credentials> getCredentials(const client::Config &config) const override;
 

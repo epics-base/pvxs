@@ -3,9 +3,6 @@
 SRC_DIRS += $(AUTHN)/jwt
 
 PROD += authnjwt
-authnjwt_INC += authnjwt.h
-authnjwt_INC += configjwt.h
-
 authnjwt_SRCS += authnjwt.cpp
 authnjwt_SRCS += authnjwtmain.cpp
 authnjwt_SRCS += configjwt.cpp
