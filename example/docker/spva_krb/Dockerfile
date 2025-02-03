@@ -30,9 +30,9 @@ COPY krb5.conf /etc/krb5.conf
 COPY krb5-admin-server-supervisor.conf /etc/supervisor/conf.d/kadmind.conf
 COPY krb5-kdc-supervisor.conf /etc/supervisor/conf.d/krb5kdc.conf
 
-RUN echo 'environment=KRB5_KTNAME=/home/pvacms/.config/krb5/pvacms.keytab' >> /etc/supervisor/conf.d/pvacms.conf
-RUN echo 'environment=KRB5_CLIENT_KTNAME=/home/pvacms/.config/krb5/pvacms.keytab' >> /etc/supervisor/conf.d/pvacms.conf
-RUN echo 'environment=EPICS_AUTH_KRB_REALM=EPICS.ORG' >> /etc/supervisor/conf.d/pvacms.conf
+RUN echo 'environment=KRB5_KTNAME="/home/pvacms/.config/krb5/pvacms.keytab"' >> /etc/supervisor/conf.d/pvacms.conf
+RUN echo 'environment=KRB5_CLIENT_KTNAME="/home/pvacms/.config/krb5/pvacms.keytab"' >> /etc/supervisor/conf.d/pvacms.conf
+RUN echo 'environment=EPICS_AUTH_KRB_REALM="EPICS.ORG"' >> /etc/supervisor/conf.d/pvacms.conf
 
 # Ensure the pvacms userr's config directory is created
 RUN mkdir -p /home/pvacms/.config/krb5/
