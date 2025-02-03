@@ -76,6 +76,7 @@ class AuthNLdap : public Auth {
         app.add_option("--ldap-port", config_ldap.ldap_port, "Specify LDAP port number");
         app.add_option("--ldap-search-root", config_ldap.ldap_search_root, "Specify LDAP search root");
     }
+    void configure(const client::Config &config) override {};
 };
 
 }  // namespace certs

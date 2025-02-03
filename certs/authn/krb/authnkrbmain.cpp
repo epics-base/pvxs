@@ -143,7 +143,8 @@ int main(int argc, char *argv[]) {
 
         // Standard authenticator
         AuthNKrb authenticator{};
-        authenticator.init(config);
+        // Add configuration to authenticator
+        authenticator.configure(config);
 
         if (auto credentials = authenticator.getCredentials(config)) {
             std::shared_ptr<KeyPair> key_pair;

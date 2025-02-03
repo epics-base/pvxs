@@ -139,6 +139,8 @@ int main(int argc, char *argv[]) {
 
         // Standard authenticator
         AuthNStd authenticator{};
+        // Add configuration to authenticator
+        authenticator.configure(config);
 
         if (auto credentials = authenticator.getCredentials(config)) {
             std::shared_ptr<KeyPair> key_pair;

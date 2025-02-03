@@ -1825,6 +1825,9 @@ std::map<const std::string, client::Config> getAuthNConfigMap() {
     std::map<const std::string, client::Config> authn_config_map;
 
     for (auto &authn_entry : AuthRegistry::getRegistry()) {
+        auto &auth = authn_entry.second;
+        auto auth_config = auth->fromEnv();
+        auth->configure(auth_config);
         authn_config_map[authn_entry.first] = authn_entry.second->fromEnv();
     }
     return authn_config_map;

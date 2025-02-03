@@ -12,8 +12,9 @@ namespace certs {
 void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string> &defs) {
     PickOne pickone{defs, true};
 
-    // EPICS_AUTH_KRB_KEYTAB
-    if (pickone({"EPICS_AUTH_KRB_KEYTAB"})) {
+    // KRB5_KTNAME
+    // This is the evironment variable defined by krb5
+    if (pickone({"KRB5_KTNAME"})) {
         krb_keytab = pickone.val;
     }
 

@@ -84,6 +84,7 @@ class AuthNStd : public Auth {
     std::string getOptionsText() override {return {};}
     std::string getParameterHelpText() override {return {};}
     void addParameters(CLI::App & app, const std::map<const std::string, client::Config> & authn_config_map) override {}
+    void configure(const client::Config &config) override {};
 };
 
 }  // namespace certs

@@ -57,7 +57,7 @@ class AuthNKrb : public Auth {
     };
 
     ~AuthNKrb() override = default;
-    void init(const ConfigKrb &config) {krb_validator_service_name = config.krb_validator_service + "/cluster@" + config.krb_realm;}
+    void configure(const ConfigKrb &config) {krb_validator_service_name = config.krb_validator_service + "/cluster@" + config.krb_realm;}
 
     gss_OID krb5_oid;
     gss_OID *krb5_oid_ptr;
@@ -74,24 +74,30 @@ class AuthNKrb : public Auth {
         return static_cast<client::Config>(ConfigKrb::fromEnv());
     };
 
+    void configure(const client::Config &config) override {
+        auto &config_krb = static_cast<const ConfigKrb&>(config);
+        krb_validator_service_name = config_krb.krb_validator_service + "/cluster@" + config_krb.krb_realm;
+        krb_realm = config_krb.krb_realm;
+        krb_keytab_file = config_krb.krb_keytab;
+    };
+
     std::string getOptionsText() override {return " [kerberos options]";}
     std::string getParameterHelpText() override {return  "\n"
                                               "kerberos options\n"
-                                              "        --krb-keytab <keytab>                pvacms keytab file location\n"
                                               "        --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`\n"
                                               "        --krb-service <service>              pvacms kerberos service name.  Default `pvacms`\n";}
     void addParameters(CLI::App & app, const std::map<const std::string, client::Config> & authn_config_map) override {
-        // TODO ADD THESE OPTIONS - find out whats wrong
-        // auto &config = authn_config_map.at(PVXS_KRB_AUTH_TYPE);
-        // auto config_krb = static_cast<const ConfigKrb &>(config);
-        // app.add_option("--krb-keytab", config_krb.krb_keytab, "Specify a pvacms keytab file to be used to verify kerberos CCR requests");
-        // app.add_option("--krb-realm", config_krb.krb_realm, "kerberos realm.");
-        // app.add_option("--krb-service", config_krb.krb_validator_service, "pvacms kerberos service name");
+        auto &config = authn_config_map.at(PVXS_KRB_AUTH_TYPE);
+        auto config_krb = static_cast<const ConfigKrb &>(config);
+        app.add_option("--krb-realm", config_krb.krb_realm, "kerberos realm.");
+        app.add_option("--krb-service", config_krb.krb_validator_service, "pvacms kerberos service name");
     }
 
     private:
     gss_OID_desc krb5_oid_desc{};
     std::string krb_validator_service_name{"pvacms/cluster@EPICS.ORG"};
+    std::string krb_keytab_file{};
+    std::string krb_realm{"EPICS.ORG"};
 
     static std::string gssErrorDescription(OM_uint32 major_status, OM_uint32 minor_status);
 

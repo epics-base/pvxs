@@ -82,6 +82,7 @@ class AuthNJwt : public Auth {
         app.add_option("--jwt-trusted_uri", config_jwt.jwt_trusted_uri, "Specify LDAP port number");
         app.add_option("--jwt-use_response-code", config_jwt.jwt_use_response_code, "Specify LDAP search root");
     }
+    void configure(const client::Config &config) override {};
 };
 
 

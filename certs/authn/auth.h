@@ -72,6 +72,7 @@ class Auth {
 
     static Auth *getAuth(const std::string & type);
 
+    virtual void configure(const client::Config &config) = 0;
     virtual client::Config fromEnv() = 0;
 
     std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, double timeout) const;
