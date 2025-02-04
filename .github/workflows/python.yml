@@ -36,34 +36,39 @@ jobs:
 
           # OSX py builds
           - name: osx 3.6 intel
-            os: macos-latest
+            os: macos-13
             python: "3.6"
             piparch: macosx_10_9_intel
 
           - name: osx 3.7 intel
-            os: macos-latest
+            os: macos-13
             python: "3.7"
             piparch: macosx_10_9_intel
 
-          - name: osx 3.8 intel
+          - name: osx 3.8 arm64
             os: macos-latest
             python: "3.8"
-            piparch: macosx_10_9_intel
+            piparch: macosx_11_0_universal2
 
-          - name: osx 3.9 intel
+          - name: osx 3.9 arm64
             os: macos-latest
             python: "3.9"
-            piparch: macosx_10_9_intel
+            piparch: macosx_11_0_universal2
 
-          - name: osx 3.10 intel
+          - name: osx 3.10 arm64
             os: macos-latest
             python: "3.10"
-            piparch: macosx_10_10_intel
+            piparch: macosx_11_0_universal2
 
-          - name: osx 3.11 intel
+          - name: osx 3.11 arm64
             os: macos-latest
             python: "3.11"
-            piparch: macosx_10_10_intel
+            piparch: macosx_11_0_universal2
+
+          - name: osx 3.12 arm64
+            os: macos-latest
+            python: "3.12"
+            piparch: macosx_11_0_universal2
 
           # Windows py builds
 
@@ -73,7 +78,7 @@ jobs:
           #  piparch: win_amd64
 
           - name: win64 3.5
-            os: windows-latest
+            os: windows-2019
             python: "3.5"
             piparch: win_amd64
 
@@ -107,20 +112,30 @@ jobs:
             python: "3.11"
             piparch: win_amd64
 
+          - name: win64 3.12
+            os: windows-latest
+            python: "3.12"
+            piparch: win_amd64
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Automatic core dumper analysis
         uses: mdavidsaver/ci-core-dumper@master
 
-
       - name: Setup native python
         if: matrix.python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
           #architecture: x64
+
+      # TLS 1.0 and 1.1 support was removed from pypi so the cached pip won't work
+      - name: Python 3.5 Fix
+        if: ${{ matrix.python == '3.5' }}
+        run: |
+          curl https://bootstrap.pypa.io/pip/3.5/get-pip.py | python
 
       - name: Prepare
         shell: bash
@@ -157,9 +172,9 @@ jobs:
         run: ls dist/*
 
       - name: Save Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: epicscorelibs
+          name: "epicscorelibs ${{ matrix.name }}"
           path: dist/*
 
       - name: Check wheels
@@ -246,6 +261,12 @@ jobs:
             manylinux: manylinux2014
             arch: x86_64
 
+          - name: linux 3.12 amd64
+            os: ubuntu-latest
+            pyver: cp312-cp312
+            manylinux: manylinux2014
+            arch: x86_64
+
           # Linux py builds x32
           - name: linux 2.7 i686
             pyver: cp27-cp27m
@@ -296,14 +317,15 @@ jobs:
             pre: linux32
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Setup native python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python || '3.7' }}
+          # used to run twine for uploads
+          python-version: '3.11'
           #architecture: x64
 
       - name: Native Prep/Info
@@ -358,9 +380,9 @@ jobs:
         run: ls dist/*
 
       - name: Save Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: epicscorelibs
+          name: "epicscorelibs ${{ matrix.name }}"
           path: dist/*
 
       - name: Check wheels
