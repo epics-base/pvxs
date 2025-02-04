@@ -1,16 +1,12 @@
-PVXS - PVAccess protocol library
-================================
-
-VXS client/server for PVA Protocol
-===================================
+PVXS - Secure PVAccess protocol library
+=======================================
 
 This module provides a library (libpvxs.so or pvxs.dll) and a set of
 CLI utilities acting as PVAccess protocol client and/or server.
 
 PVXS is functionally equivalent to the
 `pvDataCPP <https://github.com/epics-base/pvDataCPP>`_ and
-`pvAccessCPP <https://github.com/epics-base/pvAccessCPP>`_ modules,
-which it hopes to eventually supplant (Ok, the author hopes).
+`pvAccessCPP <https://github.com/epics-base/pvAccessCPP>`_ modules
 
 - VCS: https://github.com/epics-base/pvxs/
 - Docs: https://epics-base.github.io/pvxs/
