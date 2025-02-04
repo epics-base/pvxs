@@ -1,6 +1,9 @@
 PVXS - Secure PVAccess protocol library
 =======================================
 
+[![PVXS EPICS](https://github.com/george-mcintyre/pvxs/actions/workflows/ci-scripts-build.yml/badge.svg?branch=tls)](https://github.com/george-mcintyre/pvxs/actions/workflows/ci-scripts-build.yml) [![PVXS Python](https://github.com/george-mcintyre/pvxs/actions/workflows/python.yml/badge.svg?branch=tls)](https://github.com/george-mcintyre/pvxs/actions/workflows/python.yml) [![Spell Check](https://github.com/george-mcintyre/pvxs/actions/workflows/codespell.yml/badge.svg?branch=tls)](https://github.com/george-mcintyre/pvxs/actions/workflows/codespell.yml) [![pages-build-deployment](https://github.com/george-mcintyre/pvxs/actions/workflows/pages/pages-build-deployment/badge.svg?branch=tls)](https://github.com/george-mcintyre/pvxs/actions/workflows/pages/pages-build-deployment)
+
+
 This module provides a library (libpvxs.so or pvxs.dll) and a set of
 CLI utilities acting as PVAccess protocol client and/or server.
 
