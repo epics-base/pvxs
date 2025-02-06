@@ -197,6 +197,60 @@ int recvfromx::call()
     return ret;
 }
 
+int sendtox::call()
+{
+    msghdr msg{};
+
+    iovec iov = {const_cast<void*>(buf), buflen};
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1u;
+
+    msg.msg_name = const_cast<sockaddr*>(&(*dst)->sa);
+    msg.msg_namelen = dst->size();
+
+    // only need space for IPv4 option(s) or IPv6 option, never both.
+    alignas (cmsghdr) char cbuf[impl::cmax(0
+#ifdef IP_PKTINFO
+            + CMSG_SPACE(sizeof(in_pktinfo))
+#endif
+            , CMSG_SPACE(sizeof(in6_pktinfo)))
+            ] = {};
+
+#ifdef IP_PKTINFO
+    if(srcif && src && src->family()==AF_INET) {
+        auto cmsg(reinterpret_cast<cmsghdr*>(cbuf));
+        cmsg->cmsg_len = CMSG_LEN(sizeof(in_pktinfo));
+        cmsg->cmsg_level = IPPROTO_IP;
+        cmsg->cmsg_type = IP_PKTINFO;
+        auto info(reinterpret_cast<in_pktinfo*>(CMSG_DATA(cmsg)));
+        memset(info, 0, sizeof(*info));
+        info->ipi_ifindex = srcif;
+        if(src) {
+            info->ipi_addr = (*src)->in.sin_addr; // source in IP header
+            info->ipi_spec_dst = (*src)->in.sin_addr; // source use in local routing table lookup
+        }
+        msg.msg_control = cbuf;
+        msg.msg_controllen = cmsg->cmsg_len;
+    } else
+#endif
+    if(srcif && src && src->family()==AF_INET6) {
+        auto cmsg(reinterpret_cast<cmsghdr*>(cbuf));
+        cmsg->cmsg_len = CMSG_LEN(sizeof(in6_pktinfo));
+        cmsg->cmsg_level = IPPROTO_IPV6;
+        cmsg->cmsg_type = IPV6_PKTINFO;
+        auto info(reinterpret_cast<in6_pktinfo*>(CMSG_DATA(cmsg)));
+        memset(info, 0, sizeof(*info));
+        info->ipi6_ifindex = srcif;
+        if(src) {
+            info->ipi6_addr = (*src)->in6.sin6_addr; // source in IP header
+        }
+        msg.msg_control = cbuf;
+        msg.msg_controllen = cmsg->cmsg_len;
+    }
+
+    return sendmsg(sock, &msg, 0);
+}
+
 namespace impl {
 
 decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
