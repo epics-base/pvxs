@@ -516,8 +516,7 @@ Value buildCAMethod()
 }
 
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
-    :ifmap(IfaceMap::instance())
-    ,effective([conf]() -> Config{
+    :effective([conf]() -> Config{
         Config eff(conf);
         eff.expand();
         return eff;

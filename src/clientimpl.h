@@ -247,7 +247,6 @@ private:
 struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 {
     SockAttach attach;
-    IfaceMap& ifmap;
 
     enum state_t {
         Init,
