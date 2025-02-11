@@ -15,7 +15,7 @@ RUN echo "slapd slapd/no_configuration boolean false" | debconf-set-selections &
     echo "slapd slapd/purge_database boolean true" | debconf-set-selections && \
     echo "slapd slapd/move_old_database boolean true" | debconf-set-selections
 
-# Install OpenLDAP (slapd and ldap-utils), SSSD, and supervisor
+# Install packages: OpenLDAP, ldap-utils, SSSD, and supervisor.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         slapd \
@@ -29,25 +29,42 @@ RUN apt-get update && \
 RUN rm -rf /etc/ldap/slapd.d && \
     dpkg-reconfigure -f noninteractive slapd
 
-# Copy your LDAP data file
+# --- Schema, ACL, and Data Loading ---
+
+# Copy and load the EPICS custom schema.
+COPY epics-schema.ldif /tmp/epics-schema.ldif
+COPY epics-acl.ldif    /tmp/epics-acl.ldif
+
+# Start slapd in the background, wait for it to be ready, apply schema and ACL changes, then kill it.
+RUN /usr/sbin/slapd -h "ldap:/// ldapi:///" -u openldap & \
+    sleep 5 && \
+    ldapadd -Y EXTERNAL -H ldapi:/// -f /tmp/epics-schema.ldif && \
+    ldapmodify -Y EXTERNAL -H ldapi:/// -f /tmp/epics-acl.ldif && \
+    pkill slapd && \
+    sleep 2 && \
+    rm -f /tmp/epics-schema.ldif /tmp/epics-acl.ldif
+
+# --- Load LDAP Data ---
+
+# Copy LDAP data file.
 COPY ldap-data.ldif /tmp/ldap-data.ldif
 
-# Remove existing LDAP database contents, then load the LDAP entries.
+# Remove any existing LDAP database contents, load the LDAP entries using slapadd, fix ownership, and clean up.
 RUN rm -rf /var/lib/ldap/* && \
     slapadd -l /tmp/ldap-data.ldif && \
-    chown -R openldap:openldap /var/lib/ldap
+    chown -R openldap:openldap /var/lib/ldap && \
+    rm -f /tmp/ldap-data.ldif
 
-# Copy the supervisor configuration file for LDAP (for slapd)
+# --- Supervisor and SSSD Configuration ---
+
+# Copy the supervisor configuration for LDAP (slapd).
 COPY ldap-supervisor.conf /etc/supervisor/conf.d/ldap.conf
 
-#########
-## Setup all users auth to be based on LDAP
-
-# Copy SSSD configuration file
+# Copy and secure the SSSD configuration.
 COPY sssd.conf /etc/sssd/sssd.conf
 RUN chmod 600 /etc/sssd/sssd.conf && chown root:root /etc/sssd/sssd.conf
 
-# Update /etc/nsswitch.conf so that passwd, group, and shadow use SSSD.
+# Update /etc/nsswitch.conf to use SSSD for passwd, group, and shadow.
 RUN sed -i 's/^passwd:.*/passwd:         files sss/' /etc/nsswitch.conf && \
     sed -i 's/^group:.*/group:          files sss/' /etc/nsswitch.conf && \
     sed -i 's/^shadow:.*/shadow:         files sss/' /etc/nsswitch.conf
@@ -55,8 +72,8 @@ RUN sed -i 's/^passwd:.*/passwd:         files sss/' /etc/nsswitch.conf && \
 # (Optional) Expose the standard LDAP port if you plan to connect from outside.
 # EXPOSE 389
 
-# Copy SSSD supervisor configuration.
+# Copy the supervisor configuration for SSSD.
 COPY sssd-supervisor.conf /etc/supervisor/conf.d/sssd.conf
 
-# Run supervisord as the container entrypoint.
+# Set the entrypoint to run supervisord.
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]

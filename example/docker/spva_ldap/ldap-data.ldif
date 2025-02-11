@@ -18,6 +18,7 @@ dn: uid=admin,dc=epics,dc=org
 objectClass: inetOrgPerson
 objectClass: posixAccount
 objectClass: shadowAccount
+objectClass: epicsAuxiliary
 cn: admin
 sn: admin
 uid: admin
@@ -26,11 +27,13 @@ gidNumber: 1001
 homeDirectory: /home/admin
 loginShell: /bin/bash
 userPassword: {SSHA}rDsYFPnFI8zidqcImBer6BGBULvgxjo0
+# epicsPublicKey: <base64-encoded public key string>
 
 dn: uid=pvacms,ou=People,dc=epics,dc=org
 objectClass: inetOrgPerson
 objectClass: posixAccount
 objectClass: shadowAccount
+objectClass: epicsAuxiliary
 cn: pvacms
 sn: pvacms
 uid: pvacms
@@ -39,11 +42,13 @@ gidNumber: 1002
 homeDirectory: /home/pvacms
 loginShell: /bin/bash
 userPassword: {SSHA}rDsYFPnFI8zidqcImBer6BGBULvgxjo0
+# epicsPublicKey: <base64-encoded public key string>
 
 dn: uid=softioc,ou=People,dc=epics,dc=org
 objectClass: inetOrgPerson
 objectClass: posixAccount
 objectClass: shadowAccount
+objectClass: epicsAuxiliary
 cn: softioc
 sn: softioc
 uid: softioc
@@ -52,11 +57,13 @@ gidNumber: 1003
 homeDirectory: /home/softioc
 loginShell: /bin/bash
 userPassword: {SSHA}rDsYFPnFI8zidqcImBer6BGBULvgxjo0
+# epicsPublicKey: <base64-encoded public key string>
 
 dn: uid=client,ou=People,dc=epics,dc=org
 objectClass: inetOrgPerson
 objectClass: posixAccount
 objectClass: shadowAccount
+objectClass: epicsAuxiliary
 cn: client
 sn: client
 uid: client
@@ -65,6 +72,7 @@ gidNumber: 1004
 homeDirectory: /home/client
 loginShell: /bin/bash
 userPassword: {SSHA}rDsYFPnFI8zidqcImBer6BGBULvgxjo0
+# epicsPublicKey: <base64-encoded public key string>
 
 # Create groups and add members
 dn: cn=admin,ou=Groups,dc=epics,dc=org
