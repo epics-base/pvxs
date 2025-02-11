@@ -49,7 +49,7 @@ class AuthNKrb : public Auth {
     // Constructor.  Adds in kerberos specific fields (ticket) to the verifier
     // field of the ccr
     explicit AuthNKrb()
-        : Auth(PVXS_KRB_AUTH_TYPE, {Member(TypeCode::Int8A, "token")}),
+        : Auth(PVXS_KRB_AUTH_TYPE, {Member(TypeCode::Int8A, "token"), Member(TypeCode::Int8A, "mic")}),
           krb5_oid(&krb5_oid_desc),
           krb5_oid_ptr(&krb5_oid) {
         krb5_oid_desc.length = 9;

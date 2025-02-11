@@ -131,34 +131,30 @@ std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const s
                                                                         const uint16_t &usage) const {
     auto krb_credentials = castAs<KrbCredentials, Credentials>(credentials);
 
-    // Call subclass to set up common CSR fields
+    // Call base class to set up the common CSR fields.
     auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage);
     log_debug_printf(auth, "CCR: created%s", "\n");
 
     OM_uint32 minor_status;
     gss_ctx_id_t context = GSS_C_NO_CONTEXT;
 
-    // We use GSS_C_NO_CREDENTIAL to specify that we want to use the default
-    // credentials Usually, the default credential is obtained from the system's
-    // Kerberos TGT
-
-    // Similarly, for the target name, it will be of the format service@hostname (default: pvacms/cluster@EPICS.ORG)
+    // Get the target name (e.g. "pvacms/cluster@EPICS.ORG").
     log_debug_printf(auth, "Getting Target Name: %s\n", krb_validator_service_name.c_str());
     gss_name_t target_name;
     gssNameFromString(krb_validator_service_name, target_name);
 
-    // Initialize the context from a kerberos ticket
-    log_debug_printf(auth, "gss_init_sec_context%s", "\n");
+    // Initialize a security context from a Kerberos ticket.
+    log_debug_printf(auth, "Calling gss_init_sec_context%s", "\n");
     gss_buffer_desc output_token = GSS_C_EMPTY_BUFFER;
 
     OM_uint32 major_status = gss_init_sec_context(
         &minor_status,
-        GSS_C_NO_CREDENTIAL,
+        GSS_C_NO_CREDENTIAL,      // Use default credentials (TGT)
         &context,
         target_name,
         krb5_oid,
-        0,                         // minimal flags
-        GSS_C_INDEFINITE,          // use indefinite lifetime
+        0,                        // Minimal flags
+        GSS_C_INDEFINITE,         // Indefinite lifetime
         GSS_C_NO_CHANNEL_BINDINGS,
         GSS_C_NO_BUFFER,
         nullptr,
@@ -166,33 +162,52 @@ std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const s
         nullptr,
         nullptr);
 
-    /*
-    OM_uint32 major_status = gss_init_sec_context(&minor_status, GSS_C_NO_CREDENTIAL, &context, target_name, krb5_oid,
-                                                  0, // no flags or only the minimal flags required
-                                                  0, GSS_C_NO_CHANNEL_BINDINGS, GSS_C_NO_BUFFER, nullptr, &output_token,
-                                                  nullptr, nullptr);
-
-    */
-
     if (GSS_ERROR(major_status)) {
-        throw std::runtime_error(SB() << "Failed to initialize kerberos security context: "
+        throw std::runtime_error(SB() << "Failed to initialize Kerberos security context: "
                                       << gssErrorDescription(major_status, minor_status));
     }
 
-    // Add token to credentials
-    log_debug_printf(auth, "Got Security Token%s", "\n");
+    // Save the output token from the security context.
+    log_debug_printf(auth, "Obtained Security Token%s", "\n");
     krb_credentials->token = std::vector<uint8_t>(static_cast<uint8_t *>(output_token.value),
                                                   static_cast<uint8_t *>(output_token.value) + output_token.length);
+
+    // MIC generation for message integrity
+    log_debug_printf(auth, "Computing MIC over public key%s", "\n");
+    std::string public_key_str = key_pair->public_key;
+    gss_buffer_desc data_buffer;
+    data_buffer.value = reinterpret_cast<void*>(const_cast<char*>(public_key_str.c_str()));
+    data_buffer.length = public_key_str.size();
+
+    gss_buffer_desc mic_token = GSS_C_EMPTY_BUFFER;
+    major_status = gss_get_mic(&minor_status,
+                               context,
+                               GSS_C_QOP_DEFAULT,
+                               &data_buffer,
+                               &mic_token);
+    if (GSS_ERROR(major_status)) {
+        throw std::runtime_error(SB() << "Failed to obtain MIC: "
+                                      << gssErrorDescription(major_status, minor_status));
+    }
+
+    // Convert the MIC token into shared_array.
+    shared_array<const uint8_t> mic_bytes(
+        static_cast<const uint8_t*>(mic_token.value),
+        static_cast<const uint8_t*>(mic_token.value) + mic_token.length);
+
+    // Release the MIC token buffer.
+    gss_release_buffer(&minor_status, &mic_token);
 
     // Clean up
     log_debug_printf(auth, "Deleting Security Context%s", "\n");
     gss_delete_sec_context(&minor_status, &context, &output_token);
 
-    // KRB specific fields
-    log_debug_printf(auth, "Setting token in CCR%s", "\n");
+    // Add both the security token and the MIC to the certificate creation request.
+    log_debug_printf(auth, "Setting token and MIC in CCR%s", "\n");
     shared_array<const uint8_t> token_bytes(krb_credentials->token.begin(), krb_credentials->token.end());
     cert_creation_request->credentials = krb_credentials;
     cert_creation_request->ccr["verifier.token"] = token_bytes;
+    cert_creation_request->ccr["verifier.mic"] = mic_bytes;
 
     return cert_creation_request;
 }
@@ -259,7 +274,7 @@ bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, c
         throw std::runtime_error("KRB5_KTNAME environment variable needs to be set to point to the location of the keytab.  e.g. ~/.config/pva/1.3/pvacms.keytab");
     }
 
-    // acquire the correct server credentials
+    // Acquire the correct server credentials.
     log_debug_printf(auth, "Server name into name buffer: %s\n", krb_validator_service_name.c_str());
     gss_name_t serverName = GSS_C_NO_NAME;
     gss_buffer_desc nameBuf;
@@ -284,8 +299,7 @@ bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, c
         throw std::runtime_error("Failed to acquire server credentials");
     }
 
-
-    // Extract and decode client token from ccr
+    // Extract and decode the client token from the CCR.
     log_debug_printf(auth, "Get GSS-API Token from CCR: %s", "\n");
     auto token_bytes = ccr["verifier.token"].as<shared_array<const uint8_t>>();
     std::vector<uint8_t> vec_bytes(token_bytes.begin(), token_bytes.end());
@@ -293,17 +307,15 @@ bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, c
     log_debug_printf(auth, "Convert token to gss_buffer_desc: %s", "\n");
     gss_buffer_desc client_token;
     client_token.length = vec_bytes.size();
-
     std::unique_ptr<uint8_t[]> buffer(new uint8_t[client_token.length]);
     client_token.value = buffer.get();
     std::copy(vec_bytes.begin(), vec_bytes.end(), static_cast<uint8_t *>(client_token.value));
 
     log_debug_printf(auth, "Accept this client token: %s", "\n");
-    // Get ready for accepting the client's token
+    // Accept the client's token to establish a security context.
     gss_ctx_id_t context = GSS_C_NO_CONTEXT;
     gss_buffer_desc server_token;
 
-    // The server accepts the context using the client's token
     major_status = gss_accept_sec_context(&minor_status, &context, serverCred,
                                       &client_token, GSS_C_NO_CHANNEL_BINDINGS,
                                       nullptr, krb5_oid_ptr,
@@ -315,9 +327,7 @@ bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, c
             << gssErrorDescription(major_status, minor_status));
     }
 
-    // Now get the peer credentials information from the context
-
-    // Retrieve the credentials
+    // Retrieve peer credential information from the context.
     OM_uint32 peer_lifetime = 0;
     time_t now = time(nullptr);
 
@@ -329,16 +339,14 @@ bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, c
         throw std::runtime_error("Failed to inquire context for initiator name");
     }
 
-    // Optionally, if the context supports it:
     major_status = gss_inquire_context(&minor_status, context,
                                        nullptr, nullptr, &peer_lifetime,
                                        nullptr, nullptr, nullptr, nullptr);
     if (GSS_ERROR(major_status)) {
-        // TODO handle error or decide on a fallback
-        peer_lifetime = 24*60*60;  // One day TODO Change this hardcoded monstrosity!!
+        // Fallback lifetime in case of error.
+        peer_lifetime = 24 * 60 * 60;  // One day.
     }
 
-    // Get the peer principal
     log_debug_printf(auth, "Get peer name: %s", "\n");
     gss_buffer_desc peer_name_buffer;
     major_status = gss_display_name(&minor_status, initiator_name, &peer_name_buffer, nullptr);
@@ -352,26 +360,10 @@ bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, c
     gss_release_buffer(&minor_status, &peer_name_buffer);
     gss_release_name(&minor_status, &initiator_name);
 
-
-    // Now, 'principal' contains the principal name, 'peer_lifetime' contains the
-    // remaining lifetime of the credentials in seconds, and 'expiration'
-    // contains the ticket expiration time
-
-    // Split out name and organization if the principal has an at sign
+    // Compose the expected peer principal from CCR fields.
     auto peer_principal_name(ccr["name"].as<std::string>() + "@" + ccr["organization"].as<std::string>());
 
-
     log_debug_printf(auth, "Check against CCR: %s", "\n");
-    // Now the tests
-    // Verify the peer credentials against ccr fields
-    //   ccr["name"] == peer_principal(before @ sign)
-    //   ccr["organization"] == peer_principal(after @ sign)
-    //   ccr["organization_unit"] == blank
-    //   ccr["country"] == blank
-    //   ccr["type"] == "krb"
-    //   ccr["not_before"] < now+peer_lifetime
-    //   ccr["not_after"] <= now+peer_lifetime
-    ;
     if (peer_principal_name != ctx_principal) {
         throw std::runtime_error(SB() << "Verify Credentials: Kerberos name does not match name in CCR: " << peer_principal_name << " != " << ctx_principal);
     }
@@ -392,6 +384,28 @@ bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, c
         throw std::runtime_error(SB() << "Verify Credentials: CCR not_after after "
             "end of kerberos ticket lifetime");
     }
+
+    // MIC Verification
+    auto public_key = ccr["pub_key"].as<std::string>();
+    gss_buffer_desc pubkey_buffer;
+    pubkey_buffer.value = reinterpret_cast<void*>(const_cast<char*>(public_key.c_str()));
+    pubkey_buffer.length = public_key.size();
+
+    auto mic_shared = ccr["verifier.mic"].as<shared_array<const uint8_t>>();
+    gss_buffer_desc mic_buffer;
+    mic_buffer.value = reinterpret_cast<void*>(const_cast<uint8_t*>(mic_shared.data()));
+    mic_buffer.length = mic_shared.size();
+
+    OM_uint32 qop_state;
+    major_status = gss_verify_mic(&minor_status, context, &pubkey_buffer, &mic_buffer, &qop_state);
+    if (GSS_ERROR(major_status)) {
+        throw std::runtime_error(SB() << "MIC verification failed: "
+            << gssErrorDescription(major_status, minor_status));
+    }
+    log_debug_printf(auth, "MIC verification succeeded%s", "\n");
+
+    // Optionally, clean up the security context if it is no longer needed.
+    // gss_delete_sec_context(&minor_status, &context, GSS_C_NO_BUFFER);
 
     return true;
 }
