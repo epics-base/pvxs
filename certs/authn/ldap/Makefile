@@ -11,3 +11,6 @@ authnldap_SRCS += certstatus.cpp
 
 pvacms_SRCS += authnldap.cpp
 pvacms_SRCS += configldap.cpp
+
+authnldap_SYS_LIBS += ldap lber
+pvacms_SYS_LIBS += ldap lber

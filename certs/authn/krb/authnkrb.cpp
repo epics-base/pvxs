@@ -265,7 +265,7 @@ std::string AuthNKrb::gssErrorDescription(OM_uint32 major_status, OM_uint32 mino
  * @return True if the kerberos credentials extracted from the token and
  * validated by the KDC match those in the CCR, false otherwise.
  */
-bool AuthNKrb::verify(const Value ccr, std::function<bool(const std::string &, const std::string &)>) const {
+bool AuthNKrb::verify(const Value ccr) const {
     log_debug_printf(auth, "Verifying Kerberos CCR request%s", "\n");
 
     log_debug_printf(auth, "Checking Keytab is configured: %s\n", krb_keytab_file.c_str());

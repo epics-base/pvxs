@@ -86,61 +86,6 @@ static std::string getCountryCode() {
     return "US";
 }
 
-/**
- * @brief Get the IP address of the current process' host.
- *
- * This will return the IP address based on the following rules.  It will
- * look through all the network interfaces and will skip local and self-assigned
- * addresses.  Then it will select any public IP address.
- * if no public IP addresses are found then it will return
- * the first private IP address that it finds
- *
- * @return the IP address of the current process' host
- */
-std::string getIPAddress() {
-    ifaddrs *if_addr_struct = nullptr;
-    std::string chosen_ip;
-    std::string private_ip;
-
-    getifaddrs(&if_addr_struct);
-
-    std::regex local_address_pattern(R"(^(127\.)|(169\.254\.))");
-    std::regex private_address_pattern(R"(^(10\.)|(172\.1[6-9]\.)|(172\.2[0-9]\.)|(172\.3[0-1]\.)|(192\.168\.))");
-
-    for (ifaddrs *ifa = if_addr_struct; ifa != nullptr; ifa = ifa->ifa_next) {
-        if (!ifa->ifa_addr) {
-            continue;
-        }
-        if (ifa->ifa_addr->sa_family == AF_INET) {
-            // is a valid IPv4 Address
-            void *tmp_addr_ptr = &reinterpret_cast<struct sockaddr_in *>(ifa->ifa_addr)->sin_addr;
-            char address_buffer[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, tmp_addr_ptr, address_buffer, INET_ADDRSTRLEN);
-
-            // Skip local or self-assigned address. If it's a private address,
-            // remember it.
-            if (!std::regex_search(address_buffer, local_address_pattern)) {
-                if (std::regex_search(address_buffer, private_address_pattern)) {
-                    if (private_ip.empty()) {
-                        private_ip = address_buffer;
-                    }
-                } else {
-                    chosen_ip = address_buffer;
-                    break;  // If a public address is found, exit the loop
-                }
-            }
-        }
-    }
-    if (if_addr_struct != nullptr) freeifaddrs(if_addr_struct);
-
-    // If no public IP addresses were found, use the first private IP that was
-    // found.
-    if (chosen_ip.empty()) {
-        chosen_ip = private_ip;
-    }
-
-    return chosen_ip;
-}
 
 /**
  * @brief Creates credentials for use in creating an X.509 certificate.
@@ -171,31 +116,14 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
     std_credentials->not_before = now;
     std_credentials->not_after = now + (std_config.cert_validity_mins * 60);
 
-    // If name is configured then use it instead of getting the username
+    // Should not be empty as defaults to username
     if (!std_config.name.empty()) {
         std_credentials->name = std_config.name;
-    } else {
-        // Try to get username
-        char username[PVXS_X509_AUTH_USERNAME_MAX];
-        if (osiGetUserName(username, PVXS_X509_AUTH_USERNAME_MAX) == osiGetUserNameSuccess) {
-            username[PVXS_X509_AUTH_USERNAME_MAX - 1] = '\0';
-            std_credentials->name = username;
-        } else {
-            std_credentials->name = "nobody";
-        }
     }
 
-    // If we've specified an organization then use it otherwise use the hostname or IP
+    // Should not be empty as defaults to hostname
     if (!std_config.organization.empty()) {
         std_credentials->organization = std_config.organization;
-    } else {
-        // Get hostname or IP address (Organization)
-        char hostname[PVXS_X509_AUTH_HOSTNAME_MAX];
-        if (!!gethostname(hostname, PVXS_X509_AUTH_HOSTNAME_MAX)) {
-            // If no hostname then try to get IP address
-            strcpy(hostname, getIPAddress().c_str());
-        }
-        std_credentials->organization = hostname;
     }
 
     if (!std_config.organizational_unit.empty()) {
@@ -242,7 +170,7 @@ std::shared_ptr<CertCreationRequest> AuthNStd::createCertCreationRequest(const s
  * @param ccr the certificate creation request
  * @return true if the certificate creation request is valid
  */
-bool AuthNStd::verify(const Value ccr, std::function<bool(const std::string &, const std::string &)>) const { return true; }
+bool AuthNStd::verify(const Value ccr) const { return true; }
 
 }  // namespace certs
 }  // namespace pvxs

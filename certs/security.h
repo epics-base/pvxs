@@ -32,6 +32,29 @@ struct Credentials {
     // Validity
     time_t not_before;
     time_t not_after;
+
+    static std::string base64Encode(const char * data, size_t len) {
+        BIO *bio, *b64;
+        BUF_MEM *buffer_ptr;
+
+        b64 = BIO_new(BIO_f_base64());              // Create a base64 filter
+        bio = BIO_new(BIO_s_mem());                 // Create a memory BIO
+        BIO_push(b64, bio);                       // Chain them
+        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL); // No newline breaks
+        BIO_write(b64, data, len);                       // Write the input string
+        BIO_flush(b64);                                  // Ensure all data is written
+        BIO_get_mem_ptr(b64, &buffer_ptr);               // Get the output buffer
+
+        std::string out(buffer_ptr->data, buffer_ptr->length);  // Create a string from the buffer
+
+        BIO_free_all(b64);   // Free the BIOs
+
+        return out;
+    }
+
+    static std::string base64Encode(const std::string &in) {
+        return base64Encode(in.data(), in.size());
+    }
 };
 
 #define CCR_PROTOTYPE(VERIFIER)                \

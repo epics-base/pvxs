@@ -25,12 +25,12 @@ void ConfigStd::fromStdEnv(const std::map<std::string, std::string> &defs) {
 
     // EPICS_AUTH_STD_NAME
     if (pickone({"EPICS_PVA_AUTH_STD_NAME"})) {
-        name = server_name = pickone.val;
+        server_name = pickone.val;
     }
 
     // EPICS_AUTH_STD_ORG
     if (pickone({"EPICS_PVA_AUTH_STD_ORG"})) {
-        organization = server_organization = pickone.val;
+        server_organization = pickone.val;
     }
 
     // EPICS_AUTH_STD_ORG_UNIT

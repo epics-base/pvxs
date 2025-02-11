@@ -14,11 +14,6 @@ namespace certs {
 void ConfigLdap::fromLdapEnv(const std::map<std::string, std::string> &defs) {
     PickOne pickone{defs, true};
 
-    // EPICS_AUTH_LDAP_ACCOUNT
-    if (pickone({"EPICS_AUTH_LDAP_ACCOUNT"})) {
-        ldap_account = pickone.val;
-    }
-
     // EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE
     if (pickone({"EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE"})) {
         auto filepath = pickone.val;
@@ -42,11 +37,6 @@ void ConfigLdap::fromLdapEnv(const std::map<std::string, std::string> &defs) {
         } catch (std::exception &e) {
             log_err_printf(cfg, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
-    }
-
-    // EPICS_AUTH_LDAP_SEARCH_ROOT
-    if (pickone({"EPICS_AUTH_LDAP_SEARCH_ROOT"})) {
-        ldap_search_root = pickone.val;
     }
 }
 

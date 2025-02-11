@@ -30,11 +30,9 @@ class ConfigLdap : public ConfigAuthN {
         return config;
     }
 
-    std::string ldap_account{};
     std::string ldap_account_password{};
     std::string ldap_host{"localhost"};
     unsigned short ldap_port{389};
-    std::string ldap_search_root{"dc=epics,dc=org"};
 
     void fromLdapEnv(const std::map<std::string, std::string>& defs);
 };

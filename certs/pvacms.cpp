@@ -723,17 +723,8 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
         certstatus_t state = UNKNOWN;
         // Call the authenticator specific verifier if not the default type
         if (type.compare(PVXS_DEFAULT_AUTH_TYPE) != 0) {
-                        const auto authenticator = certs::Auth::getAuth(type);
-                        if (!authenticator->verify(ccr,
-                                                   [&ca_pub_key](const std::string &data,
-                                                                 const std::string &signature) {
-                                                       return CertFactory::verifySignature(
-                                                         ca_pub_key,
-                                                         data,
-                                                         signature);
-                                                   })) {
-                            throw std::runtime_error("CCR claims are invalid");
-                        }
+            const auto authenticator = certs::Auth::getAuth(type);
+            if (!authenticator->verify(ccr)) throw std::runtime_error("CCR claims are invalid");
             state = VALID;
         } else {
             state = PENDING_APPROVAL;

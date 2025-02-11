@@ -79,13 +79,13 @@ class AuthNStd : public Auth {
     std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
                                                                    const uint16_t &usage) const override;
 
-    bool verify(Value ccr, std::function<bool(const std::string &data, const std::string &signature)> signature_verifier) const override;
+    bool verify(Value ccr) const override;
     void fromEnv(std::unique_ptr<client::Config> &config) override {
         config.reset(new ConfigStd(ConfigStd::fromEnv()));
     }
     std::string getOptionsText() override {return {};}
     std::string getParameterHelpText() override {return {};}
-    void addParameters(CLI::App & app, const std::map<const std::string, std::unique_ptr<client::Config>> & authn_config_map) override {}
+    void addParameters(CLI::App & app, std::map<const std::string, std::unique_ptr<client::Config>> & authn_config_map) override {}
     void configure(const client::Config &config) override {};
 };
 

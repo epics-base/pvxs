@@ -6,26 +6,49 @@
 
 #include "authnldap.h"
 
-#include <configldap.h>
-#include <memory>
+#include <cstring>
+#include <stdexcept>
 #include <string>
+
+#ifdef __APPLE__
+#include <GSS/gssapi.h>
+#else
+#include <gssapi/gssapi.h>
+#endif
+
+#include <CLI/CLI.hpp>
 
 #include <pvxs/config.h>
 
-#include "auth.h"
+#include "certstatusfactory.h"
 #include "authregistry.h"
+#include "certfilefactory.h"
+#include "configldap.h"
+#include "openssl.h"
+#include "p12filefactory.h"
+#include "utilpvt.h"
+
 
 DEFINE_LOGGER(auth, "pvxs.auth.ldap");
 
 namespace pvxs {
 namespace certs {
 
-int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, bool &debug, uint16_t &cert_usage) {
+std::string promptPassword(const std::string &prompt) {
+    // getpass() prints the prompt and reads a password from /dev/tty without echo.
+    char *pass = getpass(prompt.c_str());
+    if (pass == nullptr) {
+        throw std::runtime_error("Error reading password");
+    }
+    return std::string(pass);
+}
+
+int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bool &debug, uint16_t &cert_usage) {
     auto program_name = argv[0];
     bool show_version{false}, help{false};
     std::string usage{"client"};
 
-    CLI::App app{"authnstd - Secure PVAccess with Standard Authentication"};
+    CLI::App app{"authnldap - Secure PVAccess with LDAP Authentication"};
 
     // Define options
     app.set_help_flag("", "");  // deactivate built-in help
@@ -37,18 +60,19 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
 
     app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `hybrid`");
 
-    app.add_option("-n,--name", config.name, "Specify CA keychain password file location");
-    app.add_option("-o,--organization", config.organization, "Specify the CA's name. Used if we need to create a root certificate");
-    app.add_option("--ou", config.organizational_unit, "Specify the CA's Organization. Used if we need to create a root certificate");
-    app.add_option("-c,--country", config.country, "Specify the CA's Organization Unit. Used if we need to create a root certificate");
+    app.add_option("-n,--name", config.name, "Specify the LDAP user name e.g. name e.g. becomes uid=name.  Defaults to logged in username");
+    app.add_option("-o,--organization", config.name, "Specify the organization e.g. epics.org e.g. becomes dc=epics, dc=org.  Defaults to hostname");
+    app.add_option("-p,--password", config.ldap_account_password, "Specify the LDAP account password");
+
+    app.add_option("--ldap-host", config.ldap_host, "Specify LDAP host.  Default localhost");
+    app.add_option("--ldap-port", config.ldap_port, "Specify LDAP port.  Default 389");
 
     CLI11_PARSE(app, argc, argv);
 
     if (help) {
-        std::cout << "authnstd - Secure PVAccess with Standard Authentication\n"
+        std::cout << "authnldap - Secure PVAccess with LDAP Authentication\n"
                   << std::endl
-                  << "Generates client, server, or hybrid certificates based on the standard authentication method. \n"
-                  << "Uses specified parameters to create certificates that require administrator APPROVAL before becoming VALID.\n"
+                  << "Generates client, server, or hybrid certificates based on the LDAP credentials. \n"
                   << std::endl
                   << "usage:\n"
                   << "  " << program_name << " [options]                          Create certificate in PENDING_APPROVAL state\n"
@@ -57,10 +81,15 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
                   << std::endl
                   << "options:\n"
                   << "  (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`\n"
-                  << "  (-n | --name) <name>                       Specify common name of the certificate. Default <logged-in-username>\n"
-                  << "  (-o | --organization) <organization>       Specify organisation name for the certificate. Default <hostname>\n"
-                  << "  --ou <org-unit>                            Specify organisational unit for the certificate. Default <blank>\n"
-                  << "  (-c | --country) <country>                 Specify country for the certificate. Default locale setting if detectable otherwise `US`\n"
+                  << "  (-n | --name) <name>                       Specify LDAP username for common name in the certificate.\n"
+                  << "                                             e.g. name ==> LDAP: uid=name, ou=People ==> Cert: CN=name\n"
+                  << "                                             Default <logged-in-username>\n"
+                  << "  (-o | --organization) <organization>      Specify LDAP org for organization in the certificate.\n"
+                  << "                                             e.g. epics.org ==> LDAP: dc=epics, dc=org ==> Cert: O=epics.org\n"
+                  << "                                             Default <hostname>\n"
+                  << "  (-p | --password) <name>                   Specify LDAP password. If not specified will prompt for password\n"
+                  << "  (     --ldap-host) <hostname>              LDAP server host\n"
+                  << "  (     --ldap-port) <port>                  LDAP serever port\n"
                   << "  (-v | --verbose)                           Verbose mode\n"
                   << "  (-d | --debug)                             Debug mode\n"
                   << std::endl;
@@ -100,6 +129,10 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
         return 13;
     }
 
+    if (config.ldap_account_password.empty()) {
+        config.ldap_account_password = promptPassword(SB() << "Enter password for "<< config.name << ": " );
+    }
+
     return 0;
 }
 }  // namespace security
@@ -108,7 +141,7 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
 using namespace pvxs::certs;
 
 /**
- * @brief Main function for the authnstd tool
+ * @brief Main function for the authnldap tool
  *
  * @param argc the number of command line arguments
  * @param argv the command line arguments
@@ -120,7 +153,7 @@ int main(int argc, char *argv[]) {
     bool retrieved_credentials{false};
 
     try {
-        auto config = ConfigStd::fromEnv();
+        auto config = ConfigLdap::fromEnv();
 
         bool verbose{false}, debug{false};
         uint16_t cert_usage{pvxs::ssl::kForClient};
@@ -128,11 +161,11 @@ int main(int argc, char *argv[]) {
         auto parse_result = readParameters(argc, argv, config, verbose, debug, cert_usage);
         if (parse_result) exit(parse_result);
 
-        if (verbose) logger_level_set("pvxs.auth.std*", pvxs::Level::Info);
-        if (debug) logger_level_set("pvxs.auth.std*", pvxs::Level::Debug);
+        if (verbose) logger_level_set("pvxs.auth.ldap*", pvxs::Level::Info);
+        if (debug) logger_level_set("pvxs.auth.ldap*", pvxs::Level::Debug);
 
         // Standard authenticator
-        AuthNStd authenticator{};
+        AuthNLdap authenticator{};
 
         if (auto credentials = authenticator.getCredentials(config)) {
             std::shared_ptr<KeyPair> key_pair;
@@ -196,6 +229,7 @@ int main(int argc, char *argv[]) {
         }
     } catch (std::exception &e) {
         if (retrieved_credentials) log_warn_printf(auth, "%s\n", e.what());
+        else log_err_printf(auth, "%s\n", e.what());
     }
     return 0;
 }
