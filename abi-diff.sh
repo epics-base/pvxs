@@ -51,6 +51,8 @@ setupsrc() {
     #make -C "$2/bundle" libevent -j8
     make -C "$2" CROSS_COMPILER_TARGET_ARCHS= OPT_CFLAGS='-g -Og' OPT_CXXFLAGS='-g -Og' ioc -j8
 
+    install -C -d compat_reports/libpvxs
+    install -C -d compat_reports/libpvxsIoc
     nm -g "$2"/lib/linux-*/libpvxs.so.* |sed -e 's|^[0-9a-f]*\s*||' > "compat_reports/libpvxs/$1.nm"
 
     abi-dumper "$2"/lib/linux-*/libpvxs.so.* -o "compat_reports/libpvxs/$1.dump" -public-headers "$2/include" -lver "$1"
