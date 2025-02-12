@@ -68,28 +68,27 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
     std::string user_dn = getDn(credentials->name, credentials->organization);
 
     // Initialize an LDAP connection.
-    // (ldap_credentials is assumed to provide the LDAP server hostname and port.)
-    LDAP *ld = ldap_init(ldap_credentials->ldap_server.c_str(), ldap_credentials->ldap_port);
-    if (!ld) {
-        throw std::runtime_error("Failed to initialize LDAP connection");
+    std::string ldap_url = "ldap://" + ldap_credentials->ldap_server + ":" +
+                           std::to_string(ldap_credentials->ldap_port);
+    LDAP *ld = nullptr;
+    int rc = ldap_initialize(&ld, ldap_url.c_str());
+    if (rc != LDAP_SUCCESS) {
+        throw std::runtime_error("ldap_initialize failed: " + std::string(ldap_err2string(rc)));
     }
-    // Set LDAP protocol version (LDAPv3).
-    int ldap_version = LDAP_VERSION3;
-    ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ldap_version);
 
-    // Bind to LDAP using SASL/GSSAPI.
-    // (You could also use ldap_simple_bind_s if you prefer, using ldap_credentials->password.)
-    int rc = ldap_sasl_interactive_bind_s(ld,
-                                          user_dn.c_str(),
-                                          "GSSAPI",    // Use GSSAPI SASL mechanism.
-                                          nullptr,        // Server controls.
-                                          nullptr,        // Client controls.
-                                          LDAP_SASL_QUIET,
-                                          nullptr,        // Callback (if needed).
-                                          nullptr);       // Defaults.
+    int ldap_version = LDAP_VERSION3;
+    rc = ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ldap_version);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
-        throw std::runtime_error(SB() << "LDAP failed to bind to " << ldap_credentials->ldap_server << ":" << ldap_credentials->ldap_port << " for " << user_dn << ":" << ldap_err2string(rc));
+        throw std::runtime_error("ldap_set_option failed: " + std::string(ldap_err2string(rc)));
+    }
+
+    rc = ldap_simple_bind_s(ld, user_dn.c_str(), ldap_credentials->password.c_str());
+    if (rc != LDAP_SUCCESS) {
+        ldap_unbind_ext_s(ld, nullptr, nullptr);
+        throw std::runtime_error(SB() << "LDAP simple bind failed to bind to "
+                             << ldap_credentials->ldap_server << ":" << ldap_credentials->ldap_port
+                             << " for " << user_dn << ":" << ldap_err2string(rc));
     }
 
     // Search for the client’s LDAP entry and retrieve the "epicsPublicKey" attribute.
@@ -113,15 +112,15 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
     }
 
     // Check whether the attribute exists.
-    char **vals = nullptr;
+    struct berval **bvals = nullptr;
     LDAPMessage *entry = ldap_first_entry(ld, result);
     std::string currentPublicKey;
     if (entry) {
-        vals = ldap_get_values(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
-        if (vals && vals[0])
-            currentPublicKey = vals[0];
-        if (vals)
-            ldap_value_free(vals);
+        bvals = ldap_get_values_len(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
+        if (bvals && bvals[0])
+            currentPublicKey = std::string(bvals[0]->bv_val, bvals[0]->bv_len);
+        if (bvals)
+            ldap_value_free_len(bvals);
     }
     ldap_msgfree(result);
 
@@ -261,17 +260,14 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server,
                                             int ldap_port,
                                             const std::string &uid,
                                             const std::string &organization) const {
-    LDAP *ld = nullptr;
-    // Build the LDAP URL, e.g., "ldap://ldap_server:ldap_port"
-    std::string ldap_url = "ldap://" + ldap_server + ":" + std::to_string(ldap_port);
 
-    // Initialize the LDAP connection.
+    std::string ldap_url = "ldap://" + ldap_server + ":" + std::to_string(ldap_port);
+    LDAP *ld = nullptr;
     int rc = ldap_initialize(&ld, ldap_url.c_str());
     if (rc != LDAP_SUCCESS) {
         throw std::runtime_error("ldap_initialize failed: " + std::string(ldap_err2string(rc)));
     }
 
-    // Use anonymous bind (assuming ACLs allow anonymous read).
     rc = ldap_simple_bind_s(ld, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
@@ -283,20 +279,9 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server,
 
     // We want only the epicsPublicKey attribute.
     char *attrs[] = { const_cast<char*>(PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE), nullptr };
-    LDAPMessage *result = nullptr;
 
-    // Search with scope BASE for this DN.
-    rc = ldap_search_ext_s(ld,
-                           dn.c_str(),
-                           LDAP_SCOPE_BASE,
-                           "(objectClass=*)",
-                           attrs,
-                           0,   // return values (not types)
-                           nullptr,
-                           nullptr,
-                           nullptr,
-                           0,
-                           &result);
+    LDAPMessage *result = nullptr;
+    rc = ldap_search_ext_s(ld, dn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)", attrs, 0, nullptr, nullptr, nullptr, 0, &result);
     if (rc != LDAP_SUCCESS) {
         if (result) ldap_msgfree(result);
         ldap_unbind_ext_s(ld, nullptr, nullptr);
@@ -310,18 +295,16 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server,
         throw std::runtime_error("No entry found for DN: " + dn);
     }
 
-    // Retrieve the attribute value.
-    char **values = ldap_get_values(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
-    if (!values || !values[0]) {
-        if (values) ldap_value_free(values);
+    struct berval **bvals = ldap_get_values_len(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
+    if (!bvals || !bvals[0]) {
+        if (bvals) ldap_value_free_len(bvals);
         ldap_msgfree(result);
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         throw std::runtime_error("epicsPublicKey attribute not found for DN: " + dn);
     }
 
-    std::string publicKeyString = values[0];
-
-    ldap_value_free(values);
+    std::string publicKeyString(bvals[0]->bv_val, bvals[0]->bv_len);
+    ldap_value_free_len(bvals);
     ldap_msgfree(result);
     ldap_unbind_ext_s(ld, nullptr, nullptr);
 
