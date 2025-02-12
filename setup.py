@@ -696,7 +696,7 @@ build_dso.sub_commands.extend([
 
 
 pvxs_ver = '%(PVXS_MAJOR_VERSION)s.%(PVXS_MINOR_VERSION)s.%(PVXS_MAINTENANCE_VERSION)s'%pvxsversion
-#pvxs_ver += 'a2'
+pvxs_ver += 'a1'
 
 with open(os.path.join(os.path.dirname(__file__), 'README.md')) as F:
     long_description = F.read()
