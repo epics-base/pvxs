@@ -78,12 +78,12 @@ class AuthNLdap : public Auth {
     std::string ldap_server{"localhost"};
     unsigned short ldap_port = 389;
 
-    std::string getDn(const std::string &uid, const std::string &organization) const;
-    std::vector<std::string> split(const std::string& s, char delimiter) const;
-    std::string getPublicKeyFromLDAP(const std::string &ldap_server,
+    static std::string getDn(const std::string &uid, const std::string &organization);
+    static std::vector<std::string> split(const std::string& s, char delimiter);
+    static std::string getPublicKeyFromLDAP(const std::string &ldap_server,
                                      int ldap_port,
                                      const std::string &uid,
-                                     const std::string &organization) const ;
+                                     const std::string &organization);
 
 };
 

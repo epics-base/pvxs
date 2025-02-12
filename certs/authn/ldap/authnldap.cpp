@@ -39,7 +39,7 @@ struct AuthNLdapRegistrar {
 } auth_n_ldap_registrar;
 
 std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &config) const {
-    auto ldap_config = dynamic_cast<const ConfigLdap&>(config);
+    const auto ldap_config = dynamic_cast<const ConfigLdap&>(config);
 
     log_debug_printf(auth,
                      "\n******************************************\n"
@@ -53,7 +53,7 @@ std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &con
     ldap_credentials->ldap_port = ldap_config.ldap_port;
     ldap_credentials->password = ldap_config.ldap_account_password;
     return ldap_credentials;
-};
+}
 
 std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
     const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const {
@@ -83,10 +83,10 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
         throw std::runtime_error("ldap_set_option failed: " + std::string(ldap_err2string(rc)));
     }
 
-    struct berval cred;
+    berval cred{};
     cred.bv_val = const_cast<char*>(ldap_credentials->password.c_str());
     cred.bv_len = ldap_credentials->password.size();
-    rc = ldap_sasl_bind_s(ld, user_dn.c_str(), /* mech */ NULL, &cred, NULL, NULL, NULL);
+    rc = ldap_sasl_bind_s(ld, user_dn.c_str(), nullptr, &cred, nullptr, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         throw std::runtime_error(SB() << "LDAP simple bind failed to bind to "
@@ -115,15 +115,14 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
     }
 
     // Check whether the attribute exists.
-    struct berval **bvals = nullptr;
     LDAPMessage *entry = ldap_first_entry(ld, result);
     std::string currentPublicKey;
     if (entry) {
-        bvals = ldap_get_values_len(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
-        if (bvals && bvals[0])
-            currentPublicKey = std::string(bvals[0]->bv_val, bvals[0]->bv_len);
-        if (bvals)
-            ldap_value_free_len(bvals);
+        berval **pub_key_val_ptr = ldap_get_values_len(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
+        if (pub_key_val_ptr && pub_key_val_ptr[0])
+            currentPublicKey = std::string(pub_key_val_ptr[0]->bv_val, pub_key_val_ptr[0]->bv_len);
+        if (pub_key_val_ptr)
+            ldap_value_free_len(pub_key_val_ptr);
     }
     ldap_msgfree(result);
 
@@ -177,25 +176,25 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
     std::string payload = ccrToString(cert_creation_request, usage);
 
     // Use the private key from key_pair->private_key to sign the payload with SHA-256.
-    ossl_ptr<EVP_MD_CTX> mdctx(EVP_MD_CTX_new(), false);
-    if (!mdctx) {
+    ossl_ptr<EVP_MD_CTX> message_digest_context(EVP_MD_CTX_new(), false);
+    if (!message_digest_context) {
         throw std::runtime_error("Failed to create EVP_MD_CTX");
     }
 
-    if (EVP_DigestSignInit(mdctx.get(), nullptr, EVP_sha256(), nullptr, key_pair->pkey.get()) <= 0) {
+    if (EVP_DigestSignInit(message_digest_context.get(), nullptr, EVP_sha256(), nullptr, key_pair->pkey.get()) <= 0) {
         throw std::runtime_error("EVP_DigestSignInit failed");
     }
 
-    if (EVP_DigestSignUpdate(mdctx.get(), payload.data(), payload.size()) <= 0) {
+    if (EVP_DigestSignUpdate(message_digest_context.get(), payload.data(), payload.size()) <= 0) {
         throw std::runtime_error("EVP_DigestSignUpdate failed");
     }
 
     size_t sig_len = 0;
-    if (EVP_DigestSignFinal(mdctx.get(), nullptr, &sig_len) <= 0) {
+    if (EVP_DigestSignFinal(message_digest_context.get(), nullptr, &sig_len) <= 0) {
         throw std::runtime_error("EVP_DigestSignFinal (get length) failed");
     }
     std::vector<unsigned char> signature(sig_len);
-    if (EVP_DigestSignFinal(mdctx.get(), signature.data(), &sig_len) <= 0) {
+    if (EVP_DigestSignFinal(message_digest_context.get(), signature.data(), &sig_len) <= 0) {
         throw std::runtime_error("EVP_DigestSignFinal failed");
     }
 
@@ -206,7 +205,7 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
     cert_creation_request->ccr["verifier.signature"] = signature_base64;
 
     return cert_creation_request;
-};
+}
 
 bool AuthNLdap::verify(const Value ccr) const {
     // Verify that the signature provided in the CCR was signed with the user's private key
@@ -214,8 +213,8 @@ bool AuthNLdap::verify(const Value ccr) const {
     auto payload = ccrToString(ccr);
 
     // Get public key
-    std::string uid = ccr["name"].as<std::string>();
-    std::string organization = ccr["organization"].as<std::string>();   // e.g., "epics.org"
+    auto uid = ccr["name"].as<std::string>();
+    auto organization = ccr["organization"].as<std::string>();   // e.g., "epics.org"
     std::string public_key_str = getPublicKeyFromLDAP(ldap_server, ldap_port, uid, organization);
 
     KeyPair key_pair(public_key_str);
@@ -223,7 +222,7 @@ bool AuthNLdap::verify(const Value ccr) const {
 }
 
 // A simple helper to split a string by a delimiter.
-std::vector<std::string> AuthNLdap::split(const std::string& s, char delimiter) const {
+std::vector<std::string> AuthNLdap::split(const std::string& s, const char delimiter) {
     std::vector<std::string> tokens;
     std::istringstream iss(s);
     std::string token;
@@ -233,9 +232,9 @@ std::vector<std::string> AuthNLdap::split(const std::string& s, char delimiter) 
     return tokens;
 }
 
-std::string AuthNLdap::getDn(const std::string &uid, const std::string &organization) const {
+std::string AuthNLdap::getDn(const std::string &uid, const std::string &organization) {
     // Convert organization (e.g., "epics.org") to a DN component "dc=epics,dc=org".
-    std::vector<std::string> dc_parts = split(organization, '.');
+    const std::vector<std::string> dc_parts = split(organization, '.');
     std::string dc_string;
     for (size_t i = 0; i < dc_parts.size(); i++) {
         if (i > 0) {
@@ -255,30 +254,30 @@ std::string AuthNLdap::getDn(const std::string &uid, const std::string &organiza
  *
  * @param ldap_server the ldap server ip or hostname
  * @param ldap_port the ldap server port
- * @param uid the user name in LDAP
+ * @param uid the username in LDAP
  * @param organization the user org e.g. epics.org
  * @return the public key string
  */
-std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server,
-                                            int ldap_port,
+std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, const int ldap_port,
                                             const std::string &uid,
-                                            const std::string &organization) const {
+                                            const std::string &organization) {
 
-    std::string ldap_url = "ldap://" + ldap_server + ":" + std::to_string(ldap_port);
+    const std::string ldap_url = "ldap://" + ldap_server + ":" + std::to_string(ldap_port);
     LDAP *ld = nullptr;
     int rc = ldap_initialize(&ld, ldap_url.c_str());
     if (rc != LDAP_SUCCESS) {
         throw std::runtime_error("ldap_initialize failed: " + std::string(ldap_err2string(rc)));
     }
 
-    rc = ldap_sasl_bind_s(ld, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+    // rc = ldap_sasl_bind_s(ld, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+    rc = ldap_simple_bind_s(ld, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         throw std::runtime_error("ldap_sasl_bind_s failed: " + std::string(ldap_err2string(rc)));
     }
 
-    // Convert uid and organization (e.g., "epics.org") to a DN component "dc=epics,dc=org".
-    std::string dn = getDn(uid, organization);
+    // Convert uid and organization (e.g., "epics.org") to a DN component "uid=<uid>, ou=People, dc=epics,dc=org".
+    const std::string dn = getDn(uid, organization);
 
     // We want only the epicsPublicKey attribute.
     char *attrs[] = { const_cast<char*>(PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE), nullptr };
@@ -298,16 +297,16 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server,
         throw std::runtime_error("No entry found for DN: " + dn);
     }
 
-    struct berval **bvals = ldap_get_values_len(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
-    if (!bvals || !bvals[0]) {
-        if (bvals) ldap_value_free_len(bvals);
+    berval **pub_key_val_ptr = ldap_get_values_len(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
+    if (!pub_key_val_ptr || !pub_key_val_ptr[0]) {
+        if (pub_key_val_ptr) ldap_value_free_len(pub_key_val_ptr);
         ldap_msgfree(result);
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         throw std::runtime_error("epicsPublicKey attribute not found for DN: " + dn);
     }
 
-    std::string publicKeyString(bvals[0]->bv_val, bvals[0]->bv_len);
-    ldap_value_free_len(bvals);
+    std::string publicKeyString(pub_key_val_ptr[0]->bv_val, pub_key_val_ptr[0]->bv_len);
+    ldap_value_free_len(pub_key_val_ptr);
     ldap_msgfree(result);
     ldap_unbind_ext_s(ld, nullptr, nullptr);
 

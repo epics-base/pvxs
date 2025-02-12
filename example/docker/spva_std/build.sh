@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Build the Docker image and tag it
-docker build --no-cache -t <your_dockerhub_username>/spva_std:latest .
+docker build --no-cache -t ${DOCKER_USERNAME}/spva_std:latest .
 
 # Log in to DockerHub (only needed if not already logged in)
 docker login
 
 # Push the image to DockerHub
-docker push <your_dockerhub_username>/spva_std:latest
+docker push ${DOCKER_USERNAME}/spva_std:latest
