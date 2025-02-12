@@ -83,7 +83,10 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
         throw std::runtime_error("ldap_set_option failed: " + std::string(ldap_err2string(rc)));
     }
 
-    rc = ldap_simple_bind_s(ld, user_dn.c_str(), ldap_credentials->password.c_str());
+    struct berval cred;
+    cred.bv_val = const_cast<char*>(ldap_credentials->password.c_str());
+    cred.bv_len = ldap_credentials->password.size();
+    rc = ldap_sasl_bind_s(ld, user_dn.c_str(), /* mech */ NULL, &cred, NULL, NULL, NULL);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         throw std::runtime_error(SB() << "LDAP simple bind failed to bind to "
