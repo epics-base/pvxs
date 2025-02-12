@@ -17,6 +17,14 @@ class ConfigAuthN : public client::Config {
    public:
     std::string name{};
     std::string organization{};
+    std::string organizational_unit{};
+    std::string country{"US"};
+
+    std::string server_name{};
+    std::string server_organization{};
+    std::string server_organizational_unit{};
+    std::string server_country{"US"};
+
     std::string tls_srv_keychain_file{};
     std::string tls_srv_keychain_pwd{};
 

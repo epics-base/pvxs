@@ -22,46 +22,6 @@ void ConfigStd::fromStdEnv(const std::map<std::string, std::string> &defs) {
             log_err_printf(cfg, "%s invalid validity minutes : %s", pickone.name.c_str(), e.what());
         }
     }
-
-    // EPICS_AUTH_STD_NAME
-    if (pickone({"EPICS_PVA_AUTH_STD_NAME"})) {
-        server_name = pickone.val;
-    }
-
-    // EPICS_AUTH_STD_ORG
-    if (pickone({"EPICS_PVA_AUTH_STD_ORG"})) {
-        server_organization = pickone.val;
-    }
-
-    // EPICS_AUTH_STD_ORG_UNIT
-    if (pickone({"EPICS_PVA_AUTH_STD_ORG_UNIT"})) {
-        organizational_unit = server_organizational_unit = pickone.val;
-    }
-
-    // EPICS_AUTH_STD_COUNTRY
-    if (pickone({"EPICS_PVA_AUTH_STD_COUNTRY"})) {
-        country = server_country = pickone.val;
-    }
-
-    // EPICS_AUTH_STD_NAME
-    if (pickone({"EPICS_PVAS_AUTH_STD_NAME"})) {
-        server_name = pickone.val;
-    }
-
-    // EPICS_AUTH_STD_ORG
-    if (pickone({"EPICS_PVAS_AUTH_STD_ORG"})) {
-        server_organization = pickone.val;
-    }
-
-    // EPICS_AUTH_STD_ORG_UNIT
-    if (pickone({"EPICS_PVAS_AUTH_STD_ORG_UNIT"})) {
-        server_organizational_unit = pickone.val;
-    }
-
-    // EPICS_AUTH_STD_COUNTRY
-    if (pickone({"EPICS_PVAS_AUTH_STD_COUNTRY"})) {
-        server_country = pickone.val;
-    }
 }
 
 }  // namespace certs

@@ -38,14 +38,6 @@ class ConfigStd : public ConfigAuthN {
      */
     uint32_t cert_validity_mins = 43200;
 
-    std::string organizational_unit{};
-    std::string country{"US"};
-
-    std::string server_name{};
-    std::string server_organization{};
-    std::string server_organizational_unit{};
-    std::string server_country{"US"};
-
     void fromStdEnv(const std::map<std::string, std::string>& defs);
 };
 

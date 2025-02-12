@@ -18,32 +18,42 @@ namespace certs {
 void ConfigAuthN::fromAuthNEnv(const std::map<std::string, std::string> &defs) {
     PickOne pickone{defs, true};
 
-    // EPICS_AUTH_STD_NAME
-    if (pickone({"EPICS_PVA_AUTH_STD_NAME"})) {
-        name = pickone.val;
+    // Try to get username
+    char username[PVXS_X509_AUTH_USERNAME_MAX];
+    std::string retrieved_username;
+
+    if (osiGetUserName(username, PVXS_X509_AUTH_USERNAME_MAX) == osiGetUserNameSuccess) {
+        username[PVXS_X509_AUTH_USERNAME_MAX - 1] = '\0';
+        retrieved_username = username;
     } else {
-        // Try to get username
-        char username[PVXS_X509_AUTH_USERNAME_MAX];
-        if (osiGetUserName(username, PVXS_X509_AUTH_USERNAME_MAX) == osiGetUserNameSuccess) {
-            username[PVXS_X509_AUTH_USERNAME_MAX - 1] = '\0';
-            name = username;
-        } else {
-            name = "nobody";
-        }
+        retrieved_username = "nobody";
     }
 
-    // EPICS_AUTH_STD_ORG
-    if (pickone({"EPICS_PVA_AUTH_STD_ORG"})) {
-        organization = pickone.val;
-    } else {
-        // Get hostname or IP address (Organization)
-        char hostname[PVXS_X509_AUTH_HOSTNAME_MAX];
-        if (!!gethostname(hostname, PVXS_X509_AUTH_HOSTNAME_MAX)) {
-            // If no hostname then try to get IP address
-            strcpy(hostname, getIPAddress().c_str());
-        }
-        organization = hostname;
+    // Get hostname or IP address (Organization)
+    char hostname[PVXS_X509_AUTH_HOSTNAME_MAX];
+    if (!!gethostname(hostname, PVXS_X509_AUTH_HOSTNAME_MAX)) {
+        // If no hostname then try to get IP address
+        strcpy(hostname, getIPAddress().c_str());
     }
+    const std::string retrieved_organization = hostname;
+
+    // EPICS_PVA_AUTH_STD_NAME, EPICS_PVAS_AUTH_STD_NAME
+    name = (pickone({"EPICS_PVA_AUTH_STD_NAME"})) ? pickone.val : retrieved_username;
+    server_name = (pickone({"EPICS_PVAS_AUTH_STD_NAME", "EPICS_PVA_AUTH_STD_NAME"})) ? pickone.val : retrieved_username;
+
+
+    // EPICS_PVA_AUTH_STD_ORG, EPICS_PVAS_AUTH_STD_ORG
+    organization = (pickone({"EPICS_PVA_AUTH_STD_ORG"})) ? pickone.val : retrieved_organization;
+    server_organization = (pickone({"EPICS_PVAS_AUTH_STD_ORG", "EPICS_PVA_AUTH_STD_ORG"})) ? pickone.val : retrieved_organization;
+
+    // EPICS_PVA_AUTH_STD_ORG_UNIT, EPICS_PVAS_AUTH_STD_ORG_UNIT
+    if (pickone({"EPICS_PVA_AUTH_STD_ORG_UNIT"})) organizational_unit = pickone.val;
+    if (pickone({"EPICS_PVAS_AUTH_STD_ORG_UNIT", "EPICS_PVA_AUTH_STD_ORG_UNIT"})) server_organizational_unit = pickone.val;
+
+    // EPICS_PVA_AUTH_STD_COUNTRY, EPICS_PVAS_AUTH_STD_COUNTRY
+    if (pickone({"EPICS_PVA_AUTH_STD_COUNTRY"})) country = pickone.val;
+    if (pickone({"EPICS_PVAS_AUTH_STD_COUNTRY", "EPICS_PVA_AUTH_STD_COUNTRY"})) server_country = pickone.val;
+
 
     // EPICS_PVAS_TLS_KEYCHAIN
     if (pickone({"EPICS_PVAS_TLS_KEYCHAIN"})) {
