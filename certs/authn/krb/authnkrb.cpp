@@ -52,7 +52,7 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &) co
     auto kerberos_credentials = std::make_shared<KrbCredentials>();
 
     // Initialize GSSAPI structures
-    OM_uint32 minor_status, major_status;
+    OM_uint32 minor_status;
     gss_name_t name = GSS_C_NO_NAME;
     gss_buffer_desc name_buffer = GSS_C_EMPTY_BUFFER;
     gss_cred_id_t cred_handle = GSS_C_NO_CREDENTIAL;
@@ -61,8 +61,8 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &) co
 
     // Acquire the default credential handle
     log_debug_printf(auth, "gss_acquire_cred: GSS_C_NO_NAME, GSS_C_INDEFINITE, GSS_C_NO_OID_SET, GSS_C_ACCEPT%s", "\n");
-    major_status = gss_acquire_cred(&minor_status, GSS_C_NO_NAME, GSS_C_INDEFINITE,
-                                    GSS_C_NO_OID_SET, GSS_C_INITIATE, &cred_handle, nullptr, nullptr);
+    OM_uint32 major_status = gss_acquire_cred(&minor_status, GSS_C_NO_NAME, GSS_C_INDEFINITE, GSS_C_NO_OID_SET,
+                                              GSS_C_INITIATE, &cred_handle, nullptr, nullptr);
     if (major_status != GSS_S_COMPLETE) throw std::runtime_error(SB() << "getCredentials: Failed to acquire credentials: " << gssErrorDescription(major_status, minor_status));
 
 
@@ -70,8 +70,9 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &) co
     log_debug_printf(auth, "gss_inquire_cred%s", "\n");
     major_status = gss_inquire_cred(&minor_status, cred_handle, &name, &lifetime, nullptr, nullptr);
     if (major_status != GSS_S_COMPLETE) {
+        const auto error_description = gssErrorDescription(major_status, minor_status);
         gss_release_cred(&minor_status, &cred_handle);
-        throw std::runtime_error(SB() << "getCredentials: Failed to inquire credentials: " << gssErrorDescription(major_status, minor_status));
+        throw std::runtime_error(SB() << "getCredentials: Failed to inquire credentials: " << error_description);
     }
 
 
@@ -79,9 +80,10 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &) co
     log_debug_printf(auth, "gss_display_name%s", "\n");
     major_status = gss_display_name(&minor_status, name, &name_buffer, nullptr);
     if (major_status != GSS_S_COMPLETE) {
+        const auto error_description = gssErrorDescription(major_status, minor_status);
         gss_release_name(&minor_status, &name);
         gss_release_cred(&minor_status, &cred_handle);
-        throw std::runtime_error(SB() << "getCredentials: Failed to get principal name: " << gssErrorDescription(major_status, minor_status));
+        throw std::runtime_error(SB() << "getCredentials: Failed to get principal name: " << error_description);
     }
 
     std::string principal_name(static_cast<char*>(name_buffer.value), name_buffer.length);
@@ -90,7 +92,7 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &) co
 
     log_debug_printf(auth, "Set Credentials%s", "\n");
     // Split the principal name into name and organization
-    size_t at_pos = principal_name.find('@');
+    const size_t at_pos = principal_name.find('@');
     if (at_pos == std::string::npos) {
         gss_release_cred(&minor_status, &cred_handle);
         throw std::runtime_error(SB() << "getCredentials: Invalid principal name format: " << principal_name.c_str());
@@ -102,7 +104,7 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &) co
     kerberos_credentials->country = {};
 
     // Get the current time and the ticket's expiration time
-    time_t now = time(nullptr);
+    const time_t now = time(nullptr);
     kerberos_credentials->not_before = now;
     kerberos_credentials->not_after = now + lifetime;
     log_debug_printf(auth, "\nName: %s, \nOrg: %s, \nnot_before: %lu, \nnot_after: %lu\n", kerberos_credentials->name.c_str(), kerberos_credentials->organization.c_str(), kerberos_credentials->not_before, kerberos_credentials->not_after);
@@ -237,18 +239,24 @@ std::string AuthNKrb::gssErrorDescription(OM_uint32 major_status, OM_uint32 mino
     char context[GSS_STATUS_BUFFER_LEN] = "";
 
     msg_ctx = 0;
-    while (!gss_display_status(&minor, major_status, GSS_C_GSS_CODE, GSS_C_NO_OID, &msg_ctx, &status_string)) {
+    do {
+        if ( gss_display_status(&minor, major_status, GSS_C_GSS_CODE, GSS_C_NO_OID, &msg_ctx, &status_string) != GSS_S_COMPLETE ) {
+            throw std::logic_error(SB() << "GSS display status failed: ");
+        }
         snprintf(context, GSS_STATUS_BUFFER_LEN, "%.*s\n", static_cast<int>(status_string.length), static_cast<char *>(status_string.value));
         error_description << context;
         gss_release_buffer(&minor, &status_string);
-    }
+    } while (msg_ctx);
 
     msg_ctx = 0;
-    while (!gss_display_status(&minor, minor_status, GSS_C_MECH_CODE, GSS_C_NULL_OID, &msg_ctx, &status_string)) {
+    do {
+        if ( gss_display_status(&minor, minor_status, GSS_C_MECH_CODE, GSS_C_NULL_OID, &msg_ctx, &status_string) != GSS_S_COMPLETE ) {
+            throw std::logic_error(SB() << "GSS display status failed: ");
+        }
         snprintf(context, GSS_STATUS_BUFFER_LEN, "%.*s\n", static_cast<int>(status_string.length), static_cast<char *>(status_string.value));
         error_description << context;
         gss_release_buffer(&minor, &status_string);
-    }
+    } while (msg_ctx);
 
     return error_description.str();
 }

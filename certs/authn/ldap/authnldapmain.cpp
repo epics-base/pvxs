@@ -225,9 +225,10 @@ int main(int argc, char *argv[]) {
                 log_info_printf(auth, "--------------------------------------%s", "\n");
             }
         }
+    return 0;
     } catch (std::exception &e) {
         if (retrieved_credentials) log_warn_printf(auth, "%s\n", e.what());
         else log_err_printf(auth, "%s\n", e.what());
     }
-    return 0;
+    return -1;
 }
