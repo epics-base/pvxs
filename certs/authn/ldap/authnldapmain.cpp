@@ -10,12 +10,6 @@
 #include <stdexcept>
 #include <string>
 
-#ifdef __APPLE__
-#include <GSS/gssapi.h>
-#else
-#include <gssapi/gssapi.h>
-#endif
-
 #include <CLI/CLI.hpp>
 
 #include <pvxs/config.h>
