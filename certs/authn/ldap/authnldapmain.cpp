@@ -55,7 +55,7 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
     app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `hybrid`");
 
     app.add_option("-n,--name", config.name, "Specify the LDAP user name e.g. name e.g. becomes uid=name.  Defaults to logged in username");
-    app.add_option("-o,--organization", config.name, "Specify the organization e.g. epics.org e.g. becomes dc=epics, dc=org.  Defaults to hostname");
+    app.add_option("-o,--organization", config.organization, "Specify the organization e.g. epics.org e.g. becomes dc=epics, dc=org.  Defaults to hostname");
     app.add_option("-p,--password", config.ldap_account_password, "Specify the LDAP account password");
 
     app.add_option("--ldap-host", config.ldap_host, "Specify LDAP host.  Default localhost");
