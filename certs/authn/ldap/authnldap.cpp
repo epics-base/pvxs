@@ -12,7 +12,9 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #else
-#define LDAP_DEPRECATED
+#ifndef LDAP_DEPRECATED
+#define LDAP_DEPRECATED 1
+#endif
 #endif
 
 #include <ldap.h>
