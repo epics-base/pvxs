@@ -124,7 +124,7 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
     }
 
     if (config.ldap_account_password.empty()) {
-        config.ldap_account_password = promptPassword(SB() << "Enter password for "<< config.name << ": " );
+        config.ldap_account_password = promptPassword(SB() << "Enter password for "<< config.name << "@" << config.organization << ": " );
     }
 
     return 0;
