@@ -160,6 +160,10 @@ int main(int argc, char *argv[]) {
 
         // Standard authenticator
         AuthNLdap authenticator{};
+        // Add configuration to authenticator
+        authenticator.configure(config);
+        const std::string tls_keychain_file = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_file : config.tls_keychain_file;
+        const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;
 
         if (auto credentials = authenticator.getCredentials(config)) {
             std::shared_ptr<KeyPair> key_pair;
@@ -169,7 +173,7 @@ int main(int argc, char *argv[]) {
             // Get key pair
             try {
                 // Check if the key pair exists
-                key_pair = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd)->getKeyFromFile();
+                key_pair = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getKeyFromFile();
             } catch (std::exception &e) {
                 // Make a new key pair file
                 try {
@@ -196,12 +200,12 @@ int main(int argc, char *argv[]) {
 
                 // Attempt to write the certificate and private key
                 // to a cert file protected by the configured password
-                auto file_factory = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd,
+                auto file_factory = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd,
                                                           key_pair, nullptr, nullptr, p12_pem_string);
                 file_factory->writeIdentityFile();
 
                 // Read file back for info
-                auto cert_data = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd)->getCertDataFromFile();
+                auto cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
                 auto serial_number = CertStatusFactory::getSerialNumber(cert_data.cert);
                 auto issuer_id = CertStatus::getIssuerId(cert_data.ca);
 
@@ -209,7 +213,7 @@ int main(int argc, char *argv[]) {
                 std::string to = std::ctime(&credentials->not_after);
                 log_info_printf(auth, "%s\n", (pvxs::SB() << "CERT_ID: " << issuer_id << ":" << serial_number).str().c_str());
                 log_info_printf(auth, "%s\n", (pvxs::SB() << "TYPE: " << authenticator.type_).str().c_str());
-                log_info_printf(auth, "%s\n", (pvxs::SB() << "OUTPUT TO: " << config.tls_keychain_file).str().c_str());
+                log_info_printf(auth, "%s\n", (pvxs::SB() << "OUTPUT TO: " << tls_keychain_file).str().c_str());
                 log_info_printf(auth, "%s\n", (pvxs::SB() << "NAME: " << credentials->name).str().c_str());
                 log_info_printf(auth, "%s\n", (pvxs::SB() << "ORGANIZATION: " << credentials->organization).str().c_str());
                 log_info_printf(auth, "%s\n", (pvxs::SB() << "ORGANIZATIONAL UNIT: " << credentials->organization_unit).str().c_str());

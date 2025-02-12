@@ -78,7 +78,7 @@ constexpr uint16_t kForClientAndServer = kForClient | kForServer;
 constexpr uint16_t kAnyServer = kForCMS | kForServer;
 
 #define IS_USED_FOR_(USED, USAGE) (((USED) & (USAGE)) == USAGE)
-#define IS_FOR_A_SERVER_(USED) (((USED) & (ssl::kAnyServer)) != 0x00)
+#define IS_FOR_A_SERVER_(USED) (((USED) & (pvxs::ssl::kAnyServer)) != 0x00)
 }  // namespace ssl
 
 struct PeerCredentials;
