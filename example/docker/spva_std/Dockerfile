@@ -1,6 +1,14 @@
 # FROM image built from /example/docker/pvxs
 FROM georgeleveln/pvxs:latest
 
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y \
+            adduser \
+            sudo \
+            supervisor && \
+    mkdir -p ${PROJECT_HOME}
+
 # Set environment variables
 ENV PROJECT_HOME=/opt/epics
 ENV DEBIAN_FRONTEND=noninteractive
