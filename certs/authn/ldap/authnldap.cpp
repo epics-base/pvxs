@@ -23,6 +23,11 @@
 
 DEFINE_LOGGER(auth, "pvxs.auth.ldap");
 
+#ifdef __APPLE__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 namespace pvxs {
 namespace certs {
 
@@ -325,3 +330,7 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server,
 
 }  // namespace security
 }  // namespace pvxs
+
+#ifdef __APPLE__
+#pragma clang diagnostic pop
+#endif
