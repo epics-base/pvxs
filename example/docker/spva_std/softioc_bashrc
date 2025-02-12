@@ -8,6 +8,11 @@ export PROJECT_HOME=/opt/epics
 # Default    : ${XDG_CONFIG_HOME}/pva/1.3/server.p12
 export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/server.p12
 
+#### SETUP SOFTIOC Organisation
+# Environment: EPICS_PVA_AUTH_STD_ORG
+# Default    : <hostname>
+export EPICS_PVA_AUTH_STD_ORG=epics.org
+
 # set path
 export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
 
