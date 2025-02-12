@@ -271,10 +271,10 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server,
         throw std::runtime_error("ldap_initialize failed: " + std::string(ldap_err2string(rc)));
     }
 
-    rc = ldap_simple_bind_s(ld, nullptr, nullptr);
+    rc = ldap_sasl_bind_s(ld, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
-        throw std::runtime_error("ldap_simple_bind_s failed: " + std::string(ldap_err2string(rc)));
+        throw std::runtime_error("ldap_sasl_bind_s failed: " + std::string(ldap_err2string(rc)));
     }
 
     // Convert uid and organization (e.g., "epics.org") to a DN component "dc=epics,dc=org".
