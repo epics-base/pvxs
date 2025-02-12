@@ -8,6 +8,13 @@
 
 #include <configldap.h>
 
+#ifdef __APPLE__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#else
+#define LDAP_DEPRECATED
+#endif
+
 #include <ldap.h>
 #include <openssl/evp.h>
 #include <stdexcept>
@@ -22,11 +29,6 @@
 #include "authregistry.h"
 
 DEFINE_LOGGER(auth, "pvxs.auth.ldap");
-
-#ifdef __APPLE__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
 
 namespace pvxs {
 namespace certs {
