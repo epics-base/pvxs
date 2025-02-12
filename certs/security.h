@@ -137,7 +137,7 @@ struct KeyPair final {
     KeyPair() = default;
 
     explicit KeyPair(ossl_ptr<EVP_PKEY> new_pkey) : pkey(std::move(new_pkey)) {
-        ossl_ptr<BIO> bio(BIO_new(BIO_s_mem()));
+        const ossl_ptr<BIO> bio(BIO_new(BIO_s_mem()));
 
         if (!PEM_write_bio_PUBKEY(bio.get(), pkey.get())) {
             throw std::runtime_error("Failed to write public key to BIO");
@@ -159,17 +159,17 @@ struct KeyPair final {
         BIO_free(bio);
 
         if (!pkey) {
-            throw std::runtime_error("Failed to create public key from string");
+            throw std::runtime_error(SB() << "Failed to create public key from string: \n" << public_key_string);
         }
     }
 
-    inline ossl_ptr<EVP_PKEY> getPublicKey() {
-        ossl_ptr<BIO> bio(BIO_new_mem_buf(public_key.c_str(), public_key.size()));
+    ossl_ptr<EVP_PKEY> getPublicKey() const {
+        const ossl_ptr<BIO> bio(BIO_new_mem_buf(public_key.c_str(), public_key.size()));
         if (!bio) {
             throw std::runtime_error("Unable to create BIO");
         }
 
-        ossl_ptr<EVP_PKEY> key(PEM_read_bio_PUBKEY(bio.get(), NULL, NULL, NULL), false);
+        ossl_ptr<EVP_PKEY> key(PEM_read_bio_PUBKEY(bio.get(), nullptr, nullptr, nullptr), false);
         if (!key) {
             throw std::runtime_error("Unable to read public key");
         }

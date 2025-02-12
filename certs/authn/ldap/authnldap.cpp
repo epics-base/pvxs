@@ -51,11 +51,18 @@ std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &con
                      "Begin acquisition");
 
     auto ldap_credentials = std::make_shared<LdapCredentials>();
+
+    // Set the expiration time of the certificate
+    const time_t now = time(nullptr);
+    ldap_credentials->not_before = now;
+    ldap_credentials->not_after = now + (365 * 24 * 60 * 60);
+
     ldap_credentials->name = ldap_config.name;
     ldap_credentials->organization = ldap_config.organization;
     ldap_credentials->ldap_server = ldap_config.ldap_host;
     ldap_credentials->ldap_port = ldap_config.ldap_port;
     ldap_credentials->password = ldap_config.ldap_account_password;
+
     return ldap_credentials;
 }
 
@@ -213,7 +220,7 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
 
 bool AuthNLdap::verify(const Value ccr) const {
     // Verify that the signature provided in the CCR was signed with the user's private key
-    auto signature = ccr["verifier.signature"].as<std::string>();
+    auto signature = Credentials::base64Decode(ccr["verifier.signature"].as<std::string>());
     auto payload = ccrToString(ccr);
 
     // Get public key
@@ -222,7 +229,7 @@ bool AuthNLdap::verify(const Value ccr) const {
     std::string public_key_str = getPublicKeyFromLDAP(ldap_server, ldap_port, uid, organization);
 
     KeyPair key_pair(public_key_str);
-    return CertFactory::verifySignature(key_pair.pkey, signature, payload);
+    return CertFactory::verifySignature(key_pair.pkey,payload, signature);
 }
 
 // A simple helper to split a string by a delimiter.
@@ -316,12 +323,12 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, cons
         throw std::runtime_error("epicsPublicKey attribute not found for DN: " + dn);
     }
 
-    const std::string publicKeyString(pub_key_val_ptr[0]->bv_val, pub_key_val_ptr[0]->bv_len);
+    const std::string public_key_string(pub_key_val_ptr[0]->bv_val, pub_key_val_ptr[0]->bv_len);
     ldap_value_free_len(pub_key_val_ptr);
     ldap_msgfree(result);
     ldap_unbind_ext_s(ld, nullptr, nullptr);
 
-    return Credentials::base64Decode(publicKeyString);
+    return public_key_string;
 }
 
 }  // namespace security
