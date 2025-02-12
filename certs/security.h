@@ -33,12 +33,11 @@ struct Credentials {
     time_t not_before;
     time_t not_after;
 
-    static std::string base64Encode(const char * data, size_t len) {
-        BIO *bio, *b64;
+    static std::string base64Encode(const char * data, const size_t len) {
         BUF_MEM *buffer_ptr;
 
-        b64 = BIO_new(BIO_f_base64());              // Create a base64 filter
-        bio = BIO_new(BIO_s_mem());                 // Create a memory BIO
+        BIO *b64 = BIO_new(BIO_f_base64());         // Create a base64 filter
+        BIO *bio = BIO_new(BIO_s_mem());            // Create a memory BIO
         BIO_push(b64, bio);                       // Chain them
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL); // No newline breaks
         BIO_write(b64, data, len);                       // Write the input string
@@ -50,6 +49,33 @@ struct Credentials {
         BIO_free_all(b64);   // Free the BIOs
 
         return out;
+    }
+
+    static std::string base64Decode(const std::string &input) {
+        int inputLength = input.size();
+        // Create a BIO chain: base64 filter + memory buffer.
+        BIO *b64 = BIO_new(BIO_f_base64());
+        // Disable newline processing
+        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+        BIO *bio = BIO_new_mem_buf(input.data(), inputLength);
+        bio = BIO_push(b64, bio);
+
+        // Allocate enough memory to hold the decoded data.
+        // Base64 encoding expands data by roughly 4/3.
+        const int max_decoded_length = inputLength * 3 / 4;
+        std::string decoded;
+        decoded.resize(max_decoded_length);
+
+        const int decodedLength = BIO_read(bio, &decoded[0], inputLength);
+        if(decodedLength < 0)
+        {
+            BIO_free_all(bio);
+            throw std::runtime_error("Base64 decoding failed");
+        }
+        decoded.resize(decodedLength);
+
+        BIO_free_all(bio);
+        return decoded;
     }
 
     static std::string base64Encode(const std::string &in) {

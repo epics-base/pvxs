@@ -266,18 +266,25 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, cons
                                             const std::string &uid,
                                             const std::string &organization) {
 
-    const std::string ldap_url = "ldap://" + ldap_server + ":" + std::to_string(ldap_port);
+    std::string ldap_url = "ldap://" + ldap_server + ":" + std::to_string(ldap_port);
     LDAP *ld = nullptr;
     int rc = ldap_initialize(&ld, ldap_url.c_str());
     if (rc != LDAP_SUCCESS) {
         throw std::runtime_error("ldap_initialize failed: " + std::string(ldap_err2string(rc)));
     }
 
-    // rc = ldap_sasl_bind_s(ld, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+    int ldap_version = LDAP_VERSION3;
+    rc = ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ldap_version);
+    if (rc != LDAP_SUCCESS) {
+        ldap_unbind_ext_s(ld, nullptr, nullptr);
+        throw std::runtime_error("ldap_set_option failed: " + std::string(ldap_err2string(rc)));
+    }
+
+    // Perform an anonymous simple bind
     rc = ldap_simple_bind_s(ld, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
-        throw std::runtime_error("ldap_sasl_bind_s failed: " + std::string(ldap_err2string(rc)));
+        throw std::runtime_error("ldap_simple_bind_s failed: " + std::string(ldap_err2string(rc)));
     }
 
     // Convert uid and organization (e.g., "epics.org") to a DN component "uid=<uid>, ou=People, dc=epics,dc=org".
@@ -309,12 +316,12 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, cons
         throw std::runtime_error("epicsPublicKey attribute not found for DN: " + dn);
     }
 
-    std::string publicKeyString(pub_key_val_ptr[0]->bv_val, pub_key_val_ptr[0]->bv_len);
+    const std::string publicKeyString(pub_key_val_ptr[0]->bv_val, pub_key_val_ptr[0]->bv_len);
     ldap_value_free_len(pub_key_val_ptr);
     ldap_msgfree(result);
     ldap_unbind_ext_s(ld, nullptr, nullptr);
 
-    return publicKeyString;
+    return Credentials::base64Decode(publicKeyString);
 }
 
 }  // namespace security
