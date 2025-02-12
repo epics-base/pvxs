@@ -8,8 +8,9 @@ Release Notes
 
 * Client: search retry step reset on channel reconnection (Anze Zagar)
 * Various documentation improvements!  (Érico Nogueira)
-* Fix dbLoadGroups (Érico Nogueira)
 * Fix build with epics-base 7.0.7 (Rémi NICOLE)
+* ioc: Fix dbLoadGroups (Érico Nogueira)
+* ioc: Fix handling of ``DBE_ARCHIVE`` when requested via ``records._options.DBE``
 
 1.3.2 (Oct 2024)
 ------------------
