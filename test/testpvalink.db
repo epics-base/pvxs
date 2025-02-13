@@ -127,7 +127,16 @@ record(ao, "meta:src") {
 }
 
 record(ai, "meta:inp") {
-    field(INP, {pva:{pv:"meta:src", sevr:"MS"}})
+    field(INP, {pva:{pv:"meta:src"}})
+}
+
+record(sub, "meta:src:ms") {
+    field(SNAM, "setAMSG")
+    field(TSE , "-2")
+}
+
+record(ai, "meta:inp:ms") {
+    field(INP, {pva:{pv:"meta:src:ms", sevr:"MS"}})
 }
 
 record(longout, "flnk:src") {
