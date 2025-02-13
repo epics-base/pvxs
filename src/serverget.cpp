@@ -250,6 +250,11 @@ struct ServerGPRConnect : public server::ConnectOp
         });
     }
 
+    virtual void logRemote(Level lvl, const std::string& msg) override final
+    {
+        doLogRemote(this, lvl, msg);
+    }
+
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerGPR> op;
 
@@ -322,6 +327,11 @@ struct ServerGPRExec : public server::ExecOp
             throw std::logic_error("Can't start timer on deal server");
 
         return Timer::Pvt::buildOneShot(delay, serv->acceptor_loop.internal(), std::move(fn));
+    }
+
+    virtual void logRemote(Level lvl, const std::string& msg) override final
+    {
+        doLogRemote(this, lvl, msg);
     }
 
     const std::weak_ptr<server::Server::Pvt> server;
