@@ -397,15 +397,16 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
         {
             log_debug_printf(_logger, "%s: %s recGblSetSevr %d\n", __func__, plink->precord->name,
                              self->snap_severity);
-            recGblSetSevr(plink->precord, LINK_ALARM, self->snap_severity);
+            recGblSetSevrMsg(plink->precord, LINK_ALARM, self->snap_severity,
+                             "%s", self->snap_message.c_str());
         }
 
         if(self->time) {
             plink->precord->time = self->snap_time;
         }
 
-        log_debug_printf(_logger, "%s: %s %s snapsevr=%d OK\n", __func__, plink->precord->name,
-                         self->channelName.c_str(), self->snap_severity);
+        log_debug_printf(_logger, "%s: %s %s snapalrm=%d,\"%s\" OK\n", __func__, plink->precord->name,
+                         self->channelName.c_str(), self->snap_severity, self->snap_message.c_str());
         return 0;
     }CATCH()
     return -1;
