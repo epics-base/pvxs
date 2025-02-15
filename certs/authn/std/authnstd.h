@@ -62,11 +62,6 @@ class AuthNStd : public Auth {
     bool verify(Value ccr) const override;
 
     void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigStd(ConfigStd::fromEnv())); }
-
-    std::string getOptionsText() override { return {}; }
-    std::string getParameterHelpText() override { return {}; }
-    void addParameters(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {}
-    void configure(const client::Config &config) override {};
 };
 
 }  // namespace certs

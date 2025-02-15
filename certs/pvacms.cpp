@@ -1869,14 +1869,14 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
 
     // Add any parameters for any registered authn methods
     for (auto & authn_entry : AuthRegistry::getRegistry())
-        authn_entry.second->addParameters(app, authn_config_map);
+        authn_entry.second->addOptions(app, authn_config_map);
 
     CLI11_PARSE(app, argc, argv);
 
     if (help) {
         std::string authn_help, authn_options;
-        for (auto & authn_entry : AuthRegistry::getRegistry()) authn_options += authn_entry.second->getOptionsText();
-        for (auto & authn_entry : AuthRegistry::getRegistry()) authn_help += authn_entry.second->getParameterHelpText();
+        for (auto & authn_entry : AuthRegistry::getRegistry()) authn_options += authn_entry.second->getOptionsPlaceholderText();
+        for (auto & authn_entry : AuthRegistry::getRegistry()) authn_help += authn_entry.second->getOptionsHelpText();
 
         std::cout << "PVACMS: PVAccess Certificate Management Service\n"
                   << std::endl

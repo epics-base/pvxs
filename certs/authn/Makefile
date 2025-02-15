@@ -5,7 +5,6 @@ SRC_DIRS += $(AUTHN)
 SRCS += auth.cpp
 SRCS += configauthn.cpp
 SRCS += ccrmanager.cpp
-SRCS += authregistry.cpp
 
 include $(AUTHN)/std/Makefile
 

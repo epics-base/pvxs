@@ -1,5 +1,8 @@
-// Created on 19/09/2024.
-//
+/**
+* Copyright - See the COPYRIGHT that is included with this distribution.
+ * pvxs is distributed subject to a Software License Agreement found
+ * in file LICENSE that is included with this distribution.
+ */
 
 #ifndef PVXS_CCRMANAGER_H_
 #define PVXS_CCRMANAGER_H_

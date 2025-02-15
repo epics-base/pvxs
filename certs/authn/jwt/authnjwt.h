@@ -64,8 +64,8 @@ class AuthNJwt : public Auth {
         return static_cast<client::Config>(ConfigJwt::fromEnv());
     };
 
-    std::string getOptionsText() {return " [jwt options]";}
-    std::string getParameterHelpText() {return  "\n"
+    std::string getOptionsPlaceholderText() {return " [jwt options]";}
+    std::string getOptionsHelpText() {return  "\n"
                                               "jwt options\n"
                                               "        --jwt-request_format <format>        The JWT request format.  String containing \"#token#\"\n"
                                               "        --jwt-request-method <method>        The JWT request method.  GET or POST\n"
@@ -82,7 +82,6 @@ class AuthNJwt : public Auth {
         app.add_option("--jwt-trusted_uri", config_jwt.jwt_trusted_uri, "Specify LDAP port number");
         app.add_option("--jwt-use_response-code", config_jwt.jwt_use_response_code, "Specify LDAP search root");
     }
-    void configure(const client::Config &config) override {};
 };
 
 

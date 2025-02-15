@@ -102,7 +102,7 @@ class AuthNKrb : public Auth {
      *
      * @return the heading for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator
      */
-    std::string getOptionsText() override { return " [kerberos options]"; }
+    std::string getOptionsPlaceholderText() override { return " [kerberos options]"; }
 
     /**
      * Get the help text for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator.
@@ -111,7 +111,7 @@ class AuthNKrb : public Auth {
      *
      * @return the help text for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator
      */
-    std::string getParameterHelpText() override {
+    std::string getOptionsHelpText() override {
         return "\n"
                "kerberos options\n"
                "        --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`\n"
@@ -132,7 +132,7 @@ class AuthNKrb : public Auth {
      * @param app the CLI11 application object to add the parameters to
      * @param authn_config_map the map of authenticator configuration parameters keyed on the authenticator type
      */
-    void addParameters(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {
+    void addOptions(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {
         auto &config = authn_config_map.at(PVXS_KRB_AUTH_TYPE);
         auto config_krb = dynamic_cast<const ConfigKrb &>(*config);
         app.add_option("--krb-realm", config_krb.krb_realm, "kerberos realm.");

@@ -16,7 +16,7 @@ namespace pvxs {
 namespace certs {
 
 /**
- * @brief Get the standard Authenticator configuration from the environment
+ * @brief Get the base Authenticator configuration from the environment
  *
  * This will get the username, organization, and other information from the
  * environment and store it in the ConfigAuthN object.
@@ -26,10 +26,10 @@ namespace certs {
 void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
     PickOne pickone{defs, true};
 
-    // Try to get username
     char username[PVXS_X509_AUTH_USERNAME_MAX];
     std::string retrieved_username;
 
+    // Try to get username
     if (osiGetUserName(username, PVXS_X509_AUTH_USERNAME_MAX) == osiGetUserNameSuccess) {
         username[PVXS_X509_AUTH_USERNAME_MAX - 1] = '\0';
         retrieved_username = username;

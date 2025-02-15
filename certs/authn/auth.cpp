@@ -43,21 +43,30 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
     cert_creation_request->credentials = credentials;
 
     // Fill in the ccr from the base data we've gathered so far.
+    cert_creation_request->ccr["type"] = type_;
+    cert_creation_request->ccr["usage"] = usage;
+    cert_creation_request->ccr["pub_key"] = key_pair->public_key;
     cert_creation_request->ccr["name"] = credentials->name;
     cert_creation_request->ccr["country"] = credentials->country;
     cert_creation_request->ccr["organization"] = credentials->organization;
     cert_creation_request->ccr["organization_unit"] = credentials->organization_unit;
-    cert_creation_request->ccr["type"] = type_;
-    cert_creation_request->ccr["usage"] = usage;
     cert_creation_request->ccr["not_before"] = credentials->not_before;
     cert_creation_request->ccr["not_after"] = credentials->not_after;
-    cert_creation_request->ccr["pub_key"] = key_pair->public_key;
     return cert_creation_request;
 }
 
+/**
+ * @brief Get a pointer to the singleton Auth object for the given type.
+ *
+ * This function returns a pointer to the singleton Auth object for the given type.
+ *
+ * @param type the type of the Auth object to get (e.g. "std", "ldap", "krb", "jwt")
+ * @return a pointer to the singleton Auth object for the given type
+ * @throws std::logic_error if the Auth object for the given type is not found
+ */
 Auth *Auth::getAuth(const std::string &type) {
     auto auth = AuthRegistry::instance().getAuth(type);
-    if ( auth == nullptr ) {
+    if (auth == nullptr) {
         throw std::logic_error("Auth::getAuth: no such auth type");
     }
     return auth;
@@ -73,17 +82,17 @@ Auth *Auth::getAuth(const std::string &type) {
  * @param cert_creation_request A shared pointer to a CertCreationRequest object
  * containing the ccr PVStructure which contains the certificate, and its
  * validity as well as any verifier specific required fields.
- * @return the signed certificate
+ * @param timeout the timeout for the request
+ * @return the certificate in PEM format with the CA chain ordered from leaf to root
  * @throws std::runtime_error when exceptions arise
  *
  * @note It is the responsibility of the caller to ensure that the
- * cert_creation_request object is valid and contains the required information
+ * CCR object is valid and contains the required information
  * before calling this function.
  */
 std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &cert_creation_request, double timeout) const {
     // Forward the ccr to the certificate management service
-    std::string p12_pem_string(ccr_manager_.createCertificate(cert_creation_request, timeout));
-    return p12_pem_string;
+    return ccr_manager_.createCertificate(cert_creation_request, timeout);
 }
 }  // namespace certs
 }  // namespace pvxs

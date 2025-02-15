@@ -59,15 +59,15 @@ class AuthNLdap : public Auth {
         ldap_port = config_ldap.ldap_port;
     };
 
-    std::string getOptionsText() override { return " [ldap options]"; }
-    std::string getParameterHelpText() override {
+    std::string getOptionsPlaceholderText() override { return " [ldap options]"; }
+    std::string getOptionsHelpText() override {
         return "\n"
                "ldap options\n"
                "        --ldap-host <host>                   LDAP Host.  Default localhost\n"
                "        --ldap-port <port>                   LDAP port.  Default 389\n";
     }
 
-    void addParameters(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {
+    void addOptions(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {
         auto &config = authn_config_map.at(PVXS_LDAP_AUTH_TYPE);
         auto config_ldap = dynamic_cast<const ConfigLdap &>(*config);
         app.add_option("--ldap-host", config_ldap.ldap_host, "Specify LDAP hostname or IP address");

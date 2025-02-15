@@ -1,5 +1,9 @@
-// Created on 19/09/2024.
-//
+/**
+* Copyright - See the COPYRIGHT that is included with this distribution.
+ * pvxs is distributed subject to a Software License Agreement found
+ * in file LICENSE that is included with this distribution.
+ */
+
 #include "ccrmanager.h"
 
 #include <pvxs/nt.h>
@@ -8,7 +12,7 @@
 #include "pvacms.h"
 #include "security.h"
 
-DEFINE_LOGGER(auths, "pvxs.certs.auth");
+DEFINE_LOGGER(auths, "pvxs.certs.auth.ccr");
 
 namespace pvxs {
 namespace certs {
@@ -16,9 +20,11 @@ namespace certs {
 using namespace members;
 
 /**
- * @brief Create a certificate
+ * @brief Create a certificate  
  *
- * @param cert_creation_request Certificate creation request
+ * This function creates a certificate from the given Certificate Creation Request (CCR).
+ *
+ * @param cert_creation_request Certificate Creation Request (CCR)
  * @param timeout Timeout for the request
  * @return std::string PEM format Certificate.
  */
