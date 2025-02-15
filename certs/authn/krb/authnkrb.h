@@ -50,14 +50,24 @@ class AuthNKrb : public Auth {
     // Constructor.  Adds in kerberos specific fields (ticket) to the verifier
     // field of the ccr
     explicit AuthNKrb()
-        : Auth(PVXS_KRB_AUTH_TYPE, {Member(TypeCode::Int8A, "token"), Member(TypeCode::Int8A, "mic")}), krb5_oid(&krb5_oid_desc), krb5_oid_ptr(&krb5_oid) {
+        : Auth(PVXS_KRB_AUTH_TYPE,
+               {
+                   Member(TypeCode::Int8A, "token"),  // Add a `token` field to the CCR
+                   Member(TypeCode::Int8A, "mic")     // Add a `mic` field to the CCR
+               }),
+          krb5_oid(&krb5_oid_desc),  // Initialize the Kerberos OID to the constant value for the Kerberos protocol
+          krb5_oid_ptr(&krb5_oid)    // Initialize the pointer to the Kerberos OID
+    {
+        // Initialize the Kerberos OID to the constant value for the Kerberos protocol
         krb5_oid_desc.length = 9;
         krb5_oid_desc.elements = const_cast<char *>("\x2a\x86\x48\x86\xf7\x12\x01\x02\x02");
     };
 
     ~AuthNKrb() override = default;
 
+    // Kerberos OID for the Kerberos protocol
     gss_OID krb5_oid;
+    // Pointer to the Kerberos OID
     gss_OID *krb5_oid_ptr;
 
     std::shared_ptr<Credentials> getCredentials(const client::Config &config) const override;
@@ -69,6 +79,15 @@ class AuthNKrb : public Auth {
 
     void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigKrb(ConfigKrb::fromEnv())); };
 
+    /**
+     * Apply the kerberos specific configuration to the authenticator.
+     * 
+     * This function applies the kerberos specific configuration to the authenticator.
+     * It sets the kerberos validator service name and the kerberos realm for use in the authenticator client,
+     * and the realm and the kerberos keytab file for use in the PVACMS kerberos verifier.
+     * 
+     * @param config the configuration for the authenticator
+     */
     void configure(const client::Config &config) override {
         auto &config_krb = dynamic_cast<const ConfigKrb &>(config);
         krb_validator_service_name = SB() << config_krb.krb_validator_service << PVXS_KRB_DEFAULT_VALIDATOR_CLUSTER_PART << config_krb.krb_realm;
@@ -76,13 +95,43 @@ class AuthNKrb : public Auth {
         krb_keytab_file = config_krb.krb_keytab;
     };
 
+    /**
+     * Get the heading for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator.
+     * 
+     * This function returns the heading for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator.
+     * 
+     * @return the heading for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator
+     */
     std::string getOptionsText() override { return " [kerberos options]"; }
+
+    /**
+     * Get the help text for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator.
+     * 
+     * This function returns the help text for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator.
+     * 
+     * @return the help text for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator
+     */
     std::string getParameterHelpText() override {
         return "\n"
                "kerberos options\n"
                "        --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`\n"
                "        --krb-service <service>              pvacms kerberos service name.  Default `pvacms`\n";
     }
+    
+    /**
+     * @brief Add the kerberos specific parameters to the command line application for the PVACMS executable.
+     *
+     * This function adds the kerberos specific parameters to the command line application for the PVACMS executable.
+     * The parameters are added to the commandline application as options so that they will
+     * be parsed from the command line when the PVACMS executable is run.
+     *
+     * The parameter values retrieved from the command line are stored in an authenticator specific
+     * config object in the `authn_config_map` map keyed on the authenticator type.  In this case
+     * the authenticator specific config object is a ConfigKrb object.
+     *
+     * @param app the CLI11 application object to add the parameters to
+     * @param authn_config_map the map of authenticator configuration parameters keyed on the authenticator type
+     */
     void addParameters(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {
         auto &config = authn_config_map.at(PVXS_KRB_AUTH_TYPE);
         auto config_krb = dynamic_cast<const ConfigKrb &>(*config);

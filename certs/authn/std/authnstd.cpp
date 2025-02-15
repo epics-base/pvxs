@@ -8,32 +8,47 @@
 
 #include <ifaddrs.h>
 #include <osiProcess.h>
-#include <CLI/CLI.hpp>
 
 #include <pvxs/log.h>
 
+#include <CLI/CLI.hpp>
+
 #include "authregistry.h"
 #include "certfilefactory.h"
+#include "certstatusfactory.h"
 #include "configstd.h"
 #include "openssl.h"
 #include "p12filefactory.h"
 #include "utilpvt.h"
-#include "certstatusfactory.h"
 
 DEFINE_LOGGER(auth, "pvxs.auth.std");
 
 namespace pvxs {
 namespace certs {
 
+/**
+ * @brief Registrar for the standard authenticator
+ *
+ * This will register the Standard authenticator with the AuthRegistry.
+ * This allows it to be found by PVACMS to authenticate Standard certificate
+ * creation requests (CCRs).
+ *
+ * The Standard authenticator uses the commandline, environment, or user/hostname
+ * information to create the credentials for the certificate.
+ */
 struct AuthNStdRegistrar {
-    AuthNStdRegistrar() { // NOLINT(*-use-equals-default)
+    AuthNStdRegistrar() {  // NOLINT(*-use-equals-default)
         AuthRegistry::instance().registerAuth(PVXS_DEFAULT_AUTH_TYPE, std::unique_ptr<Auth>(new AuthNStd()));
     }
     // ReSharper disable once CppDeclaratorNeverUsed
 } auth_n_std_registrar;
 
 /**
- * @brief Extract the country code from a locale string
+ * @brief Extract the country code from the given locale string
+ *
+ * This will extract the country code from a locale string.  It works by finding
+ * the country part of the locale string, which is always after an underscore.
+ * It then converts the country code to uppercase and returns it.
  *
  * @param locale_str the locale string to extract the country code from
  * @return the country code extracted from the locale string
@@ -51,9 +66,17 @@ static std::string extractCountryCode(const std::string &locale_str) {
 }
 
 /**
- * @brief Get the current country code of where the process is running
+ * @brief Get the current country code of where the process is running.
+ *
  * This returns the two-letter country code.  It is always upper case.
- * For example for the United States it returns US, and for France, FR.
+ * For example for the United States it returns `US`, and for France, `FR`.
+ *
+ * The fact that a locale string is not always available and that the country part is optional
+ * means that it rarely works.  It tries the following:
+ *
+ * 1. Try from std::locale("")
+ * 2. Try from the LANG environment variable
+ * 3. Default to "US" if both attempts failed
  *
  * @return the current country code of where the process is running
  */
@@ -86,23 +109,25 @@ static std::string getCountryCode() {
     return "US";
 }
 
-
 /**
- * @brief Creates credentials for use in creating an X.509 certificate.
+ * @brief Creates credentials for use in creating a certificate.
  *
  * This function retrieves the credentials required for creation of an X.509
- * certificate.  It uses supplied parameters or environment variables to
- * obtain the common name, organization, organizational unit, and country.
+ * certificate.  It uses supplied parameters, environment variables, current logged-on username/hostname,
+ * or the current country code of where the process is running to obtain the common name,
+ * organization, organizational unit, and country needed for the subject of the certificate.
  *
- * If username is not specified then use the logged in username
+ * - If username is not specified in either the commandline or environment then use the logged in username
+ * - If organization is not specified in either the commandline or environment then use the hostname of the machine
+ * - If organizational unit is not specified in either the commandline or environment then leave blank
+ * - If country is not specified in either the commandline or environment then use the current
+ *   country code of where the process is running or default to "US"
  *
- * @param config The ConfigStd object containing the environment variables
- *               optionally overridden by commandline parameters.
- * @return A structure containing the credentials required for creation of
- * certificate.
+ * @param config The ConfigStd object containing the environment variables optionally overridden by commandline parameters and pre-filled with default values.
+ * @return A structure containing the credentials required for creation of a certificate.
  */
 std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &config) const {
-    const auto & std_config = dynamic_cast<const ConfigStd&>(config);
+    const auto &std_config = dynamic_cast<const ConfigStd &>(config);
 
     log_debug_printf(auth,
                      "\n******************************************\nDefault, "
@@ -142,12 +167,9 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
 }
 
 /**
- * Create a PVStructure that corresponds to the ccr parameter of a certificate
- * creation request. This request will be sent to the PVACMS through the default
- * channel (PVAccess) and will be used to create the certificate.
+ * @brief Create a PVStructure that corresponds to the ccr parameter of a Certificate Creation Request (CCR).
  *
- * This default certificate creation request does nothing more than the base
- * certificate creation request.
+ * This request will be sent to the PVACMS through the default channel (PV Access) and will be used to create the certificate.
  *
  * @param credentials the credentials that describe the subject of the certificate
  * @param key_pair the public/private key to be used in the certificate, only public key is used
@@ -155,23 +177,25 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
  * @return A managed shared CertCreationRequest object.
  */
 std::shared_ptr<CertCreationRequest> AuthNStd::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
-                                                                        const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const {
+                                                                         const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const {
     auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage);
 
     return cert_creation_request;
 };
 
-
 /**
- * @brief Verify the certificate creation request
+ * @brief Verify the Certificate Creation Request (CCR)
  *
- * There is no verification for the basic credentials.  Just return true.
+ * There is no verification for the Standard authenticator.  Just return true.
+ * 
+ * All certificates generated by the standard authenticator normally require administrator approval 
+ * before becoming valid.  They are issued in PENDING_APPROVAL status.  An administrator must use the 
+ * PUT request to the status PV included as an extension in the certificate to approve the certificate.
  *
- * @param ccr the certificate creation request
- * @return true if the certificate creation request is valid
+ * @param ccr the Certificate Creation Request (CCR)
+ * @return true if the Certificate Creation Request (CCR) is valid
  */
 bool AuthNStd::verify(const Value ccr) const { return true; }
 
 }  // namespace certs
 }  // namespace pvxs
-

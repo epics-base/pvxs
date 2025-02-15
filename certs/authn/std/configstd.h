@@ -22,6 +22,17 @@ class ConfigStd : public ConfigAuthN {
         return *this;
     }
 
+    /**
+     * @brief Create a ConfigStd object from the environment
+     *
+     * This static method creates a ConfigStd object from the environment.
+     *
+     * It applies the generic client config environment to the ConfigStd object, then
+     * the generic authenticator environment, and finally it extracts the standard
+     * certificate validity minutes from the environment and adds it to the ConfigStd object.
+     *
+     * @return A ConfigStd object initialised from the environment
+     */
     static ConfigStd fromEnv() {
         auto config = ConfigStd{}.applyEnv();
         auto defs = std::map<std::string, std::string>();
@@ -36,7 +47,7 @@ class ConfigStd : public ConfigAuthN {
      * Use this to set the default validity for certificates
      * generated from basic credentials.
      */
-    uint32_t cert_validity_mins = 43200;
+    uint32_t cert_validity_mins = 30 * 24 * 60; // Default to 30 days
 
     void fromStdEnv(const std::map<std::string, std::string>& defs);
 };
