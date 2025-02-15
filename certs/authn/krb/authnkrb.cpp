@@ -55,10 +55,9 @@ struct AuthNKrbRegistrar {
  * It uses the GSSAPI to acquire the credentials from the current user's
  * Kerberos ticket.
  *
- * @param config the configuration for the authenticator
  * @return the credentials for the Kerberos authenticator
  */
-std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &) const {
+std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &, bool) const {
     log_debug_printf(auth,
                      "\n******************************************\n"
                      "Kerberos Authenticator: %s\n",

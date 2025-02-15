@@ -17,13 +17,15 @@
 #endif
 #endif
 
-#include <ldap.h>
-#include <openssl/evp.h>
-#include <stdexcept>
+#include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
-#include <memory>
+
+#include <ldap.h>
+
+#include <openssl/evp.h>
 
 #include <pvxs/config.h>
 
@@ -35,15 +37,49 @@ DEFINE_LOGGER(auth, "pvxs.auth.ldap");
 namespace pvxs {
 namespace certs {
 
+/**
+ * @brief Registrar for the LDAP authenticator
+ *
+ * This will register the LDAP authenticator with the AuthRegistry.
+ * This allows it to be found by PVACMS to authenticate LDAP certificate
+ * creation requests (CCRs).
+ */
 struct AuthNLdapRegistrar {
-    AuthNLdapRegistrar() { // NOLINT(*-use-equals-default)
+    AuthNLdapRegistrar() {  // NOLINT(*-use-equals-default)
         AuthRegistry::instance().registerAuth(PVXS_LDAP_AUTH_TYPE, std::unique_ptr<Auth>(new AuthNLdap()));
     }
     // ReSharper disable once CppDeclaratorNeverUsed
 } auth_n_ldap_registrar;
 
-std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &config) const {
-    const auto ldap_config = dynamic_cast<const ConfigLdap&>(config);
+/**
+ * @brief Get the credentials for the LDAP authenticator
+ *
+ * This will get the credentials for the LDAP authenticator.
+ *
+ * - The LDAP username is copied from the configuration using the
+ * EPICS_PVA_AUTH_STD_NAME environment variable if it is set, otherwise
+ * it defaults to the logged in user.
+ *
+ * - The password is copied from the configuration using the
+ * EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE environment variable if it is set to
+ * read it from a file, otherwise it is read from the command line.
+ *
+ * - The organization is copied from the configuration using the
+ * EPICS_PVA_AUTH_STD_ORG environment variable if it is set, otherwise
+ * it defaults to the logged in user's organization.
+ * Note: The organisation is used in LDAP by splitting the string on '.'
+ * and using the parts as the components of the DN. e.g. epics.org ->
+ * dc=epics,dc=org
+ *
+ * - The LDAP server and port are copied from the configuration, defaulting to
+ * the EPICS_AUTH_LDAP_HOST and EPICS_AUTH_LDAP_PORT environment variables.
+ *
+ * @param config the configuration for the authenticator
+ * @param for_client true when getting gredentials for a client, false for server
+ * @return the credentials for the LDAP authenticator
+ */
+std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &config, bool for_client) const {
+    const auto ldap_config = dynamic_cast<const ConfigLdap &>(config);
 
     log_debug_printf(auth,
                      "\n******************************************\n"
@@ -57,8 +93,8 @@ std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &con
     ldap_credentials->not_before = now;
     ldap_credentials->not_after = now + (365 * 24 * 60 * 60);
 
-    ldap_credentials->name = ldap_config.name;
-    ldap_credentials->organization = ldap_config.organization;
+    ldap_credentials->name = for_client ? ldap_config.name : ldap_config.server_name;
+    ldap_credentials->organization = for_client ? ldap_config.organization : ldap_config.server_organization;
     ldap_credentials->ldap_server = ldap_config.ldap_host;
     ldap_credentials->ldap_port = ldap_config.ldap_port;
     ldap_credentials->password = ldap_config.ldap_account_password;
@@ -66,9 +102,8 @@ std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &con
     return ldap_credentials;
 }
 
-std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
-    const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const {
-
+std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
+                                                                          const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const {
     // Cast to LDAP-specific credentials
     auto ldap_credentials = castAs<LdapCredentials, Credentials>(credentials);
 
@@ -79,8 +114,7 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
     std::string user_dn = getDn(credentials->name, credentials->organization);
 
     // Initialize an LDAP connection.
-    std::string ldap_url = "ldap://" + ldap_credentials->ldap_server + ":" +
-                           std::to_string(ldap_credentials->ldap_port);
+    std::string ldap_url = "ldap://" + ldap_credentials->ldap_server + ":" + std::to_string(ldap_credentials->ldap_port);
     LDAP *ld = nullptr;
     int rc = ldap_initialize(&ld, ldap_url.c_str());
     if (rc != LDAP_SUCCESS) {
@@ -95,31 +129,20 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
     }
 
     berval cred{};
-    cred.bv_val = const_cast<char*>(ldap_credentials->password.c_str());
+    cred.bv_val = const_cast<char *>(ldap_credentials->password.c_str());
     cred.bv_len = ldap_credentials->password.size();
     rc = ldap_sasl_bind_s(ld, user_dn.c_str(), nullptr, &cred, nullptr, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
-        throw std::runtime_error(SB() << "LDAP simple bind failed to bind to "
-                             << ldap_credentials->ldap_server << ":" << ldap_credentials->ldap_port
-                             << " for " << user_dn << ":" << ldap_err2string(rc));
+        throw std::runtime_error(SB() << "LDAP simple bind failed to bind to " << ldap_credentials->ldap_server << ":" << ldap_credentials->ldap_port << " for "
+                                      << user_dn << ":" << ldap_err2string(rc));
     }
 
     // Search for the client’s LDAP entry and retrieve the "epicsPublicKey" attribute.
     LDAPMessage *result = nullptr;
 
-    char *attrs[] = { (char *)PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE, nullptr };
-    rc = ldap_search_ext_s(ld,
-                           user_dn.c_str(),
-                           LDAP_SCOPE_BASE,
-                           "(objectClass=*)",
-                           attrs,
-                           0,
-                           nullptr,
-                           nullptr,
-                           nullptr,
-                           0,
-                           &result);
+    char *attrs[] = {(char *)PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE, nullptr};
+    rc = ldap_search_ext_s(ld, user_dn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)", attrs, 0, nullptr, nullptr, nullptr, 0, &result);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         throw std::runtime_error(SB() << "LDAP search failed: " << ldap_err2string(rc));
@@ -130,10 +153,8 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
     std::string currentPublicKey;
     if (entry) {
         berval **pub_key_val_ptr = ldap_get_values_len(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
-        if (pub_key_val_ptr && pub_key_val_ptr[0])
-            currentPublicKey = std::string(pub_key_val_ptr[0]->bv_val, pub_key_val_ptr[0]->bv_len);
-        if (pub_key_val_ptr)
-            ldap_value_free_len(pub_key_val_ptr);
+        if (pub_key_val_ptr && pub_key_val_ptr[0]) currentPublicKey = std::string(pub_key_val_ptr[0]->bv_val, pub_key_val_ptr[0]->bv_len);
+        if (pub_key_val_ptr) ldap_value_free_len(pub_key_val_ptr);
     }
     ldap_msgfree(result);
 
@@ -146,12 +167,12 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
         // Add the attribute.
         LDAPMod addMod;
         char *addVals[2];
-        addVals[0] = const_cast<char*>(newPublicKey.c_str());
+        addVals[0] = const_cast<char *>(newPublicKey.c_str());
         addVals[1] = nullptr;
         addMod.mod_op = LDAP_MOD_ADD;
-        addMod.mod_type = const_cast<char*>(PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
+        addMod.mod_type = const_cast<char *>(PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
         addMod.mod_values = addVals;
-        LDAPMod *mods[2] = { &addMod, nullptr };
+        LDAPMod *mods[2] = {&addMod, nullptr};
 
         rc = ldap_modify_ext_s(ld, user_dn.c_str(), mods, nullptr, nullptr);
         if (rc != LDAP_SUCCESS) {
@@ -159,17 +180,16 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
             throw std::runtime_error(SB() << "LDAP add epicsPublicKey failed: " << ldap_err2string(rc));
         }
         log_debug_printf(auth, "LDAP: Added epicsPublicKey for %s", user_dn.c_str());
-    }
-    else if (currentPublicKey != newPublicKey) {
+    } else if (currentPublicKey != newPublicKey) {
         // Modify the attribute.
         LDAPMod mod;
         char *modVals[2];
-        modVals[0] = const_cast<char*>(newPublicKey.c_str());
+        modVals[0] = const_cast<char *>(newPublicKey.c_str());
         modVals[1] = nullptr;
         mod.mod_op = LDAP_MOD_REPLACE;
-        mod.mod_type = const_cast<char*>(PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
+        mod.mod_type = const_cast<char *>(PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
         mod.mod_values = modVals;
-        LDAPMod *mods[2] = { &mod, nullptr };
+        LDAPMod *mods[2] = {&mod, nullptr};
 
         rc = ldap_modify_ext_s(ld, user_dn.c_str(), mods, nullptr, nullptr);
         if (rc != LDAP_SUCCESS) {
@@ -177,8 +197,7 @@ std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
             throw std::runtime_error(SB() << "LDAP modify epicsPublicKey failed: " << ldap_err2string(rc));
         }
         log_debug_printf(auth, "LDAP: Updated epicsPublicKey for %s", user_dn.c_str());
-    }
-    else {
+    } else {
         log_debug_printf(auth, "LDAP: epicsPublicKey for %s is up-to-date", user_dn.c_str());
     }
     ldap_unbind_ext_s(ld, nullptr, nullptr);
@@ -225,15 +244,15 @@ bool AuthNLdap::verify(const Value ccr) const {
 
     // Get public key
     auto uid = ccr["name"].as<std::string>();
-    auto organization = ccr["organization"].as<std::string>();   // e.g., "epics.org"
+    auto organization = ccr["organization"].as<std::string>();  // e.g., "epics.org"
     std::string public_key_str = getPublicKeyFromLDAP(ldap_server, ldap_port, uid, organization);
 
     KeyPair key_pair(public_key_str);
-    return CertFactory::verifySignature(key_pair.pkey,payload, signature);
+    return CertFactory::verifySignature(key_pair.pkey, payload, signature);
 }
 
 // A simple helper to split a string by a delimiter.
-std::vector<std::string> AuthNLdap::split(const std::string& s, const char delimiter) {
+std::vector<std::string> AuthNLdap::split(const std::string &s, const char delimiter) {
     std::vector<std::string> tokens;
     std::istringstream iss(s);
     std::string token;
@@ -269,10 +288,7 @@ std::string AuthNLdap::getDn(const std::string &uid, const std::string &organiza
  * @param organization the user org e.g. epics.org
  * @return the public key string
  */
-std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, const int ldap_port,
-                                            const std::string &uid,
-                                            const std::string &organization) {
-
+std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, const int ldap_port, const std::string &uid, const std::string &organization) {
     std::string ldap_url = "ldap://" + ldap_server + ":" + std::to_string(ldap_port);
     LDAP *ld = nullptr;
     int rc = ldap_initialize(&ld, ldap_url.c_str());
@@ -298,7 +314,7 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, cons
     const std::string dn = getDn(uid, organization);
 
     // We want only the epicsPublicKey attribute.
-    char *attrs[] = { const_cast<char*>(PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE), nullptr };
+    char *attrs[] = {const_cast<char *>(PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE), nullptr};
 
     LDAPMessage *result = nullptr;
     rc = ldap_search_ext_s(ld, dn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)", attrs, 0, nullptr, nullptr, nullptr, 0, &result);
@@ -331,7 +347,7 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, cons
     return public_key_string;
 }
 
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs
 
 #ifdef __APPLE__

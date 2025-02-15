@@ -10,9 +10,10 @@
 #include <functional>
 #include <string>
 #include <vector>
-#include <CLI/App.hpp>
 
 #include <pvxs/data.h>
+
+#include <CLI/App.hpp>
 
 #include "ccrmanager.h"
 #include "certfactory.h"
@@ -43,18 +44,18 @@ class Auth {
 
     virtual std::string getOptionsText() = 0;
     virtual std::string getParameterHelpText() = 0;
-    virtual void addParameters(CLI::App & app, std::map<const std::string, std::unique_ptr<client::Config>> & authn_config_map) = 0;
+    virtual void addParameters(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) = 0;
 
     // Registration of all supported auth methods
     static std::map<const std::string, std::shared_ptr<Auth>> auths;
 
-    virtual std::shared_ptr<Credentials> getCredentials(const client::Config &config) const = 0;
+    virtual std::shared_ptr<Credentials> getCredentials(const client::Config &config, bool for_client = true) const = 0;
     virtual std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
                                                                            const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const;
     // Called inside PVACMS to verify request
     virtual bool verify(Value ccr) const = 0;
 
-    static Auth *getAuth(const std::string & type);
+    static Auth *getAuth(const std::string &type);
 
     virtual void configure(const client::Config &config) = 0;
     virtual void fromEnv(std::unique_ptr<client::Config> &config) = 0;
@@ -65,9 +66,8 @@ class Auth {
     // Called to have a standard presentation of the CCR for the
     // purposes of generating and verifying signatures
     static std::string ccrToString(std::shared_ptr<CertCreationRequest> &ccr, const uint16_t &usage) {
-        return SB() << ccr->type  << ccr->credentials->name << ccr->credentials->country
-                    << ccr->credentials->organization << ccr->credentials->organization_unit << ccr->credentials->not_before
-                    << ccr->credentials->not_after << usage;
+        return SB() << ccr->type << ccr->credentials->name << ccr->credentials->country << ccr->credentials->organization << ccr->credentials->organization_unit
+                    << ccr->credentials->not_before << ccr->credentials->not_after << usage;
     }
 
     // Called to have a standard presentation of the CCR for the

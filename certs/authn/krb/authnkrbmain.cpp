@@ -165,7 +165,7 @@ int main(int argc, char *argv[]) {
         const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;
 
         // Get the kerberos credentials (from the kerberos ticket)
-        if (auto credentials = authenticator.getCredentials(config)) {
+        if (auto credentials = authenticator.getCredentials(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient))) {
             std::shared_ptr<KeyPair> key_pair;
             log_debug_printf(auth, "Credentials retrieved for: %s authenticator\n", authenticator.type_.c_str());
             retrieved_credentials = true;

@@ -70,7 +70,7 @@ class AuthNKrb : public Auth {
     // Pointer to the Kerberos OID
     gss_OID *krb5_oid_ptr;
 
-    std::shared_ptr<Credentials> getCredentials(const client::Config &config) const override;
+    std::shared_ptr<Credentials> getCredentials(const client::Config &config, bool for_client) const override;
 
     std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
                                                                    const uint16_t &usage) const override;
@@ -81,11 +81,11 @@ class AuthNKrb : public Auth {
 
     /**
      * Apply the kerberos specific configuration to the authenticator.
-     * 
+     *
      * This function applies the kerberos specific configuration to the authenticator.
      * It sets the kerberos validator service name and the kerberos realm for use in the authenticator client,
      * and the realm and the kerberos keytab file for use in the PVACMS kerberos verifier.
-     * 
+     *
      * @param config the configuration for the authenticator
      */
     void configure(const client::Config &config) override {
@@ -97,18 +97,18 @@ class AuthNKrb : public Auth {
 
     /**
      * Get the heading for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator.
-     * 
+     *
      * This function returns the heading for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator.
-     * 
+     *
      * @return the heading for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator
      */
     std::string getOptionsText() override { return " [kerberos options]"; }
 
     /**
      * Get the help text for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator.
-     * 
+     *
      * This function returns the help text for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator.
-     * 
+     *
      * @return the help text for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator
      */
     std::string getParameterHelpText() override {
@@ -117,7 +117,7 @@ class AuthNKrb : public Auth {
                "        --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`\n"
                "        --krb-service <service>              pvacms kerberos service name.  Default `pvacms`\n";
     }
-    
+
     /**
      * @brief Add the kerberos specific parameters to the command line application for the PVACMS executable.
      *

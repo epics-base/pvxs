@@ -4,21 +4,21 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include "authnstd.h"
-
 #include <ifaddrs.h>
 #include <osiProcess.h>
-#include <CLI/CLI.hpp>
 
 #include <pvxs/log.h>
 
+#include <CLI/CLI.hpp>
+
+#include "authnstd.h"
 #include "authregistry.h"
 #include "certfilefactory.h"
+#include "certstatusfactory.h"
 #include "configstd.h"
 #include "openssl.h"
 #include "p12filefactory.h"
 #include "utilpvt.h"
-#include "certstatusfactory.h"
 
 DEFINE_LOGGER(auth, "pvxs.auth.std");
 
@@ -96,27 +96,26 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
     }
 
     // Set the certificate usage based on the command line parameters
-    if ( usage == "server" ) {
+    if (usage == "server") {
         cert_usage = pvxs::ssl::kForServer;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create server certificates" << std::endl;
             return 10;
         }
-    } else if ( usage == "client" ) {
+    } else if (usage == "client") {
         cert_usage = pvxs::ssl::kForClient;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVA_TLS_KEYCHAIN environment variable to create client certificates" << std::endl;
             return 11;
         }
-    } else if ( usage == "hybrid" ) {
+    } else if (usage == "hybrid") {
         cert_usage = pvxs::ssl::kForClientAndServer;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create hybrid certificates" << std::endl;
             return 12;
         }
     } else {
-        std::cerr
-            << "Usage must be one of `client`, `server`, or `hybrid`: " << usage << std::endl;
+        std::cerr << "Usage must be one of `client`, `server`, or `hybrid`: " << usage << std::endl;
         return 13;
     }
 
@@ -162,7 +161,7 @@ int main(int argc, char *argv[]) {
         const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;
 
         // Get the Standard authenticator credentials
-        if (auto credentials = authenticator.getCredentials(config)) {
+        if (auto credentials = authenticator.getCredentials(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient))) {
             std::shared_ptr<KeyPair> key_pair;
             log_debug_printf(auth, "Credentials retrieved for: %s authenticator\n", authenticator.type_.c_str());
             retrieved_credentials = true;
@@ -195,8 +194,7 @@ int main(int argc, char *argv[]) {
 
                 // Attempt to write the certificate and private key
                 // to a cert file protected by the configured password
-                auto file_factory = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd,
-                                                          key_pair, nullptr, nullptr, p12_pem_string);
+                auto file_factory = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd, key_pair, nullptr, nullptr, p12_pem_string);
                 file_factory->writeIdentityFile();
 
                 // Read the certificate and private key back from the keychain file for info and verification
@@ -225,8 +223,10 @@ int main(int argc, char *argv[]) {
         }
         return 0;
     } catch (std::exception &e) {
-        if (retrieved_credentials) log_warn_printf(auth, "%s\n", e.what());
-        else log_err_printf(auth, "%s\n", e.what());
+        if (retrieved_credentials)
+            log_warn_printf(auth, "%s\n", e.what());
+        else
+            log_err_printf(auth, "%s\n", e.what());
     }
     return -1;
 }
