@@ -25,7 +25,7 @@ class ConfigLdap : public ConfigAuthN {
     static ConfigLdap fromEnv() {
         auto config = ConfigLdap{}.applyEnv();
         auto defs = std::map<std::string, std::string>();
-        config.fromAuthNEnv(defs);
+        config.fromAuthEnv(defs);
         config.fromLdapEnv(defs);
         return config;
     }

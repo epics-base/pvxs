@@ -27,7 +27,6 @@ void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_AUTH_KRB_REALM"})) {
         krb_realm = pickone.val;
     }
-
 }
 
 }  // namespace certs

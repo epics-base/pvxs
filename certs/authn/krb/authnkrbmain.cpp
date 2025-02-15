@@ -4,11 +4,11 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include "authnkrb.h"
-
 #include <cstring>
 #include <stdexcept>
 #include <string>
+
+#include "authnkrb.h"
 
 #ifdef __APPLE__
 #include <GSS/gssapi.h>
@@ -16,23 +16,34 @@
 #include <gssapi/gssapi.h>
 #endif
 
-#include <CLI/CLI.hpp>
-
 #include <pvxs/config.h>
+
+#include <CLI/CLI.hpp>
 
 #include "authregistry.h"
 #include "certfilefactory.h"
+#include "certstatusfactory.h"
 #include "configkrb.h"
 #include "openssl.h"
 #include "p12filefactory.h"
 #include "utilpvt.h"
-#include "certstatusfactory.h"
 
 DEFINE_LOGGER(auth, "pvxs.auth.krb");
 
 namespace pvxs {
 namespace certs {
 
+/*
+ * @brief Read the command line parameters
+ *
+ * @param argc the number of command line arguments
+ * @param argv the command line arguments
+ * @param config the configuration to override with command line parameters
+ * @param verbose the verbose flag to set the logger level
+ * @param debug the debug flag to set the logger level
+ * @param cert_usage the certificate usage client, server, or hybrid
+ * @return the exit status 0 if successful, non-zero if an error occurs and we should exit
+ */
 int readParameters(int argc, char *argv[], ConfigKrb &config, bool &verbose, bool &debug, uint16_t &cert_usage) {
     auto program_name = argv[0];
     bool show_version{false}, help{false};
@@ -55,6 +66,8 @@ int readParameters(int argc, char *argv[], ConfigKrb &config, bool &verbose, boo
 
     CLI11_PARSE(app, argc, argv);
 
+    // The built-in help from CLI11 is pretty lame, so we'll do our own
+    // Make sure we update this help text when options change
     if (help) {
         std::cout << "authnkrb - Secure PVAccess with Kerberos Authentication\n"
                   << std::endl
@@ -76,6 +89,7 @@ int readParameters(int argc, char *argv[], ConfigKrb &config, bool &verbose, boo
         exit(0);
     }
 
+    // Show the version and exit
     if (show_version) {
         if (argc > 2) {
             std::cerr << "Error: -V option cannot be used with any other options.\n";
@@ -85,34 +99,34 @@ int readParameters(int argc, char *argv[], ConfigKrb &config, bool &verbose, boo
         exit(0);
     }
 
-    if ( usage == "server" ) {
+    // Set the certificate usage based on the command line parameters
+    if (usage == "server") {
         cert_usage = pvxs::ssl::kForServer;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create server certificates" << std::endl;
             return 10;
         }
-    } else if ( usage == "client" ) {
+    } else if (usage == "client") {
         cert_usage = pvxs::ssl::kForClient;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVA_TLS_KEYCHAIN environment variable to create client certificates" << std::endl;
             return 11;
         }
-    } else if ( usage == "hybrid" ) {
+    } else if (usage == "hybrid") {
         cert_usage = pvxs::ssl::kForClientAndServer;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create hybrid certificates" << std::endl;
             return 12;
         }
     } else {
-        std::cerr
-            << "Usage must be one of `client`, `server`, or `hybrid`: " << usage << std::endl;
+        std::cerr << "Usage must be one of `client`, `server`, or `hybrid`: " << usage << std::endl;
         return 13;
     }
 
     return 0;
 }
 
-}  // namespace security
+}  // namespace certs
 }  // namespace pvxs
 
 using namespace pvxs::certs;
@@ -141,19 +155,22 @@ int main(int argc, char *argv[]) {
         if (verbose) logger_level_set("pvxs.auth.krb*", pvxs::Level::Info);
         if (debug) logger_level_set("pvxs.auth.krb*", pvxs::Level::Debug);
 
-        // Standard authenticator
+        // Kerberos authenticator
         AuthNKrb authenticator{};
         // Add configuration to authenticator
         authenticator.configure(config);
+
+        // Get the keychain file and password based on the certificate usage
         const std::string tls_keychain_file = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_file : config.tls_keychain_file;
         const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;
 
+        // Get the kerberos credentials (from the kerberos ticket)
         if (auto credentials = authenticator.getCredentials(config)) {
             std::shared_ptr<KeyPair> key_pair;
             log_debug_printf(auth, "Credentials retrieved for: %s authenticator\n", authenticator.type_.c_str());
             retrieved_credentials = true;
 
-            // Get key pair
+            // Get or create the key pair.  Store it in the keychain file if not already present
             try {
                 // Check if the key pair exists
                 key_pair = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getKeyFromFile();
@@ -167,14 +184,12 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            // Create a certificate creation request using the credentials and
-            // key pair
+            // Create a certificate creation request using the credentials and key pair
             auto cert_creation_request = authenticator.createCertCreationRequest(credentials, key_pair, cert_usage);
 
             log_debug_printf(auth, "CCR created for: %s authentication type\n", authenticator.type_.c_str());
 
-            // Attempt to create a certificate with the certificate creation
-            // request
+            // Attempt to create a certificate with the certificate creation request
             auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request, config.request_timeout_specified);
 
             // If the certificate was created successfully,
@@ -183,15 +198,15 @@ int main(int argc, char *argv[]) {
 
                 // Attempt to write the certificate and private key
                 // to a cert file protected by the configured password
-                auto file_factory = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd,
-                                                          key_pair, nullptr, nullptr, p12_pem_string);
+                auto file_factory = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd, key_pair, nullptr, nullptr, p12_pem_string);
                 file_factory->writeIdentityFile();
 
-                // Read file back for info
+                // Read file back for info, and to check that it was written correctly
                 auto cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
                 auto serial_number = CertStatusFactory::getSerialNumber(cert_data.cert);
                 auto issuer_id = CertStatus::getIssuerId(cert_data.ca);
 
+                // Log the certificate information to console
                 std::string from = std::ctime(&credentials->not_before);
                 std::string to = std::ctime(&credentials->not_after);
                 log_info_printf(auth, "%s\n", (pvxs::SB() << "CERT_ID: " << issuer_id << ":" << serial_number).str().c_str());
@@ -208,10 +223,12 @@ int main(int argc, char *argv[]) {
                 log_info_printf(auth, "--------------------------------------%s", "\n");
             }
         }
-    return 0;
+        return 0;
     } catch (std::exception &e) {
-        if (retrieved_credentials) log_warn_printf(auth, "%s\n", e.what());
-        else log_err_printf(auth, "%s\n", e.what());
+        if (retrieved_credentials)
+            log_warn_printf(auth, "%s\n", e.what());
+        else
+            log_err_printf(auth, "%s\n", e.what());
     }
     return -1;
 }

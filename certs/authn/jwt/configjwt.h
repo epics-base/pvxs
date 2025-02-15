@@ -24,7 +24,7 @@ class ConfigJwt : public ConfigAuthN {
     static ConfigJwt fromEnv() {
         auto config = ConfigJwt{}.applyEnv();
         auto defs = std::map<std::string, std::string>();
-        config.fromAuthNEnv(defs);
+        config.fromAuthEnv(defs);
         config.fromJwtEnv(defs);
         return config;
     }

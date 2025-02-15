@@ -25,7 +25,7 @@ class ConfigStd : public ConfigAuthN {
     static ConfigStd fromEnv() {
         auto config = ConfigStd{}.applyEnv();
         auto defs = std::map<std::string, std::string>();
-        config.fromAuthNEnv(defs);
+        config.fromAuthEnv(defs);
         config.fromStdEnv(defs);
         return config;
     }

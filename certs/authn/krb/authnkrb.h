@@ -7,9 +7,10 @@
 #ifndef PVXS_AUTH_KERB_H
 #define PVXS_AUTH_KERB_H
 
-#include <configkrb.h>
 #include <functional>
 #include <string>
+
+#include <configkrb.h>
 
 #ifdef __APPLE__
 #include <GSS/gssapi_krb5.h>
@@ -21,6 +22,7 @@
 #include <pvxs/data.h>
 
 #include "auth.h"
+#include "configkrb.h"
 #include "security.h"
 
 #define PVXS_KRB_AUTH_TYPE "krb"
@@ -45,15 +47,12 @@ struct KrbCredentials : Credentials {
 
 class AuthNKrb : public Auth {
    public:
-
     // Constructor.  Adds in kerberos specific fields (ticket) to the verifier
     // field of the ccr
     explicit AuthNKrb()
-        : Auth(PVXS_KRB_AUTH_TYPE, {Member(TypeCode::Int8A, "token"), Member(TypeCode::Int8A, "mic")}),
-          krb5_oid(&krb5_oid_desc),
-          krb5_oid_ptr(&krb5_oid) {
+        : Auth(PVXS_KRB_AUTH_TYPE, {Member(TypeCode::Int8A, "token"), Member(TypeCode::Int8A, "mic")}), krb5_oid(&krb5_oid_desc), krb5_oid_ptr(&krb5_oid) {
         krb5_oid_desc.length = 9;
-        krb5_oid_desc.elements = const_cast<char*>("\x2a\x86\x48\x86\xf7\x12\x01\x02\x02");
+        krb5_oid_desc.elements = const_cast<char *>("\x2a\x86\x48\x86\xf7\x12\x01\x02\x02");
     };
 
     ~AuthNKrb() override = default;
@@ -63,38 +62,37 @@ class AuthNKrb : public Auth {
 
     std::shared_ptr<Credentials> getCredentials(const client::Config &config) const override;
 
-    std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
-                                                                   const std::shared_ptr<KeyPair> &key_pair,
+    std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
                                                                    const uint16_t &usage) const override;
 
-    bool verify( Value ccr) const override;
+    bool verify(Value ccr) const override;
 
-    void fromEnv(std::unique_ptr<client::Config> &config) override {
-        config.reset(new ConfigKrb(ConfigKrb::fromEnv()));
-    };
+    void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigKrb(ConfigKrb::fromEnv())); };
 
     void configure(const client::Config &config) override {
-        auto &config_krb = dynamic_cast<const ConfigKrb&>(config);
-        krb_validator_service_name = SB() << config_krb.krb_validator_service <<  "/cluster@" << config_krb.krb_realm;
+        auto &config_krb = dynamic_cast<const ConfigKrb &>(config);
+        krb_validator_service_name = SB() << config_krb.krb_validator_service << PVXS_KRB_DEFAULT_VALIDATOR_CLUSTER_PART << config_krb.krb_realm;
         krb_realm = config_krb.krb_realm;
         krb_keytab_file = config_krb.krb_keytab;
     };
 
-    std::string getOptionsText() override {return " [kerberos options]";}
-    std::string getParameterHelpText() override {return  "\n"
-                                              "kerberos options\n"
-                                              "        --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`\n"
-                                              "        --krb-service <service>              pvacms kerberos service name.  Default `pvacms`\n";}
-    void addParameters(CLI::App & app, std::map<const std::string, std::unique_ptr<client::Config>> & authn_config_map) override {
+    std::string getOptionsText() override { return " [kerberos options]"; }
+    std::string getParameterHelpText() override {
+        return "\n"
+               "kerberos options\n"
+               "        --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`\n"
+               "        --krb-service <service>              pvacms kerberos service name.  Default `pvacms`\n";
+    }
+    void addParameters(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {
         auto &config = authn_config_map.at(PVXS_KRB_AUTH_TYPE);
         auto config_krb = dynamic_cast<const ConfigKrb &>(*config);
         app.add_option("--krb-realm", config_krb.krb_realm, "kerberos realm.");
         app.add_option("--krb-service", config_krb.krb_validator_service, "pvacms kerberos service name");
     }
 
-    private:
+   private:
     gss_OID_desc krb5_oid_desc{};
-    std::string krb_validator_service_name{"pvacms/cluster@EPICS.ORG"};
+    std::string krb_validator_service_name{PVXS_KRB_DEFAULT_VALIDATOR_SERVICE_NAME};
     std::string krb_keytab_file{};
     std::string krb_realm{"EPICS.ORG"};
 

@@ -28,7 +28,7 @@ class ConfigAuthN : public client::Config {
     std::string tls_srv_keychain_file{};
     std::string tls_srv_keychain_pwd{};
 
-    void fromAuthNEnv(const std::map<std::string, std::string>& defs);
+    void fromAuthEnv(const std::map<std::string, std::string>& defs);
     std::string getIPAddress();
 
 };
