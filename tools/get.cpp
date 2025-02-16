@@ -33,6 +33,9 @@ void usage(const char* argv0)
                "  -h        Show this message.\n"
                "  -V        Print version and exit.\n"
                "  -r <req>  pvRequest condition.\n"
+#ifdef PVXS_ENABLE_OPENSSL
+               "  -t        No client TLS - server-only TLS connection\n"
+#endif
                "  -v        Make more noise.\n"
                "  -d        Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\".  Make a lot of noise.\n"
                "  -w <sec>  Operation timeout in seconds.  default 5 sec.\n"
@@ -53,13 +56,13 @@ int main(int argc, char *argv[])
 #endif
         logger_config_env(); // from $PVXS_LOG
         double timeout = 5.0;
-        bool verbose = false;
+        bool verbose = false, no_tls=false;
         std::string request;
         Value::Fmt::format_t format = Value::Fmt::Delta;
         auto arrLimit = uint64_t(20);
 
         std::string options;
-        options = "hVvdw:r:#:F:";
+        options = "hVtvdw:r:#:F:";
         {
             int opt;
             while ((opt = getopt(argc, argv, options.c_str())) != -1) {
@@ -70,6 +73,11 @@ int main(int argc, char *argv[])
                 case 'V':
                     std::cout<<pvxs::version_information;
                     return 0;
+#ifdef PVXS_ENABLE_OPENSSL
+                case 't':
+                    no_tls = true;
+                    break;
+#endif
                 case 'v':
                     verbose = true;
                     break;
@@ -104,6 +112,9 @@ int main(int argc, char *argv[])
 
         // Get the timeout from the environment and build the context
         auto conf = client::Config::fromEnv();
+#ifdef PVXS_ENABLE_OPENSSL
+        if ( no_tls ) conf.tls_server_only = true;
+#endif
         conf.request_timeout_specified = timeout;
         auto ctxt = conf.build();
 
