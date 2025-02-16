@@ -367,14 +367,15 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
     (void)SSL_CTX_set_min_proto_version(tls_context->ctx.get(), TLS1_3_VERSION);
     (void)SSL_CTX_set_max_proto_version(tls_context->ctx.get(), 0);
 
+    // If server only mode and its a client then force TLS ready mode.
+    if (isForClient && conf.tls_server_only) {
+        tls_context->state = ossl::SSLContext::TlsReady;
+        return tls_context;
+    }
     // If TLS is disabled or not configured then set the context to degraded mode so that
     // only TCP connections are allowed.
     if (conf.tls_disabled || !conf.isTlsConfigured()) {
         tls_context->state = ossl::SSLContext::DegradedMode;
-        return tls_context;
-    }
-    if (isForClient && conf.tls_server_only) {
-        tls_context->state = ossl::SSLContext::TlsReady;
         return tls_context;
     }
 

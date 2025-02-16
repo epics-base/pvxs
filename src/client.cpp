@@ -472,7 +472,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
       nsChecker(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::onNSCheckS, this))
 {
 #ifdef PVXS_ENABLE_OPENSSL
-    if (effective.isTlsConfigured()) {
+    if (effective.isTlsConfigured() || effective.tls_server_only) {
         try {
             tls_context = ossl::SSLContext::for_client(effective, tcp_loop);
         } catch (std::exception& e) {
