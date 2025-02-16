@@ -33,7 +33,7 @@ RUN echo "PVXS_ENABLE_LDAP_AUTH = YES" >> CONFIG_SITE.local
 
 # Rebuild PVXS with ldap support
 RUN cd pvxs && \
-    make -j10 all
+    make distclean && make -j10 all
 
 # Remove the default LDAP configuration and reconfigure slapd non-interactively.
 RUN rm -rf /etc/ldap/slapd.d && \

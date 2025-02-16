@@ -837,6 +837,11 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
             log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
+
+    // EPICS_PVA_TLS_SERVER_ONLY
+    if (pickone({"EPICS_PVA_TLS_SERVER_ONLY"})) {
+        self.tls_server_only = parseTo<bool>(pickone.val);
+    }
 #endif  // PVXS_ENABLE_OPENSSL
     is_initialized = true;
 }
@@ -886,6 +891,9 @@ void Config::updateDefs(defs_t& defs) const {
 
     // EPICS_PVA_TLS_PORT
     defs["EPICS_PVA_TLS_PORT"] = SB() << tls_port;
+
+    defs["EPICS_PVA_TLS_SERVER_ONLY"] = tls_server_only ? "YES" : "NO";
+
 #endif  // PVXS_ENABLE_OPENSSL
 }
 

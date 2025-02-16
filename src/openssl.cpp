@@ -373,6 +373,10 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
         tls_context->state = ossl::SSLContext::DegradedMode;
         return tls_context;
     }
+    if (isForClient && conf.tls_server_only) {
+        tls_context->state = ossl::SSLContext::TlsReady;
+        return tls_context;
+    }
 
     // TLS is configured, so get the key and certificate from the file or files
     const std::string &filename = conf.tls_keychain_file, &password = conf.tls_keychain_pwd;

@@ -19,7 +19,7 @@ RUN echo "PVXS_ENABLE_KRB_AUTH = YES" >> CONFIG_SITE.local
 
 # Rebuild PVXS with kerberos support
 RUN cd pvxs && \
-    make -j10 all
+    make distclean && make -j10 all
 
 COPY kadm5.acl kdc.conf badpass.txt /etc/krb5kdc/
 
