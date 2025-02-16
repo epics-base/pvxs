@@ -837,6 +837,21 @@ uint64_t IfaceMap::index_of(const std::string& name)
     return ret;
 }
 
+uint64_t IfaceMap::index_of(const SockAddr &addr)
+{
+    Guard G(lock);
+
+    uint64_t ret = 0u;
+    try_cache(*this, [&ret, this, addr]() {
+        auto it = byAddr.find(addr);
+        bool hit = it!=byAddr.end() && !it->second.second;
+        if(hit)
+            ret = it->second.first->index;
+        return hit;
+    });
+    return ret;
+}
+
 bool IfaceMap::is_iface(const SockAddr& addr)
 {
     Guard G(lock);
@@ -845,6 +860,19 @@ bool IfaceMap::is_iface(const SockAddr& addr)
         auto it(byAddr.find(addr));
         return it!=byAddr.end() && !it->second.second;
     });
+}
+
+bool IfaceMap::is_lo(uint64_t index)
+{
+    bool is_lo = false;
+    (void)try_cache(*this, [this, &is_lo, index]() {
+        auto ifit(byIndex.find(index));
+        if(ifit!=byIndex.end()) { // hit
+            is_lo = ifit->second.isLO;
+        }
+        return false;
+    });
+    return is_lo;
 }
 
 bool IfaceMap::is_broadcast(const SockAddr& addr)
