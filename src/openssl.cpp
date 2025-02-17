@@ -573,7 +573,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
               auto peer_status = weak_peer_status.lock();
               // Update the cached state
               if (peer_status)
-                  peer_status->updateStatus(static_cast<const certs::CertificateStatus &>(status));
+                  peer_status->updateStatus((const certs::CertificateStatus)status);
           });
     }
     return peer_status;
