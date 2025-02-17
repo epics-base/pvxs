@@ -82,7 +82,6 @@ class PVXS_API CertFactory {
      * @param issuer_pkey_ptr the issuer private key optional
      * @param issuer_chain_ptr the issuer certificate chain optional
      * @param initial_status the initial status - defaults to VALID
-     * @param cert_config_uri_base the configuration uri base, normally empty but if non-empty will result in the config uri extension being added to the
      * certificate
      */
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
@@ -92,6 +91,30 @@ class PVXS_API CertFactory {
         : CertFactory(serial, key_pair, name, country, org, org_unit, not_before, not_after, usage, {}, cert_status_subscription_required,
             issuer_certificate_ptr, issuer_pkey_ptr, issuer_chain_ptr, initial_status) {}
 
+    /**
+     * @brief Constructor for CertFactory
+     *
+     * @param serial the serial number
+     * @param key_pair the key pair
+     * @param name the name
+     * @param country the country
+     * @param org the organization
+     * @param org_unit the organizational unit
+     * @param not_before the not before time
+     * @param not_after the not after time
+     * @param usage the usage
+     * @param cert_config_uri_base the configuration uri base, normally empty but if non-empty will result in the config uri extension being added to the
+     * certificate
+     * @param cert_status_subscription_required whether certificate status subscription is required
+     * @param issuer_certificate_ptr the issuer certificate
+     * @param issuer_pkey_ptr the issuer private key
+     * @param issuer_chain_ptr the issuer certificate chain
+     * @param initial_status the initial status
+     * @param issuer_certificate_ptr the issuer certificate optional
+     * @param issuer_pkey_ptr the issuer private key optional
+     * @param issuer_chain_ptr the issuer certificate chain optional
+     * @param initial_status the initial status - defaults to VALID
+     */
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
                 const std::string &org_unit, time_t not_before, time_t not_after, const uint16_t &usage, const std::string &cert_config_uri_base, bool cert_status_subscription_required = false,
                 X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr, STACK_OF(X509) *issuer_chain_ptr = nullptr,

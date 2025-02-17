@@ -142,7 +142,7 @@ void Auth::runDaemon(const ConfigAuthN &authn_config, bool for_client, ossl_ptr<
 
     const std::string pv_name = CertStatus::makeConfigURI(authn_config.config_uri_base, issuer_id, serial);
     config_server_.addPV(pv_name, config_pv);
-    std::cout << "Config server listening on " << authn_config.config_uri_base << std::endl;
+    std::cout << "Config server listening on: " << pv_name << std::endl;
     config_server_.run();
 }
 

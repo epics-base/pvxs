@@ -131,10 +131,6 @@ int readParameters(int argc, char *argv[], ConfigKrb &config, bool &verbose, boo
         return 13;
     }
 
-    if ( add_config_uri && config.config_uri_base.empty()) {
-        config.config_uri_base = "CERT:CONFIG";
-    }
-
     return 0;
 }
 

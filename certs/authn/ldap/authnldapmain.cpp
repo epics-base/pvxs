@@ -131,10 +131,6 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
         config.ldap_account_password = promptPassword(SB() << "Enter password for " << config.name << "@" << config.organization << ": ");
     }
 
-    if (add_config_uri && config.config_uri_base.empty()) {
-        config.config_uri_base = "CERT:CONFIG";
-    }
-
     return 0;
 }
 
