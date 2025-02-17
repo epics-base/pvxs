@@ -118,7 +118,8 @@ void testSearch(bool be, std::initializer_list<const char*> names)
 
     M.skip(8, __FILE__, __LINE__); // placeholder for header
     to_wire(M, uint32_t(0x12345678));
-    M.skip(4, __FILE__, __LINE__);
+    to_wire(M, uint8_t(pva_search_flags::Unicast)); // 127.0.0.1 is ucast
+    M.skip(3, __FILE__, __LINE__);
     SockAddr reply(SockAddr::any(AF_INET, 0x1020));
     to_wire(M, reply);
     to_wire(M, uint16_t(reply.port()));
