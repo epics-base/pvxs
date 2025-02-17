@@ -268,7 +268,7 @@ class Auth {
         mutable ossl_ptr<X509> cert_{};
         const std::function<ossl_ptr<X509>()> fn_{};
 
-        ConfigMonitor(const ConfigAuthN &config, ossl_ptr<X509> &cert, const std::function<ossl_ptr<X509> && ()> &&fn)
+        ConfigMonitor(const ConfigAuthN &config, ossl_ptr<X509> &cert, const std::function<ossl_ptr<X509>()> &&fn)
             : config_(config), cert_(std::move(cert)), fn_(std::move(fn)) {}
     };
 
