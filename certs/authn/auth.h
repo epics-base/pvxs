@@ -266,7 +266,7 @@ class Auth {
        public:
         const ConfigAuthN &config_;
         mutable ossl_ptr<X509> cert_{};
-        const std::function<ossl_ptr<X509> && ()> fn_{};
+        const std::function<ossl_ptr<X509>()> fn_{};
 
         ConfigMonitor(const ConfigAuthN &config, ossl_ptr<X509> &cert, const std::function<ossl_ptr<X509> && ()> &&fn)
             : config_(config), cert_(std::move(cert)), fn_(std::move(fn)) {}
@@ -285,7 +285,7 @@ class Auth {
         }
 
         // If timer has expired call function to get a new certificate
-        config_monitor_params.cert_ = std::move(config_monitor_params.fn_());
+        config_monitor_params.cert_ = config_monitor_params.fn_();
         if (!config_monitor_params.cert_) {
             // Stop if no cert retrieved
             return {0, 0};
