@@ -763,8 +763,8 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::Shared
         std::string config_uri_base = ccr["config_uri_base"].as<std::string>();
 
         // Create a certificate factory
-        auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, usage,
-                                               config.cert_status_subscription, ca_cert.get(), ca_pkey.get(), ca_chain.get(), state, config_uri_base);
+        auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, usage, config_uri_base,
+                                               config.cert_status_subscription, ca_cert.get(), ca_pkey.get(), ca_chain.get(), state);
 
         // Create the certificate using the certificate factory, store it in the database and return the PEM string
         auto pem_string = createCertificatePemString(ca_db, certificate_factory);
