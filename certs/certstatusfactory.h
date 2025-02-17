@@ -100,7 +100,7 @@ class CertStatusFactory {
      * @param asn1_number
      * @return
      */
-    static inline uint64_t ASN1ToUint64(ASN1_INTEGER* asn1_number) {
+    static uint64_t ASN1ToUint64(ASN1_INTEGER* asn1_number) {
         uint64_t uint64_number = 0;
         for (int i = 0; i < asn1_number->length; ++i) {
             uint64_number = (uint64_number << 8) | asn1_number->data[i];
@@ -138,7 +138,7 @@ class CertStatusFactory {
      */
     static pvxs::ossl_ptr<ASN1_INTEGER> uint64ToASN1(const uint64_t& serial);
 
-    static inline std::string getError() {
+    static std::string getError() {
         unsigned long err;
         std::string error_string;
         std::string sep;

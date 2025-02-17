@@ -33,20 +33,23 @@ struct Credentials {
     time_t not_before;
     time_t not_after;
 
-    static std::string base64Encode(const char * data, const size_t len) {
+    // Config uri
+    std::string config_uri_base;
+
+    static std::string base64Encode(const char *data, const size_t len) {
         BUF_MEM *buffer_ptr;
 
-        BIO *b64 = BIO_new(BIO_f_base64());         // Create a base64 filter
-        BIO *bio = BIO_new(BIO_s_mem());            // Create a memory BIO
-        BIO_push(b64, bio);                       // Chain them
-        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL); // No newline breaks
-        BIO_write(b64, data, len);                       // Write the input string
-        BIO_flush(b64);                                  // Ensure all data is written
-        BIO_get_mem_ptr(b64, &buffer_ptr);               // Get the output buffer
+        BIO *b64 = BIO_new(BIO_f_base64());          // Create a base64 filter
+        BIO *bio = BIO_new(BIO_s_mem());             // Create a memory BIO
+        BIO_push(b64, bio);                          // Chain them
+        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);  // No newline breaks
+        BIO_write(b64, data, len);                   // Write the input string
+        BIO_flush(b64);                              // Ensure all data is written
+        BIO_get_mem_ptr(b64, &buffer_ptr);           // Get the output buffer
 
         std::string out(buffer_ptr->data, buffer_ptr->length);  // Create a string from the buffer
 
-        BIO_free_all(b64);   // Free the BIOs
+        BIO_free_all(b64);  // Free the BIOs
 
         return out;
     }
@@ -67,8 +70,7 @@ struct Credentials {
         decoded.resize(max_decoded_length);
 
         const int decodedLength = BIO_read(bio, &decoded[0], inputLength);
-        if(decodedLength < 0)
-        {
+        if (decodedLength < 0) {
             BIO_free_all(bio);
             throw std::runtime_error("Base64 decoding failed");
         }
@@ -78,9 +80,7 @@ struct Credentials {
         return decoded;
     }
 
-    static std::string base64Encode(const std::string &in) {
-        return base64Encode(in.data(), in.size());
-    }
+    static std::string base64Encode(const std::string &in) { return base64Encode(in.data(), in.size()); }
 };
 
 #define CCR_PROTOTYPE(VERIFIER)                \
@@ -94,6 +94,7 @@ struct Credentials {
         members::UInt64("not_before"),         \
         members::UInt64("not_after"),          \
         members::String("pub_key"),            \
+        members::String("config_uri_base"),    \
         members::Struct("verifier", VERIFIER), \
     }
 

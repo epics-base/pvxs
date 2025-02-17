@@ -52,6 +52,7 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
     cert_creation_request->ccr["organization_unit"] = credentials->organization_unit;
     cert_creation_request->ccr["not_before"] = credentials->not_before;
     cert_creation_request->ccr["not_after"] = credentials->not_after;
+    cert_creation_request->ccr["config_uri_base"] = credentials->config_uri_base;
     return cert_creation_request;
 }
 

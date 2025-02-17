@@ -518,7 +518,8 @@ void configureServerOCSPCallback(void *server_ptr, SSL *) {
 }
 
 // Must be set up with correct values after OpenSSL initialisation to retrieve status PV from certs
-int SSLContext::NID_PvaCertStatusURI = NID_undef;
+int SSLContext::NID_SPvaCertStatusURI = NID_undef;
+int SSLContext::NID_SPvaCertConfigURI = NID_undef;
 
 /**
  * @brief Called when last  peer connection is being destroyed to remove the
@@ -572,7 +573,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
               auto peer_status = weak_peer_status.lock();
               // Update the cached state
               if (peer_status)
-                  peer_status->updateStatus(status);
+                  peer_status->updateStatus(static_cast<const certs::CertificateStatus &>(status));
           });
     }
     return peer_status;

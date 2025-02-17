@@ -284,7 +284,7 @@ void updateCertificateStatus(sql_ptr &ca_db, uint64_t serial, certstatus_t cert_
 
 certstatus_t storeCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
 
-bool statusMonitor(StatusMonitor &status_monitor_params);
+timeval statusMonitor(StatusMonitor &status_monitor_params);
 
 Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const PVACertificateStatus &cert_status = {});
 void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op, const std::string &our_issuer_id,

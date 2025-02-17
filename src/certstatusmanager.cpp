@@ -283,6 +283,8 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic
  */
 std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509> &certificate) { return getStatusPvFromCert(certificate.get()); }
 
+std::string CertStatusManager::getConfigPvFromCert(const ossl_ptr<X509> &certificate) { return geConfigPvFromCert(certificate.get()); }
+
 /**
  * @brief Get the extension from the certificate.
  * This method retrieves the extension from the given certificate using the NID_PvaCertStatusURI.
@@ -290,14 +292,33 @@ std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509> &certifi
  * @param certificate the certificate to retrieve the extension from
  * @return the X509_EXTENSION object if found, otherwise throws an exception
  */
-X509_EXTENSION *CertStatusManager::getExtension(const X509 *certificate) {
-    int extension_index = X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_PvaCertStatusURI, -1);
+X509_EXTENSION *CertStatusManager::getStatusExtension(const X509 *certificate) {
+    int extension_index = X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_SPvaCertStatusURI, -1);
     if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find Certificate-Status-PV extension in certificate.");
 
     // Get the extension object from the certificate
     X509_EXTENSION *extension = X509_get_ext(certificate, extension_index);
     if (!extension) {
         throw CertStatusNoExtensionException("Failed to get Certificate-Status-PV extension from the certificate.");
+    }
+    return extension;
+}
+
+/**
+ * @brief Get the extension from the certificate.
+ * This method retrieves the extension from the given certificate using the NID_PvaCertConfigURI.
+ * If the extension is not found, it throws a CertConfigNoExtensionException.
+ * @param certificate the certificate to retrieve the extension from
+ * @return the X509_EXTENSION object if found, otherwise throws an exception
+ */
+X509_EXTENSION *CertStatusManager::getConfigExtension(const X509 *certificate) {
+    int extension_index = X509_get_ext_by_NID(certificate, ossl::SSLContext::NID_SPvaCertConfigURI, -1);
+    if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find Certificate-Config-PV extension in certificate.");
+
+    // Get the extension object from the certificate
+    X509_EXTENSION *extension = X509_get_ext(certificate, extension_index);
+    if (!extension) {
+        throw CertStatusNoExtensionException("Failed to get Certificate-Config-PV extension from the certificate.");
     }
     return extension;
 }
@@ -314,7 +335,36 @@ X509_EXTENSION *CertStatusManager::getExtension(const X509 *certificate) {
  * @return the PV name to call for status on that certificate
  */
 std::string CertStatusManager::getStatusPvFromCert(const X509 *certificate) {
-    auto extension = getExtension(certificate);
+    auto extension = getStatusExtension(certificate);
+
+    // Retrieve the extension data which is an ASN1_OCTET_STRING object
+    ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
+    if (!ext_data) throw CertStatusNoExtensionException("Failed to get data from the Certificate-Status-PV extension.");
+
+    // Get the data as a string
+    const unsigned char *data = ASN1_STRING_get0_data(ext_data);
+    if (!data) throw CertStatusNoExtensionException("Failed to extract data from ASN1_STRING.");
+
+    int length = ASN1_STRING_length(ext_data);
+    if (length < 0) throw CertStatusNoExtensionException("Invalid length of ASN1_STRING data.");
+
+    // Return the data as a std::string
+    return std::string(reinterpret_cast<const char *>(data), length);
+}
+
+/**
+ * @brief Get the string value of a custom extension by NID from a certificate.
+ *
+ * This will return the PV name to monitor for config of the given certificate.
+ * It is stored in the certificate using a custom extension.
+ * Exceptions are thrown if it is unable to retrieve the value of the extension
+ * or it does not exist.
+ *
+ * @param certificate the certificate to examine
+ * @return the PV name to call for config on that certificate
+ */
+std::string CertStatusManager::geConfigPvFromCert(const X509 *certificate) {
+    auto extension = getConfigExtension(certificate);
 
     // Retrieve the extension data which is an ASN1_OCTET_STRING object
     ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);

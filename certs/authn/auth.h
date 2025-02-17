@@ -7,6 +7,7 @@
 #ifndef PVXS_AUTH_H
 #define PVXS_AUTH_H
 
+#include <certstatusfactory.h>
 #include <functional>
 #include <string>
 #include <vector>
@@ -99,7 +100,7 @@ class Auth {
      *
      * @return A string containing the placeholder text for the options help text
      */
-    virtual std::string getOptionsPlaceholderText() {return {};};
+    virtual std::string getOptionsPlaceholderText() { return {}; }
 
     /**
      * @brief Get the options help text.
@@ -114,7 +115,7 @@ class Auth {
      *
      * @return A string containing the options help text
      */
-    virtual std::string getOptionsHelpText() {return {};};
+    virtual std::string getOptionsHelpText() { return {}; }
 
     /**
      * @brief Add the options to the CLI application.
@@ -127,7 +128,7 @@ class Auth {
      * @param app The CLI application object
      * @param authn_config_map A map of the authentication configuration
      */
-    virtual void addOptions(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) {};
+    virtual void addOptions(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) {}
 
     /**
      * This function transfers the configuration from the given config object to the authenticator.
@@ -138,7 +139,7 @@ class Auth {
      *
      * @param config The configuration to transfer
      */
-    virtual void configure(const client::Config &config) {};
+    virtual void configure(const client::Config &config) {}
 
     /**
      * @brief Process a Certificate Creation Request (CCR).
@@ -184,23 +185,163 @@ class Auth {
      */
     static Auth *getAuth(const std::string &type);
 
+    void runDaemon(const ConfigAuthN &authn_config, bool for_client, ossl_ptr<X509> &&cert, const std::function<ossl_ptr<X509> && ()> &&fn) {
+        auto serial = CertStatusFactory::getSerialNumber(cert);
+        std::string issuer_id(CertStatus::getIssuerId(cert));
+
+        // Check time before certificate expires
+        const time_t now = time(nullptr);
+        const StatusDate expiry_date = X509_get_notAfter(cert.get());
+        time_t expires_in = expiry_date.t - now;
+
+        const ConfigMonitor config_monitor_params{authn_config, cert, std::move(fn)};
+        const auto config = server::Config::fromEnv(false);
+        config_server_ = server::Server(config, [&config_monitor_params](short evt) { return configMonitor(config_monitor_params); });
+        server::SharedPV config_pv(server::SharedPV::buildMailbox());
+
+        config_pv.onFirstConnect(
+            [&authn_config, &expires_in, for_client, &issuer_id, &serial, this](server::SharedPV &pv) {
+                pv.close();
+
+                Value config_value;
+                const auto was_open = pv.isOpen();
+                if (was_open) {
+                    config_value = pv.fetch();
+                } else {
+                    config_value = getConfigPrototype();
+                }
+                setValue<uint64_t>(config_value, "serial", serial);
+                setValue<std::string>(config_value, "issuer_id", issuer_id);
+                setValue<std::string>(config_value, "keychain", for_client ? authn_config.tls_keychain_file : authn_config.tls_srv_keychain_file);
+                setValue<uint64_t>(config_value, "expires_in", expires_in);
+
+                if (was_open) {
+                    pv.post(config_value);
+                } else {
+                    pv.open(config_value);
+                }
+            });
+
+        config_pv.onLastDisconnect(
+            [](server::SharedPV &pv) { pv.close(); });
+
+        const std::string pv_name = CertStatus::makeConfigURI(authn_config.config_uri_base, issuer_id, serial);
+        config_server_.addPV(pv_name, config_pv);
+        std::cout << "Config server listening on " << authn_config.config_uri_base << std::endl;
+        config_server_.run();
+    }
+
    protected:
     // Called to have a standard presentation of the CCR for the
     // purposes of generating and verifying signatures
     static std::string ccrToString(const std::shared_ptr<CertCreationRequest> &ccr, const uint16_t &usage) {
-        return SB() << ccr->type << ccr->credentials->name << ccr->credentials->country << ccr->credentials->organization << ccr->credentials->organization_unit
-                    << ccr->credentials->not_before << ccr->credentials->not_after << usage;
+        return SB() << ccr->type                            // Type
+                    << ccr->credentials->name               // Name
+                    << ccr->credentials->country            // Country
+                    << ccr->credentials->organization       // Organization
+                    << ccr->credentials->organization_unit  // Organizational Unit
+                    << ccr->credentials->not_before         // Not before
+                    << ccr->credentials->not_after          // Not After
+                    << ccr->credentials->config_uri_base    // Config URL Base
+                    << usage;                               // Usage
     }
 
     // Called to have a standard presentation of the CCR for the
     // purposes of generating and verifying signatures
     static std::string ccrToString(const Value &ccr) {
-        return SB() << ccr["type"].as<std::string>() << ccr["name"].as<std::string>() << ccr["country"].as<std::string>()
-                    << ccr["organization"].as<std::string>() << ccr["organization_unit"].as<std::string>() << ccr["not_before"].as<time_t>()
-                    << ccr["not_after"].as<time_t>() << ccr["usage"].as<uint16_t>();
+        return SB() << ccr["type"].as<std::string>()               // Type
+                    << ccr["name"].as<std::string>()               // Name
+                    << ccr["country"].as<std::string>()            // Country
+                    << ccr["organization"].as<std::string>()       // Organization
+                    << ccr["organization_unit"].as<std::string>()  // Organizational Unit
+                    << ccr["not_before"].as<time_t>()              // Not before
+                    << ccr["not_after"].as<time_t>()               // Not After
+                    << ccr["config_uri_base"].as<std::string>()    // Config URL Base
+                    << ccr["usage"].as<uint16_t>();                // Usage
     }
 
    private:
+    server::Server config_server_;
+    class ConfigMonitor {
+       public:
+        const ConfigAuthN &config_;
+        mutable ossl_ptr<X509> cert_{};
+        const std::function<ossl_ptr<X509> && ()> fn_{};
+
+        ConfigMonitor(const ConfigAuthN &config, ossl_ptr<X509> &cert, const std::function<ossl_ptr<X509> && ()> &&fn)
+            : config_(config), cert_(std::move(cert)), fn_(std::move(fn)) {}
+    };
+
+    static timeval configMonitor(const ConfigMonitor &config_monitor_params) {
+        // Check time before certificate expires
+        const time_t now = time(nullptr);
+        const StatusDate expiry_date = X509_get_notAfter(config_monitor_params.cert_.get());
+        time_t expires_in = expiry_date.t - now;
+
+        // If timer has not yet expired
+        if (expires_in > 0) {
+            // Set time interval for next callback and return
+            return {expires_in, 0};
+        }
+
+        // If timer has expired call function to get a new certificate
+        config_monitor_params.cert_ = std::move(config_monitor_params.fn_());
+        if (!config_monitor_params.cert_) {
+            // Stop if no cert retrieved
+            return {0, 0};
+        }
+        StatusDate new_expiry_date = X509_get_notAfter(config_monitor_params.cert_.get());
+        expires_in = expiry_date.t - now;
+
+        if ( expires_in <= 0 ) {
+            // Stop if new cert has expired
+            return {0, 0};
+        }
+
+        // Otherwise post an update and wait until this new cert has expired
+
+        return {expires_in, 0};
+    }
+
+    /**
+     * @brief The prototype of the data returned for a certificate status request
+     * Essentially an enum, a serial number and the ocsp response
+     *
+     * @return The prototype of the data returned for a certificate status request
+     */
+    static Value getConfigPrototype() {
+        using namespace members;
+
+        auto value = TypeDef(TypeCode::Struct,
+                             {
+                                 Member(TypeCode::UInt64, "serial"),
+                                 Member(TypeCode::String, "issuer_id"),
+                                 Member(TypeCode::String, "keychain"),
+                                 Member(TypeCode::UInt64, "valid_until"),
+                             })
+                         .create();
+        return value;
+    }
+
+    /**
+     * @brief Set a value in a Value object marking any changes to the field if the values changed and if not then
+     * the field is unmarked.  Doesn't work for arrays or enums so you need to do that manually.
+     *
+     * @param target The Value object to set the value in
+     * @param field The field to set the value in
+     * @param new_value The new value to set
+     */
+    template <typename T>
+    void setValue(Value &target, const std::string &field, const T &new_value) {
+        const auto current_field = target[field];
+        auto current_value = current_field.as<T>();
+        if (current_value == new_value) {
+            target[field].unmark();  // Assuming unmark is a valid method for indicating no change needed
+        } else {
+            target[field] = new_value;
+        }
+    }
+
     CCRManager ccr_manager_{};
 };
 
@@ -244,7 +385,7 @@ class Auth {
  * @endcode
  */
 template <typename S, typename C>
- std::shared_ptr<S> castAs(const std::shared_ptr<C> &baseClass) {
+std::shared_ptr<S> castAs(const std::shared_ptr<C> &baseClass) {
     static_assert(std::is_base_of<C, S>::value, "not a subclass");
     return std::dynamic_pointer_cast<S>(baseClass);
 }

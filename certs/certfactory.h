@@ -56,6 +56,7 @@ class PVXS_API CertFactory {
     STACK_OF(X509) * issuer_chain_ptr_;  // issuer cert chain
     const ossl_shared_ptr<STACK_OF(X509)> certificate_chain_;
     bool cert_status_subscription_required_;
+    std::string cert_config_uri_base_;
     std::string skid_;
     certstatus_t initial_status_;
 
@@ -80,11 +81,13 @@ class PVXS_API CertFactory {
      * @param issuer_pkey_ptr the issuer private key optional
      * @param issuer_chain_ptr the issuer certificate chain optional
      * @param initial_status the initial status - defaults to VALID
+     * @param cert_config_uri_base the configuration uri base, normally empty but if non-empty will result in the config uri extension being added to the
+     * certificate
      */
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
                 const std::string &org_unit, time_t not_before, time_t not_after, const uint16_t &usage, bool cert_status_subscription_required = false,
                 X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr, STACK_OF(X509) *issuer_chain_ptr = nullptr,
-                certstatus_t initial_status = VALID)
+                certstatus_t initial_status = VALID, const std::string &cert_config_uri_base = nullptr)
         : serial_(serial),
           key_pair_(key_pair),
           name_(name),
@@ -99,7 +102,7 @@ class PVXS_API CertFactory {
           issuer_chain_ptr_(issuer_chain_ptr),
           certificate_chain_(sk_X509_new_null()),
           initial_status_(initial_status) {
-        cert_status_subscription_required_ = cert_status_subscription_required;
+        cert_status_subscription_required_ = cert_status_subscription_required, cert_config_uri_base_ = cert_config_uri_base;
     };
 
     ossl_ptr<X509> PVXS_API create();
@@ -114,7 +117,7 @@ class PVXS_API CertFactory {
      * @brief Get the error string from the error queue
      * @return the error string
      */
-    static inline std::string getError() {
+    static std::string getError() {
         unsigned long err;
         std::string error_string;
         std::string sep;
@@ -133,14 +136,13 @@ class PVXS_API CertFactory {
     static std::string sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data);
     static bool verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data, const std::string &signature);
 
-
-  private:
+   private:
     /**
      * @brief Convert a NID to a string
      * @param nid the NID
      * @return the string representation of the NID
      */
-    static inline const char *nid2String(int nid) {
+    static const char *nid2String(int nid) {
         switch (nid) {
             case NID_subject_key_identifier:
                 return LN_subject_key_identifier;

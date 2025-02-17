@@ -103,7 +103,7 @@ struct ThreadEvent
         return evt;
     }
 
-    inline epicsEvent* operator->() { return get(); }
+    epicsEvent* operator->() { return get(); }
 };
 
 namespace {

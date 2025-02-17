@@ -217,10 +217,16 @@ int main(int argc, char* argv[]) {
         if (!cert_file.empty()) {
             try {
                 auto cert_data = certs::IdFileFactory::create(cert_file, password)->getCertDataFromFile();
+                std::string config_id{};
+                try {
+                    config_id = certs::CertStatusManager::getConfigPvFromCert(cert_data.cert);
+                } catch (...) {}
+
                 std::cout
                 << "Certificate Details: " << std::endl
                 << "============================================" << std::endl
                 << ossl::ShowX509{cert_data.cert.get()} << std::endl
+                << (config_id.empty() ? "" : "Config URI     : " + config_id + "\n")
                 << "--------------------------------------------\n" << std::endl;
                 cert_id = certs::CertStatusManager::getStatusPvFromCert(cert_data.cert);
             } catch (std::exception& e) {

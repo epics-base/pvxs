@@ -42,7 +42,7 @@ namespace pvxs {
 namespace certs {
 
 ///////////// OCSP RESPONSE ERRORS
-class OCSPParseException : public std::runtime_error {
+class OCSPParseException final : public std::runtime_error {
    public:
     explicit OCSPParseException(const std::string& message) : std::runtime_error(message) {}
 };
@@ -52,12 +52,12 @@ class CertStatusException : public std::runtime_error {
     explicit CertStatusException(const std::string& message) : std::runtime_error(message) {}
 };
 
-class CertStatusNoExtensionException : public CertStatusException {
+class CertStatusNoExtensionException final : public CertStatusException {
    public:
     explicit CertStatusNoExtensionException(const std::string& message) : CertStatusException(message) {}
 };
 
-class CertStatusSubscriptionException : public CertStatusException {
+class CertStatusSubscriptionException final : public CertStatusException {
    public:
     explicit CertStatusSubscriptionException(const std::string& message) : CertStatusException(message) {}
 };
@@ -114,7 +114,7 @@ struct CertStatus {
     // enum value of the status
     uint32_t i;
     // string representation of the status
-    std::string s;
+    std::string s{};
     // Default constructor
     CertStatus() = default;
     CertStatus(const CertStatus&) = default;
@@ -130,10 +130,10 @@ struct CertStatus {
      *
      * @return The prototype of the data returned for a certificate status request
      */
-    static inline Value getStatusPrototype() {
+    static Value getStatusPrototype() {
         using namespace members;
-        nt::NTEnum enum_value;
-        nt::NTEnum enum_ocspvalue;
+        constexpr nt::NTEnum enum_value;
+        constexpr nt::NTEnum enum_ocspvalue;
 
         auto value = TypeDef(TypeCode::Struct,
                              {
@@ -163,7 +163,7 @@ struct CertStatus {
      * @param ca_cert  the cert from which to get the subject key identifier extension
      * @return first 8 hex digits of the hex SKID (subject key identifier)
      */
-    static inline std::string getIssuerId(const ossl_ptr<X509>& ca_cert) { return getIssuerId(ca_cert.get()); }
+    static std::string getIssuerId(const ossl_ptr<X509>& ca_cert) { return getIssuerId(ca_cert.get()); }
 
     /**
      * @brief  Get the issuer ID which is the first 8 hex digits of the hex SKID (subject key identifier)
@@ -172,19 +172,19 @@ struct CertStatus {
      *
      * @return first 8 hex digits of the hex SKID (subject key identifier)
      */
-    static inline std::string getIssuerId(const ossl_shared_ptr<STACK_OF(X509)>& chain) { return getIssuerId(getRootCa(chain)); }
+    static std::string getIssuerId(const ossl_shared_ptr<STACK_OF(X509)>& chain) { return getIssuerId(getRootCa(chain)); }
 
     /**
      * @brief Get Root Certificate Authority from a CA chain
      * @param chain the CA chain
      * @return the Root CA
      */
-    static inline X509* getRootCa(const ossl_shared_ptr<STACK_OF(X509)>& chain) {
+    static X509* getRootCa(const ossl_shared_ptr<STACK_OF(X509)>& chain) {
         if(!chain || sk_X509_num(chain.get()) <= 0) {
             throw std::runtime_error("Invalid certificate chain");
         }
 
-        X509* root_ca = sk_X509_value(chain.get(), sk_X509_num(chain.get()) - 1);
+        const auto root_ca = sk_X509_value(chain.get(), sk_X509_num(chain.get()) - 1);
 
         if(root_ca == nullptr) {
             throw std::runtime_error("Failed to retrieve root certificate");
@@ -201,15 +201,15 @@ struct CertStatus {
      * @param ca_cert_ptr the cert pointer from which to get the subject key identifier extension
      * @return first 8 hex digits of the hex SKID (subject key identifier)
      */
-    static inline std::string getIssuerId(X509* ca_cert_ptr) {
-        ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING*>(X509_get_ext_d2i(ca_cert_ptr, NID_subject_key_identifier, nullptr, nullptr)),
+    static std::string getIssuerId(const X509* ca_cert_ptr) {
+        const ossl_ptr<ASN1_OCTET_STRING> skid(static_cast<ASN1_OCTET_STRING*>(X509_get_ext_d2i(ca_cert_ptr, NID_subject_key_identifier, nullptr, nullptr)),
                                          false);
         if (!skid) {
             throw std::runtime_error("Failed to get Subject Key Identifier.");
         }
 
         // Convert first 8 chars to hex
-        auto buf = const_cast<unsigned char*>(skid->data);
+        const auto buf = skid->data;
         std::stringstream ss;
         for (int i = 0; i < skid->length && ss.tellp() < 8; i++) {
             ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buf[i]);
@@ -226,34 +226,34 @@ struct CertStatus {
      * @param cert to retrieve the subject CN field
      * @return the common name
      */
-    static inline std::string getCommonName(ossl_ptr<X509>& cert) {
+    static std::string getCommonName(const ossl_ptr<X509>& cert) {
         if (!cert) return "";
 
         // Get the subject name from the certificate
-        X509_NAME* subject = X509_get_subject_name(cert.get());
+        const X509_NAME* subject = X509_get_subject_name(cert.get());
         if (!subject) {
             return "";
         }
 
         // Find the position of the Common Name field within the subject name
-        int idx = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
+        const int idx = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
         if (idx < 0) {
             return "";
         }
 
-        X509_NAME_ENTRY* entry = X509_NAME_get_entry(subject, idx);
+        const X509_NAME_ENTRY* entry = X509_NAME_get_entry(subject, idx);
         if (!entry) {
             return "";
         }
 
-        ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
+        const ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
         if (!data) {
             return "";
         }
 
         // Convert the ASN1_STRING to a UTF-8 C string
         unsigned char* utf8 = nullptr;
-        int length = ASN1_STRING_to_UTF8(&utf8, data);
+        const int length = ASN1_STRING_to_UTF8(&utf8, data);
         if (length < 0 || !utf8) {
             return "";
         }
@@ -272,8 +272,20 @@ struct CertStatus {
      * @param serial the serial number
      * @return the status URI
      */
-    static inline std::string makeStatusURI(std::string& issuer_id, uint64_t& serial) {
+    static std::string makeStatusURI(const std::string& issuer_id, const uint64_t& serial) {
         return SB() << GET_MONITOR_CERT_STATUS_ROOT << ":" << issuer_id << ":" << std::setw(16) << std::setfill('0') << serial;
+    }
+
+    /**
+     * @brief Make the config URI for a certificate
+     *
+     * @param config_uri_base The base part of the config URI.  Add colon, issuer, colon and serial number to complete
+     * @param issuer_id the issuer ID (first 8 hex digits of the hex SKID)
+     * @param serial the serial number
+     * @return the status URI
+     */
+    static std::string makeConfigURI(const std::string& config_uri_base, const std::string& issuer_id, const uint64_t& serial) {
+        return SB() << config_uri_base << ":" << issuer_id << ":" << std::setw(16) << std::setfill('0') << serial;
     }
 
    protected:
@@ -283,7 +295,7 @@ struct CertStatus {
      * @param status the enum index of the status
      * @param status_string the string representation of the status
      */
-    explicit CertStatus(const uint32_t status, std::string status_string) : i(status), s(status_string) {}
+    explicit CertStatus(const uint32_t status, const std::string &status_string) : i(status), s(status_string) {}
 
     // Friend declarations to allow cross-comparisons only between specific types
     friend struct PVACertStatus;
@@ -302,10 +314,10 @@ struct PVACertStatus : CertStatus {
     explicit PVACertStatus(const certstatus_t& status) : CertStatus(status, toString(status)) {}
 
     // Define the comparison operators
-    bool operator==(PVACertStatus rhs) const { return this->i == rhs.i; }
-    bool operator==(certstatus_t rhs) const { return this->i == rhs; }
-    bool operator!=(PVACertStatus rhs) const { return this->i != rhs.i; }
-    bool operator!=(certstatus_t rhs) const { return this->i != rhs; }
+    bool operator==(const PVACertStatus rhs) const { return this->i == rhs.i; }
+    bool operator==(const certstatus_t rhs) const { return this->i == rhs; }
+    bool operator!=(const PVACertStatus rhs) const { return this->i != rhs.i; }
+    bool operator!=(const certstatus_t rhs) const { return this->i != rhs; }
 
    protected:
     friend struct PVACertificateStatus;
@@ -318,7 +330,7 @@ struct PVACertStatus : CertStatus {
      * @param status the enum index of the status
      * @return the string representation of the status
      */
-    static inline std::string toString(const certstatus_t status) { return CERT_STATE(status); }
+    static std::string toString(const certstatus_t status) { return CERT_STATE(status); }
 };
 
 /**
@@ -333,13 +345,13 @@ struct OCSPCertStatus : CertStatus {
      *
      * @param status the enum index of the status
      */
-    explicit OCSPCertStatus(const ocspcertstatus_t& status) : CertStatus((uint32_t)status, toString(status)) {}
+    explicit OCSPCertStatus(const ocspcertstatus_t& status) : CertStatus(static_cast<uint32_t>(status), toString(status)) {}
 
     // Define the comparison operators
-    bool operator==(OCSPCertStatus rhs) const { return this->i == rhs.i; }
-    bool operator==(ocspcertstatus_t rhs) const { return this->i == rhs; }
-    bool operator!=(OCSPCertStatus rhs) const { return this->i != rhs.i; }
-    bool operator!=(ocspcertstatus_t rhs) const { return this->i != rhs; }
+    bool operator==(const OCSPCertStatus rhs) const { return this->i == rhs.i; }
+    bool operator==(const ocspcertstatus_t rhs) const { return this->i == rhs; }
+    bool operator!=(const OCSPCertStatus rhs) const { return this->i != rhs.i; }
+    bool operator!=(const ocspcertstatus_t rhs) const { return this->i != rhs; }
 
    private:
     /**
@@ -348,7 +360,7 @@ struct OCSPCertStatus : CertStatus {
      * @param status the enum index of the status
      * @return the string representation of the status
      */
-    static inline std::string toString(const ocspcertstatus_t& status) { return OCSP_CERT_STATE(status); }
+    static std::string toString(const ocspcertstatus_t& status) { return OCSP_CERT_STATE(status); }
 };
 
 /**
@@ -357,9 +369,9 @@ struct OCSPCertStatus : CertStatus {
  */
 struct StatusDate {
     // time_t representation of the status date
-    std::time_t t;
+    std::time_t t{};
     // string representation of the status date
-    std::string s;
+    std::string s{};
 
     // Default constructor
     StatusDate() = default;
@@ -374,20 +386,20 @@ struct StatusDate {
     StatusDate(const std::string& time_string) : t(toTimeT(time_string)), s(StatusDate(t).s) {}
 
     // Define the comparison operator
-    inline bool operator==(StatusDate rhs) const { return this->t == rhs.t; }
+    bool operator==(const StatusDate rhs) const { return this->t == rhs.t; }
 
     // Define the conversion operators
-    inline operator const std::string&() const { return s; }
-    inline operator std::string() const { return s; }
-    inline operator const time_t&() const { return t; }
-    inline operator time_t() const { return t; }
-    inline operator ossl_ptr<ASN1_TIME>() const { return toAsn1_Time(); };
+    operator const std::string&() const { return s; }
+    operator std::string() const { return s; }
+    operator const time_t&() const { return t; }
+    operator time_t() const { return t; }
+    operator ossl_ptr<ASN1_TIME>() const { return toAsn1_Time(); }
 
     /**
      * @brief Create an ASN1_TIME object from this StatusDate object
      * @return and ASN1_TIME object corresponding this StatusDate object
      */
-    inline ossl_ptr<ASN1_TIME> toAsn1_Time() const {
+    ossl_ptr<ASN1_TIME> toAsn1_Time() const {
         ossl_ptr<ASN1_TIME> asn1(ASN1_TIME_new());
         ASN1_TIME_set(asn1.get(), t);
         return asn1;
@@ -397,15 +409,15 @@ struct StatusDate {
      * @brief Create an ASN1_TIME object from a StatusDate object
      * @return and ASN1_TIME object corresponding the given StatusDate object
      */
-    static inline ossl_ptr<ASN1_TIME> toAsn1_Time(StatusDate status_date) { return status_date.toAsn1_Time(); }
+    static ossl_ptr<ASN1_TIME> toAsn1_Time(const StatusDate status_date) { return status_date.toAsn1_Time(); }
 
     /**
      * @brief To get the time_t (unix time) from a ASN1_TIME* time pointer
      * @param time ASN1_TIME* time pointer to convert
      * @return a time_t (unix time) version
      */
-    static inline time_t asn1TimeToTimeT(const ASN1_TIME* time) {
-        std::tm t{};
+    static time_t asn1TimeToTimeT(const ASN1_TIME* time) {
+        std::tm t = {};
         if (!time) return 0;
 
         if (ASN1_TIME_to_tm(time, &t) != 1) throw std::runtime_error("Failed to convert ASN1_TIME to tm structure");
@@ -419,13 +431,12 @@ struct StatusDate {
      * @param time the time_t to format
      * @return the string representation in local time
      */
-    static inline std::string toString(const std::time_t& time) {
+    static std::string toString(const std::time_t& time) {
         char buffer[100];
         if (std::strftime(buffer, sizeof(buffer), CERT_TIME_FORMAT, std::gmtime(&time))) {
             return std::string(buffer);
-        } else {
-            throw OCSPParseException("Failed to format status date");
         }
+        throw OCSPParseException("Failed to format status date");
     }
 
     /**
@@ -441,7 +452,7 @@ struct StatusDate {
      * @param time_string
      * @return
      */
-    static inline time_t toTimeT(std::string time_string) {
+    static time_t toTimeT(const std::string &time_string) {
         // Read the string and parse it into std::tm
         if (time_string.empty()) return 0;
         std::tm tm = {};
@@ -462,10 +473,10 @@ struct StatusDate {
      * @param tm std::tm structure to convert
      * @return a time_t (unix time) version
      */
-    static inline time_t tmToTimeTUTC(const std::tm& tm) {
+    static time_t tmToTimeTUTC(const std::tm& tm) {
         // For accurate time calculation the start day in a year of each month
         static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
-        int year = 1900 + tm.tm_year;
+        const int year = 1900 + tm.tm_year;
 
         // Calculate days up to start of the current year
         time_t days = (year - 1970) * 365 + (year - 1969) / 4  // Leap years
@@ -542,15 +553,15 @@ struct PVACertificateStatus;
  */
 struct OCSPStatus {
     // raw OCSP response bytes
-    shared_array<const uint8_t> ocsp_bytes;
+    shared_array<const uint8_t> ocsp_bytes{};
     // OCSP status of the certificate
     OCSPCertStatus ocsp_status{OCSP_CERTSTATUS_UNKNOWN};
     // date of the OCSP certificate status
-    StatusDate status_date;
+    StatusDate status_date{};
     // valid-until date of the OCSP certificate status
-    StatusDate status_valid_until_date{(time_t)0};
+    StatusDate status_valid_until_date{static_cast<time_t>(0)};
     // revocation date of the certificate if it is revoked
-    StatusDate revocation_date;
+    StatusDate revocation_date{};
 
     // Constructor from a PKCS#7 OCSP response that must be signed by the given trusted store.
     explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param, X509_STORE *trusted_store_ptr) : ocsp_bytes(ocsp_bytes_param) {
@@ -560,7 +571,7 @@ struct OCSPStatus {
         init(trusted_store_ptr);
     }
 
-    explicit OCSPStatus(const uint8_t * ocsp_bytes_ptr, size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr) : ocsp_bytes(ocsp_bytes_ptr, ocsp_bytes_len) {
+    explicit OCSPStatus(const uint8_t * ocsp_bytes_ptr, const size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr) : ocsp_bytes(ocsp_bytes_ptr, ocsp_bytes_len) {
         if (!trusted_store_ptr) {
             throw std::invalid_argument("Trusted store pointer is null");
         }
@@ -568,30 +579,31 @@ struct OCSPStatus {
     }
 
     // To  set an OCSP UNKNOWN status to indicate errors
-    OCSPStatus() : ocsp_status(OCSP_CERTSTATUS_UNKNOWN) {};
+    OCSPStatus() = default;
+    virtual ~OCSPStatus() = default;
 
-    virtual inline bool operator==(const OCSPStatus& rhs) const {
+    virtual bool operator==(const OCSPStatus& rhs) const {
         return this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date &&
                this->revocation_date == rhs.revocation_date;
     }
-    virtual inline bool operator!=(const OCSPStatus& rhs) const { return !(*this == rhs); }
+    virtual bool operator!=(const OCSPStatus& rhs) const { return !(*this == rhs); }
     virtual bool operator==(const CertificateStatus& rhs) const;
-    virtual inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs); }
+    virtual bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs); }
     virtual bool operator==(const PVACertificateStatus& rhs) const;
-    virtual inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs); }
-    virtual inline bool operator==(ocspcertstatus_t& rhs) const { return this->ocsp_status == rhs; }
-    virtual inline bool operator!=(ocspcertstatus_t& rhs) const { return !(*this == rhs); }
-    virtual inline bool operator==(certstatus_t& rhs) const {
-        return ((rhs == VALID && this->ocsp_status == OCSP_CERTSTATUS_GOOD) || (rhs == REVOKED && this->ocsp_status == OCSP_CERTSTATUS_REVOKED));
+    virtual bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs); }
+    virtual bool operator==(ocspcertstatus_t& rhs) const { return this->ocsp_status == rhs; }
+    virtual bool operator!=(ocspcertstatus_t& rhs) const { return !(*this == rhs); }
+    virtual bool operator==(certstatus_t& rhs) const {
+        return (rhs == VALID && this->ocsp_status == OCSP_CERTSTATUS_GOOD) || (rhs == REVOKED && this->ocsp_status == OCSP_CERTSTATUS_REVOKED);
     }
-    virtual inline bool operator!=(certstatus_t& rhs) const { return !(*this == rhs); }
+    virtual bool operator!=(certstatus_t& rhs) const { return !(*this == rhs); }
 
     /**
      * @brief Verify that the status validity dates are currently valid and the status is known
      * @return true if the status is still valid
      */
-    inline bool isValid() const noexcept {
-        auto now(std::time(nullptr));
+    bool isValid() const noexcept {
+        const auto now(std::time(nullptr));
         return status_valid_until_date.t > now;
     }
 
@@ -600,14 +612,14 @@ struct OCSPStatus {
      *
      * @return true if the status is permanent, false otherwise
      */
-    inline bool isPermanent() const noexcept { return status_valid_until_date.t == PERMANENTLY_VALID_STATUS; }
+    bool isPermanent() const noexcept { return status_valid_until_date.t == PERMANENTLY_VALID_STATUS; }
 
     /**
      * @brief Check if the status is GOOD
      *
      * @return true if the status is GOOD, false otherwise
      */
-    inline bool isGood() const noexcept {
+    bool isGood() const noexcept {
         return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD;
     }
 
@@ -635,31 +647,31 @@ bool operator!=(certstatus_t& lhs, OCSPStatus& rhs);
  * The ocsp_status field contains the OCSP status in numerical and text form.
  */
 struct UnCertifiedCertificateStatus;
-struct PVACertificateStatus final : public OCSPStatus {
-    PVACertStatus status;
-    inline bool operator==(const PVACertificateStatus& rhs) const {
+struct PVACertificateStatus final : OCSPStatus {
+    PVACertStatus status{UNKNOWN};
+    bool operator==(const PVACertificateStatus& rhs) const override{
         return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
                this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
     }
-    inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs); }
+    bool operator!=(const PVACertificateStatus& rhs) const override { return !(*this == rhs); }
 
-    inline bool operator==(certstatus_t& rhs) const { return this->status == rhs; }
-    inline bool operator!=(certstatus_t& rhs) const { return !(*this == rhs); }
-    inline bool operator==(ocspcertstatus_t& rhs) const { return this->ocsp_status == rhs; }
-    inline bool operator!=(ocspcertstatus_t& rhs) const { return !(*this == rhs); }
+    bool operator==(certstatus_t& rhs) const override { return this->status == rhs; }
+    bool operator!=(certstatus_t& rhs) const override { return !(*this == rhs); }
+    bool operator==(ocspcertstatus_t& rhs) const override { return this->ocsp_status == rhs; }
+    bool operator!=(ocspcertstatus_t& rhs) const override { return !(*this == rhs); }
 
-    inline bool operator==(const OCSPStatus& rhs) const {
-        return (this->status != VALID && this->status != REVOKED)
+    bool operator==(const OCSPStatus& rhs) const override {
+        return this->status != VALID && this->status != REVOKED
                    ? false
                    : this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
                          this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
     }
-    inline bool operator!=(const OCSPStatus& rhs) const { return !(*this == rhs); }
-    bool operator==(const CertificateStatus& rhs) const;
-    inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs); }
+    bool operator!=(const OCSPStatus& rhs) const override { return !(*this == rhs); }
+    bool operator==(const CertificateStatus& rhs) const override ;
+    bool operator!=(const CertificateStatus& rhs) const override { return !(*this == rhs); }
 
     explicit PVACertificateStatus(const certstatus_t status, const shared_array<const uint8_t>& ocsp_bytes, X509_STORE *trusted_store_ptr)
-        : OCSPStatus(ocsp_bytes, trusted_store_ptr), status(status) {};
+        : OCSPStatus(ocsp_bytes, trusted_store_ptr), status(status) {}
 
     explicit PVACertificateStatus(const Value& status_value, X509_STORE *trusted_store_ptr)
         : PVACertificateStatus(status_value["status.value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>(), trusted_store_ptr) {
@@ -668,15 +680,15 @@ struct PVACertificateStatus final : public OCSPStatus {
         log_debug_printf(status_setup, "Status Date: %s\n", this->status_date.s.c_str());
         log_debug_printf(status_setup, "Status Validity: %s\n", this->status_valid_until_date.s.c_str());
         log_debug_printf(status_setup, "Revocation Date: %s\n", this->revocation_date.s.c_str());
-        if (!selfConsistent() || !dateConsistent(status_value["ocsp_status_date"].as<std::string>(), status_value["ocsp_certified_until"].as<std::string>(),
-                                                 status_value["ocsp_revocation_date"].as<std::string>())) {
+        if (!selfConsistent() || !dateConsistent(StatusDate(status_value["ocsp_status_date"].as<std::string>()), StatusDate(status_value["ocsp_certified_until"].as<std::string>()),
+                                                 StatusDate(status_value["ocsp_revocation_date"].as<std::string>()))) {
             throw OCSPParseException("Certificate status does not match certified OCSP status");
-        };
+        }
     }
 
     // To  set an UNKNOWN status to indicate errors
-    PVACertificateStatus() : OCSPStatus(), status(UNKNOWN) {}
-    operator CertificateStatus() const noexcept;
+    PVACertificateStatus() : OCSPStatus() {}
+    explicit operator CertificateStatus() const noexcept override;
 
    private:
     friend class CertStatusFactory;
@@ -689,18 +701,17 @@ struct PVACertificateStatus final : public OCSPStatus {
      * @param status_valid_until_time Status valid-until date
      * @param revocation_time Revocation date
      */
-    explicit PVACertificateStatus(certstatus_t status, ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date,
-                                  StatusDate status_valid_until_time, StatusDate revocation_time)
-        : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time), status(status) {};
+    explicit PVACertificateStatus(const certstatus_t status, const ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, const StatusDate &status_date, const StatusDate &status_valid_until_time, const StatusDate &revocation_time)
+        : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time), status(status) {}
 
     /**
      * @brief Check if the PVACertificateStatus is self-consistent,
      * i.e. the OCSP status values are consistent with the PVA status values
      * @return true if the PVACertificateStatus is self-consistent, false otherwise
      */
-    inline bool selfConsistent() {
-        return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN && (!(status == VALID || status == REVOKED))) ||
-               (ocsp_status == OCSP_CERTSTATUS_REVOKED && (status == REVOKED)) || (ocsp_status == OCSP_CERTSTATUS_GOOD && (status == VALID));
+    bool selfConsistent() const {
+        return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN && !(status == VALID || status == REVOKED)) ||
+               (ocsp_status == OCSP_CERTSTATUS_REVOKED && status == REVOKED) || (ocsp_status == OCSP_CERTSTATUS_GOOD && status == VALID);
     }
 
     /**
@@ -711,8 +722,8 @@ struct PVACertificateStatus final : public OCSPStatus {
      * @param revocation_date_value Revocation date
      * @return true if the PVACertificateStatus is date-consistent, false otherwise
      */
-    inline bool dateConsistent(StatusDate status_date_value, StatusDate status_valid_until_date_value, StatusDate revocation_date_value) {
-        return (status_date == status_date_value) && (status_valid_until_date == status_valid_until_date_value) && (revocation_date == revocation_date_value);
+    bool dateConsistent(const StatusDate &status_date_value, const StatusDate &status_valid_until_date_value, const StatusDate &revocation_date_value) const {
+        return status_date == status_date_value && status_valid_until_date == status_valid_until_date_value && revocation_date == revocation_date_value;
     }
 };
 
@@ -721,13 +732,6 @@ struct PVACertificateStatus final : public OCSPStatus {
  * @param lhs ocspcertstatus_t value to compare with
  * @param rhs PVACertificateStatus object to compare with
  * @return true if the ocspcertstatus_t value is equal to the ocsp_status of the PVACertificateStatus object, false otherwise
- */
-bool operator==(ocspcertstatus_t& lhs, PVACertificateStatus& rhs);
-/**
- * @brief Inequality operator for ocspcertstatus_t and PVACertificateStatus
- * @param lhs ocspcertstatus_t value to compare with
- * @param rhs PVACertificateStatus object to compare with
- * @return true if the ocspcertstatus_t value is not equal to the ocsp_status of the PVACertificateStatus object, false otherwise
  */
 bool operator==(ocspcertstatus_t& lhs, PVACertificateStatus& rhs);
 /**
@@ -753,13 +757,13 @@ bool operator!=(certstatus_t& lhs, PVACertificateStatus& rhs);
  */
 struct CertificateStatus {
     virtual ~CertificateStatus() = default;
-    CertificateStatus() : CertificateStatus(false, (PVACertStatus)UNKNOWN, (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN, std::time(nullptr), PERMANENTLY_VALID_STATUS, (time_t)0) {};
+    CertificateStatus() : CertificateStatus(false, static_cast<PVACertStatus>(UNKNOWN), static_cast<OCSPCertStatus>(OCSP_CERTSTATUS_UNKNOWN), StatusDate(std::time(nullptr)), StatusDate(PERMANENTLY_VALID_STATUS), StatusDate(static_cast<time_t>(0))) {}
 
     // Enable copying
     CertificateStatus(const CertificateStatus&) = default;
     CertificateStatus& operator=(const CertificateStatus&) = default;
 
-    explicit CertificateStatus(PVACertificateStatus cs)
+    explicit CertificateStatus(const PVACertificateStatus& cs)
         : CertificateStatus(cs.status != UNKNOWN && !cs.ocsp_bytes.empty(), cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {}
 
     /**
@@ -769,7 +773,7 @@ struct CertificateStatus {
      *
      * @return true if the certificate status is GOOD, false otherwise
      */
-    inline bool isGood() const noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
+    bool isGood() const noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
 
     /**
      * @brief Check if the certificate status is ostensibly GOOD
@@ -779,36 +783,36 @@ struct CertificateStatus {
      *
      * @return true if the certificate status is ostensibly GOOD, false otherwise
      */
-    inline bool isOstensiblyGood() const noexcept { return ocsp_status == OCSP_CERTSTATUS_GOOD; }
+    bool isOstensiblyGood() const noexcept { return ocsp_status == OCSP_CERTSTATUS_GOOD; }
 
     /**
      * @brief Check if the certificate is Expired of Revoked
      *
      * @return true if certificate is Expired or Revoked
      */
-    inline bool isRevokedOrExpired() const noexcept { return status == REVOKED || status == EXPIRED; }
+    bool isRevokedOrExpired() const noexcept { return status == REVOKED || status == EXPIRED; }
 
     /**
      * @brief Verify that the status is currently valid
      * @return true if the status is still valid
      */
-    inline bool isValid() const noexcept {
-        auto now(std::time(nullptr));
+    bool isValid() const noexcept {
+        const auto now(std::time(nullptr));
         return status_valid_until_date.t > now;
     }
 
-    inline bool isCertified() const noexcept {
+    bool isCertified() const noexcept {
         return certified;
     }
 
-    inline bool isPermanent() const noexcept {
+    bool isPermanent() const noexcept {
         return status_valid_until_date.t == PERMANENTLY_VALID_STATUS;
     }
 
     StatusDate status_valid_until_date;
-    bool certified;
-    PVACertStatus status;
-    OCSPCertStatus ocsp_status;
+    bool certified{false};
+    PVACertStatus status{UNKNOWN};
+    OCSPCertStatus ocsp_status{OCSP_CERTSTATUS_UNKNOWN};
     StatusDate status_date;
     StatusDate revocation_date;
 
@@ -817,19 +821,19 @@ struct CertificateStatus {
      * @param rhs PVACertificateStatus object to compare with
      * @return true if the PVACertificateStatus objects are equal, false otherwise
      */
-    inline bool operator==(const PVACertificateStatus& rhs) const { return (CertificateStatus)rhs == *this; }
+    bool operator==(const PVACertificateStatus& rhs) const { return static_cast<CertificateStatus>(rhs) == *this; }
     /**
      * @brief Inequality operator for PVACertificateStatus
      * @param rhs PVACertificateStatus object to compare with
      * @return true if the PVACertificateStatus objects are not equal, false otherwise
      */
-    inline bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs); }
+    bool operator!=(const PVACertificateStatus& rhs) const { return !(*this == rhs); }
     /**
      * @brief Equality operator for CertificateStatus
      * @param rhs CertificateStatus object to compare with
      * @return true if the CertificateStatus objects are equal, false otherwise
      */
-    inline bool operator==(const CertificateStatus& rhs) const {
+    bool operator==(const CertificateStatus& rhs) const {
         return this->certified == rhs.certified && this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
                this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
     }
@@ -837,7 +841,7 @@ struct CertificateStatus {
     friend ParsedOCSPStatus;
    protected:
     // Protected constructor for derived classes
-    CertificateStatus(bool is_certified, PVACertStatus st, OCSPCertStatus ocsp_st, StatusDate st_date, StatusDate valid_until, StatusDate rev_date)
+    CertificateStatus(const bool is_certified, const PVACertStatus &st, const OCSPCertStatus &ocsp_st, const StatusDate &st_date, const StatusDate &valid_until, const StatusDate &rev_date)
         : status_valid_until_date(valid_until), certified(is_certified), status(st), ocsp_status(ocsp_st), status_date(st_date), revocation_date(rev_date) {}
 
     /**
@@ -845,35 +849,35 @@ struct CertificateStatus {
      * @param rhs CertificateStatus object to compare with
      * @return true if the CertificateStatus objects are not equal, false otherwise
      */
-    inline bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs); }
+    bool operator!=(const CertificateStatus& rhs) const { return !(*this == rhs); }
 
     /**
      * @brief Equality operator for certstatus_t
      * @param rhs certstatus_t value to compare with
      * @return true if the certstatus_t value is equal to the status, false otherwise
      */
-    inline bool operator==(certstatus_t& rhs) const { return this->status == rhs; }
+    bool operator==(const certstatus_t& rhs) const { return this->status == rhs; }
 
     /**
      * @brief Inequality operator for certstatus_t
      * @param rhs certstatus_t value to compare with
      * @return true if the certstatus_t value is not equal to the status, false otherwise
      */
-    inline bool operator!=(certstatus_t& rhs) const { return !(*this == rhs); }
+    bool operator!=(const certstatus_t& rhs) const { return !(*this == rhs); }
 
     /**
      * @brief Equality operator for ocspcertstatus_t
      * @param rhs ocspcertstatus_t value to compare with
      * @return true if the ocspcertstatus_t value is equal to the ocsp_status, false otherwise
      */
-    inline bool operator==(ocspcertstatus_t& rhs) const { return this->ocsp_status == rhs; }
+    bool operator==(const ocspcertstatus_t& rhs) const { return this->ocsp_status == rhs; }
 
     /**
      * @brief Inequality operator for ocspcertstatus_t
      * @param rhs ocspcertstatus_t value to compare with
      * @return true if the ocspcertstatus_t value is not equal to the ocsp_status, false otherwise
      */
-    inline bool operator!=(ocspcertstatus_t& rhs) const { return !(*this == rhs); }
+    bool operator!=(const ocspcertstatus_t& rhs) const { return !(*this == rhs); }
 
    private:
     friend struct CertifiedCertificateStatus;
@@ -892,25 +896,25 @@ struct CertificateStatus {
  * status of a certified certificate, including PVA certificate status, OCSP status, status date,
  * status valid-until date, and revocation date.
  */
-struct CertifiedCertificateStatus final : public CertificateStatus {
-    explicit CertifiedCertificateStatus(PVACertificateStatus cs)
-        : CertificateStatus(true, cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {};
+struct CertifiedCertificateStatus final : CertificateStatus {
+    explicit CertifiedCertificateStatus(const PVACertificateStatus &cs)
+        : CertificateStatus(true, cs.status, cs.ocsp_status, cs.status_date, cs.status_valid_until_date, cs.revocation_date) {}
 
-   private:
+    private:
     friend struct OCSPStatus;
-    explicit CertifiedCertificateStatus(OCSPStatus cs)
+    explicit CertifiedCertificateStatus(const OCSPStatus &cs)
         : CertificateStatus(true, PVACertStatus(cs.ocsp_status == OCSP_CERTSTATUS_GOOD ? VALID : REVOKED), cs.ocsp_status, cs.status_date,
-                            cs.status_valid_until_date, cs.revocation_date) {};
+                            cs.status_valid_until_date, cs.revocation_date) {}
 };
 
-struct UnknownCertificateStatus final : public CertificateStatus {
+struct UnknownCertificateStatus final : CertificateStatus {
     UnknownCertificateStatus()
-        : CertificateStatus(false, (PVACertStatus)UNKNOWN, (OCSPCertStatus)OCSP_CERTSTATUS_UNKNOWN, std::time(nullptr), PERMANENTLY_VALID_STATUS, (time_t)0) {};
+        : CertificateStatus(false, static_cast<PVACertStatus>(UNKNOWN), static_cast<OCSPCertStatus>(OCSP_CERTSTATUS_UNKNOWN), StatusDate(std::time(nullptr)), StatusDate(PERMANENTLY_VALID_STATUS), StatusDate(static_cast<time_t>(0))) {}
 };
 
-struct UnCertifiedCertificateStatus final : public CertificateStatus {
+struct UnCertifiedCertificateStatus final : CertificateStatus {
     UnCertifiedCertificateStatus()
-        : CertificateStatus(false, (PVACertStatus)VALID, (OCSPCertStatus)OCSP_CERTSTATUS_GOOD, std::time(nullptr), PERMANENTLY_VALID_STATUS, (time_t)0) {};
+        : CertificateStatus(false, static_cast<PVACertStatus>(VALID), static_cast<OCSPCertStatus>(OCSP_CERTSTATUS_GOOD), StatusDate(std::time(nullptr)), StatusDate(PERMANENTLY_VALID_STATUS), StatusDate(static_cast<time_t>(0))) {}
 };
 
 }  // namespace certs

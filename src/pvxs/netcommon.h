@@ -20,7 +20,7 @@
 #include <pvxs/version.h>
 
 #ifdef PVXS_ENABLE_OPENSSL
-using CustomServerCallback = std::function<void(short)>;
+using CustomServerCallback = std::function<timeval(short)>;
 static constexpr timeval kCustomCallbackIntervalInitial{0, 0};
 static constexpr timeval kCustomCallbackInterval{15, 0};
 #endif

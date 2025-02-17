@@ -93,10 +93,15 @@ ossl_ptr<X509> CertFactory::create() {
     // 10. Set the authority key identifier appropriately
     addExtension(certificate, NID_authority_key_identifier, "keyid:always,issuer:always");
 
-    // 11. Add EPICS subscription status subscription extension, if required and is not CMS itself
-    if (cert_status_subscription_required_ && !IS_USED_FOR_(usage_, ssl::kForCMS)) {
-        auto issuerId = CertStatus::getIssuerId(issuer_certificate_ptr_);
-        addCustomExtensionByNid(certificate, ossl::SSLContext::NID_PvaCertStatusURI, CertStatus::makeStatusURI(issuerId, serial_));
+    // 11. Add EPICS status and config subscription extensions, if required and is not CMS itself
+    if (!IS_USED_FOR_(usage_, ssl::kForCMS)) {
+        auto issuer_id = CertStatus::getIssuerId(issuer_certificate_ptr_);
+        if (cert_status_subscription_required_ ) {
+            addCustomExtensionByNid(certificate, ossl::SSLContext::NID_SPvaCertStatusURI, CertStatus::makeStatusURI(issuer_id, serial_));
+        }
+        if (!cert_config_uri_base_.empty() ) {
+            addCustomExtensionByNid(certificate, ossl::SSLContext::NID_SPvaCertConfigURI, CertStatus::makeConfigURI(cert_config_uri_base_, issuer_id, serial_));
+        }
     }
 
     // 12. Create cert chain from issuer's chain and issuer's cert

@@ -297,7 +297,7 @@ struct CertCreator {
 
         if ( add_status_extension) {
             auto issuerId = pvxs::certs::CertStatus::getIssuerId((X509*)issuer);
-            pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::SSLContext::NID_PvaCertStatusURI, pvxs::certs::CertStatus::makeStatusURI(issuerId, serial), issuer);
+            pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::SSLContext::NID_SPvaCertStatusURI, pvxs::certs::CertStatus::makeStatusURI(issuerId, serial), issuer);
         }
 
         auto nbytes(X509_sign(cert.get(), ikey, sig));

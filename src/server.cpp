@@ -61,13 +61,13 @@ Server Server::fromEnv(const bool tls_disabled, const ConfigCommon::ConfigTarget
     return Config::fromEnv(tls_disabled, target).build();
 }
 
-Server Server::fromEnv(CustomServerCallback &cert_file_event_callback, const bool tls_disabled, const ConfigCommon::ConfigTarget target)
+Server Server::fromEnv(CustomServerCallback &custom_event_callback, const bool tls_disabled, const ConfigCommon::ConfigTarget target)
 {
-    return Config::fromEnv(tls_disabled, target).build(cert_file_event_callback);
+    return Config::fromEnv(tls_disabled, target).build(custom_event_callback);
 }
 
-Server::Server(const Config &conf, CustomServerCallback cert_file_event_callback) {
-    auto internal(std::make_shared<Pvt>(*this, conf, cert_file_event_callback));
+Server::Server(const Config &conf, CustomServerCallback custom_event_callback) {
+    auto internal(std::make_shared<Pvt>(*this, conf, custom_event_callback));
     internal->internal_self = internal;
 
     // external
@@ -743,8 +743,6 @@ void Server::Pvt::start()
             if(event_add(custom_server_callback_timer.get(), &kCustomCallbackIntervalInitial))
                 log_err_printf(serversetup, "Error enabling file monitor\n%s", "");
        });
-
-
 }
 
 void Server::Pvt::stop()
@@ -987,10 +985,14 @@ void Server::Pvt::doCustomServerCallback(int fd, short evt, void *raw) {
     try {
         auto pvt = static_cast<Server::Pvt *>(raw);
         if (pvt && pvt->custom_server_callback) {
-            pvt->custom_server_callback(evt);
-            timeval interval(kCustomCallbackInterval);
-            if (event_add(pvt->custom_server_callback_timer. get(), &interval))
-                log_err_printf(serverio, "Error re-enabling custom server callback%s\n", "");
+            auto next_timeval =  pvt->custom_server_callback(evt);
+            if (next_timeval.tv_sec == 0 && next_timeval.tv_usec == 0) {
+                next_timeval = kCustomCallbackInterval;
+            }
+            if ( next_timeval.tv_sec > 0 || next_timeval.tv_usec > 0) {
+                if (event_add(pvt->custom_server_callback_timer. get(), &next_timeval))
+                    log_err_printf(serverio, "Error re-enabling custom server callback%s\n", "");
+            }
         }
     } catch (std::exception &e) {
         log_err_printf(serverio, "Unhandled error in custom server callback: %s\n", e.what());

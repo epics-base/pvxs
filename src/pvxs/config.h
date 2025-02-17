@@ -66,7 +66,7 @@ struct PVXS_API ConfigCommon {
      * @param path the containing tilde, dot and/or dot-dot
      * @return the expanded path
      */
-    static std::string inline convertPath(std::string &path) {
+    static std::string convertPath(std::string &path) {
         std::string abs_path;
 
         if (!path.empty()) {
@@ -108,7 +108,7 @@ struct PVXS_API ConfigCommon {
      * @brief Ensure that the directory specified in the path exist
      * @param filepath the file path containing an optional directory component
      */
-    static void inline PVXS_API ensureDirectoryExists(std::string &filepath, bool convert_path = true) {
+    static void PVXS_API ensureDirectoryExists(std::string &filepath, bool convert_path = true) {
         std::string temp_path = convert_path ? convertPath(filepath) : filepath;
 
         std::string delimiter = std::string(OSI_PATH_SEPARATOR);

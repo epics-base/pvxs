@@ -59,7 +59,7 @@ void OCSPStatus::init(X509_STORE *trusted_store_ptr) {
  * @return CertificateStatus The converted CertificateStatus
  */
 PVACertificateStatus::operator CertificateStatus() const noexcept {
-    return (status == UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this};
+    return (status == UNKNOWN) ? static_cast<CertificateStatus>(UnknownCertificateStatus{}) : static_cast<CertificateStatus>(CertifiedCertificateStatus{*this});
 }
 
 /**
@@ -69,7 +69,7 @@ PVACertificateStatus::operator CertificateStatus() const noexcept {
  * @return CertificateStatus The converted CertificateStatus
  */
 OCSPStatus::operator CertificateStatus() const noexcept {
-    return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN) ? (CertificateStatus)UnknownCertificateStatus{} : CertifiedCertificateStatus{*this};
+    return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN) ? static_cast<CertificateStatus>(UnknownCertificateStatus{}) : static_cast<CertificateStatus>(CertifiedCertificateStatus{*this});
 }
 
 /**

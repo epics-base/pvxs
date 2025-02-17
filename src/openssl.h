@@ -39,13 +39,16 @@ typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 typedef uint64_t serial_number_t;
 
-// EPICS OID for "validTillRevoked" extension:
-// TODO Register this unassigned OID for EPICS
+// TODO Register these unassigned OIDs for EPICS
 // "1.3.6.1.4.1" OID prefix for custom OIDs
-// "37427" DTMF for "EPICS"
-#define NID_PvaCertStatusURIID "1.3.6.1.4.1.37427.1"
-#define SN_PvaCertStatusURI "ASN.1 - PvaCertStatusURI"
-#define LN_PvaCertStatusURI "EPICS PVA Certificate Status URI"
+// EPICS OID for "SPvaCertConfigURI" extension: "37427" DTMF for "EPICS" :)
+#define NID_SPvaCertStatusURIID "1.3.6.1.4.1.37427.1"
+#define SN_SPvaCertStatusURI "ASN.1 - SPvaCertStatusURI"
+#define LN_SPvaCertStatusURI "EPICS SPVA Certificate Status URI"
+// EPICS OID for "SPvaCertConfigURI" extension: "72473" DTMF for "SCIPE" :)
+#define NID_SPvaCertConfigURIID "1.3.6.1.4.1.72473.1"
+#define SN_SPvaCertConfigURI "ASN.1 - SPvaCertConfigURI"
+#define LN_SPvaCertConfigURI "EPICS SPVA Certificate Config URI"
 
 namespace pvxs {
 
@@ -160,7 +163,7 @@ struct SSLPeerStatusAndMonitor {
     void restartPeerStatusValidityCountdown();
     void peersStatusValidityExpirationHandler();
 
-    inline bool isSubscribed() {return !cert_status_manager; }
+    bool isSubscribed() {return !cert_status_manager; }
 };
 
 struct StatusValidityExpirationHandlerParam;
@@ -227,7 +230,7 @@ struct CertStatusExData {
      */
     static CertStatusExData* fromSSL(SSL* ssl);
 
-    inline void removePeerStatusAndMonitor(serial_number_t serial_number) {
+    void removePeerStatusAndMonitor(serial_number_t serial_number) {
         Guard G(lock);
         peer_statuses.erase(serial_number);
     }
@@ -237,7 +240,7 @@ struct CertStatusExData {
      * @param cert_ptr - Certificate
      * @return The serial number
      */
-    static inline serial_number_t getSerialNumber(X509* cert_ptr) {
+    static serial_number_t getSerialNumber(X509* cert_ptr) {
         ASN1_INTEGER* serial = X509_get_serialNumber(cert_ptr);
         ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
         if (!bn) {
@@ -255,22 +258,21 @@ struct CertStatusExData {
 
     /**
      * @brief Sets the peer status for the given certificate
-     * @param cert_ptr - Certificate
-     * @param status - Certificate status
+     * @param peer_cert - Peer Certificate
+     * @param new_status - New Certificate status
      * @param fn - the function to call
      * @return The peer status that was set
      */
-    inline std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(ossl_ptr<X509> &peer_cert,
-                                                                  const certs::CertificateStatus &new_status,
-                                                                  std::function<void(bool)> fn = nullptr) {
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(ossl_ptr<X509> &peer_cert,
+                                                           const certs::CertificateStatus &new_status, const std::function<void(bool)> &fn = nullptr) {
         return setPeerStatus(peer_cert.get(), new_status, fn);
     }
 
-    inline std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(ossl_ptr<X509> &peer_cert, std::function<void(bool)> fn = nullptr) {
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(ossl_ptr<X509> &peer_cert, const std::function<void(bool)> &fn = nullptr) {
         return setPeerStatus(peer_cert.get(), {}, fn);
     }
 
-    inline std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(X509 *peer_cert_ptr, std::function<void(bool)> fn = nullptr) {
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(X509 *peer_cert_ptr, const std::function<void(bool)> &fn = nullptr) {
         return setPeerStatus(peer_cert_ptr, {}, fn);
     }
 
@@ -283,7 +285,7 @@ struct CertStatusExData {
      * @param serial_number - Serial number
      * @return The cached peer status
      */
-    inline std::shared_ptr<SSLPeerStatusAndMonitor> getCachedPeerStatus(serial_number_t serial_number) const {
+    std::shared_ptr<SSLPeerStatusAndMonitor> getCachedPeerStatus(serial_number_t serial_number) const {
         auto it = peer_statuses.find(serial_number);
         if (it != peer_statuses.end()) {
             auto peer_status = it->second.lock();
@@ -370,7 +372,8 @@ struct SSLContext {
     // The event loop.  Used to create timers for the status validity countdown
     const impl::evbase loop;
 
-    static PVXS_API int NID_PvaCertStatusURI;
+    static PVXS_API int NID_SPvaCertStatusURI;
+    static PVXS_API int NID_SPvaCertConfigURI;
 
     ossl_shared_ptr<SSL_CTX> ctx;
 
@@ -454,17 +457,21 @@ struct SSLContext {
      *
      * It will also create and register the custom certificate status URI OID.
      */
-    static inline void sslInit() {
+    static void sslInit() {
         // Initialize SSL
-        if (NID_PvaCertStatusURI == NID_undef) {
+        if (NID_SPvaCertStatusURI == NID_undef) {
             SSL_library_init();
             OpenSSL_add_all_algorithms();
             ERR_load_crypto_strings();
             OpenSSL_add_all_ciphers();
             OpenSSL_add_all_digests();
-            NID_PvaCertStatusURI = OBJ_create(NID_PvaCertStatusURIID, SN_PvaCertStatusURI, LN_PvaCertStatusURI);
-            if (NID_PvaCertStatusURI == NID_undef) {
-                throw std::runtime_error("Failed to create NID for " SN_PvaCertStatusURI ": " LN_PvaCertStatusURI);
+            NID_SPvaCertStatusURI = OBJ_create(NID_SPvaCertStatusURIID, SN_SPvaCertStatusURI, LN_SPvaCertStatusURI);
+            if (NID_SPvaCertStatusURI == NID_undef) {
+                throw std::runtime_error("Failed to create NID for " SN_SPvaCertStatusURI ": " LN_SPvaCertStatusURI);
+            }
+            NID_SPvaCertConfigURI = OBJ_create(NID_SPvaCertConfigURIID, SN_SPvaCertConfigURI, LN_SPvaCertConfigURI);
+            if (NID_SPvaCertConfigURI == NID_undef) {
+                throw std::runtime_error("Failed to create NID for " SN_SPvaCertConfigURI ": " LN_SPvaCertConfigURI);
             }
         }
     }
@@ -475,7 +482,7 @@ struct SSLContext {
 
     static bool getPeerCredentials(PeerCredentials& cred, const SSL* ctx);
     static bool subscribeToPeerCertStatus(const SSL* ctx, std::function<void(bool)> fn);
-    inline const certs::PVACertificateStatus& get_status() { return cert_status; }
+    const certs::PVACertificateStatus& get_status() { return cert_status; }
 
    private:
     // The entity certificate status monitor

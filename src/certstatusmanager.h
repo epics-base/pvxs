@@ -139,6 +139,17 @@ class CertStatusManager {
     static std::string getStatusPvFromCert(const ossl_ptr<X509> &cert);
 
     /**
+     * @brief Get the config PV from a Cert.
+     * This function gets the PVA extension that stores the config PV in the certificate
+     * if the certificate can be used in conjunction with a config monitor to check for
+     * expired status.
+     * @param cert the certificate to check for the config PV extension
+     * @return a blank string if no extension exists, otherwise contains the config PV
+     *         e.g. CERT:CONFIG:0293823f:098294739483904875
+     */
+    static std::string getConfigPvFromCert(const ossl_ptr<X509> &cert);
+
+    /**
      * @brief Get the status PV from a Cert.
      * This function gets the PVA extension that stores the status PV in the certificate
      * if the certificate must be used in conjunction with a status monitor to check for
@@ -148,6 +159,7 @@ class CertStatusManager {
      *         e.g. CERT:STATUS:0293823f:098294739483904875
      */
     static std::string getStatusPvFromCert(const X509 *cert);
+    static std::string geConfigPvFromCert(const X509 *cert);
 
     /**
      * @brief Used to create a helper that you can use to subscribe to certificate status with
@@ -168,15 +180,15 @@ class CertStatusManager {
      */
     void unsubscribe();
 
-    inline bool available(double timeout = 5.0) noexcept { return isValid() || waitedTooLong(timeout); }
-    inline bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t) timeout) < std::time(nullptr); }
-    inline bool isValid() noexcept { return status_ && status_->isValid(); }
+    bool available(double timeout = 5.0) noexcept { return isValid() || waitedTooLong(timeout); }
+    bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t) timeout) < std::time(nullptr); }
+    bool isValid() noexcept { return status_ && status_->isValid(); }
 
   private:
     CertStatusManager(std::shared_ptr<client::Context> &&client, std::shared_ptr<client::Subscription> sub) : client_(std::move(client)), sub_(sub) {};
     explicit CertStatusManager(std::shared_ptr<client::Context> &&client) : client_(std::move(client)), sub_{} {};
 
-    inline void subscribe(std::shared_ptr<client::Subscription> &sub) { sub_ = sub; }
+    void subscribe(std::shared_ptr<client::Subscription> &sub) { sub_ = sub; }
 
     std::shared_ptr<StatusCallback> callback_ref{}; // Option placeholder for ref to callback if used
     std::shared_ptr<client::Context> client_;
@@ -191,7 +203,8 @@ class CertStatusManager {
      * @return the extension
      * @throws CertStatusNoExtensionException if no extension is present in the certificate
      */
-    static X509_EXTENSION *getExtension(const X509 *certificate);
+    static X509_EXTENSION *getStatusExtension(const X509 *certificate);
+    static X509_EXTENSION *getConfigExtension(const X509 *certificate);
 
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t> &ocsp_bytes);
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const uint8_t* ocsp_bytes, const size_t ocsp_bytes_len);
@@ -200,7 +213,7 @@ class CertStatusManager {
 
 template<>
 struct cert_status_delete<CertStatusManager> {
-    inline void operator()(CertStatusManager *base_pointer) {
+    void operator()(CertStatusManager *base_pointer) {
         if (base_pointer) {
             base_pointer->unsubscribe();  // Idempotent unsubscribe
             delete base_pointer;

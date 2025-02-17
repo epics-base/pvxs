@@ -280,15 +280,15 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
         Stopped,
     } state = Init;
 
-    inline bool isRunning() const { return state == Running; }
+    bool isRunning() const { return state == Running; }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    inline bool isContextReadyForTls() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
-    inline bool isInitialisedForTls(std::shared_ptr<ossl::SSLContext> context) {
+    bool isContextReadyForTls() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
+    bool isInitialisedForTls(std::shared_ptr<ossl::SSLContext> context) {
         return context && context->state >= ossl::SSLContext::TcpReady && !((certs::CertificateStatus)context->get_status()).isRevokedOrExpired();
     }
-    inline bool isTlsEnabled() { return tls_context && tls_context->state > ossl::SSLContext::DegradedMode; }
-    inline void initialiseState() {
+    bool isTlsEnabled() { return tls_context && tls_context->state > ossl::SSLContext::DegradedMode; }
+    void initialiseState() {
         if (!tls_context || !tls_context->ctx) {
             state = Running;
         } else {
@@ -426,8 +426,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     void reloadTlsFromConfig(const Config& new_config = {});
     void enableTlsForPeerConnection(const Connection* client_conn = nullptr);
 
-    inline bool canAcceptTlsConnectionValidation() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
-    inline bool readyToEmitTlsSearch() { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady; }
+    bool canAcceptTlsConnectionValidation() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
+    bool readyToEmitTlsSearch() { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady; }
 #endif
 };
 
