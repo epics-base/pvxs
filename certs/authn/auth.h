@@ -186,7 +186,7 @@ class Auth {
      */
     static Auth *getAuth(const std::string &type);
 
-    void runDaemon(const ConfigAuthN &authn_config, bool for_client, ossl_ptr<X509> &&cert, const std::function<ossl_ptr<X509>()> &&fn);
+    void runDaemon(const ConfigAuthN &authn_config, bool for_client, CertData &&cert_data, const std::function<CertData()> &&fn);
 
    protected:
     // Called to have a standard presentation of the CCR for the
@@ -223,13 +223,13 @@ class Auth {
        public:
         const ConfigAuthN &config_;
         mutable ossl_ptr<X509> cert_{};
-        const std::function<ossl_ptr<X509>()> fn_{};
+        const std::function<CertData()> fn_{};
 
-        ConfigMonitor(const ConfigAuthN &config, ossl_ptr<X509> &cert, const std::function<ossl_ptr<X509>()> &&fn)
+        ConfigMonitor(const ConfigAuthN &config, ossl_ptr<X509> &cert, const std::function<CertData()> &&fn)
             : config_(config), cert_(std::move(cert)), fn_(std::move(fn)) {}
     };
 
-    static timeval configMonitor(const ConfigMonitor &config_monitor_params);
+    static timeval configMonitor(ConfigMonitor &config_monitor_params, server::SharedPV &pv);
 
     /**
      * @brief The prototype of the data returned for a certificate status request
@@ -243,7 +243,7 @@ class Auth {
         auto value = TypeDef(TypeCode::Struct,
                              {
                                  Member(TypeCode::UInt64, "serial"),
-                                 Member(TypeCode::String, "issuer_id"),
+                                 Member(TypeCode::String, "skid"),
                                  Member(TypeCode::String, "keychain"),
                                  Member(TypeCode::UInt64, "valid_until"),
                              })
@@ -260,7 +260,7 @@ class Auth {
      * @param new_value The new value to set
      */
     template <typename T>
-    void setValue(Value &target, const std::string &field, const T &new_value) {
+    static void setValue(Value &target, const std::string &field, const T &new_value) {
         const auto current_field = target[field];
         auto current_value = current_field.as<T>();
         if (current_value == new_value) {

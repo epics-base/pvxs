@@ -593,7 +593,7 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factor
     std::string from = std::ctime(&certificate_factory.not_before_);
     std::string to = std::ctime(&certificate_factory.not_after_);
 
-    auto cert_id = getCertId(CertStatus::getIssuerId(certificate_factory.issuer_certificate_ptr_), certificate_factory.serial_);
+    auto cert_id = getCertId(CertStatus::getSkId(certificate_factory.issuer_certificate_ptr_), certificate_factory.serial_);
     log_info_printf(pvacms, "%s *=> %s\n", cert_id.c_str(), CERT_STATE(effective_status));
     log_debug_printf(pvacms, "--------------------------------------%s", "\n");
     auto cert_description = (SB() << "X.509 "
@@ -2018,7 +2018,7 @@ int main(int argc, char *argv[]) {
         // Get or create CA certificate
         auto is_initialising{false};
         getOrCreateCaCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain, is_initialising);
-        auto our_issuer_id = CertStatus::getIssuerId(ca_cert);
+        auto our_issuer_id = CertStatus::getSkId(ca_cert);
 
         if (!admin_name.empty()) {
             try {

@@ -156,23 +156,23 @@ struct CertStatus {
     }
 
     /**
-     * @brief  Get the issuer ID which is the first 8 hex digits of the hex SKID (subject key identifier)
+     * @brief  Get the first 8 hex digits of the hex SKID (subject key identifier)
      *
      * Note that the given cert must contain the SKID extension in the first place
      *
-     * @param ca_cert  the cert from which to get the subject key identifier extension
+     * @param cert  the cert from which to get the subject key identifier extension
      * @return first 8 hex digits of the hex SKID (subject key identifier)
      */
-    static std::string getIssuerId(const ossl_ptr<X509>& ca_cert) { return getIssuerId(ca_cert.get()); }
+    static std::string getSkId(const ossl_ptr<X509>& cert) { return getSkId(cert.get()); }
 
     /**
-     * @brief  Get the issuer ID which is the first 8 hex digits of the hex SKID (subject key identifier)
+     * @brief  Get the issuer ID which is SKID (subject key identifier) of the root CA in the given chain
      *
-     * First determine the CA certificate then get the skid
+     * First determine the root CA certificate then get the skid
      *
      * @return first 8 hex digits of the hex SKID (subject key identifier)
      */
-    static std::string getIssuerId(const ossl_shared_ptr<STACK_OF(X509)>& chain) { return getIssuerId(getRootCa(chain)); }
+    static std::string getIssuerId(const ossl_shared_ptr<STACK_OF(X509)>& chain) { return getSkId(getRootCa(chain)); }
 
     /**
      * @brief Get Root Certificate Authority from a CA chain
@@ -194,15 +194,15 @@ struct CertStatus {
     }
 
     /**
-     * @brief Get the issuer ID which is the first 8 hex digits of the hex SKID (subject key identifier)
+     * @brief Get the first 8 hex digits of the hex SKID (subject key identifier)
      *
      * Note that the given cert must contain the SKID extension in the first place
      *
-     * @param ca_cert_ptr the cert pointer from which to get the subject key identifier extension
+     * @param cert_ptr the cert pointer from which to get the subject key identifier extension
      * @return first 8 hex digits of the hex SKID (subject key identifier)
      */
-    static std::string getIssuerId(const X509* ca_cert_ptr) {
-        const ossl_ptr<ASN1_OCTET_STRING> skid(static_cast<ASN1_OCTET_STRING*>(X509_get_ext_d2i(ca_cert_ptr, NID_subject_key_identifier, nullptr, nullptr)),
+    static std::string getSkId(const X509* cert_ptr) {
+        const ossl_ptr<ASN1_OCTET_STRING> skid(static_cast<ASN1_OCTET_STRING*>(X509_get_ext_d2i(cert_ptr, NID_subject_key_identifier, nullptr, nullptr)),
                                          false);
         if (!skid) {
             throw std::runtime_error("Failed to get Subject Key Identifier.");
@@ -284,8 +284,8 @@ struct CertStatus {
      * @param serial the serial number
      * @return the status URI
      */
-    static std::string makeConfigURI(const std::string& config_uri_base, const std::string& issuer_id, const uint64_t& serial) {
-        return SB() << config_uri_base << ":" << issuer_id << ":" << std::setw(16) << std::setfill('0') << serial;
+    static std::string makeConfigURI(const std::string& config_uri_base, const std::string& issuer_id, const std::string& skid) {
+        return SB() << config_uri_base << ":" << issuer_id << ":" << skid;
     }
 
    protected:
