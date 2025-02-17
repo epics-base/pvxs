@@ -485,9 +485,8 @@ Server::Pvt::Pvt(Server &svr, const Config& conf, CustomServerCallback custom_ce
             }
             if (effective.tls_throw_if_no_cert) {
                 throw(std::runtime_error(e.what()));
-            } else {
-                log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
             }
+            log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
         }
     } else if (tls_context) {
         tls_context->setDegradedMode(true);

@@ -95,5 +95,83 @@ std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCr
     // Forward the ccr to the certificate management service
     return ccr_manager_.createCertificate(cert_creation_request, timeout);
 }
+
+void Auth::runDaemon(const ConfigAuthN &authn_config, bool for_client, ossl_ptr<X509> &&cert, const std::function<ossl_ptr<X509>()> &&fn) {
+    auto serial = CertStatusFactory::getSerialNumber(cert);
+    std::string issuer_id(CertStatus::getIssuerId(cert));
+
+    // Check time before certificate expires
+    const time_t now = time(nullptr);
+    const StatusDate expiry_date = X509_get_notAfter(cert.get());
+    time_t expires_in = expiry_date.t - now;
+
+    const ConfigMonitor config_monitor_params{authn_config, cert, std::move(fn)};
+    const auto config = server::Config::fromEnv(true);
+    config_server_ = server::Server(config, [&config_monitor_params](short evt) { return configMonitor(config_monitor_params); });
+    server::SharedPV config_pv(server::SharedPV::buildMailbox());
+
+    config_pv.onFirstConnect(
+        [&authn_config, &expires_in, for_client, &issuer_id, &serial, this](server::SharedPV &pv) {
+            pv.close();
+
+            Value config_value;
+            const auto was_open = pv.isOpen();
+            if (was_open) {
+                config_value = pv.fetch();
+            } else {
+                config_value = getConfigPrototype();
+            }
+            setValue<uint64_t>(config_value, "serial", serial);
+            setValue<std::string>(config_value, "issuer_id", issuer_id);
+            setValue<std::string>(config_value, "keychain", for_client ? authn_config.tls_keychain_file : authn_config.tls_srv_keychain_file);
+            setValue<uint64_t>(config_value, "expires_in", expires_in);
+
+            if (was_open) {
+                pv.post(config_value);
+            } else {
+                pv.open(config_value);
+            }
+        });
+
+    config_pv.onLastDisconnect(
+        [](server::SharedPV &pv) { pv.close(); });
+
+    const std::string pv_name = CertStatus::makeConfigURI(authn_config.config_uri_base, issuer_id, serial);
+    config_server_.addPV(pv_name, config_pv);
+    std::cout << "Config server listening on " << authn_config.config_uri_base << std::endl;
+    config_server_.run();
+}
+
+timeval Auth::configMonitor(const ConfigMonitor &config_monitor_params) {
+    // Check time before certificate expires
+    const time_t now = time(nullptr);
+    const StatusDate expiry_date = X509_get_notAfter(config_monitor_params.cert_.get());
+    time_t expires_in = expiry_date.t - now;
+
+    // If timer has not yet expired
+    if (expires_in > 0) {
+        // Set time interval for next callback and return
+        return {expires_in, 0};
+    }
+
+    // If timer has expired call function to get a new certificate
+    config_monitor_params.cert_ = config_monitor_params.fn_();
+    if (!config_monitor_params.cert_) {
+        // Stop if no cert retrieved
+        return {0, 0};
+    }
+    StatusDate new_expiry_date = X509_get_notAfter(config_monitor_params.cert_.get());
+    expires_in = expiry_date.t - now;
+
+    if ( expires_in <= 0 ) {
+        // Stop if new cert has expired
+        return {0, 0};
+    }
+
+    // Otherwise post an update and wait until this new cert has expired
+
+    return {expires_in, 0};
+}
+
 }  // namespace certs
 }  // namespace pvxs
