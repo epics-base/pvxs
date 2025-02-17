@@ -21,6 +21,7 @@
 #include "configstd.h"
 #include "security.h"
 
+#define PVXS_NON_CLASH_PORT_OFFSET 1000
 namespace pvxs {
 namespace certs {
 

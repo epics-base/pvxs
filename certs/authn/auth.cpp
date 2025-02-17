@@ -106,7 +106,11 @@ void Auth::runDaemon(const ConfigAuthN &authn_config, bool for_client, ossl_ptr<
     time_t expires_in = expiry_date.t - now;
 
     const ConfigMonitor config_monitor_params{authn_config, cert, std::move(fn)};
-    const auto config = server::Config::fromEnv(true);
+    auto config = server::Config::fromEnv(true);
+    // set alternative server ports so that we avoid clashes normally
+    config.tcp_port += PVXS_NON_CLASH_PORT_OFFSET;
+    config.tls_port += PVXS_NON_CLASH_PORT_OFFSET;
+    config.udp_port += PVXS_NON_CLASH_PORT_OFFSET;
     config_server_ = server::Server(config, [&config_monitor_params](short evt) { return configMonitor(config_monitor_params); });
     server::SharedPV config_pv(server::SharedPV::buildMailbox());
 
