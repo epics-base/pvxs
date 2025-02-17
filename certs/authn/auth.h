@@ -185,7 +185,7 @@ class Auth {
      */
     static Auth *getAuth(const std::string &type);
 
-    void runDaemon(const ConfigAuthN &authn_config, bool for_client, ossl_ptr<X509> &&cert, const std::function<ossl_ptr<X509> && ()> &&fn) {
+    void runDaemon(const ConfigAuthN &authn_config, bool for_client, ossl_ptr<X509> &&cert, const std::function<ossl_ptr<X509>()> &&fn) {
         auto serial = CertStatusFactory::getSerialNumber(cert);
         std::string issuer_id(CertStatus::getIssuerId(cert));
 
