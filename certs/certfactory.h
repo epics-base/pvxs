@@ -7,6 +7,7 @@
 #ifndef PVXS_CERT_FACTORY_H
 #define PVXS_CERT_FACTORY_H
 
+#include <certfilefactory.h>
 #include <tuple>
 
 #include <openssl/bio.h>
@@ -113,6 +114,8 @@ class PVXS_API CertFactory {
     };
 
     ossl_ptr<X509> PVXS_API create();
+
+    static time_t getNotAfterTimeFromCert(const ossl_ptr<X509> & cert);
 
     static std::string PVXS_API certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * ca);
 

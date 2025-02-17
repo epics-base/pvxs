@@ -238,8 +238,20 @@ int main(int argc, char *argv[]) {
         const std::string tls_keychain_file = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_file : config.tls_keychain_file;
         const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;
 
-        // Get the Standard authenticator credentials
-        auto cert = getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd);
+        pvxs::ossl_ptr<X509> cert;
+        try {
+            if ( daemon_mode ) {
+                auto cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
+                const auto now = time(nullptr);
+                const auto not_after_time = CertFactory::getNotAfterTimeFromCert(cert_data.cert);
+                if ( not_after_time > now) {
+                    cert = std::move(cert_data.cert);
+                }
+            }
+        } catch (std::exception &) { }
+
+        if ( !cert )
+            cert = getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd);
 
         if (daemon_mode) {
             authenticator.runDaemon(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient), std::move(cert),

@@ -442,6 +442,13 @@ void CertFactory::writeCertsToBio(const ossl_ptr<BIO> &bio, const STACK_OF(X509)
     }
 }
 
+time_t CertFactory::getNotAfterTimeFromCert(const ossl_ptr<X509> & cert) {
+    ASN1_TIME *cert_not_after = X509_get_notAfter(cert.get());
+    const time_t not_after = StatusDate::asn1TimeToTimeT(cert_not_after);
+    return not_after;
+}
+
+
 std::string CertFactory::certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * ca) {
     auto bio = newBio();
 
