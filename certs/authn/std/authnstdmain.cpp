@@ -57,6 +57,8 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
 
     app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `hybrid`");
 
+    app.add_option("-t,--time", config.cert_validity_mins, "Duration of the certificate in minutes.  Default 30 days");
+
     app.add_option("-n,--name", config.name, "Specify CA keychain password file location");
     app.add_option("-o,--organization", config.organization, "Specify the CA's name. Used if we need to create a root certificate");
     app.add_option("--ou", config.organizational_unit, "Specify the CA's Organization. Used if we need to create a root certificate");
@@ -83,6 +85,7 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
                   << "  (-o | --organization) <organization>       Specify organisation name for the certificate. Default <hostname>\n"
                   << "  --ou <org-unit>                            Specify organisational unit for the certificate. Default <blank>\n"
                   << "  (-c | --country) <country>                 Specify country for the certificate. Default locale setting if detectable otherwise `US`\n"
+                  << "  (-t | --time) <minutes>                    Duration of the certificate in minutes\n"
                   << "  (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`\n"
                   << "  --add-config-uri                           Add a config uri to the generated certificate\n"
                   << "  --config-uri-base <config_uri_base>        Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`\n"
