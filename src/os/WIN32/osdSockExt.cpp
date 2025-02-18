@@ -36,14 +36,17 @@ DEFINE_LOGGER(logiface, "pvxs.iface");
 
 static
 LPFN_WSARECVMSG WSARecvMsg;
+static
+LPFN_WSASENDMSG WSASendMsg;
 
 static
 void oseDoOnce()
 {
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
-    GUID guid      = WSAID_WSARECVMSG;
+    GUID guid;
     DWORD nout;
 
+    guid      = WSAID_WSARECVMSG;
     if(WSAIoctl(dummy.sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
                 &guid, sizeof(guid),
                 &WSARecvMsg, sizeof(WSARecvMsg),
@@ -51,8 +54,18 @@ void oseDoOnce()
     {
         cantProceed("Unable to get &WSARecvMsg: %d", WSAGetLastError());
     }
-    if(!WSARecvMsg)
-        cantProceed("Unable to get &WSARecvMsg!!");
+
+    guid      = WSAID_WSASENDMSG;
+    if(WSAIoctl(dummy.sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+                &guid, sizeof(guid),
+                &WSASendMsg, sizeof(WSASendMsg),
+                &nout, nullptr, nullptr))
+    {
+        cantProceed("Unable to get &WSASendMsg: %d", WSAGetLastError());
+    }
+
+    if(!WSARecvMsg || !WSASendMsg)
+        cantProceed("Unable to get &WSARecvMsg or &WSASendMsg");
 
     evsocket::canIPv6 = evsocket::init_canIPv6();
     evsocket::ipstack = is_wine() ? evsocket::Linsock : evsocket::Winsock;
@@ -132,6 +145,58 @@ int recvfromx::call()
     } else {
         return -1;
     }
+}
+
+int sendtox::call()
+{
+    WSAMSG msg{};
+
+    WSABUF iov = {(ULONG)buflen, (char*)buf};
+    msg.lpBuffers = &iov;
+    msg.dwBufferCount = 1u;
+
+    msg.name = const_cast<sockaddr*>(&(*dst)->sa);
+    msg.namelen = dst->size();
+
+    alignas (WSACMSGHDR) char cbuf[
+            // only need space for IPv4 option(s) or IPv6 option, never both.
+            impl::cmax(WSA_CMSG_SPACE(sizeof(in_pktinfo)), WSA_CMSG_SPACE(sizeof(in6_pktinfo)))
+    ] = {};
+
+    if(srcif && src && src->family()==AF_INET) {
+        auto cmsg(reinterpret_cast<WSACMSGHDR*>(cbuf));
+        cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(in_pktinfo));
+        cmsg->cmsg_level = IPPROTO_IP;
+        cmsg->cmsg_type = IP_PKTINFO;
+        auto info(reinterpret_cast<in_pktinfo*>(WSA_CMSG_DATA(cmsg)));
+        memset(info, 0, sizeof(*info));
+        info->ipi_ifindex = srcif;
+        if(src) {
+            info->ipi_addr = (*src)->in.sin_addr; // source in IP header
+        }
+        msg.Control.buf = cbuf;
+        msg.Control.len = WSA_CMSG_SPACE(sizeof(in_pktinfo));
+
+    } else if(srcif && src && src->family()==AF_INET6) {
+        auto cmsg(reinterpret_cast<WSACMSGHDR*>(cbuf));
+        cmsg->cmsg_len = WSA_CMSG_LEN(sizeof(in6_pktinfo));
+        cmsg->cmsg_level = IPPROTO_IPV6;
+        cmsg->cmsg_type = IPV6_PKTINFO;
+        auto info(reinterpret_cast<in6_pktinfo*>(WSA_CMSG_DATA(cmsg)));
+        memset(info, 0, sizeof(*info));
+        info->ipi6_ifindex = srcif;
+        if(src) {
+            info->ipi6_addr = (*src)->in6.sin6_addr; // source in IP header
+        }
+        msg.Control.buf = cbuf;
+        msg.Control.len = WSA_CMSG_SPACE(sizeof(in6_pktinfo));
+        // real winsock insists that Control.len includes padding
+    }
+
+    DWORD nSent = 0;
+    if(WSASendMsg(sock, &msg, 0, &nSent, nullptr, nullptr))
+        return -1;
+    return nSent;
 }
 
 namespace impl {

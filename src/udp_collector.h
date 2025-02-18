@@ -49,8 +49,10 @@ struct PVXS_API UDPManager
 
     struct PVXS_API Search {
         std::vector<std::string> otherproto; // any protocols other than "tcp"
-        SockAddr src;
+        SockAddr src; // sender/client address
+        SockAddr dest; // destination IP used by client
         SockAddr server;
+        uint64_t srcIface;
         uint32_t searchID;
         uint8_t peerVersion;
         bool protoTCP = false; // included protocol "tcp"

@@ -316,8 +316,12 @@ struct PVXS_API IfaceMap {
     std::string name_of(const SockAddr& addr);
     // returns 0 if not found
     uint64_t index_of(const std::string& name);
+    // lookup interface index by interface address (not broadcast addr)
+    uint64_t index_of(const SockAddr& addr);
     // is this a valid interface or broadcast address?
     bool is_iface(const SockAddr& addr);
+    // is this index the/a loopback interface?
+    bool is_lo(uint64_t index);
     // is this a valid interface or broadcast address?
     bool is_broadcast(const SockAddr& addr);
     // look up interface address.  useful for IPV4.  returns AF_UNSPEC if not found
