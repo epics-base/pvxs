@@ -6,6 +6,8 @@
 
 #include <sstream>
 
+#include <pvxs/log.h>
+#include "qsrvpvt.h"
 #include "pvalink.h"
 
 #include <epicsStdio.h> // redirects stdout/stderr
@@ -16,6 +18,8 @@ namespace ioc {
 pvaLinkConfig::~pvaLinkConfig() {}
 
 namespace {
+
+DEFINE_LOGGER(logj, "pvxs.ioc.link.parse");
 
 /* link options.
  *
@@ -73,8 +77,8 @@ jlif_result pva_parse_null(jlink *pjlink) noexcept
             pvt->sevr = pvaLinkConfig::NMS;
         } else if(pvt->jkey == "local") {
             pvt->local = false; // alias for local:false
-        } else if(pvt->debug) {
-            printf("pva link parsing unknown none depth=%u key=\"%s\"\n",
+        } else {
+            log_warn_printf(logj, "pva link parsing unknown none depth=%u key=\"%s\"\n",
                    pvt->parseDepth, pvt->jkey.c_str());
         }
 
@@ -107,8 +111,8 @@ jlif_result pva_parse_bool(jlink *pjlink, int val) noexcept
             pvt->always = !!val;
         } else if(pvt->jkey == "atomic") {
             pvt->atomic = !!val;
-        } else if(pvt->debug) {
-            printf("pva link parsing unknown integer depth=%u key=\"%s\" value=%s\n",
+        } else {
+            log_warn_printf(logj, "pva link parsing unknown integer depth=%u key=\"%s\" value=%s\n",
                    pvt->parseDepth, pvt->jkey.c_str(), val ? "true" : "false");
         }
 
@@ -126,8 +130,8 @@ jlif_result pva_parse_integer(jlink *pjlink, long long val) noexcept
             pvt->queueSize = val < 1 ? 1 : size_t(val);
         } else if(pvt->jkey == "monorder") {
             pvt->monorder = std::max(-1024, std::min(int(val), 1024));
-        } else if(pvt->debug) {
-            printf("pva link parsing unknown integer depth=%u key=\"%s\" value=%lld\n",
+        } else {
+            log_warn_printf(logj, "pva link parsing unknown integer depth=%u key=\"%s\" value=%lld\n",
                    pvt->parseDepth, pvt->jkey.c_str(), val);
         }
 
@@ -160,8 +164,8 @@ jlif_result pva_parse_string(jlink *pjlink, const char *val, size_t len) noexcep
                 pvt->proc = pvaLinkConfig::PP;
             } else if(sval=="NPP") {
                 pvt->proc = pvaLinkConfig::NPP;
-            } else if(pvt->debug) {
-                printf("pva link parsing unknown proc depth=%u key=\"%s\" value=\"%s\"\n",
+            } else {
+                log_warn_printf(logj, "pva link parsing unknown proc depth=%u key=\"%s\" value=\"%s\"\n",
                        pvt->parseDepth, pvt->jkey.c_str(), sval.c_str());
             }
 
@@ -177,13 +181,13 @@ jlif_result pva_parse_string(jlink *pjlink, const char *val, size_t len) noexcep
                 // leave room for this to happen compatibly later by
                 // handling as alias for MS until then.
                 pvt->sevr = pvaLinkConfig::MS;
-            } else if(pvt->debug) {
-                printf("pva link parsing unknown sevr depth=%u key=\"%s\" value=\"%s\"\n",
+            } else {
+                log_warn_printf(logj, "pva link parsing unknown sevr depth=%u key=\"%s\" value=\"%s\"\n",
                        pvt->parseDepth, pvt->jkey.c_str(), sval.c_str());
             }
 
-        } else if(pvt->debug) {
-            printf("pva link parsing unknown string depth=%u key=\"%s\" value=\"%s\"\n",
+        } else {
+            log_warn_printf(logj, "pva link parsing unknown string depth=%u key=\"%s\" value=\"%s\"\n",
                    pvt->parseDepth, pvt->jkey.c_str(), sval.c_str());
         }
 
