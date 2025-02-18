@@ -238,7 +238,7 @@ int main(int argc, char *argv[]) {
         const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;
 
         // Get the Standard authenticator credentials
-        CertData cert_data;
+        CertData cert_data{};
         try {
             if ( daemon_mode ) {
                 auto new_cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
@@ -253,7 +253,7 @@ int main(int argc, char *argv[]) {
         if ( !cert_data.cert )
             cert_data = getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd);
 
-        if (daemon_mode) {
+        if (cert_data.cert && daemon_mode) {
             authenticator.runDaemon(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient), std::move(cert_data),
                                     [&retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd]() {
                                         return getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd);
