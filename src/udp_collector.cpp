@@ -96,7 +96,7 @@ struct UDPManager::Pvt {
     SockAttach attach;
 
     evbase loop;
-    IfaceMap& ifmap;
+    IfaceMap ifmap;
 
     // only manipulate from loop worker thread
     // key'd by address family and port#

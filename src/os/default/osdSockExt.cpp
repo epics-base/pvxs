@@ -253,10 +253,10 @@ int sendtox::call()
 
 namespace impl {
 
-decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
+decltype (IfaceMap::Current::byIndex) IfaceMap::_refresh() {
     ifaddrs* addrs = nullptr;
 
-    decltype (byIndex) temp;
+    decltype (Current::byIndex) temp;
 
     if(getifaddrs(&addrs)) {
         log_warn_printf(logiface, "Unable to getifaddrs() errno=%d\n", errno);
