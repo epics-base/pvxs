@@ -788,7 +788,8 @@ void Server::Pvt::doBeacons(short evt)
             auto lvl = Level::Warn;
             if(err==EINTR || err==EPERM)
                 lvl = Level::Debug;
-            log_printf(serverio, lvl, "Beacon tx error (%d) %s\n",
+            log_printf(serverio, lvl, "Beacon tx %s error (%d) %s\n",
+                       (SB()<<dest).str().c_str(),
                        err, evutil_socket_error_to_string(err));
 
         } else if(unsigned(ntx)<pktlen) {
