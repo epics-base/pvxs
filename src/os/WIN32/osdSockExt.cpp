@@ -205,9 +205,9 @@ namespace impl {
 #  define GAA_FLAG_INCLUDE_ALL_INTERFACES 0
 #endif
 
-decltype (IfaceMap::byIndex) IfaceMap::_refresh() {
+decltype (IfaceMap::Current::byIndex) IfaceMap::_refresh() {
     std::vector<char> ifaces(1024u);
-    decltype (byIndex) temp;
+    decltype (Current::byIndex) temp;
 
     {
         constexpr ULONG flags = GAA_FLAG_SKIP_ANYCAST

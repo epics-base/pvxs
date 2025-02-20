@@ -101,11 +101,9 @@ void testFwdIface()
 
     std::vector<SockAddr> ifaddrs;
     {
-        auto& ifs(IfaceMap::instance());
+        auto ifs(IfaceMap::instance());
 
-        epicsGuard<epicsMutex> G(ifs.lock);
-
-        for(auto it : ifs.byIndex) {
+        for(auto it : ifs.current->byIndex) {
             auto& iface = it.second;
             if(iface.isLO)
                 continue;

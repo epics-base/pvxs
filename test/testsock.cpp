@@ -180,18 +180,14 @@ void test_ifacemap()
 {
     testDiag("Enter %s", __func__);
 
-    auto& ifs = IfaceMap::instance();
+    auto ifs(IfaceMap::instance());
 
-    epicsGuard<epicsMutex> G(ifs.lock); // since we are playing around with the internals...
-
-    ifs.refresh(true);
-
-    testFalse(ifs.byIndex.empty())<<" found "<<ifs.byIndex.size()<<" interfaces";
+    testFalse(ifs.current->byIndex.empty())<<" found "<<ifs.current->byIndex.size()<<" interfaces";
 
     bool foundlo = false;
     const auto lo(SockAddr::loopback(AF_INET));
 
-    for(const auto& pair : ifs.byIndex) {
+    for(const auto& pair : ifs.current->byIndex) {
         auto& iface = pair.second;
         testDiag("Interface %u \"%s\"", unsigned(iface.index), iface.name.c_str());
         for(const auto& pair : iface.addrs) {
@@ -297,7 +293,7 @@ void test_local_mcast()
 {
     testDiag("Enter %s", __func__);
 
-    IfaceMap ifinfo;
+    auto ifinfo(IfaceMap::instance());
 
     evsocket A(AF_INET, SOCK_DGRAM, 0, true),
              B(AF_INET, SOCK_DGRAM, 0, true);
