@@ -545,7 +545,7 @@ void evsocket::mcast_prep_sendto(const SockEndpoint& ep) const
     else if(!ep.addr.isMCast())
         return;
 
-    auto& ifmap = IfaceMap::instance();
+    auto ifmap = IfaceMap::instance();
 
     if(af==AF_INET) {
         SockAddr iface(AF_INET);
@@ -697,215 +697,174 @@ bool evsocket::init_canIPv6() noexcept
 #  define getMonotonic getCurrent
 #endif
 
-static IfaceMap* theinstance;
+struct IfMapDaemon : private epicsThreadRunable {
+    epicsMutex lock;
+    epicsEvent wake;
+    std::shared_ptr<const IfaceMap::Current> latest;
+    bool stop = false;
+    epicsThread worker;
+    IfMapDaemon()
+        :latest(IfaceMap::refresh())
+        ,worker(*this, "IfMapDaemon",
+                epicsThreadGetStackSize(epicsThreadStackBig),
+                epicsThreadPriorityMin)
+    {
+        worker.start();
+    }
+    ~IfMapDaemon()
+    {
+        {
+            Guard G(lock);
+            stop = true;
+        }
+        wake.signal();
+        worker.exitWait();
+    }
+
+    virtual void run() override final
+    {
+        Guard G(lock);
+        while(!stop) {
+            try {
+                std::shared_ptr<const IfaceMap::Current> next;
+                {
+                    epicsGuardRelease<epicsMutex> U(G);
+                    wake.wait(15.0); // arbitrary period...
+                    next = IfaceMap::refresh();
+                }
+                latest.swap(next);
+
+            } catch(std::exception& e){
+                log_crit_printf(logiface, "While updating IfaceMap : %s\n", e.what());
+            }
+        }
+    }
+} *ifmapper;
 
 static
 void mapInit()
 {
-    theinstance = new IfaceMap();
+    ifmapper = new IfMapDaemon();
 }
 
-IfaceMap& IfaceMap::instance()
+IfaceMap IfaceMap::instance()
 {
     threadOnce<&mapInit>();
-    assert(theinstance);
-    return *theinstance;
+    assert(ifmapper);
+    Guard G(ifmapper->lock);
+    auto ret(ifmapper->latest);
+    if(!ret)
+        throw std::logic_error("No IfaceMap");
+    return IfaceMap(std::move(ret));
 }
 
 void IfaceMap::cleanup()
 {
-    delete theinstance;
-    theinstance = nullptr;
+    delete ifmapper;
+    ifmapper = nullptr;
 }
 
-IfaceMap::IfaceMap()
+std::shared_ptr<const IfaceMap::Current> IfaceMap::refresh()
 {
-    refresh();
-}
-
-void IfaceMap::refresh(bool force)
-{
-    auto now(epicsTime::getMonotonic());
-    auto age = now-updated;
-    double threshold = force ? 10.0 : 600.0; // TODO: configurable?
-    if(age<threshold && !byIndex.empty())
-        return;
-    log_debug_printf(logiface, "refresh%s after %.1f sec\n", force?" forced":"", age);
-    auto temp = _refresh();
+    log_debug_printf(logiface, "refresh%s", "\n");
+    auto next(std::make_shared<Current>());
+    next->byIndex = _refresh();
     // cross-index
-    decltype (byName) tempN;
-    decltype (byAddr) tempA;
-    for(auto& pair : temp) {
+    for(auto& pair : next->byIndex) {
         auto& iface = pair.second;
-        tempN[iface.name] = &iface;
+        next->byName[iface.name] = &iface;
         for(auto& pair : iface.addrs) {
-            tempA.emplace(pair.first, std::make_pair(&iface, false));
-            if(pair.second.family()==AF_INET)
-                tempA.emplace(pair.second, std::make_pair(&iface, true));
+            next->byAddr.emplace(pair.first, std::make_pair(&iface, false));
+            if(pair.first.family()==AF_INET && pair.second.family()==AF_INET) {
+                next->byAddr.emplace(pair.second, std::make_pair(&iface, true));
+                iface.bcast[pair.second] = pair.first;
+            }
         }
     }
-    byIndex.swap(temp);
-    byName.swap(tempN);
-    byAddr.swap(tempA);
-    updated = now;
+    return next;
 }
 
-namespace {
-
-template<typename FN>
-bool try_cache(IfaceMap& self, FN&& fn)
+bool IfaceMap::has_address(uint64_t ifindex, const SockAddr &addr) const
 {
-    bool force = false;
-retry:
-    self.refresh(force);
-    bool found = fn();
-    if(!found && !force) {
-        force = true;
-        goto retry;
-    }
-    return found;
-}
-
-} // namespace
-
-bool IfaceMap::has_address(uint64_t ifindex, const SockAddr &addr)
-{
-    Guard G(lock);
-
     if(addr.isAny())
         return true;
 
-    bool found = try_cache(*this, [this, ifindex, &addr]() {
-        auto ifit(byIndex.find(ifindex));
-        if(ifit!=byIndex.end()) {
-            const auto& addrs = ifit->second.addrs;
-            return addrs.find(addr)!=addrs.end();
-        }
-        return false;
-    });
-    return found;
-}
-
-std::string IfaceMap::name_of(uint64_t index)
-{
-    Guard G(lock);
-
-    std::string name;
-    bool found = try_cache(*this, [this, index, &name](){
-        auto it(byIndex.find(index));
-        if(it!=byIndex.end()) {
-            name = it->second.name;
-            return true;
-        }
-        return false;
-    });
-    if(!found) {
-        // fallback to numeric index
-        name = SB()<<index;
+    auto ifit(current->byIndex.find(ifindex));
+    if(ifit!=current->byIndex.end()) {
+        const auto& addrs = ifit->second.addrs;
+        return addrs.find(addr)!=addrs.end();
     }
-    return name;
+    return false;
 }
 
-std::string IfaceMap::name_of(const SockAddr& addr)
+std::string IfaceMap::name_of(uint64_t index) const
 {
-    Guard G(lock);
-
-    std::string name;
-    try_cache(*this, [this, addr, &name](){
-        auto it(byAddr.find(addr));
-        if(it!=byAddr.end()) {
-            name = it->second.first->name;
-            return true;
-        }
-        return false;
-    });
-    return name;
+    auto it(current->byIndex.find(index));
+    if(it!=current->byIndex.end()) {
+        return it->second.name;
+    }
+    // fallback to numeric index
+    return SB()<<index;
 }
 
-uint64_t IfaceMap::index_of(const std::string& name)
+std::string IfaceMap::name_of(const SockAddr& addr) const
 {
-    Guard G(lock);
-
-    uint64_t ret = 0u;
-    try_cache(*this, [&ret, this, name]() {
-        auto it = byName.find(name);
-        bool hit = it!=byName.end();
-        if(hit)
-            ret = it->second->index;
-        return hit;
-    });
-    return ret;
+    auto it(current->byAddr.find(addr));
+    if(it!=current->byAddr.end())
+        return it->second.first->name;;
+    return std::string();
 }
 
-uint64_t IfaceMap::index_of(const SockAddr &addr)
+uint64_t IfaceMap::index_of(const std::string& name) const
 {
-    Guard G(lock);
-
-    uint64_t ret = 0u;
-    try_cache(*this, [&ret, this, addr]() {
-        auto it = byAddr.find(addr);
-        bool hit = it!=byAddr.end() && !it->second.second;
-        if(hit)
-            ret = it->second.first->index;
-        return hit;
-    });
-    return ret;
+    auto it = current->byName.find(name);
+    if(it!=current->byName.end())
+        return it->second->index;
+    return 0;
 }
 
-bool IfaceMap::is_iface(const SockAddr& addr)
+uint64_t IfaceMap::index_of(const SockAddr &addr) const
 {
-    Guard G(lock);
-
-    return try_cache(*this, [this, addr]() {
-        auto it(byAddr.find(addr));
-        return it!=byAddr.end() && !it->second.second;
-    });
+    auto it = current->byAddr.find(addr);
+    if(it!=current->byAddr.end() && !it->second.second)
+        return it->second.first->index;
+    return 0;
 }
 
-bool IfaceMap::is_lo(uint64_t index)
+bool IfaceMap::is_iface(const SockAddr& addr) const
 {
-    bool is_lo = false;
-    (void)try_cache(*this, [this, &is_lo, index]() {
-        auto ifit(byIndex.find(index));
-        if(ifit!=byIndex.end()) { // hit
-            is_lo = ifit->second.isLO;
-        }
-        return false;
-    });
-    return is_lo;
+    auto it(current->byAddr.find(addr));
+    return it!=current->byAddr.end() && !it->second.second;
 }
 
-bool IfaceMap::is_broadcast(const SockAddr& addr)
+bool IfaceMap::is_lo(uint64_t index) const
 {
-    Guard G(lock);
-
-    return try_cache(*this, [this, addr]() {
-        auto it(byAddr.find(addr));
-        return it!=byAddr.end() && it->second.second;
-    });
+    auto ifit(current->byIndex.find(index));
+    if(ifit!=current->byIndex.end()) { // hit
+        return ifit->second.isLO;
+    }
+    return false;
 }
 
-SockAddr IfaceMap::address_of(const std::string& name)
+bool IfaceMap::is_broadcast(const SockAddr& addr) const
 {
-    Guard G(lock);
-
-    SockAddr ret;
-    try_cache(*this, [this, name, &ret]() {
-        auto it(byName.find(name));
-        if(it!=byName.end() && !it->second->addrs.empty()) {
-            ret = it->second->addrs.begin()->first;
-        }
-        return false;
-    });
-    return ret;
+    auto it(current->byAddr.find(addr));
+    return it!=current->byAddr.end() && it->second.second;
 }
 
-std::set<std::string> IfaceMap::all_external()
+SockAddr IfaceMap::address_of(const std::string& name) const
+{
+    auto it(current->byName.find(name));
+    if(it!=current->byName.end() && !it->second->addrs.empty()) {
+        return it->second->addrs.begin()->first;
+    }
+    return SockAddr();
+}
+
+std::set<std::string> IfaceMap::all_external() const
 {
     std::set<std::string> ret;
-    Guard G(lock);
-    refresh();
-    for(auto& pair : byIndex) {
+    for(auto& pair : current->byIndex) {
         ret.emplace(pair.second.name);
     }
     return ret;
