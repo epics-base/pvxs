@@ -76,8 +76,8 @@ struct UDPCollector final : public UDPManager::Search,
             if(!(ev&EV_READ))
                 return;
 
-            // handle up to 4 packets before going back to the reactor
-            for(unsigned i=0; i<4 && self->handle_one(); i++) {}
+            // bound number of packets handled before going back to the reactor
+            for(unsigned i=0; i<16 && self->handle_one(); i++) {}
 
         }catch(std::exception& e) {
             log_crit_printf(logio, "Ignoring unhandled exception in UDPManager::handle(): %s\n", e.what());
