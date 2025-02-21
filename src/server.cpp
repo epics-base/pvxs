@@ -441,14 +441,7 @@ Server::Pvt::Pvt(const Config &conf)
             listeners.push_back(manager.onSearch(any4, cb));
         }
 
-        if(evsocket::ipstack!=evsocket::Winsock
-                && addr.addr.family()==AF_INET && !addr.addr.isAny() && !addr.addr.isMCast()) {
-            /* An oddness of BSD sockets (not winsock) is that binding to
-             * INADDR_ANY will receive unicast and broadcast, but binding to
-             * a specific interface address receives only unicast.  The trick
-             * is to bind a second socket to the interface broadcast address,
-             * which will then receive only broadcasts.
-             */
+        if(addr.addr.family()==AF_INET && !addr.addr.isAny() && !addr.addr.isMCast()) {
             for(auto bcast : dummy.broadcasts(&addr.addr)) {
                 bcast.setPort(addr.addr.port());
                 listeners.push_back(manager.onSearch(bcast, cb));
