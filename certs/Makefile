@@ -25,7 +25,6 @@ USR_CPPFLAGS += -I$(TOP)/src/pvxs
 USR_CPPFLAGS += -I$(TOP)/src
 USR_CPPFLAGS += -I$(TOP)/ioc
 
-#INC += certstatus.h
 INC += security.h
 
 PROD += pvacms

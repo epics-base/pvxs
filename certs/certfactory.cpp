@@ -237,7 +237,7 @@ void CertFactory::setSerialNumber(const ossl_ptr<X509> &certificate) const {
     if (X509_set_serialNumber(certificate.get(), serial_number.get()) != 1) {
         throw std::runtime_error("Failed to set certificate serial number.");
     }
-    log_debug_printf(certs, "Serial Number: %lu\n", serial_);
+    log_debug_printf(certs, "Serial Number: %llu\n", serial_);
 }
 
 /**
