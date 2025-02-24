@@ -237,7 +237,7 @@ struct CertStatusExData {
             return 0;
         }
 
-        if (BN_num_bytes(bn.get()) > sizeof(uint64_t)) {
+        if (static_cast<size_t>(BN_num_bytes(bn.get())) > sizeof(uint64_t)) {
             return 0;
         }
 
