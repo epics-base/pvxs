@@ -98,7 +98,7 @@ class CertStatusManager {
      * @param ocsp_bytes The input byte array containing the OCSP responses data.
      * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
      */
-    static ParsedOCSPStatus parse(shared_array<const uint8_t> ocsp_bytes, X509_STORE *trusted_store_ptr);
+    static ParsedOCSPStatus parse(const shared_array<const uint8_t> &ocsp_bytes, X509_STORE *trusted_store_ptr);
 
     /**
      * Parse OCSP responses from the provided ocsp_bytes response
@@ -125,7 +125,7 @@ class CertStatusManager {
      * @param ocsp_response An OCSP response object.
      * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
      */
-    static ParsedOCSPStatus parse(ossl_ptr<OCSP_RESPONSE> &ocsp_response, X509_STORE *trusted_store_ptr);
+    static ParsedOCSPStatus parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_response, X509_STORE *trusted_store_ptr);
 
     /**
      * @brief Get the status PV from a Cert.
@@ -159,7 +159,7 @@ class CertStatusManager {
      *         e.g. CERT:STATUS:0293823f:098294739483904875
      */
     static std::string getStatusPvFromCert(const X509 *cert);
-    static std::string geConfigPvFromCert(const X509 *cert);
+    static std::string getConfigPvFromCert(const X509 *cert);
 
     /**
      * @brief Used to create a helper that you can use to subscribe to certificate status with
@@ -180,9 +180,9 @@ class CertStatusManager {
      */
     void unsubscribe();
 
-    bool available(double timeout = 5.0) noexcept { return isValid() || waitedTooLong(timeout); }
+    bool available(double timeout = 5.0) const noexcept { return isValid() || waitedTooLong(timeout); }
     bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t) timeout) < std::time(nullptr); }
-    bool isValid() noexcept { return status_ && status_->isValid(); }
+    bool isValid() const noexcept { return status_ && status_->isValid(); }
 
   private:
     CertStatusManager(std::shared_ptr<client::Context> &&client, std::shared_ptr<client::Subscription> sub) : client_(std::move(client)), sub_(sub) {};

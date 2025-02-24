@@ -16,13 +16,13 @@ SRC_DIRS += $(TOP)/certs
 SRC_DIRS += $(TOP)/src
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 USR_CPPFLAGS += -I$(TOP)/certs -I$(TOP)/bundle/CLI11/include
+SRCS += certstatus.cpp
 
 PROD += pvxcert
 pvxcert_SRCS += cert.cpp
 pvxcert_SRCS += p12filefactory.cpp
 pvxcert_SRCS += certfilefactory.cpp
 pvxcert_SRCS += certfactory.cpp
-pvxcert_SRCS += certstatus.cpp
 pvxcert_SRCS += certstatusmanager.cpp
 pvxcert_SRCS += openssl.cpp
 

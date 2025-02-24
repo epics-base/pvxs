@@ -8,6 +8,7 @@
 #include <osiProcess.h>
 
 #include <pvxs/log.h>
+#include <pvxs/sslinit.h>
 
 #include <CLI/CLI.hpp>
 
@@ -132,8 +133,8 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
     return 0;
 }
 
-CertData getCertificate(bool &retrieved_credentials, ConfigStd config, uint16_t cert_usage, const AuthNStd &authenticator,
-                                    const std::string &tls_keychain_file, const std::string &tls_keychain_pwd) {
+CertData getCertificate(bool &retrieved_credentials, ConfigStd config, uint16_t cert_usage, const AuthNStd &authenticator, const std::string &tls_keychain_file,
+                        const std::string &tls_keychain_pwd) {
     CertData cert_data;
 
     if (auto credentials = authenticator.getCredentials(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient))) {
@@ -173,7 +174,7 @@ CertData getCertificate(bool &retrieved_credentials, ConfigStd config, uint16_t 
             file_factory->writeIdentityFile();
 
             // Read the certificate and private key back from the keychain file for info and verification
-            auto cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
+            cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
             auto serial_number = CertStatusFactory::getSerialNumber(cert_data.cert);
             auto issuer_id = CertStatus::getIssuerId(cert_data.ca);
 
@@ -212,11 +213,12 @@ using namespace pvxs::certs;
  * @return the exit status
  */
 int main(int argc, char *argv[]) {
-    pvxs::ossl::SSLContext::sslInit();
     pvxs::logger_config_env();
     bool retrieved_credentials{false};
 
     try {
+        pvxs::ossl::sslInit();
+
         auto config = ConfigStd::fromEnv();
 
         bool verbose{false}, debug{false}, daemon_mode{false};
@@ -238,26 +240,27 @@ int main(int argc, char *argv[]) {
         const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;
 
         // Get the Standard authenticator credentials
-        CertData cert_data{};
+        CertData cert_data;
         try {
-            if ( daemon_mode ) {
+            if (daemon_mode) {
                 auto new_cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
                 const auto now = time(nullptr);
                 const auto not_after_time = CertFactory::getNotAfterTimeFromCert(new_cert_data.cert);
-                if ( not_after_time > now) {
+                if (not_after_time > now) {
                     cert_data = std::move(new_cert_data);
                 }
             }
-        } catch (std::exception &) { }
+        } catch (std::exception &) {
+        }
 
-        if ( !cert_data.cert )
-            cert_data = getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd);
+        if (!cert_data.cert) cert_data = getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd);
 
         if (cert_data.cert && daemon_mode) {
-            authenticator.runDaemon(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient), std::move(cert_data),
-                                    [&retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd]() {
-                                        return getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd);
-                                    });
+            authenticator.runAuthNDaemon(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient), std::move(cert_data),
+                                         [&retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd]() {
+                                             return getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file,
+                                                                   tls_keychain_pwd);
+                                         });
         }
 
         return 0;

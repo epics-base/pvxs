@@ -14,6 +14,7 @@
 
 #include <pvxs/client.h>
 #include <pvxs/log.h>
+#include <pvxs/sslinit.h>
 
 #include <CLI/CLI.hpp>
 #include <cstdlib>
@@ -62,8 +63,7 @@ std::string actionToString(CertAction& action) {
 }
 int readParameters(int argc, char* argv[], const char *program_name, client::Config &conf, CertAction &action, Value::Fmt::format_t &format,
                     bool &approve, bool &revoke, bool &deny, bool &debug, bool &password_flag, bool &verbose,
-                    std::string &cert_file, std::string &password, std::string &format_str, std::string &issuer_serial_string,
-                    uint64_t &arrLimit) {
+                    std::string &cert_file, std::string &issuer_serial_string) {
 
     bool show_version{false}, help{false};
 
@@ -84,8 +84,6 @@ int readParameters(int argc, char* argv[], const char *program_name, client::Con
     // Define options
     app.add_option("-w,--timeout", conf.request_timeout_specified);
     app.add_option("-f,--file", cert_file, "The keychain file to read if no Certificate ID specified");
-    app.add_option("-#,--limit", arrLimit)->default_val(20);
-    app.add_option("-F,--format", format_str);
 
     // Action flags in mutually exclusive group
     app.add_flag("-A,--approve", approve);
@@ -110,9 +108,8 @@ int readParameters(int argc, char* argv[], const char *program_name, client::Con
                   << "  REVOCATION of a certificate: Can only be made by an administrator.\n"
                   << std::endl
                   <<  "usage:\n"
-                  <<  "  " << program_name << " [display_options] [options] <cert_id>\n"
-                  <<  "                                             Get certificate status\n"
-                  <<  "  " << program_name << " [display_options] [file_options] [options] (-f | --file) <cert_file>\n"
+                  <<  "  " << program_name << " [options] <cert_id> Get certificate status\n"
+                  <<  "  " << program_name << " [file_options] [options] (-f | --file) <cert_file>\n"
                   <<  "                                             Get certificate information from the specified cert file\n"
                   <<  "  " << program_name << " [options] (-A | --approve) <cert_id>\n"
                   <<  "                                             APPROVE pending certificate approval request (ADMIN ONLY)\n"
@@ -122,10 +119,6 @@ int readParameters(int argc, char* argv[], const char *program_name, client::Con
                   <<  "  " << program_name << " (-h | --help)                      Show this help message and exit\n"
                   <<  "  " << program_name << " (-V | --version)                   Print version and exit\n"
                   << std::endl
-                  <<  "display_options:\n"
-                  <<  "  (-F | --format) (delta | tree)             Output format mode: delta (default), or tree\n"
-                  <<  "  (-# | --limit) <max_elements>              Maximum number of elements to print for each array field. Set to\n"
-                  <<  "                                             zero 0 for unlimited.  Default 20\n"
                   <<  "file_options:\n"
                   <<  "  (-p | --password)                          Prompt for password\n"
                   <<  "\n"
@@ -151,10 +144,8 @@ int readParameters(int argc, char* argv[], const char *program_name, client::Con
 
 int main(int argc, char* argv[]) {
     try {
-#ifdef PVXS_ENABLE_OPENSSL
-        ossl::SSLContext::sslInit();
-#endif
-        logger_config_env();  // from $PVXS_LOG
+        ossl::sslInit();
+        logger_config_env();
         auto conf = client::Config::fromEnv();
         auto program_name = argv[0];
 
@@ -163,10 +154,9 @@ int main(int argc, char* argv[]) {
         Value::Fmt::format_t format = Value::Fmt::Delta;
         bool approve{false}, revoke{false}, deny{false}, debug{false}, password_flag{false}, verbose{false};
         std::string cert_file, password, format_str, issuer_serial_string;
-        uint64_t arrLimit = 20;
 
         auto parse_result = readParameters(argc, argv, program_name, conf, action, format, approve, revoke, deny, debug, password_flag,
-                                           verbose, cert_file, password, format_str, issuer_serial_string, arrLimit);
+                                           verbose, cert_file, issuer_serial_string);
         if (parse_result) exit(parse_result);
 
 

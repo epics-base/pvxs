@@ -61,6 +61,11 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_PVA_AUTH_STD_COUNTRY"})) country = pickone.val;
     if (pickone({"EPICS_PVAS_AUTH_STD_COUNTRY", "EPICS_PVA_AUTH_STD_COUNTRY"})) server_country = pickone.val;
 
+    // Fixup keychain files to make sure we have default values even when empty
+    if (tls_keychain_file.empty()) {
+        tls_keychain_file = SB() << config_home << OSI_PATH_SEPARATOR << "client.p12";
+    }
+
     // EPICS_PVAS_TLS_KEYCHAIN
     if (pickone({"EPICS_PVAS_TLS_KEYCHAIN"})) {
         ensureDirectoryExists(tls_srv_keychain_file = pickone.val);

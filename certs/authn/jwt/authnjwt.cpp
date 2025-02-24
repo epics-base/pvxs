@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include <pvxs/log.h>
+#include <pvxs/sslinit.h>
 
 #include "authregistry.h"
 
@@ -65,9 +66,10 @@ void handle_request(int client_socket) {
 }  // namespace pvxs
 
 int main() {
-    pvxs::ossl::SSLContext::sslInit();
+    pvxs::ossl::sslInit();
+
     int server_fd, new_socket;
-    struct sockaddr_in address;
+    sockaddr_in address;
     int addrlen = sizeof(address);
 
     // Creating socket file descriptor

@@ -22,6 +22,9 @@
 #include <osiSock.h>
 
 #include <pvxs/log.h>
+#ifdef PVXS_ENABLE_OPENSSL
+#include <pvxs/sslinit.h>
+#endif
 #include <pvxs/util.h>
 
 #include <udp_collector.h>
@@ -103,7 +106,7 @@ int main(int argc, char *argv[])
 {
     try {
 #ifdef PVXS_ENABLE_OPENSSL
-        pvxs::ossl::SSLContext::sslInit();
+        pvxs::ossl::sslInit();
 #endif
         // group options used from callback
         struct {

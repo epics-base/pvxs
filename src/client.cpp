@@ -354,11 +354,11 @@ Subscription::~Subscription() {}
 Context Context::fromEnv() { return Config::fromEnv().build(); }
 #else
 Context Context::fromEnv(const bool tls_disabled) { return Config::fromEnv(tls_disabled).build(); }
-Context::Context(const Config& conf, const std::function<int(int)>& fn) : pvt(std::make_shared<Pvt>(conf)) { pvt->impl->startNS(); }
+Context::Context(const Config& conf, const std::function<int(int)>& fn) : pvt(std::make_shared<Pvt>(conf)) { pvt->impl->startNS(); pvt->impl->configureExpirationHandler(this); }
 
 #endif  // PVXS_ENABLE_OPENSSL
 
-Context::Context(const Config& conf) : pvt(std::make_shared<Pvt>(conf)) { pvt->impl->startNS(); }
+Context::Context(const Config& conf) : pvt(std::make_shared<Pvt>(conf)) { pvt->impl->startNS(); pvt->impl->configureExpirationHandler(this);}
 
 Context::~Context() = default;
 
@@ -469,7 +469,8 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
       manager(UDPManager::instance(effective.shareUDP())),
       beaconCleaner(__FILE__, __LINE__, event_new(manager.loop().base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::tickBeaconCleanS, this)),
       cacheCleaner(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::cacheCleanS, this)),
-      nsChecker(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::onNSCheckS, this))
+      nsChecker(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::onNSCheckS, this)),
+      cert_expiration_timer(__FILE__, __LINE__, event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::certExpirationHandlerS, nullptr))
 {
 #ifdef PVXS_ENABLE_OPENSSL
     if (effective.isTlsConfigured() || effective.tls_server_only) {
@@ -1163,6 +1164,16 @@ void ContextImpl::tickBeaconCleanS(evutil_socket_t fd, short evt, void* raw) {
     }
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
+void ContextImpl::certExpirationHandlerS(evutil_socket_t fd, short evt, void* raw) {
+    try {
+        static_cast<Context*>(raw)->certExpirationHandler();
+    } catch (std::exception& e) {
+        log_exc_printf(io, "Unhandled error in certificate expiration callback: %s\n", e.what());
+    }
+}
+#endif
+
 void ContextImpl::onNSCheck() {
     for (auto& ns : nameServers) {
         if (ns.second && ns.second->state != ConnBase::Disconnected)  // hold-off, connecting, or connected
@@ -1256,6 +1267,12 @@ void Context::reconfigure(const Config& new_conf) {
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
+void Context::certExpirationHandler() {
+    reconfigure(pvt->impl->effective);
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
 /**
  * @brief Enable TLS with the optional config if provided
  * @param new_config optional config (check the is_initialized flag to see if its blank or not)
@@ -1265,7 +1282,7 @@ void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
     if (isContextReadyForTls()) return;
     try {
         const auto& config_to_use = new_config.is_initialized ? new_config : effective;
-        auto new_context = ossl::SSLContext::for_client(config_to_use, tcp_loop);
+        const auto new_context = ossl::SSLContext::for_client(config_to_use, tcp_loop);
 
         // If unsuccessful in getting cert then don't do anything
         if (!isInitialisedForTls(new_context)) return;
@@ -1302,7 +1319,7 @@ void ContextImpl::enableTlsForPeerConnection(const Connection* client_conn) {
         }
     }
 
-    log_debug_printf(watcher, "Closing %zu TCP connections to replace with TLS ones\n", to_cleanup.size());
+    log_debug_printf(watcher, "Closing %zu connections to replace with TLS ones\n", to_cleanup.size());
 
     // Clean them up
     for (auto& weak_conn : to_cleanup) {

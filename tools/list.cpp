@@ -18,6 +18,10 @@
 #include <pvxs/client.h>
 #include <pvxs/nt.h>
 #include <pvxs/log.h>
+#ifdef PVXS_ENABLE_OPENSSL
+#include <pvxs/sslinit.h>
+#endif
+
 #include "utilpvt.h"
 #include "evhelper.h"
 
@@ -68,7 +72,7 @@ int main(int argc, char *argv[])
 {
     try {
 #ifdef PVXS_ENABLE_OPENSSL
-        ossl::SSLContext::sslInit();
+        ossl::sslInit();
 #endif
         logger_config_env(); // from $PVXS_LOG
         double timeout = 5.0;

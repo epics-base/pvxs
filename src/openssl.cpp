@@ -18,6 +18,8 @@
 #include <openssl/pkcs12.h>
 
 #include <pvxs/log.h>
+#include <pvxs/sslinit.h>
+
 #include <cstring>
 #include <cstdint>
 
@@ -337,9 +339,7 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
  */
 std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClient, const impl::ConfigCommon &conf, const impl::evbase& loop) {
     impl::threadOnce<&OSSLGbl_init>();
-
-    // Initialise SSL subsystem and add our custom extensions (idempotent)
-    SSLContext::sslInit();
+    sslInit();
 
     auto tls_context = std::make_shared<SSLContext>(SSLContext(loop));
     assert(tls_context && "TLS context is null");
@@ -516,10 +516,6 @@ void configureServerOCSPCallback(void *server_ptr, SSL *) {
     SSL_CTX_set_tlsext_status_arg(server->tls_context->ctx.get(), server);
     SSL_CTX_set_tlsext_status_cb(server->tls_context->ctx.get(), serverOCSPCallback);
 }
-
-// Must be set up with correct values after OpenSSL initialisation to retrieve status PV from certs
-int SSLContext::NID_SPvaCertStatusURI = NID_undef;
-int SSLContext::NID_SPvaCertConfigURI = NID_undef;
 
 /**
  * @brief Called when last  peer connection is being destroyed to remove the
@@ -732,6 +728,14 @@ const X509 *SSLContext::getEntityCertificate() const {
 
     auto car = static_cast<CertStatusExData *>(SSL_CTX_get_ex_data(ctx.get(), ossl_gbl->SSL_CTX_ex_idx));
     return car->cert.get();
+}
+
+bool SSLContext::hasExpired() const {
+    if (!ctx) throw std::invalid_argument("NULL");
+    const auto now = time(nullptr);
+    const auto cert = getEntityCertificate();
+    const certs::StatusDate expiry_date = X509_get_notAfter(cert);
+    return expiry_date.t < now;
 }
 
 /**

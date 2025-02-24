@@ -97,6 +97,7 @@ LIB_SRCS += evhelper.cpp
 LIB_SRCS += log.cpp
 LIB_SRCS += nt.cpp
 LIB_SRCS += openssl.cpp
+LIB_SRCS += sslinit.cpp
 LIB_SRCS += osdSockExt.cpp
 LIB_SRCS += osgroups.cpp
 LIB_SRCS += pvrequest.cpp

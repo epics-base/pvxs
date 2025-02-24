@@ -148,6 +148,7 @@ DEFINE_SSL_DELETER_FOR_(X509_EXTENSION);
 DEFINE_SSL_DELETER_FOR_(X509_NAME);
 DEFINE_SSL_DELETER_FOR_(X509_STORE);
 DEFINE_SSL_DELETER_FOR_(X509_STORE_CTX);
+DEFINE_SSL_DELETER_FOR_(X509_PUBKEY);
 DEFINE_SSL_INFO_STACK_DELETER_FOR_(X509_INFO);
 DEFINE_SSL_STACK_DELETER_FOR_(X509);
 DEFINE_SSL_STACK_DELETER_FOR_(X509_ATTRIBUTE);
@@ -179,7 +180,7 @@ DEFINE_SSL_STACK_DELETER_FOR_(X509_ATTRIBUTE);
  * @tparam D The deleter type.
  */
 template <typename T, typename D>
-struct OwnedPtr : public std::unique_ptr<T, D> {
+struct OwnedPtr : std::unique_ptr<T, D> {
     typedef std::unique_ptr<T, D> base_t;
 
     constexpr OwnedPtr() noexcept {}

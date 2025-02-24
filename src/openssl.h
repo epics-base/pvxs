@@ -20,6 +20,7 @@
 #endif
 
 #include <epicsAssert.h>
+#include <epicsMutex.h>
 
 #include <openssl/bn.h>
 #include <openssl/err.h>
@@ -38,17 +39,6 @@
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 typedef uint64_t serial_number_t;
-
-// TODO Register these unassigned OIDs for EPICS
-// "1.3.6.1.4.1" OID prefix for custom OIDs
-// EPICS OID for "SPvaCertConfigURI" extension: "37427" DTMF for "EPICS" :)
-#define NID_SPvaCertStatusURIID "1.3.6.1.4.1.37427.1"
-#define SN_SPvaCertStatusURI "ASN.1 - SPvaCertStatusURI"
-#define LN_SPvaCertStatusURI "EPICS SPVA Certificate Status URI"
-// EPICS OID for "SPvaCertConfigURI" extension: "72473" DTMF for "SCIPE" :)
-#define NID_SPvaCertConfigURIID "1.3.6.1.4.1.72473.1"
-#define SN_SPvaCertConfigURI "ASN.1 - SPvaCertConfigURI"
-#define LN_SPvaCertConfigURI "EPICS SPVA Certificate Config URI"
 
 namespace pvxs {
 
@@ -372,9 +362,6 @@ struct SSLContext {
     // The event loop.  Used to create timers for the status validity countdown
     const impl::evbase loop;
 
-    static PVXS_API int NID_SPvaCertStatusURI;
-    static PVXS_API int NID_SPvaCertConfigURI;
-
     ossl_shared_ptr<SSL_CTX> ctx;
 
     /**
@@ -444,41 +431,10 @@ struct SSLContext {
     static void statusValidityExpirationHandler(evutil_socket_t, short, void* raw);
     void setStatusValidityCountdown();
 
-    /**
-     * @brief Initializes the SSL library and sets up the custom certificate status URI OID
-     * Uses the singleton pattern to ensure that the SSL library is initialized only once,
-     * keyed off NID_PvaCertStatusURI being undefined.
-     *
-     * This is idempotent.  It can be called multiple times, but will not re-initialize the SSL library.
-     *
-     * It will do all the one time SSL library initialization that is required, inluding
-     * SSL_library_init(), OpenSSL_add_all_algorithms(), ERR_load_crypto_strings(),
-     * OpenSSL_add_all_ciphers(), and OpenSSL_add_all_digests().
-     *
-     * It will also create and register the custom certificate status URI OID.
-     */
-    static void sslInit() {
-        // Initialize SSL
-        if (NID_SPvaCertStatusURI == NID_undef) {
-            SSL_library_init();
-            OpenSSL_add_all_algorithms();
-            ERR_load_crypto_strings();
-            OpenSSL_add_all_ciphers();
-            OpenSSL_add_all_digests();
-            NID_SPvaCertStatusURI = OBJ_create(NID_SPvaCertStatusURIID, SN_SPvaCertStatusURI, LN_SPvaCertStatusURI);
-            if (NID_SPvaCertStatusURI == NID_undef) {
-                throw std::runtime_error("Failed to create NID for " SN_SPvaCertStatusURI ": " LN_SPvaCertStatusURI);
-            }
-            NID_SPvaCertConfigURI = OBJ_create(NID_SPvaCertConfigURIID, SN_SPvaCertConfigURI, LN_SPvaCertConfigURI);
-            if (NID_SPvaCertConfigURI == NID_undef) {
-                throw std::runtime_error("Failed to create NID for " SN_SPvaCertConfigURI ": " LN_SPvaCertConfigURI);
-            }
-        }
-    }
-
     explicit operator bool() const { return ctx.get(); }
 
     const X509* getEntityCertificate() const;
+    bool hasExpired() const;
 
     static bool getPeerCredentials(PeerCredentials& cred, const SSL* ctx);
     static bool subscribeToPeerCertStatus(const SSL* ctx, std::function<void(bool)> fn);

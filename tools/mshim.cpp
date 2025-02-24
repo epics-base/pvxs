@@ -15,6 +15,10 @@
 
 #include <pvxs/log.h>
 #include <pvxs/server.h>
+#ifdef PVXS_ENABLE_OPENSSL
+#include <pvxs/sslinit.h>
+#endif
+
 #include "utilpvt.h"
 #include "evhelper.h"
 #include "udp_collector.h"
@@ -239,7 +243,7 @@ int main(int argc, char *argv[])
 {
     try {
 #ifdef PVXS_ENABLE_OPENSSL
-        ossl::SSLContext::sslInit();
+        ossl::sslInit();
 #endif
         SockAttach attach;
         logger_config_env();

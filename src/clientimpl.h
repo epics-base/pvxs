@@ -283,11 +283,11 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     bool isRunning() const { return state == Running; }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    bool isContextReadyForTls() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
-    bool isInitialisedForTls(std::shared_ptr<ossl::SSLContext> context) {
-        return context && context->state >= ossl::SSLContext::TcpReady && !((certs::CertificateStatus)context->get_status()).isRevokedOrExpired();
+    bool isContextReadyForTls() const { return tls_context && tls_context->state == ossl::SSLContext::TlsReady && !tls_context->hasExpired(); }
+    bool isInitialisedForTls(const std::shared_ptr<ossl::SSLContext> &context) const {
+        return context && context->state >= ossl::SSLContext::TcpReady && !((certs::CertificateStatus)context->get_status()).isRevokedOrExpired() && !tls_context->hasExpired();
     }
-    bool isTlsEnabled() { return tls_context && tls_context->state > ossl::SSLContext::DegradedMode; }
+    bool isTlsEnabled() const { return tls_context && tls_context->state > ossl::SSLContext::DegradedMode && !tls_context->hasExpired(); }
     void initialiseState() {
         if (!tls_context || !tls_context->ctx) {
             state = Running;
@@ -303,7 +303,29 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
                     break;
             }
         }
-    };
+    }
+
+    void configureExpirationHandler(Context * context) const {
+        if ( tls_context && tls_context->state >= ossl::SSLContext::TcpReady) {
+            // Only do this if we have a valid tls_context
+
+            const auto cert = tls_context->getEntityCertificate();
+            const certs::StatusDate expiry_date = X509_get_notAfter(cert);
+
+            // If not yet expired
+            const auto now = time(nullptr);
+            if (expiry_date.t > now) {
+                // Set up the callback to point to this context
+                event_assign(cert_expiration_timer.get(), tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &certExpirationHandlerS, context);
+
+                // Add the event for 2 second after expiration while ignoring errors
+                const auto expires_in = (expiry_date.t - now) + 2;
+                const timeval expirationInterval{expires_in, 0};
+                event_add(cert_expiration_timer.get(), &expirationInterval);
+            }
+        }
+    }
+
 #endif
 
     Config effective;
@@ -389,7 +411,9 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent beaconCleaner;
     const evevent cacheCleaner;
     const evevent nsChecker;
-
+#ifdef PVXS_ENABLE_OPENSSL
+    const evevent cert_expiration_timer;
+#endif
     INST_COUNTER(ClientContextImpl);
 
     ContextImpl(const Config& conf, evbase tcp_loop);
@@ -419,15 +443,16 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
     void onNSCheck();
     static void onNSCheckS(evutil_socket_t fd, short evt, void *raw);
-
 #ifdef PVXS_ENABLE_OPENSSL
+    static void certExpirationHandlerS(evutil_socket_t fd, short evt, void *raw);
+
     void enterDegradedMode();
     void removePeerTlsConnections(const Connection* client_conn = nullptr);
     void reloadTlsFromConfig(const Config& new_config = {});
     void enableTlsForPeerConnection(const Connection* client_conn = nullptr);
 
-    bool canAcceptTlsConnectionValidation() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
-    bool readyToEmitTlsSearch() { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady; }
+    bool canAcceptTlsConnectionValidation() const { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
+    bool readyToEmitTlsSearch() const { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady; }
 #endif
 };
 

@@ -27,6 +27,8 @@
 
 #include <epicsGetopt.h>
 
+#include <pvxs/sslinit.h>
+
 #include "certfactory.h"
 #include "ownedptr.h"
 #include "openssl.h"
@@ -297,7 +299,7 @@ struct CertCreator {
 
         if ( add_status_extension) {
             auto issuerId = pvxs::certs::CertStatus::getSkId((X509*)issuer);
-            pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::SSLContext::NID_SPvaCertStatusURI, pvxs::certs::CertStatus::makeStatusURI(issuerId, serial), issuer);
+            pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::NID_SPvaCertStatusURI, pvxs::certs::CertStatus::makeStatusURI(issuerId, serial), issuer);
         }
 
         auto nbytes(X509_sign(cert.get(), ikey, sig));
@@ -321,7 +323,7 @@ void usage(const char* argv0) {
 int main(int argc, char *argv[])
 {
     try {
-        pvxs::ossl::SSLContext::sslInit();
+        pvxs::ossl::sslInit();
         std::string outdir(".");
         {
             int opt;

@@ -137,6 +137,12 @@
     "FROM certs "           \
     "WHERE not_after <= strftime('%s', 'now') "
 
+#define SQL_CERT_TO_EXPIRED_WITH_FULL_SKID      \
+    "SELECT serial "                            \
+    "FROM certs "                               \
+    "WHERE not_after <= strftime('%s', 'now') " \
+    "  AND skid = :skid "
+
 #define SQL_PRIOR_APPROVAL_STATUS \
     "SELECT approved "            \
     "FROM certs "                 \

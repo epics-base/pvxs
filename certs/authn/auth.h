@@ -7,10 +7,11 @@
 #ifndef PVXS_AUTH_H
 #define PVXS_AUTH_H
 
-#include <certstatusfactory.h>
 #include <functional>
 #include <string>
 #include <vector>
+
+#include <certstatusfactory.h>
 
 #include <pvxs/data.h>
 
@@ -21,7 +22,6 @@
 #include "configstd.h"
 #include "security.h"
 
-#define PVXS_NON_CLASH_PORT_OFFSET 1000
 namespace pvxs {
 namespace certs {
 
@@ -186,7 +186,7 @@ class Auth {
      */
     static Auth *getAuth(const std::string &type);
 
-    void runDaemon(const ConfigAuthN &authn_config, bool for_client, CertData &&cert_data, const std::function<CertData()> &&fn);
+    void runAuthNDaemon(const ConfigAuthN &authn_config, bool for_client, CertData &&cert_data, const std::function<CertData()> &&fn);
 
    protected:
     // Called to have a standard presentation of the CCR for the
@@ -219,33 +219,39 @@ class Auth {
 
    private:
     server::Server config_server_;
-    class ConfigMonitor {
+    class ConfigMonitorParams {
        public:
         const ConfigAuthN &config_;
         mutable ossl_ptr<X509> cert_{};
         const std::function<CertData()> fn_{};
+        int adaptive_timeout_mins_{0};
+#define PVXS_CONFIG_MONITOR_TIMEOUT_MAX 1440
 
-        ConfigMonitor(const ConfigAuthN &config, ossl_ptr<X509> &cert, const std::function<CertData()> &&fn)
+        ConfigMonitorParams(const ConfigAuthN &config, ossl_ptr<X509> &cert, const std::function<CertData()> &&fn)
             : config_(config), cert_(std::move(cert)), fn_(std::move(fn)) {}
     };
 
-    static timeval configMonitor(ConfigMonitor &config_monitor_params, server::SharedPV &pv);
+    static timeval configurationMonitor(ConfigMonitorParams &config_monitor_params, server::SharedPV &pv);
+    static std::string formatTimeDuration(time_t total_seconds);
 
     /**
-     * @brief The prototype of the data returned for a certificate status request
-     * Essentially an enum, a serial number and the ocsp response
+     * @brief The prototype of the data returned for a certificate configuration PV
      *
-     * @return The prototype of the data returned for a certificate status request
+     * A serial number, issuer ID, the keychain file and how long before it expires.
+     * Each config change will update the serial number and expires_in value.
+     * Keychain and issuer will stay the same
+     *
+     * @return The prototype of the data returned for a certificate configuration PV
      */
-    static Value getConfigPrototype() {
+    static Value getConfigurationPrototype() {
         using namespace members;
 
         auto value = TypeDef(TypeCode::Struct,
                              {
                                  Member(TypeCode::UInt64, "serial"),
-                                 Member(TypeCode::String, "skid"),
+                                 Member(TypeCode::String, "issuer_id"),
                                  Member(TypeCode::String, "keychain"),
-                                 Member(TypeCode::UInt64, "valid_until"),
+                                 Member(TypeCode::String, "expires_in"),
                              })
                          .create();
         return value;
@@ -264,7 +270,7 @@ class Auth {
         const auto current_field = target[field];
         auto current_value = current_field.as<T>();
         if (current_value == new_value) {
-            target[field].unmark();  // Assuming unmark is a valid method for indicating no change needed
+            target[field].unmark();
         } else {
             target[field] = new_value;
         }

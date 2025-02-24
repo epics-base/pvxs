@@ -20,7 +20,7 @@ namespace certs {
 using namespace members;
 
 /**
- * @brief Create a certificate  
+ * @brief Create a certificate
  *
  * This function creates a certificate from the given Certificate Creation Request (CCR).
  *
@@ -37,9 +37,7 @@ std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequ
     arg["path"] = RPC_CERT_CREATE;
     arg["query"].from(cert_creation_request->ccr);
 
-    auto conf = client::Config::fromEnv();
-    conf.tls_disabled = true;
-    auto client = conf.build();
+    auto client = client::Config::fromEnv(true).build();
     auto value(client.rpc(RPC_CERT_CREATE, arg).exec()->wait(timeout));
 
     log_info_printf(auths, "X.509 CLIENT certificate%s\n", "");

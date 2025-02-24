@@ -25,6 +25,7 @@
 
 #include <pvxs/config.h>
 #include <pvxs/log.h>
+#include <pvxs/sslinit.h>
 
 #include "openssl.h"
 #include "osiFileName.h"
@@ -97,11 +98,11 @@ ossl_ptr<X509> CertFactory::create() {
     if (!IS_USED_FOR_(usage_, ssl::kForCMS)) {
         auto issuer_id = CertStatus::getSkId(issuer_certificate_ptr_);
         auto skid = CertStatus::getSkId(certificate);
-        if (cert_status_subscription_required_ ) {
-            addCustomExtensionByNid(certificate, ossl::SSLContext::NID_SPvaCertStatusURI, CertStatus::makeStatusURI(issuer_id, serial_));
+        if (cert_status_subscription_required_) {
+            addCustomExtensionByNid(certificate, ossl::NID_SPvaCertStatusURI, CertStatus::makeStatusURI(issuer_id, serial_));
         }
-        if (!cert_config_uri_base_.empty() ) {
-            addCustomExtensionByNid(certificate, ossl::SSLContext::NID_SPvaCertConfigURI, CertStatus::makeConfigURI(cert_config_uri_base_, issuer_id, skid));
+        if (!cert_config_uri_base_.empty()) {
+            addCustomExtensionByNid(certificate, ossl::NID_SPvaCertConfigURI, CertStatus::makeConfigURI(cert_config_uri_base_, issuer_id, skid));
         }
     }
 
@@ -148,8 +149,7 @@ std::string CertFactory::sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string 
     assert(EVP_DigestSignFinal(message_digest_context.get(), nullptr, &len) == 1);
 
     std::string signature(len, '\0');
-    assert(EVP_DigestSignFinal(message_digest_context.get(), reinterpret_cast<unsigned char *>(&signature[0]), &len) ==
-           1);
+    assert(EVP_DigestSignFinal(message_digest_context.get(), reinterpret_cast<unsigned char *>(&signature[0]), &len) == 1);
     signature.resize(len);
 
     return signature;
@@ -165,8 +165,7 @@ bool CertFactory::verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::str
     assert(EVP_DigestVerifyInit(message_digest_context.get(), nullptr, message_digest, nullptr, pkey.get()) == 1);
     assert(EVP_DigestVerifyUpdate(message_digest_context.get(), data.c_str(), data.size()) == 1);
 
-    if (EVP_DigestVerifyFinal(message_digest_context.get(), reinterpret_cast<const unsigned char *>(&signature[0]),
-                              signature.size()) == 1) {
+    if (EVP_DigestVerifyFinal(message_digest_context.get(), reinterpret_cast<const unsigned char *>(&signature[0]), signature.size()) == 1) {
         return true;
     } else {
         return false;
@@ -443,12 +442,11 @@ void CertFactory::writeCertsToBio(const ossl_ptr<BIO> &bio, const STACK_OF(X509)
     }
 }
 
-time_t CertFactory::getNotAfterTimeFromCert(const ossl_ptr<X509> & cert) {
+time_t CertFactory::getNotAfterTimeFromCert(const ossl_ptr<X509> &cert) {
     ASN1_TIME *cert_not_after = X509_get_notAfter(cert.get());
     const time_t not_after = StatusDate::asn1TimeToTimeT(cert_not_after);
     return not_after;
 }
-
 
 std::string CertFactory::certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * ca) {
     auto bio = newBio();

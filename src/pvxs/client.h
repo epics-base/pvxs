@@ -341,6 +341,14 @@ public:
      * @since UNRELEASED
      */
     void reconfigure(const Config&);
+
+    /**
+     * @brief Handle certificate expiration
+     *
+     * @since UNRELEASED
+     */
+    void certExpirationHandler();
+
 #endif // PVXS_ENABLE_OPENSSL
 
     //! effective config of running client
