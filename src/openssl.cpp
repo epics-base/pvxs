@@ -77,7 +77,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509>&cert,X509_STORE *
                 setStatusValidityCountdown();
             });
         } catch (certs::CertStatusNoExtensionException &e) {
-            log_debug_printf(watcher, "No certificate status extension found in certificate%s", "\n");
+            log_debug_printf(watcher, "No certificate status extension found in certificate: %s\n", e.what());
         }
     } else {
         log_debug_printf(watcher, "Status check is disabled%s", "\n");
@@ -333,11 +333,12 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
  * @param isForClient A boolean indicating whether the setup is for a client or a
  * server.
  * @param conf The common configuration object.
+ * @param loop The event loop used to schedule custom events
  *
  * @return SSLContext initialised appropriately - clients can have an empty
  * context so that they can connect to ssl servers without having a certificate
  */
-std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClient, const impl::ConfigCommon &conf, const impl::evbase& loop) {
+std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool isForClient, const impl::ConfigCommon &conf, const evbase& loop) {
     impl::threadOnce<&OSSLGbl_init>();
     sslInit();
 
@@ -346,7 +347,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, bool isForClie
 
     tls_context->status_check_disabled = conf.tls_disable_status_check;
     tls_context->stapling_disabled = conf.tls_disable_stapling;
-    tls_context->ctx = ossl_shared_ptr<SSL_CTX>(SSL_CTX_new_ex(ossl_gbl->libctx.get(), NULL, method));
+    tls_context->ctx = ossl_shared_ptr<SSL_CTX>(SSL_CTX_new_ex(ossl_gbl->libctx.get(), nullptr, method));
     if (!tls_context->ctx) throw SSLError("Unable to allocate SSL_CTX");
 
     {
@@ -512,7 +513,7 @@ int serverOCSPCallback(SSL *ssl,void *raw) {
  * @param server_ptr pointer to the server object who's tls context is to be configured for stapling
  */
 void configureServerOCSPCallback(void *server_ptr, SSL *) {
-    auto server = (pvxs::server::Server::Pvt *)server_ptr;
+    auto server = static_cast<server::Server::Pvt *>(server_ptr);
     SSL_CTX_set_tlsext_status_arg(server->tls_context->ctx.get(), server);
     SSL_CTX_set_tlsext_status_cb(server->tls_context->ctx.get(), serverOCSPCallback);
 }
@@ -565,7 +566,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
         std::weak_ptr<SSLPeerStatusAndMonitor> weak_peer_status = peer_status;
         Guard G(peer_status->lock);
         peer_status->cert_status_manager =
-          certs::CertStatusManager::subscribe(trusted_store_ptr, status_pv, [ weak_peer_status, fn](certs::PVACertificateStatus status) {
+          certs::CertStatusManager::subscribe(trusted_store_ptr, status_pv, [ weak_peer_status](const certs::PVACertificateStatus &status) {
               auto peer_status = weak_peer_status.lock();
               // Update the cached state
               if (peer_status)
@@ -734,6 +735,7 @@ bool SSLContext::hasExpired() const {
     if (!ctx) throw std::invalid_argument("NULL");
     const auto now = time(nullptr);
     const auto cert = getEntityCertificate();
+    if (!cert) return false;
     const certs::StatusDate expiry_date = X509_get_notAfter(cert);
     return expiry_date.t < now;
 }
@@ -751,9 +753,9 @@ bool SSLContext::hasExpired() const {
 bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
     if (!ctx) throw std::invalid_argument("NULL");
 
-    if (auto cert = SSL_get0_peer_certificate(ctx)) {
+    if (const auto cert = SSL_get0_peer_certificate(ctx)) {
         PeerCredentials temp(C);  // copy current as initial (don't overwrite isTLS)
-        auto subj = X509_get_subject_name(cert);
+        const auto subj = X509_get_subject_name(cert);
         char name[64];
         if (subj && X509_NAME_get_text_by_NID(subj, NID_commonName, name, sizeof(name) - 1)) {
             name[sizeof(name) - 1] = '\0';
@@ -767,7 +769,7 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
                 X509 *root;
                 X509_NAME *rootName;
                 // last cert should be root CA
-                if (N && !!(root = sk_X509_value(chain, N - 1)) && !!(rootName = X509_get_subject_name(root)) &&
+                if (N && !!((root = sk_X509_value(chain, N - 1))) && !!((rootName = X509_get_subject_name(root))) &&
                     X509_NAME_get_text_by_NID(rootName, NID_commonName, name, sizeof(name) - 1)) {
                     if (X509_check_ca(root) && (X509_get_extension_flags(root) & EXFLAG_SS)) {
                         temp.authority = name;
@@ -810,7 +812,7 @@ bool SSLContext::subscribeToPeerCertStatus(const SSL *ctx, std::function<void(bo
     }
 }
 
-std::shared_ptr<SSLContext> SSLContext::for_client(const impl::ConfigCommon &conf, const impl::evbase loop) {
+std::shared_ptr<SSLContext> SSLContext::for_client(const ConfigCommon &conf, const impl::evbase loop) {
     auto ctx(commonSetup(TLS_client_method(), true, conf, loop));
 
     if (0 != SSL_CTX_set_alpn_protos(ctx->ctx.get(), pva_alpn, sizeof(pva_alpn) - 1))
