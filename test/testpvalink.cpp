@@ -8,6 +8,7 @@
 #include <epicsExit.h>
 #include <dbLock.h>
 #include <dbLink.h>
+#include <recGbl.h>
 #include <dbUnitTest.h>
 #include <aiRecord.h>
 #include <aaoRecord.h>
@@ -17,6 +18,7 @@
 #include <longinRecord.h>
 #include <longoutRecord.h>
 #include <stringoutRecord.h>
+#include <registryFunction.h>
 
 #define PVXS_ENABLE_EXPERT_API
 
@@ -339,6 +341,9 @@ namespace {
             src->time.secPastEpoch = 0x12345678;
             src->time.nsec = 0x10203040;
             src->val = 7;
+#ifdef HAS_ALARM_MESSAGE
+            strcpy(src->amsg, "Test");
+#endif
             dbProcess((dbCommon*)src);
             dbScanUnlock((dbCommon*)src);
         }
@@ -364,6 +369,19 @@ namespace {
                  && stat==LINK_ALARM && sevr==INVALID_ALARM)
                 <<" ret="<<ret<<" stat="<<stat<<" sevr="<<sevr;
 
+#ifdef HAS_ALARM_MESSAGE
+        {
+            char amsg[DB_AMSG_SIZE];
+            amsg[sizeof(amsg)-1] = '\0';
+            testTrue((ret=dbGetAlarmMsg(&inp->inp, &stat, &sevr, amsg, sizeof(amsg)-1))==0
+                     && stat==LINK_ALARM && sevr==INVALID_ALARM
+                     && strncmp(amsg, "", sizeof(amsg))==0)
+                    <<" ret="<<ret<<" stat="<<stat<<" sevr="<<sevr<<" amsg="<<amsg;
+        }
+#else
+        testSkip(1, "No AMSG");
+#endif
+
         testTrue((ret=dbGetTimeStamp(&inp->inp, &time))==0
                  && time.secPastEpoch==0 && time.nsec==0)
                 <<" ret="<<ret<<" sec="<<time.secPastEpoch<<" ns="<<time.nsec;
@@ -375,6 +393,19 @@ namespace {
         testTrue((ret=dbGetAlarm(&inp->inp, &stat, &sevr))==0
                  && stat==LINK_ALARM && sevr==MINOR_ALARM)
                 <<" ret="<<ret<<" stat="<<stat<<" sevr="<<sevr;
+
+#ifdef HAS_ALARM_MESSAGE
+        {
+            char amsg[DB_AMSG_SIZE];
+            amsg[sizeof(amsg)-1] = '\0';
+            testTrue((ret=dbGetAlarmMsg(&inp->inp, &stat, &sevr, amsg, sizeof(amsg)-1))==0
+                     && stat==LINK_ALARM && sevr==MINOR_ALARM
+                     && strncmp(amsg, "HIGH", sizeof(amsg))==0)
+                    <<" ret="<<ret<<" stat="<<stat<<" sevr="<<sevr<<" amsg="<<amsg;
+        }
+#else
+        testSkip(1, "No AMSG");
+#endif
 
         testTrue((ret=dbGetTimeStamp(&inp->inp, &time))==0
                  && time.secPastEpoch==0x12345678 && time.nsec==0x10203040)
@@ -398,6 +429,66 @@ namespace {
 
         testTrue((ret=dbGetNelements(&inp->inp, &nelem))==0 && nelem==1)
                 <<" ret="<<ret<<" nelem='"<<nelem<<"'";
+
+        dbScanUnlock((dbCommon*)inp);
+    }
+
+    long setAMSG(dbCommon *prec)
+    {
+        (void)recGblSetSevrMsg(prec, READ_ALARM, MAJOR_ALARM, "%s", __func__);
+        prec->time.secPastEpoch = 0x12345678;
+        prec->time.nsec = 0x10203041;
+        return 0;
+    }
+
+    void testMetaMS()
+    {
+        testDiag("==== %s ====", __func__);
+
+        testqsrvWaitForLinkConnected("meta:inp:ms.INP");
+
+        {
+            QSrvWaitForLinkUpdate U("meta:inp:ms.INP");
+            testdbPutFieldOk("meta:src:ms.PROC", DBR_LONG, 0);
+        }
+        auto inp = (aiRecord*)testdbRecordPtr("meta:inp:ms");
+
+        dbScanLock((dbCommon*)inp);
+
+        testTrue(dbIsLinkConnected(&inp->inp)!=0);
+
+        testEq(dbGetLinkDBFtype(&inp->inp), DBF_DOUBLE);
+
+        testOk(inp->nsev==0 && inp->nsta==0
+#ifdef HAS_ALARM_MESSAGE
+               && inp->namsg[0]==0
+#endif
+                ,
+               "NSEVR=%u NSTAT=%u NAMSG=\"%s\"", inp->nsev, inp->nsta,
+#ifdef HAS_ALARM_MESSAGE
+                inp->namsg
+#else
+                "N/A"
+#endif
+                );
+
+        long ret;
+        double val;
+        testTrue((ret=dbGetLink(&inp->inp, DBR_DOUBLE, &val, nullptr, nullptr))==0
+                 && val==0.0)<<" ret="<<ret<<" val="<<val;
+
+        testOk(inp->nsev==MAJOR_ALARM && inp->nsta==LINK_ALARM
+#ifdef HAS_ALARM_MESSAGE
+               && strcmp(inp->namsg, "setAMSG")==0
+#endif
+               ,
+               "NSEVR=%u NSTAT=%u NAMSG=\"%s\"", inp->nsev, inp->nsta,
+#ifdef HAS_ALARM_MESSAGE
+               inp->namsg
+#else
+               "N/A"
+#endif
+               );
 
         dbScanUnlock((dbCommon*)inp);
     }
@@ -483,7 +574,7 @@ extern "C" void testioc_registerRecordDeviceDriver(struct dbBase *);
 
 MAIN(testpvalink)
 {
-    testPlan(92);
+    testPlan(100);
     testSetup();
     pvxs::logger_config_env();
 
@@ -493,6 +584,7 @@ MAIN(testpvalink)
 
         testdbReadDatabase("testioc.dbd", NULL, NULL);
         testioc_registerRecordDeviceDriver(pdbbase);
+        registryFunctionAdd("setAMSG", (REGISTRYFUNCTION)&setAMSG);
         testdbReadDatabase("testpvalink.db", NULL, NULL);
 
         IOC.init();
@@ -509,6 +601,7 @@ MAIN(testpvalink)
         testPutAsync();
         testDisconnect();
         testMeta();
+        testMetaMS();
         testFwd();
         testAtomic();
         testEnum();
