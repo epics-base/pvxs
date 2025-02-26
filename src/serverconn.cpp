@@ -526,7 +526,7 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
     name = bind_addr.tostring();
 
     if(orig_port && bind_addr.port() != orig_port) {
-        log_warn_printf(connsetup, "Server unable to bind port %u, falling back to %s\n", orig_port, name.c_str());
+        log_warn_printf(connsetup, "Server unable to bind %s port %u, falling back to %s\n", (isTLS ? "TLS" : "TCP"), orig_port, name.c_str());
     }
 
     // added in libevent 2.1.1

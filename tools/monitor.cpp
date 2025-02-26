@@ -43,7 +43,6 @@ void usage(const char* argv0)
                "            Default: 20\n"
                "  -F <fmt>  Output format mode: delta, tree\n"
 #ifdef PVXS_ENABLE_OPENSSL
-               "  -t        No client TLS - server-only TLS connection\n"
                "  -w <sec>  Timeout for certificate status verification if configured.  default 5 sec.\n"
 #endif
                ;
@@ -59,7 +58,7 @@ int main(int argc, char *argv[])
 #endif
         logger_config_env(); // from $PVXS_LOG
         double timeout{5.0};
-        bool verbose = false, no_tls=false;
+        bool verbose = false;
         std::string request;
         Value::Fmt::format_t format = Value::Fmt::Delta;
         auto arrLimit = uint64_t(20);
@@ -67,7 +66,7 @@ int main(int argc, char *argv[])
         {
             int opt;
 #ifdef PVXS_ENABLE_OPENSSL
-            while ((opt = getopt(argc, argv, "hVtvw:dr:#:F:")) != -1) {
+            while ((opt = getopt(argc, argv, "hVvw:dr:#:F:")) != -1) {
 #else
             while ((opt = getopt(argc, argv, "hVvdr:#:F:")) != -1) {
 #endif
@@ -86,9 +85,6 @@ int main(int argc, char *argv[])
                     logger_level_set("pvxs.*", Level::Debug);
                     break;
 #ifdef PVXS_ENABLE_OPENSSL
-                case 't':
-                    no_tls = true;
-                    break;
                 case 'w':
                     timeout = parseTo<double>(optarg);
                     break;
@@ -120,7 +116,6 @@ int main(int argc, char *argv[])
         auto conf = client::Config::fromEnv();
 #ifdef PVXS_ENABLE_OPENSSL
         conf.request_timeout_specified = timeout;
-        if ( no_tls ) conf.tls_server_only = true;
 #endif
         auto ctxt = conf.build();
 

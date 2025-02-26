@@ -45,13 +45,14 @@
 namespace pvxs {
 namespace certs {
 
+DEFINE_LOGGER(filelogger, "pvxs.p12");
+
 /**
  * @brief Get a key pair from a P12 file
  *
- * @param filename the path to the P12 file
- * @param password the optional password for the file. If blank then the password is not used.
  * @return a shared pointer to the KeyPair object
- * @throw std::runtime_error if the file cannot be opened or parsed
+ * @throw std::runtime_error if the file cannot be opened
+ * @throw ossl::SSLError if file cannot be parsed
  */
 std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
     file_ptr fp(fopen(filename_.c_str(), "rb"), false);
@@ -83,7 +84,7 @@ std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
  */
 CertData P12FileFactory::getCertDataFromFile() {
     ossl_ptr<X509> cert;
-    STACK_OF(X509) *chain_ptr = nullptr;
+    ossl_ptr<STACK_OF(X509)> chain(sk_X509_new_null());
     std::shared_ptr<KeyPair> key_pair;
     ossl_ptr<EVP_PKEY> pkey;
 
@@ -99,17 +100,19 @@ CertData P12FileFactory::getCertDataFromFile() {
     }
 
     // Try to get private key and certificates
-    if (!PKCS12_parse(p12.get(), password_.c_str(), pkey.acquire(), cert.acquire(), &chain_ptr)) {
+    if (!PKCS12_parse(p12.get(), password_.c_str(), pkey.acquire(), cert.acquire(), chain.acquire())) {
         throw std::runtime_error(SB() << "Error parsing keychain file: " << filename_);
     }
 
-    ossl_shared_ptr<STACK_OF(X509)> chain;
-    if (chain_ptr)
-        chain = ossl_shared_ptr<STACK_OF(X509)>(chain_ptr);
-    else
-        chain = ossl_shared_ptr<STACK_OF(X509)>(sk_X509_new_null());
+    if ( !!cert  ^ !!pkey ) {
+        log_warn_printf(filelogger, "Inconsistency between certificate and key: %s\n", filename_.c_str());
+        cert .reset();
+        pkey .reset();
+    }
 
-    return {cert, chain, std::make_shared<KeyPair>(std::move(pkey))};
+    ossl_shared_ptr<STACK_OF(X509)> shared_chain(std::move(chain));
+
+    return {cert, shared_chain, (pkey ? std::make_shared<KeyPair>(std::move(pkey)) : nullptr)};
 }
 
 /**

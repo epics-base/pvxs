@@ -25,8 +25,6 @@ USR_CPPFLAGS += -I$(TOP)/src/pvxs
 USR_CPPFLAGS += -I$(TOP)/src
 USR_CPPFLAGS += -I$(TOP)/ioc
 
-INC += security.h
-
 PROD += pvacms
 pvacms_SRCS += pvacms.cpp
 pvacms_SRCS += configcms.cpp

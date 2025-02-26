@@ -186,7 +186,7 @@ Value getRootValue(const std::string &issuer_id, const ossl_ptr<X509> &ca_cert, 
         return subject.substr(start, end - start);
     };
 
-    value["serial"] = pvxs::certs::CertStatusFactory::getSerialNumber(ca_cert);
+    value["serial"] = CertStatusFactory::getSerialNumber(ca_cert);
     value["issuer"] = issuer_id;
     value["name"] = extractSubjectPart("CN");
     value["org"] = extractSubjectPart("O");

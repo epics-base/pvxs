@@ -37,7 +37,7 @@ DEFINE_LOGGER(stapling, "pvxs.stapling");
  * @return Typically returns an integer value indicating the SSL_TLSEXT_ERR_OK, SSL_TLSEXT_ERR_ALERT_WARNING,
  * or SSL_TLSEXT_ERR_ALERT_FATAL of the OCSP validation.
  */
-static int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
+ int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
     log_debug_printf(stapling, "Client OCSP Stapling: %s\n", "clientOCSPCallback");
     // Find out what the peer cert we're verifying is
     X509* peer_cert = SSL_get_peer_certificate(ctx);
@@ -45,7 +45,8 @@ static int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
     // Get the ex_data from the tls context, return if no peer-statuses to set
     auto ex_data = ossl::CertStatusExData::fromSSL(ctx);
     if (!ex_data || !ex_data->trusted_store_ptr) {
-        return PVXS_OCSP_STAPLING_OK;
+        log_debug_printf(stapling, "OCSP callback called without establishing root of trust%s\n", "");
+        return PVXS_OCSP_STAPLING_ERR;
     }
 
     try {

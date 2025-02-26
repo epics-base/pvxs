@@ -218,11 +218,6 @@ struct PVXS_API ConfigCommon {
     double request_timeout_specified{5.0};
 
     /**
-     * @brief True if server only connection is to be established.  Client only
-     */
-    bool tls_server_only{false};
-
-    /**
      * True if the environment is configured for TLS.  All this means is that
      * the location of the keychain file has been specified in
      * EPICS_PVA_TLS_KEYCHAIN.

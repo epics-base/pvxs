@@ -330,7 +330,7 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
  * common configuration options.
  *
  * @param method The SSL_METHOD object representing the SSL method to use.
- * @param isForClient A boolean indicating whether the setup is for a client or a
+ * @param is_for_client A boolean indicating whether the setup is for a client or a
  * server.
  * @param conf The common configuration object.
  * @param loop The event loop used to schedule custom events
@@ -338,7 +338,7 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
  * @return SSLContext initialised appropriately - clients can have an empty
  * context so that they can connect to ssl servers without having a certificate
  */
-std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool isForClient, const impl::ConfigCommon &conf, const evbase& loop) {
+std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_for_client, const ConfigCommon &conf, const evbase& loop) {
     impl::threadOnce<&OSSLGbl_init>();
     sslInit();
 
@@ -359,7 +359,13 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool isF
         car.release();  // SSL_CTX_free() now responsible (using our registered callback `free_SSL_CTX_sidecar`)
     }
 
-#ifdef PVXS_ENABLE_SSLKEYLOGFILE
+    // Read back pointer to cert ext data
+    auto cert_status_ex_data = tls_context->getCertStatusExData();
+    if (!cert_status_ex_data) {
+        throw std::runtime_error("Invalid certificate data");
+    }
+
+    #ifdef PVXS_ENABLE_SSLKEYLOGFILE
     // Set the keylog callback to log the TLS secrets to the file
     (void)SSL_CTX_set_keylog_callback(tls_context->ctx.get(), &sslkeylogfile_log);
 #endif
@@ -368,41 +374,49 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool isF
     (void)SSL_CTX_set_min_proto_version(tls_context->ctx.get(), TLS1_3_VERSION);
     (void)SSL_CTX_set_max_proto_version(tls_context->ctx.get(), 0);
 
-    // If server only mode and its a client then force TLS ready mode.
-    if (isForClient && conf.tls_server_only) {
-        tls_context->state = ossl::SSLContext::TlsReady;
-        return tls_context;
-    }
     // If TLS is disabled or not configured then set the context to degraded mode so that
     // only TCP connections are allowed.
     if (conf.tls_disabled || !conf.isTlsConfigured()) {
-        tls_context->state = ossl::SSLContext::DegradedMode;
+        tls_context->state = SSLContext::DegradedMode;
         return tls_context;
     }
 
     // TLS is configured, so get the key and certificate from the file or files
     const std::string &filename = conf.tls_keychain_file, &password = conf.tls_keychain_pwd;
     auto cert_data = certs::IdFileFactory::createReader(filename, password)->getCertDataFromFile();
-    if (!cert_data.cert) throw std::runtime_error("No Certificate");
+
+    ossl_ptr<X509>trusted_root_ca(extractCAs(tls_context, cert_data.ca));
+    if (!trusted_root_ca) throw SSLError("Could not find Trusted Root CA Certificate in keychain");
+
+    // Get the context's trust store that has been established by reading the CAs from the file
+    X509_STORE* store_ptr = SSL_CTX_get_cert_store(tls_context->ctx.get());
+    if (!store_ptr) {
+        throw std::invalid_argument("Trusted store pointer is null.");
+    }
+    cert_status_ex_data->trusted_store_ptr = store_ptr;
+
+    // If no cert
+    if (!cert_data.cert) {
+        // But this is a client then try a server-only tls connection
+        if (is_for_client) {
+            tls_context->state = SSLContext::TlsReady;
+            log_info_printf(setup, "TLS server-only mode selected%s", "\n");
+            return tls_context;
+        }
+        // otherwise we can't continue to create a TLS connection
+        throw std::runtime_error("No Certificate");
+    }
 
     // Verify the key usage of the certificate
-    verifyKeyUsage(cert_data.cert, isForClient);
+    verifyKeyUsage(cert_data.cert, is_for_client);
 
     // Use the certificate in the context
     if (!SSL_CTX_use_certificate(tls_context->ctx.get(), cert_data.cert.get())) throw SSLError("using certificate");
 
     // Check the private key
-    if (!cert_data.key_pair) throw std::runtime_error("No private key");
+    assert (cert_data.key_pair);
     if (!SSL_CTX_use_PrivateKey(tls_context->ctx.get(), cert_data.key_pair->pkey.get())) throw SSLError("using private key");
-    ossl_ptr<X509>trusted_root_ca(extractCAs(tls_context, cert_data.ca));
-    if (!trusted_root_ca) throw SSLError("Could not find Trusted Root CA Certificate in keychain");
     if (!cert_data.key_pair->pkey || !SSL_CTX_check_private_key(tls_context->ctx.get())) throw SSLError("invalid private key");
-
-    // Get the context's trust store
-    X509_STORE* store_ptr = SSL_CTX_get_cert_store(tls_context->ctx.get());
-    if (!store_ptr) {
-        throw std::invalid_argument("Trusted store pointer is null.");
-    }
 
     // Build the certificate chain and set verification flags
     // Note useful flags are:
@@ -413,12 +427,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool isF
         throw SSLError("invalid cert chain");
 
     // Move entity certificate to the custom data in the SSL context
-    auto cert_status_ex_data = tls_context->getCertStatusExData();
-    if (!cert_status_ex_data) {
-        throw std::runtime_error("Invalid certificate data");
-    }
     cert_status_ex_data->cert = std::move(cert_data.cert);
-    cert_status_ex_data->trusted_store_ptr = store_ptr;
 
     // TLS is now configured:
     //  - Entity certificate valid,
@@ -435,7 +444,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool isF
     //  - SSL_VERIFY_FAIL_IF_NO_PEER_CERT - Fail if no peer certificate present (only for servers)
     {
         int mode = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
-        if (!isForClient && conf.tls_client_cert_required == ConfigCommon::Require) {
+        if (!is_for_client && conf.tls_client_cert_required == ConfigCommon::Require) {
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
             log_debug_printf(setup, "This Secure PVAccess Server requires an X.509 client certificate%s", "\n");
         }

@@ -40,7 +40,7 @@
  * status extensions for obvious reasons.
  *
  * The tests initially follow the exact same sequence as those in the `testtls` suite and then try out some
- * edge conditions such as the Mock PVACMS being unavailable and the Mock PVACMS returning non GOOD statuses.
+ * edge conditions such as the Mock PVACMS being unavailable and the Mock PVACMS returning non-GOOD statuses.
  *
  */
 using namespace pvxs;
@@ -144,7 +144,7 @@ struct Tester {
      * @param evt the epics event
      * @return the popped Value or empty on timeout
      */
-    Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt) {
+    static Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt) {
         while (true) {
             if (auto ret = sub->pop()) {
                 return ret;
@@ -250,7 +250,7 @@ struct Tester {
      * assigned.
      *
      * It pulls the `method` and `account` from the PVAccess operation (GET/PUT/MONITOR/RPC).
-     * The values corresponds to the following:
+     * The values correspond to the following:
      *   `method`: 'ca' for `tcp` connections, and `x509` for `tls` connections
      *   `account`: the subject `CN` (common name) encoded in the certificate for `tls` connections,
      *              or "ca" or "anonymous" for `tcp` connections
@@ -292,9 +292,52 @@ struct Tester {
         }
     };
 
+
+    /**
+     * @brief testServerOnly is a test that verifies the client can connect in server-only authenticated TLS mode
+     *
+     * This is used to verify that a client that is configured with a CA certificate but no entity cert
+     * will be able to connect in server-only authenticated TLS mode
+     */
+    void testServerOnly() {
+        testShow() << __func__;
+        RESET_COUNTER(server1)
+
+        auto initial(nt::NTScalar{TypeCode::Int32}.create());
+        auto mbox(server::SharedPV::buildReadonly());
+
+        auto serv_conf(server::Config::isolated());
+        serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
+        serv_conf.tls_disable_status_check = false;
+
+        auto serv(serv_conf.build().addPV(TEST_PV, mbox));
+
+        auto cli_conf(serv.clientConfig());
+        cli_conf.tls_keychain_file = CA_CERT_CERT_FILE;
+        cli_conf.tls_disable_status_check = false;
+
+        auto cli(cli_conf.build());
+
+        mbox.open(initial.update(TEST_PV_FIELD, 42));
+        serv.start();
+
+        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
+
+        try {
+            auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+            testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
+            TEST_COUNTER_EQ(server1, 1)
+        } catch (std::exception& e) {
+            testFail("Timeout: %s", e.what());
+        }
+
+        conn.reset();
+    }
+
+
     /**
      * @brief Test getting a value using a certificate that is configured to use an intermediate CA
-     * Note that we don't disable status monitoring so therefore the framework will attempt to contact
+     * Note that we don't disable status monitoring therefore the framework will attempt to contact
      * PVACMS to verify certificate status for any certificates that contain the certificate status extension.
      *
      * We chose the SERVER1 and CLIENT1 certificates for this test which as well as both being
@@ -581,7 +624,7 @@ struct Tester {
      * The Mock PVACMS must be previously stopped prior to this test
      *
      */
-    void testCMSUnavailable() {
+    static void testCMSUnavailable() {
         testShow() << __func__;
         // Create a test PV and set value to 42
         auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
@@ -659,13 +702,18 @@ MAIN(testtlswithcms) {
     // Initialize SSL
     ossl::sslInit();
 
-    testPlan(180);
+    testPlan(187);
     testSetup();
     logger_config_env();
     auto tester = new Tester();
     tester->createCertStatuses();
     tester->makeStatusResponses();
     tester->startMockCMS();
+    try {
+        tester->testServerOnly();
+    } catch (std::runtime_error& e) {
+        testFail("FAILED with errors: %s\n", e.what());
+    }
     try {
         tester->testGetIntermediate();
     } catch (std::runtime_error& e) {

@@ -43,6 +43,8 @@ using namespace pvxs::certs;
  */
 #define CA_CERT_FILE "ca.p12"
 #define CA_CERT_FILE_PWD ""
+#define CA_CERT_CERT_FILE "cacert.p12"
+#define CA_CERT_CERT_FILE_PWD ""
 #define SUPER_SERVER_CERT_FILE "superserver1.p12"
 #define SUPER_SERVER_CERT_FILE_PWD ""
 #define SUPER_SERVER2_CERT_FILE "superserver2.p12"
@@ -357,7 +359,7 @@ void setValue(Value &target, const std::string &field, const T &source) {
  * @error If there is any error opening the file, reading the file, or parsing the PKCS#12 object,
  *        a TestCert object with nullptr values is returned and diagnostic messages are logged.
  */
-TestCert getTestCert(std::string filename, std::string password) {
+inline TestCert getTestCert(const std::string &filename, const std::string &password) {
     char buffer[PATH_MAX];
     getcwd(buffer, sizeof(buffer));
 
@@ -369,7 +371,7 @@ TestCert getTestCert(std::string filename, std::string password) {
     }
 
     testDiag("Opening %s certs file as a PKCS#12 object", filename.c_str());
-    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), NULL));
+    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr));
     if (!p12) {
         testFail("Error opening certs file as a PKCS#12 object: %s", filename.c_str());
         return {};

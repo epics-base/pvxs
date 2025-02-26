@@ -264,6 +264,8 @@ class ossl_shared_ptr : public std::shared_ptr<T> {
     explicit ossl_shared_ptr(T *ptr, D d = D()) : base_t(ptr, d) {
         if (!*this) throw loc_bad_alloc(__FILE__, __LINE__);
     }
+
+    explicit ossl_shared_ptr(OwnedPtr<T, D> &&other) : base_t(std::move(other)) {}
 };
 
 // Helper function to create ossl_shared_ptr while removing const qualifier

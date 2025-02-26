@@ -369,8 +369,14 @@ int main(int argc, char *argv[])
 
             PKCS12Writer p12(outdir);
             p12.friendlyName = cc.CN;
-            p12.key = root_key.get();
+
+            // This can be used for server-only connections as the client p12 file containing only the CA cert
+            // Properly labelled in the p12 file in the correct bag
             MUST(1, sk_X509_push(p12.cacerts.get(), root_cert.get()));
+            p12.write("cacert.p12");
+
+            // This contains the ca cert as well as the keys - used when we need a CA cert for CMS and other signing roles
+            p12.key = root_key.get();
             p12.write("ca.p12");
         }
 

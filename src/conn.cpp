@@ -144,7 +144,7 @@ void ConnBase::bevEvent(short events, std::function<void(bool)> fn)
         if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
             while (auto err = bufferevent_get_openssl_error(bev.get())) {
                 auto error_reason = ERR_reason_error_string(err);
-                if (error_reason) log_err_printf(connio, "%s: TLS Error (0x%lx) %s\n", peerLabel(), err, error_reason);
+                if (error_reason) log_debug_printf(connio, "%s: TLS Error (0x%lx) %s\n", peerLabel(), err, error_reason);
             }
         }
 
@@ -171,7 +171,11 @@ void ConnBase::bevEvent(short events, std::function<void(bool)> fn)
         if (events & BEV_EVENT_ERROR) {
             int err = EVUTIL_SOCKET_ERROR();
             const char *msg = evutil_socket_error_to_string(err);
-            log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
+            if ( err) {
+                log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
+            } else {
+                log_debug_printf(connio, "connection to %s %s closed\n", peerLabel(), peerName.c_str());
+            }
         }
         if (events & BEV_EVENT_EOF) {
             log_debug_printf(connio, "connection to %s %s closed by peer\n", peerLabel(), peerName.c_str());
