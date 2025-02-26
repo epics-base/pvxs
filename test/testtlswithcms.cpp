@@ -151,13 +151,13 @@ struct Tester {
 
             } else if (!evt.wait(10.0)) {
                 testFail("timeout waiting for event");
-                return Value();
+                return {};
             }
         }
     }
 
     /**
-     * @brief Start the Mock PVACMS service]
+     * @brief Start the Mock PVACMS service
      *
      * Important; This server is implemented by using the standard SharedWildcardPV so it
      * also tests this newly exposed feature.
@@ -260,13 +260,13 @@ struct Tester {
 
         WhoAmI() : resultType(nt::NTScalar(TypeCode::String).create()) {}
 
-        virtual void onSearch(Search& op) override final {
+        void onSearch(Search& op) override {
             for (auto& pv : op) {
                 if (strcmp(pv.name(), WHO_AM_I_PV) == 0) pv.claim();
             }
         }
 
-        virtual void onCreate(std::unique_ptr<server::ChannelControl>&& op) override final {
+        void onCreate(std::unique_ptr<server::ChannelControl>&& op) override {
             if (op->name() != WHO_AM_I_PV) return;
 
             // Handle GET
@@ -285,7 +285,7 @@ struct Tester {
         }
 
         // Create the concatenated whoami response string from the `method` and `account`
-        Value getWhoAmIValue(std::shared_ptr<const server::ClientCredentials> cred) {
+        Value getWhoAmIValue(const std::shared_ptr<const server::ClientCredentials> &cred) const {
             std::ostringstream strm;
             strm << cred->method << '/' << cred->account;
             return resultType.cloneEmpty().update(TEST_PV_FIELD, strm.str());
@@ -423,7 +423,6 @@ struct Tester {
 
         epicsEvent evt;
         auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
-        Value update;
 
         try {
             pop(sub, evt);
@@ -439,7 +438,7 @@ struct Tester {
         }
         testDiag("Connect");
 
-        update = pop(sub, evt);
+        Value update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
         TEST_COUNTER_EQ(ioc, 1)
         TEST_COUNTER_EQ(client1, 1)
@@ -451,7 +450,7 @@ struct Tester {
         testDiag("cli.reconfigure()");
         cli.reconfigure(cli_conf);
 
-        testThrows<client::Disconnect>([this, &sub, &evt] { pop(sub, evt); });
+        testThrows<client::Disconnect>([&sub, &evt] { pop(sub, evt); });
         testDiag("Disconnect");
 
         try {
@@ -504,7 +503,6 @@ struct Tester {
 
         epicsEvent evt;
         auto sub(cli.monitor(WHO_AM_I_PV).maskConnected(false).maskDisconnected(false).event([&evt](client::Subscription&) { evt.signal(); }).exec());
-        Value update;
 
         try {
             pop(sub, evt);
@@ -520,7 +518,7 @@ struct Tester {
         }
         testDiag("Connect");
 
-        update = pop(sub, evt);
+        Value update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
         TEST_COUNTER_EQ(server1, 1)
         TEST_COUNTER_EQ(client1, 1)
@@ -531,7 +529,7 @@ struct Tester {
         testDiag("serv.reconfigure()");
         serv.reconfigure(serv_conf);
 
-        testThrows<client::Disconnect>([this, &sub, &evt] { pop(sub, evt); });
+        testThrows<client::Disconnect>([&sub, &evt] { pop(sub, evt); });
         testDiag("Disconnect");
 
         try {
@@ -557,7 +555,7 @@ struct Tester {
 
     /**
      * @brief Test getting a value using a certificate that is configured to use an intermediate CA
-     * Note that we don't disable status monitoring so therefore the framework will attempt to contact
+     * Note that we don't disable status monitoring so the framework will attempt to contact
      * PVACMS to verify certificate status for any certificates that contain the certificate status extension.
      *
      * We chose the SERVER1 and CLIENT1 certificates for this test which as well as both being
@@ -641,7 +639,7 @@ struct Tester {
                 auto serv_no_cms(serv_conf.build().addPV(TEST_PV, test_pv));
                 testOk(1, "Created server when CMS is unavailable");
             } catch (std::exception& e) {
-                testFail("Unexpected Failure");
+                testFail("Unexpected Failure: %s", e.what());
             }
 
             // Now let's do it again with status checking disabled so we can test the client
@@ -740,7 +738,7 @@ MAIN(testtlswithcms) {
         testFail("FAILED with errors: %s\n", e.what());
     }
     try {
-        tester->testCMSUnavailable();
+        Tester::testCMSUnavailable();
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }
