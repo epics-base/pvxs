@@ -34,6 +34,22 @@ using namespace pvxs;
 #  endif
 #endif
 
+void testStackID()
+{
+    testDiag("Enter %s", __func__);
+
+    const char unknown[] = "Unknown?";
+    const char *name = unknown;
+    switch(evsocket::ipstack) {
+#define CASE(NAME) case evsocket:: NAME : name = #NAME ; break
+    CASE(Linsock);
+    CASE(Winsock);
+    CASE(GenericBSD);
+#undef CASE
+    }
+    testOk(name!=unknown, "Detected IP stack: %s", name);
+}
+
 void testEndPoint()
 {
     testDiag("Enter %s", __func__);
@@ -494,8 +510,9 @@ MAIN(testsock)
 {
     SockAttach attach;
     logger_config_env();
-    testPlan(92);
+    testPlan(93);
     testSetup();
+    testStackID();
     testEndPoint();
     // check for behavior when binding ipv4 and ipv6 to the same socket
     // as a function of socket type and order.
