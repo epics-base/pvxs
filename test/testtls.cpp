@@ -200,9 +200,11 @@ void testServerOnly() {
     mbox.open(initial.update(TEST_PV_FIELD, 42));
     serv.start();
 
-    auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
+    auto is_tls{false};
+    auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) { is_tls =c.cred && c.cred->isTLS; }).exec());
 
     auto reply(cli.get(TEST_PV).exec()->wait(5.0));
+    testTrue(is_tls);
     testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
     conn.reset();
 }
@@ -228,16 +230,16 @@ void testStrictServer() {
 
     auto cli_conf(serv.clientConfig());
 
-    try {
+    {
         // Test without any client TLS configuration
         auto cli(cli_conf.build());
 
-        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testFail("Unexpected connection with non-configured client"); }).exec());
+        auto is_tls{false};
+        auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) { is_tls =c.cred && c.cred->isTLS; }).exec());
 
         auto reply(cli.get(TEST_PV).exec()->wait(3.0));
-        testFail("Unexpected reply with non-configured client");
-    } catch (std::exception& e) {
-        testTrue(std::string{e.what()} ==  "Timeout");
+        testTrue(!is_tls);
+        testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
     }
 
     try {
@@ -480,7 +482,7 @@ void testServerReconfig() {
 }  // namespace
 
 MAIN(testtls) {
-    testPlan(32);
+    testPlan(33);
     testSetup();
     logger_config_env();
     testLegacyMode();

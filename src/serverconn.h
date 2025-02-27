@@ -136,7 +136,7 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
     const std::shared_ptr<ServerChan>& lookupSID(uint32_t sid);
 
 #ifdef PVXS_ENABLE_OPENSSL
-    virtual ossl::CertStatusExData *getCertStatusExData() final;
+    ossl::CertStatusExData *getCertStatusExData() override;
 #endif
 private:
 #define CASE(Op) virtual void handle_##Op() override final;
@@ -295,9 +295,9 @@ struct Server::Pvt
     void start();
     void stop();
 
-    bool canRespondToTcpSearch() { return !effective.tls_client_cert_required  && (!tls_context || tls_context->state >= ossl::SSLContext::DegradedMode); }
-    bool canRespondToTlsSearch() { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady && effective.tls_port; }
-    bool isInDegradedMode() { return !tls_context || tls_context->state <= ossl::SSLContext::DegradedMode; }
+    bool canRespondToTcpSearch() const { return !tls_context || tls_context->state >= ossl::SSLContext::DegradedMode; }
+    bool canRespondToTlsSearch() const { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady && effective.tls_port; }
+    bool isInDegradedMode() const { return !tls_context || tls_context->state <= ossl::SSLContext::DegradedMode; }
 
    private:
     void onSearch(const UDPManager::Search& msg);
@@ -307,7 +307,7 @@ struct Server::Pvt
 #ifdef PVXS_ENABLE_OPENSSL
     static void doCustomServerCallback(evutil_socket_t fd, short evt, void* raw);
 
-    bool isContextReadyForTls() { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
+    bool isContextReadyForTls() const { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
 
   public:
     void removePeerTlsConnections(const ServerConn* server_conn = nullptr);
