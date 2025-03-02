@@ -1,5 +1,5 @@
 # FROM image built from /example/docker/pvxs
-FROM georgeleveln/pvxs:latest
+FROM georgeleveln/pvxs:tls-dev
 
 # Install dependencies
 RUN apt-get update && \
