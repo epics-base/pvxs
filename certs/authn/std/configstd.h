@@ -7,15 +7,15 @@
 #ifndef PVXS_CONFIGSTD_H_
 #define PVXS_CONFIGSTD_H_
 
-#include <pvxs/config.h>
 #include <pvxs/client.h>
+#include <pvxs/config.h>
 
 #include "configauthn.h"
 
 namespace pvxs {
 namespace certs {
 
-class ConfigStd : public ConfigAuthN {
+class ConfigStd final : public ConfigAuthN {
    public:
     ConfigStd& applyEnv() {
         Config::applyEnv(true, CLIENT);
@@ -35,7 +35,7 @@ class ConfigStd : public ConfigAuthN {
      */
     static ConfigStd fromEnv() {
         auto config = ConfigStd{}.applyEnv();
-        auto defs = std::map<std::string, std::string>();
+        const auto defs = std::map<std::string, std::string>();
         config.fromAuthEnv(defs);
         config.fromStdEnv(defs);
         return config;
@@ -47,7 +47,7 @@ class ConfigStd : public ConfigAuthN {
      * Use this to set the default validity for certificates
      * generated from basic credentials.
      */
-    uint32_t cert_validity_mins = 30 * 24 * 60; // Default to 30 days
+    uint32_t cert_validity_mins = 30 * 24 * 60;  // Default to 30 days
 
     void fromStdEnv(const std::map<std::string, std::string>& defs);
 };

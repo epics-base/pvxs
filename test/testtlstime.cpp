@@ -22,10 +22,10 @@ using namespace pvxs;
 
 struct Tester {
     // Pristine values
-    const time_t now;
+    const time_t now{};
     const time_t future;
-    const std::string now_string;
-    const std::string future_string;
+    const std::string now_string{};
+    const std::string future_string{};
 
     // For testing Status date
     const certs::StatusDate date_now;
@@ -34,7 +34,7 @@ struct Tester {
     Tester()
         : now(time(nullptr)),
           future(now + ONE_DAY_OF_SECONDS),
-          now_string(((certs::StatusDate)now).s),
+          now_string(static_cast<certs::StatusDate>(now).s),
           future_string(certs::StatusDate(future).s),
           date_now(now),
           date_future(future) {
@@ -43,7 +43,7 @@ struct Tester {
 
     ~Tester() = default;
 
-    void initialisation() {
+    void initialisation() const {
         testShow() << __func__;
         testEq(now, date_now.t);
         testEq(future, date_future.t);
@@ -51,26 +51,26 @@ struct Tester {
         testEq(future_string, date_future.s);
     }
 
-    void conversion() {
+    void conversion() const {
         testShow() << __func__;
-        testEq(now, ((certs::StatusDate)date_now.s).t);
-        testEq(future, ((certs::StatusDate)date_future.s).t);
+        testEq(now, static_cast<certs::StatusDate>(date_now.s).t);
+        testEq(future, static_cast<certs::StatusDate>(date_future.s).t);
         testEq(now_string, certs::StatusDate(date_now.t).s);
         testEq(future_string, certs::StatusDate(date_future.t).s);
     }
 
-    void asn1_time() {
+    void asn1_time() const {
         testShow() << __func__;
-        ossl_ptr<ASN1_TIME> now_asn1(ASN1_TIME_new());
+        const ossl_ptr<ASN1_TIME> now_asn1(ASN1_TIME_new());
         ASN1_TIME_set(now_asn1.get(), now);
-        ossl_ptr<ASN1_TIME> future_asn1(ASN1_TIME_new());
+        const ossl_ptr<ASN1_TIME> future_asn1(ASN1_TIME_new());
         ASN1_TIME_set(future_asn1.get(), future);
 
-        testEq(now, ((certs::StatusDate)now_asn1).t);
-        testEq(future, ((certs::StatusDate)future_asn1.get()).t);
+        testEq(now, static_cast<certs::StatusDate>(now_asn1).t);
+        testEq(future, static_cast<certs::StatusDate>(future_asn1.get()).t);
 
-        testEq(now, ((certs::StatusDate)date_now.toAsn1_Time().get()).t);
-        testEq(future, ((certs::StatusDate)certs::StatusDate::toAsn1_Time(date_future).get()).t);
+        testEq(now, static_cast<certs::StatusDate>(date_now.toAsn1_Time().get()).t);
+        testEq(future, static_cast<certs::StatusDate>(certs::StatusDate::toAsn1_Time(date_future).get()).t);
     }
 };
 

@@ -135,7 +135,7 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
                                       );
 
 #ifdef PVXS_ENABLE_OPENSSL
-    virtual ossl::CertStatusExData *getCertStatusExData() final;
+    ossl::CertStatusExData *getCertStatusExData() override;
 #endif
 private:
     void startConnecting();
@@ -150,7 +150,7 @@ public:
     virtual void cleanup() override final;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    void configureClientOCSPCallback(SSL *ssl);
+    void configureClientOCSPCallback(SSL *ssl) const;
 #endif
 
 #define CASE(Op) virtual void handle_##Op() override final;
@@ -447,8 +447,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 #ifdef PVXS_ENABLE_OPENSSL
     static void certExpirationHandlerS(evutil_socket_t fd, short evt, void *raw);
 
-    void enterDegradedMode();
-    void removePeerTlsConnections(const Connection* client_conn = nullptr);
+    void enterDegradedMode() const;
+    void removePeerTlsConnections(const Connection* client_conn = nullptr) const;
     void reloadTlsFromConfig(const Config& new_config = {});
     void enableTlsForPeerConnection(const Connection* client_conn = nullptr);
 

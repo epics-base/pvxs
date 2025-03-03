@@ -102,25 +102,25 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
             std::cerr << "Error: -V option cannot be used with any other options.\n";
             return 10;
         }
-        std::cout << pvxs::version_information;
+        std::cout << version_information;
         exit(0);
     }
 
     // Set the certificate usage based on the command line parameters
     if (usage == "server") {
-        cert_usage = pvxs::ssl::kForServer;
+        cert_usage = ssl::kForServer;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create server certificates" << std::endl;
             return 10;
         }
     } else if (usage == "client") {
-        cert_usage = pvxs::ssl::kForClient;
+        cert_usage = ssl::kForClient;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVA_TLS_KEYCHAIN environment variable to create client certificates" << std::endl;
             return 11;
         }
     } else if (usage == "hybrid") {
-        cert_usage = pvxs::ssl::kForClientAndServer;
+        cert_usage = ssl::kForClientAndServer;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create hybrid certificates" << std::endl;
             return 12;
@@ -152,7 +152,7 @@ CertData getCertificate(bool &retrieved_credentials, ConfigStd config, uint16_t 
                 log_debug_printf(auth, "%s\n", e.what());
                 key_pair = IdFileFactory::createKeyPair();
             } catch (std::exception &new_e) {
-                throw std::runtime_error(pvxs::SB() << "Error creating client key: " << new_e.what());
+                throw std::runtime_error(SB() << "Error creating client key: " << new_e.what());
             }
         }
 
@@ -212,7 +212,7 @@ using namespace pvxs::certs;
  * @param argv the command line arguments
  * @return the exit status
  */
-int main(int argc, char *argv[]) {
+int main(const int argc, char *argv[]) {
     pvxs::logger_config_env();
     bool retrieved_credentials{false};
 
@@ -224,7 +224,7 @@ int main(int argc, char *argv[]) {
         bool verbose{false}, debug{false}, daemon_mode{false};
         uint16_t cert_usage{pvxs::ssl::kForClient};
 
-        auto parse_result = readParameters(argc, argv, config, verbose, debug, cert_usage, daemon_mode);
+        const auto parse_result = readParameters(argc, argv, config, verbose, debug, cert_usage, daemon_mode);
         if (parse_result) exit(parse_result);
 
         if (verbose) logger_level_set("pvxs.auth.std*", pvxs::Level::Info);
@@ -257,7 +257,7 @@ int main(int argc, char *argv[]) {
 
         if (cert_data.cert && daemon_mode) {
             authenticator.runAuthNDaemon(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient), std::move(cert_data),
-                                         [&retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd]() {
+                                         [&retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd] {
                                              return getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file,
                                                                    tls_keychain_pwd);
                                          });

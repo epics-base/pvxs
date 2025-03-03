@@ -330,7 +330,7 @@ public:
 #ifndef PVXS_ENABLE_OPENSSL
     static Context fromEnv();
 #else
-    Context(const Config &, const std::function<int(int)>&);
+    Context(const Config&, const std::function<int(int)>&);
     static Context fromEnv(const bool tls_disabled = false);
 
     /** Apply (in part) updated configuration

@@ -87,7 +87,7 @@ void IdFileFactory::chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cer
  * @param key_pair The key pair to include in the certificate data.
  * @return The certificate data.
  */
-CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) {
+CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) const {
     if (pem_string_.empty() && !cert_ptr_) {
         throw std::runtime_error("No certificate data available");
     }
@@ -100,7 +100,7 @@ CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) {
 
     if (!pem_string_.empty()) {
         // Parse certificates from PEM string
-        ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string_.data(), pem_string_.size()), false);
+        const ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string_.data(), pem_string_.size()), false);
         if (!bio) {
             throw std::runtime_error("Failed to create BIO for PEM data");
         }
@@ -147,13 +147,10 @@ CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) {
 
 cert_factory_ptr IdFileFactory::create(const std::string& filename, const std::string& password, const std::shared_ptr<KeyPair>& key_pair, X509* cert_ptr,
                                        STACK_OF(X509) * certs_ptr, const std::string& pem_string) {
-    std::string ext = getExtension(filename);
+    const std::string ext = getExtension(filename);
     if (ext == "p12" || ext == "pfx") {
-        if (cert_ptr)
-            return make_factory_ptr<P12FileFactory>(filename, password, key_pair, cert_ptr, certs_ptr);
-        else
-            return make_factory_ptr<P12FileFactory>(filename, password, key_pair, pem_string);
-
+        if (cert_ptr) return make_factory_ptr<P12FileFactory>(filename, password, key_pair, cert_ptr, certs_ptr);
+        return make_factory_ptr<P12FileFactory>(filename, password, key_pair, pem_string);
     }
     throw std::runtime_error(SB() << ": Unsupported keychain file extension (expected p12 or pfx): \"" << (ext.empty() ? "<none>" : ext) << "\"");
 }
@@ -169,11 +166,11 @@ std::shared_ptr<KeyPair> IdFileFactory::createKeyPair() {
     // Create a new KeyPair object
     auto key_pair = std::make_shared<KeyPair>();
 
-    const int kKeySize = 2048;          // Key size
-    const int kKeyType = EVP_PKEY_RSA;  // Key type
+    constexpr int kKeySize = 2048;          // Key size
+    constexpr int kKeyType = EVP_PKEY_RSA;  // Key type
 
     // Initialize the context for the key generation operation
-    ossl_ptr<EVP_PKEY_CTX> context(EVP_PKEY_CTX_new_id(kKeyType, nullptr), false);
+    const ossl_ptr<EVP_PKEY_CTX> context(EVP_PKEY_CTX_new_id(kKeyType, nullptr), false);
     if (!context) {
         throw std::runtime_error("Failed to create EVP_PKEY_CTX");
     }
@@ -194,7 +191,7 @@ std::shared_ptr<KeyPair> IdFileFactory::createKeyPair() {
     }
 
     // Create a memory buffer BIO for storing the public key
-    ossl_ptr<BIO> bio_public(BIO_new(BIO_s_mem()));
+    const ossl_ptr<BIO> bio_public(BIO_new(BIO_s_mem()));
 
     // Write the public key into the buffer
     if (!PEM_write_bio_PUBKEY(bio_public.get(), key_pair->pkey.get())) {
@@ -203,10 +200,10 @@ std::shared_ptr<KeyPair> IdFileFactory::createKeyPair() {
 
     // Get the public key data as binary and store it in the buffer
     char* bio_buffer_pub = nullptr;
-    long public_key_length = BIO_get_mem_data(bio_public.get(), &bio_buffer_pub);
+    const long public_key_length = BIO_get_mem_data(bio_public.get(), &bio_buffer_pub);
 
     // Convert buffer containing public key data into std::string format
-    std::string public_key(bio_buffer_pub, public_key_length);
+    const std::string public_key(bio_buffer_pub, public_key_length);
     key_pair->public_key = public_key;
     log_debug_printf(certs, "Key Pair Generated: %s\n", public_key.c_str());
 

@@ -7,6 +7,8 @@
 #include "openssl.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <stdexcept>
 #include <tuple>
@@ -19,9 +21,6 @@
 
 #include <pvxs/log.h>
 #include <pvxs/sslinit.h>
-
-#include <cstring>
-#include <cstdint>
 
 #include "certfilefactory.h"
 #include "certstatus.h"
@@ -61,7 +60,7 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
  * @param cert_data
  * @param trusted_store_ptr the trusted store that we'll use to verify the peer OCSP status responses
  */
-void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509>&cert,X509_STORE *trusted_store_ptr) {
+void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE *trusted_store_ptr) {
     if (!status_check_disabled) {
         try {
             auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
@@ -118,12 +117,10 @@ void SSLContext::setTlsOrTcpMode() {
 SSLContext::SSLContext(const impl::evbase loop) : loop(loop) {}
 
 SSLContext::SSLContext(const SSLContext &o)
-    : loop(o.loop), ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) {
-}
+    : loop(o.loop), ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) {}
 
 SSLContext::SSLContext(SSLContext &o) noexcept
-    : loop(o.loop), ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) {
-}
+    : loop(o.loop), ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) {}
 
 void SSLContext::setStatusValidityCountdown() {
     auto now = time(nullptr);
@@ -338,7 +335,7 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
  * @return SSLContext initialised appropriately - clients can have an empty
  * context so that they can connect to ssl servers without having a certificate
  */
-std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_for_client, const ConfigCommon &conf, const evbase& loop) {
+std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_for_client, const ConfigCommon &conf, const evbase &loop) {
     impl::threadOnce<&OSSLGbl_init>();
     sslInit();
 
@@ -365,7 +362,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
         throw std::runtime_error("Invalid certificate data");
     }
 
-    #ifdef PVXS_ENABLE_SSLKEYLOGFILE
+#ifdef PVXS_ENABLE_SSLKEYLOGFILE
     // Set the keylog callback to log the TLS secrets to the file
     (void)SSL_CTX_set_keylog_callback(tls_context->ctx.get(), &sslkeylogfile_log);
 #endif
@@ -385,11 +382,11 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     const std::string &filename = conf.tls_keychain_file, &password = conf.tls_keychain_pwd;
     auto cert_data = certs::IdFileFactory::createReader(filename, password)->getCertDataFromFile();
 
-    ossl_ptr<X509>trusted_root_ca(extractCAs(tls_context, cert_data.ca));
+    ossl_ptr<X509> trusted_root_ca(extractCAs(tls_context, cert_data.ca));
     if (!trusted_root_ca) throw SSLError("Could not find Trusted Root CA Certificate in keychain");
 
     // Get the context's trust store that has been established by reading the CAs from the file
-    X509_STORE* store_ptr = SSL_CTX_get_cert_store(tls_context->ctx.get());
+    X509_STORE *store_ptr = SSL_CTX_get_cert_store(tls_context->ctx.get());
     if (!store_ptr) {
         throw std::invalid_argument("Trusted store pointer is null.");
     }
@@ -414,7 +411,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     if (!SSL_CTX_use_certificate(tls_context->ctx.get(), cert_data.cert.get())) throw SSLError("using certificate");
 
     // Check the private key
-    assert (cert_data.key_pair);
+    assert(cert_data.key_pair);
     if (!SSL_CTX_use_PrivateKey(tls_context->ctx.get(), cert_data.key_pair->pkey.get())) throw SSLError("using private key");
     if (!cert_data.key_pair->pkey || !SSL_CTX_check_private_key(tls_context->ctx.get())) throw SSLError("invalid private key");
 
@@ -423,8 +420,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     //  SSL_BUILD_CHAIN_FLAG_CHECK - Fully check CA certificate chain and fail if any are not trusted
     //  SSL_BUILD_CHAIN_FLAG_UNTRUSTED - Flag untrusted in build chain but still use it
     //  0 - run default checks
-    if (!SSL_CTX_build_cert_chain(tls_context->ctx.get(), SSL_BUILD_CHAIN_FLAG_CHECK))
-        throw SSLError("invalid cert chain");
+    if (!SSL_CTX_build_cert_chain(tls_context->ctx.get(), SSL_BUILD_CHAIN_FLAG_CHECK)) throw SSLError("invalid cert chain");
 
     // Move entity certificate to the custom data in the SSL context
     cert_status_ex_data->cert = std::move(cert_data.cert);
@@ -469,12 +465,12 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
  *         SSL_TLSEXT_ERR_NOACK if the OCSP response was not added - no status available to staple at this time
  *         SSL_TLSEXT_ERR_ALERT_FATAL if the OCSP response was not added - some error occurred adding the OCSP response
  */
-int serverOCSPCallback(SSL *ssl,void *raw) {
+int serverOCSPCallback(SSL *ssl, void *raw) {
     auto ret_val = SSL_TLSEXT_ERR_OK;
     auto server = static_cast<pvxs::server::Server::Pvt *>(raw);
     log_debug_printf(stapling, "Server OCSP Stapling: %s\n", "serverOCSPCallback");
 
-    if ( auto& tls_context = server->tls_context ) {
+    if (auto &tls_context = server->tls_context) {
         auto &current_status = tls_context->get_status();
         if (current_status.isValid()) {
             auto ocsp_data_ptr = (void *)current_status.ocsp_bytes.data();
@@ -483,10 +479,10 @@ int serverOCSPCallback(SSL *ssl,void *raw) {
 
             // Allocate a new one and copy in the response data
             // TODO Verify that this is really freed up by the framework after it is stapled
-            ocsp_data_ptr_copy = (uint8_t*)OPENSSL_malloc(ocsp_data_len);
+            ocsp_data_ptr_copy = (uint8_t *)OPENSSL_malloc(ocsp_data_len);
             memcpy(ocsp_data_ptr_copy, ocsp_data_ptr, ocsp_data_len);
 
-            if ( ocsp_data_ptr_copy ) {
+            if (ocsp_data_ptr_copy) {
                 // Staple the data as the OCSP response for the TLS handshake
                 if (SSL_set_tlsext_status_ocsp_resp(ssl, ocsp_data_ptr_copy, ocsp_data_len) != 1) {
                     log_warn_printf(stapling, "Server OCSP Stapling: %s\n", "unable to staple server status");
@@ -543,13 +539,12 @@ SSLPeerStatusAndMonitor::~SSLPeerStatusAndMonitor() {
  * @fn function to be configured to be called for updates
  * @return The peer status that was set
  */
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *peer_cert_ptr,
-                                                                         const certs::CertificateStatus &new_status,
-                                                                               std::function<void(bool)> fn) {
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *peer_cert_ptr, const certs::CertificateStatus &new_status,
+                                                                         std::function<void(bool)> fn) {
     auto serial_number = getSerialNumber(peer_cert_ptr);
     std::shared_ptr<SSLPeerStatusAndMonitor> peer_status_and_monitor;
     try {
-        if ( status_check_enabled && fn) {
+        if (status_check_enabled && fn) {
             auto status_pv = certs::CertStatusManager::getStatusPvFromCert(peer_cert_ptr);
             peer_status_and_monitor = getOrCreatePeerStatus(serial_number, status_pv, fn);
         } else {
@@ -563,8 +558,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *p
     return peer_status_and_monitor;
 }
 
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(serial_number_t serial_number,
-                                                                                 const std::string &status_pv,
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(serial_number_t serial_number, const std::string &status_pv,
                                                                                  std::function<void(bool)> fn) {
     // Create holder for peer status or return current holder if already exists
     auto peer_status = createPeerStatus(serial_number, fn);
@@ -575,12 +569,11 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
         std::weak_ptr<SSLPeerStatusAndMonitor> weak_peer_status = peer_status;
         Guard G(peer_status->lock);
         peer_status->cert_status_manager =
-          certs::CertStatusManager::subscribe(trusted_store_ptr, status_pv, [ weak_peer_status](const certs::PVACertificateStatus &status) {
-              auto peer_status = weak_peer_status.lock();
-              // Update the cached state
-              if (peer_status)
-                  peer_status->updateStatus((const certs::CertificateStatus)status);
-          });
+            certs::CertStatusManager::subscribe(trusted_store_ptr, status_pv, [weak_peer_status](const certs::PVACertificateStatus &status) {
+                auto peer_status = weak_peer_status.lock();
+                // Update the cached state
+                if (peer_status) peer_status->updateStatus((const certs::CertificateStatus)status);
+            });
     }
     return peer_status;
 }
@@ -593,10 +586,10 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
  */
 std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(serial_number_t serial_number, const std::function<void(bool)> fn) {
     auto existing_peer_status_entry = peer_statuses.find(serial_number);
-    if ( existing_peer_status_entry != peer_statuses.end() ) return existing_peer_status_entry->second.lock();
+    if (existing_peer_status_entry != peer_statuses.end()) return existing_peer_status_entry->second.lock();
 
     std::shared_ptr<SSLPeerStatusAndMonitor> new_peer_status;
-    if ( fn ) {
+    if (fn) {
         auto validity_timer = impl::evevent(__FILE__, __LINE__, event_new(loop.base, -1, EV_TIMEOUT, peersStatusValidityExpirationHandler, this));
         new_peer_status = std::make_shared<SSLPeerStatusAndMonitor>(serial_number, this, std::move(validity_timer), fn);
     } else {
@@ -628,8 +621,7 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
     }
 }
 
-
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::subscribeToPeerCertStatus(X509* cert_ptr, std::function<void(bool)> fn) noexcept {
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::subscribeToPeerCertStatus(X509 *cert_ptr, std::function<void(bool)> fn) noexcept {
     assert(cert_ptr && "Peer Cert NULL");
     auto serial_number = getSerialNumber(cert_ptr);
     assert(serial_number && "Peer Cert has no serial number");
@@ -830,7 +822,7 @@ std::shared_ptr<SSLContext> SSLContext::for_client(const ConfigCommon &conf, con
     return ctx;
 }
 
-std::shared_ptr<SSLContext>  SSLContext::for_server(const impl::ConfigCommon &conf, const impl::evbase loop) {
+std::shared_ptr<SSLContext> SSLContext::for_server(const impl::ConfigCommon &conf, const impl::evbase loop) {
     auto ctx(commonSetup(TLS_server_method(), false, conf, loop));
 
     SSL_CTX_set_alpn_select_cb(ctx->ctx.get(), &ossl_alpn_select, nullptr);

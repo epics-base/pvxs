@@ -5,10 +5,10 @@
  */
 #define PVXS_ENABLE_EXPERT_API
 
+#include <cstring>
 #include <sstream>
 
 #include <epicsUnitTest.h>
-#include <cstring>
 #include <testMain.h>
 
 #include <pvxs/client.h>
@@ -32,7 +32,7 @@ namespace {
  *
  * This is used to test the client and server credentials.
  */
-struct WhoAmI final : public server::Source {
+struct WhoAmI final : server::Source {
     const Value resultType;
 
     WhoAmI() : resultType(nt::NTScalar(TypeCode::String).create()) {}
@@ -48,7 +48,7 @@ struct WhoAmI final : public server::Source {
 
         op->onOp([this](std::unique_ptr<server::ConnectOp>&& cop) {
             cop->onGet([this](std::unique_ptr<server::ExecOp>&& eop) {
-                auto cred(eop->credentials());
+                const auto cred(eop->credentials());
                 std::ostringstream strm;
                 strm << cred->method << '/' << cred->account;
 
@@ -61,7 +61,7 @@ struct WhoAmI final : public server::Source {
         std::shared_ptr<server::MonitorControlOp> sub;
         op->onSubscribe([this, sub](std::unique_ptr<server::MonitorSetupOp>&& sop) mutable {
             sub = sop->connect(resultType);
-            auto cred(sub->credentials());
+            const auto cred(sub->credentials());
             std::ostringstream strm;
             strm << cred->method << '/' << cred->account;
 
@@ -77,10 +77,8 @@ struct WhoAmI final : public server::Source {
  */
 Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt) {
     while (true) {
-        if (auto ret = sub->pop()) {
-            return ret;
-
-        } else if (!evt.wait(5.0)) {
+        if (auto ret = sub->pop()) return ret;
+        if (!evt.wait(5.0)) {
             testFail("timeout waiting for event");
             return {};
         }
@@ -97,11 +95,11 @@ void testLegacyMode() {
     auto initial(nt::NTScalar{TypeCode::Int32}.create());
     auto mbox(server::SharedPV::buildReadonly());
 
-    auto serv_conf(server::Config::isolated());
+    const auto serv_conf(server::Config::isolated());
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
-    auto cli_conf(serv.clientConfig());
+    const auto cli_conf(serv.clientConfig());
 
     auto cli(cli_conf.build());
 
@@ -131,7 +129,7 @@ void testClientBackwardsCompatibility() {
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
-    auto cli_conf(serv.clientConfig());
+    const auto cli_conf(serv.clientConfig());
 
     auto cli(cli_conf.build());
 
@@ -156,7 +154,7 @@ void testServerBackwardsCompatibility() {
     auto initial(nt::NTScalar{TypeCode::Int32}.create());
     auto mbox(server::SharedPV::buildReadonly());
 
-    auto serv_conf(server::Config::isolated());
+    const auto serv_conf(server::Config::isolated());
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
@@ -201,7 +199,7 @@ void testServerOnly() {
     serv.start();
 
     auto is_tls{false};
-    auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) { is_tls =c.cred && c.cred->isTLS; }).exec());
+    auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) { is_tls = c.cred && c.cred->isTLS; }).exec());
 
     auto reply(cli.get(TEST_PV).exec()->wait(5.0));
     testTrue(is_tls);
@@ -235,7 +233,7 @@ void testStrictServer() {
         auto cli(cli_conf.build());
 
         auto is_tls{false};
-        auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) { is_tls =c.cred && c.cred->isTLS; }).exec());
+        auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) { is_tls = c.cred && c.cred->isTLS; }).exec());
 
         auto reply(cli.get(TEST_PV).exec()->wait(3.0));
         testTrue(!is_tls);
@@ -248,12 +246,12 @@ void testStrictServer() {
 
         auto cli(cli_conf.build());
 
-        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testFail("Unexpected connection with server only setup"); }).exec());
+        auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected&) { testFail("Unexpected connection with server only setup"); }).exec());
 
         auto reply(cli.get(TEST_PV).exec()->wait(3.0));
         testFail("Unexpected reply with server only setup");
     } catch (std::exception& e) {
-        testTrue(std::string{e.what()} ==  "Timeout");
+        testTrue(std::string{e.what()} == "Timeout");
     }
 }
 
@@ -347,9 +345,8 @@ void testGetNameServer() {
     try {
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-    } catch (std::exception &) {
+    } catch (std::exception&) {
         testFail("timeout waiting for event");
-        return;
     }
 }
 

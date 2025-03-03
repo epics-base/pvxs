@@ -115,7 +115,7 @@ struct PVXS_API ConfigCommon {
         size_t pos = 0;
         std::string token;
         std::string path = "";
-        struct stat info{};
+        struct stat info {};
         while ((pos = temp_path.find(delimiter)) != std::string::npos) {
             token = temp_path.substr(0, pos);
             path += token + delimiter;
@@ -225,9 +225,7 @@ struct PVXS_API ConfigCommon {
      * @return true if the location of the keychain file has been specified,
      * false otherwise
      */
-    inline bool isTlsConfigured() const {
-        return !tls_disabled && !tls_keychain_file.empty();
-    }
+    inline bool isTlsConfigured() const { return !tls_disabled && !tls_keychain_file.empty(); }
 #endif  // PVXS_ENABLE_OPENSSL
 
     inline std::string getFileContents(const std::string &file_name) {

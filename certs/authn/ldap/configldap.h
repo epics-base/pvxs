@@ -7,16 +7,16 @@
 #ifndef PVXS_CONFIGLDAP_H_
 #define PVXS_CONFIGLDAP_H_
 
-#include <pvxs/config.h>
 #include <pvxs/client.h>
+#include <pvxs/config.h>
 
 #include "configauthn.h"
 
 namespace pvxs {
 namespace certs {
 
-class ConfigLdap : public ConfigAuthN {
-  public:
+class ConfigLdap final : public ConfigAuthN {
+   public:
     ConfigLdap& applyEnv() {
         Config::applyEnv(true, CLIENT);
         return *this;
@@ -24,7 +24,7 @@ class ConfigLdap : public ConfigAuthN {
 
     static ConfigLdap fromEnv() {
         auto config = ConfigLdap{}.applyEnv();
-        auto defs = std::map<std::string, std::string>();
+        const auto defs = std::map<std::string, std::string>();
         config.fromAuthEnv(defs);
         config.fromLdapEnv(defs);
         return config;
@@ -40,4 +40,4 @@ class ConfigLdap : public ConfigAuthN {
 }  // namespace certs
 }  // namespace pvxs
 
-#endif //PVXS_CONFIGLDAP_H_
+#endif  // PVXS_CONFIGLDAP_H_

@@ -17,7 +17,7 @@
 namespace pvxs {
 namespace certs {
 
-class ConfigCms : public pvxs::server::Config {
+class ConfigCms final : public server::Config {
    public:
     ConfigCms& applyEnv() {
         Config::applyEnv();
@@ -34,7 +34,7 @@ class ConfigCms : public pvxs::server::Config {
         auto config = ConfigCms{}.applyEnv();
 
         // Indicate that this is a CMS configuration
-        config.config_target = pvxs::impl::ConfigCommon::CMS;
+        config.config_target = CMS;
 
         // Disable status checking as this is the CMS itself
         config.tls_disable_status_check = true;
@@ -109,7 +109,7 @@ class ConfigCms : public pvxs::server::Config {
      *
      * Note: This certificate needs to be trusted by all EPICS agents.
      */
-    std::string ca_keychain_file;
+    std::string ca_keychain_file{};
 
     /**
      * @brief This is the string that determines
@@ -119,21 +119,21 @@ class ConfigCms : public pvxs::server::Config {
      * This is optional.  If not specified, the `ca_keychain_file`
      * contents will not be encrypted.
      */
-    std::string ca_keychain_pwd;
+    std::string ca_keychain_pwd{};
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to the keychain file that contains
      * the admin user's certificate, and public and private keys.
      */
-    std::string admin_keychain_file;
+    std::string admin_keychain_file{};
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to a file that contains the password that
      * unlocks the admin user's keychain file.
      */
-    std::string admin_keychain_pwd;
+    std::string admin_keychain_pwd{};
 
     /**
      * @brief This is the string that determines the
@@ -199,7 +199,7 @@ class ConfigCms : public pvxs::server::Config {
     /**
      * @brief The CA Country
      */
-    std::string ca_country;
+    std::string ca_country{"US"};
 
     /**
      * @brief If a PVACMS certificate has not been established
@@ -234,7 +234,7 @@ class ConfigCms : public pvxs::server::Config {
     /**
      * @brief The PVACMS Country
      */
-    std::string pvacms_country;
+    std::string pvacms_country{"US"};
 
     void fromCmsEnv(const std::map<std::string, std::string>& defs);
 };

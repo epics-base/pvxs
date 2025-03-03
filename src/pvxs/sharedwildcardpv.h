@@ -9,12 +9,13 @@
 
 #include <functional>
 #include <list>
-#include <memory>
 #include <map>
+#include <memory>
 #include <string>
 
 #include <pvxs/sharedpv.h>
 #include <pvxs/version.h>
+
 #include "srvcommon.h"
 
 namespace pvxs {
@@ -59,24 +60,24 @@ struct PVXS_API SharedWildcardPV : public SharedPV {
     //! Attach this SharedPV with a new client channel.
     //! Not necessary when using StaticSource.
     //! eg. could call from Source::onCreate()
-    void attach(std::unique_ptr<ChannelControl>&& op, const std::list<std::string> parameters);
+    void attach(std::unique_ptr<ChannelControl> &&op, const std::list<std::string> parameters);
 
     //! Callback when the number of attach()d clients becomes non-zero for a particular pv_name
-    void onFirstConnect(std::function<void(SharedWildcardPV&, const std::string &, const std::list<std::string> &)>&& fn);
+    void onFirstConnect(std::function<void(SharedWildcardPV &, const std::string &, const std::list<std::string> &)> &&fn);
     //! Callback when the number of attach()d clients becomes zero for a particular pv_name
-    void onLastDisconnect(std::function<void(SharedWildcardPV&, const std::string &, const std::list<std::string> &)>&& fn);
+    void onLastDisconnect(std::function<void(SharedWildcardPV &, const std::string &, const std::list<std::string> &)> &&fn);
     //! Callback when a client executes a new Put operation for a given pv_name
-    void onPut(std::function<void(SharedWildcardPV&, std::unique_ptr<ExecOp>&&, const std::string &, const std::list<std::string> &, Value&&)>&& fn);
+    void onPut(std::function<void(SharedWildcardPV &, std::unique_ptr<ExecOp> &&, const std::string &, const std::list<std::string> &, Value &&)> &&fn);
     //! Callback when a client executes an RPC operation for a given pc_name
     //! @note RPC operations are allowed even when the SharedPV is not opened (isOpen()==false)
-    void onRPC(std::function<void(SharedWildcardPV&, std::unique_ptr<ExecOp>&&, const std::string &, const std::list<std::string> &, Value&&)>&& fn);
+    void onRPC(std::function<void(SharedWildcardPV &, std::unique_ptr<ExecOp> &&, const std::string &, const std::list<std::string> &, Value &&)> &&fn);
 
     /** Provide data type and initial value.  Allows clients to begin connecting.
      * @pre !isOpen()
      * @param pv_name For wildcard PVs this indicates the actual PV requested
      * @param initial Defines data type, and initial value
      */
-    void open(const std::string &pv_name, const Value& initial);
+    void open(const std::string &pv_name, const Value &initial);
     /**
      * @brief Test whether open(pv_name) has been called w/o matching close(pv_name)
      * @param pv_name For wildcard PVs this indicates the actual PV requested
@@ -93,13 +94,13 @@ struct PVXS_API SharedWildcardPV : public SharedPV {
      * @param pv_name For wildcard PVs this indicates the actual PV requested
      * @param val the value to post
      */
-    void post(const std::string &pv_name, const Value& val);
+    void post(const std::string &pv_name, const Value &val);
     /**
      * @brief query the internal data value and update the provided Value.
      * @param pv_name For wildcard PVs this indicates the actual PV requested
      * @param val reference to value to update by fetching
      */
-    void fetch(const std::string &pv_name, Value& val) const;
+    void fetch(const std::string &pv_name, Value &val) const;
     /**
      * @brief Return a (shallow) copy of the internal data value
      * @param pv_name For wildcard PVs this indicates the actual PV requested
@@ -121,7 +122,7 @@ struct PVXS_API SharedWildcardPV : public SharedPV {
      * @param pv_name For wildcard PVs this indicates the actual PV requested
      * @return a list of strings that correspond to the parts of the PV name matched by pattersn in the Wildcard PV.
      */
-    const std::list<std::string> getParameters(const std::string& pv_name) noexcept {
+    const std::list<std::string> getParameters(const std::string &pv_name) noexcept {
         std::list<std::string> parameters;
         size_t pv_name_pos = 0;
         size_t wildcard_pv_pos = 0;
@@ -163,14 +164,15 @@ struct PVXS_API SharedWildcardPV : public SharedPV {
         }
         return parameters;
     }
-  private:
+
+   private:
     std::shared_ptr<Impl> impl;
 
     template <typename T>
-    bool exists(const std::map<std::string, T>&m , const std::string &ref) const;
+    bool exists(const std::map<std::string, T> &m, const std::string &ref) const;
 };
 
-} // namespace server
-} // namespace pvxs
+}  // namespace server
+}  // namespace pvxs
 
-#endif // PVXS_SHAREDWILDCARDPV_H
+#endif  // PVXS_SHAREDWILDCARDPV_H

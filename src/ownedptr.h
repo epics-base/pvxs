@@ -270,8 +270,8 @@ class ossl_shared_ptr : public std::shared_ptr<T> {
 
 // Helper function to create ossl_shared_ptr while removing const qualifier
 template <typename T>
-ossl_shared_ptr<T> make_ossl_shared_ptr(const T* ptr) {
-    return ossl_shared_ptr<T>(const_cast<T*>(ptr));
+ossl_shared_ptr<T> make_ossl_shared_ptr(const T *ptr) {
+    return ossl_shared_ptr<T>(const_cast<T *>(ptr));
 }
 
 #endif

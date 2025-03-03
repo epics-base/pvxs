@@ -55,13 +55,13 @@ struct AuthNStdRegistrar {
  */
 static std::string extractCountryCode(const std::string &locale_str) {
     // Look for underscore
-    auto pos = locale_str.find('_');
+    const auto pos = locale_str.find('_');
     if (pos == std::string::npos || pos + 3 > locale_str.size()) {
         return "";
     }
 
     std::string country_code = locale_str.substr(pos + 1, 2);
-    std::transform(country_code.begin(), country_code.end(), country_code.begin(), ::toupper);
+    std::transform(country_code.begin(), country_code.end(), country_code.begin(), toupper);
     return country_code;
 }
 
@@ -83,8 +83,8 @@ static std::string extractCountryCode(const std::string &locale_str) {
 static std::string getCountryCode() {
     // 1. Try from std::locale("")
     {
-        std::locale loc("");
-        std::string name = loc.name();
+        const std::locale loc("");
+        const std::string name = loc.name();
         if (name != "C" && name != "POSIX") {
             std::string cc = extractCountryCode(name);
             if (!cc.empty()) {
@@ -97,7 +97,7 @@ static std::string getCountryCode() {
     {
         const char *lang = std::getenv("LANG");
         if (lang && *lang) {
-            std::string locale_str(lang);
+            const std::string locale_str(lang);
             std::string cc = extractCountryCode(locale_str);
             if (!cc.empty()) {
                 return cc;
@@ -138,9 +138,9 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
     auto std_credentials = std::make_shared<DefaultCredentials>();
 
     // Set the expiration time of the certificate
-    time_t now = time(nullptr);
+    const time_t now = time(nullptr);
     std_credentials->not_before = now;
-    std_credentials->not_after = now + (std_config.cert_validity_mins * 60);
+    std_credentials->not_after = now + std_config.cert_validity_mins * 60;
 
     // Should not be empty as defaults to username
     if (!std_config.name.empty()) {
@@ -182,7 +182,7 @@ std::shared_ptr<CertCreationRequest> AuthNStd::createCertCreationRequest(const s
     auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage);
 
     return cert_creation_request;
-};
+}
 
 /**
  * @brief Verify the Certificate Creation Request (CCR)

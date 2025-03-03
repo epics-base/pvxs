@@ -37,7 +37,7 @@ DEFINE_LOGGER(stapling, "pvxs.stapling");
  * @return Typically returns an integer value indicating the SSL_TLSEXT_ERR_OK, SSL_TLSEXT_ERR_ALERT_WARNING,
  * or SSL_TLSEXT_ERR_ALERT_FATAL of the OCSP validation.
  */
- int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
+int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
     log_debug_printf(stapling, "Client OCSP Stapling: %s\n", "clientOCSPCallback");
     // Find out what the peer cert we're verifying is
     X509* peer_cert = SSL_get_peer_certificate(ctx);
@@ -71,7 +71,7 @@ DEFINE_LOGGER(stapling, "pvxs.stapling");
             log_debug_printf(stapling, "Client OCSP stapled status valid until: %s\n", parsed_status.status_valid_until_date.s.c_str());
             log_debug_printf(stapling, "Client OCSP stapled revocation date: %s\n", parsed_status.revocation_date.s.c_str());
             return PVXS_OCSP_STAPLING_OK;
-        } catch (const certs::OCSPParseException &e) {
+        } catch (const certs::OCSPParseException& e) {
             log_warn_printf(stapling, "Stapled OCSP response invalid: %s\n", e.what());
             return PVXS_OCSP_STAPLING_NAK;
         }
@@ -143,10 +143,10 @@ std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>
         throw std::logic_error("Context close()d");
 
 #ifdef PVXS_ENABLE_OPENSSL
-    auto pair(std::make_pair(serv, tls));
+    const auto pair(std::make_pair(serv, tls));
     std::shared_ptr<Connection> ret;
     auto it = context->connByAddr.find(pair);
-    if (it == context->connByAddr.end() || !(ret = it->second.lock())) {
+    if (it == context->connByAddr.end() || !((ret = it->second.lock()))) {
         context->connByAddr[pair] = ret = std::make_shared<Connection>(context, serv, reconn, tls);
     }
 #else
@@ -171,7 +171,7 @@ void Connection::startConnecting() {
             return;
         }
 
-        auto ctx(SSL_new(context->tls_context->ctx.get()));
+        const auto ctx(SSL_new(context->tls_context->ctx.get()));
         if (!ctx) throw std::runtime_error("SSL_new");
 
         // w/ BEV_OPT_CLOSE_ON_FREE calls SSL_free() on error
@@ -210,7 +210,7 @@ void Connection::startConnecting() {
 /**
  * @brief Configure the client OCSP callback if appropriate and if required
  */
-void Connection::configureClientOCSPCallback(SSL* ssl) {
+void Connection::configureClientOCSPCallback(SSL* ssl) const {
     // If stapling is not disabled
     if (!context->tls_context->stapling_disabled) {
         // And client was not previously set to request the stapled OCSP Response
@@ -286,12 +286,12 @@ void Connection::bevEvent(short events) {
             std::weak_ptr<ContextImpl> weak_context(context);
             if (enable)
                 context->tcp_loop.dispatch([weak_context, this]() mutable {
-                    auto context = weak_context.lock();
+                    const auto context = weak_context.lock();
                     if (context) context->enableTlsForPeerConnection(this);
                 });
             else
                 context->tcp_loop.dispatch([weak_context, this]() mutable {
-                    auto context = weak_context.lock();
+                    const auto context = weak_context.lock();
                     if (context) context->removePeerTlsConnections(this);
                 });
         }
@@ -312,7 +312,7 @@ void Connection::bevEvent(short events) {
         peerCred->isTLS = isTLS;
 
         if (isTLS) {
-            auto ctx = bufferevent_openssl_get_ssl(bev.get());
+            const auto ctx = bufferevent_openssl_get_ssl(bev.get());
             assert(ctx);
             ossl::SSLContext::getPeerCredentials(*peerCred, ctx);
         }

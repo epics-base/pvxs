@@ -1,5 +1,5 @@
 /**
-* Copyright - See the COPYRIGHT that is included with this distribution.
+ * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
@@ -14,7 +14,7 @@ namespace certs {
 
 class CCRManager {
    public:
-    std::string createCertificate(const std::shared_ptr<CertCreationRequest>& cert_creation_request, double timeout) const;
+    static std::string createCertificate(const std::shared_ptr<CertCreationRequest>& cert_creation_request, double timeout);
 };
 }  // namespace certs
 }  // namespace pvxs

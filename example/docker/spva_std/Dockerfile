@@ -35,12 +35,17 @@ RUN echo "source ~/.spva_bashrc" >> /home/pvacms/.bashrc
 RUN echo "source ~/.spva_bashrc" >> /home/softioc/.bashrc
 RUN echo "source ~/.spva_bashrc" >> /home/client/.bashrc
 
-# Generate the administrator certificate
-RUN su - pvacms -c "/opt/epics/pvxs/bin/*/pvacms --admin-keychain-new admin"
+# Create the log directory and files with correct permissions
+RUN mkdir -p /var/log/supervisor && \
+    touch /var/log/supervisor/pvacms.out.log /var/log/supervisor/pvacms.err.log && \
+    chown pvacms:pvacms /var/log/supervisor/pvacms.out.log /var/log/supervisor/pvacms.err.log
+
+# Generate the administrator certificate with logging redirections
+RUN su - pvacms -c "/bin/bash -c '/opt/epics/pvxs/bin/*/pvacms --admin-keychain-new admin >> /var/log/supervisor/pvacms.out.log 2>> /var/log/supervisor/pvacms.err.log'"
 
 # Copy the administrator certificate to the admin user
 RUN mkdir -p /home/admin/.config/pva/1.3 && \
-    cp -pr /home/pvacms/.config/pva/1.3/admin.p12 /home/admin/.config/pva/1.3/client.p12 && \
+    mv /home/pvacms/.config/pva/1.3/admin.p12 /home/admin/.config/pva/1.3/client.p12 && \
     chown admin:admin /home/admin/.config/pva/1.3/client.p12 && \
     chmod 400 /home/admin/.config/pva/1.3/client.p12
 

@@ -1,5 +1,5 @@
 /**
-* Copyright - See the COPYRIGHT that is included with this distribution.
+ * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
@@ -28,7 +28,7 @@ using namespace members;
  * @param timeout Timeout for the request
  * @return std::string PEM format Certificate.
  */
-std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequest> &cert_creation_request, double timeout) const {
+std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequest> &cert_creation_request, double timeout) {
     auto uri = nt::NTURI({}).build();
     uri += {Struct("query", CCR_PROTOTYPE(cert_creation_request->verifier_fields))};
     auto arg = uri.create();

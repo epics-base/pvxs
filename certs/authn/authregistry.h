@@ -1,5 +1,5 @@
 /**
-* Copyright - See the COPYRIGHT that is included with this distribution.
+ * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
@@ -54,7 +54,7 @@ class AuthRegistry {
      * @return A pointer to the authentication method.
      */
     Auth* getAuth(const std::string& name) const {
-        auto it = registry.find(name);
+        const auto it = registry.find(name);
         if (it != registry.end()) {
             return it->second.get();
         }

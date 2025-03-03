@@ -37,10 +37,11 @@ struct Subscription;
 
 namespace certs {
 
-template<typename T>
+template <typename T>
 struct cert_status_delete;
 
-template<typename T> using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
+template <typename T>
+using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
 
 /**
  * @brief This class is used to parse OCSP responses and to get/subscribe to certificate status
@@ -79,7 +80,7 @@ template<typename T> using cert_status_ptr = ossl_shared_ptr<T, cert_status_dele
  * @endcode
  */
 class CertStatusManager {
-  public:
+   public:
     friend struct OCSPStatus;
     using StatusCallback = std::function<void(const PVACertificateStatus &)>;
 
@@ -112,7 +113,7 @@ class CertStatusManager {
      * @ocsp_bytes_len the length of the byte buffer
      * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
      */
-    static ParsedOCSPStatus parse(const uint8_t* ocsp_bytes, size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr);
+    static ParsedOCSPStatus parse(const uint8_t *ocsp_bytes, size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr);
 
     /**
      * Parse OCSP responses from the provided OCSP response object
@@ -181,16 +182,16 @@ class CertStatusManager {
     void unsubscribe();
 
     bool available(double timeout = 5.0) const noexcept { return isValid() || waitedTooLong(timeout); }
-    bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t) timeout) < std::time(nullptr); }
+    bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t)timeout) < std::time(nullptr); }
     bool isValid() const noexcept { return status_ && status_->isValid(); }
 
-  private:
+   private:
     CertStatusManager(std::shared_ptr<client::Context> &&client, std::shared_ptr<client::Subscription> sub) : client_(std::move(client)), sub_(sub) {};
     explicit CertStatusManager(std::shared_ptr<client::Context> &&client) : client_(std::move(client)), sub_{} {};
 
     void subscribe(std::shared_ptr<client::Subscription> &sub) { sub_ = sub; }
 
-    std::shared_ptr<StatusCallback> callback_ref{}; // Option placeholder for ref to callback if used
+    std::shared_ptr<StatusCallback> callback_ref{};  // Option placeholder for ref to callback if used
     std::shared_ptr<client::Context> client_;
     std::shared_ptr<client::Subscription> sub_;
     std::shared_ptr<CertificateStatus> status_;
@@ -207,11 +208,11 @@ class CertStatusManager {
     static X509_EXTENSION *getConfigExtension(const X509 *certificate);
 
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t> &ocsp_bytes);
-    static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const uint8_t* ocsp_bytes, const size_t ocsp_bytes_len);
+    static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const uint8_t *ocsp_bytes, const size_t ocsp_bytes_len);
     static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic_response, X509_STORE *trusted_store_ptr);
 };
 
-template<>
+template <>
 struct cert_status_delete<CertStatusManager> {
     void operator()(CertStatusManager *base_pointer) {
         if (base_pointer) {

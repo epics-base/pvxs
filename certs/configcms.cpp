@@ -109,17 +109,17 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     }
 
     // EPICS_CA_ORGANIZATION
-    if (pickone({"EPICS_CA_ORGANIZATION"})) {
+    if (pickone({"EPICS_CA_ORGANIZATION", "EPICS_PVAS_AUTH_STD_ORGANIZATION", "EPICS_PVA_AUTH_STD_ORGANIZATION"})) {
         ca_organization = pickone.val;
     }
 
     // EPICS_CA_ORGANIZATIONAL_UNIT
-    if (pickone({"EPICS_CA_ORGANIZATIONAL_UNIT"})) {
+    if (pickone({"EPICS_CA_ORGANIZATIONAL_UNIT", "EPICS_PVAS_AUTH_STD_ORG_UNIT", "EPICS_PVA_AUTH_STD_ORG_UNIT"})) {
         ca_organizational_unit = pickone.val;
     }
 
     // EPICS_CA_COUNTRY
-    if (pickone({"EPICS_CA_COUNTRY"})) {
+    if (pickone({"EPICS_CA_COUNTRY", "EPICS_PVAS_AUTH_STD_COUNTRY", "EPICS_PVA_AUTH_STD_COUNTRY"})) {
         ca_country = pickone.val;
     }
 

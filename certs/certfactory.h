@@ -7,8 +7,9 @@
 #ifndef PVXS_CERT_FACTORY_H
 #define PVXS_CERT_FACTORY_H
 
-#include <certfilefactory.h>
 #include <tuple>
+
+#include <certfilefactory.h>
 
 #include <openssl/bio.h>
 #include <openssl/err.h>
@@ -85,11 +86,11 @@ class PVXS_API CertFactory {
      * certificate
      */
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
-                const std::string &org_unit, time_t not_before, time_t not_after, const uint16_t &usage, bool cert_status_subscription_required = false,
-                X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr, STACK_OF(X509) *issuer_chain_ptr = nullptr,
-                certstatus_t initial_status = VALID)
+                const std::string &org_unit, const time_t not_before, const time_t not_after, const uint16_t &usage,
+                const bool cert_status_subscription_required = false, X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr,
+                STACK_OF(X509) *issuer_chain_ptr = nullptr, certstatus_t initial_status = VALID)
         : CertFactory(serial, key_pair, name, country, org, org_unit, not_before, not_after, usage, {}, cert_status_subscription_required,
-            issuer_certificate_ptr, issuer_pkey_ptr, issuer_chain_ptr, initial_status) {}
+                      issuer_certificate_ptr, issuer_pkey_ptr, issuer_chain_ptr, initial_status) {}
 
     /**
      * @brief Constructor for CertFactory
@@ -116,9 +117,9 @@ class PVXS_API CertFactory {
      * @param initial_status the initial status - defaults to VALID
      */
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
-                const std::string &org_unit, time_t not_before, time_t not_after, const uint16_t &usage, const std::string &cert_config_uri_base, bool cert_status_subscription_required = false,
-                X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr, STACK_OF(X509) *issuer_chain_ptr = nullptr,
-                certstatus_t initial_status = VALID)
+                const std::string &org_unit, const time_t not_before, time_t not_after, const uint16_t &usage, const std::string &cert_config_uri_base,
+                const bool cert_status_subscription_required = false, X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr,
+                STACK_OF(X509) *issuer_chain_ptr = nullptr, certstatus_t initial_status = VALID)
         : serial_(serial),
           key_pair_(key_pair),
           name_(name),
@@ -134,11 +135,11 @@ class PVXS_API CertFactory {
           certificate_chain_(sk_X509_new_null()),
           initial_status_(initial_status) {
         cert_status_subscription_required_ = cert_status_subscription_required, cert_config_uri_base_ = cert_config_uri_base;
-    };
+    }
 
     ossl_ptr<X509> PVXS_API create();
 
-    static time_t getNotAfterTimeFromCert(const ossl_ptr<X509> & cert);
+    static time_t getNotAfterTimeFromCert(const ossl_ptr<X509> &cert);
 
     static std::string PVXS_API certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * ca);
 
@@ -192,17 +193,17 @@ class PVXS_API CertFactory {
         }
     }
 
-    void setSubject(const ossl_ptr<X509> &certificate);
+    void setSubject(const ossl_ptr<X509> &certificate) const;
 
     void setValidity(const ossl_ptr<X509> &certificate) const;
 
     void setSerialNumber(const ossl_ptr<X509> &certificate) const;
 
-    void addExtensions(const ossl_ptr<X509> &certificate);
+    void addExtensions(const ossl_ptr<X509> &certificate) const;
 
-    void addExtension(const ossl_ptr<X509> &certificate, int nid, const char *value, const X509 *subject = nullptr);
+    void addExtension(const ossl_ptr<X509> &certificate, int nid, const char *value, const X509 *subject = nullptr) const;
 
-    void addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value) const;
+    void addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, const std::string &value) const;
 
     static void writeCertToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<X509> &cert);
 
@@ -210,7 +211,7 @@ class PVXS_API CertFactory {
 
     static ossl_ptr<BIO> newBio();
 
-    void set_skid(ossl_ptr<X509> &certificate);
+    void set_skid(const ossl_ptr<X509> &certificate);
 };
 
 }  // namespace certs

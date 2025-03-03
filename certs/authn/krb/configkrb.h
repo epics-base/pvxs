@@ -28,7 +28,7 @@ namespace certs {
  * It adds the kerberos validator service name, realm for use in the authn CCR creation
  * and keytab file for use in the PVACMS CCR verification.
  */
-class ConfigKrb : public ConfigAuthN {
+class ConfigKrb final : public ConfigAuthN {
    public:
     ConfigKrb& applyEnv() {
         Config::applyEnv(true, CLIENT);
@@ -49,7 +49,7 @@ class ConfigKrb : public ConfigAuthN {
      */
     static ConfigKrb fromEnv() {
         auto config = ConfigKrb{}.applyEnv();
-        auto defs = std::map<std::string, std::string>();
+        const auto defs = std::map<std::string, std::string>();
         config.fromAuthEnv(defs);
         config.fromKrbEnv(defs);
         return config;
