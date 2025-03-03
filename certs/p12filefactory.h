@@ -36,10 +36,10 @@ namespace certs {
 class P12FileFactory : public IdFileFactory {
    public:
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr, stack_st_X509 *certs_ptr)
-        : IdFileFactory(filename, password, key_pair, cert_ptr, certs_ptr, ""), p12_ptr_(nullptr) {}
+        : IdFileFactory(filename, password, key_pair, cert_ptr, certs_ptr, "") {}
 
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, const std::string &pem_string)
-        : IdFileFactory(filename, password, key_pair, nullptr, nullptr, pem_string), p12_ptr_(nullptr) {}
+        : IdFileFactory(filename, password, key_pair, nullptr, nullptr, pem_string) {}
 
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, PKCS12 *p12_ptr)
         : IdFileFactory(filename, password, key_pair, nullptr, nullptr, ""), p12_ptr_(p12_ptr) {}

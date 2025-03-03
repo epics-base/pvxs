@@ -112,6 +112,8 @@ CertData P12FileFactory::getCertDataFromFile() {
 
     ossl_shared_ptr<STACK_OF(X509)> shared_chain(std::move(chain));
 
+    if ( !sk_X509_num(shared_chain.get())) shared_chain = nullptr;
+
     return {cert, shared_chain, (pkey ? std::make_shared<KeyPair>(std::move(pkey)) : nullptr)};
 }
 

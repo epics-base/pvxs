@@ -1053,16 +1053,14 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
         cert_data = IdFileFactory::create(config.ca_keychain_file, config.ca_keychain_pwd)->getCertDataFromFile();
     } catch (...) {
     }
-    std::shared_ptr<KeyPair> key_pair = cert_data.key_pair;
-    if (!key_pair && cert_data.cert) throw(std::runtime_error("Keychain file contains a certificate but no key: "));
+    auto key_pair = cert_data.key_pair;
 
-    if (!key_pair) key_pair = IdFileFactory::createKeyPair();
-
-    if (!cert_data.cert) {
-        is_initialising = true;
+    if (!key_pair) {
+        is_initialising = true; // Let caller know that we've created a new Cert and Key
+        key_pair = IdFileFactory::createKeyPair();
         cert_data = createCaCertificate(config, ca_db, key_pair);
         createDefaultAdminACF(config, cert_data.cert);
-        createDefaultAdminClientCert(config, ca_db, key_pair->pkey, cert_data.cert, cert_data.ca);
+        createAdminClientCert(config, ca_db, key_pair->pkey, cert_data.cert, cert_data.ca);
     }
 
     ca_pkey = std::move(key_pair->pkey);
@@ -1256,7 +1254,7 @@ void addNewAdminToYamlFile(const std::string &filename, const std::string &admin
  * @param config the config to read to find out the name of the acf file
  * @param admin_name the admin name to add
  */
-void addNewAdminToAcf(const ConfigCms &config, const std::string &admin_name) {
+void addUserToAdminACF(const ConfigCms &config, const std::string &admin_name) {
     std::string extension = config.ca_acf_filename.substr(config.ca_acf_filename.find_last_of(".") + 1);
     std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 
@@ -1280,7 +1278,7 @@ void addNewAdminToAcf(const ConfigCms &config, const std::string &admin_name) {
  * @param ca_pkey The CA's key pair to use to create the certificate
  * @param admin_name The optional name of the administrator (defaults to admin if not specified)
  */
-void createDefaultAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
+void createAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
                                   ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name) {
     auto key_pair = IdFileFactory::createKeyPair();
     auto serial = generateSerial();
@@ -2058,8 +2056,8 @@ int main(int argc, char *argv[]) {
 
         if (!admin_name.empty()) {
             try {
-                createDefaultAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain, admin_name);
-                addNewAdminToAcf(config, admin_name);
+                createAdminClientCert(config, ca_db, ca_pkey, ca_cert, ca_chain, admin_name);
+                addUserToAdminACF(config, admin_name);
                 std::cout << "Admin user \"" << admin_name << "\" has been added to list of administrators of this PVACMS" << std::endl;
                 std::cout << "Restart the PVACMS for it to take effect" << std::endl;
             } catch (const std::runtime_error &e) {
