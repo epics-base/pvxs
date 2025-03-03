@@ -43,7 +43,7 @@ std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequ
     log_info_printf(auths, "X.509 CLIENT certificate%s\n", "");
     log_info_printf(auths, "%s\n", value["status.value.index"].as<std::string>().c_str());
     log_info_printf(auths, "%s\n", value["state"].as<std::string>().c_str());
-    log_info_printf(auths, "%llu\n", value["serial"].as<serial_number_t>());
+    log_info_printf(auths, "%llu\n", (unsigned long long)value["serial"].as<serial_number_t>());
     log_info_printf(auths, "%s\n", value["issuer"].as<std::string>().c_str());
     log_info_printf(auths, "%s\n", value["certid"].as<std::string>().c_str());
     log_info_printf(auths, "%s\n", value["statuspv"].as<std::string>().c_str());
