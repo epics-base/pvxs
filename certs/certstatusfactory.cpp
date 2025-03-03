@@ -41,7 +41,8 @@ class CertStatusManager;
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_ptr<X509>& cert, const certstatus_t status, const StatusDate &status_date, const StatusDate &predicated_revocation_time) const {
+PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_ptr<X509>& cert, const certstatus_t status, const StatusDate& status_date,
+                                                                   const StatusDate& predicated_revocation_time) const {
     return createPVACertificateStatus(getSerialNumber(cert), status, status_date, predicated_revocation_time);
 }
 

@@ -283,13 +283,12 @@ struct Tester {
         }
 
         // Create the concatenated whoami response string from the `method` and `account`
-        Value getWhoAmIValue(const std::shared_ptr<const server::ClientCredentials> &cred) const {
+        Value getWhoAmIValue(const std::shared_ptr<const server::ClientCredentials>& cred) const {
             std::ostringstream strm;
             strm << cred->method << '/' << cred->account;
             return resultType.cloneEmpty().update(TEST_PV_FIELD, strm.str());
         }
     };
-
 
     /**
      * @brief testServerOnly is a test that verifies the client can connect in server-only authenticated TLS mode
@@ -331,7 +330,6 @@ struct Tester {
 
         conn.reset();
     }
-
 
     /**
      * @brief Test getting a value using a certificate that is configured to use an intermediate CA
@@ -679,8 +677,7 @@ struct Tester {
             try {
                 auto reply(cli2.get(TEST_PV2).exec()->wait(3.0));
                 testFail("Unexpected Success");
-                if (reply)
-                    testFalse(reply[TEST_PV_FIELD].as<int32_t>() == 42);  // Should not get here
+                if (reply) testFalse(reply[TEST_PV_FIELD].as<int32_t>() == 42);  // Should not get here
             } catch (std::exception& e) {
                 testStrEq("Timeout", e.what());
             }

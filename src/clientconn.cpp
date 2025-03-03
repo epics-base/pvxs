@@ -37,7 +37,7 @@ DEFINE_LOGGER(stapling, "pvxs.stapling");
  * @return Typically returns an integer value indicating the SSL_TLSEXT_ERR_OK, SSL_TLSEXT_ERR_ALERT_WARNING,
  * or SSL_TLSEXT_ERR_ALERT_FATAL of the OCSP validation.
  */
- int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
+int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
     log_debug_printf(stapling, "Client OCSP Stapling: %s\n", "clientOCSPCallback");
     // Find out what the peer cert we're verifying is
     X509* peer_cert = SSL_get_peer_certificate(ctx);
@@ -71,7 +71,7 @@ DEFINE_LOGGER(stapling, "pvxs.stapling");
             log_debug_printf(stapling, "Client OCSP stapled status valid until: %s\n", parsed_status.status_valid_until_date.s.c_str());
             log_debug_printf(stapling, "Client OCSP stapled revocation date: %s\n", parsed_status.revocation_date.s.c_str());
             return PVXS_OCSP_STAPLING_OK;
-        } catch (const certs::OCSPParseException &e) {
+        } catch (const certs::OCSPParseException& e) {
             log_warn_printf(stapling, "Stapled OCSP response invalid: %s\n", e.what());
             return PVXS_OCSP_STAPLING_NAK;
         }

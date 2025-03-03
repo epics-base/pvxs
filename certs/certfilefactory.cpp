@@ -149,8 +149,7 @@ cert_factory_ptr IdFileFactory::create(const std::string& filename, const std::s
                                        STACK_OF(X509) * certs_ptr, const std::string& pem_string) {
     const std::string ext = getExtension(filename);
     if (ext == "p12" || ext == "pfx") {
-        if (cert_ptr)
-            return make_factory_ptr<P12FileFactory>(filename, password, key_pair, cert_ptr, certs_ptr);
+        if (cert_ptr) return make_factory_ptr<P12FileFactory>(filename, password, key_pair, cert_ptr, certs_ptr);
         return make_factory_ptr<P12FileFactory>(filename, password, key_pair, pem_string);
     }
     throw std::runtime_error(SB() << ": Unsupported keychain file extension (expected p12 or pfx): \"" << (ext.empty() ? "<none>" : ext) << "\"");

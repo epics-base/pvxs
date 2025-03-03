@@ -442,7 +442,7 @@ void updateCertificateStatus(const sql_ptr &ca_db, serial_number_t serial, const
  */
 serial_number_t generateSerial() {
     std::random_device random_from_device;                        // Obtain a random number from hardware
-    auto seed = std::mt19937_64(random_from_device());          // Seed the generator
+    auto seed = std::mt19937_64(random_from_device());            // Seed the generator
     std::uniform_int_distribution<serial_number_t> distribution;  // Define the range
 
     const serial_number_t random_serial_number = distribution(seed);  // Generate a random number
@@ -465,9 +465,9 @@ certstatus_t storeCertificate(const sql_ptr &ca_db, CertFactory &cert_factory) {
     const auto db_serial = *reinterpret_cast<int64_t *>(&cert_factory.serial_);  // db stores as signed int so convert to and from
     const auto current_time = std::time(nullptr);
     const auto effective_status = cert_factory.initial_status_ != VALID     ? cert_factory.initial_status_
-                            : current_time < cert_factory.not_before_ ? PENDING
-                            : current_time >= cert_factory.not_after_ ? EXPIRED
-                                                                      : cert_factory.initial_status_;
+                                  : current_time < cert_factory.not_before_ ? PENDING
+                                  : current_time >= cert_factory.not_after_ ? EXPIRED
+                                                                            : cert_factory.initial_status_;
 
     checkForDuplicates(ca_db, cert_factory);
 
@@ -589,18 +589,13 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &cert_factory) {
     log_info_printf(pvacms, "%s *=> %s\n", cert_id.c_str(), CERT_STATE(effective_status));
     log_debug_printf(pvacms, "--------------------------------------%s", "\n");
     auto cert_description = (SB() << "X.509 "
-                                  << (IS_USED_FOR_(cert_factory.usage_, ssl::kForIntermediateCa)
-                                          ? "INTERMEDIATE CA"
-                                          : IS_USED_FOR_(cert_factory.usage_, ssl::kForClientAndServer)
-                                                ? "CLIENT & SERVER"
-                                                : IS_USED_FOR_(cert_factory.usage_, ssl::kForClient)
-                                                      ? "CLIENT"
-                                                      : IS_USED_FOR_(cert_factory.usage_, ssl::kForServer)
-                                                            ? "SERVER"
-                                                            : IS_USED_FOR_(cert_factory.usage_, ssl::kForCMS)
-                                                                  ? "PVACMS"
-                                                                  : IS_USED_FOR_(cert_factory.usage_, ssl::kForCa)
-                                                                        ? "CA" : "STRANGE")
+                                  << (IS_USED_FOR_(cert_factory.usage_, ssl::kForIntermediateCa)    ? "INTERMEDIATE CA"
+                                      : IS_USED_FOR_(cert_factory.usage_, ssl::kForClientAndServer) ? "CLIENT & SERVER"
+                                      : IS_USED_FOR_(cert_factory.usage_, ssl::kForClient)          ? "CLIENT"
+                                      : IS_USED_FOR_(cert_factory.usage_, ssl::kForServer)          ? "SERVER"
+                                      : IS_USED_FOR_(cert_factory.usage_, ssl::kForCMS)             ? "PVACMS"
+                                      : IS_USED_FOR_(cert_factory.usage_, ssl::kForCa)              ? "CA"
+                                                                                                    : "STRANGE")
                                   << " certificate")
                                 .str();
     log_debug_printf(pvacms, "%s\n", cert_description.c_str());
@@ -667,7 +662,8 @@ T getStructureValue(const Value &src, const std::string &field) {
  * @param organization_unit The organizational unit of the certificate
  * @return True if the certificate has been previously approved, false otherwise
  */
-bool getPriorApprovalStatus(const sql_ptr &ca_db, const std::string &name, const std::string &country, const std::string &organization, const std::string &organization_unit) {
+bool getPriorApprovalStatus(const sql_ptr &ca_db, const std::string &name, const std::string &country, const std::string &organization,
+                            const std::string &organization_unit) {
     // Check for duplicate subject
     sqlite3_stmt *sql_statement;
     bool previously_approved{false};
@@ -706,7 +702,8 @@ bool getPriorApprovalStatus(const sql_ptr &ca_db, const std::string &name, const
  * @param issuer_id the issuer ID to be encoded in the certificate
  */
 void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, server::SharedWildcardPV &shared_status_pv, std::unique_ptr<server::ExecOp> &&op, Value &&args,
-                         const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<stack_st_X509> &ca_chain, std::string issuer_id) {
+                         const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<stack_st_X509> &ca_chain,
+                         std::string issuer_id) {
     auto ccr = args["query"];
 
     // First make sure that we've updated any expired cert first
@@ -811,9 +808,9 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, server::SharedWildca
  *
  * @return void
  */
-void onGetStatus(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, const std::string &pv_name,
-                 const serial_number_t serial, const std::string &issuer_id, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
-                 const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
+void onGetStatus(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
+                 const std::string &pv_name, const serial_number_t serial, const std::string &issuer_id, const ossl_ptr<EVP_PKEY> &ca_pkey,
+                 const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
@@ -867,9 +864,9 @@ void onGetStatus(const ConfigCms &config, const sql_ptr &ca_db, const std::strin
  *
  * @return void
  */
-void onRevoke(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
-              const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
-              const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
+void onRevoke(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
+              std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey,
+              const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
@@ -913,9 +910,9 @@ void onRevoke(const ConfigCms &config, const sql_ptr &ca_db, const std::string &
  *
  * @return void
  */
-void onApprove(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
-               const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
-               const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
+void onApprove(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
+               std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey,
+               const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
@@ -970,9 +967,9 @@ void onApprove(const ConfigCms &config, const sql_ptr &ca_db, const std::string 
  *
  * @return void
  */
-void onDeny(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op,
-            const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
-            const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
+void onDeny(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
+            std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey,
+            const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain) {
     Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
@@ -1055,7 +1052,7 @@ void getOrCreateCaCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<
     auto key_pair = cert_data.key_pair;
 
     if (!key_pair) {
-        is_initialising = true; // Let caller know that we've created a new Cert and Key
+        is_initialising = true;  // Let caller know that we've created a new Cert and Key
         key_pair = IdFileFactory::createKeyPair();
         cert_data = createCaCertificate(config, ca_db, key_pair);
         createDefaultAdminACF(config, cert_data.cert);
@@ -1085,42 +1082,42 @@ void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &ca_cer
     }
 
     extension == "yaml" || extension == "yml" ? out_file << "# EPICS YAML\n"
-                                                              "version: 1.0\n"
-                                                              "\n"
-                                                              "# user access groups\n"
-                                                              "uags:\n"
-                                                              "  - name: CMS_ADMIN\n"
-                                                              "    users:\n"
-                                                              "      - admin\n"
-                                                              "\n"
-                                                              "# Access security group definitions\n"
-                                                              "asgs:\n"
-                                                              "  - name: DEFAULT\n"
-                                                              "    rules:\n"
-                                                              "      - level: 0\n"
-                                                              "        access: READ\n"
-                                                              "      - level: 1\n"
-                                                              "        access: WRITE\n"
-                                                              "        uags:\n"
-                                                              "          - CMS_ADMIN\n"
-                                                              "        methods:\n"
-                                                              "          - x509\n"
-                                                              "        authorities:\n"
-                                                              "          - "
-                                                           << cn << std::endl
-                                                : out_file << "UAG(CMS_ADMIN) {admin}\n"
-                                                              "\n"
-                                                              "ASG(DEFAULT) {\n"
-                                                              "    RULE(0,READ)\n"
-                                                              "    RULE(1,WRITE) {\n"
-                                                              "        UAG(CMS_ADMIN)\n"
-                                                              "        METHOD(\"x509\")\n"
-                                                              "        AUTHORITY(\""
-                                                           << cn
-                                                           << "\")\n"
-                                                              "    }\n"
-                                                              "}"
-                                                           << std::endl;
+                                                            "version: 1.0\n"
+                                                            "\n"
+                                                            "# user access groups\n"
+                                                            "uags:\n"
+                                                            "  - name: CMS_ADMIN\n"
+                                                            "    users:\n"
+                                                            "      - admin\n"
+                                                            "\n"
+                                                            "# Access security group definitions\n"
+                                                            "asgs:\n"
+                                                            "  - name: DEFAULT\n"
+                                                            "    rules:\n"
+                                                            "      - level: 0\n"
+                                                            "        access: READ\n"
+                                                            "      - level: 1\n"
+                                                            "        access: WRITE\n"
+                                                            "        uags:\n"
+                                                            "          - CMS_ADMIN\n"
+                                                            "        methods:\n"
+                                                            "          - x509\n"
+                                                            "        authorities:\n"
+                                                            "          - "
+                                                         << cn << std::endl
+                                              : out_file << "UAG(CMS_ADMIN) {admin}\n"
+                                                            "\n"
+                                                            "ASG(DEFAULT) {\n"
+                                                            "    RULE(0,READ)\n"
+                                                            "    RULE(1,WRITE) {\n"
+                                                            "        UAG(CMS_ADMIN)\n"
+                                                            "        METHOD(\"x509\")\n"
+                                                            "        AUTHORITY(\""
+                                                         << cn
+                                                         << "\")\n"
+                                                            "    }\n"
+                                                            "}"
+                                                         << std::endl;
 
     out_file.close();
 
@@ -1278,7 +1275,7 @@ void addUserToAdminACF(const ConfigCms &config, const std::string &admin_name) {
  * @param admin_name The optional name of the administrator (defaults to admin if not specified)
  */
 void createAdminClientCert(const ConfigCms &config, sql_ptr &ca_db, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
-                                  const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name) {
+                           const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name) {
     auto key_pair = IdFileFactory::createKeyPair();
     auto serial = generateSerial();
 
@@ -1830,7 +1827,7 @@ void postUpdatesToExpiredStatuses(const CertStatusFactory &cert_status_creator, 
 timeval statusMonitor(const StatusMonitor &status_monitor_params) {
     log_debug_printf(pvacmsmonitor, "Certificate Monitor Thread Wake Up%s", "\n");
     const auto cert_status_creator(CertStatusFactory(status_monitor_params.ca_cert_, status_monitor_params.ca_pkey_, status_monitor_params.ca_chain_,
-                                               status_monitor_params.config_.cert_status_validity_mins));
+                                                     status_monitor_params.config_.cert_status_validity_mins));
     // Search for next cert to become valid and update it
     postUpdateToNextCertBecomingValid(cert_status_creator, status_monitor_params);
 
@@ -2084,10 +2081,10 @@ int main(int argc, char *argv[]) {
 
         // RPC handlers
         pvxs::ossl_ptr<EVP_PKEY> ca_pub_key(X509_get_pubkey(ca_cert.get()));
-        create_pv.onRPC([&config, &ca_db, &ca_pkey, &ca_cert, ca_chain, &our_issuer_id, &status_pv](
-                            const SharedPV &, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
-            onCreateCertificate(config, ca_db, status_pv, std::move(op), std::move(args), ca_pkey, ca_cert, ca_chain, our_issuer_id);
-        });
+        create_pv.onRPC(
+            [&config, &ca_db, &ca_pkey, &ca_cert, ca_chain, &our_issuer_id, &status_pv](const SharedPV &, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
+                onCreateCertificate(config, ca_db, status_pv, std::move(op), std::move(args), ca_pkey, ca_cert, ca_chain, our_issuer_id);
+            });
 
         // Client Connect handlers GET/MONITOR
         status_pv.onFirstConnect([&config, &ca_db, &ca_pkey, &ca_cert, &ca_chain, &our_issuer_id, &active_status_validity](

@@ -91,12 +91,7 @@ class IdFileFactory {
    protected:
     IdFileFactory(const std::string& filename, const std::string& password = "", const std::shared_ptr<KeyPair>& key_pair = nullptr, X509* cert_ptr = nullptr,
                   STACK_OF(X509) * certs_ptr = nullptr, const std::string& pem_string = "")
-        : filename_(filename),
-          password_(password),
-          key_pair_(key_pair),
-          cert_ptr_(cert_ptr),
-          certs_ptr_(certs_ptr),
-          pem_string_(pem_string) {}
+        : filename_(filename), password_(password), key_pair_(key_pair), cert_ptr_(cert_ptr), certs_ptr_(certs_ptr), pem_string_(pem_string) {}
 
     std::string filename_{};
     std::string password_{};

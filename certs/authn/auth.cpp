@@ -192,7 +192,7 @@ timeval Auth::configurationMonitor(ConfigMonitorParams &config_monitor_params, s
         config_monitor_params.adaptive_timeout_mins_ = 0;
     } catch (const std::exception &e) {
         // Stop if we're already at the max retries
-        if ( config_monitor_params.adaptive_timeout_mins_ == PVXS_CONFIG_MONITOR_TIMEOUT_MAX ) return {};
+        if (config_monitor_params.adaptive_timeout_mins_ == PVXS_CONFIG_MONITOR_TIMEOUT_MAX) return {};
 
         config_monitor_params.adaptive_timeout_mins_ =
             !config_monitor_params.adaptive_timeout_mins_ ? 1 : std::min(config_monitor_params.adaptive_timeout_mins_ * 2, PVXS_CONFIG_MONITOR_TIMEOUT_MAX);

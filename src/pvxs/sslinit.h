@@ -32,7 +32,7 @@ namespace ossl {
 extern PVXS_API int NID_SPvaCertStatusURI;
 extern PVXS_API int NID_SPvaCertConfigURI;
 
-// SSL library initialization lock  
+// SSL library initialization lock
 extern epicsMutex ssl_init_lock;
 
 // Initialize the SSL library and set up the custom certificate status and config URI OIDs

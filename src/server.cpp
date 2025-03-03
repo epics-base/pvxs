@@ -980,20 +980,20 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-void Server::Pvt::doCustomServerCallback(int, const short evt, void *raw) {
+void Server::Pvt::doCustomServerCallback(int, const short evt, void* raw) {
     try {
-        const auto pvt = static_cast<Pvt *>(raw);
+        const auto pvt = static_cast<Pvt*>(raw);
         if (pvt && pvt->custom_server_callback) {
-            auto next_timeval =  pvt->custom_server_callback(evt);
+            auto next_timeval = pvt->custom_server_callback(evt);
             if (next_timeval.tv_sec == 0 && next_timeval.tv_usec == 0) {
                 next_timeval = kCustomCallbackInterval;
             }
-            if ( next_timeval.tv_sec > 0 || next_timeval.tv_usec > 0) {
-                if (event_add(pvt->custom_server_callback_timer. get(), &next_timeval))
+            if (next_timeval.tv_sec > 0 || next_timeval.tv_usec > 0) {
+                if (event_add(pvt->custom_server_callback_timer.get(), &next_timeval))
                     log_err_printf(serverio, "Error re-enabling custom server callback%s\n", "");
             }
         }
-    } catch (std::exception &e) {
+    } catch (std::exception& e) {
         log_err_printf(serverio, "Unhandled error in custom server callback: %s\n", e.what());
     }
 }

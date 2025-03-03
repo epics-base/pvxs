@@ -4,6 +4,7 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <cstdlib>
 #include <iostream>
 #include <list>
 #include <string>
@@ -17,7 +18,6 @@
 #include <pvxs/sslinit.h>
 
 #include <CLI/CLI.hpp>
-#include <cstdlib>
 
 #include "certfactory.h"
 #include "certfilefactory.h"
@@ -31,7 +31,7 @@ namespace {
 DEFINE_LOGGER(certslog, "pvxs.certs.tool");
 
 void setEcho(const bool enable) {
-    termios tty {};
+    termios tty{};
     tcgetattr(STDIN_FILENO, &tty);
     if (!enable) {
         tty.c_lflag &= ~ECHO;
@@ -43,21 +43,16 @@ void setEcho(const bool enable) {
 }  // namespace
 
 enum CertAction { STATUS, APPROVE, DENY, REVOKE };
-std::string actionToString(const CertAction& action) {
-    return action == STATUS    ? "Get Status"
-               : action == APPROVE ? "Approve"
-                     : action == REVOKE  ? "Revoke"
-                           : "Deny";
+std::string actionToString(const CertAction &action) {
+    return action == STATUS ? "Get Status" : action == APPROVE ? "Approve" : action == REVOKE ? "Revoke" : "Deny";
 }
-int readParameters(const int argc, char* argv[], const char *program_name, client::Config &conf,
-                    bool &approve, bool &revoke, bool &deny, bool &debug, bool &password_flag, bool &verbose,
-                    std::string &cert_file, std::string &issuer_serial_string) {
-
+int readParameters(const int argc, char *argv[], const char *program_name, client::Config &conf, bool &approve, bool &revoke, bool &deny, bool &debug,
+                   bool &password_flag, bool &verbose, std::string &cert_file, std::string &issuer_serial_string) {
     bool show_version{false}, help{false};
 
     // Argument configuration
     CLI::App app{"Certificate Management Utility for PVXS"};
-    app.set_help_flag("", ""); // deactivate built-in help
+    app.set_help_flag("", "");  // deactivate built-in help
 
     // Add a positional argument
     app.add_option("cert_id", issuer_serial_string)->required(false);
@@ -95,25 +90,25 @@ int readParameters(const int argc, char* argv[], const char *program_name, clien
                   << std::endl
                   << "  REVOCATION of a certificate: Can only be made by an administrator.\n"
                   << std::endl
-                  <<  "usage:\n"
-                  <<  "  " << program_name << " [options] <cert_id> Get certificate status\n"
-                  <<  "  " << program_name << " [file_options] [options] (-f | --file) <cert_file>\n"
-                  <<  "                                             Get certificate information from the specified cert file\n"
-                  <<  "  " << program_name << " [options] (-A | --approve) <cert_id>\n"
-                  <<  "                                             APPROVE pending certificate approval request (ADMIN ONLY)\n"
-                  <<  "  " << program_name << " [options] (-D | --deny) <cert_id>  DENY pending certificate approval request (ADMIN ONLY)\n"
-                  <<  "  " << program_name << " [options] (-R | --revoke) <cert_id>\n"
-                  <<  "                                             REVOKE certificate (ADMIN ONLY)\n"
-                  <<  "  " << program_name << " (-h | --help)                      Show this help message and exit\n"
-                  <<  "  " << program_name << " (-V | --version)                   Print version and exit\n"
+                  << "usage:\n"
+                  << "  " << program_name << " [options] <cert_id> Get certificate status\n"
+                  << "  " << program_name << " [file_options] [options] (-f | --file) <cert_file>\n"
+                  << "                                             Get certificate information from the specified cert file\n"
+                  << "  " << program_name << " [options] (-A | --approve) <cert_id>\n"
+                  << "                                             APPROVE pending certificate approval request (ADMIN ONLY)\n"
+                  << "  " << program_name << " [options] (-D | --deny) <cert_id>  DENY pending certificate approval request (ADMIN ONLY)\n"
+                  << "  " << program_name << " [options] (-R | --revoke) <cert_id>\n"
+                  << "                                             REVOKE certificate (ADMIN ONLY)\n"
+                  << "  " << program_name << " (-h | --help)                      Show this help message and exit\n"
+                  << "  " << program_name << " (-V | --version)                   Print version and exit\n"
                   << std::endl
-                  <<  "file_options:\n"
-                  <<  "  (-p | --password)                          Prompt for password\n"
-                  <<  "\n"
-                  <<  "options:\n"
-                  <<  "  (-w | --timeout) <timout_secs>             Operation timeout in seconds.  Default 5.0s\n"
-                  <<  "  (-d | --debug)                             Debug mode: Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\"\n"
-                  <<  "  (-v | --verbose)                           Verbose mode\n"
+                  << "file_options:\n"
+                  << "  (-p | --password)                          Prompt for password\n"
+                  << "\n"
+                  << "options:\n"
+                  << "  (-w | --timeout) <timout_secs>             Operation timeout in seconds.  Default 5.0s\n"
+                  << "  (-d | --debug)                             Debug mode: Shorthand for $PVXS_LOG=\"pvxs.*=DEBUG\"\n"
+                  << "  (-v | --verbose)                           Verbose mode\n"
                   << std::endl;
         exit(0);
     }
@@ -130,7 +125,7 @@ int readParameters(const int argc, char* argv[], const char *program_name, clien
     return 0;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     try {
         ossl::sslInit();
         logger_config_env();
@@ -142,10 +137,9 @@ int main(int argc, char* argv[]) {
         bool approve{false}, revoke{false}, deny{false}, debug{false}, password_flag{false}, verbose{false};
         std::string cert_file, password, issuer_serial_string;
 
-        auto parse_result = readParameters(argc, argv, program_name, conf, approve, revoke, deny, debug, password_flag,
-                                           verbose, cert_file, issuer_serial_string);
+        auto parse_result =
+            readParameters(argc, argv, program_name, conf, approve, revoke, deny, debug, password_flag, verbose, cert_file, issuer_serial_string);
         if (parse_result) exit(parse_result);
-
 
         if (password_flag && cert_file.empty()) {
             log_err_printf(certslog, "Error: -p must only be used with -f.%s", "\n");
@@ -156,7 +150,6 @@ int main(int argc, char* argv[]) {
             log_err_printf(certslog, "Error: -I, -A, -R, or -D cannot be used with -f.%s", "\n");
             return 2;
         }
-
 
         // Handle the flags after parsing
         if (debug) logger_level_set("pvxs.*", Level::Debug);
@@ -194,20 +187,19 @@ int main(int argc, char* argv[]) {
                 std::string config_id{};
                 try {
                     config_id = certs::CertStatusManager::getConfigPvFromCert(cert_data.cert);
-                } catch (...) {}
+                } catch (...) {
+                }
 
-                std::cout
-                << "Certificate Details: " << std::endl
-                << "============================================" << std::endl
-                << ossl::ShowX509{cert_data.cert.get()} << std::endl
-                << (config_id.empty() ? "" : "Config URI     : " + config_id + "\n")
-                << "--------------------------------------------\n" << std::endl;
+                std::cout << "Certificate Details: " << std::endl
+                          << "============================================" << std::endl
+                          << ossl::ShowX509{cert_data.cert.get()} << std::endl
+                          << (config_id.empty() ? "" : "Config URI     : " + config_id + "\n") << "--------------------------------------------\n"
+                          << std::endl;
                 cert_id = certs::CertStatusManager::getStatusPvFromCert(cert_data.cert);
-            } catch (std::exception& e) {
-                std::cout
-                << "Online Certificate Status: " << std::endl
-                << "============================================" << std::endl
-                << "Not configured: " << e.what() << std::endl;
+            } catch (std::exception &e) {
+                std::cout << "Online Certificate Status: " << std::endl
+                          << "============================================" << std::endl
+                          << "Not configured: " << e.what() << std::endl;
                 return 0;
             }
         } else {
@@ -216,7 +208,7 @@ int main(int argc, char* argv[]) {
 
         try {
             if (action != STATUS) {
-                std::cout << actionToString(action) << " ==> " << cert_id ;
+                std::cout << actionToString(action) << " ==> " << cert_id;
             }
             Value result;
             switch (action) {
@@ -235,27 +227,25 @@ int main(int argc, char* argv[]) {
             }
             Indented I(std::cout);
             if (result) {
-                std::cout
-                << "Certificate Status: " << std::endl
-                << "============================================" << std::endl
-                << "Certificate ID: " << cert_id.substr(cert_id.rfind(':')-8) << std::endl
-                << "Status        : " << result["state"].as<std::string>() << std::endl
-                << "Status Issued : " << result["ocsp_status_date"].as<std::string>() << std::endl
-                << "Status Expires: " << result["ocsp_certified_until"].as<std::string>() << std::endl ;
-                if ( result["status.value.index"].as<uint32_t>() == certs::REVOKED ) {
-                    std::cout << "Revocation Date: " << result["ocsp_revocation_date"].as<std::string>() << std::endl ;
+                std::cout << "Certificate Status: " << std::endl
+                          << "============================================" << std::endl
+                          << "Certificate ID: " << cert_id.substr(cert_id.rfind(':') - 8) << std::endl
+                          << "Status        : " << result["state"].as<std::string>() << std::endl
+                          << "Status Issued : " << result["ocsp_status_date"].as<std::string>() << std::endl
+                          << "Status Expires: " << result["ocsp_certified_until"].as<std::string>() << std::endl;
+                if (result["status.value.index"].as<uint32_t>() == certs::REVOKED) {
+                    std::cout << "Revocation Date: " << result["ocsp_revocation_date"].as<std::string>() << std::endl;
                 }
                 std::cout << "--------------------------------------------\n" << std::endl;
-            }
-            else if (action != STATUS)
+            } else if (action != STATUS)
                 std::cout << " ==> Completed Successfully\n";
-        } catch (std::exception& e) {
+        } catch (std::exception &e) {
             std::cout << std::endl;
             log_err_printf(certslog, "%s\n", e.what());
             return 4;
         }
 
-    } catch (std::exception& e) {
+    } catch (std::exception &e) {
         log_err_printf(certslog, "Error: %s%s", e.what(), "\n");
         return 5;
     }

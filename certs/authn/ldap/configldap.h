@@ -7,8 +7,8 @@
 #ifndef PVXS_CONFIGLDAP_H_
 #define PVXS_CONFIGLDAP_H_
 
-#include <pvxs/config.h>
 #include <pvxs/client.h>
+#include <pvxs/config.h>
 
 #include "configauthn.h"
 
@@ -16,7 +16,7 @@ namespace pvxs {
 namespace certs {
 
 class ConfigLdap final : public ConfigAuthN {
-  public:
+   public:
     ConfigLdap& applyEnv() {
         Config::applyEnv(true, CLIENT);
         return *this;
@@ -40,4 +40,4 @@ class ConfigLdap final : public ConfigAuthN {
 }  // namespace certs
 }  // namespace pvxs
 
-#endif //PVXS_CONFIGLDAP_H_
+#endif  // PVXS_CONFIGLDAP_H_

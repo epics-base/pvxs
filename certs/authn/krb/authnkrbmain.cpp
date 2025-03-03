@@ -134,7 +134,7 @@ int readParameters(const int argc, char *argv[], ConfigKrb &config, bool &verbos
     return 0;
 }
 
-CertData getCertificate(bool &retrieved_credentials, ConfigKrb config, uint16_t cert_usage, const AuthNKrb& authenticator, const std::string &tls_keychain_file,
+CertData getCertificate(bool &retrieved_credentials, ConfigKrb config, uint16_t cert_usage, const AuthNKrb &authenticator, const std::string &tls_keychain_file,
                         const std::string &tls_keychain_pwd) {
     CertData cert_data{};
 

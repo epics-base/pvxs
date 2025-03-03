@@ -118,31 +118,29 @@ struct SSLPeerStatusAndMonitor {
     const serial_number_t serial_number;
 
     // Peer status and monitor map holder: Cert Status Ex data where Map where status and monitors are mapped to status pv
-    CertStatusExData *ex_data_ptr;
+    CertStatusExData* ex_data_ptr;
 
     certs::CertificateStatus status;
 
     /**
      * @brief Constructor when monitoring is needed
-      * @param serial_number the serial number of the certificate that we're monitoring
-      * @param ex_data_ptr the ex_data structure that the list of peer status and monitors is stored, for cleanup
-      * @param validity_timer the status validity time to use (created externally and passed in)
-      * @param fn function to call when the status changes
-      * @param status optional initial status to set
+     * @param serial_number the serial number of the certificate that we're monitoring
+     * @param ex_data_ptr the ex_data structure that the list of peer status and monitors is stored, for cleanup
+     * @param validity_timer the status validity time to use (created externally and passed in)
+     * @param fn function to call when the status changes
+     * @param status optional initial status to set
      */
-    SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData *ex_data_ptr,  evevent&& validity_timer, const std::function<void(bool)>& fn)
-        : validity_timer(std::move(validity_timer)), fn(fn),
-          serial_number{serial_number}, ex_data_ptr{ex_data_ptr} {}
+    SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, evevent&& validity_timer, const std::function<void(bool)>& fn)
+        : validity_timer(std::move(validity_timer)), fn(fn), serial_number{serial_number}, ex_data_ptr{ex_data_ptr} {}
 
     /**
      * @brief Constructor when no monitoring is needed
-      * @param serial_number the serial number of the certificate that we're monitoring
-      * @param ex_data_ptr the ex_data structure that the list of peer status and monitors is stored, for cleanup
-      * @param status permanent status to set
+     * @param serial_number the serial number of the certificate that we're monitoring
+     * @param ex_data_ptr the ex_data structure that the list of peer status and monitors is stored, for cleanup
+     * @param status permanent status to set
      */
-    SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData *ex_data_ptr, certs::CertificateStatus &status)
+    SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, certs::CertificateStatus& status)
         : serial_number{serial_number}, ex_data_ptr{ex_data_ptr}, status{status} {}
-
 
     void updateStatus(const certs::CertificateStatus& status);
 
@@ -153,7 +151,7 @@ struct SSLPeerStatusAndMonitor {
     void restartPeerStatusValidityCountdown();
     void peersStatusValidityExpirationHandler();
 
-    bool isSubscribed() {return !cert_status_manager; }
+    bool isSubscribed() { return !cert_status_manager; }
 };
 
 struct StatusValidityExpirationHandlerParam;
@@ -203,8 +201,7 @@ struct CertStatusExData {
      * @param status_check_enabled - Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not
      * configured
      */
-    CertStatusExData(const impl::evbase& loop, bool status_check_enabled)
-        : loop(loop), status_check_enabled(status_check_enabled) {}
+    CertStatusExData(const impl::evbase& loop, bool status_check_enabled) : loop(loop), status_check_enabled(status_check_enabled) {}
 
     /**
      * @brief Returns the CertStatusExData from the SSL_CTX
@@ -253,21 +250,20 @@ struct CertStatusExData {
      * @param fn - the function to call
      * @return The peer status that was set
      */
-    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(ossl_ptr<X509> &peer_cert,
-                                                           const certs::CertificateStatus &new_status, const std::function<void(bool)> &fn = nullptr) {
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(ossl_ptr<X509>& peer_cert, const certs::CertificateStatus& new_status,
+                                                           const std::function<void(bool)>& fn = nullptr) {
         return setPeerStatus(peer_cert.get(), new_status, fn);
     }
 
-    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(ossl_ptr<X509> &peer_cert, const std::function<void(bool)> &fn = nullptr) {
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(ossl_ptr<X509>& peer_cert, const std::function<void(bool)>& fn = nullptr) {
         return setPeerStatus(peer_cert.get(), {}, fn);
     }
 
-    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(X509 *peer_cert_ptr, const std::function<void(bool)> &fn = nullptr) {
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(X509* peer_cert_ptr, const std::function<void(bool)>& fn = nullptr) {
         return setPeerStatus(peer_cert_ptr, {}, fn);
     }
 
-    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(X509 *peer_cert_ptr,
-                                                           const certs::CertificateStatus &new_status,
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(X509* peer_cert_ptr, const certs::CertificateStatus& new_status,
                                                            std::function<void(bool)> fn = nullptr);
 
     /**
@@ -279,8 +275,7 @@ struct CertStatusExData {
         auto it = peer_statuses.find(serial_number);
         if (it != peer_statuses.end()) {
             auto peer_status = it->second.lock();
-            if (peer_status)
-                return peer_status;
+            if (peer_status) return peer_status;
         }
         return {};
     }
@@ -291,9 +286,9 @@ struct CertStatusExData {
      * @param fn - Function to call when the peer status changes from good to bad or vice versa
      * @return a shared pointer to the peer status and optional monitor
      */
-    std::shared_ptr<SSLPeerStatusAndMonitor> subscribeToPeerCertStatus(X509* cert_ptr, std::function<void(bool)> fn) noexcept ;
+    std::shared_ptr<SSLPeerStatusAndMonitor> subscribeToPeerCertStatus(X509* cert_ptr, std::function<void(bool)> fn) noexcept;
 
-  private:
+   private:
     /**
      * @brief Static peers status validity expiration handler
      *
@@ -317,7 +312,7 @@ struct CertStatusExData {
      * @param fn - Function to call when the peer status changes
      * @return The peer status that was created or found
      */
-    std::shared_ptr<SSLPeerStatusAndMonitor> getOrCreatePeerStatus(serial_number_t serial_number, const std::string &status_pv={},
+    std::shared_ptr<SSLPeerStatusAndMonitor> getOrCreatePeerStatus(serial_number_t serial_number, const std::string& status_pv = {},
                                                                    std::function<void(bool)> fn = nullptr);
 };
 
@@ -394,7 +389,7 @@ struct SSLContext {
      * @param cert the entity certificate
      * @param trusted_root_ca the trusted root to verify OCSP status with
      */
-    void monitorStatusAndSetState(const ossl_ptr<X509>&cert, X509_STORE *trusted_store_ptr);
+    void monitorStatusAndSetState(const ossl_ptr<X509>& cert, X509_STORE* trusted_store_ptr);
     void setDegradedMode(bool clear = false);
     void setTlsOrTcpMode();
 

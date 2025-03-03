@@ -135,8 +135,8 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
     return 0;
 }
 
-CertData getCertificate(bool &retrieved_credentials, ConfigLdap config, uint16_t cert_usage, const AuthNLdap& authenticator, const std::string &tls_keychain_file,
-                        const std::string &tls_keychain_pwd) {
+CertData getCertificate(bool &retrieved_credentials, ConfigLdap config, uint16_t cert_usage, const AuthNLdap &authenticator,
+                        const std::string &tls_keychain_file, const std::string &tls_keychain_pwd) {
     CertData cert_data{};
 
     if (auto credentials = authenticator.getCredentials(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient))) {

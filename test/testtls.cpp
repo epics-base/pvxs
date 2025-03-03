@@ -5,10 +5,10 @@
  */
 #define PVXS_ENABLE_EXPERT_API
 
+#include <cstring>
 #include <sstream>
 
 #include <epicsUnitTest.h>
-#include <cstring>
 #include <testMain.h>
 
 #include <pvxs/client.h>
@@ -199,7 +199,7 @@ void testServerOnly() {
     serv.start();
 
     auto is_tls{false};
-    auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) { is_tls =c.cred && c.cred->isTLS; }).exec());
+    auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) { is_tls = c.cred && c.cred->isTLS; }).exec());
 
     auto reply(cli.get(TEST_PV).exec()->wait(5.0));
     testTrue(is_tls);
@@ -233,7 +233,7 @@ void testStrictServer() {
         auto cli(cli_conf.build());
 
         auto is_tls{false};
-        auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) { is_tls =c.cred && c.cred->isTLS; }).exec());
+        auto conn(cli.connect(TEST_PV).onConnect([&is_tls](const client::Connected& c) { is_tls = c.cred && c.cred->isTLS; }).exec());
 
         auto reply(cli.get(TEST_PV).exec()->wait(3.0));
         testTrue(!is_tls);
@@ -251,7 +251,7 @@ void testStrictServer() {
         auto reply(cli.get(TEST_PV).exec()->wait(3.0));
         testFail("Unexpected reply with server only setup");
     } catch (std::exception& e) {
-        testTrue(std::string{e.what()} ==  "Timeout");
+        testTrue(std::string{e.what()} == "Timeout");
     }
 }
 
@@ -345,7 +345,7 @@ void testGetNameServer() {
     try {
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-    } catch (std::exception &) {
+    } catch (std::exception&) {
         testFail("timeout waiting for event");
     }
 }

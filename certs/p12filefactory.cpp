@@ -104,7 +104,7 @@ CertData P12FileFactory::getCertDataFromFile() {
         throw std::runtime_error(SB() << "Error parsing keychain file: " << filename_);
     }
 
-    if ( !!cert  ^ !!pkey ) {
+    if (!!cert ^ !!pkey) {
         log_warn_printf(filelogger, "Inconsistency between certificate and key: %s\n", filename_.c_str());
         cert.reset();
         pkey.reset();
@@ -198,11 +198,11 @@ ossl_ptr<PKCS12> P12FileFactory::toP12(const std::string &password, EVP_PKEY *ke
             // Use null cert and construct chain from cert
             chainFromRootCertPtr(cert_chain_ptr, cert_ptr);
             ERR_clear_error();
-            p12.reset(PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, nullptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr,
-                                        nullptr, &jdkTrust, nullptr));
+            p12.reset(
+                PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, nullptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr, nullptr, &jdkTrust, nullptr));
         } else {
-            p12.reset(PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, cert_ptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr,
-                                        nullptr, &jdkTrust, nullptr));
+            p12.reset(
+                PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, cert_ptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr, nullptr, &jdkTrust, nullptr));
         }
     }
 

@@ -213,7 +213,8 @@ std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const s
     }
 
     // Convert the MIC token into shared_array.
-    const shared_array<const uint8_t> mic_bytes(static_cast<const uint8_t *>(mic_token.value), static_cast<const uint8_t *>(mic_token.value) + mic_token.length);
+    const shared_array<const uint8_t> mic_bytes(static_cast<const uint8_t *>(mic_token.value),
+                                                static_cast<const uint8_t *>(mic_token.value) + mic_token.length);
 
     // Release the MIC token buffer.
     gss_release_buffer(&minor_status, &mic_token);

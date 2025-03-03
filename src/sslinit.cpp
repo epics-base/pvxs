@@ -28,7 +28,7 @@ epicsMutex ssl_init_lock;
 
 /**
  * @brief Initializes the SSL library and sets up the custom certificate status URI OID
- * 
+ *
  * This is idempotent
  *
  * It will do all the one time SSL library initialization that is required, inluding
