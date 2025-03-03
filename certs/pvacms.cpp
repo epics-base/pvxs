@@ -1046,7 +1046,7 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
  * @param ca_chain reference to the certificate chain of the returned cert
  * @param is_initialising true if we are in the initializing state when called
  */
-void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
+void getOrCreateCaCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool &is_initialising) {
     CertData cert_data;
     try {
@@ -1278,8 +1278,8 @@ void addUserToAdminACF(const ConfigCms &config, const std::string &admin_name) {
  * @param ca_pkey The CA's key pair to use to create the certificate
  * @param admin_name The optional name of the administrator (defaults to admin if not specified)
  */
-void createAdminClientCert(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
-                                  ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name) {
+void createAdminClientCert(const ConfigCms &config, sql_ptr &ca_db, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
+                                  const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name) {
     auto key_pair = IdFileFactory::createKeyPair();
     auto serial = generateSerial();
 

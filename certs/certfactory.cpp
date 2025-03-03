@@ -27,6 +27,7 @@
 #include <pvxs/log.h>
 #include <pvxs/sslinit.h>
 
+#include "certstatusfactory.h"
 #include "openssl.h"
 #include "osiFileName.h"
 #include "ownedptr.h"
@@ -52,6 +53,7 @@ ossl_ptr<X509> CertFactory::create() {
 
     // 2. Determine issuer: If no issuer then self sign, or specify cert & key
     if (!issuer_certificate_ptr_) {
+        // ReSharper disable once CppDFALocalValueEscapesFunction
         issuer_certificate_ptr_ = certificate.get();
         issuer_pkey_ptr_ = key_pair_->pkey.get();
         issuer_chain_ptr_ = nullptr;
@@ -96,8 +98,8 @@ ossl_ptr<X509> CertFactory::create() {
 
     // 11. Add EPICS status and config subscription extensions, if required and is not CMS itself
     if (!IS_USED_FOR_(usage_, ssl::kForCMS)) {
-        auto issuer_id = CertStatus::getSkId(issuer_certificate_ptr_);
-        auto skid = CertStatus::getSkId(certificate);
+        const auto issuer_id = CertStatus::getSkId(issuer_certificate_ptr_);
+        const auto skid = CertStatus::getSkId(certificate);
         if (cert_status_subscription_required_) {
             addCustomExtensionByNid(certificate, ossl::NID_SPvaCertStatusURI, CertStatus::makeStatusURI(issuer_id, serial_));
         }
@@ -109,16 +111,21 @@ ossl_ptr<X509> CertFactory::create() {
     // 12. Create cert chain from issuer's chain and issuer's cert
     if (issuer_chain_ptr_) {
         // Fill with issuer chain certificates if supplied
-        int num_certs = sk_X509_num(issuer_chain_ptr_);
+        const int num_certs = sk_X509_num(issuer_chain_ptr_);
         log_debug_printf(certs, "Creating Certificate Chain with %d entries\n", num_certs + 1);
         for (int i = 0; i < num_certs; ++i) {
-            if (sk_X509_push(certificate_chain_.get(), sk_X509_value(issuer_chain_ptr_, i)) != 1) {
-                throw std::runtime_error(SB() << "Failed create certificate chain for new certificate");
+            auto chain_cert = sk_X509_value(issuer_chain_ptr_, i);
+            if (sk_X509_push(certificate_chain_.get(), chain_cert) != 1) {
+                throw std::runtime_error(SB() << "Failed to create certificate chain for new certificate");
             }
         }
-        // Add the issuer's certificate too
-        if (sk_X509_push(certificate_chain_.get(), issuer_certificate_ptr_) != 1) {
-            throw std::runtime_error(SB() << "Failed add issuer certificate to certificate chain");
+        // Add the issuer's certificate too if not already added
+        const serial_number_t issuer_serial_number = issuer_certificate_ptr_ ? CertStatusFactory::getSerialNumber(issuer_certificate_ptr_) : 0;
+        const auto root_cert = sk_X509_value(issuer_chain_ptr_, num_certs - 1);
+        const serial_number_t root_serial_number = root_cert ? CertStatusFactory::getSerialNumber(root_cert) : 0;
+        const auto already_added = issuer_serial_number == root_serial_number;
+        if (!already_added && sk_X509_push(certificate_chain_.get(), issuer_certificate_ptr_) != 1) {
+            throw std::runtime_error(SB() << "Failed to add issuer certificate to certificate chain");
         }
     } else
         log_debug_printf(certs, "Creating %s Certificate Chain\n", "*EMPTY*");

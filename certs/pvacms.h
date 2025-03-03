@@ -251,13 +251,13 @@ time_t getNotAfterTimeFromCert(const X509 *cert);
 
 time_t getNotBeforeTimeFromCert(const X509 *cert);
 
-void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
+void getOrCreateCaCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool &is_initialising);
 
 void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &ca_cert);
 
-void createAdminClientCert(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
-                                  ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name = "admin");
+void createAdminClientCert(const ConfigCms &config, sql_ptr &ca_db, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
+                                  const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name = "admin");
 
 void initCertsDatabase(sql_ptr &ca_db, const std::string &db_file);
 

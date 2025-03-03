@@ -204,32 +204,5 @@ std::vector<uint8_t> CertStatusFactory::ocspResponseToBytes(const ossl_ptr<OCSP_
     return resp_bytes;
 }
 
-/**
- * @brief Get serial number from an owned cert
- * @param cert owned cert
- * @return serial number
- */
-uint64_t CertStatusFactory::getSerialNumber(const ossl_ptr<X509>& cert) { return getSerialNumber(cert.get()); }
-
-/**
- * @brief Get a serial number from a cert pointer
- * @param cert cert pointer
- * @return serial number
- */
-uint64_t CertStatusFactory::getSerialNumber(X509* cert) {
-    if (!cert) {
-        throw std::runtime_error("Can't get serial number: Null certificate");
-    }
-
-    // Extract the serial number from the certificate
-    ASN1_INTEGER* serial_number_asn1 = X509_get_serialNumber(cert);
-    if (!serial_number_asn1) {
-        throw std::runtime_error("Failed to retrieve serial number from certificate");
-    }
-
-    // Convert ASN1_INTEGER to a 64-bit unsigned integer
-    return ASN1ToUint64(serial_number_asn1);
-}
-
 }  // namespace certs
 }  // namespace pvxs

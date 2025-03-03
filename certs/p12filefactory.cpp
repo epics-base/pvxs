@@ -84,7 +84,7 @@ std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
  */
 CertData P12FileFactory::getCertDataFromFile() {
     ossl_ptr<X509> cert;
-    ossl_ptr<STACK_OF(X509)> chain(sk_X509_new_null());
+    ossl_ptr<STACK_OF(X509)> chain(sk_X509_new_null(), false);
     std::shared_ptr<KeyPair> key_pair;
     ossl_ptr<EVP_PKEY> pkey;
 
@@ -106,14 +106,24 @@ CertData P12FileFactory::getCertDataFromFile() {
 
     if ( !!cert  ^ !!pkey ) {
         log_warn_printf(filelogger, "Inconsistency between certificate and key: %s\n", filename_.c_str());
-        cert .reset();
-        pkey .reset();
+        cert.reset();
+        pkey.reset();
+    }
+
+    if (!chain) {
+        chain.reset(sk_X509_new_null());
+    }
+    // If no CA chain was provided, then check if the entity cert is self-signed.
+    // If it is, add it as a single-entry chain.
+    if (!chain || sk_X509_num(chain.get()) == 0) {
+        if (cert && (X509_check_issued(cert.get(), cert.get()) == X509_V_OK)) {
+            if (!sk_X509_push(chain.get(), X509_dup(cert.get()))) {
+                throw std::runtime_error("Error adding self-signed certificate to chain");
+            }
+        }
     }
 
     ossl_shared_ptr<STACK_OF(X509)> shared_chain(std::move(chain));
-
-    if ( !sk_X509_num(shared_chain.get()))
-        shared_chain = nullptr;
 
     return {cert, shared_chain, (pkey ? std::make_shared<KeyPair>(std::move(pkey)) : nullptr)};
 }

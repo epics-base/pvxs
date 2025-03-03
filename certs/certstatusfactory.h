@@ -100,7 +100,7 @@ class CertStatusFactory {
      * @param asn1_number
      * @return
      */
-    static uint64_t ASN1ToUint64(ASN1_INTEGER* asn1_number) {
+    static uint64_t ASN1ToUint64(const ASN1_INTEGER* asn1_number) {
         uint64_t uint64_number = 0;
         for (int i = 0; i < asn1_number->length; ++i) {
             uint64_number = (uint64_number << 8) | asn1_number->data[i];
@@ -108,8 +108,32 @@ class CertStatusFactory {
         return uint64_number;
     }
 
-    static uint64_t getSerialNumber(const ossl_ptr<X509>& cert);
-    static uint64_t getSerialNumber(X509* cert);
+    /**
+     * @brief Get serial number from an owned cert
+     * @param cert owned cert
+     * @return serial number
+     */
+    static uint64_t getSerialNumber(const ossl_ptr<X509>& cert) { return getSerialNumber(cert.get()); }
+
+    /**
+     * @brief Get a serial number from a cert pointer
+     * @param cert cert pointer
+     * @return serial number
+     */
+    static uint64_t getSerialNumber(X509* cert) {
+        if (!cert) {
+            throw std::runtime_error("Can't get serial number: Null certificate");
+        }
+
+        // Extract the serial number from the certificate
+        ASN1_INTEGER* serial_number_asn1 = X509_get_serialNumber(cert);
+        if (!serial_number_asn1) {
+            throw std::runtime_error("Failed to retrieve serial number from certificate");
+        }
+
+        // Convert ASN1_INTEGER to a 64-bit unsigned integer
+        return ASN1ToUint64(serial_number_asn1);
+    }
 
    private:
     const ossl_ptr<X509>& ca_cert_;                          // CA Certificate to encode in the OCSP responses
