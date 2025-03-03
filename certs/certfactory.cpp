@@ -27,7 +27,6 @@
 #include <pvxs/log.h>
 #include <pvxs/sslinit.h>
 
-#include "certstatusfactory.h"
 #include "openssl.h"
 #include "osiFileName.h"
 #include "ownedptr.h"
@@ -120,10 +119,8 @@ ossl_ptr<X509> CertFactory::create() {
             }
         }
         // Add the issuer's certificate too if not already added
-        const serial_number_t issuer_serial_number = issuer_certificate_ptr_ ? CertStatusFactory::getSerialNumber(issuer_certificate_ptr_) : 0;
         const auto root_cert = sk_X509_value(issuer_chain_ptr_, num_certs - 1);
-        const serial_number_t root_serial_number = root_cert ? CertStatusFactory::getSerialNumber(root_cert) : 0;
-        const auto already_added = issuer_serial_number == root_serial_number;
+        const bool already_added = root_cert && (X509_cmp(root_cert, issuer_certificate_ptr_) == 0);
         if (!already_added && sk_X509_push(certificate_chain_.get(), issuer_certificate_ptr_) != 1) {
             throw std::runtime_error(SB() << "Failed to add issuer certificate to certificate chain");
         }
