@@ -199,7 +199,7 @@ class ConfigCms : public pvxs::server::Config {
     /**
      * @brief The CA Country
      */
-    std::string ca_country;
+    std::string ca_country{"US"};
 
     /**
      * @brief If a PVACMS certificate has not been established
@@ -234,7 +234,7 @@ class ConfigCms : public pvxs::server::Config {
     /**
      * @brief The PVACMS Country
      */
-    std::string pvacms_country;
+    std::string pvacms_country{"US"};
 
     void fromCmsEnv(const std::map<std::string, std::string>& defs);
 };
