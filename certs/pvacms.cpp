@@ -1333,11 +1333,9 @@ void ensureServerCertificateExists(const ConfigCms &config, sql_ptr &ca_db, cons
         cert_data = IdFileFactory::create(config.tls_keychain_file, config.tls_keychain_pwd)->getCertDataFromFile();
     } catch (...) {
     }
-    auto key_pair = cert_data.key_pair;
 
-    if (!key_pair) {
-        if (!key_pair) key_pair = IdFileFactory::createKeyPair();
-        createServerCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain, key_pair);
+    if (!cert_data.key_pair) {
+        createServerCertificate(config, ca_db, ca_cert, ca_pkey, ca_chain, IdFileFactory::createKeyPair());
     }
 }
 
