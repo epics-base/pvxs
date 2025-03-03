@@ -252,7 +252,7 @@ void AuthNKrb::gssNameFromString(const std::string &name, gss_name_t &target_nam
     name_buf.length = name.size() + 1;
 
     /* import the name */
-    const OM_uint32 major_status = gss_import_name(&minor_status, &name_buf, name_type, &target_name);
+    const OM_uint32 major_status = gss_import_name(&minor_status, &name_buf, const_cast<gss_OID>(name_type), &target_name);
     if (GSS_ERROR(major_status)) {
         throw std::runtime_error(SB() << "Kerberos can't create name from \"" << name << "\" : " << gssErrorDescription(major_status, minor_status));
     }
