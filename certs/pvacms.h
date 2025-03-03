@@ -256,7 +256,7 @@ void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> 
 
 void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &ca_cert);
 
-void createAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
+void createAdminClientCert(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
                                   ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name = "admin");
 
 void initCertsDatabase(sql_ptr &ca_db, const std::string &db_file);

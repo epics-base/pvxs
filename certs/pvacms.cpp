@@ -627,7 +627,7 @@ ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &certificate_factor
  * @return A PEM string representation of the certificate.
  */
 std::string createCertificatePemString(sql_ptr &ca_db, CertFactory &cert_factory) {
-    ossl_ptr<X509> cert = createCertificate(ca_db, cert_factory);
+    auto cert = createCertificate(ca_db, cert_factory);
 
     // Write out as PEM string for return to client
     return CertFactory::certAndCasToPemString(cert, cert_factory.certificate_chain_.get());
@@ -1049,19 +1049,21 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
 void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool &is_initialising) {
     CertData cert_data;
+    /*
     try {
         cert_data = IdFileFactory::create(config.ca_keychain_file, config.ca_keychain_pwd)->getCertDataFromFile();
     } catch (...) {
     }
-    auto key_pair = cert_data.key_pair;
+    */
+    std::shared_ptr<KeyPair> key_pair /*= cert_data.key_pair*/;
 
-    if (!key_pair) {
+    // if (!key_pair) {
         is_initialising = true; // Let caller know that we've created a new Cert and Key
         key_pair = IdFileFactory::createKeyPair();
         cert_data = createCaCertificate(config, ca_db, key_pair);
         createDefaultAdminACF(config, cert_data.cert);
         createAdminClientCert(config, ca_db, key_pair->pkey, cert_data.cert, cert_data.ca);
-    }
+    // }
 
     ca_pkey = std::move(key_pair->pkey);
     ca_cert = std::move(cert_data.cert);
@@ -1278,7 +1280,7 @@ void addUserToAdminACF(const ConfigCms &config, const std::string &admin_name) {
  * @param ca_pkey The CA's key pair to use to create the certificate
  * @param admin_name The optional name of the administrator (defaults to admin if not specified)
  */
-void createAdminClientCert(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
+void createAdminClientCert(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<EVP_PKEY> &ca_pkey, ossl_ptr<X509> &ca_cert,
                                   ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name) {
     auto key_pair = IdFileFactory::createKeyPair();
     auto serial = generateSerial();
