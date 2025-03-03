@@ -15,7 +15,7 @@
 namespace pvxs {
 namespace certs {
 
-class ConfigStd : public ConfigAuthN {
+class ConfigStd final : public ConfigAuthN {
    public:
     ConfigStd& applyEnv() {
         Config::applyEnv(true, CLIENT);
@@ -35,7 +35,7 @@ class ConfigStd : public ConfigAuthN {
      */
     static ConfigStd fromEnv() {
         auto config = ConfigStd{}.applyEnv();
-        auto defs = std::map<std::string, std::string>();
+        const auto defs = std::map<std::string, std::string>();
         config.fromAuthEnv(defs);
         config.fromStdEnv(defs);
         return config;

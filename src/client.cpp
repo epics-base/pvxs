@@ -1165,7 +1165,7 @@ void ContextImpl::tickBeaconCleanS(evutil_socket_t fd, short evt, void* raw) {
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-void ContextImpl::certExpirationHandlerS(evutil_socket_t fd, short evt, void* raw) {
+void ContextImpl::certExpirationHandlerS(evutil_socket_t, short, void* raw) {
     try {
         static_cast<Context*>(raw)->certExpirationHandler();
     } catch (std::exception& e) {
@@ -1337,7 +1337,7 @@ void ContextImpl::enableTlsForPeerConnection(const Connection* client_conn) {
 /**
  * @brief Called to disable TLS - if TLS is not enabled then this will do nothing.  It is idempotent
  */
-void ContextImpl::enterDegradedMode() {
+void ContextImpl::enterDegradedMode() const {
     if (!isTlsEnabled()) return;
 
     tls_context->setDegradedMode(true);
@@ -1351,7 +1351,7 @@ void ContextImpl::enterDegradedMode() {
 /**
  * @brief Called to disable TLS - if TLS is not enabled then this will do nothing.  It is idempotent
  */
-void ContextImpl::removePeerTlsConnections(const Connection* client_conn) {
+void ContextImpl::removePeerTlsConnections(const Connection* client_conn) const {
     // Collect tls connections to clean-up
     std::vector<std::weak_ptr<Connection>> to_cleanup;
     for (auto& pair : connByAddr) {

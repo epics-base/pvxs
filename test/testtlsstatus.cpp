@@ -61,7 +61,7 @@ struct Tester {
 
     ~Tester() = default;
 
-    void initialisation() {
+    void initialisation() const {
         testShow() << __func__;
         testEq(now.t, status_valid_until_time.t - STATUS_VALID_FOR_SECS);
         testEq(now.t, revocation_date.t + REVOKED_SINCE_SECS);
@@ -70,7 +70,7 @@ struct Tester {
     void ocspPayload() {
         testShow() << __func__;
         try {
-            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
+            const auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
             CREATE_CERT_STATUS(ca, {VALID});
             CREATE_CERT_STATUS(server1, {PENDING});
             CREATE_CERT_STATUS(client1, {REVOKED});
@@ -79,7 +79,7 @@ struct Tester {
         }
     }
 
-    void parse() {
+    void parse() const {
         testShow() << __func__;
         try {
             testDiag("Parsing OCSP Response: %s", "Client certificate");
@@ -126,7 +126,7 @@ struct Tester {
 
     void makeStatusResponses() {
         testShow() << __func__;
-        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
+        const auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
         MAKE_STATUS_RESPONSE(ca)
         MAKE_STATUS_RESPONSE(server1)
         MAKE_STATUS_RESPONSE(client1)
@@ -138,9 +138,9 @@ struct Tester {
             auto unknown_status = UnknownCertificateStatus();
             {
                 testDiag("PVACertificateStatus ==> CertificateStatus");
-                auto client_cs = (CertifiedCertificateStatus)client1_cert_status;
-                auto server_cs = (CertifiedCertificateStatus)server1_cert_status;
-                auto ca_cs = (CertifiedCertificateStatus)ca_cert_status;
+                auto client_cs = static_cast<CertifiedCertificateStatus>(client1_cert_status);
+                auto server_cs = static_cast<CertifiedCertificateStatus>(server1_cert_status);
+                auto ca_cs = static_cast<CertifiedCertificateStatus>(ca_cert_status);
 
                 testDiag("CertificateStatus == PVACertificateStatus");
                 testOk1(client_cs == client1_cert_status);  // REVOKED == REVOKED
@@ -165,9 +165,9 @@ struct Tester {
 
             {
                 testDiag("PVACertificateStatus ==> OCSPStatus");
-                auto client_ocs = (OCSPStatus)client1_cert_status;
-                auto server_ocs = (OCSPStatus)server1_cert_status;
-                auto ca_ocs = (OCSPStatus)ca_cert_status;
+                auto client_ocs = static_cast<OCSPStatus>(client1_cert_status);
+                auto server_ocs = static_cast<OCSPStatus>(server1_cert_status);
+                auto ca_ocs = static_cast<OCSPStatus>(ca_cert_status);
 
                 testDiag("OCSPStatus == PVACertificateStatus");
                 testOk1(client_ocs == client1_cert_status);  // REVOKED == REVOKED
@@ -194,9 +194,9 @@ struct Tester {
 
             {
                 testDiag("PVACertificateStatus ==> certstatus_t");
-                auto client_cs_t = (certstatus_t)client1_cert_status.status.i;
-                auto server_cs_t = (certstatus_t)server1_cert_status.status.i;
-                auto ca_cs_t = (certstatus_t)ca_cert_status.status.i;
+                auto client_cs_t = static_cast<certstatus_t>(client1_cert_status.status.i);
+                auto server_cs_t = static_cast<certstatus_t>(server1_cert_status.status.i);
+                auto ca_cs_t = static_cast<certstatus_t>(ca_cert_status.status.i);
 
                 testDiag("certstatus_t == PVACertificateStatus");
                 testOk1(client_cs_t == client1_cert_status);  // REVOKED == REVOKED
@@ -221,13 +221,13 @@ struct Tester {
 
             {
                 testDiag("PVACertificateStatus ==> certstatus_t & OCSPStatus");
-                auto client_cs_t = (certstatus_t)client1_cert_status.status.i;
-                auto server_cs_t = (certstatus_t)server1_cert_status.status.i;
-                auto ca_cs_t = (certstatus_t)ca_cert_status.status.i;
+                auto client_cs_t = static_cast<certstatus_t>(client1_cert_status.status.i);
+                auto server_cs_t = static_cast<certstatus_t>(server1_cert_status.status.i);
+                auto ca_cs_t = static_cast<certstatus_t>(ca_cert_status.status.i);
 
-                auto client_ocs = (OCSPStatus)client1_cert_status;
-                auto server_ocs = (OCSPStatus)server1_cert_status;
-                auto ca_ocs = (OCSPStatus)ca_cert_status;
+                auto client_ocs = static_cast<OCSPStatus>(client1_cert_status);
+                auto server_ocs = static_cast<OCSPStatus>(server1_cert_status);
+                auto ca_ocs = static_cast<OCSPStatus>(ca_cert_status);
 
                 testDiag("OCSPStatus == certstatus_t");
                 testOk1(client_ocs == client_cs_t);  // REVOKED == REVOKED
@@ -267,7 +267,7 @@ struct Tester {
             status_pv.onFirstConnect([this](server::SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
                 auto it = parameters.begin();
                 const std::string &serial_string = *++it;
-                serial_number_t serial = std::stoull(serial_string);
+                const serial_number_t serial = std::stoull(serial_string);
 
                 if (pv.isOpen(pv_name)) {
                     switch (serial) {
@@ -319,14 +319,14 @@ MAIN(testtlsstatus) {
     testPlan(121);
     testSetup();
     logger_config_env();
-    auto tester = new Tester();
+    const auto tester = new Tester();
     tester->initialisation();
     tester->ocspPayload();
     tester->parse();
     tester->makeStatusResponses();
     tester->testStatusConversions();
     tester->makeStatusRequest();
-    delete (tester);
+    delete tester;
     cleanup_for_valgrind();
     return testDone();
 }

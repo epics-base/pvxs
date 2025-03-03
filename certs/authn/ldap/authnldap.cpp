@@ -78,7 +78,7 @@ struct AuthNLdapRegistrar {
  * @param for_client true when getting gredentials for a client, false for server
  * @return the credentials for the LDAP authenticator
  */
-std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &config, bool for_client) const {
+std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &config, const bool for_client) const {
     const auto ldap_config = dynamic_cast<const ConfigLdap &>(config);
 
     log_debug_printf(auth,
@@ -91,7 +91,7 @@ std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &con
     // Set the expiration time of the certificate
     const time_t now = time(nullptr);
     ldap_credentials->not_before = now;
-    ldap_credentials->not_after = now + (365 * 24 * 60 * 60);
+    ldap_credentials->not_after = now + 365 * 24 * 60 * 60;
 
     ldap_credentials->name = for_client ? ldap_config.name : ldap_config.server_name;
     ldap_credentials->organization = for_client ? ldap_config.organization : ldap_config.server_organization;
@@ -289,14 +289,14 @@ std::string AuthNLdap::getDn(const std::string &uid, const std::string &organiza
  * @return the public key string
  */
 std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, const int ldap_port, const std::string &uid, const std::string &organization) {
-    std::string ldap_url = "ldap://" + ldap_server + ":" + std::to_string(ldap_port);
+    const std::string ldap_url = "ldap://" + ldap_server + ":" + std::to_string(ldap_port);
     LDAP *ld = nullptr;
     int rc = ldap_initialize(&ld, ldap_url.c_str());
     if (rc != LDAP_SUCCESS) {
         throw std::runtime_error("ldap_initialize failed: " + std::string(ldap_err2string(rc)));
     }
 
-    int ldap_version = LDAP_VERSION3;
+    constexpr int ldap_version = LDAP_VERSION3;
     rc = ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ldap_version);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);

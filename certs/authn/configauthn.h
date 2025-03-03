@@ -31,7 +31,7 @@ class ConfigAuthN : public client::Config {
     std::string tls_srv_keychain_pwd{};
 
     void fromAuthEnv(const std::map<std::string, std::string>& defs);
-    std::string getIPAddress();
+    static std::string getIPAddress();
 };
 
 }  // namespace certs

@@ -30,8 +30,8 @@ namespace {
 
 DEFINE_LOGGER(certslog, "pvxs.certs.tool");
 
-void setEcho(bool enable) {
-    struct termios tty {};
+void setEcho(const bool enable) {
+    termios tty {};
     tcgetattr(STDIN_FILENO, &tty);
     if (!enable) {
         tty.c_lflag &= ~ECHO;
@@ -40,28 +40,16 @@ void setEcho(bool enable) {
     }
     tcsetattr(STDIN_FILENO, TCSANOW, &tty);
 }
-
-// Helper function to convert string to enum
-Value::Fmt::format_t stringToFormat(const std::string& formatStr) {
-    if (formatStr == "delta") {
-        return Value::Fmt::Delta;
-    } else if (formatStr == "tree") {
-        return Value::Fmt::Tree;
-    } else {
-        throw std::invalid_argument("Invalid format type");
-    }
-}
-
 }  // namespace
 
 enum CertAction { STATUS, APPROVE, DENY, REVOKE };
-std::string actionToString(CertAction& action) {
-    return (action == STATUS    ? "Get Status"
-            : action == APPROVE ? "Approve"
-            : action == REVOKE  ? "Revoke"
-                                : "Deny");
+std::string actionToString(const CertAction& action) {
+    return action == STATUS    ? "Get Status"
+               : action == APPROVE ? "Approve"
+                     : action == REVOKE  ? "Revoke"
+                           : "Deny";
 }
-int readParameters(int argc, char* argv[], const char *program_name, client::Config &conf, CertAction &action, Value::Fmt::format_t &format,
+int readParameters(const int argc, char* argv[], const char *program_name, client::Config &conf,
                     bool &approve, bool &revoke, bool &deny, bool &debug, bool &password_flag, bool &verbose,
                     std::string &cert_file, std::string &issuer_serial_string) {
 
@@ -135,7 +123,7 @@ int readParameters(int argc, char* argv[], const char *program_name, client::Con
             std::cerr << "Error: -V option cannot be used with any other options.\n";
             exit(10);
         }
-        std::cout << pvxs::version_information;
+        std::cout << version_information;
         exit(0);
     }
 
@@ -151,11 +139,10 @@ int main(int argc, char* argv[]) {
 
         // Variables to store options
         CertAction action{STATUS};
-        Value::Fmt::format_t format = Value::Fmt::Delta;
         bool approve{false}, revoke{false}, deny{false}, debug{false}, password_flag{false}, verbose{false};
-        std::string cert_file, password, format_str, issuer_serial_string;
+        std::string cert_file, password, issuer_serial_string;
 
-        auto parse_result = readParameters(argc, argv, program_name, conf, action, format, approve, revoke, deny, debug, password_flag,
+        auto parse_result = readParameters(argc, argv, program_name, conf, approve, revoke, deny, debug, password_flag,
                                            verbose, cert_file, issuer_serial_string);
         if (parse_result) exit(parse_result);
 
@@ -170,9 +157,6 @@ int main(int argc, char* argv[]) {
             return 2;
         }
 
-        if (!format_str.empty()) {
-            format = stringToFormat(format_str);
-        }
 
         // Handle the flags after parsing
         if (debug) logger_level_set("pvxs.*", Level::Debug);

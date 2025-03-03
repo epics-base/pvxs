@@ -39,13 +39,13 @@ extern gss_OID krb5_oid;
  * The subclass of Credentials that contains the AuthNKrb specific
  * identification object
  */
-struct KrbCredentials : Credentials {
+struct KrbCredentials final : Credentials {
     // gss-api token for default Kerberos Ticket Granting Ticket
     // (TGT) on the system, stored as a byte array
     std::vector<uint8_t> token{};
 };
 
-class AuthNKrb : public Auth {
+class AuthNKrb final : public Auth {
    public:
     // Constructor.  Adds in kerberos specific fields (ticket) to the verifier
     // field of the ccr
@@ -61,7 +61,7 @@ class AuthNKrb : public Auth {
         // Initialize the Kerberos OID to the constant value for the Kerberos protocol
         krb5_oid_desc.length = 9;
         krb5_oid_desc.elements = const_cast<char *>("\x2a\x86\x48\x86\xf7\x12\x01\x02\x02");
-    };
+    }
 
     ~AuthNKrb() override = default;
 
@@ -77,7 +77,7 @@ class AuthNKrb : public Auth {
 
     bool verify(Value ccr) const override;
 
-    void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigKrb(ConfigKrb::fromEnv())); };
+    void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigKrb(ConfigKrb::fromEnv())); }
 
     /**
      * Apply the kerberos specific configuration to the authenticator.
@@ -93,7 +93,7 @@ class AuthNKrb : public Auth {
         krb_validator_service_name = SB() << config_krb.krb_validator_service << PVXS_KRB_DEFAULT_VALIDATOR_CLUSTER_PART << config_krb.krb_realm;
         krb_realm = config_krb.krb_realm;
         krb_keytab_file = config_krb.krb_keytab;
-    };
+    }
 
     /**
      * Get the heading for the Kerberos options section of the help text for PVACMS when compiled with the kerberos authenticator.

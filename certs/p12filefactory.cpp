@@ -55,12 +55,12 @@ DEFINE_LOGGER(filelogger, "pvxs.p12");
  * @throw ossl::SSLError if file cannot be parsed
  */
 std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
-    file_ptr fp(fopen(filename_.c_str(), "rb"), false);
+    const file_ptr fp(fopen(filename_.c_str(), "rb"), false);
     if (!fp) {
         throw std::runtime_error(SB() << "Error getting private key from file: \"" << filename_ << "\": " << strerror(errno));
     }
 
-    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr), false);
+    const ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr), false);
     if (!p12) {
         throw std::runtime_error(SB() << "Error opening private key file as a PKCS#12 object: " << filename_);
     }
@@ -89,12 +89,12 @@ CertData P12FileFactory::getCertDataFromFile() {
     ossl_ptr<EVP_PKEY> pkey;
 
     // Get cert from configured file
-    file_ptr fp(fopen(filename_.c_str(), "rb"), false);
+    const file_ptr fp(fopen(filename_.c_str(), "rb"), false);
     if (!fp) {
         throw std::runtime_error(SB() << "Error opening keychain file for reading binary contents: \"" << filename_ << "\"");
     }
 
-    ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr), false);
+    const ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr), false);
     if (!p12) {
         throw std::runtime_error(SB() << "Error opening keychain file as a PKCS#12 object: " << filename_);
     }
@@ -116,7 +116,7 @@ CertData P12FileFactory::getCertDataFromFile() {
     // If no CA chain was provided, then check if the entity cert is self-signed.
     // If it is, add it as a single-entry chain.
     if (!chain || sk_X509_num(chain.get()) == 0) {
-        if (cert && (X509_check_issued(cert.get(), cert.get()) == X509_V_OK)) {
+        if (cert && X509_check_issued(cert.get(), cert.get()) == X509_V_OK) {
             if (!sk_X509_push(chain.get(), X509_dup(cert.get()))) {
                 throw std::runtime_error("Error adding self-signed certificate to chain");
             }
@@ -142,27 +142,26 @@ CertData P12FileFactory::getCertDataFromFile() {
  */
 ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(const std::string &password, EVP_PKEY *keys_ptr, const std::string &pem_string) {
     // Read PEM data into a new BIO
-    ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string.c_str(), -1), false);
+    const ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string.c_str(), -1), false);
     if (!bio) {
         throw std::runtime_error("Unable to allocate BIO");
     }
 
     // Get first Cert as Certificate
-    ossl_ptr<X509> cert(PEM_read_bio_X509_AUX(bio.get(), nullptr, nullptr, (void *)password.c_str()), false);
+    const ossl_ptr<X509> cert(PEM_read_bio_X509_AUX(bio.get(), nullptr, nullptr, (void *)password.c_str()), false);
     if (!cert) {
         throw std::runtime_error("Unable to read certificate");
     }
 
     // Get the chain
-    ossl_ptr<STACK_OF(X509)> certs(sk_X509_new_null());
+    const ossl_ptr<STACK_OF(X509)> certs(sk_X509_new_null());
     if (!certs) {
         throw std::runtime_error("Unable to allocate certificate stack");
     }
 
     // Get whole of certificate chain and push to certs
-    ossl_ptr<X509> ca;
     while (X509 *ca_ptr = PEM_read_bio_X509(bio.get(), nullptr, nullptr, (void *)password.c_str())) {
-        ca = ossl_ptr<X509>(ca_ptr);
+        auto ca = ossl_ptr<X509>(ca_ptr);
         sk_X509_push(certs.get(), ca.release());
     }
 
@@ -187,9 +186,9 @@ ossl_ptr<PKCS12> P12FileFactory::toP12(const std::string &password, EVP_PKEY *ke
     if (!cert_ptr) {
         p12.reset(PKCS12_create_ex2(password.c_str(), nullptr, keys_ptr, nullptr, nullptr, 0, 0, 0, 0, 0, nullptr, nullptr, nullptr, nullptr));
     } else {
-        auto subject_name(X509_get_subject_name(cert_ptr));
-        auto subject_string(X509_NAME_oneline(subject_name, nullptr, 0));
-        ossl_ptr<char> subject(subject_string, false);
+        const auto subject_name(X509_get_subject_name(cert_ptr));
+        const auto subject_string(X509_NAME_oneline(subject_name, nullptr, 0));
+        const ossl_ptr<char> subject(subject_string, false);
         if (!subject) {
             throw std::runtime_error("Unable to get the subject of the certificate");
         }
@@ -238,6 +237,7 @@ void P12FileFactory::writePKCS12File() {
         p12 = toP12(password_, key_pair_->pkey.get(), nullptr, nullptr);
     }
 
+    // ReSharper disable once CppDFALocalValueEscapesFunction
     p12_ptr_ = p12.get();
 
     if (!p12_ptr_) throw std::runtime_error("Insufficient configuration to create certificate");
@@ -248,7 +248,7 @@ void P12FileFactory::writePKCS12File() {
     backupFileIfExists(filename_);
 
     // Open file for writing.
-    file_ptr file(fopen(filename_.c_str(), "wb"), false);
+    const file_ptr file(fopen(filename_.c_str(), "wb"), false);
     if (!file) {
         throw std::runtime_error(SB() << "Error opening P12 file for writing: " << filename_);
     }

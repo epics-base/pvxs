@@ -34,7 +34,7 @@ namespace certs {
  * @throws std::logic_error if the Auth object for the given type is not found
  */
 Auth *Auth::getAuth(const std::string &type) {
-    auto auth = AuthRegistry::instance().getAuth(type);
+    const auto auth = AuthRegistry::instance().getAuth(type);
     if (auth == nullptr) {
         throw std::logic_error("Auth::getAuth: no such auth type");
     }
@@ -82,7 +82,7 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
  * PVStructure to PVACMS to be signed. It will wait for the signed signature or
  * any reported error.
  *
- * @param cert_creation_request A shared pointer to a CertCreationRequest object
+ * @param ccr A shared pointer to a CertCreationRequest object
  * containing the ccr PVStructure which contains the certificate, and its
  * validity as well as any verifier specific required fields.
  * @param timeout the timeout for the request
@@ -93,9 +93,9 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
  * CCR object is valid and contains the required information
  * before calling this function.
  */
-std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &cert_creation_request, double timeout) const {
+std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, const double timeout) const {
     // Forward the ccr to the certificate management service
-    return ccr_manager_.createCertificate(cert_creation_request, timeout);
+    return ccr_manager_.createCertificate(ccr, timeout);
 }
 
 /**
@@ -130,7 +130,7 @@ void Auth::runAuthNDaemon(const ConfigAuthN &authn_config, bool for_client, Cert
     server::SharedPV config_pv(server::SharedPV::buildMailbox());
 
     // Create a server with a custom timer event that runs our configuration monitor
-    config_server_ = server::Server(config, [&config_monitor_params, &config_pv](short evt) { return configurationMonitor(config_monitor_params, config_pv); });
+    config_server_ = server::Server(config, [&config_monitor_params, &config_pv](short) { return configurationMonitor(config_monitor_params, config_pv); });
 
     config_pv.onFirstConnect([&config_monitor_params, &for_client, &authn_config, &issuer_id](server::SharedPV &pv) {
         // Set up the config PV
@@ -195,7 +195,7 @@ timeval Auth::configurationMonitor(ConfigMonitorParams &config_monitor_params, s
         if ( config_monitor_params.adaptive_timeout_mins_ == PVXS_CONFIG_MONITOR_TIMEOUT_MAX ) return {};
 
         config_monitor_params.adaptive_timeout_mins_ =
-            (!config_monitor_params.adaptive_timeout_mins_) ? 1 : std::min(config_monitor_params.adaptive_timeout_mins_ * 2, PVXS_CONFIG_MONITOR_TIMEOUT_MAX);
+            !config_monitor_params.adaptive_timeout_mins_ ? 1 : std::min(config_monitor_params.adaptive_timeout_mins_ * 2, PVXS_CONFIG_MONITOR_TIMEOUT_MAX);
         log_err_printf(config, "Config refresh error.  Retry in %d mins: %s\n", config_monitor_params.adaptive_timeout_mins_, e.what());
         return {config_monitor_params.adaptive_timeout_mins_ * 60, 0};
     }

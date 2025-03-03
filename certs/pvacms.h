@@ -176,12 +176,11 @@ class StatusMonitor {
     sql_ptr &ca_db_;
     std::string &issuer_id_;
     server::SharedWildcardPV &status_pv_;
-    pvxs::ossl_ptr<X509> &ca_cert_;
-    pvxs::ossl_ptr<EVP_PKEY> &ca_pkey_;
+    ossl_ptr<X509> &ca_cert_;
+    ossl_ptr<EVP_PKEY> &ca_pkey_;
     pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain_;
     std::map<serial_number_t, time_t> &active_status_validity_;
 
-   public:
     StatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &issuer_id, server::SharedWildcardPV &status_pv, ossl_ptr<X509> &ca_cert,
                   ossl_ptr<EVP_PKEY> &ca_pkey, ossl_shared_ptr<STACK_OF(X509)> &ca_chain, std::map<serial_number_t, time_t> &active_status_validity)
         : config_(config),
@@ -211,7 +210,7 @@ class StatusMonitor {
      * @param serial the serial number of the validity we need to update
      * @param validity_date the new validity date
      */
-    void setValidity(serial_number_t serial, time_t validity_date) const {
+    void setValidity(const serial_number_t serial, const time_t validity_date) const {
         const auto it = active_status_validity_.find(serial);
         if (it != active_status_validity_.end()) {
             it->second = validity_date;

@@ -29,11 +29,11 @@ namespace pvxs {
 namespace certs {
 
 /**
- * @class KeychainFactory
+ * @class P12FileFactory
  *
- * @brief Manages certificates and associated operations.
+ * @brief Manages certificate file operations.
  */
-class P12FileFactory : public IdFileFactory {
+class P12FileFactory final : public IdFileFactory {
    public:
     P12FileFactory(const std::string &filename, const std::string &password, const std::shared_ptr<KeyPair> &key_pair, X509 *cert_ptr, stack_st_X509 *certs_ptr)
         : IdFileFactory(filename, password, key_pair, cert_ptr, certs_ptr, "") {}
@@ -68,10 +68,9 @@ class P12FileFactory : public IdFileFactory {
      * This is conditionally compiled in for platforms that support it.
      *
      * @param bag the p12 safe bag to add the attribute to
-     * @param cbarg the callback argument (not used)
      * @return 1 if the attribute was added, 0 if it was not added
      */
-    static int jdkTrust(PKCS12_SAFEBAG *bag, void *cbarg) noexcept {
+    static int jdkTrust(PKCS12_SAFEBAG *bag, void *) noexcept {
         try {
             // Only add trustedkeyusage when bag is an X509 cert. with an
             // associated key (when localKeyID is present) which does not
@@ -80,12 +79,11 @@ class P12FileFactory : public IdFileFactory {
                 !!PKCS12_SAFEBAG_get0_attr(bag, NID_localKeyID) || !!PKCS12_SAFEBAG_get0_attr(bag, NID_oracle_jdk_trustedkeyusage))
                 return 1;
 
-            auto curattrs(PKCS12_SAFEBAG_get0_attrs(bag));
-            // PKCS12_SAFEBAG_get0_attrs() returns const.  Make a paranoia copy.
+            const auto curattrs(PKCS12_SAFEBAG_get0_attrs(bag));
             pvxs::ossl_ptr<STACK_OF(X509_ATTRIBUTE)> newattrs(sk_X509_ATTRIBUTE_deep_copy(curattrs, &X509_ATTRIBUTE_dup, &X509_ATTRIBUTE_free));
 
-            pvxs::ossl_ptr<ASN1_OBJECT> trust(OBJ_txt2obj("anyExtendedKeyUsage", 0));
-            pvxs::ossl_ptr<X509_ATTRIBUTE> attr(X509_ATTRIBUTE_create(NID_oracle_jdk_trustedkeyusage, V_ASN1_OBJECT, trust.get()));
+            const ossl_ptr<ASN1_OBJECT> trust(OBJ_txt2obj("anyExtendedKeyUsage", 0));
+            ossl_ptr<X509_ATTRIBUTE> attr(X509_ATTRIBUTE_create(NID_oracle_jdk_trustedkeyusage, V_ASN1_OBJECT, trust.get()));
 
             if (sk_X509_ATTRIBUTE_push(newattrs.get(), attr.get()) != 1) {
                 std::cerr << "Error: unable to add JDK trust attribute\n";
@@ -101,7 +99,7 @@ class P12FileFactory : public IdFileFactory {
             std::cerr << "Error: unable to add JDK trust attribute: " << e.what() << "\n";
             return 0;
         }
-    };
+    }
 #else
     static int jdkTrust(PKCS12_SAFEBAG *bag, void *cbarg) noexcept { return 0; }
     static inline PKCS12 *PKCS12_create_ex2(const char *pass, const char *name, EVP_PKEY *pkey, X509 *cert, STACK_OF(X509) * ca, int nid_key, int nid_cert,

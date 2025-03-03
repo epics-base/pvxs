@@ -14,7 +14,7 @@ namespace certs {
 
 class CCRManager {
    public:
-    std::string createCertificate(const std::shared_ptr<CertCreationRequest>& cert_creation_request, double timeout) const;
+    static std::string createCertificate(const std::shared_ptr<CertCreationRequest>& cert_creation_request, double timeout);
 };
 }  // namespace certs
 }  // namespace pvxs

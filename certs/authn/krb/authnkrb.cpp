@@ -68,9 +68,9 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &, bo
 
     // Initialize GSSAPI structures
     OM_uint32 minor_status;
-    gss_name_t name = GSS_C_NO_NAME;
+    auto name = GSS_C_NO_NAME;
     gss_buffer_desc name_buffer = GSS_C_EMPTY_BUFFER;
-    gss_cred_id_t cred_handle = GSS_C_NO_CREDENTIAL;
+    auto cred_handle = GSS_C_NO_CREDENTIAL;
     OM_uint32 lifetime;
 
     // Acquire the default credential handle
@@ -166,14 +166,14 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &, bo
  */
 std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
                                                                          const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const {
-    auto krb_credentials = castAs<KrbCredentials, Credentials>(credentials);
+    const auto krb_credentials = castAs<KrbCredentials, Credentials>(credentials);
 
     // Call base class to set up the common CSR fields.
     auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage);
     log_debug_printf(auth, "CCR: created%s", "\n");
 
     OM_uint32 minor_status;
-    gss_ctx_id_t context = GSS_C_NO_CONTEXT;
+    auto context = GSS_C_NO_CONTEXT;
 
     // Get the target name (e.g. "pvacms/cluster@EPICS.ORG").
     log_debug_printf(auth, "Getting Target Name: %s\n", krb_validator_service_name.c_str());
@@ -201,7 +201,7 @@ std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const s
 
     // MIC generation for message integrity
     log_debug_printf(auth, "Computing MIC over public key%s", "\n");
-    std::string public_key_str = key_pair->public_key;
+    const std::string public_key_str = key_pair->public_key;
     gss_buffer_desc data_buffer;
     data_buffer.value = reinterpret_cast<void *>(const_cast<char *>(public_key_str.c_str()));
     data_buffer.length = public_key_str.size();
@@ -213,7 +213,7 @@ std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const s
     }
 
     // Convert the MIC token into shared_array.
-    shared_array<const uint8_t> mic_bytes(static_cast<const uint8_t *>(mic_token.value), static_cast<const uint8_t *>(mic_token.value) + mic_token.length);
+    const shared_array<const uint8_t> mic_bytes(static_cast<const uint8_t *>(mic_token.value), static_cast<const uint8_t *>(mic_token.value) + mic_token.length);
 
     // Release the MIC token buffer.
     gss_release_buffer(&minor_status, &mic_token);
@@ -224,7 +224,7 @@ std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const s
 
     // Add both the security token and the MIC to the certificate creation request.
     log_debug_printf(auth, "Setting token and MIC in CCR%s", "\n");
-    shared_array<const uint8_t> token_bytes(krb_credentials->token.begin(), krb_credentials->token.end());
+    const shared_array<const uint8_t> token_bytes(krb_credentials->token.begin(), krb_credentials->token.end());
     cert_creation_request->credentials = krb_credentials;
     cert_creation_request->ccr["verifier.token"] = token_bytes;
     cert_creation_request->ccr["verifier.mic"] = mic_bytes;
@@ -243,14 +243,15 @@ std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const s
 void AuthNKrb::gssNameFromString(const std::string &name, gss_name_t &target_name) {
     OM_uint32 minor_status;
     gss_buffer_desc name_buf;
-    gss_OID name_type = GSS_KRB5_NT_PRINCIPAL_NAME;
+    // ReSharper disable once CppLocalVariableMayBeConst
+    gss_const_OID name_type = GSS_KRB5_NT_PRINCIPAL_NAME;
 
     /* initialize the name buffer */
     name_buf.value = const_cast<char *>(name.c_str());
     name_buf.length = name.size() + 1;
 
     /* import the name */
-    OM_uint32 major_status = gss_import_name(&minor_status, &name_buf, name_type, &target_name);
+    const OM_uint32 major_status = gss_import_name(&minor_status, &name_buf, name_type, &target_name);
     if (GSS_ERROR(major_status)) {
         throw std::runtime_error(SB() << "Kerberos can't create name from \"" << name << "\" : " << gssErrorDescription(major_status, minor_status));
     }
@@ -266,7 +267,7 @@ void AuthNKrb::gssNameFromString(const std::string &name, gss_name_t &target_nam
  * @param minor_status the minor status code or the last error
  * @return the error description
  */
-std::string AuthNKrb::gssErrorDescription(OM_uint32 major_status, OM_uint32 minor_status) {
+std::string AuthNKrb::gssErrorDescription(const OM_uint32 major_status, const OM_uint32 minor_status) {
     OM_uint32 msg_ctx;
     OM_uint32 minor;
     gss_buffer_desc status_string;
@@ -355,7 +356,7 @@ bool AuthNKrb::verify(const Value ccr) const {
     }
 
     log_debug_printf(auth, "Acquire Server Credentials for PVACMS service: %s\n", krb_validator_service_name.c_str());
-    gss_cred_id_t serverCred = GSS_C_NO_CREDENTIAL;
+    auto serverCred = GSS_C_NO_CREDENTIAL;
     major_status = gss_acquire_cred(&minor_status, serverName, GSS_C_INDEFINITE, GSS_C_NO_OID_SET, GSS_C_ACCEPT, &serverCred, nullptr, nullptr);
     if (GSS_ERROR(major_status)) {
         log_debug_printf(auth, "Failed to acquire server credentials: %s\n", krb_validator_service_name.c_str());
@@ -376,7 +377,7 @@ bool AuthNKrb::verify(const Value ccr) const {
 
     log_debug_printf(auth, "Accept this client token: %s", "\n");
     // Accept the client's token to establish a security context.
-    gss_ctx_id_t context = GSS_C_NO_CONTEXT;
+    auto context = GSS_C_NO_CONTEXT;
     gss_buffer_desc server_token;
 
     major_status = gss_accept_sec_context(&minor_status, &context, serverCred, &client_token, GSS_C_NO_CHANNEL_BINDINGS, nullptr, krb5_oid_ptr, &server_token,
@@ -391,7 +392,7 @@ bool AuthNKrb::verify(const Value ccr) const {
     OM_uint32 peer_lifetime = 0;
     time_t now = time(nullptr);
 
-    gss_name_t initiator_name = GSS_C_NO_NAME;
+    auto initiator_name = GSS_C_NO_NAME;
     major_status = gss_inquire_context(&minor_status, context, &initiator_name, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
     if (GSS_ERROR(major_status)) {
         throw std::runtime_error("Failed to inquire context for initiator name");

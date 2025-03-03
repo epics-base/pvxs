@@ -35,11 +35,12 @@ namespace certs {
 using namespace certs;
 class Auth {
    public:
-    std::string type_;
-    std::vector<Member> verifier_fields_;
+    std::string type_{};
+    std::vector<Member> verifier_fields_{};
 
     // Constructor and Destructor
-    Auth(const std::string &type, const std::vector<Member> &verifier_fields) : type_(type), verifier_fields_(verifier_fields) {};
+    Auth(const std::string &type, const std::vector<Member> &verifier_fields) : type_(type), verifier_fields_(verifier_fields) {}
+
     virtual ~Auth() = default;
 
     /**
@@ -218,7 +219,7 @@ class Auth {
     }
 
    private:
-    server::Server config_server_;
+    server::Server config_server_{};
     class ConfigMonitorParams {
        public:
         const ConfigAuthN &config_;

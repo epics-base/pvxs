@@ -35,15 +35,14 @@ class CertStatusManager;
  *
  * @param cert The certificate.
  * @param status The status of the certificate (PENDING_VALIDATION, VALID, EXPIRED, or REVOKED).
- * @param this_status_update The status date of this status certification, normally now.
+ * @param status_date The status date of this status certification, normally now.
  * @param predicated_revocation_time The time of revocation for the certificate if revoked.
  *
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_ptr<X509>& cert, certstatus_t status, StatusDate this_status_update,
-                                                                   StatusDate predicated_revocation_time) const {
-    return createPVACertificateStatus(getSerialNumber(cert), status, this_status_update, predicated_revocation_time);
+PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_ptr<X509>& cert, const certstatus_t status, const StatusDate &status_date, const StatusDate &predicated_revocation_time) const {
+    return createPVACertificateStatus(getSerialNumber(cert), status, status_date, predicated_revocation_time);
 }
 
 /**
@@ -58,22 +57,22 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_pt
  *
  * @param serial The serial number of the certificate.
  * @param status The status of the certificate (PENDING_VALIDATION, VALID, EXPIRED, or REVOKED).
- * @param this_status_update The status date of this status certification, normally now.
+ * @param status_date The status date of this status certification, normally now.
  * @param predicated_revocation_time The time of revocation for the certificate if revoked.
  *
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-PVACertificateStatus CertStatusFactory::createPVACertificateStatus(serial_number_t serial, certstatus_t status, StatusDate this_status_update,
+PVACertificateStatus CertStatusFactory::createPVACertificateStatus(serial_number_t serial, certstatus_t status, StatusDate status_date,
                                                                    StatusDate predicated_revocation_time) const {
     // Create OCSP response
     ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
     // Set ASN1_TIME objects
-    auto status_valid_until_time = StatusDate(this_status_update.t + (cert_status_validity_mins_ * 60) + cert_status_validity_secs_);
-    const auto this_update = this_status_update.toAsn1_Time();
+    auto status_valid_until_time = StatusDate(status_date.t + cert_status_validity_mins_ * 60 + cert_status_validity_secs_);
+    const auto this_update = status_date.toAsn1_Time();
     const auto next_update = status_valid_until_time.toAsn1_Time();
-    StatusDate revocation_time_to_use = (time_t)0;  // Default to 0
+    StatusDate revocation_time_to_use = static_cast<time_t>(0);  // Default to 0
 
     // Determine the OCSP status and revocation time
     ocspcertstatus_t ocsp_status;
@@ -102,7 +101,7 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(serial_number
     // Adding the CA chain to the response
     if (ca_chain_) {
         for (int i = 0; i < sk_X509_num(ca_chain_.get()); i++) {
-            X509* cert = sk_X509_value(ca_chain_.get(), i);
+            auto cert = sk_X509_value(ca_chain_.get(), i);
             OCSP_basic_add1_cert(basic_resp.get(), cert);
         }
     }
@@ -118,11 +117,11 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(serial_number
 
     log_debug_printf(status_setup, "Status: %d\n", status);
     log_debug_printf(status_setup, "OCSP Status: %d\n", ocsp_status);
-    log_debug_printf(status_setup, "Status Date: %s\n", this_status_update.s.c_str());
+    log_debug_printf(status_setup, "Status Date: %s\n", status_date.s.c_str());
     log_debug_printf(status_setup, "Status Validity: %s\n", status_valid_until_time.s.c_str());
     log_debug_printf(status_setup, "Revocation Date: %s\n", revocation_time_to_use.s.c_str());
 
-    return PVACertificateStatus(status, ocsp_status, ocsp_bytes, this_status_update, status_valid_until_time, revocation_time_to_use);
+    return PVACertificateStatus(status, ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time_to_use);
 }
 
 /**
@@ -165,19 +164,19 @@ ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& serial
 
     // Compute issuer_name_hash
     unsigned int issuer_name_hash_len = 0;
-    X509_NAME* issuer_name = X509_get_subject_name(ca_cert_.get());
+    const X509_NAME* issuer_name = X509_get_subject_name(ca_cert_.get());
     X509_NAME_digest(issuer_name, digest, issuer_name_hash, &issuer_name_hash_len);
 
     // Compute issuer_key_hash
     unsigned int issuer_key_hash_len = 0;
-    ASN1_BIT_STRING* issuer_key = X509_get0_pubkey_bitstr(ca_cert_.get());
-    pvxs::ossl_ptr<EVP_MD_CTX> mdctx(EVP_MD_CTX_new());
+    const ASN1_BIT_STRING* issuer_key = X509_get0_pubkey_bitstr(ca_cert_.get());
+    const ossl_ptr<EVP_MD_CTX> mdctx(EVP_MD_CTX_new());
     EVP_DigestInit_ex(mdctx.get(), digest, nullptr);
     EVP_DigestUpdate(mdctx.get(), issuer_key->data, issuer_key->length);
     EVP_DigestFinal_ex(mdctx.get(), issuer_key_hash, &issuer_key_hash_len);
 
     // Convert uint64_t serial number to ASN1_INTEGER
-    ossl_ptr<ASN1_INTEGER> asn1_serial = uint64ToASN1(serial);
+    const ossl_ptr<ASN1_INTEGER> asn1_serial = uint64ToASN1(serial);
 
     // Create OCSP_CERTID
     auto cert_id = ossl_ptr<OCSP_CERTID>(OCSP_cert_id_new(digest, issuer_name, issuer_key, asn1_serial.get()), false);
@@ -196,8 +195,8 @@ ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& serial
  */
 std::vector<uint8_t> CertStatusFactory::ocspResponseToBytes(const ossl_ptr<OCSP_BASICRESP>& basic_resp) {
     ossl_ptr<unsigned char> resp_der(nullptr, false);
-    ossl_ptr<OCSP_RESPONSE> ocsp_resp(OCSP_response_create(OCSP_RESPONSE_STATUS_SUCCESSFUL, basic_resp.get()));
-    int resp_len = i2d_OCSP_RESPONSE(ocsp_resp.get(), resp_der.acquire());
+    const ossl_ptr<OCSP_RESPONSE> ocsp_resp(OCSP_response_create(OCSP_RESPONSE_STATUS_SUCCESSFUL, basic_resp.get()));
+    const int resp_len = i2d_OCSP_RESPONSE(ocsp_resp.get(), resp_der.acquire());
 
     std::vector<uint8_t> resp_bytes(resp_der.get(), resp_der.get() + resp_len);
 

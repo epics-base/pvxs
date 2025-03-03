@@ -46,12 +46,12 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
     const std::string retrieved_organization = hostname;
 
     // EPICS_PVA_AUTH_STD_NAME, EPICS_PVAS_AUTH_STD_NAME
-    name = (pickone({"EPICS_PVA_AUTH_STD_NAME"})) ? pickone.val : retrieved_username;
-    server_name = (pickone({"EPICS_PVAS_AUTH_STD_NAME", "EPICS_PVA_AUTH_STD_NAME"})) ? pickone.val : retrieved_username;
+    name = pickone({"EPICS_PVA_AUTH_STD_NAME"}) ? pickone.val : retrieved_username;
+    server_name = pickone({"EPICS_PVAS_AUTH_STD_NAME", "EPICS_PVA_AUTH_STD_NAME"}) ? pickone.val : retrieved_username;
 
     // EPICS_PVA_AUTH_STD_ORG, EPICS_PVAS_AUTH_STD_ORG
-    organization = (pickone({"EPICS_PVA_AUTH_STD_ORG"})) ? pickone.val : retrieved_organization;
-    server_organization = (pickone({"EPICS_PVAS_AUTH_STD_ORG", "EPICS_PVA_AUTH_STD_ORG"})) ? pickone.val : retrieved_organization;
+    organization = pickone({"EPICS_PVA_AUTH_STD_ORG"}) ? pickone.val : retrieved_organization;
+    server_organization = pickone({"EPICS_PVAS_AUTH_STD_ORG", "EPICS_PVA_AUTH_STD_ORG"}) ? pickone.val : retrieved_organization;
 
     // EPICS_PVA_AUTH_STD_ORG_UNIT, EPICS_PVAS_AUTH_STD_ORG_UNIT
     if (pickone({"EPICS_PVA_AUTH_STD_ORG_UNIT"})) organizational_unit = pickone.val;
@@ -70,7 +70,7 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_PVAS_TLS_KEYCHAIN"})) {
         ensureDirectoryExists(tls_srv_keychain_file = pickone.val);
     } else {
-        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "server.p12";
+        const std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "server.p12";
         ensureDirectoryExists(tls_srv_keychain_file = filename);
     }
 
@@ -100,12 +100,12 @@ std::string ConfigAuthN::getIPAddress() {
     getifaddrs(&if_addr_struct);
 
     // Regex to match local and self-assigned addresses
-    std::regex local_address_pattern(R"(^(127\.)|(169\.254\.))");
+    const std::regex local_address_pattern(R"(^(127\.)|(169\.254\.))");
     // Regex to match private addresses
-    std::regex private_address_pattern(R"(^(10\.)|(172\.1[6-9]\.)|(172\.2[0-9]\.)|(172\.3[0-1]\.)|(192\.168\.))");
+    const std::regex private_address_pattern(R"(^(10\.)|(172\.1[6-9]\.)|(172\.2[0-9]\.)|(172\.3[0-1]\.)|(192\.168\.))");
 
     // Iterate through all the network interfaces
-    for (ifaddrs *ifa = if_addr_struct; ifa != nullptr; ifa = ifa->ifa_next) {
+    for (const ifaddrs *ifa = if_addr_struct; ifa != nullptr; ifa = ifa->ifa_next) {
         // Skip if the interface address is not valid
         if (!ifa->ifa_addr) {
             continue;
@@ -114,7 +114,7 @@ std::string ConfigAuthN::getIPAddress() {
         // Check if the address is an IPv4 address
         if (ifa->ifa_addr->sa_family == AF_INET) {
             // Get the address
-            void *tmp_addr_ptr = &reinterpret_cast<struct sockaddr_in *>(ifa->ifa_addr)->sin_addr;
+            const void *tmp_addr_ptr = &reinterpret_cast<struct sockaddr_in *>(ifa->ifa_addr)->sin_addr;
             char address_buffer[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, tmp_addr_ptr, address_buffer, INET_ADDRSTRLEN);
 

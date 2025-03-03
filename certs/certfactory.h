@@ -192,17 +192,17 @@ class PVXS_API CertFactory {
         }
     }
 
-    void setSubject(const ossl_ptr<X509> &certificate);
+    void setSubject(const ossl_ptr<X509> &certificate) const;
 
     void setValidity(const ossl_ptr<X509> &certificate) const;
 
     void setSerialNumber(const ossl_ptr<X509> &certificate) const;
 
-    void addExtensions(const ossl_ptr<X509> &certificate);
+    void addExtensions(const ossl_ptr<X509> &certificate) const;
 
-    void addExtension(const ossl_ptr<X509> &certificate, int nid, const char *value, const X509 *subject = nullptr);
+    void addExtension(const ossl_ptr<X509> &certificate, int nid, const char *value, const X509 *subject = nullptr) const;
 
-    void addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value) const;
+    void addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, const std::string &value) const;
 
     static void writeCertToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<X509> &cert);
 
@@ -210,7 +210,7 @@ class PVXS_API CertFactory {
 
     static ossl_ptr<BIO> newBio();
 
-    void set_skid(ossl_ptr<X509> &certificate);
+    void set_skid(const ossl_ptr<X509> &certificate);
 };
 
 }  // namespace certs

@@ -110,7 +110,7 @@ struct Tester {
     void createCertStatuses() {
         testShow() << __func__;
         try {
-            auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
+            const auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
             CREATE_CERT_STATUS(ca, {VALID})
             CREATE_CERT_STATUS(intermediate_server, {VALID})
             CREATE_CERT_STATUS(server1, {VALID})
@@ -128,7 +128,7 @@ struct Tester {
      */
     void makeStatusResponses() {
         testShow() << __func__;
-        auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
+        const auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
 
         MAKE_STATUS_RESPONSE(ca)
         MAKE_STATUS_RESPONSE(intermediate_server)
@@ -147,10 +147,8 @@ struct Tester {
      */
     static Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt) {
         while (true) {
-            if (auto ret = sub->pop()) {
-                return ret;
-
-            } else if (!evt.wait(10.0)) {
+            if (auto ret = sub->pop()) return ret;
+            if (!evt.wait(10.0)) {
                 testFail("timeout waiting for event");
                 return {};
             }
@@ -215,7 +213,7 @@ struct Tester {
                     }
                 }
             });
-            status_pv.onLastDisconnect([](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>& parameters) {
+            status_pv.onLastDisconnect([](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>&) {
                 testOk(1, "Closing Status Request Connection: %s", pv_name.c_str());
                 pv.close(pv_name);
             });
@@ -256,7 +254,7 @@ struct Tester {
      *   `account`: the subject `CN` (common name) encoded in the certificate for `tls` connections,
      *              or "ca" or "anonymous" for `tcp` connections
      */
-    struct WhoAmI final : public server::Source {
+    struct WhoAmI final : server::Source {
         const Value resultType;
 
         WhoAmI() : resultType(nt::NTScalar(TypeCode::String).create()) {}
@@ -726,7 +724,7 @@ MAIN(testtlswithcmsandstapling) {
     testPlan(191);
     testSetup();
     logger_config_env();
-    auto tester = new Tester();
+    const auto tester = new Tester();
     tester->createCertStatuses();
     tester->makeStatusResponses();
     tester->startMockCMS();
@@ -770,7 +768,7 @@ MAIN(testtlswithcmsandstapling) {
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }
-    delete (tester);
+    delete tester;
 
     cleanup_for_valgrind();
 

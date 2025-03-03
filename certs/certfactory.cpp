@@ -61,7 +61,7 @@ ossl_ptr<X509> CertFactory::create() {
     }
 
     // 3. Set the certificate version to 2 (X.509 v3 - 0 based)
-    auto cert_version = 2;
+    constexpr auto cert_version = 2;
     if (X509_set_version(certificate.get(), cert_version) != 1) {
         throw std::runtime_error("Failed to set certificate version.");
     }
@@ -113,14 +113,14 @@ ossl_ptr<X509> CertFactory::create() {
         const int num_certs = sk_X509_num(issuer_chain_ptr_);
         log_debug_printf(certs, "Creating Certificate Chain with %d entries\n", num_certs + 1);
         for (int i = 0; i < num_certs; ++i) {
-            auto chain_cert = sk_X509_value(issuer_chain_ptr_, i);
+            const auto chain_cert = sk_X509_value(issuer_chain_ptr_, i);
             if (sk_X509_push(certificate_chain_.get(), chain_cert) != 1) {
                 throw std::runtime_error(SB() << "Failed to create certificate chain for new certificate");
             }
         }
         // Add the issuer's certificate too if not already added
         const auto root_cert = sk_X509_value(issuer_chain_ptr_, num_certs - 1);
-        const bool already_added = root_cert && (X509_cmp(root_cert, issuer_certificate_ptr_) == 0);
+        const bool already_added = root_cert && X509_cmp(root_cert, issuer_certificate_ptr_) == 0;
         if (!already_added && sk_X509_push(certificate_chain_.get(), issuer_certificate_ptr_) != 1) {
             throw std::runtime_error(SB() << "Failed to add issuer certificate to certificate chain");
         }
@@ -140,7 +140,7 @@ ossl_ptr<X509> CertFactory::create() {
 }
 
 std::string CertFactory::sign(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data) {
-    ossl_ptr<EVP_MD_CTX> message_digest_context(EVP_MD_CTX_new());
+    const ossl_ptr<EVP_MD_CTX> message_digest_context(EVP_MD_CTX_new());
     assert(message_digest_context.get() != nullptr);
 
     const EVP_MD *message_digest = EVP_sha256();
@@ -171,9 +171,8 @@ bool CertFactory::verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::str
 
     if (EVP_DigestVerifyFinal(message_digest_context.get(), reinterpret_cast<const unsigned char *>(&signature[0]), signature.size()) == 1) {
         return true;
-    } else {
-        return false;
     }
+    return false;
 }
 
 /**
@@ -181,8 +180,8 @@ bool CertFactory::verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::str
  *
  * @param certificate A pointer to a certificate
  */
-void CertFactory::setSubject(const ossl_ptr<X509> &certificate) {
-    auto subject_name(X509_get_subject_name(certificate.get()));
+void CertFactory::setSubject(const ossl_ptr<X509> &certificate) const {
+    const auto subject_name(X509_get_subject_name(certificate.get()));
     if (subject_name) {
         if (X509_NAME_add_entry_by_txt(subject_name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char *>(name_.c_str()), -1, -1, 0) != 1) {
             throw std::runtime_error(SB() << "Failed to set common name in certificate subject: " << name_);
@@ -213,8 +212,8 @@ void CertFactory::setSubject(const ossl_ptr<X509> &certificate) {
  * @param certificate The certificate whose validity is to be set
  */
 void CertFactory::setValidity(const ossl_ptr<X509> &certificate) const {
-    auto before = StatusDate::toAsn1_Time(not_before_);
-    auto after = StatusDate::toAsn1_Time(not_after_);
+    const auto before = StatusDate::toAsn1_Time(not_before_);
+    const auto after = StatusDate::toAsn1_Time(not_after_);
 
     if (X509_set1_notBefore(certificate.get(), before.get()) != 1) {
         throw std::runtime_error("Failed to set validity start time in certificate.");
@@ -234,7 +233,7 @@ void CertFactory::setValidity(const ossl_ptr<X509> &certificate) const {
  * @param certificate The certificate whose serial number is to be
  */
 void CertFactory::setSerialNumber(const ossl_ptr<X509> &certificate) const {
-    ossl_ptr<ASN1_INTEGER> serial_number(ASN1_INTEGER_new());
+    const ossl_ptr<ASN1_INTEGER> serial_number(ASN1_INTEGER_new());
     if (ASN1_INTEGER_set_uint64(serial_number.get(), serial_) != 1) {
         throw std::runtime_error("Failed to create certificate serial number.");
     }
@@ -252,12 +251,12 @@ void CertFactory::setSerialNumber(const ossl_ptr<X509> &certificate) const {
  *
  * @param certificate The certificate whose extensions are to be set
  */
-void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) {
+void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) const {
     // Subject Key Identifier
     addExtension(certificate, NID_subject_key_identifier, "hash", certificate.get());
 
     // Basic Constraints
-    auto basic_constraint((IS_USED_FOR_(usage_, ssl::kForCa) ? "critical,CA:TRUE" : "CA:FALSE"));
+    auto basic_constraint(IS_USED_FOR_(usage_, ssl::kForCa) ? "critical,CA:TRUE" : "CA:FALSE");
     addExtension(certificate, NID_basic_constraints, basic_constraint);
 
     // Key usage
@@ -311,18 +310,18 @@ void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) {
  *
  * see also "man x509v3_config" for explanation of "expr" string.
  */
-void CertFactory::addExtension(const ossl_ptr<X509> &certificate, int nid, const char *value, const X509 *subject) {
+void CertFactory::addExtension(const ossl_ptr<X509> &certificate, const int nid, const char *value, const X509 *subject) const {
     if (!value) {
         throw std::invalid_argument("Value for the extension cannot be null.");
     }
 
     X509V3_CTX context;
     X509V3_set_ctx_nodb(&context);
-    X509V3_set_ctx(&context, const_cast<X509 *>(issuer_certificate_ptr_), const_cast<X509 *>(subject), nullptr, nullptr, 0);
+    X509V3_set_ctx(&context, issuer_certificate_ptr_, const_cast<X509 *>(subject), nullptr, nullptr, 0);
 
-    ossl_ptr<X509_EXTENSION> extension(X509V3_EXT_conf_nid(nullptr, &context, nid, value), false);
+    const ossl_ptr<X509_EXTENSION> extension(X509V3_EXT_conf_nid(nullptr, &context, nid, value), false);
     if (!extension) {
-        unsigned long err = ERR_get_error();
+        const unsigned long err = ERR_get_error();
         char err_msg[256];
         ERR_error_string_n(err, err_msg, sizeof(err_msg));
         throw std::runtime_error(SB() << "Failed to set certificate extension: " << err_msg);
@@ -338,36 +337,36 @@ void CertFactory::addExtension(const ossl_ptr<X509> &certificate, int nid, const
  * Add a string extension by NID to certificate.
  *
  */
-void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, const std::string &value, const X509 *issuer_certificate_ptr) {
+void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, const int nid, const std::string &value, const X509 *issuer_certificate_ptr) {
     char err_msg[256];
     X509V3_CTX context;
     X509V3_set_ctx_nodb(&context);
     X509V3_set_ctx(&context, const_cast<X509 *>(issuer_certificate_ptr), certificate.get(), nullptr, nullptr, 0);
 
     // Construct the string value using ASN1_STRING with IA5String type
-    ossl_ptr<ASN1_IA5STRING> string_data(ASN1_IA5STRING_new(), false);
+    const ossl_ptr<ASN1_IA5STRING> string_data(ASN1_IA5STRING_new(), false);
     if (!string_data) {
         throw std::runtime_error("Adding custom extension: Failed to create ASN1_IA5STRING object");
     }
 
     // Set the string data using IA5STRING
     if (!ASN1_STRING_set(string_data.get(), value.c_str(), value.size())) {
-        unsigned long err = ERR_get_error();
+        const unsigned long err = ERR_get_error();
         ERR_error_string_n(err, err_msg, sizeof(err_msg));
         throw std::runtime_error(SB() << "Adding custom extension: Failed to set ASN1_STRING: " << err_msg);
     }
 
     // Create a new extension using your smart pointer
-    ossl_ptr<X509_EXTENSION> ext(X509_EXTENSION_create_by_NID(nullptr, nid, false, string_data.get()), false);
+    const ossl_ptr<X509_EXTENSION> ext(X509_EXTENSION_create_by_NID(nullptr, nid, false, string_data.get()), false);
     if (!ext) {
-        unsigned long err = ERR_get_error();
+        const unsigned long err = ERR_get_error();
         ERR_error_string_n(err, err_msg, sizeof(err_msg));
         throw std::runtime_error(SB() << "Adding custom extension: Failed to create X509_EXTENSION: " << err_msg);
     }
 
     // Add the extension to the certificate
     if (!X509_add_ext(certificate.get(), ext.get(), -1)) {
-        unsigned long err = ERR_get_error();
+        const unsigned long err = ERR_get_error();
         ERR_error_string_n(err, err_msg, sizeof(err_msg));
         throw std::runtime_error(SB() << "Failed to add X509_EXTENSION to certificate: " << err_msg);
     }
@@ -375,7 +374,7 @@ void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int
     log_debug_printf(certs, "Extension [%*d]: %-*s = \"%s\"\n", 3, nid, 32, nid2String(nid), value.c_str());
 }
 
-void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, int nid, std::string value) const {
+void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, const int nid, const std::string &value) const {
     addCustomExtensionByNid(certificate, nid, value, issuer_certificate_ptr_);
 }
 
@@ -435,7 +434,7 @@ void CertFactory::writeCertsToBio(const ossl_ptr<BIO> &bio, const STACK_OF(X509)
     if (certs) {
         ERR_clear_error();
         // Get number of certificates in the stack
-        int count = sk_X509_num(certs);
+        const int count = sk_X509_num(certs);
 
         for (int i = 0; i < count; i++) {
             if (!PEM_write_bio_X509(bio.get(), sk_X509_value(certs, i))) {
@@ -447,13 +446,13 @@ void CertFactory::writeCertsToBio(const ossl_ptr<BIO> &bio, const STACK_OF(X509)
 }
 
 time_t CertFactory::getNotAfterTimeFromCert(const ossl_ptr<X509> &cert) {
-    ASN1_TIME *cert_not_after = X509_get_notAfter(cert.get());
+    const ASN1_TIME *cert_not_after = X509_get_notAfter(cert.get());
     const time_t not_after = StatusDate::asn1TimeToTimeT(cert_not_after);
     return not_after;
 }
 
 std::string CertFactory::certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * ca) {
-    auto bio = newBio();
+    const auto bio = newBio();
 
     writeCertToBio(bio, cert);
     writeCertsToBio(bio, ca);
@@ -461,14 +460,14 @@ std::string CertFactory::certAndCasToPemString(const ossl_ptr<X509> &cert, const
     return bioToString(bio);
 }
 
-void CertFactory::set_skid(ossl_ptr<X509> &certificate) {
+void CertFactory::set_skid(const ossl_ptr<X509> &certificate) {
     int pos = -1;
     std::stringstream skid_ss;
 
     pos = X509_get_ext_by_NID(certificate.get(), NID_subject_key_identifier, pos);
     X509_EXTENSION *ex = X509_get_ext(certificate.get(), pos);
 
-    ossl_ptr<ASN1_OCTET_STRING> skid(reinterpret_cast<ASN1_OCTET_STRING *>(X509V3_EXT_d2i(ex)), false);
+    const ossl_ptr<ASN1_OCTET_STRING> skid(static_cast<ASN1_OCTET_STRING *>(X509V3_EXT_d2i(ex)), false);
 
     if (skid != nullptr) {
         // Convert to hexadecimal string

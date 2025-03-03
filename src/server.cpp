@@ -404,9 +404,9 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                 strm<<indent{}<<"Cred: "<<*conn->cred<<"\n";
 #ifdef PVXS_ENABLE_OPENSSL
                 if (conn->iface->isTLS && conn->connection()) {
-                    auto ctx = bufferevent_openssl_get_ssl(conn->connection());
+                    const auto ctx = bufferevent_openssl_get_ssl(conn->connection());
                     assert(ctx);
-                    if (auto cert = SSL_get0_peer_certificate(ctx)) strm << indent{} << "Cert: " << ossl::ShowX509{cert} << "\n";
+                    if (const auto cert = SSL_get0_peer_certificate(ctx)) strm << indent{} << "Cert: " << ossl::ShowX509{cert} << "\n";
                 }
 #endif
 
@@ -875,10 +875,10 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     to_wire(M, SockAddr::any(AF_INET));
 #ifdef PVXS_ENABLE_OPENSSL
     if (msg.protoTLS && canRespondToTlsSearch()) {
-        to_wire(M, uint16_t(effective.tls_port));
+        to_wire(M, effective.tls_port);
         to_wire(M, "tls");
     } else if ((nreply == 0 && msg.mustReply) || (msg.protoTCP && canRespondToTcpSearch())) {
-        to_wire(M, uint16_t(effective.tcp_port));
+        to_wire(M, effective.tcp_port);
         to_wire(M, "tcp");
     }
 #else
@@ -980,9 +980,9 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-void Server::Pvt::doCustomServerCallback(int fd, short evt, void *raw) {
+void Server::Pvt::doCustomServerCallback(int, const short evt, void *raw) {
     try {
-        auto pvt = static_cast<Server::Pvt *>(raw);
+        const auto pvt = static_cast<Pvt *>(raw);
         if (pvt && pvt->custom_server_callback) {
             auto next_timeval =  pvt->custom_server_callback(evt);
             if (next_timeval.tv_sec == 0 && next_timeval.tv_usec == 0) {

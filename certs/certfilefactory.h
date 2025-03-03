@@ -86,7 +86,7 @@ class IdFileFactory {
      */
     static std::shared_ptr<KeyPair> createKeyPair();
 
-    CertData getCertData(const std::shared_ptr<KeyPair>& key_pair);
+    CertData getCertData(const std::shared_ptr<KeyPair>& key_pair) const;
 
    protected:
     IdFileFactory(const std::string& filename, const std::string& password = "", const std::shared_ptr<KeyPair>& key_pair = nullptr, X509* cert_ptr = nullptr,

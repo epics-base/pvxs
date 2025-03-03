@@ -37,7 +37,7 @@ std::string promptPassword(const std::string &prompt) {
 }
 
 int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bool &debug, uint16_t &cert_usage, bool &daemon_mode) {
-    auto program_name = argv[0];
+    const auto program_name = argv[0];
     bool show_version{false}, help{false}, add_config_uri{false};
     std::string usage{"client"};
 
@@ -101,24 +101,24 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
             std::cerr << "Error: -V option cannot be used with any other options.\n";
             return 10;
         }
-        std::cout << pvxs::version_information;
+        std::cout << version_information;
         exit(0);
     }
 
     if (usage == "server") {
-        cert_usage = pvxs::ssl::kForServer;
+        cert_usage = ssl::kForServer;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create server certificates" << std::endl;
             return 10;
         }
     } else if (usage == "client") {
-        cert_usage = pvxs::ssl::kForClient;
+        cert_usage = ssl::kForClient;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVA_TLS_KEYCHAIN environment variable to create client certificates" << std::endl;
             return 11;
         }
     } else if (usage == "hybrid") {
-        cert_usage = pvxs::ssl::kForClientAndServer;
+        cert_usage = ssl::kForClientAndServer;
         if (config.tls_srv_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create hybrid certificates" << std::endl;
             return 12;
@@ -135,8 +135,8 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
     return 0;
 }
 
-CertData getCertificate(bool &retrieved_credentials, ConfigLdap config, uint16_t cert_usage, AuthNLdap authenticator, const std::string tls_keychain_file,
-                        const std::string tls_keychain_pwd) {
+CertData getCertificate(bool &retrieved_credentials, ConfigLdap config, uint16_t cert_usage, const AuthNLdap& authenticator, const std::string &tls_keychain_file,
+                        const std::string &tls_keychain_pwd) {
     CertData cert_data{};
 
     if (auto credentials = authenticator.getCredentials(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient))) {
@@ -154,7 +154,7 @@ CertData getCertificate(bool &retrieved_credentials, ConfigLdap config, uint16_t
                 log_debug_printf(auth, "%s\n", e.what());
                 key_pair = IdFileFactory::createKeyPair();
             } catch (std::exception &new_e) {
-                throw std::runtime_error(pvxs::SB() << "Error creating client key: " << new_e.what());
+                throw std::runtime_error(SB() << "Error creating client key: " << new_e.what());
             }
         }
 
@@ -178,9 +178,9 @@ CertData getCertificate(bool &retrieved_credentials, ConfigLdap config, uint16_t
             file_factory->writeIdentityFile();
 
             // Read file back for info
-            auto cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
-            auto serial_number = CertStatusFactory::getSerialNumber(cert_data.cert);
-            auto issuer_id = CertStatus::getIssuerId(cert_data.ca);
+            auto read_back_cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
+            auto serial_number = CertStatusFactory::getSerialNumber(read_back_cert_data.cert);
+            auto issuer_id = CertStatus::getIssuerId(read_back_cert_data.ca);
 
             std::string from = std::ctime(&credentials->not_before);
             std::string to = std::ctime(&credentials->not_after);

@@ -56,22 +56,41 @@ class CertStatusFactory {
     /**
      * @brief Used to make OCSP responses for given statuses
      * You need the private key of the CA in order to do this.
-     * Subsequently call createPVACertificateStatus() to make responses for certificates
+     * You should call createPVACertificateStatus() afterward to make responses for certificates
      *
      * @param ca_cert the CA certificate to use to sign the OCSP response
      * @param ca_pkey the CA's private key to use to sign the response
      * @param ca_chain the CA's certificate change used to sign any response
-     * @param cert_status_validity_mins_ the number of minutes the status is valid for
+     * @param cert_status_validity_mins the number of minutes the status is valid for
+     * @param cert_status_validity_secs additional seconds the status is valid for
      *
      * @see createPVACertificateStatus()
      */
-    CertStatusFactory(const ossl_ptr<X509>& ca_cert, const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain,
-                      uint32_t cert_status_validity_mins = 30, uint32_t cert_status_validity_secs = 0)
+    CertStatusFactory(const ossl_ptr<X509>& ca_cert, const ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain, const uint32_t cert_status_validity_mins = 30, const uint32_t cert_status_validity_secs = 0)
         : ca_cert_(ca_cert),
           ca_pkey_(ca_pkey),
           ca_chain_(ca_chain),
           cert_status_validity_mins_(cert_status_validity_mins),
-          cert_status_validity_secs_(cert_status_validity_secs) {};
+          cert_status_validity_secs_(cert_status_validity_secs) {}
+
+    /**
+     * @brief Create OCSP status for certificate identified by serial number
+     * The configured ca_cert and ca_chain is encoded into the response so that consumers of the response can determine the issuer
+     * and the chain of trust.  The issuer will have to have previously trusted the root certificate as this will
+     * be verified.  The response will be signed with the configured private key so that authenticity of the response can be verified.
+     *
+     * The result contains the signed OCSP response as well as unencrypted OCSP status, status date , status validity date and
+     * revocation date if applicable.
+     * The PVA status is also included for completeness
+     *
+     * @param cert Certificate to create OCSP response for
+     * @param status the PVA certificate status to create an OCSP response with
+     * @param status_date the status date to set in the OCSP response
+     * @param predicated_revocation_time the revocation date to set in the OCSP response if applicable
+     *
+     * @return the Certificate Status containing the signed OCSP response and other OCSP response data.
+     */
+    PVACertificateStatus createPVACertificateStatus(const ossl_ptr<X509>& cert, certstatus_t status, const StatusDate &status_date = StatusDate(std::time(nullptr)), const StatusDate &predicated_revocation_time = StatusDate(std::time(nullptr))) const;
 
     /**
      * @brief Create OCSP status for certificate identified by serial number
@@ -90,10 +109,8 @@ class CertStatusFactory {
      *
      * @return the Certificate Status containing the signed OCSP response and other OCSP response data.
      */
-    PVACertificateStatus createPVACertificateStatus(const ossl_ptr<X509>& cert, certstatus_t status, StatusDate status_date = std::time(nullptr),
-                                                    StatusDate predicated_revocation_time = std::time(nullptr)) const;
-    PVACertificateStatus createPVACertificateStatus(uint64_t serial, certstatus_t status, StatusDate status_date = std::time(nullptr),
-                                                    StatusDate predicated_revocation_time = std::time(nullptr)) const;
+    PVACertificateStatus createPVACertificateStatus(uint64_t serial, certstatus_t status, StatusDate status_date = StatusDate(std::time(nullptr)),
+                                                    StatusDate predicated_revocation_time = StatusDate(std::time(nullptr))) const;
 
     /**
      * @brief Convert ASN1_INTEGER to a 64-bit unsigned integer
@@ -103,7 +120,7 @@ class CertStatusFactory {
     static uint64_t ASN1ToUint64(const ASN1_INTEGER* asn1_number) {
         uint64_t uint64_number = 0;
         for (int i = 0; i < asn1_number->length; ++i) {
-            uint64_number = (uint64_number << 8) | asn1_number->data[i];
+            uint64_number = uint64_number << 8 | asn1_number->data[i];
         }
         return uint64_number;
     }
@@ -126,7 +143,7 @@ class CertStatusFactory {
         }
 
         // Extract the serial number from the certificate
-        ASN1_INTEGER* serial_number_asn1 = X509_get_serialNumber(cert);
+        const ASN1_INTEGER* serial_number_asn1 = X509_get_serialNumber(cert);
         if (!serial_number_asn1) {
             throw std::runtime_error("Failed to retrieve serial number from certificate");
         }
@@ -137,30 +154,31 @@ class CertStatusFactory {
 
    private:
     const ossl_ptr<X509>& ca_cert_;                          // CA Certificate to encode in the OCSP responses
-    const pvxs::ossl_ptr<EVP_PKEY>& ca_pkey_;                // CA Certificate's private key to sign the OCSP responses
+    const ossl_ptr<EVP_PKEY>& ca_pkey_;                // CA Certificate's private key to sign the OCSP responses
     const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain_;  // CA Certificate chain to encode in the OCSP responses
     const uint32_t cert_status_validity_mins_;               // The status validity period in minutes to encode in the OCSP responses
     const uint32_t cert_status_validity_secs_;               // The status validity period additional seconds to encode in the OCSP responses
 
     /**
      * @brief Internal function to create an OCSP CERTID.  Uses CertStatusFactory configuration
+     * @param serial serial number of cert to find certificate id of
      * @param digest the method to use to create the CERTID
      * @return an OCSP CERTID
      */
-    pvxs::ossl_ptr<OCSP_CERTID> createOCSPCertId(const uint64_t& serial, const EVP_MD* digest = EVP_sha1()) const;
+    ossl_ptr<OCSP_CERTID> createOCSPCertId(const uint64_t& serial, const EVP_MD* digest = EVP_sha1()) const;
     /**
      * @brief Internal function to convert an OCSP_BASICRESP into a byte array
      * @param basic_resp the OCSP_BASICRESP to convert
      * @return a byte array
      */
-    static std::vector<uint8_t> ocspResponseToBytes(const pvxs::ossl_ptr<OCSP_BASICRESP>& basic_resp);
+    static std::vector<uint8_t> ocspResponseToBytes(const ossl_ptr<OCSP_BASICRESP>& basic_resp);
 
     /**
      * @brief Internal function to convert a PVA serial number into an ASN1_INTEGER
      * @param serial the serial number to convert
      * @return ASN1_INTEGER
      */
-    static pvxs::ossl_ptr<ASN1_INTEGER> uint64ToASN1(const uint64_t& serial);
+    static ossl_ptr<ASN1_INTEGER> uint64ToASN1(const uint64_t& serial);
 
     static std::string getError() {
         unsigned long err;

@@ -94,12 +94,14 @@ SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint1
         auto schemeLen = sep - ep;
         if (!conf) {
             throw std::runtime_error("URI unsupported in this context");
+        }
 #ifdef PVXS_ENABLE_OPENSSL
-        } else if (schemeLen == 4u && strncmp(ep, "pvas", 4) == 0) {
+        if (schemeLen == 4u && strncmp(ep, "pvas", 4) == 0) {
             scheme = TLS;
-            defport = conf ? conf->tls_port : defdefport;
+            defport = conf->tls_port;
+        } else
 #endif
-        } else if (schemeLen == 3u && strncmp(ep, "pva", 3) == 0) {
+        if (schemeLen == 3u && strncmp(ep, "pva", 3) == 0) {
             scheme = Plain;
         } else {
             throw std::runtime_error(SB() << "Unsupported scheme '" << ep << "'");

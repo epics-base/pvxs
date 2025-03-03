@@ -44,7 +44,7 @@ class AuthNLdap : public Auth {
     AuthNLdap() : Auth(PVXS_LDAP_AUTH_TYPE, {Member(TypeCode::String, "signature")}) {};
     ~AuthNLdap() override = default;
 
-    std::shared_ptr<Credentials> getCredentials(const client::Config &config, bool for_client = true) const override;
+    std::shared_ptr<Credentials> getCredentials(const client::Config &config, bool for_client) const override;
 
     std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
                                                                    const uint16_t &usage) const override;
