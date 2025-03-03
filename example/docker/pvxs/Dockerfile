@@ -21,7 +21,7 @@ WORKDIR ${PROJECT_HOME}
 RUN echo "EPICS_BASE = \$(TOP)/../epics-base" >> ${PROJECT_HOME}/RELEASE.local
 
 # Clone and build PVXS
-RUN git clone --recursive --branch tls-dev https://github.com/george-mcintyre/pvxs.git && \
+RUN git clone --recursive --branch tls https://github.com/george-mcintyre/pvxs.git && \
     cd pvxs && \
     make -j10 all
 
