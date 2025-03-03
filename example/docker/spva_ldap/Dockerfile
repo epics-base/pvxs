@@ -1,5 +1,5 @@
 # FROM image built from /example/docker/spva_std
-FROM georgeleveln/spva_std:tls-dev
+FROM georgeleveln/spva_std:latest
 
 # Set environment variables
 ENV PROJECT_HOME=/opt/epics
