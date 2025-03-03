@@ -1049,21 +1049,19 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
 void getOrCreateCaCertificate(ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool &is_initialising) {
     CertData cert_data;
-    /*
     try {
         cert_data = IdFileFactory::create(config.ca_keychain_file, config.ca_keychain_pwd)->getCertDataFromFile();
     } catch (...) {
     }
-    */
-    std::shared_ptr<KeyPair> key_pair /*= cert_data.key_pair*/;
+    auto key_pair = cert_data.key_pair;
 
-    // if (!key_pair) {
+    if (!key_pair) {
         is_initialising = true; // Let caller know that we've created a new Cert and Key
         key_pair = IdFileFactory::createKeyPair();
         cert_data = createCaCertificate(config, ca_db, key_pair);
         createDefaultAdminACF(config, cert_data.cert);
         createAdminClientCert(config, ca_db, key_pair->pkey, cert_data.cert, cert_data.ca);
-    // }
+    }
 
     ca_pkey = std::move(key_pair->pkey);
     ca_cert = std::move(cert_data.cert);
