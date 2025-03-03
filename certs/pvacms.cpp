@@ -815,7 +815,7 @@ void onGetStatus(const ConfigCms &config, const sql_ptr &ca_db, const std::strin
     const auto cert_status_creator(CertStatusFactory(ca_cert, ca_pkey, ca_chain, config.cert_status_validity_mins));
     try {
         std::vector<serial_number_t> ca_serial_numbers;
-        log_debug_printf(pvacms, "GET STATUS: Certificate %s:%llu\n", issuer_id.c_str(), serial);
+        log_debug_printf(pvacms, "GET STATUS: Certificate %s:%llu\n", issuer_id.c_str(), (unsigned long long)serial);
 
         if (our_issuer_id != issuer_id) {
             throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
@@ -874,7 +874,7 @@ void onRevoke(const ConfigCms &config, const sql_ptr &ca_db, const std::string &
         std::string issuer_id;
         serial_number_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
-        log_debug_printf(pvacms, "REVOKE: Certificate %s:%llu\n", issuer_id.c_str(), serial);
+        log_debug_printf(pvacms, "REVOKE: Certificate %s:%llu\n", issuer_id.c_str(), (unsigned long long)serial);
 
         if (our_issuer_id != issuer_id) {
             throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
@@ -920,7 +920,7 @@ void onApprove(const ConfigCms &config, const sql_ptr &ca_db, const std::string 
         std::string issuer_id;
         serial_number_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
-        log_debug_printf(pvacms, "APPROVE: Certificate %s:%llu\n", issuer_id.c_str(), serial);
+        log_debug_printf(pvacms, "APPROVE: Certificate %s:%llu\n", issuer_id.c_str(), (unsigned long long)serial);
 
         if (our_issuer_id != issuer_id) {
             throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
@@ -977,7 +977,7 @@ void onDeny(const ConfigCms &config, const sql_ptr &ca_db, const std::string &ou
         std::string issuer_id;
         serial_number_t serial;
         std::tie(issuer_id, serial) = getParameters(parameters);
-        log_debug_printf(pvacms, "DENY: Certificate %s:%llu\n", issuer_id.c_str(), serial);
+        log_debug_printf(pvacms, "DENY: Certificate %s:%llu\n", issuer_id.c_str(), (unsigned long long)serial);
 
         if (our_issuer_id != issuer_id) {
             throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
