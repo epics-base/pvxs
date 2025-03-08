@@ -128,7 +128,7 @@ class Auth {
      * They should use this entry to store the values retrieved from the command line for the authenticator's options
      *
      * @param app The CLI application object
-     * @param authn_config_map A map of the authentication configuration
+     * @param authn_config_map A map of the authenticator configuration
      */
     virtual void addOptions(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) {}
 
@@ -158,7 +158,7 @@ class Auth {
     /**
      * @brief Registration of all supported auth methods.
      *
-     * This static member is used to store all the supported authentication methods.
+     * This static member is used to store all the supported authenticators.
      * The registration performed by each authenticator adds an entry to this map.
      * Registration is performed as follows:
      *

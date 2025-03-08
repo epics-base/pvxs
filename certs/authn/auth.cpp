@@ -99,9 +99,9 @@ std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCr
 }
 
 /**
- * @brief Run the authentication daemon
+ * @brief Run the authenticator daemon
  *
- * This authentication daemon will re-run the authentication method each time the
+ * This Authenticator daemon will re-run the Authenticator each time the
  * certificate expires to try to get another certificate.  It will also
  * maintain a PV that will publish the current status and how much time there is
  * remaining until the current certificate expires.
@@ -109,7 +109,7 @@ std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCr
  * Clients will automatically reconfigure connections when certs expire so if a new
  * certificate is available then it will be picked up automatically.
  *
- * @param authn_config The authentication type's configuration
+ * @param authn_config The Authenticator's configuration
  * @param for_client Whether the daemon is for a client or server
  * @param cert_data The certificate data (contains cert, ca, and key)
  * @param fn The function to call to get the next certificate

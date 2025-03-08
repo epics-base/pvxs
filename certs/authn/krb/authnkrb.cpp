@@ -139,7 +139,7 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &, bo
 }
 
 /**
- * @brief Creates a certificate creation request for the Kerberos authentication type.
+ * @brief Creates a certificate creation request for the Kerberos Authenticator.
  *
  * This function generates a certificate creation request (CCR) using the
  * provided credentials and key pair.
@@ -168,7 +168,7 @@ std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const s
                                                                          const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const {
     const auto krb_credentials = castAs<KrbCredentials, Credentials>(credentials);
 
-    // Call base class to set up the common CSR fields.
+    // Call base class to set up the common CCR fields.
     auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage);
     log_debug_printf(auth, "CCR: created%s", "\n");
 
@@ -304,7 +304,7 @@ std::string AuthNKrb::gssErrorDescription(const OM_uint32 major_status, const OM
  * This function verifies the provided CCR against the configured KDC.
  *
  * It does this by acquiring the server credentials for the PVACMS service from
- * the configured keytab (`krb5_keytab_file`) that allows passwordless kerberos
+ * the configured keytab (`krb5_keytab_file`) that allows passwordless Kerberos
  * authentication.
  *
  * It then "accepts" the client's token to establish a security context.  If successful

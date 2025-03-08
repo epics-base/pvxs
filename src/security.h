@@ -16,7 +16,7 @@ namespace certs {
 
 /**
  * @class Credentials
- * @brief Represents the credentials for an abstract authentication type.
+ * @brief Represents the credentials for an abstract Authenticator.
  *
  * This structure provides the principal name.
  */
@@ -105,12 +105,12 @@ struct CertCreationRequest final {
     // "std", "krb", etc
     std::string type;
 
-    // PVStructure containing the authentication type specific CSR to be
+    // PVStructure containing the Authenticator specific CCR to be
     // transmitted over the wire.  The type field is used to in the server side
     // switch to correctly decode and verify the ccr.
     //
-    // The verification structure will be filled by the authenticator subtypes
-    // based on their verification needs. If your authentication method can use
+    // The verification structure will be filled by the Authenticator subtypes
+    // based on their verification needs. If your Authenticator can use
     // just a string token to pass verification information then use this
     // definition directly, otherwise replace the definition with a similar
     // structure definition except that the verifier substructure will be your

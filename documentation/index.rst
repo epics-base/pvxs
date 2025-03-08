@@ -41,6 +41,9 @@ See :ref:`relpolicy` for details.
    overview
    netconfig
    spvaqstart
+   spvaqstartstd.rst
+   spvaqstartkrb
+   spvaqstartldap
    spva
    spvaauth
    spvacerts

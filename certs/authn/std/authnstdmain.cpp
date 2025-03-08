@@ -42,7 +42,7 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
     bool show_version{false}, help{false}, add_config_uri{false};
     std::string usage{"client"};
 
-    CLI::App app{"authnstd - Secure PVAccess with Standard Authentication"};
+    CLI::App app{"authnstd - Secure PVAccess Standard Authenticator"};
 
     // Define options
     app.set_help_flag("", "");  // deactivate built-in help
@@ -70,9 +70,9 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
     // The built-in help from CLI11 is pretty lame, so we'll do our own
     // Make sure we update this help text when options change
     if (help) {
-        std::cout << "authnstd - Secure PVAccess with Standard Authentication\n"
+        std::cout << "authnstd - Secure PVAccess Standard Authenticator\n"
                   << std::endl
-                  << "Generates client, server, or hybrid certificates based on the standard authentication method. \n"
+                  << "Generates client, server, or hybrid certificates based on the Standard Authenticator. \n"
                   << "Uses specified parameters to create certificates that require administrator APPROVAL before becoming VALID.\n"
                   << std::endl
                   << "usage:\n"
@@ -159,7 +159,7 @@ CertData getCertificate(bool &retrieved_credentials, ConfigStd config, uint16_t 
         // Create a Certificate Creation Request (CCR) using the credentials and key pair
         auto cert_creation_request = authenticator.createCertCreationRequest(credentials, key_pair, cert_usage);
 
-        log_debug_printf(auth, "CCR created for: %s authentication type\n", authenticator.type_.c_str());
+        log_debug_printf(auth, "CCR created for: %s Authenticator\n", authenticator.type_.c_str());
 
         // Attempt to create a certificate with the Certificate Creation Request (CCR)
         auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request, config.request_timeout_specified);

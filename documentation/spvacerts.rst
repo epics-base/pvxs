@@ -25,18 +25,18 @@ Certificate Status Message
 
 Status response structure:
 
-    .. code-block:: console
+.. code-block:: console
 
-        Structure
-            enum_t     status               # PENDING_APPROVAL, PENDING, VALID, EXPIRED, REVOKED
-            UInt64     serial               # Certificate serial number
-            string     state                # String representation of status
-            enum_t     ocsp_status          # GOOD, REVOKED, UNKNOWN
-            string     ocsp_state           # OCSP state string
-            string     ocsp_status_date     # Status timestamp
-            string     ocsp_certified_until # Validity period end
-            string     ocsp_revocation_date # Revocation date if applicable
-            UInt8A     ocsp_response        # Signed PKCS#7 encoded OCSP response
+    Structure
+        enum_t     status               # PENDING_APPROVAL, PENDING, VALID, EXPIRED, REVOKED
+        UInt64     serial               # Certificate serial number
+        string     state                # String representation of status
+        enum_t     ocsp_status          # GOOD, REVOKED, UNKNOWN
+        string     ocsp_state           # OCSP state string
+        string     ocsp_status_date     # Status timestamp
+        string     ocsp_certified_until # Validity period end
+        string     ocsp_revocation_date # Revocation date if applicable
+        UInt8A     ocsp_response        # Signed PKCS#7 encoded OCSP response
 
 .. _certificate_creation_request_CCR:
 
@@ -47,30 +47,30 @@ This message is sent to :ref:`pvacms` to create a new certificate. It is a PVStr
 
 Request structure:
 
-    .. code-block:: console
+.. code-block:: console
 
-        Structure
-            string     type               # std, krb, ldap, jwt
-            string     name               # Certificate subject name
-            string     country            # Optional: Country code
-            string     organization       # Optional: Organization name
-            string     organization_unit  # Optional: Unit name
-            UInt16     usage              # Certificate usage flags:
-                                            #   0x01: Client
-                                            #   0x02: Server
-                                            #   0x03: Client and Server
-                                            #   0x04: Intermediate CA
-                                            #   0x08: CMS
-                                            #   0x0A: Any Server
-                                            #   0x10: CA
-            UInt32     not_before         # Validity start time (epoch seconds)
-            UInt32     not_after          # Validity end time (epoch seconds)
-            string     pub_key            # Public key data
-            enum_t     status_monitoring_extension  # Include status monitoring
-            structure  verifier           # Optional: Authentication data
+    Structure
+        string     type               # std, krb, ldap, jwt
+        string     name               # Certificate subject name
+        string     country            # Optional: Country code
+        string     organization       # Optional: Organization name
+        string     organization_unit  # Optional: Unit name
+        UInt16     usage              # Certificate usage flags:
+                                        #   0x01: Client
+                                        #   0x02: Server
+                                        #   0x03: Client and Server
+                                        #   0x04: Intermediate CA
+                                        #   0x08: CMS
+                                        #   0x0A: Any Server
+                                        #   0x10: CA
+        UInt32     not_before         # Validity start time (epoch seconds)
+        UInt32     not_after          # Validity end time (epoch seconds)
+        string     pub_key            # Public key data
+        enum_t     status_monitoring_extension  # Include status monitoring
+        structure  verifier           # Optional: Authenticator specific data
 
 The ``verifier`` sub-structure is only present if the ``type`` field references a
- :ref:`pvacms_type_1_auth_methods`, or :ref:`pvacms_type_2_auth_methods` authentication mechanism.
+ :ref:`pvacms_type_1_auth_methods`, or :ref:`pvacms_type_2_auth_methods` Authenticator.
 
 
 Certificate Management Operations
@@ -80,29 +80,29 @@ Certificate Management Operations
 
 Approval:
 
-    .. code-block:: sh
+.. code-block:: shell
 
-        pvxcert -A <certid>    # Approve certificate
+    pvxcert -A <certid>    # Approve certificate
 
 Denial:
 
-    .. code-block:: sh
+.. code-block:: shell
 
-        pvxcert -D <certid>    # Deny certificate (sets REVOKED)
+    pvxcert -D <certid>    # Deny certificate (sets REVOKED)
 
 Revocation:
 
-    .. code-block:: sh
+.. code-block:: shell
 
-        pvxcert -R <certid>    # Permanently revoke certificate
+    pvxcert -R <certid>    # Permanently revoke certificate
 
 It achieves this by using `PUT` to send a PVStructure with the following fields, to :ref:`pvacms`
 on the PV associated with the certificate:
 
-    .. code-block:: console
+.. code-block:: console
 
-        Structure
-            string     state    # APPROVE, DENY, REVOKE
+    Structure
+        string     state    # APPROVE, DENY, REVOKE
 
 
 .. _certificates_and_private_keys:
@@ -136,30 +136,42 @@ Certificate Management Tools
 pvxcert
 ----------
 
-    .. code-block:: console
+.. code-block:: console
 
-        Usage: pvxcert [OPTIONS] [cert_id]
-            pvxcert [OPTIONS] -f [cert-file] [-p]
-            pvxcert -I
+    Certificate management utility for PVXS
 
-        POSITIONALS:
-          cert_id TEXT                Certificate ID
+    Gets the STATUS of a certificate, REVOKES a certificate, or APPROVES or DENIES a pending certificate approval.
 
-        OPTIONS:
-          -h,     --help              Print this help message and exit
-          -w,     --timeout FLOAT [5] Operation timeout in seconds
-          -v,     --verbose           Make more noise
-          -d,     --debug             Shorthand for $PVXS_LOG="pvxs.*=DEBUG". Make a lot of noise.
-          -f,     --file TEXT         The Keychain file to read if no Certificate ID specified
-          -p,     --password          Prompt for password
-          -V,     --version           Print version and exit.
-          -#,     --limit UINT [20]   Maximum number of elements to print for each array field. Set to
-                                      zero 0 for unlimited
-          -F,     --format TEXT       Output format mode: delta, tree
-          -I,     --install           Download and install the root certificate
-          -A,     --approve           APPROVE the certificate (ADMIN ONLY)
-          -R,     --revoke            REVOKE the certificate (ADMIN ONLY)
-          -D,     --deny              DENY the pending certificate (ADMIN ONLY)
+      Get certificate status from serial number: The certificate ID is specified as <issuer>:<serial>,
+      where <issuer> is the first 8 hex digits of the subject key identifier of the issuer and <serial>
+      is the serial number of the certificate. e.g. 27975e6b:7246297371190731775.
+
+      Get certificate status from keychain file: The keychain file must be a PKCS#12 file.
+
+      APPROVAL and DENIAL of pending certificate approval requests: Can only be made by administrators.
+
+      REVOCATION of a certificate: Can only be made by an administrator.
+
+    usage:
+      pvxcert [options] <cert_id> Get certificate status
+      pvxcert [file_options] [options] (-f | --file) <cert_file>
+                                                 Get certificate information from the specified cert file
+      pvxcert [options] (-A | --approve) <cert_id>
+                                                 APPROVE pending certificate approval request (ADMIN ONLY)
+      pvxcert [options] (-D | --deny) <cert_id>  DENY pending certificate approval request (ADMIN ONLY)
+      pvxcert [options] (-R | --revoke) <cert_id>
+                                                 REVOKE certificate (ADMIN ONLY)
+      pvxcert (-h | --help)                      Show this help message and exit
+      pvxcert (-V | --version)                   Print version and exit
+
+    file_options:
+      (-p | --password)                          Prompt for password
+
+    options:
+      (-w | --timeout) <timout_secs>             Operation timeout in seconds.  Default 5.0s
+      (-d | --debug)                             Debug mode: Shorthand for $PVXS_LOG="pvxs.*=DEBUG"
+      (-v | --verbose)                           Verbose mode
+
 
 Key Operations:
 
@@ -192,79 +204,50 @@ The :ref:`pvacms` is the Certificate Authority Service for the EPICS Secure PVAc
 PVACMS Usage
 ^^^^^^^^^^^^
 
-    .. code-block:: console
+.. code-block:: console
 
-        PVACMS - Certificate Management Service
+    PVACMS: PVAccess Certificate Management Service
 
-        pvacms [OPTIONS]
+    Manages Certificates for a Secure PVAccess network.  The Certificate Authority.  Handles Create
+    and Revoke requests.  Manages Certificate lifecycles and provides live OCSP certificate status.
 
-        OPTIONS:
-          -h,     --help              Show this message
-          -v,     --verbose           Make more noise
-          -V,     --version           Print version and exit.
-          -d,     --cert-db TEXT [certs.db]
-                                      Specify cert db file location
-          -c,     --ca-keychain TEXT [ca.p12]
-                                      Specify CA keychain file location
-                  --ca-private-key TEXT
-                                      Specify CA private key file location
-                  --ca-keychain-pwd TEXT
-                                      Specify CA keychain password file location
-                  --ca-private-key-pwd TEXT
-                                      Specify CA private key password file location
-                  --ca-name TEXT ["EPICS Test Root CA"]
-                                      Specify the CA's name. Used if we need to create a root
-                                      certificate
-                  --ca-org TEXT ["ca.epics.org"]
-                                      Specify the CA's Organization. Used if we need to create a root
-                                      certificate
-                  --ca-org-unit TEXT ["EPICS Certificate Authority"]
-                                      Specify the CA's Organization Unit. Used if we need to create a
-                                      root certificate
-                  --ca-country TEXT [US]
-                                      Specify the CA's Country. Used if we need to create a root
-                                      certificate
-          -p,     --pvacms-keychain TEXT [pvacms.p12]
-                                      Specify PVACMS keychain file location
-                  --pvacms-private-key TEXT
-                                      Specify PVACMS private key file location
-                  --pvacms-keychain-pwd TEXT
-                                      Specify PVACMS keychain password file location
-                  --pvacms-private-key-pwd TEXT
-                                      Specify PVACMS private key password file location
-                  --pvacms-name TEXT [PVACMS]
-                                      Specify the PVACMS name. Used if we need to create a PVACMS
-                                      certificate
-                  --pvacms-org TEXT [ca.epics.org]
-                                      Specify the PVACMS Organization. Used if we need to create a
-                                      PVACMS certificate
-                  --pvacms-org-unit TEXT [EPICS Certificate Authority]
-                                      Specify the PVACMS Organization Unit. Used if we need to create a
-                                      PVACMS certificate
-                  --pvacms-country TEXT [US]
-                                      Specify the PVACMS Country. Used if we need to create a PVACMS
-                                      certificate
-          -a,     --admin-keychain TEXT [admin.p12]
-                                      Specify PVACMS admin user's keychain file location
-                  --admin-private-key TEXT
-                                      Specify PVACMS admin user's private key file location
-                  --admin-keychain-pwd TEXT
-                                      Specify PVACMS admin user's keychain password file location
-                  --admin-private-key-pwd TEXT
-                                      Specify PVACMS admin user's private key password file location
-                  --acf TEXT [pvacms.acf]
-                                      Admin Security Configuration File
-                  --client-require-approval [true]
-                                      Generate Client Certificates in PENDING_APPROVAL state
-                  --server-require-approval [true]
-                                      Generate Server Certificates in PENDING_APPROVAL state
-                  --hybrid-require-approval [true]
-                                      Generate Hybrid Certificates in PENDING_APPROVAL state
-                  --status-validity-mins UINT [30]
-                                      Set Status Validity Time in Minutes
-                  --status-monitoring-enabled [true]
-                                      Require Peers to monitor Status of Certificates Generated by this
-                                      server by default. Can be overridden in each CCR
+    Also can be used to re-generate the admin certificate that is required to administer the certificates.
+
+    usage:
+      pvacms [admin options] [kerberos options] [options]
+                                                 Run PVACMS.  Interrupt to quit
+      pvacms (-h | --help)                       Show this help message and exit
+      pvacms (-V | --version)                    Print version and exit
+      pvacms [admin options] --admin-keychain-new <new_name>
+                                                 Generate a new Admin User's keychain file, update the ACF file, and exit
+
+    options:
+      (-c | --ca-keychain) <ca_keychain>         Specify CA keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/ca.p12
+            --ca-keychain-pwd <file>             Specify location of file containing CA keychain file's password
+            --ca-name <name>                     Specify name (CN) to be used for CA certificate. Default `EPICS Root CA`
+            --ca-org <name>                      Specify organisation (O) to be used for CA certificate. Default `ca.epics.org`
+            --ca-org-unit <name>                 Specify organisational unit (OU) to be used for CA certificate. Default `EPICS Certificate Authority`
+            --ca-country <name>                  Specify country (C) to be used for CA certificate. Default `US`
+      (-d | --cert-db) <db_name>                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.3/certs.db
+      (-p | --pvacms-keychain) <pvacms_keychain> Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
+            --pvacms-keychain-pwd <file>         Specify location of file containing PVACMS keychain file's password
+            --pvacms-name <name>                 Specify name (CN) to be used for PVACMS certificate. Default `PVACMS Service`
+            --pvacms-org <name>                  Specify organisation (O) to be used for PVACMS certificate. Default `ca.epics.org`
+            --pvacms-org-unit <name>             Specify organisational unit (OU) to be used for PVACMS certificate. Default `EPICS PVA Certificate Management Service`
+            --pvacms-country <name>              Specify country (C) to be used for PVACMS certificate. Default US
+            --client-require-approval            Generate Client Certificates in PENDING_APPROVAL state
+            --hybrid-require-approval            Generate Hybrid Certificates in PENDING_APPROVAL state
+            --server-require-approval            Generate Server Certificates in PENDING_APPROVAL state
+            --status-monitoring-enabled          Require Peers to monitor Status of Certificates Generated by this
+                                                 server by default. Can be overridden in each CCR
+            --status-validity-mins               Set Status Validity Time in Minutes
+      (-v | --verbose)                           Verbose mode
+
+    admin options:
+            --acf <acf_file>                     Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
+      (-a | --admin-keychain) <admin_keychain>   Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/admin.p12
+            --admin-keychain-pwd <file>          Specify location of file containing Admin User's keychain file password
+
 
 .. _pvacms_configuration:
 
@@ -274,6 +257,7 @@ PVACMS Configuration
 The environment variables in the following table configure the :ref:`pvacms` at runtime.
 
 .. note::
+
    There is also an implied hierarchy to their applicability such that :ref:`pvacms`
    supersedes the PVAS version which in turn, supersedes the PVA version.
    So, if a :ref:`pvacms` wants to specify its keychain file location it can simply
@@ -347,10 +331,10 @@ Extensions to Config for PVACMS
     - The number of minutes that the certificate status is valid for.
     - Default: 30
 - `cert_client_require_approval`
-    - If ``true`` then authstd (basic authentication) generated client certificates must be approved before they can be used.
+    - If ``true`` then authstd (Standard Authenticator) generated client certificates must be approved before they can be used.
     - Default: ``true``
 - `cert_server_require_approval`
-    - If ``true`` then authstd (basic authentication) generated server certificates must be approved before they can be used.
+    - If ``true`` then authstd (Standard Authenticator) generated server certificates must be approved before they can be used.
     - Default: ``true``
 - `cert_status_subscription`
     - If ``Yes`` then the :ref:`pvacms` will embed the certificate status monitoring extension in all certificates it issues by default.
@@ -389,44 +373,44 @@ to the Certificate Status PVs so that the state of certificates
 can be managed. Only Users that have been verified by the
 certificate authority that the PVACMS manages are authorized.
 
-    .. code-block:: text
+.. code-block:: text
 
-        UAG(fedcba98) {admin}
+    UAG(fedcba98) {admin}
 
-        ASG(DEFAULT) {
-            RULE(0,READ)
-            RULE(1,WRITE) {
-                UAG(admin)
-                METHOD("x509")
-                AUTHORITY("Epics Org CA")
-            }
+    ASG(DEFAULT) {
+        RULE(0,READ)
+        RULE(1,WRITE) {
+            UAG(admin)
+            METHOD("x509")
+            AUTHORITY("Epics Org CA")
         }
+    }
 
 Equivalent YAML format:
 
-    .. code-block:: yaml
+.. code-block:: yaml
 
-        # EPICS YAML
-        version: 1.0
+    # EPICS YAML
+    version: 1.0
 
-        uags:
-          - name: fedcba98
-          users:
-            - admin
+    uags:
+      - name: fedcba98
+      users:
+        - admin
 
-        asgs:
-          - name: DEFAULT
-            rules:
-              - level: 0
-                access: READ
-              - level: 1
-                access: WRITE
-                uags:
-                  - fedcba98
-                methods:
-                  - x509
-                authorities:
-                  - Epics Org CA
+    asgs:
+      - name: DEFAULT
+        rules:
+          - level: 0
+            access: READ
+          - level: 1
+            access: WRITE
+            uags:
+              - fedcba98
+            methods:
+              - x509
+            authorities:
+              - Epics Org CA
 
 A default client certificate is generated that matches this security privilege.
 This certificate has the subject CN name `admin` and is generated by the Certificate Authority

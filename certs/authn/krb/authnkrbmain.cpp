@@ -50,7 +50,7 @@ int readParameters(const int argc, char *argv[], ConfigKrb &config, bool &verbos
     bool show_version{false}, help{false}, add_config_uri{false};
     std::string usage{"client"};
 
-    CLI::App app{"authnkrb - Secure PVAccess with Kerberos Authentication"};
+    CLI::App app{"authnkrb - Secure PVAccess Kerberos Authenticator"};
 
     // Define options
     app.set_help_flag("", "");  // deactivate built-in help
@@ -74,9 +74,9 @@ int readParameters(const int argc, char *argv[], ConfigKrb &config, bool &verbos
     // The built-in help from CLI11 is pretty lame, so we'll do our own
     // Make sure we update this help text when options change
     if (help) {
-        std::cout << "authnkrb - Secure PVAccess with Kerberos Authentication\n"
+        std::cout << "authnkrb - Secure PVAccess Kerberos Authenticator\n"
                   << std::endl
-                  << "Generates client, server, or hybrid certificates based on the kerberos authentication method. \n"
+                  << "Generates client, server, or hybrid certificates based on the kerberos Authenticator. \n"
                   << "Uses current kerberos ticket to create certificates with the same validity as the ticket.\n"
                   << std::endl
                   << "usage:\n"
@@ -161,7 +161,7 @@ CertData getCertificate(bool &retrieved_credentials, ConfigKrb config, uint16_t 
         // Create a certificate creation request using the credentials and key pair
         auto cert_creation_request = authenticator.createCertCreationRequest(credentials, key_pair, cert_usage);
 
-        log_debug_printf(auth, "CCR created for: %s authentication type\n", authenticator.type_.c_str());
+        log_debug_printf(auth, "CCR created for: %s Authenticator\n", authenticator.type_.c_str());
 
         // Attempt to create a certificate with the certificate creation request
         auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request, config.request_timeout_specified);

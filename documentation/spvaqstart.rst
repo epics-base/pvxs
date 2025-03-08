@@ -1,53 +1,158 @@
 .. _quick_start:
 
-Secure PVA Quick Start
-======================
+⚡ Secure PVXS
+========================
 
-This section contains quick start guides for common Secure PVAccess
-tasks. See :ref:`secure_pvaccess` for general documentation on Secure PVAccess.
 
-In this section you'll find quick starts for
+    Secure PVAccess is a version of the PVAccess protocol secured with TLS. It delivers robust
+    protection for EPICS network agents through zero‑trust, mutually authenticated connections
+    and end‑to‑end encryption. This upgrade reinforces EPICS’s authorization system by ensuring
+    authenticated endpoints and establishing trusted authorities. Additionally, it
+    incorporates a comprehensive certificate management service, *PVACMS*, that issues, and provides
+    status of, X.509 certificates.
+
+
+This section contains a Quick Start Guide (⚡) for Secure PVAccess.  It shows how to configure and
+build *epics-base* and then *pvxs* with the Secure PVAccess
+protocol enabled.  We provide containerised build instructions
+that allow you to familiarize yourself with the protocol and tools before
+deploying into your network.
+See :ref:`secure_pvaccess` for general documentation.
+
+Other Quick Start Guides:
+
+- :ref:`quick_start_std`
+- :ref:`quick_start_krb`
+- :ref:`quick_start_ldap`
+
+🎓 What you will learn
+-------------------------------------
 
 - :ref:`Building and Deploying epics-base and the PVXS libraries and executables <spva_qs_build_and_deploy>`,
-- :ref:`Configuring EPICS Agents to access a Secure PVAccess Network <spva_qs_add_users>`,
-- :ref:`Configuring and running PVACMS <spva_qs_pvacms>`,
-- :ref:`Configuring and running a Secure PVAccess Server<spva_qs_server>` and
-- :ref:`Connecting a Client to an SPVA Server<spva_qs_client>`
+- :ref:`Running PVACMS to manage certificates <spva_qs_pvacms>`,
+- :ref:`Hands on experience with Certificate Management<spva_qs_admin>`
 
-If you want a pre-setup quick-start environment to play around in try this:
+⏩ Pre-built
+-------------------------------------
 
-    .. code-block:: sh
+If you want a pre-setup environment, try the following.  You will need two terminal sessions.
 
-        # Term #1
-        docker run -it --name ubuntu_pvxs georgeleveln/spva_qs:latest /bin/bash
+① 🖥¹ Run PVACMS
+^^^^^^^^^^^^^^^^^^^^
 
-        # Term #2
-        docker exec -it --user admin ubuntu_pvxs /bin/bash
+start a vm in a container named *ubuntu_pvxs* from a pre-built Secure PVAccess image
 
-        # Term #3
-        docker exec -it --user pvacms ubuntu_pvxs /bin/bash
-        pvacms
+.. code-block:: shell
 
-        # Term #4
-        docker exec -it --user softioc ubuntu_pvxs /bin/bash
-        softIocPVX \
-         -m user=test,N=tst,P=tst \
-         -d ${PROJECT_HOME}/pvxs/test/testioc.db \
-         -d ${PROJECT_HOME}/pvxs/test/testiocg.db \
-         -d ${PROJECT_HOME}/pvxs/test/image.db \
-         -G ${PROJECT_HOME}/pvxs/test/image.json \
-         -a ${PROJECT_HOME}/pvxs/test/testioc.acf
+    docker run -it --name ubuntu_pvxs georgeleveln/pvxs:latest
 
-        # Term 5
-        docker exec -it --user client ubuntu_pvxs /bin/bash
-        pvxinfo -v test:enumExample
+within the container, start *pvacms*
 
+.. code-block:: shell
 
-Create VM for Quick Start
--------------------------
+    export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+    export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+    export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+    pvacms -v
 
-1. Locate the image below
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. code-block:: console
+
+    Certificate DB created  : /root/.local/share/pva/1.3/certs.db
+    2025-03-08T09:45:46.357411047 INFO pvxs.certs.cms 06e4748c:1314642908097862106 *=> VALID
+    Keychain file created   : /root/.config/pva/1.3/ca.p12
+    Created Default ACF file: /root/.config/pva/1.3/pvacms.acf
+    2025-03-08T09:45:46.416659464 INFO pvxs.certs.cms 06e4748c:9522902379233552024 *=> VALID
+    Keychain file created   : /root/.config/pva/1.3/admin.p12
+    2025-03-08T09:45:46.483891839 INFO pvxs.certs.cms 06e4748c:12098279511235536670 *=> VALID
+    Keychain file created   : /root/.config/pva/1.3/pvacms.p12
+    Effective config
+    EPICS_PVAS_AUTO_BEACON_ADDR_LIST=YES
+    EPICS_PVAS_BROADCAST_PORT=5076
+    EPICS_PVAS_SERVER_PORT=5075
+    EPICS_PVAS_TLS_KEYCHAIN=/root/.config/pva/1.3/pvacms.p12
+    EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check on_no_cms=fallback-to-tcp
+    EPICS_PVAS_TLS_PORT=5076
+    EPICS_PVAS_TLS_STOP_IF_NO_CERT=YES
+    PVACMS [06e4748c] Service Running
+
+② 🖥² Demonstrate some certificate management tools
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+in a new terminal open a new shell to the same container
+
+.. code-block:: shell
+
+    docker exec -it ubuntu_pvxs /bin/bash
+
+set up the environment
+
+.. code-block:: shell
+
+    export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+    export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+    export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+    export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
+
+run some *pvxcert* commands
+
+.. code-block:: shell
+
+    pvxcert 06e4748c:1314642908097862106
+
+.. code-block:: console
+
+    Certificate Status:
+    ============================================
+    Certificate ID: 06e4748c:1314642908097862106
+    Status        : VALID
+    Status Issued : Sat Mar 08 09:47:40 2025 UTC
+    Status Expires: Sat Mar 08 10:17:40 2025 UTC
+    --------------------------------------------
+
+.. code-block:: shell
+
+    pvxcert -f /root/.config/pva/1.3/admin.p12
+
+.. code-block:: console
+
+    Certificate Details:
+    ============================================
+    Subject        : CN=admin, C=US
+    Issuer         : CN=EPICS Root CA, C=US, O=ca.epics.org, OU=EPICS Certificate Authority
+    Valid from     : Sat Mar 08 09:45:46 2025 UTC
+    Cert Expires   : Mon Mar 09 09:45:46 2026 UTC
+    --------------------------------------------
+
+    Certificate Status:
+    ============================================
+    Certificate ID: 06e4748c:9522902379233552024
+    Status        : VALID
+    Status Issued : Sat Mar 08 09:47:56 2025 UTC
+    Status Expires: Sat Mar 08 10:17:56 2025 UTC
+    --------------------------------------------
+
+.. code-block:: shell
+
+    pvxcert --revoke 06e4748c:9522902379233552024
+
+.. code-block:: console
+
+    Revoke ==> CERT:STATUS:06e4748c:9522902379233552024 ==> Completed Successfully
+
+.. code-block:: shell
+
+    pvxcert --revoke 06e4748c:1314642908097862106
+
+.. code-block:: console
+
+    Revoke ==> CERT:STATUS:06e4748c:1314642908097862106
+    2025-03-08T09:49:08.021246627 ERR pvxs.certs.tool REVOKED operation not authorized on 06e4748c:1314642908097862106
+
+1️⃣ Create Container
+--------------------------------------------
+
+① 🖥¹ Locate the image you want to use from the list below
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 +--------------+----------------+--------------------------------------------+
 | Distribution | container name | image                                      |
@@ -68,138 +173,179 @@ Create VM for Quick Start
 +--------------+----------------+--------------------------------------------+
 
 
-2. Create a container from the image
+② 🖥¹ Create a container from the image
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    .. code-block:: sh
+start a vm in a container named *ubuntu_pvxs* from a ubuntu image
 
-        # docker run -it --name <container_name> <image> /bin/bash
-        docker run -it --name ubuntu_pvxs ubuntu:latest /bin/bash
+.. code-block:: shell
 
+    docker run -it --name ubuntu_pvxs ubuntu:latest /bin/bash
+
+where:
+
+- ``--name ubuntu_pvxs`` : sets the name of the container
+- ``ubuntu:latest`` : the image we're using for the remainder of the examples
+- ``/bin/bash`` : the command to run when entering the VM
 
 .. _spva_qs_build_and_deploy:
 
-Build & Deploy epics-base and PVXS
-----------------------------------
+2️⃣ Build
+-------------------------------------------------
+
+① 🖥¹ Initialise Environment
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+make working directory for building project files
+
+.. code-block:: shell
+
+    export PROJECT_HOME=/opt/epics
+    mkdir -p ${PROJECT_HOME}
 
 
-1. Initialise Environment
-^^^^^^^^^^^^^^^^^^^^^^^^^
+② 🖥¹ Install Requirements
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-    .. code-block:: sh
+Select from the following installation instructions based on the image you selected:
 
-        # Make working directory for building project files
-        export PROJECT_HOME=/opt/epics
-        mkdir -p ${PROJECT_HOME}
-
-
-2. Install Requirements
-^^^^^^^^^^^^^^^^^^^^^^^
-
-    .. code-block:: sh
-
-        #############
-        # For Debian/Ubuntu
-
-        apt-get update
-        apt-get install -y \
-            build-essential \
-            git \
-            openssl \
-            libssl-dev \
-            libevent-dev \
-            libsqlite3-dev \
-            libcurl4-openssl-dev \
-            pkg-config
-
-        #############
-        # For RHEL/CentOS/Rocky/Alma Linux/Fedora
-
-        dnf install -y \
-            gcc-c++ \
-            git \
-            make \
-            openssl-devel \
-            libevent-devel \
-            sqlite-devel \
-            libcurl-devel \
-            pkg-config
-
-        #############
-        # For macOS
-        # Install Homebrew if not already installed
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-        # Update Homebrew and install dependencies
-        brew update
-        brew install \
-            openssl@3 \
-            libevent \
-            sqlite3 \
-            curl \
-            pkg-config
-
-        #############
-        # For Alpine Linux
-
-        apk add --no-cache \
-            build-base \
-            git \
-            openssl-dev \
-            libevent-dev \
-            sqlite-dev \
-            curl-dev \
-            pkgconfig
-
-        #############
-        # For RTEMS
-        # First install RTEMS toolchain from https://docs.rtems.org/branches/master/user/start/
-        # Then ensure these are built into your BSP:
-        #   - openssl
-        #   - libevent
-        #   - sqlite
-        #   - libcurl
-        # Note: RTEMS support requires additional configuration. See RTEMS-specific documentation.
-
-
-Note for MacOS users
+For Debian/Ubuntu
 ~~~~~~~~~~~~~~~~~~~~
 
-If you don't have homebrew and don't want to install it, here's how you would install the prerequisites.
+.. code-block:: shell
 
-    .. code-block:: sh
+    apt-get update
+    apt-get install -y \
+           build-essential \
+           git \
+           openssl \
+           libssl-dev \
+           libevent-dev \
+           libsqlite3-dev \
+           libcurl4-openssl-dev \
+           pkg-config
 
-        # Ensure Xcode Command Line Tools are installed
-        xcode-select --install
+For RHEL/CentOS/Rocky/Alma Linux/Fedora
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # Install OpenSSL
-        curl -O https://www.openssl.org/source/openssl-3.1.2.tar.gz
-        tar -xzf openssl-3.1.2.tar.gz
-        cd openssl-3.1.2
-        ./Configure darwin64-x86_64-cc
-        make
-        sudo make install
+.. code-block:: shell
 
-        # Install libevent
-        curl -O https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
-        tar -xzf libevent-2.1.12-stable.tar.gz
-        cd libevent-2.1.12-stable
-        ./configure
-        make
-        sudo make install
+    dnf install -y \
+           gcc-c++ \
+           git \
+           make \
+           openssl-devel \
+           libevent-devel \
+           sqlite-devel \
+           libcurl-devel \
+           pkg-config
 
-        # Install SQLite
-        curl -O https://sqlite.org/2023/sqlite-autoconf-3430200.tar.gz
-        tar -xzf sqlite-autoconf-3430200.tar.gz
-        cd sqlite-autoconf-3430200
-        ./configure
-        make
-        sudo make install
+For Alpine Linux
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # Install cURL
-        # check if its already there
+.. code-block:: shell
+
+    apk add --no-cache \
+           build-base \
+           git \
+           openssl-dev \
+           libevent-dev \
+           sqlite-dev \
+           curl-dev \
+           pkgconfig
+
+For RTEMS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- install RTEMS toolchain from https://docs.rtems.org/branches/master/user/start/
+
+- ensure the following are built into your BSP:
+    - openssl
+    - libevent
+    - sqlite
+    - libcurl
+
+.. note::
+
+  RTEMS support requires additional configuration. See RTEMS-specific documentation.
+
+
+For MacOS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+install Homebrew if not already installed
+
+.. code-block:: shell
+
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+update Homebrew and install dependencies
+
+.. code-block:: shell
+
+    brew update
+    brew install \
+           openssl@3 \
+           libevent \
+           sqlite3 \
+           curl \
+           pkg-config
+
+.. note::
+
+  If you don't have homebrew and don't want to install it, here's how you would install the prerequisites.
+
+  - ensure *Xcode* Command Line Tools are installed
+
+  .. code-block:: shell
+
+    xcode-select --install
+
+  - install *OpenSSL*
+
+  .. code-block:: shell
+
+    curl -O https://www.openssl.org/source/openssl-3.1.2.tar.gz
+    tar -xzf openssl-3.1.2.tar.gz
+    cd openssl-3.1.2
+    ./Configure darwin64-x86_64-cc
+    make
+    sudo make install
+
+  - install *libevent*
+
+  .. code-block:: shell
+
+    curl -O https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
+    tar -xzf libevent-2.1.12-stable.tar.gz
+    cd libevent-2.1.12-stable
+    ./configure
+    make
+    sudo make install
+
+  - install *SQLite*
+
+  .. code-block:: shell
+
+    curl -O https://sqlite.org/2023/sqlite-autoconf-3430200.tar.gz
+    tar -xzf sqlite-autoconf-3430200.tar.gz
+    cd sqlite-autoconf-3430200
+    ./configure
+    make
+    sudo make install
+
+  - install *Curl*
+
+  - check if its already there
+
+    .. code-block:: shell
+
         curl --version
-        # If not then install like this:
+
+  - if not then install it
+
+    .. code-block:: shell
+
         curl -O https://curl.se/download/curl-8.1.2.tar.gz
         tar -xzf curl-8.1.2.tar.gz
         cd curl-8.1.2
@@ -207,459 +353,323 @@ If you don't have homebrew and don't want to install it, here's how you would in
         make
         sudo make install
 
-        # Install pkg-config
-        curl -O https://pkgconfig.freedesktop.org/releases/pkg-config-0.29.2.tar.gz
-        tar -xzf pkg-config-0.29.2.tar.gz
-        cd pkg-config-0.29.2
-        ./configure --with-internal-glib
-        make
+  - install *pkg-config*
+
+  .. code-block:: shell
+
+    curl -O https://pkgconfig.freedesktop.org/releases/pkg-config-0.29.2.tar.gz
+    tar -xzf pkg-config-0.29.2.tar.gz
+    cd pkg-config-0.29.2
+    ./configure --with-internal-glib
+    make
         sudo make install
 
 
-3. Build epics-base
-^^^^^^^^^^^^^^^^^^^
+③ 🖥¹ Build epics-base
+^^^^^^^^^^^^^^^^^^^^
 
-    .. code-block:: sh
+.. code-block:: shell
 
-        cd ${PROJECT_HOME}
-        git clone --branch 7.0-method_and_authority https://github.com/george-mcintyre/epics-base.git
-        cd epics-base
+    cd ${PROJECT_HOME}
+    git clone --branch 7.0-method_and_authority https://github.com/george-mcintyre/epics-base.git
+    cd epics-base
 
-        make -j10 all
-        cd ${PROJECT_HOME}
+    make -j10 all
+    cd ${PROJECT_HOME}
 
-4. Configure PVXS Build
-^^^^^^^^^^^^^^^^^^^^^^^
+④ 🖥¹ Configure PVXS Build
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-    .. code-block:: sh
+.. code-block:: shell
 
-        cd ${PROJECT_HOME}
-        cat >> RELEASE.local <<EOF
-        EPICS_BASE = \$(TOP)/../epics-base
-        EOF
+    cd ${PROJECT_HOME}
+    cat >> RELEASE.local <<EOF
+    EPICS_BASE = \$(TOP)/../epics-base
+    EOF
 
-        # Optional: To enable appropriate site authentication mechanisms.
-        # Note: `authnstd` is always available.
+⑤ 🖥¹ Build PVXS
+^^^^^^^^^^^^^^
 
-        # cat >> CONFIG_SITE.local <<EOF
-        # PVXS_ENABLE_KRB_AUTH = YES
-        # PVXS_ENABLE_JWT_AUTH = YES
-        # PVXS_ENABLE_LDAP_AUTH = YES
-        #EOF
+.. code-block:: shell
 
-5. Build PVXS
-^^^^^^^^^^^^^
+    cd ${PROJECT_HOME}
+    git clone --recursive  --branch tls https://github.com/george-mcintyre/pvxs.git
+    cd pvxs
 
-    .. code-block:: sh
-
-        cd ${PROJECT_HOME}
-        git clone --recursive  --branch tls https://github.com/george-mcintyre/pvxs.git
-        cd pvxs
-
-        # Build PVXS
-
-        make -j10 all
-        cd ${PROJECT_HOME}
-
-
-.. _spva_qs_add_users:
-
-
-Configure EPICS Agents
------------------------
-
-This section shows you what basic configuration you'll need for each type of EPICS agent.
-Look at the environment variable settings and the file locations referenced by
-this configuration to understand how to configure EPICS agents in
-your environment.
-
-
-1. Add a PVACMS EPICS Agent
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-    .. code-block:: sh
-
-
-        # Add user and when prompted use "PVACMS Server" as Full Name
-        adduser pvacms
-
-
-    .. code-block:: sh
-
-
-        # Set up environment for a PVACMS server
-        su - pvacms
-
-
-    .. code-block:: sh
-
-        cat >> ~/.bashrc <<EOF
-
-        export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}
-        export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}
-        export PROJECT_HOME=/opt/epics
-
-        #### [optional] Set path and name of the CA database file (default: ./certs.db)
-        # Environment: EPICS_PVACMS_DB
-        # Default    : \${XDG_DATA_HOME}/pva/1.3/certs.db
-        # export EPICS_PVACMS_DB=\${XDG_DATA_HOME}/pva/1.3/certs.db
-
-        #### SETUP CA KEYCHAIN FILE
-        # Place your CA's certificate and key in this file if you have one
-        # otherwise the CA certificate will be created by PVACMS
-        # Environment: EPICS_CA_TLS_KEYCHAIN
-        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/ca.p12
-        # export EPICS_CA_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/ca.p12
-
-        # Specify the name of your CA
-        # Environment: EPICS_CA_NAME, EPICS_CA_ORGANIZATION, EPICS_CA_ORGANIZATIONAL_UNIT
-        # Default    : CN=EPICS Root CA, O=ca.epics.org, OU=EPICS Certificate Authority,
-        # export EPICS_CA_NAME="EPICS Root CA"
-        # export EPICS_CA_ORGANIZATION="ca.epics.org"
-        # export EPICS_CA_ORGANIZATIONAL_UNIT="EPICS Certificate Authority"
-
-        #### SETUP PVACMS KEYCHAIN FILE
-        # Environment: EPICS_PVACMS_TLS_KEYCHAIN
-        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
-        # export EPICS_PVACMS_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
-
-        # Configure ADMIN user client certificate (will be created for you)
-        # This file will be copied to the admin user
-        # Environment: EPICS_ADMIN_TLS_KEYCHAIN
-        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/admin.p12
-        # export EPICS_ADMIN_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/admin.p12
-
-        # Configure PVACMS ADMIN user access control file
-        # Environment: EPICS_PVACMS_ACF
-        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
-        # export EPICS_PVACMS_ACF=\${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
-
-        # set path
-        export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
-
-        cd ~
-        EOF
-
-        exit
-
-
-2. Add a PVACMS Administrator EPICS agent
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-    .. code-block:: sh
-
-        # Add user and when prompted use "ADMIN User" as Full Name
-        adduser admin
-
-
-    .. code-block:: sh
-
-        # Set up environment for pvacms server
-        su - admin
-
-
-    .. code-block:: sh
-
-        cat >> ~/.bashrc <<EOF
-
-        export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}
-        export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}
-        export PROJECT_HOME=/opt/epics
-
-        #### SETUP ADMIN KEYCHAIN FILE (will be copied from PVACMS)
-        # Environment: EPICS_PVA_TLS_KEYCHAIN
-        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/client.p12
-        # export EPICS_PVA_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/client.p12
-
-        # set path
-        export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
-
-        cd ~
-        EOF
-
-        exit
-
-3. Add a Secure EPICS Server Agent - SoftIOC
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-    .. code-block:: sh
-
-        # Add user and when prompted use "SOFTIOC Server" as Full Name
-        adduser softioc
-
-
-    .. code-block:: sh
-
-        # Set up environment for pvacms server
-        su - softioc
-
-
-    .. code-block:: sh
-
-        cat >> ~/.bashrc <<EOF
-
-        export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}
-        export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}
-        export PROJECT_HOME=/opt/epics
-
-        #### SETUP SOFTIOC KEYCHAIN FILE
-        # Environment: EPICS_PVAS_TLS_KEYCHAIN
-        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/server.p12
-        export EPICS_PVAS_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/server.p12
-
-        # set path
-        export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
-
-        cd ~
-        EOF
-
-        exit
-
-4. Add a Secure EPICS Client agent
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-    .. code-block:: sh
-
-        # Add user and when prompted use "SPVA Client" as Full Name
-        adduser client
-
-
-    .. code-block:: sh
-
-        # Set up environment for pvacms server
-        su - client
-
-    .. code-block:: sh
-
-        cat >> ~/.bashrc <<EOF
-
-        export XDG_DATA_HOME=\${XDG_DATA_HOME-~/.local/share}
-        export XDG_CONFIG_HOME=\${XDG_CONFIG_HOME-~/.config}
-        export PROJECT_HOME=/opt/epics
-
-        #### SETUP SPVA Client KEYCHAIN FILE
-        # Environment: EPICS_PVA_TLS_KEYCHAIN
-        # Default    : \${XDG_CONFIG_HOME}/pva/1.3/client.p12
-        export EPICS_PVA_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.3/client.p12
-
-        # set path
-        export PATH="\$(echo \${PROJECT_HOME}/pvxs/bin/*):$PATH"
-
-        cd ~
-        EOF
-
-        exit
+    make -j10 all
+    cd ${PROJECT_HOME}
 
 
 .. _spva_qs_pvacms:
 
-Running PVACMS
----------------
 
-1. Login as pvacms in a new shell
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+3️⃣ Run PVACMS
+-------------------------------------------------------
 
-    .. code-block:: sh
+① 🖥¹ Configure PVACMS
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-        # If you're using docker
-        docker exec -it --user pvacms ubuntu_pvxs /bin/bash
+set up XDG environment if not already set
+
+.. code-block:: shell
+
+    export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+    export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+
+----------------------
+
+Set PATH to include Secure PVAccess executables
+
+.. code-block:: shell
+
+    export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+
+----------------------
+
+*optionally: Configure CA database file location*
+
+.. code-block:: shell
+
+    export EPICS_PVACMS_DB=${XDG_DATA_HOME}/pva/1.3/certs.db
+
+----------------------
+
+*optionally: Configure Root CA Keychain file location*
+
+*Place your CA's certificate and key in this file if you have one
+otherwise the CA certificate will be created here*
+
+.. code-block:: shell
+
+    export EPICS_CA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/ca.p12
+
+----------------------
+
+*optionally: Specify the subject name of your Root CA in case you don't provide a Root CA and
+it needs to be created*
+
+.. code-block:: shell
+
+    export EPICS_CA_NAME="EPICS Root CA"                              # CN
+    export EPICS_CA_ORGANIZATION="ca.epics.org"                       # O
+    export EPICS_CA_ORGANIZATIONAL_UNIT="EPICS Certificate Authority" # OU
+    export EPICS_CA_COUNTRY="US"                                      # C
+
+----------------------
+
+*optionally: Configure PVACMS Keychain file location*
+
+*The PVACMS keychain file will be created at this location if it does not exist*
+
+.. code-block:: shell
+
+    export EPICS_PVACMS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
+
+----------------------
+
+*optionally: Configure Admin User Keychain file location*
+
+*An Admin User keychain file will be created at this location if it does not exist*
+
+.. code-block:: shell
+
+    export EPICS_ADMIN_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
+
+----------------------
+
+*optionally: Configure PVACMS ADMIN user Access Control File (ACF) location*
+
+*An ACF file that controls accesss to PVACMS resources (certificates, etc.) is created at this
+location if it does not exist*
+
+*By default the file created ensures that administrator permisions are granted to any user
+that presents a certificate that is signed by the configured Root CA and has
+CN="admin", O="", OU="", C="US"*
+
+*You can modify this file to add other admin users to the UAG section, or conditions to an existing
+or new RULES section*
+
+.. code-block:: shell
+
+    export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
+
+② 🖥¹ Run PVACMS
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: shell
+
+    pvacms -v
+
+.. code-block:: console
+
+    Certificate DB created  : /root/.local/share/pva/1.3/certs.db
+    2025-03-04T14:53:32.401223876 INFO pvxs.certs.cms 2535f0b8:7554235394877908901 *=> VALID
+    Keychain file created   : /root/.config/pva/1.3/ca.p12
+    Created Default ACF file: /root/.config/pva/1.3/pvacms.acf
+    2025-03-04T14:53:32.538922876 INFO pvxs.certs.cms 2535f0b8:7810503273530005364 *=> VALID
+    Keychain file created   : /root/.config/pva/1.3/admin.p12
+    2025-03-04T14:53:32.589539542 INFO pvxs.certs.cms 2535f0b8:15782598755272381308 *=> VALID
+    Keychain file created   : /root/.config/pva/1.3/pvacms.p12
+    Effective config
+    EPICS_PVAS_AUTO_BEACON_ADDR_LIST=YES
+    EPICS_PVAS_BROADCAST_PORT=5076
+    EPICS_PVAS_SERVER_PORT=5075
+    EPICS_PVAS_TLS_KEYCHAIN=/root/.config/pva/1.3/pvacms.p12
+    EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check on_no_cms=fallback-to-tcp
+    EPICS_PVAS_TLS_PORT=5076
+    EPICS_PVAS_TLS_STOP_IF_NO_CERT=YES
+    PVACMS [2535f0b8] Service Running
+
+.. note::
+
+  Make a note of the certificates that are created
+
+  - `2535f0b8:7554235394877908901`  : Root CA Certificate
+  - `2535f0b8:7810503273530005364`  : Admin User Certificate
+  - `2535f0b8:15782598755272381308` : PVACMS Server Certificate
+
+.. _spva_qs_admin:
+
+4️⃣ Test
+------------------------------------------------------
+
+① 🖥 ² Configure PVACMS Admin User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+in a different terminal open a shell to the same container:
+
+.. code-block:: shell
+
+    docker exec -it ubuntu_pvxs /bin/bash
+
+----------------------
+
+set up XDG environment if not already set, and set PATH
+
+.. code-block:: shell
+
+    export PROJECT_HOME=/opt/epics
+    export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+    export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+    export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+
+----------------------
+
+configure the location of the Admin User's keychain file.
+
+We will be carrying out some protected operations so we will need to have access
+to the Admin User's keychain file
+
+.. code-block:: shell
+
+    export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
 
 
-2. Running PVACMS and sharing its ADMIN certificate
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+② 🖥 ² Get Certificate Status
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    .. code-block:: sh
+get the status of Root CA Certificate
 
-        #### RUN PVACMS
-        #
-        # 1. Create root CA
-        #   - creates root CA if does not exist,
-        #   - at location specified by EPICS_CA_TLS_KEYCHAIN or ${XDG_CONFIG_HOME}/pva/1.3/ca.p12,
-        #   - with CN specified by EPICS_CA_NAME
-        #   - with  O specified by EPICS_CA_ORGANIZATION
-        #   - with OU specified by EPICS_CA_ORGANIZATIONAL_UNIT
-        #
-        # 2. Create the PVACMS server certificate
-        #   - creates server certificate if does not exist,
-        #   - at location specified by EPICS_PVACMS_TLS_KEYCHAIN or ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12,
-        #
-        # 3. Create PVACMS certificate database
-        #   - creates database if does not exist
-        #   - at location pointed to by EPICS_PVACMS_DB or ${XDG_DATA_HOME}/pva/1.3/certs.db
-        #
-        # 4. Create the default ACF file that controls permissions for the PVACMS service
-        #   - creates default ACF (or yaml) file
-        #   - at location pointed to by EPICS_PVACMS_ACF or ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
-        #
-        # 5. Create the default admin client certificate that can be used to access PVACMS admin functions like REVOKE and APPROVE
-        #   - creates default admin client certificate
-        #   - at location specified by EPICS_ADMIN_TLS_KEYCHAIN or ${XDG_CONFIG_HOME}/pva/1.3/admin.p12,
-        #
-        # 6. Start PVACMS service with verbose logging
+.. code-block:: shell
 
-        pvacms
+    pvxcert 2535f0b8:7554235394877908901
 
-        ...
+.. code-block:: console
 
-        Certificate DB created  : /home/pvacms/.local/share/pva/1.3/certs.db
-        Keychain file created   : /home/pvacms/.config/pva/1.3/ca.p12
-        Created Default ACF file: /home/pvacms/.config/pva/1.3/pvacms.acf
-        Keychain file created   : /home/pvacms/.config/pva/1.3/admin.p12
-        Keychain file created   : /home/pvacms/.config/pva/1.3/pvacms.p12
-        PVACMS [6caf749c] Service Running
+    Certificate Status:
+    ============================================
+    Certificate ID: 2535f0b8:7554235394877908901
+    Status        : VALID
+    Status Issued : Tue Mar 04 15:27:10 2025 UTC
+    Status Expires: Tue Mar 04 15:57:10 2025 UTC
+    --------------------------------------------
 
-Note the ``6caf749c`` is the issuer ID which is comprised of the first 8 characters
-of the hex Subject Key Identifier of the CA certificate.
+check status of the Admin Certificate by file name
 
-Leave this PVACMS service running while running SoftIOC and SPVA client below.
+.. code-block:: shell
 
-3. Copy Admin Certificate to Admin user
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    pvxcert -f /root/.config/pva/1.3/admin.p12
 
-In the root shell (not PVACMS shell)
+.. code-block:: console
 
-    .. code-block:: sh
+    Certificate Details:
+    ============================================
+    Subject        : CN=admin, C=US
+    Issuer         : CN=EPICS Root CA, C=US, O=ca.epics.org, OU=EPICS Certificate Authority
+    Valid from     : Tue Mar 04 14:53:32 2025 UTC
+    Cert Expires   : Thu Mar 05 14:53:32 2026 UTC
+    --------------------------------------------
 
-        mkdir -p ~admin/.config/pva/1.3
-        cp -pr ~pvacms/.config/pva/1.3/admin.p12 ~admin/.config/pva/1.3/client.p12
-        chown admin ~admin/.config/pva/1.3/client.p12
-        chmod 400 ~admin/.config/pva/1.3/client.p12
+    Certificate Status:
+    ============================================
+    Certificate ID: 2535f0b8:7810503273530005364
+    Status        : VALID
+    Status Issued : Tue Mar 04 15:29:54 2025 UTC
+    Status Expires: Tue Mar 04 15:59:54 2025 UTC
+    --------------------------------------------
 
 
-.. _spva_qs_server:
-
-Secure PVAccess SoftIOC Server
--------------------------------
-
-1. Login as softioc in a new shell
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-    .. code-block:: sh
-
-        # If you're using docker
-        docker exec -it --user softioc ubuntu_pvxs /bin/bash
-
-
-2. Create Certificate
+③ 🖥 ² Revoke a certificate
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    .. code-block:: sh
+revoke Admin User's certificate. Once this completes, the Admin user will lose administrator
+status
 
-        #### 1. Create a new server private key and certificate at location specified by EPICS_PVAS_TLS_KEYCHAIN
+.. code-block:: shell
 
-        authnstd -u server \
-          -n "IOC1" \
-          -o "KLI:LI01:10" \
-          --ou "FACET"
+    pvxcert --revoke 2535f0b8:7810503273530005364
 
-        ...
+.. code-block:: console
 
-        Keychain file created   : /home/softioc/.config/pva/1.3/server.p12
-        Certificate identifier  : 6caf749c:853259638908858244
+    Revoke ==> CERT:STATUS:2535f0b8:7810503273530005364 ==> Completed Successfully
 
-        ...
+----------------------
 
-Note the certificate ID ``6caf749c:853259638908858244`` (<issuer_id>:<serial_number>).
-You will need this ID to carry out operations on this certificate including APPROVING it.
+try to revoke Root CA Certificate and fail because Admin User's Certificate has been revoked
 
-3. Verify that certificate is created pending approval
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. code-block:: shell
 
-    .. code-block:: sh
+    pvxcert --revoke 2535f0b8:7554235394877908901
 
-        #### 1. Get the current status of a certificate
+.. code-block:: console
 
-        pvxcert <issuer_id>:<serial_number>
+    Revoke ==> CERT:STATUS:2535f0b8:7554235394877908901
+    2025-03-04T15:38:09.101065420 ERR pvxs.certs.tool REVOKED operation not authorized on 2535f0b8:7554235394877908901
 
+----------------------
 
-4. Approve certificate
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+regenerate admin certificate
 
+i. in the other other terminal window,  Stop PVACMS (ctrl-C)
 
-    .. code-block:: sh
+.. code-block:: shell
 
-        #### 1. Login as admin in a new shell
-        docker exec -it --user admin ubuntu_pvxs /bin/bash
+    ^C
 
-        #### 2. Approve the certificate
-        pvxcert --approve <issuer_id>:<serial_number>
+.. code-block:: console
 
+    PVACMS [2535f0b8] Service Exiting
 
-5. Check the certificate status has changed
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ii. Create a new Admin User Certificate
 
-    .. code-block:: sh
+.. code-block:: shell
 
-        #### 1. Back in softIOC shell, get the current status of a certificate
+    pvacms --admin-keychain-new admin
 
-        pvxcert <issuer_id>:<serial_number>
+.. code-block:: console
 
+    2025-03-04T15:40:38.519777878 WARN pvxs.certs.file
+        Cert file backed up: /root/.config/pva/1.3/admin.p12 ==> /root/.config/pva/1.3/admin.2503041540.p12
+    Keychain file created   : /root/.config/pva/1.3/admin.p12
+    Admin user "admin" has been added to list of administrators of this PVACMS
+    Restart the PVACMS for it to take effect
 
-6. Run an SPVA Service
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+iii. Restart PVACMS
 
-    .. code-block:: sh
+.. code-block:: shell
 
-        softIocPVX \
-            -m user=test,N=tst,P=tst \
-            -d ${PROJECT_HOME}/pvxs/test/testioc.db \
-            -d ${PROJECT_HOME}/pvxs/test/testiocg.db \
-            -d ${PROJECT_HOME}/pvxs/test/image.db \
-            -G ${PROJECT_HOME}/pvxs/test/image.json \
-            -a ${PROJECT_HOME}/pvxs/test/testioc.acf
+    pvacms
 
+.. code-block:: console
 
-.. _spva_qs_client:
-
-SPVA Client
----------------
-
-1. Login as client in a new shell
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-    .. code-block:: sh
-
-        # If you're using docker
-        docker exec -it --user client ubuntu_pvxs /bin/bash
-
-
-
-2. Create Certificate
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-    .. code-block:: sh
-
-        #### 1. Create client key and certificate at location specified by EPICS_PVA_TLS_KEYCHAIN
-
-        authnstd -u client \
-          -n "greg" \
-          -o "SLAC.STANFORD.EDU" \
-          --ou "Controls"
-
-
-4. Approve certificate
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-
-    .. code-block:: sh
-
-        #### 1. Switch back to admin shell
-
-        #### 2. Approve the certificate
-        pvxcert --approve <issuer_id>:<serial_number>
-
-
-4. Run an SPVA Client
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-    .. code-block:: sh
-
-        #### 1. Back in client shell, get a value from the SoftIOC
-
-        pvxget -F tree test:structExample
-
-        #### 2. Show that the configuration is using TLS
-        pvxinfo -v test:enumExample
-
-        #### 3. Show a connection without TLS
-        env EPICS_PVA_TLS_KEYCHAIN= pvxinfo -v test:enumExample
+    PVACMS [2535f0b8] Service Running

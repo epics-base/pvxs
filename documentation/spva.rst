@@ -85,6 +85,7 @@ Environment Variables
 The following environment variables control SPVA behavior:
 
 .. note::
+
    There is an implied hierarchy to the applicability of the environment variables such that
    the PVAS version supersedes a PVA version.
    So, if an EPICS server agent wants to specify its keychain file location it can simply
@@ -186,18 +187,18 @@ and keys exist, loading and verifying them, checking for status and status of pe
 
 `pvxs::client::Context::reconfigure` and `pvxs::server::Server::reconfigure` allow runtime TLS configuration updates:
 
-    .. code-block:: c++
+.. code-block:: c++
 
-        // Initial client setup with certificate
-        auto cli_conf(serv.clientConfig());
-        cli_conf.tls_keychain_file = "client1.p12";
-        auto cli(cli_conf.build());
+    // Initial client setup with certificate
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = "client1.p12";
+    auto cli(cli_conf.build());
 
-        // Later reconfiguration with new certificate
-        cli_conf = cli.config();
-        cli_conf.tls_keychain_file = "client2.p12";
-        cli_conf.tls_keychain_pwd = "pwd";
-        cli.reconfigure(cli_conf);
+    // Later reconfiguration with new certificate
+    cli_conf = cli.config();
+    cli_conf.tls_keychain_file = "client2.p12";
+    cli_conf.tls_keychain_pwd = "pwd";
+    cli.reconfigure(cli_conf);
 
 Wildcard PV Support
 ~~~~~~~~~~~~~~~~~~~
@@ -208,34 +209,34 @@ to provide individualised PVs for each certificate's status management.
 
 `pvxs::server::SharedWildcardPV` support for pattern-matched PV names:
 
-    .. code-block:: c++
+.. code-block:: c++
 
-        // Define a server that responds to any SEARCH request with WILDCARD:PV:<4-characters>:<any-string>
-        // It will extract the 4-character part of the PV name as the `id` and
-        // the last string as the `name`
+    // Define a server that responds to any SEARCH request with WILDCARD:PV:<4-characters>:<any-string>
+    // It will extract the 4-character part of the PV name as the `id` and
+    // the last string as the `name`
 
-        SharedWildcardPV wildcard_pv(SharedWildcardPV::buildMailbox());
-        wildcard_pv.onFirstConnect([](SharedWildcardPV &pv, const std::string &pv_name,
-                                    const std::list<std::string> &parameters) {
-            // Extract id and name from parameters
-            auto it = parameters.begin();
-            const std::string &id = *it;
-            const std::string &name = *++it;
+    SharedWildcardPV wildcard_pv(SharedWildcardPV::buildMailbox());
+    wildcard_pv.onFirstConnect([](SharedWildcardPV &pv, const std::string &pv_name,
+                                const std::list<std::string> &parameters) {
+        // Extract id and name from parameters
+        auto it = parameters.begin();
+        const std::string &id = *it;
+        const std::string &name = *++it;
 
-            // Process and post value
-            if (pv.isOpen(pv_name)) {
-                pv.post(pv_name, value);
-            } else {
-                pv.open(pv_name, value);
-            }
-        });
-        wildcard_pv.onLastDisconnect([](SharedWildcardPV &pv, const std::string &pv_name,
-                                    const std::list<std::string> &parameters) {
-            pv.close(pv_name);
-        });
+        // Process and post value
+        if (pv.isOpen(pv_name)) {
+            pv.post(pv_name, value);
+        } else {
+            pv.open(pv_name, value);
+        }
+    });
+    wildcard_pv.onLastDisconnect([](SharedWildcardPV &pv, const std::string &pv_name,
+                                const std::list<std::string> &parameters) {
+        pv.close(pv_name);
+    });
 
-        // Add wildcard PV to server
-        serv.addPV("WILDCARD:PV:????:*", wildcard_pv);
+    // Add wildcard PV to server
+    serv.addPV("WILDCARD:PV:????:*", wildcard_pv);
 
 .. _protocol_operation:
 
@@ -505,9 +506,9 @@ For detailed TLS traffic analysis:
 
 2. Configure runtime logging:
 
-    .. code-block:: sh
+.. code-block:: shell
 
-        export SSLKEYLOGFILE=/tmp/sslkeylog.log
+    export SSLKEYLOGFILE=/tmp/sslkeylog.log
 
 3. Configure Wireshark:
 
@@ -522,28 +523,28 @@ Enable detailed PVXS debug logging:
 
 1. Environment variable method:
 
-    .. code-block:: sh
+    .. code-block:: shell
 
         export PVXS_LOG="pvxs.stapling*=DEBUG"
 
 1. Command line option with pvxcert:
 
-    .. code-block:: sh
+    .. code-block:: shell
 
         pvxcert -d ...
 
 New Debug Categories:
 
-- ``pvxs.certs.auth``          - Authentication mechanisms
+- ``pvxs.certs.auth``          - Authenticators
 - ``pvxs.auth.cfg``            - Authn configuration
-- ``pvxs.auth.cms``            - CMS authentication
-- ``pvxs.auth.jwt``            - JWT authentication mechanism
-- ``pvxs.auth.krb``            - Kerberos authentication mechanism
-- ``pvxs.auth.mon``            - Authn monitoring
-- ``pvxs.auth.stat``           - Authn status
-- ``pvxs.auth.std``            - Basic credentials authentication mechanism
-- ``pvxs.auth.tool``           - Authn tools (``pvacert``)
-- ``pvxs.certs.status``        - Certificate management
+- ``pvxs.auth.cms``            - CMS
+- ``pvxs.auth.jwt``            - JWT Authenticator
+- ``pvxs.auth.krb``            - Kerberos Authenticator
+- ``pvxs.auth.mon``            - Certificate Status Monitoring
+- ``pvxs.auth.stat``           - Certificate Status
+- ``pvxs.auth.std``            - Stanard Authenticator
+- ``pvxs.auth.tool``           - Certificate Management Tools (``pvacert``)
+- ``pvxs.certs.status``        - Certificate Status Management
 - ``pvxs.ossl.init``           - TLS initialization
 - ``pvxs.ossl.io``             - TLS I/O
 - ``pvxs.stapling``            - OCSP stapling
@@ -555,7 +556,7 @@ Monitor connection state transitions:
 
 1. Enable connection tracing:
 
-   .. code-block:: sh
+   .. code-block:: shell
 
        export PVXS_LOG="pvxs.connection=DEBUG"
 

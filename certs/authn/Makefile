@@ -9,7 +9,7 @@ SRCS += ccrmanager.cpp
 include $(AUTHN)/std/Makefile
 
 #--------------------------------------------
-#  ADD AUTHENTICATION PLUGINS AFTER THIS LINE
+#  ADD AUTHENTICATOR PLUGINS AFTER THIS LINE
 
 ifeq ($(PVXS_ENABLE_JWT_AUTH),YES)
 include $(AUTHN)/jwt/Makefile

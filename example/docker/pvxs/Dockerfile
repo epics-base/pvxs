@@ -1,5 +1,6 @@
-# FROM image built from /example/docker/epics-base
-FROM georgeleveln/epics-base:latest
+ARG DOCKER_USERNAME=georgeleveln
+
+FROM ${DOCKER_USERNAME}/epics-base:latest
 
 # Set environment variables
 ENV PROJECT_HOME=/opt/epics

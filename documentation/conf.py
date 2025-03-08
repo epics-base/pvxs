@@ -31,10 +31,9 @@ def read_version(fmt):
 
 # -- Project information -----------------------------------------------------
 
-# TODO Update Copyright and Attribution to reflect SLAC input
 project = 'PVXS'
-copyright = time.strftime('%Y Michael Davidsaver and Osprey DCS LLC')
-author = 'Michael Davidsaver'
+copyright = time.strftime('%Y Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC')
+author = 'Michael Davidsaver and George McIntyre'
 
 # The short X.Y version
 version = read_version('{PVXS_MAJOR_VERSION}.{PVXS_MINOR_VERSION}')
@@ -105,8 +104,7 @@ html_theme = 'alabaster'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = []
-
+html_static_path = ['_static']
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
 #

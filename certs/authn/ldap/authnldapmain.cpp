@@ -41,7 +41,7 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
     bool show_version{false}, help{false}, add_config_uri{false};
     std::string usage{"client"};
 
-    CLI::App app{"authnldap - Secure PVAccess with LDAP Authentication"};
+    CLI::App app{"authnldap - Secure PVAccess LDAP Authenticator"};
 
     // Define options
     app.set_help_flag("", "");  // deactivate built-in help
@@ -67,7 +67,7 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
     CLI11_PARSE(app, argc, argv);
 
     if (help) {
-        std::cout << "authnldap - Secure PVAccess with LDAP Authentication\n"
+        std::cout << "authnldap - Secure PVAccess LDAP Authenticator\n"
                   << std::endl
                   << "Generates client, server, or hybrid certificates based on the LDAP credentials. \n"
                   << std::endl
@@ -162,7 +162,7 @@ CertData getCertificate(bool &retrieved_credentials, ConfigLdap config, uint16_t
         // key pair
         auto cert_creation_request = authenticator.createCertCreationRequest(credentials, key_pair, cert_usage);
 
-        log_debug_printf(auth, "CCR created for: %s authentication type\n", authenticator.type_.c_str());
+        log_debug_printf(auth, "CCR created for: %s Authenticator\n", authenticator.type_.c_str());
 
         // Attempt to create a certificate with the certificate creation
         // request

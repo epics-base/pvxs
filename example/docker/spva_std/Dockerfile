@@ -1,5 +1,6 @@
-# FROM image built from /example/docker/pvxs
-FROM georgeleveln/pvxs:latest
+ARG DOCKER_USERNAME=georgeleveln
+
+FROM ${DOCKER_USERNAME}/pvxs:latest
 
 # Install dependencies
 RUN apt-get update && \
