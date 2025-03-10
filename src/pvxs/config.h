@@ -183,7 +183,7 @@ struct PVXS_API ConfigCommon {
 
     /**
      * @brief Behaviour of server and client if the certificate expires
-     * during the long running session.
+     * during the long-running session.
      *  - FallbackToTCP.  Only for clients, this will reinitialise the
      * connection but in server-only authentication mode.
      *  - Shutdown.       This will stop the process immediately

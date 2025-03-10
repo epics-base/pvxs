@@ -1,42 +1,44 @@
 .. _authn_and_authz:
 
-Authentication and Authorization
+|security| AuthN & AuthZ
 =====================================
 
-`AutheNtication` and `AuthoriZation` with Secure PVAccess.
+:ref:`AutheNtication and AuthoriZation<glossary_auth_vs_authz>` with Secure PVAccess
 
-*Authentication* determines the identity of a client or server. *Authorization* determines access rights to PV resources.
+- **AutheNtication** determines and verifies the identity of a client or server.
+- **AuthoriZation** defines and enforces access rights to PV resources.
+
 SPVA enhances :ref:`epics_security` with fine-grained control based on:
 
-- *Authentication Mode* - choose between `server-only`, `mutual`, or `none`
-- *Authentication Method* - either legacy (`ca`), spva (`x509`), or none (`anonymous`)
-- *Certificate Authority* - Only allow authorised access matching `Common Name` of Certificate Authority
-- *Transport Type* - for unauthenticated clients provide access based on transport - legacy (not `isTLS`), or tls encapsulated (`isTLS`)
-- *Encapsulation Mode* - packets are encrypted (`tls`),  or unencrypted (`tcp`)
+- **Authentication Mode** - choose between ``server-only``, ``mutual``, or ``none``
+- **Authentication Method** - either legacy (``ca``), spva (``x509``), or none (``anonymous``)
+- **Certificate Authority** - Only allow authorised access matching ``Common Name`` of Certificate Authority
+- **Transport Type** - for unauthenticated clients provide access based on transport - legacy (not ``isTLS``), or tls encapsulated (``isTLS``)
+- **Encapsulation Mode** - packets are encrypted (``tls``),  or unencrypted (``tcp``)
 
 .. _authentication_modes:
 
 Authentication Modes
---------------------
+------------------------
 
-- `Mutual`: Both client and server are authenticated via certificates (spva: Method is `x509`)
-- `Server-only`: Only server is authenticated via certificate (hybrid: Method is `ca` or `anonymous`, but `isTLS` flag is true)
-- `Un-authenticated`: Credentials supplied in AUTHZ message (legacy: Method is `ca`)
-- `Unknown`: No credentials (legacy: Method is `anonymous`)
+- ``Mutual``: Both client and server are authenticated via certificates (spva: Method is ``x509``)
+- ``Server-only``: Only server is authenticated via certificate (hybrid: Method is ``ca`` or ``anonymous``, but ``isTLS`` flag is true)
+- ``Un-authenticated``: Credentials supplied in ``AUTHZ`` message (legacy: Method is ``ca``)
+- ``Unknown``: No credentials (legacy: Method is ``anonymous``)
 
 .. _determining_identity:
 
 Legacy Authentication Mode
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- `Un-authenticated`
-- `Unknown`
+- ``Un-authenticated``
+- ``Unknown``
 
 .. image:: pvaident.png
    :alt: Identity in PVAccess
    :align: center
 
-1. Optional AUTHZ message from client:
+1. Optional ``AUTHZ`` message from client:
 
 .. code-block:: shell
 
@@ -57,7 +59,7 @@ Legacy Authentication Mode
     }
 
 3. PeerInfo fields map to `asAddClient()` parameters ...
-4. for authorization through the ACF definitions of UAGs and ASGs ...
+4. for authorization through the ``ACF`` definitions of ``UAG``s and ``ASG``s ...
 5. to control access to PVs
 
 Secure PVAccess Authentication Mode
@@ -95,8 +97,8 @@ Secure PVAccess Authentication Mode
     };
 
 4. Extended ``asAddClientX()`` function provides ...
-5. authorization control (enhanced with `isTls`, `METHOD`, and `AUTHORITY`) through the ACF definitions of UAGs and ASGs ...
-6. to control access to PVs (enhanced with addition of `RPC`)
+5. authorization control (enhanced with ``isTls``, ``METHOD``, and ``AUTHORITY``) through the ACF definitions of UAGs and ASGs ...
+6. to control access to PVs (enhanced with addition of ``RPC``)
 
 
 .. _site_authentication_methods:
@@ -104,19 +106,19 @@ Secure PVAccess Authentication Mode
 Authentication Methods
 -----------------------
 
-A new authentication method is added with SPVA - `x509`.  This supercedes the legacy `ca`, and
-`anonymous` authentication methods.  With `x509` EPICS clients can use a variety of Site Authentication Methods that
+A new authentication method is added with SPVA - ``x509``.  This supercedes the legacy ``ca``, and
+`anonymous` authentication methods.  With ``x509`` EPICS clients can use a variety of Site Authentication Methods that
 all integrate with Secure PVAccess via a PKCS#12 keychain file ( :ref:`glossary_pkcs12` ) and the certificate and keys that it contains.
 
 **Authenticator**:
 
 Authenticators are ways of generating the PKCS#12 keychain file by
 using credentials (tickets, tokens, or other identity-affirming methods) from existing authentication methods
-that may be in use in a particular installation site.  The simplest is called "Standard Authenticator" (`std`) and it
-allows a user to create an arbitrary x509 certificate that has to be approved by a network administrator before
+that may be in use in a particular installation site.  The simplest is called "Standard Authenticator" (``std``) and it
+allows a user to create an arbitrary x509 certificate that has to be ``APPROVED`` by a network administrator before
 it is allowed on the network.
 
-Tools that start with `authn` e.g. `authnstd` are the commandline interfaces to these Authenticators.
+Tools that start with ``authn`` e.g. ``authnstd`` are the commandline interfaces to these Authenticators.
 
 Each new Authenticator requires:
 
@@ -125,7 +127,7 @@ Each new Authenticator requires:
 
 Create under ``/certs/authn/<name>``:
 
-- `authnmain.cpp` - Main runner (copy from template)
+- `authn<name>main.cpp` - Main runner (copy from template)
 - `authn<name>.cpp` - Main implementation subclassing ``Authn``, includes registration
 - `authn<name>.h` - Header file
 - `config<name>.cpp` - Configuration interface subclassing ``AuthnConfig``
@@ -143,6 +145,65 @@ Create under `/certs/authn/<name>`:
 - `<name>VERIFIER_RULES` - Makefile rules for :ref:`pvacms` integration
 - `<name>VERIFIER_CONFIG` - Makefile configuration for :ref:`pvacms`
 
+3. Build flag to enable code to be compiled in
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- choose a make flag name of the form ``PVXS_ENABLE_<NAME>_AUTH`` where ``NAME``
+  is a three or four letter acronynm. e.g. ``KRB``
+- update ``/certs/authn/Makefile`` to add a line at the end similar to the following:
+
+.. code-block:: make
+
+    #--------------------------------------------
+    #  ADD AUTHENTICATOR PLUGINS AFTER THIS LINE
+
+    ifeq ($(PVXS_ENABLE_KRB_AUTH),YES)
+    include $(AUTHN)/krb/Makefile
+    endif
+
+- Sites compiling PVXS will set these macros in their private ``CONFIG_SITE.local`` stored one level above
+  the root of the source tree.  e.g.
+
+.. code-block:: make
+
+    PVXS_ENABLE_KRB_AUTH = YES
+    PVXS_ENABLE_LDAP_AUTH = YES
+    PVXS_ENABLE_JWT_AUTH = NO
+
+
+4. Extra options for PVACMS
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you need to add some options to the commandline for PVACMS for your
+Authenticator just override these methods in the base ``Auth`` class.  e.g. for LDAP
+below:
+
+.. code-block:: c++
+
+    class AuthNLdap : public Auth {
+      public:
+        void configure(const client::Config &config) override {
+            auto &config_ldap = dynamic_cast<const ConfigLdap &>(config);
+            ldap_server = config_ldap.ldap_host;
+            ldap_port = config_ldap.ldap_port;
+        };
+
+        std::string getOptionsPlaceholderText() override { return " [ldap options]"; }
+        std::string getOptionsHelpText() override {
+            return "\n"
+                   "ldap options\n"
+                   "        --ldap-host <host>                   LDAP Host.  Default localhost\n"
+                   "        --ldap-port <port>                   LDAP port.  Default 389\n";
+        }
+
+        void addOptions(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {
+            auto &config = authn_config_map.at(PVXS_LDAP_AUTH_TYPE);
+            auto config_ldap = dynamic_cast<const ConfigLdap &>(*config);
+            app.add_option("--ldap-host", config_ldap.ldap_host, "Specify LDAP hostname or IP address");
+            app.add_option("--ldap-port", config_ldap.ldap_port, "Specify LDAP port number");
+        }
+    };
+
 
 Authenticators
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -154,12 +215,26 @@ TYPE ``0`` - Basic Credentials
 
 - Uses basic information:
 
-  - Username
-  - Hostname
-  - Process name
-  - Device name
-  - IP address
-  - Commandline Parameters
+  - CN: Common name
+
+    - Commandline flag: `-n` `--name`
+    - Username
+
+  - O: Organisation
+
+    - Commandline flag: `-o` `--organization`
+    - Hostname
+    - IP address
+
+  - OU: Organisational Unit
+
+    - Commandline flag: `--ou`
+
+  - C: Country
+
+    - Commandline flag: `-c` `--country`
+    - Locale (not reliable)
+    - Default = "US"
 
 - No verification performed
 - Certificates start in ``PENDING_APPROVAL`` state
@@ -187,6 +262,40 @@ TYPE ``2`` - Source Verifiable Tokens
 - :ref:`pvacms` uses method-specific libraries for verification
 
 
+Common Environment Variables for all Authenticators
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Environment Variables for authnstd**
+
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+| Name                 | Keys and Values                    | Description                                                           |
++======================+====================================+=======================================================================+
+|| EPICS_PVA_AUTH_STD  || {name to use}                     || Name to use in new certificates                                      |
+|| _NAME               || e.g. ``archiver``                 ||                                                                      |
++----------------------+  e.g. ``IOC1``                     ||                                                                      |
+|| EPICS_PVAS_AUTH_STD || e.g. ``greg``                     ||                                                                      |
+|| _NAME               ||                                   ||                                                                      |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_AUTH_STD  || {organization to use}             || Organization to use in new certificates                              |
+|| _ORG                || e.g. ``site.epics.org``           ||                                                                      |
++----------------------+  e.g. ``SLAC.STANFORD.EDU``        ||                                                                      |
+|| EPICS_PVAS_AUTH_STD || e.g. ``KLYS:LI01:101``            ||                                                                      |
+|| _ORG                || e.g. ``centos07``                 ||                                                                      |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_AUTH_STD  || {organization unit to use}        || Organization Unit to use in new certificates                         |
+|| _ORG_UNIT           || e.g. ``data center``              ||                                                                      |
++----------------------+  e.g. ``ops``                      ||                                                                      |
+|| EPICS_PVAS_AUTH_STD || e.g. ``prod``                     ||                                                                      |
+|| _ORG_UNIT           || e.g. ``remote``                   ||                                                                      |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_AUTH_STD  || {country to use}                  || Country to use in new certificates.                                  |
+|| _COUNTRY            || e.g. ``US``                       || Must be a two digit country code                                     |
++----------------------+  e.g. ``CA``                       ||                                                                      |
+|| EPICS_PVAS_AUTH_STD ||                                   ||                                                                      |
+|| _COUNTRY            ||                                   ||                                                                      |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+
+
 Included Reference Authenticators
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -205,22 +314,22 @@ It can be used to create a certificate with a username and hostname.
 
 - `CN` field in the certificate will be the logged in username
 
-  - unless the `-N` commandline option is set
+  - unless the `-n` `--name` commandline option is set
   - unless the `EPICS_PVA_AUTH_STD_NAME`, `EPICS_PVAS_AUTH_STD_NAME` environment variable is set
 
-- `O` field in the certificate will be the hostname
+- `O` field in the certificate will be the hostname or ip address
 
-  - unless the `-O`  commandline option is set
+  - unless the `-o` `--organization`  commandline option is set
   - unless the `EPICS_PVA_AUTH_STD_ORG`, `EPICS_PVAS_AUTH_STD_ORG` environment variable is set
 
 - `OU` field in the certificate will not be set
 
-  - unless the `-o`  commandline option is set
+  - unless the `--ou`  commandline option is set
   - unless the `EPICS_PVA_AUTH_STD_ORG_UNIT`, `EPICS_PVAS_AUTH_STD_ORG_UNIT` environment variable is set
 
 - `C` field in the certificate will be set to the local country code
 
-  - unless the `-C`  commandline option is set
+  - unless the `-c` `--country`  commandline option is set
   - unless the `EPICS_PVA_AUTH_STD_COUNTRY`, `EPICS_PVAS_AUTH_STD_COUNTRY` environment variable is set
 
 **usage**
@@ -260,42 +369,6 @@ and password file locations.
 +======================+====================================+=======================================================================+
 || EPICS_AUTH_STD      || <number of minutes>               || Amount of minutes before the certificate expires.                    |
 || _CERT_VALIDITY_MINS || e.g. ``525960`` for 1 year        ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_AUTH_STD  || {name to use}                     || Name to use in new certificates                                      |
-|| _NAME               || e.g. ``archiver``                 ||                                                                      |
-+----------------------+  e.g. ``IOC1``                     ||                                                                      |
-|| EPICS_PVAS_AUTH_STD || e.g. ``greg``                     ||                                                                      |
-|| _NAME               ||                                   ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_AUTH_STD  || {organization to use}             || Organization to use in new certificates                              |
-|| _ORG                || e.g. ``site.epics.org``           ||                                                                      |
-+----------------------+  e.g. ``SLAC.STANFORD.EDU``        ||                                                                      |
-|| EPICS_PVAS_AUTH_STD || e.g. ``KLYS:LI01:101``            ||                                                                      |
-|| _ORG                || e.g. ``centos07``                 ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_AUTH_STD  || {organization unit to use}        || Organization Unit to use in new certificates                         |
-|| _ORG_UNIT           || e.g. ``data center``              ||                                                                      |
-+----------------------+  e.g. ``ops``                      ||                                                                      |
-|| EPICS_PVAS_AUTH_STD || e.g. ``prod``                     ||                                                                      |
-|| _ORG_UNIT           || e.g. ``remote``                   ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_AUTH_STD  || {country to use}                  || Country to use in new certificates.                                  |
-|| _COUNTRY            || e.g. ``US``                       || Must be a two digit country code                                     |
-+----------------------+  e.g. ``CA``                       ||                                                                      |
-|| EPICS_PVAS_AUTH_STD ||                                   ||                                                                      |
-|| _COUNTRY            ||                                   ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_TLS       || <path to the keychain file>       || The location of the keychain file for client or server.  The file    |
-|| _TLS_KEYCHAIN       ||                                   || will be created here                                                 |
-+----------------------+                                    ||                                                                      |
-|| EPICS_PVAS_TLS      ||                                   ||                                                                      |
-|| _TLS_KEYCHAIN       ||                                   ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_TLS       || <cert password file path>         || The location of the file containing the password for the keychain    |
-|| _KEYCHAIN_PWD_FILE  ||                                   || file.                                                                |
-+----------------------+                                    ||                                                                      |
-|| EPICS_PVAS_TLS      ||                                   ||                                                                      |
-|| _KEYCHAIN_PWD_FILE  ||                                   ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
 
 **Examples**

@@ -1,6 +1,6 @@
 .. _quick_start:
 
-⚡ Secure PVXS
+|guide| Secure PVXS
 ========================
 
 
@@ -12,7 +12,7 @@
     status of, X.509 certificates.
 
 
-This section contains a Quick Start Guide (⚡) for Secure PVAccess.  It shows how to configure and
+This section contains a Quick Start |guide| for Secure PVAccess.  It shows how to configure and
 build *epics-base* and then *pvxs* with the Secure PVAccess
 protocol enabled.  We provide containerised build instructions
 that allow you to familiarize yourself with the protocol and tools before
@@ -25,28 +25,29 @@ Other Quick Start Guides:
 - :ref:`quick_start_krb`
 - :ref:`quick_start_ldap`
 
-🎓 What you will learn
--------------------------------------
+|learn| You will learn
+****************************
 
 - :ref:`Building and Deploying epics-base and the PVXS libraries and executables <spva_qs_build_and_deploy>`,
 - :ref:`Running PVACMS to manage certificates <spva_qs_pvacms>`,
 - :ref:`Hands on experience with Certificate Management<spva_qs_admin>`
 
-⏩ Pre-built
--------------------------------------
+|pre-packaged|\Prepackaged
+****************************
 
-If you want a pre-setup environment, try the following.  You will need two terminal sessions.
+If you want a prepackaged environment, try the following.  You will need two terminal sessions.
 
-① 🖥¹ Run PVACMS
-^^^^^^^^^^^^^^^^^^^^
+|1| Run PVACMS
+-----------------------
 
-start a vm in a container named *ubuntu_pvxs* from a pre-built Secure PVAccess image
+- |terminal|\¹
+- start a vm in a container named *ubuntu_pvxs* from a Prepackaged Secure PVAccess image
 
 .. code-block:: shell
 
     docker run -it --name ubuntu_pvxs georgeleveln/pvxs:latest
 
-within the container, start *pvacms*
+- within the container, start *pvacms*
 
 .. code-block:: shell
 
@@ -75,16 +76,17 @@ within the container, start *pvacms*
     EPICS_PVAS_TLS_STOP_IF_NO_CERT=YES
     PVACMS [06e4748c] Service Running
 
-② 🖥² Demonstrate some certificate management tools
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+|2| Run Tools
+----------------------
 
-in a new terminal open a new shell to the same container
+- |terminal|\²
+- in a new terminal open a new shell to the same container
 
 .. code-block:: shell
 
     docker exec -it ubuntu_pvxs /bin/bash
 
-set up the environment
+- set up the environment
 
 .. code-block:: shell
 
@@ -93,7 +95,7 @@ set up the environment
     export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
     export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
 
-run some *pvxcert* commands
+- run some *pvxcert* commands
 
 .. code-block:: shell
 
@@ -148,11 +150,16 @@ run some *pvxcert* commands
     Revoke ==> CERT:STATUS:06e4748c:1314642908097862106
     2025-03-08T09:49:08.021246627 ERR pvxs.certs.tool REVOKED operation not authorized on 06e4748c:1314642908097862106
 
-1️⃣ Create Container
+|step-by-step| Step-by-Step
+****************************
+
+|step| Docker Image
 --------------------------------------------
 
-① 🖥¹ Locate the image you want to use from the list below
+|1| Image
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Locate the image you want to use from the list below
 
 +--------------+----------------+--------------------------------------------+
 | Distribution | container name | image                                      |
@@ -173,10 +180,11 @@ run some *pvxcert* commands
 +--------------+----------------+--------------------------------------------+
 
 
-② 🖥¹ Create a container from the image
+|2| Create
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-start a vm in a container named *ubuntu_pvxs* from a ubuntu image
+- |terminal|\¹
+- start a vm in a container named *ubuntu_pvxs* from a ubuntu image
 
 .. code-block:: shell
 
@@ -190,13 +198,13 @@ where:
 
 .. _spva_qs_build_and_deploy:
 
-2️⃣ Build
+|step| Build PVXS
 -------------------------------------------------
 
-① 🖥¹ Initialise Environment
+|1| Environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-make working directory for building project files
+- make working directory for building project files
 
 .. code-block:: shell
 
@@ -204,7 +212,7 @@ make working directory for building project files
     mkdir -p ${PROJECT_HOME}
 
 
-② 🖥¹ Install Requirements
+|2| Requirements
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 Select from the following installation instructions based on the image you selected:
@@ -273,13 +281,13 @@ For RTEMS
 For MacOS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-install Homebrew if not already installed
+- install Homebrew if not already installed
 
 .. code-block:: shell
 
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-update Homebrew and install dependencies
+- update Homebrew and install dependencies
 
 .. code-block:: shell
 
@@ -365,7 +373,7 @@ update Homebrew and install dependencies
         sudo make install
 
 
-③ 🖥¹ Build epics-base
+|3| epics-base
 ^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: shell
@@ -377,7 +385,7 @@ update Homebrew and install dependencies
     make -j10 all
     cd ${PROJECT_HOME}
 
-④ 🖥¹ Configure PVXS Build
+|4| Configure
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: shell
@@ -387,7 +395,7 @@ update Homebrew and install dependencies
     EPICS_BASE = \$(TOP)/../epics-base
     EOF
 
-⑤ 🖥¹ Build PVXS
+|5| Build
 ^^^^^^^^^^^^^^
 
 .. code-block:: shell
@@ -403,50 +411,53 @@ update Homebrew and install dependencies
 .. _spva_qs_pvacms:
 
 
-3️⃣ Run PVACMS
+|step| PVACMS
 -------------------------------------------------------
 
-① 🖥¹ Configure PVACMS
+|1| Configure
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-set up XDG environment if not already set
+- Environment
+
+  - set up XDG environment if not already set
 
 .. code-block:: shell
 
     export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
     export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
 
-----------------------
+- PATH
 
-Set PATH to include Secure PVAccess executables
+  - set PATH to include Secure PVAccess executables
 
 .. code-block:: shell
 
     export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
 
-----------------------
 
-*optionally: Configure CA database file location*
+- *optionally*
+
+  - Configure CA database file location*
 
 .. code-block:: shell
 
     export EPICS_PVACMS_DB=${XDG_DATA_HOME}/pva/1.3/certs.db
 
-----------------------
 
-*optionally: Configure Root CA Keychain file location*
+- *optionally*
 
-*Place your CA's certificate and key in this file if you have one
-otherwise the CA certificate will be created here*
+  - Configure Root CA Keychain file location
+  - Place your CA's certificate and key in this file if you have one
+otherwise the CA certificate will be created here
 
 .. code-block:: shell
 
     export EPICS_CA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/ca.p12
 
-----------------------
 
-*optionally: Specify the subject name of your Root CA in case you don't provide a Root CA and
-it needs to be created*
+- *optionally*
+
+  - Specify the subject name of your Root CA in case you don't provide a Root CA and it needs to be created
 
 .. code-block:: shell
 
@@ -455,45 +466,39 @@ it needs to be created*
     export EPICS_CA_ORGANIZATIONAL_UNIT="EPICS Certificate Authority" # OU
     export EPICS_CA_COUNTRY="US"                                      # C
 
-----------------------
 
-*optionally: Configure PVACMS Keychain file location*
+- *optionally*
 
-*The PVACMS keychain file will be created at this location if it does not exist*
+  - Configure PVACMS Keychain file location
+  - The PVACMS keychain file will be created at this location if it does not exist
 
 .. code-block:: shell
 
     export EPICS_PVACMS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
 
-----------------------
 
-*optionally: Configure Admin User Keychain file location*
+- *optionally*
 
-*An Admin User keychain file will be created at this location if it does not exist*
+  - Configure Admin User Keychain file location
+  - An Admin User keychain file will be created at this location if it does not exist
 
 .. code-block:: shell
 
     export EPICS_ADMIN_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
 
-----------------------
 
-*optionally: Configure PVACMS ADMIN user Access Control File (ACF) location*
+- *optionally*
 
-*An ACF file that controls accesss to PVACMS resources (certificates, etc.) is created at this
-location if it does not exist*
-
-*By default the file created ensures that administrator permisions are granted to any user
-that presents a certificate that is signed by the configured Root CA and has
-CN="admin", O="", OU="", C="US"*
-
-*You can modify this file to add other admin users to the UAG section, or conditions to an existing
-or new RULES section*
+  - Configure PVACMS ADMIN user Access Control File (ACF) location
+  - An ACF file that controls accesss to PVACMS resources (certificates, etc.) is created at this location if it does not exist
+  - By default the file created ensures that administrator permisions are granted to any user that presents a certificate that is signed by the configured Root CA and has CN="admin", O="", OU="", C="US"
+  - You can modify this file to add other admin users to the UAG section, or conditions to an existing or new RULES section
 
 .. code-block:: shell
 
     export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
 
-② 🖥¹ Run PVACMS
+|2| Run
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: shell
@@ -530,13 +535,14 @@ or new RULES section*
 
 .. _spva_qs_admin:
 
-4️⃣ Test
+|step| Test
 ------------------------------------------------------
 
-① 🖥 ² Configure PVACMS Admin User
+|1|  Configure
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-in a different terminal open a shell to the same container:
+- |terminal|\²
+- in a different terminal open a shell to the same container:
 
 .. code-block:: shell
 
@@ -544,7 +550,7 @@ in a different terminal open a shell to the same container:
 
 ----------------------
 
-set up XDG environment if not already set, and set PATH
+- set up XDG environment if not already set, and set PATH
 
 .. code-block:: shell
 
@@ -555,7 +561,7 @@ set up XDG environment if not already set, and set PATH
 
 ----------------------
 
-configure the location of the Admin User's keychain file.
+- configure the location of the Admin User's keychain file.
 
 We will be carrying out some protected operations so we will need to have access
 to the Admin User's keychain file
@@ -565,10 +571,10 @@ to the Admin User's keychain file
     export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
 
 
-② 🖥 ² Get Certificate Status
+|2|\Get Status
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-get the status of Root CA Certificate
+- get the status of Root CA Certificate
 
 .. code-block:: shell
 
@@ -584,7 +590,7 @@ get the status of Root CA Certificate
     Status Expires: Tue Mar 04 15:57:10 2025 UTC
     --------------------------------------------
 
-check status of the Admin Certificate by file name
+- check status of the Admin Certificate by file name
 
 .. code-block:: shell
 
@@ -609,10 +615,12 @@ check status of the Admin Certificate by file name
     --------------------------------------------
 
 
-③ 🖥 ² Revoke a certificate
+|3| Revoke
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-revoke Admin User's certificate. Once this completes, the Admin user will lose administrator
+- revoke Admin User's certificate.
+
+Once this completes, the Admin user will lose administrator
 status
 
 .. code-block:: shell
@@ -625,7 +633,9 @@ status
 
 ----------------------
 
-try to revoke Root CA Certificate and fail because Admin User's Certificate has been revoked
+- try to revoke Root CA Certificate
+
+Fail because Admin User's Certificate has been revoked
 
 .. code-block:: shell
 
@@ -640,7 +650,7 @@ try to revoke Root CA Certificate and fail because Admin User's Certificate has 
 
 regenerate admin certificate
 
-i. in the other other terminal window,  Stop PVACMS (ctrl-C)
+- in the other other terminal window,  Stop PVACMS (ctrl-C)
 
 .. code-block:: shell
 
@@ -650,7 +660,7 @@ i. in the other other terminal window,  Stop PVACMS (ctrl-C)
 
     PVACMS [2535f0b8] Service Exiting
 
-ii. Create a new Admin User Certificate
+- Create a new Admin User Certificate
 
 .. code-block:: shell
 
@@ -664,7 +674,7 @@ ii. Create a new Admin User Certificate
     Admin user "admin" has been added to list of administrators of this PVACMS
     Restart the PVACMS for it to take effect
 
-iii. Restart PVACMS
+- Restart PVACMS
 
 .. code-block:: shell
 

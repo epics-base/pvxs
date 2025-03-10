@@ -70,7 +70,7 @@ asgs:
         authorities:
           - Epics Org CA
 
-  # RPC access for localhost user bar with a secure EPICS Org CA authenticated connection
+  # RPC access for localhost user bar with an EPICS Org CA authenticated connection
   - name: rwx
     rules:
       - level: 0

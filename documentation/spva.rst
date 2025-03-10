@@ -1,6 +1,6 @@
 .. _secure_pvaccess:
 
-Secure PVAccess
+|security| Secure PVAccess
 ===============
 
 Secure PVAccess (SPVA) enhances the existing PVAccess protocol by integrating :ref:`transport_layer_security` (TLS)
@@ -75,8 +75,7 @@ content type, protocol version, and length, followed by the encrypted PVAccess d
    :align: center
 
 Note: We use ``TLS version 1.3`` for Secure PVAccess. This version deprecates support for connection renegotiation which is a security risk. So any
-connections that are established using Secure PVAccess will not be renegotiated but will be closed if a certificate is revoked or needs to be renewed.
-
+connections that are established using Secure PVAccess will not be renegotiated but will be closed if a certificate is revoked or needs to be renewed
 
 .. _environment_variables:
 
@@ -126,12 +125,17 @@ The following environment variables control SPVA behavior:
 |                          |                            |                                     |                                                               |
 |                          |                            |                                     | For a client standby has the same effect as shutdown.         |
 |                          +----------------------------+-------------------------------------+---------------------------------------------------------------+
-|                          | ``stop_if_no_cert``        | ``yes``, ``true``, ``1``            | Stop if no certificate is provided                            |
-|                          |                            |                                     |                                                               |
-|                          | Determines whether server  +-------------------------------------+---------------------------------------------------------------+
-|                          | stops if no cert           | ``no``, ``false``, ``0`` (default)  | Don't stop if no certificate is provided                      |
+|                          | ``on_no_cms``              | ``fallback-to-tcp`` (default)       | If revocation status check is required but CMS cannot         |
+|                          |                            |                                     | degrade connections to TCO mode                               |
+|                          | Determines what to do when +-------------------------------------+---------------------------------------------------------------+
+|                          | CMS is unavailable         | ``throw``                           | Otherwise throw an exception                                  |
 |                          +----------------------------+-------------------------------------+---------------------------------------------------------------+
-|                          | ``disable_stapling``       | ``yes``, ``true``, ``1``            | Servers won't staple certificate status, clients won't        |
+|                          | ``no_revocation_check``    |                                     | This flag, if present, disables certificate status monitoring |
+|                          |                            |                                     | so clients / servers will not know if certificates have been  |
+|                          | Determines whether cert    |                                     | revoked.                                                      |
+|                          | status is monitored        |                                     | Default: status monitoring is not disabled                    |
+|                          +----------------------------+-------------------------------------+---------------------------------------------------------------+
+|                          | ``no_stapling``            | ``yes``, ``true``, ``1``            | Servers won't staple certificate status, clients won't        |
 |                          |                            |                                     | request stapling information during TLS handshake             |
 |                          | Determines whether         +-------------------------------------+---------------------------------------------------------------+
 |                          | stapling is enabled        | ``no``, ``false``, ``0`` (default)  | Don't disable stapling                                        |
@@ -140,7 +144,10 @@ The following environment variables control SPVA behavior:
 |                          |                                                                  | PVAccess, either as the port on the Secure PVAccess server    |
 +--------------------------+ e.g. ``8076``                                                    | for clients to connect to - PVA, or as the local port number  |
 | EPICS_PVAS_TLS_PORT      |                                                                  | for Secure PVAccess servers to listen on - PVAS.              |
-|                          |                                                                  |                                                               |
++--------------------------+----------------------------+-------------------------------------+---------------------------------------------------------------+
+| EPICS_PVAS_TLS_STOP      | ``yes``, ``true``, ``1``                                         | For servers only. Stop if no certificate is provided.         |
+| _IF_NO_CERT.             +------------------------------------------------------------------+                                                               |
+|                          | ``no``, ``false``, ``0`` (default)                               |                                                               |
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | SSLKEYLOGFILE            | {fully qualified path to key log file}                           | This is the path to the SSL key log file that, in conjunction |
 |                          |                                                                  | with the build-time macro `PVXS_ENABLE_SSLKEYLOGFILE`,        |
@@ -415,12 +422,17 @@ OCSP Stapling optimizes certificate status verification during TLS handshake:
 Status Verification
 ^^^^^^^^^^^^^^^^^^^
 
+    Certificate Status recieved from the PVACMS for a certificate returns a ``GOOD`` status
+    if, and only if, the certificate status is good and so is that of its CA certificate
+    chain all the way back to the root certificate.  In this way agents need monitor
+    only their own entity certificate and that of their peer.
+
 Certificate status verification occurs at several points:
 
 1. Initial Connection
 
    - Certificates are verified during TLS handshake
-   - Both peers verify against trusted root certificates
+   - Both peers verify against a trusted root certificates that they have loaded from their own keychain file
    - Basic checks include:
 
      - Signature validation
@@ -432,9 +444,7 @@ Certificate status verification occurs at several points:
    - EPICS agents subscribe to:
 
      - Their own certificate status
-     - Their certificate chain status
-     - Peer certificate status
-     - Peer certificate chain status
+     - Peer entity certificate status
 
 3. Status Response Handling
 
@@ -464,7 +474,7 @@ Certificate status verification occurs at several points:
 Status Caching
 ^^^^^^^^^^^^^^
 
-- Agents subscribe to peer certificate and chain status
+- Agents subscribe to peer certificate
 - Status transitions trigger connection status re-evaluation
 - Cached status used within validity period to reduce :ref:`pvacms` requests
 - Servers staple cached status in handshake
@@ -523,15 +533,9 @@ Enable detailed PVXS debug logging:
 
 1. Environment variable method:
 
-    .. code-block:: shell
+.. code-block:: shell
 
-        export PVXS_LOG="pvxs.stapling*=DEBUG"
-
-1. Command line option with pvxcert:
-
-    .. code-block:: shell
-
-        pvxcert -d ...
+    export PVXS_LOG="pvxs.stapling*=DEBUG"
 
 New Debug Categories:
 
@@ -542,30 +546,12 @@ New Debug Categories:
 - ``pvxs.auth.krb``            - Kerberos Authenticator
 - ``pvxs.auth.mon``            - Certificate Status Monitoring
 - ``pvxs.auth.stat``           - Certificate Status
-- ``pvxs.auth.std``            - Stanard Authenticator
+- ``pvxs.auth.std``            - Standard Authenticator
 - ``pvxs.auth.tool``           - Certificate Management Tools (``pvacert``)
 - ``pvxs.certs.status``        - Certificate Status Management
 - ``pvxs.ossl.init``           - TLS initialization
 - ``pvxs.ossl.io``             - TLS I/O
 - ``pvxs.stapling``            - OCSP stapling
-
-Connection Tracing
-^^^^^^^^^^^^^^^^^^
-
-Monitor connection state transitions:
-
-1. Enable connection tracing:
-
-   .. code-block:: shell
-
-       export PVXS_LOG="pvxs.connection=DEBUG"
-
-2. Trace output includes:
-
-   - Connection establishment
-   - State transitions
-   - Certificate verification
-   - Error conditions
 
 .. _network_deployment:
 
@@ -598,7 +584,17 @@ Certificate Storage
 
 Standard Nodes:
 
+- ``XDG_CONFIG_HOME`` standard is used by default to locate certificates for clients and server
+
+  - default if not set is ``~/.config``
+  - we append ``/pva/1.3/`` to make the full path default to ``~/.config/pva/1.3/``
+  - client certificates are stored in ``client.p12`` by default
+  - server certificates are stored in ``server.p12`` by default
+
 - Store certificates in local protected directory
+
+  - the files are protected with ``400`` so that only the owner can read
+
 - Automatic reconfiguration on certificate updates
 
 Diskless Nodes:
@@ -612,8 +608,14 @@ Trust Establishment
 
 1. Root Certificate Distribution:
 
-   - Install during node boot process, or
-   - Use publicly signed root certificates
+   - Administrators must distribute PKCS#12 files containing the CA Root certificate to all clients
+   - These files must be stored at the location pointed to by EPICS_PVA_TLS_KEYCHAIN or equivalent
+   - These files are replaced with any new certificates that are generated for the user but
+     the Root CA certificate is preserved
+   - Use of publicly signed root certificates is not supported at present
+   - The only exception is when clients use any Authenticator to generate certificates.
+     In this case the Root CA certificate is delivered with the certificate.  Users
+     must verify that the issuer of the certificate matches the Root CA they are expecting.
    - Consistent across all deployment types
 
 2. Certificate Authority:
