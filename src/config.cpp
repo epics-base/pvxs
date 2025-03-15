@@ -742,13 +742,13 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf) {
 
     for (const auto& pair : defs) {
         // only print the server variant
-        static const char prefix[] = "EPICS_PVAS_";
-        static const char ca_prefix[] = "EPICS_CA_";
-        static const char pvacms_prefix[] = "EPICS_PVACMS_";
-        static const char ocsp_prefix[] = "EPICS_OCSP_";
-        static const char auth_prefix[] = "EPICS_AUTH_";
+        static constexpr char prefix[] = "EPICS_PVAS_";
+        static constexpr char cert_auth_prefix[] = "EPICS_CERT_AUTH_";
+        static constexpr char pvacms_prefix[] = "EPICS_PVACMS_";
+        static constexpr char ocsp_prefix[] = "EPICS_OCSP_";
+        static constexpr char auth_prefix[] = "EPICS_AUTH_";
 
-        if (MATCHING_DEF() || MATCHING_DEF(ca_) || MATCHING_DEF(pvacms_) || MATCHING_DEF(ocsp_) || MATCHING_DEF(auth_))
+        if (MATCHING_DEF() || MATCHING_DEF(cert_auth_) || MATCHING_DEF(pvacms_) || MATCHING_DEF(ocsp_) || MATCHING_DEF(auth_))
             strm << indent{} << pair.first << '=' << pair.second << '\n';
     }
     return strm;

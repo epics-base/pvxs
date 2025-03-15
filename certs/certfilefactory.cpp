@@ -57,7 +57,7 @@ void IdFileFactory::backupFileIfExists(const std::string& filename) {
  * The chain is allocated and the root certificate is added to it.
  * The chain will always have only one certificate in it.
  *
- * Use this function when you need to have a CA certificate chain but its a self signed
+ * Use this function when you need to have a certificate chain but its a self signed
  * certificate.
  *
  * @param chain The certificate chain reference that will be allocated and populated.

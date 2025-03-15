@@ -387,7 +387,7 @@ The following diagram shows the simplified TLS handshake sequence between server
 
 3. SPVA certificates may include status monitoring extension requiring:
 
-   - Subscription to certificate status from issuing CA's service (:ref:`pvacms`)
+   - Subscription to certificate status from issuing Certificate Authority's service (:ref:`pvacms`)
    - Receipt of GOOD status before trust
 
 4. Agents subscribe to:
@@ -423,7 +423,7 @@ Status Verification
 ^^^^^^^^^^^^^^^^^^^
 
     Certificate Status recieved from the PVACMS for a certificate returns a ``GOOD`` status
-    if, and only if, the certificate status is good and so is that of its CA certificate
+    if, and only if, the certificate status is good and so is that of its certificate authority certificate
     chain all the way back to the root certificate.  In this way agents need monitor
     only their own entity certificate and that of their peer.
 
@@ -611,10 +611,10 @@ Trust Establishment
    - Administrators must distribute PKCS#12 files containing the CA Root certificate to all clients
    - These files must be stored at the location pointed to by EPICS_PVA_TLS_KEYCHAIN or equivalent
    - These files are replaced with any new certificates that are generated for the user but
-     the Root CA certificate is preserved
+     the root certificate authority certificate is preserved
    - Use of publicly signed root certificates is not supported at present
    - The only exception is when clients use any Authenticator to generate certificates.
-     In this case the Root CA certificate is delivered with the certificate.  Users
+     In this case the root certificate authority certificate is delivered with the certificate.  Users
      must verify that the issuer of the certificate matches the Root CA they are expecting.
    - Consistent across all deployment types
 

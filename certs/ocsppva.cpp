@@ -138,10 +138,10 @@ int ocspService(client::Context &pva_client, std::string &port, bool verbose) {
     auto cert_password = config->tls_keychain_pwd;
 
     auto key_chain_data = security::KeychainFactory::getKeychainDataFromKeychainFile(cert_filename, cert_password);
-    const ossl_ptr<EVP_PKEY> ca_pkey(std::move(key_chain_data.pkey));
-    const ossl_ptr<X509> ca_cert(std::move(key_chain_data.cert));
-    const ossl_ptr<EVP_PKEY> ca_pub_key(X509_get_pubkey(ca_cert.get()));
-    const ossl_shared_ptr<STACK_OF(X509)> ca_chain(key_chain_data.ca);
+    const ossl_ptr<EVP_PKEY> cert_auth_pkey(std::move(key_chain_data.pkey));
+    const ossl_ptr<X509> cert_auth_cert(std::move(key_chain_data.cert));
+    const ossl_ptr<EVP_PKEY> cert_auth_pub_key(X509_get_pubkey(cert_auth_cert.get()));
+    const ossl_shared_ptr<STACK_OF(X509)> cert_auth_chain(key_chain_data.ca);
 
     ossl_ptr<SSL_CTX> ctx(SSL_CTX_new(TLS_server_method()));
 
@@ -210,7 +210,7 @@ int ocspService(client::Context &pva_client, std::string &port, bool verbose) {
             }
 
             OCSP_copy_nonce(basic_resp.get(), ocsp_req.get());
-            OCSP_basic_sign(basic_resp.get(), ca_cert.get(), ca_pkey.get(), EVP_sha256(), ca_chain.get(), 0);
+            OCSP_basic_sign(basic_resp.get(), cert_auth_cert.get(), cert_auth_pkey.get(), EVP_sha256(), cert_auth_chain.get(), 0);
             ocsp_resp.reset(OCSP_response_create(OCSP_RESPONSE_STATUS_SUCCESSFUL, basic_resp.get()));
 
             BIO *bio_resp = BIO_new(BIO_s_mem());

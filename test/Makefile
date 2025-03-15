@@ -134,7 +134,7 @@ testtls_SRCS += certstatusfactory.cpp
 testtls_SRCS += certstatusmanager.cpp
 testtls_SRCS += certstatus.cpp
 TESTS += testtls
-TESTFILES += ca.p12 cacert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
 TESTPROD_HOST += testtlswithcms
 testtlswithcms_SRCS += testtlswithcms.cpp
@@ -142,7 +142,7 @@ testtlswithcms_SRCS += certstatusfactory.cpp
 testtlswithcms_SRCS += certstatusmanager.cpp
 testtlswithcms_SRCS += certstatus.cpp
 TESTS += testtlswithcms
-TESTFILES += ca.p12 cacert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
 TESTPROD_HOST += testtlswithcmsandstapling
 testtlswithcmsandstapling_SRCS += testtlswithcmsandstapling.cpp
@@ -150,7 +150,7 @@ testtlswithcmsandstapling_SRCS += certstatusfactory.cpp
 testtlswithcmsandstapling_SRCS += certstatusmanager.cpp
 testtlswithcmsandstapling_SRCS += certstatus.cpp
 TESTS += testtlswithcmsandstapling
-TESTFILES += ca.p12 cacert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
 TESTPROD_HOST += testtlstime
 testtlstime_SRCS += testtlstime.cpp
@@ -252,15 +252,15 @@ rtemsTestData.c : $(TESTFILES) $(TOOLS)/epicsMakeMemFs.pl
 	$(PERL) $(TOOLS)/epicsMakeMemFs.pl $@ epicsRtemsFSImage $(TESTFILES)
 
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
-testtls$(EXE): | ca.p12
+testtls$(EXE): | cert_auth.p12
 
 # generate test certs only with EPICS_HOST_ARCH
 ifdef T_A
-ca.p12 :
+cert_auth.p12 :
 	$(RM) *.p12
 	../O.$(EPICS_HOST_ARCH)/gen_test_certs$(HOSTEXE) -O .
 ifeq ($(T_A),$(EPICS_HOST_ARCH))
-ca.p12 : gen_test_certs$(HOSTEXE)
+cert_auth.p12 : gen_test_certs$(HOSTEXE)
 endif # T_A==EPICS_HOST_ARCH
 endif # T_A
 endif # EVENT2_HAS_OPENSSL

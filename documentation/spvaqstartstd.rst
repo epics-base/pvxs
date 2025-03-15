@@ -168,7 +168,7 @@ If you want a prepackaged environment, try the following.  You will need four te
     EPICS_PVA_TLS_PORT=5076
     XDG_CONFIG_HOME=/home/client/.config/pva/1.3
     XDG_DATA_HOME=/home/client/.local/share/pva/1.3
-    # TLS x509:EPICS Root CA/softioc@172.17.0.2:33809
+    # TLS x509:EPICS Root Certificate Authority/softioc@172.17.0.2:33809
     test:enumExample from 172.17.0.2:33809
     struct "epics:nt/NTEnum:1.0" {
        struct "enum_t" {
@@ -192,10 +192,10 @@ If you want a prepackaged environment, try the following.  You will need four te
 
 - verify that connection is TLS
 
-  - ``TLS x509:EPICS Root CA/softioc @ 172.17.0.2`` indicates that:
+  - ``TLS x509:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
     - The connection is ``TLS``,
-    - The Server end of the channel has been authenticated by the Root CA ``EPICS Root CA``
+    - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
     - The Server end of the channel's name has been authenticated as ``softioc`` and is connecting from host ``172.17.0.2``
 
 |step-by-step| Step-By-Step
@@ -305,11 +305,11 @@ log back in as pvacms with environment set by ``.bashrc``
   - creates root CA if does not exist
 
     - creates root CA if does not exist,
-    - at location specified by ``EPICS_CA_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.3/ca.p12`` by default
-    - with ``CN`` specified by ``EPICS_CA_NAME``
-    - with  ``O`` specified by ``EPICS_CA_ORGANIZATION``
-    - with ``OU`` specified by ``EPICS_CA_ORGANIZATIONAL_UNIT``
-    - with  ``C`` specified by ``EPICS_CA_COUNTRY``
+    - at location specified by ``EPICS_CERT_AUTH_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12`` by default
+    - with ``CN`` specified by ``EPICS_CERT_AUTH_NAME``
+    - with  ``O`` specified by ``EPICS_CERT_AUTH_ORGANIZATION``
+    - with ``OU`` specified by ``EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT``
+    - with  ``C`` specified by ``EPICS_CERT_AUTH_COUNTRY``
 
   - create the default ACF file that controls permissions for the PVACMS service
 
@@ -328,7 +328,7 @@ log back in as pvacms with environment set by ``.bashrc``
 .. code-block:: console
 
     Certificate DB created  : /home/pvacms/.local/share/pva/1.3/certs.db
-    Keychain file created   : /home/pvacms/.config/pva/1.3/ca.p12
+    Keychain file created   : /home/pvacms/.config/pva/1.3/cert_auth.p12
     Created Default ACF file: /home/pvacms/.config/pva/1.3/pvacms.acf
     Keychain file created   : /home/pvacms/.config/pva/1.3/admin.p12
 
@@ -550,7 +550,7 @@ log back in as pvacms with environment set by ``.bashrc``
 .. note::
 
     ``46093d7c`` is the issuer ID which is comprised of the first 8 characters
-    of the hex Subject Key Identifier of the CA certificate.  You will see this
+    of the hex Subject Key Identifier of the certificate authority certificate.  You will see this
     preceding all certificate identifiers from this PVACMS
 
 Leave this PVACMS service running while running SoftIOC and SPVA client below.
@@ -816,7 +816,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
     EPICS_PVA_TLS_PORT=5076
     XDG_CONFIG_HOME=/home/client/.config/pva/1.3
     XDG_DATA_HOME=/home/client/.local/share/pva/1.3
-    # TLS x509:EPICS Root CA/softioc@172.17.0.2:35093
+    # TLS x509:EPICS Root Certificate Authority/softioc@172.17.0.2:35093
     test:enumExample from 172.17.0.2:35093
     struct "epics:nt/NTEnum:1.0" {
         struct "enum_t" {
@@ -840,10 +840,10 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
 
 .. note::
 
-  - ``TLS x509:EPICS Root CA/softioc @ 172.17.0.2`` indicates that:
+  - ``TLS x509:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
     - The connection is ``TLS``,
-    - The Server end of the channel has been authenticated by the Root CA ``EPICS Root CA``
+    - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
     - The Server end of the channel's name has been authenticated as ``softioc`` and is connecting from host ``172.17.0.2``
 
 
@@ -870,7 +870,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
 
     - user is "michael" and
     - method is ``x509`` - client has been authenticated using an *X.509 certificate* and
-    - the certificate authority that signed the certificate was *EPICS Root CA*
+    - the certificate authority that signed the certificate was *EPICS Root Certificate Authority*
 
 .. code-block:: shell
 
@@ -881,7 +881,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
     ASG(SPECIAL) {
         RULE(1,WRITE,TRAPWRITE) {
             UAG(OPERATORS)
-    		AUTHORITY("EPICS Root CA")
+    		AUTHORITY("EPICS Root Certificate Authority")
     		METHOD("x509")
         }
     }
@@ -958,7 +958,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
 
   - we are identified as "michael"
   - using an ``X.509`` certificate
-  - created by the *EPICS Root CA*
+  - created by the *EPICS Root Certificate Authority*
 
 .. code-block:: shell
 

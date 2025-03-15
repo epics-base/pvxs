@@ -58,7 +58,7 @@ struct Tester {
     const StatusDate revocation_date;
 
     const Value status_value_prototype{CertStatus::getStatusPrototype()};
-    DEFINE_MEMBERS(ca)
+    DEFINE_MEMBERS(cert_auth)
     DEFINE_MEMBERS(super_server)
     DEFINE_MEMBERS(intermediate_server)
     DEFINE_MEMBERS(server1)
@@ -67,7 +67,7 @@ struct Tester {
     DEFINE_MEMBERS(client1)
     DEFINE_MEMBERS(client2)
 
-    ossl_ptr<X509_STORE> trusted_store{ca_cert.createTrustStore()};
+    ossl_ptr<X509_STORE> trusted_store{cert_auth_cert.createTrustStore()};
 
     server::SharedWildcardPV status_pv{server::SharedWildcardPV::buildMailbox()};
     server::Server pvacms;
@@ -78,7 +78,7 @@ struct Tester {
           status_valid_until_time(now.t + STATUS_VALID_FOR_SECS),
           revocation_date(now.t - REVOKED_SINCE_SECS)
 
-              INIT_CERT_MEMBER_FROM_FILE(ca, CA) INIT_CERT_MEMBER_FROM_FILE(super_server, SUPER_SERVER)
+              INIT_CERT_MEMBER_FROM_FILE(cert_auth, CERT_AUTH) INIT_CERT_MEMBER_FROM_FILE(super_server, SUPER_SERVER)
                   INIT_CERT_MEMBER_FROM_FILE(intermediate_server, INTERMEDIATE_SERVER) INIT_CERT_MEMBER_FROM_FILE(server1, SERVER1)
                       INIT_CERT_MEMBER_FROM_FILE(server2, SERVER2) INIT_CERT_MEMBER_FROM_FILE(ioc, IOC1) INIT_CERT_MEMBER_FROM_FILE(client1, CLIENT1)
                           INIT_CERT_MEMBER_FROM_FILE(client2, CLIENT2)
@@ -86,11 +86,11 @@ struct Tester {
     {
         // Set up the Mock PVACMS server certificate (does not contain custom status extension)
         auto pvacms_config = server::Config::forCms();
-        pvacms_config.tls_keychain_file = SUPER_SERVER_CERT_FILE;
+        pvacms_config.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
         pvacms = pvacms_config.build().addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
         client = pvacms.clientConfig().build();
 
-        if (CHECK_CERT_MEMBER_CONDITION(ca) || CHECK_CERT_MEMBER_CONDITION(super_server) || CHECK_CERT_MEMBER_CONDITION(intermediate_server) ||
+        if (CHECK_CERT_MEMBER_CONDITION(cert_auth) || CHECK_CERT_MEMBER_CONDITION(super_server) || CHECK_CERT_MEMBER_CONDITION(intermediate_server) ||
             CHECK_CERT_MEMBER_CONDITION(server1) || CHECK_CERT_MEMBER_CONDITION(server2) || CHECK_CERT_MEMBER_CONDITION(ioc) ||
             CHECK_CERT_MEMBER_CONDITION(client1) || CHECK_CERT_MEMBER_CONDITION(client2)) {
             testFail("Error loading one or more certificates");
@@ -110,8 +110,8 @@ struct Tester {
     void createCertStatuses() {
         testShow() << __func__;
         try {
-            const auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
-            CREATE_CERT_STATUS(ca, {VALID})
+            const auto cert_status_creator(CertStatusFactory(cert_auth_cert.cert, cert_auth_cert.pkey, cert_auth_cert.chain, 0, STATUS_VALID_FOR_SECS));
+            CREATE_CERT_STATUS(cert_auth, {VALID})
             CREATE_CERT_STATUS(intermediate_server, {VALID})
             CREATE_CERT_STATUS(server1, {VALID})
             CREATE_CERT_STATUS(server2, {VALID})
@@ -128,8 +128,8 @@ struct Tester {
      */
     void makeStatusResponses() {
         testShow() << __func__;
-        const auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SECS));
-        MAKE_STATUS_RESPONSE(ca)
+        const auto cert_status_creator(CertStatusFactory(cert_auth_cert.cert, cert_auth_cert.pkey, cert_auth_cert.chain, 0, STATUS_VALID_FOR_SECS));
+        MAKE_STATUS_RESPONSE(cert_auth)
         MAKE_STATUS_RESPONSE(intermediate_server)
         MAKE_STATUS_RESPONSE(server1)
         MAKE_STATUS_RESPONSE(server2)
@@ -173,7 +173,7 @@ struct Tester {
         try {
             testDiag("Setting up: %s", "Mock PVACMS Server");
 
-            SET_PV(ca)
+            SET_PV(cert_auth)
             SET_PV(intermediate_server)
             SET_PV(server1)
             SET_PV(server2)
@@ -188,7 +188,7 @@ struct Tester {
 
                 if (pv.isOpen(pv_name)) {
                     switch (serial) {
-                        POST_VALUE_CASE(ca, post)
+                        POST_VALUE_CASE(cert_auth, post)
                         POST_VALUE_CASE(intermediate_server, post)
                         POST_VALUE_CASE(server1, post)
                         POST_VALUE_CASE(server2, post)
@@ -200,7 +200,7 @@ struct Tester {
                     }
                 } else {
                     switch (serial) {
-                        POST_VALUE_CASE(ca, open)
+                        POST_VALUE_CASE(cert_auth, open)
                         POST_VALUE_CASE(intermediate_server, open)
                         POST_VALUE_CASE(server1, open)
                         POST_VALUE_CASE(server2, open)
@@ -218,7 +218,7 @@ struct Tester {
             });
 
             pvacms.start();
-            TEST_STATUS_REQUEST(ca)
+            TEST_STATUS_REQUEST(cert_auth)
 
             testDiag("Set up: %s", "Mock PVACMS Server");
         } catch (std::exception& e) {
@@ -293,7 +293,7 @@ struct Tester {
     /**
      * @brief testServerOnly is a test that verifies the client can connect in server-only authenticated TLS mode
      *
-     * This is used to verify that a client that is configured with a CA certificate but no entity cert
+     * This is used to verify that a client that is configured with a certificate authority certificate but no entity cert
      * will be able to connect in server-only authenticated TLS mode
      */
     void testServerOnly() {
@@ -304,13 +304,13 @@ struct Tester {
         auto mbox(server::SharedPV::buildReadonly());
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
+        serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
 
         auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_keychain_file = CA_CERT_CERT_FILE;
+        cli_conf.tls_keychain_file = CERT_AUTH_CERT_FILE;
         cli_conf.tls_disable_status_check = false;
 
         auto cli(cli_conf.build());
@@ -356,12 +356,12 @@ struct Tester {
         auto test_pv(server::SharedPV::buildReadonly());
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
+        serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
         auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
         auto cli(cli_conf.build());
 
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
@@ -405,13 +405,13 @@ struct Tester {
         RESET_COUNTER(client2)
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_keychain_file = IOC1_CERT_FILE;
+        serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
 
         auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
 
         auto cli(cli_conf.build());
 
@@ -441,8 +441,8 @@ struct Tester {
         TEST_COUNTER_EQ(client2, 0)
 
         cli_conf = cli.config();
-        cli_conf.tls_keychain_file = CLIENT2_CERT_FILE;
-        cli_conf.tls_keychain_pwd = CLIENT2_CERT_FILE_PWD;
+        cli_conf.tls_keychain_file = CLIENT2_KEYCHAIN_FILE;
+        cli_conf.tls_keychain_pwd = CLIENT2_KEYCHAIN_FILE_PWD;
         testDiag("cli.reconfigure()");
         cli.reconfigure(cli_conf);
 
@@ -485,13 +485,13 @@ struct Tester {
         RESET_COUNTER(ioc)
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
+        serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
 
         auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
 
         auto cli(cli_conf.build());
 
@@ -521,7 +521,7 @@ struct Tester {
         TEST_COUNTER_EQ(ioc, 0)
 
         serv_conf = serv.config();
-        serv_conf.tls_keychain_file = IOC1_CERT_FILE;
+        serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
         testDiag("serv.reconfigure()");
         serv.reconfigure(serv_conf);
 
@@ -567,8 +567,8 @@ struct Tester {
      */
     void testUnCachedStatus() {
         testShow() << __func__;
-        const auto cert_status_creator(CertStatusFactory(ca_cert.cert, ca_cert.pkey, ca_cert.chain, 0, STATUS_VALID_FOR_SHORT_SECS));
-        MAKE_STATUS_RESPONSE(ca)
+        const auto cert_status_creator(CertStatusFactory(cert_auth_cert.cert, cert_auth_cert.pkey, cert_auth_cert.chain, 0, STATUS_VALID_FOR_SHORT_SECS));
+        MAKE_STATUS_RESPONSE(cert_auth)
         MAKE_STATUS_RESPONSE(intermediate_server)
         MAKE_STATUS_RESPONSE(server1)
         MAKE_STATUS_RESPONSE(server2)
@@ -583,12 +583,12 @@ struct Tester {
         auto test_pv(server::SharedPV::buildReadonly());
 
         auto serv_conf(server::Config::isolated());
-        serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
+        serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
         auto serv(serv_conf.build().addPV(TEST_PV, test_pv));
 
         auto cli_conf(serv.clientConfig());
-        cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
+        cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
 
         auto cli(cli_conf.build());
 
@@ -627,7 +627,7 @@ struct Tester {
         {
             // Configure server with status checking enabled
             auto serv_conf(server::Config::isolated());
-            serv_conf.tls_keychain_file = IOC1_CERT_FILE;
+            serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
             serv_conf.tls_disable_status_check = false;
             serv_conf.tls_throw_if_no_cert = true;
 
@@ -646,7 +646,7 @@ struct Tester {
 
             // Configure client with status checking enabled
             auto cli_conf(serv.clientConfig());
-            cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
+            cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
             cli_conf.tls_disable_status_check = false;
             auto cli(cli_conf.build());
 
@@ -661,13 +661,13 @@ struct Tester {
         {
             // Configure server with status checking disabled
             auto serv_conf2(server::Config::isolated());
-            serv_conf2.tls_keychain_file = IOC1_CERT_FILE;
+            serv_conf2.tls_keychain_file = IOC1_KEYCHAIN_FILE;
             serv_conf2.tls_disable_status_check = false;
             auto serv2(serv_conf2.build().addPV(TEST_PV2, test_pv));
 
             // Configure client with status checking disabled
             auto cli_conf2(serv2.clientConfig());
-            cli_conf2.tls_keychain_file = CLIENT1_CERT_FILE;
+            cli_conf2.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
             auto cli2(cli_conf2.build());
 
             // Start the server

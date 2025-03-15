@@ -8,19 +8,19 @@ export PROJECT_HOME=/opt/epics
 # Default    : ${XDG_DATA_HOME}/pva/1.3/certs.db
 # export EPICS_PVACMS_DB=${XDG_DATA_HOME}/pva/1.3/certs.db
 
-#### SETUP CA KEYCHAIN FILE
-# Place your CA's certificate and key in this file if you have one
-# otherwise the CA certificate will be created by PVACMS
-# Environment: EPICS_CA_TLS_KEYCHAIN
-# Default    : ${XDG_CONFIG_HOME}/pva/1.3/ca.p12
-# export EPICS_CA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/ca.p12
+#### SETUP Certificate Authority KEYCHAIN FILE
+# Place your certificate authority's certificate and key in this file if you have one
+# otherwise the certificate authority certificate will be created by PVACMS
+# Environment: EPICS_CERT_AUTH_TLS_KEYCHAIN
+# Default    : ${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12
+# export EPICS_CERT_AUTH_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12
 
-# Specify the name of your CA
-# Environment: EPICS_CA_NAME, EPICS_CA_ORGANIZATION, EPICS_CA_ORGANIZATIONAL_UNIT
-# Default    : CN=EPICS Root CA, O=ca.epics.org, OU=EPICS Certificate Authority,
-# export EPICS_CA_NAME="EPICS Root CA"
-# export EPICS_CA_ORGANIZATION="ca.epics.org"
-# export EPICS_CA_ORGANIZATIONAL_UNIT="EPICS Certificate Authority"
+# Specify the name of your certificate authority
+# Environment: EPICS_CERT_AUTH_NAME, EPICS_CERT_AUTH_ORGANIZATION, EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT
+# Default    : CN=EPICS Root Certificate Authority, O=certs.epics.org, OU=EPICS Certificate Authority,
+# export EPICS_CERT_AUTH_NAME="EPICS Root Certificate Authority"
+# export EPICS_CERT_AUTH_ORGANIZATION="certs.epics.org"
+# export EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT="EPICS Certificate Authority"
 
 #### SETUP PVACMS KEYCHAIN FILE
 # Environment: EPICS_PVACMS_TLS_KEYCHAIN

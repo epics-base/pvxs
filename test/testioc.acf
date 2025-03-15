@@ -14,9 +14,7 @@ ASG(SPECIAL) {
     RULE(1,WRITE,TRAPWRITE) {
         UAG(DEFAULT)
         UAG(BAR)
-		AUTHORITY("EPICS Root CA")
-#		AUTHORITY("CA Beamline")
-#		METHOD("ca")
+		AUTHORITY("EPICS Root Certificate Authority")
 		METHOD("x509")
     }
 }

@@ -16,7 +16,7 @@ PW="${2:-changeit}"
 [ "$OUT" = "-h" -o -d "$OUT" ] || die "usage: $0 [outdir] [password]"
 
 rm -f \
-    "$OUT"/ca-full.p12 "$OUT"/ca.pem "$OUT"/ca.p12 \
+    "$OUT"/cert-auth-full.p12 "$OUT"/cert_auth.pem "$OUT"/cert_auth.p12 \
     "$OUT"/superserver1.p12 \
     "$OUT"/intermediateCA.p12 "$OUT"/intermediateCA.pem \
     "$OUT"/ioc1.p12 \
@@ -26,21 +26,21 @@ rm -f \
     "$OUT"/client2.p12
 
 # the root CA private key is not needed during testing, so delete it on exit.
-trap 'rm -f "$OUT"/ca-full.p12' EXIT QUIT TERM KILL
+trap 'rm -f "$OUT"/cert-auth-full.p12' EXIT QUIT TERM KILL
 
-echo "==== Creating rootCA ===="
+echo "==== Creating rootCertAuth ===="
 
-keytool -v -genkeypair -alias rootCA \
-        -keystore "$OUT"/ca-full.p12 -storepass "$PW" \
-        -dname "CN=rootCA" -keyalg RSA \
+keytool -v -genkeypair -alias rootCertAuth \
+        -keystore "$OUT"/cert-auth-full.p12 -storepass "$PW" \
+        -dname "CN=rootCertAuth" -keyalg RSA \
         -ext BasicConstraints=ca:true \
         -ext KeyUsage=cRLSign,keyCertSign
-keytool -v -exportcert -alias rootCA \
-        -keystore "$OUT"/ca-full.p12 -storepass "$PW" \
-        -rfc -file "$OUT"/ca.pem
-keytool -v -importcert -alias rootCA \
-        -keystore "$OUT"/ca.p12 -storepass "$PW" \
-        -file "$OUT"/ca.pem -noprompt
+keytool -v -exportcert -alias rootCertAuth \
+        -keystore "$OUT"/cert-auth-full.p12 -storepass "$PW" \
+        -rfc -file "$OUT"/cert_auth.pem
+keytool -v -importcert -alias rootCertAuth \
+        -keystore "$OUT"/cert_auth.p12 -storepass "$PW" \
+        -file "$OUT"/cert_auth.pem -noprompt
 
 echo "==== Creating superserver1 ===="
 
@@ -48,14 +48,14 @@ keytool -v -genkeypair -alias superserver1 \
         -keystore "$OUT"/superserver1.p12 -storepass "$PW" \
         -dname "CN=dummy" \
         -keyalg RSA
-keytool -v -importcert -alias rootCA \
+keytool -v -importcert -alias rootCertAuth \
         -keystore "$OUT"/superserver1.p12 -storepass "$PW" \
-        -file "$OUT"/ca.pem \
+        -file "$OUT"/cert_auth.pem \
         -noprompt
 keytool -v -certreq -alias superserver1 \
         -keystore "$OUT"/superserver1.p12 -storepass "$PW" \
-| keytool -v -gencert -alias rootCA \
-        -keystore "$OUT"/ca-full.p12 -storepass "$PW" \
+| keytool -v -gencert -alias rootCertAuth \
+        -keystore "$OUT"/cert-auth-full.p12 -storepass "$PW" \
         -dname "CN=superserver1" \
         -ext KeyUsage=digitalSignature -ext ExtendedKeyUsage=serverAuth,clientAuth \
 | keytool -v -importcert -alias superserver1 \
@@ -67,14 +67,14 @@ keytool -v -genkeypair -alias intermediateCA \
         -keystore "$OUT"/intermediateCA.p12 -storepass "$PW" \
         -dname "CN=dummy" \
         -keyalg RSA
-keytool -v -importcert -alias rootCA \
+keytool -v -importcert -alias rootCertAuth \
         -keystore "$OUT"/intermediateCA.p12 -storepass "$PW" \
-        -file "$OUT"/ca.pem \
+        -file "$OUT"/cert_auth.pem \
         -noprompt
 keytool -v -certreq -alias intermediateCA \
         -keystore "$OUT"/intermediateCA.p12 -storepass "$PW" \
-| keytool -v -gencert -alias rootCA \
-        -keystore "$OUT"/ca-full.p12 -storepass "$PW" \
+| keytool -v -gencert -alias rootCertAuth \
+        -keystore "$OUT"/cert-auth-full.p12 -storepass "$PW" \
         -dname "CN=intermediateCA" \
         -ext BasicConstraints=ca:true \
         -ext KeyUsage=digitalSignature,cRLSign,keyCertSign \
@@ -96,9 +96,9 @@ do
             -keystore "$OUT/$name.p12" -storepass "$PW" \
             -dname "CN=dummy" \
             -keyalg RSA
-    keytool -v -importcert -alias rootCA \
+    keytool -v -importcert -alias rootCertAuth \
             -keystore "$OUT/$name.p12" -storepass "$PW" \
-            -file "$OUT"/ca.pem \
+            -file "$OUT"/cert_auth.pem \
             -noprompt
     keytool -v -importcert -alias intermediateCA \
             -keystore "$OUT/$name.p12" -storepass "$PW" \

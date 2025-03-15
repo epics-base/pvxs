@@ -71,7 +71,7 @@ TODO: keytool has been observed setting this to "6".  OpenSSL 3.2 set `anyExtend
 
 The structures of files created by `openssl pkcs12` and `keytool` are almost identical.
 
-For example, a file with a certificate/key pair, and an associated CA certificate is structured like:
+For example, a file with a certificate/key pair, and an associated certificate authority certificate is structured like:
 
 ```
 PKCS#12

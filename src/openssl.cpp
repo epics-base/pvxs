@@ -264,7 +264,7 @@ void verifyKeyUsage(const ossl_ptr<X509> &cert,
     auto flags(X509_get_extension_flags(cert.get()));
     auto kusage(X509_get_extended_key_usage(cert.get()));
 
-    if (flags & EXFLAG_CA) throw std::runtime_error(SB() << "Found CA Certificate when End Entity expected");
+    if (flags & EXFLAG_CA) throw std::runtime_error(SB() << "Found certificate authority certificate when End Entity expected");
 
     if ((isForClient && !(kusage & XKU_SSL_CLIENT)) || (!isForClient && !(kusage & XKU_SSL_SERVER)))
         throw std::runtime_error(SB() << "Extended Key Usage does not permit usage as a Secure PVAccess " << (isForClient ? "Client" : "Server"));
@@ -285,7 +285,7 @@ void verifyKeyUsage(const ossl_ptr<X509> &cert,
  * chain.
  *
  * @param ctx the context to add the CAs to
- * @param CAs the stack of X509 CA certificates
+ * @param CAs the stack of X509 Certificate Authority certificates
  */
 ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr<STACK_OF(X509)> &CAs) {
     ossl_ptr<X509> trusted_root_ca{};
@@ -295,11 +295,11 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
         auto canSign(X509_check_ca(ca));
         auto flags(X509_get_extension_flags(ca));
 
-        // Check for non-CA certificates
+        // Check for non-Certificate Authority certificates
         if (canSign == 0 && i != 0) {
-            log_err_printf(setup, "non-CA certificate in keychain%s\n", "");
+            log_err_printf(setup, "non-certificate-authority certificate in keychain%s\n", "");
             log_err_printf(setup, "%s\n", (SB() << ShowX509{ca}).str().c_str());
-            throw std::runtime_error(SB() << "non-CA certificate found in keychain");
+            throw std::runtime_error(SB() << "non-certificate-authority certificate found in keychain");
         }
 
         if (flags & EXFLAG_SS) {  // self-signed (aka. root)
@@ -383,7 +383,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     auto cert_data = certs::IdFileFactory::createReader(filename, password)->getCertDataFromFile();
 
     ossl_ptr<X509> trusted_root_ca(extractCAs(tls_context, cert_data.ca));
-    if (!trusted_root_ca) throw SSLError("Could not find Trusted Root CA Certificate in keychain");
+    if (!trusted_root_ca) throw SSLError("Could not find Trusted Root Certificate Authority Certificate in keychain");
 
     // Get the context's trust store that has been established by reading the CAs from the file
     X509_STORE *store_ptr = SSL_CTX_get_cert_store(tls_context->ctx.get());
@@ -417,7 +417,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
 
     // Build the certificate chain and set verification flags
     // Note useful flags are:
-    //  SSL_BUILD_CHAIN_FLAG_CHECK - Fully check CA certificate chain and fail if any are not trusted
+    //  SSL_BUILD_CHAIN_FLAG_CHECK - Fully check certificate authority's certificate chain and fail if any are not trusted
     //  SSL_BUILD_CHAIN_FLAG_UNTRUSTED - Flag untrusted in build chain but still use it
     //  0 - run default checks
     if (!SSL_CTX_build_cert_chain(tls_context->ctx.get(), SSL_BUILD_CHAIN_FLAG_CHECK)) throw SSLError("invalid cert chain");
@@ -427,8 +427,8 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
 
     // TLS is now configured:
     //  - Entity certificate valid,
-    //  - CA certificate valid,
-    //  - CA certificate chain valid,
+    //  - certificate authority certificate valid,
+    //  - certificate authority's certificate chain valid,
     //  - Private key valid
     // Start monitoring entity certificate status and set TLS context state accordingly
     tls_context->monitorStatusAndSetState(cert_status_ex_data->cert, store_ptr);

@@ -21,7 +21,7 @@ class ConfigCms : public Config {
     /**
      * @brief This is the string that determines
      * the fully qualified path to the keychain file that contains
-     * the CA certificate, and public and private keys.
+     * the certificate authority certificate, and public and private keys.
      *
      * This is used to sign certificates being created in the PVACMS or
      * sign certificate status responses being delivered by OCSP-PVA.
@@ -29,17 +29,17 @@ class ConfigCms : public Config {
      *
      * Note: This certificate needs to be trusted by all EPICS agents.
      */
-    std::string ca_keychain_file;
+    std::string cert_auth_keychain_file;
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to a file that contains the password that
-     * unlocks the `ca_keychain_file`.
+     * unlocks the `cert_auth_keychain_file`.
      *
-     * This is optional.  If not specified, the `ca_keychain_file`
+     * This is optional.  If not specified, the `cert_auth_keychain_file`
      * contents will not be encrypted.
      */
-    std::string ca_keychain_pwd;
+    std::string cert_auth_keychain_pwd;
 };
 
 class ConfigCmsFactory : public ConfigFactoryInterface {

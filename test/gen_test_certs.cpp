@@ -237,7 +237,7 @@ struct CertCreator {
                                                    reinterpret_cast<const unsigned char*>("US"),
                                                    -1, -1, 0));
                 MUST(1, X509_NAME_add_entry_by_txt(sub, "O", MBSTRING_ASC,
-                                                   reinterpret_cast<const unsigned char *>("ca.epics.org"),
+                                                   reinterpret_cast<const unsigned char *>("certs.epics.org"),
                                                    -1, -1, 0));
                 MUST(1, X509_NAME_add_entry_by_txt(sub, "OU", MBSTRING_ASC,
                                                    reinterpret_cast<const unsigned char*>("epics.org Certificate Authority"),
@@ -360,7 +360,7 @@ int main(int argc, char *argv[])
         pvxs::ossl_ptr<EVP_PKEY> root_key;
         {
             CertCreator cc;
-            cc.CN = "epics.org Root CA";
+            cc.CN = "EPICS Root Certificate Authority";
             cc.serial = serial++;
             cc.isCA = true;
             cc.key_usage = "cRLSign,keyCertSign";
@@ -373,11 +373,11 @@ int main(int argc, char *argv[])
             // This can be used for server-only connections as the client p12 file containing only the CA cert
             // Properly labelled in the p12 file in the correct bag
             MUST(1, sk_X509_push(p12.cacerts.get(), root_cert.get()));
-            p12.write("cacert.p12");
+            p12.write("cert_authcert.p12");
 
             // This contains the ca cert as well as the keys - used when we need a CA cert for CMS and other signing roles
             p12.key = root_key.get();
-            p12.write("ca.p12");
+            p12.write("cert_auth.p12");
         }
 
         // a server-type cert. issued directly from the root
@@ -426,7 +426,7 @@ int main(int argc, char *argv[])
             p12.write("intermediateCA.p12");
         }
 
-        // from this point, the epics.org Root CA key is no longer needed.
+        // from this point, the EPICS Root Certificate Authority key is no longer needed.
         root_key.reset();
 
         // remaining certificates issued by intermediate.

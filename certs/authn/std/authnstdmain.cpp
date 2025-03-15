@@ -60,10 +60,10 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
 
     app.add_option("-t,--time", config.cert_validity_mins, "Duration of the certificate in minutes.  Default 30 days");
 
-    app.add_option("-n,--name", config.name, "Specify CA keychain password file location");
-    app.add_option("-o,--organization", config.organization, "Specify the CA's name. Used if we need to create a root certificate");
-    app.add_option("--ou", config.organizational_unit, "Specify the CA's Organization. Used if we need to create a root certificate");
-    app.add_option("-c,--country", config.country, "Specify the CA's Organization Unit. Used if we need to create a root certificate");
+    app.add_option("-n,--name", config.name, "Specify Certificate's name");
+    app.add_option("-o,--organization", config.organization, "Specify the Certificate's Organisation");
+    app.add_option("--ou", config.organizational_unit, "Specify the Certificate's Organizational Unit");
+    app.add_option("-c,--country", config.country, "Specify the Certificate's Country");
 
     CLI11_PARSE(app, argc, argv);
 

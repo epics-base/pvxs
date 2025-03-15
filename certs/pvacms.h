@@ -163,7 +163,7 @@ namespace certs {
  * for all certificates that have just expired and all certificates that have just become valid.  If any
  * are found then the associated shared wildcard PV is updated and the new status stored in the database.
  *
- * @param ca_db The certificates database object.
+ * @param certs_db The certificates database object.
  * @param issuer_id The issuer ID.
  * @param status_pv The shared wildcard PV to notify.
  *
@@ -173,23 +173,23 @@ namespace certs {
 class StatusMonitor {
    public:
     ConfigCms &config_;
-    sql_ptr &ca_db_;
+    sql_ptr &certs_db_;
     std::string &issuer_id_;
     server::SharedWildcardPV &status_pv_;
-    ossl_ptr<X509> &ca_cert_;
-    ossl_ptr<EVP_PKEY> &ca_pkey_;
-    pvxs::ossl_shared_ptr<STACK_OF(X509)> &ca_chain_;
+    ossl_ptr<X509> &cert_auth_cert_;
+    ossl_ptr<EVP_PKEY> &cert_auth_pkey_;
+    pvxs::ossl_shared_ptr<STACK_OF(X509)> &cert_auth_cert_chain_;
     std::map<serial_number_t, time_t> &active_status_validity_;
 
-    StatusMonitor(ConfigCms &config, sql_ptr &ca_db, std::string &issuer_id, server::SharedWildcardPV &status_pv, ossl_ptr<X509> &ca_cert,
-                  ossl_ptr<EVP_PKEY> &ca_pkey, ossl_shared_ptr<STACK_OF(X509)> &ca_chain, std::map<serial_number_t, time_t> &active_status_validity)
+    StatusMonitor(ConfigCms &config, sql_ptr &certs_db, std::string &issuer_id, server::SharedWildcardPV &status_pv, ossl_ptr<X509> &cert_auth_cert,
+                  ossl_ptr<EVP_PKEY> &cert_auth_pkey, ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, std::map<serial_number_t, time_t> &active_status_validity)
         : config_(config),
-          ca_db_(ca_db),
+          certs_db_(certs_db),
           issuer_id_(issuer_id),
           status_pv_(status_pv),
-          ca_cert_(ca_cert),
-          ca_pkey_(ca_pkey),
-          ca_chain_(ca_chain),
+          cert_auth_cert_(cert_auth_cert),
+          cert_auth_pkey_(cert_auth_pkey),
+          cert_auth_cert_chain_(cert_auth_chain),
           active_status_validity_(active_status_validity) {}
 
     std::vector<serial_number_t> getActiveSerials() const {
@@ -218,27 +218,27 @@ class StatusMonitor {
     }
 };
 
-void checkForDuplicates(const sql_ptr &ca_db, const CertFactory &cert_factory);
+void checkForDuplicates(const sql_ptr &certs_db, const CertFactory &cert_factory);
 
-CertData createCaCertificate(const ConfigCms &config, sql_ptr &ca_db, const std::shared_ptr<KeyPair> &key_pair);
+CertData createCaCertificate(const ConfigCms &config, sql_ptr &certs_db, const std::shared_ptr<KeyPair> &key_pair);
 
-ossl_ptr<X509> createCertificate(sql_ptr &ca_db, CertFactory &cert_factory);
+ossl_ptr<X509> createCertificate(sql_ptr &certs_db, CertFactory &cert_factory);
 
-std::string createCertificatePemString(sql_ptr &ca_db, CertFactory &cert_factory);
+std::string createCertificatePemString(sql_ptr &certs_db, CertFactory &cert_factory);
 
-void createServerCertificate(const ConfigCms &config, sql_ptr &ca_db, const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pkey,
-                             const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::shared_ptr<KeyPair> &key_pair);
+void createServerCertificate(const ConfigCms &config, sql_ptr &certs_db, const ossl_ptr<X509> &cert_auth_cert, const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
+                             const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, const std::shared_ptr<KeyPair> &key_pair);
 
-void ensureServerCertificateExists(const ConfigCms &config, sql_ptr &ca_db, const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pkey,
-                                   const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+void ensureServerCertificateExists(const ConfigCms &config, sql_ptr &certs_db, const ossl_ptr<X509> &cert_auth_cert, const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
+                                   const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_cert_chain);
 
 void ensureValidityCompatible(const CertFactory &cert_factory);
 
 uint64_t generateSerial();
 
-std::tuple<certstatus_t, time_t> getCertificateStatus(const sql_ptr &ca_db, uint64_t serial);
-void getWorstCertificateStatus(const sql_ptr &ca_db, uint64_t serial, certstatus_t &worst_status_so_far, time_t &worst_status_time_so_far);
-std::tuple<time_t, time_t> getCertificateValidity(const sql_ptr &ca_db, uint64_t serial);
+std::tuple<certstatus_t, time_t> getCertificateStatus(const sql_ptr &certs_db, uint64_t serial);
+void getWorstCertificateStatus(const sql_ptr &certs_db, uint64_t serial, certstatus_t &worst_status_so_far, time_t &worst_status_time_so_far);
+std::tuple<time_t, time_t> getCertificateValidity(const sql_ptr &certs_db, uint64_t serial);
 
 std::string extractCountryCode(const std::string &locale_str);
 
@@ -250,45 +250,45 @@ time_t getNotAfterTimeFromCert(const X509 *cert);
 
 time_t getNotBeforeTimeFromCert(const X509 *cert);
 
-void getOrCreateCaCertificate(const ConfigCms &config, sql_ptr &ca_db, ossl_ptr<X509> &ca_cert, ossl_ptr<EVP_PKEY> &ca_pkey,
-                              ossl_shared_ptr<STACK_OF(X509)> &ca_chain, bool &is_initialising);
+void getOrCreateCaCertificate(const ConfigCms &config, sql_ptr &certs_db, ossl_ptr<X509> &cert_auth_cert, ossl_ptr<EVP_PKEY> &cert_auth_pkey,
+                              ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, bool &is_initialising);
 
-void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &ca_cert);
+void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &cert_auth_cert);
 
-void createAdminClientCert(const ConfigCms &config, sql_ptr &ca_db, const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert,
-                           const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, const std::string &admin_name = "admin");
+void createAdminClientCert(const ConfigCms &config, sql_ptr &certs_db, const ossl_ptr<EVP_PKEY> &cert_auth_pkey, const ossl_ptr<X509> &cert_auth_cert,
+                           const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_cert_chain, const std::string &admin_name = "admin");
 
-void initCertsDatabase(sql_ptr &ca_db, const std::string &db_file);
+void initCertsDatabase(sql_ptr &certs_db, const std::string &db_file);
 
-void onCreateCertificate(ConfigCms &config, sql_ptr &ca_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&op, Value &&args,
-                         const ossl_ptr<EVP_PKEY> &ca_pkey, const ossl_ptr<X509> &ca_cert, const ossl_ptr<EVP_PKEY> &ca_pub_key,
-                         const ossl_shared_ptr<STACK_OF(X509)> &ca_chain, std::string issuer_id);
+void onCreateCertificate(ConfigCms &config, sql_ptr &certs_db, const server::SharedPV &pv, std::unique_ptr<server::ExecOp> &&op, Value &&args,
+                         const ossl_ptr<EVP_PKEY> &cert_auth_pkey, const ossl_ptr<X509> &cert_auth_cert, const ossl_ptr<EVP_PKEY> &cert_auth_pub_key,
+                         const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, std::string issuer_id);
 
-bool getPriorApprovalStatus(const sql_ptr &ca_db, const std::string &name, const std::string &country, const std::string &organization,
+bool getPriorApprovalStatus(const sql_ptr &certs_db, const std::string &name, const std::string &country, const std::string &organization,
                             const std::string &organization_unit);
 
-void onGetStatus(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
-                 const std::string &pv_name, serial_number_t serial, const std::string &issuer_id, const ossl_ptr<EVP_PKEY> &ca_pkey,
-                 const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+void onGetStatus(const ConfigCms &config, const sql_ptr &certs_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
+                 const std::string &pv_name, serial_number_t serial, const std::string &issuer_id, const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
+                 const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain);
 
-void onRevoke(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
-              std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey,
-              const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+void onRevoke(const ConfigCms &config, const sql_ptr &certs_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
+              std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
+              const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain);
 
-void onApprove(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
-               std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey,
-               const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+void onApprove(const ConfigCms &config, const sql_ptr &certs_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
+               std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
+               const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain);
 
-void onDeny(const ConfigCms &config, const sql_ptr &ca_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
-            std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &ca_pkey,
-            const ossl_ptr<X509> &ca_cert, const ossl_shared_ptr<STACK_OF(X509)> &ca_chain);
+void onDeny(const ConfigCms &config, const sql_ptr &certs_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
+            std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
+            const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain);
 
 int readOptions(ConfigCms &config, int argc, char *argv[], bool &verbose);
 
-void updateCertificateStatus(const sql_ptr &ca_db, uint64_t serial, certstatus_t cert_status, int approval_status,
+void updateCertificateStatus(const sql_ptr &certs_db, uint64_t serial, certstatus_t cert_status, int approval_status,
                              const std::vector<certstatus_t> &valid_status = {PENDING_APPROVAL, PENDING, VALID});
 
-certstatus_t storeCertificate(const sql_ptr &ca_db, CertFactory &cert_factory);
+certstatus_t storeCertificate(const sql_ptr &certs_db, CertFactory &cert_factory);
 
 timeval statusMonitor(const StatusMonitor &status_monitor_params);
 

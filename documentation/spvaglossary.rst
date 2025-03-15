@@ -140,10 +140,10 @@
   It is defined in ``RFC 7292``.
   We use PKCS#12 files to store:
 
-  - the Root CA's Certificate that is the trust anchor for all TLS operations in an EPICS agent
+  - the Root Certificate Authority's Certificate that is the trust anchor for all TLS operations in an EPICS agent
   - the EPICS agent's public / private key pair,
   - the EPICS agent's certificate created using the public key.
-  - the CA keychain
+  - the Certificate Authority keychain
 
   The PKCS#12 files are referenced by environment variables described in the :ref:`secure_pvaccess_configuration`.
 

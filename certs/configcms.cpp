@@ -17,11 +17,11 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     PickOne pickone{defs, true};
     PickOne pick_another_one{defs, true};
 
-    // EPICS_KEYCHAIN ( default the private key to use the same file and password )
+    // EPICS_PVACMS_TLS_KEYCHAIN ( default the private key to use the same file and password )
     if (pickone({"EPICS_PVACMS_TLS_KEYCHAIN", "EPICS_PVAS_TLS_KEYCHAIN"})) {
         ensureDirectoryExists(tls_keychain_file = pickone.val);
 
-        // EPICS_CA_TLS_KEYCHAIN_PWD_FILE
+        // EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE
         std::string password_filename;
         if (pickone.name == "EPICS_PVACMS_TLS_KEYCHAIN") {
             pick_another_one({"EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE"});
@@ -48,52 +48,52 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
 
     // EPICS_PVACMS_ACF
     if (pickone({"EPICS_PVACMS_ACF"})) {
-        ensureDirectoryExists(ca_acf_filename = pickone.val);
+        ensureDirectoryExists(pvacms_acf_filename = pickone.val);
     } else {
         std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "pvacms.acf";
-        ensureDirectoryExists(ca_acf_filename = filename);
+        ensureDirectoryExists(pvacms_acf_filename = filename);
     }
 
     // EPICS_PVACMS_DB
     if (pickone({"EPICS_PVACMS_DB"})) {
-        ensureDirectoryExists(ca_db_filename = pickone.val);
+        ensureDirectoryExists(certs_db_filename = pickone.val);
     } else {
         std::string filename = SB() << data_home << OSI_PATH_SEPARATOR << "certs.db";
         ensureDirectoryExists(filename);
-        ca_db_filename = filename;
+        certs_db_filename = filename;
     }
 
-    // EPICS_CA_TLS_KEYCHAIN
-    if (pickone({"EPICS_CA_TLS_KEYCHAIN"})) {
-        ensureDirectoryExists(ca_keychain_file = pickone.val);
+    // EPICS_CERT_AUTH_TLS_KEYCHAIN
 
-        // EPICS_CA_TLS_KEYCHAIN_PWD_FILE
-        if (pickone.name == "EPICS_CA_TLS_KEYCHAIN") {
-            pick_another_one({"EPICS_CA_TLS_KEYCHAIN_PWD_FILE"});
+    if (pickone({"EPICS_CERT_AUTH_TLS_KEYCHAIN"})) {
+        ensureDirectoryExists(cert_auth_keychain_file = pickone.val);
+
+        // EPICS_CERT_AUTH_TLS_KEYCHAIN_PWD_FILE
+        if (pickone.name == "EPICS_CERT_AUTH_TLS_KEYCHAIN") {
+            pick_another_one({"EPICS_CERT_AUTH_TLS_KEYCHAIN_PWD_FILE"});
             std::string password_filename = pick_another_one.val;
             ensureDirectoryExists(password_filename);
             try {
-                ca_keychain_pwd = getFileContents(password_filename);
+                cert_auth_keychain_pwd = getFileContents(password_filename);
             } catch (std::exception &e) {
                 log_err_printf(cert_cfg, "error reading password file: %s. %s", password_filename.c_str(), e.what());
             }
         }
     } else {
-        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "ca.p12";
-        ensureDirectoryExists(ca_keychain_file = filename);
+        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "cert_auth.p12";
+        ensureDirectoryExists(cert_auth_keychain_file = filename);
     }
-
     // EPICS_ADMIN_TLS_KEYCHAIN
     if (pickone({"EPICS_ADMIN_TLS_KEYCHAIN"})) {
         ensureDirectoryExists(admin_keychain_file = pickone.val);
 
-        // EPICS_CA_TLS_KEYCHAIN_PWD_FILE
+        // EPICS_ADMIN_TLS_KEYCHAIN_PWD_FILE
         if (pickone.name == "EPICS_ADMIN_TLS_KEYCHAIN") {
             pick_another_one({"EPICS_ADMIN_TLS_KEYCHAIN_PWD_FILE"});
             std::string password_filename = pick_another_one.val;
             ensureDirectoryExists(password_filename);
             try {
-                ca_keychain_pwd = getFileContents(password_filename);
+                admin_keychain_pwd = getFileContents(password_filename);
             } catch (std::exception &e) {
                 log_err_printf(cert_cfg, "error reading password file: %s. %s", password_filename.c_str(), e.what());
             }
@@ -103,24 +103,24 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         ensureDirectoryExists(admin_keychain_file = filename);
     }
 
-    // EPICS_CA_NAME
-    if (pickone({"EPICS_CA_NAME"})) {
-        ca_name = pickone.val;
+    // EPICS_CERT_AUTH_NAME
+    if (pickone({"EPICS_CERT_AUTH_NAME"})) {
+        cert_auth_name = pickone.val;
     }
 
-    // EPICS_CA_ORGANIZATION
-    if (pickone({"EPICS_CA_ORGANIZATION", "EPICS_PVAS_AUTH_STD_ORGANIZATION", "EPICS_PVA_AUTH_STD_ORGANIZATION"})) {
-        ca_organization = pickone.val;
+    // EPICS_CERT_AUTH_ORGANIZATION
+    if (pickone({"EPICS_CERT_AUTH_ORGANIZATION", "EPICS_PVAS_AUTH_STD_ORGANIZATION", "EPICS_PVA_AUTH_STD_ORGANIZATION"})) {
+        cert_auth_organization = pickone.val;
     }
 
-    // EPICS_CA_ORGANIZATIONAL_UNIT
-    if (pickone({"EPICS_CA_ORGANIZATIONAL_UNIT", "EPICS_PVAS_AUTH_STD_ORG_UNIT", "EPICS_PVA_AUTH_STD_ORG_UNIT"})) {
-        ca_organizational_unit = pickone.val;
+    // EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT
+    if (pickone({"EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT", "EPICS_PVAS_AUTH_STD_ORG_UNIT", "EPICS_PVA_AUTH_STD_ORG_UNIT"})) {
+        cert_auth_organizational_unit = pickone.val;
     }
 
-    // EPICS_CA_COUNTRY
-    if (pickone({"EPICS_CA_COUNTRY", "EPICS_PVAS_AUTH_STD_COUNTRY", "EPICS_PVA_AUTH_STD_COUNTRY"})) {
-        ca_country = pickone.val;
+    // EPICS_CERT_AUTH_COUNTRY
+    if (pickone({"EPICS_CERT_AUTH_COUNTRY", "EPICS_PVAS_AUTH_STD_COUNTRY", "EPICS_PVA_AUTH_STD_COUNTRY"})) {
+        cert_auth_country = pickone.val;
     }
 
     // EPICS_PVACMS_CERT STATUS VALIDITY MINS

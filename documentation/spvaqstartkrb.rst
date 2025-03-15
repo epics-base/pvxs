@@ -123,7 +123,7 @@ If you want a prepackaged environment, try the following.  You will need three t
     Certificate Details:
     ============================================
     Subject        : CN=softioc, O=EPICS.ORG
-    Issuer         : CN=EPICS Root CA, C=US, O=ca.epics.org, OU=EPICS Certificate Authority
+    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
     Valid from     : Sat Mar 08 15:23:21 2025 UTC
     Cert Expires   : Sun Mar 09 15:23:09 2025 UTC
     --------------------------------------------
@@ -189,7 +189,7 @@ If you want a prepackaged environment, try the following.  You will need three t
     Certificate Details:
     ============================================
     Subject        : CN=client, O=EPICS.ORG
-    Issuer         : CN=EPICS Root CA, C=US, O=ca.epics.org, OU=EPICS Certificate Authority
+    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
     Valid from     : Sat Mar 08 15:31:44 2025 UTC
     Cert Expires   : Sun Mar 09 15:27:50 2025 UTC
     --------------------------------------------
@@ -255,7 +255,7 @@ If you want a prepackaged environment, try the following.  You will need three t
     EPICS_PVA_TLS_PORT=5076
     XDG_CONFIG_HOME=/home/client/.config/pva/1.3
     XDG_DATA_HOME=/home/client/.local/share/pva/1.3
-    # TLS x509:EPICS Root CA/softioc@172.17.0.2:34381
+    # TLS x509:EPICS Root Certificate Authority/softioc@172.17.0.2:34381
     test:enumExample from 172.17.0.2:34381
     struct "epics:nt/NTEnum:1.0" {
         struct "enum_t" {
@@ -279,10 +279,10 @@ If you want a prepackaged environment, try the following.  You will need three t
 
 - verify that connection is TLS
 
-- ``TLS x509:EPICS Root CA/softioc @ 172.17.0.2`` indicates that:
+- ``TLS x509:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
   - The connection is ``TLS``,
-  - The Server end of the channel has been authenticated by the Root CA ``EPICS Root CA``
+  - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
   - The Server end of the channel's name has been authenticated as ``softioc`` and is connecting from host ``172.17.0.2``
 
 |step-by-step| Step-By-Step
@@ -714,7 +714,7 @@ using the Kerberos Authenticator.
     Certificate Details:
     ============================================
     Subject        : CN=softioc, O=EPICS.ORG
-    Issuer         : CN=EPICS Root CA, C=US, O=ca.epics.org, OU=EPICS Certificate Authority
+    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
     Valid from     : Mon Mar 10 03:20:05 2025 UTC
     Cert Expires   : Tue Mar 11 03:16:25 2025 UTC
     --------------------------------------------
@@ -834,7 +834,7 @@ using the Kerberos Authenticator.
     Certificate Details:
     ============================================
     Subject        : CN=client, O=EPICS.ORG
-    Issuer         : CN=EPICS Root CA, C=US, O=ca.epics.org, OU=EPICS Certificate Authority
+    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
     Valid from     : Mon Mar 10 03:32:57 2025 UTC
     Cert Expires   : Tue Mar 11 03:30:32 2025 UTC
     --------------------------------------------
@@ -877,7 +877,7 @@ using the Kerberos Authenticator.
     EPICS_PVA_TLS_PORT=5076
     XDG_CONFIG_HOME=/home/client/.config/pva/1.3
     XDG_DATA_HOME=/home/client/.local/share/pva/1.3
-    # TLS x509:EPICS Root CA/softioc@172.17.0.2:37027
+    # TLS x509:EPICS Root Certificate Authority/softioc@172.17.0.2:37027
     test:enumExample from 172.17.0.2:37027
     struct "epics:nt/NTEnum:1.0" {
         struct "enum_t" {
@@ -901,10 +901,10 @@ using the Kerberos Authenticator.
 
 .. note::
 
-  - ``TLS x509:EPICS Root CA/softioc @ 172.17.0.2`` indicates that:
+  - ``TLS x509:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
     - The connection is ``TLS``,
-    - The Server end of the channel has been authenticated by the Root CA ``EPICS Root CA``
+    - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
     - The Server end of the channel's name has been authenticated as ``softioc`` and is connecting from host ``172.17.0.2``
 
 

@@ -96,30 +96,32 @@ class ConfigCms final : public server::Config {
      *
      * The default is the current directory in a file called certs.db
      */
-    std::string ca_db_filename = "certs.db";
+    std::string certs_db_filename = "certs.db";
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to the keychain file that contains
-     * the CA certificate, and public and private keys.
+     * the certificate authority's certificate, and its private key.
+     * It also contains any certificate chain leading back to the root
+     * certificate authority if this is not the root.
      *
      * This is used to sign certificates being created in the PVACMS or
      * sign certificate status responses being delivered by OCSP-PVA.
-     * If this is not specified it defaults to the TLS_KEYCHAIN file.
      *
-     * Note: This certificate needs to be trusted by all EPICS agents.
+     * Note: This certificate needs to be in all EPICS agents keychain files so
+     * that they can trust any certificate or status that it signs.
      */
-    std::string ca_keychain_file{};
+    std::string cert_auth_keychain_file{};
 
     /**
      * @brief This is the string that determines
      * the fully qualified path to a file that contains the password that
-     * unlocks the `ca_keychain_file`.
+     * unlocks the `cert_auth_keychain_file`.
      *
-     * This is optional.  If not specified, the `ca_keychain_file`
+     * This is optional.  If not specified, the `cert_auth_keychain_file`
      * contents will not be encrypted.
      */
-    std::string ca_keychain_pwd{};
+    std::string cert_auth_keychain_pwd{};
 
     /**
      * @brief This is the string that determines
@@ -164,42 +166,42 @@ class ConfigCms final : public server::Config {
      * @endcode
      *
      */
-    std::string ca_acf_filename{"pvacms.acf"};
+    std::string pvacms_acf_filename{"pvacms.acf"};
 
     /**
-     * @brief If a CA root certificate has not been established
+     * @brief If a root certificate authority certificate has not been determined
      * prior to the first time that the PVACMS starts up, then one
      * will be created automatically.
      *
-     * To provide the name (CN) to be used in the subject of the
-     * CA certificate we can use this environment variable.
+     * To provide the `name` (CN) to be used in the subject of the
+     * certificate authority certificate we can use this environment variable.
      */
-    std::string ca_name = "EPICS Root CA";
+    std::string cert_auth_name = "EPICS Root Certificate Authority";
 
     /**
-     * @brief If a CA root certificate has not been established
+     * @brief If a root certificate authority certificate has not been determined
      * prior to the first time that the PVACMS starts up, then one will be
      * created automatically.
      *
      * To provide the organization (O) to be used in the subject of
-     * the CA certificate we can use this environment variable.
+     * the certificate authority certificate we can use this environment variable.
      */
-    std::string ca_organization = "ca.epics.org";
+    std::string cert_auth_organization = "certs.epics.org";
 
     /**
-     * @brief If a CA root certificate has not been
+     * @brief If a root certificate authority certificate has not been determined
      * established prior to the first time that the PVACMS starts up,
      * then one will be created automatically.
      *
      * To provide the organizational unit (OU) to be used in the
-     * subject of the CA certificate we can use this environment variable.
+     * subject of the certificate authority certificate we can use this environment variable.
      */
-    std::string ca_organizational_unit = "EPICS Certificate Authority";
+    std::string cert_auth_organizational_unit = "EPICS Certificate Authority";
 
     /**
-     * @brief The CA Country
+     * @brief The certificate authority's country code
      */
-    std::string ca_country{"US"};
+    std::string cert_auth_country{"US"};
 
     /**
      * @brief If a PVACMS certificate has not been established
@@ -219,7 +221,7 @@ class ConfigCms final : public server::Config {
      * To provide the organization (O) to be used in the subject of
      * the PVACMS certificate we can use this environment variable.
      */
-    std::string pvacms_organization = "ca.epics.org";
+    std::string pvacms_organization = "certs.epics.org";
 
     /**
      * @brief If a PVACMS certificate has not been

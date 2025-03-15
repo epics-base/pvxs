@@ -169,16 +169,16 @@ struct CertStatus {
     /**
      * @brief  Get the issuer ID which is SKID (subject key identifier) of the root CA in the given chain
      *
-     * First determine the root CA certificate then get the skid
+     * First determine the root certificate authority certificate then get the SKID
      *
-     * @return first 8 hex digits of the hex SKID (subject key identifier)
+     * @return first 8 hex digits of the hex SKID (Subject Key Identifier)
      */
     static std::string getIssuerId(const ossl_shared_ptr<STACK_OF(X509)>& chain) { return getSkId(getRootCa(chain)); }
 
     /**
-     * @brief Get Root Certificate Authority from a CA chain
-     * @param chain the CA chain
-     * @return the Root CA
+     * @brief Get root certificate authority from a certificate authority chain
+     * @param chain the certificate authority certificate chain
+     * @return the root certificate authority
      */
     static X509* getRootCa(const ossl_shared_ptr<STACK_OF(X509)>& chain) {
         if (!chain || sk_X509_num(chain.get()) <= 0) {

@@ -125,7 +125,7 @@ void testClientBackwardsCompatibility() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SUPER_SERVER_CERT_FILE;
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
@@ -159,7 +159,7 @@ void testServerBackwardsCompatibility() {
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
 
     auto cli(cli_conf.build());
 
@@ -176,7 +176,7 @@ void testServerBackwardsCompatibility() {
 /**
  * @brief testServerOnly is a test that verifies the client can connect in server-only authenticated TLS mode
  *
- * This is used to verify that a client that is configured with a CA certificate but no entity cert
+ * This is used to verify that a client that is configured with a certificate authority certificate but no entity cert
  * will be able to connect in server-only authenticated TLS mode
  */
 void testServerOnly() {
@@ -186,12 +186,12 @@ void testServerOnly() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SUPER_SERVER_CERT_FILE;
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CA_CERT_CERT_FILE;
+    cli_conf.tls_keychain_file = CERT_AUTH_CERT_FILE;
 
     auto cli(cli_conf.build());
 
@@ -219,7 +219,7 @@ void testStrictServer() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SUPER_SERVER_CERT_FILE;
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
     serv_conf.tls_client_cert_required = ConfigCommon::Require;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
@@ -242,7 +242,7 @@ void testStrictServer() {
 
     try {
         // Test with server only TLS config
-        cli_conf.tls_keychain_file = CA_CERT_CERT_FILE;
+        cli_conf.tls_keychain_file = CERT_AUTH_CERT_FILE;
 
         auto cli(cli_conf.build());
 
@@ -267,12 +267,12 @@ void testGetSuper() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SUPER_SERVER_CERT_FILE;
+    serv_conf.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
 
     auto cli(cli_conf.build());
 
@@ -298,12 +298,12 @@ void testGetIntermediate() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
+    serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
 
     auto cli(cli_conf.build());
 
@@ -324,12 +324,12 @@ void testGetNameServer() {
     auto mbox(server::SharedPV::buildReadonly());
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
+    serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
 
     auto serv(serv_conf.build().addPV(TEST_PV, mbox));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
 
     for (auto& addr : cli_conf.addressList) cli_conf.nameServers.push_back(SB() << "pvas://" << addr /*<<':'<<cli_conf.tls_port*/);
     cli_conf.autoAddrList = false;
@@ -362,12 +362,12 @@ void testClientReconfig() {
     testShow() << __func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = IOC1_CERT_FILE;
+    serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
 
     auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = CLIENT1_CERT_FILE;
+    cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
 
     auto cli(cli_conf.build());
 
@@ -391,8 +391,8 @@ void testClientReconfig() {
     testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
 
     cli_conf = cli.config();
-    cli_conf.tls_keychain_file = CLIENT2_CERT_FILE;
-    cli_conf.tls_keychain_pwd = CLIENT2_CERT_FILE_PWD;
+    cli_conf.tls_keychain_file = CLIENT2_KEYCHAIN_FILE;
+    cli_conf.tls_keychain_pwd = CLIENT2_KEYCHAIN_FILE_PWD;
     testDiag("cli.reconfigure()");
     cli.reconfigure(cli_conf);
 
@@ -425,12 +425,12 @@ void testServerReconfig() {
     testShow() << __func__;
 
     auto serv_conf(server::Config::isolated());
-    serv_conf.tls_keychain_file = SERVER1_CERT_FILE;
+    serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
 
     auto serv(serv_conf.build().addSource(WHO_AM_I_PV, std::make_shared<WhoAmI>()));
 
     auto cli_conf(serv.clientConfig());
-    cli_conf.tls_keychain_file = IOC1_CERT_FILE;
+    cli_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
 
     auto cli(cli_conf.build());
 
@@ -454,7 +454,7 @@ void testServerReconfig() {
     testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_IOC1);
 
     serv_conf = serv.config();
-    serv_conf.tls_keychain_file = IOC1_CERT_FILE;
+    serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
     testDiag("serv.reconfigure()");
     serv.reconfigure(serv_conf);
 

@@ -113,7 +113,7 @@ CertData P12FileFactory::getCertDataFromFile() {
     if (!chain) {
         chain.reset(sk_X509_new_null());
     }
-    // If no CA chain was provided, then check if the entity cert is self-signed.
+    // If no certificate authority certificate chain was provided, then check if the entity cert is self-signed.
     // If it is, add it as a single-entry chain.
     if (!chain || sk_X509_num(chain.get()) == 0) {
         if (cert && X509_check_issued(cert.get(), cert.get()) == X509_V_OK) {
@@ -136,7 +136,7 @@ CertData P12FileFactory::getCertDataFromFile() {
  * @param pem_string the PEM string to convert.  May contain certificates, and certificate chains.  We will
  *                   read the first certificate and use is as the subject of the P12 file.  The remaining certificates
  *                   will be added to the chain of the P12 file.  As a convention the order of the certificates in the
- *                   PEM string is the entity certificate first, intermediate certificates next and then finally the CA certificate.
+ *                   PEM string is the entity certificate first, intermediate certificates next and then finally the certificate authority certificate.
  * @return an owned pointer to the PKCS12 object
  * @throw std::runtime_error if the PEM string cannot be parsed
  */
@@ -160,8 +160,8 @@ ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(const std::string &password, EVP
     }
 
     // Get whole of certificate chain and push to certs
-    while (X509 *ca_ptr = PEM_read_bio_X509(bio.get(), nullptr, nullptr, (void *)password.c_str())) {
-        auto ca = ossl_ptr<X509>(ca_ptr);
+    while (X509 *cert_auth_ptr = PEM_read_bio_X509(bio.get(), nullptr, nullptr, (void *)password.c_str())) {
+        auto ca = ossl_ptr<X509>(cert_auth_ptr);
         sk_X509_push(certs.get(), ca.release());
     }
 

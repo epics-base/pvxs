@@ -60,7 +60,7 @@ If you want a prepackaged environment, try the following.  You will need two ter
 
     Certificate DB created  : /root/.local/share/pva/1.3/certs.db
     2025-03-08T09:45:46.357411047 INFO pvxs.certs.cms 06e4748c:1314642908097862106 *=> VALID
-    Keychain file created   : /root/.config/pva/1.3/ca.p12
+    Keychain file created   : /root/.config/pva/1.3/cert_auth.p12
     Created Default ACF file: /root/.config/pva/1.3/pvacms.acf
     2025-03-08T09:45:46.416659464 INFO pvxs.certs.cms 06e4748c:9522902379233552024 *=> VALID
     Keychain file created   : /root/.config/pva/1.3/admin.p12
@@ -120,7 +120,7 @@ If you want a prepackaged environment, try the following.  You will need two ter
     Certificate Details:
     ============================================
     Subject        : CN=admin, C=US
-    Issuer         : CN=EPICS Root CA, C=US, O=ca.epics.org, OU=EPICS Certificate Authority
+    Issuer         : CN=EPICS Root CA, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
     Valid from     : Sat Mar 08 09:45:46 2025 UTC
     Cert Expires   : Mon Mar 09 09:45:46 2026 UTC
     --------------------------------------------
@@ -446,13 +446,13 @@ For MacOS
 
 - *optionally*
 
-  - Configure Root CA Keychain file location
-  - Place your CA's certificate and key in this file if you have one
-otherwise the CA certificate will be created here
+  - Configure root certificate authority keychain file location
+  - Place your certificate authority's certificate and key in this file if you have one
+otherwise the certificate authority certificate will be created here
 
 .. code-block:: shell
 
-    export EPICS_CA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/ca.p12
+    export EPICS_CERT_AUTH_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12
 
 
 - *optionally*
@@ -461,10 +461,10 @@ otherwise the CA certificate will be created here
 
 .. code-block:: shell
 
-    export EPICS_CA_NAME="EPICS Root CA"                              # CN
-    export EPICS_CA_ORGANIZATION="ca.epics.org"                       # O
-    export EPICS_CA_ORGANIZATIONAL_UNIT="EPICS Certificate Authority" # OU
-    export EPICS_CA_COUNTRY="US"                                      # C
+    export EPICS_CERT_AUTH_NAME="EPICS Root Certificate Authority"           # CN
+    export EPICS_CERT_AUTH_ORGANIZATION="certs.epics.org"                    # O
+    export EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT="EPICS Certificate Authority" # OU
+    export EPICS_CERT_AUTH_COUNTRY="US"                                     # C
 
 
 - *optionally*
@@ -509,7 +509,7 @@ otherwise the CA certificate will be created here
 
     Certificate DB created  : /root/.local/share/pva/1.3/certs.db
     2025-03-04T14:53:32.401223876 INFO pvxs.certs.cms 2535f0b8:7554235394877908901 *=> VALID
-    Keychain file created   : /root/.config/pva/1.3/ca.p12
+    Keychain file created   : /root/.config/pva/1.3/cert_auth.p12
     Created Default ACF file: /root/.config/pva/1.3/pvacms.acf
     2025-03-04T14:53:32.538922876 INFO pvxs.certs.cms 2535f0b8:7810503273530005364 *=> VALID
     Keychain file created   : /root/.config/pva/1.3/admin.p12
@@ -529,7 +529,7 @@ otherwise the CA certificate will be created here
 
   Make a note of the certificates that are created
 
-  - `2535f0b8:7554235394877908901`  : Root CA Certificate
+  - `2535f0b8:7554235394877908901`  : Root Certificate Authority Certificate
   - `2535f0b8:7810503273530005364`  : Admin User Certificate
   - `2535f0b8:15782598755272381308` : PVACMS Server Certificate
 
@@ -574,7 +574,7 @@ to the Admin User's keychain file
 |2|\Get Status
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- get the status of Root CA Certificate
+- get the status of Root Certificate Authority Certificate
 
 .. code-block:: shell
 
@@ -601,7 +601,7 @@ to the Admin User's keychain file
     Certificate Details:
     ============================================
     Subject        : CN=admin, C=US
-    Issuer         : CN=EPICS Root CA, C=US, O=ca.epics.org, OU=EPICS Certificate Authority
+    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
     Valid from     : Tue Mar 04 14:53:32 2025 UTC
     Cert Expires   : Thu Mar 05 14:53:32 2026 UTC
     --------------------------------------------
@@ -633,7 +633,7 @@ status
 
 ----------------------
 
-- try to revoke Root CA Certificate
+- try to revoke Root Certificate Authority Certificate
 
 Fail because Admin User's Certificate has been revoked
 

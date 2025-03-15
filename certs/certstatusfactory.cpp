@@ -26,13 +26,6 @@ class CertStatusManager;
 /**
  * @brief Creates and signs an OCSP response for a given certificate.
  *
- * This function takes in a certificate, certificate status, revocation time, CA certificate,
- * CA private key, and CA chain as input parameters. It creates an OCSP_CERTID using the CA
- * certificate and its serial number. Then it creates an OCSP request using the OCSP_CERTID.
- * Next, it creates an OCSP basic response using the OCSP request, CA certificate, CA private key,
- * CA chain, and certificate status. The function adds the status times to the OCSP basic response
- * and serializes the response into a byte array. The byte array is then returned.
- *
  * @param cert The certificate.
  * @param status The status of the certificate (PENDING_VALIDATION, VALID, EXPIRED, or REVOKED).
  * @param status_date The status date of this status certification, normally now.
@@ -47,19 +40,12 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_pt
 }
 
 /**
- * @brief Create a PVACertificateStatus for a given certificate, that involves creating a signed OCSP response .
- *
- * This function takes in a serial number, certificate status, revocation time, CA certificate,
- * CA private key, and CA chain as input parameters. It creates an OCSP_CERTID using the CA
- * certificate and serial number. Then it creates an OCSP request using the OCSP_CERTID.
- * Next, it creates an OCSP basic response using the OCSP request, CA certificate, CA private key,
- * CA chain, and certificate status. The function adds the status times to the OCSP basic response
- * and serializes the response into a byte array. The byte array is then returned.
+ * @brief Create a PVACertificateStatus for a given certificate
  *
  * @param serial The serial number of the certificate.
- * @param status The status of the certificate (PENDING_VALIDATION, VALID, EXPIRED, or REVOKED).
- * @param status_date The status date of this status certification, normally now.
- * @param predicated_revocation_time The time of revocation for the certificate if revoked.
+ * @param status The status of the certificate (PENDING_VALIDATION, VALID, EXPIRED, or `REVOKED`).
+ * @param status_date The status date of this status certification, normally ``now``.
+ * @param predicated_revocation_time The time of revocation for the certificate if `REVOKED`.
  *
  * @see createOCSPCertId
  * @see ocspResponseToBytes
@@ -99,16 +85,16 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(serial_number
         throw std::runtime_error(SB() << "Failed to add status to OCSP response: " << getError());
     }
 
-    // Adding the CA chain to the response
-    if (ca_chain_) {
-        for (int i = 0; i < sk_X509_num(ca_chain_.get()); i++) {
-            auto cert = sk_X509_value(ca_chain_.get(), i);
+    // Adding the certificate authority certificate chain to the response
+    if (cert_auth_cert_chain_) {
+        for (int i = 0; i < sk_X509_num(cert_auth_cert_chain_.get()); i++) {
+            auto cert = sk_X509_value(cert_auth_cert_chain_.get(), i);
             OCSP_basic_add1_cert(basic_resp.get(), cert);
         }
     }
 
     // Sign the OCSP response
-    if (!OCSP_basic_sign(basic_resp.get(), ca_cert_.get(), ca_pkey_.get(), EVP_sha256(), ca_chain_.get(), 0)) {
+    if (!OCSP_basic_sign(basic_resp.get(), cert_auth_cert_.get(), cert_auth_pkey_.get(), EVP_sha256(), cert_auth_cert_chain_.get(), 0)) {
         throw std::runtime_error("Failed to sign the OCSP response");
     }
 
@@ -158,19 +144,19 @@ ossl_ptr<ASN1_INTEGER> CertStatusFactory::uint64ToASN1(const uint64_t& serial) {
  * @return The OCSP certificate ID.
  */
 ossl_ptr<OCSP_CERTID> CertStatusFactory::createOCSPCertId(const uint64_t& serial, const EVP_MD* digest) const {
-    if (!ca_cert_) throw std::runtime_error(SB() << "Can't create OCSP Cert ID: Null Certificate");
+    if (!cert_auth_cert_) throw std::runtime_error(SB() << "Can't create OCSP Cert ID: Null Certificate");
 
     unsigned char issuer_name_hash[EVP_MAX_MD_SIZE];
     unsigned char issuer_key_hash[EVP_MAX_MD_SIZE];
 
     // Compute issuer_name_hash
     unsigned int issuer_name_hash_len = 0;
-    const X509_NAME* issuer_name = X509_get_subject_name(ca_cert_.get());
+    const X509_NAME* issuer_name = X509_get_subject_name(cert_auth_cert_.get());
     X509_NAME_digest(issuer_name, digest, issuer_name_hash, &issuer_name_hash_len);
 
     // Compute issuer_key_hash
     unsigned int issuer_key_hash_len = 0;
-    const ASN1_BIT_STRING* issuer_key = X509_get0_pubkey_bitstr(ca_cert_.get());
+    const ASN1_BIT_STRING* issuer_key = X509_get0_pubkey_bitstr(cert_auth_cert_.get());
     const ossl_ptr<EVP_MD_CTX> mdctx(EVP_MD_CTX_new());
     EVP_DigestInit_ex(mdctx.get(), digest, nullptr);
     EVP_DigestUpdate(mdctx.get(), issuer_key->data, issuer_key->length);

@@ -47,7 +47,7 @@ namespace certs {
  * change.
  *
  * @code
- *      static auto cert_status_creator(CertStatusFactory(config, ca_cert, ca_pkey, ca_chain));
+ *      static auto cert_status_creator(CertStatusFactory(config, cert_auth_cert, cert_auth_pkey, cert_auth_cert_chain));
  *      auto cert_status = cert_status_creator.createPVACertificateStatus(serial, new_state);
  * @endcode
  */
@@ -58,25 +58,25 @@ class CertStatusFactory {
      * You need the private key of the CA in order to do this.
      * You should call createPVACertificateStatus() afterward to make responses for certificates
      *
-     * @param ca_cert the CA certificate to use to sign the OCSP response
-     * @param ca_pkey the CA's private key to use to sign the response
-     * @param ca_chain the CA's certificate change used to sign any response
+     * @param cert_auth_cert the certificate authority certificate to use to sign the OCSP response
+     * @param cert_auth_pkey the certificate authority's private key to use to sign the response
+     * @param cert_auth_cert_chain the certificate authority's certificate chain used to sign any response
      * @param cert_status_validity_mins the number of minutes the status is valid for
      * @param cert_status_validity_secs additional seconds the status is valid for
      *
      * @see createPVACertificateStatus()
      */
-    CertStatusFactory(const ossl_ptr<X509>& ca_cert, const ossl_ptr<EVP_PKEY>& ca_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain,
+    CertStatusFactory(const ossl_ptr<X509>& cert_auth_cert, const ossl_ptr<EVP_PKEY>& cert_auth_pkey, const pvxs::ossl_shared_ptr<STACK_OF(X509)>& cert_auth_cert_chain,
                       const uint32_t cert_status_validity_mins = 30, const uint32_t cert_status_validity_secs = 0)
-        : ca_cert_(ca_cert),
-          ca_pkey_(ca_pkey),
-          ca_chain_(ca_chain),
+        : cert_auth_cert_(cert_auth_cert),
+          cert_auth_pkey_(cert_auth_pkey),
+          cert_auth_cert_chain_(cert_auth_cert_chain),
           cert_status_validity_mins_(cert_status_validity_mins),
           cert_status_validity_secs_(cert_status_validity_secs) {}
 
     /**
      * @brief Create OCSP status for certificate identified by serial number
-     * The configured ca_cert and ca_chain is encoded into the response so that consumers of the response can determine the issuer
+     * The configured cert_auth_cert and cert_auth_chain is encoded into the response so that consumers of the response can determine the issuer
      * and the chain of trust.  The issuer will have to have previously trusted the root certificate as this will
      * be verified.  The response will be signed with the configured private key so that authenticity of the response can be verified.
      *
@@ -97,7 +97,7 @@ class CertStatusFactory {
 
     /**
      * @brief Create OCSP status for certificate identified by serial number
-     * The configured ca_cert and ca_chain is encoded into the response so that consumers of the response can determine the issuer
+     * The configured cert_auth_cert and cert_auth_chain is encoded into the response so that consumers of the response can determine the issuer
      * and the chain of trust.  The issuer will have to have previously trusted the root certificate as this will
      * be verified.  The response will be signed with the configured private key so that authenticity of the response can be verified.
      *
@@ -156,11 +156,11 @@ class CertStatusFactory {
     }
 
    private:
-    const ossl_ptr<X509>& ca_cert_;                          // CA Certificate to encode in the OCSP responses
-    const ossl_ptr<EVP_PKEY>& ca_pkey_;                      // CA Certificate's private key to sign the OCSP responses
-    const pvxs::ossl_shared_ptr<STACK_OF(X509)>& ca_chain_;  // CA Certificate chain to encode in the OCSP responses
-    const uint32_t cert_status_validity_mins_;               // The status validity period in minutes to encode in the OCSP responses
-    const uint32_t cert_status_validity_secs_;               // The status validity period additional seconds to encode in the OCSP responses
+    const ossl_ptr<X509>& cert_auth_cert_;                               // certificate authority certificate to encode in the OCSP responses
+    const ossl_ptr<EVP_PKEY>& cert_auth_pkey_;                           // certificate authority's private key to sign the OCSP responses
+    const pvxs::ossl_shared_ptr<STACK_OF(X509)>& cert_auth_cert_chain_;  // certificate authority certificate chain to encode in the OCSP responses
+    const uint32_t cert_status_validity_mins_;                                // The status validity period in minutes to encode in the OCSP responses
+    const uint32_t cert_status_validity_secs_;                                // The status validity period additional seconds to encode in the OCSP responses
 
     /**
      * @brief Internal function to create an OCSP CERTID.  Uses CertStatusFactory configuration

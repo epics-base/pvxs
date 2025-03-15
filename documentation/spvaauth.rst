@@ -632,7 +632,7 @@ AUTHORITY
 
 Defines access permissions based on certificate authority:
 
-- Uses CA name from ``CN`` field of CA certificate's subject
+- Uses name from ``CN`` field of certificate authority certificate's subject
 - Only applicable for X.509 certificate authentication
 
 RPC Permission

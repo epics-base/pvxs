@@ -130,7 +130,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE>
         throw OCSPParseException("Failed to get basic OCSP response");
     }
 
-    // Verify OCSP response is signed by provided trusted root CA
+    // Verify OCSP response is signed by provided trusted root certificate authority
     verifyOCSPResponse(basic_response, trusted_store_ptr);
 
     OCSP_SINGLERESP *single_response = OCSP_resp_get0(basic_response.get(), 0);
@@ -249,26 +249,19 @@ void CertStatusManager::unsubscribe() {
  * @return Returns true if the OCSP response is valid, false otherwise.
  *
  * This function takes in an OCSP response and verifies that it was signed by a trusted source.
- * It verifies the validity of the OCSP response against the contained CA certificate and its chain,
- * and returns a boolean result.
+ * It verifies the validity of the OCSP response against the contained certificate authority certificate
+ * and its chain, and returns a boolean result.
  *
  * Returns true if the OCSP response is valid, indicating that the certificate in question is from a trusted source.
  * Returns false if the OCSP response is invalid or if the certificate in question not to be trusted.
- *
- * Example usage:
- * @code
- *     shared_array<const uint8_t> ocsp_bytes = generateOCSPResponse(); // Generates an OCSP response
- *     ossl_ptr<X509> ca_cert = loadCACertificate(); // Loads a CA certificate
- *     bool isValid = verifyOCSPResponse(ocsp_bytes, ca_cert); // Verifies the OCSP response
- * @endcode
  */
 bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic_response, X509_STORE *trusted_store_ptr) {
-    // get ca_chain from the response (will be verified to see if it's ultimately signed by our trusted root ca)
-    auto const_ca_chain_ptr = OCSP_resp_get0_certs(basic_response.get());
-    ossl_ptr<STACK_OF(X509)> ca_chain(sk_X509_dup(const_ca_chain_ptr));  // remove const-ness
+    // get cert_auth_cert_chain from the response (will be verified to see if it's ultimately signed by our trusted root certificate authority)
+    const auto const_cert_auth_cert_chain_ptr = OCSP_resp_get0_certs(basic_response.get());
+    ossl_ptr<STACK_OF(X509)> cert_auth_cert_chain(sk_X509_dup(const_cert_auth_cert_chain_ptr));  // remove const-ness
 
     // Verify the OCSP response.  Values greater than 0 mean verified
-    int verify_result = OCSP_basic_verify(basic_response.get(), ca_chain.get(), trusted_store_ptr, 0);
+    const int verify_result = OCSP_basic_verify(basic_response.get(), cert_auth_cert_chain.get(), trusted_store_ptr, 0);
     if (verify_result <= 0) {
         throw OCSPParseException("OCSP_basic_verify failed");
     }
