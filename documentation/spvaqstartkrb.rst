@@ -298,7 +298,7 @@ If you want a prepackaged environment, try the following.  You will need three t
 ||                     ||                    ||                         ||                     ||                                     ||                                                                      |
 +----------------------+---------------------+--------------------------+----------------------+--------------------------------------+-----------------------------------------------------------------------+
 || EPICS_AUTH_KRB_VALIDATOR_SERVICE          || ``-s``                  || ``--krb-service``   || {this is service name}              || The name of the service user created in the KDC that the pvacms      |
-||                                           || ``--validator-service`` ||                     || e.g. ``pvacms/cluster@EPICS.ORG``   || service will log in as                                               |
+||                                           || ``--validator-service`` ||                     || e.g. ``pvacms``                     || service will log in as.  `/cluster@<>realm>` will be added           |
 +--------------------------------------------+--------------------------+----------------------+--------------------------------------+-----------------------------------------------------------------------+
 || EPICS_AUTH_KRB_REALM                      || ``-r``                  || ``--krb-realm``     || e.g. ``EPICS.ORG``                  || Kerberos REALM authenticate against                                  |
 ||                                           || ``--realm``             ||                     ||                                     ||                                                                      |

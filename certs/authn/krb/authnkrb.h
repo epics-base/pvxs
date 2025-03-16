@@ -35,6 +35,11 @@ namespace certs {
 extern gss_OID_desc krb5_oid_desc;
 extern gss_OID krb5_oid;
 
+struct PrincipalInfo {
+    std::string principal;
+    OM_uint32 lifetime;
+};
+
 /**
  * The subclass of Credentials that contains the AuthNKrb specific
  * identification object
@@ -64,6 +69,16 @@ class AuthNKrb final : public Auth {
     }
 
     ~AuthNKrb() override = default;
+
+    /**
+     * Get the realm from the kerberos ticket
+     *
+     * This function gets the realm from the kerberos ticket.  It is used
+     * only when the realm is not set in the configuration.
+     *
+     * @return the realm from the kerberos ticket
+     */
+    static std::string getRealm();
 
     // Kerberos OID for the Kerberos protocol
     gss_OID krb5_oid;
@@ -164,6 +179,7 @@ class AuthNKrb final : public Auth {
     static std::string gssErrorDescription(OM_uint32 major_status, OM_uint32 minor_status);
 
     static void gssNameFromString(const std::string &name, gss_name_t &target_name);
+    static PrincipalInfo getPrincipalInfo();
 };
 
 }  // namespace certs

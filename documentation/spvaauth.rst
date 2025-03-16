@@ -503,12 +503,12 @@ and password file locations.
     options:
       (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`
       (-s | --validator-service) <service-name>  Specify kerberos validator service.  Default `pvacms`
-      (-r | --realm) <krb-realm>                 Specify the kerberos realm.  Default `EPICS.ORG`
+      (-r | --realm) <krb-realm>                 Specify the kerberos realm.  If not specified we'll take it from the ticket
       (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`
-      --add-config-uri                           Add a config uri to the generated certificate
-      --config-uri-base <config_uri_base>        Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
-      (-v | --verbose)                           Verbose mode
-      (-d | --debug)                             Debug mode
+      --add-config-uri                            Add a config uri to the generated certificate
+      --config-uri-base <config_uri_base>         Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
+      (-v | --verbose)                            Verbose mode
+      (-d | --debug)                              Debug mode
 
 **Environment Variables for PVACMS AuthnKRB Verifier**
 
@@ -774,7 +774,7 @@ Example ACF showing new security features:
         RULE(1,WRITE,TRAPWRITE) {
             UAG(foo)
             METHOD("x509")
-            AUTHORITY("Epics Org CA")
+            AUTHORITY("EPICS Root Certificate Authority")
         }
     }
 
@@ -783,7 +783,7 @@ Example ACF showing new security features:
         RULE(1,RPC,NOTRAPWRITE) {
             UAG(bar)
             METHOD("x509")
-            AUTHORITY("Epics Org CA","ORNL Org CA")
+            AUTHORITY("EPICS Root Certificate Authority","ORNL Org Certificate Authority")
         }
     }
 
@@ -854,6 +854,6 @@ Alternative YAML format for improved readability:
               - x509
             authorities:
               - SLAC Certificate Authority
-              - ORNL Org CA
+              - ORNL Org Certificate Authority
 
 

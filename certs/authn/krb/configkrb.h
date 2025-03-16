@@ -56,7 +56,7 @@ class ConfigKrb final : public ConfigAuthN {
     }
 
     std::string krb_validator_service{PVXS_KRB_DEFAULT_VALIDATOR_SERVICE};
-    std::string krb_realm{PVXS_KRB_DEFAULT_VALIDATOR_REALM};
+    std::string krb_realm{};
     std::string krb_keytab{};
 
     void fromKrbEnv(const std::map<std::string, std::string>& defs);

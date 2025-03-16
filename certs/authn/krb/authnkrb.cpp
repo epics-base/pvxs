@@ -51,9 +51,11 @@ struct AuthNKrbRegistrar {
 /**
  * @brief Get the credentials for the Kerberos authenticator
  *
- * This will get the credentials for the Kerberos authenticator.
- * It uses the GSSAPI to acquire the credentials from the current user's
- * Kerberos ticket.
+ * This function gets the credentials for the Kerberos authenticator.
+ *
+ * It gets the principal name from the kerberos ticket and splits it into
+ * a name and organization.  It then sets the validity times for the
+ * credentials to the current time and the lifetime of the kerberos ticket.
  *
  * @return the credentials for the Kerberos authenticator
  */
@@ -63,79 +65,59 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &, bo
                      "Kerberos Authenticator: %s\n",
                      "Begin acquisition");
 
-    // Create KrbCredentials shared_ptr
     auto kerberos_credentials = std::make_shared<KrbCredentials>();
+    // Get principal info from the kerberos ticket
+    const auto info = getPrincipalInfo();
+    auto const &principal_name = info.principal;
+    auto const lifetime = info.lifetime;
 
-    // Initialize GSSAPI structures
-    OM_uint32 minor_status;
-    auto name = GSS_C_NO_NAME;
-    gss_buffer_desc name_buffer = GSS_C_EMPTY_BUFFER;
-    auto cred_handle = GSS_C_NO_CREDENTIAL;
-    OM_uint32 lifetime;
-
-    // Acquire the default credential handle
-    log_debug_printf(auth, "gss_acquire_cred: GSS_C_NO_NAME, GSS_C_INDEFINITE, GSS_C_NO_OID_SET, GSS_C_ACCEPT%s", "\n");
-    OM_uint32 major_status = gss_acquire_cred(&minor_status, GSS_C_NO_NAME, GSS_C_INDEFINITE, GSS_C_NO_OID_SET, GSS_C_INITIATE, &cred_handle, nullptr, nullptr);
-    if (major_status != GSS_S_COMPLETE)
-        throw std::runtime_error(SB() << "getCredentials: Failed to acquire credentials: " << gssErrorDescription(major_status, minor_status));
-
-    // Get the principal name associated with the credential
-    log_debug_printf(auth, "gss_inquire_cred%s", "\n");
-    major_status = gss_inquire_cred(&minor_status, cred_handle, &name, &lifetime, nullptr, nullptr);
-    if (major_status != GSS_S_COMPLETE) {
-        const auto error_description = gssErrorDescription(major_status, minor_status);
-        gss_release_cred(&minor_status, &cred_handle);
-        throw std::runtime_error(SB() << "getCredentials: Failed to inquire credentials: " << error_description);
-    }
-
-    // Convert the principal name to a string
-    log_debug_printf(auth, "gss_display_name%s", "\n");
-    major_status = gss_display_name(&minor_status, name, &name_buffer, nullptr);
-    if (major_status != GSS_S_COMPLETE) {
-        const auto error_description = gssErrorDescription(major_status, minor_status);
-        gss_release_name(&minor_status, &name);
-        gss_release_cred(&minor_status, &cred_handle);
-        throw std::runtime_error(SB() << "getCredentials: Failed to get principal name: " << error_description);
-    }
-
-    // Convert the principal name to a string
-    std::string principal_name(static_cast<char *>(name_buffer.value), name_buffer.length);
-
-    // Release the name buffer
-    gss_release_buffer(&minor_status, &name_buffer);
-
-    // Release the name
-    gss_release_name(&minor_status, &name);
-
-    log_debug_printf(auth, "Set Credentials%s", "\n");
-    // Split the principal name into name and organization
+    // Split the principal name into name and organization.
     const size_t at_pos = principal_name.find('@');
-    if (at_pos == std::string::npos) {
-        gss_release_cred(&minor_status, &cred_handle);
-        throw std::runtime_error(SB() << "getCredentials: Invalid principal name format: " << principal_name.c_str());
-    }
+    if (at_pos == std::string::npos)
+        throw std::runtime_error(SB() << "getCredentials: Invalid principal name format: " << principal_name);
 
-    // Set the name and organization
     kerberos_credentials->name = principal_name.substr(0, at_pos);
     kerberos_credentials->organization = principal_name.substr(at_pos + 1);
-
-    // Set the organization unit and country to empty strings
     kerberos_credentials->organization_unit = {};
     kerberos_credentials->country = {};
 
-    // Get the current time and the ticket's expiration time
+    // Set validity times.
     const time_t now = time(nullptr);
     kerberos_credentials->not_before = now;
     kerberos_credentials->not_after = now + lifetime;
 
-    // Log the credentials
-    log_debug_printf(auth, "\nName: %s, \nOrg: %s, \nnot_before: %lu, \nnot_after: %lu\n", kerberos_credentials->name.c_str(),
-                     kerberos_credentials->organization.c_str(), kerberos_credentials->not_before, kerberos_credentials->not_after);
-
-    // Release the credential handle
-    gss_release_cred(&minor_status, &cred_handle);
+    log_debug_printf(auth, "\nName: %s, \nOrg: %s, \nnot_before: %lu, \nnot_after: %lu\n",
+                     kerberos_credentials->name.c_str(),
+                     kerberos_credentials->organization.c_str(),
+                     kerberos_credentials->not_before,
+                     kerberos_credentials->not_after);
 
     return kerberos_credentials;
+}
+
+/**
+ * @brief Get the realm from the kerberos ticket
+ *
+ * This function gets the realm from the kerberos ticket.  It is used
+ * only when the realm is not set in the configuration.
+ *
+ * @return the realm from the kerberos ticket
+ */
+std::string AuthNKrb::getRealm() {
+    log_debug_printf(auth,
+                     "\n******************************************\n"
+                     "Kerberos Authenticator: %s\n",
+                     "Begin realm extraction");
+
+    // Get principal info from the kerberos ticket
+    const auto& info = getPrincipalInfo();
+    auto const &principal_name = info.principal;
+
+    const size_t at_pos = principal_name.find('@');
+    if (at_pos == std::string::npos)
+        throw std::runtime_error(SB() << "getRealm: Invalid principal name format: " << principal_name);
+
+    return principal_name.substr(at_pos + 1);
 }
 
 /**
@@ -464,6 +446,62 @@ bool AuthNKrb::verify(const Value ccr) const {
     // gss_delete_sec_context(&minor_status, &context, GSS_C_NO_BUFFER);
 
     return true;
+}
+
+/**
+ * @brief Get the principal info from the kerberos ticket
+ *
+ * This function gets the principal info from the kerberos ticket.
+ *
+ * It acquires credentials from the kerberos ticket and then gets the
+ * principal name and lifetime from the credentials.
+ *
+ * @return the principal info from the kerberos ticket
+ */
+PrincipalInfo AuthNKrb::getPrincipalInfo() {
+    OM_uint32 minor_status = 0;
+    auto name = GSS_C_NO_NAME;
+    gss_buffer_desc name_buffer = GSS_C_EMPTY_BUFFER;
+    auto cred_handle = GSS_C_NO_CREDENTIAL;
+    OM_uint32 lifetime = 0;
+
+    log_debug_printf(auth, "gss_acquire_cred: GSS_C_NO_NAME, GSS_C_INDEFINITE, GSS_C_NO_OID_SET, GSS_C_INITIATE%s", "\n");
+    OM_uint32 major_status = gss_acquire_cred(&minor_status,
+                                              GSS_C_NO_NAME,
+                                              GSS_C_INDEFINITE,
+                                              GSS_C_NO_OID_SET,
+                                              GSS_C_INITIATE,
+                                              &cred_handle,
+                                              nullptr,
+                                              nullptr);
+    if (major_status != GSS_S_COMPLETE)
+        throw std::runtime_error(SB() << "getPrincipalInfo: Failed to acquire credentials: " << gssErrorDescription(major_status, minor_status));
+
+    log_debug_printf(auth, "gss_inquire_cred%s", "\n");
+    major_status = gss_inquire_cred(&minor_status, cred_handle, &name, &lifetime, nullptr, nullptr);
+    if (major_status != GSS_S_COMPLETE) {
+        const auto error_description = gssErrorDescription(major_status, minor_status);
+        gss_release_cred(&minor_status, &cred_handle);
+        throw std::runtime_error(SB() << "getPrincipalInfo: Failed to inquire credentials: " << error_description);
+    }
+
+    log_debug_printf(auth, "gss_display_name%s", "\n");
+    major_status = gss_display_name(&minor_status, name, &name_buffer, nullptr);
+    if (major_status != GSS_S_COMPLETE) {
+        const auto error_description = gssErrorDescription(major_status, minor_status);
+        gss_release_name(&minor_status, &name);
+        gss_release_cred(&minor_status, &cred_handle);
+        throw std::runtime_error(SB() << "getPrincipalInfo: Failed to display principal name: " << error_description);
+    }
+
+    std::string principal(static_cast<char*>(name_buffer.value), name_buffer.length);
+
+    // Clean up GSSAPI objects.
+    gss_release_buffer(&minor_status, &name_buffer);
+    gss_release_name(&minor_status, &name);
+    gss_release_cred(&minor_status, &cred_handle);
+
+    return {principal, lifetime};
 }
 
 }  // namespace certs
