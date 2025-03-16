@@ -60,6 +60,9 @@ class ConfigKrb final : public ConfigAuthN {
     std::string krb_keytab{};
 
     void fromKrbEnv(const std::map<std::string, std::string>& defs);
+
+    void updateDefs(defs_t &defs) const override;
+
 };
 
 }  // namespace certs

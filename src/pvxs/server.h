@@ -256,8 +256,7 @@ public:
     Config& applyDefs(const defs_t& def);
 
     //! extract definitions with environment variable names as keys.
-    //! Process environment is not changed.
-    void updateDefs(defs_t& defs) const;
+    virtual void updateDefs(defs_t& defs) const;
 
     /** Apply rules to translate current requested configuration
      *  into one which can actually be loaded based on current host network configuration.

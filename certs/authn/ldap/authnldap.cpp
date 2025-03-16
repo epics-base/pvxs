@@ -57,7 +57,7 @@ struct AuthNLdapRegistrar {
  * This will get the credentials for the LDAP authenticator.
  *
  * - The LDAP username is copied from the configuration using the
- * EPICS_PVA_AUTH_STD_NAME environment variable if it is set, otherwise
+ * EPICS_PVA_AUTH_NAME environment variable if it is set, otherwise
  * it defaults to the logged in user.
  *
  * - The password is copied from the configuration using the
@@ -65,7 +65,7 @@ struct AuthNLdapRegistrar {
  * read it from a file, otherwise it is read from the command line.
  *
  * - The organization is copied from the configuration using the
- * EPICS_PVA_AUTH_STD_ORG environment variable if it is set, otherwise
+ * EPICS_PVA_AUTH_ORGANIZATION environment variable if it is set, otherwise
  * it defaults to the logged in user's organization.
  * Note: The organisation is used in LDAP by splitting the string on '.'
  * and using the parts as the components of the DN. e.g. epics.org ->

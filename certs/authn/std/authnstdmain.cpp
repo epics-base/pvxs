@@ -235,6 +235,11 @@ int main(const int argc, char *argv[]) {
         // Add configuration to authenticator
         authenticator.configure(config);
 
+        // log the effective config
+        if (verbose) {
+            std::cout << "Effective config\n" << config << std::endl;
+        }
+
         // Get the keychain file and password based on the certificate usage
         const std::string tls_keychain_file = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_file : config.tls_keychain_file;
         const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;

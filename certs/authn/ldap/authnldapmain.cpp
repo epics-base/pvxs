@@ -72,16 +72,16 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
                   << "Generates client, server, or hybrid certificates based on the LDAP credentials. \n"
                   << std::endl
                   << "usage:\n"
-                  << "  " << program_name << " [options]                          Create certificate in PENDING_APPROVAL state\n"
-                  << "  " << program_name << " (-h | --help)                      Show this help message and exit\n"
-                  << "  " << program_name << " (-V | --version)                   Print version and exit\n"
+                  << "  " << program_name << " [options]                        Create certificate in PENDING_APPROVAL state\n"
+                  << "  " << program_name << " (-h | --help)                    Show this help message and exit\n"
+                  << "  " << program_name << " (-V | --version)                 Print version and exit\n"
                   << std::endl
                   << "options:\n"
                   << "  (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`\n"
                   << "  (-n | --name) <name>                       Specify LDAP username for common name in the certificate.\n"
                   << "                                             e.g. name ==> LDAP: uid=name, ou=People ==> Cert: CN=name\n"
                   << "                                             Default <logged-in-username>\n"
-                  << "  (-o | --organization) <organization>      Specify LDAP org for organization in the certificate.\n"
+                  << "  (-o | --organization) <organization>       Specify LDAP org for organization in the certificate.\n"
                   << "                                             e.g. epics.org ==> LDAP: dc=epics, dc=org ==> Cert: O=epics.org\n"
                   << "                                             Default <hostname>\n"
                   << "  (-p | --password) <name>                   Specify LDAP password. If not specified will prompt for password\n"
@@ -234,6 +234,11 @@ int main(int argc, char *argv[]) {
         AuthNLdap authenticator{};
         // Add configuration to authenticator
         authenticator.configure(config);
+
+        if (verbose) {
+            std::cout << "Effective config\n" << config << std::endl;
+        }
+
         const std::string tls_keychain_file = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_file : config.tls_keychain_file;
         const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;
 

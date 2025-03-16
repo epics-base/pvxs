@@ -32,6 +32,7 @@ class ConfigAuthN : public client::Config {
 
     void fromAuthEnv(const std::map<std::string, std::string>& defs);
     static std::string getIPAddress();
+    virtual void updateDefs(defs_t& defs) const;
 };
 
 }  // namespace certs

@@ -32,13 +32,13 @@ namespace certs {
  * The subclass of Credentials that contains the AuthNLdap specific
  * identification object
  */
-struct LdapCredentials : Credentials {
+struct LdapCredentials final : Credentials {
     std::string password{};
     std::string ldap_server{};
     unsigned short ldap_port = 389;
 };
 
-class AuthNLdap : public Auth {
+class AuthNLdap final : public Auth {
    public:
     // Constructor
     AuthNLdap() : Auth(PVXS_LDAP_AUTH_TYPE, {Member(TypeCode::String, "signature")}) {};
@@ -58,6 +58,19 @@ class AuthNLdap : public Auth {
         ldap_server = config_ldap.ldap_host;
         ldap_port = config_ldap.ldap_port;
     };
+
+    /**
+     * @brief Update the definitions with the LDAP authenticator specific definitions.
+     *
+     * This function is called from PVACMS to update the definitions with the LDAP authenticator specific definitions.
+     * It updates the definitions with the LDAP host and port.
+     *
+     * @param defs the definitions to update with the LDAP authenticator specific definitions
+     */
+    void updateDefs(client::Config::defs_t &defs) const override {
+        defs["EPICS_AUTH_LDAP_HOST"] = ldap_server;
+        defs["EPICS_AUTH_LDAP_PORT"] = SB() << ldap_port;
+    }
 
     std::string getOptionsPlaceholderText() override { return " [ldap options]"; }
     std::string getOptionsHelpText() override {

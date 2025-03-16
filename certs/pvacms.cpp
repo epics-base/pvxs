@@ -702,8 +702,8 @@ bool getPriorApprovalStatus(const sql_ptr &certs_db, const std::string &name, co
  * @param issuer_id the issuer ID to be encoded in the certificate
  */
 void onCreateCertificate(ConfigCms &config, sql_ptr &certs_db, server::SharedWildcardPV &shared_status_pv, std::unique_ptr<server::ExecOp> &&op, Value &&args,
-                         const ossl_ptr<EVP_PKEY> &cert_auth_pkey, const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<stack_st_X509> &cert_auth_cert_chain,
-                         std::string issuer_id) {
+                         const ossl_ptr<EVP_PKEY> &cert_auth_pkey, const ossl_ptr<X509> &cert_auth_cert,
+                         const ossl_shared_ptr<stack_st_X509> &cert_auth_cert_chain, std::string issuer_id) {
     auto ccr = args["query"];
 
     // First make sure that we've updated any expired cert first
@@ -865,8 +865,8 @@ void onGetStatus(const ConfigCms &config, const sql_ptr &certs_db, const std::st
  * @return void
  */
 void onRevoke(const ConfigCms &config, const sql_ptr &certs_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
-              std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
-              const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain) {
+              std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters,
+              const ossl_ptr<EVP_PKEY> &cert_auth_pkey, const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain) {
     Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(CertStatusFactory(cert_auth_cert, cert_auth_pkey, cert_auth_chain, config.cert_status_validity_mins));
     try {
@@ -911,8 +911,8 @@ void onRevoke(const ConfigCms &config, const sql_ptr &certs_db, const std::strin
  * @return void
  */
 void onApprove(const ConfigCms &config, const sql_ptr &certs_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
-               std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
-               const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain) {
+               std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters,
+               const ossl_ptr<EVP_PKEY> &cert_auth_pkey, const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain) {
     Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(CertStatusFactory(cert_auth_cert, cert_auth_pkey, cert_auth_chain, config.cert_status_validity_mins));
     try {
@@ -968,8 +968,8 @@ void onApprove(const ConfigCms &config, const sql_ptr &certs_db, const std::stri
  * @return void
  */
 void onDeny(const ConfigCms &config, const sql_ptr &certs_db, const std::string &our_issuer_id, server::SharedWildcardPV &status_pv,
-            std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
-            const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain) {
+            std::unique_ptr<server::ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters,
+            const ossl_ptr<EVP_PKEY> &cert_auth_pkey, const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain) {
     Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(CertStatusFactory(cert_auth_cert, cert_auth_pkey, cert_auth_chain, config.cert_status_validity_mins));
     try {
@@ -1355,8 +1355,8 @@ CertData createCaCertificate(const ConfigCms &config, sql_ptr &certs_db, const s
     // Generate a new serial number
     const auto serial = generateSerial();
 
-    auto certificate_factory = CertFactory(serial, key_pair, config.cert_auth_name, config.cert_auth_country, config.cert_auth_organization, config.cert_auth_organizational_unit,
-                                           not_before, not_after, ssl::kForCa, config.cert_status_subscription);
+    auto certificate_factory = CertFactory(serial, key_pair, config.cert_auth_name, config.cert_auth_country, config.cert_auth_organization,
+                                           config.cert_auth_organizational_unit, not_before, not_after, ssl::kForCa, config.cert_status_subscription);
 
     const auto pem_string = createCertificatePemString(certs_db, certificate_factory);
 
@@ -1385,9 +1385,10 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &certs_db, const o
     // Generate a new serial number
     const auto serial = generateSerial();
 
-    auto certificate_factory = CertFactory(serial, key_pair, config.pvacms_name, config.pvacms_country, config.pvacms_organization,
-                                           config.pvacms_organizational_unit, getNotBeforeTimeFromCert(cert_auth_cert.get()), getNotAfterTimeFromCert(cert_auth_cert.get()),
-                                           ssl::kForCMS, config.cert_status_subscription, cert_auth_cert.get(), cert_auth_pkey.get(), cert_auth_chain.get());
+    auto certificate_factory =
+        CertFactory(serial, key_pair, config.pvacms_name, config.pvacms_country, config.pvacms_organization, config.pvacms_organizational_unit,
+                    getNotBeforeTimeFromCert(cert_auth_cert.get()), getNotAfterTimeFromCert(cert_auth_cert.get()), ssl::kForCMS,
+                    config.cert_status_subscription, cert_auth_cert.get(), cert_auth_pkey.get(), cert_auth_chain.get());
 
     const auto cert = createCertificate(certs_db, certificate_factory);
 
@@ -1826,8 +1827,8 @@ void postUpdatesToExpiredStatuses(const CertStatusFactory &cert_status_creator, 
  */
 timeval statusMonitor(const StatusMonitor &status_monitor_params) {
     log_debug_printf(pvacmsmonitor, "Certificate Monitor Thread Wake Up%s", "\n");
-    const auto cert_status_creator(CertStatusFactory(status_monitor_params.cert_auth_cert_, status_monitor_params.cert_auth_pkey_, status_monitor_params.cert_auth_cert_chain_,
-                                                     status_monitor_params.config_.cert_status_validity_mins));
+    const auto cert_status_creator(CertStatusFactory(status_monitor_params.cert_auth_cert_, status_monitor_params.cert_auth_pkey_,
+                                                     status_monitor_params.cert_auth_cert_chain_, status_monitor_params.config_.cert_status_validity_mins));
     // Search for next cert to become valid and update it
     postUpdateToNextCertBecomingValid(cert_status_creator, status_monitor_params);
 
@@ -1873,9 +1874,12 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
     app.add_option("-c,--cert-auth-keychain", config.cert_auth_keychain_file, "Specify Certificate Authority keychain file location");
     app.add_option("--cert-auth-keychain-pwd", cert_auth_password_file, "Specify Certificate Authority keychain password file location");
     app.add_option("--cert-auth-name", config.cert_auth_name, "Specify the Certificate Authority's name. Used if we need to create a root certificate");
-    app.add_option("--cert-auth-org", config.cert_auth_organization, "Specify the Certificate Authority's Organization. Used if we need to create a root certificate");
-    app.add_option("--cert-auth-org-unit", config.cert_auth_organizational_unit, "Specify the Certificate Authority's Organization Unit. Used if we need to create a root certificate");
-    app.add_option("--cert-auth-country", config.cert_auth_country, "Specify the Certificate Authority's Country. Used if we need to create a root certificate");
+    app.add_option("--cert-auth-org", config.cert_auth_organization,
+                   "Specify the Certificate Authority's Organization. Used if we need to create a root certificate");
+    app.add_option("--cert-auth-org-unit", config.cert_auth_organizational_unit,
+                   "Specify the Certificate Authority's Organization Unit. Used if we need to create a root certificate");
+    app.add_option("--cert-auth-country", config.cert_auth_country,
+                   "Specify the Certificate Authority's Country. Used if we need to create a root certificate");
     app.add_option("-d,--cert-db", config.certs_db_filename, "Specify cert db file location");
 
     app.add_option("-p,--pvacms-keychain", config.tls_keychain_file, "Specify PVACMS keychain file location");
@@ -1926,11 +1930,15 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
                   << std::endl
                   << "options:\n"
                   << "  (-c | --cert-auth-keychain) <cert_auth_keychain>\n"
-                  << "                                             Specify Certificate Authority keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12\n"
+                  << "                                             Specify Certificate Authority keychain file location. Default "
+                     "${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12\n"
                   << "        --cert-auth-keychain-pwd <file>      Specify location of file containing Certificate Authority keychain file's password\n"
-                  << "        --cert-auth-name <name>              Specify name (CN) to be used for certificate authority certificate. Default `EPICS Root Certificate Authority`\n"
-                  << "        --cert-auth-org <name>               Specify organisation (O) to be used for certificate authority certificate. Default `certs.epics.org`\n"
-                  << "        --cert-auth-org-unit <name>          Specify organisational unit (OU) to be used for certificate authority certificate. Default `EPICS Certificate "
+                  << "        --cert-auth-name <name>              Specify name (CN) to be used for certificate authority certificate. Default `EPICS Root "
+                     "Certificate Authority`\n"
+                  << "        --cert-auth-org <name>               Specify organisation (O) to be used for certificate authority certificate. Default "
+                     "`certs.epics.org`\n"
+                  << "        --cert-auth-org-unit <name>          Specify organisational unit (OU) to be used for certificate authority certificate. Default "
+                     "`EPICS Certificate "
                      "Authority`\n"
                   << "        --ca-country <name>                  Specify country (C) to be used for certificate authority certificate. Default `US`\n"
                   << "  (-d | --cert-db) <db_name>                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.3/certs.db\n"
@@ -2082,10 +2090,10 @@ int main(int argc, char *argv[]) {
 
         // RPC handlers
         pvxs::ossl_ptr<EVP_PKEY> cert_auth_pub_key(X509_get_pubkey(cert_auth_cert.get()));
-        create_pv.onRPC(
-            [&config, &certs_db, &cert_auth_pkey, &cert_auth_cert, cert_auth_chain, &our_issuer_id, &status_pv](const SharedPV &, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
-                onCreateCertificate(config, certs_db, status_pv, std::move(op), std::move(args), cert_auth_pkey, cert_auth_cert, cert_auth_chain, our_issuer_id);
-            });
+        create_pv.onRPC([&config, &certs_db, &cert_auth_pkey, &cert_auth_cert, cert_auth_chain, &our_issuer_id, &status_pv](
+                            const SharedPV &, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
+            onCreateCertificate(config, certs_db, status_pv, std::move(op), std::move(args), cert_auth_pkey, cert_auth_cert, cert_auth_chain, our_issuer_id);
+        });
 
         // Client Connect handlers GET/MONITOR
         status_pv.onFirstConnect([&config, &certs_db, &cert_auth_pkey, &cert_auth_cert, &cert_auth_chain, &our_issuer_id, &active_status_validity](
@@ -2109,51 +2117,52 @@ int main(int argc, char *argv[]) {
         });
 
         // PUT handlers
-        status_pv.onPut([&config, &certs_db, &our_issuer_id, &cert_auth_pkey, &cert_auth_cert, &cert_auth_chain](SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op,
-                                                                                         const std::string &pv_name, const std::list<std::string> &parameters,
-                                                                                         pvxs::Value &&value) {
-            // Make sure that pv is open before any put operation
-            if (!pv.isOpen(pv_name)) {
-                pv.open(pv_name, CertStatus::getStatusPrototype());
-            }
+        status_pv.onPut(
+            [&config, &certs_db, &our_issuer_id, &cert_auth_pkey, &cert_auth_cert, &cert_auth_chain](
+                SharedWildcardPV &pv, std::unique_ptr<ExecOp> &&op, const std::string &pv_name, const std::list<std::string> &parameters, pvxs::Value &&value) {
+                // Make sure that pv is open before any put operation
+                if (!pv.isOpen(pv_name)) {
+                    pv.open(pv_name, CertStatus::getStatusPrototype());
+                }
 
-            std::string issuer_id;
-            uint64_t serial;
-            std::tie(issuer_id, serial) = getParameters(parameters);
+                std::string issuer_id;
+                uint64_t serial;
+                std::tie(issuer_id, serial) = getParameters(parameters);
 
-            // Get desired state
-            auto state = value["state"].as<std::string>();
-            std::transform(state.begin(), state.end(), state.begin(), toupper);
+                // Get desired state
+                auto state = value["state"].as<std::string>();
+                std::transform(state.begin(), state.end(), state.begin(), toupper);
 
-            // Get credentials for this operation
-            auto creds = op->credentials();
+                // Get credentials for this operation
+                auto creds = op->credentials();
 
-            pvxs::ioc::Credentials credentials(*creds);
+                pvxs::ioc::Credentials credentials(*creds);
 
-            // Get security client from channel
-            pvxs::ioc::SecurityClient securityClient;
+                // Get security client from channel
+                pvxs::ioc::SecurityClient securityClient;
 
-            static ASMember as_member;
-            securityClient.update(as_member.mem, ASL1, credentials);
+                static ASMember as_member;
+                securityClient.update(as_member.mem, ASL1, credentials);
 
-            if (!securityClient.canWrite()) {
-                log_err_printf(pvacms, "PVACMS Client Not Authorised%s", "\n");
-                op->error(pvxs::SB() << state << " operation not authorized on " << issuer_id << ":" << serial);
-                return;
-            }
+                if (!securityClient.canWrite()) {
+                    log_err_printf(pvacms, "PVACMS Client Not Authorised%s", "\n");
+                    op->error(pvxs::SB() << state << " operation not authorized on " << issuer_id << ":" << serial);
+                    return;
+                }
 
-            if (state == "REVOKED") {
-                onRevoke(config, certs_db, our_issuer_id, pv, std::move(op), pv_name, parameters, cert_auth_pkey, cert_auth_cert, cert_auth_chain);
-            } else if (state == "APPROVED") {
-                onApprove(config, certs_db, our_issuer_id, pv, std::move(op), pv_name, parameters, cert_auth_pkey, cert_auth_cert, cert_auth_chain);
-            } else if (state == "DENIED") {
-                onDeny(config, certs_db, our_issuer_id, pv, std::move(op), pv_name, parameters, cert_auth_pkey, cert_auth_cert, cert_auth_chain);
-            } else {
-                op->error(pvxs::SB() << "Invalid certificate state requested: " << state);
-            }
-        });
+                if (state == "REVOKED") {
+                    onRevoke(config, certs_db, our_issuer_id, pv, std::move(op), pv_name, parameters, cert_auth_pkey, cert_auth_cert, cert_auth_chain);
+                } else if (state == "APPROVED") {
+                    onApprove(config, certs_db, our_issuer_id, pv, std::move(op), pv_name, parameters, cert_auth_pkey, cert_auth_cert, cert_auth_chain);
+                } else if (state == "DENIED") {
+                    onDeny(config, certs_db, our_issuer_id, pv, std::move(op), pv_name, parameters, cert_auth_pkey, cert_auth_cert, cert_auth_chain);
+                } else {
+                    op->error(pvxs::SB() << "Invalid certificate state requested: " << state);
+                }
+            });
 
-        StatusMonitor status_monitor_params(config, certs_db, our_issuer_id, status_pv, cert_auth_cert, cert_auth_pkey, cert_auth_chain, active_status_validity);
+        StatusMonitor status_monitor_params(config, certs_db, our_issuer_id, status_pv, cert_auth_cert, cert_auth_pkey, cert_auth_chain,
+                                            active_status_validity);
 
         // Create a server with a certificate monitoring function attached to the cert file monitor timer
         // Return true to indicate that we want the file monitor time to run after this
@@ -2162,14 +2171,34 @@ int main(int argc, char *argv[]) {
         pva_server.addPV(RPC_CERT_CREATE, create_pv).addPV(GET_MONITOR_CERT_STATUS_PV, status_pv).addPV(kCertRoot, root_pv);
         root_pv.open(root_pv_value);
 
+        // Log the effective config
         if (verbose) {
-            std::cout << "Effective config\n" << config;
+            std::cout << "Effective config\n" << config << std::endl;
         }
 
+        // Get the subject of the certificate authority certificate
+        pvxs::ossl_ptr<BIO> io(BIO_new(BIO_s_mem()));
+        X509_NAME_print_ex(io.get(), X509_get_subject_name(cert_auth_cert.get()), 0, XN_FLAG_ONELINE);
+        char *data = nullptr;
+        auto len = BIO_get_mem_data(io.get(), &data);
+        auto subject_string = std::string(data, len);
+
         try {
-            std::cout << "PVACMS [" << our_issuer_id << "] Service Running" << std::endl;
+            std::cout << "+=======================================+" << std::endl;
+            std::cout << "| PVACMS Certificate Management Service |" << std::endl;
+            std::cout << "+---------------------------------------+" << std::endl;
+            std::cout << "| Certificate Database                  : " << config.certs_db_filename << std::endl;
+            std::cout << "| Certificate Authority                 : " << subject_string << std::endl;
+            std::cout << "| Certificate Authority Keychain File   : " << config.cert_auth_keychain_file << std::endl;
+            std::cout << "| PVACMS Keychain File                  : " << config.tls_keychain_file << std::endl;
+            std::cout << "| PVACMS Access Control File            : " << config.pvacms_acf_filename << std::endl;
+            std::cout << "+---------------------------------------+" << std::endl;
+            std::cout << "| PVACMS [" << our_issuer_id << "] Service Running     |" << std::endl;
+            std::cout << "+=======================================+" << std::endl;
             pva_server.run();
-            std::cout << "PVACMS [" << our_issuer_id << "] Service Exiting" << std::endl;
+            std::cout << "\n+=======================================+" << std::endl;
+            std::cout << "| PVACMS [" << our_issuer_id << "] Service Exiting     |" << std::endl;
+            std::cout << "+=======================================+" << std::endl;
         } catch (const std::exception &e) {
             log_err_printf(pvacms, "PVACMS error: %s\n", e.what());
         }

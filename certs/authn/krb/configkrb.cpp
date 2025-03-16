@@ -9,7 +9,7 @@
 namespace pvxs {
 namespace certs {
 
-void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string> &defs) {
+void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string>& defs) {
     PickOne pickone{defs, true};
 
     // KRB5_KTNAME
@@ -27,6 +27,23 @@ void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_AUTH_KRB_REALM"})) {
         krb_realm = pickone.val;
     }
+}
+
+/**
+ * Update the definitions with the kerberos authenticator specific definitions.
+ *
+ * This function is called from authnkrbmain to update the definitions with the kerberos authenticator specific definitions.
+ * It updates the definitions with the kerberos keytab file, the kerberos client keytab file,
+ * the kerberos validator service name, and the kerberos realm.
+ *
+ * @param defs the definitions to update with the kerberos authenticator specific definitions
+ */
+void ConfigKrb::updateDefs(defs_t& defs) const {
+    ConfigAuthN::updateDefs(defs);
+    defs["KRB5_KTNAME"] = krb_keytab;
+    defs["KRB5_CLIENT_KTNAME"] = krb_keytab;
+    defs["EPICS_AUTH_KRB_VALIDATOR_SERVICE"] = krb_validator_service;
+    defs["EPICS_AUTH_KRB_REALM"] = krb_realm;
 }
 
 }  // namespace certs

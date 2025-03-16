@@ -9,9 +9,9 @@ export PROJECT_HOME=/opt/epics
 export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/client.p12
 
 #### SETUP Client Organisation
-# Environment: EPICS_PVA_AUTH_STD_ORG
+# Environment: EPICS_PVA_AUTH_ORGANIZATION
 # Default    : <hostname>
-export EPICS_PVA_AUTH_STD_ORG=epics.org
+export EPICS_PVA_AUTH_ORGANIZATION=epics.org
 
 # set path
 export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"

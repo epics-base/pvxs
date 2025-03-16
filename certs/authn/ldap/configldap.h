@@ -35,6 +35,9 @@ class ConfigLdap final : public ConfigAuthN {
     unsigned short ldap_port{389};
 
     void fromLdapEnv(const std::map<std::string, std::string>& defs);
+
+    void updateDefs(defs_t &defs) const override;
+
 };
 
 }  // namespace certs

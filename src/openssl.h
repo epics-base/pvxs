@@ -332,7 +332,7 @@ struct ShowX509 {
     const X509* cert;
 };
 
-std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
+PVXS_API std::ostream& operator<<(std::ostream& strm, const ShowX509& cert);
 
 /**
  * @brief SSL context for TLS communication

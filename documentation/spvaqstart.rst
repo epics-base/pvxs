@@ -67,14 +67,41 @@ If you want a prepackaged environment, try the following.  You will need two ter
     2025-03-08T09:45:46.483891839 INFO pvxs.certs.cms 06e4748c:12098279511235536670 *=> VALID
     Keychain file created   : /root/.config/pva/1.3/pvacms.p12
     Effective config
+    EPICS_CERT_AUTH_COUNTRY=US
+    EPICS_CERT_AUTH_NAME=EPICS Root Certificate Authority
+    EPICS_CERT_AUTH_ORGANIZATION=certs.epics.org
+    EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT=EPICS Certificate Authority
+    EPICS_CERT_AUTH_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.3/cert_auth.p12
+    EPICS_PVACMS_ACF=/home/pvacms/.config/pva/1.3/pvacms.acf
+    EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION=YES
+    EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS=30
+    EPICS_PVACMS_DB=/home/pvacms/.local/share/pva/1.3/certs.db
+    EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL=YES
+    EPICS_PVACMS_REQUIRE_HYBRID_APPROVAL=YES
+    EPICS_PVACMS_REQUIRE_SERVER_APPROVAL=YES
+    EPICS_PVACMS_TLS_STOP_IF_NO_CERT=YES
+    EPICS_PVAS_AUTH_COUNTRY=US
+    EPICS_PVAS_AUTH_ORGANIZATION=certs.epics.org
+    EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT=EPICS Certificate Authority
     EPICS_PVAS_AUTO_BEACON_ADDR_LIST=YES
     EPICS_PVAS_BROADCAST_PORT=5076
     EPICS_PVAS_SERVER_PORT=5075
-    EPICS_PVAS_TLS_KEYCHAIN=/root/.config/pva/1.3/pvacms.p12
+    EPICS_PVAS_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.3/pvacms.p12
     EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check on_no_cms=fallback-to-tcp
     EPICS_PVAS_TLS_PORT=5076
     EPICS_PVAS_TLS_STOP_IF_NO_CERT=YES
-    PVACMS [06e4748c] Service Running
+
+    +=======================================+
+    | PVACMS Certificate Management Service |
+    +---------------------------------------+
+    | Certificate Database                  : /home/pvacms/.local/share/pva/1.3/certs.db
+    | Certificate Authority                 : CN = EPICS Root Certificate Authority, C = US, O = certs.epics.org, OU = EPICS Certificate Authority
+    | Certificate Authority Keychain File   : /home/pvacms/.config/pva/1.3/cert_auth.p12
+    | PVACMS Keychain File                  : /home/pvacms/.config/pva/1.3/pvacms.p12
+    | PVACMS Access Control File            : /home/pvacms/.config/pva/1.3/pvacms.acf
+    +---------------------------------------+
+    | PVACMS [2535f0b8] Service Running     |
+    +=======================================+
 
 |2| Run Tools
 ----------------------
@@ -516,14 +543,41 @@ otherwise the certificate authority certificate will be created here
     2025-03-04T14:53:32.589539542 INFO pvxs.certs.cms 2535f0b8:15782598755272381308 *=> VALID
     Keychain file created   : /root/.config/pva/1.3/pvacms.p12
     Effective config
+    EPICS_CERT_AUTH_COUNTRY=US
+    EPICS_CERT_AUTH_NAME=EPICS Root Certificate Authority
+    EPICS_CERT_AUTH_ORGANIZATION=certs.epics.org
+    EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT=EPICS Certificate Authority
+    EPICS_CERT_AUTH_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.3/cert_auth.p12
+    EPICS_PVACMS_ACF=/home/pvacms/.config/pva/1.3/pvacms.acf
+    EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION=YES
+    EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS=30
+    EPICS_PVACMS_DB=/home/pvacms/.local/share/pva/1.3/certs.db
+    EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL=YES
+    EPICS_PVACMS_REQUIRE_HYBRID_APPROVAL=YES
+    EPICS_PVACMS_REQUIRE_SERVER_APPROVAL=YES
+    EPICS_PVACMS_TLS_STOP_IF_NO_CERT=YES
+    EPICS_PVAS_AUTH_COUNTRY=US
+    EPICS_PVAS_AUTH_ORGANIZATION=certs.epics.org
+    EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT=EPICS Certificate Authority
     EPICS_PVAS_AUTO_BEACON_ADDR_LIST=YES
     EPICS_PVAS_BROADCAST_PORT=5076
     EPICS_PVAS_SERVER_PORT=5075
-    EPICS_PVAS_TLS_KEYCHAIN=/root/.config/pva/1.3/pvacms.p12
+    EPICS_PVAS_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.3/pvacms.p12
     EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check on_no_cms=fallback-to-tcp
     EPICS_PVAS_TLS_PORT=5076
     EPICS_PVAS_TLS_STOP_IF_NO_CERT=YES
-    PVACMS [2535f0b8] Service Running
+
+    +=======================================+
+    | PVACMS Certificate Management Service |
+    +---------------------------------------+
+    | Certificate Database                  : /home/pvacms/.local/share/pva/1.3/certs.db
+    | Certificate Authority                 : CN = EPICS Root Certificate Authority, C = US, O = certs.epics.org, OU = EPICS Certificate Authority
+    | Certificate Authority Keychain File   : /home/pvacms/.config/pva/1.3/cert_auth.p12
+    | PVACMS Keychain File                  : /home/pvacms/.config/pva/1.3/pvacms.p12
+    | PVACMS Access Control File            : /home/pvacms/.config/pva/1.3/pvacms.acf
+    +---------------------------------------+
+    | PVACMS [2535f0b8] Service Running     |
+    +=======================================+
 
 .. note::
 

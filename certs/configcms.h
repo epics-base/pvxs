@@ -44,6 +44,8 @@ class ConfigCms final : public server::Config {
         return config;
     }
 
+    void updateDefs(defs_t& defs) const override;
+
     /**
      * @brief Minutes that the ocsp status response will
      * be valid before a client must re-request an update

@@ -13,6 +13,7 @@
 
 #include <certstatusfactory.h>
 
+#include <pvxs/client.h>
 #include <pvxs/data.h>
 
 #include <CLI/App.hpp>
@@ -154,6 +155,16 @@ class Auth {
      * @return The PEM encoded certificate
      */
     std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, double timeout) const;
+
+    /**
+     * @brief Update the definitions with the authenticator specific definitions.
+     *
+     * This function is called from PVACMS to update the definitions with the authenticator specific definitions.
+     * It updates the given definitions with the authenticator specific definitions.
+     *
+     * @param defs the definitions to update with the authenticator specific definitions
+     */
+    virtual void updateDefs(client::Config::defs_t &defs) const {}
 
     /**
      * @brief Registration of all supported auth methods.

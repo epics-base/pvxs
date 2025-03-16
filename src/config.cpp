@@ -751,6 +751,7 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf) {
         if (MATCHING_DEF() || MATCHING_DEF(cert_auth_) || MATCHING_DEF(pvacms_) || MATCHING_DEF(ocsp_) || MATCHING_DEF(auth_))
             strm << indent{} << pair.first << '=' << pair.second << '\n';
     }
+
     return strm;
 }
 #undef MATCHING_DEF

@@ -225,13 +225,13 @@ PVACMS Usage
       (-c | --cert-auth-keychain) <cert_auth_keychain>
                                                   Specify certificate authority keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12
             --cert-auth-keychain-pwd <file>       Specify location of file containing certificate authority keychain file's password
-            --cert-auth-name <name>              Specify name (CN) to be used for certificate authority Certificate. Default `EPICS Root Certificate Authority`
-            --cert-auth-org <name>               Specify organisation (O) to be used for certificate authority Certificate. Default `certs.epics.org`
-            --cert-auth-org-unit <name>          Specify organisational unit (OU) to be used for certificate authority Certificate. Default `EPICS Certificate Authority`
-            --cert-auth-country <name>           Specify country (C) to be used for certificate authority Certificate. Default `US`
-      (-d | --cert-db) <db_name>                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.3/certs.db
-      (-p | --pvacms-keychain) <pvacms_keychain> Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
-            --pvacms-keychain-pwd <file>         Specify location of file containing PVACMS keychain file's password
+            --cert-auth-name <name>               Specify name (CN) to be used for certificate authority Certificate. Default `EPICS Root Certificate Authority`
+            --cert-auth-org <name>                Specify organisation (O) to be used for certificate authority Certificate. Default `certs.epics.org`
+            --cert-auth-org-unit <name>           Specify organisational unit (OU) to be used for certificate authority Certificate. Default `EPICS Certificate Authority`
+            --cert-auth-country <name>            Specify country (C) to be used for certificate authority Certificate. Default `US`
+      (-d | --cert-db) <db_name>                  Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.3/certs.db
+      (-p | --pvacms-keychain) <pvacms_keychain>  Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
+            --pvacms-keychain-pwd <file>          Specify location of file containing PVACMS keychain file's password
             --pvacms-name <name>                  Specify name (CN) to be used for PVACMS certificate. Default `PVACMS Service`
             --pvacms-org <name>                   Specify organisation (O) to be used for PVACMS certificate. Default `certs.epics.org`
             --pvacms-org-unit <name>              Specify organisational unit (OU) to be used for PVACMS certificate. Default `EPICS PVA Certificate Management Service`

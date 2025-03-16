@@ -45,21 +45,21 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
     }
     const std::string retrieved_organization = hostname;
 
-    // EPICS_PVA_AUTH_STD_NAME, EPICS_PVAS_AUTH_STD_NAME
-    name = pickone({"EPICS_PVA_AUTH_STD_NAME"}) ? pickone.val : retrieved_username;
-    server_name = pickone({"EPICS_PVAS_AUTH_STD_NAME", "EPICS_PVA_AUTH_STD_NAME"}) ? pickone.val : retrieved_username;
+    // EPICS_PVA_AUTH_NAME, EPICS_PVAS_AUTH_NAME
+    name = pickone({"EPICS_PVA_AUTH_NAME"}) ? pickone.val : retrieved_username;
+    server_name = pickone({"EPICS_PVAS_AUTH_NAME", "EPICS_PVA_AUTH_NAME"}) ? pickone.val : retrieved_username;
 
-    // EPICS_PVA_AUTH_STD_ORG, EPICS_PVAS_AUTH_STD_ORG
-    organization = pickone({"EPICS_PVA_AUTH_STD_ORG"}) ? pickone.val : retrieved_organization;
-    server_organization = pickone({"EPICS_PVAS_AUTH_STD_ORG", "EPICS_PVA_AUTH_STD_ORG"}) ? pickone.val : retrieved_organization;
+    // EPICS_PVA_AUTH_ORG, EPICS_PVAS_AUTH_ORG
+    organization = pickone({"EPICS_PVA_AUTH_ORGANIZATION"}) ? pickone.val : retrieved_organization;
+    server_organization = pickone({"EPICS_PVAS_AUTH_ORGANIZATION", "EPICS_PVA_AUTH_ORGANIZATION"}) ? pickone.val : retrieved_organization;
 
-    // EPICS_PVA_AUTH_STD_ORG_UNIT, EPICS_PVAS_AUTH_STD_ORG_UNIT
-    if (pickone({"EPICS_PVA_AUTH_STD_ORG_UNIT"})) organizational_unit = pickone.val;
-    if (pickone({"EPICS_PVAS_AUTH_STD_ORG_UNIT", "EPICS_PVA_AUTH_STD_ORG_UNIT"})) server_organizational_unit = pickone.val;
+    // EPICS_PVA_AUTH_ORG_UNIT, EPICS_PVAS_AUTH_ORG_UNIT
+    if (pickone({"EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT"})) organizational_unit = pickone.val;
+    if (pickone({"EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT", "EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT"})) server_organizational_unit = pickone.val;
 
-    // EPICS_PVA_AUTH_STD_COUNTRY, EPICS_PVAS_AUTH_STD_COUNTRY
-    if (pickone({"EPICS_PVA_AUTH_STD_COUNTRY"})) country = pickone.val;
-    if (pickone({"EPICS_PVAS_AUTH_STD_COUNTRY", "EPICS_PVA_AUTH_STD_COUNTRY"})) server_country = pickone.val;
+    // EPICS_PVA_AUTH_COUNTRY, EPICS_PVAS_AUTH_COUNTRY
+    if (pickone({"EPICS_PVA_AUTH_COUNTRY"})) country = pickone.val;
+    if (pickone({"EPICS_PVAS_AUTH_COUNTRY", "EPICS_PVA_AUTH_COUNTRY"})) server_country = pickone.val;
 
     // Fixup keychain files to make sure we have default values even when empty
     if (tls_keychain_file.empty()) {
@@ -78,6 +78,29 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"})) {
         tls_srv_keychain_pwd = getFileContents(pickone.val);
     }
+}
+
+/**
+ * Update the definitions with the generic authenticator definitions.
+ *
+ * This function is called from each authenticator to update the definitions with the generic authenticator definitions.
+ * It updates the definitions with the name, server name, organization, server organization,
+ * organizational unit, server organizational unit, country, server country, and TLS keychain file.
+ *
+ * @param defs the definitions to update with the generic authenticator definitions
+ */
+void ConfigAuthN::updateDefs(defs_t &defs) const {
+    Config::updateDefs(defs);
+    defs["EPICS_PVA_AUTH_NAME"] = name;
+    defs["EPICS_PVAS_AUTH_NAME"] = server_name;
+    defs["EPICS_PVA_AUTH_ORGANIZATION"] = organization;
+    defs["EPICS_PVAS_AUTH_ORGANIZATION"] = server_organization;
+    defs["EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT"] = organizational_unit;
+    defs["EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT"] = server_organizational_unit;
+    defs["EPICS_PVA_AUTH_COUNTRY"] = country;
+    defs["EPICS_PVAS_AUTH_COUNTRY"] = server_country;
+    defs["EPICS_PVAS_TLS_KEYCHAIN"] = tls_srv_keychain_file;
+    if (!tls_srv_keychain_pwd.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
 }
 
 /**
