@@ -66,8 +66,8 @@ int readParameters(const int argc, char *argv[], ConfigKrb &config, bool &verbos
 
     app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `hybrid`");
 
-    app.add_option("-s,--validator-service", config.krb_validator_service, "Specify kerberos validator service.  Default `pvacms`");
-    app.add_option("-r,--realm", config.krb_realm, "Specify the kerberos realm.  If not specified we'll take it from the ticket");
+    app.add_option("--krb-validator", config.krb_validator, "Specify kerberos validator name.  Default `pvacms`");
+    app.add_option("--krb-realm", config.krb_realm, "Specify the kerberos realm.  If not specified we'll take it from the ticket");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -86,8 +86,8 @@ int readParameters(const int argc, char *argv[], ConfigKrb &config, bool &verbos
                   << std::endl
                   << "options:\n"
                   << "  (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`\n"
-                  << "  (-s | --validator-service) <service-name>  Specify kerberos validator service.  Default `pvacms`\n"
-                  << "  (-r | --realm) <krb-realm>                 Specify the kerberos realm.  If not specified we'll take it from the ticket\n"
+                  << "  --krb-validator <service-name>             Specify kerberos validator name.  Default `pvacms`\n"
+                  << "  --krb-realm <krb-realm>                    Specify the kerberos realm.  If not specified we'll take it from the ticket\n"
                   << "  (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`\n"
                   << "  --add-config-uri                           Add a config uri to the generated certificate\n"
                   << "  --config-uri-base <config_uri_base>        Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`\n"

@@ -105,7 +105,7 @@ class AuthNKrb final : public Auth {
      */
     void configure(const client::Config &config) override {
         auto &config_krb = dynamic_cast<const ConfigKrb &>(config);
-        krb_validator_service_name = SB() << config_krb.krb_validator_service << PVXS_KRB_DEFAULT_VALIDATOR_CLUSTER_PART << config_krb.krb_realm;
+        krb_validator_service_name = SB() << config_krb.krb_validator << PVXS_KRB_DEFAULT_VALIDATOR_CLUSTER_PART << config_krb.krb_realm;
         krb_realm = config_krb.krb_realm;
         krb_keytab_file = config_krb.krb_keytab;
     }
@@ -145,8 +145,9 @@ class AuthNKrb final : public Auth {
     std::string getOptionsHelpText() override {
         return "\n"
                "kerberos options\n"
+               "        --krb-keytab <keytab file>           kerberos keytab file for non-interactive login`\n"
                "        --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`\n"
-               "        --krb-service <service>              pvacms kerberos service name.  Default `pvacms`\n";
+               "        --krb-validator <validator-service>  pvacms kerberos service name.  Default `pvacms`\n";
     }
 
     /**
@@ -166,8 +167,9 @@ class AuthNKrb final : public Auth {
     void addOptions(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {
         auto &config = authn_config_map.at(PVXS_KRB_AUTH_TYPE);
         auto config_krb = dynamic_cast<const ConfigKrb &>(*config);
+        app.add_option("--krb-keytab", config_krb.krb_keytab, "kerberos keytab file.");
         app.add_option("--krb-realm", config_krb.krb_realm, "kerberos realm.");
-        app.add_option("--krb-service", config_krb.krb_validator_service, "pvacms kerberos service name");
+        app.add_option("--krb-validator", config_krb.krb_validator, "pvacms kerberos validator service name");
     }
 
    private:

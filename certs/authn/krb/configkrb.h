@@ -55,7 +55,7 @@ class ConfigKrb final : public ConfigAuthN {
         return config;
     }
 
-    std::string krb_validator_service{PVXS_KRB_DEFAULT_VALIDATOR_SERVICE};
+    std::string krb_validator{PVXS_KRB_DEFAULT_VALIDATOR_SERVICE};
     std::string krb_realm{};
     std::string krb_keytab{};
 

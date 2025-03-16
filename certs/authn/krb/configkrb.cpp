@@ -20,7 +20,7 @@ void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string>& defs) {
 
     // EPICS_AUTH_KRB_REALM
     if (pickone({"EPICS_AUTH_KRB_VALIDATOR_SERVICE"})) {
-        krb_validator_service = pickone.val;
+        krb_validator = pickone.val;
     }
 
     // EPICS_AUTH_KRB_REALM
@@ -42,7 +42,7 @@ void ConfigKrb::updateDefs(defs_t& defs) const {
     ConfigAuthN::updateDefs(defs);
     defs["KRB5_KTNAME"] = krb_keytab;
     defs["KRB5_CLIENT_KTNAME"] = krb_keytab;
-    defs["EPICS_AUTH_KRB_VALIDATOR_SERVICE"] = krb_validator_service;
+    defs["EPICS_AUTH_KRB_VALIDATOR_SERVICE"] = krb_validator;
     defs["EPICS_AUTH_KRB_REALM"] = krb_realm;
 }
 

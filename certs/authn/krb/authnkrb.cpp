@@ -73,8 +73,7 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &, bo
 
     // Split the principal name into name and organization.
     const size_t at_pos = principal_name.find('@');
-    if (at_pos == std::string::npos)
-        throw std::runtime_error(SB() << "getCredentials: Invalid principal name format: " << principal_name);
+    if (at_pos == std::string::npos) throw std::runtime_error(SB() << "getCredentials: Invalid principal name format: " << principal_name);
 
     kerberos_credentials->name = principal_name.substr(0, at_pos);
     kerberos_credentials->organization = principal_name.substr(at_pos + 1);
@@ -86,11 +85,8 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &, bo
     kerberos_credentials->not_before = now;
     kerberos_credentials->not_after = now + lifetime;
 
-    log_debug_printf(auth, "\nName: %s, \nOrg: %s, \nnot_before: %lu, \nnot_after: %lu\n",
-                     kerberos_credentials->name.c_str(),
-                     kerberos_credentials->organization.c_str(),
-                     kerberos_credentials->not_before,
-                     kerberos_credentials->not_after);
+    log_debug_printf(auth, "\nName: %s, \nOrg: %s, \nnot_before: %lu, \nnot_after: %lu\n", kerberos_credentials->name.c_str(),
+                     kerberos_credentials->organization.c_str(), kerberos_credentials->not_before, kerberos_credentials->not_after);
 
     return kerberos_credentials;
 }
@@ -110,12 +106,11 @@ std::string AuthNKrb::getRealm() {
                      "Begin realm extraction");
 
     // Get principal info from the kerberos ticket
-    const auto& info = getPrincipalInfo();
+    const auto &info = getPrincipalInfo();
     auto const &principal_name = info.principal;
 
     const size_t at_pos = principal_name.find('@');
-    if (at_pos == std::string::npos)
-        throw std::runtime_error(SB() << "getRealm: Invalid principal name format: " << principal_name);
+    if (at_pos == std::string::npos) throw std::runtime_error(SB() << "getRealm: Invalid principal name format: " << principal_name);
 
     return principal_name.substr(at_pos + 1);
 }
@@ -466,14 +461,7 @@ PrincipalInfo AuthNKrb::getPrincipalInfo() {
     OM_uint32 lifetime = 0;
 
     log_debug_printf(auth, "gss_acquire_cred: GSS_C_NO_NAME, GSS_C_INDEFINITE, GSS_C_NO_OID_SET, GSS_C_INITIATE%s", "\n");
-    OM_uint32 major_status = gss_acquire_cred(&minor_status,
-                                              GSS_C_NO_NAME,
-                                              GSS_C_INDEFINITE,
-                                              GSS_C_NO_OID_SET,
-                                              GSS_C_INITIATE,
-                                              &cred_handle,
-                                              nullptr,
-                                              nullptr);
+    OM_uint32 major_status = gss_acquire_cred(&minor_status, GSS_C_NO_NAME, GSS_C_INDEFINITE, GSS_C_NO_OID_SET, GSS_C_INITIATE, &cred_handle, nullptr, nullptr);
     if (major_status != GSS_S_COMPLETE)
         throw std::runtime_error(SB() << "getPrincipalInfo: Failed to acquire credentials: " << gssErrorDescription(major_status, minor_status));
 
@@ -494,7 +482,7 @@ PrincipalInfo AuthNKrb::getPrincipalInfo() {
         throw std::runtime_error(SB() << "getPrincipalInfo: Failed to display principal name: " << error_description);
     }
 
-    std::string principal(static_cast<char*>(name_buffer.value), name_buffer.length);
+    std::string principal(static_cast<char *>(name_buffer.value), name_buffer.length);
 
     // Clean up GSSAPI objects.
     gss_release_buffer(&minor_status, &name_buffer);

@@ -91,17 +91,17 @@ If you want a prepackaged environment, try the following.  You will need two ter
     EPICS_PVAS_TLS_PORT=5076
     EPICS_PVAS_TLS_STOP_IF_NO_CERT=YES
 
-    +=======================================+
-    | PVACMS Certificate Management Service |
-    +---------------------------------------+
+    +=======================================+=======================================
+    | EPICS Secure PVAccess Certificate Management Service
+    +---------------------------------------+---------------------------------------
     | Certificate Database                  : /home/pvacms/.local/share/pva/1.3/certs.db
     | Certificate Authority                 : CN = EPICS Root Certificate Authority, C = US, O = certs.epics.org, OU = EPICS Certificate Authority
     | Certificate Authority Keychain File   : /home/pvacms/.config/pva/1.3/cert_auth.p12
     | PVACMS Keychain File                  : /home/pvacms/.config/pva/1.3/pvacms.p12
     | PVACMS Access Control File            : /home/pvacms/.config/pva/1.3/pvacms.acf
-    +---------------------------------------+
+    +---------------------------------------+---------------------------------------
     | PVACMS [2535f0b8] Service Running     |
-    +=======================================+
+    +=======================================+=======================================
 
 |2| Run Tools
 ----------------------
@@ -567,17 +567,17 @@ otherwise the certificate authority certificate will be created here
     EPICS_PVAS_TLS_PORT=5076
     EPICS_PVAS_TLS_STOP_IF_NO_CERT=YES
 
-    +=======================================+
-    | PVACMS Certificate Management Service |
-    +---------------------------------------+
+    +=======================================+=======================================
+    | EPICS Secure PVAccess Certificate Management Service
+    +---------------------------------------+---------------------------------------
     | Certificate Database                  : /home/pvacms/.local/share/pva/1.3/certs.db
     | Certificate Authority                 : CN = EPICS Root Certificate Authority, C = US, O = certs.epics.org, OU = EPICS Certificate Authority
     | Certificate Authority Keychain File   : /home/pvacms/.config/pva/1.3/cert_auth.p12
     | PVACMS Keychain File                  : /home/pvacms/.config/pva/1.3/pvacms.p12
     | PVACMS Access Control File            : /home/pvacms/.config/pva/1.3/pvacms.acf
-    +---------------------------------------+
+    +---------------------------------------+---------------------------------------
     | PVACMS [2535f0b8] Service Running     |
-    +=======================================+
+    +=======================================+=======================================
 
 .. note::
 

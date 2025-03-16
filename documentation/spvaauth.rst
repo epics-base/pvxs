@@ -496,15 +496,15 @@ and password file locations.
     Uses current kerberos ticket to create certificates with the same validity as the ticket.
 
     usage:
-      authnkrb [options]                          Create certificate
-      authnkrb (-h | --help)                      Show this help message and exit
-      authnkrb (-V | --version)                   Print version and exit
+      authnkrb [options]                         Create certificate
+      authnkrb (-h | --help)                     Show this help message and exit
+      authnkrb (-V | --version)                  Print version and exit
 
     options:
       (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`
-      (-s | --validator-service) <service-name>  Specify kerberos validator service.  Default `pvacms`
-      (-r | --realm) <krb-realm>                 Specify the kerberos realm.  If not specified we'll take it from the ticket
-      (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`
+      --krb-validator <service-name>             Specify kerberos validator name.  Default `pvacms`
+      --krb-realm <krb-realm>                    Specify the kerberos realm.  If not specified we'll take it from the ticket
+      (-D | --daemon)                             Start a daemon that re-requests a certificate on expiration`
       --add-config-uri                            Add a config uri to the generated certificate
       --config-uri-base <config_uri_base>         Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
       (-v | --verbose)                            Verbose mode
@@ -518,18 +518,17 @@ Credentials Verifier for :ref:`pvacms` at runtime.
 +----------------------+---------------------+--------------------------+----------------------+--------------------------------------+-----------------------------------------------------------------------+
 | Env. *authnkrb*      | Env. *pvacms*       | Params. *authkrb*        | Params. *pvacms*     | Keys and Values                      | Description                                                           |
 +======================+=====================+==========================+======================+======================================+=======================================================================+
-||                     || KRB5_KTNAME        ||                         ||                     || {string location of keytab file}    || This is the keytab file shared with :ref:`pvacms` by the KDC so      |
+||                     || KRB5_KTNAME        ||                         || ``--krb-keytab``    || {string location of keytab file}    || This is the keytab file shared with :ref:`pvacms` by the KDC so      |
 ||                     ||                    ||                         ||                     || e.g. ``/etc/security/keytab``       || that it can verify kerberos tickets                                  |
-||                     +---------------------+--------------------------+|                     ||                                     ||                                                                      |
+||                     +---------------------+|                         ||                     ||                                     ||                                                                      |
 ||                     || KRB5_CLIENT_KTNAME ||                         ||                     ||                                     ||                                                                      |
 ||                     ||                    ||                         ||                     ||                                     ||                                                                      |
 +----------------------+---------------------+--------------------------+----------------------+--------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_AUTH_KRB_VALIDATOR_SERVICE          || ``-s``                  || ``--krb-service``   || {this is service name}              || The name of the service user created in the KDC that the pvacms      |
-||                                           || ``--validator-service`` ||                     || e.g. ``pvacms/cluster@EPICS.ORG``   || service will log in as                                               |
-+--------------------------------------------+--------------------------+----------------------+--------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_AUTH_KRB_REALM                      || ``-r``                  || ``--krb-realm``     || e.g. ``EPICS.ORG``                  || Kerberos REALM authenticate against                                  |
-||                                           || ``--realm``             ||                     ||                                     ||                                                                      |
-+--------------------------------------------+--------------------------+----------------------+--------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_AUTH_KRB_VALIDATOR_SERVICE          || ``--krb-validator``                            || {this is validator service name}    || The name of the service user created in the KDC that the pvacms      |
+||                                           ||                                                || e.g. ``pvacms``                     || service will log in as.  `/cluster@{realm}` will be added            |
++--------------------------------------------+-------------------------------------------------+--------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_AUTH_KRB_REALM                      || ``--krb-realm``                                || e.g. ``EPICS.ORG``                  || Kerberos REALM to authenticate against                               |
++--------------------------------------------+-------------------------------------------------+--------------------------------------+-----------------------------------------------------------------------+
 
 **Setup of Kerberos in Docker Container for testing**
 

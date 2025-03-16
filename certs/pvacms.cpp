@@ -2184,21 +2184,21 @@ int main(int argc, char *argv[]) {
         auto subject_string = std::string(data, len);
 
         try {
-            std::cout << "+=======================================+" << std::endl;
-            std::cout << "| PVACMS Certificate Management Service |" << std::endl;
-            std::cout << "+---------------------------------------+" << std::endl;
-            std::cout << "| Certificate Database                  : " << config.certs_db_filename << std::endl;
-            std::cout << "| Certificate Authority                 : " << subject_string << std::endl;
-            std::cout << "| Certificate Authority Keychain File   : " << config.cert_auth_keychain_file << std::endl;
-            std::cout << "| PVACMS Keychain File                  : " << config.tls_keychain_file << std::endl;
-            std::cout << "| PVACMS Access Control File            : " << config.pvacms_acf_filename << std::endl;
-            std::cout << "+---------------------------------------+" << std::endl;
-            std::cout << "| PVACMS [" << our_issuer_id << "] Service Running     |" << std::endl;
-            std::cout << "+=======================================+" << std::endl;
+            std::cout << "+=======================================+======================================="   << std::endl;
+            std::cout << "| EPICS Secure PVAccess Certificate Management Service"                             << std::endl;
+            std::cout << "+---------------------------------------+---------------------------------------"   << std::endl;
+            std::cout << "| Certificate Database                  : " << config.certs_db_filename             << std::endl;
+            std::cout << "| Certificate Authority                 : " << subject_string                       << std::endl;
+            std::cout << "| Certificate Authority Keychain File   : " << config.cert_auth_keychain_file       << std::endl;
+            std::cout << "| PVACMS Keychain File                  : " << config.tls_keychain_file             << std::endl;
+            std::cout << "| PVACMS Access Control File            : " << config.pvacms_acf_filename           << std::endl;
+            std::cout << "+---------------------------------------+---------------------------------------"   << std::endl;
+            std::cout << "| PVACMS [" << our_issuer_id << "] Service Running     |"                           << std::endl;
+            std::cout << "+=======================================+======================================="   << std::endl;
             pva_server.run();
-            std::cout << "\n+=======================================+" << std::endl;
-            std::cout << "| PVACMS [" << our_issuer_id << "] Service Exiting     |" << std::endl;
-            std::cout << "+=======================================+" << std::endl;
+            std::cout << "\n+=======================================+=======================================" << std::endl;
+            std::cout << "| PVACMS [" << our_issuer_id << "] Service Exiting     |"                           << std::endl;
+            std::cout << "+=======================================+======================================="   << std::endl;
         } catch (const std::exception &e) {
             log_err_printf(pvacms, "PVACMS error: %s\n", e.what());
         }
