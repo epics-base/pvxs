@@ -14,6 +14,7 @@ export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/server.p12
 export EPICS_PVAS_AUTH_ORG=epics.org
 
 # set path
-export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+export PVXS_HOST_ARCH=$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
+export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/${PVXS_HOST_ARCH}):$PATH"
 
 cd ~

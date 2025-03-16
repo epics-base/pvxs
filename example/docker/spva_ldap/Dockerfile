@@ -68,7 +68,7 @@ RUN chmod 600 /etc/sssd/sssd.conf && chown root:root /etc/sssd/sssd.conf
 
 # Update /etc/nsswitch.conf to use SSSD for passwd, group, and shadow.
 RUN sed -i 's/^passwd:.*/passwd:         files sss/' /etc/nsswitch.conf && \
-    sed -i 's/^group:.*/group:          files sss/' /etc/nsswitch.conf && \
+    sed -i 's/^group:.*/group:           files sss/' /etc/nsswitch.conf && \
     sed -i 's/^shadow:.*/shadow:         files sss/' /etc/nsswitch.conf
 
 # (Optional) Expose the standard LDAP port if you plan to connect from outside.
