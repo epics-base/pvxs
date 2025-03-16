@@ -221,7 +221,7 @@ class StatusMonitor {
 
 void checkForDuplicates(const sql_ptr &certs_db, const CertFactory &cert_factory);
 
-CertData createCaCertificate(const ConfigCms &config, sql_ptr &certs_db, const std::shared_ptr<KeyPair> &key_pair);
+CertData createCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, const std::shared_ptr<KeyPair> &key_pair);
 
 ossl_ptr<X509> createCertificate(sql_ptr &certs_db, CertFactory &cert_factory);
 
@@ -251,7 +251,7 @@ time_t getNotAfterTimeFromCert(const X509 *cert);
 
 time_t getNotBeforeTimeFromCert(const X509 *cert);
 
-void getOrCreateCaCertificate(const ConfigCms &config, sql_ptr &certs_db, ossl_ptr<X509> &cert_auth_cert, ossl_ptr<EVP_PKEY> &cert_auth_pkey,
+void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, ossl_ptr<X509> &cert_auth_cert, ossl_ptr<EVP_PKEY> &cert_auth_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, bool &is_initialising);
 
 void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &cert_auth_cert);

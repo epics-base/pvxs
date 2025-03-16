@@ -522,6 +522,8 @@ certstatus_t storeCertificate(const sql_ptr &certs_db, CertFactory &cert_factory
  *    Users of this function should ensure that any required error handling and exception handling is implemented accordingly.
  */
 void checkForDuplicates(const sql_ptr &certs_db, const CertFactory &cert_factory) {
+    if ( cert_factory.allow_duplicates) return;
+
     // Prepare SQL statements
     sqlite3_stmt *sql_statement;
 
@@ -720,7 +722,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &certs_db, server::SharedWil
     try {
         certstatus_t state = UNKNOWN;
         // Call the authenticator specific verifier if not the default type
-        if (type.compare(PVXS_DEFAULT_AUTH_TYPE) != 0) {
+        if (type != PVXS_DEFAULT_AUTH_TYPE) {
             const auto authenticator = Auth::getAuth(type);
             if (!authenticator->verify(ccr)) throw std::runtime_error("CCR claims are invalid");
             state = VALID;
@@ -763,6 +765,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &certs_db, server::SharedWil
         // Create a certificate factory
         auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, usage, config_uri_base,
                                                config.cert_status_subscription, cert_auth_cert.get(), cert_auth_pkey.get(), cert_auth_cert_chain.get(), state);
+        certificate_factory.allow_duplicates = type != PVXS_DEFAULT_AUTH_TYPE;
 
         // Create the certificate using the certificate factory, store it in the database and return the PEM string
         auto pem_string = createCertificatePemString(certs_db, certificate_factory);
@@ -1042,7 +1045,7 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
  * @param cert_auth_chain reference to the certificate chain of the returned cert
  * @param is_initialising true if we are in the initializing state when called
  */
-void getOrCreateCaCertificate(const ConfigCms &config, sql_ptr &certs_db, ossl_ptr<X509> &cert_auth_cert, ossl_ptr<EVP_PKEY> &cert_auth_pkey,
+void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, ossl_ptr<X509> &cert_auth_cert, ossl_ptr<EVP_PKEY> &cert_auth_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, bool &is_initialising) {
     CertData cert_data;
     try {
@@ -1054,7 +1057,7 @@ void getOrCreateCaCertificate(const ConfigCms &config, sql_ptr &certs_db, ossl_p
     if (!key_pair) {
         is_initialising = true;  // Let caller know that we've created a new Cert and Key
         key_pair = IdFileFactory::createKeyPair();
-        cert_data = createCaCertificate(config, certs_db, key_pair);
+        cert_data = createCertAuthCertificate(config, certs_db, key_pair);
         createDefaultAdminACF(config, cert_data.cert);
         createAdminClientCert(config, certs_db, key_pair->pkey, cert_data.cert, cert_data.ca);
     }
@@ -1290,6 +1293,7 @@ void createAdminClientCert(const ConfigCms &config, sql_ptr &certs_db, const oss
     // Create a certificate factory
     auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, ssl::kForClient, true,
                                            cert_auth_cert.get(), cert_auth_pkey.get(), cert_auth_cert_chain.get(), VALID);
+    certificate_factory.allow_duplicates = false;
 
     // Create the certificate using the certificate factory, store it in the database and return the PEM string
     auto pem_string = createCertificatePemString(certs_db, certificate_factory);
@@ -1347,7 +1351,7 @@ void ensureServerCertificateExists(const ConfigCms &config, sql_ptr &certs_db, c
  * @param key_pair the key pair to use for the certificate
  * @return a cert data structure containing the cert and chain and a copy of the key
  */
-CertData createCaCertificate(const ConfigCms &config, sql_ptr &certs_db, const std::shared_ptr<KeyPair> &key_pair) {
+CertData createCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, const std::shared_ptr<KeyPair> &key_pair) {
     // Set validity to 4 yrs
     const time_t not_before(time(nullptr));
     const time_t not_after(not_before + (4 * 365 + 1) * 24 * 60 * 60);  // 4yrs
@@ -1357,6 +1361,7 @@ CertData createCaCertificate(const ConfigCms &config, sql_ptr &certs_db, const s
 
     auto certificate_factory = CertFactory(serial, key_pair, config.cert_auth_name, config.cert_auth_country, config.cert_auth_organization,
                                            config.cert_auth_organizational_unit, not_before, not_after, ssl::kForCa, config.cert_status_subscription);
+    certificate_factory.allow_duplicates = false;
 
     const auto pem_string = createCertificatePemString(certs_db, certificate_factory);
 
@@ -2053,7 +2058,7 @@ int main(int argc, char *argv[]) {
 
         // Get or create Certificate Authority Certificate
         auto is_initialising{false};
-        getOrCreateCaCertificate(config, certs_db, cert_auth_cert, cert_auth_pkey, cert_auth_chain, is_initialising);
+        getOrCreateCertAuthCertificate(config, certs_db, cert_auth_cert, cert_auth_pkey, cert_auth_chain, is_initialising);
         auto our_issuer_id = CertStatus::getSkId(cert_auth_cert);
 
         if (!admin_name.empty()) {

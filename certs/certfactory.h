@@ -61,6 +61,7 @@ class PVXS_API CertFactory {
     std::string cert_config_uri_base_;
     std::string skid_;
     certstatus_t initial_status_;
+    bool allow_duplicates{true};
 
     /**
      * @brief Constructor for CertFactory
