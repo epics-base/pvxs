@@ -17,7 +17,9 @@ on:
 
 jobs:
   build-epics-base:
-    if: ${{ github.event.inputs.build_target == 'epics-base' || github.event.inputs.build_target == 'all' }}
+    if: |
+      github.event.inputs.build_target == 'epics-base' ||
+      github.event.inputs.build_target == 'all'
     uses: george-mcintyre/epics-base/.github/workflows/docker-pub-epics-base.yml@7.0_method_and_authority
     secrets:
       DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
@@ -26,7 +28,10 @@ jobs:
   build-pvxs:
     needs: [build-epics-base]
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.build_target == 'pvxs' || github.event.inputs.build_target == 'all' }}
+    if: |
+      github.event.inputs.build_target == 'pvxs' || 
+      github.event.inputs.build_target == 'all' ||
+      (needs.build-epics-base.result == 'success')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -54,7 +59,10 @@ jobs:
   build-spva-std:
     needs: [build-pvxs]
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.build_target == 'spva_std' || github.event.inputs.build_target == 'all' }}
+    if: |
+      github.event.inputs.build_target == 'spva_std' || 
+      github.event.inputs.build_target == 'all' ||
+      (needs.build-pvxs.result == 'success')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -82,7 +90,10 @@ jobs:
   build-spva-krb:
     needs: [build-spva-std]
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.build_target == 'spva_krb' || github.event.inputs.build_target == 'all' }}
+    if: |
+      github.event.inputs.build_target == 'spva_krb' ||
+      github.event.inputs.build_target == 'all' ||
+      (needs.build-spva-std.result == 'success' && github.event.inputs.build_target != 'spva_ldap')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -110,7 +121,10 @@ jobs:
   build-spva-ldap:
     needs: [build-spva-std]
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.build_target == 'spva_ldap' || github.event.inputs.build_target == 'all' }}
+    if: |
+      github.event.inputs.build_target == 'spva_ldap' || 
+      github.event.inputs.build_target == 'all' ||
+      (needs.build-spva-std.result == 'success' && github.event.inputs.build_target != 'spva_krb')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
