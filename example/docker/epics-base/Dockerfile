@@ -1,3 +1,4 @@
+# Run from epics-base root dir
 FROM ubuntu:latest
 
 # Set environment variables
@@ -11,10 +12,9 @@ RUN apt-get update && \
             git && \
     mkdir -p ${PROJECT_HOME}
 
-# Clone and build EPICS Base
-WORKDIR ${PROJECT_HOME}
-RUN git clone --branch 7.0-method_and_authority https://github.com/george-mcintyre/epics-base.git && \
-    cd epics-base && \
-    make -j10 all
+# build EPICS Base
+WORKDIR ${PROJECT_HOME}/epics-base
+COPY . .
+RUN make -j10 all
 
 CMD ["/bin/bash"]
