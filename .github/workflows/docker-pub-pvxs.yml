@@ -14,6 +14,9 @@ on:
           - spva_krb
           - spva_ldap
           - all
+  push:
+    branches:
+      - 'tls'
 
 jobs:
   build-epics-base:
@@ -30,6 +33,7 @@ jobs:
     if: |
       github.event.inputs.build_target == 'pvxs' || 
       github.event.inputs.build_target == 'all' ||
+      github.event_name == 'push' ||
       (needs.build-epics-base.result == 'success')
     steps:
       - name: Checkout repository
