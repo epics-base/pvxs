@@ -14,11 +14,8 @@ RUN apt-get update && \
 
 # build EPICS Base
 WORKDIR ${PROJECT_HOME}
-COPY epics-base .
-RUN ls -la
+COPY epics-base ./epics-base
 WORKDIR ${PROJECT_HOME}/epics-base
-RUN ls -la
-RUN ls -la *
 RUN make -j10 all
 
 CMD ["/bin/bash"]
