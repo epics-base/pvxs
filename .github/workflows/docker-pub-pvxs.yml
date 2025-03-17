@@ -20,13 +20,12 @@ jobs:
     if: |
       github.event.inputs.build_target == 'epics-base' ||
       github.event.inputs.build_target == 'all'
-    uses: george-mcintyre/epics-base/.github/workflows/docker-pub-epics-base.yml@7.0_method_and_authority
+    uses: george-mcintyre/epics-base/.github/workflows/docker-pub-epics-base.yml@7.0-method_and_authority
     secrets:
       DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
       DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
 
   build-pvxs:
-    needs: [build-epics-base]
     runs-on: ubuntu-latest
     if: |
       github.event.inputs.build_target == 'pvxs' || 
@@ -57,7 +56,6 @@ jobs:
           tags: ${{ vars.DOCKER_USERNAME }}/pvxs:latest
 
   build-spva-std:
-    needs: [build-pvxs]
     runs-on: ubuntu-latest
     if: |
       github.event.inputs.build_target == 'spva_std' || 
@@ -88,7 +86,6 @@ jobs:
           tags: ${{ vars.DOCKER_USERNAME }}/spva_std:latest
 
   build-spva-krb:
-    needs: [build-spva-std]
     runs-on: ubuntu-latest
     if: |
       github.event.inputs.build_target == 'spva_krb' ||
@@ -119,7 +116,6 @@ jobs:
           tags: ${{ vars.DOCKER_USERNAME }}/spva_krb:latest
 
   build-spva-ldap:
-    needs: [build-spva-std]
     runs-on: ubuntu-latest
     if: |
       github.event.inputs.build_target == 'spva_ldap' || 
