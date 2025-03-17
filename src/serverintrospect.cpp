@@ -113,6 +113,23 @@ struct ServerIntrospectControl : public server::ConnectOp
     virtual void onGet(std::function<void(std::unique_ptr<server::ExecOp>&& fn)>&& fn) override final {}
     virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&& fn, Value&&)>&& fn) override final {}
 
+    virtual void logRemote(Level lvl, const std::string& msg) override final
+    {
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        std::string m(msg); // copy for bind
+        serv->acceptor_loop.dispatch([this, lvl, m](){
+            if(auto oper = op.lock()) {
+                if(auto chan = oper->chan.lock()) {
+                    if(auto conn = chan->conn.lock()) {
+                        conn->logRemote(oper->ioid, lvl, m);
+                    }
+                }
+            }
+        });
+    }
+
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerIntrospect> op;
 

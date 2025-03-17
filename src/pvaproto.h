@@ -22,6 +22,7 @@
 #include <event2/buffer.h>
 #include <pvxs/version.h>
 #include <pvxs/sharedArray.h>
+#include <pvxs/log.h>
 #include "utilpvt.h"
 
 namespace pvxs {namespace impl {
@@ -695,6 +696,32 @@ void from_wire(Buf& buf, Header& H)
         buf.skip(4u, __FILE__, __LINE__);
         from_wire(buf, H.len);
     }
+}
+
+// mapping between CMD_MESSAGE mtype and logging Level
+
+inline
+Level mtype2level(uint8_t mtype)
+{
+    switch(mtype) {
+    case 0:  return Level::Info;
+    case 1:  return Level::Warn;
+    case 2:  return Level::Err;
+    default: return Level::Crit;
+    }
+}
+
+inline
+uint8_t level2mtype(Level lvl)
+{
+    switch(lvl) {
+    case Level::Debug:
+    case Level::Info: return 0;
+    case Level::Warn: return 1;
+    case Level::Err:  return 2;
+    case Level::Crit: return 3;
+    }
+    return 3;
 }
 
 }} // namespace pvxs::impl
