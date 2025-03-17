@@ -21,8 +21,11 @@ WORKDIR ${PROJECT_HOME}
 RUN echo "EPICS_BASE = \$(TOP)/../epics-base" >> ${PROJECT_HOME}/RELEASE.local
 
 # build PVXS
+WORKDIR ${PROJECT_HOME}
+RUN ls -la
+COPY . ./pvxs
+RUN ls -la pvxs
 WORKDIR ${PROJECT_HOME}/pvxs
-COPY . .
 RUN make -j10 all
 
 CMD ["/bin/bash"]
