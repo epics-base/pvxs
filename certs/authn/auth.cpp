@@ -267,5 +267,6 @@ std::string Auth::formatTimeDuration(time_t total_seconds) {
     return oss.str();
 }
 
+
 }  // namespace certs
 }  // namespace pvxs

@@ -17,14 +17,9 @@
 #include <gssapi/gssapi_krb5.h>
 #endif
 
-#include <pvxs/config.h>
-
 #include <CLI/CLI.hpp>
 
 #include "authregistry.h"
-#include "certfilefactory.h"
-#include "certstatusfactory.h"
-#include "configkrb.h"
 #include "openssl.h"
 #include "p12filefactory.h"
 #include "utilpvt.h"

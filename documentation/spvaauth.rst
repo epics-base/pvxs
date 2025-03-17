@@ -419,20 +419,21 @@ and password file locations.
     Uses specified parameters to create certificates that require administrator APPROVAL before becoming VALID.
 
     usage:
-      authnstd [options]                          Create certificate in PENDING_APPROVAL state
-      authnstd (-h | --help)                      Show this help message and exit
-      authnstd (-V | --version)                   Print version and exit
+      authnstd [options]                         Create certificate in PENDING_APPROVAL state
+      authnstd (-h | --help)                     Show this help message and exit
+      authnstd (-V | --version)                  Print version and exit
 
     options:
       (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`
       (-n | --name) <name>                       Specify common name of the certificate. Default <logged-in-username>
       (-o | --organization) <organization>       Specify organisation name for the certificate. Default <hostname>
-      --ou <org-unit>                            Specify organisational unit for the certificate. Default <blank>
+            --ou <org-unit>                      Specify organisational unit for the certificate. Default <blank>
       (-c | --country) <country>                 Specify country for the certificate. Default locale setting if detectable otherwise `US`
       (-t | --time) <minutes>                    Duration of the certificate in minutes
       (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`
-      --add-config-uri                           Add a config uri to the generated certificate
-      --config-uri-base <config_uri_base>        Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
+            --add-config-uri                     Add a config uri to the generated certificate
+            --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
+            --force                              Force overwrite if certificate exists
       (-v | --verbose)                           Verbose mode
       (-d | --debug)                             Debug mode
 
@@ -502,13 +503,14 @@ and password file locations.
 
     options:
       (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`
-      --krb-validator <service-name>             Specify kerberos validator name.  Default `pvacms`
-      --krb-realm <krb-realm>                    Specify the kerberos realm.  If not specified we'll take it from the ticket
-      (-D | --daemon)                             Start a daemon that re-requests a certificate on expiration`
-      --add-config-uri                            Add a config uri to the generated certificate
-      --config-uri-base <config_uri_base>         Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
-      (-v | --verbose)                            Verbose mode
-      (-d | --debug)                              Debug mode
+            --krb-validator <service-name>       Specify kerberos validator name.  Default `pvacms`
+            --krb-realm <krb-realm>              Specify the kerberos realm.  If not specified we'll take it from the ticket
+      (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`
+            --add-config-uri                     Add a config uri to the generated certificate
+            --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
+            --force                              Force overwrite if certificate exists
+      (-v | --verbose)                           Verbose mode
+      (-d | --debug)                             Debug mode
 
 **Environment Variables for PVACMS AuthnKRB Verifier**
 
@@ -588,11 +590,12 @@ and password file locations.
                                                  e.g. epics.org ==> LDAP: dc=epics, dc=org ==> Cert: O=epics.org
                                                  Default <hostname>
       (-p | --password) <name>                   Specify LDAP password. If not specified will prompt for password
-      (     --ldap-host) <hostname>              LDAP server host
-      (     --ldap-port) <port>                  LDAP serever port
+            --ldap-host <hostname>               LDAP server host
+            --ldap-port <port>                   LDAP serever port
       (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`
-      --add-config-uri                           Add a config uri to the generated certificate
-      --config-uri-base <config_uri_base>        Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
+            --add-config-uri                     Add a config uri to the generated certificate
+            --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
+            --force                              Force overwrite if certificate exists
       (-v | --verbose)                           Verbose mode
       (-d | --debug)                             Debug mode
 

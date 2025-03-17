@@ -17,7 +17,6 @@
 #endif
 #endif
 
-#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -26,8 +25,6 @@
 #include <ldap.h>
 
 #include <openssl/evp.h>
-
-#include <pvxs/config.h>
 
 #include "auth.h"
 #include "authregistry.h"

@@ -3,30 +3,24 @@
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
-
-#include <cstring>
-#include <stdexcept>
-#include <string>
-
-#include <pvxs/config.h>
-#include <pvxs/sslinit.h>
-
 #include <CLI/CLI.hpp>
 
 #include "authnldap.h"
 #include "authregistry.h"
-#include "certfilefactory.h"
-#include "certstatusfactory.h"
 #include "configldap.h"
 #include "openssl.h"
 #include "p12filefactory.h"
-#include "utilpvt.h"
-
-DEFINE_LOGGER(auth, "pvxs.auth.ldap");
 
 namespace pvxs {
 namespace certs {
 
+/**
+ * @brief Prompt the user for a password
+ *
+ * This function prompts the user for a password and returns the password.
+ *
+ * @param prompt the prompt to display to the user
+ */
 std::string promptPassword(const std::string &prompt) {
     // getpass() prints the prompt and reads a password from /dev/tty without echo.
     char *pass = getpass(prompt.c_str());
@@ -36,20 +30,29 @@ std::string promptPassword(const std::string &prompt) {
     return std::string(pass);
 }
 
-int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bool &debug, uint16_t &cert_usage, bool &daemon_mode) {
-    const auto program_name = argv[0];
-    bool show_version{false}, help{false}, add_config_uri{false};
-    std::string usage{"client"};
-
-    CLI::App app{"authnldap - Secure PVAccess LDAP Authenticator"};
-
-    // Define options
+/**
+ * @brief Define the options for the authnldap tool
+ *
+ * This function defines the options for the authnldap tool.
+ *
+ * @param app the CLI::App object to add the options to
+ * @param config the configuration to override with command line parameters
+ * @param verbose the verbose flag to set the logger level
+ * @param debug the debug flag to set the logger level
+ * @param daemon_mode the daemon mode flag to set daemon mode
+ * @param show_version the show version flag to show version and exit
+ * @param help the help flag to show this help message and exit
+ * @param add_config_uri the add config uri flag to add a config uri to the generated certificate
+ * @param usage the certificate usage client, server, or hybrid
+ */
+void defineOptions(CLI::App &app, ConfigLdap &config, bool &verbose, bool &debug, bool &daemon_mode, bool &force, bool &show_version, bool &help, bool &add_config_uri, std::string &usage) {
     app.set_help_flag("", "");  // deactivate built-in help
 
     app.add_flag("-h,--help", help);
     app.add_flag("-v,--verbose", verbose, "Make more noise");
     app.add_flag("-d,--debug", debug, "Debug mode");
     app.add_flag("-V,--version", show_version, "Print version and exit.");
+    app.add_flag("--force", force, "Force overwrite if certificate exists.");
 
     app.add_flag("-D,--daemon", daemon_mode, "Daemon mode");
     app.add_flag("--add-config-uri", add_config_uri, "Add a config uri to the generated certificate");
@@ -63,36 +66,51 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
 
     app.add_option("--ldap-host", config.ldap_host, "Specify LDAP host.  Default localhost");
     app.add_option("--ldap-port", config.ldap_port, "Specify LDAP port.  Default 389");
+}
+
+void showHelp(const char * const program_name) {
+    std::cout << "authnldap - Secure PVAccess LDAP Authenticator\n"
+        << std::endl
+        << "Generates client, server, or hybrid certificates based on the LDAP credentials. \n"
+        << std::endl
+        << "usage:\n"
+        << "  " << program_name << " [options]                        Create certificate in PENDING_APPROVAL state\n"
+        << "  " << program_name << " (-h | --help)                    Show this help message and exit\n"
+        << "  " << program_name << " (-V | --version)                 Print version and exit\n"
+        << std::endl
+        << "options:\n"
+        << "  (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`\n"
+        << "  (-n | --name) <name>                       Specify LDAP username for common name in the certificate.\n"
+        << "                                             e.g. name ==> LDAP: uid=name, ou=People ==> Cert: CN=name\n"
+        << "                                             Default <logged-in-username>\n"
+        << "  (-o | --organization) <organization>       Specify LDAP org for organization in the certificate.\n"
+        << "                                             e.g. epics.org ==> LDAP: dc=epics, dc=org ==> Cert: O=epics.org\n"
+        << "                                             Default <hostname>\n"
+        << "  (-p | --password) <name>                   Specify LDAP password. If not specified will prompt for password\n"
+        << "        --ldap-host <hostname>               LDAP server host\n"
+        << "        --ldap-port <port>                   LDAP serever port\n"
+        << "  (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`\n"
+        << "        --add-config-uri                     Add a config uri to the generated certificate\n"
+        << "        --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`\n"
+        << "        --force                              Force overwrite if certificate exists\n"
+        << "  (-v | --verbose)                           Verbose mode\n"
+        << "  (-d | --debug)                             Debug mode\n"
+        << std::endl;
+}
+
+int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bool &debug, uint16_t &cert_usage, bool &daemon_mode, bool &force) {
+    const auto program_name = argv[0];
+    bool show_version{false}, help{false}, add_config_uri{false};
+    std::string usage{"client"};
+
+    CLI::App app{"authnldap - Secure PVAccess LDAP Authenticator"};
+
+    defineOptions(app, config, verbose, debug, daemon_mode, force, show_version, help, add_config_uri, usage);
 
     CLI11_PARSE(app, argc, argv);
 
     if (help) {
-        std::cout << "authnldap - Secure PVAccess LDAP Authenticator\n"
-                  << std::endl
-                  << "Generates client, server, or hybrid certificates based on the LDAP credentials. \n"
-                  << std::endl
-                  << "usage:\n"
-                  << "  " << program_name << " [options]                        Create certificate in PENDING_APPROVAL state\n"
-                  << "  " << program_name << " (-h | --help)                    Show this help message and exit\n"
-                  << "  " << program_name << " (-V | --version)                 Print version and exit\n"
-                  << std::endl
-                  << "options:\n"
-                  << "  (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`\n"
-                  << "  (-n | --name) <name>                       Specify LDAP username for common name in the certificate.\n"
-                  << "                                             e.g. name ==> LDAP: uid=name, ou=People ==> Cert: CN=name\n"
-                  << "                                             Default <logged-in-username>\n"
-                  << "  (-o | --organization) <organization>       Specify LDAP org for organization in the certificate.\n"
-                  << "                                             e.g. epics.org ==> LDAP: dc=epics, dc=org ==> Cert: O=epics.org\n"
-                  << "                                             Default <hostname>\n"
-                  << "  (-p | --password) <name>                   Specify LDAP password. If not specified will prompt for password\n"
-                  << "  (     --ldap-host) <hostname>              LDAP server host\n"
-                  << "  (     --ldap-port) <port>                  LDAP serever port\n"
-                  << "  (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`\n"
-                  << "  --add-config-uri                           Add a config uri to the generated certificate\n"
-                  << "  --config-uri-base <config_uri_base>        Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`\n"
-                  << "  (-v | --verbose)                           Verbose mode\n"
-                  << "  (-d | --debug)                             Debug mode\n"
-                  << std::endl;
+        showHelp(program_name);
         exit(0);
     }
 
@@ -113,7 +131,7 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
         }
     } else if (usage == "client") {
         cert_usage = ssl::kForClient;
-        if (config.tls_srv_keychain_file.empty()) {
+        if (config.tls_keychain_file.empty()) {
             std::cerr << "You must set EPICS_PVA_TLS_KEYCHAIN environment variable to create client certificates" << std::endl;
             return 11;
         }
@@ -135,71 +153,6 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
     return 0;
 }
 
-CertData getCertificate(bool &retrieved_credentials, ConfigLdap config, uint16_t cert_usage, const AuthNLdap &authenticator,
-                        const std::string &tls_keychain_file, const std::string &tls_keychain_pwd) {
-    CertData cert_data{};
-
-    if (auto credentials = authenticator.getCredentials(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient))) {
-        std::shared_ptr<KeyPair> key_pair;
-        log_debug_printf(auth, "Credentials retrieved for: %s authenticator\n", authenticator.type_.c_str());
-        retrieved_credentials = true;
-
-        // Get key pair
-        try {
-            // Check if the key pair exists
-            key_pair = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getKeyFromFile();
-        } catch (std::exception &e) {
-            // Make a new key pair file
-            try {
-                log_debug_printf(auth, "%s\n", e.what());
-                key_pair = IdFileFactory::createKeyPair();
-            } catch (std::exception &new_e) {
-                throw std::runtime_error(SB() << "Error creating client key: " << new_e.what());
-            }
-        }
-
-        // Create a certificate creation request using the credentials and
-        // key pair
-        auto cert_creation_request = authenticator.createCertCreationRequest(credentials, key_pair, cert_usage);
-
-        log_debug_printf(auth, "CCR created for: %s Authenticator\n", authenticator.type_.c_str());
-
-        // Attempt to create a certificate with the certificate creation
-        // request
-        auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request, config.request_timeout_specified);
-
-        // If the certificate was created successfully,
-        if (!p12_pem_string.empty()) {
-            log_debug_printf(auth, "Cert generated by PVACMS and successfully received: %s\n", p12_pem_string.c_str());
-
-            // Attempt to write the certificate and private key
-            // to a cert file protected by the configured password
-            auto file_factory = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd, key_pair, nullptr, nullptr, p12_pem_string);
-            file_factory->writeIdentityFile();
-
-            // Read file back for info
-            auto read_back_cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
-            auto serial_number = CertStatusFactory::getSerialNumber(read_back_cert_data.cert);
-            auto issuer_id = CertStatus::getIssuerId(read_back_cert_data.ca);
-
-            std::string from = std::ctime(&credentials->not_before);
-            std::string to = std::ctime(&credentials->not_after);
-            log_info_printf(auth, "%s\n", (pvxs::SB() << "CERT_ID: " << issuer_id << ":" << serial_number).str().c_str());
-            log_info_printf(auth, "%s\n", (pvxs::SB() << "TYPE: " << authenticator.type_).str().c_str());
-            log_info_printf(auth, "%s\n", (pvxs::SB() << "OUTPUT TO: " << tls_keychain_file).str().c_str());
-            log_info_printf(auth, "%s\n", (pvxs::SB() << "NAME: " << credentials->name).str().c_str());
-            log_info_printf(auth, "%s\n", (pvxs::SB() << "ORGANIZATION: " << credentials->organization).str().c_str());
-            log_info_printf(auth, "%s\n", (pvxs::SB() << "ORGANIZATIONAL UNIT: " << credentials->organization_unit).str().c_str());
-            log_info_printf(auth, "%s\n", (pvxs::SB() << "COUNTRY: " << credentials->country).str().c_str());
-            log_info_printf(auth, "%s\n",
-                            (pvxs::SB() << "VALIDITY: " << from.substr(0, from.size() - 1) << " to " << to.substr(0, to.size() - 1)).str().c_str());
-            std::cout << "Certificate identifier  : " << issuer_id << ":" << serial_number << std::endl;
-
-            log_info_printf(auth, "--------------------------------------%s", "\n");
-        }
-    }
-    return cert_data;
-}
 }  // namespace certs
 }  // namespace pvxs
 
@@ -213,66 +166,5 @@ using namespace pvxs::certs;
  * @return the exit status
  */
 int main(int argc, char *argv[]) {
-    pvxs::logger_config_env();
-    bool retrieved_credentials{false};
-
-    try {
-        pvxs::ossl::sslInit();
-
-        auto config = ConfigLdap::fromEnv();
-
-        bool verbose{false}, debug{false}, daemon_mode{false};
-        uint16_t cert_usage{pvxs::ssl::kForClient};
-
-        auto parse_result = readParameters(argc, argv, config, verbose, debug, cert_usage, daemon_mode);
-        if (parse_result) exit(parse_result);
-
-        if (verbose) logger_level_set("pvxs.auth.ldap*", pvxs::Level::Info);
-        if (debug) logger_level_set("pvxs.auth.ldap*", pvxs::Level::Debug);
-
-        // Standard authenticator
-        AuthNLdap authenticator{};
-        // Add configuration to authenticator
-        authenticator.configure(config);
-
-        if (verbose) {
-            std::cout << "Effective config\n" << config << std::endl;
-        }
-
-        const std::string tls_keychain_file = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_file : config.tls_keychain_file;
-        const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;
-
-        // Get the Standard authenticator credentials
-        // Get the Standard authenticator credentials
-        CertData cert_data;
-        try {
-            if (daemon_mode) {
-                auto new_cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
-                const auto now = time(nullptr);
-                const auto not_after_time = CertFactory::getNotAfterTimeFromCert(new_cert_data.cert);
-                if (not_after_time > now) {
-                    cert_data = std::move(new_cert_data);
-                }
-            }
-        } catch (std::exception &) {
-        }
-
-        if (!cert_data.cert) cert_data = getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd);
-
-        if (daemon_mode) {
-            authenticator.runAuthNDaemon(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient), std::move(cert_data),
-                                         [&retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file, tls_keychain_pwd]() {
-                                             return getCertificate(retrieved_credentials, config, cert_usage, authenticator, tls_keychain_file,
-                                                                   tls_keychain_pwd);
-                                         });
-        }
-
-        return 0;
-    } catch (std::exception &e) {
-        if (retrieved_credentials)
-            log_warn_printf(auth, "%s\n", e.what());
-        else
-            log_err_printf(auth, "%s\n", e.what());
-    }
-    return -1;
+    return runAuthenticator<ConfigLdap, AuthNLdap>(argc, argv);
 }
