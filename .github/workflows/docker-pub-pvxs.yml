@@ -63,6 +63,7 @@ jobs:
 
 
   build-spva-std:
+    needs: [build-pvxs]
     runs-on: ubuntu-latest
     if: |
       github.event.inputs.build_target == 'spva_std' || 
