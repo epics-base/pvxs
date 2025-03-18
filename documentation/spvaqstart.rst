@@ -53,7 +53,8 @@ If you want a prepackaged environment, try the following.  You will need two ter
 
     export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
     export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
-    export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+    export PVXS_HOST_ARCH=$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
+    export PATH="${PROJECT_HOME}/pvxs/bin/${PVXS_HOST_ARCH}:$PATH"
     pvacms -v
 
 .. code-block:: console
@@ -119,7 +120,8 @@ If you want a prepackaged environment, try the following.  You will need two ter
 
     export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
     export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
-    export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+    export PVXS_HOST_ARCH=$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
+    export PATH="${PROJECT_HOME}/pvxs/bin/${PVXS_HOST_ARCH}:$PATH"
     export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.3/admin.p12
 
 - run some *pvxcert* commands
@@ -459,7 +461,8 @@ For MacOS
 
 .. code-block:: shell
 
-    export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+    export PVXS_HOST_ARCH=$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
+    export PATH="${PROJECT_HOME}/pvxs/bin/${PVXS_HOST_ARCH}:$PATH"
 
 
 - *optionally*
@@ -611,7 +614,8 @@ otherwise the certificate authority certificate will be created here
     export PROJECT_HOME=/opt/epics
     export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
     export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
-    export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+    export PVXS_HOST_ARCH=$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
+    export PATH="${PROJECT_HOME}/pvxs/bin/${PVXS_HOST_ARCH}:$PATH"
 
 ----------------------
 

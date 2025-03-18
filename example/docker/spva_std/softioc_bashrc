@@ -15,6 +15,6 @@ export EPICS_PVAS_AUTH_ORG=epics.org
 
 # set path
 export PVXS_HOST_ARCH=$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
-export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/${PVXS_HOST_ARCH}):$PATH"
+export PATH="${PROJECT_HOME}/pvxs/bin/${PVXS_HOST_ARCH}:$PATH"
 
 cd ~

@@ -231,7 +231,8 @@ your environment.
 
     export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
     export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
-    export PATH="$(echo ${PROJECT_HOME}/pvxs/bin/*):$PATH"
+    export PVXS_HOST_ARCH=$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
+    export PATH="${PROJECT_HOME}/pvxs/bin/${PVXS_HOST_ARCH}:$PATH"
 
 
 .. _spva_qs_std_admin:
