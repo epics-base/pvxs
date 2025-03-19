@@ -224,7 +224,7 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
     EPICS_PVA_TLS_PORT=5076
     XDG_CONFIG_HOME=/home/client/.config/pva/1.3
     XDG_DATA_HOME=/home/client/.local/share/pva/1.3
-    # TLS x509:EPICS Root Certificate Authority/softioc@172.17.0.2:35255
+    # TLS x509:47530d89:12147807175996825338:EPICS Root Certificate Authority/softioc@172.17.0.2:35255
     test:enumExample from 172.17.0.2:35255
     struct "epics:nt/NTEnum:1.0" {
         struct "enum_t" {
@@ -248,7 +248,7 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
 
 - verify that connection is TLS
 
-- ``TLS x509:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
+- ``TLS x509:47530d89:12147807175996825338:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
   - The connection is ``TLS``,
   - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
@@ -1026,7 +1026,7 @@ then generate X.509 certificates.
     EPICS_PVA_TLS_PORT=5076
     XDG_CONFIG_HOME=/home/client/.config/pva/1.3
     XDG_DATA_HOME=/home/client/.local/share/pva/1.3
-    # TLS x509:EPICS Root Certificate Authority/softioc@172.17.0.2:37623
+    # TLS x509:b271f07a:13935791733272200197:EPICS Root Certificate Authority/softioc@172.17.0.2:37623
     test:enumExample from 172.17.0.2:37623
     struct "epics:nt/NTEnum:1.0" {
         struct "enum_t" {
@@ -1050,7 +1050,7 @@ then generate X.509 certificates.
 
 .. note::
 
-  - ``TLS x509:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
+  - ``TLS x509:b271f07a:13935791733272200197:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
     - The connection is ``TLS``,
     - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``

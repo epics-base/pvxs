@@ -661,14 +661,14 @@ Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
 }
 
 void Config::updateDefs(defs_t& defs) const {
-    defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = SB() << udp_port;
-    defs["EPICS_PVA_SERVER_PORT"] = defs["EPICS_PVAS_SERVER_PORT"] = SB() << tcp_port;
+    defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = std::to_string(udp_port);
+    defs["EPICS_PVA_SERVER_PORT"] = defs["EPICS_PVAS_SERVER_PORT"] = std::to_string(tcp_port);
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = auto_beacon ? "YES" : "NO";
 
     if (!beaconDestinations.empty()) defs["EPICS_PVA_ADDR_LIST"] = defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
     if (!interfaces.empty()) defs["EPICS_PVA_INTF_ADDR_LIST"] = defs["EPICS_PVAS_INTF_ADDR_LIST"] = join_addr(interfaces);
     if (!ignoreAddrs.empty()) defs["EPICS_PVAS_IGNORE_ADDR_LIST"] = join_addr(ignoreAddrs);
-    defs["EPICS_PVA_CONN_TMO"] = SB() << tcpTimeout / tmoScale;
+    defs["EPICS_PVA_CONN_TMO"] = std::to_string(tcpTimeout / tmoScale);
 
     defs["EPICS_XDG_DATA_HOME"] = data_home;
     defs["EPICS_XDG_CONFIG_HOME"] = config_home;
@@ -684,7 +684,7 @@ void Config::updateDefs(defs_t& defs) const {
     defs["EPICS_PVAS_TLS_OPTIONS"] = printTLSOptions(*this);
 
     // EPICS_PVAS_TLS_PORT
-    defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = SB() << tls_port;
+    defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = std::to_string(tls_port);
 
     // EPICS_PVAS_TLS_STOP_IF_NO_CERT
     defs["EPICS_PVAS_TLS_STOP_IF_NO_CERT"] = tls_stop_if_no_cert ? "YES" : "NO";
@@ -866,12 +866,12 @@ Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
 }
 
 void Config::updateDefs(defs_t& defs) const {
-    defs["EPICS_PVA_BROADCAST_PORT"] = SB() << udp_port;
-    defs["EPICS_PVA_SERVER_PORT"] = SB() << tcp_port;
+    defs["EPICS_PVA_BROADCAST_PORT"] = std::to_string(udp_port);
+    defs["EPICS_PVA_SERVER_PORT"] = std::to_string(tcp_port);
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = autoAddrList ? "YES" : "NO";
     if (!addressList.empty()) defs["EPICS_PVA_ADDR_LIST"] = join_addr(addressList);
     if (!interfaces.empty()) defs["EPICS_PVA_INTF_ADDR_LIST"] = join_addr(interfaces);
-    defs["EPICS_PVA_CONN_TMO"] = SB() << tcpTimeout / tmoScale;
+    defs["EPICS_PVA_CONN_TMO"] = std::to_string(tcpTimeout / tmoScale);
     if (!nameServers.empty()) defs["EPICS_PVA_NAME_SERVERS"] = join_addr(nameServers);
 
     defs["XDG_DATA_HOME"] = data_home;
@@ -888,7 +888,7 @@ void Config::updateDefs(defs_t& defs) const {
     defs["EPICS_PVA_TLS_OPTIONS"] = printTLSOptions(*this);
 
     // EPICS_PVA_TLS_PORT
-    defs["EPICS_PVA_TLS_PORT"] = SB() << tls_port;
+    defs["EPICS_PVA_TLS_PORT"] = std::to_string(tls_port);
 
 #endif  // PVXS_ENABLE_OPENSSL
 }

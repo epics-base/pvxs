@@ -764,8 +764,15 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
             temp.method = "x509";
             temp.account = name;
 
+            // Get serial number
+            const ASN1_INTEGER* serial_asn1 = X509_get_serialNumber(cert);
+            if (!serial_asn1) throw std::runtime_error("Failed to retrieve serial number from peer certificate");
+            serial_number_t serial = 0;
+            for (int i = 0; i < serial_asn1->length; ++i) serial = serial << 8 | serial_asn1->data[i];
+            temp.serial = std::to_string(serial);
+
             // try to use root CA name to qualify authority
-            if (auto chain = SSL_get0_verified_chain(ctx)) {
+            if (const auto chain = SSL_get0_verified_chain(ctx)) {
                 auto N = sk_X509_num(chain);
                 X509 *root;
                 X509_NAME *rootName;
@@ -774,6 +781,7 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
                     X509_NAME_get_text_by_NID(rootName, NID_commonName, name, sizeof(name) - 1)) {
                     if (X509_check_ca(root) && (X509_get_extension_flags(root) & EXFLAG_SS)) {
                         temp.authority = name;
+                        temp.issuer_id = certs::CertStatus::getSkId(root);
 
                     } else {
                         log_warn_printf(io, "Last cert in peer chain is not root CA?!? %s\n", std::string(SB() << ossl::ShowX509{root}).c_str());
@@ -784,9 +792,8 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
 
         C = std::move(temp);
         return true;
-    } else {
-        return false;
     }
+    return false;
 }
 
 /**

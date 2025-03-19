@@ -40,6 +40,10 @@ std::ostream& operator<<(std::ostream& strm, const PeerCredentials& cred)
     if(cred.isTLS)
         strm<<"TLS ";
     strm<<cred.method;
+    if(!cred.issuer_id.empty())
+        strm<<":"<<cred.issuer_id;
+    if(!cred.serial.empty())
+        strm<<":"<<cred.serial;
     if(!cred.authority.empty())
         strm<<":"<<cred.authority;
     strm<<"/"<<cred.account<<"@"<<cred.peer;

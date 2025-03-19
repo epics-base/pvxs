@@ -69,7 +69,7 @@ class AuthNLdap final : public Auth {
      */
     void updateDefs(client::Config::defs_t &defs) const override {
         defs["EPICS_AUTH_LDAP_HOST"] = ldap_server;
-        defs["EPICS_AUTH_LDAP_PORT"] = SB() << ldap_port;
+        defs["EPICS_AUTH_LDAP_PORT"] = std::to_string(ldap_port);
     }
 
     std::string getOptionsPlaceholderText() override { return " [ldap options]"; }

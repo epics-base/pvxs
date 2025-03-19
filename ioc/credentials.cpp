@@ -29,6 +29,8 @@ Credentials::Credentials(const server::ClientCredentials& clientCredentials) {
     host = clientCredentials.peer.substr(0, pos);
     method = clientCredentials.method;
     authority = clientCredentials.authority;
+    issuer_id = clientCredentials.issuer_id;
+    serial = clientCredentials.serial;
     cred.emplace_back(clientCredentials.account);
 
     for (const auto& role: clientCredentials.roles()) {

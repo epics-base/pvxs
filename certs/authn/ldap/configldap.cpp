@@ -52,7 +52,7 @@ void ConfigLdap::updateDefs(defs_t &defs) const {
     ConfigAuthN::updateDefs(defs);
     if (!ldap_account_password.empty()) defs["EPICS_AUTH_LDAP_ACCOUNT_PWD_FILE"] = "<password read>";
     defs["EPICS_AUTH_LDAP_HOST"] = ldap_host;
-    defs["EPICS_AUTH_LDAP_PORT"] = SB() << ldap_port;
+    defs["EPICS_AUTH_LDAP_PORT"] = std::to_string(ldap_port);
 }
 
 }  // namespace certs

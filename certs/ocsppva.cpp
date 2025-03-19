@@ -148,7 +148,7 @@ int ocspService(client::Context &pva_client, std::string &port, bool verbose) {
     // Listen on port
     ossl_ptr_all<BIO> bio_acc(BIO_new_accept(port.c_str()));
     if (BIO_do_accept(bio_acc.get()) <= 0) {
-        throw std::runtime_error(SB() << "Error setting up accept BIO for OCSP");
+        throw std::runtime_error("Error setting up accept BIO for OCSP");
     }
 
     while (true) {

@@ -52,6 +52,12 @@ struct PVXS_API PeerCredentials {
     //! For "x509" method, common name of the root CA.
     //! @since UNRELEASED
     std::string authority;
+    // For "x509"
+    // Peer certificate issuer ID (not passed to EPICS security)
+    std::string issuer_id;
+    // For "x509"
+    // Peer certificate serial number (not passed to EPICS security)
+    std::string serial;
     //! Remote user account name.  Meaning depends upon method.
     std::string account;
     /** Lookup (locally) roles associated with the account.

@@ -34,7 +34,7 @@ void ConfigStd::fromStdEnv(const std::map<std::string, std::string> &defs) {
  */
 void ConfigStd::updateDefs(defs_t &defs) const {
     ConfigAuthN::updateDefs(defs);
-    defs["EPICS_AUTH_CERT_VALIDITY_MINS"] = SB() << cert_validity_mins;
+    defs["EPICS_AUTH_CERT_VALIDITY_MINS"] = std::to_string(cert_validity_mins);
 }
 
 }  // namespace certs

@@ -180,7 +180,7 @@ void ConfigCms::updateDefs(defs_t &defs) const {
     defs["EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT"] = defs["EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT"] = defs["EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT"] =
         cert_auth_organizational_unit;
     defs["EPICS_CERT_AUTH_COUNTRY"] = defs["EPICS_PVAS_AUTH_COUNTRY"] = defs["EPICS_PVAS_AUTH_COUNTRY"] = cert_auth_country;
-    defs["EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS"] = SB() << cert_status_validity_mins;
+    defs["EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS"] = std::to_string(cert_status_validity_mins);
     defs["EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"] = cert_client_require_approval ? "YES" : "NO";
     defs["EPICS_PVACMS_REQUIRE_SERVER_APPROVAL"] = cert_server_require_approval ? "YES" : "NO";
     defs["EPICS_PVACMS_REQUIRE_HYBRID_APPROVAL"] = cert_hybrid_require_approval ? "YES" : "NO";

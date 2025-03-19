@@ -115,7 +115,7 @@ ossl_ptr<X509> CertFactory::create() {
         for (int i = 0; i < num_certs; ++i) {
             const auto chain_cert = sk_X509_value(issuer_chain_ptr_, i);
             if (sk_X509_push(certificate_chain_.get(), chain_cert) != 1) {
-                throw std::runtime_error(SB() << "Failed to create certificate chain for new certificate");
+                throw std::runtime_error("Failed to create certificate chain for new certificate");
             }
         }
         // Add the issuer's certificate too if not already added
@@ -129,7 +129,7 @@ ossl_ptr<X509> CertFactory::create() {
 
     // 13. Sign the certificate with the private key of the issuer
     if (!X509_sign(certificate.get(), issuer_pkey_ptr_, EVP_sha256())) {
-        throw std::runtime_error(SB() << "Failed to sign the certificate");
+        throw std::runtime_error("Failed to sign the certificate");
     }
     log_debug_printf(certs, "Certificate: %s\n", "<SIGNED>");
 

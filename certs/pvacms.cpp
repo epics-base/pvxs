@@ -2131,7 +2131,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 std::string issuer_id;
-                uint64_t serial;
+                serial_number_t serial;
                 std::tie(issuer_id, serial) = getParameters(parameters);
 
                 // Get desired state
@@ -2149,13 +2149,22 @@ int main(int argc, char *argv[]) {
                 static ASMember as_member;
                 securityClient.update(as_member.mem, ASL1, credentials);
 
-                if (!securityClient.canWrite()) {
+                // Don't allow if:
+                // - The new `state` is not `REVOKE` and the user is not an administrator, OR
+                // - The new `state` is `REVOKE` and either:
+                //   - both conditions are true (an administrator is revoking their own certificate), OR
+                //   - both are false (a non-administrator is revoking a certificate that is not their own).
+                const auto is_admin = securityClient.canWrite();
+                const auto is_own_cert = (credentials.issuer_id == our_issuer_id && std::to_string(serial) == credentials.serial);
+                const auto is_revoke   = (state == "REVOKED");
+
+                if (!((!is_revoke && is_admin) || (is_revoke && (is_admin ^ is_own_cert)))) {
                     log_err_printf(pvacms, "PVACMS Client Not Authorised%s", "\n");
                     op->error(pvxs::SB() << state << " operation not authorized on " << issuer_id << ":" << serial);
                     return;
                 }
 
-                if (state == "REVOKED") {
+                if (is_revoke) {
                     onRevoke(config, certs_db, our_issuer_id, pv, std::move(op), pv_name, parameters, cert_auth_pkey, cert_auth_cert, cert_auth_chain);
                 } else if (state == "APPROVED") {
                     onApprove(config, certs_db, our_issuer_id, pv, std::move(op), pv_name, parameters, cert_auth_pkey, cert_auth_cert, cert_auth_chain);

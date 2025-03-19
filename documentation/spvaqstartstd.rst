@@ -168,7 +168,7 @@ If you want a prepackaged environment, try the following.  You will need four te
     EPICS_PVA_TLS_PORT=5076
     XDG_CONFIG_HOME=/home/client/.config/pva/1.3
     XDG_DATA_HOME=/home/client/.local/share/pva/1.3
-    # TLS x509:EPICS Root Certificate Authority/softioc@172.17.0.2:33809
+    # TLS x509:47530d89:7450074183745406049:EPICS Root Certificate Authority/softioc@172.17.0.2:33809
     test:enumExample from 172.17.0.2:33809
     struct "epics:nt/NTEnum:1.0" {
        struct "enum_t" {
@@ -192,7 +192,7 @@ If you want a prepackaged environment, try the following.  You will need four te
 
 - verify that connection is TLS
 
-  - ``TLS x509:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
+  - ``TLS x509:47530d89:7450074183745406049:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
     - The connection is ``TLS``,
     - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
@@ -817,7 +817,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
     EPICS_PVA_TLS_PORT=5076
     XDG_CONFIG_HOME=/home/client/.config/pva/1.3
     XDG_DATA_HOME=/home/client/.local/share/pva/1.3
-    # TLS x509:EPICS Root Certificate Authority/softioc@172.17.0.2:35093
+    # TLS x509:46093d7c:13415272142438558829:EPICS Root Certificate Authority/softioc@172.17.0.2:35093
     test:enumExample from 172.17.0.2:35093
     struct "epics:nt/NTEnum:1.0" {
         struct "enum_t" {
@@ -841,7 +841,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
 
 .. note::
 
-  - ``TLS x509:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
+  - ``TLS x509:46093d7c:13415272142438558829:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
     - The connection is ``TLS``,
     - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
