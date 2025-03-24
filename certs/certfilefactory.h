@@ -1,3 +1,9 @@
+/*
+ * Copyright - See the COPYRIGHT that is included with this distribution.
+ * pvxs is distributed subject to a Software License Agreement found
+ * in file LICENSE that is included with this distribution.
+ */
+
 #ifndef PVXS_CERT_FILE_FACTORY_H
 #define PVXS_CERT_FILE_FACTORY_H
 
