@@ -667,9 +667,6 @@ def define_DSOS(self):
                 ('PVXS_ENABLE_EXPERT_API', None),
                 ('PVXS_ENABLE_SSLKEYLOGFILE', None),
                 ('PVXS_ENABLE_OPENSSL', None),
-                ('PVXS_ENABLE_KRB_AUTH', None),
-                ('PVXS_ENABLE_JWT_AUTH', None),
-                ('PVXS_ENABLE_LDAP_AUTH', None),
             ] + pvxs_tls_macros + get_config_var('CPPFLAGS'),
             include_dirs=[
                 'bundle/libevent/include',

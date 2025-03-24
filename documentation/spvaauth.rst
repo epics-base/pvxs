@@ -106,7 +106,7 @@ Secure PVAccess Authentication Mode
 Authentication Methods
 -----------------------
 
-A new authentication method is added with SPVA - ``x509``.  This supercedes the legacy ``ca``, and
+A new authentication method is added with SPVA - ``x509``.  This supersedes the legacy ``ca``, and
 `anonymous` authentication methods.  With ``x509`` EPICS clients can use a variety of Site Authentication Methods that
 all integrate with Secure PVAccess via a PKCS#12 keychain file ( :ref:`glossary_pkcs12` ) and the certificate and keys that it contains.
 
@@ -375,7 +375,7 @@ Included Reference Authenticators
 
 Though it is recommended that you create your own site-specific Authenticators PVXS provides four reference implementations:
 
-- ``authnstd`` : Standard Authenticator - Uses explcitly specified and unverified credentials
+- ``authnstd`` : Standard Authenticator - Uses explicitly specified and unverified credentials
 - ``authnkrb`` : Kerberos Authenticator - Kerberos credentials verified by the KDC
 - ``authnldap``: LDAP Authenticator     - Login to LDAP directory to establish identity
 - ``authnjwt`` : JWT Authenticator      - JWT tokens obtained by OAuth and verified against the token issuer

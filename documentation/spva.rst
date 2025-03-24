@@ -422,7 +422,7 @@ OCSP Stapling optimizes certificate status verification during TLS handshake:
 Status Verification
 ^^^^^^^^^^^^^^^^^^^
 
-    Certificate Status recieved from the PVACMS for a certificate returns a ``GOOD`` status
+    Certificate Status received from the PVACMS for a certificate returns a ``GOOD`` status
     if, and only if, the certificate status is good and so is that of its certificate authority certificate
     chain all the way back to the root certificate.  In this way agents need monitor
     only their own entity certificate and that of their peer.

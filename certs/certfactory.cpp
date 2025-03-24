@@ -394,7 +394,7 @@ ossl_ptr<BIO> CertFactory::newBio() {
 }
 
 /**
- * @brief HELPER FUNCTION: Output the Basic Input Ouptut object as a string
+ * @brief HELPER FUNCTION: Output the Basic Input Output object as a string
  *
  * return string representation of the BIO object
  */

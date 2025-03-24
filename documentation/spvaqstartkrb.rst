@@ -312,7 +312,7 @@ If you want a prepackaged environment, try the following.  You will need three t
 
 - |terminal|\¹
 - open a terminal and load pre-built image
-- don't forget to add /bin/bash at the end to supress running the pvacms
+- don't forget to add /bin/bash at the end to suppress running the pvacms
 
 .. code-block:: shell
 
@@ -440,7 +440,7 @@ using the Kerberos Authenticator.
 
 - set kadmin access control list
 
-  - set administor user to ``admin@EPICS.ORG``
+  - set administrator user to ``admin@EPICS.ORG``
 
 .. code-block:: shell
 

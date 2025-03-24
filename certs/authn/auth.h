@@ -64,7 +64,7 @@ class Auth {
      *
      * This function verifies a Certificate Creation Request (CCR). It is called inside PVACMS to verify the CCR.
      * Automatically compiles into the PVACMS if the auth method is registered, PVACMS will
-     * look at any CCR it recieves and call the overriden function with the CCR as the argument.
+     * look at any CCR it receives and call the overridden function with the CCR as the argument.
      * Implementers should provide appropriate code to verify the authenticity of the CCR.
      *
      * @param ccr The CCR to verify
@@ -114,7 +114,7 @@ class Auth {
      * This function returns a string containing the options help text.
      * Implementers should return a string containing the options help text.
      * The string will be multi-line and will be formatted to fit into the usage documentation for PVACMS.
-     * It shuld start with a string heading that matches the name given in the getOptionsPlaceholderText() function.
+     * It should start with a string heading that matches the name given in the getOptionsPlaceholderText() function.
      *
      * e.g. if getOptionsPlaceholderText() returns "[kerberos Options]", the heading should be "kerberos Options"
      * followed by multiple lines of help text for the kerberos options.

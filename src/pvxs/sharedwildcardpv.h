@@ -120,7 +120,7 @@ struct PVXS_API SharedWildcardPV : public SharedPV {
      * resolve to strings in the returned vector.
      *
      * @param pv_name For wildcard PVs this indicates the actual PV requested
-     * @return a list of strings that correspond to the parts of the PV name matched by pattersn in the Wildcard PV.
+     * @return a list of strings that correspond to the parts of the PV name matched by pattern in the Wildcard PV.
      */
     const std::list<std::string> getParameters(const std::string &pv_name) noexcept {
         std::list<std::string> parameters;

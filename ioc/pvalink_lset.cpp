@@ -85,7 +85,7 @@ void pvaOpenLink(DBLINK *plink) noexcept
             linkGlobal_t::channels_t::iterator it(linkGlobal->channels.find(key));
 
             if(it!=linkGlobal->channels.end()) {
-                // re-use existing channel
+                // reuse existing channel
                 chan = it->second.lock();
             }
 
@@ -623,7 +623,7 @@ long pvaPutValueX(DBLINK *plink, short dbrType,
         if(!self->defer) self->lchan->put();
 
         log_debug_printf(_logger, "%s: %s %s %s\n", __func__, plink->precord->name, self->channelName.c_str(), self->lchan->root.valid() ? "valid": "not valid");
-        
+
         return 0;
     }CATCH()
     return -1;

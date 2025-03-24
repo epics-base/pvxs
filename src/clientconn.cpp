@@ -221,7 +221,7 @@ void Connection::configureClientOCSPCallback(SSL* ssl) const {
             } else {
                 throw ossl::SSLError("Client OCSP Stapling: Error enabling stapling");
             }
-            // Set the tls context as the parameter to the callabck
+            // Set the tls context as the parameter to the callback
             SSL_CTX_set_tlsext_status_arg(context->tls_context->ctx.get(), context->tls_context.get());
             // Set the callback
             SSL_CTX_set_tlsext_status_cb(context->tls_context->ctx.get(), clientOCSPCallback);

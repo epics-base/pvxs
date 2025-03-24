@@ -150,7 +150,7 @@ struct PVXS_API ConfigCommon {
 
     /**
      * @brief Set to true to disable TLS.  This will override the environment TLS configuration
-     * settings and will also override config TLS configuration fields.  Suitable fot testing.
+     * settings and will also override config TLS configuration fields.  Suitable for testing.
      * server
      */
     bool tls_disabled = false;

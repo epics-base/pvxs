@@ -697,7 +697,7 @@ bool getPriorApprovalStatus(const sql_ptr &certs_db, const std::string &name, co
  * @param certs_db the DB to write the certificate registration information
  * @param shared_status_pv
  * @param op The unique pointer to the execution operation.
- * @param args the RPC aruments
+ * @param args the RPC arguments
  * @param cert_auth_pkey the public/private key of the certificate authority certificate
  * @param cert_auth_cert the certificate authority certificate
  * @param cert_auth_cert_chain the certificate authority certificate chain
@@ -1780,7 +1780,7 @@ void postUpdateToNextCertToExpire(const CertStatusFactory &cert_status_creator, 
  * and the status validity time is now nearly up.  We use the timeout value (default 5 seconds) to determine
  * "nearly up".
  *
- * It uses the set of active serials that are updated everytime a connection is opened or closed.
+ * It uses the set of active serials that are updated every time a connection is opened or closed.
  * So only certificates that are currently active will be updated.
  *
  * @param cert_status_creator The certificate status creator

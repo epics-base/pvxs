@@ -580,7 +580,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
 
 /**
  * @brief Create a peer status in the list of statuses or return existing one
- * @param serial_number teh serial number to index into the list
+ * @param serial_number the serial number to index into the list
  * @param fn optional function that will be called as status changes if provided
  * @return the existing or new peer status
  */

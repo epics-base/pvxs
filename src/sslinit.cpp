@@ -31,7 +31,7 @@ epicsMutex ssl_init_lock;
  *
  * This is idempotent
  *
- * It will do all the one time SSL library initialization that is required, inluding
+ * It will do all the one time SSL library initialization that is required, including
  * SSL_library_init(), OpenSSL_add_all_algorithms(), ERR_load_crypto_strings(),
  * OpenSSL_add_all_ciphers(), and OpenSSL_add_all_digests().
  *

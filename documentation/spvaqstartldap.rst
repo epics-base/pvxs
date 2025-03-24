@@ -12,7 +12,7 @@ This section contains a Quick Start |guide| for the Secure PVAccess *LDAP Authen
     It then signs a certificate creation request with its private key and passes
     it to the PVACMS, which decodes it with the public key that
     it finds in the LDAP directory entry for the user.  If this succeeds it means that the
-    requestor holds the matching private key and so the certificate is generated.
+    requester holds the matching private key and so the certificate is generated.
 
     It uses the LDAP username as the ``common name`` and then concatenates all the ``dc`` components it finds
     to create the organisation while leaving the ``organizational unit`` blank.
@@ -282,7 +282,7 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
 
 - |terminal|\¹
 - open a terminal and load pre-built image
-- don't forget to add /bin/bash at the end to supress running the pvacms
+- don't forget to add /bin/bash at the end to suppress running the pvacms
 
 .. code-block:: shell
 

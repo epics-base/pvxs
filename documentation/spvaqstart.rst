@@ -408,7 +408,7 @@ For MacOS
 .. code-block:: shell
 
     cd ${PROJECT_HOME}
-    git clone --branch 7.0-method_and_authority https://github.com/george-mcintyre/epics-base.git
+    git clone --branch 7.0-METHOD-and-AUTHORITY https://github.com/george-mcintyre/epics-base.git
     cd epics-base
 
     make -j10 all
@@ -520,8 +520,8 @@ otherwise the certificate authority certificate will be created here
 - *optionally*
 
   - Configure PVACMS ADMIN user Access Control File (ACF) location
-  - An ACF file that controls accesss to PVACMS resources (certificates, etc.) is created at this location if it does not exist
-  - By default the file created ensures that administrator permisions are granted to any user that presents a certificate that is signed by the configured Root CA and has CN="admin", O="", OU="", C="US"
+  - An ACF file that controls access to PVACMS resources (certificates, etc.) is created at this location if it does not exist
+  - By default the file created ensures that administrator permissions are granted to any user that presents a certificate that is signed by the configured Root CA and has CN="admin", O="", OU="", C="US"
   - You can modify this file to add other admin users to the UAG section, or conditions to an existing or new RULES section
 
 .. code-block:: shell
