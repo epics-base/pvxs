@@ -16,6 +16,7 @@
 /dbd/
 /dist/
 /documentation/_static/*
+/documentation/_static/.*
 !/documentation/_static/*
 /include/
 /lib/
