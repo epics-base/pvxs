@@ -151,7 +151,12 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
 
     // EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION
     if (pickone({"EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION"})) {
-        cert_status_subscription = parseTo<bool>(pickone.val);
+        if (parseTo<bool>(pickone.val)) {
+            cert_status_subscription = YES;
+        } else {
+            cert_status_subscription = NO;
+        }
+        // If value is not YES or NO, keep the default
     }
 }
 

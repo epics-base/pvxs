@@ -53,10 +53,11 @@ Auth *Auth::getAuth(const std::string &type) {
  * @param key_pair the public/private key to be used in the certificate, only
  * public key is used
  * @param usage the desired certificate usage
+ * @param config The configuration for the certificate
  * @return A managed shared CertCreationRequest object.
  */
 std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
-                                                                     const uint16_t &usage) const {
+                                                                     const uint16_t &usage, const ConfigAuthN &config) const {
     // Create a new CertCreationRequest object.
     auto cert_creation_request = std::make_shared<CertCreationRequest>(type_, verifier_fields_);
     cert_creation_request->credentials = credentials;
@@ -71,6 +72,7 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
     cert_creation_request->ccr["organization_unit"] = credentials->organization_unit;
     cert_creation_request->ccr["not_before"] = credentials->not_before;
     cert_creation_request->ccr["not_after"] = credentials->not_after;
+    cert_creation_request->ccr["no_status"] = config.no_status;
     cert_creation_request->ccr["config_uri_base"] = credentials->config_uri_base;
     return cert_creation_request;
 }

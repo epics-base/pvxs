@@ -91,10 +91,13 @@ class Auth {
      * @param credentials The credentials to use for the CCR
      * @param key_pair The key pair to use for the CCR
      * @param usage The usage of the CCR
+     * @param config The configuration to use for the CCR
      * @return A shared pointer to the CCR
      */
     virtual std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
-                                                                           const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const = 0;
+                                                                           const std::shared_ptr<KeyPair> &key_pair,
+                                                                           const uint16_t &usage,
+                                                                           const ConfigAuthN &config) const = 0;
 
     /**
      * @brief Get the placeholder text for the options help text.
@@ -385,7 +388,7 @@ CertData getCertificate(bool &retrieved_credentials, ConfigT config, uint16_t ce
         }
 
         // Create a Certificate Creation Request (CCR) using the credentials and key pair
-        auto cert_creation_request = authenticator.createCertCreationRequest(credentials, key_pair, cert_usage);
+        auto cert_creation_request = authenticator.createCertCreationRequest(credentials, key_pair, cert_usage, config);
 
         log_debug_printf(auth, "CCR created for: %s Authenticator\n", authenticator.type_.c_str());
 

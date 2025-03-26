@@ -35,6 +35,16 @@ namespace certs {
 #define NAME_STRING(name, org) name + (org.empty() ? "" : ("@" + (org)))
 
 /**
+ * @brief Enum to control whether certificates require status subscription
+ */
+enum CertStatusSubscription {
+    DEFAULT,  // Use the no_status flag from the client request
+    YES,      // Always require status subscription
+    NO        // Never require status subscription
+};
+
+
+/**
  * @class CertFactory
  *
  * @brief Manages certificates and associated operations.
@@ -57,7 +67,8 @@ class PVXS_API CertFactory {
     EVP_PKEY *issuer_pkey_ptr_;          // Will point to the issuer private key when created
     STACK_OF(X509) * issuer_chain_ptr_;  // issuer cert chain
     const ossl_shared_ptr<STACK_OF(X509)> certificate_chain_;
-    bool cert_status_subscription_required_;
+    CertStatusSubscription cert_status_subscription_required_;
+    bool no_status_;
     std::string cert_config_uri_base_;
     std::string skid_;
     certstatus_t initial_status_;
@@ -76,22 +87,33 @@ class PVXS_API CertFactory {
      * @param not_after the not after time
      * @param usage the usage
      * @param cert_status_subscription_required whether certificate status subscription is required
+     * @param no_status whether to disable status subscription for this certificate
      * @param issuer_certificate_ptr the issuer certificate
      * @param issuer_pkey_ptr the issuer private key
      * @param issuer_chain_ptr the issuer certificate chain
      * @param initial_status the initial status
-     * @param issuer_certificate_ptr the issuer certificate optional
-     * @param issuer_pkey_ptr the issuer private key optional
-     * @param issuer_chain_ptr the issuer certificate chain optional
-     * @param initial_status the initial status - defaults to VALID
-     * certificate
      */
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
                 const std::string &org_unit, const time_t not_before, const time_t not_after, const uint16_t &usage,
-                const bool cert_status_subscription_required = false, X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr,
+                const CertStatusSubscription cert_status_subscription_required = CertStatusSubscription::DEFAULT, const bool no_status = false,
+                X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr,
                 STACK_OF(X509) *issuer_chain_ptr = nullptr, certstatus_t initial_status = VALID)
-        : CertFactory(serial, key_pair, name, country, org, org_unit, not_before, not_after, usage, {}, cert_status_subscription_required,
-                      issuer_certificate_ptr, issuer_pkey_ptr, issuer_chain_ptr, initial_status) {}
+        : serial_(serial),
+          key_pair_(key_pair),
+          name_(name),
+          country_(country),
+          org_(org),
+          org_unit_(org_unit),
+          not_before_(not_before),
+          not_after_(not_after),
+          usage_(usage),
+          issuer_certificate_ptr_(issuer_certificate_ptr),
+          issuer_pkey_ptr_(issuer_pkey_ptr),
+          issuer_chain_ptr_(issuer_chain_ptr),
+          certificate_chain_(sk_X509_new_null()),
+          cert_status_subscription_required_(cert_status_subscription_required),
+          no_status_(no_status),
+          initial_status_(initial_status) {}
 
     /**
      * @brief Constructor for CertFactory
@@ -119,7 +141,7 @@ class PVXS_API CertFactory {
      */
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
                 const std::string &org_unit, const time_t not_before, time_t not_after, const uint16_t &usage, const std::string &cert_config_uri_base,
-                const bool cert_status_subscription_required = false, X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr,
+                const CertStatusSubscription cert_status_subscription_required = CertStatusSubscription::DEFAULT, const bool no_status = false, X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr,
                 STACK_OF(X509) *issuer_chain_ptr = nullptr, certstatus_t initial_status = VALID)
         : serial_(serial),
           key_pair_(key_pair),
@@ -134,9 +156,10 @@ class PVXS_API CertFactory {
           issuer_pkey_ptr_(issuer_pkey_ptr),
           issuer_chain_ptr_(issuer_chain_ptr),
           certificate_chain_(sk_X509_new_null()),
-          initial_status_(initial_status) {
-        cert_status_subscription_required_ = cert_status_subscription_required, cert_config_uri_base_ = cert_config_uri_base;
-    }
+          cert_status_subscription_required_(cert_status_subscription_required),
+          no_status_(no_status),
+          cert_config_uri_base_(cert_config_uri_base),
+          initial_status_(initial_status) {}
 
     ossl_ptr<X509> PVXS_API create();
 

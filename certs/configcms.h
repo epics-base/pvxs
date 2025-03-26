@@ -7,6 +7,7 @@
 #ifndef PVXS_CONFIGCMS_H_
 #define PVXS_CONFIGCMS_H_
 
+#include <certfactory.h>
 #include <memory>
 
 #include <pvxs/config.h>
@@ -84,12 +85,13 @@ class ConfigCms final : public server::Config {
      * A flag indicating that subscription is required and a string
      * containing the PV name to subscribe to.
      *
-     * If the flag is false certificate validity will work as normal
-     * but clients will not know that they have been revoked.
+     * If set to YES, status subscription is always required.
+     * If set to NO, status subscription is never required.
+     * If set to DEFAULT, the client's no_status flag determines whether status subscription is required.
      *
-     * Default is true
+     * Default is DEFAULT
      */
-    bool cert_status_subscription = true;
+    CertStatusSubscription cert_status_subscription{DEFAULT};
 
     /**
      * @brief This is the string that determines the fully

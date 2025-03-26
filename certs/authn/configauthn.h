@@ -19,6 +19,7 @@ class ConfigAuthN : public client::Config {
     std::string organization{};
     std::string organizational_unit{};
     std::string country{"US"};
+    bool no_status{false};
 
     std::string config_uri_base{"CERT:CONFIG"};
 

@@ -13,142 +13,132 @@ on:
           - spva_std
           - spva_krb
           - spva_ldap
-          - all
   push:
     branches:
       - 'tls'
 
 jobs:
+  check_docker_changes:
+    runs-on: ubuntu-22.04
+    outputs:
+      non_docker_changed: ${{ steps.filter.outputs.non_docker }}
+      spva_std_changed: ${{ steps.filter.outputs.spva_std }}
+      spva_krb_changed: ${{ steps.filter.outputs.spva_krb }}
+      spva_ldap_changed: ${{ steps.filter.outputs.spva_ldap }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          base: ${{ github.event.before }}
+          filters: |
+            non_docker:
+              - 'src/**'
+              - 'include/**'
+              - 'test/**'
+              - 'example/[!docker]/**'
+            spva_std:
+              - 'example/docker/spva_std/**'
+            spva_krb:
+              - 'example/docker/spva_krb/**'
+            spva_ldap:
+              - 'example/docker/spva_ldap/**'
+
   build-epics-base:
     if: |
-      github.event.inputs.build_target == 'epics-base' ||
-      github.event.inputs.build_target == 'all'
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.build_target == 'epics-base'
     uses: george-mcintyre/epics-base/.github/workflows/docker-pub-epics-base.yml@7.0-method_and_authority
     secrets:
       DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
       DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
 
   build-pvxs:
-    runs-on: ubuntu-latest
+    needs: [check_docker_changes, build-epics-base]
     if: |
-      github.event.inputs.build_target == 'pvxs' || 
-      github.event.inputs.build_target == 'all' ||
-      github.event_name == 'push' ||
-      (needs.build-epics-base.result == 'success')
+      always() && 
+      (github.event_name == 'workflow_dispatch' && 
+       github.event.inputs.build_target == 'pvxs') || 
+      (github.event_name == 'push' && 
+       needs.check_docker_changes.outputs.non_docker_changed == 'true') ||
+      needs.build-epics-base.result == 'success'
+    runs-on: ubuntu-22.04
+    outputs:
+      status: ${{ job.status }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: tls
           submodules: recursive
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      - name: Build and push pvxs
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: example/docker/pvxs/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: |
-            DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
-          tags: ${{ vars.DOCKER_USERNAME }}/pvxs:latest
-
+      # Add your build steps here
+      - name: Build pvxs
+        run: echo "Building pvxs"
 
   build-spva-std:
-    needs: [build-pvxs]
-    runs-on: ubuntu-latest
+    needs: [check_docker_changes, build-pvxs]
     if: |
-      github.event.inputs.build_target == 'spva_std' || 
-      github.event.inputs.build_target == 'all' ||
-      (needs.build-pvxs.result == 'success')
+      always() && 
+      (github.event_name == 'workflow_dispatch' && 
+       github.event.inputs.build_target == 'spva_std') || 
+      (github.event_name == 'push' && 
+       needs.check_docker_changes.outputs.spva_std_changed == 'true' && 
+       needs.check_docker_changes.outputs.non_docker_changed == 'false') ||
+      needs.build-pvxs.result == 'success'
+    runs-on: ubuntu-22.04
+    outputs:
+      status: ${{ job.status }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: tls
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      - name: Build and push spva_std
-        uses: docker/build-push-action@v5
-        with:
-          context: example/docker/spva_std/.
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: |
-            DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
-          tags: ${{ vars.DOCKER_USERNAME }}/spva_std:latest
+      # Add your build steps here
+      - name: Build spva_std
+        run: echo "Building spva_std"
 
   build-spva-krb:
-    runs-on: ubuntu-latest
+    needs: [check_docker_changes, build-spva-std]
     if: |
-      github.event.inputs.build_target == 'spva_krb' ||
-      github.event.inputs.build_target == 'all' ||
-      (needs.build-spva-std.result == 'success' && github.event.inputs.build_target != 'spva_ldap')
+      always() && 
+      (github.event_name == 'workflow_dispatch' && 
+       github.event.inputs.build_target == 'spva_krb') || 
+      (github.event_name == 'push' && 
+       needs.check_docker_changes.outputs.spva_krb_changed == 'true' && 
+       needs.check_docker_changes.outputs.non_docker_changed == 'false') ||
+      needs.build-spva-std.result == 'success'
+    runs-on: ubuntu-22.04
+    outputs:
+      status: ${{ job.status }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: tls
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      - name: Build and push spva_krb
-        uses: docker/build-push-action@v5
-        with:
-          context: example/docker/spva_krb/.
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: |
-            DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
-          tags: ${{ vars.DOCKER_USERNAME }}/spva_krb:latest
+      # Add your build steps here
+      - name: Build spva_krb
+        run: echo "Building spva_krb"
 
   build-spva-ldap:
-    runs-on: ubuntu-latest
+    needs: [check_docker_changes, build-spva-std]
     if: |
-      github.event.inputs.build_target == 'spva_ldap' || 
-      github.event.inputs.build_target == 'all' ||
-      (needs.build-spva-std.result == 'success' && github.event.inputs.build_target != 'spva_krb')
+      always() && 
+      (github.event_name == 'workflow_dispatch' && 
+       github.event.inputs.build_target == 'spva_ldap') || 
+      (github.event_name == 'push' && 
+       needs.check_docker_changes.outputs.spva_ldap_changed == 'true' && 
+       needs.check_docker_changes.outputs.non_docker_changed == 'false') ||
+      needs.build-spva-std.result == 'success'
+    runs-on: ubuntu-22.04
+    outputs:
+      status: ${{ job.status }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: tls
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      - name: Build and push spva_ldap
-        uses: docker/build-push-action@v5
-        with:
-          context: example/docker/spva_ldap/.
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: |
-            DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
-          tags: ${{ vars.DOCKER_USERNAME }}/spva_ldap:latest
+      # Add your build steps here
+      - name: Build spva_ldap
+        run: echo "Building spva_ldap"

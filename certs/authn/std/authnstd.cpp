@@ -175,11 +175,13 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
  * @param credentials the credentials that describe the subject of the certificate
  * @param key_pair the public/private key to be used in the certificate, only public key is used
  * @param usage certificate usage
+ * @param config the configuration for the certificate creation request
  * @return A managed shared CertCreationRequest object.
  */
 std::shared_ptr<CertCreationRequest> AuthNStd::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
-                                                                         const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const {
-    auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage);
+const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage,
+const ConfigAuthN &config) const {
+    auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage, config);
 
     return cert_creation_request;
 }

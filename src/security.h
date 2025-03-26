@@ -95,6 +95,7 @@ struct Credentials {
         members::UInt64("not_after"),          \
         members::String("pub_key"),            \
         members::String("config_uri_base"),    \
+        members::Bool("no_status"),            \
         members::Struct("verifier", VERIFIER), \
     }
 

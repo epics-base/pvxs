@@ -46,8 +46,10 @@ class AuthNLdap final : public Auth {
 
     std::shared_ptr<Credentials> getCredentials(const client::Config &config, bool for_client) const override;
 
-    std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials, const std::shared_ptr<KeyPair> &key_pair,
-                                                                   const uint16_t &usage) const override;
+    std::shared_ptr<CertCreationRequest> createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
+                                                                 const std::shared_ptr<KeyPair> &key_pair,
+                                                                 const uint16_t &usage,
+                                                                 const ConfigAuthN &config) const override;
 
     bool verify(Value ccr) const override;
 

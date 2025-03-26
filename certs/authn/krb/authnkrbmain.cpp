@@ -39,6 +39,7 @@ void defineOptions(CLI::App &app, ConfigKrb &config, bool &verbose, bool &debug,
     app.add_flag("-d,--debug", debug, "Debug mode");
     app.add_flag("-V,--version", show_version, "Print version and exit.");
     app.add_flag("--force", force, "Force overwrite if certificate exists.");
+    app.add_flag("-s,--no-status", config.no_status, "Request that status checking not be required for this certificate. PVACMS may ignore this request if it is configured to require all certificates to have status checking");
 
     app.add_flag("-D,--daemon", daemon_mode, "Daemon mode");
     app.add_flag("--add-config-uri", add_config_uri, "Add a config uri to the generated certificate");
@@ -76,6 +77,7 @@ void showHelp(const char *const program_name) {
               << "        --add-config-uri                     Add a config uri to the generated certificate\n"
               << "        --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`\n"
               << "        --force                              Force overwrite if certificate exists\n"
+              << "  (-s | --no-status)                         Request that status checking not be required for this certificate\n"
               << "  (-v | --verbose)                           Verbose mode\n"
               << "  (-d | --debug)                             Debug mode\n"
               << std::endl;

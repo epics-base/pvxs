@@ -1,3 +1,6 @@
+# Testing workflow Docker change detection - insignificant change
+# Testing workflow Docker change detection - second test
+# Testing workflow Docker change detection - third test
 ARG DOCKER_USERNAME=georgeleveln
 
 FROM ${DOCKER_USERNAME}/spva_std:latest
@@ -57,3 +60,7 @@ RUN cd pvxs && \
     make distclean && make -j10 all
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+
+# Test comment to verify workflow changes
+
+# Test comment to verify workflow changes - take 2

@@ -49,11 +49,14 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
     name = pickone({"EPICS_PVA_AUTH_NAME"}) ? pickone.val : retrieved_username;
     server_name = pickone({"EPICS_PVAS_AUTH_NAME", "EPICS_PVA_AUTH_NAME"}) ? pickone.val : retrieved_username;
 
-    // EPICS_PVA_AUTH_ORG, EPICS_PVAS_AUTH_ORG
+    // EPICS_PVA_AUTH_NO_STATUS, EPICS_PVAS_AUTH_NO_STATUS
+    no_status = pickone({"EPICS_PVA_AUTH_NO_STATUS", "EPICS_PVAS_AUTH_NO_STATUS"}) && pickone.val == "YES";
+
+    // EPICS_PVA_AUTH_ORGANIZATION, EPICS_PVAS_AUTH_ORGANIZATION
     organization = pickone({"EPICS_PVA_AUTH_ORGANIZATION"}) ? pickone.val : retrieved_organization;
     server_organization = pickone({"EPICS_PVAS_AUTH_ORGANIZATION", "EPICS_PVA_AUTH_ORGANIZATION"}) ? pickone.val : retrieved_organization;
 
-    // EPICS_PVA_AUTH_ORG_UNIT, EPICS_PVAS_AUTH_ORG_UNIT
+    // EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT, EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT
     if (pickone({"EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT"})) organizational_unit = pickone.val;
     if (pickone({"EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT", "EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT"})) server_organizational_unit = pickone.val;
 

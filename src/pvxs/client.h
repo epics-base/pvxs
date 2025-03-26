@@ -3,6 +3,8 @@
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
+
+// Test comment to verify non-Docker changes
 #ifndef PVXS_CLIENT_H
 #define PVXS_CLIENT_H
 

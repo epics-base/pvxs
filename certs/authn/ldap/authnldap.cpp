@@ -100,12 +100,13 @@ std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &con
 }
 
 std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
-                                                                          const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage) const {
+const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage,
+const ConfigAuthN &config) const {
     // Cast to LDAP-specific credentials
     auto ldap_credentials = castAs<LdapCredentials, Credentials>(credentials);
 
     // First, set up the common CCR fields using the base class.
-    auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage);
+    auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage, config);
     log_debug_printf(auth, "LDAP CCR: created%s", "\n");
 
     std::string user_dn = getDn(credentials->name, credentials->organization);

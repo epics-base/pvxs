@@ -99,9 +99,21 @@ ossl_ptr<X509> CertFactory::create() {
     if (!IS_USED_FOR_(usage_, ssl::kForCMS)) {
         const auto issuer_id = CertStatus::getSkId(issuer_certificate_ptr_);
         const auto skid = CertStatus::getSkId(certificate);
-        if (cert_status_subscription_required_) {
+        
+        // Check if status subscription should be added based on configuration and no_status flag
+        bool add_status_subscription = false;
+        if (cert_status_subscription_required_ == YES) {
+            add_status_subscription = true;
+        } else if (cert_status_subscription_required_ == NO) {
+            add_status_subscription = false;
+        } else { // DEFAULT
+            add_status_subscription = !no_status_;
+        }
+        
+        if (add_status_subscription) {
             addCustomExtensionByNid(certificate, ossl::NID_SPvaCertStatusURI, CertStatus::makeStatusURI(issuer_id, serial_));
         }
+        
         if (!cert_config_uri_base_.empty()) {
             addCustomExtensionByNid(certificate, ossl::NID_SPvaCertConfigURI, CertStatus::makeConfigURI(cert_config_uri_base_, issuer_id, skid));
         }
