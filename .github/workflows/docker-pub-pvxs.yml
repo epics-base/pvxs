@@ -73,9 +73,25 @@ jobs:
         with:
           ref: tls
           submodules: recursive
-      # Add your build steps here
-      - name: Build pvxs
-        run: echo "Building pvxs"
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+      - name: Build and push pvxs
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: example/docker/pvxs/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
+          tags: ${{ vars.DOCKER_USERNAME }}/pvxs:latest
 
   build-spva-std:
     needs: [check_docker_changes, build-pvxs]
@@ -95,9 +111,24 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: tls
-      # Add your build steps here
-      - name: Build spva_std
-        run: echo "Building spva_std"
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+      - name: Build and push spva_std
+        uses: docker/build-push-action@v5
+        with:
+          context: example/docker/spva_std/.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
+          tags: ${{ vars.DOCKER_USERNAME }}/spva_std:latest
 
   build-spva-krb:
     needs: [check_docker_changes, build-spva-std]
@@ -117,9 +148,24 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: tls
-      # Add your build steps here
-      - name: Build spva_krb
-        run: echo "Building spva_krb"
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+      - name: Build and push spva_krb
+        uses: docker/build-push-action@v5
+        with:
+          context: example/docker/spva_krb/.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
+          tags: ${{ vars.DOCKER_USERNAME }}/spva_krb:latest
 
   build-spva-ldap:
     needs: [check_docker_changes, build-spva-std]
@@ -139,6 +185,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: tls
-      # Add your build steps here
-      - name: Build spva_ldap
-        run: echo "Building spva_ldap"
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+      - name: Build and push spva_ldap
+        uses: docker/build-push-action@v5
+        with:
+          context: example/docker/spva_ldap/.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
+          tags: ${{ vars.DOCKER_USERNAME }}/spva_ldap:latest
