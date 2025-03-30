@@ -1,0 +1,64 @@
+%%{init: {
+    'theme': 'forest',
+    'themeVariables': {
+        'noteBkgColor': '#fff6e9',
+        'noteBorderColor': '#7c334f',
+        'noteTextColor': '#544943',
+        'fontFamily': 'Georgia Serif',
+        'fontSize': '12px',
+        'messageFontSize': '12px',
+        'noteFontSize': '12px',
+        'actorFontSize': '14px',
+        'width': 1200,
+        'boxMargin': 20,
+        'messageMargin': 40
+    }
+}}%%
+sequenceDiagram
+    participant Agent as EPICS Client
+    participant Peer as EPICS Server
+
+    Note over Agent, Peer: SEARCH Request / Response
+    Agent-->>Peer: SEARCH (protocol=["tcp"]) with retry
+    Peer-->>Agent: SEARCH_RESPONSE (protocol="tcp", address)
+
+    Note over Agent, Peer: TCP Connection / VALIDATION
+    Agent->>Peer: TCP Connection initiated to `address`
+
+    Peer-->>Agent: CONNECTION_VALIDATION Request
+    activate Agent
+    Agent-->>Peer: CONNECTION_VALIDATION Response
+    deactivate Agent
+    activate Peer
+    Peer-->>Agent: CONNECTION_VALIDATED
+    deactivate Peer
+
+    Note over Agent, Peer: Create Channel
+    Agent->>Peer: CREATE_CHANNEL
+    activate Peer
+    Peer-->>Agent: CREATE_CHANNEL Response
+    deactivate Peer
+
+    %% Operations
+    Note over Agent, Peer: Operations
+    alt
+        Agent->>Peer: GET Request
+        activate Peer
+        Peer-->>Agent: GET Response(value)
+        deactivate Peer
+    else
+        Agent->>Peer: MONITOR Request
+        activate Peer
+        loop
+            Peer-->>Agent: MONITOR Subscrition(update)
+        end
+        deactivate Peer
+    else
+        Agent->>Peer: RPC Request
+        activate Peer
+        Peer-->>Agent: RPC Response(value)
+        deactivate Peer
+    else
+        Agent-->>Peer: PUT Request(value)
+    end
+

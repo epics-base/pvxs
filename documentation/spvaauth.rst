@@ -91,7 +91,7 @@ Secure PVAccess Authentication Mode
         std::string peer;      // network address
         std::string iface;     // network interface
         std::string method;    // "anonymous", "ca", or "x509"
-        std::string authority; // CA common name for x509 if mode is `Mutual` or blank
+        std::string authority; // Certificate Authority common name for x509 if mode is `Mutual` or blank
         std::string account;   // User account if mode is `Mutual` or blank
         bool isTLS;            // Secure transport status.  True is mode is `Mutual` or `Server-Only`
     };
@@ -378,10 +378,10 @@ Though it is recommended that you create your own site-specific Authenticators P
 - ``authnstd`` : Standard Authenticator - Uses explicitly specified and unverified credentials
 - ``authnkrb`` : Kerberos Authenticator - Kerberos credentials verified by the KDC
 - ``authnldap``: LDAP Authenticator     - Login to LDAP directory to establish identity
-- ``authnjwt`` : JWT Authenticator      - JWT tokens obtained by OAuth and verified against the token issuer
+- ``authnjwt`` : JWT Authenticator      - JWT tokens obtained by OAuth and verified against the token issuer for a temporary in-session certificate
 
 authstd Configuration and Usage
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This Authenticator is used for explicitly specified and unverified credentials.
 It can be used to create a certificate with a username and hostname.
@@ -413,15 +413,15 @@ and password file locations.
 
 .. code-block:: shell
 
-    authnstd - Secure PVAccess with Standard Authentication
+    authnstd - Secure PVAccess Standard Authenticator
 
-    Generates client, server, or hybrid certificates based on the standard authentication method.
+    Generates client, server, or hybrid certificates based on the Standard Authenticator.
     Uses specified parameters to create certificates that require administrator APPROVAL before becoming VALID.
 
     usage:
-      authnstd [options]                         Create certificate in PENDING_APPROVAL state
-      authnstd (-h | --help)                     Show this help message and exit
-      authnstd (-V | --version)                  Print version and exit
+      authnstd [options]                          Create certificate in PENDING_APPROVAL state
+      authnstd (-h | --help)                      Show this help message and exit
+      authnstd (-V | --version)                   Print version and exit
 
     options:
       (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`
@@ -434,8 +434,12 @@ and password file locations.
             --add-config-uri                     Add a config uri to the generated certificate
             --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
             --force                              Force overwrite if certificate exists
+      (-a | --trust-anchor)                      Download Trust Anchor into keychain file.  Do not create a certificate
+      (-s | --no-status)                         Request that status checking not be required for this certificate
       (-v | --verbose)                           Verbose mode
       (-d | --debug)                             Debug mode
+
+
 
 **Environment Variables for authnstd**
 
@@ -458,11 +462,22 @@ and password file locations.
     # create a server certificate for IOC1
     authnstd -u server -n IOC1 -o "KLI:LI01:10" --ou "FACET"
 
+.. code-block:: shell
+
+    # create a client certificate for current user with no status monitoring
+    authnstd --no-status
+
 
 .. code-block:: shell
 
     # create a hybrid certificate for gateway1
     authnstd -u hybrid -n gateway1 -o bridge.ornl.gov --ou "Networking"
+
+
+.. code-block:: shell
+
+    # Download the Trust Anchor into your keychain file for server-only authenticated connections
+    authnstd --trust-anchor
 
 
 authkrb Configuration and Usage
@@ -509,8 +524,21 @@ and password file locations.
             --add-config-uri                     Add a config uri to the generated certificate
             --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
             --force                              Force overwrite if certificate exists
+      (-s | --no-status)                         Request that status checking not be required for this certificate
       (-v | --verbose)                           Verbose mode
       (-d | --debug)                             Debug mode
+
+**Extra options that are available in PVACMS**
+
+.. code-block:: shell
+
+    usage:
+      pvacms [kerberos options]                  Run PVACMS.  Interrupt to quit
+
+    kerberos options
+            --krb-keytab <keytab file>           kerberos keytab file for non-interactive login`
+            --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`
+            --krb-validator <validator-service>  pvacms kerberos service name.  Default `pvacms`
 
 **Environment Variables for PVACMS AuthnKRB Verifier**
 
@@ -596,8 +624,22 @@ and password file locations.
             --add-config-uri                     Add a config uri to the generated certificate
             --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
             --force                              Force overwrite if certificate exists
+      (-s | --no-status)                         Request that status checking not be required for this certificate
       (-v | --verbose)                           Verbose mode
       (-d | --debug)                             Debug mode
+
+
+**Extra options that are available in PVACMS**
+
+.. code-block:: shell
+
+    usage:
+      pvacms [ldap options]                      Run PVACMS.  Interrupt to quit
+
+    ldap options
+            --ldap-host <host>                   LDAP Host.  Default localhost
+            --ldap-port <port>                   LDAP port.  Default 389
+
 
 **Environment Variables for authnldap and PVACMS AuthnLDAP Verifier**
 
@@ -743,7 +785,7 @@ ISTLS Option
 
 New rule option for TLS-based access control:
 
-- Requires server connection with trusted CA-signed certificate
+- Requires server connection with trusted Certificate Authority-signed certificate
 - Enables READ access restriction to certified PVs only
 
 .. _access_control_file_ACF:

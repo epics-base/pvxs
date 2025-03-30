@@ -32,7 +32,7 @@ namespace pvxs {
  * Primarily a way of presenting peer address and a remote account name.
  * The ``method`` gives the authentication sub-protocol used and is presently one of:
  *
- * - "x509" - Peer certificate.  Common Names of root CA and peer used as authority and account.
+ * - "x509" - Peer certificate.  Common Names of root Certificate Authority and peer used as authority and account.
  * - "ca" - Client provided account name.
  * - "anonymous" - Client provided no credentials.  account will also be "anonymous".
  *
@@ -49,7 +49,7 @@ struct PVXS_API PeerCredentials {
     //! Who vouches for this account.
     //!
     //! Empty for "anonymous" and "ca" methods.
-    //! For "x509" method, common name of the root CA.
+    //! For "x509" method, common name of the root Certificate Authority.
     //! @since UNRELEASED
     std::string authority;
     // For "x509"

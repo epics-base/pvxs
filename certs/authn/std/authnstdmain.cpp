@@ -39,6 +39,7 @@ void defineOptions(CLI::App &app, ConfigStd &config, bool &verbose, bool &debug,
     app.add_flag("-d,--debug", debug, "Debug mode");
     app.add_flag("-V,--version", show_version, "Print version and exit.");
     app.add_flag("--force", force, "Force overwrite if certificate exists.");
+    app.add_flag("-a,--trust-anchor", config.trust_anchor_only, "Download Trust Anchor into keychain file");
     app.add_flag("-s,--no-status", config.no_status, "Request that status checking not be required for this certificate. PVACMS may ignore this request if it is configured to require all certificates to have status checking");
 
     app.add_flag("-D,--daemon", daemon_mode, "Daemon mode");
@@ -84,6 +85,7 @@ void showHelp(const char *program_name) {
               << "        --add-config-uri                     Add a config uri to the generated certificate\n"
               << "        --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`\n"
               << "        --force                              Force overwrite if certificate exists\n"
+              << "  (-a | --trust-anchor)                      Download Trust Anchor into keychain file.  Do not create a certificate\n"
               << "  (-s | --no-status)                         Request that status checking not be required for this certificate\n"
               << "  (-v | --verbose)                           Verbose mode\n"
               << "  (-d | --debug)                             Debug mode\n"
@@ -151,6 +153,28 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
     } else {
         std::cerr << "Usage must be one of `client`, `server`, or `hybrid`: " << usage << std::endl;
         return 13;
+    }
+
+    if ( config.trust_anchor_only) {
+        const std::string tls_keychain_file = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_file : config.tls_keychain_file;
+        const std::string tls_keychain_pwd = IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_pwd : config.tls_keychain_pwd;
+
+        // Create keychain file from trust anchor
+        AuthNStd authenticator{};
+        auto credentials = authenticator.getCredentials(config, IS_USED_FOR_(cert_usage, pvxs::ssl::kForClient));
+        auto cert_creation_request = authenticator.createCertCreationRequest(credentials, nullptr, cert_usage, config);
+        auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request, config.request_timeout_specified);
+
+        // If the certificate was created successfully, write it to the keychain file
+        if (!p12_pem_string.empty()) {
+            // Attempt to write the certificate and private key to a cert file protected by the configured password
+            auto file_factory = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd, nullptr, nullptr, nullptr, p12_pem_string);
+            file_factory->writeIdentityFile();
+            std::cout << "Trust Anchor retrieved"<< std::endl;
+            return -1;
+        }
+        std::cerr << "Failed to retrieve Trust Anchor" << std::endl;
+        return 14;
     }
 
     return 0;

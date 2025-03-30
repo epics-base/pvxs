@@ -406,7 +406,7 @@ CertData getCertificate(bool &retrieved_credentials, ConfigT config, uint16_t ce
             // Read the certificate and private key back from the keychain file for info and verification
             cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
             auto serial_number = CertStatusFactory::getSerialNumber(cert_data.cert);
-            auto issuer_id = CertStatus::getIssuerId(cert_data.ca);
+            auto issuer_id = CertStatus::getIssuerId(cert_data.cert_auth_chain);
 
             // Get the start and end dates of the certificate
             std::string from = std::ctime(&credentials->not_before);
@@ -461,7 +461,7 @@ int runAuthenticator(int argc, char *argv[], std::function<void(ConfigT &, AuthT
         uint16_t cert_usage{pvxs::ssl::kForClient};
 
         const auto parse_result = readParameters(argc, argv, config, verbose, debug, cert_usage, daemon_mode, force);
-        if (parse_result) return parse_result;
+        if (parse_result) return parse_result == -1 ? 0 : parse_result;
 
         if (verbose) logger_level_set(std::string("pvxs.auth." + authenticator.type_ + "*").c_str(), pvxs::Level::Info);
         if (debug) logger_level_set(std::string("pvxs.auth." + authenticator.type_ + "*").c_str(), pvxs::Level::Debug);
@@ -484,7 +484,7 @@ int runAuthenticator(int argc, char *argv[], std::function<void(ConfigT &, AuthT
         try {
             auto new_cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
             const auto now = time(nullptr);
-            const auto not_after_time = CertFactory::getNotAfterTimeFromCert(new_cert_data.cert);
+            const auto not_after_time = (!cert_data.cert) ? 0 :  CertFactory::getNotAfterTimeFromCert(new_cert_data.cert);
             if (not_after_time > now) {
                 cert_data = std::move(new_cert_data);
             }

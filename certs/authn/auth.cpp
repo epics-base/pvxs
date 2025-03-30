@@ -65,7 +65,7 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
     // Fill in the ccr from the base data we've gathered so far.
     cert_creation_request->ccr["type"] = type_;
     cert_creation_request->ccr["usage"] = usage;
-    cert_creation_request->ccr["pub_key"] = key_pair->public_key;
+    cert_creation_request->ccr["pub_key"] = (key_pair) ? key_pair->public_key: "";
     cert_creation_request->ccr["name"] = credentials->name;
     cert_creation_request->ccr["country"] = credentials->country;
     cert_creation_request->ccr["organization"] = credentials->organization;
@@ -88,7 +88,7 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
  * containing the ccr PVStructure which contains the certificate, and its
  * validity as well as any verifier specific required fields.
  * @param timeout the timeout for the request
- * @return the certificate in PEM format with the CA chain ordered from leaf to root
+ * @return the certificate in PEM format with the certificate authority chain ordered from leaf to root
  * @throws std::runtime_error when exceptions arise
  *
  * @note It is the responsibility of the caller to ensure that the
@@ -113,11 +113,11 @@ std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCr
  *
  * @param authn_config The Authenticator's configuration
  * @param for_client Whether the daemon is for a client or server
- * @param cert_data The certificate data (contains cert, ca, and key)
+ * @param cert_data The certificate data (contains cert, cert_auth_chain, and key)
  * @param fn The function to call to get the next certificate
  */
 void Auth::runAuthNDaemon(const ConfigAuthN &authn_config, bool for_client, CertData &&cert_data, const std::function<CertData()> &&fn) {
-    auto issuer_id = CertStatus::getIssuerId(cert_data.ca);
+    auto issuer_id = CertStatus::getIssuerId(cert_data.cert_auth_chain);
     const std::string skid(CertStatus::getSkId(cert_data.cert));
 
     // Create a ConfigMonitorParams object to pass to the configuration monitor

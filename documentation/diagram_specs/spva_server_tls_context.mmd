@@ -1,0 +1,36 @@
+%%{init: {
+    'theme': 'forest',
+    'themeVariables': {
+        'noteBkgColor': '#fff6e9',
+        'noteBorderColor': '#7c334f',
+        'noteTextColor': '#544943',
+        'stateBkg': '#cde498',
+        'stateBorder': '#7c334f',
+        'stateTextColor': '#544943',
+        'fontFamily': 'Georgia Serif',
+        'fontSize': '12px',
+        'stateLabelColor': '#544943',
+        'stateTextColor': '#544943',
+        'stateBorderColor': '#7c334f',
+        'mainBkg': '#fff6e9',
+        'textColor': '#544943',
+        'lineColor': '#7c334f',
+        'edgeLabelBackground': '#fff6e9',
+        'tertiaryColor': '#fff6e9'
+    }
+}}%%
+stateDiagram-v2
+    direction TB
+    [*] --> Init
+
+    Init --> [*] : No Cert<br>OR Cert INVALID<br>AND EPICS_PVAS_TLS_STOP_IF_NO_CERT
+    Init --> DegradedMode: No Cert<br>OR Cert INVALID<br>AND NOT EPICS_PVAS_TLS_STOP_IF_NO_CERT
+    Init --> TcpReady: Cert VALID<br>AND Monitoring Required
+    Init --> TlsReady: Cert VALID<br>AND Monitoring NOT Required
+
+    TcpReady --> DegradedMode: Cert Status NOT_GOOD<br>OR Stale
+    TcpReady --> TlsReady: Cert Status GOOD
+
+    DegradedMode --> TlsReady: Cert Status GOOD
+
+    TlsReady --> DegradedMode: Cert Status NOT_GOOD<br>OR Stale

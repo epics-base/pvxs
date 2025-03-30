@@ -25,7 +25,7 @@ rm -f \
     "$OUT"/client1.p12 \
     "$OUT"/client2.p12
 
-# the root CA private key is not needed during testing, so delete it on exit.
+# the root Certificate Authority private key is not needed during testing, so delete it on exit.
 trap 'rm -f "$OUT"/cert-auth-full.p12' EXIT QUIT TERM KILL
 
 echo "==== Creating rootCertAuth ===="

@@ -167,7 +167,7 @@ namespace certs {
  * @param issuer_id The issuer ID.
  * @param status_pv The shared wildcard PV to notify.
  *
- * @note This function assumes that the CA database and the status PV have been properly configured and initialized.
+ * @note This function assumes that the certificate database and the status PV have been properly configured and initialized.
  * @note The status_pv parameter must be a valid SharedWildcardPV object.
  */
 class StatusMonitor {

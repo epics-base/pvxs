@@ -49,6 +49,9 @@ class ConfigStd final : public ConfigAuthN {
      */
     uint32_t cert_validity_mins = 30 * 24 * 60;  // Default to 30 days
 
+    // To create trust anchor only
+    bool trust_anchor_only{false};
+
     void fromStdEnv(const std::map<std::string, std::string>& defs);
 
     void updateDefs(defs_t &defs) const override;

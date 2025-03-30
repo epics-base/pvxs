@@ -1,6 +1,6 @@
 .. _quick_start_ldap:
 
-|guide| LDAP Authenticator
+|guide| Quick Start LDAP
 ===============================
 
 This section contains a Quick Start |guide| for the Secure PVAccess *LDAP Authenticator*.
@@ -251,7 +251,7 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
 - ``TLS x509:47530d89:12147807175996825338:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
   - The connection is ``TLS``,
-  - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
+  - The Server end of the channel has been authenticated by the Root Certificate Authority ``EPICS Root Certificate Authority``
   - The Server end of the channel's name has been authenticated as ``softioc`` and is connecting from host ``172.17.0.2``
 
 |step-by-step| Step-By-Step
@@ -1053,6 +1053,6 @@ then generate X.509 certificates.
   - ``TLS x509:b271f07a:13935791733272200197:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
     - The connection is ``TLS``,
-    - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
+    - The Server end of the channel has been authenticated by the Root Certificate Authority ``EPICS Root Certificate Authority``
     - The Server end of the channel's name has been authenticated as ``softioc`` and is connecting from host ``172.17.0.2``
 

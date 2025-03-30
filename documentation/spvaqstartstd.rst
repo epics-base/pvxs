@@ -1,6 +1,6 @@
 .. _quick_start_std:
 
-|guide| Std. Authenticator
+|guide| Quick Start Std
 ========================================
 
 This section contains a Quick Start |guide| for the Secure PVAccess *Standard Authenticator*.
@@ -195,7 +195,7 @@ If you want a prepackaged environment, try the following.  You will need four te
   - ``TLS x509:47530d89:7450074183745406049:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
     - The connection is ``TLS``,
-    - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
+    - The Server end of the channel has been authenticated by the Root Certificate Authority ``EPICS Root Certificate Authority``
     - The Server end of the channel's name has been authenticated as ``softioc`` and is connecting from host ``172.17.0.2``
 
 |step-by-step| Step-By-Step
@@ -303,9 +303,9 @@ log back in as pvacms with environment set by ``.bashrc``
     - creates database if does not exist
     - at location pointed to by ``EPICS_PVACMS_DB`` or ``${XDG_DATA_HOME}/pva/1.3/certs.db`` by default
 
-  - creates root CA if does not exist
+  - creates root Certificate Authority certificate if does not exist
 
-    - creates root CA if does not exist,
+    - creates root Certificate Authority certificate if does not exist,
     - at location specified by ``EPICS_CERT_AUTH_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12`` by default
     - with ``CN`` specified by ``EPICS_CERT_AUTH_NAME``
     - with  ``O`` specified by ``EPICS_CERT_AUTH_ORGANIZATION``
@@ -844,7 +844,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
   - ``TLS x509:46093d7c:13415272142438558829:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
     - The connection is ``TLS``,
-    - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
+    - The Server end of the channel has been authenticated by the Root Certificate Authority ``EPICS Root Certificate Authority``
     - The Server end of the channel's name has been authenticated as ``softioc`` and is connecting from host ``172.17.0.2``
 
 

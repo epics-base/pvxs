@@ -115,12 +115,12 @@ static int jdk_trust(PKCS12_SAFEBAG *bag, void *cbarg) noexcept {
 static int jdk_trust(PKCS12_SAFEBAG *bag, void *cbarg) noexcept {return 0;}
 static inline
 PKCS12 *PKCS12_create_ex2(const char *pass, const char *name, EVP_PKEY *pkey,
-                          X509 *cert, STACK_OF(X509) *ca, int nid_key, int nid_cert,
+                          X509 *cert, STACK_OF(X509) *cert_auth_chain_ptr, int nid_key, int nid_cert,
                           int iter, int mac_iter, int keytype,
                           OSSL_LIB_CTX *ctx, const char *propq,
                           int (*cb)(PKCS12_SAFEBAG *bag, void *cbarg), void *cbarg)
 {
-    return PKCS12_create_ex(pass, name, pkey, cert, ca,
+    return PKCS12_create_ex(pass, name, pkey, cert, cert_auth_chain_ptr,
                             nid_key, nid_cert, iter, mac_iter, keytype,
                             ctx, propq);
 }
@@ -276,19 +276,19 @@ struct CertCreator {
         // see RFC5280
 
         // Store a hash of the public key.  (kind of redundant to stored public key?)
-        // RFC5280 mandates this for a CA cert.  Optional for others, and very common.
+        // RFC5280 mandates this for a Certificate Authority certificate.  Optional for others, and very common.
         add_extension(cert.get(), NID_subject_key_identifier, "hash",
                       cert.get());
 
         // store hash and name of issuer certificate (or issuer's issuer?)
-        // RFC5280 mandates this for all certs.
+        // RFC5280 mandates this for all certificates.
         add_extension(cert.get(), NID_authority_key_identifier, "keyid:always,issuer:always",
                       nullptr, issuer);
 
         // certificate usage constraints.
 
         // most basic.  Can this certificate be an issuer to other certificates?
-        // RFC5280 mandates this for a CA cert.  (CA:TRUE)  Optional for others, but common
+        // RFC5280 mandates this for a Certificate Authority certificate.  (CA:TRUE)  Optional for others, but common
         add_extension(cert.get(), NID_basic_constraints, isCA ? "critical,CA:TRUE" : "CA:FALSE");
 
         if (key_usage)
@@ -370,12 +370,12 @@ int main(int argc, char *argv[])
             PKCS12Writer p12(outdir);
             p12.friendlyName = cc.CN;
 
-            // This can be used for server-only connections as the client p12 file containing only the CA cert
+            // This can be used for server-only connections as the client p12 file containing only the Certificate Authority certificate
             // Properly labelled in the p12 file in the correct bag
             MUST(1, sk_X509_push(p12.cacerts.get(), root_cert.get()));
             p12.write("cert_authcert.p12");
 
-            // This contains the ca cert as well as the keys - used when we need a CA cert for CMS and other signing roles
+            // This contains the Certificate Authority certificate as well as the keys - used when we need a Certificate Authority certificate for CMS and other signing roles
             p12.key = root_key.get();
             p12.write("cert_auth.p12");
         }
@@ -413,7 +413,7 @@ int main(int argc, char *argv[])
             cc.ikey = root_key.get();
             cc.isCA = true;
             cc.key_usage = "digitalSignature,cRLSign,keyCertSign";
-            // on a CA cert. this is a mask of usages which it is allowed to delegate.
+            // on a Certificate Authority certificate. this is a mask of usages which it is allowed to delegate.
             cc.extended_key_usage = "serverAuth,clientAuth,OCSPSigning";
 
             std::tie(i_key, i_cert) = cc.create();

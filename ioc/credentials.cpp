@@ -15,12 +15,9 @@ namespace pvxs {
 namespace ioc {
 
 /**
- * eg.
- * "username"  implies "ca/" prefix
- * "krb/principle"
- * "role/groupname"
+ * @brief Credentials constructor
  *
- * @param clientCredentials
+ * @param clientCredentials The client credentials to be used for the credentials object
  */
 
 Credentials::Credentials(const server::ClientCredentials& clientCredentials) {

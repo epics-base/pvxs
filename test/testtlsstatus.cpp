@@ -120,7 +120,7 @@ struct Tester {
             testEq(parsed_response.status_valid_until_date.t, status_valid_until_time.t);
             testEq(parsed_response.revocation_date.t, 0);
         } catch (std::exception &e) {
-            testFail("Failed to parse CA OCSP response: %s", e.what());
+            testFail("Failed to parse Certificate Authority OCSP response: %s", e.what());
         }
     }
 

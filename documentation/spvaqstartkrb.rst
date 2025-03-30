@@ -1,6 +1,6 @@
 .. _quick_start_krb:
 
-|guide| KRB Authenticator
+|guide| Quick Start KRB
 ==================================================
 
 This section contains a Quick Start |guide| for the Secure PVAccess *Kerberos Authenticator*.
@@ -282,7 +282,7 @@ If you want a prepackaged environment, try the following.  You will need three t
 - ``TLS x509:47530d89:3826361579604613181:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
   - The connection is ``TLS``,
-  - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
+  - The Server end of the channel has been authenticated by the Root Certificate Authority ``EPICS Root Certificate Authority``
   - The Server end of the channel's name has been authenticated as ``softioc`` and is connecting from host ``172.17.0.2``
 
 |step-by-step| Step-By-Step
@@ -920,7 +920,7 @@ using the Kerberos Authenticator.
   - ``TLS x509:b271f07a:12421554925305118824:EPICS Root Certificate Authority/softioc @ 172.17.0.2`` indicates that:
 
     - The connection is ``TLS``,
-    - The Server end of the channel has been authenticated by the Root CA ``EPICS Root Certificate Authority``
+    - The Server end of the channel has been authenticated by the Root Certificate Authority ``EPICS Root Certificate Authority``
     - The Server end of the channel's name has been authenticated as ``softioc`` and is connecting from host ``172.17.0.2``
 
 

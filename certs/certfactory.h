@@ -165,7 +165,7 @@ class PVXS_API CertFactory {
 
     static time_t getNotAfterTimeFromCert(const ossl_ptr<X509> &cert);
 
-    static std::string PVXS_API certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * ca);
+    static std::string PVXS_API certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * cert_auth_chain_ptr);
 
     //    static bool PVXS_API verifySignature(const ossl_ptr<EVP_PKEY> &pkey, const std::string &data, const std::string &signature);
 

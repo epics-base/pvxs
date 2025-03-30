@@ -1,0 +1,39 @@
+%%{init: {
+    'theme': 'forest',
+    'themeVariables': {
+        'noteBkgColor': '#fff6e9',
+        'noteBorderColor': '#7c334f',
+        'noteTextColor': '#544943',
+        'stateBkg': '#cde498',
+        'stateBorder': '#7c334f',
+        'stateTextColor': '#544943',
+        'fontFamily': 'Georgia Serif',
+        'fontSize': '12px',
+        'stateLabelColor': '#544943',
+        'stateTextColor': '#544943',
+        'stateBorderColor': '#7c334f',
+        'mainBkg': '#fff6e9',
+        'textColor': '#544943',
+        'lineColor': '#7c334f',
+        'edgeLabelBackground': '#fff6e9',
+        'tertiaryColor': '#fff6e9'
+    }
+}}%%
+stateDiagram-v2
+    direction TB
+    [*] --> UNKNOWN
+    
+    UNKNOWN --> GOOD: Status GOOD
+    UNKNOWN --> NOT_GOOD: Status NOT_GOOD
+    UNKNOWN --> [*]: REVOKED
+    UNKNOWN --> [*]: EXPIRED
+
+    GOOD --> UNKNOWN: PVACMS Unreachable
+    GOOD --> [*]: REVOKED
+    GOOD --> [*]: EXPIRED
+    GOOD --> NOT_GOOD: Status NOT_GOOD
+
+    NOT_GOOD --> GOOD: Status GOOD
+    NOT_GOOD --> UNKNOWN: PVACMS Unreachable
+    NOT_GOOD --> [*]: REVOKED
+    NOT_GOOD --> [*]: EXPIRED

@@ -167,7 +167,7 @@ struct CertStatus {
     static std::string getSkId(const ossl_ptr<X509>& cert) { return getSkId(cert.get()); }
 
     /**
-     * @brief  Get the issuer ID which is SKID (subject key identifier) of the root CA in the given chain
+     * @brief  Get the issuer ID which is SKID (subject key identifier) of the root certificate authority in the given chain
      *
      * First determine the root certificate authority certificate then get the SKID
      *

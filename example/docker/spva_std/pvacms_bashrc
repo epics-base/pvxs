@@ -3,7 +3,7 @@ export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
 export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
 export PROJECT_HOME=/opt/epics
 
-#### [optional] Set path and name of the CA database file (default: ./certs.db)
+#### [optional] Set path and name of the certificate database file (default: ./certs.db)
 # Environment: EPICS_PVACMS_DB
 # Default    : ${XDG_DATA_HOME}/pva/1.3/certs.db
 # export EPICS_PVACMS_DB=${XDG_DATA_HOME}/pva/1.3/certs.db

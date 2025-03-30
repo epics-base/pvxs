@@ -334,12 +334,12 @@ struct Tester {
     }
 
     /**
-     * @brief Test getting a value using a certificate that is configured to use an intermediate CA
+     * @brief Test getting a value using a certificate that is configured to use an intermediate Certificate Authority
      * Note that we don't disable status monitoring so the framework will attempt to contact
      * PVACMS to verify certificate status for any certificates that contain the certificate status extension.
      *
      * We chose the SERVER1 and CLIENT1 certificates for this test which as well as both being
-     * certificates that have an intermediate certificate between them and the root CA, they
+     * certificates that have an intermediate certificate between them and the root Certificate Authority, they
      * also have the certificate status extension embedded in them.  So this test will
      * verify that the statuses are verified and the TLS proceeds as expected.  If the
      * statuses are not verified then the test count will be off because there is a test

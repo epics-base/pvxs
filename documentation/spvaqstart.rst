@@ -1,6 +1,6 @@
 .. _quick_start:
 
-|guide| Secure PVXS
+|guide| Quick Start PVXS
 ========================
 
 
@@ -149,7 +149,7 @@ If you want a prepackaged environment, try the following.  You will need two ter
     Certificate Details:
     ============================================
     Subject        : CN=admin, C=US
-    Issuer         : CN=EPICS Root CA, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Issuer         : CN=EPICS Root, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
     Valid from     : Sat Mar 08 09:45:46 2025 UTC
     Cert Expires   : Mon Mar 09 09:45:46 2026 UTC
     --------------------------------------------
@@ -467,7 +467,7 @@ For MacOS
 
 - *optionally*
 
-  - Configure CA database file location*
+  - Configure Certificate database file location*
 
 .. code-block:: shell
 
@@ -487,7 +487,7 @@ otherwise the certificate authority certificate will be created here
 
 - *optionally*
 
-  - Specify the subject name of your Root CA in case you don't provide a Root CA and it needs to be created
+  - Specify the subject name of your Root Certificate Authority in case you don't provide a Root Certificate Authority certificate and it needs to be created
 
 .. code-block:: shell
 
@@ -521,7 +521,7 @@ otherwise the certificate authority certificate will be created here
 
   - Configure PVACMS ADMIN user Access Control File (ACF) location
   - An ACF file that controls access to PVACMS resources (certificates, etc.) is created at this location if it does not exist
-  - By default the file created ensures that administrator permissions are granted to any user that presents a certificate that is signed by the configured Root CA and has CN="admin", O="", OU="", C="US"
+  - By default the file created ensures that administrator permissions are granted to any user that presents a certificate that is signed by the configured Root Certificate Authority and has CN="admin", O="", OU="", C="US"
   - You can modify this file to add other admin users to the UAG section, or conditions to an existing or new RULES section
 
 .. code-block:: shell

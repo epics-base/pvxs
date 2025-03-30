@@ -1,0 +1,236 @@
+%%{init: {
+    'theme': 'forest',
+    'themeVariables': {
+        'noteBkgColor': '#fff6e9',
+        'noteBorderColor': '#7c334f',
+        'noteTextColor': '#544943',
+        'fontFamily': 'Georgia Serif',
+        'fontSize': '12px',
+        'messageFontSize': '12px',
+        'noteFontSize': '12px',
+        'actorFontSize': '14px',
+        'width': 1200,
+        'boxMargin': 20,
+        'messageMargin': 40
+    }
+}}%%
+sequenceDiagram
+    participant Agent as Secure EPICS Client
+    participant Peer as Secure EPICS Server
+    participant PVACMS as PVACMS
+
+    Note over Agent,Peer: TLS Context Initialisation
+    Note over Peer: State TLS Context: Init<br>Peer Certificate Status: UNKNOWN
+    Note over Agent: State TLS Context: Init<br>Peer Certificate Status: UNKNOWN
+
+    % Check Server Phase
+    Note over Peer: Check if EPICS Server is Viable
+    alt Server Certificate Found AND is VALID OR EPICS_PVAS_TLS_STOP_IF_NO_CERT
+        %% Server Cert Validation Phase
+        Note over Peer: Check Server Certificate Viability
+        alt Server Certificate Configured AND VALID
+            alt Server Certificate Status Monitoring Required
+                Peer-->>PVACMS: Monitor Certificate Status
+                Note over Peer: TLS Context: TcpReady
+            else
+                Note over Peer: TLS Context: TlsReady
+            end
+        else
+            Note over Peer: TLS Context: DegradedMode
+        end
+
+        Note over Agent,Peer: SEARCH Request
+        %% Trust Validation Phase
+        Note over Agent: Check for Trust Anchor
+        alt No Trust Anchor Found
+            Note over Agent: TLS Context: DegradedMode
+            Agent-->>Peer: SEARCH (protocol=["tcp"]) with retry
+        else
+            Agent-->>Peer: SEARCH (protocol=["tcp", "tls"]) with retry
+            %% Client Cert Validation Phase
+            Note over Agent: Check Client Certificate Viability
+            alt Client Certificate Configured AND VALID
+                alt Client Certificate Status Monitoring Required
+                    Agent-->>PVACMS: Monitor Certificate Status
+                    Note over Agent: TLS Context: TcpReady
+                else
+                    Note over Agent: TLS Context: TlsReady
+                end
+            else
+                Note over Agent: TLS Context: DegradedMode
+            end
+        end
+
+        Note over Agent,Peer: Asynchronous Certificate Status Monitoring
+        par Client Certificate Monitoring Updates
+            loop
+                alt
+                    PVACMS-->>Agent: Certificate Status(GOOD)
+                    Note over Agent: TLS Context: TlsReady
+                else
+                    PVACMS-->>Agent: Certificate Status(NOT_GOOD)/STALE
+                    Note over Agent: TLS Context: DegradedMode
+                end
+            end
+        and Server Certificate Monitoring Updates
+            loop
+                alt
+                    PVACMS-->>Peer: Certificate Status(GOOD)
+                    Note over Peer: TLS Context: TlsReady
+                else
+                    PVACMS-->>Peer: Certificate Status(NOT_GOOD)/STALE
+                    Note over Peer: TLS Context: DegradedMode
+                end
+            end
+        and Client's Peer Certificate Monitoring
+            loop
+                alt
+                    PVACMS-->>Agent: peer_certificate(GOOD)
+                    Note over Agent: Peer Certificate Status: GOOD
+                else
+                    PVACMS-->>Agent: peer_certificate(NOT_GOOD)
+                    Note over Agent: Peer Certificate Status: NOT_GOOD/STALE
+                end
+            end
+        and Server's Peer Certificate Monitoring
+            loop
+                alt
+                    PVACMS-->>Peer: peer_certificate(GOOD)
+                    Note over Peer: Peer Certificate Status: GOOD
+                else
+                    PVACMS-->>Peer: peer_certificate(NOT_GOOD)
+                    Note over Peer: Peer Certificate Status: NOT_GOOD/STALE
+                end
+            end
+        and Search Response and Connection Establishment
+
+            Note over Agent,Peer: SEARCH Response
+            %% Server Response determination Phase
+            alt Server TLS Context: DegradedMode
+                Peer-->>Agent: SEARCH_RESPONSE (protocol="tcp", address)
+                Agent->>Peer: TCP Connection initiated to `address`
+            else Server TLS Context: TlsReady
+                alt SEARCH protocol list contains "tls"
+                    Peer-->>Agent: SEARCH_RESPONSE (protocol="tls", address)
+                    Agent->>Peer: TLS Connection initiated to `address`
+                else
+                    Note over Peer: Check Server-only Authentication setting
+                    alt Server-only Authenticated TLS allowed
+                        Peer-->>Agent: SEARCH_RESPONSE (protocol="tcp", address)
+                        Agent->>Peer: TLS Connection initiated to `address`
+                    end
+                end
+            end
+
+            % Connection Establishment Phase
+            Note over Agent,Peer: TCP Connection/TLS Connection & HANDSHAKE
+            alt TCP Connection initiated
+                Note over Agent, Peer: TCP Connection Established on `address`
+            else
+                Note over Agent,Peer: TLS Connection Establishment begins on `address`
+                alt Server Certificate Status Monitoring Required AND Certificate Stapling Enabled AND Server TLS Context: NOT TcpReady
+                    Peer->>Agent: TLS_HANDSHAKE(peer_certificate, peer_certificate_status)
+                    activate Agent
+                    Note over Agent: Check Trust Anchor Compatibility
+                    alt `peer_certificate`'s Trust Anchor incompatible with Client's
+                        Note over Agent: TLS Handshake Fails: Connection Dropped
+                    end
+                    alt stapled `peer_certificate_status` is GOOD
+                        Note over Agent: Peer Certificate Status: GOOD
+                    else
+                        Note over Agent: Peer Certificate Status: NOT_GOOD
+                    end
+                    deactivate Agent
+                else
+                    Peer->>Agent: TLS_HANDSHAKE(peer_certificate)
+                end
+
+                alt `peer_certificate` requires Status Monitoring
+                    Agent-->>PVACMS: Monitor `peer_certificate` Status
+                end
+
+                alt Client TLS Context: DegradedMode
+                    Agent->>Peer: TLS_HANDSHAKE()
+                else
+                    Agent->>Peer: TLS_HANDSHAKE(peer_certificate)
+                    activate Peer
+                    Note over Peer: Check Trust Anchor Compatibility
+                    alt `peer_certificate`'s Trust Anchor incompatible with Server's
+                        Note over Peer: TLS Handshake Fails: Connection Dropped
+                    end
+                    deactivate Peer
+                    alt `peer_certificate` requires Status Monitoring
+                        Peer-->>PVACMS: Monitor `peer_certificate` Status
+                    end
+                end
+
+                Note over Agent,Peer: Check Trust Anchor Compatibility
+                alt `peer_certificate`'s Trust Anchor incompatible with Server's
+                    Note over Peer: TLS Handshake Fails: Connection Dropped
+                end
+
+                alt `peer_certificate`'s Trust Anchor incompatible with Client's
+                    Note over Agent: TLS Handshake Fails: Connection Dropped
+                end
+
+            end
+
+            %% Connection Validation Phase
+            Peer-->>Agent: CONNECTION_VALIDATION Request
+            activate Agent
+            Agent-->>Peer: CONNECTION_VALIDATION Response
+            deactivate Agent
+            activate Peer
+            Peer-->>Agent: CONNECTION_VALIDATED
+            deactivate Peer
+
+            Note over Agent,Peer: Ready to VALIDATE CONNECTION?
+            alt Client TLS Context: DegradedMode
+                Agent-->>Peer: CONNECTION_VALIDATION Response
+            else Client TLS Context: TlsReady
+                alt `peer_certificate` requires Status Monitoring
+                    alt Peer Certificate Status: GOOD
+                        Agent-->>Peer: CONNECTION_VALIDATION Response
+                    end
+                else
+                    Agent-->>Peer: CONNECTION_VALIDATION Response
+                end
+            end
+
+            Note over Agent,Peer: Ready to signal CONNECTION VALIDATED?
+            alt Server TLS Context: DegradedMode OR Server TLS Context: TlsReady
+                Peer-->>Agent: CONNECTION_VALIDATED
+            end
+        end
+
+        Note over Agent,Peer: Create Channel
+        %% Channel Creation
+        Agent->>Peer: CREATE_CHANNEL
+        activate Peer
+        Peer-->>Agent: CREATE_CHANNEL Response
+        deactivate Peer
+
+        Note over Agent,Peer: Operation
+        %% Operations
+        alt
+            Agent->>Peer: GET Request
+            activate Peer
+            Peer-->>Agent: GET Response(value)
+            deactivate Peer
+        else
+            Agent->>Peer: MONITOR Request
+            activate Peer
+            loop
+                Peer-->>Agent: MONITOR Subscrition(update)
+            end
+            deactivate Peer
+        else
+            Agent->>Peer: RPC Request
+            activate Peer
+            Peer-->>Agent: RPC Response(value)
+            deactivate Peer
+        else
+            Agent-->>Peer: PUT Request(value)
+        end
+    end
+

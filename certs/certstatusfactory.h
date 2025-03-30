@@ -55,7 +55,7 @@ class CertStatusFactory {
    public:
     /**
      * @brief Used to make OCSP responses for given statuses
-     * You need the private key of the CA in order to do this.
+     * You need the private key of the certificate authority in order to do this.
      * You should call createPVACertificateStatus() afterward to make responses for certificates
      *
      * @param cert_auth_cert the certificate authority certificate to use to sign the OCSP response

@@ -12,12 +12,6 @@
   - ``Authentication`` refers to the process of verifying the validity of the credentials and claims presented within a security token, ensuring that the entity is who or what it claims to be.
   - ``Authorization``, on the other hand, is the process of determining and granting the appropriate access permissions to resources based on the authenticated entity's credentials and associated privileges.
 
-.. _glossary_certificate_authority:
-
-- CA – Certificate Authority.
-
-  An entity that signs, and issues digital certificates.  Each site where EPICS is installed will use the proposed PVACMS as their CA.
-
 .. _glossary_certificate_subject:
 
 - Certificate’s Subject.
@@ -39,7 +33,7 @@
 
     For Certificate Authorities the ``CN`` field will be
 
-    - the name of the CA, e.g. ``SLAC Certificate Authority`` or ``ORNL CA``.
+    - the name of the Certificate Authority, e.g. ``SLAC Certificate Authority`` or ``ORNL Certificate Authority``.
       This field value is used in an ``ASG`` ``AUTHORITY`` rule to identify the certificate issuer.
 
   - the ``O`` organization field stores
@@ -63,7 +57,7 @@
 
   In cryptography, a client certificate is a type of digital certificate that is used by client systems
   to make authenticated requests to a remote server which itself has a server certificate.
-  They contain claims that are signed by a CA that is trusted by the peer certificate user.
+  They contain claims that are signed by a Certificate Authority that is trusted by the peer certificate user.
   All Secure PVAccess certificates are ``X.509`` certificates.
 
 .. _glossary_custom_extension:

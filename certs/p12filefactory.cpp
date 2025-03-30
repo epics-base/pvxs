@@ -161,8 +161,13 @@ ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(const std::string &password, EVP
 
     // Get whole of certificate chain and push to certs
     while (X509 *cert_auth_ptr = PEM_read_bio_X509(bio.get(), nullptr, nullptr, (void *)password.c_str())) {
-        auto ca = ossl_ptr<X509>(cert_auth_ptr);
-        sk_X509_push(certs.get(), ca.release());
+        auto cert_auth = ossl_ptr<X509>(cert_auth_ptr);
+        sk_X509_push(certs.get(), cert_auth.release());
+    }
+    if ( !keys_ptr && sk_X509_num(certs.get()) == 0) {
+        auto trust_anchor_ptr = X509_dup(cert.get());
+        sk_X509_push(certs.get(), trust_anchor_ptr);
+        return toP12(password, nullptr, nullptr, certs.get());
     }
 
     return toP12(password, keys_ptr, cert.get(), certs.get());
@@ -180,7 +185,13 @@ ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(const std::string &password, EVP
  */
 ossl_ptr<PKCS12> P12FileFactory::toP12(const std::string &password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) * cert_chain_ptr) {
     // Get the subject name of the certificate
-    if (!cert_ptr && !keys_ptr) throw std::runtime_error("No certificate or key provided");
+    if (!cert_ptr && !keys_ptr) {
+        ossl_ptr<PKCS12> p12{
+            PKCS12_create_ex2(password.c_str(), "", nullptr, nullptr,
+                cert_chain_ptr, 0, 0, 0, 0, 0,
+                nullptr, nullptr, &jdkTrust, nullptr)};
+        return p12;
+    };
 
     ossl_ptr<PKCS12> p12;
     if (!cert_ptr) {
@@ -228,7 +239,7 @@ void P12FileFactory::writePKCS12File() {
     // If a pem string has been specified then convert to p12
     ossl_ptr<PKCS12> p12;
     if (!pem_string_.empty()) {
-        p12 = pemStringToP12(password_, key_pair_->pkey.get(), pem_string_);
+        p12 = pemStringToP12(password_, (!key_pair_) ? nullptr : key_pair_->pkey.get(), pem_string_);
     } else if (cert_ptr_) {
         // If a cert has been specified then convert to p12
         p12 = toP12(password_, key_pair_->pkey.get(), cert_ptr_, certs_ptr_);

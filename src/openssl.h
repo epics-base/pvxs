@@ -63,9 +63,9 @@ using cert_status_ptr = ossl_shared_ptr<T, cert_status_delete<T>>;
 namespace ssl {
 constexpr uint16_t kForClient = 0x01;
 constexpr uint16_t kForServer = 0x02;
-constexpr uint16_t kForIntermediateCa = 0x04;
+constexpr uint16_t kForIntermediateCertAuth = 0x04;
 constexpr uint16_t kForCMS = 0x08;
-constexpr uint16_t kForCa = 0x10;
+constexpr uint16_t kForCertAuth = 0x10;
 
 constexpr uint16_t kForClientAndServer = kForClient | kForServer;
 constexpr uint16_t kAnyServer = kForCMS | kForServer;
@@ -114,7 +114,7 @@ struct SSLPeerStatusAndMonitor {
     // The function to call when the peer status changes
     const std::function<void(bool)> fn;
 
-    // The serial number of the certificate being monitored.  We get the status PV from the cert so we know that it is from the right CA is we are monitoring it
+    // The serial number of the certificate being monitored.  We get the status PV from the cert, so we know that it is from the right certificate authority 
     const serial_number_t serial_number;
 
     // Peer status and monitor map holder: Cert Status Ex data where Map where status and monitors are mapped to status pv
@@ -178,7 +178,7 @@ struct CertStatusExData {
     const impl::evbase& loop;
     // The entity certificate
     ossl_ptr<X509> cert{};
-    // The Trusted Root CA
+    // The Trusted Root Certificate Authority
     X509_STORE* trusted_store_ptr;
     // Whether status checking is enabled for this context.
     // If not then a permanent status is set and monitoring is not configured

@@ -3,6 +3,88 @@
 |security| Cert Management
 =====================
 
+.. _certificates_and_private_keys:
+
+Public and Private Keys
+-----------------------------------
+
+EPICS Agents maintain public/private key pairs for identification:
+
+- Public key identifies agent to peers (shorthand representation: 8-character SKID)
+- Private key must be protected like a password
+- The Key pair are stored in the keychain file.
+- If the referenced keychain file does not contain a key pair then any of the authnxxx tools will automatically generate a new key pair and store it in the keychain file.
+- Once a key pair has been established, it will be reused for each certificate request.
+
+Identity Assertion Process:
+
+1. Agent presents certificate to peer
+2. Agent signs some data with his private key
+3. Peer verifies signature using the public key in the certificate
+4. Peer validates certificate by checking the signature and the certificate chain of trust.
+5. The chain of trust is validated back to the Peer's own Trust Anchor (Root Certificate Authority).
+6. The Agent's identity is confirmed through successful verification
+
+Key Security:
+
+- Keeping a private key secure is critical
+- Store it in a keychain file that is not accessible by other users or programs
+- Use separate keychain files for each certificate
+
+Trust Establishment
+--------------------------------
+
+Secure PVAccess relies on each EPICS agent having a copy of the Root Certificate Authority certificate in
+a referenced keychain file so that it can verify certificates presented to it by other agents.
+
+If a peer presents a certificate that is not signed by a certificate authority that is trusted by the
+agent, the agent will reject the certificate.
+
+Even if the EPICS client does not want its own certificate it must still have a copy of the Root Certificate Authority.
+This copy is referred to in this document as the ``Trust Anchor``.
+
+1. Trust Anchor Distribution:
+
+   - Administrators must distribute PKCS#12 files containing the Root certificate to all clients
+   - These files must be stored at the location pointed to by EPICS_PVA_TLS_KEYCHAIN or equivalent
+
+Certificates
+-----------------------------------
+
+A certificate is the document that is exchanged with a peer that identifies an agent.  It contains the name of the agent (subject) and the public key of the agent so that the peer can verify the agent's identity.
+
+- A certificate is not private.  It can safely be shared with any peer.
+
+  - Care must be taken when sharing a certificate as it is stored in the same file as the private key. Do not share the keychain file with others.
+
+- A certificate is valid for a specific period of time.
+- A certificate can be revoked by an administrator (if the status monitoring extension is addded to the certificate - by default it is)
+
+Certificate Attributes
+----------------------
+
+The following attributes are used to describe a certificate:
+
+- ``subject``: The entity to which the certificate was issued
+
+  - ``name``: The common name of the entity to which the certificate was issued. Username, application name, or other identifier.
+  - ``organization``: The organization of the entity to which the certificate was issued.  Hostname, institution, domain, realm, etc.
+  - ``organizational unit``: The organizational unit of the entity to which the certificate was issued.  Optional.
+  - ``country``: The country of the entity to which the certificate was issued.  Two letter country code. Default `US`.
+
+- ``issuer``: The certificate authority that issued the certificate
+- ``serial number``: A unique serial number for the certificate
+- ``validity period``: The period of time for which the certificate is valid
+
+  - ``notBefore``: The date and time before which the certificate is not valid.
+  - ``notAfter``: The date and time after which the certificate is not valid.
+
+- ``public key``: The public key of the entity to which the certificate was issued
+- ``private key``: The private key of the entity to which the certificate was issued.  This is not stored in the certificate but it is stored in the keychain file.
+- ``SPVA certificate status extension``: A string representing the PV name where the certificate status can be monitored.
+- ``SPVA config uri extension``: A string representing the PV name where the certificate configuration can be monitored.
+
+
 Certificate States
 ----------------------
 
@@ -59,10 +141,10 @@ Request structure:
                                         #   0x01: Client
                                         #   0x02: Server
                                         #   0x03: Client and Server
-                                        #   0x04: Intermediate CA
+                                        #   0x04: Intermediate Certificate Authority
                                         #   0x08: CMS
                                         #   0x0A: Any Server
-                                        #   0x10: CA
+                                        #   0x10: Certificate Authority
         UInt32     not_before         # Validity start time (epoch seconds)
         UInt32     not_after          # Validity end time (epoch seconds)
         string     pub_key            # Public key data
@@ -104,30 +186,6 @@ on the PV associated with the certificate:
     Structure
         string     state    # APPROVE, DENY, REVOKE
 
-
-.. _certificates_and_private_keys:
-
-Certificates and Private Keys
------------------------------------
-
-EPICS Agents maintain public/private key pairs for identification:
-
-- Public key identifies agent to peers (8-character SKID)
-- Private key must be protected like a password
-
-Identity Assertion Process:
-
-1. Agent presents certificate to peer
-2. Agent signs data with private key
-3. Peer verifies signature using public key
-4. Peer validates certificate trust chain to CA
-5. Identity confirmed through successful verification
-
-Key Security:
-
-- Private key protection is critical
-- Store in protected keychain file
-- Use separate keychain files for each certificate
 
 
 Certificate Management Tools
@@ -175,10 +233,9 @@ pvxcert
 
 Key Operations:
 
-- Install root certificates in trusted store
 - Check certificate status
 - Approve/deny ``PENDING_APPROVAL`` certificates (admin)
-- Revoke certificates in any state (admin)
+- Revoke certificates in any state (admin/self)
 
 Certificate Usage
 ----------------------
@@ -214,40 +271,39 @@ PVACMS Usage
     Also can be used to re-generate the admin certificate that is required to administer the certificates.
 
     usage:
-      pvacms [admin options] [kerberos options] [options]
-                                                  Run PVACMS.  Interrupt to quit
-      pvacms (-h | --help)                        Show this help message and exit
-      pvacms (-V | --version)                     Print version and exit
+      pvacms [admin options] [options]           Run PVACMS.  Interrupt to quit
+      pvacms (-h | --help)                       Show this help message and exit
+      pvacms (-V | --version)                    Print version and exit
       pvacms [admin options] --admin-keychain-new <new_name>
-                                                  Generate a new Admin User's keychain file, update the ACF file, and exit
+                                                 Generate a new Admin User's keychain file, update the ACF file, and exit
 
     options:
       (-c | --cert-auth-keychain) <cert_auth_keychain>
-                                                  Specify certificate authority keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12
-            --cert-auth-keychain-pwd <file>       Specify location of file containing certificate authority keychain file's password
-            --cert-auth-name <name>               Specify name (CN) to be used for certificate authority Certificate. Default `EPICS Root Certificate Authority`
-            --cert-auth-org <name>                Specify organisation (O) to be used for certificate authority Certificate. Default `certs.epics.org`
-            --cert-auth-org-unit <name>           Specify organisational unit (OU) to be used for certificate authority Certificate. Default `EPICS Certificate Authority`
-            --cert-auth-country <name>            Specify country (C) to be used for certificate authority Certificate. Default `US`
-      (-d | --cert-db) <db_name>                  Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.3/certs.db
-      (-p | --pvacms-keychain) <pvacms_keychain>  Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
-            --pvacms-keychain-pwd <file>          Specify location of file containing PVACMS keychain file's password
-            --pvacms-name <name>                  Specify name (CN) to be used for PVACMS certificate. Default `PVACMS Service`
-            --pvacms-org <name>                   Specify organisation (O) to be used for PVACMS certificate. Default `certs.epics.org`
-            --pvacms-org-unit <name>              Specify organisational unit (OU) to be used for PVACMS certificate. Default `EPICS PVA Certificate Management Service`
-            --pvacms-country <name>               Specify country (C) to be used for PVACMS certificate. Default US
-            --client-require-approval             Generate Client Certificates in PENDING_APPROVAL state
-            --hybrid-require-approval             Generate Hybrid Certificates in PENDING_APPROVAL state
-            --server-require-approval             Generate Server Certificates in PENDING_APPROVAL state
-            --status-monitoring-enabled           Require Peers to monitor Status of Certificates Generated by this
-                                                  server by default. Can be overridden in each CCR
-            --status-validity-mins                Set Status Validity Time in Minutes
-      (-v | --verbose)                            Verbose mode
+                                                 Specify Certificate Authority keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12
+            --cert-auth-keychain-pwd <file>      Specify location of file containing Certificate Authority keychain file's password
+            --cert-auth-name <name>              Specify name (CN) to be used for certificate authority certificate. Default `EPICS Root Certificate Authority`
+            --cert-auth-org <name>               Specify organisation (O) to be used for certificate authority certificate. Default `certs.epics.org`
+            --cert-auth-org-unit <name>          Specify organisational unit (OU) to be used for certificate authority certificate. Default `EPICS Certificate Authority`
+            --cert-auth-country <name>           Specify country (C) to be used for certificate authority certificate. Default `US`
+      (-d | --cert-db) <db_name>                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.3/certs.db
+      (-p | --pvacms-keychain) <pvacms_keychain> Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12
+            --pvacms-keychain-pwd <file>         Specify location of file containing PVACMS keychain file's password
+            --pvacms-name <name>                 Specify name (CN) to be used for PVACMS certificate. Default `PVACMS Service`
+            --pvacms-org <name>                  Specify organisation (O) to be used for PVACMS certificate. Default `certs.epics.org`
+            --pvacms-org-unit <name>             Specify organisational unit (OU) to be used for PVACMS certificate. Default `EPICS PVA Certificate Management Service`
+            --pvacms-country <name>              Specify country (C) to be used for PVACMS certificate. Default US
+            --client-require-approval            Generate Client Certificates in PENDING_APPROVAL state
+            --hybrid-require-approval            Generate Hybrid Certificates in PENDING_APPROVAL state
+            --server-require-approval            Generate Server Certificates in PENDING_APPROVAL state
+            --status-monitoring-enabled          Require Peers to monitor Status of Certificates Generated by this
+                                                 server by default. Can be overridden in each CCR
+            --status-validity-mins               Set Status Validity Time in Minutes
+      (-v | --verbose)                           Verbose mode
 
     admin options:
-            --acf <acf_file>                      Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
-      (-a | --admin-keychain) <admin_keychain>    Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/admin.p12
-            --admin-keychain-pwd <file>           Specify location of file containing Admin User's keychain file password
+            --acf <acf_file>                     Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf
+      (-a | --admin-keychain) <admin_keychain>   Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.3/admin.p12
+            --admin-keychain-pwd <file>          Specify location of file containing Admin User's keychain file password
 
 
 .. _pvacms_configuration:
@@ -291,7 +347,7 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 ||                       || ``~/.config/pva/1.3/cert_auth.p12``       ||                                                                         |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_CERT_AUTH_      || <certificate authority password file>     || fully qualified path to a file that will be used as the                 |
-|| TLS_KEYCHAIN_PWD_FILE || e.g. ``~/.config/pva/1.3/ca.pass``        || certificate authority keychain password file.                           |
+|| TLS_KEYCHAIN_PWD_FILE || e.g. ``~/.config/pva/1.3/cert_auth.pass`` || certificate authority keychain password file.                           |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_ACF      || <path to ACF file>                        || fully qualified path to a file that will be used as the                 |
 ||                       || e.g. ``~/.config/pva/1.3/pvacms.acf``     || ACF file that configures the permissions of :ref:`pvacms` peers.        |
@@ -304,7 +360,7 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 ||                       ||                                           || be deemed VALID. Adds extension to new certificates                     |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_DB       || <path to DB file>                         || fully qualified path to a file that will be used as the                 |
-||                       || e.g. ``~/.local/share/pva/1.3/certs.db``  || CA database file.                                                       |
+||                       || e.g. ``~/.local/share/pva/1.3/certs.db``  || Certificate database file.                                              |
 +------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_REQUIRE  || {``true`` (default) or ``false`` }        || ``true`` if server should generate new client certificates in the       |
 || _CLIENT_APPROVAL      ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |

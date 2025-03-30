@@ -142,6 +142,15 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
     std_credentials->not_before = now;
     std_credentials->not_after = now + std_config.cert_validity_mins * 60;
 
+    if ( std_config.trust_anchor_only ) {
+        std_credentials->name = "";
+        std_credentials->organization = "";
+        std_credentials->organization_unit = "";
+        std_credentials->country = "";
+        log_debug_printf(auth, "Trust Anchor%s\n", "");
+        return std_credentials;
+    }
+
     // Should not be empty as defaults to username
     if (!std_config.name.empty()) {
         std_credentials->name = for_client ? std_config.name : std_config.server_name;

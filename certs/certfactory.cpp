@@ -268,14 +268,14 @@ void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) const {
     addExtension(certificate, NID_subject_key_identifier, "hash", certificate.get());
 
     // Basic Constraints
-    auto basic_constraint(IS_USED_FOR_(usage_, ssl::kForCa) ? "critical,CA:TRUE" : "CA:FALSE");
+    auto basic_constraint(IS_USED_FOR_(usage_, ssl::kForCertAuth) ? "critical,CA:TRUE" : "CA:FALSE");
     addExtension(certificate, NID_basic_constraints, basic_constraint);
 
     // Key usage
     std::string usage;
-    if (IS_USED_FOR_(usage_, ssl::kForIntermediateCa)) {
+    if (IS_USED_FOR_(usage_, ssl::kForIntermediateCertAuth)) {
         usage = "digitalSignature,cRLSign,keyCertSign";
-    } else if (IS_USED_FOR_(usage_, ssl::kForCa)) {
+    } else if (IS_USED_FOR_(usage_, ssl::kForCertAuth)) {
         usage = "cRLSign,keyCertSign";
     } else if (IS_FOR_A_SERVER_(usage_)) {
         usage = "digitalSignature,keyEncipherment";
@@ -294,7 +294,7 @@ void CertFactory::addExtensions(const ossl_ptr<X509> &certificate) const {
         extended_usage = "clientAuth";
     } else if (IS_USED_FOR_(usage_, ssl::kForServer)) {
         extended_usage = "serverAuth";
-    } else if (IS_USED_FOR_(usage_, ssl::kForIntermediateCa)) {
+    } else if (IS_USED_FOR_(usage_, ssl::kForIntermediateCertAuth)) {
         extended_usage = "serverAuth,clientAuth,OCSPSigning";
     } else if (IS_USED_FOR_(usage_, ssl::kForCMS)) {
         extended_usage = "serverAuth,OCSPSigning";
@@ -463,11 +463,11 @@ time_t CertFactory::getNotAfterTimeFromCert(const ossl_ptr<X509> &cert) {
     return not_after;
 }
 
-std::string CertFactory::certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * ca) {
+std::string CertFactory::certAndCasToPemString(const ossl_ptr<X509> &cert, const STACK_OF(X509) * cert_auth_chain_ptr) {
     const auto bio = newBio();
 
     writeCertToBio(bio, cert);
-    writeCertsToBio(bio, ca);
+    writeCertsToBio(bio, cert_auth_chain_ptr);
 
     return bioToString(bio);
 }

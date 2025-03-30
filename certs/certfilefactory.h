@@ -34,12 +34,12 @@ std::unique_ptr<T> make_factory_ptr(Args&&... args) {
 // CertData structure definition
 struct CertData {
     ossl_ptr<X509> cert;
-    ossl_shared_ptr<STACK_OF(X509)> ca;
+    ossl_shared_ptr<STACK_OF(X509)> cert_auth_chain;
     std::shared_ptr<KeyPair> key_pair;
 
-    CertData(ossl_ptr<X509>& newCert, ossl_shared_ptr<STACK_OF(X509)>& newCa) : cert(std::move(newCert)), ca(newCa) {}
+    CertData(ossl_ptr<X509>& newCert, ossl_shared_ptr<STACK_OF(X509)>& newCa) : cert(std::move(newCert)), cert_auth_chain(newCa) {}
     CertData(ossl_ptr<X509>& newCert, ossl_shared_ptr<STACK_OF(X509)>& newCa, std::shared_ptr<KeyPair> key_pair)
-        : cert(std::move(newCert)), ca(newCa), key_pair(key_pair) {}
+        : cert(std::move(newCert)), cert_auth_chain(newCa), key_pair(key_pair) {}
     CertData() = default;
 };
 
@@ -64,7 +64,7 @@ class IdFileFactory {
      *
      * This method writes an identity file which is a file containing both:
      *   - the private key and
-     *   - the X.509 certificate and CA chain
+     *   - the X.509 certificate and certificate authority chain
      * The format (PKCS#12, or Base64-encoded ASCII) is determined by the filename extension.
      */
     virtual void writeIdentityFile() = 0;
