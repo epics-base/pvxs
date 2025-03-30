@@ -639,37 +639,60 @@ Server::Pvt::Pvt(Server &svr, const Config& conf, CustomServerCallback custom_ce
         } pun{};
         static_assert (sizeof(pun)==12, "");
 
-        // seed with some randomness to avoid making UUID a vector
-        // for information disclosure
-        evutil_secure_rng_get_bytes((char*)pun.b.data(), sizeof(pun.b));
+        #ifdef PVXS_ENABLE_OPENSSL
+        if (effective.config_target == ConfigCommon::CMS) {
+            // For PVACMS, generate a deterministic GUID based on "pvacms/cluster"
+            const std::string input = "pvacms/cluster";
+            
+            // Simple deterministic hash function
+            for (size_t idx = 0; idx < input.size(); idx++) {
+                pun.b[idx % pun.b.size()] ^= input[idx];
+                // Rotate bits to spread the entropy
+                if ((idx + 1) % 4 == 0) {
+                    uint32_t& val = pun.i[idx / 4];
+                    val = (val << 13) | (val >> 19);
+                }
+            }
+            
+            // Add some fixed bits to ensure uniqueness from random GUIDs
+            pun.b[0] |= 0x80; // Set high bit to mark as deterministic
+            pun.b[11] = 0x42; // Magic number for PVACMS
+        } else
+            // Original random GUID generation for non-PVACMS servers
+        #endif 
+        {
+            // seed with some randomness to avoid making UUID a vector
+            // for information disclosure
+            evutil_secure_rng_get_bytes((char*)pun.b.data(), sizeof(pun.b));
 
-        // i[0] (start) time
-        epicsTimeStamp now;
-        epicsTimeGetCurrent(&now);
-        pun.i[0] ^= now.secPastEpoch ^ now.nsec;
+            // i[0] (start) time
+            epicsTimeStamp now;
+            epicsTimeGetCurrent(&now);
+            pun.i[0] ^= now.secPastEpoch ^ now.nsec;
 
-        // i[1] host
-        // mix together first interface and all local bcast addresses
-        pun.i[1] ^= ntohl(osiLocalAddr(dummy.sock).ia.sin_addr.s_addr);
-        for(auto& addr : dummy.broadcasts()) {
-            if(addr.family()==AF_INET)
-                pun.i[1] ^= ntohl(addr->in.sin_addr.s_addr);
-        }
+            // i[1] host
+            // mix together first interface and all local bcast addresses
+            pun.i[1] ^= ntohl(osiLocalAddr(dummy.sock).ia.sin_addr.s_addr);
+            for(auto& addr : dummy.broadcasts()) {
+                if(addr.family()==AF_INET)
+                    pun.i[1] ^= ntohl(addr->in.sin_addr.s_addr);
+            }
 
-        // i[2] process on host
+            // i[2] process on host
 #if defined(_WIN32)
-        pun.i[2] ^= GetCurrentProcessId();
+            pun.i[2] ^= GetCurrentProcessId();
 #elif !defined(__rtems__) && !defined(vxWorks)
-        pun.i[2] ^= getpid();
+            pun.i[2] ^= getpid();
 #else
-        pun.i[2] ^= 0xdeadbeef;
+            pun.i[2] ^= 0xdeadbeef;
 #endif
-        // and a bit of server instance within this process
-        pun.i[2] ^= uint32_t(effective.tcp_port)<<16u;
-        // maybe a little bit of randomness (eg. ASLR on Linux)
-        pun.i[2] ^= size_t(this);
-        if(sizeof(size_t)>4)
-            pun.i[2] ^= size_t(this)>>32u;
+            // and a bit of server instance within this process
+            pun.i[2] ^= uint32_t(effective.tcp_port)<<16u;
+            // maybe a little bit of randomness (eg. ASLR on Linux)
+            pun.i[2] ^= size_t(this);
+            if(sizeof(size_t)>4)
+                pun.i[2] ^= size_t(this)>>32u;
+        }
 
         std::copy(pun.b.begin(), pun.b.end(), effective.guid.begin());
     }
