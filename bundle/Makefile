@@ -14,6 +14,8 @@ endif
 
 CMAKEFLAGS = $(CMD_CMAKEFLAGS)
 
+CMAKEFLAGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.10
+
 # override definitions from CONFIG_PVXS_MODULE, but not from CLI arguments
 LIBEVENT = $(LIBEVENT_$(T_A))
 LIBEVENT_$(T_A) = $(INSTALL_LOCATION)/bundle/usr/$(T_A)
