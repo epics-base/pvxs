@@ -252,7 +252,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
         auto nReq(pnRequest ? *pnRequest : 1);
         auto value(self->fld_value);
 
-        if(value.type()==TypeCode::Any)
+        if(value.type()==TypeCode::Any || value.type()==TypeCode::Union)
             value = value.lookup("->");
 
         if(nReq <= 0 || !value) {
