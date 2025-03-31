@@ -204,3 +204,9 @@ record(waveform, "sarr:inp") {
     field(FTVL, "STRING")
     field(NELM, "16")
 }
+
+record(aai, "target:ntndarray_inp") {
+    field(INP,  {pva:{pv:"source:ntndarray", proc:"CP"}}) # created programatically with pvxs::server::SharedPV
+    field(NELM, "5")
+    field(FTVL, "FLOAT")
+}

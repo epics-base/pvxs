@@ -53,6 +53,12 @@ void testNTNDArray()
     auto top = nt::NTNDArray{}.create();
 
     testTrue(top.idStartsWith("epics:nt/NTNDArray:"))<<"\n"<<top;
+
+    top["value->floatValue"] = shared_array<const float>({0.1, 0.2, 0.3, 0.4, 0.5});
+    testEq(top["value"].type(), TypeCode::Union);
+    top = top["value"].lookup("->");
+    testEq(top.type(), TypeCode::Float32A);
+
 }
 
 void testNTURI()
@@ -108,7 +114,7 @@ void testNTTable()
 } // namespace
 
 MAIN(testnt) {
-    testPlan(22);
+    testPlan(24);
     testNTScalar();
     testNTNDArray();
     testNTURI();

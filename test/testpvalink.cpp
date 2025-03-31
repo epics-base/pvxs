@@ -477,13 +477,50 @@ namespace {
         testdbGetFieldEqual("enum:tgt:b", DBR_STRING, "one");
         testTodoEnd();
     }
+
+    void testNTNDArray()
+    {
+        testDiag("==== %s ====", __func__);
+        auto serv(ioc::server());
+
+        auto ntndarray(server::SharedPV::buildReadonly());
+        auto top = nt::NTNDArray{}.create();
+        top["value->floatValue"] = shared_array<const float>({0.0});
+        ntndarray.open(top);
+        serv.addPV("source:ntndarray", ntndarray);
+
+        testqsrvWaitForLinkConnected("target:ntndarray_inp.INP");
+
+        {
+            QSrvWaitForLinkUpdate A("target:ntndarray_inp.INP");
+            auto update = ntndarray.fetch().cloneEmpty();
+            update["value->floatValue"] = shared_array<const float>({0.1, 0.2, 0.3, 0.4, 0.5});
+            ntndarray.post(update);
+        }
+        static const epicsFloat32 expected_float_A[] = {0.1, 0.2, 0.3, 0.4, 0.5};
+        testdbGetArrFieldEqual("target:ntndarray_inp", DBF_FLOAT, 5, 5, expected_float_A);
+
+        {
+            QSrvWaitForLinkUpdate B("target:ntndarray_inp.INP");
+            auto update = ntndarray.fetch().cloneEmpty();
+            update["value->floatValue"] = shared_array<const float>({0.6, 0.7, 0.8, 0.9, 0.91});
+            ntndarray.post(update);
+        }
+        static const epicsFloat32 expected_float_B[] = {0.6, 0.7, 0.8, 0.9, 0.91};
+        testdbGetArrFieldEqual("target:ntndarray_inp", DBF_FLOAT, 5, 5, expected_float_B);
+
+        serv.removePV("source:ntndarray");
+        ntndarray.close();
+    }
+
+
 } // namespace
 
 extern "C" void testioc_registerRecordDeviceDriver(struct dbBase *);
 
 MAIN(testpvalink)
 {
-    testPlan(92);
+    testPlan(94);
     testSetup();
     pvxs::logger_config_env();
 
@@ -512,6 +549,7 @@ MAIN(testpvalink)
         testFwd();
         testAtomic();
         testEnum();
+        testNTNDArray();
     }
     catch (std::exception &e)
     {
