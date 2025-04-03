@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.3.3 (UNRELEASED)
-------------------
+1.3.3 (Apr 2025)
+----------------
 
 * Client: search retry step reset on channel reconnection (Anze Zagar)
 * Various documentation improvements!  (Érico Nogueira)

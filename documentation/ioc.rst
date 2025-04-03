@@ -141,7 +141,7 @@ handled specially.
 Alternately, ``DBE`` may be a string using the old caProvider "parsing"
 rules.  This is not recommended.
 
-Until UNRELEASED ``DBE_ARCHIVE`` was not handled correctly.
+Until 1.3.3 ``DBE_ARCHIVE`` was not handled correctly.
 
 
 Group PV
