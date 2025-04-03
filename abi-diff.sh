@@ -54,6 +54,7 @@ setupsrc() {
     install -C -d compat_reports/libpvxs
     install -C -d compat_reports/libpvxsIoc
     nm -g "$2"/lib/linux-*/libpvxs.so.* |sed -e 's|^[0-9a-f]*\s*||' > "compat_reports/libpvxs/$1.nm"
+    nm -g "$2"/lib/linux-*/libpvxsIoc.so.* |sed -e 's|^[0-9a-f]*\s*||' > "compat_reports/libpvxsIoc/$1.nm"
 
     abi-dumper "$2"/lib/linux-*/libpvxs.so.* -o "compat_reports/libpvxs/$1.dump" -public-headers "$2/include" -lver "$1"
     abi-dumper "$2"/lib/linux-*/libpvxsIoc.so.* -o "compat_reports/libpvxsIoc/$1.dump" -public-headers "$2/include" -lver "$1"
@@ -66,11 +67,17 @@ setupsrc "$NEW" "$TDIR/new"
 diff -u "compat_reports/libpvxs/$OLD.nm" "compat_reports/libpvxs/$NEW.nm" || true
 diff -u "compat_reports/libpvxsIoc/$OLD.nm" "compat_reports/libpvxsIoc/$NEW.nm" || true
 
-abi-compliance-checker -l libpvxs \
+RET=0
+if ! abi-compliance-checker -l libpvxs \
  -report-path "compat_reports/compat_report-${OLD}_to_${NEW}.html" \
  -old "compat_reports/libpvxs/$OLD.dump" \
  -new "compat_reports/libpvxs/$NEW.dump"
+then
+  RET=1
+fi
 abi-compliance-checker -l libpvxsIoc \
  -report-path "compat_reports/compat_report-${OLD}_to_${NEW}-ioc.html" \
  -old "compat_reports/libpvxsIoc/$OLD.dump" \
  -new "compat_reports/libpvxsIoc/$NEW.dump"
+
+exit $RET
