@@ -9,8 +9,10 @@ Release Notes
 * Client: search retry step reset on channel reconnection (Anze Zagar)
 * Various documentation improvements!  (Érico Nogueira)
 * Fix build with epics-base 7.0.7 (Rémi NICOLE)
+* Fix NTNDArray definition for floating point types (Joao Paulo Martins)
 * ioc: Fix dbLoadGroups (Érico Nogueira)
 * ioc: Fix handling of ``DBE_ARCHIVE`` when requested via ``records._options.DBE``
+* ioc: Fix pvalink targeting Union field (Joao Paulo Martins)
 
 1.3.2 (Oct 2024)
 ------------------
