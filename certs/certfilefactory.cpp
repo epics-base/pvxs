@@ -79,7 +79,7 @@ void IdFileFactory::chainFromRootCertPtr(STACK_OF(X509) * &chain, X509* root_cer
         throw std::runtime_error("Unable to allocate space for certificate chain");
     }
 
-    if (sk_X509_push(chain, root_cert_ptr) != 1) {
+    if (!sk_X509_push(chain, root_cert_ptr)) {
         sk_X509_free(chain);
         throw std::runtime_error("Unable to add root certificate to chain");
     }
@@ -124,7 +124,7 @@ CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) co
                 ERR_clear_error();  // Clear EOF error
                 break;
             }
-            if (sk_X509_push(chain.get(), chain_cert.get()) != 1) {
+            if (!sk_X509_push(chain.get(), chain_cert.get())) {
                 throw std::runtime_error("Failed to add certificate to chain");
             }
             chain_cert.reset();
@@ -140,7 +140,7 @@ CertData IdFileFactory::getCertData(const std::shared_ptr<KeyPair>& key_pair) co
             // Duplicate each certificate in the chain
             for (int i = 0; i < sk_X509_num(certs_ptr_); i++) {
                 ossl_ptr<X509> int_cert(X509_dup(sk_X509_value(certs_ptr_, i)), false);
-                if (!int_cert || sk_X509_push(chain.get(), int_cert.get()) != 1) {
+                if (!int_cert || !sk_X509_push(chain.get(), int_cert.get())) {
                     throw std::runtime_error("Failed to duplicate chain certificate");
                 }
                 int_cert.reset();

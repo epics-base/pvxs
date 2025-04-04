@@ -99,7 +99,7 @@ ossl_ptr<X509> CertFactory::create() {
     if (!IS_USED_FOR_(usage_, ssl::kForCMS)) {
         const auto issuer_id = CertStatus::getSkId(issuer_certificate_ptr_);
         const auto skid = CertStatus::getSkId(certificate);
-        
+
         // Check if status subscription should be added based on configuration and no_status flag
         bool add_status_subscription = false;
         if (cert_status_subscription_required_ == YES) {
@@ -109,11 +109,11 @@ ossl_ptr<X509> CertFactory::create() {
         } else { // DEFAULT
             add_status_subscription = !no_status_;
         }
-        
+
         if (add_status_subscription) {
             addCustomExtensionByNid(certificate, ossl::NID_SPvaCertStatusURI, CertStatus::makeStatusURI(issuer_id, serial_));
         }
-        
+
         if (!cert_config_uri_base_.empty()) {
             addCustomExtensionByNid(certificate, ossl::NID_SPvaCertConfigURI, CertStatus::makeConfigURI(cert_config_uri_base_, issuer_id, skid));
         }
@@ -126,14 +126,14 @@ ossl_ptr<X509> CertFactory::create() {
         log_debug_printf(certs, "Creating Certificate Chain with %d entries\n", num_certs + 1);
         for (int i = 0; i < num_certs; ++i) {
             const auto chain_cert = sk_X509_value(issuer_chain_ptr_, i);
-            if (sk_X509_push(certificate_chain_.get(), chain_cert) != 1) {
+            if (!sk_X509_push(certificate_chain_.get(), chain_cert)) {
                 throw std::runtime_error("Failed to create certificate chain for new certificate");
             }
         }
         // Add the issuer's certificate too if not already added
         const auto root_cert = sk_X509_value(issuer_chain_ptr_, num_certs - 1);
         const bool already_added = root_cert && X509_cmp(root_cert, issuer_certificate_ptr_) == 0;
-        if (!already_added && sk_X509_push(certificate_chain_.get(), issuer_certificate_ptr_) != 1) {
+        if (!already_added && !sk_X509_push(certificate_chain_.get(), issuer_certificate_ptr_)) {
             throw std::runtime_error(SB() << "Failed to add issuer certificate to certificate chain");
         }
     } else
