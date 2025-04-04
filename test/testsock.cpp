@@ -180,18 +180,14 @@ void test_ifacemap()
 {
     testDiag("Enter %s", __func__);
 
-    auto& ifs = IfaceMap::instance();
+    auto ifs(IfaceMap::instance());
 
-    epicsGuard<epicsMutex> G(ifs.lock); // since we are playing around with the internals...
-
-    ifs.refresh(true);
-
-    testFalse(ifs.byIndex.empty())<<" found "<<ifs.byIndex.size()<<" interfaces";
+    testFalse(ifs.current->byIndex.empty())<<" found "<<ifs.current->byIndex.size()<<" interfaces";
 
     bool foundlo = false;
     const auto lo(SockAddr::loopback(AF_INET));
 
-    for(const auto& pair : ifs.byIndex) {
+    for(const auto& pair : ifs.current->byIndex) {
         auto& iface = pair.second;
         testDiag("Interface %u \"%s\"", unsigned(iface.index), iface.name.c_str());
         for(const auto& pair : iface.addrs) {
@@ -220,6 +216,7 @@ void test_udp(int af)
     }
 
     A.enable_IP_PKTINFO();
+    B.enable_IP_PKTINFO();
     try{
         A.bind(bind_addr);
     }catch(std::system_error& e){
@@ -237,31 +234,66 @@ void test_udp(int af)
     testNotEq(send_addr.port(), 0);
     testNotEq(send_addr.port(), bind_addr.port());
 
-    uint8_t msg[] = {0x12, 0x34, 0x56, 0x78};
-    int ret = sendto(B.sock, (char*)msg, sizeof(msg), 0, &bind_addr->sa, bind_addr.size());
-    testOk(ret==(int)sizeof(msg), "Send test ret==%d(%d)", ret, EVUTIL_SOCKET_ERROR());
+    {
+        uint8_t msg[] = {0x12, 0x34, 0x56, 0x78};
+        int ret = sendtox{B.sock, (char*)msg, sizeof(msg), &bind_addr}.call();
+        testOk(ret==(int)sizeof(msg), "Send test ret==%d(%d)", ret, EVUTIL_SOCKET_ERROR());
+    }
 
-    uint8_t rxbuf[8] = {};
-    SockAddr src;
-    SockAddr dest;
+    SockAddr reply_to, reply_from;
+    uint64_t reply_from_iface = 0;
+    {
+        testDiag("Call recvfrom()");
 
-    testDiag("Call recvfrom()");
-    ret = recvfromx{A.sock, (char*)rxbuf, sizeof(rxbuf), &src, &dest}.call();
-    // only the destination address is captured, not the port
-    if(dest.family()!=AF_UNSPEC)
-        dest.setPort(bind_addr.port());
+        uint8_t rxbuf[8] = {};
+        SockAddr src, dest;
+        auto rx(recvfromx{A.sock, (char*)rxbuf, sizeof(rxbuf), &src, &dest});
+        int ret = rx.call();
+        // only the destination address is captured, not the port
+        if(dest.family()!=AF_UNSPEC)
+            dest.setPort(bind_addr.port());
 
-    testOk(ret==4 && rxbuf[0]==0x12 && rxbuf[1]==0x34 && rxbuf[2]==0x56 && rxbuf[3]==0x78,
-            "Recv'd %d(%d) [%u, %u, %u, %u]", ret, EVUTIL_SOCKET_ERROR(), rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);
-    testEq(src, send_addr);
-    testEq(dest, bind_addr);
+        testOk(ret==4 && rxbuf[0]==0x12 && rxbuf[1]==0x34 && rxbuf[2]==0x56 && rxbuf[3]==0x78,
+                "Recv'd %d(%d) [%u, %u, %u, %u]", ret, EVUTIL_SOCKET_ERROR(), rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);
+        testEq(src, send_addr);
+        testEq(dest, bind_addr);
+
+        reply_to = src;
+        reply_from = dest;
+        reply_from_iface = rx.dstif;
+    }
+
+    {
+        testDiag("Call sendto() with source addr override");
+        uint8_t msg[] = {0x9a, 0xbc, 0xde, 0xf0};
+        // reply to "src" from "dest"
+        int ret = sendtox{A.sock, (char*)msg, sizeof(msg), &reply_to, &reply_from, reply_from_iface}.call();
+        testOk(ret==(int)sizeof(msg), "Send test ret==%d(%d)", ret, EVUTIL_SOCKET_ERROR());
+    }
+
+    {
+        testDiag("Call recvfrom()");
+
+        uint8_t rxbuf[8] = {};
+        SockAddr src, dest;
+        auto rx(recvfromx{B.sock, (char*)rxbuf, sizeof(rxbuf), &src, &dest});
+        int ret = rx.call();
+        // only the destination address is captured, not the port
+        if(dest.family()!=AF_UNSPEC)
+            dest.setPort(send_addr.port());
+
+        testOk(ret==4 && rxbuf[0]==0x9a && rxbuf[1]==0xbc && rxbuf[2]==0xde && rxbuf[3]==0xf0,
+                "Recv'd %d(%d) [%u, %u, %u, %u]", ret, EVUTIL_SOCKET_ERROR(), rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3]);
+        testEq(src, reply_from);
+        testEq(dest, reply_to);
+    }
 }
 
 void test_local_mcast()
 {
     testDiag("Enter %s", __func__);
 
-    IfaceMap ifinfo;
+    auto ifinfo(IfaceMap::instance());
 
     evsocket A(AF_INET, SOCK_DGRAM, 0, true),
              B(AF_INET, SOCK_DGRAM, 0, true);
@@ -510,7 +542,7 @@ MAIN(testsock)
 {
     SockAttach attach;
     logger_config_env();
-    testPlan(93);
+    testPlan(101);
     testSetup();
     testStackID();
     testEndPoint();

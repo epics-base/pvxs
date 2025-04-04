@@ -302,51 +302,57 @@ struct PVXS_API evsocket
 
 struct PVXS_API IfaceMap {
     static
-    IfaceMap& instance();
+    IfaceMap instance();
     static
     void cleanup();
 
-    IfaceMap();
-
     // return true if ifindex is valid, and addr an interface address assigned to it.
-    bool has_address(uint64_t ifindex, const SockAddr& addr);
+    bool has_address(uint64_t ifindex, const SockAddr& addr) const;
     // lookup interface name by index
-    std::string name_of(uint64_t index);
+    std::string name_of(uint64_t index) const;
     // find (an) interface name with this address.  useful for IPv4.  returns empty string if not found.
-    std::string name_of(const SockAddr& addr);
+    std::string name_of(const SockAddr& addr) const;
     // returns 0 if not found
-    uint64_t index_of(const std::string& name);
+    uint64_t index_of(const std::string& name) const;
+    // lookup interface index by interface address (not broadcast addr)
+    uint64_t index_of(const SockAddr& addr) const;
     // is this a valid interface or broadcast address?
-    bool is_iface(const SockAddr& addr);
+    bool is_iface(const SockAddr& addr) const;
+    // is this index the/a loopback interface?
+    bool is_lo(uint64_t index) const;
     // is this a valid interface or broadcast address?
-    bool is_broadcast(const SockAddr& addr);
+    bool is_broadcast(const SockAddr& addr) const;
     // look up interface address.  useful for IPV4.  returns AF_UNSPEC if not found
-    SockAddr address_of(const std::string& name);
+    SockAddr address_of(const std::string& name) const;
     // all interface names except LO
-    std::set<std::string> all_external();
-
-    // caller must hold lock
-    void refresh(bool force=false);
+    std::set<std::string> all_external() const;
 
     struct Iface {
         std::string name;
         uint64_t index;
         bool isLO;
-        // interface address(s) -> (maybe) broadcast addr
-        std::map<SockAddr, SockAddr, SockAddrOnlyLess> addrs;
+        // addrs - interface address -> (maybe) broadcast addr
+        // bcast - broadcast -> interface address
+        std::map<SockAddr, SockAddr, SockAddrOnlyLess> addrs, bcast;
         Iface(const std::string& name, uint64_t index, bool isLO) :name(name), index(index), isLO(isLO) {}
     };
 
-    SockAttach attach;
-    epicsMutex lock;
-    std::map<uint64_t, Iface> byIndex;
-    std::map<std::string, Iface*> byName;
-    // map address to tuple of interface and broadcast?
-    std::multimap<SockAddr, std::pair<Iface*, bool>, SockAddrOnlyLess> byAddr;
-    epicsTime updated;
+    struct Current {
+        std::map<uint64_t, Iface> byIndex;
+        std::map<std::string, Iface*> byName;
+        // map address to tuple of interface and broadcast?
+        std::multimap<SockAddr, std::pair<Iface*, bool>, SockAddrOnlyLess> byAddr;
+    };
+    std::shared_ptr<const Current> current;
+
+    IfaceMap() = default;
+    IfaceMap(const IfaceMap&) = default;
+    IfaceMap(std::shared_ptr<const Current>&& cur) : current(std::move(cur)) {}
+    static
+    std::shared_ptr<const Current> refresh();
 private:
     static
-    decltype (byIndex) _refresh();
+    decltype (Current::byIndex) _refresh();
 };
 
 } // namespace impl

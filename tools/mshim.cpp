@@ -76,7 +76,7 @@ SockEndpoint parseEP(const char* optarg, const server::Config& conf)
 
 struct App {
     const SockAttach attach;
-    IfaceMap& ifmap;
+    IfaceMap ifmap;
     const evsocket sockTx{AF_INET, SOCK_DGRAM, 0};
     std::vector<SockEndpoint> destinations;
 
