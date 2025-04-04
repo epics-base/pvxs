@@ -1084,9 +1084,10 @@ void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, 
         is_initialising = true;  // Let caller know that we've created a new Cert and Key
         key_pair = IdFileFactory::createKeyPair();
         cert_data = createCertAuthCertificate(config, certs_db, key_pair);
-        createDefaultAdminACF(config, cert_data.cert);
-        createAdminClientCert(config, certs_db, key_pair->pkey, cert_data.cert, cert_data.cert_auth_chain);
     }
+
+    createDefaultAdminACF(config, cert_data.cert);
+    createAdminClientCert(config, certs_db, key_pair->pkey, cert_data.cert, cert_data.cert_auth_chain);
 
     cert_auth_pkey = std::move(key_pair->pkey);
     cert_auth_cert = std::move(cert_data.cert);
@@ -1100,6 +1101,9 @@ void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, 
  * @param cert_auth_cert the certificate authority certificate to use to get the issuer ID and common name
  */
 void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &cert_auth_cert) {
+    std::ifstream file (config.pvacms_acf_filename);
+    if ( file.good()) return;
+
     const auto cn = CertStatus::getCommonName(cert_auth_cert);
 
     std::string extension = config.pvacms_acf_filename.substr(config.pvacms_acf_filename.find_last_of(".") + 1);
@@ -1305,6 +1309,9 @@ void addUserToAdminACF(const ConfigCms &config, const std::string &admin_name) {
  */
 void createAdminClientCert(const ConfigCms &config, sql_ptr &certs_db, const ossl_ptr<EVP_PKEY> &cert_auth_pkey, const ossl_ptr<X509> &cert_auth_cert,
                            const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_cert_chain, const std::string &admin_name) {
+    std::ifstream file (config.admin_keychain_file);
+    if ( file.good()) return;
+
     auto key_pair = IdFileFactory::createKeyPair();
     auto serial = generateSerial();
 

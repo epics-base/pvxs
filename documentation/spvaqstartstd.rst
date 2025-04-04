@@ -405,7 +405,7 @@ log back in as pvacms with environment set by ``.bashrc``
 
 .. _spva_qs_std_server:
 
-|4| Add a Secure PVAccess Server Agent - SoftIOC
+|4| Add a Secure PVAccess Server - SoftIOC
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 - add user and when prompted use "SOFTIOC Server" as Full Name

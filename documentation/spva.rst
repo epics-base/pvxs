@@ -17,8 +17,6 @@ Key Features:
 - Backward compatibility with existing PVAccess deployments
 - Integration with site authentication systems
 
-In SPVA terminology, an `EPICS Agent` refers to any PVAccess network client.
-
 Note: This release requires specific unmerged changes to epics-base.
 
 See :ref:`quick_start` to get started.
@@ -192,9 +190,9 @@ Allows runtime reconfiguration of a TLS connection.  It does this by dropping al
 then re-initialising them using the given configuration.  This means checking if the certificates
 and keys exist, loading and verifying them, checking for status and status of peers, etc.
 
-- `pvxs::client::Context::reconfigure` and 
-- `pvxs::server::Server::reconfigure`  
-  
+- `pvxs::client::Context::reconfigure` and
+- `pvxs::server::Server::reconfigure`
+
 Example of TLS configuration reconfiguration:
 
 .. code-block:: c++
@@ -217,7 +215,7 @@ This addition is based on the Wildcard PV support included in epics-base since v
 extends this support to pvxs allowing PVs to be specified as wildcard patterns.  We use this
 to provide individualised PVs for each certificate's status management.
 
-- `pvxs::server::SharedWildcardPV` 
+- `pvxs::server::SharedWildcardPV`
 
 Example of support for pattern-matched PV names:
 
@@ -280,10 +278,10 @@ After the TLS handshake:
 - Both sides subscribe to peer certificate status where configured
 - Clients may use stapled server certificate status
 
-Connection Types 
+Connection Types
 ^^^^^^^^^^^^^^^^
 
-There are three types of possible connections  
+There are three types of possible connections
 
 - tcp / tcp : TCP only connection, legacy ``ca``
 - tcp / tls : server-only authenticated TLS
@@ -397,6 +395,16 @@ The following diagram shows the PVAccess connection establishment sequence:
    :align: center
 
 
+PVAccess with TLS Sequence Diagram
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following diagram shows the PVAccess connection establishment sequence with TLS (no certificate status monitoring):
+
+.. image:: tls_seq.png
+   :alt: PVA with TLS Sequence Diagram
+   :align: center
+
+
 Secure PVAccess Sequence Diagram
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -443,12 +451,12 @@ Certificate Status Verification
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Certificate Status received from the PVACMS for a certificate returns a ``GOOD`` status
-if, and only if, 
+if, and only if,
 
-- the certificate status is GOOD and 
-- so is that of its trust anchor certificate chain 
-- all the way back to the root certificate  
-  
+- the certificate status is GOOD and
+- so is that of its trust anchor certificate chain
+- all the way back to the root certificate
+
 In this way agents need monitor only their own entity certificate and that of their peer.
 
 Certificate status verification occurs at several points:
@@ -621,7 +629,7 @@ Standard Nodes:
     - the certificate
     - the private key
     - the certificate authority chain including the root certificate
-  
+
   - the files are protected with ``400`` so that only the owner can read
 
 - Automatic reconfiguration on certificate updates
@@ -642,10 +650,10 @@ Trust Establishment
    - These files are replaced with any new certificates that are generated for the user but
      the trust anchor certificate is preserved
    - Use of publicly signed trust anchor certificates is not supported at present
-  
+
 2. Trust Anchor Distribution with Authenticators:
 
-   - The trust anchor certificate is delivered with the entity certificate.  
+   - The trust anchor certificate is delivered with the entity certificate.
    - Users must verify that the issuer of the certificate matches the Root Certificate Authority they are expecting.
    - To control the selection of PVACMS service and thus the trust anchor certificate, users verify their PVAccess configuration.
 
@@ -658,14 +666,14 @@ Trust Establishment
 
    - Use ``authnstd`` to get the trust anchor certificate from PVACMS
    - The p12 file created can be used by a client to create a server-only authenticated TLS connection
-  
-  .. code-block:: shell
 
-     # Get the trust anchor certificate from PVACMS and save to the location specified by ``EPICS_PVA_TLS_KEYCHAIN``
-     authnstd --trust-anchor
+.. code-block:: shell
 
-     # Get the trust anchor certificate from PVACMS and save to the location specified by ``EPICS_PVAS_TLS_KEYCHAIN``
-     authnstd -u server -a
+    # Get the trust anchor certificate from PVACMS and save to the location specified by ``EPICS_PVA_TLS_KEYCHAIN``
+    authnstd --trust-anchor
+
+    # Get the trust anchor certificate from PVACMS and save to the location specified by ``EPICS_PVAS_TLS_KEYCHAIN``
+    authnstd -u server -a
 
 4. Certificate Authority = Trust Anchor
 

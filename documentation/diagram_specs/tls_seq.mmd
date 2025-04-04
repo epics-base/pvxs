@@ -1,0 +1,125 @@
+%%{init: {
+    'theme': 'forest',
+    'themeVariables': {
+        'noteBkgColor': '#fff6e9',
+        'noteBorderColor': '#7c334f',
+        'noteTextColor': '#544943',
+        'fontFamily': 'Georgia Serif',
+        'fontSize': '12px',
+        'messageFontSize': '12px',
+        'noteFontSize': '12px',
+        'actorFontSize': '14px',
+        'width': 1200,
+        'boxMargin': 20,
+        'messageMargin': 40
+    }
+}}%%
+sequenceDiagram
+    participant Agent as Secure EPICS Client
+    participant Peer as Secure EPICS Server
+
+    Note over Agent,Peer: SEARCH Request
+    %% Trust Validation Phase
+    Note over Agent: Check Trust Anchor and Cert Validity
+    alt No Trust Anchor
+        Note over Agent: TLS Context: DegradedMode
+        Agent-->>Peer: SEARCH (protocol=["tcp"]) with retry
+    else Trust Anchor Configured
+        alt Cert Not Configured or Cert not VALID
+            Note over Agent: TLS Context: DegradedMode
+        else Cert VALID
+            Note over Agent: TLS Context: TlsReady
+        end
+        Agent-->>Peer: SEARCH (protocol=["tcp", "tls"]) with retry
+    end
+
+    % Check Server Phase
+    Note over Peer: Check if EPICS Server is Viable
+    alt Server Cert configured and is VALID or not EPICS_PVAS_TLS_STOP_IF_NO_CERT
+        Note over Peer: Check Server Certificate
+        alt Server Cert configured and VALID
+            Note over Peer: TLS Context: TlsReady
+            alt SEARCH protocol list contains "tls"
+                Peer-->>Agent: SEARCH_RESPONSE (protocol="tls", address)
+                Agent->>Peer: TLS Connection initiated to `address`
+            else
+                Peer-->>Agent: SEARCH_RESPONSE (protocol="tcp", address)
+                Agent->>Peer: TCP Connection initiated to `address`
+            end
+        else
+            Note over Peer: TLS Context: DegradedMode
+            Peer-->>Agent: SEARCH_RESPONSE (protocol="tcp", address)
+            Agent->>Peer: TCP Connection initiated to `address`
+        end
+
+        % Connection and Handshake Phase
+        Note over Agent,Peer: TCP Connection/TLS Connection & HANDSHAKE
+        alt TCP Connection initiated
+            Note over Agent, Peer: TCP Connection Established on `address`
+        else TLS Connection initiated
+            Note over Agent,Peer: TLS Connection Establishment begins on `address`
+            Peer->>Agent: TLS_HANDSHAKE(peer_certificate)
+            activate Agent
+            alt `peer_certificate`'s Trust Anchor incompatible with Client's
+                Note over Agent: TLS Handshake Fails: Connection Dropped
+            end
+            deactivate Agent
+
+            alt Client TLS Context: DegradedMode
+                Agent->>Peer: TLS_HANDSHAKE()
+                activate Peer
+                alt Server Only Authenticated Connections not allowed by Server
+                    Note over Peer: TLS Handshake Fails: Connection Dropped
+                end
+                deactivate Peer
+            else Client TLS Context: TlsReady
+                Agent->>Peer: TLS_HANDSHAKE(peer_certificate)
+                activate Peer
+                Note over Peer: Check Trust Anchor Compatibility
+                alt `peer_certificate`'s Trust Anchor incompatible with Server's
+                    Note over Peer: TLS Handshake Fails: Connection Dropped
+                end
+                deactivate Peer
+            end
+        end
+
+        %% Connection Validation Phase
+        Peer-->>Agent: CONNECTION_VALIDATION Request
+        activate Agent
+        Agent-->>Peer: CONNECTION_VALIDATION Response
+        deactivate Agent
+        activate Peer
+        Peer-->>Agent: CONNECTION_VALIDATED
+        deactivate Peer
+
+        Note over Agent,Peer: Create Channel
+        %% Channel Creation
+        Agent->>Peer: CREATE_CHANNEL
+        activate Peer
+        Peer-->>Agent: CREATE_CHANNEL Response
+        deactivate Peer
+
+        Note over Agent,Peer: Operation
+        %% Operations
+        alt
+            Agent->>Peer: GET Request
+            activate Peer
+            Peer-->>Agent: GET Response(value)
+            deactivate Peer
+        else
+            Agent->>Peer: MONITOR Request
+            activate Peer
+            loop
+                Peer-->>Agent: MONITOR Subscrition(update)
+            end
+            deactivate Peer
+        else
+            Agent->>Peer: RPC Request
+            activate Peer
+            Peer-->>Agent: RPC Response(value)
+            deactivate Peer
+        else
+            Agent-->>Peer: PUT Request(value)
+        end
+    end
+

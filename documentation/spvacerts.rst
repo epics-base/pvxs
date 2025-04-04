@@ -18,12 +18,12 @@ EPICS Agents maintain public/private key pairs for identification:
 
 Identity Assertion Process:
 
-1. Agent presents certificate to peer
-2. Agent signs some data with his private key
+1. Each peer presents a certificate
+2. Each peer signs some data with his private key
 3. Peer verifies signature using the public key in the certificate
 4. Peer validates certificate by checking the signature and the certificate chain of trust.
 5. The chain of trust is validated back to the Peer's own Trust Anchor (Root Certificate Authority).
-6. The Agent's identity is confirmed through successful verification
+6. The peer's identity is confirmed through successful verification
 
 Key Security:
 
