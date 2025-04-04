@@ -62,7 +62,7 @@ void evthread_init()
     evthread_use_pthreads();
 
 #else
-#  error No threading support for this target
+#  error libevent not built with threading support for this target
     // TODO fallback to libCom ?
 #endif
 }

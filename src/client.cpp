@@ -1022,14 +1022,17 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
     if(kind == SearchKind::check)
         currentBucket = (currentBucket+1u)%searchBuckets.size();
 
-    log_debug_printf(io, "Search tick %zu\n", idx);
-
     decltype (searchBuckets)::value_type bucket;
     if (kind == SearchKind::initial) {
         initialSearchBucket.swap(bucket);
     } else if(kind == SearchKind::check) {
         searchBuckets[idx].swap(bucket);
     }
+
+    log_debug_printf(io, "%s tick %zu for %zu\n",
+                     kind == SearchKind::discover ? "Discover" : "Search",
+                     idx,
+                     bucket.size());
 
     while(!bucket.empty() || kind == SearchKind::discover) {
         // when 'discover' we only loop once
