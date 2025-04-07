@@ -214,6 +214,18 @@ struct recvfromx {
     int call();
 };
 
+struct sendtox {
+    evutil_socket_t sock;
+    const void *buf;
+    size_t buflen;
+    const SockAddr* dst;
+    const SockAddr* src; // if !NULL override UDP source address
+    uint64_t srcif;      // if !=0 override routing to send through this interface
+
+    PVXS_API
+    int call();
+};
+
 } // namespace pvxs
 
 #endif // OSISOCKEXT_H
