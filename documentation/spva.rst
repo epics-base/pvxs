@@ -389,7 +389,7 @@ PVAccess Sequence Diagram
 
 The following diagram shows the PVAccess connection establishment sequence:
 
-.. image:: pva_seq.png
+.. image:: h_pva_seq.png
    :width: 300px
    :alt: PVA Sequence Diagram
    :align: center
@@ -400,7 +400,7 @@ PVAccess with TLS Sequence Diagram
 
 The following diagram shows the PVAccess connection establishment sequence with TLS (no certificate status monitoring):
 
-.. image:: tls_seq.png
+.. image:: h_tls_seq.png
    :alt: PVA with TLS Sequence Diagram
    :align: center
 
@@ -410,7 +410,7 @@ Secure PVAccess Sequence Diagram
 
 The following diagram shows how the Secure PVAccess protocol establishes a secure connection between an EPICS client and server:
 
-.. image:: spva_seq.png
+.. image:: h_spva_seq.png
    :alt: SPVA Sequence Diagram
    :align: center
 
