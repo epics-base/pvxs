@@ -11,8 +11,9 @@
 
 #include <epicsGetopt.h>
 #include <epicsThread.h>
+#if !defined(_WIN32) && !defined(_MSC_VER)
 #include <termios.h>
-
+#endif
 #include <pvxs/client.h>
 #include <pvxs/log.h>
 #include <pvxs/sslinit.h>
