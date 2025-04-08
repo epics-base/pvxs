@@ -31,6 +31,7 @@ namespace {
 
 DEFINE_LOGGER(certslog, "pvxs.certs.tool");
 
+#if !defined(_WIN32) && !defined(_MSC_VER)
 void setEcho(const bool enable) {
     termios tty{};
     tcgetattr(STDIN_FILENO, &tty);
@@ -41,6 +42,7 @@ void setEcho(const bool enable) {
     }
     tcsetattr(STDIN_FILENO, TCSANOW, &tty);
 }
+#endif
 }  // namespace
 
 enum CertAction { STATUS, APPROVE, DENY, REVOKE };
@@ -156,9 +158,13 @@ int main(int argc, char *argv[]) {
         if (debug) logger_level_set("pvxs.*", Level::Debug);
         if (password_flag) {
             std::cout << "Enter password: ";
+#if !defined(_WIN32) && !defined(_MSC_VER)
             setEcho(false);
+#endif
             std::getline(std::cin, password);
+#if !defined(_WIN32) && !defined(_MSC_VER)
             setEcho(true);
+#endif
             std::cout << std::endl;
         }
 
