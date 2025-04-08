@@ -25,7 +25,7 @@ USR_CPPFLAGS += -I$(TOP)/src/pvxs
 USR_CPPFLAGS += -I$(TOP)/src
 USR_CPPFLAGS += -I$(TOP)/ioc
 
-ifeq ($(PXXS_ENABLE_PVACMS),YES)
+ifeq ($(PVXS_ENABLE_PVACMS),YES)
 USR_CPPFLAGS += -DPVXS_ENABLE_PVACMS
 PROD += pvacms
 pvacms_SRCS += pvacms.cpp

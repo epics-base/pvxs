@@ -2,6 +2,10 @@ ARG DOCKER_USERNAME=georgeleveln
 
 FROM ${DOCKER_USERNAME}/pvxs:latest
 
+# Set environment variables
+ENV PROJECT_HOME=/opt/epics
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install dependencies
 RUN apt-get update && \
     apt-get install -y \
@@ -9,10 +13,6 @@ RUN apt-get update && \
             sudo \
             supervisor && \
     mkdir -p ${PROJECT_HOME}
-
-# Set environment variables
-ENV PROJECT_HOME=/opt/epics
-ENV DEBIAN_FRONTEND=noninteractive
 
 # Create users with pre-set passwords ("secret")
 RUN useradd -m -s /bin/bash admin && echo "admin:secret" | chpasswd
