@@ -9,7 +9,6 @@
 #include <pvxs/nt.h>
 
 #include "client.h"
-#include "pvacms.h"
 #include "security.h"
 
 DEFINE_LOGGER(auths, "pvxs.certs.auth.ccr");

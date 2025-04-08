@@ -170,6 +170,12 @@ Create under `/certs/authn/<name>`:
     PVXS_ENABLE_LDAP_AUTH = YES
     PVXS_ENABLE_JWT_AUTH = NO
 
+- To build PVACMS add the following, by default it will not be built
+
+.. code-block:: make
+
+    PVXS_ENABLE_PVACMS = YES
+
 
 4. Extra options for PVACMS
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

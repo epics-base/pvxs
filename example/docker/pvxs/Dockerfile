@@ -20,6 +20,9 @@ RUN apt-get update && \
 WORKDIR ${PROJECT_HOME}
 RUN echo "EPICS_BASE = \$(TOP)/../epics-base" >> ${PROJECT_HOME}/RELEASE.local
 
+# Set up CONFIG_SITE.local
+RUN echo "PVXS_ENABLE_PVACMS = YES" >> CONFIG_SITE.local
+
 # build PVXS
 WORKDIR ${PROJECT_HOME}/pvxs
 COPY . .

@@ -430,6 +430,10 @@ For MacOS
 .. code-block:: shell
 
     cd ${PROJECT_HOME}
+    cat >> CONFIG_SITE.local <<EOF
+    PVXS_ENABLE_PVACMS = YES
+    EOF
+
     git clone --recursive  --branch tls https://github.com/george-mcintyre/pvxs.git
     cd pvxs
 

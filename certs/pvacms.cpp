@@ -70,6 +70,7 @@
 #include "certstatusfactory.h"
 #include "configcms.h"
 #include "credentials.h"
+#include "ccrmanager.h"
 #include "evhelper.h"
 #include "openssl.h"
 #include "ownedptr.h"

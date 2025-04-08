@@ -382,6 +382,7 @@ then generate X.509 certificates.
 
     cat >> CONFIG_SITE.local <<EOF
     EVENT2_HAS_OPENSSL = YES
+    PVXS_ENABLE_PVACMS = YES
     PVXS_ENABLE_LDAP_AUTH = YES
     EOF
 

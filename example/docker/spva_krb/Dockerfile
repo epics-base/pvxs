@@ -53,6 +53,7 @@ RUN echo "source ~/.spva_krb_bashrc" >> /home/pvacms/.bashrc
 # Set up CONFIG_SITE.local
 WORKDIR ${PROJECT_HOME}
 RUN echo "EVENT2_HAS_OPENSSL = YES" >> CONFIG_SITE.local
+RUN echo "PVXS_ENABLE_PVACMS = YES" >> CONFIG_SITE.local
 RUN echo "PVXS_ENABLE_KRB_AUTH = YES" >> CONFIG_SITE.local
 
 # Rebuild PVXS with kerberos support

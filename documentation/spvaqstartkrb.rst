@@ -376,6 +376,7 @@ using the Kerberos Authenticator.
 
     cat >> CONFIG_SITE.local <<EOF
     EVENT2_HAS_OPENSSL = YES
+    PVXS_ENABLE_PVACMS = YES
     PVXS_ENABLE_KRB_AUTH = YES
     EOF
 

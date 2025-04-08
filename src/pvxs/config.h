@@ -32,9 +32,9 @@
 
 #include <unistd.h>
 
-#include <pvxs/version.h>
-
 #include <sys/stat.h>
+
+#include <pvxs/version.h>
 
 #include "osiFileName.h"
 
@@ -121,7 +121,11 @@ struct PVXS_API ConfigCommon {
             path += token + delimiter;
             temp_path.erase(0, pos + delimiter.length());
             if (stat(path.c_str(), &info) != 0 || !(info.st_mode & S_IFDIR)) {
-                mkdir(path.c_str(), S_IRWXU);
+#ifdef _WIN32
+                mkdir(path.c_str());  // Windows version takes only the path
+#else
+                mkdir(path.c_str(), S_IRWXU);  // Unix version takes path and permissions
+#endif
             }
         }
     }

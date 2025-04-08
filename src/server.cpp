@@ -643,7 +643,7 @@ Server::Pvt::Pvt(Server &svr, const Config& conf, CustomServerCallback custom_ce
         if (effective.config_target == ConfigCommon::CMS) {
             // For PVACMS, generate a deterministic GUID based on "pvacms/cluster"
             const std::string input = "pvacms/cluster";
-            
+
             // Simple deterministic hash function
             for (size_t idx = 0; idx < input.size(); idx++) {
                 pun.b[idx % pun.b.size()] ^= input[idx];
@@ -653,13 +653,13 @@ Server::Pvt::Pvt(Server &svr, const Config& conf, CustomServerCallback custom_ce
                     val = (val << 13) | (val >> 19);
                 }
             }
-            
+
             // Add some fixed bits to ensure uniqueness from random GUIDs
             pun.b[0] |= 0x80; // Set high bit to mark as deterministic
             pun.b[11] = 0x42; // Magic number for PVACMS
         } else
             // Original random GUID generation for non-PVACMS servers
-        #endif 
+        #endif
         {
             // seed with some randomness to avoid making UUID a vector
             // for information disclosure
@@ -1003,7 +1003,7 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-void Server::Pvt::doCustomServerCallback(int, const short evt, void* raw) {
+void Server::Pvt::doCustomServerCallback(evutil_socket_t fd, short evt, void* raw) {
     try {
         const auto pvt = static_cast<Pvt*>(raw);
         if (pvt && pvt->custom_server_callback) {

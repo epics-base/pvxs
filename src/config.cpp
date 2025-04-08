@@ -8,14 +8,16 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
-#include <sys/types.h>
-#include <pwd.h>
-#include <unistd.h>
 #include <stdexcept>
 
-#ifdef __unix__
+#include <sys/types.h>
+
+#ifndef _WIN32
 #include <pwd.h>
+#include <unistd.h>
 #endif
+
+#include <cstdlib>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -24,12 +26,10 @@
 #include <epicsStdlib.h>
 #include <epicsString.h>
 #include <osiSock.h>
-#include <unistd.h>
-
-#include <pvxs/log.h>
 
 #include <sys/stat.h>
-#include <cstdlib>
+
+#include <pvxs/log.h>
 
 #include "clientimpl.h"
 #include "evhelper.h"
@@ -46,13 +46,23 @@ namespace impl {
 std::string getHomeDir() {
 #ifdef _WIN32
     const char* home = getenv("USERPROFILE");
-#else
-    struct passwd *pw = getpwuid(getuid());
-
-    if (pw == nullptr) {
-        throw std::runtime_error("Failed to get home directory");
+    if (!home) {
+        home = getenv("HOMEDRIVE");
+        if (home) {
+            static std::string homePath;
+            const char* homedir = getenv("HOMEPATH");
+            if (homedir) {
+                homePath = std::string(home) + homedir;
+                return homePath;
+            }
+        }
     }
-    const char * home = pw->pw_dir;
+#else
+    struct passwd* pw = getpwuid(getuid());
+    const char* home = pw ? pw->pw_dir : nullptr;
+    if (!home) {
+        home = getenv("HOME");
+    }
 #endif
     return home ? std::string(home) : std::string("");
 }

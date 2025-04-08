@@ -11,7 +11,7 @@
 #include <memory>
 #include <string>
 
-#include <curl/curl.h>
+// #include <curl/curl.h>
 
 #include <pvxs/config.h>
 #include <pvxs/data.h>

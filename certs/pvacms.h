@@ -30,8 +30,6 @@
 #include "configcms.h"
 #include "ownedptr.h"
 
-#define RPC_CERT_CREATE "CERT:CREATE"
-
 #define SQL_CREATE_DB_FILE              \
     "BEGIN TRANSACTION;"                \
     "CREATE TABLE IF NOT EXISTS certs(" \

@@ -9,6 +9,8 @@
 
 #include "security.h"
 
+#define RPC_CERT_CREATE "CERT:CREATE"
+
 namespace pvxs {
 namespace certs {
 
