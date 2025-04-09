@@ -61,9 +61,10 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
  * @param trusted_store_ptr the trusted store that we'll use to verify the peer OCSP status responses
  */
 void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE *trusted_store_ptr) {
+    bool no_status{false};
     if (!status_check_disabled) {
         try {
-            auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
+            const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
             cert_monitor = certs::CertStatusManager::subscribe(trusted_store_ptr, status_pv, [=](const certs::PVACertificateStatus &pva_status) {
                 {
                     Guard G(lock);
@@ -76,6 +77,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
                 setStatusValidityCountdown();
             });
         } catch (certs::CertStatusNoExtensionException &e) {
+            no_status = true;
             log_debug_printf(watcher, "No certificate status extension found in certificate: %s\n", e.what());
         }
     } else {
@@ -84,7 +86,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
 
     // Set the state
     Guard G(lock);
-    state = (status_check_disabled || cert_status.isGood()) ? TlsReady : TcpReady;
+    state = (status_check_disabled || no_status || cert_status.isGood()) ? TlsReady : TcpReady;
 }
 
 /**
@@ -541,11 +543,11 @@ SSLPeerStatusAndMonitor::~SSLPeerStatusAndMonitor() {
  */
 std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *peer_cert_ptr, const certs::CertificateStatus &new_status,
                                                                          std::function<void(bool)> fn) {
-    auto serial_number = getSerialNumber(peer_cert_ptr);
+    const auto serial_number = getSerialNumber(peer_cert_ptr);
     std::shared_ptr<SSLPeerStatusAndMonitor> peer_status_and_monitor;
     try {
         if (status_check_enabled && fn) {
-            auto status_pv = certs::CertStatusManager::getStatusPvFromCert(peer_cert_ptr);
+            const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(peer_cert_ptr);
             peer_status_and_monitor = getOrCreatePeerStatus(serial_number, status_pv, fn);
         } else {
             peer_status_and_monitor = getOrCreatePeerStatus(serial_number);
@@ -558,7 +560,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *p
     return peer_status_and_monitor;
 }
 
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(serial_number_t serial_number, const std::string &status_pv,
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(const serial_number_t serial_number, const std::string &status_pv,
                                                                                  std::function<void(bool)> fn) {
     // Create holder for peer status or return current holder if already exists
     auto peer_status = createPeerStatus(serial_number, fn);
@@ -570,9 +572,9 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
         Guard G(peer_status->lock);
         peer_status->cert_status_manager =
             certs::CertStatusManager::subscribe(trusted_store_ptr, status_pv, [weak_peer_status](const certs::PVACertificateStatus &status) {
-                auto peer_status = weak_peer_status.lock();
+                const auto peer_status_update = weak_peer_status.lock();
                 // Update the cached state
-                if (peer_status) peer_status->updateStatus((const certs::CertificateStatus)status);
+                if (peer_status_update) peer_status_update->updateStatus((const certs::CertificateStatus)status);
             });
     }
     return peer_status;
@@ -606,7 +608,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(seri
 void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_status) {
     // Update the status
     Guard G(lock);
-    auto was_good = status.isOstensiblyGood();
+    const auto was_good = status.isOstensiblyGood();
     status = new_status;
 
     // Call the callback if there has been any state change
