@@ -497,7 +497,7 @@ int serverOCSPCallback(SSL *ssl, void *raw) {
                 ret_val = SSL_TLSEXT_ERR_NOACK;
             }
         } else {
-            log_warn_printf(stapling, "Server OCSP Stapling: %s\n", "Server status not valid");
+            log_info_printf(stapling, "Server OCSP Stapling: %s\n", "Server status not valid.  Not stapling");
             ret_val = SSL_TLSEXT_ERR_NOACK;
         }
     } else {
