@@ -35,7 +35,7 @@ On Debian/Ubuntu. ::
 On macOS / Homebrew. ::
 
     brew install libevent
-    export LIBEVENT=/opt/homebrew
+    export LIBEVENT=$(brew --prefix)
 
 To build from source (Requires `CMake <https://cmake.org/>`_): ::
 
