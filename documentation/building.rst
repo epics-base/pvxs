@@ -32,6 +32,11 @@ On Debian/Ubuntu. ::
 
     apt-get install libevent-dev
 
+On macOS / Homebrew. ::
+
+    brew install libevent
+    export LIBEVENT=$(brew --prefix)
+
 To build from source (Requires `CMake <https://cmake.org/>`_): ::
 
     make -C pvxs/bundle libevent # implies .$(EPICS_HOST_ARCH)
