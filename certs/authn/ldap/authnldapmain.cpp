@@ -43,9 +43,13 @@ std::string promptPassword(const std::string &prompt) {
  * @param show_version the show version flag to show version and exit
  * @param help the help flag to show this help message and exit
  * @param add_config_uri the add config uri flag to add a config uri to the generated certificate
+ * @param name the ldap name
+ * @param organization the ldap organization
  * @param usage the certificate usage client, server, or hybrid
  */
-void defineOptions(CLI::App &app, ConfigLdap &config, bool &verbose, bool &debug, bool &daemon_mode, bool &force, bool &show_version, bool &help, bool &add_config_uri, std::string &usage) {
+
+void defineOptions(CLI::App &app, ConfigLdap &config, bool &verbose, bool &debug, bool &daemon_mode, bool &force, bool &show_version, bool &help, bool &add_config_uri,
+                   std::string &usage, std::string &name, std::string &organization) {
     app.set_help_flag("", "");  // deactivate built-in help
 
     app.add_flag("-h,--help", help);
@@ -61,8 +65,8 @@ void defineOptions(CLI::App &app, ConfigLdap &config, bool &verbose, bool &debug
 
     app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `hybrid`");
 
-    app.add_option("-n,--name", config.name, "Specify the LDAP user name e.g. name e.g. becomes uid=name.  Defaults to logged in username");
-    app.add_option("-o,--organization", config.organization, "Specify the organization e.g. epics.org e.g. becomes dc=epics, dc=org.  Defaults to hostname");
+    app.add_option("-n,--name", name, "Specify the LDAP user name e.g. name e.g. becomes uid=name.  Defaults to logged in username");
+    app.add_option("-o,--organization", organization, "Specify the organization e.g. epics.org e.g. becomes dc=epics, dc=org.  Defaults to hostname");
     app.add_option("-p,--password", config.ldap_account_password, "Specify the LDAP account password");
 
     app.add_option("--ldap-host", config.ldap_host, "Specify LDAP host.  Default localhost");
@@ -103,11 +107,11 @@ void showHelp(const char * const program_name) {
 int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bool &debug, uint16_t &cert_usage, bool &daemon_mode, bool &force) {
     const auto program_name = argv[0];
     bool show_version{false}, help{false}, add_config_uri{false};
-    std::string usage{"client"};
+    std::string usage{"client"}, name, organization;
 
     CLI::App app{"authnldap - Secure PVAccess LDAP Authenticator"};
 
-    defineOptions(app, config, verbose, debug, daemon_mode, force, show_version, help, add_config_uri, usage);
+    defineOptions(app, config, verbose, debug, daemon_mode, force, show_version, help, add_config_uri, usage, name, organization);
 
     CLI11_PARSE(app, argc, argv);
 
@@ -148,8 +152,27 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
         return 13;
     }
 
+    // Pull out command line args to override config values
+    if ( !name.empty()) {
+        switch (cert_usage) {
+            case ssl::kForClient: config.name = name; break;
+            case ssl::kForServer: config.server_name = name; break;
+            default: config.name = config.server_name = name; break;
+        }
+    }
+    if ( !organization.empty()) {
+        switch (cert_usage) {
+            case ssl::kForClient: config.organization = organization; break;
+            case ssl::kForServer: config.server_organization = organization; break;
+            default: config.organization = config.server_organization = organization; break;
+        }
+    }
+
+    const auto name_to_use = cert_usage == ssl::kForClient ? config.name : config.server_name;
+    const auto organization_to_use = cert_usage == ssl::kForClient ? config.organization : config.server_organization;
+
     if (config.ldap_account_password.empty()) {
-        config.ldap_account_password = promptPassword(SB() << "Enter password for " << config.name << "@" << config.organization << ": ");
+        config.ldap_account_password = promptPassword(SB() << "Enter password for " << name_to_use << "@" << organization_to_use << ": ");
     }
 
     return 0;

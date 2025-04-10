@@ -29,9 +29,13 @@ namespace certs {
  * @param help the help flag to show this help message and exit
  * @param add_config_uri the add config uri flag to add a config uri to the generated certificate
  * @param usage the certificate usage client, server, or hybrid
+ * @param name the name
+ * @param organization the organization
+ * @param organizational_unit the organizational unit
+ * @param country the country
  */
 void defineOptions(CLI::App &app, ConfigStd &config, bool &verbose, bool &debug, bool &daemon_mode, bool &force, bool &show_version, bool &help, bool &add_config_uri,
-                   std::string &usage) {
+                   std::string &usage, std::string &name, std::string &organization, std::string &organizational_unit, std::string &country) {
     app.set_help_flag("", "");  // deactivate built-in help
 
     app.add_flag("-h,--help", help);
@@ -50,10 +54,10 @@ void defineOptions(CLI::App &app, ConfigStd &config, bool &verbose, bool &debug,
 
     app.add_option("-t,--time", config.cert_validity_mins, "Duration of the certificate in minutes.  Default 30 days");
 
-    app.add_option("-n,--name", config.name, "Specify Certificate's name");
-    app.add_option("-o,--organization", config.organization, "Specify the Certificate's Organisation");
-    app.add_option("--ou", config.organizational_unit, "Specify the Certificate's Organizational Unit");
-    app.add_option("-c,--country", config.country, "Specify the Certificate's Country");
+    app.add_option("-n,--name", name, "Specify Certificate's name");
+    app.add_option("-o,--organization", organization, "Specify the Certificate's Organisation");
+    app.add_option("--ou", organizational_unit, "Specify the Certificate's Organizational Unit");
+    app.add_option("-c,--country", country, "Specify the Certificate's Country");
 }
 
 /**
@@ -106,11 +110,11 @@ void showHelp(const char *program_name) {
 int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, bool &debug, uint16_t &cert_usage, bool &daemon_mode, bool &force) {
     auto program_name = argv[0];
     bool show_version{false}, help{false}, add_config_uri{false};
-    std::string usage{"client"};
+    std::string usage{"client"}, name, organization, organizational_unit, country;
 
     CLI::App app{"authnstd - Secure PVAccess Standard Authenticator"};
 
-    defineOptions(app, config, verbose, debug, daemon_mode, force, show_version, help, add_config_uri, usage);
+    defineOptions(app, config, verbose, debug, daemon_mode, force, show_version, help, add_config_uri, usage, name, organization, organizational_unit, country);
 
     CLI11_PARSE(app, argc, argv);
 
@@ -153,6 +157,36 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
     } else {
         std::cerr << "Usage must be one of `client`, `server`, or `hybrid`: " << usage << std::endl;
         return 13;
+    }
+
+    // Pull out command line args to override config values
+    if ( !name.empty()) {
+        switch (cert_usage) {
+            case ssl::kForClient: config.name = name; break;
+            case ssl::kForServer: config.server_name = name; break;
+            default: config.name = config.server_name = name; break;
+        }
+    }
+    if ( !organization.empty()) {
+        switch (cert_usage) {
+            case ssl::kForClient: config.organization = organization; break;
+            case ssl::kForServer: config.server_organization = organization; break;
+            default: config.organization = config.server_organization = organization; break;
+        }
+    }
+    if ( !organizational_unit.empty()) {
+        switch (cert_usage) {
+            case ssl::kForClient: config.organizational_unit = organizational_unit; break;
+            case ssl::kForServer: config.server_organizational_unit = organizational_unit; break;
+            default: config.organizational_unit = config.server_organizational_unit = organizational_unit; break;
+        }
+    }
+    if ( !country.empty()) {
+        switch (cert_usage) {
+            case ssl::kForClient: config.country = country; break;
+            case ssl::kForServer: config.server_country = country; break;
+            default: config.country = config.server_country = country; break;
+        }
     }
 
     if ( config.trust_anchor_only) {
