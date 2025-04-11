@@ -389,19 +389,9 @@ PVAccess Sequence Diagram
 
 The following diagram shows the PVAccess connection establishment sequence:
 
-.. image:: h_pva_seq.png
+.. image:: pva_seq.png
    :width: 300px
    :alt: PVA Sequence Diagram
-   :align: center
-
-
-PVAccess with TLS Sequence Diagram
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The following diagram shows the PVAccess connection establishment sequence with TLS (no certificate status monitoring):
-
-.. image:: h_tls_seq.png
-   :alt: PVA with TLS Sequence Diagram
    :align: center
 
 
@@ -410,9 +400,12 @@ Secure PVAccess Sequence Diagram
 
 The following diagram shows how the Secure PVAccess protocol establishes a secure connection between an EPICS client and server:
 
-.. image:: h_spva_seq.png
+.. image:: spva_simple_seq.png
    :alt: SPVA Sequence Diagram
    :align: center
+
+Click for a detailed diagram `with <_images/h_spva_seq.png>`_
+or `without <_images/h_tls_seq.png>`_ certificate status monitoring
 
 1. Each agent uses an ``X.509`` certificate for peer authentication
 
@@ -431,12 +424,12 @@ The following diagram shows how the Secure PVAccess protocol establishes a secur
    - If peer certificate is configured for status monitoring, subscribes to status updates from PVACMS
    - Peer certificate status is verified and cached
    - Server may staple its own certificate status in handshake
-   - Client may use stapled status immediately before waiting for status monitoring results
+   - Client may use stapled status immediately, instead of waiting for status monitoring results
 
 3. SPVA certificates may include status monitoring extension requiring:
 
    - Subscription to certificate status from issuing Certificate Authority's service (:ref:`pvacms`)
-   - Receipt of GOOD status before trust
+   - Receipt of ``GOOD`` status before trust
 
 4. Agents subscribe to:
 
@@ -485,12 +478,12 @@ Certificate status verification occurs at several points:
      - Search requests are ignored
      - Client retries later
 
-   - If status not GOOD:
+   - If status not ``GOOD``:
 
      - Server offers only TCP protocol
      - Client fails connection validation
 
-   - If status GOOD:
+   - If status ``GOOD``:
 
      - Server offers both TCP and TLS
      - Connection proceeds normally

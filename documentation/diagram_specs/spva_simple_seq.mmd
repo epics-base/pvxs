@@ -1,0 +1,88 @@
+%%{init: {
+    'theme': 'forest',
+    'themeVariables': {
+        'noteBkgColor': '#fff6e9',
+        'noteBorderColor': '#7c334f',
+        'noteTextColor': '#544943',
+        'fontFamily': 'Georgia Serif',
+        'fontSize': '12px',
+        'messageFontSize': '12px',
+        'noteFontSize': '12px',
+        'actorFontSize': '14px',
+        'width': 1200,
+        'boxMargin': 20,
+        'messageMargin': 40
+    }
+}}%%
+sequenceDiagram
+    participant Agent as Secure EPICS Client
+    participant Peer as Secure EPICS Server
+    participant PVACMS as PVACMS
+
+    Note over Peer: Server Startup
+    Peer-->>PVACMS: Monitor Server Certificate Status
+    PVACMS-->>Peer: Server Certificate Status(GOOD)
+
+    Note over Agent: Client Startup
+    Agent-->>PVACMS: Monitor Client Certificate Status
+
+    Note over Agent, Peer: SEARCH Request / Response
+    Agent-->>Peer: SEARCH (protocol=["tcp", "tls"]) with retry
+    activate Peer
+    Peer-->>Agent: SEARCH_RESPONSE (protocol="tls", address)
+    deactivate Peer
+    activate Agent
+    Agent->>Peer: TLS Connection initiated to `address`
+    deactivate Agent
+
+    Note over Agent,Peer: TLS Connection & HANDSHAKE
+    Peer->>Agent: TLS_HANDSHAKE(server_certificate, server_certificate_status)
+    activate Agent
+    Agent-->>PVACMS: Monitor Server Certificate Status
+    PVACMS-->>Agent: Client Certificate Status(GOOD)
+    Agent->>Peer: TLS_HANDSHAKE(client_certificate)
+    deactivate Agent
+    Peer-->>PVACMS: Monitor Client Certificate Status
+
+
+    Note over Agent, Peer: VALIDATION
+
+    Peer-->>Agent: CONNECTION_VALIDATION Request
+    activate Agent
+    PVACMS-->>Agent: Server Certificate Status(GOOD)
+    Agent-->>Peer: CONNECTION_VALIDATION Response
+    deactivate Agent
+    activate Peer
+    PVACMS-->>Peer: Client Certificate Status(GOOD)
+    Peer-->>Agent: CONNECTION_VALIDATED
+    deactivate Peer
+
+    Note over Agent, Peer: Create Channel
+    Agent->>Peer: CREATE_CHANNEL
+    activate Peer
+    Peer-->>Agent: CREATE_CHANNEL Response
+    deactivate Peer
+
+    %% Operations
+    Note over Agent, Peer: Operations
+    alt
+        Agent->>Peer: GET Request
+        activate Peer
+        Peer-->>Agent: GET Response(value)
+        deactivate Peer
+    else
+        Agent->>Peer: MONITOR Request
+        activate Peer
+        loop
+            Peer-->>Agent: MONITOR Subscrition(update)
+        end
+        deactivate Peer
+    else
+        Agent->>Peer: RPC Request
+        activate Peer
+        Peer-->>Agent: RPC Response(value)
+        deactivate Peer
+    else
+        Agent-->>Peer: PUT Request(value)
+    end
+
