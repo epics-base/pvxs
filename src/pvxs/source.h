@@ -20,7 +20,7 @@ struct ServerConn;
 namespace server {
 
 //! Handle when an operation is being setup
-struct PVXS_API ConnectOp : public OpBase {
+struct PVXS_API ConnectOp : public OpBase, public RemoteLogger {
 protected:
     Value _pvRequest;
 public:
@@ -72,7 +72,7 @@ struct MonitorStat {
 };
 
 //! Handle for active subscription
-struct PVXS_API MonitorControlOp : public OpBase {
+struct PVXS_API MonitorControlOp : public OpBase, public RemoteLogger {
     MonitorControlOp(const std::string& name,
            const std::shared_ptr<const ClientCredentials>& cred, op_t op)
         :OpBase(name, cred, op)
@@ -134,7 +134,7 @@ public:
 };
 
 //! Handle for subscription which is being setup
-struct PVXS_API MonitorSetupOp : public OpBase {
+struct PVXS_API MonitorSetupOp : public OpBase, public RemoteLogger {
 protected:
     Value _pvRequest;
 public:
