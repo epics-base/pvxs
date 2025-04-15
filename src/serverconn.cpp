@@ -434,7 +434,7 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
             }
             listener = evlisten(__FILE__, __LINE__, list);
 
-            if(!LEV_OPT_DISABLED)
+            if(LEV_OPT_DISABLED==0)
                 evconnlistener_disable(listener.get());
 
         } catch(std::system_error& e) {
