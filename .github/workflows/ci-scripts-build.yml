@@ -81,7 +81,7 @@ jobs:
             cross: "windows-x64-mingw"
 
           - name: RTEMS5
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             cmp: gcc
             configuration: default
             base: "7.0"
