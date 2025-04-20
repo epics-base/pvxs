@@ -580,8 +580,8 @@ void from_wire(Buffer& buf, shared_array<const void>& varr)
 
 struct pva_version {
     enum {
-        client = 2,
-        server = 2,
+        client = 3,
+        server = 3,
     };
 };
 
@@ -641,6 +641,7 @@ enum pva_app_msg_t : uint8_t {
 struct pva_search_flags {
     enum type_t : uint8_t {
         MustReply = 0x01,
+        ReplySrcPort = 0x02,
         Unicast   = 0x80,
     };
 };
