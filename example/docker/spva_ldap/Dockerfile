@@ -1,6 +1,8 @@
 ARG DOCKER_USERNAME=georgeleveln
+ARG BASE_IMAGE=spva_std
+ARG BASE_IMAGE_TAG=latest
 
-FROM ${DOCKER_USERNAME}/spva_std:latest
+FROM ${DOCKER_USERNAME}/${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
 # Set environment variables
 ENV PROJECT_HOME=/opt/epics
