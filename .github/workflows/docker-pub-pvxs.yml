@@ -89,6 +89,7 @@ jobs:
           file: example/docker/pvxs/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          no-cache: true
           build-args: |
             DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
           tags: ${{ vars.DOCKER_USERNAME }}/pvxs:latest
@@ -126,6 +127,7 @@ jobs:
           context: example/docker/spva_std/.
           platforms: linux/amd64,linux/arm64
           push: true
+          no-cache: true
           build-args: |
             DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
           tags: ${{ vars.DOCKER_USERNAME }}/spva_std:latest
@@ -163,6 +165,7 @@ jobs:
           context: example/docker/spva_krb/.
           platforms: linux/amd64,linux/arm64
           push: true
+          no-cache: true
           build-args: |
             DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
           tags: ${{ vars.DOCKER_USERNAME }}/spva_krb:latest
@@ -200,6 +203,7 @@ jobs:
           context: example/docker/spva_ldap/.
           platforms: linux/amd64,linux/arm64
           push: true
+          no-cache: true
           build-args: |
             DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}
           tags: ${{ vars.DOCKER_USERNAME }}/spva_ldap:latest
