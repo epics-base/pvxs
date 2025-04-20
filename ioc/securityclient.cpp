@@ -22,15 +22,13 @@ void SecurityClient::update(ASMEMBERPVT mem, int asl, Credentials& cred) {
 
     for (size_t i = 0, N = temp.cli.size(); i < N; i++) {
         /* asAddClient() fails secure to no-permission */
-        (void)asAddClientX(&temp.cli[i],
-                           mem,
-                           asl,
-                           cred.cred[i].c_str(),
-          // TODO switch to vector of char to accommodate inplace modifications to string
-                           const_cast<char*>(cred.method.c_str()),
-                           const_cast<char*>(cred.authority.c_str()),
-                           const_cast<char*>(cred.host.data()),
-                           true // isTLS TODO fix this!!!
+        (void)asAddClientIdentity(&temp.cli[i], mem, asl,
+                           (ASIDENTITY){
+                               .user = cred.cred[i].c_str(),
+                               .host = const_cast<char*>(cred.host.data()),
+                               .method = cred.method.c_str(),
+                               .authority = cred.authority.c_str(),
+                               .protocol = AS_PROTOCOL_TLS }
         );
     }
 

@@ -14,7 +14,8 @@ ASG(SPECIAL) {
     RULE(1,WRITE,TRAPWRITE) {
         UAG(DEFAULT)
         UAG(BAR)
-		AUTHORITY("EPICS Root Certificate Authority")
-		METHOD("x509")
+	AUTHORITY("EPICS Root Certificate Authority")
+	METHOD(x509)
+	PROTOCOL(tls)
     }
 }

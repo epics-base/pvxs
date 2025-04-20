@@ -50,7 +50,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' && 
       github.event.inputs.build_target == 'epics-base'
-    uses: george-mcintyre/epics-base/.github/workflows/docker-pub-epics-base.yml@7.0-method_and_authority
+    uses: george-mcintyre/epics-base/.github/workflows/docker-pub-epics-base.yml@7.0-secure-pvaccess
     secrets:
       DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
       DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}

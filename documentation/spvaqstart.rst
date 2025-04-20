@@ -408,7 +408,7 @@ For MacOS
 .. code-block:: shell
 
     cd ${PROJECT_HOME}
-    git clone --branch 7.0-METHOD-and-AUTHORITY https://github.com/george-mcintyre/epics-base.git
+    git clone --branch 7.0-secure-pvaccess https://github.com/george-mcintyre/epics-base.git
     cd epics-base
 
     make -j10 all
