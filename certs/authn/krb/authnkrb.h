@@ -31,6 +31,9 @@
 namespace pvxs {
 namespace certs {
 
+// Grace period of 300 seconds past ticket validity can be requested
+constexpr time_t kGracePeriod = 300;
+
 // Declarations
 extern gss_OID_desc krb5_oid_desc;
 extern gss_OID krb5_oid;

@@ -17,6 +17,7 @@ IMAGE_TAG="local"
 echo "--- Building ${IMAGE_NAME} Docker image ---"
 
 docker build \
+  ${*} \
   -t "${DOCKER_USERNAME:-georgeleveln}/${IMAGE_NAME}:${IMAGE_TAG}" \
   -f "${DOCKER_DIR}/Dockerfile" \
   .

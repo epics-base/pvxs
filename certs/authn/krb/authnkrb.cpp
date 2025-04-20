@@ -410,7 +410,7 @@ bool AuthNKrb::verify(const Value ccr) const {
         throw std::runtime_error(SB() << "Verify Credentials: CCR not_before after "
                                          "end of kerberos ticket lifetime");
     }
-    if (ccr["not_after"].as<uint32_t>() > now + peer_lifetime) {
+    if (ccr["not_after"].as<uint32_t>() > now + peer_lifetime + kGracePeriod) {
         throw std::runtime_error(SB() << "Verify Credentials: CCR not_after after "
                                          "end of kerberos ticket lifetime");
     }
