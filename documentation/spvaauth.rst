@@ -3,36 +3,37 @@
 |security| AuthN & AuthZ
 =====================================
 
-:ref:`AutheNtication and AuthoriZation<glossary_auth_vs_authz>` with Secure PVAccess
+:ref:`Authentication and Authorization<glossary_auth_vs_authz>` with Secure PVAccess
 
-- **AutheNtication** determines and verifies the identity of a client or server.
-- **AuthoriZation** defines and enforces access rights to PV resources.
+- **Authentication** (AuthN) determines and verifies the identity of a client or server.
+- **Authorization** (AuthZ) defines and enforces access rights to PV resources.
 
-SPVA enhances :ref:`epics_security` with fine-grained control based on:
+Secure PVAccess enhances :ref:`epics_security` with fine-grained control based on:
 
-- **Authentication Mode** - choose between ``server-only``, ``mutual``, or ``none``
-- **Authentication Method** - either legacy (``ca``), spva (``x509``), or none (``anonymous``)
-- **Certificate Authority** - Only allow authorised access matching ``Common Name`` of Certificate Authority
-- **Transport Type** - for unauthenticated clients provide access based on transport - legacy (not ``isTLS``), or tls encapsulated (``isTLS``)
-- **Encapsulation Mode** - packets are encrypted (``tls``),  or unencrypted (``tcp``)
+- Authentication Mode
+- Authentication Method
+- Certifying Authority
+- Protocol
 
 .. _authentication_modes:
 
 Authentication Modes
 ------------------------
 
-- ``Mutual``: Both client and server are authenticated via certificates (spva: Method is ``x509``)
-- ``Server-only``: Only server is authenticated via certificate (hybrid: Method is ``ca`` or ``anonymous``, but ``isTLS`` flag is true)
-- ``Un-authenticated``: Credentials supplied in ``AUTHZ`` message (legacy: Method is ``ca``)
-- ``Unknown``: No credentials (legacy: Method is ``anonymous``)
+- ``Mutual``: Both client and server are authenticated via certificates (spva: ``METHOD`` is ``x509``)
+- ``Server-only``: Only server is authenticated via certificate (spva: ``METHOD`` is ``ca`` or ``anonymous``, but ``PROTOCOL`` is ``tls``)
+- ``Un-authenticated``: Credentials supplied in ``AUTHZ`` message (legacy: ``METHOD`` is ``ca``)
+- ``Unknown``: No credentials (legacy: ``METHOD`` is ``anonymous``)
 
 .. _determining_identity:
 
 Legacy Authentication Mode
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- ``Un-authenticated``
-- ``Unknown``
+Methods:
+
+- ``annonymous`` - `Unknown`
+- ``ca`` - `Un-authenticated`
 
 .. image:: pvaident.png
    :alt: Identity in PVAccess
@@ -48,25 +49,19 @@ Legacy Authentication Mode
 
 2. Server uses PeerInfo structure:
 
-.. code-block:: c++
-
-    struct PeerInfo {
-        std::string peer;      // network address
-        std::string transport; // protocol (e.g., "pva")
-        std::string authority; // auth mechanism
-        std::string realm;     // authority scope
-        std::string account;   // user name
-    }
+- :ref:`peer_info`
 
 3. PeerInfo fields map to `asAddClient()` parameters ...
-4. for authorization through the ``ACF`` definitions of ``UAG``s and ``ASG``s ...
+4. for authorization through the ``ACF`` definitions of ``UAG`` and ``ASG`` ...
 5. to control access to PVs
 
 Secure PVAccess Authentication Mode
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- `Mutual`
-- `Server-only`
+Methods:
+
+- server: ``x509`` / client: ``x509`` - `Mutual`
+- server: ``x509`` - `Server-Only`
 
 .. image:: spvaident.png
    :alt: Identity in Secure PVAccess
@@ -85,208 +80,93 @@ Secure PVAccess Authentication Mode
 
 3. PeerCredentials structure provides peer information:
 
-.. code-block:: c++
+- :ref:`peer_credentials`
 
-    struct PeerCredentials {
-        std::string peer;      // network address
-        std::string iface;     // network interface
-        std::string method;    // "anonymous", "ca", or "x509"
-        std::string authority; // Certificate Authority common name for x509 if mode is `Mutual` or blank
-        std::string account;   // User account if mode is `Mutual` or blank
-        bool isTLS;            // Secure transport status.  True is mode is `Mutual` or `Server-Only`
-    };
+4. Extended ``asAddClientIdentity()`` function provides
 
-4. Extended ``asAddClientX()`` function provides ...
-5. authorization control (enhanced with ``isTls``, ``METHOD``, and ``AUTHORITY``) through the ACF definitions of UAGs and ASGs ...
-6. to control access to PVs (enhanced with addition of ``RPC``)
+- :ref:`identity_structure`
+
+5. Secure authorization control enhanced with:
+
+- ``METHOD``
+- ``AUTHORITY``
+- ``PROTOCOL``
+
+through the ACF definitions of ASGs ...
+
+6. to control access to PVs
 
 
 .. _site_authentication_methods:
 
-Authentication Methods
+Authentication Method
 -----------------------
 
-A new authentication method is added with SPVA - ``x509``.  This supersedes the legacy ``ca``, and
-`anonymous` authentication methods.  With ``x509`` EPICS clients can use a variety of Site Authentication Methods that
-all integrate with Secure PVAccess via a PKCS#12 keychain file ( :ref:`glossary_pkcs12` ) and the certificate and keys that it contains.
+anonymous Method
+^^^^^^^^^^^^^^^
 
-**Authenticator**:
+No credentials are supplied.
 
-Authenticators are ways of generating the PKCS#12 keychain file by
+ca Method
+^^^^^^^^
+
+Unauthenticated credentials are supplied in ``AUTHZ`` message.
+
+x509 Method
+^^^^^^^^^^^^
+
+A new Authentication Method is added with Secure PVAccess - ``x509``.
+With ``x509`` EPICS clients provde authenticated credentials in the form of an X.509 certificate.
+
+Optionally EPICS clients can use a variety of Site Authenticators that can create an X.509 certificate from a variety of sources including
+
+- Kerberos
+- LDAP
+- Standard Authenticator (Just provide a username and optional organization)
+
+The x509 authentication method integrates with Secure PVAccess via a PKCS#12 keychain file ( :ref:`glossary_pkcs12` )
+using the certificates and keys that it contains.
+
+
+Certifying Authority
+--------------------
+
+The Certifying Authority is the entity that vouches for the identity of the EPICS agent.
+
+The identity of Secure PVAccess servers and clients are attested to by a Certifying Authority.
+This is known as the Certificate Authority or Trust Anchor.
+
+A client and server must agree on the Certifying Authority that vouches for the identity of their peer.
+Certificates that are delivered by the PVACMS service are signed by a common Certificate Authority so
+clients and servers implicitly agree.  If you provide your own certificates then you must share the trust anchor certificate
+between all clients and servers that need to communicate.
+
+
+Protocol
+--------
+
+The Protocol is the method used to transport the identity of an EPICS agent to its peer.
+
+- ``TLS`` - Transport Layer Security (Secure PVAccess)
+- ``TCP`` - Transmission Control Protocol (Legacy)
+
+The TLS protocol is negotiated during the TLS handshake using the X.509 certificate provided by
+the server and optionally by the client.
+
+.. _site_authenticators:
+
+Site Authenticators
+--------------------
+
+Authenticators are ways of generating the certificate and placing it in the PKCS#12 keychain file,
 using credentials (tickets, tokens, or other identity-affirming methods) from existing authentication methods
-that may be in use in a particular installation site.  The simplest is called "Standard Authenticator" (``std``) and it
+that may be in use at a particular site.  The simplest is called "Standard Authenticator" (``std``) and it
 allows a user to create an arbitrary x509 certificate that has to be ``APPROVED`` by a network administrator before
 it is allowed on the network.
 
 Tools that start with ``authn`` e.g. ``authnstd`` are the commandline interfaces to these Authenticators.
 
-Each new Authenticator requires:
-
-1. Authenticator Implementation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Create under ``/certs/authn/<name>``:
-
-- `authn<name>main.cpp` - Main runner (copy from template)
-- `authn<name>.cpp` - Main implementation subclassing ``Authn``, includes registration
-- `authn<name>.h` - Header file
-- `config<name>.cpp` - Configuration interface subclassing ``AuthnConfig``
-- `config<name>.h` - Header file
-- `Makefile` - Build configuration
-- `README.md` - Documentation
-
-2. CCR Message Verifier
-^^^^^^^^^^^^^^^^^^^^
-
-Create under `/certs/authn/<name>`:
-
-- `<name>verifier.cpp` - Verifier implementation for :ref:`pvacms`
-- `<name>verifier.h` - Header file with required macros/constants
-- `<name>VERIFIER_RULES` - Makefile rules for :ref:`pvacms` integration
-- `<name>VERIFIER_CONFIG` - Makefile configuration for :ref:`pvacms`
-
-3. Build flag to enable code to be compiled in
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-- choose a make flag name of the form ``PVXS_ENABLE_<NAME>_AUTH`` where ``NAME``
-  is a three or four letter acronynm. e.g. ``KRB``
-- update ``/certs/authn/Makefile`` to add a line at the end similar to the following:
-
-.. code-block:: make
-
-    #--------------------------------------------
-    #  ADD AUTHENTICATOR PLUGINS AFTER THIS LINE
-
-    ifeq ($(PVXS_ENABLE_KRB_AUTH),YES)
-    include $(AUTHN)/krb/Makefile
-    endif
-
-- Sites compiling PVXS will set these macros in their private ``CONFIG_SITE.local`` stored one level above
-  the root of the source tree.  e.g.
-
-.. code-block:: make
-
-    PVXS_ENABLE_KRB_AUTH = YES
-    PVXS_ENABLE_LDAP_AUTH = YES
-    PVXS_ENABLE_JWT_AUTH = NO
-
-- To build PVACMS add the following, by default it will not be built
-
-.. code-block:: make
-
-    PVXS_ENABLE_PVACMS = YES
-
-
-4. Extra options for PVACMS
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you need to add some options to the commandline for PVACMS for your
-Authenticator just override these methods in the base ``Auth`` class.  e.g. for LDAP
-below:
-
-.. code-block:: c++
-
-    class AuthNLdap final : public Auth {
-      public:
-        // Copy config settings into the Authenticator
-        void configure(const client::Config &config) override {
-            auto &config_ldap = dynamic_cast<const ConfigLdap &>(config);
-            ldap_server = config_ldap.ldap_host;
-            ldap_port = config_ldap.ldap_port;
-        };
-
-        // Define placeholder text e.g. `command [placeholder] [options] positional parameters`
-        std::string getOptionsPlaceholderText() override { return " [ldap options]"; }
-
-        // Define the help text for the options
-        std::string getOptionsHelpText() override {
-            return "\n"
-                   "ldap options\n"
-                   "        --ldap-host <host>                   LDAP Host.  Default localhost\n"
-                   "        --ldap-port <port>                   LDAP port.  Default 389\n";
-        }
-
-        // Add options to given commandline parser
-        void addOptions(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {
-            auto &config = authn_config_map.at(PVXS_LDAP_AUTH_TYPE);
-            auto config_ldap = dynamic_cast<const ConfigLdap &>(*config);
-            app.add_option("--ldap-host", config_ldap.ldap_host, "Specify LDAP hostname or IP address");
-            app.add_option("--ldap-port", config_ldap.ldap_port, "Specify LDAP port number");
-        }
-    };
-
-
-5. Extra environment variables for PVACMS
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you need to add some environment variables for PVACMS for your Authenticator
-just override these methods in the base ``Auth`` and ``ConfigAuthN`` classes.
-e.g. for Kerberos shown below.
-
-.. code-block:: c++
-
-    class AuthNKrb final : public Auth {
-      public:
-        // Copy config settings into the Authenticator
-        void configure(const client::Config &config) override {
-            auto &config_krb = dynamic_cast<const ConfigKrb &>(config);
-            krb_validator_service_name = SB() << config_krb.krb_validator_service << PVXS_KRB_DEFAULT_VALIDATOR_CLUSTER_PART << config_krb.krb_realm;
-            krb_realm = config_krb.krb_realm;
-            krb_keytab_file = config_krb.krb_keytab;
-        }
-
-        // Update the definitions map for display of effective config
-        void updateDefs(client::Config::defs_t &defs) const override {
-            defs["KRB5_KTNAME"] = krb_keytab_file;
-            defs["KRB5_CLIENT_KTNAME"] = krb_keytab_file;
-            defs["EPICS_AUTH_KRB_VALIDATOR_SERVICE"] = krb_validator_service_name;
-            defs["EPICS_AUTH_KRB_REALM"] = krb_realm;
-        }
-
-        // Construct a new AuthNKrb, configured from the environment
-        void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigKrb(ConfigKrb::fromEnv())); }
-    };
-
-    class ConfigKrb final : public ConfigAuthN {
-      public:
-        ConfigKrb& applyEnv() {
-            Config::applyEnv(true, CLIENT);
-            return *this;
-        }
-
-        // Make a new config containing the base classes environment settings plus any
-        // environment variables for this Authenticator
-        static ConfigKrb fromEnv() {
-            auto config = ConfigKrb{}.applyEnv();
-            const auto defs = std::map<std::string, std::string>();
-            config.fromAuthEnv(defs);
-            config.fromKrbEnv(defs);
-            return config;
-        }
-
-        void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string>& defs) {
-            PickOne pickone{defs, true};
-
-            // KRB5_KTNAME
-            // This is the environment variable defined by krb5
-            if (pickone({"KRB5_KTNAME", "KRB5_CLIENT_KTNAME"})) {
-                krb_keytab = pickone.val;
-            }
-
-            // EPICS_AUTH_KRB_REALM
-            if (pickone({"EPICS_AUTH_KRB_VALIDATOR_SERVICE"})) {
-                krb_validator_service = pickone.val;
-            }
-
-            // EPICS_AUTH_KRB_REALM
-            if (pickone({"EPICS_AUTH_KRB_REALM"})) {
-                krb_realm = pickone.val;
-            }
-        }
-    };
-
-
-Authenticators
+Reference Authenticators
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. _pvacms_type_0_auth_methods:
@@ -384,7 +264,6 @@ Though it is recommended that you create your own site-specific Authenticators P
 - ``authnstd`` : Standard Authenticator - Uses explicitly specified and unverified credentials
 - ``authnkrb`` : Kerberos Authenticator - Kerberos credentials verified by the KDC
 - ``authnldap``: LDAP Authenticator     - Login to LDAP directory to establish identity
-- ``authnjwt`` : JWT Authenticator      - JWT tokens obtained by OAuth and verified against the token issuer for a temporary in-session certificate
 
 authstd Configuration and Usage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -486,6 +365,23 @@ and password file locations.
     authnstd --trust-anchor
 
 
+**Setup of standard authenticator in Docker Container for testing**
+
+In the source code under ``/examples/docker/spva_std`` you'll find a Dockerfile and supporting resources for creating an environment
+that contains a working Secure PVAccess with the following characteristics:
+
+- users (unix)
+
+  - ``pvacms`` - service
+  - ``admin`` - principal with password "secret" (includes a configured PVACMS administrator certificate)
+  - ``softioc`` - service principal with password "secret"
+  - ``client`` - principal with password "secret"
+
+- services
+
+  - PVACMS
+
+
 authkrb Configuration and Usage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -555,7 +451,7 @@ Credentials Verifier for :ref:`pvacms` at runtime.
 | Env. *authnkrb*      | Env. *pvacms*       | Params. *authkrb*        | Params. *pvacms*     | Keys and Values                      | Description                                                           |
 +======================+=====================+==========================+======================+======================================+=======================================================================+
 ||                     || KRB5_KTNAME        ||                         || ``--krb-keytab``    || {string location of keytab file}    || This is the keytab file shared with :ref:`pvacms` by the KDC so      |
-||                     ||                    ||                         ||                     || e.g. ``/etc/security/keytab``       || that it can verify kerberos tickets                                  |
+||                     ||                    ||                         ||                     ||                                     || that it can verify kerberos tickets                                  |
 ||                     +---------------------+|                         ||                     ||                                     ||                                                                      |
 ||                     || KRB5_CLIENT_KTNAME ||                         ||                     ||                                     ||                                                                      |
 ||                     ||                    ||                         ||                     ||                                     ||                                                                      |
@@ -568,15 +464,15 @@ Credentials Verifier for :ref:`pvacms` at runtime.
 
 **Setup of Kerberos in Docker Container for testing**
 
-In the source code under /examples/docker/spva_krb you'll find a Dockerfile and supporting resources for creating an environment
+In the source code under ``/examples/docker/spva_krb`` you'll find a Dockerfile and supporting resources for creating an environment
 that contains a working kerberos KDC with the following characteristics:
 
 - users (both unix and kerberos principals)
 
-  - pvacms - service principal with private keytab file for authentication in ~/.config/pva/1.3/pvacms.keytab
-  - admin - principal with password "secret" (includes a configured PVACMS administrator certificate)
-  - softioc - service principal with password "secret"
-  - client - principal with password "secret"
+  - ``pvacms`` - service principal with private keytab file for authentication in ``~/.config/pva/1.3/pvacms.keytab``
+  - ``admin`` - principal with password "secret" (includes a configured PVACMS administrator certificate)
+  - ``softioc`` - service principal with password "secret"
+  - ``client`` - principal with password "secret"
 
 - services
 
@@ -668,242 +564,496 @@ LDAP Credentials Verifier for :ref:`pvacms` at runtime.
 ||                                              || ``--ldap-port``                                    || e.g. ``389``                         ||                                                           |
 +-----------------------------------------------+-----------------------------------------------------+---------------------------------------+------------------------------------------------------------+
 
+**Setup of LDAP in Docker Container for testing**
 
-authjwt Configuration and Usage
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In the source code under ``/examples/docker/spva_ldap`` you'll find a Dockerfile and supporting resources for creating an environment
+that contains a working LDAP with the following characteristics:
 
-This Authenticator is a TYPE ``1`` Authenticator.
-It can be used to create a certificate from a JWT token.
+- users (both unix and LDAP users)
 
-The daemon will create a rest service that will allow posting of JWT tokens
-and create a certificate based on the token's credentials.
+  - ``pvacms`` - service with verifier for LDAP service
+  - ``admin`` - principal with password "secret" (includes a configured PVACMS administrator certificate)
+  - ``softioc`` - service principal with password "secret"
+  - ``client`` - principal with password "secret"
 
-Verification of the JWT token is performed by :ref:`pvacms` before exchanging for a certificate.
+- services
 
-**JWT Token Post Request**
-A web application, python script, java application, etc. can post a JWT token to the authentication daemon
-whenever it gets a new token from an authentication service.   The authentication daemon will send
-a :ref:`certificate_creation_request_CCR` to :ref:`pvacms` to create a certificate based on the JWT token.  :ref:`pvacms` will verify the token based
-on the configuration of the authnjwt verifier.
-
-You could test this by posting a JWT token to the authentication daemon as follows:
-
-.. code-block:: shell
-
-    authnjwt -D &
-
-    curl -X POST http://localhost:8080 \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer YOUR_JWT_TOKEN_HERE"
-
-.. note::
-
-    No body is sent in this POST request.
-
-- `CN` field in the certificate will be the username from the JWT token
-- `O` field in the certificate will be the issuer from the JWT token
-- `OU` field in the certificate will not be set
-- `C` field in the certificate will be set to the local country code
-
-
-**usage**
-
-Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain,
-and password file locations.
-
-.. code-block:: shell
-
-    authnjwt <opts>
-
-    Options:
-    -h show help
-    -v verbose output
-    -t {client | server}     Client or server certificate certificate type
-    -C                       Create a certificate and exit
-    -D                       Start authentication daemon web service to receive
-                            JWT tokens and create certificates.
-
-**Environment Variables for PVACMS AuthnJWT Verifier**
-
-The environment variables in the following table configure the JWT
-Credentials Verifier for :ref:`pvacms` at runtime.
-
-+---------------------+---------------------------------------------------+-------------------------------------------------------------------------------------+
-| Name                | Keys and Values                                   | Description                                                                         |
-+=====================+===================================================+=====================================================================================+
-|| EPICS_AUTH_JWT     || {string format for verification request payload} || Used to create the verification request payload by substituting the #token#        |
-|| _REQUEST_FORMAT    || e.g. ``{ "token": "#token#" }``                  || for the token value, and #kid# for the key id. This is used when the               |
-||                    || e.g. ``#token#``                                 || verification server requires a formatted payload for the verification request.     |
-+---------------------+---------------------------------------------------+-------------------------------------------------------------------------------------+
-|| EPICS_AUTH_JWT     || {string format for verification response value}  || A pattern string that we can use to decode the response from a verification        |
-|| _RESPONSE_FORMAT   ||                                                  || endpoint if the response is formatted text. All white space is removed in the      |
-||                    ||                                                  || given string and in the response. Then all the text prior to #response# is matched |
-||                    ||                                                  || and removed from the response and all the text after the response is likewise      |
-||                    ||                                                  || removed, what remains is the response value. An asterisk in the string matches     |
-||                    ||                                                  || any sequence of characters in the response. It is converted to lowercase and       |
-||                    ||                                                  || interpreted as valid if it equals valid, ok, true, t, yes, y, or 1.                |
-+---------------------+---------------------------------------------------+-------------------------------------------------------------------------------------+
-|| EPICS_AUTH_JWT     || {uri of JWT validation endpoint}                 || Trusted URI of the validation endpoint – the substring that starts the URI         |
-|| _TRUSTED_URI       ||                                                  || including the http://, https:// and port number.                                   |
-+---------------------+---------------------------------------------------+-------------------------------------------------------------------------------------+
-|| EPICS_AUTH_JWT_USE || case insensitive: ``YES``, ``TRUE``, or ``1``    || If set this tells :ref:`pvacms` that when it receives a 200 HTTP-response from     |
-|| _RESPONSE_CODE     ||                                                  || the HTTP request then the token is valid, and invalid for any other response code. |
-+---------------------+---------------------------------------------------+-------------------------------------------------------------------------------------+
-|| EPICS_AUTH_JWT     || {``POST`` (default) or ``GET``}                  || This determines whether the endpoint will be called with HTTP GET or POST.         |
-|| _REQUEST_METHOD    ||                                                  ||                                                                                    |
-+---------------------+---------------------------------------------------+-------------------------------------------------------------------------------------+
-
+  - LDAP service + example schemas
+  - PVACMS
 
 .. _epics_security:
 
-EPICS Security
---------------
+Authorization
+-------------
 
-New AUTHORIZATION mechanisms integrate with EPICS Security through four access control mechanisms:
+Secure PVAccess' authentication mechanisms integrate with EPICS Security's authorization system
+to provide fine-grained access control options. These improvements enable robust
+security while maintaining backward compatibility with legacy systems.
+
+- **Certificate-based Identity**:
+
+  - Authentication using X.509 certificates provides stronger identity verification than legacy username/host identification.
+- **Expanded Access Control Rules**:
+
+  - New rule elements for ``METHOD``, ``AUTHORITY``, and ``PROTOCOL`` enable precise permission definitions.
+- **Enhanced Permission Types**:
+
+  - Addition of ``RPC`` permission supports fine-grained control over remote procedure calls.
+- **Protocol-aware Security**:
+
+  - Permissions can be granted based on encrypted (``TLS``) or unencrypted (``TCP``) connections.
+- **API Extensions**:
+
+  - New APIs for client identity management and auditing security events with enhanced identity data.
+
+New Security Features
+^^^^^^^^^^^^^^^^^^^^^^
+
+1. **Identity Verification**:
+
+   - Certificates provide cryptographically secure identity verification
+2. **Fine-grained Control**:
+
+   - Combine authentcation ``METHOD``, certifying ``AUTHORITY``, and transport ``PROTOCOL`` for precise access control
+3. **Connection Security**:
+
+   - Control access based on encrypted (``TLS``) vs. unencrypted (``TCP``) connections
+4. **Defense in Depth**:
+
+   - Layer multiple security rules for comprehensive protection
+5. **Backward Compatibility**:
+
+   - Support legacy clients while providing enhanced security for modern clients
+6. **Centralized Management**:
+
+   - Revocation of permisions now managed through PVACMS with immediate effect
+7. **Scalable Architecture**:
+
+   - Support for multiple authentication methods via Authenticators
+
+By leveraging these enhanced security features, Secure PVAccess provides a robust
+security model that can meet the requirements of modern control systems while
+maintaining compatibility with existing EPICS deployments.
+
+
+EPICS Security Access Control File (ACF) Extensions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Secure PVAccess extends the Access Control File (ACF) syntax with new rule predicates:
 
 METHOD
-^^^^^^
+~~~~~~
 
-Defines access permissions based on Authenticator:
+Defines access permissions based on authentication method:
 
 - ``x509``: Certificate-based authentication
 - ``ca``: Legacy PVAccess AUTHZ with user-specified account
 - ``anonymous``: Access without specified name
 
-AUTHORITY
-^^^^^^^^^
+Can be provided as quoted or unquoted strings.
 
-Defines access permissions based on certificate authority:
+Example:
+
+.. code-block:: text
+
+   RULE(1,READ) {
+       METHOD("x509")
+   }
+
+The above rule will match any client that presents an x509 certificate to assert its identity.
+
+AUTHORITY
+~~~~~~~~~
+
+Specifies Certifying Authority:
 
 - Uses name from ``CN`` field of certificate authority certificate's subject
 - Only applicable for X.509 certificate authentication
+- Multiple authorities can be specified and any one of them will be accepted
+
+Should be provided as a quoted string.
+
+Example:
+
+.. code-block:: text
+
+   RULE(1,WRITE) {
+       AUTHORITY("EPICS Root Certificate Authority")
+   }
+
+The above rule will match any client that presents an x509 certificate
+that is signed by the EPICS Root Certificate Authority. This means that
+the EPICS Root Certificate Authority vouches for the identity of the client.
+
+PROTOCOL
+~~~~~~~~
+
+Specifies the connection protocol requirement:
+
+- ``TCP``: Default unencrypted connection
+- ``TLS``: Encrypted connection
+
+Can be provided as quoted or unquoted strings.  Upper or lower case is accepted.
+
+Example:
+
+.. code-block:: text
+
+   RULE(1,READ) {
+       PROTOCOL("TLS")
+   }
+
+The above rule will match any client that connects using an encrypted (TLS) connection.
+This is always the case for when clients provide an x509 certificate to assert their identity,
+however it can also be the case for server-only authenticated connections.  In the later case
+the connection METHOD could be ``ca`` or ``anonymous`` but the PROTOCOL will be ``TLS``.
+
+Note that you can also specify ``TCP`` to define a rule that matches only unencrypted (TCP) connections.
+
+Example:
+
+.. code-block:: text
+
+   RULE(1,NONE) {
+       PROTOCOL("TCP")
+   }
+
+The above rule will explicitly prohibit any client that connects using an unencrypted (TCP) connection.
 
 RPC Permission
-^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~
 
 New rule permission for RPC message access control:
 
 - Supplements existing ``NONE``, ``READ`` (`GET`), and ``WRITE`` (`PUT`)
 - Controls access to `RPC` PVAccess messages
 
-ISTLS Option
-^^^^^^^^^^^^^
+Note: The syntax has been implemented for ACF files but control of RPC access is not yet available.
 
-New rule option for TLS-based access control:
-
-- Requires server connection with trusted Certificate Authority-signed certificate
-- Enables READ access restriction to certified PVs only
-
-.. _access_control_file_ACF:
-
-Access Control File (ACF)
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Example ACF showing new security features:
+Example:
 
 .. code-block:: text
 
-    UAG(bar) {boss}
-    UAG(foo) {testing}
-    UAG(ops) {geek}
+   RULE(1,RPC) {
+       UAG(admins)
+   }
 
-    ASG(DEFAULT) {
-        RULE(0,NONE,NOTRAPWRITE)
-    }
+Full ACF Examples
+~~~~~~~~~~~~~~~~~
 
-    ASG(ro) {
-        RULE(0,NONE,NOTRAPWRITE)
-        RULE(1,READ,ISTLS) {
-            UAG(foo,ops)
-            METHOD("ca")
+These examples demonstrate combining security features for granular access control:
+
+*Authorization based on PROTOCOL, METHOD, and AUTHORITY*
+
+.. code-block:: text
+
+   UAG(operators) {greg, karen, ralph}
+   UAG(engineers) {kay, george, michael}
+   UAG(admins) {aqeel, earnesto, pierrick}
+
+   ASG(DEFAULT) {
+   # Default - No access
+       RULE(0,NONE)
+
+   # Read-only access for operators, requiring TLS
+       RULE(1,READ) {
+           UAG(operators,engineers,admins)
+           PROTOCOL(tls)
+       }
+
+   # Write access for engineers using x509 auth
+       RULE(2,WRITE) {
+           UAG(engineers,admins)
+           METHOD(x509)
+           AUTHORITY("LBNL Certificate Authority","SLAC Certificate Authority")
+       }
+
+   # RPC access for admins using specific CA and TLS
+       RULE(3,RPC) {
+           UAG(admins)
+           METHOD("x509")
+           AUTHORITY("EPICS Root Certificate Authority")
+       }
+   }
+
+*Legacy compatible with Enhanced Security*
+
+.. code-block:: text
+
+   # Support both legacy and SPVA clients
+   ASG(backward_compatible) {
+       RULE(0,NONE)
+       # Legacy access - read only
+       RULE(1,READ) {
+           METHOD("ca", "anonymous")
+           PROTOCOL(tcp)
+       }
+       # Enhanced access - write with secure authentication
+       RULE(2,WRITE) {
+           UAG(operators)
+           METHOD("x509")
+           AUTHORITY("EPICS Root Certificate Authority")
+           PROTOCOL("tls")
+       }
+   }
+
+Authenticator Development
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To implement a new Authenticator requires the following steps:
+
+1. Source Code
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Create under ``/certs/authn/<name>``:
+
+- `authn<name>main.cpp`
+
+  - Main runner (copy from template)
+- `authn<name>.cpp`
+
+  - Main implementation subclassing ``Authn``,
+  - includes registration and PVACMS extensions & verifier
+- `authn<name>.h`
+
+  - Header file
+- `config<name>.cpp`
+
+  - Configuration interface subclassing ``AuthnConfig``
+- `config<name>.h`
+
+  - Header file
+- `Makefile`
+
+  - Build configuration
+- `README.md`
+
+  - Documentation
+
+2. Build flag to enable code to be compiled in
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- choose a make flag name of the form ``PVXS_ENABLE_<NAME>_AUTH`` where ``NAME``
+  is a three or four letter acronynm. e.g. ``KRB``
+- update ``/certs/authn/Makefile`` to add a line at the end similar to the following:
+
+.. code-block:: make
+
+    #--------------------------------------------
+    #  ADD AUTHENTICATOR PLUGINS AFTER THIS LINE
+
+    ifeq ($(PVXS_ENABLE_KRB_AUTH),YES)
+    include $(AUTHN)/krb/Makefile
+    endif
+
+- Sites compiling PVXS will set these macros in their private ``CONFIG_SITE.local`` stored one level above
+  the root of the source tree.  e.g.
+
+.. code-block:: make
+
+    PVXS_ENABLE_KRB_AUTH = YES
+    PVXS_ENABLE_LDAP_AUTH = YES
+
+- To build PVACMS add the following, by default it will not be built
+
+.. code-block:: make
+
+    PVXS_ENABLE_PVACMS = YES
+
+
+3. Extra options for PVACMS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you need to add some options to the commandline for PVACMS for your
+Authenticator just override these methods in the base ``Auth`` class.  e.g. for LDAP
+below:
+
+.. code-block:: c++
+
+    class AuthNLdap final : public Auth {
+      public:
+        // Copy config settings into the Authenticator
+        void configure(const client::Config &config) override {
+            auto &config_ldap = dynamic_cast<const ConfigLdap &>(config);
+            ldap_server = config_ldap.ldap_host;
+            ldap_port = config_ldap.ldap_port;
+        };
+
+        // Define placeholder text e.g. `command [placeholder] [options] positional parameters`
+        std::string getOptionsPlaceholderText() override { return " [ldap options]"; }
+
+        // Define the help text for the options
+        std::string getOptionsHelpText() override {
+            return "\n"
+                   "ldap options\n"
+                   "        --ldap-host <host>                   LDAP Host.  Default localhost\n"
+                   "        --ldap-port <port>                   LDAP port.  Default 389\n";
         }
-    }
 
-    ASG(rw) {
-        RULE(0,NONE,NOTRAPWRITE)
-        RULE(1,WRITE,TRAPWRITE) {
-            UAG(foo)
-            METHOD("x509")
-            AUTHORITY("EPICS Root Certificate Authority")
+        // Add options to given commandline parser
+        void addOptions(CLI::App &app, std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map) override {
+            auto &config = authn_config_map.at(PVXS_LDAP_AUTH_TYPE);
+            auto config_ldap = dynamic_cast<const ConfigLdap &>(*config);
+            app.add_option("--ldap-host", config_ldap.ldap_host, "Specify LDAP hostname or IP address");
+            app.add_option("--ldap-port", config_ldap.ldap_port, "Specify LDAP port number");
         }
-    }
+    };
 
-    ASG(rwx) {
-        RULE(0,NONE,NOTRAPWRITE)
-        RULE(1,RPC,NOTRAPWRITE) {
-            UAG(bar)
-            METHOD("x509")
-            AUTHORITY("EPICS Root Certificate Authority","ORNL Org Certificate Authority")
+
+4. Extra environment variables for PVACMS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you need to add some environment variables for PVACMS for your Authenticator
+just override these methods in the base ``Auth`` and ``ConfigAuthN`` classes.
+e.g. for Kerberos shown below.
+
+.. code-block:: c++
+
+    class AuthNKrb final : public Auth {
+      public:
+        // Copy config settings into the Authenticator
+        void configure(const client::Config &config) override {
+            auto &config_krb = dynamic_cast<const ConfigKrb &>(config);
+            krb_validator_service_name = SB() << config_krb.krb_validator_service << PVXS_KRB_DEFAULT_VALIDATOR_CLUSTER_PART << config_krb.krb_realm;
+            krb_realm = config_krb.krb_realm;
+            krb_keytab_file = config_krb.krb_keytab;
         }
+
+        // Update the definitions map for display of effective config
+        void updateDefs(client::Config::defs_t &defs) const override {
+            defs["KRB5_KTNAME"] = krb_keytab_file;
+            defs["KRB5_CLIENT_KTNAME"] = krb_keytab_file;
+            defs["EPICS_AUTH_KRB_VALIDATOR_SERVICE"] = krb_validator_service_name;
+            defs["EPICS_AUTH_KRB_REALM"] = krb_realm;
+        }
+
+        // Construct a new AuthNKrb, configured from the environment
+        void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigKrb(ConfigKrb::fromEnv())); }
+    };
+
+    class ConfigKrb final : public ConfigAuthN {
+      public:
+        ConfigKrb& applyEnv() {
+            Config::applyEnv(true, CLIENT);
+            return *this;
+        }
+
+        // Make a new config containing the base classes environment settings plus any
+        // environment variables for this Authenticator
+        static ConfigKrb fromEnv() {
+            auto config = ConfigKrb{}.applyEnv();
+            const auto defs = std::map<std::string, std::string>();
+            config.fromAuthEnv(defs);
+            config.fromKrbEnv(defs);
+            return config;
+        }
+
+        void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string>& defs) {
+            PickOne pickone{defs, true};
+
+            // KRB5_KTNAME
+            // This is the environment variable defined by krb5
+            if (pickone({"KRB5_KTNAME", "KRB5_CLIENT_KTNAME"})) {
+                krb_keytab = pickone.val;
+            }
+
+            // EPICS_AUTH_KRB_REALM
+            if (pickone({"EPICS_AUTH_KRB_VALIDATOR_SERVICE"})) {
+                krb_validator_service = pickone.val;
+            }
+
+            // EPICS_AUTH_KRB_REALM
+            if (pickone({"EPICS_AUTH_KRB_REALM"})) {
+                krb_realm = pickone.val;
+            }
+        }
+    };
+
+
+New APIs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Secure PVAccess introduces new APIs for programatically managing security with authenticated identities:
+
+.. _peer_info:
+
+Legacy ``PeerInfo`` Structure
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: c++
+
+    struct PeerInfo {
+        std::string peer;      // network address
+        std::string transport; // protocol (e.g., "pva")
+        std::string authority; // auth mechanism
+        std::string realm;     // authority scope
+        std::string account;   // user name
     }
 
-.. _new_epics_yaml_acf_file_format:
 
-EPICS YAML ACF Format
-^^^^^^^^^^^^^^^^^^^
+.. _peer_credentials:
 
-Alternative YAML format for improved readability:
+New ``PeerCredentials`` Structure
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: yaml
+.. code-block:: c++
 
-    # EPICS YAML
-    version: 1.0
+    struct PeerCredentials {
+        std::string peer;      // network address
+        std::string iface;     // network interface
+        std::string method;    // "anonymous", "ca", or "x509"
+        std::string authority; // Certificate Authority common name for x509 if mode is `Mutual` or blank
+        std::string account;   // User account if mode is `Mutual` or blank
+        bool isTLS;            // Secure transport status.  True is mode is `Mutual` or `Server-Only`
+    };
 
-    uags:
-      - name: bar
-        users:
-          - boss
-      - name: foo
-        users:
-          - testing
-      - name: ops
-        users:
-          - geek
 
-    asgs:
-      - name: ro
-        rules:
-          - level: 0
-            access: NONE
-            trapwrite: false
-          - level: 1
-            access: READ
-            isTLS: true
-            uags:
-              - foo
-              - ops
-            methods:
-              - ca
+Enhanced Client Management
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-      - name: rw
-        rules:
-          - level: 0
-            access: NONE
-            trapwrite: false
-          - level: 1
-            access: WRITE
-            trapwrite: true
-            uags:
-              - foo
-            methods:
-              - x509
-            authorities:
-              - SLAC Certificate Authority
+.. code-block:: c
 
-      - name: rwx
-        rules:
-          - level: 0
-            access: NONE
-            trapwrite: false
-          - level: 1
-            access: RPC
-            trapwrite: true
-            uags:
-              - bar
-            methods:
-              - x509
-            authorities:
-              - SLAC Certificate Authority
-              - ORNL Org Certificate Authority
+   long epicsStdCall asAddClientIdentity(
+        ASCLIENTPVT *pasClientPvt, ASMEMBERPVT asMemberPvt, int asl,
+        ASIDENTITY identity);
 
+   long epicsStdCall asChangeClientIdentity(
+        ASCLIENTPVT asClientPvt, int asl,
+        ASIDENTITY identity);
+
+Enhanced Auditing
+~~~~~~~~~~~~~~~~~
+
+.. code-block:: c
+
+   void * epicsStdCall asTrapWriteBeforeWithIdentityData(
+        ASIDENTITY identity,
+        dbChannel *addr, int dbrType, int no_elements, void *data);
+
+.. _identity_structure:
+
+Identity Structure for APIs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This unified structure replaces separate user/host parameters:
+
+.. code-block:: c
+
+   typedef struct asIdentity {
+       const char *user;         // User identifier (CN from certificate)
+       char *host;               // Host identifier (O from certificate)
+       const char *method;       // Authentication method ("ca", "x509", "anonymous")
+       const char *authority;    // Certificate authority
+       enum AsProtocol protocol; // Connection protocol (TCP/TLS)
+   } ASIDENTITY;
+
+Protocol Enumeration
+~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: c
+
+   enum AsProtocol {
+       AS_PROTOCOL_TCP = 0,     // Unencrypted connection
+       AS_PROTOCOL_TLS = 1      // Encrypted connection
+   };
 
