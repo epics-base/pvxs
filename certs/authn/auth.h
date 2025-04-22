@@ -70,7 +70,7 @@ class Auth {
      * @param ccr The CCR to verify
      * @return True if the CCR is valid, false otherwise
      */
-    virtual bool verify(Value ccr) const = 0;
+    virtual bool verify(Value &ccr) const = 0;
 
     /**
      * @brief Get the authenticator configuration from the environment.

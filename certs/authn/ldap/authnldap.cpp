@@ -235,7 +235,7 @@ const ConfigAuthN &config) const {
     return cert_creation_request;
 }
 
-bool AuthNLdap::verify(const Value ccr) const {
+bool AuthNLdap::verify(Value &ccr) const {
     // Verify that the signature provided in the CCR was signed with the user's private key
     auto signature = Credentials::base64Decode(ccr["verifier.signature"].as<std::string>());
     auto payload = ccrToString(ccr);

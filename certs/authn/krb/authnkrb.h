@@ -31,9 +31,6 @@
 namespace pvxs {
 namespace certs {
 
-// Grace period of 300 seconds past ticket validity can be requested
-constexpr time_t kGracePeriod = 300;
-
 // Declarations
 extern gss_OID_desc krb5_oid_desc;
 extern gss_OID krb5_oid;
@@ -95,7 +92,7 @@ class AuthNKrb final : public Auth {
                                                                  const uint16_t &usage,
                                                                  const ConfigAuthN &config) const override;
 
-    bool verify(Value ccr) const override;
+    bool verify(Value &ccr) const override;
 
     void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigKrb(ConfigKrb::fromEnv())); }
 

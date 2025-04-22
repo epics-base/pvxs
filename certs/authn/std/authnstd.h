@@ -61,7 +61,7 @@ class AuthNStd final : public Auth {
                                                                  const uint16_t &usage,
                                                                  const ConfigAuthN &config) const override;
 
-    bool verify(Value ccr) const override;
+    bool verify(Value &ccr) const override;
 
     void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigStd(ConfigStd::fromEnv())); }
 };

@@ -207,7 +207,7 @@ const ConfigAuthN &config) const {
  * @param ccr the Certificate Creation Request (CCR)
  * @return true if the Certificate Creation Request (CCR) is valid
  */
-bool AuthNStd::verify(const Value ccr) const { return true; }
+bool AuthNStd::verify(Value &ccr) const { return true; }
 
 }  // namespace certs
 }  // namespace pvxs
