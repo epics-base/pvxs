@@ -374,8 +374,8 @@ bool AuthNKrb::verify(Value &ccr) const {
 
     major_status = gss_inquire_context(&minor_status, context, nullptr, nullptr, &peer_lifetime, nullptr, nullptr, nullptr, nullptr);
     if (GSS_ERROR(major_status)) {
-        // Fallback lifetime in case of error.
-        peer_lifetime = 24 * 60 * 60;  // One day.
+        gss_release_name(&minor_status, &initiator_name);
+        throw std::runtime_error(SB() << "Verify Credentials: Failed to get peer lifetime: " << gssErrorDescription(major_status, minor_status));
     }
 
     log_debug_printf(auth, "Get peer name: %s", "\n");
