@@ -58,33 +58,20 @@ struct UDPCollector final : public UDPManager::Search,
     void addListener(UDPListener *l);
     void delListener(UDPListener *l);
 
-    bool handle_one();
+    bool handle_one(const IfaceMap::Current &ifinfo);
 
     enum origin_t {
-        Remote,    // non-local sender
-        Local,     // sent from a local interface, including loopback
-        OriginTag, // payload of CMD_ORIGIN_TAG
+        Broadcast, // received directly from original client as bcast/mcast, process directly
+        Forwarding,// received directly from original client as ucast, forward
+        Forwarded, // forwarded by a local peer
+        OriginTag, // ... with CMD_ORIGIN_TAG
     };
 
-    void process_one(const SockAddr& dest, const uint8_t* buf, size_t nrx, origin_t origin);
-    static void handle_static(evutil_socket_t fd, short ev, void *raw)
-    {
-        (void)fd;
-        auto self = static_cast<UDPCollector*>(raw);
-        try {
-            log_debug_printf(logio, "UDP %p event %x\n", self->rx.get(), ev);
-            if(!(ev&EV_READ))
-                return;
+    void process_one(const uint8_t* buf, size_t nrx, origin_t origin,
+                     const IfaceMap::Current& ifinfo);
+    static void handle_static(evutil_socket_t fd, short ev, void *raw);
 
-            // handle up to 4 packets before going back to the reactor
-            for(unsigned i=0; i<4 && self->handle_one(); i++) {}
-
-        }catch(std::exception& e) {
-            log_crit_printf(logio, "Ignoring unhandled exception in UDPManager::handle(): %s\n", e.what());
-        }
-    }
-
-    void forwardM(const SockAddr& origin, const uint8_t* buf, size_t len);
+    void forwardM(const uint8_t* buf, size_t len);
 
     // Search interface
 public:
@@ -96,7 +83,7 @@ struct UDPManager::Pvt {
     SockAttach attach;
 
     evbase loop;
-    IfaceMap& ifmap;
+    IfaceMap ifmap;
 
     // only manipulate from loop worker thread
     // key'd by address family and port#
@@ -221,13 +208,30 @@ void UDPCollector::delListener(UDPListener *l)
     // TODO: bother to cleanup mcast group membership?
 }
 
+void UDPCollector::handle_static(evutil_socket_t fd, short ev, void *raw)
+{
+    (void)fd;
+    auto self = static_cast<UDPCollector*>(raw);
+    try {
+        log_debug_printf(logio, "UDP %p event %x\n", self->rx.get(), ev);
+        if(!(ev&EV_READ))
+            return;
+
+        auto ifmap(self->manager->ifmap.current);
+
+        // bound number of packets handled before going back to the reactor
+        for(unsigned i=0; i<16 && self->handle_one(*ifmap); i++) {}
+
+    }catch(std::exception& e) {
+        log_crit_printf(logio, "Ignoring unhandled exception in UDPManager::handle(): %s\n", e.what());
+    }
+}
+
 // size of a CMD_ORIGIN_TAG prefix header
 static constexpr size_t cmd_origin_tag_size = 8 + 16;
 
-bool UDPCollector::handle_one()
+bool UDPCollector::handle_one(const IfaceMap::Current& ifinfo)
 {
-    SockAddr dest;
-
     buf.resize(cmd_origin_tag_size + 0x10000 + 1);
     auto rxbuf = &buf[cmd_origin_tag_size];
     auto rxlen = buf.size()-cmd_origin_tag_size-1;
@@ -249,7 +253,6 @@ bool UDPCollector::handle_one()
                             evutil_socket_error_to_string(err));
         }
         return false; // wait for more I/O
-
     }
 
     if(dest.family()!=AF_UNSPEC)
@@ -261,16 +264,65 @@ bool UDPCollector::handle_one()
         return true;
     }
 
-    log_hex_printf(logio, Level::Debug, rxbuf, nrx, "UDP Rx %d, %s -> %s @%u (%s)\n",
-            nrx, src.tostring().c_str(), dest.tostring().c_str(), unsigned(rx.dstif), bind_addr.tostring().c_str());
+    auto ifit(ifinfo.byIndex.find(rx.dstif));
+    if(ifit==ifinfo.byIndex.end()) {
+        log_debug_printf(logio, "Ignore UDP from as yet unknown iface index %u\n", unsigned(rx.dstif));
+        return true;
+    }
+    srcIface = &ifit->second;
 
-    origin_t origin = manager->ifmap.is_iface(src) ? Local : Remote;
+    // detect "origin" and reply-from address.  (dest in request becomes source in reply)
+    origin_t origin = Broadcast;
+    if(srcIface->isLO && dest.compare(lo_mcast_addr.addr,false)==0) {
+        // packet forwarded by a local PVA peer (maybe us) as IPv4 local multicast
+        origin = Forwarded;
+        // UDP header info of forwarder not relevant to reply.  Spoil...
+        src = dest = SockAddr(); // IPv6 does not support local mcast :(
+        srcIface = nullptr;
 
-    process_one(dest, rxbuf, nrx, origin);
+    } else {
+        // if destination is...
+        //   unicast (local iface addr), use as is
+        //   broadcast, look up corresponding local iface addr
+        //   multicast,
+        // ensure that dest is an interface address
+        auto ifit(srcIface->bcast.find(dest));
+        if(ifit!=srcIface->bcast.end()) {
+            // dest is bcast, so replace with associated iface address
+            dest = ifit->second;
+
+        } else if((ifit=srcIface->addrs.find(dest))!=srcIface->addrs.end()) {
+            // dest is interface address.  Nothing to do.
+            origin = Forwarding;
+
+        } else {
+            // mcast
+            // reply from an arbitrary address on the source interface
+            bool found = false;
+            for(auto& it : srcIface->addrs) {
+                if(it.first.family()==dest.family()) {
+                    dest = it.first;
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) {
+                // let host mcast routing try...
+                dest = SockAddr(dest.family());
+            }
+        }
+    }
+
+    log_hex_printf(logio, Level::Debug, rxbuf, nrx, "UDP Rx %d, %s -> %s @%u (%s) : orig %d\n",
+                   nrx, src.tostring().c_str(), dest.tostring().c_str(), unsigned(rx.dstif), bind_addr.tostring().c_str(),
+                   origin);
+
+    process_one(rxbuf, nrx, origin, ifinfo);
     return true;
 }
 
-void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t nrx, origin_t origin)
+void UDPCollector::process_one(const uint8_t *buf, size_t nrx, origin_t origin,
+                               const IfaceMap::Current& ifinfo)
 {
     FixedBuf M(true, const_cast<uint8_t*>(buf), nrx);
     Header head{};
@@ -312,27 +364,38 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
         from_wire(M, port);
         if(server.isAny()) {
             server = src;
-            if(origin==OriginTag) {
-                log_err_printf(logio, "CMD_ORIGIN_TAG search with reply to sender never works%s", "\n");
+            if(origin==Forwarded || origin==OriginTag) {
+                log_warn_printf(logio, "Forwarded SEARCH with reply to sender never works.  Ignore.%s", "\n");
                 return;
             }
         }
+        if((origin==Broadcast || origin==Forwarding)
+                && peerVersion >= 3
+                && (flags&pva_search_flags::ReplySrcPort))
+        {
+            // peer requests reply to (apparent) sender port
+            port = src.port();
+        }
         server.setPort(port);
 
-        if(!M.good() || !(flags&pva_search_flags::Unicast) || dest.family()!=AF_INET) {
-            // invalid, bcast, or not ipv4
+        if(!M.good())
+            return;
 
-        } else if(dest.compare(lo_mcast_addr.addr,false)!=0) {
+        if(origin==Broadcast || dest.family()!=AF_INET) {
+            // bcast, mcast, or not ipv4
+
+        } else if(origin==Forwarding) {
             assert(buf==&this->buf[cmd_origin_tag_size]);
             // clear unicast flag in forwarded message
             *save_flags &= ~pva_search_flags::Unicast;
             // recipient of forwarded message must use, and trust, replyAddr in body :(
             {
-                FixedBuf R(M.be, save_replyAddr, 16u);
+                FixedBuf R(M.be, save_replyAddr, 16u + 2u);
                 to_wire(R, server);
+                to_wire(R, port);
                 assert(R.good());
             }
-            forwardM(dest, buf, nrx);
+            forwardM(buf, nrx);
             return;
 
         } else {
@@ -436,20 +499,33 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
 
         // only allow one CMD_ORIGIN_TAG message per packet
         // only accept when sent to the mcast address through the loopback address
-        //   since we only join the mcast group on loopback this will hopefully
-        //   frustrate attempts to inject CMD_ORIGIN_TAG externally.
-        if(M.good() && origin==Local && dest.compare(lo_mcast_addr.addr,false)==0) {
-            originaddr.setPort(bind_addr.port());
-
-            process_one(originaddr, M.save(), M.size(), OriginTag);
-
+        // since we only join the mcast group on loopback this will hopefully
+        // frustrate attempts to inject CMD_ORIGIN_TAG externally.
+        if(!M.good()) {
+            log_err_printf(logio, "malformed ORIGIN_TAG from %s %c %d\n",
+                             originaddr.tostring().c_str(),
+                             M.good() ? 'T' : 'F',
+                             origin);
             return;
+
+        } else if(origin==Forwarded) {
+            auto ifit(ifinfo.byAddr.find(originaddr));
+            if(ifit!=ifinfo.byAddr.end()) {
+                // original destination is local interface address
+                originaddr.setPort(bind_addr.port());
+                dest = originaddr;
+                srcIface = ifit->second.first;
+                process_one(M.save(), M.size(), OriginTag, ifinfo);
+                return;
+
+            } else {
+                // forwarded w/ non-local ORIGIN_TAG??
+                log_warn_printf(logio, "Ignore originated from %s %d\n",
+                                 originaddr.tostring().c_str(),
+                                 origin);
+                // continue and try to process search as if directly received
+            }
         }
-        log_debug_printf(logio, "Ignore originated from %s %c%c%c\n",
-                         originaddr.tostring().c_str(),
-                         M.good() ? 'T' : 'F',
-                         origin==Local ? 'T' : 'F',
-                         dest.compare(lo_mcast_addr.addr,false)==0 ? 'T' : 'F');
 
         break;
     }
@@ -459,10 +535,10 @@ void UDPCollector::process_one(const SockAddr &dest, const uint8_t *buf, size_t 
     }
 }
 
-void UDPCollector::forwardM(const SockAddr& origin, const uint8_t *pbuf, size_t plen)
+void UDPCollector::forwardM(const uint8_t *pbuf, size_t plen)
 {
     log_debug_printf(logio, "Forward as originated for %s\n",
-                     origin.tostring().c_str());
+                     dest.tostring().c_str());
 
     assert(buf.size() > cmd_origin_tag_size);
     assert(pbuf==&buf[cmd_origin_tag_size]);
@@ -471,10 +547,14 @@ void UDPCollector::forwardM(const SockAddr& origin, const uint8_t *pbuf, size_t 
         FixedBuf M(true, &buf[0], cmd_origin_tag_size);
 
         to_wire(M, Header{CMD_ORIGIN_TAG, 0, 16u});
-        to_wire(M, origin);
+        to_wire(M, dest);
         assert(M.good());
         assert(M.save()==&buf[cmd_origin_tag_size]);
     }
+
+    // mcast_prep_sendto() will override routing
+    srcIface = nullptr;
+    dest = SockAddr(src.family());
 
     sock.mcast_prep_sendto(lo_mcast_addr);
     src = lo_mcast_addr.addr;
@@ -485,17 +565,21 @@ bool UDPCollector::reply(const void *msg, size_t msglen) const
 {
     manager->loop.assertInLoop();
 
-    log_hex_printf(logio, Level::Debug, msg, msglen, "Send %s -> %s\n",
-                   bind_addr.tostring().c_str(), src.tostring().c_str());
+    log_hex_printf(logio, Level::Debug, msg, msglen, "Send %s -> %s, %s,%s\n",
+                   bind_addr.tostring().c_str(), src.tostring().c_str(),
+                   dest.tostring().c_str(), srcIface ? srcIface->name.c_str() : "N/A");
 
-    auto ntx = sendto(sock.sock, (char*)msg, msglen, 0, &src->sa, src.size());
+    // reply to original source, through the original interface, as from original destination
+    auto ntx = sendtox{sock.sock, (char*)msg, msglen, &src, &dest, srcIface ? srcIface->index : 0}.call();
     if(ntx<0) {
         int err = evutil_socket_geterror(sock.sock);
         if(err==SOCK_EWOULDBLOCK || err==EAGAIN || err==SOCK_EINTR) {
             // nothing to do here
         } else {
-            log_warn_printf(logio, "UDP TX Error on %s -> %s : (%d) %s\n",
-                            name.c_str(), src.tostring().c_str(),
+            log_warn_printf(logio, "UDP TX Error: bound:%s src:%s,%s dst:%s : (%d) %s\n",
+                            name.c_str(),
+                            dest.tostring().c_str(), srcIface ? srcIface->name.c_str() : "N/A",
+                            src.tostring().c_str(),
                             err, evutil_socket_error_to_string(err));
         }
         return false; // wait for more I/O

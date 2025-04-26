@@ -1044,8 +1044,12 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
         // flags and reserved.
         // initially flags[7] is cleared (bcast)
         auto pflags = M.save();
-        to_wire(M, uint8_t(kind == SearchKind::discover ?
-                           pva_search_flags::MustReply : 0u)); // must-reply to discovery, ignore regular negative search
+        to_wire(M, uint8_t(
+                // must-reply to discovery, ignore regular negative search
+                (kind == SearchKind::discover ? pva_search_flags::MustReply : 0u)
+                | pva_search_flags::ReplySrcPort
+                )
+        );
         to_wire(M, uint8_t(0u));
         to_wire(M, uint16_t(0u));
 
