@@ -150,25 +150,18 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
         log_debug_printf(auth, "Trust Anchor%s\n", "");
         return std_credentials;
     }
-
-    // Should not be empty as defaults to username
-    if (!std_config.name.empty()) {
-        std_credentials->name = for_client ? std_config.name : std_config.server_name;
-    }
-
-    // Should not be empty as defaults to hostname
-    if (!std_config.organization.empty()) {
-        std_credentials->organization = for_client ? std_config.organization : std_config.server_organization;
-    }
-
-    if (!std_config.organizational_unit.empty()) {
-        std_credentials->organization_unit = for_client ? std_config.organizational_unit : std_config.server_organizational_unit;
-    }
-
-    if (!std_config.country.empty()) {
-        std_credentials->country = for_client ? std_config.country : std_config.server_country;
+    if (for_client) {
+        if (!std_config.name.empty()) std_credentials->name = std_config.name;
+        if (!std_config.organization.empty()) std_credentials->organization = std_config.organization;
+        if (!std_config.organizational_unit.empty()) std_credentials->organization_unit = std_config.organizational_unit;
+        if (!std_config.country.empty()) std_credentials->country = std_config.country;
+        else std_credentials->country = getCountryCode();
     } else {
-        std_credentials->country = getCountryCode();
+        if (!std_config.server_name.empty()) std_credentials->name = std_config.server_name;
+        if (!std_config.server_organization.empty()) std_credentials->organization = std_config.server_organization;
+        if (!std_config.server_organizational_unit.empty()) std_credentials->organization_unit = std_config.server_organizational_unit;
+        if (!std_config.server_country.empty()) std_credentials->country = std_config.server_country;
+        else std_credentials->country = getCountryCode();
     }
 
     log_debug_printf(auth, "Standard Credentials retrieved for: %s@%s\n", std_credentials->name.c_str(), std_credentials->organization.c_str());
