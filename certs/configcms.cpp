@@ -189,7 +189,7 @@ void ConfigCms::updateDefs(defs_t &defs) const {
     defs["EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"] = cert_client_require_approval ? "YES" : "NO";
     defs["EPICS_PVACMS_REQUIRE_SERVER_APPROVAL"] = cert_server_require_approval ? "YES" : "NO";
     defs["EPICS_PVACMS_REQUIRE_HYBRID_APPROVAL"] = cert_hybrid_require_approval ? "YES" : "NO";
-    defs["EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION"] = cert_status_subscription ? "YES" : "NO";
+    defs["EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION"] = (cert_status_subscription == DEFAULT) ? "DEFAULT" : (cert_status_subscription == YES) ? "YES" : "NO";
 
     // Add any defs for any registered authn methods
     for (auto &authn_entry : AuthRegistry::getRegistry()) authn_entry.second->updateDefs(defs);

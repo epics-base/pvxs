@@ -1087,8 +1087,10 @@ void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, 
         cert_data = createCertAuthCertificate(config, certs_db, key_pair);
     }
 
-    createDefaultAdminACF(config, cert_data.cert);
-    createAdminClientCert(config, certs_db, key_pair->pkey, cert_data.cert, cert_data.cert_auth_chain);
+    if ( is_initialising ) {
+        createDefaultAdminACF(config, cert_data.cert);
+        createAdminClientCert(config, certs_db, key_pair->pkey, cert_data.cert, cert_data.cert_auth_chain);
+    }
 
     cert_auth_pkey = std::move(key_pair->pkey);
     cert_auth_cert = std::move(cert_data.cert);
