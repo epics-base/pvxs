@@ -18,8 +18,3 @@ endif
 ifeq ($(PVXS_ENABLE_LDAP_AUTH),YES)
 include $(AUTHN)/ldap/Makefile
 endif
-
-ifeq ($(PVXS_ENABLE_JWT_AUTH),YES)
-include $(AUTHN)/jwt/Makefile
-endif
-

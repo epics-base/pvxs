@@ -41,7 +41,6 @@ PVXS_ENABLE_SSLKEYLOGFILE ?= YES
 # Uncomment the appropriate line or include in your private $(TOP)/../CONFIG_SITE.local
 # PVXS_ENABLE_PVACMS = YES
 # PVXS_ENABLE_KRB_AUTH = YES
-# PVXS_ENABLE_JWT_AUTH = YES
 # PVXS_ENABLE_LDAP_AUTH = YES
 
 # These allow developers to override the CONFIG_SITE variable

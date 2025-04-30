@@ -163,12 +163,6 @@ testtlsstatus_SRCS += certstatusmanager.cpp
 testtlsstatus_SRCS += certstatus.cpp
 TESTS += testtlsstatus
 
-ifeq ($(PVXS_ENABLE_JWT_AUTH),YES)
-TESTPROD_HOST += jwtlogintest
-jwtlogintest_SRCS += jwtlogintest.cpp
-jwtlogintest_SYS_LIBS +=curl
-endif # PVXS_ENABLE_JWT_AUTH
-
 endif # EVENT2_HAS_OPENSSL
 endif
 
