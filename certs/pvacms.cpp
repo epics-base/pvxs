@@ -2194,9 +2194,15 @@ int main(int argc, char *argv[]) {
                 const auto is_own_cert = (credentials.issuer_id == our_issuer_id && std::to_string(serial) == credentials.serial);
                 const auto is_revoke   = (state == "REVOKED");
 
-                if (!((!is_revoke && is_admin) || (is_revoke && (is_admin ^ is_own_cert)))) {
+                if (is_revoke && is_own_cert) {
+                    if ( is_admin ) {
+                        log_err_printf(pvacms, "PVACMS Admin Not Allowed to Self-Revoke%s", "\n");
+                        op->error(pvxs::SB() << state << " Admin Self-Revoke not permitted on " << issuer_id << ":" << serial << " by " << *creds);
+                        return;
+                    }
+                } else if (!is_admin) {
                     log_err_printf(pvacms, "PVACMS Client Not Authorised%s", "\n");
-                    op->error(pvxs::SB() << state << " operation not authorized on " << issuer_id << ":" << serial);
+                    op->error(pvxs::SB() << state << " operation not authorized on " << issuer_id << ":" << serial << " by " << *creds);
                     return;
                 }
 
