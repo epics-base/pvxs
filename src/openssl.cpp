@@ -70,10 +70,12 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
                     Guard G(lock);
                     cert_status = pva_status;
                 }
-                // set TLS context state appropriately based on new status
+                if (!cert_status.isGood())
+                    log_warn_printf(watcher, "Certificate not valid: %s\n", CERT_STATE(cert_status.status.i));
+                // set TLS context state appropriately based on the new status
                 setTlsOrTcpMode();
 
-                // Start validity timer for status
+                // Start a validity timer for status
                 setStatusValidityCountdown();
             });
         } catch (certs::CertStatusNoExtensionException &e) {
@@ -573,6 +575,8 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
         peer_status->cert_status_manager =
             certs::CertStatusManager::subscribe(trusted_store_ptr, status_pv, [weak_peer_status](const certs::PVACertificateStatus &status) {
                 const auto peer_status_update = weak_peer_status.lock();
+                if (!status.isGood())
+                    log_warn_printf(watcher, "Peer certificate not valid: %s\n", CERT_STATE(status.status.i));
                 // Update the cached state
                 if (peer_status_update) peer_status_update->updateStatus((const certs::CertificateStatus)status);
             });
