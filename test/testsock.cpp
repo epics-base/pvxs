@@ -90,6 +90,20 @@ void testEndPoint()
         testEq(ep.iface, "ifname");
         testEq(ep.ttl, 1);
     }
+    {
+        SockEndpoint ep("[::ffff:192.168.1.1]");
+        testEq(ep.addr.tostring(), "[::ffff:192.168.1.1]");
+        testEq(ep.addr.map6to4().tostring(), "192.168.1.1");
+        testEq(ep.iface, "");
+        testEq(ep.ttl, -1);
+    }
+    {
+        SockEndpoint ep("[1234::1]");
+        testEq(ep.addr.tostring(), "[1234::1]");
+        testEq(ep.addr.map6to4().tostring(), "[1234::1]");
+        testEq(ep.iface, "");
+        testEq(ep.ttl, -1);
+    }
 
     std::vector<std::string> bad({
         "127.0.0.",
@@ -542,7 +556,7 @@ MAIN(testsock)
 {
     SockAttach attach;
     logger_config_env();
-    testPlan(101);
+    testPlan(109);
     testSetup();
     testStackID();
     testEndPoint();
