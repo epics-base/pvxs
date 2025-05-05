@@ -685,7 +685,20 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
         searchOp._names[i]._name = msg.names[i].name;
         searchOp._names[i]._claim = false;
     }
-    ipAddrToDottedIP(&msg.server->in, searchOp._src, sizeof(searchOp._src));
+    static_assert(sizeof(searchOp._src) >= INET6_ADDRSTRLEN+1, "");
+    switch(msg.server.family()) {
+    case AF_INET:
+        evutil_inet_ntop(AF_INET, &msg.server->in.sin_addr,
+                         searchOp._src, sizeof(searchOp._src)-1);
+        break;
+    case AF_INET6:
+        evutil_inet_ntop(AF_INET6, msg.server->in6.sin6_addr.s6_addr,
+                         searchOp._src, sizeof(searchOp._src)-1);
+        break;
+    default:
+        strcpy(searchOp._src, "?");
+        break;
+    }
 
     {
         auto G(sourcesLock.lockReader());

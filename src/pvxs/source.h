@@ -232,7 +232,7 @@ struct PVXS_API Source {
     private:
         typedef std::vector<Name> _names_t;
         _names_t _names;
-        char _src[24];
+        char _src[80]; // >= INET6_ADDRSTRLEN+1
         friend struct Server::Pvt;
         friend struct impl::ServerConn;
     public:
