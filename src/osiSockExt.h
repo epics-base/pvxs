@@ -78,6 +78,7 @@ public:
     bool isMCast() const noexcept;
 
     SockAddr map4to6() const;
+    SockAddr map6to4() const;
 
     store_t* operator->() { return &store; }
     const store_t* operator->() const { return &store; }

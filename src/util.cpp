@@ -601,6 +601,23 @@ SockAddr SockAddr::map4to6() const
     return ret;
 }
 
+SockAddr SockAddr::map6to4() const
+{
+    constexpr uint8_t is4[12] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff};
+    SockAddr ret;
+    if(family()==AF_INET6 && memcmp(store.in6.sin6_addr.s6_addr, is4, 12)==0) {
+        ret->in.sin_family = AF_INET;
+        memcpy(&ret->in.sin_addr.s_addr,
+               &store.in6.sin6_addr.s6_addr[12],
+                4);
+        ret->in.sin_port = store.in6.sin6_port;
+
+    } else {
+        ret = *this;
+    }
+    return ret;
+}
+
 std::string SockAddr::tostring() const
 {
     std::ostringstream strm;
