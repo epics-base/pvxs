@@ -691,7 +691,9 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
 
 GetAddrInfo::GetAddrInfo(const char *name)
 {
-    if(auto err = evutil_getaddrinfo(name, nullptr, nullptr, &info)) {
+    evutil_addrinfo hints = {};
+    hints.ai_flags = EVUTIL_AI_NUMERICHOST;
+    if(auto err = evutil_getaddrinfo(name, nullptr, &hints, &info)) {
         throw std::runtime_error(SB()<<"Error resolving \""<<escape(name)<<"\" : "<<evutil_gai_strerror(err));
     }
 }
