@@ -250,7 +250,7 @@ time_t getNotAfterTimeFromCert(const X509 *cert);
 time_t getNotBeforeTimeFromCert(const X509 *cert);
 
 void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, ossl_ptr<X509> &cert_auth_cert, ossl_ptr<EVP_PKEY> &cert_auth_pkey,
-                              ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, bool &is_initialising);
+                              ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, ossl_ptr<X509> &cert_auth_root_cert, bool &is_initialising);
 
 void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &cert_auth_cert);
 
@@ -292,15 +292,10 @@ certstatus_t storeCertificate(const sql_ptr &certs_db, CertFactory &cert_factory
 timeval statusMonitor(const StatusMonitor &status_monitor_params);
 
 Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const PVACertificateStatus &cert_status = {});
-void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op, const std::string &our_issuer_id,
-                                const uint64_t &serial, int32_t error_status, int32_t error_severity, const std::string &error_message);
 
-std::string getCertUri(const std::string &prefix, const std::string &issuer_id, const uint64_t &serial);
-std::string getCertUri(const std::string &prefix, const std::string &cert_id);
-std::string getCertId(const std::string &issuer_id, const uint64_t &serial);
 std::string getValidStatusesClause(const std::vector<certstatus_t> &valid_status);
 void bindValidStatusClauses(sqlite3_stmt *sql_statement, const std::vector<certstatus_t> &valid_status);
-std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &parameters);
+uint64_t getParameters(const std::list<std::string> &parameters);
 
 template <typename T>
 void setValue(Value &target, const std::string &field, const T &new_value);

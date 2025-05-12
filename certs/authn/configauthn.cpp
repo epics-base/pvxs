@@ -52,6 +52,9 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
     // EPICS_PVA_AUTH_NO_STATUS, EPICS_PVAS_AUTH_NO_STATUS
     no_status = pickone({"EPICS_PVA_AUTH_NO_STATUS", "EPICS_PVAS_AUTH_NO_STATUS"}) && pickone.val == "YES";
 
+    // EPICS_PVA_AUTH_ISSUER, EPICS_PVAS_AUTH_ISSUER
+    if (pickone({"EPICS_PVA_AUTH_ISSUER", "EPICS_PVAS_AUTH_ISSUER"})) issuer_id = pickone.val;
+
     // EPICS_PVA_AUTH_ORGANIZATION, EPICS_PVAS_AUTH_ORGANIZATION
     organization = pickone({"EPICS_PVA_AUTH_ORGANIZATION"}) ? pickone.val : retrieved_organization;
     server_organization = pickone({"EPICS_PVAS_AUTH_ORGANIZATION", "EPICS_PVA_AUTH_ORGANIZATION"}) ? pickone.val : retrieved_organization;
@@ -96,6 +99,8 @@ void ConfigAuthN::updateDefs(defs_t &defs) const {
     Config::updateDefs(defs);
     defs["EPICS_PVA_AUTH_NAME"] = name;
     defs["EPICS_PVAS_AUTH_NAME"] = server_name;
+    defs["EPICS_PVAS_AUTH_NO_STATUS"] = no_status ? "YES" : "NO";
+    defs["EPICS_PVA_AUTH_ISSUER"] = defs["EPICS_PVAS_AUTH_ISSUER"] = issuer_id;
     defs["EPICS_PVA_AUTH_ORGANIZATION"] = organization;
     defs["EPICS_PVAS_AUTH_ORGANIZATION"] = server_organization;
     defs["EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT"] = organizational_unit;

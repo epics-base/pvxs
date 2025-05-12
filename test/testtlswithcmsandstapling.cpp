@@ -67,6 +67,8 @@ struct Tester {
     DEFINE_MEMBERS(client1)
     DEFINE_MEMBERS(client2)
 
+    const std::string issuer_id{CertStatus::getSkId(cert_auth_cert.cert)};
+
     ossl_ptr<X509_STORE> trusted_store{cert_auth_cert.createTrustStore()};
 
     server::SharedWildcardPV status_pv{server::SharedWildcardPV::buildMailbox()};
@@ -87,7 +89,7 @@ struct Tester {
         // Set up the Mock PVACMS server certificate (does not contain custom status extension)
         auto pvacms_config = server::Config::forCms();
         pvacms_config.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
-        pvacms = pvacms_config.build().addPV(GET_MONITOR_CERT_STATUS_PV, status_pv);
+        pvacms = pvacms_config.build().addPV(getCertStatusPv("CERT", issuer_id), status_pv);
         client = pvacms.clientConfig().build();
 
         if (CHECK_CERT_MEMBER_CONDITION(cert_auth) || CHECK_CERT_MEMBER_CONDITION(super_server) || CHECK_CERT_MEMBER_CONDITION(intermediate_server) ||
@@ -107,7 +109,7 @@ struct Tester {
      * This function generates mock statuses to be returned by the Mock CMS server.
      * These statuses are replete with valid OCSP responses that are valid for `STATUS_VALID_FOR_MINS` minutes
      */
-    void createCertStatuses() {
+    void createCertStatuses() { // NOLINT(*-convert-member-functions-to-static)
         testShow() << __func__;
         try {
             const auto cert_status_creator(CertStatusFactory(cert_auth_cert.cert, cert_auth_cert.pkey, cert_auth_cert.chain, 0, STATUS_VALID_FOR_SECS));
@@ -126,7 +128,7 @@ struct Tester {
     /**
      * @brief Make PVAccess Certificate Status Responses for each of the certificates
      */
-    void makeStatusResponses() {
+    void makeStatusResponses() { // NOLINT(*-convert-member-functions-to-static)
         testShow() << __func__;
         const auto cert_status_creator(CertStatusFactory(cert_auth_cert.cert, cert_auth_cert.pkey, cert_auth_cert.chain, 0, STATUS_VALID_FOR_SECS));
 
@@ -142,7 +144,7 @@ struct Tester {
     /**
      * @brief Pop the next event off the subscribed PV's queue
      * @param sub the subscription
-     * @param evt the epics event
+     * @param evt the EPICS event
      * @return the popped Value or empty on timeout
      */
     static Value pop(const std::shared_ptr<client::Subscription>& sub, epicsEvent& evt) {
@@ -169,7 +171,7 @@ struct Tester {
      * During the setup tests are performed to verify that it works as expected
      *
      */
-    void startMockCMS() {
+    void startMockCMS() { // NOLINT(*-convert-member-functions-to-static)
         testShow() << __func__;
         try {
             testDiag("Setting up: %s", "Mock PVACMS Server");
@@ -184,7 +186,7 @@ struct Tester {
 
             status_pv.onFirstConnect([this](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>& parameters) {
                 auto it = parameters.begin();
-                const std::string& serial_string = *++it;
+                const std::string& serial_string = *it;
                 serial_number_t serial = std::stoull(serial_string);
 
                 if (pv.isOpen(pv_name)) {
@@ -230,7 +232,7 @@ struct Tester {
     /**
      * @brief Stop the Mock PVACMS Server
      */
-    void stopMockCMS() {
+    void stopMockCMS() { // NOLINT(*-convert-member-functions-to-static)
         testShow() << __func__;
         try {
             testDiag("Stopping: %s", "Mock PVACMS Server");
@@ -257,7 +259,7 @@ struct Tester {
     struct WhoAmI final : server::Source {
         const Value resultType;
 
-        WhoAmI() : resultType(nt::NTScalar(TypeCode::String).create()) {}
+        WhoAmI() : resultType(nt::NTScalar(TypeCode::String).create()) {} // NOLINT(*-use-equals-default)
 
         void onSearch(Search& op) override {
             for (auto& pv : op) {
@@ -284,7 +286,7 @@ struct Tester {
         }
 
         // Create the concatenated whoami response string from the `method` and `account`
-        Value getWhoAmIValue(const std::shared_ptr<const server::ClientCredentials>& cred) const {
+        Value getWhoAmIValue(const std::shared_ptr<const server::ClientCredentials>& cred) const { // NOLINT(*-convert-member-functions-to-static)
             std::ostringstream strm;
             strm << cred->method << '/' << cred->account;
             return resultType.cloneEmpty().update(TEST_PV_FIELD, strm.str());
@@ -335,14 +337,14 @@ struct Tester {
 
     /**
      * @brief Test getting a value using a certificate that is configured to use an intermediate Certificate Authority
-     * Note that we don't disable status monitoring so the framework will attempt to contact
+     * Note that we don't disable status monitoring, so the framework will attempt to contact
      * PVACMS to verify certificate status for any certificates that contain the certificate status extension.
      *
      * We chose the SERVER1 and CLIENT1 certificates for this test which as well as both being
      * certificates that have an intermediate certificate between them and the root Certificate Authority, they
      * also have the certificate status extension embedded in them.  So this test will
      * verify that the statuses are verified and the TLS proceeds as expected.  If the
-     * statuses are not verified then the test count will be off because there is a test
+     * statuses are not verified, then the test count will be off because there is a test
      * in the Mock PVACMS when certificate statuses are posted.
      *
      * The test to make sure that the connection is a tls connection here serves to verify that
@@ -382,21 +384,21 @@ struct Tester {
     }
 
     /**
-     * @brief This test verifies that the client connection is successfully reestablished after a client reconfigure
+     * @brief This test verifies that the client connection is successfully reestablished after a client reconfigure()
      * is triggered.
      *
-     * A client can now reconfigure its connection to use different tls configuration.  We will first create a connection
-     * using one tls configuration then we will reconfigure the connection using a different configuration
+     * A client can now reconfigure its connection to use different TLS configuration.  We will first create a connection
+     * using one TLS configuration, then we will reconfigure the connection using a different configuration
      * and check whether the changes are successfully applied to the connection.
      *
      * The simple way we do this is to create a server that will simply return the common name of the identity
      * presented in the client certificate (via the Subject common name CN) and the method by which the connection
-     * is made (x509 for tls connections).  If we change configuration then this value will change to the new
+     * is made (x509 for tls connections).  If we change the configuration, then this value will change to the new
      * credentials presented by the newly configured client.
      *
-     * CLIENT1 and CLIENT2 are used as the different client configuration and IOC1 is used for the server's config.
+     * CLIENT1 and CLIENT2 are used as the different client configurations, and IOC1 is used for the server's config.
      *
-     * As this uses the Mock PVACMS we verify that it checks certificate status before using the certificates
+     * As this uses the Mock PVACMS, we verify that it checks certificate status before using the certificates
      */
     void testClientReconfig() {
         testShow() << __func__;
@@ -473,12 +475,12 @@ struct Tester {
     }
 
     /**
-     * @brief Tests that new configuration is applied to all server connections when the server reconfigure is executed.
+     * @brief Tests that a new configuration is applied to all server connections when the server reconfigure() is executed.
      *
-     * Here we use the SERVER1 and IOC1 certificates for the server and check that after a reconfigure the
+     * Here we use the SERVER1 and IOC1 certificates for the server and check that after a reconfigure() the
      * tls session is re-established but using the new configuration.
      *
-     * As this uses the Mock PVACMS we verify that it checks certificate status before using the certificates
+     * As this uses the Mock PVACMS, we verify that it checks certificate status before using the certificates
      */
     void testServerReconfig() {
         testShow() << __func__;
@@ -554,19 +556,19 @@ struct Tester {
     }
 
     /**
-     * @brief This test checks that tls connections are prohibited when CMS is unavailable but configuration requires it
+     * @brief This test checks that tls connections are prohibited when CMS is unavailable, but configuration requires it
      *
      * The Mock PVACMS must be previously stopped prior to this test
      *
      */
     static void testCMSUnavailable() {
         testShow() << __func__;
-        // Create a test PV and set value to 42
+        // Create a test PV and set the value to 42
         auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
         auto test_pv(server::SharedPV::buildReadonly());
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
         {
-            // Configure server with status checking enabled
+            // Configure a server with status checking enabled
             auto serv_conf(server::Config::isolated());
             serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
             serv_conf.tls_disable_status_check = false;
@@ -588,7 +590,7 @@ struct Tester {
             serv.start();
             sleep(1);
 
-            // Configure client with status checking enabled
+            // Configure a client with status checking enabled
             auto cli_conf(serv.clientConfig());
             cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
             cli_conf.tls_disable_status_check = false;
@@ -604,14 +606,14 @@ struct Tester {
         }
 
         {
-            // Configure server with status checking and stapling disabled
+            // Configure a server with status checking and stapling disabled
             auto serv_conf2(server::Config::isolated());
             serv_conf2.tls_keychain_file = IOC1_KEYCHAIN_FILE;
             serv_conf2.tls_disable_status_check = false;
             serv_conf2.tls_disable_stapling = true;
             auto serv2(serv_conf2.build().addPV(TEST_PV2, test_pv));
 
-            // Configure client with status checking disabled
+            // Configure a client with status checking disabled
             auto cli_conf2(serv2.clientConfig());
             cli_conf2.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
             auto cli2(cli_conf2.build());

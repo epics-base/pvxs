@@ -44,8 +44,16 @@ std::ostream& operator<<(std::ostream& strm, const PeerCredentials& cred)
         strm<<":"<<cred.issuer_id;
     if(!cred.serial.empty())
         strm<<":"<<cred.serial;
-    if(!cred.authority.empty())
-        strm<<":"<<cred.authority;
+    if(!cred.authority.empty()) {
+        strm<<":";
+        std::string authority = cred.authority;
+        size_t pos = 0;
+        while((pos = authority.find('\n', pos)) != std::string::npos) {
+            authority.replace(pos, 1, " <- ");
+            pos += 4; // Move past the replacement string
+        }
+        strm<<authority;
+    }
     strm<<"/"<<cred.account<<"@"<<cred.peer;
     return strm;
 }

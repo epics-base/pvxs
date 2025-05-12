@@ -73,9 +73,9 @@
 .. _glossary_diskless_server:
 .. _glossary_diskless_node:
 .. _glossary_network_computer:
-.. _glossary_hybrid_client:
+.. _glossary_ioc_client:
 
-- Diskless Server, Diskless Node, Network Computer, Hybrid Client.
+- Diskless Server, Diskless Node, Network Computer, IOC.
 
   A network device without disk drives, which employs network booting to load its operating system from a server, and network mounted drives for storage.
 

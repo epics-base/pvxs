@@ -20,8 +20,7 @@ class ConfigAuthN : public client::Config {
     std::string organizational_unit{};
     std::string country{"US"};
     bool no_status{false};
-
-    std::string config_uri_base{"CERT:CONFIG"};
+    std::string issuer_id{};
 
     std::string server_name{};
     std::string server_organization{};
@@ -33,7 +32,7 @@ class ConfigAuthN : public client::Config {
 
     void fromAuthEnv(const std::map<std::string, std::string>& defs);
     static std::string getIPAddress();
-    virtual void updateDefs(defs_t& defs) const;
+    void updateDefs(defs_t& defs) const override;
 };
 
 }  // namespace certs

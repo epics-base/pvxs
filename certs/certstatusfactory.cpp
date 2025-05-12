@@ -50,10 +50,9 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_pt
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-PVACertificateStatus CertStatusFactory::createPVACertificateStatus(serial_number_t serial, certstatus_t status, StatusDate status_date,
-                                                                   StatusDate predicated_revocation_time) const {
+PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const serial_number_t serial, const certstatus_t status, const StatusDate &status_date, const StatusDate &predicated_revocation_time) const {
     // Create OCSP response
-    ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
+    const ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
     // Set ASN1_TIME objects
     auto status_valid_until_time = StatusDate(status_date.t + cert_status_validity_mins_ * 60 + cert_status_validity_secs_);
@@ -78,7 +77,7 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(serial_number
     auto revocation_asn1_time = revocation_time_to_use.toAsn1_Time();
 
     // Create OCSP_CERTID
-    auto cert_id = createOCSPCertId(serial);
+    const auto cert_id = createOCSPCertId(serial);
 
     // Add the status to the OCSP response
     if (!OCSP_basic_add1_status(basic_resp.get(), cert_id.get(), ocsp_status, 0, revocation_asn1_time.get(), this_update.get(), next_update.get())) {

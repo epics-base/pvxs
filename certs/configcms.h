@@ -71,23 +71,23 @@ class ConfigCms final : public server::Config {
 
     /**
      * @brief When basic credentials are used then set to true
-     * to request administrator approval to issue hybrid certificates.
+     * to request administrator approval to issue ioc certificates.
      *
      * All other auth methods will never require administrator approval.
      */
-    bool cert_hybrid_require_approval = true;
+    bool cert_ioc_require_approval = true;
 
     /**
      * @brief This flag is used to indicate that a certificate user must subscribe
-     * to the certificate status PV to verify certificate's revoked status.
+     * to the certificate status PV to verify the certificate's revoked status.
      *
      * With this flag set two extensions are added to created certificates.
      * A flag indicating that subscription is required and a string
      * containing the PV name to subscribe to.
      *
-     * If set to YES, status subscription is always required.
-     * If set to NO, status subscription is never required.
-     * If set to DEFAULT, the client's no_status flag determines whether status subscription is required.
+     * If set to YES, a status subscription is always required.
+     * If set to NO, a status subscription is never required.
+     * If set to DEFAULT, the client's no_status flag determines whether a status subscription is required.
      *
      * Default is DEFAULT
      */

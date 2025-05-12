@@ -71,7 +71,7 @@ int readParameters(const int argc, char *argv[], const char *program_name, clien
     app.add_option("-w,--timeout", conf.request_timeout_specified);
     app.add_option("-f,--file", cert_file, "The keychain file to read if no Certificate ID specified");
 
-    // Action flags in mutually exclusive group
+    // Action flags in a mutually exclusive group
     app.add_flag("-A,--approve", approve);
     app.add_flag("-R,--revoke", revoke);
     app.add_flag("-D,--deny", deny);

@@ -1,7 +1,7 @@
 .. _secure_pvaccess:
 
 |security| Secure PVAccess
-===============
+============================
 
 Secure PVAccess (SPVA) enhances the existing PVAccess protocol by integrating :ref:`transport_layer_security` (TLS)
 with comprehensive :ref:`certificate_management`, enabling encrypted communication channels and authenticated connections
@@ -93,6 +93,9 @@ The following environment variables control SPVA behavior:
 +--------------------------+----------------------------+-------------------------------------+---------------------------------------------------------------+
 | Name                     | Key                        | Value                               | Description                                                   |
 +==========================+============================+=====================================+===============================================================+
+| EPICS_PVA_CERT_PV_PREFIX | {string prefix for certificate management PVs}                   | This replaces the default ``CERT`` prefix.  Followed by       |
+|                          | e.g. ``ORNL_CERTS``                                              | ``:STATUS:...``, ``:ROOT``, or ``:CREATE`` to form PV names   |
++--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_KEYCHAIN   | {fully qualified path  to keychain file}                         | This is the string that determines the fully qualified path   |
 +--------------------------+                                                                  | to the keychain file that contains the certificate,           |
 | EPICS_PVAS_TLS_KEYCHAIN  | e.g. ``~/.config/client.p12``,                                   | and private keys used in the TLS handshake.                   |

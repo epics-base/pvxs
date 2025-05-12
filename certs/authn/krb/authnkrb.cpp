@@ -133,7 +133,7 @@ std::string AuthNKrb::getRealm() {
  *
  * @param credentials The credentials to be used to create certificate creation request.
  * @param key_pair The key pair containing the public key used for the CCR.
- * @param usage the desired certificate usage bitmask: client, server, or hybrid
+ * @param usage the desired certificate usage bitmask: client, server, or ioc
  * @return The certificate creation request (CCR).
  */
 std::shared_ptr<CertCreationRequest> AuthNKrb::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,

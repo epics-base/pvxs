@@ -144,9 +144,9 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         cert_server_require_approval = parseTo<bool>(pickone.val);
     }
 
-    // EPICS_PVACMS_REQUIRE_HYBRID_APPROVAL
-    if (pickone({"EPICS_PVACMS_REQUIRE_HYBRID_APPROVAL", "EPICS_PVACMS_REQUIRE_SERVER_APPROVAL", "EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"})) {
-        cert_hybrid_require_approval = parseTo<bool>(pickone.val);
+    // EPICS_PVACMS_REQUIRE_IOC_APPROVAL
+    if (pickone({"EPICS_PVACMS_REQUIRE_IOC_APPROVAL", "EPICS_PVACMS_REQUIRE_SERVER_APPROVAL", "EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"})) {
+        cert_ioc_require_approval = parseTo<bool>(pickone.val);
     }
 
     // EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION
@@ -167,7 +167,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
  * It updates the definitions with the TLS stop if no cert, the ACF file, the certs database file, the certificate authority keychain file,
  * the admin keychain file, the certificate authority name, the certificate authority organization, the certificate authority organizational unit,
  * the certificate authority country, the certificate validity minutes, the client require approval, the server require approval,
- * the hybrid require approval, and the certificate status subscription.
+ * the ioc require approval, and the certificate status subscription.
  *
  * It also adds any defs for any registered authn methods
  *
@@ -188,7 +188,7 @@ void ConfigCms::updateDefs(defs_t &defs) const {
     defs["EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS"] = std::to_string(cert_status_validity_mins);
     defs["EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"] = cert_client_require_approval ? "YES" : "NO";
     defs["EPICS_PVACMS_REQUIRE_SERVER_APPROVAL"] = cert_server_require_approval ? "YES" : "NO";
-    defs["EPICS_PVACMS_REQUIRE_HYBRID_APPROVAL"] = cert_hybrid_require_approval ? "YES" : "NO";
+    defs["EPICS_PVACMS_REQUIRE_IOC_APPROVAL"] = cert_ioc_require_approval ? "YES" : "NO";
     defs["EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION"] = (cert_status_subscription == DEFAULT) ? "DEFAULT" : (cert_status_subscription == YES) ? "YES" : "NO";
 
     // Add any defs for any registered authn methods

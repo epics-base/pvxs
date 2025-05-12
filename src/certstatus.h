@@ -16,6 +16,7 @@
 
 #include <openssl/x509.h>
 
+#include <pvxs/config.h>
 #include <pvxs/log.h>
 #include <pvxs/nt.h>
 
@@ -42,6 +43,219 @@ PERMANENTLY_VALID_STATUS(time_t)
 namespace pvxs {
 namespace certs {
 
+/**
+ * @brief Get the Certificate Status PV base.
+ * e.g., CERT:STATUS
+ *
+ * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
+ * @return the Certificate Status PV base string
+ */
+inline std::string getCertStatusPvBase(const std::string &cert_pv_prefix) {
+    std::string pv = cert_pv_prefix;
+    pv += ":STATUS";
+    return pv;
+}
+
+/**
+ * @brief Get the Certificate Status PV name for configuring the PVACMS listener
+ * e.g., CERT:STATUS:0192faeb:*
+ * Note that the PVACMS only listens for requests for certificates
+ *
+ * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
+ * @param issuer_id the issuer ID that this PVACMS is serving
+ * @return the Certificate Status PV name
+ */
+inline std::string getCertStatusPv(const std::string &cert_pv_prefix, const std::string& issuer_id) {
+    std::string pv = getCertStatusPvBase(cert_pv_prefix);
+    pv += ":";
+    pv += issuer_id;
+    pv += ":*";
+    return pv;
+}
+
+/**
+ * @brief Get the Certificate Issuer PV name
+ *
+ * This is suitable for networks where there is only one certificate authority.  Clients will
+ * not need to specify the issuer they are interested in
+ *
+ * e.g., CERT:ISSUER
+ *
+ * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
+ * @return the generic Certificate Issuer PV name
+ */
+inline std::string getCertIssuerPv(const std::string &cert_pv_prefix) {
+    std::string pv = cert_pv_prefix;
+    pv += ":ISSUER";
+    return pv;
+}
+
+/**
+ * @brief get the Certificate Issuer PV name
+*
+ * This is suitable for networks where there are multiple certificate authorities.  Clients will
+ * need to specify the issuer they are interested in
+ *
+ * e.g., CERT:ISSUER:0192faeb
+ *
+ * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
+ * @param issuer_id the issuer ID that this PVACMS is serving
+ * @return the generic Certificate Issuer PV name
+ */
+inline std::string getCertIssuerPv(const std::string &cert_pv_prefix, const std::string& issuer_id) {
+    std::string pv = getCertIssuerPv(cert_pv_prefix);
+    pv += ":";
+    pv += issuer_id;
+    return pv;
+}
+
+/**
+ * @brief Get the Certificate Root Authority PV name
+ *
+ * This is suitable for networks where there is only one certificate authority.  Clients will
+ * not need to specify the issuer they are interested in
+ *
+ * e.g., CERT:ROOT
+ *
+ * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
+ * @return the generic Certificate Root Authority PV name
+ */
+inline std::string getCertAuthRootPv(const std::string &cert_pv_prefix) {
+    std::string pv = cert_pv_prefix;
+    pv += ":ROOT";
+    return pv;
+}
+
+/**
+ * @brief get the Certificate Root Authority PV name
+*
+ * This is suitable for networks where there are multiple certificate authorities.  Clients will
+ * need to specify the issuer they are interested in
+ *
+ * e.g., CERT:ROOT:0192faeb
+ *
+ * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
+ * @param issuer_id the issuer ID that this PVACMS is serving
+ * @return the generic Certificate Root Authority PV name
+ */
+inline std::string getCertAuthRootPv(const std::string &cert_pv_prefix, const std::string& issuer_id) {
+    std::string pv = getCertAuthRootPv(cert_pv_prefix);
+    pv += ":";
+    pv += issuer_id;
+    return pv;
+}
+
+/**
+ * @brief Get the Certificate Create PV name
+ *
+ * This is suitable for networks where there is only one certificate authority.  Clients will
+ * not need to specify the issuer they are interested in
+ *
+ * e.g., CERT:CREATE
+ *
+ * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
+ * @return the generic Certificate Create PV name
+ */
+inline std::string getCertCreatePv(const std::string &cert_pv_prefix) {
+    std::string pv = cert_pv_prefix;
+    pv += ":CREATE";
+    return pv;
+}
+
+/**
+ * @brief get the Certificate Create PV name
+*
+ * This is suitable for networks where there are multiple certificate authorities.  Clients will
+ * need to specify the issuer they are interested in
+ *
+ * e.g., CERT:CREATE:0192faeb
+ *
+ * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
+ * @param issuer_id the issuer ID that this PVACMS is serving
+ * @return the generic Certificate Create PV name
+ */
+inline std::string getCertCreatePv(const std::string &cert_pv_prefix, const std::string& issuer_id) {
+    std::string pv = getCertCreatePv(cert_pv_prefix);
+    pv += ":";
+    pv += issuer_id;
+    return pv;
+}
+
+/**
+ * @brief Returns the certificate URI.
+ *
+ * This function takes a prefix and a certificate ID as input parameters and returns the certificate URI.
+ * The certificate URI is constructed by concatenating the prefix and the certificate ID using a colon `:` as a separator.
+ * The serial number is left padded with zero's to make it 19 characters long
+ *
+ * e.g., CERT:STATUS:0192faeb:0095472510025972592
+ *
+ * @param prefix The prefix string for the certificate URI.
+ * @param cert_id The certificate ID string.
+ * @return The certificate URI string.
+ */
+inline std::string getCertStatusURI(const std::string &prefix, const std::string &cert_id) {
+    const std::string pv_name(SB() << prefix << ":" << cert_id);
+    return pv_name;
+}
+
+/**
+ * @brief Make the config URI for a certificate
+ *
+ * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
+ * @param issuer_id the issuer ID (first 8 hex digits of the hex SKID)
+ * @param skid Subject Key Identifier based on a public key used to re-generate Cert
+ * @return the config URI
+ */
+inline std::string getConfigURI(const std::string &cert_pv_prefix, const std::string& issuer_id, const std::string& skid) {
+    std::string pv = cert_pv_prefix;
+    pv += ":CONFIG:";
+    pv += issuer_id;
+    pv += ":";
+    pv += skid;
+    return pv;
+}
+
+/**
+ * @brief Generates a unique certificate ID based on the issuer ID and serial number.
+ *
+ * This function takes the issuer ID and serial number as input and combines them
+ * into a unique certificate ID. The certificate ID is generated by concatenating
+ * the issuer ID and serial number with a ":" separator.
+ *
+ * @param issuer_id The issuer ID of the certificate.
+ * @param serial The serial number of the certificate.
+ * @return The unique certificate ID.
+ *
+ * @see SB
+ */
+inline std::string getCertId(const std::string &issuer_id, const uint64_t &serial) {
+    // constexpr int serial_bits = 64;
+    // constexpr int serial_len = static_cast<int>(std::log10(std::pow(2, serial_bits))) + 1;
+    std::ostringstream oss;
+    oss << issuer_id
+        << ":"
+        << std::setw(20)
+        << std::setfill('0')
+        << serial;
+    return oss.str();
+}
+
+/**
+ * @brief Generates the Certificate URI to write into the certificate given the configuration to determine the prefix, the issuer and the serial number
+ *
+ * @param cert_pv_prefix the prefix for PVACMS PVs.  Default `CERT`
+ * @param issuer_id the issuer id
+ * @param serial the certificate's serial number
+ * @return the certificate URI to write into the certificate
+ */
+inline std::string getCertStatusURI(const std::string &cert_pv_prefix, const std::string &issuer_id, const uint64_t &serial) {
+    auto cert_uri = getCertStatusPvBase(cert_pv_prefix);
+    cert_uri += ":";
+    cert_uri += getCertId(issuer_id, serial);
+    return cert_uri;
+}
+
 ///////////// OCSP RESPONSE ERRORS
 class OCSPParseException final : public std::runtime_error {
    public:
@@ -62,10 +276,6 @@ class CertStatusSubscriptionException final : public CertStatusException {
    public:
     explicit CertStatusSubscriptionException(const std::string& message) : CertStatusException(message) {}
 };
-
-// Certificate management
-#define GET_MONITOR_CERT_STATUS_ROOT "CERT:STATUS"
-#define GET_MONITOR_CERT_STATUS_PV "CERT:STATUS:????????:*"
 
 // All certificate statuses
 #define CERT_STATUS_LIST   \
@@ -113,7 +323,7 @@ struct OCSPCertStatus;
  */
 struct CertStatus {
     // enum value of the status
-    uint32_t i;
+    uint32_t i{0};
     // string representation of the status
     std::string s{};
     // Default constructor
@@ -167,13 +377,13 @@ struct CertStatus {
     static std::string getSkId(const ossl_ptr<X509>& cert) { return getSkId(cert.get()); }
 
     /**
-     * @brief  Get the issuer ID which is SKID (subject key identifier) of the root certificate authority in the given chain
+     * @brief  Get the issuer ID which is SKID (subject key identifier) of the issuer certificate authority in the given chain
      *
-     * First determine the root certificate authority certificate then get the SKID
+     * First determine the issuer certificate authority certificate then get the SKID
      *
      * @return first 8 hex digits of the hex SKID (Subject Key Identifier)
      */
-    static std::string getIssuerId(const ossl_shared_ptr<STACK_OF(X509)>& chain) { return getSkId(getRootCa(chain)); }
+    static std::string getIssuerId(const ossl_shared_ptr<STACK_OF(X509)>& chain) { return getSkId(getIssuerCa(chain)); }
 
     /**
      * @brief Get root certificate authority from a certificate authority chain
@@ -195,6 +405,31 @@ struct CertStatus {
     }
 
     /**
+     * @brief Get issuer certificate authority from a certificate authority chain
+     * @param chain the certificate authority certificate chain
+     * @return the issuer certificate authority which is the second one or the first if only one
+     */
+    static X509* getIssuerCa(const ossl_shared_ptr<STACK_OF(X509)>& chain) {
+        if (!chain) {
+            throw std::runtime_error("Invalid certificate chain");
+        }
+
+        const auto N = sk_X509_num(chain.get());
+
+        if (N <= 0) {
+            throw std::runtime_error("Invalid certificate chain");
+        }
+
+        const auto issuer_ca = sk_X509_value(chain.get(), N==1 ? 0 : 1);
+
+        if (issuer_ca == nullptr) {
+            throw std::runtime_error("Failed to retrieve issuer certificate");
+        }
+
+        return issuer_ca;
+    }
+
+    /**
      * @brief Get the first 8 hex digits of the hex SKID (subject key identifier)
      *
      * Note that the given cert must contain the SKID extension in the first place
@@ -209,7 +444,7 @@ struct CertStatus {
             throw std::runtime_error("Failed to get Subject Key Identifier.");
         }
 
-        // Convert first 8 chars to hex
+        // Convert the first 8 chars to hex
         const auto buf = skid->data;
         std::stringstream ss;
         for (int i = 0; i < skid->length && ss.tellp() < 8; i++) {
@@ -276,7 +511,7 @@ struct CertStatus {
         // Convert into a hexadecimal string.
         std::ostringstream oss;
         oss << std::hex << std::setfill('0');
-        for (unsigned char i : hash) {
+        for (const unsigned char i : hash) {
             oss << std::setw(2) << static_cast<unsigned int>(i);
         }
 
@@ -285,7 +520,7 @@ struct CertStatus {
 
     /**
      * @brief Get the common name of the given certificate
-     * return the common name or an empty string if cert is null or
+     * return the common name or an empty string if cert is null, or
      * there are any problems retrieving the common name
      *
      * @param cert to retrieve the subject CN field
@@ -323,35 +558,13 @@ struct CertStatus {
             return "";
         }
 
-        // Construct a std::string from the UTF-8 data
+        // Construct a string from the UTF-8 data
         std::string cn(reinterpret_cast<char*>(utf8), length);
         OPENSSL_free(utf8);
 
         return cn;
     }
 
-    /**
-     * @brief Make the status URI for a certificate
-     *
-     * @param issuer_id the issuer ID (first 8 hex digits of the hex SKID)
-     * @param serial the serial number
-     * @return the status URI
-     */
-    static std::string makeStatusURI(const std::string& issuer_id, const uint64_t& serial) {
-        return SB() << GET_MONITOR_CERT_STATUS_ROOT << ":" << issuer_id << ":" << std::setw(16) << std::setfill('0') << serial;
-    }
-
-    /**
-     * @brief Make the config URI for a certificate
-     *
-     * @param config_uri_base The base part of the config URI.  Add colon, issuer, colon and serial number to complete
-     * @param issuer_id the issuer ID (first 8 hex digits of the hex SKID)
-     * @param skid Subject Keuy Identifier based on public key used to re-generate Cert
-     * @return the config URI
-     */
-    static std::string makeConfigURI(const std::string& config_uri_base, const std::string& issuer_id, const std::string& skid) {
-        return SB() << config_uri_base << ":" << issuer_id << ":" << skid;
-    }
 
    protected:
     /**
@@ -442,13 +655,13 @@ struct StatusDate {
     StatusDate() = default;
 
     // Constructor from time_t
-    StatusDate(const std::time_t& time) : t(time), s(toString(time)) {}
+    StatusDate(const std::time_t& time) : t(time), s(toString(time)) {} // NOLINT(*-explicit-constructor)
     // Constructor from ASN1_TIME*
-    StatusDate(const ASN1_TIME* time) : t(asn1TimeToTimeT(time)), s(toString(t)) {}
+    StatusDate(const ASN1_TIME* time) : t(asn1TimeToTimeT(time)), s(toString(t)) {}// NOLINT(*-explicit-constructor)
     // Constructor from ossl_ptr<ASN1_TIME>
-    StatusDate(const ossl_ptr<ASN1_TIME>& time) : t(asn1TimeToTimeT(time.get())), s(toString(t)) {}
+    StatusDate(const ossl_ptr<ASN1_TIME>& time) : t(asn1TimeToTimeT(time.get())), s(toString(t)) {}// NOLINT(*-explicit-constructor)
     // Constructor from time string
-    StatusDate(const std::string& time_string) : t(toTimeT(time_string)), s(StatusDate(t).s) {}
+    StatusDate(const std::string& time_string) : t(toTimeT(time_string)), s(StatusDate(t).s) {}// NOLINT(*-explicit-constructor)
 
     // Define the comparison operator
     bool operator==(const StatusDate rhs) const { return this->t == rhs.t; }
@@ -472,7 +685,7 @@ struct StatusDate {
 
     /**
      * @brief Create an ASN1_TIME object from a StatusDate object
-     * @return and ASN1_TIME object corresponding the given StatusDate object
+     * @return and ASN1_TIME object corresponding to the given StatusDate object
      */
     static ossl_ptr<ASN1_TIME> toAsn1_Time(const StatusDate status_date) { return status_date.toAsn1_Time(); }
 
@@ -487,7 +700,7 @@ struct StatusDate {
 
         if (ASN1_TIME_to_tm(time, &t) != 1) throw std::runtime_error("Failed to convert ASN1_TIME to tm structure");
 
-        return tmToTimeTUTC(t);
+        return tmToUnixTime(t);
     }
 
    private:
@@ -508,7 +721,7 @@ struct StatusDate {
      * @brief Convert the given string to a time_t value.
      *
      * The string is assumed to represent a time in the UTC timezone.  The
-     * format of the string is defined by `CERT_TIME_FORMAT`.  The string is parsed
+     * format of the string is defined by `CERT_TIME_FORMAT`.  The string is parsed,
      * and the time_t extracted and returned.
      *
      * Any errors in format are signalled by raising OCSPParseExceptions as this function
@@ -530,7 +743,7 @@ struct StatusDate {
         }
 
         // Convert std::tm to time_t
-        return tmToTimeTUTC(tm);
+        return tmToUnixTime(tm);
     }
 
     /**
@@ -538,12 +751,12 @@ struct StatusDate {
      * @param tm std::tm structure to convert
      * @return a time_t (unix time) version
      */
-    static time_t tmToTimeTUTC(const std::tm& tm) {
+    static time_t tmToUnixTime(const std::tm& tm) {
         // For accurate time calculation the start day in a year of each month
         static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
         const int year = 1900 + tm.tm_year;
 
-        // Calculate days up to start of the current year
+        // Calculate days up to the start of the current year
         time_t days = (year - 1970) * 365 + (year - 1969) / 4  // Leap years
                       - (year - 1901) / 100                    // Excluding non-leap centuries
                       + (year - 1601) / 400;                   // Including leap centuries
@@ -554,7 +767,7 @@ struct StatusDate {
             days += 1;  // Add one day for leap years after February
         }
 
-        // Adjust with the current day in the month (tm_mday starts from 1)
+        // Adjust with the current day in the month (`tm_mday` starts from 1)
         days += tm.tm_mday - 1;
 
         // Incorporate hours, minutes, and seconds
@@ -563,7 +776,7 @@ struct StatusDate {
 };
 
 /**
- * @brief To store OCSP status value - parsed out of an OCSP response
+ * @brief To store OCSP status value - parsed out of an OCSP response.
  *
  * This struct is used to store the parsed OCSP status value.  It is used
  * to store the serial number, the OCSP status, the status date, the status
@@ -588,7 +801,7 @@ struct ParsedOCSPStatus {
      * @param serial the serial number of the certificate
      * @param ocsp_status the OCSP status of the certificate
      * @param status_date the status date of the certificate
-     * @param status_valid_until_date the status valid-until date of the certificate
+     * @param status_valid_until_date the status `valid-until` date of the certificate
      * @param revocation_date the revocation date of the certificate if it is revoked
      */
     ParsedOCSPStatus(const uint64_t& serial, const OCSPCertStatus& ocsp_status, const StatusDate& status_date, const StatusDate& status_valid_until_date,
@@ -613,7 +826,7 @@ struct PVACertificateStatus;
  * @brief Structure representing OCSP status.
  *
  * It contains the OCSP response bytes as well as the date the status was set and how
- * long the status is valid for.  If the status is revoked then there is also a
+ * long the status is valid for.  If the status is revoked, then there is also a
  * revocation date.  The ocsp_status field contains the OCSP status in numerical and text form.
  */
 struct OCSPStatus {
@@ -644,7 +857,7 @@ struct OCSPStatus {
         init(trusted_store_ptr);
     }
 
-    // To  set an OCSP UNKNOWN status to indicate errors
+    // To set an OCSP UNKNOWN status to indicate errors
     OCSPStatus() = default;
     virtual ~OCSPStatus() = default;
 
@@ -668,7 +881,7 @@ struct OCSPStatus {
      * @brief Verify that the status validity dates are currently valid and the status is known
      * @return true if the status is still valid
      */
-    bool isValid() const noexcept {
+    bool isValid() const noexcept { // NOLINT(*-convert-member-functions-to-static)
         const auto now(std::time(nullptr));
         return status_valid_until_date.t > now;
     }
@@ -706,11 +919,10 @@ bool operator!=(certstatus_t& lhs, OCSPStatus& rhs);
  * @brief Structure representing PVA-OCSP certificate status.  This is a superclass of OCSPStatus
  *
  * It contains the OCSP response bytes as well as the date the status was set and how
- * long the status is valid for.  If the status is revoked then there is also a
+ * long the status is valid for.  If the status is revoked, then there is also a
  * revocation date.  The status field contains the PVA certificate status in numerical and text form.
  * The ocsp_status field contains the OCSP status in numerical and text form.
  */
-struct UnCertifiedCertificateStatus;
 struct PVACertificateStatus final : OCSPStatus {
     PVACertStatus status{UNKNOWN};
     bool operator==(const PVACertificateStatus& rhs) const override {
@@ -752,7 +964,7 @@ struct PVACertificateStatus final : OCSPStatus {
         }
     }
 
-    // To  set an UNKNOWN status to indicate errors
+    // To set an UNKNOWN status to indicate errors
     PVACertificateStatus() : OCSPStatus() {}
     explicit operator CertificateStatus() const noexcept override;
 
@@ -773,7 +985,7 @@ struct PVACertificateStatus final : OCSPStatus {
 
     /**
      * @brief Check if the PVACertificateStatus is self-consistent,
-     * i.e. the OCSP status values are consistent with the PVA status values
+     * i.e., the OCSP status values are consistent with the PVA status values
      * @return true if the PVACertificateStatus is self-consistent, false otherwise
      */
     bool selfConsistent() const {
@@ -783,7 +995,7 @@ struct PVACertificateStatus final : OCSPStatus {
 
     /**
      * @brief Check if the PVACertificateStatus is date-consistent,
-     * i.e. the status date, status valid-until date, and revocation date are all the same
+     * i.e., the status date, status valid-until date, and revocation date are all the same
      * @param status_date_value Status date
      * @param status_valid_until_date_value Status valid-until date
      * @param revocation_date_value Revocation date
@@ -858,7 +1070,7 @@ struct CertificateStatus {
     /**
      * @brief Check if the certificate is Expired of Revoked
      *
-     * @return true if certificate is Expired or Revoked
+     * @return true if the certificate is Expired or Revoked
      */
     bool isRevokedOrExpired() const noexcept { return status == REVOKED || status == EXPIRED; }
 
@@ -866,7 +1078,7 @@ struct CertificateStatus {
      * @brief Verify that the status is currently valid
      * @return true if the status is still valid
      */
-    bool isValid() const noexcept {
+    bool isValid() const noexcept { // NOLINT(*-convert-member-functions-to-static)
         const auto now(std::time(nullptr));
         return status_valid_until_date.t > now;
     }
@@ -958,7 +1170,7 @@ struct CertificateStatus {
  *
  * This is the certificate status struct to use when you don't need to carry round the heavy PKCS#7 `ocsp_bytes`
  * It is certified because it can only be created from a certified `CertificateStatus` struct.
- * Create by casting a `CertificateStatus` or by passing one to the single argument constructor.
+ * Create by casting a `CertificateStatus`, or passing one in to the single argument constructor.
  *
  * The `CertifiedCertificateStatus` struct encapsulates various attributes related to the
  * status of a certified certificate, including PVA certificate status, OCSP status, status date,

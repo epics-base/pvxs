@@ -777,20 +777,46 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
             for (int i = 0; i < serial_asn1->length; ++i) serial = serial << 8 | serial_asn1->data[i];
             temp.serial = std::to_string(serial);
 
-            // try to use root certificate authority name to qualify authority
+            // try to use certificate chain authority names to qualify
             if (const auto chain = SSL_get0_verified_chain(ctx)) {
-                auto N = sk_X509_num(chain);
-                X509 *root;
-                X509_NAME *rootName;
-                // last cert should be root certificate authority
-                if (N && !!((root = sk_X509_value(chain, N - 1))) && !!((rootName = X509_get_subject_name(root))) &&
-                    X509_NAME_get_text_by_NID(rootName, NID_commonName, name, sizeof(name) - 1)) {
-                    if (X509_check_ca(root) && (X509_get_extension_flags(root) & EXFLAG_SS)) {
-                        temp.authority = name;
-                        temp.issuer_id = certs::CertStatus::getSkId(root);
+                const auto N = sk_X509_num(chain);
 
-                    } else {
-                        log_warn_printf(io, "Last cert in peer chain is not root Root certificate authority certificate? %s\n", std::string(SB() << ossl::ShowX509{root}).c_str());
+                if (N > 0) {
+                    std::string authority;
+                    char common_name[256];
+
+                    // Start from index 1 to skip the entity certificate (first in chain)
+                    // But if there's only one certificate, we don't skip it
+                    const int start_index = (N > 1) ? 1 : 0;
+
+                    // Process certificates in the chain, skipping the entity cert unless it's the only one
+                    for (int i = start_index; i < N; i++) {
+                        const auto chain_cert = sk_X509_value(chain, i);
+                        const X509_NAME *certName = X509_get_subject_name(chain_cert);
+
+                        if (chain_cert && certName &&
+                            X509_NAME_get_text_by_NID(certName, NID_commonName, common_name, sizeof(common_name) - 1)) {
+
+                            // Add this name to the authority string
+                            if (!authority.empty()) {
+                                authority += '\n';
+                            }
+                            authority += common_name;
+
+                            // If this is the issuer cert (first in the chain after entity), also set the issuer_id
+                            if (i == start_index) {
+                                temp.issuer_id = certs::CertStatus::getSkId(chain_cert);
+                            }
+                            if (i == N - 1 && !(X509_check_ca(chain_cert) || (X509_get_extension_flags(chain_cert) & EXFLAG_SS))) {
+                                log_warn_printf(io, "Last cert in peer chain is not root Root certificate authority certificate? %s\n",
+                                                std::string(SB() << ossl::ShowX509{chain_cert}).c_str());
+                            }
+                        }
+                    }
+
+                    // Only set the authority if we found at least one name
+                    if (!authority.empty()) {
+                        temp.authority = authority;
                     }
                 }
             }

@@ -88,6 +88,8 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
  * containing the ccr PVStructure which contains the certificate, and its
  * validity as well as any verifier specific required fields.
  * @param timeout the timeout for the request
+ * @param cert_pv_prefix the CMS pv prefix
+ * @param issuer_id the issuer ID of the CMS
  * @return the certificate in PEM format with the certificate authority chain ordered from leaf to root
  * @throws std::runtime_error when exceptions arise
  *
@@ -95,9 +97,9 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
  * CCR object is valid and contains the required information
  * before calling this function.
  */
-std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, const double timeout) const {
+std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, const std::string &cert_pv_prefix, const std::string &issuer_id, const double timeout) const {
     // Forward the ccr to the certificate management service
-    return ccr_manager_.createCertificate(ccr, timeout);
+    return ccr_manager_.createCertificate(ccr, cert_pv_prefix, issuer_id, timeout);
 }
 
 /**
@@ -108,8 +110,8 @@ std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCr
  * maintain a PV that will publish the current status and how much time there is
  * remaining until the current certificate expires.
  *
- * Clients will automatically reconfigure connections when certs expire so if a new
- * certificate is available then it will be picked up automatically.
+ * Clients will automatically reconfigure connections when certs expire, so if a new
+ * certificate is available, then it will be picked up automatically.
  *
  * @param authn_config The Authenticator's configuration
  * @param for_client Whether the daemon is for a client or server
@@ -156,7 +158,7 @@ void Auth::runAuthNDaemon(const ConfigAuthN &authn_config, bool for_client, Cert
     config_pv.onLastDisconnect([](server::SharedPV &pv) { pv.close(); });
 
     // Run the CONFIG server
-    const std::string pv_name = CertStatus::makeConfigURI(authn_config.config_uri_base, issuer_id, skid);
+    const std::string pv_name = getConfigURI(authn_config.cert_pv_prefix, issuer_id, skid);
     config_server_.addPV(pv_name, config_pv);
     std::cout << "Cert Config info available on: " << pv_name << std::endl;
     config_server_.run();

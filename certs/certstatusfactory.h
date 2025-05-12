@@ -113,8 +113,7 @@ class CertStatusFactory {
      *
      * @return the Certificate Status containing the signed OCSP response and other OCSP response data.
      */
-    PVACertificateStatus createPVACertificateStatus(uint64_t serial, certstatus_t status, StatusDate status_date = StatusDate(std::time(nullptr)),
-                                                    StatusDate predicated_revocation_time = StatusDate(std::time(nullptr))) const;
+    PVACertificateStatus createPVACertificateStatus(uint64_t serial, certstatus_t status, const StatusDate &status_date = StatusDate(std::time(nullptr)), const StatusDate &predicated_revocation_time = StatusDate(std::time(nullptr))) const;
 
     /**
      * @brief Convert ASN1_INTEGER to a 64-bit unsigned integer

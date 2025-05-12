@@ -42,7 +42,7 @@ DEFINE_LOGGER(certs, "pvxs.certs.cms");
  * Creates a new X.509 certificate from scratch.  It uses the provided public
  * key from the key pair and sets all the appropriate fields based on usage.
  * It then signs the certificate with the issuer's private key if it is
- * specified otherwise it uses the provided private key (self signed).
+ * specified otherwise, it uses the provided private key (self-signed).
  *
  * @return a unique pointer to an X.509 certificate
  */
@@ -50,7 +50,7 @@ ossl_ptr<X509> CertFactory::create() {
     // 1. Create an empty certificate
     ossl_ptr<X509> certificate(X509_new());
 
-    // 2. Determine issuer: If no issuer then self sign, or specify cert & key
+    // 2. Determine issuer: If no issuer, then self-sign, or specify cert & key
     if (!issuer_certificate_ptr_) {
         // ReSharper disable once CppDFALocalValueEscapesFunction
         issuer_certificate_ptr_ = certificate.get();
@@ -60,7 +60,7 @@ ossl_ptr<X509> CertFactory::create() {
         throw std::runtime_error("Issuer' private key not provided for signing the certificate");
     }
 
-    // 3. Set the certificate version to 2 (X.509 v3 - 0 based)
+    // 3. Set the certificate version to 2 (X.509 v3 - 0-based)
     constexpr auto cert_version = 2;
     if (X509_set_version(certificate.get(), cert_version) != 1) {
         throw std::runtime_error("Failed to set certificate version.");
@@ -111,11 +111,11 @@ ossl_ptr<X509> CertFactory::create() {
         }
 
         if (add_status_subscription) {
-            addCustomExtensionByNid(certificate, ossl::NID_SPvaCertStatusURI, CertStatus::makeStatusURI(issuer_id, serial_));
+            addCustomExtensionByNid(certificate, ossl::NID_SPvaCertStatusURI, getCertStatusURI(cert_pv_prefix_, issuer_id, serial_));
         }
 
         if (!cert_config_uri_base_.empty()) {
-            addCustomExtensionByNid(certificate, ossl::NID_SPvaCertConfigURI, CertStatus::makeConfigURI(cert_config_uri_base_, issuer_id, skid));
+            addCustomExtensionByNid(certificate, ossl::NID_SPvaCertConfigURI, getConfigURI(cert_pv_prefix_, issuer_id, skid));
         }
     }
 
@@ -252,7 +252,7 @@ void CertFactory::setSerialNumber(const ossl_ptr<X509> &certificate) const {
     if (X509_set_serialNumber(certificate.get(), serial_number.get()) != 1) {
         throw std::runtime_error("Failed to set certificate serial number.");
     }
-    log_debug_printf(certs, "Serial Number: %llu\n", (unsigned long long)serial_);
+    log_debug_printf(certs, "Serial Number: %llu\n", static_cast<unsigned long long>(serial_));
 }
 
 /**

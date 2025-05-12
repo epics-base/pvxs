@@ -603,6 +603,8 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     if (pickone({"EPICS_PVAS_TLS_STOP_IF_NO_CERT"})) {
         self.tls_stop_if_no_cert = parseTo<bool>(pickone.val);
     }
+
+    if (pickone({"EPICS_PVAS_CERT_PV_PREFIX", "EPICS_PVA_CERT_PV_PREFIX"})) cert_pv_prefix = pickone.val;
 #endif  // PVXS_ENABLE_OPENSSL
     is_initialized = true;
 }
@@ -698,6 +700,9 @@ void Config::updateDefs(defs_t& defs) const {
 
     // EPICS_PVAS_TLS_STOP_IF_NO_CERT
     defs["EPICS_PVAS_TLS_STOP_IF_NO_CERT"] = tls_stop_if_no_cert ? "YES" : "NO";
+
+    // EPICS_PVAS_CERT_PV_PREFIX
+    if (!cert_pv_prefix.empty()) defs["EPICS_PVAS_CERT_PV_PREFIX"] = cert_pv_prefix;
 #endif  // PVXS_ENABLE_OPENSSL
 }
 
@@ -850,6 +855,8 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
             log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
+
+    if (pickone({"EPICS_PVA_CERT_PV_PREFIX"})) cert_pv_prefix = pickone.val;
 #endif  // PVXS_ENABLE_OPENSSL
     is_initialized = true;
 }
@@ -899,6 +906,9 @@ void Config::updateDefs(defs_t& defs) const {
 
     // EPICS_PVA_TLS_PORT
     defs["EPICS_PVA_TLS_PORT"] = std::to_string(tls_port);
+
+    // EPICS_PVA_CERT_PV_PREFIX
+    if (!cert_pv_prefix.empty()) defs["EPICS_PVA_CERT_PV_PREFIX"] = cert_pv_prefix;
 
 #endif  // PVXS_ENABLE_OPENSSL
 }

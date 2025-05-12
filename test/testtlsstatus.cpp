@@ -41,10 +41,13 @@ struct Tester {
     DEFINE_MEMBERS(cert_auth)
     DEFINE_MEMBERS(server1)
     DEFINE_MEMBERS(client1)
+
+    const std::string issuer_id{CertStatus::getSkId(cert_auth_cert.cert)};
+
     ossl_ptr<X509_STORE> trusted_store{cert_auth_cert.createTrustStore()};
 
     server::SharedWildcardPV status_pv{server::SharedWildcardPV::buildMailbox()};
-    server::Server pvacms{server::Config::forCms().build().addPV(GET_MONITOR_CERT_STATUS_PV, status_pv)};
+    server::Server pvacms{server::Config::forCms().build().addPV(getCertStatusPv("CERT", issuer_id), status_pv)};
     client::Context client{pvacms.clientConfig().build()};
 
     Tester()
@@ -266,7 +269,7 @@ struct Tester {
 
             status_pv.onFirstConnect([this](server::SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
                 auto it = parameters.begin();
-                const std::string &serial_string = *++it;
+                const std::string &serial_string = *it;
                 const serial_number_t serial = std::stoull(serial_string);
 
                 if (pv.isOpen(pv_name)) {
@@ -298,9 +301,9 @@ struct Tester {
 
             testDiag("Set up: %s", "Mock PVACMS Server");
 
+            TEST_STATUS_REQUEST(cert_auth)
             TEST_STATUS_REQUEST(client1)
             TEST_STATUS_REQUEST(server1)
-            TEST_STATUS_REQUEST(client1)
 
             testDiag("Stop Mock PVACMS server");
             pvacms.stop();
@@ -316,7 +319,7 @@ MAIN(testtlsstatus) {
     // Initialize SSL
     ossl::sslInit();
 
-    testPlan(121);
+    testPlan(125);
     testSetup();
     logger_config_env();
     const auto tester = new Tester();

@@ -32,7 +32,7 @@ Four protocol operations are supported by PVXS.
 Get, Put, Monitor, and RPC are to the PVA protocol what GET, PUT, POST are to the HTTP protocol.
 
 What is Secure PVAccess?
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 Secure PVAccess (SPVA) is the new version of the PVA protocol which supports TLS for secure communication.
 

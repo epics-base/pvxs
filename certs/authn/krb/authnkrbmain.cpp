@@ -28,7 +28,7 @@ namespace certs {
  * @param show_version the show version flag to show version and exit
  * @param help the help flag to show this help message and exit
  * @param add_config_uri the add config uri flag to add a config uri to the generated certificate
- * @param usage the certificate usage client, server, or hybrid
+ * @param usage the certificate usage client, server, or ioc
  */
 void defineOptions(CLI::App &app, ConfigKrb &config, bool &verbose, bool &debug, bool &daemon_mode, bool &force, bool &show_version, bool &help, bool &add_config_uri,
                    std::string &usage) {
@@ -43,9 +43,10 @@ void defineOptions(CLI::App &app, ConfigKrb &config, bool &verbose, bool &debug,
 
     app.add_flag("-D,--daemon", daemon_mode, "Daemon mode");
     app.add_flag("--add-config-uri", add_config_uri, "Add a config uri to the generated certificate");
-    app.add_option("--config-uri-base", config.config_uri_base, "Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`");
+    app.add_option("--cert-pv-prefix", config.cert_pv_prefix, "Specifies the pv prefix to use to contact PVACMS.  Default `CERT`");
+    app.add_option("-i,--issuer", config.issuer_id, "The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening");
 
-    app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `hybrid`");
+    app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `ioc`");
 
     app.add_option("--krb-validator", config.krb_validator, "Specify kerberos validator name.  Default `pvacms`");
     app.add_option("--krb-realm", config.krb_realm, "Specify the kerberos realm.  If not specified we'll take it from the ticket");
@@ -61,7 +62,7 @@ void defineOptions(CLI::App &app, ConfigKrb &config, bool &verbose, bool &debug,
 void showHelp(const char *const program_name) {
     std::cout << "authnkrb - Secure PVAccess Kerberos Authenticator\n"
               << std::endl
-              << "Generates client, server, or hybrid certificates based on the kerberos Authenticator. \n"
+              << "Generates client, server, or ioc certificates based on the kerberos Authenticator. \n"
               << "Uses current kerberos ticket to create certificates with the same validity as the ticket.\n"
               << std::endl
               << "usage:\n"
@@ -70,14 +71,15 @@ void showHelp(const char *const program_name) {
               << "  " << program_name << " (-V | --version)                  Print version and exit\n"
               << std::endl
               << "options:\n"
-              << "  (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`\n"
+              << "  (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|ioc.  Default `client`\n"
               << "        --krb-validator <service-name>       Specify kerberos validator name.  Default `pvacms`\n"
               << "        --krb-realm <krb-realm>              Specify the kerberos realm.  If not specified we'll take it from the ticket\n"
               << "  (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`\n"
+              << "        --cert-pv-prefix <cert_pv_prefix>    Specifies the pv prefix to use to contact PVACMS.  Default `CERT`\n"
               << "        --add-config-uri                     Add a config uri to the generated certificate\n"
-              << "        --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`\n"
               << "        --force                              Force overwrite if certificate exists\n"
               << "  (-s | --no-status)                         Request that status checking not be required for this certificate\n"
+              << "  (-i | --issuer) <issuer_id>                The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening\n"
               << "  (-v | --verbose)                           Verbose mode\n"
               << "  (-d | --debug)                             Debug mode\n"
               << std::endl;
@@ -91,7 +93,7 @@ void showHelp(const char *const program_name) {
  * @param config the configuration to override with command line parameters
  * @param verbose the verbose flag to set the logger level
  * @param debug the debug flag to set the logger level
- * @param cert_usage the certificate usage client, server, or hybrid
+ * @param cert_usage the certificate usage client, server, or ioc
  * @return the exit status 0 if successful, non-zero if an error occurs and we should exit
  */
 int readParameters(const int argc, char *argv[], ConfigKrb &config, bool &verbose, bool &debug, uint16_t &cert_usage, bool &daemon_mode, bool &force) {
@@ -135,14 +137,14 @@ int readParameters(const int argc, char *argv[], ConfigKrb &config, bool &verbos
             std::cerr << "You must set EPICS_PVA_TLS_KEYCHAIN environment variable to create client certificates" << std::endl;
             return 11;
         }
-    } else if (usage == "hybrid") {
+    } else if (usage == "ioc") {
         cert_usage = ssl::kForClientAndServer;
         if (config.tls_srv_keychain_file.empty()) {
-            std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create hybrid certificates" << std::endl;
+            std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create ioc certificates" << std::endl;
             return 12;
         }
     } else {
-        std::cerr << "Usage must be one of `client`, `server`, or `hybrid`: " << usage << std::endl;
+        std::cerr << "Usage must be one of `client`, `server`, or `ioc`: " << usage << std::endl;
         return 13;
     }
 

@@ -85,7 +85,7 @@ namespace pvxs {
 namespace certs {
 
 bool postUpdateToNextCertToExpire(const CertStatusFactory &cert_status_creator, server::SharedWildcardPV &status_pv, const sql_ptr &certs_db,
-                                  const std::string &issuer_id, const std::string &full_skid = {});
+                                  const std::string &cert_pv_prefix, const std::string &issuer_id, const std::string &full_skid = {});
 
 epicsMutex status_pv_lock;
 epicsMutex status_update_lock;
@@ -144,10 +144,10 @@ Value getCreatePrototype() {
 }
 
 /**
- * @brief  The value for a GET root certificate operation
- * @return  The value for a GET root certificate operation
+ * @brief  The value for a GET issuer certificate operation
+ * @return  The value for a GET issuer certificate operation
  */
-Value getRootValue(const std::string &issuer_id, const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_cert_chain) {
+Value getIssuerValue(const std::string &issuer_id, const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_cert_chain) {
     using namespace members;
     auto value = TypeDef(TypeCode::Struct,
                          {
@@ -193,6 +193,60 @@ Value getRootValue(const std::string &issuer_id, const ossl_ptr<X509> &cert_auth
     value["org"] = extractSubjectPart("O");
     value["org_unit"] = extractSubjectPart("OU");
     value["cert"] = CertFactory::certAndCasToPemString(cert_auth_cert, cert_auth_cert_chain.get());
+
+    return value;
+}
+
+/**
+ * @brief  The value for a GET root certificate operation
+ * @return  The value for a GET root certificate operation
+ */
+Value getRootValue(const std::string &issuer_id, const ossl_ptr<X509> &cert_auth_cert) {
+    using namespace members;
+    auto value = TypeDef(TypeCode::Struct,
+                         {
+                             Member(TypeCode::UInt64, "serial"),
+                             Member(TypeCode::String, "issuer"),
+                             Member(TypeCode::String, "name"),
+                             Member(TypeCode::String, "org"),
+                             Member(TypeCode::String, "org_unit"),
+                             Member(TypeCode::String, "cert"),
+                             Struct("alarm", "alarm_t",
+                                    {
+                                        Int32("severity"),
+                                        Int32("status"),
+                                        String("message"),
+                                    }),
+                         })
+                     .create();
+    const auto subject_name(X509_get_subject_name(cert_auth_cert.get()));
+    const auto subject_string(X509_NAME_oneline(subject_name, nullptr, 0));
+    const ossl_ptr<char> owned_subject(subject_string, false);
+    if (!owned_subject) {
+        throw std::runtime_error("Unable to get the subject of the certificate authority certificate");
+    }
+    std::string subject(owned_subject.get());
+
+    // Subject part extractor
+    auto extractSubjectPart = [&subject](const std::string &key) -> std::string {
+        std::size_t start = subject.find("/" + key + "=");
+        if (start == std::string::npos) {
+            throw std::runtime_error("Key not found: " + key);
+        }
+        start += key.size() + 2;                     // Skip over "/key="
+        std::size_t end = subject.find("/", start);  // Find the end of the current value
+        if (end == std::string::npos) {
+            end = subject.size();
+        }
+        return subject.substr(start, end - start);
+    };
+
+    value["serial"] = CertStatusFactory::getSerialNumber(cert_auth_cert);
+    value["issuer"] = issuer_id;
+    value["name"] = extractSubjectPart("CN");
+    value["org"] = extractSubjectPart("O");
+    value["org_unit"] = extractSubjectPart("OU");
+    value["cert"] = CertFactory::certAndCasToPemString(cert_auth_cert, nullptr);
 
     return value;
 }
@@ -719,7 +773,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &certs_db, server::SharedWil
         // Construct and return the reply
         auto serial = CertStatusFactory::getSerialNumber(cert_auth_cert);
         auto cert_id = getCertId(issuer_id, serial);
-        auto status_pv = getCertUri(GET_MONITOR_CERT_STATUS_ROOT, cert_id);
+        auto status_pv = getCertStatusURI(config.cert_pv_prefix, cert_id);
         auto reply(getCreatePrototype());
         auto now(time(nullptr));
         reply["status.value.index"] = VALID;
@@ -737,7 +791,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &certs_db, server::SharedWil
     // First make sure that we've updated any expired cert first
     auto const full_skid = CertStatus::getFullSkId(pub_key);
     auto cert_status_factory(CertStatusFactory(cert_auth_cert, cert_auth_pkey, cert_auth_cert_chain, config.cert_status_validity_mins));
-    postUpdateToNextCertToExpire(cert_status_factory, shared_status_pv, certs_db, issuer_id, full_skid);
+    postUpdateToNextCertToExpire(cert_status_factory, shared_status_pv, certs_db, config.cert_pv_prefix, issuer_id, full_skid);
 
     auto type = getStructureValue<const std::string>(ccr, "type");
     auto name = getStructureValue<const std::string>(ccr, "name");
@@ -746,14 +800,14 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &certs_db, server::SharedWil
 
     try {
         certstatus_t state = UNKNOWN;
-        // Call the authenticator specific verifier if not the default type
+        // Call the authenticator-specific verifier if not the default type
         if (type != PVXS_DEFAULT_AUTH_TYPE) {
             const auto authenticator = Auth::getAuth(type);
             if (!authenticator->verify(ccr)) throw std::runtime_error("CCR claims are invalid");
             state = VALID;
         } else {
             state = PENDING_APPROVAL;
-            if ((IS_USED_FOR_(usage, ssl::kForClientAndServer) && !config.cert_hybrid_require_approval) ||
+            if ((IS_USED_FOR_(usage, ssl::kForClientAndServer) && !config.cert_ioc_require_approval) ||
                 (IS_USED_FOR_(usage, ssl::kForClient) && !config.cert_client_require_approval) ||
                 (IS_USED_FOR_(usage, ssl::kForServer) && !config.cert_server_require_approval)) {
                 state = VALID;
@@ -789,7 +843,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &certs_db, server::SharedWil
         auto config_uri_base = ccr["config_uri_base"].as<std::string>();
 
         // Create a certificate factory
-        auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, usage,
+        auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, usage, config.cert_pv_prefix,
                                              config.cert_status_subscription, no_status, cert_auth_cert.get(), cert_auth_pkey.get(),
                                              cert_auth_cert_chain.get(), state);
         certificate_factory.allow_duplicates = type != PVXS_DEFAULT_AUTH_TYPE;
@@ -799,7 +853,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &certs_db, server::SharedWil
 
         // Construct and return the reply
         auto cert_id = getCertId(issuer_id, serial);
-        auto status_pv = getCertUri(GET_MONITOR_CERT_STATUS_ROOT, cert_id);
+        auto status_pv = getCertStatusURI(config.cert_pv_prefix, issuer_id, serial);
         auto reply(getCreatePrototype());
         auto now(time(nullptr));
         reply["status.value.index"] = state;
@@ -901,14 +955,8 @@ void onRevoke(const ConfigCms &config, const sql_ptr &certs_db, const std::strin
     const auto cert_status_creator(CertStatusFactory(cert_auth_cert, cert_auth_pkey, cert_auth_chain, config.cert_status_validity_mins));
     try {
         Guard G(status_update_lock);
-        std::string issuer_id;
-        serial_number_t serial;
-        std::tie(issuer_id, serial) = getParameters(parameters);
-        log_debug_printf(pvacms, "REVOKE: Certificate %s:%llu\n", issuer_id.c_str(), (unsigned long long)serial);
-
-        if (our_issuer_id != issuer_id) {
-            throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
-        }
+        serial_number_t serial = getParameters(parameters);
+        log_debug_printf(pvacms, "REVOKE: Certificate %s:%llu\n", our_issuer_id.c_str(), (unsigned long long)serial);
 
         // set status value
         updateCertificateStatus(certs_db, serial, REVOKED, 0);
@@ -916,7 +964,7 @@ void onRevoke(const ConfigCms &config, const sql_ptr &certs_db, const std::strin
         const auto revocation_date = std::time(nullptr);
         const auto ocsp_status = cert_status_creator.createPVACertificateStatus(serial, REVOKED, revocation_date, revocation_date);
         postCertificateStatus(status_pv, pv_name, serial, ocsp_status);
-        log_info_printf(pvacms, "%s ==> REVOKED\n", getCertId(issuer_id, serial).c_str());
+        log_info_printf(pvacms, "%s ==> REVOKED\n", getCertId(our_issuer_id, serial).c_str());
         op->reply();
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error revoking certificate: %s\n", e.what());
@@ -948,13 +996,8 @@ void onApprove(const ConfigCms &config, const sql_ptr &certs_db, const std::stri
     try {
         Guard G(status_update_lock);
         std::string issuer_id;
-        serial_number_t serial;
-        std::tie(issuer_id, serial) = getParameters(parameters);
-        log_debug_printf(pvacms, "APPROVE: Certificate %s:%llu\n", issuer_id.c_str(), (unsigned long long)serial);
-
-        if (our_issuer_id != issuer_id) {
-            throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
-        }
+        serial_number_t serial = getParameters(parameters);
+        log_debug_printf(pvacms, "APPROVE: Certificate %s:%llu\n", our_issuer_id.c_str(), (unsigned long long)serial);
 
         // set status value
         const auto status_date(time(nullptr));
@@ -969,7 +1012,7 @@ void onApprove(const ConfigCms &config, const sql_ptr &certs_db, const std::stri
             case VALID:
             case EXPIRED:
             case PENDING:
-                log_info_printf(pvacms, "%s ==> %s\n", getCertId(issuer_id, serial).c_str(), CERT_STATE(new_state));
+                log_info_printf(pvacms, "%s ==> %s\n", getCertId(our_issuer_id, serial).c_str(), CERT_STATE(new_state));
                 break;
             default:
                 break;
@@ -1005,13 +1048,8 @@ void onDeny(const ConfigCms &config, const sql_ptr &certs_db, const std::string 
     try {
         Guard G(status_update_lock);
         std::string issuer_id;
-        serial_number_t serial;
-        std::tie(issuer_id, serial) = getParameters(parameters);
-        log_debug_printf(pvacms, "DENY: Certificate %s:%llu\n", issuer_id.c_str(), (unsigned long long)serial);
-
-        if (our_issuer_id != issuer_id) {
-            throw std::runtime_error(SB() << "Issuer ID of certificate status requested: " << issuer_id << ", is not our issuer ID: " << our_issuer_id);
-        }
+        serial_number_t serial = getParameters(parameters);
+        log_debug_printf(pvacms, "DENY: Certificate %s:%llu\n", our_issuer_id.c_str(), (unsigned long long)serial);
 
         // set status value
         updateCertificateStatus(certs_db, serial, REVOKED, 0, {PENDING_APPROVAL});
@@ -1019,7 +1057,7 @@ void onDeny(const ConfigCms &config, const sql_ptr &certs_db, const std::string 
         const auto revocation_date = std::time(nullptr);
         const auto cert_status = cert_status_creator.createPVACertificateStatus(serial, REVOKED, revocation_date, revocation_date);
         postCertificateStatus(status_pv, pv_name, serial, cert_status);
-        log_info_printf(pvacms, "%s ==> REVOKED (Approval Request Denied)\n", getCertId(issuer_id, serial).c_str());
+        log_info_printf(pvacms, "%s ==> REVOKED (Approval Request Denied)\n", getCertId(our_issuer_id, serial).c_str());
         op->reply();
     } catch (std::exception &e) {
         log_err_printf(pvacms, "PVACMS Error denying certificate request: %s\n", e.what());
@@ -1028,17 +1066,15 @@ void onDeny(const ConfigCms &config, const sql_ptr &certs_db, const std::string 
 }
 
 /**
- * @brief Get the issuer ID and serial number from the parameters
+ * @brief Get the serial number from the parameters
  *
  * @param parameters The list of parameters from the SharedWildcardPV
- * @return A tuple containing the issuer ID and serial number
+ * @return serial number
  */
-std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &parameters) {
-    // get serial and issuer from URI parameters
+uint64_t getParameters(const std::list<std::string> &parameters) {
+    // get serial from URI parameters
     auto it = parameters.begin();
-    const std::string &issuer_id = *it;
-
-    const std::string &serial_string = *++it;
+    const std::string &serial_string = *it;
     uint64_t serial;
     try {
         serial = std::stoull(serial_string);
@@ -1048,7 +1084,7 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
         throw std::runtime_error(SB() << "Conversion error: Out of range. Serial is too large: " << serial_string);
     }
 
-    return std::make_tuple(issuer_id, serial);
+    return serial;
 }
 
 /**
@@ -1067,13 +1103,14 @@ std::tuple<std::string, uint64_t> getParameters(const std::list<std::string> &pa
  *
  * @param config the config to use to get certificate authority creation parameters if needed
  * @param certs_db the certificate database to write the certificate authority to if needed
- * @param cert_auth_cert the reference to the returned certificate
+ * @param cert_auth_cert the reference to the returned certificate (the issuer)
  * @param cert_auth_pkey the reference to the private key of the returned certificate
  * @param cert_auth_chain reference to the certificate chain of the returned cert
+ * @param cert_auth_root_cert reference to the returned root of the certificate authority chain
  * @param is_initialising true if we are in the initializing state when called
  */
 void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, ossl_ptr<X509> &cert_auth_cert, ossl_ptr<EVP_PKEY> &cert_auth_pkey,
-                              ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, bool &is_initialising) {
+                              ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, ossl_ptr<X509> &cert_auth_root_cert, bool &is_initialising) {
     CertData cert_data;
     try {
         cert_data = IdFileFactory::create(config.cert_auth_keychain_file, config.cert_auth_keychain_pwd)->getCertDataFromFile();
@@ -1082,7 +1119,7 @@ void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, 
     auto key_pair = cert_data.key_pair;
 
     if (!key_pair) {
-        is_initialising = true;  // Let caller know that we've created a new Cert and Key
+        is_initialising = true;  // Let the caller know that we've created a new Cert and Key
         key_pair = IdFileFactory::createKeyPair();
         cert_data = createCertAuthCertificate(config, certs_db, key_pair);
     }
@@ -1095,6 +1132,11 @@ void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, 
     cert_auth_pkey = std::move(key_pair->pkey);
     cert_auth_cert = std::move(cert_data.cert);
     cert_auth_chain = cert_data.cert_auth_chain;
+    if ( sk_X509_num(cert_auth_chain.get()) <= 0) {
+        cert_auth_root_cert.reset(X509_dup(cert_auth_cert.get()));
+    } else {
+        cert_auth_root_cert.reset(X509_dup(CertStatus::getRootCa(cert_auth_chain)));
+    }
 }
 
 /**
@@ -1327,7 +1369,7 @@ void createAdminClientCert(const ConfigCms &config, sql_ptr &certs_db, const oss
     time_t not_after(not_before + (365 + 1) * 24 * 60 * 60);  // 1yrs
 
     // Create a certificate factory
-    auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, ssl::kForClient, YES, false,
+    auto certificate_factory = CertFactory(serial, key_pair, name, country, organization, organization_unit, not_before, not_after, ssl::kForClient, config.cert_pv_prefix, YES, false,
                                            cert_auth_cert.get(), cert_auth_pkey.get(), cert_auth_cert_chain.get(), VALID);
     certificate_factory.allow_duplicates = false;
 
@@ -1396,7 +1438,7 @@ CertData createCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, c
     const auto serial = generateSerial();
 
     auto certificate_factory = CertFactory(serial, key_pair, config.cert_auth_name, config.cert_auth_country, config.cert_auth_organization,
-                                           config.cert_auth_organizational_unit, not_before, not_after, ssl::kForCertAuth, config.cert_status_subscription);
+                                           config.cert_auth_organizational_unit, not_before, not_after, ssl::kForCertAuth, config.cert_pv_prefix, config.cert_status_subscription);
     certificate_factory.allow_duplicates = false;
 
     const auto pem_string = createCertificatePemString(certs_db, certificate_factory);
@@ -1428,7 +1470,7 @@ void createServerCertificate(const ConfigCms &config, sql_ptr &certs_db, const o
 
     auto certificate_factory =
         CertFactory(serial, key_pair, config.pvacms_name, config.pvacms_country, config.pvacms_organization, config.pvacms_organizational_unit,
-                    getNotBeforeTimeFromCert(cert_auth_cert.get()), getNotAfterTimeFromCert(cert_auth_cert.get()), ssl::kForCMS,
+                    getNotBeforeTimeFromCert(cert_auth_cert.get()), getNotAfterTimeFromCert(cert_auth_cert.get()), ssl::kForCMS, config.cert_pv_prefix,
                     NO, true, cert_auth_cert.get(), cert_auth_pkey.get(), cert_auth_chain.get());
 
     const auto cert = createCertificate(certs_db, certificate_factory);
@@ -1605,97 +1647,6 @@ Value postCertificateStatus(server::SharedWildcardPV &status_pv, const std::stri
 }
 
 /**
- * @brief Posts the error status of a certificate to the shared wildcard PV.
- *
- * This function posts the error status of a certificate to a shared wildcard PV so that any listeners will be notified.
- * The shared wildcard PV is a data structure that can be accessed by multiple clients through a server.
- * The error status of the certificate error_status, error_severity and error_message parameters.
- *
- * @param status_pv The shared wildcard PV to post the error status to.
- * @param op
- * @param our_issuer_id The issuer ID of the certificate.
- * @param serial The serial number of the certificate.
- * @param error_status error status.
- * @param error_severity error severity
- * @param error_message The error message
- */
-void postCertificateErrorStatus(server::SharedWildcardPV &status_pv, std::unique_ptr<server::ExecOp> &&op, const std::string &our_issuer_id,
-                                const uint64_t &serial, const int32_t error_status, const int32_t error_severity, const std::string &error_message) {
-    const std::string pv_name = getCertUri(GET_MONITOR_CERT_STATUS_ROOT, our_issuer_id, serial);
-    Value status_value{CertStatus::getStatusPrototype()};
-    const auto cert_status = PVACertificateStatus();  // Create an UNKNOWN CertificateStatus
-    setValue<uint64_t>(status_value, "serial", serial);
-    setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
-    setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", time(nullptr));
-    setValue<std::string>(status_value, "state", cert_status.status.s);
-
-    status_value["status.alarm.status"] = error_status;
-    status_value["status.alarm.severity"] = error_severity;
-    status_value["status.alarm.message"] = error_message;
-
-    status_value["status.value.index"] = UNKNOWN;
-    status_value["serial"] = serial;
-    log_debug_printf(pvacms, "Posting Certificate Error Status: %s = %s\n", pv_name.c_str(), error_message.c_str());
-    {
-        Guard G(status_pv_lock);
-        if (status_pv.isOpen(pv_name))
-            status_pv.post(pv_name, status_value);
-        else {
-            status_pv.open(pv_name, status_value);
-        }
-    }
-    if (op != nullptr) op->error(error_message);
-}
-
-/**
- * @brief This function returns the certificate URI.
- *
- * The certificate URI is generated by concatenating the provided `prefix` with the certificate ID obtained
- * from the `issuer_id` and `serial`. The certificate ID is generated using the `getCertId` function.
- *
- * @param prefix The prefix used to construct the certificate URI.
- * @param issuer_id The issuer ID used to generate the certificate ID.
- * @param serial The serial number used to generate the certificate ID.
- * @return The certificate URI string.
- */
-std::string getCertUri(const std::string &prefix, const std::string &issuer_id, const uint64_t &serial) {
-    return getCertUri(prefix, getCertId(issuer_id, serial));
-}
-
-/**
- * @brief Returns the certificate URI.
- *
- * This function takes a prefix and a certificate ID as input parameters and returns the certificate URI.
- * The certificate URI is constructed by concatenating the prefix and the certificate ID using a colon (:) as a separator.
- *
- * @param prefix The prefix string for the certificate URI.
- * @param cert_id The certificate ID string.
- * @return The certificate URI string.
- */
-std::string getCertUri(const std::string &prefix, const std::string &cert_id) {
-    const std::string pv_name(SB() << prefix << ":" << cert_id);
-    return pv_name;
-}
-
-/**
- * @brief Generates a unique certificate ID based on the issuer ID and serial number.
- *
- * This function takes the issuer ID and serial number as input and combines them
- * into a unique certificate ID. The certificate ID is generated by concatenating
- * the issuer ID and serial number with a ":" separator.
- *
- * @param issuer_id The issuer ID of the certificate.
- * @param serial The serial number of the certificate.
- * @return The unique certificate ID.
- *
- * @see SB
- */
-std::string getCertId(const std::string &issuer_id, const uint64_t &serial) {
-    const std::string cert_id(SB() << issuer_id << ":" << serial);
-    return cert_id;
-}
-
-/**
  * @brief Post an update to the next certificate that is becoming valid
  *
  * This function will post an update to the next certificate that is becoming VALID.
@@ -1723,7 +1674,7 @@ void postUpdateToNextCertBecomingValid(const CertStatusFactory &cert_status_crea
             int64_t db_serial = sqlite3_column_int64(stmt, 0);
             const uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
             try {
-                const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, status_monitor_params.issuer_id_, serial));
+                const std::string pv_name(getCertStatusURI(status_monitor_params.config_.cert_pv_prefix, status_monitor_params.issuer_id_, serial));
                 updateCertificateStatus(status_monitor_params.certs_db_, serial, VALID, 1, {PENDING});
                 const auto status_date = std::time(nullptr);
                 const auto cert_status = cert_status_creator.createPVACertificateStatus(serial, VALID, status_date);
@@ -1753,11 +1704,12 @@ void postUpdateToNextCertBecomingValid(const CertStatusFactory &cert_status_crea
  * @param cert_status_creator The certificate status creator
  * @param status_pv the status pv
  * @param certs_db the database
- * @param issuer_id the issuer ID
+ * @param cert_pv_prefix Specifies the prefix for all PVs published by this PVACMS.  Default `CERT`
+ * @param issuer_id The issuer ID of this PVACMS.
  * @param full_skid optional full SKID - if provided will search only for a certificate that matches
  */
 bool postUpdateToNextCertToExpire(const CertStatusFactory &cert_status_creator, server::SharedWildcardPV &status_pv, const sql_ptr &certs_db,
-                                  const std::string &issuer_id, const std::string &full_skid) {
+                                  const std::string &cert_pv_prefix, const std::string &issuer_id, const std::string &full_skid) {
     Guard G(status_update_lock);
     bool updated{false};
     sqlite3_stmt *stmt;
@@ -1773,7 +1725,7 @@ bool postUpdateToNextCertToExpire(const CertStatusFactory &cert_status_creator, 
             int64_t db_serial = sqlite3_column_int64(stmt, 0);
             const uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
             try {
-                const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, issuer_id, serial));
+                const std::string pv_name(getCertStatusURI(cert_pv_prefix, issuer_id, serial));
                 updateCertificateStatus(certs_db, serial, EXPIRED, -1, {VALID, PENDING_APPROVAL, PENDING});
                 const auto status_date = std::time(nullptr);
                 const auto cert_status = cert_status_creator.createPVACertificateStatus(serial, EXPIRED, status_date);
@@ -1805,7 +1757,7 @@ bool postUpdateToNextCertToExpire(const CertStatusFactory &cert_status_creator, 
  * @param status_monitor_params The status monitor parameters
  */
 void postUpdateToNextCertToExpire(const CertStatusFactory &cert_status_creator, const StatusMonitor &status_monitor_params) {
-    postUpdateToNextCertToExpire(cert_status_creator, status_monitor_params.status_pv_, status_monitor_params.certs_db_, status_monitor_params.issuer_id_);
+    postUpdateToNextCertToExpire(cert_status_creator, status_monitor_params.status_pv_, status_monitor_params.certs_db_, status_monitor_params.config_.cert_pv_prefix, status_monitor_params.issuer_id_);
 }
 
 /**
@@ -1840,7 +1792,7 @@ void postUpdatesToExpiredStatuses(const CertStatusFactory &cert_status_creator, 
             int status = sqlite3_column_int(stmt, 1);
             uint64_t serial = *reinterpret_cast<uint64_t *>(&db_serial);
             try {
-                const std::string pv_name(getCertUri(GET_MONITOR_CERT_STATUS_ROOT, status_monitor_params.issuer_id_, serial));
+                const std::string pv_name(getCertStatusURI(status_monitor_params.config_.cert_pv_prefix, status_monitor_params.issuer_id_, serial));
                 auto status_date = std::time(nullptr);
                 auto cert_status = cert_status_creator.createPVACertificateStatus(serial, static_cast<certstatus_t>(status), status_date);
                 postCertificateStatus(status_monitor_params.status_pv_, pv_name, serial, cert_status);
@@ -1902,6 +1854,7 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
                    std::map<const std::string, std::unique_ptr<client::Config>> &authn_config_map, bool &verbose, std::string &admin_name) {
     std::string cert_auth_password_file, pvacms_password_file, admin_password_file;
     bool show_version{false}, help{false};
+    bool create_client_cert_in_valid_state{false}, create_server_cert_in_valid_state{false}, create_ioc_cert_in_valid_state{false}, create_all_certs_in_valid_state{false};
 
     CLI::App app{"PVACMS - Certificate Management Service"};
 
@@ -1936,13 +1889,15 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
     app.add_option("--admin-keychain-pwd", admin_password_file, "Specify PVACMS admin user's keychain password file location");
     app.add_option("--acf", config.pvacms_acf_filename, "Admin Security Configuration File");
 
-    app.add_flag("--client-require-approval", config.cert_client_require_approval, "Generate Client Certificates in PENDING_APPROVAL state");
-    app.add_flag("--server-require-approval", config.cert_server_require_approval, "Generate Server Certificates in PENDING_APPROVAL state");
-    app.add_flag("--hybrid-require-approval", config.cert_hybrid_require_approval, "Generate Hybrid Certificates in PENDING_APPROVAL state");
+    app.add_flag("--client-dont-require-approval", create_client_cert_in_valid_state, "Generate Client Certificates in VALID state");
+    app.add_flag("--server-dont-require-approval", create_server_cert_in_valid_state, "Generate Server Certificates in VALID state");
+    app.add_flag("--ioc-dont-require-approval", create_ioc_cert_in_valid_state, "Generate IOC Certificates in VALID state");
+    app.add_flag("--certs-dont-require-approval", create_all_certs_in_valid_state, "Generate All Certificates in VALID state");
 
     app.add_option("--status-validity-mins", config.cert_status_validity_mins, "Set Status Validity Time in Minutes");
     app.add_flag("--status-monitoring-enabled", config.cert_status_subscription,
                  "Require Peers to monitor Status of Certificates Generated by this server by default.  Can be overridden in each CCR");
+    app.add_option("--cert-pv-prefix", config.cert_pv_prefix, "Specifies the prefix for all PVs published by this PVACMS.  Default `CERT`");
 
     // Add any parameters for any registered authn methods
     for (auto &authn_entry : AuthRegistry::getRegistry()) authn_entry.second->addOptions(app, authn_config_map);
@@ -1990,12 +1945,14 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
                   << "        --pvacms-org-unit <name>             Specify organisational unit (OU) to be used for PVACMS certificate. Default `EPICS PVA "
                      "Certificate Management Service`\n"
                   << "        --pvacms-country <name>              Specify country (C) to be used for PVACMS certificate. Default US\n"
-                  << "        --client-require-approval            Generate Client Certificates in PENDING_APPROVAL state\n"
-                  << "        --hybrid-require-approval            Generate Hybrid Certificates in PENDING_APPROVAL state\n"
-                  << "        --server-require-approval            Generate Server Certificates in PENDING_APPROVAL state\n"
+                  << "        --client-dont-require-approval       Generate Client Certificates in VALID state\n"
+                  << "        --ioc-dont-require-approval          Generate IOC Certificates in VALID state\n"
+                  << "        --server-dont-require-approval       Generate Server Certificates in VALID state\n"
+                  << "        --certs-dont-require-approval        Generate All Certificates in VALID state\n"
                   << "        --status-monitoring-enabled          Require Peers to monitor Status of Certificates Generated by this\n"
                   << "                                             server by default. Can be overridden in each CCR\n"
                   << "        --status-validity-mins               Set Status Validity Time in Minutes\n"
+                  << "        --cert-pv-prefix <cert_pv_prefix>    Specifies the prefix for all PVs published by this PVACMS.  Default `CERT`\n"
                   << "  (-v | --verbose)                           Verbose mode\n"
                   << std::endl
                   << "admin options:\n"
@@ -2048,6 +2005,11 @@ int readParameters(int argc, char *argv[], const char *program_name, ConfigCms &
         config.admin_keychain_pwd = config.getFileContents(admin_password_file);
     }
 
+    if (create_all_certs_in_valid_state) config.cert_client_require_approval  = config.cert_server_require_approval = config.cert_ioc_require_approval = false;
+    if (create_client_cert_in_valid_state) config.cert_client_require_approval = false;
+    if (create_server_cert_in_valid_state) config.cert_server_require_approval = false;
+    if (create_ioc_cert_in_valid_state) config.cert_ioc_require_approval = false;
+
     // Override some settings for PVACMS
     config.tls_stop_if_no_cert = true;
     config.tls_client_cert_required = ConfigCommon::Optional;
@@ -2090,11 +2052,12 @@ int main(int argc, char *argv[]) {
         // Get the Certificate Authority Certificate
         pvxs::ossl_ptr<EVP_PKEY> cert_auth_pkey;
         pvxs::ossl_ptr<X509> cert_auth_cert;
+        pvxs::ossl_ptr<X509> cert_auth_root_cert;
         pvxs::ossl_shared_ptr<STACK_OF(X509)> cert_auth_chain;
 
         // Get or create Certificate Authority Certificate
         auto is_initialising{false};
-        getOrCreateCertAuthCertificate(config, certs_db, cert_auth_cert, cert_auth_pkey, cert_auth_chain, is_initialising);
+        getOrCreateCertAuthCertificate(config, certs_db, cert_auth_cert, cert_auth_pkey, cert_auth_chain, cert_auth_root_cert, is_initialising);
         auto our_issuer_id = CertStatus::getSkId(cert_auth_cert);
 
         if (!admin_name.empty()) {
@@ -2120,17 +2083,19 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
+        pvxs::ossl_ptr<EVP_PKEY> cert_auth_pub_key(X509_get_pubkey(cert_auth_cert.get()));
+
         // Create the PVs
         SharedPV create_pv(SharedPV::buildReadonly());
         SharedPV root_pv(SharedPV::buildReadonly());
+        SharedPV issuer_pv(SharedPV::buildReadonly());
         SharedWildcardPV status_pv(SharedWildcardPV::buildMailbox());
 
-        // Create Root PV value which won't change
-        // TODO what happens when it changes
-        pvxs::Value root_pv_value = getRootValue(our_issuer_id, cert_auth_cert, cert_auth_chain);
+        // Create Root and issuer PV values which won't change
+        pvxs::Value root_pv_value = getRootValue(our_issuer_id, cert_auth_root_cert);
+        pvxs::Value issuer_pv_value = getIssuerValue(our_issuer_id, cert_auth_cert, cert_auth_chain);
 
         // RPC handlers
-        pvxs::ossl_ptr<EVP_PKEY> cert_auth_pub_key(X509_get_pubkey(cert_auth_cert.get()));
         create_pv.onRPC([&config, &certs_db, &cert_auth_pkey, &cert_auth_cert, cert_auth_chain, &our_issuer_id, &status_pv](
                             const SharedPV &, std::unique_ptr<ExecOp> &&op, pvxs::Value &&args) {
             onCreateCertificate(config, certs_db, status_pv, std::move(op), std::move(args), cert_auth_pkey, cert_auth_cert, cert_auth_chain, our_issuer_id);
@@ -2139,10 +2104,8 @@ int main(int argc, char *argv[]) {
         // Client Connect handlers GET/MONITOR
         status_pv.onFirstConnect([&config, &certs_db, &cert_auth_pkey, &cert_auth_cert, &cert_auth_chain, &our_issuer_id, &active_status_validity](
                                      SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
-            serial_number_t serial = 0;
-            std::string issuer_id;
-            std::tie(issuer_id, serial) = getParameters(parameters);
-            onGetStatus(config, certs_db, our_issuer_id, pv, pv_name, serial, issuer_id, cert_auth_pkey, cert_auth_cert, cert_auth_chain);
+            serial_number_t serial = getParameters(parameters);
+            onGetStatus(config, certs_db, our_issuer_id, pv, pv_name, serial, our_issuer_id, cert_auth_pkey, cert_auth_cert, cert_auth_chain);
 
             // Add reference to this serial number
             active_status_validity.emplace(serial, 0);
@@ -2151,10 +2114,7 @@ int main(int argc, char *argv[]) {
             pv.close(pv_name);
 
             // Remove reference to this serial number
-            serial_number_t serial = 0;
-            std::string issuer_id;
-            std::tie(issuer_id, serial) = getParameters(parameters);
-            active_status_validity.erase(serial);
+            active_status_validity.erase(getParameters(parameters));
         });
 
         // PUT handlers
@@ -2166,16 +2126,14 @@ int main(int argc, char *argv[]) {
                     pv.open(pv_name, CertStatus::getStatusPrototype());
                 }
 
-                std::string issuer_id;
-                serial_number_t serial;
-                std::tie(issuer_id, serial) = getParameters(parameters);
+                serial_number_t serial = getParameters(parameters);
 
-                // Get desired state
+                // Get the desired state
                 auto state = value["state"].as<std::string>();
                 std::transform(state.begin(), state.end(), state.begin(), toupper);
 
                 // Get credentials for this operation
-                auto creds = op->credentials();
+                const auto creds = op->credentials();
 
                 pvxs::ioc::Credentials credentials(*creds);
 
@@ -2197,12 +2155,12 @@ int main(int argc, char *argv[]) {
                 if (is_revoke && is_own_cert) {
                     if ( is_admin ) {
                         log_err_printf(pvacms, "PVACMS Admin Not Allowed to Self-Revoke%s", "\n");
-                        op->error(pvxs::SB() << state << " Admin Self-Revoke not permitted on " << issuer_id << ":" << serial << " by " << *creds);
+                        op->error(pvxs::SB() << state << " Admin Self-Revoke not permitted on " << our_issuer_id << ":" << serial << " by " << *creds);
                         return;
                     }
                 } else if (!is_admin) {
                     log_err_printf(pvacms, "PVACMS Client Not Authorised%s", "\n");
-                    op->error(pvxs::SB() << state << " operation not authorized on " << issuer_id << ":" << serial << " by " << *creds);
+                    op->error(pvxs::SB() << state << " operation not authorized on " << our_issuer_id << ":" << serial << " by " << *creds);
                     return;
                 }
 
@@ -2224,8 +2182,16 @@ int main(int argc, char *argv[]) {
         // Return true to indicate that we want the file monitor time to run after this
         auto pva_server = Server(config, [&status_monitor_params](short) { return statusMonitor(status_monitor_params); });
 
-        pva_server.addPV(RPC_CERT_CREATE, create_pv).addPV(GET_MONITOR_CERT_STATUS_PV, status_pv).addPV(kCertRoot, root_pv);
+        pva_server
+            .addPV(getCertCreatePv(config.cert_pv_prefix), create_pv)
+            .addPV(getCertCreatePv(config.cert_pv_prefix, our_issuer_id), create_pv)
+            .addPV(getCertAuthRootPv(config.cert_pv_prefix), root_pv)
+            .addPV(getCertAuthRootPv(config.cert_pv_prefix, our_issuer_id), root_pv)
+            .addPV(getCertIssuerPv(config.cert_pv_prefix), issuer_pv)
+            .addPV(getCertIssuerPv(config.cert_pv_prefix, our_issuer_id), issuer_pv)
+            .addPV(getCertStatusPv(config.cert_pv_prefix, our_issuer_id), status_pv);
         root_pv.open(root_pv_value);
+        issuer_pv.open(issuer_pv_value);
 
         // Log the effective config
         if (verbose) {

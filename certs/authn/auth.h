@@ -158,17 +158,19 @@ class Auth {
      *
      * @param ccr The CCR to process
      * @param timeout The timeout for the processing
+     * @param cert_pv_prefix the CMS pv prefix
+     * @param issuer_id the issuer ID of the CMS
      * @return The PEM encoded certificate
      */
-    std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, double timeout) const;
+    std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, const std::string &cert_pv_prefix, const std::string &issuer_id, double timeout) const;
 
     /**
-     * @brief Update the definitions with the authenticator specific definitions.
+     * @brief Update the definitions with the authenticator-specific definitions.
      *
-     * This function is called from PVACMS to update the definitions with the authenticator specific definitions.
-     * It updates the given definitions with the authenticator specific definitions.
+     * This function is called from PVACMS to update the definitions with the authenticator-specific definitions.
+     * It updates the given definitions with the authenticator-specific definitions.
      *
-     * @param defs the definitions to update with the authenticator specific definitions
+     * @param defs the definitions to update with the authenticator-specific definitions
      */
     virtual void updateDefs(client::Config::defs_t &defs) const {}
 
@@ -356,7 +358,7 @@ int runAuthenticator(int argc, char *argv[], std::function<void(ConfigT &, AuthT
  *
  * @param retrieved_credentials the retrieved credentials flag - true if credentials were retrieved
  * @param config the configuration to use for the certificate
- * @param cert_usage the certificate usage client, server, or hybrid
+ * @param cert_usage the certificate usage client, server, or ioc
  * @param authenticator the authenticator to use for the certificate
  * @param tls_keychain_file the TLS keychain file to use for the certificate
  * @param tls_keychain_pwd the TLS keychain password to use for the certificate, none if empty
@@ -393,7 +395,7 @@ CertData getCertificate(bool &retrieved_credentials, ConfigT config, uint16_t ce
         log_debug_printf(auth, "CCR created for: %s Authenticator\n", authenticator.type_.c_str());
 
         // Attempt to create a certificate with the Certificate Creation Request (CCR)
-        auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request, config.request_timeout_specified);
+        auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request, config.cert_pv_prefix, config.issuer_id, config.request_timeout_specified);
 
         // If the certificate was created successfully, write it to the keychain file
         if (!p12_pem_string.empty()) {
@@ -405,12 +407,12 @@ CertData getCertificate(bool &retrieved_credentials, ConfigT config, uint16_t ce
 
             // Read the certificate and private key back from the keychain file for info and verification
             cert_data = IdFileFactory::create(tls_keychain_file, tls_keychain_pwd)->getCertDataFromFile();
-            auto serial_number = CertStatusFactory::getSerialNumber(cert_data.cert);
-            auto issuer_id = CertStatus::getIssuerId(cert_data.cert_auth_chain);
+            const auto serial_number = CertStatusFactory::getSerialNumber(cert_data.cert);
+            const auto issuer_id = CertStatus::getIssuerId(cert_data.cert_auth_chain);
 
             // Get the start and end dates of the certificate
-            std::string from = std::ctime(&credentials->not_before);
-            std::string to = std::ctime(&credentials->not_after);
+            const std::string from = std::ctime(&credentials->not_before);
+            const std::string to = std::ctime(&credentials->not_after);
 
             // Log the certificate info
             log_info_printf(auth, "%s\n", (pvxs::SB() << "CERT_ID: " << issuer_id << ":" << serial_number).str().c_str());

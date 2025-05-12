@@ -63,6 +63,7 @@ class PVXS_API CertFactory {
     const time_t not_before_;
     const time_t not_after_;
     const uint16_t usage_;
+    std::string cert_pv_prefix_ ;
     X509 *issuer_certificate_ptr_;       // Will point to the issuer certificate when created
     EVP_PKEY *issuer_pkey_ptr_;          // Will point to the issuer private key when created
     STACK_OF(X509) * issuer_chain_ptr_;  // issuer cert chain
@@ -86,6 +87,7 @@ class PVXS_API CertFactory {
      * @param not_before the not before time
      * @param not_after the not after time
      * @param usage the usage
+     * @param cert_pv_prefix the certificate management PV prefix for this factory
      * @param cert_status_subscription_required whether certificate status subscription is required
      * @param no_status whether to disable status subscription for this certificate
      * @param issuer_certificate_ptr the issuer certificate
@@ -95,7 +97,7 @@ class PVXS_API CertFactory {
      */
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
                 const std::string &org_unit, const time_t not_before, const time_t not_after, const uint16_t &usage,
-                const CertStatusSubscription cert_status_subscription_required = CertStatusSubscription::DEFAULT, const bool no_status = false,
+                const std::string &cert_pv_prefix, const CertStatusSubscription cert_status_subscription_required = DEFAULT, const bool no_status = false,
                 X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr,
                 STACK_OF(X509) *issuer_chain_ptr = nullptr, certstatus_t initial_status = VALID)
         : serial_(serial),
@@ -107,6 +109,7 @@ class PVXS_API CertFactory {
           not_before_(not_before),
           not_after_(not_after),
           usage_(usage),
+          cert_pv_prefix_(cert_pv_prefix),
           issuer_certificate_ptr_(issuer_certificate_ptr),
           issuer_pkey_ptr_(issuer_pkey_ptr),
           issuer_chain_ptr_(issuer_chain_ptr),
@@ -127,6 +130,7 @@ class PVXS_API CertFactory {
      * @param not_before the not before time
      * @param not_after the not after time
      * @param usage the usage
+     * @param cert_pv_prefix the certificate management PV prefix for this factory
      * @param cert_config_uri_base the configuration uri base, normally empty but if non-empty will result in the config uri extension being added to the
      * certificate
      * @param cert_status_subscription_required whether certificate status subscription is required
@@ -140,8 +144,8 @@ class PVXS_API CertFactory {
      * @param initial_status the initial status - defaults to VALID
      */
     CertFactory(uint64_t serial, const std::shared_ptr<KeyPair> &key_pair, const std::string &name, const std::string &country, const std::string &org,
-                const std::string &org_unit, const time_t not_before, time_t not_after, const uint16_t &usage, const std::string &cert_config_uri_base,
-                const CertStatusSubscription cert_status_subscription_required = CertStatusSubscription::DEFAULT, const bool no_status = false, X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr,
+                const std::string &org_unit, const time_t not_before, time_t not_after, const uint16_t &usage, const std::string &cert_pv_prefix, const std::string &cert_config_uri_base,
+                const CertStatusSubscription cert_status_subscription_required = DEFAULT, const bool no_status = false, X509 *issuer_certificate_ptr = nullptr, EVP_PKEY *issuer_pkey_ptr = nullptr,
                 STACK_OF(X509) *issuer_chain_ptr = nullptr, certstatus_t initial_status = VALID)
         : serial_(serial),
           key_pair_(key_pair),
@@ -152,6 +156,7 @@ class PVXS_API CertFactory {
           not_before_(not_before),
           not_after_(not_after),
           usage_(usage),
+          cert_pv_prefix_(cert_pv_prefix),
           issuer_certificate_ptr_(issuer_certificate_ptr),
           issuer_pkey_ptr_(issuer_pkey_ptr),
           issuer_chain_ptr_(issuer_chain_ptr),

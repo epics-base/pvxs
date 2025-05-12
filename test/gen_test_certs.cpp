@@ -33,7 +33,7 @@
 #include "ownedptr.h"
 #include "openssl.h"
 
-#define TEST_FIRST_SERIAL 9876543210
+constexpr std::uint64_t TEST_FIRST_SERIAL = 9876543210;
 
 namespace {
 
@@ -153,7 +153,7 @@ void add_extension(X509* cert, int nid, const char *expr,
     MUST(1, X509_add_ext(cert, ext.get(), -1));
 }
 
-// for writing a PKCS#12 files, right?
+// for writing a PKCS#12 file
 struct PKCS12Writer {
     const std::string& outdir;
     const char* friendlyName = nullptr;
@@ -168,7 +168,7 @@ struct PKCS12Writer {
 
     void write(const char* fname,
                const char *passwd = "") const {
-        pvxs::ossl_ptr<PKCS12> p12(PKCS12_create_ex2(passwd,
+        const pvxs::ossl_ptr<PKCS12> p12(PKCS12_create_ex2(passwd,
                                                 friendlyName,
                                                 key,
                                                 cert,
@@ -177,11 +177,11 @@ struct PKCS12Writer {
                                                 nullptr, nullptr,
                                                 &jdk_trust, nullptr));
 
-        std::string outpath(SB()<<outdir<<fname);
-        pvxs::file_ptr out(fopen(outpath.c_str(), "wb"), false);
+        const std::string output_path(SB()<<outdir<<fname);
+        const pvxs::file_ptr out(fopen(output_path.c_str(), "wb"), false);
         if(!out) {
-            auto err = errno;
-            throw std::runtime_error(SB()<<"Error opening for write : "<<outpath<<" : "<<strerror(err));
+            const auto err = errno;
+            throw std::runtime_error(SB()<<"Error opening for write : "<<output_path<<" : "<<strerror(err));
         }
 
         MUST(1, i2d_PKCS12_fp(out.get(), p12.get()));
@@ -191,6 +191,8 @@ struct PKCS12Writer {
 struct CertCreator {
     // commonName string
     const char *CN = nullptr;
+    // Root cert (we'll use this as if the CMS is serving this root cert and not some intermediary)
+    const X509 *root = nullptr;
     // NULL for self-signed
     const X509 *issuer = nullptr;
     EVP_PKEY *ikey = nullptr;
@@ -208,15 +210,15 @@ struct CertCreator {
     size_t keylen = 2048;
     const EVP_MD* sig = EVP_sha256();
 
-    std::tuple<pvxs::ossl_ptr<EVP_PKEY>, pvxs::ossl_ptr<X509>> create(bool add_status_extension=true)
+    std::tuple<pvxs::ossl_ptr<EVP_PKEY>, pvxs::ossl_ptr<X509>> create(const bool add_status_extension=true)
     {
-        // generate public/private key pair
+        // generate a public/private key pair
         pvxs::ossl_ptr<EVP_PKEY> key;
         {
-            pvxs::ossl_ptr<EVP_PKEY_CTX> kctx(EVP_PKEY_CTX_new_id(keytype, NULL));
-            MUST(1, EVP_PKEY_keygen_init(kctx.get()));
-            MUST(1, EVP_PKEY_CTX_set_rsa_keygen_bits(kctx.get(), keylen));
-            MUST(1, EVP_PKEY_keygen(kctx.get(), key.acquire()));
+            const pvxs::ossl_ptr<EVP_PKEY_CTX> kCtx(EVP_PKEY_CTX_new_id(keytype, nullptr));
+            MUST(1, EVP_PKEY_keygen_init(kCtx.get()));
+            MUST(1, EVP_PKEY_CTX_set_rsa_keygen_bits(kCtx.get(), keylen));
+            MUST(1, EVP_PKEY_keygen(kCtx.get(), key.acquire()));
         }
 
         // start assembling certificate
@@ -228,7 +230,7 @@ struct CertCreator {
         // symbolic name for this cert.  Could have multiple entries.
         // but we only add commonName (CN)
         {
-            auto sub(X509_get_subject_name(cert.get()));
+            const auto sub(X509_get_subject_name(cert.get()));
             if(CN)
                 MUST(1, X509_NAME_add_entry_by_txt(sub, "CN", MBSTRING_ASC,
                                                    reinterpret_cast<const unsigned char*>(CN),
@@ -267,7 +269,7 @@ struct CertCreator {
 
         // issuer serial number
         if(serial) {
-            pvxs::ossl_ptr<ASN1_INTEGER> sn(ASN1_INTEGER_new());
+            const pvxs::ossl_ptr<ASN1_INTEGER> sn(ASN1_INTEGER_new());
             MUST(1, ASN1_INTEGER_set_uint64(sn.get(), serial));
             MUST(1, X509_set_serialNumber(cert.get(), sn.get()));
         }
@@ -298,8 +300,8 @@ struct CertCreator {
             add_extension(cert.get(), NID_ext_key_usage, extended_key_usage);
 
         if ( add_status_extension) {
-            auto issuerId = pvxs::certs::CertStatus::getSkId((X509*)issuer);
-            pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::NID_SPvaCertStatusURI, pvxs::certs::CertStatus::makeStatusURI(issuerId, serial), issuer);
+            const auto issuer_id = pvxs::certs::CertStatus::getSkId(root ? root : issuer);
+            pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::NID_SPvaCertStatusURI, pvxs::certs::getCertStatusURI("CERT", issuer_id, serial), issuer);
         }
 
         auto nbytes(X509_sign(cert.get(), ikey, sig));
@@ -384,6 +386,7 @@ int main(int argc, char *argv[])
         {
             CertCreator cc;
             cc.CN = "superserver1";
+            cc.root = root_cert.get();
             cc.serial = serial++;
             cc.key_usage = "digitalSignature";
             cc.extended_key_usage = "serverAuth";
@@ -407,6 +410,7 @@ int main(int argc, char *argv[])
         pvxs::ossl_ptr<EVP_PKEY> i_key;
         {
             CertCreator cc;
+            cc.root = root_cert.get();
             cc.CN = "intermediateCA";
             cc.serial = serial++;
             cc.issuer = root_cert.get();
@@ -433,6 +437,7 @@ int main(int argc, char *argv[])
         // extendedKeyUsage derived from name: client, server, or IOC (both client and server)
         for(const char *name : {"server1", "server2", "ioc1", "client1", "client2"}) {
             CertCreator cc;
+            cc.root = root_cert.get();
             cc.CN = name;
             cc.serial = serial++;
             cc.key_usage = "digitalSignature";

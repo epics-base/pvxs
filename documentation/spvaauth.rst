@@ -32,8 +32,8 @@ Legacy Authentication Mode
 
 Methods:
 
-- ``annonymous`` - `Unknown`
-- ``ca`` - `Un-authenticated`
+- ``anonymous`` - ``Unknown``
+- ``ca`` - ``Un-authenticated``
 
 .. image:: pvaident.png
    :alt: Identity in PVAccess
@@ -60,8 +60,8 @@ Secure PVAccess Authentication Mode
 
 Methods:
 
-- server: ``x509`` / client: ``x509`` - `Mutual`
-- server: ``x509`` - `Server-Only`
+- server: ``x509`` / client: ``x509`` - ``Mutual``
+- server: ``x509`` - ``Server-Only``
 
 .. image:: spvaident.png
    :alt: Identity in Secure PVAccess
@@ -103,12 +103,12 @@ Authentication Method
 -----------------------
 
 anonymous Method
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 
 No credentials are supplied.
 
 ca Method
-^^^^^^^^
+^^^^^^^^^^
 
 Unauthenticated credentials are supplied in ``AUTHZ`` message.
 
@@ -124,7 +124,7 @@ Optionally EPICS clients can use a variety of Site Authenticators that can creat
 - LDAP
 - Standard Authenticator (Just provide a username and optional organization)
 
-The x509 authentication method integrates with Secure PVAccess via a PKCS#12 keychain file ( :ref:`glossary_pkcs12` )
+The x509 authentication method integrates with Secure PVAccess via a PKCS#12 keychain file
 using the certificates and keys that it contains.
 
 
@@ -172,28 +172,28 @@ Reference Authenticators
 .. _pvacms_type_0_auth_methods:
 
 TYPE ``0`` - Basic Credentials
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Uses basic information:
 
   - CN: Common name
 
-    - Commandline flag: `-n` `--name`
+    - Commandline flag: ``-n`` ``--name``
     - Username
 
   - O: Organisation
 
-    - Commandline flag: `-o` `--organization`
+    - Commandline flag: ``-o`` ``--organization``
     - Hostname
     - IP address
 
   - OU: Organisational Unit
 
-    - Commandline flag: `--ou`
+    - Commandline flag: ``--ou``
 
   - C: Country
 
-    - Commandline flag: `-c` `--country`
+    - Commandline flag: ``-c`` ``--country``
     - Locale (not reliable)
     - Default = "US"
 
@@ -204,7 +204,7 @@ TYPE ``0`` - Basic Credentials
 .. _pvacms_type_1_auth_methods:
 
 TYPE ``1`` - Independently Verifiable Tokens
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Tokens verified independently or via endpoint (e.g., JWT)
 - Verification methods:
@@ -216,7 +216,7 @@ TYPE ``1`` - Independently Verifiable Tokens
 .. _pvacms_type_2_auth_methods:
 
 TYPE ``2`` - Source Verifiable Tokens
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Requires programmatic API integration (e.g., Kerberos)
 - Adds verifiable data to :ref:`certificate_creation_request_CCR` message
@@ -255,6 +255,18 @@ Common Environment Variables for all Authenticators
 || EPICS_PVAS_AUTH     ||                                   ||                                                                      |
 || _COUNTRY            ||                                   ||                                                                      |
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_AUTH      || {issuer of cert. mgmt. service}   || The issuer ID to contact for any certificate operation.              |
+|| _ISSUER             || e.g. ``f0a9e1b8``                 || Must be am 8 character SKID                                          |
++----------------------+                                    ||                                                                      |
+|| EPICS_PVAS_AUTH     ||                                   || If there are PVACMS's from different certificate authorities         |
+|| _ISSUER             ||                                   || on the network, this allows you to specify the one you want          |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_CERT      || {certificate mgnt. prefix}        || Specify the prefix for the PVACMS PV to contact for new certificates |
+|| _PV_PREFIX          || e.g. ``SLAC_CERTS``               || default ``CERT``                                                     |
++----------------------+                                    ||                                                                      |
+|| EPICS_PVAS_CERT     ||                                   ||                                                                      |
+|| _PV_PREFIX          ||                                   ||                                                                      |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
 
 Included Reference Authenticators
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -273,23 +285,23 @@ It can be used to create a certificate with a username and hostname.
 
 - `CN` field in the certificate will be the logged in username
 
-  - unless the `-n` `--name` commandline option is set
-  - unless the `EPICS_PVA_AUTH_NAME`, `EPICS_PVAS_AUTH_NAME` environment variable is set
+  - unless the ``-n`` ``--name`` commandline option is set
+  - unless the ``EPICS_PVA_AUTH_NAME``, ``EPICS_PVAS_AUTH_NAME`` environment variable is set
 
 - `O` field in the certificate will be the hostname or ip address
 
-  - unless the `-o` `--organization`  commandline option is set
-  - unless the `EPICS_PVA_AUTH_ORGANIZATION`, `EPICS_PVAS_AUTH_ORGANIZATION` environment variable is set
+  - unless the ``-o`` ``--organization``  commandline option is set
+  - unless the ``EPICS_PVA_AUTH_ORGANIZATION``, ``EPICS_PVAS_AUTH_ORGANIZATION`` environment variable is set
 
 - `OU` field in the certificate will not be set
 
-  - unless the `--ou`  commandline option is set
-  - unless the `EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT`, `EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT` environment variable is set
+  - unless the ``--ou``  commandline option is set
+  - unless the ``EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT``, ``EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT`` environment variable is set
 
 - `C` field in the certificate will be set to the local country code
 
-  - unless the `-c` `--country`  commandline option is set
-  - unless the `EPICS_PVA_AUTH_COUNTRY`, `EPICS_PVAS_AUTH_COUNTRY` environment variable is set
+  - unless the ``-c`` ``--country``  commandline option is set
+  - unless the ``EPICS_PVA_AUTH_COUNTRY``, ``EPICS_PVAS_AUTH_COUNTRY`` environment variable is set
 
 **usage**
 
@@ -300,7 +312,7 @@ and password file locations.
 
     authnstd - Secure PVAccess Standard Authenticator
 
-    Generates client, server, or hybrid certificates based on the Standard Authenticator.
+    Generates client, server, or ioc certificates based on the Standard Authenticator.
     Uses specified parameters to create certificates that require administrator APPROVAL before becoming VALID.
 
     usage:
@@ -309,18 +321,19 @@ and password file locations.
       authnstd (-V | --version)                   Print version and exit
 
     options:
-      (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`
+      (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|ioc.  Default `client`
       (-n | --name) <name>                       Specify common name of the certificate. Default <logged-in-username>
       (-o | --organization) <organization>       Specify organisation name for the certificate. Default <hostname>
             --ou <org-unit>                      Specify organisational unit for the certificate. Default <blank>
       (-c | --country) <country>                 Specify country for the certificate. Default locale setting if detectable otherwise `US`
       (-t | --time) <minutes>                    Duration of the certificate in minutes
       (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`
+            --cert-pv-prefix <cert_pv_prefix>    Specifies the pv prefix to use to contact PVACMS.  Default `CERT`
             --add-config-uri                     Add a config uri to the generated certificate
-            --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
             --force                              Force overwrite if certificate exists
       (-a | --trust-anchor)                      Download Trust Anchor into keychain file.  Do not create a certificate
       (-s | --no-status)                         Request that status checking not be required for this certificate
+      (-i | --issuer) <issuer_id>                The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening
       (-v | --verbose)                           Verbose mode
       (-d | --debug)                             Debug mode
 
@@ -355,8 +368,8 @@ and password file locations.
 
 .. code-block:: shell
 
-    # create a hybrid certificate for gateway1
-    authnstd -u hybrid -n gateway1 -o bridge.ornl.gov --ou "Networking"
+    # create a ioc certificate for gateway1
+    authnstd -u ioc -n gateway1 -o bridge.ornl.gov --ou "Networking"
 
 
 .. code-block:: shell
@@ -383,7 +396,7 @@ that contains a working Secure PVAccess with the following characteristics:
 
 
 authkrb Configuration and Usage
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This Authenticator is a TYPE ``2`` Authenticator.
 It can be used to create a certificate from a Kerberos ticket.
@@ -406,11 +419,11 @@ using the ``kinit`` command.
 Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain,
 and password file locations.
 
-.. code-block:: shell
+.. code-block::
 
     authnkrb - Secure PVAccess Kerberos Authenticator
 
-    Generates client, server, or hybrid certificates based on the kerberos Authenticator.
+    Generates client, server, or ioc certificates based on the kerberos Authenticator.
     Uses current kerberos ticket to create certificates with the same validity as the ticket.
 
     usage:
@@ -419,14 +432,15 @@ and password file locations.
       authnkrb (-V | --version)                  Print version and exit
 
     options:
-      (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`
-            --krb-validator <service-name>       Specify kerberos validator name.  Default `pvacms`
+      (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|ioc.  Default ``client``
+            --krb-validator <service-name>       Specify kerberos validator name.  Default ``pvacms``
             --krb-realm <krb-realm>              Specify the kerberos realm.  If not specified we'll take it from the ticket
       (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`
+            --cert-pv-prefix <cert_pv_prefix>    Specifies the pv prefix to use to contact PVACMS.  Default `CERT`
             --add-config-uri                     Add a config uri to the generated certificate
-            --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
             --force                              Force overwrite if certificate exists
       (-s | --no-status)                         Request that status checking not be required for this certificate
+      (-i | --issuer) <issuer_id>                The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening
       (-v | --verbose)                           Verbose mode
       (-d | --debug)                             Debug mode
 
@@ -439,8 +453,8 @@ and password file locations.
 
     kerberos options
             --krb-keytab <keytab file>           kerberos keytab file for non-interactive login`
-            --krb-realm <realm>                  kerberos realm.  Default `EPICS.ORG`
-            --krb-validator <validator-service>  pvacms kerberos service name.  Default `pvacms`
+            --krb-realm <realm>                  kerberos realm.  Default ``EPICS.ORG``
+            --krb-validator <validator-service>  pvacms kerberos service name.  Default ``pvacms``
 
 **Environment Variables for PVACMS AuthnKRB Verifier**
 
@@ -457,7 +471,7 @@ Credentials Verifier for :ref:`pvacms` at runtime.
 ||                     ||                    ||                         ||                     ||                                     ||                                                                      |
 +----------------------+---------------------+--------------------------+----------------------+--------------------------------------+-----------------------------------------------------------------------+
 || EPICS_AUTH_KRB_VALIDATOR_SERVICE          || ``--krb-validator``                            || {this is validator service name}    || The name of the service user created in the KDC that the pvacms      |
-||                                           ||                                                || e.g. ``pvacms``                     || service will log in as.  `/cluster@{realm}` will be added            |
+||                                           ||                                                || e.g. ``pvacms``                     || service will log in as.  ``/cluster@{realm}`` will be added          |
 +--------------------------------------------+-------------------------------------------------+--------------------------------------+-----------------------------------------------------------------------+
 || EPICS_AUTH_KRB_REALM                      || ``--krb-realm``                                || e.g. ``EPICS.ORG``                  || Kerberos REALM to authenticate against                               |
 +--------------------------------------------+-------------------------------------------------+--------------------------------------+-----------------------------------------------------------------------+
@@ -482,7 +496,7 @@ that contains a working kerberos KDC with the following characteristics:
 
 
 authldap Configuration and Usage
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This Authenticator is a TYPE ``2`` Authenticator.
 It can be used to create a certificate by logging in to the LDAP directory service.
@@ -504,7 +518,7 @@ and password file locations.
 
     authnldap - Secure PVAccess LDAP Authenticator
 
-    Generates client, server, or hybrid certificates based on the LDAP credentials.
+    Generates client, server, or ioc certificates based on the LDAP credentials.
 
     usage:
       authnldap [options]                        Create certificate in PENDING_APPROVAL state
@@ -512,7 +526,7 @@ and password file locations.
       authnldap (-V | --version)                 Print version and exit
 
     options:
-      (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`
+      (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|ioc.  Default `client`
       (-n | --name) <name>                       Specify LDAP username for common name in the certificate.
                                                  e.g. name ==> LDAP: uid=name, ou=People ==> Cert: CN=name
                                                  Default <logged-in-username>
@@ -523,10 +537,11 @@ and password file locations.
             --ldap-host <hostname>               LDAP server host
             --ldap-port <port>                   LDAP serever port
       (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`
+            --cert-pv-prefix <cert_pv_prefix>    Specifies the pv prefix to use to contact PVACMS.  Default `CERT`
             --add-config-uri                     Add a config uri to the generated certificate
-            --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`
             --force                              Force overwrite if certificate exists
       (-s | --no-status)                         Request that status checking not be required for this certificate
+      (-i | --issuer) <issuer_id>                The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening
       (-v | --verbose)                           Verbose mode
       (-d | --debug)                             Debug mode
 
@@ -642,7 +657,7 @@ EPICS Security Access Control File (ACF) Extensions
 Secure PVAccess extends the Access Control File (ACF) syntax with new rule predicates:
 
 METHOD
-~~~~~~
+~~~~~~~
 
 Defines access permissions based on authentication method:
 
@@ -807,31 +822,31 @@ To implement a new Authenticator requires the following steps:
 
 Create under ``/certs/authn/<name>``:
 
-- `authn<name>main.cpp`
+- ``authn<name>main.cpp``
 
   - Main runner (copy from template)
-- `authn<name>.cpp`
+- ``authn<name>.cpp``
 
   - Main implementation subclassing ``Authn``,
   - includes registration and PVACMS extensions & verifier
-- `authn<name>.h`
+- ``authn<name>.h``
 
   - Header file
-- `config<name>.cpp`
+- ``config<name>.cpp``
 
   - Configuration interface subclassing ``AuthnConfig``
-- `config<name>.h`
+- ``config<name>.h``
 
   - Header file
-- `Makefile`
+- ``Makefile``
 
   - Build configuration
-- `README.md`
+- ``README.md``
 
   - Documentation
 
 2. Build flag to enable code to be compiled in
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - choose a make flag name of the form ``PVXS_ENABLE_<NAME>_AUTH`` where ``NAME``
   is a three or four letter acronynm. e.g. ``KRB``

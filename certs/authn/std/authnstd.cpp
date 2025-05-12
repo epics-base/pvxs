@@ -112,12 +112,12 @@ static std::string getCountryCode() {
 /**
  * @brief Creates credentials for use in creating a certificate.
  *
- * This function retrieves the credentials required for creation of an X.509
+ * This function retrieves the credentials required for the creation of an X.509
  * certificate.  It uses supplied parameters, environment variables, current logged-on username/hostname,
  * or the current country code of where the process is running to obtain the common name,
  * organization, organizational unit, and country needed for the subject of the certificate.
  *
- * - If username is not specified in either the commandline or environment then use the logged in username
+ * - If username is not specified in either the commandline or environment then use the logged-in username
  * - If organization is not specified in either the commandline or environment then use the hostname of the machine
  * - If organizational unit is not specified in either the commandline or environment then leave blank
  * - If country is not specified in either the commandline or environment then use the current
@@ -125,9 +125,9 @@ static std::string getCountryCode() {
  *
  * @param config The ConfigStd object containing the environment variables optionally overridden by commandline parameters and pre-filled with default values.
  * @param for_client true if getting credentials for a client
- * @return A structure containing the credentials required for creation of a certificate.
+ * @return A structure containing the credentials required for the creation of a certificate.
  */
-std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &config, bool for_client) const {
+std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &config, const bool for_client) const {
     const auto &std_config = dynamic_cast<const ConfigStd &>(config);
 
     log_debug_printf(auth,

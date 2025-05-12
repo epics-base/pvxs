@@ -45,7 +45,7 @@ std::string promptPassword(const std::string &prompt) {
  * @param add_config_uri the add config uri flag to add a config uri to the generated certificate
  * @param name the ldap name
  * @param organization the ldap organization
- * @param usage the certificate usage client, server, or hybrid
+ * @param usage the certificate usage client, server, or ioc
  */
 
 void defineOptions(CLI::App &app, ConfigLdap &config, bool &verbose, bool &debug, bool &daemon_mode, bool &force, bool &show_version, bool &help, bool &add_config_uri,
@@ -61,9 +61,10 @@ void defineOptions(CLI::App &app, ConfigLdap &config, bool &verbose, bool &debug
 
     app.add_flag("-D,--daemon", daemon_mode, "Daemon mode");
     app.add_flag("--add-config-uri", add_config_uri, "Add a config uri to the generated certificate");
-    app.add_option("--config-uri-base", config.config_uri_base, "Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`");
+    app.add_option("--cert-pv-prefix", config.cert_pv_prefix, "Specifies the pv prefix to use to contact PVACMS.  Default `CERT`");
+    app.add_option("-i,--issuer", config.issuer_id, "The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening");
 
-    app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `hybrid`");
+    app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `ioc`");
 
     app.add_option("-n,--name", name, "Specify the LDAP user name e.g. name e.g. becomes uid=name.  Defaults to logged in username");
     app.add_option("-o,--organization", organization, "Specify the organization e.g. epics.org e.g. becomes dc=epics, dc=org.  Defaults to hostname");
@@ -76,7 +77,7 @@ void defineOptions(CLI::App &app, ConfigLdap &config, bool &verbose, bool &debug
 void showHelp(const char * const program_name) {
     std::cout << "authnldap - Secure PVAccess LDAP Authenticator\n"
         << std::endl
-        << "Generates client, server, or hybrid certificates based on the LDAP credentials. \n"
+        << "Generates client, server, or ioc certificates based on the LDAP credentials. \n"
         << std::endl
         << "usage:\n"
         << "  " << program_name << " [options]                        Create certificate in PENDING_APPROVAL state\n"
@@ -84,7 +85,7 @@ void showHelp(const char * const program_name) {
         << "  " << program_name << " (-V | --version)                 Print version and exit\n"
         << std::endl
         << "options:\n"
-        << "  (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|hybrid.  Default `client`\n"
+        << "  (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|ioc.  Default `client`\n"
         << "  (-n | --name) <name>                       Specify LDAP username for common name in the certificate.\n"
         << "                                             e.g. name ==> LDAP: uid=name, ou=People ==> Cert: CN=name\n"
         << "                                             Default <logged-in-username>\n"
@@ -95,10 +96,11 @@ void showHelp(const char * const program_name) {
         << "        --ldap-host <hostname>               LDAP server host\n"
         << "        --ldap-port <port>                   LDAP serever port\n"
         << "  (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`\n"
+        << "        --cert-pv-prefix <cert_pv_prefix>    Specifies the certificate management PV prefix.  Default `CERT`\n"
         << "        --add-config-uri                     Add a config uri to the generated certificate\n"
-        << "        --config-uri-base <config_uri_base>  Specifies the config URI base to add to a certificate.  Default `CERT:CONFIG`\n"
         << "        --force                              Force overwrite if certificate exists\n"
         << "  (-s | --no-status)                         Request that status checking not be required for this certificate\n"
+        << "  (-i | --issuer) <issuer_id>                Specify the issuer ID of the Certificate Management Service to use\n"
         << "  (-v | --verbose)                           Verbose mode\n"
         << "  (-d | --debug)                             Debug mode\n"
         << std::endl;
@@ -141,14 +143,14 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
             std::cerr << "You must set EPICS_PVA_TLS_KEYCHAIN environment variable to create client certificates" << std::endl;
             return 11;
         }
-    } else if (usage == "hybrid") {
+    } else if (usage == "ioc") {
         cert_usage = ssl::kForClientAndServer;
         if (config.tls_srv_keychain_file.empty()) {
-            std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create hybrid certificates" << std::endl;
+            std::cerr << "You must set EPICS_PVAS_TLS_KEYCHAIN environment variable to create ioc certificates" << std::endl;
             return 12;
         }
     } else {
-        std::cerr << "Usage must be one of `client`, `server`, or `hybrid`: " << usage << std::endl;
+        std::cerr << "Usage must be one of `client`, `server`, or `ioc`: " << usage << std::endl;
         return 13;
     }
 

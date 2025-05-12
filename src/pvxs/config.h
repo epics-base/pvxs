@@ -221,6 +221,13 @@ struct PVXS_API ConfigCommon {
      */
     double request_timeout_specified{5.0};
 
+
+    /**
+     * @brief the prefix to append to the URI for CREATE, STATUS, ROOT, etc
+     * default "CERT"
+     */
+    std::string cert_pv_prefix{"CERT"};
+
     /**
      * True if the environment is configured for TLS.  All this means is that
      * the location of the keychain file has been specified in
@@ -230,7 +237,7 @@ struct PVXS_API ConfigCommon {
      * false otherwise
      */
     inline bool isTlsConfigured() const { return !tls_disabled && !tls_keychain_file.empty(); }
-#endif  // PVXS_ENABLE_OPENSSL
+    #endif  // PVXS_ENABLE_OPENSSL
 
     inline std::string getFileContents(const std::string &file_name) {
         std::ifstream ifs(file_name);

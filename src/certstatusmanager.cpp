@@ -102,7 +102,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const uint8_t *ocsp_bytes, co
  * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
  */
 PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> &ocsp_bytes, X509_STORE *trusted_store_ptr) {
-    auto ocsp_response = getOCSPResponse(ocsp_bytes);
+    const auto ocsp_response = getOCSPResponse(ocsp_bytes);
     return parse(ocsp_response, trusted_store_ptr);
 }
 
@@ -275,12 +275,12 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic
  * It is stored in the certificate using a custom extension.
  * Exceptions are thrown if it is unable to retrieve the value of the extension
  * or it does not exist.
- * @param certificate the certificate to examine
+ * @param cert the certificate to examine
  * @return the PV name to call for status on that certificate
  */
-std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509> &certificate) { return getStatusPvFromCert(certificate.get()); }
+std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509> &cert) { return getStatusPvFromCert(cert.get()); }
 
-std::string CertStatusManager::getConfigPvFromCert(const ossl_ptr<X509> &certificate) { return getConfigPvFromCert(certificate.get()); }
+std::string CertStatusManager::getConfigPvFromCert(const ossl_ptr<X509> &cert) { return getConfigPvFromCert(cert.get()); }
 
 /**
  * @brief Get the extension from the certificate.
@@ -328,21 +328,21 @@ X509_EXTENSION *CertStatusManager::getConfigExtension(const X509 *certificate) {
  * Exceptions are thrown if it is unable to retrieve the value of the extension
  * or it does not exist.
  *
- * @param certificate the certificate to examine
+ * @param cert the certificate to examine
  * @return the PV name to call for status on that certificate
  */
-std::string CertStatusManager::getStatusPvFromCert(const X509 *certificate) {
-    auto extension = getStatusExtension(certificate);
+std::string CertStatusManager::getStatusPvFromCert(const X509 *cert) {
+    const auto extension = getStatusExtension(cert);
 
     // Retrieve the extension data which is an ASN1_OCTET_STRING object
-    ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
+    const ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
     if (!ext_data) throw CertStatusNoExtensionException("Failed to get data from the Certificate-Status-PV extension.");
 
     // Get the data as a string
     const unsigned char *data = ASN1_STRING_get0_data(ext_data);
     if (!data) throw CertStatusNoExtensionException("Failed to extract data from ASN1_STRING.");
 
-    int length = ASN1_STRING_length(ext_data);
+    const int length = ASN1_STRING_length(ext_data);
     if (length < 0) throw CertStatusNoExtensionException("Invalid length of ASN1_STRING data.");
 
     // Return the data as a std::string
