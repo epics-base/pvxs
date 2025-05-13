@@ -290,6 +290,7 @@ bool UDPCollector::handle_one(const IfaceMap::Current& ifinfo)
         if(ifit!=srcIface->bcast.end()) {
             // dest is bcast, so replace with associated iface address
             dest = ifit->second;
+            origin = Forwarding;
 
         } else if((ifit=srcIface->addrs.find(dest))!=srcIface->addrs.end()) {
             // dest is interface address.  Nothing to do.
