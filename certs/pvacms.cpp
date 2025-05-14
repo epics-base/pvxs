@@ -114,6 +114,20 @@ uint16_t num_partitions = 1;
 
 // Forward decls
 
+// Subject part extractor
+std::string extractSubjectPart (const std::string &subject, const std::string &key) {
+    std::size_t start = subject.find("/" + key + "=");
+    if (start == std::string::npos) {
+        return {};
+    }
+    start += key.size() + 2;                     // Skip over "/key="
+    std::size_t end = subject.find("/", start);  // Find the end of the current value
+    if (end == std::string::npos) {
+        end = subject.size();
+    }
+    return subject.substr(start, end - start);
+};
+
 /**
  * @brief  The prototype of the returned data from a create certificate operation
  * @return  the prototype to use for create certificate operations
@@ -124,9 +138,9 @@ Value getCreatePrototype() {
     auto value = TypeDef(TypeCode::Struct,
                          {
                              enum_value.build().as("status"),
+                             Member(TypeCode::String, "issuer"),
                              Member(TypeCode::UInt64, "serial"),
                              Member(TypeCode::String, "state"),
-                             Member(TypeCode::String, "issuer"),
                              Member(TypeCode::String, "certid"),
                              Member(TypeCode::String, "statuspv"),
                              Member(TypeCode::String, "cert"),
@@ -144,15 +158,22 @@ Value getCreatePrototype() {
 }
 
 /**
- * @brief  The value for a GET issuer certificate operation
- * @return  The value for a GET issuer certificate operation
+ * @brief  Create the certificate `Value` for the given certificate and certificate chain
+ *
+ * Uses the given certificate to extract the subject parts and
+ * create the value to return, including the certificate chain if specified
+ *
+ * @param issuer_id The issuer ID - the ID of the issuer of the given certificate
+ * @param cert The certificate to extract the subject parts from
+ * @param cert_chain_ptr The certificate chain of the certificate or null if not specified
+ * @return  The certificate `Value` for the given certificate
  */
-Value getIssuerValue(const std::string &issuer_id, const ossl_ptr<X509> &cert_auth_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_cert_chain) {
+static Value createCertificateValue(const std::string &issuer_id, const ossl_ptr<X509> &cert, const STACK_OF(X509) *cert_chain_ptr) {
     using namespace members;
     auto value = TypeDef(TypeCode::Struct,
                          {
-                             Member(TypeCode::UInt64, "serial"),
                              Member(TypeCode::String, "issuer"),
+                             Member(TypeCode::UInt64, "serial"),
                              Member(TypeCode::String, "name"),
                              Member(TypeCode::String, "org"),
                              Member(TypeCode::String, "org_unit"),
@@ -165,94 +186,51 @@ Value getIssuerValue(const std::string &issuer_id, const ossl_ptr<X509> &cert_au
                                     }),
                          })
                      .create();
-    const auto subject_name(X509_get_subject_name(cert_auth_cert.get()));
-    const auto subject_string(X509_NAME_oneline(subject_name, nullptr, 0));
-    const ossl_ptr<char> owned_subject(subject_string, false);
-    if (!owned_subject) {
-        throw std::runtime_error("Unable to get the subject of the certificate authority certificate");
+    // Get subject
+    const auto subject_name(X509_get_subject_name(cert.get()));
+    const auto subject_ptr(X509_NAME_oneline(subject_name, nullptr, 0));
+    if (!subject_ptr) {
+        throw std::runtime_error("Unable to get the subject of the given certificate");
     }
-    std::string subject(owned_subject.get());
+    const std::string subject(subject_ptr);
+    free(subject_ptr);
 
-    // Subject part extractor
-    auto extractSubjectPart = [&subject](const std::string &key) -> std::string {
-        std::size_t start = subject.find("/" + key + "=");
-        if (start == std::string::npos) {
-            throw std::runtime_error("Key not found: " + key);
-        }
-        start += key.size() + 2;                     // Skip over "/key="
-        std::size_t end = subject.find("/", start);  // Find the end of the current value
-        if (end == std::string::npos) {
-            end = subject.size();
-        }
-        return subject.substr(start, end - start);
-    };
-
-    value["serial"] = CertStatusFactory::getSerialNumber(cert_auth_cert);
+    std::string val;
     value["issuer"] = issuer_id;
-    value["name"] = extractSubjectPart("CN");
-    value["org"] = extractSubjectPart("O");
-    value["org_unit"] = extractSubjectPart("OU");
-    value["cert"] = CertFactory::certAndCasToPemString(cert_auth_cert, cert_auth_cert_chain.get());
+    value["serial"] = CertStatusFactory::getSerialNumber(cert);
+    if ( !(val = extractSubjectPart(subject, "CN")).empty() ) value["name"] = val;
+    if ( !(val = extractSubjectPart(subject, "O")).empty() ) value["org"] = val;
+    if ( !(val = extractSubjectPart(subject, "OU")).empty() ) value["org_unit"] = val;
+    value["cert"] = CertFactory::certAndCasToPemString(cert, cert_chain_ptr);
 
     return value;
 }
 
 /**
- * @brief  The value for a GET root certificate operation
- * @return  The value for a GET root certificate operation
+ * @brief  The value for a GET ISSUER certificate operation
+ *
+ * @param issuer_id The issuer ID
+ * @param issuer_cert The issuer certificate
+ * @param cert_auth_cert_chain The certificate authority chain back to the root certificate
+ * @return  The value for a GET ISSUER certificate operation
  */
-Value getRootValue(const std::string &issuer_id, const ossl_ptr<X509> &cert_auth_cert) {
-    using namespace members;
-    auto value = TypeDef(TypeCode::Struct,
-                         {
-                             Member(TypeCode::UInt64, "serial"),
-                             Member(TypeCode::String, "issuer"),
-                             Member(TypeCode::String, "name"),
-                             Member(TypeCode::String, "org"),
-                             Member(TypeCode::String, "org_unit"),
-                             Member(TypeCode::String, "cert"),
-                             Struct("alarm", "alarm_t",
-                                    {
-                                        Int32("severity"),
-                                        Int32("status"),
-                                        String("message"),
-                                    }),
-                         })
-                     .create();
-    const auto subject_name(X509_get_subject_name(cert_auth_cert.get()));
-    const auto subject_string(X509_NAME_oneline(subject_name, nullptr, 0));
-    const ossl_ptr<char> owned_subject(subject_string, false);
-    if (!owned_subject) {
-        throw std::runtime_error("Unable to get the subject of the certificate authority certificate");
-    }
-    std::string subject(owned_subject.get());
-
-    // Subject part extractor
-    auto extractSubjectPart = [&subject](const std::string &key) -> std::string {
-        std::size_t start = subject.find("/" + key + "=");
-        if (start == std::string::npos) {
-            throw std::runtime_error("Key not found: " + key);
-        }
-        start += key.size() + 2;                     // Skip over "/key="
-        std::size_t end = subject.find("/", start);  // Find the end of the current value
-        if (end == std::string::npos) {
-            end = subject.size();
-        }
-        return subject.substr(start, end - start);
-    };
-
-    value["serial"] = CertStatusFactory::getSerialNumber(cert_auth_cert);
-    value["issuer"] = issuer_id;
-    value["name"] = extractSubjectPart("CN");
-    value["org"] = extractSubjectPart("O");
-    value["org_unit"] = extractSubjectPart("OU");
-    value["cert"] = CertFactory::certAndCasToPemString(cert_auth_cert, nullptr);
-
-    return value;
+Value getIssuerValue(const std::string &issuer_id, const ossl_ptr<X509> &issuer_cert, const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_cert_chain) {
+    return createCertificateValue(issuer_id, issuer_cert, cert_auth_cert_chain.get());
 }
 
 /**
- * @brief Initializes the certificates database by opening the specified
+ * @brief  The value for a GET ROOT certificate operation
+ *
+ * @param issuer_id The issuer ID
+ * @param root_cert The root certificate
+ * @return  The value for a GET ROOT certificate operation
+ */
+Value getRootValue(const std::string &issuer_id, const ossl_ptr<X509> &root_cert) {
+    return createCertificateValue(issuer_id, root_cert, nullptr);
+}
+
+/**
+ * @brief Initializes the certificate database by opening the specified
  * database file.
  *
  * @param certs_db A shared pointer to the SQLite database object.
