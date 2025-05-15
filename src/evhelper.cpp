@@ -315,25 +315,6 @@ bool evbase::_dispatch(mfunction&& fn, bool dothrow) const
     return true;
 }
 
-bool evbase::_delayedDispatch(timeval delay, mfunction&& fn, bool dothrow) const {
-    bool empty;
-    {
-        Guard G(pvt->lock);
-        if(!pvt->running) {
-            if(dothrow)
-                throw std::logic_error("Worker stopped");
-            return false;
-        }
-        empty = pvt->actions.empty();
-        pvt->actions.emplace_back(std::move(fn), nullptr, nullptr);
-    }
-
-    if(empty && event_add(pvt->dowork.get(), &delay))
-        throw std::runtime_error("Unable to wakeup dispatch()");
-
-    return true;
-}
-
 bool evbase::_call(mfunction&& fn, bool dothrow) const
 {
     if(pvt->worker.isCurrentThread()) {
