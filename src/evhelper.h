@@ -130,7 +130,6 @@ struct PVXS_API evbase {
 
 private:
     bool _dispatch(mfunction&& fn, bool dothrow) const;
-    bool _delayedDispatch(timeval delay, mfunction&& fn, bool dothrow) const;
     bool _call(mfunction&& fn, bool dothrow) const;
 public:
 

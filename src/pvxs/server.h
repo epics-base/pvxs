@@ -25,8 +25,6 @@
 #include <pvxs/util.h>
 #include <pvxs/version.h>
 
-#include "evhelper.h"
-
 #ifdef PVXS_ENABLE_OPENSSL
 #include "openssl.h"
 #endif
