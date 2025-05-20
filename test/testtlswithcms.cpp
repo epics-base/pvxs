@@ -26,6 +26,7 @@
 #include "certstatus.h"
 #include "certstatusfactory.h"
 #include "certstatusmanager.h"
+#include "openssl.h"
 #include "testcerts.h"
 #include "utilpvt.h"
 

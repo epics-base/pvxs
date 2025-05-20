@@ -6,12 +6,15 @@
 
 #include "ccrmanager.h"
 
+#include <pvxs/client.h>
+#include <pvxs/log.h>
 #include <pvxs/nt.h>
 
-#include "client.h"
+#include "certstatus.h"
+#include "openssl.h"
 #include "security.h"
 
-DEFINE_LOGGER(auths, "pvxs.certs.auth.ccr");
+DEFINE_LOGGER(auth_log, "pvxs.certs.auth.ccr");
 
 namespace pvxs {
 namespace certs {
@@ -43,13 +46,13 @@ std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequ
     auto client = client::Config::fromEnv(true).build();
     auto value(client.rpc(create_pv, arg).exec()->wait(timeout));
 
-    log_info_printf(auths, "X.509 CLIENT certificate%s\n", "");
-    log_info_printf(auths, "%s\n", value["status.value.index"].as<std::string>().c_str());
-    log_info_printf(auths, "%s\n", value["state"].as<std::string>().c_str());
-    log_info_printf(auths, "%llu\n", (unsigned long long)value["serial"].as<serial_number_t>());
-    log_info_printf(auths, "%s\n", value["issuer"].as<std::string>().c_str());
-    log_info_printf(auths, "%s\n", value["certid"].as<std::string>().c_str());
-    log_info_printf(auths, "%s\n", value["statuspv"].as<std::string>().c_str());
+    log_info_printf(auth_log, "X.509 CLIENT certificate%s\n", "");
+    log_info_printf(auth_log, "%s\n", value["status.value.index"].as<std::string>().c_str());
+    log_info_printf(auth_log, "%s\n", value["state"].as<std::string>().c_str());
+    log_info_printf(auth_log, "%llu\n", (unsigned long long)value["serial"].as<serial_number_t>());
+    log_info_printf(auth_log, "%s\n", value["issuer"].as<std::string>().c_str());
+    log_info_printf(auth_log, "%s\n", value["certid"].as<std::string>().c_str());
+    log_info_printf(auth_log, "%s\n", value["statuspv"].as<std::string>().c_str());
     return value["cert"].as<std::string>();
 }
 }  // namespace certs

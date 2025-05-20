@@ -872,11 +872,6 @@ Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
     return *this;
 }
 
-#ifdef PVXS_ENABLE_OPENSSL
-Config& Config::applyEnv(const bool tls_disabled) { return applyEnv(tls_disabled, CLIENT); }
-
-#endif  // PVXS_ENABLE_OPENSSL
-
 Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
     fromDefs(*this, defs, false);
     return *this;

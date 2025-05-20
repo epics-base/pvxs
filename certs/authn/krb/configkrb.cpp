@@ -36,7 +36,7 @@ void ConfigKrb::fromKrbEnv(const std::map<std::string, std::string>& defs) {
  * It updates the definitions with the kerberos keytab file, the kerberos client keytab file,
  * the kerberos validator service name, and the kerberos realm.
  *
- * @param defs the definitions to update with the kerberos authenticator specific definitions
+ * @param defs the definitions to update with the kerberos authenticator-specific definitions
  */
 void ConfigKrb::updateDefs(defs_t& defs) const {
     ConfigAuthN::updateDefs(defs);

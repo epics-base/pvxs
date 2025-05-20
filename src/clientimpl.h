@@ -19,6 +19,7 @@
 #include "conn.h"
 #include "dataimpl.h"
 #include "evhelper.h"
+#include "openssl.h"
 #include "ownedptr.h"
 #include "udp_collector.h"
 #include "utilpvt.h"

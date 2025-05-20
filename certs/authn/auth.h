@@ -21,7 +21,9 @@
 #include "ccrmanager.h"
 #include "certfactory.h"
 #include "configstd.h"
+#include "openssl.h"
 #include "security.h"
+#include "server.h"
 #include "sslinit.h"
 
 #pragma once

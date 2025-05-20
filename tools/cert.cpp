@@ -23,7 +23,7 @@
 #include "certfactory.h"
 #include "certfilefactory.h"
 #include "certstatusmanager.h"
-#include "p12filefactory.h"
+#include "openssl.h"
 
 using namespace pvxs;
 

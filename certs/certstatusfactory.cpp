@@ -17,6 +17,7 @@
 #include <pvxs/client.h>
 
 #include "configcms.h"
+#include "openssl.h"
 
 namespace pvxs {
 namespace certs {
@@ -55,7 +56,7 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const serial_
     const ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
     // Set ASN1_TIME objects
-    auto status_valid_until_time = StatusDate(status_date.t + cert_status_validity_mins_ * 60 + cert_status_validity_secs_);
+    const auto status_valid_until_time = StatusDate(status_date.t + cert_status_validity_mins_ * 60 + cert_status_validity_secs_);
     const auto this_update = status_date.toAsn1_Time();
     const auto next_update = status_valid_until_time.toAsn1_Time();
     StatusDate revocation_time_to_use = static_cast<time_t>(0);  // Default to 0
@@ -74,7 +75,7 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const serial_
             ocsp_status = OCSP_CERTSTATUS_UNKNOWN;
             break;
     }
-    auto revocation_asn1_time = revocation_time_to_use.toAsn1_Time();
+    const auto revocation_asn1_time = revocation_time_to_use.toAsn1_Time();
 
     // Create OCSP_CERTID
     const auto cert_id = createOCSPCertId(serial);
@@ -86,8 +87,8 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const serial_
 
     // Adding the certificate authority certificate chain to the response
     if (cert_auth_cert_chain_) {
-        for (int i = 0; i < sk_X509_num(cert_auth_cert_chain_.get()); i++) {
-            auto cert = sk_X509_value(cert_auth_cert_chain_.get(), i);
+        for (auto i = 0; i < sk_X509_num(cert_auth_cert_chain_.get()); i++) {
+            const auto cert = sk_X509_value(cert_auth_cert_chain_.get(), i);
             OCSP_basic_add1_cert(basic_resp.get(), cert);
         }
     }

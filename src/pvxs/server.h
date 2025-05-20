@@ -25,10 +25,6 @@
 #include <pvxs/util.h>
 #include <pvxs/version.h>
 
-#ifdef PVXS_ENABLE_OPENSSL
-#include "openssl.h"
-#endif
-
 namespace pvxs {
 namespace client {
 struct Subscription;
@@ -42,6 +38,12 @@ struct SSLContext;
 #endif
 
 namespace server {
+
+#ifdef PVXS_ENABLE_OPENSSL
+using CustomServerCallback = std::function<timeval(short)>;
+static constexpr timeval kCustomCallbackIntervalInitial{0, 0};
+static constexpr timeval kCustomCallbackInterval{15, 0};
+#endif
 
 struct SharedPV;
 struct Source;
@@ -237,7 +239,6 @@ public:
     }
     static inline Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER) { return Config{}.applyEnv(tls_disabled, target); }
     Config &applyEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER);
-//    Config &applyEnv(const bool tls_disabled = false);
 #endif
 
     //! Configuration limited to the local loopback interface on a randomly chosen port.

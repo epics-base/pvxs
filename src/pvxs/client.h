@@ -25,10 +25,6 @@
 #include <pvxs/netcommon.h>
 #include <pvxs/util.h>
 
-#ifdef PVXS_ENABLE_OPENSSL
-#include "openssl.h"
-#endif
-
 namespace pvxs {
 namespace client {
 
@@ -933,7 +929,7 @@ public:
     MonitorBuilder& maskDisconnected(bool m = true) { _maskDisconn = m; return *this; }
 
 #ifdef PVXS_EXPERT_API_ENABLED
-    // called during operation INIT phase for Get/Put/Monitor when remote type
+    // called during operation INIT phase for Get/Put/Monitor when the remote type
     // description is available.
     MonitorBuilder& onInit(std::function<void (Subscription&, const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
 #endif
@@ -1045,7 +1041,7 @@ public:
     /** Controls whether Operation::cancel() synchronizes.
      *
      * When true (the default) explicit or implicit cancel blocks until any
-     * in progress callback has completed.  This makes safe some use of
+     * in-progress callback has completed.  This makes safe some use of
      * references in callbacks.
      */
     DiscoverBuilder& syncCancel(bool b) { this->_syncCancel = b; return *this; }
@@ -1093,10 +1089,9 @@ public:
     //! update using defined EPICS_PVA* environment variables
     Config &applyEnv();
 #else
-    static inline Config from_env(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
-    static inline Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
-    Config &applyEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT);
-    Config &applyEnv(const bool tls_disabled = false);
+    static Config from_env(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
+    static Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = CLIENT) { return Config{}.applyEnv(tls_disabled, target); }
+    Config &applyEnv(bool tls_disabled = false, const ConfigTarget target = CLIENT);
 #endif // PVXS_ENABLE_OPENSSL
 
     typedef std::map<std::string, std::string> defs_t;

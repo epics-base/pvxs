@@ -28,6 +28,7 @@
 #include "certfilefactory.h"
 #include "certstatus.h"
 #include "configcms.h"
+#include "openssl.h"
 #include "ownedptr.h"
 
 #define SQL_CREATE_DB_FILE              \

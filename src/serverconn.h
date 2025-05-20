@@ -25,6 +25,7 @@
 #include "evhelper.h"
 #include "udp_collector.h"
 #include "utilpvt.h"
+#include "openssl.h"
 
 namespace pvxs {namespace impl {
 
