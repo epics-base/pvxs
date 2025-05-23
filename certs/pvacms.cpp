@@ -1102,8 +1102,10 @@ void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, 
         cert_data = createCertAuthCertificate(config, certs_db, key_pair);
     }
 
+    std::ifstream acf_file(config.pvacms_acf_filename);
+    createDefaultAdminACF(config, cert_data);
+
     if ( is_initialising ) {
-        createDefaultAdminACF(config, cert_data.cert);
         createAdminClientCert(config, certs_db, key_pair->pkey, cert_data.cert, cert_data.cert_auth_chain);
     }
 
@@ -1117,17 +1119,121 @@ void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, 
     }
 }
 
+std::vector<std::string> getCertPaths(const CertData &cert_data)
+{
+    std::vector<std::string> common_names;
+    if (cert_data.cert_auth_chain && sk_X509_num(cert_data.cert_auth_chain.get()) > 0) {
+        // Get common names from all certificates in the chain
+        for (int i = 0; i < sk_X509_num(cert_data.cert_auth_chain.get()); ++i) {
+            auto  cert = ossl_ptr<X509>(X509_dup(sk_X509_value(cert_data.cert_auth_chain.get(), i)));
+            common_names.push_back(CertStatus::getCommonName(cert));
+        }
+    }
+    if (cert_data.cert) {
+        common_names.push_back(CertStatus::getCommonName(cert_data.cert));
+    }
+    return common_names;
+}
+
 /**
- * @brief Create the default admin ACF file
+ * @brief Convert the certificate data to an Admin Auth ACF file
+ *
+ * @param id the id of the certificate authority to insert into the Admin Auth ACF file
+ * @param cert_data the certificate data to use to get the common names for the Authorities section of the Admin Auth ACF file
+ * @return the Admin Auth ACF file
+ */
+std::string toACFAuth(const std::string &id, const CertData &cert_data) {
+    if (!cert_data.cert) return "";
+
+    const auto common_names = getCertPaths(cert_data);
+
+    // Build the nested structure from root to issuer
+    std::string result;
+    for (size_t i = common_names.size(); i > 0; --i) {
+        const std::string &cn = common_names[i-1];
+        std::string indent(4 * (common_names.size() - i), ' ');
+
+        result += indent + "AUTHORITY(";
+        // Add id parameter only for the last (issuer) certificate
+        if (i == 1) result += id + ", ";
+        result += "\"" + cn + "\")";
+
+        // Add braces and newline for all but the innermost authority
+        if (i > 1) result += " {\n";
+    }
+
+    // Close all brackets except for the innermost one
+    for (size_t i = 1; i < common_names.size(); ++i) {
+        std::string indent(4 * (common_names.size() - i - 1), ' ');
+        result += "\n" + indent + "}";
+    }
+
+    return result;
+}
+
+/**
+ * @brief Convert the certificate data to a YAML formatted Admin ACF file
+ *
+ * @param id the id of the certificate authority to insert into the Admin ACF file
+ * @param cert_data the certificate data to use to get the common names for the Authorities section
+ * @return the YAML formatted Admin ACF file
+ */
+std::string toACFYamlAuth(const std::string &id, const CertData &cert_data) {
+    if (!cert_data.cert) return "";
+
+    const auto common_names = getCertPaths(cert_data);
+
+    if (common_names.empty()) return "";
+
+    std::string result = "authorities:\n";
+
+    // For single certificate case
+    if (common_names.size() == 1) {
+        result += "  - id: " + id + "\n";
+        result += "    name: " + common_names[0];
+        return result;
+    }
+
+    // For certificate chain
+    std::string indent = "  ";
+    size_t current_level = 1;
+
+    // Start with root
+    result += indent + "- name: " + common_names.back() + "\n";
+
+    // Handle intermediate certificates and issuer
+    for (size_t i = common_names.size() - 1; i > 0; --i) {
+        current_level++;
+        std::string current_indent(current_level * 2, ' ');
+
+        result += current_indent + "authorities:\n";
+        current_indent += "  ";
+
+        result += current_indent + "- ";
+
+        // Add id only for the last (issuer) certificate
+        if (i == 1) {
+            result += "id: " + id + "\n";
+            result += current_indent + "  name: " + common_names[i-1];
+        } else {
+            result += "name: " + common_names[i-1] + "\n";
+        }
+    }
+
+    return result;
+}
+
+
+
+/*
+ * Create the default admin ACF file
  *
  * @param config the config to use to get the ACF filename
- * @param cert_auth_cert the certificate authority certificate to use to get the issuer ID and common name
+ * @param cert_data the certificate data to use to get the common names
  */
-void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &cert_auth_cert) {
+void createDefaultAdminACF(const ConfigCms &config, const CertData &cert_data) {
     std::ifstream file (config.pvacms_acf_filename);
     if ( file.good()) return;
-
-    const auto cn = CertStatus::getCommonName(cert_auth_cert);
 
     std::string extension = config.pvacms_acf_filename.substr(config.pvacms_acf_filename.find_last_of(".") + 1);
     std::transform(extension.begin(), extension.end(), extension.begin(), tolower);
@@ -1139,6 +1245,9 @@ void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &cert_a
 
     extension == "yaml" || extension == "yml" ? out_file << "# EPICS YAML\n"
                                                             "version: 1.0\n"
+                                                            "\n"
+                                                            "# certificate authorities\n"
+                                                            << toACFYamlAuth("CMS_AUTH", cert_data) << "\n" <<
                                                             "\n"
                                                             "# user access groups\n"
                                                             "uags:\n"
@@ -1159,18 +1268,17 @@ void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &cert_a
                                                             "        methods:\n"
                                                             "          - x509\n"
                                                             "        authorities:\n"
-                                                            "          - "
-                                                         << cn << std::endl
-                                              : out_file << "UAG(CMS_ADMIN) {admin}\n"
+                                                            "          - CMS_AUTH" << std::endl
+                                              : out_file << toACFAuth("CMS_AUTH", cert_data) << "\n"
+                                                            "\n"
+                                                            "UAG(CMS_ADMIN) {admin}\n"
                                                             "\n"
                                                             "ASG(DEFAULT) {\n"
                                                             "    RULE(0,READ)\n"
                                                             "    RULE(1,WRITE) {\n"
                                                             "        UAG(CMS_ADMIN)\n"
                                                             "        METHOD(\"x509\")\n"
-                                                            "        AUTHORITY(\""
-                                                         << cn
-                                                         << "\")\n"
+                                                            "        AUTHORITY(CMS_AUTH)\n"
                                                             "    }\n"
                                                             "}"
                                                          << std::endl;

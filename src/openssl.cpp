@@ -789,8 +789,8 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
                     // But if there's only one certificate, we don't skip it
                     const int start_index = (N > 1) ? 1 : 0;
 
-                    // Process certificates in the chain, skipping the entity cert unless it's the only one
-                    for (int i = start_index; i < N; i++) {
+                    // Process certificates in the chain in reverse order, from root to issuer
+                    for (int i = N - 1; i >= start_index; i--) {
                         const auto chain_cert = sk_X509_value(chain, i);
                         const X509_NAME *certName = X509_get_subject_name(chain_cert);
 

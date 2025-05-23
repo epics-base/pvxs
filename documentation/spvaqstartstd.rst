@@ -875,6 +875,8 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
 
 .. code-block:: shell
 
+    AUTHORITY(AUTH_EPICS_ROOT, "EPICS Root Certificate Authority")
+
     UAG(OPERATORS) {
         "michael"
     }
@@ -882,7 +884,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
     ASG(SPECIAL) {
         RULE(1,WRITE,TRAPWRITE) {
             UAG(OPERATORS)
-    		AUTHORITY("EPICS Root Certificate Authority")
+    		AUTHORITY(AUTH_EPICS_ROOT)
     		METHOD("x509")
         }
     }

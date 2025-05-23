@@ -253,7 +253,11 @@ time_t getNotBeforeTimeFromCert(const X509 *cert);
 void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, ossl_ptr<X509> &cert_auth_cert, ossl_ptr<EVP_PKEY> &cert_auth_pkey,
                               ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain, ossl_ptr<X509> &cert_auth_root_cert, bool &is_initialising);
 
-void createDefaultAdminACF(const ConfigCms &config, const ossl_ptr<X509> &cert_auth_cert);
+std::vector<std::string> getCertPaths(const CertData &cert_data);
+std::string toACFAuth(const std::string &id, const CertData &cert_data);
+std::string toACFYamlAuth(const std::string &id, const CertData &cert_data);
+
+void createDefaultAdminACF(const ConfigCms &config, const CertData &cert_data);
 
 void createAdminClientCert(const ConfigCms &config, sql_ptr &certs_db, const ossl_ptr<EVP_PKEY> &cert_auth_pkey, const ossl_ptr<X509> &cert_auth_cert,
                            const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_cert_chain, const std::string &admin_name = "admin");

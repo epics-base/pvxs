@@ -680,25 +680,57 @@ The above rule will match any client that presents an x509 certificate to assert
 AUTHORITY
 ~~~~~~~~~
 
-Specifies Certifying Authority:
+1. A new top level item in ACF files AUTHORITY declares the heirarchy of Certificate Authorities that can be
+referenced, going all the way back to the Root Certificate Authority.
 
-- Uses name from ``CN`` field of certificate authority certificate's subject
-- Only applicable for X.509 certificate authentication
-- Multiple authorities can be specified and any one of them will be accepted
+  - Specifies Certifying Authority:
 
-Should be provided as a quoted string.
+    - Uses name from ``CN`` field of certificate authority certificate's subject
+    - The whole chain must be specified back to the root certificate
+    - Not all nodes need to be named especially if they are intermediate certificates
 
 Example:
 
 .. code-block:: text
 
-   RULE(1,WRITE) {
-       AUTHORITY("EPICS Root Certificate Authority")
+    AUTHORITY(AUTH_EPICS_ROOT, "EPICS Root Certificate Authority") {
+        AUTHORITY("SNS Intermediate CA") {
+            AUTHORITY(AUTH_SNS_CTRL, "SNS Control Systems CA")
+            AUTHORITY(AUTH_BEAMLINE, "SNS Beamline Operations CA")
+       }
+    }
+
+    AUTHORITY(AUTH_EPICS_IT_ROOT, "EPICS IT Root Certificate Authority") {
+    	AUTHORITY(AUTH_EPICS_USERS, "EPICS Users Certificate Authority")
+    }
+
+2. A new AUTHORITY predicate in ASG RULES references the top level AUTHORITY to constrain rules
+
+  - References the Top Level Authority definition:
+
+    - Only applicable for X.509 certificate authentication
+    - Multiple authorities can be specified and any one of them will be accepted
+
+Example:
+
+.. code-block:: text
+
+   RULE(1,READ) {
+       AUTHORITY(AUTH_EPICS_USERS, AUTH_EPICS_ROOT)
    }
 
 The above rule will match any client that presents an x509 certificate
-that is signed by the EPICS Root Certificate Authority. This means that
-the EPICS Root Certificate Authority vouches for the identity of the client.
+that is signed by the EPICS Root Certificate Authority or the
+EPICS Users Certificate Authority.
+
+.. code-block:: text
+
+   RULE(1,WRITE) {
+       AUTHORITY(AUTH_SNS_CTRL)
+   }
+
+The above rule will match any client that presents an x509 certificate
+that is signed by the SNS Control Systems CA.
 
 PROTOCOL
 ~~~~~~~~
@@ -762,41 +794,53 @@ These examples demonstrate combining security features for granular access contr
 
 .. code-block:: text
 
-   UAG(operators) {greg, karen, ralph}
-   UAG(engineers) {kay, george, michael}
-   UAG(admins) {aqeel, earnesto, pierrick}
+    UAG(operators) {greg, karen, ralph}
+    UAG(engineers) {kay, george, michael}
+    UAG(admins) {aqeel, earnesto, pierrick}
 
-   ASG(DEFAULT) {
-   # Default - No access
+    AUTHORITY(AUTH_EPICS_ROOT, "EPICS Root Certificate Authority") {
+        AUTHORITY("Intermediate CA") {
+            AUTHORITY(AUTH_LBNL_CTRL, "LBNL Certificate Authority")
+        }
+        AUTHORITY(AUTH_SLAC_ROOT, "SLAC Certificate Authority") {
+            AUTHORITY(AUTH_EPICS_USERS, "EPICS Users Certificate Authority")
+        }
+    }
+
+
+    ASG(DEFAULT) {
+    # Default - No access
        RULE(0,NONE)
 
-   # Read-only access for operators, requiring TLS
+    # Read-only access for operators, requiring TLS
        RULE(1,READ) {
            UAG(operators,engineers,admins)
            PROTOCOL(tls)
        }
 
-   # Write access for engineers using x509 auth
+    # Write access for engineers from SLAC or LBNL using x509 auth
        RULE(2,WRITE) {
            UAG(engineers,admins)
            METHOD(x509)
-           AUTHORITY("LBNL Certificate Authority","SLAC Certificate Authority")
+           AUTHORITY(AUTH_LBNL_CTRL, AUTH_SLAC_ROOT)
        }
 
-   # RPC access for admins using specific CA and TLS
+    # RPC access for admins using specific Cert Auth and TLS
        RULE(3,RPC) {
            UAG(admins)
            METHOD("x509")
-           AUTHORITY("EPICS Root Certificate Authority")
+           AUTHORITY(AUTH_EPICS_ROOT)
        }
-   }
+    }
 
 *Legacy compatible with Enhanced Security*
 
 .. code-block:: text
 
-   # Support both legacy and SPVA clients
-   ASG(backward_compatible) {
+    AUTHORITY(AUTH_EPICS_ROOT, "EPICS Root Certificate Authority")
+
+    # Support both legacy and SPVA clients
+    ASG(backward_compatible) {
        RULE(0,NONE)
        # Legacy access - read only
        RULE(1,READ) {
@@ -807,10 +851,10 @@ These examples demonstrate combining security features for granular access contr
        RULE(2,WRITE) {
            UAG(operators)
            METHOD("x509")
-           AUTHORITY("EPICS Root Certificate Authority")
+           AUTHORITY(AUTH_EPICS_ROOT)
            PROTOCOL("tls")
        }
-   }
+    }
 
 Authenticator Development
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

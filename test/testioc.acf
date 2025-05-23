@@ -2,6 +2,8 @@ UAG(DEFAULT) {
     "george"
 }
 
+AUTHORITY(EPICS_ROOT, "EPICS Root Certificate Authority")
+
 UAG(BAR) {
     "michael"
 }
@@ -14,7 +16,7 @@ ASG(SPECIAL) {
     RULE(1,WRITE,TRAPWRITE) {
         UAG(DEFAULT)
         UAG(BAR)
-	AUTHORITY("EPICS Root Certificate Authority")
+	AUTHORITY(EPICS_ROOT)
 	METHOD(x509)
 	PROTOCOL(tls)
     }

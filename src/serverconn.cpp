@@ -49,7 +49,7 @@ std::ostream& operator<<(std::ostream& strm, const PeerCredentials& cred)
         std::string authority = cred.authority;
         size_t pos = 0;
         while((pos = authority.find('\n', pos)) != std::string::npos) {
-            authority.replace(pos, 1, " <- ");
+            authority.replace(pos, 1, " -> ");
             pos += 4; // Move past the replacement string
         }
         strm<<authority;

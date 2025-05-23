@@ -148,12 +148,14 @@ class ConfigCms final : public server::Config {
      * to validated peers of the PVACMS.
      *
      * This will specify administrators that have the right to revoke
-     * certificates, and the default read permissions for certificate statuses.
-     * There is no default so it must be specified on the command line or
+     * certificates and the default read permissions for certificate statuses.
+     * There is no default, so it must be specified on the command line or
      * as an environment variable.
      *
      * e.g.
      * @code
+     *      AUTHORITY(YOUR_AUTH_ROOT, "CN of your Certificate Authority")
+     *
      *      USG(ADMINS) {
      *       "admin",
      *       "admin@yourdomain.com"
@@ -164,7 +166,7 @@ class ConfigCms final : public server::Config {
      *       RULE(1,WRITE) {
      *         UAG(ADMINS)
      *         METHOD("x509")
-     *         AUTHORITY("CN of your Certificate Authority")
+     *         AUTHORITY(YOUR_AUTH_ROOT)
      *      }
      *
      * @endcode
@@ -178,7 +180,7 @@ class ConfigCms final : public server::Config {
      * will be created automatically.
      *
      * To provide the `name` (CN) to be used in the subject of the
-     * certificate authority certificate we can use this environment variable.
+     * certificate authority certificate, we can use this environment variable.
      */
     std::string cert_auth_name = "EPICS Root Certificate Authority";
 
@@ -188,7 +190,7 @@ class ConfigCms final : public server::Config {
      * created automatically.
      *
      * To provide the organization (O) to be used in the subject of
-     * the certificate authority certificate we can use this environment variable.
+     * the certificate authority certificate, we can use this environment variable.
      */
     std::string cert_auth_organization = "certs.epics.org";
 
@@ -213,7 +215,7 @@ class ConfigCms final : public server::Config {
      * will be created automatically.
      *
      * To provide the name (CN) to be used in the subject of the
-     * PVACMS certificate we can use this environment variable.
+     * PVACMS certificate, we can use this environment variable.
      */
     std::string pvacms_name = "PVACMS Service";
 
@@ -223,7 +225,7 @@ class ConfigCms final : public server::Config {
      * created automatically.
      *
      * To provide the organization (O) to be used in the subject of
-     * the PVACMS certificate we can use this environment variable.
+     * the PVACMS certificate, we can use this environment variable.
      */
     std::string pvacms_organization = "certs.epics.org";
 
