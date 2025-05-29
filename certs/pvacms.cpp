@@ -1149,22 +1149,23 @@ std::string toACFAuth(const std::string &id, const CertData &cert_data) {
 
     // Build the nested structure from root to issuer
     std::string result;
-    for (size_t i = common_names.size(); i > 0; --i) {
-        const std::string &cn = common_names[i-1];
-        std::string indent(4 * (common_names.size() - i), ' ');
+    const auto N = common_names.size();
+    for (size_t i = 0; i < N; i++) {
+        const std::string &cn = common_names[i];
+        std::string indent(4 * i, ' ');
 
         result += indent + "AUTHORITY(";
         // Add id parameter only for the last (issuer) certificate
-        if (i == 1) result += id + ", ";
+        if (i == N-1) result += id + ", ";
         result += "\"" + cn + "\")";
 
         // Add braces and newline for all but the innermost authority
-        if (i > 1) result += " {\n";
+        if (i != N-1) result += " {\n";
     }
 
     // Close all brackets except for the innermost one
-    for (size_t i = 1; i < common_names.size(); ++i) {
-        std::string indent(4 * (common_names.size() - i - 1), ' ');
+    for (size_t i = 1; i < N; ++i) {
+        std::string indent(4 * (N - i - 1), ' ');
         result += "\n" + indent + "}";
     }
 
