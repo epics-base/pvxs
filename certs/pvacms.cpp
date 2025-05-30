@@ -797,8 +797,7 @@ void onCreateCertificate(ConfigCms &config, sql_ptr &certs_db, server::SharedWil
         ///////////////////
 
         // Get Public Key to use
-        auto public_key = getStructureValue<const std::string>(ccr, "pub_key");
-        const auto key_pair = std::make_shared<KeyPair>(public_key);
+        const auto key_pair = std::make_shared<KeyPair>(pub_key);
 
         // Generate a new serial number
         auto serial = generateSerial();
@@ -893,7 +892,8 @@ void onGetStatus(const ConfigCms &config, const sql_ptr &certs_db, const std::st
 
         // Get all other serial numbers to check (certificate authority and certificate authority chain)
         cert_auth_serial_numbers.push_back(CertStatusFactory::getSerialNumber(cert_auth_cert));
-        for (auto i = 0u; i < sk_X509_num(cert_auth_chain.get()); ++i) {
+        const auto N = sk_X509_num(cert_auth_chain.get());
+        for (auto i = 0u; i < N; ++i) {
             cert_auth_serial_numbers.push_back(CertStatusFactory::getSerialNumber(sk_X509_value(cert_auth_chain.get(), i)));
         }
 
@@ -1122,11 +1122,15 @@ void getOrCreateCertAuthCertificate(const ConfigCms &config, sql_ptr &certs_db, 
 std::vector<std::string> getCertPaths(const CertData &cert_data)
 {
     std::vector<std::string> common_names;
-    if (cert_data.cert_auth_chain && sk_X509_num(cert_data.cert_auth_chain.get()) > 0) {
-        // Get common names from all certificates in the chain
-        for (int i = 0; i < sk_X509_num(cert_data.cert_auth_chain.get()); ++i) {
-            auto  cert = ossl_ptr<X509>(X509_dup(sk_X509_value(cert_data.cert_auth_chain.get(), i)));
-            common_names.push_back(CertStatus::getCommonName(cert));
+    if (cert_data.cert_auth_chain) {
+        const auto N = sk_X509_num(cert_data.cert_auth_chain.get());
+        if (N > 0) {
+            // Get common names from all certificates in the chain
+            for (int i = N-1; i >= 0; i--) {
+                auto  cert = ossl_ptr<X509>(X509_dup(sk_X509_value(cert_data.cert_auth_chain.get(), i)));
+                const auto common_name = CertStatus::getCommonName(cert);
+                common_names.push_back(common_name);
+            }
         }
     }
     if (cert_data.cert) {

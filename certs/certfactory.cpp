@@ -121,20 +121,22 @@ ossl_ptr<X509> CertFactory::create() {
 
     // 12. Create cert chain from issuer's chain and issuer's cert
     if (issuer_chain_ptr_) {
-        // Fill with issuer chain certificates if supplied
         const int num_certs = sk_X509_num(issuer_chain_ptr_);
         log_debug_printf(certs, "Creating Certificate Chain with %d entries\n", num_certs + 1);
-        for (int i = 0; i < num_certs; ++i) {
-            const auto chain_cert = sk_X509_value(issuer_chain_ptr_, i);
-            if (!sk_X509_push(certificate_chain_.get(), chain_cert)) {
-                throw std::runtime_error("Failed to create certificate chain for new certificate");
-            }
-        }
+
         // Add the issuer's certificate too if not already added
         const auto root_cert = sk_X509_value(issuer_chain_ptr_, num_certs - 1);
         const bool already_added = root_cert && X509_cmp(root_cert, issuer_certificate_ptr_) == 0;
         if (!already_added && !sk_X509_push(certificate_chain_.get(), issuer_certificate_ptr_)) {
             throw std::runtime_error(SB() << "Failed to add issuer certificate to certificate chain");
+        }
+
+        // Fill with issuer chain certificates if supplied
+        for (int i = 0; i < num_certs; ++i) {
+            const auto chain_cert = sk_X509_value(issuer_chain_ptr_, i);
+            if (!sk_X509_push(certificate_chain_.get(), chain_cert)) {
+                throw std::runtime_error("Failed to create certificate chain for new certificate");
+            }
         }
     } else
         log_debug_printf(certs, "Creating %s Certificate Chain\n", "*EMPTY*");

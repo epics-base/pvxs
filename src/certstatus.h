@@ -420,7 +420,7 @@ struct CertStatus {
             throw std::runtime_error("Invalid certificate chain");
         }
 
-        const auto issuer_ca = sk_X509_value(chain.get(), N==1 ? 0 : 1);
+        const auto issuer_ca = sk_X509_value(chain.get(), 0);
 
         if (issuer_ca == nullptr) {
             throw std::runtime_error("Failed to retrieve issuer certificate");
