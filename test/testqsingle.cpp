@@ -589,6 +589,9 @@ void testPutLog()
         static
         void message(asTrapWriteMessage *pmessage,int after)
         {
+            testTrue(strcmp(pmessage->hostid, "127.0.0.1")==0 || strcmp(pmessage->hostid, "::1")==0)
+                    <<" asTrapWriteMessage "<<escape(pmessage->hostid);
+
             // caPutLog assumes "serverSpecific" is always available, and a dbChannel*
             // (or dbAddr* with 3.14)
             auto *pchan = (dbChannel*)pmessage->serverSpecific;
@@ -907,7 +910,7 @@ void testMonitorDBE(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(89);
+    testPlan(95);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
