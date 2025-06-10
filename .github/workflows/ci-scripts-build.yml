@@ -137,16 +137,16 @@ jobs:
             configuration: default
             base: "7.0"
 
-          - name: vs2019 DLL
-            os: windows-2019
-            cmp: vs2019
+          - name: vs2022 DLL
+            os: windows-2022
+            cmp: vs2022
             configuration: debug
             base: "7.0"
             extra: "CMD_CXXFLAGS=-analysis"
 
-          - name: vs2019 static
-            os: windows-2019
-            cmp: vs2019
+          - name: vs2022 static
+            os: windows-2022
+            cmp: vs2022
             configuration: static-debug
             base: "7.0"
             extra: "CMD_CXXFLAGS=-analysis"
