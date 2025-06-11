@@ -92,6 +92,8 @@ public:
     OpBase& operator=(const OpBase&) = delete;
     virtual ~OpBase() =0;
 };
+//! Log to remote peer
+//! @since UNRELEASED
 struct PVXS_API RemoteLogger {
     virtual ~RemoteLogger() =0;
 

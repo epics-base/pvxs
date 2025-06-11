@@ -3,6 +3,18 @@
 Release Notes
 =============
 
+1.4.0 (UNRELEASED)
+------------------
+
+* Rename generated CONFIG_SITE to TOOLCHAIN.
+  Existing clones need to remove previously generated ``configure/os/CONFIG_SITE.Common.*``.
+* Fix rendering of IPv6 addresses in QSRV credential (ACF and asTrapWrite/caputlog) and `pvxs::server::Source::Search`.
+* Add server to client remote logging.
+  Several `pvxs::server::Source` related objects gain the `pvxs::server::RemoteLogger` interface.
+* Add remote logging for some malformed pvRequest.
+* ioc: record._options.process accept numeric values as true/false.
+* server: handle protocol corner case of monitor create without initial ACK.
+
 1.3.3 (Apr 2025)
 ----------------
 
