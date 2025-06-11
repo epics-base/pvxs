@@ -8,6 +8,10 @@ include $(TOP)/configure/CONFIG
 USR_CPPFLAGS += -DPVXS_API_BUILDING
 USR_CPPFLAGS += -DPVXS_ENABLE_EXPERT_API
 
+ifeq (YES,$(EVENT2_HAS_OPENSSL))
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+endif
+
 ifdef T_A
 ifneq ($(CONFIG_LOADED),YES)
 $(warning Toolchain inspection failed $(MAKEFILE_LIST))
