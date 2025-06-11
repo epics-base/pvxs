@@ -20,6 +20,7 @@
 #include <pvxs/log.h>
 #include <pvxs/nt.h>
 
+#include "certdate.h"
 #include "ownedptr.h"
 #include "security.h"
 
@@ -217,6 +218,24 @@ inline std::string getConfigURI(const std::string &cert_pv_prefix, const std::st
 }
 
 /**
+ * @brief Generates a serial number string as used in a certificate ID.
+ *
+ * Left pad with zeros in 20 characters
+ *
+ * @param serial The serial number of the certificate.
+ * @return The the serial number string.
+ *
+ * @see SB
+ */
+inline std::string getSerialString(const uint64_t &serial) {
+    std::ostringstream oss;
+    oss << std::setw(20)
+        << std::setfill('0')
+        << serial;
+    return oss.str();
+}
+
+/**
  * @brief Generates a unique certificate ID based on the issuer ID and serial number.
  *
  * This function takes the issuer ID and serial number as input and combines them
@@ -230,14 +249,10 @@ inline std::string getConfigURI(const std::string &cert_pv_prefix, const std::st
  * @see SB
  */
 inline std::string getCertId(const std::string &issuer_id, const uint64_t &serial) {
-    // constexpr int serial_bits = 64;
-    // constexpr int serial_len = static_cast<int>(std::log10(std::pow(2, serial_bits))) + 1;
     std::ostringstream oss;
     oss << issuer_id
         << ":"
-        << std::setw(20)
-        << std::setfill('0')
-        << serial;
+        << getSerialString(serial);
     return oss.str();
 }
 
@@ -283,6 +298,7 @@ class CertStatusSubscriptionException final : public CertStatusException {
     X_IT(VALID)            \
     X_IT(PENDING)          \
     X_IT(PENDING_APPROVAL) \
+    X_IT(PENDING_RENEWAL)  \
     X_IT(EXPIRED)          \
     X_IT(REVOKED)
 
@@ -313,6 +329,34 @@ enum ocspcertstatus_t { OCSP_CERT_STATUS_LIST };
 // Forward declarations
 struct PVACertStatus;
 struct OCSPCertStatus;
+
+struct DbCert {
+    // The certificate's serial number
+    uint64_t serial{0};
+    // not before
+    time_t not_before{0};
+    // not after
+    time_t not_after{0};
+    // renew by
+    time_t renew_by{0};
+    // status
+    certstatus_t status;
+    // The certificate's issuer ID (first 8 hex digits of the hex SKID)
+    std::string issuer_id{};
+    // The certificate's SKID (subject key identifier)
+    std::string skid{};
+    // The certificate's subject CN
+    std::string cn{};
+    // The certificate's subject O
+    std::string o{};
+    // The certificate's subject OU
+    std::string ou{};
+    // The certificate's subject C
+    std::string c{};
+
+    DbCert(const uint64_t serial, const time_t not_after, const time_t renew_by, const certstatus_t status) : serial(serial), not_after(not_after), renew_by(renew_by), status(status) {};
+    DbCert() = default;
+};
 
 /**
  * @brief Base class for Certificate status values.  Contains the enum index `i`
@@ -642,140 +686,6 @@ struct OCSPCertStatus : CertStatus {
 };
 
 /**
- * @brief To create and manipulate status dates.
- * Status dates have a string representation `s` as well as a time_t representation `t`
- */
-struct StatusDate {
-    // time_t representation of the status date
-    std::time_t t{};
-    // string representation of the status date
-    std::string s{};
-
-    // Default constructor
-    StatusDate() = default;
-
-    // Constructor from time_t
-    StatusDate(const std::time_t& time) : t(time), s(toString(time)) {} // NOLINT(*-explicit-constructor)
-    // Constructor from ASN1_TIME*
-    StatusDate(const ASN1_TIME* time) : t(asn1TimeToTimeT(time)), s(toString(t)) {}// NOLINT(*-explicit-constructor)
-    // Constructor from ossl_ptr<ASN1_TIME>
-    StatusDate(const ossl_ptr<ASN1_TIME>& time) : t(asn1TimeToTimeT(time.get())), s(toString(t)) {}// NOLINT(*-explicit-constructor)
-    // Constructor from time string
-    StatusDate(const std::string& time_string) : t(toTimeT(time_string)), s(StatusDate(t).s) {}// NOLINT(*-explicit-constructor)
-
-    // Define the comparison operator
-    bool operator==(const StatusDate rhs) const { return this->t == rhs.t; }
-
-    // Define the conversion operators
-    operator const std::string&() const { return s; }
-    operator std::string() const { return s; }
-    operator const time_t&() const { return t; }
-    operator time_t() const { return t; }
-    operator ossl_ptr<ASN1_TIME>() const { return toAsn1_Time(); }
-
-    /**
-     * @brief Create an ASN1_TIME object from this StatusDate object
-     * @return and ASN1_TIME object corresponding this StatusDate object
-     */
-    ossl_ptr<ASN1_TIME> toAsn1_Time() const {
-        ossl_ptr<ASN1_TIME> asn1(ASN1_TIME_new());
-        ASN1_TIME_set(asn1.get(), t);
-        return asn1;
-    }
-
-    /**
-     * @brief Create an ASN1_TIME object from a StatusDate object
-     * @return and ASN1_TIME object corresponding to the given StatusDate object
-     */
-    static ossl_ptr<ASN1_TIME> toAsn1_Time(const StatusDate status_date) { return status_date.toAsn1_Time(); }
-
-    /**
-     * @brief To get the time_t (unix time) from a ASN1_TIME* time pointer
-     * @param time ASN1_TIME* time pointer to convert
-     * @return a time_t (unix time) version
-     */
-    static time_t asn1TimeToTimeT(const ASN1_TIME* time) {
-        std::tm t = {};
-        if (!time) return 0;
-
-        if (ASN1_TIME_to_tm(time, &t) != 1) throw std::runtime_error("Failed to convert ASN1_TIME to tm structure");
-
-        return tmToUnixTime(t);
-    }
-
-   private:
-    /**
-     * @brief To format a string representation of the given time_t
-     * @param time the time_t to format
-     * @return the string representation in local time
-     */
-    static std::string toString(const std::time_t& time) {
-        char buffer[100];
-        if (std::strftime(buffer, sizeof(buffer), CERT_TIME_FORMAT, std::gmtime(&time))) {
-            return std::string(buffer);
-        }
-        throw OCSPParseException("Failed to format status date");
-    }
-
-    /**
-     * @brief Convert the given string to a time_t value.
-     *
-     * The string is assumed to represent a time in the UTC timezone.  The
-     * format of the string is defined by `CERT_TIME_FORMAT`.  The string is parsed,
-     * and the time_t extracted and returned.
-     *
-     * Any errors in format are signalled by raising OCSPParseExceptions as this function
-     * is called from OCSP parsing
-     *
-     * @param time_string
-     * @return
-     */
-    static time_t toTimeT(const std::string& time_string) {
-        // Read the string and parse it into std::tm
-        if (time_string.empty()) return 0;
-        std::tm tm = {};
-        std::istringstream ss(time_string);
-        ss >> std::get_time(&tm, CERT_TIME_FORMAT);
-
-        // Check if parsing was successful
-        if (ss.fail()) {
-            throw OCSPParseException("Failed to parse date-time string.");
-        }
-
-        // Convert std::tm to time_t
-        return tmToUnixTime(tm);
-    }
-
-    /**
-     * @brief To get the time_t (unix time) from a std::tm structure
-     * @param tm std::tm structure to convert
-     * @return a time_t (unix time) version
-     */
-    static time_t tmToUnixTime(const std::tm& tm) {
-        // For accurate time calculation the start day in a year of each month
-        static const int kMonthStartDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
-        const int year = 1900 + tm.tm_year;
-
-        // Calculate days up to the start of the current year
-        time_t days = (year - 1970) * 365 + (year - 1969) / 4  // Leap years
-                      - (year - 1901) / 100                    // Excluding non-leap centuries
-                      + (year - 1601) / 400;                   // Including leap centuries
-
-        // Calculate days up to the start of the current month within the current year
-        days += kMonthStartDays[tm.tm_mon];
-        if (tm.tm_mon > 1 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))) {
-            days += 1;  // Add one day for leap years after February
-        }
-
-        // Adjust with the current day in the month (`tm_mday` starts from 1)
-        days += tm.tm_mday - 1;
-
-        // Incorporate hours, minutes, and seconds
-        return ((days * 24 + tm.tm_hour) * 60 + tm.tm_min) * 60 + tm.tm_sec;
-    }
-};
-
-/**
  * @brief To store OCSP status value - parsed out of an OCSP response.
  *
  * This struct is used to store the parsed OCSP status value.  It is used
@@ -789,11 +699,11 @@ struct ParsedOCSPStatus {
     // OCSP status of the certificate
     const OCSPCertStatus ocsp_status;
     // date of the OCSP certificate status
-    const StatusDate status_date;
+    const CertDate status_date;
     // valid-until date of the OCSP certificate status
-    const StatusDate status_valid_until_date;
+    const CertDate status_valid_until_date;
     // revocation date of the certificate if it is revoked
-    const StatusDate revocation_date;
+    const CertDate revocation_date;
 
     /**
      * @brief Constructor for ParsedOCSPStatus
@@ -804,8 +714,8 @@ struct ParsedOCSPStatus {
      * @param status_valid_until_date the status `valid-until` date of the certificate
      * @param revocation_date the revocation date of the certificate if it is revoked
      */
-    ParsedOCSPStatus(const uint64_t& serial, const OCSPCertStatus& ocsp_status, const StatusDate& status_date, const StatusDate& status_valid_until_date,
-                     const StatusDate& revocation_date)
+    ParsedOCSPStatus(const uint64_t& serial, const OCSPCertStatus& ocsp_status, const CertDate& status_date, const CertDate& status_valid_until_date,
+                     const CertDate& revocation_date)
         : serial(serial),
           ocsp_status(ocsp_status),
           status_date(status_date),
@@ -835,11 +745,11 @@ struct OCSPStatus {
     // OCSP status of the certificate
     OCSPCertStatus ocsp_status{OCSP_CERTSTATUS_UNKNOWN};
     // date of the OCSP certificate status
-    StatusDate status_date{};
+    CertDate status_date{};
     // valid-until date of the OCSP certificate status
-    StatusDate status_valid_until_date{static_cast<time_t>(0)};
+    CertDate status_valid_until_date{static_cast<time_t>(0)};
     // revocation date of the certificate if it is revoked
-    StatusDate revocation_date{};
+    CertDate revocation_date{};
 
     // Constructor from a PKCS#7 OCSP response that must be signed by the given trusted store.
     explicit OCSPStatus(const shared_array<const uint8_t>& ocsp_bytes_param, X509_STORE* trusted_store_ptr) : ocsp_bytes(ocsp_bytes_param) {
@@ -904,8 +814,8 @@ struct OCSPStatus {
 
    private:
     friend struct PVACertificateStatus;
-    explicit OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
-                        StatusDate revocation_time);
+    explicit OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes, CertDate status_date, CertDate status_valid_until_time,
+                        CertDate revocation_time);
 
     void init(X509_STORE* trusted_store_ptr);
 };
@@ -958,8 +868,8 @@ struct PVACertificateStatus final : OCSPStatus {
         log_debug_printf(status_setup, "Status Validity: %s\n", this->status_valid_until_date.s.c_str());
         log_debug_printf(status_setup, "Revocation Date: %s\n", this->revocation_date.s.c_str());
         if (!selfConsistent() ||
-            !dateConsistent(StatusDate(status_value["ocsp_status_date"].as<std::string>()), StatusDate(status_value["ocsp_certified_until"].as<std::string>()),
-                            StatusDate(status_value["ocsp_revocation_date"].as<std::string>()))) {
+            !dateConsistent(CertDate(status_value["ocsp_status_date"].as<std::string>()), CertDate(status_value["ocsp_certified_until"].as<std::string>()),
+                            CertDate(status_value["ocsp_revocation_date"].as<std::string>()))) {
             throw OCSPParseException("Certificate status does not match certified OCSP status");
         }
     }
@@ -980,7 +890,7 @@ struct PVACertificateStatus final : OCSPStatus {
      * @param revocation_time Revocation date
      */
     explicit PVACertificateStatus(const certstatus_t status, const ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes,
-                                  const StatusDate& status_date, const StatusDate& status_valid_until_time, const StatusDate& revocation_time)
+                                  const CertDate& status_date, const CertDate& status_valid_until_time, const CertDate& revocation_time)
         : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time), status(status) {}
 
     /**
@@ -1001,7 +911,7 @@ struct PVACertificateStatus final : OCSPStatus {
      * @param revocation_date_value Revocation date
      * @return true if the PVACertificateStatus is date-consistent, false otherwise
      */
-    bool dateConsistent(const StatusDate& status_date_value, const StatusDate& status_valid_until_date_value, const StatusDate& revocation_date_value) const {
+    bool dateConsistent(const CertDate& status_date_value, const CertDate& status_valid_until_date_value, const CertDate& revocation_date_value) const {
         return status_date == status_date_value && status_valid_until_date == status_valid_until_date_value && revocation_date == revocation_date_value;
     }
 };
@@ -1037,8 +947,8 @@ bool operator!=(certstatus_t& lhs, PVACertificateStatus& rhs);
 struct CertificateStatus {
     virtual ~CertificateStatus() = default;
     CertificateStatus()
-        : CertificateStatus(false, static_cast<PVACertStatus>(UNKNOWN), static_cast<OCSPCertStatus>(OCSP_CERTSTATUS_UNKNOWN), StatusDate(std::time(nullptr)),
-                            StatusDate(PERMANENTLY_VALID_STATUS), StatusDate(static_cast<time_t>(0))) {}
+        : CertificateStatus(false, static_cast<PVACertStatus>(UNKNOWN), static_cast<OCSPCertStatus>(OCSP_CERTSTATUS_UNKNOWN), CertDate(std::time(nullptr)),
+                            CertDate(PERMANENTLY_VALID_STATUS), CertDate(static_cast<time_t>(0))) {}
 
     // Enable copying
     CertificateStatus(const CertificateStatus&) = default;
@@ -1087,12 +997,12 @@ struct CertificateStatus {
 
     bool isPermanent() const noexcept { return status_valid_until_date.t == PERMANENTLY_VALID_STATUS; }
 
-    StatusDate status_valid_until_date;
+    CertDate status_valid_until_date;
     bool certified{false};
     PVACertStatus status{UNKNOWN};
     OCSPCertStatus ocsp_status{OCSP_CERTSTATUS_UNKNOWN};
-    StatusDate status_date;
-    StatusDate revocation_date;
+    CertDate status_date;
+    CertDate revocation_date;
 
     /**
      * @brief Equality operator for PVACertificateStatus
@@ -1120,8 +1030,8 @@ struct CertificateStatus {
 
    protected:
     // Protected constructor for derived classes
-    CertificateStatus(const bool is_certified, const PVACertStatus& st, const OCSPCertStatus& ocsp_st, const StatusDate& st_date, const StatusDate& valid_until,
-                      const StatusDate& rev_date)
+    CertificateStatus(const bool is_certified, const PVACertStatus& st, const OCSPCertStatus& ocsp_st, const CertDate& st_date, const CertDate& valid_until,
+                      const CertDate& rev_date)
         : status_valid_until_date(valid_until), certified(is_certified), status(st), ocsp_status(ocsp_st), status_date(st_date), revocation_date(rev_date) {}
 
     /**
@@ -1189,14 +1099,14 @@ struct CertifiedCertificateStatus final : CertificateStatus {
 
 struct UnknownCertificateStatus final : CertificateStatus {
     UnknownCertificateStatus()
-        : CertificateStatus(false, static_cast<PVACertStatus>(UNKNOWN), static_cast<OCSPCertStatus>(OCSP_CERTSTATUS_UNKNOWN), StatusDate(std::time(nullptr)),
-                            StatusDate(PERMANENTLY_VALID_STATUS), StatusDate(static_cast<time_t>(0))) {}
+        : CertificateStatus(false, static_cast<PVACertStatus>(UNKNOWN), static_cast<OCSPCertStatus>(OCSP_CERTSTATUS_UNKNOWN), CertDate(std::time(nullptr)),
+                            CertDate(PERMANENTLY_VALID_STATUS), CertDate(static_cast<time_t>(0))) {}
 };
 
 struct UnCertifiedCertificateStatus final : CertificateStatus {
     UnCertifiedCertificateStatus()
-        : CertificateStatus(false, static_cast<PVACertStatus>(VALID), static_cast<OCSPCertStatus>(OCSP_CERTSTATUS_GOOD), StatusDate(std::time(nullptr)),
-                            StatusDate(PERMANENTLY_VALID_STATUS), StatusDate(static_cast<time_t>(0))) {}
+        : CertificateStatus(false, static_cast<PVACertStatus>(VALID), static_cast<OCSPCertStatus>(OCSP_CERTSTATUS_GOOD), CertDate(std::time(nullptr)),
+                            CertDate(PERMANENTLY_VALID_STATUS), CertDate(static_cast<time_t>(0))) {}
 };
 
 }  // namespace certs

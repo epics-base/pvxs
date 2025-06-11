@@ -236,10 +236,10 @@ struct PVXS_API ConfigCommon {
      * @return true if the location of the keychain file has been specified,
      * false otherwise
      */
-    inline bool isTlsConfigured() const { return !tls_disabled && !tls_keychain_file.empty(); }
+    bool isTlsConfigured() const { return !tls_disabled && !tls_keychain_file.empty(); }
     #endif  // PVXS_ENABLE_OPENSSL
 
-    inline std::string getFileContents(const std::string &file_name) {
+    std::string getFileContents(const std::string &file_name) {
         std::ifstream ifs(file_name);
         std::string contents((std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()));
 

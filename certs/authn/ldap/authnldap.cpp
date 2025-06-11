@@ -88,7 +88,11 @@ std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &con
     // Set the expiration time of the certificate
     const time_t now = time(nullptr);
     ldap_credentials->not_before = now;
-    ldap_credentials->not_after = now + 365 * 24 * 60 * 60;
+    if (ldap_config.cert_validity_mins == -1) {
+        ldap_credentials->not_after = -1;
+    } else {
+        ldap_credentials->not_after = now + ldap_config.cert_validity_mins * 60;
+    }
 
     ldap_credentials->name = for_client ? ldap_config.name : ldap_config.server_name;
     ldap_credentials->organization = for_client ? ldap_config.organization : ldap_config.server_organization;
@@ -99,9 +103,11 @@ std::shared_ptr<Credentials> AuthNLdap::getCredentials(const client::Config &con
     return ldap_credentials;
 }
 
-std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
-const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage,
-const ConfigAuthN &config) const {
+std::shared_ptr<CertCreationRequest> AuthNLdap::createCertCreationRequest(
+    const std::shared_ptr<Credentials> &credentials,
+    const std::shared_ptr<KeyPair> &key_pair,
+    const uint16_t &usage,
+    const ConfigAuthN &config) const {
     // Cast to LDAP-specific credentials
     auto ldap_credentials = castAs<LdapCredentials, Credentials>(credentials);
 
@@ -112,7 +118,8 @@ const ConfigAuthN &config) const {
     std::string user_dn = getDn(credentials->name, credentials->organization);
 
     // Initialize an LDAP connection.
-    std::string ldap_url = "ldap://" + ldap_credentials->ldap_server + ":" + std::to_string(ldap_credentials->ldap_port);
+    std::string ldap_url =
+        "ldap://" + ldap_credentials->ldap_server + ":" + std::to_string(ldap_credentials->ldap_port);
     LDAP *ld = nullptr;
     int rc = ldap_initialize(&ld, ldap_url.c_str());
     if (rc != LDAP_SUCCESS) {
@@ -132,15 +139,26 @@ const ConfigAuthN &config) const {
     rc = ldap_sasl_bind_s(ld, user_dn.c_str(), nullptr, &cred, nullptr, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
-        throw std::runtime_error(SB() << "LDAP simple bind failed to bind to " << ldap_credentials->ldap_server << ":" << ldap_credentials->ldap_port << " for "
-                                      << user_dn << ":" << ldap_err2string(rc));
+        throw std::runtime_error(SB() << "LDAP simple bind failed to bind to " << ldap_credentials->ldap_server << ":"
+                                      << ldap_credentials->ldap_port << " for " << user_dn << ":"
+                                      << ldap_err2string(rc));
     }
 
-    // Search for the client’s LDAP entry and retrieve the "epicsPublicKey" attribute.
+    // Search for the client's LDAP entry and retrieve the "epicsPublicKey" attribute.
     LDAPMessage *result = nullptr;
 
     char *attrs[] = {(char *)PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE, nullptr};
-    rc = ldap_search_ext_s(ld, user_dn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)", attrs, 0, nullptr, nullptr, nullptr, 0, &result);
+    rc = ldap_search_ext_s(ld,
+                           user_dn.c_str(),
+                           LDAP_SCOPE_BASE,
+                           "(objectClass=*)",
+                           attrs,
+                           0,
+                           nullptr,
+                           nullptr,
+                           nullptr,
+                           0,
+                           &result);
     if (rc != LDAP_SUCCESS) {
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         throw std::runtime_error(SB() << "LDAP search failed: " << ldap_err2string(rc));
@@ -151,8 +169,10 @@ const ConfigAuthN &config) const {
     std::string currentPublicKey;
     if (entry) {
         berval **pub_key_val_ptr = ldap_get_values_len(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
-        if (pub_key_val_ptr && pub_key_val_ptr[0]) currentPublicKey = std::string(pub_key_val_ptr[0]->bv_val, pub_key_val_ptr[0]->bv_len);
-        if (pub_key_val_ptr) ldap_value_free_len(pub_key_val_ptr);
+        if (pub_key_val_ptr && pub_key_val_ptr[0])
+            currentPublicKey = std::string(pub_key_val_ptr[0]->bv_val, pub_key_val_ptr[0]->bv_len);
+        if (pub_key_val_ptr)
+            ldap_value_free_len(pub_key_val_ptr);
     }
     ldap_msgfree(result);
 
@@ -235,17 +255,20 @@ const ConfigAuthN &config) const {
     return cert_creation_request;
 }
 
-bool AuthNLdap::verify(Value &ccr) const {
+bool AuthNLdap::verify(Value &ccr, time_t &authenticated_expiration_date) const {
+    // For LDAP authentication, the authorized expiration is what was requested
+    authenticated_expiration_date = ccr["not_after"].as<uint32_t>();
+
     // Verify that the signature provided in the CCR was signed with the user's private key
-    auto signature = Credentials::base64Decode(ccr["verifier.signature"].as<std::string>());
-    auto payload = ccrToString(ccr);
+    const auto signature = Credentials::base64Decode(ccr["verifier.signature"].as<std::string>());
+    const auto payload = ccrToString(ccr);
 
-    // Get public key
-    auto uid = ccr["name"].as<std::string>();
-    auto organization = ccr["organization"].as<std::string>();  // e.g., "epics.org"
-    std::string public_key_str = getPublicKeyFromLDAP(ldap_server, ldap_port, uid, organization);
+    // Get the public key
+    const auto uid = ccr["name"].as<std::string>();
+    const auto organization = ccr["organization"].as<std::string>();  // e.g., "epics.org"
+    const std::string public_key_str = getPublicKeyFromLDAP(ldap_server, ldap_port, uid, organization);
 
-    KeyPair key_pair(public_key_str);
+    const KeyPair key_pair(public_key_str);
     return CertFactory::verifySignature(key_pair.pkey, payload, signature);
 }
 
@@ -286,7 +309,10 @@ std::string AuthNLdap::getDn(const std::string &uid, const std::string &organiza
  * @param organization the user org e.g. epics.org
  * @return the public key string
  */
-std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, const int ldap_port, const std::string &uid, const std::string &organization) {
+std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server,
+                                            const int ldap_port,
+                                            const std::string &uid,
+                                            const std::string &organization) {
     const std::string ldap_url = "ldap://" + ldap_server + ":" + std::to_string(ldap_port);
     LDAP *ld = nullptr;
     int rc = ldap_initialize(&ld, ldap_url.c_str());
@@ -315,9 +341,20 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, cons
     char *attrs[] = {const_cast<char *>(PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE), nullptr};
 
     LDAPMessage *result = nullptr;
-    rc = ldap_search_ext_s(ld, dn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)", attrs, 0, nullptr, nullptr, nullptr, 0, &result);
+    rc = ldap_search_ext_s(ld,
+                           dn.c_str(),
+                           LDAP_SCOPE_BASE,
+                           "(objectClass=*)",
+                           attrs,
+                           0,
+                           nullptr,
+                           nullptr,
+                           nullptr,
+                           0,
+                           &result);
     if (rc != LDAP_SUCCESS) {
-        if (result) ldap_msgfree(result);
+        if (result)
+            ldap_msgfree(result);
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         throw std::runtime_error("ldap_search_ext_s failed: " + std::string(ldap_err2string(rc)));
     }
@@ -331,7 +368,8 @@ std::string AuthNLdap::getPublicKeyFromLDAP(const std::string &ldap_server, cons
 
     berval **pub_key_val_ptr = ldap_get_values_len(ld, entry, PVXS_LDAP_AUTH_PUB_KEY_ATTRIBUTE);
     if (!pub_key_val_ptr || !pub_key_val_ptr[0]) {
-        if (pub_key_val_ptr) ldap_value_free_len(pub_key_val_ptr);
+        if (pub_key_val_ptr)
+            ldap_value_free_len(pub_key_val_ptr);
         ldap_msgfree(result);
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         throw std::runtime_error("epicsPublicKey attribute not found for DN: " + dn);

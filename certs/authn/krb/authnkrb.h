@@ -92,7 +92,7 @@ class AuthNKrb final : public Auth {
                                                                  const uint16_t &usage,
                                                                  const ConfigAuthN &config) const override;
 
-    bool verify(Value &ccr) const override;
+    bool verify(Value &ccr, time_t &authenticated_expiration_date) const override;
 
     void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigKrb(ConfigKrb::fromEnv())); }
 
@@ -180,7 +180,7 @@ class AuthNKrb final : public Auth {
     std::string krb_keytab_file{};
     std::string krb_realm{PVXS_KRB_DEFAULT_VALIDATOR_REALM };
 
-    static std::string gssErrorDescription(OM_uint32 major_status, OM_uint32 minor_status);
+    static std::string gssErrorDescription(OM_uint32 major_status, OM_uint32 minor_status, bool only_first = false);
 
     static void gssNameFromString(const std::string &name, gss_name_t &target_name);
     static PrincipalInfo getPrincipalInfo();

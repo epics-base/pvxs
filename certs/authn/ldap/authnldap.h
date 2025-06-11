@@ -51,7 +51,7 @@ class AuthNLdap final : public Auth {
                                                                  const uint16_t &usage,
                                                                  const ConfigAuthN &config) const override;
 
-    bool verify(Value &ccr) const override;
+    bool verify(Value &ccr, time_t &authenticated_expiration_date) const override;
 
     void fromEnv(std::unique_ptr<client::Config> &config) override { config.reset(new ConfigLdap(ConfigLdap::fromEnv())); };
 

@@ -28,10 +28,10 @@ class ConfigStd final : public ConfigAuthN {
      * This static method creates a ConfigStd object from the environment.
      *
      * It applies the generic client config environment to the ConfigStd object, then
-     * the generic authenticator environment, and finally it extracts the standard
+     * the generic authenticator environment, and finally, it extracts the standard
      * certificate validity minutes from the environment and adds it to the ConfigStd object.
      *
-     * @return A ConfigStd object initialised from the environment
+     * @return A ConfigStd object initialized from the environment
      */
     static ConfigStd fromEnv() {
         auto config = ConfigStd{}.applyEnv();
@@ -40,14 +40,6 @@ class ConfigStd final : public ConfigAuthN {
         config.fromStdEnv(defs);
         return config;
     }
-
-    /**
-     * @brief The number of minutes from now after which the new certificate being created should expire.
-     *
-     * Use this to set the default validity for certificates
-     * generated from basic credentials.
-     */
-    uint32_t cert_validity_mins = 30 * 24 * 60;  // Default to 30 days
 
     // To create trust anchor only
     bool trust_anchor_only{false};

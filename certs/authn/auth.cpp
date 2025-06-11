@@ -63,17 +63,25 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
     cert_creation_request->credentials = credentials;
 
     // Fill in the ccr from the base data we've gathered so far.
-    cert_creation_request->ccr["type"] = type_;
-    cert_creation_request->ccr["usage"] = usage;
-    cert_creation_request->ccr["pub_key"] = (key_pair) ? key_pair->public_key: "";
-    cert_creation_request->ccr["name"] = credentials->name;
-    cert_creation_request->ccr["country"] = credentials->country;
-    cert_creation_request->ccr["organization"] = credentials->organization;
-    cert_creation_request->ccr["organization_unit"] = credentials->organization_unit;
-    cert_creation_request->ccr["not_before"] = credentials->not_before;
-    cert_creation_request->ccr["not_after"] = credentials->not_after;
-    cert_creation_request->ccr["no_status"] = config.no_status;
-    cert_creation_request->ccr["config_uri_base"] = credentials->config_uri_base;
+    if (key_pair) {
+        cert_creation_request->ccr["type"] = type_; // Authenticator type
+        cert_creation_request->ccr["usage"] = usage; // Desired Certificate usage
+        cert_creation_request->ccr["pub_key"] = key_pair->public_key; // The public key to use (you keep the private key private)
+
+        // Optional CCR components
+        if (!credentials->name.empty()) cert_creation_request->ccr["name"] = credentials->name;
+        if (!credentials->organization.empty()) cert_creation_request->ccr["organization"] = credentials->organization;
+        if (!credentials->organization_unit.empty()) cert_creation_request->ccr["organization_unit"] = credentials->organization_unit;
+        if (!credentials->country.empty()) cert_creation_request->ccr["country"] = credentials->country;
+        if (credentials->not_before >0) cert_creation_request->ccr["not_before"] = credentials->not_before;
+        if (credentials->not_after >0) cert_creation_request->ccr["not_after"] = credentials->not_after;
+
+        // Don't include any status checking extension.  This will disable any certificate renewal functionality
+        if (config.no_status) cert_creation_request->ccr["no_status"] = config.no_status;
+
+        // Do we need to add a configuration uri to the certificate?
+        if (!credentials->config_uri_base.empty()) cert_creation_request->ccr["config_uri_base"] = credentials->config_uri_base;
+    }
     return cert_creation_request;
 }
 
@@ -123,36 +131,33 @@ void Auth::runAuthNDaemon(const ConfigAuthN &authn_config, bool for_client, Cert
     const std::string skid(CertStatus::getSkId(cert_data.cert));
 
     // Create a ConfigMonitorParams object to pass to the configuration monitor
-    ConfigMonitorParams config_monitor_params{
-        authn_config,
-        cert_data.cert,
-        std::move(fn),
-    };
+    auto config_monitor_params = std::make_shared<ConfigMonitorParams>(authn_config, cert_data.cert, std::move(fn));
 
     // Server Mailbox configuration with disabled tls
     const auto config = server::Config::fromEnv(true);
     server::SharedPV config_pv(server::SharedPV::buildMailbox());
+    config_pv.open(config_monitor_params->config_pv_value);
 
     // Create a server with a custom timer event that runs our configuration monitor
-    config_server_ = server::Server(config, [&config_monitor_params, &config_pv](short) { return configurationMonitor(config_monitor_params, config_pv); });
+    config_server_ = server::Server(config, [config_monitor_params, &config_pv](short) { return configurationMonitor(config_monitor_params, config_pv); });
 
     config_pv.onFirstConnect([&config_monitor_params, &for_client, &authn_config, &issuer_id](server::SharedPV &pv) {
-        // Set up the config PV
-        Value config_value = getConfigurationPrototype();
+        const auto serial = CertStatusFactory::getSerialNumber(config_monitor_params->cert_);
 
-        const auto serial = CertStatusFactory::getSerialNumber(config_monitor_params.cert_);
+        // Check the amount of time before the certificate expires or the renew_by date
+        const CertDate expiry_date = X509_get_notAfter(config_monitor_params->cert_.get());
+        CertDate renew_by = expiry_date;
+        try {
+            renew_by = CertStatusManager::getRenewByFromCert(config_monitor_params->cert_);
+        } catch (...) {}
+        const std::string renew_by_s = std::ctime(&renew_by.t);
 
-        // Check time before certificate expires
-        const time_t now = time(nullptr);
-        const StatusDate expiry_date = X509_get_notAfter(config_monitor_params.cert_.get());
-        const time_t expires_in = expiry_date.t - now;
+        setValue<std::string>(config_monitor_params->config_pv_value, "issuer_id", issuer_id);
+        setValue<std::string>(config_monitor_params->config_pv_value, "keychain", for_client ? authn_config.tls_keychain_file : authn_config.tls_srv_keychain_file);
+        setValue<uint64_t>(config_monitor_params->config_pv_value, "serial", serial);
+        setValue<std::string>(config_monitor_params->config_pv_value, "renewal_date", renew_by_s.substr(0, renew_by_s.size()-1));
 
-        setValue<std::string>(config_value, "issuer_id", issuer_id);
-        setValue<std::string>(config_value, "keychain", for_client ? authn_config.tls_keychain_file : authn_config.tls_srv_keychain_file);
-        setValue<uint64_t>(config_value, "serial", serial);
-        setValue<std::string>(config_value, "expires_in", formatTimeDuration(expires_in));
-
-        pv.open(config_value);
+        pv.post(config_monitor_params->config_pv_value);
     });
 
     config_pv.onLastDisconnect([](server::SharedPV &pv) { pv.close(); });
@@ -177,13 +182,17 @@ void Auth::runAuthNDaemon(const ConfigAuthN &authn_config, bool for_client, Cert
  * @param pv
  * @return
  */
-timeval Auth::configurationMonitor(ConfigMonitorParams &config_monitor_params, server::SharedPV &pv) {
-    // Check time before certificate expires
+timeval Auth::configurationMonitor(std::shared_ptr<ConfigMonitorParams> config_monitor_params, server::SharedPV &pv) {
+    // Check time before the certificate renewal
     const time_t now = time(nullptr);
-    const StatusDate expiry_date = X509_get_notAfter(config_monitor_params.cert_.get());
-    time_t expires_in = expiry_date.t - now;
+    const CertDate expiry_date = X509_get_notAfter(config_monitor_params->cert_.get());
+    CertDate renew_by = expiry_date;
+    try {
+        renew_by = CertStatusManager::getRenewByFromCert(config_monitor_params->cert_);
+    } catch (...) {}
+    time_t expires_in = renew_by.t - now - CERT_RENEWAL_LEAD_TIME;
 
-    // If timer has not yet expired
+    // If the timer has not yet expired
     if (expires_in > 0) {
         // Set time interval for next callback and return
         return {expires_in, 0};
@@ -191,33 +200,38 @@ timeval Auth::configurationMonitor(ConfigMonitorParams &config_monitor_params, s
 
     // If timer has expired call function to update config with a new certificate
     try {
-        config_monitor_params.cert_ = config_monitor_params.fn_().cert;
+        config_monitor_params->cert_ = config_monitor_params->fn_().cert;
         // Reset adaptive timeout
-        config_monitor_params.adaptive_timeout_mins_ = 0;
+        config_monitor_params->adaptive_timeout_mins_ = 0;
     } catch (const std::exception &e) {
         // Stop if we're already at the max retries
-        if (config_monitor_params.adaptive_timeout_mins_ == PVXS_CONFIG_MONITOR_TIMEOUT_MAX) return {};
+        if (config_monitor_params->adaptive_timeout_mins_ == PVXS_CONFIG_MONITOR_TIMEOUT_MAX) return {};
 
-        config_monitor_params.adaptive_timeout_mins_ =
-            !config_monitor_params.adaptive_timeout_mins_ ? 1 : std::min(config_monitor_params.adaptive_timeout_mins_ * 2, PVXS_CONFIG_MONITOR_TIMEOUT_MAX);
-        log_err_printf(config, "Config refresh error.  Retry in %d mins: %s\n", config_monitor_params.adaptive_timeout_mins_, e.what());
-        return {config_monitor_params.adaptive_timeout_mins_ * 60, 0};
+        config_monitor_params->adaptive_timeout_mins_ =
+            !config_monitor_params->adaptive_timeout_mins_ ? 1 : std::min(config_monitor_params->adaptive_timeout_mins_ * 2, PVXS_CONFIG_MONITOR_TIMEOUT_MAX);
+        log_err_printf(config, "Config refresh error.  Retry in %d mins: %s\n", config_monitor_params->adaptive_timeout_mins_, e.what());
+        return {config_monitor_params->adaptive_timeout_mins_ * 60, 0};
     }
 
     // Compute next expiry time and post an update with the new serial number
-    const StatusDate new_expiry_date = X509_get_notAfter(config_monitor_params.cert_.get());
-    expires_in = new_expiry_date.t - now;
+    const CertDate new_expiry_date = X509_get_notAfter(config_monitor_params->cert_.get());
+    CertDate new_renew_by = new_expiry_date;
+    try {
+        new_renew_by = CertStatusManager::getRenewByFromCert(config_monitor_params->cert_);
+    } catch (...) {}
+    expires_in = new_renew_by.t - now - CERT_RENEWAL_LEAD_TIME;
+    const std::string new_renew_by_s = std::ctime(&new_renew_by.t);
 
-    auto value = pv.fetch();
-    value.unmark(true, true);
-    setValue<uint64_t>(value, "serial", CertStatusFactory::getSerialNumber(config_monitor_params.cert_));
-    setValue<std::string>(value, "expires_in", formatTimeDuration(expires_in));
-    // value["serial"].mark();
-    // value["expires_in"].mark();
+    if ( new_renew_by.t > now ) {
+        // If renewal is in future then post updated time
+        pv.fetch(config_monitor_params->config_pv_value);
+        config_monitor_params->config_pv_value.unmark(true, true);
+        setValue<uint64_t>(config_monitor_params->config_pv_value, "serial", CertStatusFactory::getSerialNumber(config_monitor_params->cert_));
+        setValue<std::string>(config_monitor_params->config_pv_value, "renewal_date", new_renew_by_s.substr(0, new_renew_by_s.size()-1));
+        pv.post(config_monitor_params->config_pv_value);
+    }
 
-    pv.post(value);
-
-    assert(expires_in >= 0);
+    if (expires_in < 0) expires_in = CERT_RENEWAL_LEAD_TIME;
 
     // Call back when expired
     return {expires_in, 0};

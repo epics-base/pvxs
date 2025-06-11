@@ -35,8 +35,8 @@ class CertStatusManager;
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_ptr<X509>& cert, const certstatus_t status, const StatusDate& status_date,
-                                                                   const StatusDate& predicated_revocation_time) const {
+PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_ptr<X509>& cert, const certstatus_t status, const CertDate& status_date,
+                                                                   const CertDate& predicated_revocation_time) const {
     return createPVACertificateStatus(getSerialNumber(cert), status, status_date, predicated_revocation_time);
 }
 
@@ -51,15 +51,15 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_pt
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const serial_number_t serial, const certstatus_t status, const StatusDate &status_date, const StatusDate &predicated_revocation_time) const {
+PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const serial_number_t serial, const certstatus_t status, const CertDate &status_date, const CertDate &predicated_revocation_time) const {
     // Create OCSP response
     const ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
     // Set ASN1_TIME objects
-    const auto status_valid_until_time = StatusDate(status_date.t + cert_status_validity_mins_ * 60 + cert_status_validity_secs_);
+    const auto status_valid_until_time = CertDate(status_date.t + cert_status_validity_mins_ * 60 + cert_status_validity_secs_);
     const auto this_update = status_date.toAsn1_Time();
     const auto next_update = status_valid_until_time.toAsn1_Time();
-    StatusDate revocation_time_to_use = static_cast<time_t>(0);  // Default to 0
+    CertDate revocation_time_to_use = static_cast<time_t>(0);  // Default to 0
 
     // Determine the OCSP status and revocation time
     ocspcertstatus_t ocsp_status;

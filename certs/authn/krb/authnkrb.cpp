@@ -52,9 +52,12 @@ struct AuthNKrbRegistrar {
  * a name and organization.  It then sets the validity times for the
  * credentials to the current time and the lifetime of the kerberos ticket.
  *
+ * @param config kerberos authenticator config
+ *
  * @return the credentials for the Kerberos authenticator
  */
-std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &, bool) const {
+std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &config, bool) const {
+    const auto krb_config = dynamic_cast<const ConfigKrb &>(config);
     log_debug_printf(auth,
                      "\n******************************************\n"
                      "Kerberos Authenticator: %s\n",
@@ -64,7 +67,6 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &, bo
     // Get principal info from the kerberos ticket
     const auto info = getPrincipalInfo();
     auto const &principal_name = info.principal;
-    auto const lifetime = info.lifetime;
 
     // Split the principal name into name and organization.
     const size_t at_pos = principal_name.find('@');
@@ -78,7 +80,11 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &, bo
     // Set validity times.
     const time_t now = time(nullptr);
     kerberos_credentials->not_before = now;
-    kerberos_credentials->not_after = now + lifetime;
+    if ( krb_config.cert_validity_mins == -1 ) {
+        kerberos_credentials->not_after =-1;
+    } else {
+        kerberos_credentials->not_after = now + krb_config.cert_validity_mins * 60;
+    }
 
     log_debug_printf(auth, "\nName: %s, \nOrg: %s, \nnot_before: %lu, \nnot_after: %lu\n", kerberos_credentials->name.c_str(),
                      kerberos_credentials->organization.c_str(), kerberos_credentials->not_before, kerberos_credentials->not_after);
@@ -239,9 +245,10 @@ void AuthNKrb::gssNameFromString(const std::string &name, gss_name_t &target_nam
  *
  * @param major_status the major status code or the last error
  * @param minor_status the minor status code or the last error
+ * @param only_first Only retrieve the first error code instead of the full string of errors.  Default false
  * @return the error description
  */
-std::string AuthNKrb::gssErrorDescription(const OM_uint32 major_status, const OM_uint32 minor_status) {
+std::string AuthNKrb::gssErrorDescription(const OM_uint32 major_status, const OM_uint32 minor_status, bool only_first) {
     OM_uint32 msg_ctx;
     OM_uint32 minor;
     gss_buffer_desc status_string;
@@ -256,6 +263,7 @@ std::string AuthNKrb::gssErrorDescription(const OM_uint32 major_status, const OM
         snprintf(context, GSS_STATUS_BUFFER_LEN, "%.*s\n", static_cast<int>(status_string.length), static_cast<char *>(status_string.value));
         error_description << context;
         gss_release_buffer(&minor, &status_string);
+        if (only_first) return error_description.str();
     } while (msg_ctx);
 
     msg_ctx = 0;
@@ -280,32 +288,34 @@ std::string AuthNKrb::gssErrorDescription(const OM_uint32 major_status, const OM
  * the configured keytab (`krb5_keytab_file`) that allows passwordless Kerberos
  * authentication.
  *
- * It then "accepts" the client's token to establish a security context.  If successful
+ * It then "accepts" the client's token to establish a security context.  If successful,
  * this means that the client's token is valid with the KDC and the client is therefore
  * authentic.
  *
  * It then compares the peer principal name from the context with the
- * peer principal name provided in the CCR.  If these do not match then an
+ * peer principal name provided in the CCR.  If these do not match, then an
  * exception is thrown.
  *
- * It then verifies the MIC over the public key in the CCR.  If this fails
+ * It then verifies the MIC over the public key in the CCR.  If this fails,
  * then an exception is thrown.  It would mean that the public key has been
  * tampered with or the kerberos ticket has been compromised.
  *
- * Finally the function checks that the CCR fields are valid.  This involves
+ * Finally, the function checks that the CCR fields are valid.  This involves
  * verification that the not_before and not_after times are within the valid
  * lifetime of the kerberos ticket, and that the organisation unit and country
  * are empty strings.
  *
- * If all of the above checks pass then the function returns true indicating
+ * If all of the above checks pass, then the function returns true indicating
  * that the CCR is valid, and that certificate creation can proceed with the
  * information contained in the CCR.
  *
  * @param ccr The certificate creation request (CCR) to verify
+ * @param authenticated_expiration_date The amount of time the authenticator says we can
+ *                                      have.  Leave empty for defaults
  * @return True if the CCR is valid.
  * @throw std::runtime_error if the CCR is not valid
  */
-bool AuthNKrb::verify(Value &ccr) const {
+bool AuthNKrb::verify(Value &ccr, time_t &authenticated_expiration_date) const {
     log_debug_printf(auth, "Verifying Kerberos CCR request%s", "\n");
 
     log_debug_printf(auth, "Checking Keytab is configured: %s\n", krb_keytab_file.c_str());
@@ -410,10 +420,8 @@ bool AuthNKrb::verify(Value &ccr) const {
         throw std::runtime_error(SB() << "Verify Credentials: CCR not_before after "
                                          "end of kerberos ticket lifetime");
     }
-    if (ccr["not_after"].as<uint32_t>() > now + peer_lifetime) {
-        // If expiration is incorrect, then set it to max allowable
-        ccr["not_after"] = now + peer_lifetime;
-    }
+    authenticated_expiration_date = now + peer_lifetime;
+    // Don't check the not_after date because we will only return VALID status while authorized
 
     // MIC Verification
     auto public_key = ccr["pub_key"].as<std::string>();
@@ -464,7 +472,7 @@ PrincipalInfo AuthNKrb::getPrincipalInfo() {
     log_debug_printf(auth, "gss_inquire_cred%s", "\n");
     major_status = gss_inquire_cred(&minor_status, cred_handle, &name, &lifetime, nullptr, nullptr);
     if (major_status != GSS_S_COMPLETE) {
-        const auto error_description = gssErrorDescription(major_status, minor_status);
+        const auto error_description = gssErrorDescription(major_status, minor_status, true);
         gss_release_cred(&minor_status, &cred_handle);
         throw std::runtime_error(SB() << "getPrincipalInfo: Failed to inquire credentials: " << error_description);
     }

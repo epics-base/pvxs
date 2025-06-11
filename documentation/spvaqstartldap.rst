@@ -113,10 +113,11 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
 
     Certificate Details:
     ============================================
-    Subject        : CN=softioc, O=epics.org
-    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
-    Valid from     : Sat Mar 08 19:56:17 2025 UTC
-    Cert Expires   : Sun Mar 08 19:56:17 2026 UTC
+    Certificate ID : 47530d89:12147807175996825338
+    Entity Subject : CN=softioc, O=epics.org
+    Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Valid From     : Sat Mar 08 19:56:17 2025 UTC
+    Expires On     : Sun Mar 08 19:56:17 2026 UTC
     --------------------------------------------
 
     Certificate Status:
@@ -157,10 +158,11 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
 
     Certificate Details:
     ============================================
-    Subject        : CN=client, O=epics.org
-    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
-    Valid from     : Sat Mar 08 20:00:41 2025 UTC
-    Cert Expires   : Sun Mar 08 20:00:41 2026 UTC
+    Certificate ID : 47530d89:11547935522995899879
+    Entity Subject : CN=client, O=epics.org
+    Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Valid From     : Sat Mar 08 20:00:41 2025 UTC
+    Expires On     : Sun Mar 08 20:00:41 2026 UTC
     --------------------------------------------
 
     Certificate Status:
@@ -855,10 +857,11 @@ then generate X.509 certificates.
 
     Certificate Details:
     ============================================
-    Subject        : CN=softioc, O=epics.org
-    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
-    Valid from     : Mon Mar 10 12:48:26 2025 UTC
-    Cert Expires   : Tue Mar 10 12:48:26 2026 UTC
+    Certificate ID : b271f07a:13935791733272200197
+    Entity Subject : CN=softioc, O=epics.org
+    Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Valid From     : Mon Mar 10 12:48:26 2025 UTC
+    Expires On     : Tue Mar 10 12:48:26 2026 UTC
     --------------------------------------------
 
     Certificate Status:
@@ -983,10 +986,11 @@ then generate X.509 certificates.
 
     Certificate Details:
     ============================================
-    Subject        : CN=client, O=EPICS.ORG
-    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
-    Valid from     : Mon Mar 10 03:32:57 2025 UTC
-    Cert Expires   : Tue Mar 11 03:30:32 2025 UTC
+    Certificate ID : b271f07a:1204731550645534180
+    Entity Subject : CN=client, O=EPICS.ORG
+    Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Valid From     : Mon Mar 10 03:32:57 2025 UTC
+    Expires On     : Tue Mar 11 03:30:32 2025 UTC
     --------------------------------------------
 
     Certificate Status:

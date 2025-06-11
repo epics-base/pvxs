@@ -39,17 +39,19 @@ std::string promptPassword(const std::string &prompt) {
  * @param config the configuration to override with command line parameters
  * @param verbose the verbose flag to set the logger level
  * @param debug the debug flag to set the logger level
+ * @param force force overwrite if certificate exists
  * @param daemon_mode the daemon mode flag to set daemon mode
  * @param show_version the show version flag to show version and exit
  * @param help the help flag to show this help message and exit
  * @param add_config_uri the add config uri flag to add a config uri to the generated certificate
  * @param name the ldap name
- * @param organization the ldap organization
  * @param usage the certificate usage client, server, or ioc
+ * @param organization the ldap organization
+ * @param cert_validity_mins the requested certificate validity in minutes
  */
 
 void defineOptions(CLI::App &app, ConfigLdap &config, bool &verbose, bool &debug, bool &daemon_mode, bool &force, bool &show_version, bool &help, bool &add_config_uri,
-                   std::string &usage, std::string &name, std::string &organization) {
+                   std::string &usage, std::string &name, std::string &organization, std::string &cert_validity_mins) {
     app.set_help_flag("", "");  // deactivate built-in help
 
     app.add_flag("-h,--help", help);
@@ -65,6 +67,8 @@ void defineOptions(CLI::App &app, ConfigLdap &config, bool &verbose, bool &debug
     app.add_option("-i,--issuer", config.issuer_id, "The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening");
 
     app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `ioc`");
+
+    app.add_option("-t,--time", cert_validity_mins, "Duration of the certificate in minutes.");
 
     app.add_option("-n,--name", name, "Specify the LDAP user name e.g. name e.g. becomes uid=name.  Defaults to logged in username");
     app.add_option("-o,--organization", organization, "Specify the organization e.g. epics.org e.g. becomes dc=epics, dc=org.  Defaults to hostname");
@@ -92,6 +96,7 @@ void showHelp(const char * const program_name) {
         << "  (-o | --organization) <organization>       Specify LDAP org for organization in the certificate.\n"
         << "                                             e.g. epics.org ==> LDAP: dc=epics, dc=org ==> Cert: O=epics.org\n"
         << "                                             Default <hostname>\n"
+        << "  (-t | --time) <minutes>                    Duration of the certificate in minutes.  e.g. 30 or 1d or 1y3M2d4m\n"
         << "  (-p | --password) <name>                   Specify LDAP password. If not specified will prompt for password\n"
         << "        --ldap-host <hostname>               LDAP server host\n"
         << "        --ldap-port <port>                   LDAP serever port\n"
@@ -109,11 +114,11 @@ void showHelp(const char * const program_name) {
 int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bool &debug, uint16_t &cert_usage, bool &daemon_mode, bool &force) {
     const auto program_name = argv[0];
     bool show_version{false}, help{false}, add_config_uri{false};
-    std::string usage{"client"}, name, organization;
+    std::string usage{"client"}, name, organization, cert_validity_mins;
 
     CLI::App app{"authnldap - Secure PVAccess LDAP Authenticator"};
 
-    defineOptions(app, config, verbose, debug, daemon_mode, force, show_version, help, add_config_uri, usage, name, organization);
+    defineOptions(app, config, verbose, debug, daemon_mode, force, show_version, help, add_config_uri, usage, name, organization, cert_validity_mins);
 
     CLI11_PARSE(app, argc, argv);
 
@@ -175,6 +180,10 @@ int readParameters(int argc, char *argv[], ConfigLdap &config, bool &verbose, bo
 
     if (config.ldap_account_password.empty()) {
         config.ldap_account_password = promptPassword(SB() << "Enter password for " << name_to_use << "@" << organization_to_use << ": ");
+    }
+
+    if (!cert_validity_mins.empty()) {
+        config.cert_validity_mins = CertDate::parseDurationMins(cert_validity_mins);
     }
 
     return 0;

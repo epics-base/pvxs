@@ -122,10 +122,11 @@ If you want a prepackaged environment, try the following.  You will need three t
 
     Certificate Details:
     ============================================
-    Subject        : CN=softioc, O=EPICS.ORG
-    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
-    Valid from     : Sat Mar 08 15:23:21 2025 UTC
-    Cert Expires   : Sun Mar 09 15:23:09 2025 UTC
+    Certificate ID : 47530d89:3826361579604613181
+    Entity Subject : CN=softioc, O=EPICS.ORG
+    Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Valid From     : Sat Mar 08 15:23:21 2025 UTC
+    Expires On     : Sun Mar 09 15:23:09 2025 UTC
     --------------------------------------------
 
     Certificate Status:
@@ -188,10 +189,11 @@ If you want a prepackaged environment, try the following.  You will need three t
 
     Certificate Details:
     ============================================
-    Subject        : CN=client, O=EPICS.ORG
-    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
-    Valid from     : Sat Mar 08 15:31:44 2025 UTC
-    Cert Expires   : Sun Mar 09 15:27:50 2025 UTC
+    Certificate ID : 47530d89:15177030356392297708
+    Entity Subject : CN=client, O=EPICS.ORG
+    Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Valid From     : Sat Mar 08 15:31:44 2025 UTC
+    Expires On     : Sun Mar 09 15:27:50 2025 UTC
     --------------------------------------------
 
     Certificate Status:
@@ -730,10 +732,11 @@ using the Kerberos Authenticator.
 
     Certificate Details:
     ============================================
-    Subject        : CN=softioc, O=EPICS.ORG
-    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
-    Valid from     : Mon Mar 10 03:20:05 2025 UTC
-    Cert Expires   : Tue Mar 11 03:16:25 2025 UTC
+    Certificate ID : b271f07a:12421554925305118824
+    Entity Subject : CN=softioc, O=EPICS.ORG
+    Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Valid From     : Mon Mar 10 03:20:05 2025 UTC
+    Expires On     : Tue Mar 11 03:16:25 2025 UTC
     --------------------------------------------
 
     Certificate Status:
@@ -850,10 +853,11 @@ using the Kerberos Authenticator.
 
     Certificate Details:
     ============================================
-    Subject        : CN=client, O=EPICS.ORG
-    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
-    Valid from     : Mon Mar 10 03:32:57 2025 UTC
-    Cert Expires   : Tue Mar 11 03:30:32 2025 UTC
+    Certificate ID : b271f07a:1204731550645534180
+    Entity Subject : CN=client, O=EPICS.ORG
+    Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Valid From     : Mon Mar 10 03:32:57 2025 UTC
+    Expires On     : Tue Mar 11 03:30:32 2025 UTC
     --------------------------------------------
 
     Certificate Status:

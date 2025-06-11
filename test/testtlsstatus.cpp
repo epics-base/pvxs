@@ -33,9 +33,9 @@ using namespace pvxs::certs;
 
 struct Tester {
     // Pristine values
-    const StatusDate now;
-    const StatusDate status_valid_until_time;
-    const StatusDate revocation_date;
+    const CertDate now;
+    const CertDate status_valid_until_time;
+    const CertDate revocation_date;
     const Value status_value_prototype{CertStatus::getStatusPrototype()};
 
     DEFINE_MEMBERS(cert_auth)

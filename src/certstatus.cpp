@@ -26,8 +26,8 @@ namespace certs {
  * @param status_valid_until_time the valid-until date of the OCSP certificate status
  * @param revocation_time the revocation date of the certificate if it is revoked
  */
-OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t> &ocsp_bytes, StatusDate status_date, StatusDate status_valid_until_time,
-                       StatusDate revocation_time)
+OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t> &ocsp_bytes, CertDate status_date, CertDate status_valid_until_time,
+                       CertDate revocation_time)
     : ocsp_bytes(ocsp_bytes),
       ocsp_status(ocsp_status),
       status_date(status_date),

@@ -28,6 +28,8 @@
 #include <pvxs/util.h>
 #include <pvxs/sharedArray.h>
 #include <pvxs/data.h>
+
+#include "certfactory.h"
 #include "utilpvt.h"
 #include "udp_collector.h"
 

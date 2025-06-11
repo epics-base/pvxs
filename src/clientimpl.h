@@ -312,7 +312,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
             const auto cert = tls_context->getEntityCertificate();
             if (!cert) return;  // If no cert (server-only) then don't set up handler
-            const certs::StatusDate expiry_date = X509_get_notAfter(cert);
+            const certs::CertDate expiry_date = X509_get_notAfter(cert);
 
             // If not yet expired
             const auto now = time(nullptr);

@@ -11,8 +11,6 @@
 
 #include <pvxs/log.h>
 
-#include <CLI/CLI.hpp>
-
 #include "authregistry.h"
 #include "certfilefactory.h"
 #include "certstatusfactory.h"
@@ -20,6 +18,8 @@
 #include "openssl.h"
 #include "p12filefactory.h"
 #include "utilpvt.h"
+
+#include <CLI/CLI.hpp>
 
 DEFINE_LOGGER(auth, "pvxs.auth.std");
 
@@ -123,7 +123,8 @@ static std::string getCountryCode() {
  * - If country is not specified in either the commandline or environment then use the current
  *   country code of where the process is running or default to "US"
  *
- * @param config The ConfigStd object containing the environment variables optionally overridden by commandline parameters and pre-filled with default values.
+ * @param config The ConfigStd object containing the environment variables optionally overridden by commandline
+ * parameters and pre-filled with default values.
  * @param for_client true if getting credentials for a client
  * @return A structure containing the credentials required for the creation of a certificate.
  */
@@ -140,9 +141,12 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
     // Set the expiration time of the certificate
     const time_t now = time(nullptr);
     std_credentials->not_before = now;
-    std_credentials->not_after = now + std_config.cert_validity_mins * 60;
+    if (std_config.cert_validity_mins <= 0)
+        std_credentials->not_after = -1;
+    else
+        std_credentials->not_after = now + std_config.cert_validity_mins * 60;
 
-    if ( std_config.trust_anchor_only ) {
+    if (std_config.trust_anchor_only) {
         std_credentials->name = "";
         std_credentials->organization = "";
         std_credentials->organization_unit = "";
@@ -151,20 +155,33 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
         return std_credentials;
     }
     if (for_client) {
-        if (!std_config.name.empty()) std_credentials->name = std_config.name;
-        if (!std_config.organization.empty()) std_credentials->organization = std_config.organization;
-        if (!std_config.organizational_unit.empty()) std_credentials->organization_unit = std_config.organizational_unit;
-        if (!std_config.country.empty()) std_credentials->country = std_config.country;
-        else std_credentials->country = getCountryCode();
+        if (!std_config.name.empty())
+            std_credentials->name = std_config.name;
+        if (!std_config.organization.empty())
+            std_credentials->organization = std_config.organization;
+        if (!std_config.organizational_unit.empty())
+            std_credentials->organization_unit = std_config.organizational_unit;
+        if (!std_config.country.empty())
+            std_credentials->country = std_config.country;
+        else
+            std_credentials->country = getCountryCode();
     } else {
-        if (!std_config.server_name.empty()) std_credentials->name = std_config.server_name;
-        if (!std_config.server_organization.empty()) std_credentials->organization = std_config.server_organization;
-        if (!std_config.server_organizational_unit.empty()) std_credentials->organization_unit = std_config.server_organizational_unit;
-        if (!std_config.server_country.empty()) std_credentials->country = std_config.server_country;
-        else std_credentials->country = getCountryCode();
+        if (!std_config.server_name.empty())
+            std_credentials->name = std_config.server_name;
+        if (!std_config.server_organization.empty())
+            std_credentials->organization = std_config.server_organization;
+        if (!std_config.server_organizational_unit.empty())
+            std_credentials->organization_unit = std_config.server_organizational_unit;
+        if (!std_config.server_country.empty())
+            std_credentials->country = std_config.server_country;
+        else
+            std_credentials->country = getCountryCode();
     }
 
-    log_debug_printf(auth, "Standard Credentials retrieved for: %s@%s\n", std_credentials->name.c_str(), std_credentials->organization.c_str());
+    log_debug_printf(auth,
+                     "Standard Credentials retrieved for: %s@%s\n",
+                     std_credentials->name.c_str(),
+                     std_credentials->organization.c_str());
 
     return std_credentials;
 }
@@ -172,7 +189,8 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
 /**
  * @brief Create a PVStructure that corresponds to the ccr parameter of a Certificate Creation Request (CCR).
  *
- * This request will be sent to the PVACMS through the default channel (PV Access) and will be used to create the certificate.
+ * This request will be sent to the PVACMS through the default channel (PV Access) and will be used to create the
+ * certificate.
  *
  * @param credentials the credentials that describe the subject of the certificate
  * @param key_pair the public/private key to be used in the certificate, only public key is used
@@ -180,9 +198,11 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
  * @param config the configuration for the certificate creation request
  * @return A managed shared CertCreationRequest object.
  */
-std::shared_ptr<CertCreationRequest> AuthNStd::createCertCreationRequest(const std::shared_ptr<Credentials> &credentials,
-const std::shared_ptr<KeyPair> &key_pair, const uint16_t &usage,
-const ConfigAuthN &config) const {
+std::shared_ptr<CertCreationRequest> AuthNStd::createCertCreationRequest(
+    const std::shared_ptr<Credentials> &credentials,
+    const std::shared_ptr<KeyPair> &key_pair,
+    const uint16_t &usage,
+    const ConfigAuthN &config) const {
     auto cert_creation_request = Auth::createCertCreationRequest(credentials, key_pair, usage, config);
 
     return cert_creation_request;
@@ -191,16 +211,21 @@ const ConfigAuthN &config) const {
 /**
  * @brief Verify the Certificate Creation Request (CCR)
  *
- * There is no verification for the Standard authenticator.  Just return true.
- *
- * All certificates generated by the standard authenticator normally require administrator approval
- * before becoming valid.  They are issued in PENDING_APPROVAL status.  An administrator must use the
+ * This implementation simply returns true, since the credentials presented in the CCR are trusted.
+ * The assumption is that the CCR is either coming from a trustworthy source, or it will
+ * require a manual approval step, which would likely involve an administrator making a
  * PUT request to the status PV included as an extension in the certificate to approve the certificate.
  *
  * @param ccr the Certificate Creation Request (CCR)
+ * @param authenticated_expiration_date
  * @return true if the Certificate Creation Request (CCR) is valid
  */
-bool AuthNStd::verify(Value &ccr) const { return true; }
+bool AuthNStd::verify(Value &ccr, time_t &authenticated_expiration_date) const {
+    // For standard auth, the authorized expiration is simply what was requested
+    // Since this authenticator doesn't provide any additional constraints
+    authenticated_expiration_date = ccr["not_after"].as<uint32_t>();
+    return true;
+}
 
 }  // namespace certs
 }  // namespace pvxs

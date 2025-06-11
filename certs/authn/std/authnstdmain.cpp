@@ -33,9 +33,10 @@ namespace certs {
  * @param organization the organization
  * @param organizational_unit the organizational unit
  * @param country the country
+ * @param cert_validity_mins the requested certificate validity in minutes
  */
 void defineOptions(CLI::App &app, ConfigStd &config, bool &verbose, bool &debug, bool &daemon_mode, bool &force, bool &show_version, bool &help, bool &add_config_uri,
-                   std::string &usage, std::string &name, std::string &organization, std::string &organizational_unit, std::string &country) {
+                   std::string &usage, std::string &name, std::string &organization, std::string &organizational_unit, std::string &country, std::string &cert_validity_mins) {
     app.set_help_flag("", "");  // deactivate built-in help
 
     app.add_flag("-h,--help", help);
@@ -53,7 +54,7 @@ void defineOptions(CLI::App &app, ConfigStd &config, bool &verbose, bool &debug,
 
     app.add_option("-u,--cert-usage", usage, "Certificate usage.  `server`, `client`, `ioc`");
 
-    app.add_option("-t,--time", config.cert_validity_mins, "Duration of the certificate in minutes.  Default 30 days");
+    app.add_option("-t,--time", cert_validity_mins, "Duration of the certificate in minutes.  Default 30 days");
 
     app.add_option("-n,--name", name, "Specify Certificate's name");
     app.add_option("-o,--organization", organization, "Specify the Certificate's Organisation");
@@ -85,7 +86,7 @@ void showHelp(const char *program_name) {
               << "  (-o | --organization) <organization>       Specify organisation name for the certificate. Default <hostname>\n"
               << "        --ou <org-unit>                      Specify organisational unit for the certificate. Default <blank>\n"
               << "  (-c | --country) <country>                 Specify country for the certificate. Default locale setting if detectable otherwise `US`\n"
-              << "  (-t | --time) <minutes>                    Duration of the certificate in minutes\n"
+              << "  (-t | --time) <minutes>                    Duration of the certificate in minutes.  e.g. 30 or 1d or 1y3M2d4m\n"
               << "  (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`\n"
               << "        --cert-pv-prefix <cert_pv_prefix>    Specifies the pv prefix to use to contact PVACMS.  Default `CERT`\n"
               << "        --add-config-uri                     Add a config uri to the generated certificate\n"
@@ -107,16 +108,16 @@ void showHelp(const char *program_name) {
  * @param verbose the verbose flag to set the logger level
  * @param debug the debug flag to set the logger level
  * @param cert_usage the certificate usage client, server, or ioc
- * @return the exit status 0 if successful, non-zero if an error occurs and we should exit
+ * @return exit status 0 if successful, non-zero if an error occurs and we should exit
  */
 int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, bool &debug, uint16_t &cert_usage, bool &daemon_mode, bool &force) {
     auto program_name = argv[0];
     bool show_version{false}, help{false}, add_config_uri{false};
-    std::string usage{"client"}, name, organization, organizational_unit, country;
+    std::string usage{"client"}, name, organization, organizational_unit, country, cert_validity_mins;
 
     CLI::App app{"authnstd - Secure PVAccess Standard Authenticator"};
 
-    defineOptions(app, config, verbose, debug, daemon_mode, force, show_version, help, add_config_uri, usage, name, organization, organizational_unit, country);
+    defineOptions(app, config, verbose, debug, daemon_mode, force, show_version, help, add_config_uri, usage, name, organization, organizational_unit, country, cert_validity_mins);
 
     CLI11_PARSE(app, argc, argv);
 
@@ -189,6 +190,9 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
             case ssl::kForServer: config.server_country = country; break;
             default: config.country = config.server_country = country; break;
         }
+    }
+    if (!cert_validity_mins.empty()) {
+        config.cert_validity_mins = CertDate::parseDurationMins(cert_validity_mins);
     }
 
     if ( config.trust_anchor_only) {

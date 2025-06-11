@@ -301,7 +301,7 @@ struct CertCreator {
 
         if ( add_status_extension) {
             const auto issuer_id = pvxs::certs::CertStatus::getSkId(root ? root : issuer);
-            pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::NID_SPvaCertStatusURI, pvxs::certs::getCertStatusURI("CERT", issuer_id, serial), issuer);
+            pvxs::certs::CertFactory::addCustomExtensionByNid(cert, pvxs::ossl::NID_SPvaCertStatusURI, pvxs::certs::getCertStatusURI("CERT", issuer_id, serial));
         }
 
         auto nbytes(X509_sign(cert.get(), ikey, sig));

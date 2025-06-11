@@ -10,6 +10,8 @@
 #include <ifaddrs.h>
 #include <osiProcess.h>
 
+#include "certdate.h"
+
 struct ifaddrs;
 
 namespace pvxs {
@@ -84,6 +86,8 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
         const std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "server.p12";
         ensureDirectoryExists(tls_srv_keychain_file = filename);
     }
+
+    if (pickone({"EPICS_PVA_AUTH_CERT_VALIDITY_MINS"})) cert_validity_mins = CertDate::parseDurationMins(pickone.val);
 }
 
 /**
@@ -97,17 +101,18 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
  */
 void ConfigAuthN::updateDefs(defs_t &defs) const {
     Config::updateDefs(defs);
-    defs["EPICS_PVA_AUTH_NAME"] = name;
+    defs["EPICS_PVAS_AUTH_COUNTRY"] = server_country;
     defs["EPICS_PVAS_AUTH_NAME"] = server_name;
     defs["EPICS_PVAS_AUTH_NO_STATUS"] = no_status ? "YES" : "NO";
-    defs["EPICS_PVA_AUTH_ISSUER"] = defs["EPICS_PVAS_AUTH_ISSUER"] = issuer_id;
-    defs["EPICS_PVA_AUTH_ORGANIZATION"] = organization;
     defs["EPICS_PVAS_AUTH_ORGANIZATION"] = server_organization;
-    defs["EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT"] = organizational_unit;
     defs["EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT"] = server_organizational_unit;
-    defs["EPICS_PVA_AUTH_COUNTRY"] = country;
-    defs["EPICS_PVAS_AUTH_COUNTRY"] = server_country;
     defs["EPICS_PVAS_TLS_KEYCHAIN"] = tls_srv_keychain_file;
+    defs["EPICS_PVA_AUTH_CERT_VALIDITY_MINS"] = CertDate::formatDurationMins(cert_validity_mins);
+    defs["EPICS_PVA_AUTH_COUNTRY"] = country;
+    defs["EPICS_PVA_AUTH_ISSUER"] = defs["EPICS_PVAS_AUTH_ISSUER"] = issuer_id;
+    defs["EPICS_PVA_AUTH_NAME"] = name;
+    defs["EPICS_PVA_AUTH_ORGANIZATION"] = organization;
+    defs["EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT"] = organizational_unit;
     if (!tls_srv_keychain_pwd.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
 }
 

@@ -13,6 +13,35 @@
 DEFINE_LOGGER(cert_cfg, "pvxs.certs.cfg");
 
 namespace pvxs {
+namespace impl {
+/**
+ * @brief create a CertStatusSubscription flag based on a string parameter value
+ *
+ * YES for "yes"/"true"/"1"
+ * NO for "no"/"false"/"0"
+ * DEFAULT for default
+ *
+ * @param input the string parameter value
+ * @return the corresponding CertStatusSubscription value
+ * @throw std::invalid_argument if the string doesn't match any expected value
+ */
+template<>
+certs::CertStatusSubscription parseTo<certs::CertStatusSubscription>(const std::string& input) {
+    // Create a lowercase copy of the input string
+    std::string lower = input;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                  [](const unsigned char c) { return std::tolower(c); });
+
+    if (lower == "yes" || lower == "true" || lower == "enabled" || lower == "on" || lower == "1") return certs::YES;
+    if (lower == "no" || lower == "false" || lower == "disabled" || lower == "off" || lower == "0") return certs::NO;
+    if (lower == "default") return certs::DEFAULT;
+
+    // No match found - throw an exception
+    throw NoConvert(SB() << "Invalid value: must be 'yes'/'true'/'enabled'/'on'/'1', 'no'/'false'/'disabled'/'off'/'0', or 'default': " << input);
+}
+
+
+}
 namespace certs {
 
 void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
@@ -128,10 +157,15 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     // EPICS_PVACMS_CERT STATUS VALIDITY MINS
     if (pickone({"EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS"})) {
         try {
-            cert_status_validity_mins = parseTo<uint64_t>(pickone.val);
+            cert_status_validity_mins = CertDate::parseDurationMins(pickone.val);
         } catch (std::exception &e) {
-            log_err_printf(cert_cfg, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+            log_err_printf(cert_cfg, "%s invalid validity duration : %s", pickone.name.c_str(), e.what());
         }
+    }
+
+    // EPICS_PVACMS_REQUIRE_APPROVAL
+    if (pickone({"EPICS_PVACMS_REQUIRE_APPROVAL"})) {
+        cert_client_require_approval = cert_server_require_approval = cert_ioc_require_approval = parseTo<bool>(pickone.val);
     }
 
     // EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL
@@ -149,14 +183,49 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
         cert_ioc_require_approval = parseTo<bool>(pickone.val);
     }
 
+    // EPICS_PVACMS_DISALLOW_CUSTOM_DURATION
+    if (pickone({"EPICS_PVACMS_DISALLOW_CUSTOM_DURATION"})) {
+        cert_disallow_client_custom_duration = cert_disallow_server_custom_duration = cert_disallow_ioc_custom_duration = parseTo<bool>(pickone.val);
+    }
+
+    // EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION
+    if (pickone({"EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION"})) {
+        cert_disallow_client_custom_duration = parseTo<bool>(pickone.val);
+    }
+
+    // EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION
+    if (pickone({"EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION"})) {
+        cert_disallow_server_custom_duration = parseTo<bool>(pickone.val);
+    }
+
+    // EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION
+    if (pickone({"EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION", "EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION", "EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION"})) {
+        cert_disallow_ioc_custom_duration = parseTo<bool>(pickone.val);
+    }
+
+    // EPICS_PVACMS_CERT_VALIDITY
+    if (pickone({"EPICS_PVACMS_CERT_VALIDITY"})) {
+        default_client_cert_validity = default_server_cert_validity = default_ioc_cert_validity = pickone.val;
+    }
+
+    // EPICS_PVACMS_CERT_VALIDITY_CLIENT
+    if (pickone({"EPICS_PVACMS_CERT_VALIDITY_CLIENT"})) {
+        default_client_cert_validity = pickone.val;
+    }
+
+    // EPICS_PVACMS_CERT_VALIDITY_SERVER
+    if (pickone({"EPICS_PVACMS_CERT_VALIDITY_SERVER"})) {
+        default_server_cert_validity = pickone.val;
+    }
+
+    // EPICS_PVACMS_CERT_VALIDITY_IOC
+    if (pickone({"EPICS_PVACMS_CERT_VALIDITY_IOC", "EPICS_PVACMS_CERT_VALIDITY_SERVER", "EPICS_PVACMS_CERT_VALIDITY_CLIENT"})) {
+        default_ioc_cert_validity = pickone.val;
+    }
+
     // EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION
     if (pickone({"EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION"})) {
-        if (parseTo<bool>(pickone.val)) {
-            cert_status_subscription = YES;
-        } else {
-            cert_status_subscription = NO;
-        }
-        // If value is not YES or NO, keep the default
+        cert_status_subscription = parseTo<CertStatusSubscription>(pickone.val);
     }
 }
 
@@ -185,10 +254,28 @@ void ConfigCms::updateDefs(defs_t &defs) const {
     defs["EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT"] = defs["EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT"] = defs["EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT"] =
         cert_auth_organizational_unit;
     defs["EPICS_CERT_AUTH_COUNTRY"] = defs["EPICS_PVAS_AUTH_COUNTRY"] = defs["EPICS_PVAS_AUTH_COUNTRY"] = cert_auth_country;
-    defs["EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS"] = std::to_string(cert_status_validity_mins);
-    defs["EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"] = cert_client_require_approval ? "YES" : "NO";
-    defs["EPICS_PVACMS_REQUIRE_SERVER_APPROVAL"] = cert_server_require_approval ? "YES" : "NO";
-    defs["EPICS_PVACMS_REQUIRE_IOC_APPROVAL"] = cert_ioc_require_approval ? "YES" : "NO";
+    defs["EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS"] = CertDate::formatDurationMins(cert_status_validity_mins);
+    if ( cert_client_require_approval == cert_server_require_approval && cert_server_require_approval == cert_ioc_require_approval) {
+        defs["EPICS_PVACMS_REQUIRE_APPROVAL"] = cert_client_require_approval ? "YES" : "NO";
+    } else {
+        defs["EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL"] = cert_client_require_approval ? "YES" : "NO";
+        defs["EPICS_PVACMS_REQUIRE_SERVER_APPROVAL"] = cert_server_require_approval ? "YES" : "NO";
+        defs["EPICS_PVACMS_REQUIRE_IOC_APPROVAL"] = cert_ioc_require_approval ? "YES" : "NO";
+    }
+    if ( cert_disallow_client_custom_duration == cert_disallow_server_custom_duration && cert_disallow_server_custom_duration == cert_disallow_ioc_custom_duration) {
+        defs["EPICS_PVACMS_DISALLOW_CUSTOM_DURATION"] = cert_disallow_client_custom_duration ? "YES" : "NO";
+    } else {
+        defs["EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION"] = cert_disallow_client_custom_duration ? "YES" : "NO";
+        defs["EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION"] = cert_disallow_server_custom_duration ? "YES" : "NO";
+        defs["EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION"] = cert_disallow_ioc_custom_duration ? "YES" : "NO";
+    }
+    if (default_client_cert_validity == default_server_cert_validity && default_server_cert_validity == default_ioc_cert_validity) {
+        defs["EPICS_PVACMS_CERT_VALIDITY"] = default_client_cert_validity;
+    } else {
+        defs["EPICS_PVACMS_CLIENT_CERT_VALIDITY"] = default_client_cert_validity ;
+        defs["EPICS_PVACMS_SERVER_CERT_VALIDITY"] = default_server_cert_validity;
+        defs["EPICS_PVACMS_IOC_CERT_VALIDITY"] = default_ioc_cert_validity;
+    }
     defs["EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION"] = (cert_status_subscription == DEFAULT) ? "DEFAULT" : (cert_status_subscription == YES) ? "YES" : "NO";
 
     // Add any defs for any registered authn methods

@@ -75,11 +75,11 @@ If you want a prepackaged environment, try the following.  You will need two ter
     EPICS_CERT_AUTH_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.3/cert_auth.p12
     EPICS_PVACMS_ACF=/home/pvacms/.config/pva/1.3/pvacms.acf
     EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION=YES
-    EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS=30
+    EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS=30m
+    EPICS_PVACMS_CERT_VALIDITY=6M
     EPICS_PVACMS_DB=/home/pvacms/.local/share/pva/1.3/certs.db
-    EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL=YES
-    EPICS_PVACMS_REQUIRE_IOC_APPROVAL=YES
-    EPICS_PVACMS_REQUIRE_SERVER_APPROVAL=YES
+    EPICS_PVACMS_DISALLOW_CUSTOM_DURATION=NO
+    EPICS_PVACMS_REQUIRE_APPROVAL=YES
     EPICS_PVACMS_TLS_STOP_IF_NO_CERT=YES
     EPICS_PVAS_AUTH_COUNTRY=US
     EPICS_PVAS_AUTH_ORGANIZATION=certs.epics.org
@@ -149,10 +149,11 @@ If you want a prepackaged environment, try the following.  You will need two ter
 
     Certificate Details:
     ============================================
-    Subject        : CN=admin, C=US
-    Issuer         : CN=EPICS Root, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
-    Valid from     : Sat Mar 08 09:45:46 2025 UTC
-    Cert Expires   : Mon Mar 09 09:45:46 2026 UTC
+    Certificate ID : 06e4748c:9522902379233552024
+    Entity Subject : CN=admin, C=US
+    Issuer Subject : CN=EPICS Root, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Valid From     : Sat Mar 08 09:45:46 2025 UTC
+    Expires On     : Mon Mar 09 09:45:46 2026 UTC
     --------------------------------------------
 
     Certificate Status:
@@ -557,12 +558,12 @@ otherwise the certificate authority certificate will be created here
     EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT=EPICS Certificate Authority
     EPICS_CERT_AUTH_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.3/cert_auth.p12
     EPICS_PVACMS_ACF=/home/pvacms/.config/pva/1.3/pvacms.acf
-    EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION=YES
-    EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS=30
+    EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION=DEFAULT
+    EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS=30m
+    EPICS_PVACMS_CERT_VALIDITY=6M
     EPICS_PVACMS_DB=/home/pvacms/.local/share/pva/1.3/certs.db
-    EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL=YES
-    EPICS_PVACMS_REQUIRE_IOC_APPROVAL=YES
-    EPICS_PVACMS_REQUIRE_SERVER_APPROVAL=YES
+    EPICS_PVACMS_DISALLOW_CUSTOM_DURATION=NO
+    EPICS_PVACMS_REQUIRE_APPROVAL=YES
     EPICS_PVACMS_TLS_STOP_IF_NO_CERT=YES
     EPICS_PVAS_AUTH_COUNTRY=US
     EPICS_PVAS_AUTH_ORGANIZATION=certs.epics.org
@@ -664,10 +665,11 @@ to the Admin User's keychain file
 
     Certificate Details:
     ============================================
-    Subject        : CN=admin, C=US
-    Issuer         : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
-    Valid from     : Tue Mar 04 14:53:32 2025 UTC
-    Cert Expires   : Thu Mar 05 14:53:32 2026 UTC
+    Certificate ID : 2535f0b8:7810503273530005364
+    Entity Subject : CN=admin, C=US
+    Issuer Subject : CN=EPICS Root Certificate Authority, C=US, O=certs.epics.org, OU=EPICS Certificate Authority
+    Valid From     : Tue Mar 04 14:53:32 2025 UTC
+    Expires On     : Thu Mar 05 14:53:32 2026 UTC
     --------------------------------------------
 
     Certificate Status:

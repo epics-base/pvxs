@@ -8,6 +8,8 @@ SRCS += ccrmanager.cpp
 
 include $(AUTHN)/std/Makefile
 
+SRCS += certstatusmanager.cpp
+
 #--------------------------------------------
 #  ADD AUTHENTICATOR PLUGINS AFTER THIS LINE
 

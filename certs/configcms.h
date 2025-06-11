@@ -70,7 +70,7 @@ class ConfigCms final : public server::Config {
     bool cert_server_require_approval = true;
 
     /**
-     * @brief When basic credentials are used then set to true
+     * @brief When basic credentials are used, then set to true
      * to request administrator approval to issue ioc certificates.
      *
      * All other auth methods will never require administrator approval.
@@ -78,12 +78,77 @@ class ConfigCms final : public server::Config {
     bool cert_ioc_require_approval = true;
 
     /**
+     * @brief By default, Authenticators can request custom certificate durations.  Setting this flag disallows this for client certificates.
+     *
+     * This is useful for preventing a client from requesting a client certificate with a duration that is too long.
+     *
+     * Overrides the `EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION` environment variable, which,
+     * if set, overrides the default of false.
+     *
+     * Default is false
+     *
+     */
+    bool cert_disallow_client_custom_duration = false;
+
+    /**
+     * @brief By default, Authenticators can request custom certificate durations.  Setting this flag disallows this for server certificates.
+     *
+     * This is useful for preventing a client from requesting a server certificate with a duration that is too long.
+     *
+     * Overrides the `EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION` environment variable, which,
+     * if set, overrides the default of false.
+     *
+     * Default is false
+     *
+     */
+    bool cert_disallow_server_custom_duration = false;
+
+    /**
+     * @brief By default, Authenticators can request custom certificate durations.  Setting this flag disallows this for IOC certificates.
+     *
+     * This is useful for preventing a client from requesting an IOC certificate with a duration that is too long.
+     *
+     * Overrides the `EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION` environment variable, which,
+     * if set, overrides the default of false.
+     *
+     * Default is false
+     *
+     */
+    bool cert_disallow_ioc_custom_duration = false;
+
+    /**
+     * @brief Default client certificate validity period
+     *
+     * Expressed using format: 1y 2M 3w 4d 5h 6m 7s
+     * This is the amount of time that a client certificate will be given to a new client
+     * certificate unless overridden by the Authenticator verify routine.
+     */
+    std::string default_client_cert_validity="6M";
+
+    /**
+     * @brief Default server certificate validity period
+     *
+     * Expressed using format: 1y 2M 3w 4d 5h 6m 7s
+     * This is the amount of time that a server certificate will be given to a new server
+     * certificate unless overridden by the Authenticator verify routine.
+     */
+    std::string default_server_cert_validity="6M";
+
+    /**
+     * @brief Default IOC certificate validity period
+     *
+     * Expressed using format: 1y 2M 3w 4d 5h 6m 7s
+     * This is the amount of time that a IOC certificate will be given to a new IOC
+     * certificate unless overridden by the Authenticator verify routine.
+     */
+    std::string default_ioc_cert_validity="6M";
+
+    /**
      * @brief This flag is used to indicate that a certificate user must subscribe
      * to the certificate status PV to verify the certificate's revoked status.
      *
-     * With this flag set two extensions are added to created certificates.
-     * A flag indicating that subscription is required and a string
-     * containing the PV name to subscribe to.
+     * With this flag set, an extension is added to created certificates -
+     * a string containing the PV name to subscribe to.
      *
      * If set to YES, a status subscription is always required.
      * If set to NO, a status subscription is never required.

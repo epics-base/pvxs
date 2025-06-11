@@ -231,6 +231,13 @@ Common Environment Variables for all Authenticators
 +----------------------+------------------------------------+-----------------------------------------------------------------------+
 | Name                 | Keys and Values                    | Description                                                           |
 +======================+====================================+=======================================================================+
+|| EPICS_PVA_AUTH_     || <number of minutes>               || Amount of minutes before the certificate expires.                    |
+|| _CERT_VALIDITY_MINS || e.g. ``1y`` for 1 year            || e.g. 1d or 1y 2w 1d or 24h                                           |
+||                     ||                                   || Where:                                                               |
+||                     ||                                   ||   1y = 365 days                                                      |
+||                     ||                                   ||   1M = 30 days                                                       |
+||                     ||                                   ||   1w = 7 days                                                        |
++----------------------+------------------------------------+-----------------------------------------------------------------------+
 || EPICS_PVA_AUTH      || {name to use}                     || Name to use in new certificates                                      |
 || _NAME               || e.g. ``archiver``                 ||                                                                      |
 +----------------------+  e.g. ``IOC1``                     ||                                                                      |
@@ -316,9 +323,9 @@ and password file locations.
     Uses specified parameters to create certificates that require administrator APPROVAL before becoming VALID.
 
     usage:
-      authnstd [options]                          Create certificate in PENDING_APPROVAL state
-      authnstd (-h | --help)                      Show this help message and exit
-      authnstd (-V | --version)                   Print version and exit
+      authnstd [options]                         Create certificate in PENDING_APPROVAL state
+      authnstd (-h | --help)                     Show this help message and exit
+      authnstd (-V | --version)                  Print version and exit
 
     options:
       (-u | --cert-usage) <usage>                Specify the certificate usage.  client|server|ioc.  Default `client`
@@ -326,27 +333,17 @@ and password file locations.
       (-o | --organization) <organization>       Specify organisation name for the certificate. Default <hostname>
             --ou <org-unit>                      Specify organisational unit for the certificate. Default <blank>
       (-c | --country) <country>                 Specify country for the certificate. Default locale setting if detectable otherwise `US`
-      (-t | --time) <minutes>                    Duration of the certificate in minutes
+      (-t | --time) <minutes>                    Duration of the certificate in minutes.  e.g. 30 or 1d or 1y3M2d4m
       (-D | --daemon)                            Start a daemon that re-requests a certificate on expiration`
-            --cert-pv-prefix <cert_pv_prefix>    Specifies the pv prefix to use to contact PVACMS.  Default `CERT`
-            --add-config-uri                     Add a config uri to the generated certificate
-            --force                              Force overwrite if certificate exists
-      (-a | --trust-anchor)                      Download Trust Anchor into keychain file.  Do not create a certificate
-      (-s | --no-status)                         Request that status checking not be required for this certificate
-      (-i | --issuer) <issuer_id>                The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening
-      (-v | --verbose)                           Verbose mode
-      (-d | --debug)                             Debug mode
+            --cert-pv-prefix <cert_pv_prefix>     Specifies the pv prefix to use to contact PVACMS.  Default `CERT`
+            --add-config-uri                      Add a config uri to the generated certificate
+            --force                               Force overwrite if certificate exists
+      (-a | --trust-anchor)                       Download Trust Anchor into keychain file.  Do not create a certificate
+      (-s | --no-status)                          Request that status checking not be required for this certificate
+      (-i | --issuer) <issuer_id>                 The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening
+      (-v | --verbose)                            Verbose mode
+      (-d | --debug)                              Debug mode
 
-
-
-**Environment Variables for authnstd**
-
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-| Name                 | Keys and Values                    | Description                                                           |
-+======================+====================================+=======================================================================+
-|| EPICS_AUTH_         || <number of minutes>               || Amount of minutes before the certificate expires.                    |
-|| _CERT_VALIDITY_MINS || e.g. ``525960`` for 1 year        ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
 
 **Examples**
 
@@ -597,6 +594,139 @@ that contains a working LDAP with the following characteristics:
   - PVACMS
 
 .. _epics_security:
+
+Long Running Certificates
+--------------------------
+
+In Experimental Physics and Industrial Control Systems, maintaining uninterrupted connections is critical. Even a microsecond break can trigger fail-safety mechanisms that might disrupt experiments.
+
+With TLS 1.3 (implemented in OpenSSL), renegotiation has been completely removed from the protocol due to serious security vulnerabilities. Previous versions of TLS allowed session
+renegotiation, which permitted changing security parameters (including certificates) without closing the connection. However, this feature was exploited in
+several attacks, including the "Triple Handshake Attack" and "Secure Renegotiation" vulnerabilities.
+
+This means that once a TLS connection has been established with an IOC over Secure PVAccess, we cannot change the certificate without breaking and re-establishing the connection. Our solution to this problem involves:
+
+- Creating very long running certificates (decades)
+- Allowing them to be `REVOKED` by administrators when necessary
+- Implementing a kind of "soft-expiration" tied to authenticator configuration
+- Providing the ability to renew certificates without breaking existing connections
+
+Specifying long running certificates
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Common to all Authenticators - commandline parameters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use the `-t,--time` flag to specify a duration for the certificate using these components:
+
+- `y` - Years (e.g., `2y` for two years)
+- `M` - Months (e.g., `6M` for six months)
+- `w` - Weeks (e.g., `1w` for one week)
+- `d` - Days (e.g., `15d` for 15 days)
+- `h` - Hours (e.g., `12h` for 12 hours)
+- `m` - Minutes (e.g., `30m` for 30 minutes, or simply `30`)
+- `s` - Seconds (e.g., `45s` for 45 seconds)
+
+Examples:
+
+- `1y and 6M` - one year and six months
+- `2y3M15d` - two years, three months, and 15 days
+
+The system uses natural time understanding, accounting for daylight savings, leap years, etc. For example, if you specify 1
+year, the certificate will expire on the same calendar day next year, regardless of leap years.
+
+Common to all Authenticators - environment variables
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+`EPICS_AUTH_CERT_VALIDITY_MINS` - sets a global duration for any Authenticator using the same format as the commandline parameter.
+
+PVACMS Defaults - Parameters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+PVACMS defaults to 6 months for certificate duration unless overridden by:
+
+- `--cert_validity <duration>` - default duration for all certificates
+- `--cert_validity-client <duration>` - default for client certificates
+- `--cert_validity-server <duration>` - default for server certificates
+- `--cert_validity-ioc <duration>` - default for IOC certificates
+- `--disallow-custom-durations` - prevents clients from specifying durations for any certificates
+- `--disallow-custom-durations-client` - restricts custom durations for client certificates
+- `--disallow-custom-durations-server` - restricts custom durations for server certificates
+- `--disallow-custom-durations-ioc` - restricts custom durations for IOC certificates
+
+PVACMS Defaults - Environment Variables
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Values can also be set using environment variables:
+
+- `EPICS_PVACMS_CERT_VALIDITY` - default duration for all certificates
+- `EPICS_PVACMS_CERT_VALIDITY_CLIENT` - default for client certificates
+- `EPICS_PVACMS_CERT_VALIDITY_SERVER` - default for server certificates
+- `EPICS_PVACMS_CERT_VALIDITY_IOC` - default for IOC certificates
+- `EPICS_PVACMS_DISALLOW_CUSTOM_DURATION` - YES/NO to prevent custom durations for any certificates
+- `EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION` - YES/NO for client certificates
+- `EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION` - YES/NO for server certificates
+- `EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION` - YES/NO for IOC certificates
+
+The Authenticator Controls the Certificate Renewal Date
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The actual time before a certificate needs renewal is determined by the Authenticator (and by extension, the network administrators controlling the authentication methods).
+
+This is known as the **Authenticated Expiration Date**:
+
+- **Standard Authenticator**: Default is 6 months with no upper limit (subject to admin approval)
+- **Kerberos**: Limited by service ticket lifetime (typically 1 day)
+- **LDAP**: Limited by server default (typically 1 day)
+
+Mapping requested duration to certificate expiration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Two critical dates govern certificate lifecycle:
+
+- **Requested Duration → Certificate Expiration Date**: When the certificate becomes invalid
+- **Authenticated Expiration → Certificate Renew-By Date**: When the certificate should be renewed
+
+The PVACMS will change a certificate's status from `VALID` to `PENDING_RENEWAL` when it reaches the
+renew-by date. Certificates in this state can't establish new connections, but existing connections
+can continue until the certificate is renewed.
+
+How do we enforce Renew By dates
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+All certificates with renew-by dates must have certificate status monitoring enabled. If status
+monitoring is disabled for the PVACMS server, generating certificates with renew-by dates will be forbidden.
+
+Secure PVAccess monitors certificate status and reacts to state changes:
+
+- `VALID`: Certificate is operational
+- `PENDING_RENEWAL`: Certificate needs renewal but isn't revoked
+- `REVOKED` / `EXPIRED`: Certificate is permanently invalidated
+
+When a certificate transitions to `PENDING_RENEWAL`:
+
+- IOCs/servers will only accept TCP connections (no TLS)
+- Clients won't search for TLS protocol services
+- Monitoring consoles will pause until certificate renewal
+
+Renewing certificates
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To renew a certificate, simply perform the same action used to get the original certificate. PVACMS will:
+
+1. Recognize that the certificate is for the same subject
+2. Automatically renew it
+3. Keep both the new certificate and the original one active
+
+This means:
+
+- Existing connections using the long-running certificate continue without interruption
+- New connections will use the newer certificate
+
+You can renew certificates multiple times, and the system will always keep the last certificate obtained as well as the original, renewed one.
+
+Best practice: Renew before the certificate enters `PENDING_RENEWAL` state to maintain uninterrupted service. If renewal occurs after the renew-by date, the certificate will automatically transition back to `VALID` upon successful renewal.
+
 
 Authorization
 -------------
