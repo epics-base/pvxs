@@ -501,12 +501,17 @@ void UDPCollector::process_one(const uint8_t *buf, size_t nrx, origin_t origin,
             return;
 
         } else if(origin==Forwarded) {
-            auto ifit(ifinfo.byAddr.find(originaddr));
-            if(ifit!=ifinfo.byAddr.end()) {
-                // original destination is local interface address
+            auto isany = originaddr.isAny(); // valid ORIGIN_TAG, but no additional information
+            decltype(ifinfo.byAddr)::const_iterator ifit;
+            if(!isany)
+                ifit = ifinfo.byAddr.find(originaddr);
+
+            if(isany || ifit!=ifinfo.byAddr.end()) {
+                // original destination is wildcard, or local interface address
                 originaddr.setPort(bind_addr.port());
                 dest = originaddr;
-                srcIface = ifit->second.first;
+                if(!isany)
+                    srcIface = ifit->second.first;
                 process_one(M.save(), M.size(), OriginTag, ifinfo);
                 return;
 
