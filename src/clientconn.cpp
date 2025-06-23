@@ -13,7 +13,6 @@ namespace pvxs {
 namespace client {
 
 DEFINE_LOGGER(io, "pvxs.client.io");
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 DEFINE_LOGGER(remote, "pvxs.remote.log");
 
 Connection::Connection(const std::shared_ptr<ContextImpl>& context,
