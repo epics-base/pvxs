@@ -162,6 +162,23 @@ jobs:
         sudo apt-get update
         sudo apt-get -y install libreadline-dev g++-mingw-w64-x86-64 cmake gdb qemu-system-x86 libssl-dev
       if: runner.os == 'Linux'
+    - name: vcpkg cache
+      uses: actions/cache@v4
+      with:
+        path: c:/vcpkg-cache
+        key: ${{ runner.os }}-vcpkg
+    - name: vcpkg
+      shell: bash
+      run: |
+        install -d c:/vcpkg-cache
+        vcpkg install --binarysource="clear;files,c:/vcpkg-cache,readwrite" "openssl[tools]"
+        ls C:/vcpkg/installed/x64-windows
+        cat <<EOF >> configure/CONFIG_SITE.local
+        OPENSSL=C:/vcpkg/installed/x64-windows
+        EOF
+        echo "C:/vcpkg/installed/x64-windows/bin" >> "$GITHUB_PATH"
+        echo "C:/vcpkg/installed/x64-windows/tools/openssl" >> "$GITHUB_PATH"
+      if: runner.os == 'Windows'
     - name: Host Info
       run: openssl version -a
     - name: Automatic core dumper analysis
