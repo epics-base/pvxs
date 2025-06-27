@@ -229,14 +229,14 @@ struct PKCS12Writer {
                                                 nullptr, nullptr,
                                                 &jdk_trust, nullptr));
 
-        std::string outpath(SB()<<outdir<<fname);
-        std::unique_ptr<FILE, ssl_delete<FILE>> out(fopen(outpath.c_str(), "wb"));
-        if(!out) {
-            auto err = errno;
-            throw std::runtime_error(SB()<<"Error opening for write : "<<outpath<<" : "<<strerror(err));
-        }
 
-        MUST(1, i2d_PKCS12_fp(out.get(), p12.get()));
+        owned_ptr<BIO> fp(BIO_new(BIO_s_file()));
+
+        std::string outpath(SB()<<outdir<<fname);
+        if(BIO_write_filename(fp.get(), (void*)outpath.c_str())<=0)
+            throw SSLError(SB()<<"BIO_write_filename() : "<<outpath);
+
+        MUST(1, i2d_PKCS12_bio(fp.get(), p12.get()));
     }
 };
 
