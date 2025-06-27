@@ -238,19 +238,18 @@ ossl_setup_common(const SSL_METHOD *method, bool ssl_client, const impl::ConfigC
         log_debug_printf(_setup, "Read keychain (PKCS12) %s%s\n",
                          keychain.c_str(), password.empty() ? "" : " w/ password");
 
-        std::unique_ptr<FILE> fp(fopen(keychain.c_str(), "rb"));
-        if(!fp) {
-            auto err = errno;
-            throw std::runtime_error(SB()<<"Unable to open \""<<keychain<<"\" : "<<strerror(err));
-        }
-
         ossl_ptr<PKCS12> p12;
         {
-            if(!d2i_PKCS12_fp(fp.get(), p12.acquire()))
+            ossl_ptr<BIO> fp(__FILE__, __LINE__, BIO_new(BIO_s_file()));
+
+            if(BIO_read_filename(fp.get(), keychain.c_str())<=0)
+                throw SSLError(SB()<<"Unable to open and read \""<<keychain<<"\"");
+
+            if(!d2i_PKCS12_bio(fp.get(), p12.acquire()))
                 throw SSLError(SB()<<"Unable to read \""<<keychain<<"\"");
 
             if(!p12)
-                throw std::logic_error("d2i_PKCS12_fp() success without success?!?");
+                throw std::logic_error("d2i_PKCS12_bio() success without success?!?");
         }
 
         ossl_ptr<EVP_PKEY> key;
