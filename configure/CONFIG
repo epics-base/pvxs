@@ -28,3 +28,6 @@ ifdef T_A
  -include $(TOP)/configure/O.$(T_A)/TOOLCHAIN
 endif
 
+-include $(INSTALL_LOCATION)/cfg/CONFIG_PVXS_MODULE
+-include $(INSTALL_LOCATION)/cfg/CONFIG_PVXS_VERSION
+
