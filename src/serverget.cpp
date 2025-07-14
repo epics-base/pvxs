@@ -88,8 +88,9 @@ struct ServerGPR final : public ServerOp
 
                 if(state==Executing)
                     state = Idle;
+
                 else // Creating
-                    state = Dead;
+                    cleanup();
 
             } else if(state==Creating) {
                 // connect()
@@ -108,7 +109,11 @@ struct ServerGPR final : public ServerOp
                     if(value)
                         to_wire_full(R, value);
                 }
-                state = lastRequest ? Dead : Idle;
+                if(lastRequest) {
+                    cleanup();
+                } else {
+                    state = Idle;
+                }
 
             } else {
                 assert(false);
@@ -117,10 +122,6 @@ struct ServerGPR final : public ServerOp
         }
 
         ch->statTx += conn->enqueueTxBody(cmd);
-
-        if(state == ServerOp::Dead) {
-            cleanup();
-        }
     }
 
     void cleanup() override final

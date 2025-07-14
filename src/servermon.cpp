@@ -128,7 +128,11 @@ struct MonitorOp final : public ServerOp
         uint8_t subcmd = 0u;
         if(self->state==Creating) {
             subcmd = 0x08;
-            self->state = self->type ? Idle : Dead;
+            if(self->type) {
+                self->state = Idle;
+            } else {
+                self->cleanup();
+            }
 
         } else if(self->state==Executing) {
             if(self->queue.empty() || (self->pipeline && !self->window && !self->finished)) {
@@ -138,7 +142,7 @@ struct MonitorOp final : public ServerOp
 
             } else if(!self->queue.front()) {
                 subcmd = 0x10;
-                self->state = Dead;
+                self->cleanup();
                 log_debug_printf(connio, "Client %s IOID %u finishes\n",
                                  conn->peerName.c_str(), unsigned(self->ioid));
             }
@@ -177,7 +181,6 @@ struct MonitorOp final : public ServerOp
         ch->statTx += conn->enqueueTxBody(pva_app_msg_t::CMD_MONITOR);
 
         if(self->state == ServerOp::Dead) {
-            self->cleanup();
             return;
         }
 
