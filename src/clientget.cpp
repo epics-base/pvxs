@@ -501,7 +501,15 @@ void Connection::handle_GPR(pva_app_msg_t cmd)
 
     if(!sts.isSuccess()) {
         gpr->result = Result(std::make_exception_ptr(RemoteError(sts.msg)));
-        gpr->state = gpr->state==GPROp::Creating || gpr->autoExec ? GPROp::Done : GPROp::Idle;
+
+        if(gpr->state==GPROp::Exec && !gpr->autoExec) {
+            gpr->state = GPROp::Idle; // repeated exec may yield a different result
+            gpr->notify();
+            return;
+
+        } else {
+            gpr->state = GPROp::Done; // treat as unrecoverable, destroy OP
+        }
 
     } else if(gpr->state==GPROp::Creating) {
 
