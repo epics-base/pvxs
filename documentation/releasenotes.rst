@@ -14,6 +14,7 @@ Release Notes
 * Add remote logging for some malformed pvRequest.
 * ioc: record._options.process accept numeric values as true/false.
 * server: handle protocol corner case of monitor create without initial ACK.
+* Add support for Python 3.13
 
 1.3.3 (Apr 2025)
 ----------------
