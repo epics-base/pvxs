@@ -370,16 +370,24 @@ SigInt::~SigInt() {}
 #endif // !defined(__rtems__) && !defined(vxWorks)
 
 
-SockAddr::SockAddr(int af)
+SockAddr::SockAddr(int af, unsigned short port)
     :store{}
 {
     store.sa.sa_family = af;
-    if(af!=AF_INET
-#ifdef AF_INET6
-            && af!=AF_INET6
-#endif
-            && af!=AF_UNSPEC)
+    switch(af) {
+    case AF_INET:
+        store.in.sin_port = htons(port);
+        break;
+    case AF_INET6:
+        store.in6.sin6_port = htons(port);
+        break;
+    case AF_UNSPEC:
+        if(port)
+            throw std::invalid_argument("AF_UNSPEC can not specify port");
+        break;
+    default:
         throw std::invalid_argument("Unsupported address family");
+    }
 }
 
 SockAddr::SockAddr(const char *address, unsigned short port)

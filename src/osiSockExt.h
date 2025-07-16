@@ -50,7 +50,7 @@ private:
     store_t  store;
 public:
 
-    explicit SockAddr(int af = AF_UNSPEC);
+    explicit SockAddr(int af = AF_UNSPEC, unsigned short port=0);
     explicit SockAddr(const char *address, unsigned short port=0);
     explicit SockAddr(const sockaddr *addr, socklen_t alen=0);
     inline explicit SockAddr(const std::string& address, unsigned short port=0) :SockAddr(address.c_str(), port) {}

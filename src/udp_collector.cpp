@@ -277,7 +277,8 @@ bool UDPCollector::handle_one(const IfaceMap::Current& ifinfo)
         // packet forwarded by a local PVA peer (maybe us) as IPv4 local multicast
         origin = Forwarded;
         // UDP header info of forwarder not relevant to reply.  Spoil...
-        src = dest = SockAddr(); // IPv6 does not support local mcast :(
+        src = SockAddr(src.family(), src.port());
+        dest = SockAddr(dest.family(), dest.port());
         srcIface = nullptr;
 
     } else {
@@ -289,7 +290,7 @@ bool UDPCollector::handle_one(const IfaceMap::Current& ifinfo)
         auto ifit(srcIface->bcast.find(dest));
         if(ifit!=srcIface->bcast.end()) {
             // dest is bcast, so replace with associated iface address
-            dest = ifit->second;
+            dest = ifit->second.withPort(dest.port());
 
         } else if((ifit=srcIface->addrs.find(dest))!=srcIface->addrs.end()) {
             // dest is interface address.  Nothing to do.
@@ -301,14 +302,14 @@ bool UDPCollector::handle_one(const IfaceMap::Current& ifinfo)
             bool found = false;
             for(auto& it : srcIface->addrs) {
                 if(it.first.family()==dest.family()) {
-                    dest = it.first;
+                    dest = it.first.withPort(dest.port());
                     found = true;
                     break;
                 }
             }
             if(!found) {
                 // let host mcast routing try...
-                dest = SockAddr(dest.family());
+                dest = SockAddr(dest.family(), dest.port());
             }
         }
     }
