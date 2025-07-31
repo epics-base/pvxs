@@ -3,7 +3,7 @@
 Release Notes
 =============
 
-1.4.0 (UNRELEASED)
+1.4.0 (July 2025)
 ------------------
 
 * Rename generated CONFIG_SITE to TOOLCHAIN.
