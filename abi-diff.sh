@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e -x
 
-# need abi-dumper vtable-dumper abi-compliance-checker ctags-universal
-# circa >= Debian 11
+# need abi-dumper vtable-dumper abi-compliance-checker universal-ctags
+# circa >= Debian 12
 
 die() {
     echo "$1" >&1
@@ -10,10 +10,23 @@ die() {
 }
 
 OLD="$1"
-NEW="${2:-HEAD}"
+NEW="$2"
+# default to eg. "1.2.3-5-adfjlad"
+[ "$NEW" ] || NEW="$(git describe --tags)"
 
-# default to tag before $NEW
-[ "$OLD" ] || OLD="$(git describe --abbrev=0 "$NEW")"
+if ! [ "$OLD" ]
+then
+    # default to tag before $NEW (eg. "1.2.3")
+    OLD="$(git describe --tags --abbrev=0 "$NEW")"
+    if [ "$OLD" = "$NEW" ]
+    then
+        # $NEW is a tagged revision, so nothing to abbreviate.
+        # look back for a previous tag.  May be confused by merging
+        OLD="$(git describe --tags --abbrev=0 "$NEW"~)"
+    fi
+
+    [ "$OLD" = "$NEW" ] && die "Refusing self-diff of $NEW"
+fi
 
 [ "$OLD" -a "$NEW" ] || die "usage: $0 <oldrev> <newrev>"
 
