@@ -1,0 +1,52 @@
+name: Release artifacts
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  artifacts:
+    runs-on: ubuntu-latest
+    env:
+      SETUP_PATH: .ci-local
+      SET: defaults
+      CMP: gcc
+      BCFG: default
+      BASE: "7.0"
+      _PVXS_ABORT_ON_CRIT: 1
+      PVXS_LOG: pvxs.*=WARN
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: "0"
+        submodules: true
+    - name: "apt-get install"
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install libreadline-dev libevent-dev cmake \
+         abi-dumper vtable-dumper abi-compliance-checker universal-ctags \
+         gcovr jq
+
+    - name: Prepare and compile dependencies
+      run: python .ci/cue.py prepare
+
+    - name: coverage
+      run: python .ci/cue.py exec ./coverage.sh
+
+    - name: Upload Coverage
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: coverage
+        path: 'coverage/coverage.tar.bz2'
+
+    - name: abi-diff
+      run: python .ci/cue.py exec ./abi-diff.sh
+
+    - name: Upload ABI
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        retention-days: 7
+        name: abi-diff
+        path: 'compat_reports'
+        if-no-files-found: ignore

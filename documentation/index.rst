@@ -24,7 +24,7 @@ Dependencies
 
 * `EPICS Base <https://epics-controls.org/resources-and-support/base/>`_ >=3.15.1
 * `libevent <http://libevent.org/>`_ >=2.0.1  (Optionally bundled)
-* (optional) `CMake <https://cmake.org/>`_ >=3.1, only needed when building bundled libevent
+* (optional) `CMake <https://cmake.org/>`_ >=3.10, only needed when building bundled libevent
 
 See :ref:`building` for details.
 
