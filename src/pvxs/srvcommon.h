@@ -93,12 +93,12 @@ public:
     virtual ~OpBase() =0;
 };
 //! Log to remote peer
-//! @since UNRELEASED
+//! @since 1.4.0
 struct PVXS_API RemoteLogger {
     virtual ~RemoteLogger() =0;
 
     //! Request log message to peer
-    //! @since UNRELEASED
+    //! @since 1.4.0
     virtual void logRemote(Level lvl, const std::string& msg) =0;
 };
 
