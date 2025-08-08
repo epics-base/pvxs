@@ -103,4 +103,4 @@ Add the pvxs library as a dependency to your executable or library. eg. ::
 libevent will be automatically added for linking.
 
 For those interested, this is accomplished with the logic found in
-"cfg/CONFIG_PVXS_MODULE".
+``$(INSTALL_LOCATION)/cfg/CONFIG_PVXS_MODULE``.

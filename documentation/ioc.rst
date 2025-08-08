@@ -1,5 +1,7 @@
+.. _iocintegration:
+
 IOC Integration
-###############
+===============
 
 .. code-block:: c++
 
@@ -9,12 +11,13 @@ IOC Integration
 The separate ``pvxsIoc`` library exists to run a PVXS server as part of an IOC.
 See also :ref:`includepvxs`.
 
-IOC Integration respects the **$PVXS_LOG** as well as the **$EPICS_PVA\*** environment variables.
+IOC Integration respects the **$PVXS_LOG** as well as the **$EPICS_PVA\*** environment variables
+to configure :ref:`logconfig`.
 Changes to this environment variable are possible prior to
 calling ``*_registerRecordDeviceDriver(pdbbase)``.
 
 IOC shell
-^^^^^^^^^
+---------
 
 The ``pvxsIoc`` library adds several IOC shell functions which apply to all PVs
 served by the Integrated PVA server.
@@ -35,18 +38,18 @@ served by the Integrated PVA server.
     May be requested when reporting a bug.
 
 Adding custom PVs to Server
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------
 
 .. doxygenfunction:: pvxs::ioc::server
 
 .. _qsrv2:
 
 QSRV 2
-######
+======
 
 Beginning with PVXS 1.2.0 the functionality of `QSRV <https://epics-base.github.io/pva2pva>`_
 is replicated in the ``pvxsIoc`` library.
-As of 1.3.0 this feature preview is considered **beta** level with equivalent functionality.
+As of 1.4.0 QSRV2 is considered to be a complete replacement.
 
 It is recommended not to load both ``pvxsIoc.dbd`` and ``qsrv.dbd`` in the same IOC process.
 However, if this is done.  Users may opt out at runtime by setting

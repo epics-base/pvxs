@@ -17,10 +17,26 @@
 # sys.path.insert(0, os.path.abspath('.'))
 
 import time
-import os
+
+def git_date():
+    from subprocess import check_output
+    try:
+        return check_output(['git','log', '-n1','--format=%cs']).decode('ascii')
+    except Exception as e:
+        print(f'Unable to find Git revision date: {e}')
+        return time.strftime('%Y-%m-%d')
+
+def git_describe():
+    from subprocess import check_output
+    try:
+        return check_output(['git','describe','--tags']).decode('ascii')
+    except Exception as e:
+        print(f'Unable to find Git revision: {e}')
+        return None # fallback
 
 def read_version(fmt):
     import os, re
+
     parts = {}
     with open(os.path.join('..','configure','CONFIG_PVXS_VERSION'), 'r') as F:
         for line in F:
@@ -36,11 +52,12 @@ copyright = time.strftime('%Y Michael Davidsaver and Osprey DCS LLC')
 author = 'Michael Davidsaver'
 
 # The short X.Y version
-version = read_version('{PVXS_MAJOR_VERSION}.{PVXS_MINOR_VERSION}')
+version = git_describe() or read_version('{PVXS_MAJOR_VERSION}.{PVXS_MINOR_VERSION}.{PVXS_MAINTENANCE_VERSION}')
 print("VERSION", version)
 # The full version, including alpha/beta/rc tags
-release = read_version('{PVXS_MAJOR_VERSION}.{PVXS_MINOR_VERSION}.{PVXS_MAINTENANCE_VERSION}')
+release = version
 
+today = git_date()
 
 # -- General configuration ---------------------------------------------------
 

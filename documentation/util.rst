@@ -1,6 +1,8 @@
 Misc
 ====
 
+.. _logconfig:
+
 Logging
 -------
 
