@@ -69,12 +69,12 @@ ServerChannelControl::~ServerChannelControl() {}
 
 void ServerChannelControl::onOp(std::function<void(std::unique_ptr<server::ConnectOp>&&)>&& fn)
 {
-    auto serv = server.lock();
+    const auto serv = server.lock();
     if(!serv)
         return;
 
     serv->acceptor_loop.call([this, &fn](){
-        auto ch = chan.lock();
+        const auto ch = chan.lock();
         if(!ch)
             return;
 
@@ -84,12 +84,12 @@ void ServerChannelControl::onOp(std::function<void(std::unique_ptr<server::Conne
 
 void ServerChannelControl::onRPC(std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)>&& fn)
 {
-    auto serv = server.lock();
+    const auto serv = server.lock();
     if(!serv)
         return;
 
     serv->acceptor_loop.call([this, &fn](){
-        auto ch = chan.lock();
+        const auto ch = chan.lock();
         if(!ch)
             return;
 
@@ -99,12 +99,12 @@ void ServerChannelControl::onRPC(std::function<void(std::unique_ptr<server::Exec
 
 void ServerChannelControl::onSubscribe(std::function<void(std::unique_ptr<server::MonitorSetupOp>&&)>&& fn)
 {
-    auto serv = server.lock();
+    const auto serv = server.lock();
     if(!serv)
         return;
 
     serv->acceptor_loop.call([this, &fn](){
-        auto ch = chan.lock();
+        const auto ch = chan.lock();
         if(!ch)
             return;
 
@@ -114,12 +114,12 @@ void ServerChannelControl::onSubscribe(std::function<void(std::unique_ptr<server
 
 void ServerChannelControl::onClose(std::function<void(const std::string&)>&& fn)
 {
-    auto serv = server.lock();
+    const auto serv = server.lock();
     if(!serv)
         return;
 
     serv->acceptor_loop.call([this, &fn](){
-        auto ch = chan.lock();
+        const auto ch = chan.lock();
         if(!ch || ch->state==ServerChan::Destroy)
             return;
 
@@ -130,20 +130,20 @@ void ServerChannelControl::onClose(std::function<void(const std::string&)>&& fn)
 void ServerChannelControl::close()
 {
     // fail soft if server stopped, or channel/connection already closed
-    auto serv = server.lock();
+    const auto serv = server.lock();
     if(!serv)
         return;
 
     serv->acceptor_loop.call([this](){
-        auto ch = chan.lock();
+        const auto ch = chan.lock();
         if(!ch)
             return;
-        auto conn = ch->conn.lock();
+        const auto conn = ch->conn.lock();
         if(conn && conn->connection() && ch->state==ServerChan::Active) {
             log_debug_printf(connio, "%s %s Send unsolicited Channel Destroy\n",
                              conn->peerName.c_str(), ch->name.c_str());
 
-            auto tx = bufferevent_get_output(conn->connection());
+            const auto tx = bufferevent_get_output(conn->connection());
             EvOutBuf R(conn->sendBE, tx);
             to_wire(R, Header{CMD_DESTROY_CHANNEL, pva_flags::Server, 8});
             to_wire(R, ch->sid);
@@ -158,12 +158,12 @@ void ServerChannelControl::close()
 
 void ServerChannelControl::_updateInfo(const std::shared_ptr<const ReportInfo>& info)
 {
-    auto serv = server.lock();
+    const auto serv = server.lock();
     if(!serv)
         return;
 
     serv->acceptor_loop.call([this, &info](){
-        auto ch = chan.lock();
+        const auto ch = chan.lock();
         if(!ch)
             return;
         ch->reportInfo = info;
@@ -179,7 +179,7 @@ void ServerConn::handle_SEARCH()
 
     from_wire(M, searchID);
     from_wire(M, flags);
-    bool mustReply = flags&pva_search_flags::MustReply;
+    const bool mustReply = flags&pva_search_flags::MustReply;
     M.skip(3 + 16 + 2, __FILE__, __LINE__); // unused and replyAddr (we always and only reply to TCP peer)
 
     bool foundtcp = false;
@@ -211,7 +211,7 @@ void ServerConn::handle_SEARCH()
     std::vector<std::pair<uint32_t, std::string>> nameStorage(nchan);
     op._names.resize(nchan);
 
-    for(auto n : range(nchan)) {
+    for(const auto n : range(nchan)) {
         from_wire(M, nameStorage[n].first);
         from_wire(M, nameStorage[n].second);
         op._names[n]._name = nameStorage[n].second.c_str();
@@ -267,9 +267,9 @@ void ServerConn::handle_SEARCH()
         to_wire(R, uint8_t(nreply!=0 ? 1 : 0));
 
         to_wire(R, uint16_t(nreply));
-        for(auto i : range(op._names.size())) {
+        for(const auto i : range(op._names.size())) {
             if(op._names[i]._claim) {
-                to_wire(R, uint32_t(nameStorage[i].first));
+                to_wire(R, static_cast<uint32_t>(nameStorage[i].first));
                 log_debug_printf(serversearch, "Search claimed '%s'\n", op._names[i]._name);
             }
         }

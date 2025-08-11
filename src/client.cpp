@@ -214,7 +214,7 @@ std::shared_ptr<Connect> ConnectBuilder::exec() {
         throw std::logic_error("NULL Builder");
 
     auto syncCancel(_syncCancel);
-    auto context(ctx->impl->shared_from_this());
+    const auto context(ctx->impl->shared_from_this());
     auto op(std::make_shared<ConnectImpl>(context->tcp_loop, _pvname));
     op->_onConn = std::move(_onConn);
     op->_onDis = std::move(_onDis);
@@ -222,7 +222,7 @@ std::shared_ptr<Connect> ConnectBuilder::exec() {
     std::shared_ptr<ConnectImpl> external(op.get(), [op, syncCancel](ConnectImpl*) mutable {
         // from user thread
         auto temp(std::move(op));
-        auto loop(temp->loop);
+        const auto loop(temp->loop);
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
         loop.tryInvoke(syncCancel, std::bind(
@@ -236,15 +236,15 @@ std::shared_ptr<Connect> ConnectBuilder::exec() {
                                        std::move(temp)));
     });
 
-    auto server(std::move(_server));
+    const auto server(std::move(_server));
     context->tcp_loop.dispatch([=]() {
         // on worker
         op->chan = Channel::build(context, op->_name, server);
 
-        bool cur = op->_connected = op->chan->state == Channel::Active;
+        const bool cur = op->_connected = op->chan->state == Channel::Active;
         if (cur && op->_onConn) {
-            auto& conn = op->chan->conn;
-            Connected evt(conn->peerName, conn->connTime, conn->cred);
+            const auto& conn = op->chan->conn;
+            const Connected evt(conn->peerName, conn->connTime, conn->cred);
             op->_onConn(evt);
         } else if (!cur && op->_onDis) {
             op->_onDis();

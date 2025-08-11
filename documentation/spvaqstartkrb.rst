@@ -533,6 +533,7 @@ using the Kerberos Authenticator.
 
     - note that this is created as a user (not a service)
     - allocated a random password which is exported to the keytab and shared with pvacms user
+    - make sure that pvacms/cluster does not have the ``DISALLOW_SVR`` attribute set
 
   - ``softioc`` user allowed to act as a server
   - ``client`` user

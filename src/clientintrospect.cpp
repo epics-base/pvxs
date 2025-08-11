@@ -213,8 +213,8 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
                        }, std::move(temp)));
     });
 
-    auto name(std::move(_name));
-    auto server(std::move(_server));
+    const auto name(std::move(_name));
+    const auto server(std::move(_server));
     context->tcp_loop.dispatch([=]() {
         // on worker
         try {

@@ -16,7 +16,7 @@ namespace pvxs {
 namespace client {
 
 Discovery::Discovery(const std::shared_ptr<ContextImpl> &context)
-    :OperationBase (Operation::Discover, context->tcp_loop)
+    :OperationBase (Discover, context->tcp_loop)
     ,context(context)
 {}
 
@@ -69,11 +69,11 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
     auto syncCancel(_syncCancel);
     std::shared_ptr<Discovery> external(op.get(), [op, syncCancel](Discovery*) mutable {
         // (maybe) user thread
-        auto loop(op->context->tcp_loop);
+        const auto loop(op->context->tcp_loop);
         auto temp(std::move(op));
-        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<Discovery>& op){
+        loop.tryInvoke(syncCancel, std::bind([](const std::shared_ptr<Discovery>& operation){
                            // on worker
-                           op->context->discoverers.erase(op.get());
+                           operation->context->discoverers.erase(operation.get());
 
                        }, std::move(temp)));
     });

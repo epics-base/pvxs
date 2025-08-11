@@ -157,7 +157,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 
         const auto save = M.save();
         M.skip(8, __FILE__, __LINE__); // placeholder for header
-        auto bstart = M.save();
+        const auto bstart = M.save();
 
         // serverReceiveBufferSize, not used
         to_wire(M, static_cast<uint32_t>(0x10000));
@@ -230,7 +230,7 @@ void ServerConn::handle_ECHO()
 #ifdef PVXS_ENABLE_OPENSSL
 void ServerConn::retryConnectionValidationS(evutil_socket_t fd, short evt, void *raw)
 {
-    auto conn = static_cast<ServerConn*>(raw);
+    const auto conn = static_cast<ServerConn*>(raw);
     conn->retryConnectionValidation();
 }
 
@@ -320,7 +320,7 @@ void ServerConn::processConnectionValidation(const std::string& selected, const 
             log_debug_printf(connsetup, "Client %s certificate status not ready, will retry in 100ms\n", peerName.c_str());
 
             // Schedule a retry after a short delay
-            timeval retry_delay{0, 1000}; // 1ms
+            constexpr timeval retry_delay{0, 1000}; // 1ms
             event_add(authRetryTimer.get(), &retry_delay);
             return; // Backoff - don't complete authentication yet
         }
@@ -340,10 +340,8 @@ void ServerConn::processConnectionValidation(const std::string& selected, const 
         log_debug_printf(connsetup, "Client %s selects unadvertised auth \"%s\"", peerName.c_str(), selected.c_str());
         auth_complete(this, Status{Status::Error, "Client selects unadvertised auth"});
         return;
-    } else {
-        log_debug_printf(connsetup, "selected-%s: Client %s selects auth \"%s\" as \"%s\" on \"%s\" authority\n", selected.c_str(),
-                         peerName.c_str(), cred->method.c_str(), cred->account.c_str(), cred->authority.c_str());
     }
+    log_debug_printf(connsetup, "selected-%s: Client %s selects auth \"%s\" as \"%s\" on \"%s\" authority\n", selected.c_str(), peerName.c_str(), cred->method.c_str(), cred->account.c_str(), cred->authority.c_str());
 
     // Clear pending validation data since we're completing
     has_pending_validation = false;
@@ -555,14 +553,14 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
     ,bind_addr(addr)
 {
     server->acceptor_loop.assertInLoop();
-    auto orig_port = bind_addr.port();
+    const auto orig_port = bind_addr.port();
 
     sock = evsocket(bind_addr.family(), SOCK_STREAM, 0);
 
     if(evutil_make_listen_socket_reuseable(sock.sock))
         log_warn_printf(connsetup, "Unable to make socket reusable%s", "\n");
 
-    // try to bind to requested port, then fallback to a random port
+    // try to bind to the requested port, then fallback to a random port
     while(true) {
         try {
             sock.bind(bind_addr);
@@ -593,7 +591,7 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
 #  define LEV_OPT_DISABLED 0
 #endif
 
-    const int backlog = 4;
+    constexpr int backlog = 4;
     listener = evlisten(__FILE__, __LINE__,
                         evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
 
@@ -632,24 +630,24 @@ ServerOp::~ServerOp()
  */
 void ServerOp::cleanup()
 {
-    if(state==ServerOp::Dead)
+    if(state==Dead)
         return;
 
-    if(state==ServerOp::Executing && onCancel) {
-        auto fn(std::move(onCancel));
+    if(state==Executing && onCancel) {
+        const auto fn(std::move(onCancel));
         fn();
     }
 
-    state = ServerOp::Dead;
+    state = Dead;
 
     onCancel = nullptr;
     auto closer(std::move(onClose));
     bool notify = closer.operator bool();
 
-    if(auto ch = chan.lock()) {
+    if(const auto ch = chan.lock()) {
         ch->opByIOID.erase(ioid);
 
-        if(auto conn = ch->conn.lock()) {
+        if(const auto conn = ch->conn.lock()) {
             conn->opByIOID.erase(ioid);
 
             if(notify) {

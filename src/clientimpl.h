@@ -276,7 +276,7 @@ private:
     virtual void disconnected(const std::shared_ptr<OperationBase> &self) override final;
 };
 
-struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
+struct ContextImpl : std::enable_shared_from_this<ContextImpl>
 {
     SockAttach attach;
     IfaceMap& ifmap;

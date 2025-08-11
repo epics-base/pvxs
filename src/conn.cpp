@@ -139,7 +139,7 @@ void ConnBase::handle_DESTROY_REQUEST() {};
 
 void ConnBase::handle_MESSAGE() {};
 
-void ConnBase::bevEvent(short events) {
+void ConnBase::bevEvent(const short events) {
 #ifdef PVXS_ENABLE_OPENSSL
     if (bev && isTLS) {
         if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {

@@ -81,10 +81,10 @@ struct MonitorOp final : public ServerOp
         {
             // based on operation state, yes
             server->acceptor_loop.dispatch([op](){
-                auto ch(op->chan.lock());
+                const auto ch(op->chan.lock());
                 if(!ch)
                     return;
-                auto conn(ch->conn.lock());
+                const auto conn(ch->conn.lock());
                 if(!conn || conn->state==ConnBase::Disconnected)
                     return;
 
@@ -315,7 +315,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
         if(!serv)
             return;
         serv->acceptor_loop.call([this, low, high](){
-            if(auto oper = op.lock()) {
+            if(const auto oper = op.lock()) {
                 Guard G(oper->lock);
                 oper->low = std::min(low, oper->ackAt-1u);
                 oper->high = std::min(high, oper->ackAt-1u);
@@ -326,31 +326,31 @@ struct ServerMonitorControl : public server::MonitorControlOp
     }
     virtual void onStart(std::function<void (bool)> &&fn) override final
     {
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
+            if(const auto oper = op.lock())
                 oper->onStart = std::move(fn);
         });
     }
     virtual void onHighMark(std::function<void ()> &&fn) override final
     {
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
+            if(const auto oper = op.lock())
                 oper->onHighMark = std::move(fn);
         });
     }
     virtual void onLowMark(std::function<void ()> &&fn) override final
     {
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
+            if(const auto oper = op.lock())
                 oper->onLowMark = std::move(fn);
         });
     }
@@ -386,11 +386,11 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
 
         std::unique_ptr<server::MonitorControlOp> ret;
 
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return ret;
         serv->acceptor_loop.call([this, &type, &ret, &mask](){
-            if(auto oper = op.lock()) {
+            if(const auto oper = op.lock()) {
                 if(oper->state!=ServerOp::Creating)
                     return;
                 oper->type = type;
@@ -408,12 +408,12 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
     {
         if(msg.empty())
             throw std::invalid_argument("Must provide error message");
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         auto op(this->op);
         serv->acceptor_loop.dispatch([op, msg]() mutable {
-            if(auto oper = op.lock()) {
+            if(const auto oper = op.lock()) {
                 if(oper->state==ServerOp::Creating) {
                     oper->msg = std::move(msg);
                     MonitorOp::doReply(oper);
@@ -423,11 +423,11 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
     }
     virtual void onClose(std::function<void (const std::string &)> &&fn) override final
     {
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
+            if(const auto oper = op.lock())
                 oper->onClose = std::move(fn);
         });
     }
@@ -444,7 +444,7 @@ ServerMonitorControl::ServerMonitorControl(ServerMonitorSetup* setup,
                                            const std::weak_ptr<server::Server::Pvt>& server,
                                            const std::string& name,
                                            const std::weak_ptr<MonitorOp>& op)
-    :server::MonitorControlOp(name, setup->credentials(), Info)
+    :MonitorControlOp(name, setup->credentials(), Info)
     ,server(server)
     ,op(op)
 {}
@@ -453,7 +453,7 @@ ServerMonitorControl::ServerMonitorControl(ServerMonitorSetup* setup,
 
 void ServerConn::handle_MONITOR()
 {
-    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
+    const auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid = -1, ioid = -1;
@@ -504,12 +504,12 @@ void ServerConn::handle_MONITOR()
         if(!op->limit)
             op->limit = 1u;
 
-        auto ackAny = pvRequest["record._options.ackAny"];
+        const auto ackAny = pvRequest["record._options.ackAny"];
         if(ackAny.type()==TypeCode::String) {
-            auto sval = ackAny.as<std::string>();
+            const auto sval = ackAny.as<std::string>();
             if(sval.size()>1 && sval.back()=='%') {
                 try {
-                    auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
+                    const auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
                     op->ackAt = std::max(0.0, std::min(percent, 100.0)) * op->limit;
                 }catch(std::exception&){
                     log_warn_printf(connio, "Error parsing as percent ackAny: \"%s\"\n", sval.c_str());
@@ -647,10 +647,10 @@ void ServerConn::handle_MONITOR()
             // destroy
 
             chan->opByIOID.erase(ioid);
-            auto it = opByIOID.find(ioid);
-            if(it!=opByIOID.end()) {
-                auto self(it->second);
-                opByIOID.erase(it);
+            const auto iter = opByIOID.find(ioid);
+            if(iter!=opByIOID.end()) {
+                auto self(iter->second);
+                opByIOID.erase(iter);
 
                 iface->server->acceptor_loop.dispatch([self](){
                     self->cleanup();

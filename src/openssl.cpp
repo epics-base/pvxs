@@ -43,9 +43,9 @@ namespace pvxs {
 namespace ossl {
 
 int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
-    X509 *cert_ptr = X509_STORE_CTX_get_current_cert(x509_ctx);
+    const X509 *cert_ptr = X509_STORE_CTX_get_current_cert(x509_ctx);
     if (!preverify_ok) {
-        auto err = X509_STORE_CTX_get_error(x509_ctx);
+        const auto err = X509_STORE_CTX_get_error(x509_ctx);
         log_err_printf(io, "Unable to verify peer cert: %s : %s\n", X509_verify_cert_error_string(err), std::string(SB() << ShowX509{cert_ptr}).c_str());
     }
     log_printf(io, preverify_ok ? Level::Debug : Level::Err, "TLS verify %s\n", preverify_ok ? "Ok" : "Reject");
@@ -186,14 +186,14 @@ void sslkeylogfile_log(const SSL *, const char *line) noexcept {
 #endif  // PVXS_ENABLE_SSLKEYLOGFILE
 
 void free_SSL_CTX_sidecar(void *, void *ptr, CRYPTO_EX_DATA *, int, long, void *) noexcept {
-    auto car = static_cast<CertStatusExData *>(ptr);
+    const auto car = static_cast<CertStatusExData *>(ptr);
     delete car;
 }
 
 void OSSLGbl_init() {
     ossl_ptr<OSSL_LIB_CTX> ctx(__FILE__, __LINE__, OSSL_LIB_CTX_new());
     // read $OPENSSL_CONF or eg. /usr/lib/ssl/openssl.cnf
-    (void)CONF_modules_load_file_ex(ctx.get(), NULL, "pvxs", CONF_MFLAGS_IGNORE_MISSING_FILE | CONF_MFLAGS_IGNORE_RETURN_CODES);
+    (void)CONF_modules_load_file_ex(ctx.get(), nullptr, "pvxs", CONF_MFLAGS_IGNORE_MISSING_FILE | CONF_MFLAGS_IGNORE_RETURN_CODES);
     std::unique_ptr<OSSLGbl> gbl{new OSSLGbl};
     gbl->SSL_CTX_ex_idx = SSL_CTX_get_ex_new_index(0, nullptr, nullptr, nullptr, free_SSL_CTX_sidecar);
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
@@ -213,7 +213,7 @@ void OSSLGbl_init() {
 
 int ossl_alpn_select(SSL *, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *) {
     unsigned char *selected;
-    auto ret(SSL_select_next_proto(&selected, outlen, pva_alpn, sizeof(pva_alpn) - 1u, in, inlen));
+    const auto ret(SSL_select_next_proto(&selected, outlen, pva_alpn, sizeof(pva_alpn) - 1u, in, inlen));
     if (ret == OPENSSL_NPN_NEGOTIATED) {
         *out = selected;
         log_debug_printf(io, "TLS ALPN select%s", "\n");
@@ -243,8 +243,8 @@ int ossl_alpn_select(SSL *, const unsigned char **out, unsigned char *outlen, co
  */
 void verifyKeyUsage(const ossl_ptr<X509> &cert,
                     bool isForClient) {  // some early sanity checks
-    auto flags(X509_get_extension_flags(cert.get()));
-    auto kusage(X509_get_extended_key_usage(cert.get()));
+    const auto flags(X509_get_extension_flags(cert.get()));
+    const auto kusage(X509_get_extended_key_usage(cert.get()));
 
     if (flags & EXFLAG_CA) throw std::runtime_error(SB() << "Found certificate authority certificate when End Entity expected");
 
@@ -452,16 +452,16 @@ int serverOCSPCallback(SSL *ssl, void *raw) {
     auto server = static_cast<pvxs::server::Server::Pvt *>(raw);
     log_debug_printf(stapling, "Server OCSP Stapling: %s\n", "serverOCSPCallback");
 
-    if (auto &tls_context = server->tls_context) {
+    if (const auto &tls_context = server->tls_context) {
         auto &current_status = tls_context->get_cert_status();
         if (current_status.isValid()) {
-            auto ocsp_data_ptr = (void *)current_status.ocsp_bytes.data();
-            auto ocsp_data_len = current_status.ocsp_bytes.size();
+            const auto ocsp_data_ptr = (void *)current_status.ocsp_bytes.data();
+            const auto ocsp_data_len = current_status.ocsp_bytes.size();
             uint8_t *ocsp_data_ptr_copy = nullptr;
 
             // Allocate a new one and copy in the response data
             // TODO Verify that this is really freed up by the framework after it is stapled
-            ocsp_data_ptr_copy = (uint8_t *)OPENSSL_malloc(ocsp_data_len);
+            ocsp_data_ptr_copy = static_cast<uint8_t *>(OPENSSL_malloc(ocsp_data_len));
             memcpy(ocsp_data_ptr_copy, ocsp_data_ptr, ocsp_data_len);
 
             if (ocsp_data_ptr_copy) {
@@ -594,7 +594,7 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
     status = new_status;
 
     // Call the callback if there has been any state change
-    const bool is_good = status.isGood();
+    const auto is_good = status.isGood();
     if (fn && is_good != was_good) fn(is_good);
 }
 
@@ -658,7 +658,7 @@ CertStatusExData *SSLContext::getCertStatusExData() const { return CertStatusExD
 const X509 *SSLContext::getEntityCertificate() const {
     if (!ctx) throw std::invalid_argument("NULL");
 
-    auto car = static_cast<CertStatusExData *>(SSL_CTX_get_ex_data(ctx.get(), ossl_gbl->SSL_CTX_ex_idx));
+    const auto car = static_cast<CertStatusExData *>(SSL_CTX_get_ex_data(ctx.get(), ossl_gbl->SSL_CTX_ex_idx));
     return car->cert.get();
 }
 
@@ -757,16 +757,16 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
  *
  * This function subscribes to the peer certificate status and calls the given function when the status changes.
  *
- * @param ctx the SSL context to get the peer certificate from
+ * @param ssl the SSL context to get the peer certificate from
  * @param fn the function to call when the certificate status changes
  * @return true if the peer certificate status was successfully subscribed, false otherwise
  */
-std::shared_ptr<SSLPeerStatusAndMonitor> SSLContext::subscribeToPeerCertStatus(const SSL *ctx, const std::function<void(bool)> &fn) {
-    if (!ctx) throw std::invalid_argument("NULL");
+std::shared_ptr<SSLPeerStatusAndMonitor> SSLContext::subscribeToPeerCertStatus(const SSL *ssl, const std::function<void(bool)> &fn) {
+    if (!ssl) throw std::invalid_argument("NULL");
 
-    if (const auto cert = SSL_get0_peer_certificate(ctx)) {
+    if (const auto cert = SSL_get0_peer_certificate(ssl)) {
         // Subscribe to peer certificate status if necessary
-        const auto ex_data = CertStatusExData::fromSSL(const_cast<SSL *>(ctx));
+        const auto ex_data = CertStatusExData::fromSSL(const_cast<SSL *>(ssl));
         if (ex_data) {
             return ex_data->subscribeToPeerCertStatus(cert, [=](const bool is_good) { fn(is_good); });
         }
@@ -783,7 +783,7 @@ std::shared_ptr<SSLContext> SSLContext::for_client(const ConfigCommon &conf, con
     return ctx;
 }
 
-std::shared_ptr<SSLContext> SSLContext::for_server(const impl::ConfigCommon &conf, const impl::evbase loop) {
+std::shared_ptr<SSLContext> SSLContext::for_server(const ConfigCommon &conf, const evbase &loop) {
     auto ctx(commonSetup(TLS_server_method(), false, conf, loop));
 
     SSL_CTX_set_alpn_select_cb(ctx->ctx.get(), &ossl_alpn_select, nullptr);

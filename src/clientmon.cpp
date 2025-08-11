@@ -745,7 +745,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    auto context(ctx->impl->shared_from_this());
+    const auto context(ctx->impl->shared_from_this());
 
     auto op(std::make_shared<SubscriptionImpl>(context->tcp_loop));
     op->self = op;
@@ -766,7 +766,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 
     (void)options["pipeline"].as(op->pipeline);
 
-    auto ackAny = options["ackAny"];
+    const auto ackAny = options["ackAny"];
 
     if(ackAny.type()==TypeCode::String) {
         auto sval = ackAny.as<std::string>();
@@ -803,7 +803,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     std::shared_ptr<SubscriptionImpl> external(op.get(), [op, syncCancel](SubscriptionImpl*) mutable {
         // from user thread
         auto temp(std::move(op));
-        auto loop(temp->loop);
+        const auto loop(temp->loop);
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
         loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<SubscriptionImpl>& op) {
@@ -815,7 +815,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
                        }, std::move(temp)));
     });
 
-    auto server(std::move(_server));
+    const auto server(std::move(_server));
     context->tcp_loop.dispatch([=]() {
         // on worker
         try {

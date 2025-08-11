@@ -43,7 +43,7 @@ int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
     X509* peer_cert = SSL_get_peer_certificate(ctx);
 
     // Get the ex_data from the tls context, return if no peer-statuses to set
-    auto ex_data = ossl::CertStatusExData::fromSSL(ctx);
+    const auto ex_data = ossl::CertStatusExData::fromSSL(ctx);
     if (!ex_data || !ex_data->trusted_store_ptr) {
         log_debug_printf(stapling, "OCSP callback called without establishing root of trust%s\n", "");
         return PVXS_OCSP_STAPLING_ERR;
@@ -52,9 +52,9 @@ int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
     try {
         // Try to get the stapled OCSP response
         uint8_t* ocsp_response_ptr;
-        auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
+        const auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
 
-        // If no response received even though we've requested it then just ignore this callback
+        // If no response received even though we've requested it, then just ignore this callback
         if (!ocsp_response_ptr || len < 0) {
             log_debug_printf(stapling, "No Stapled OCSP response found by %s\n", "client");
             return PVXS_OCSP_STAPLING_OK;
@@ -63,7 +63,7 @@ int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
         // Replace cached peer cert with received OCSP response.  Throws if parsing error and catch sets invalid status
         try {
             auto parsed_status = certs::CertStatusManager::parse(ocsp_response_ptr, (size_t)len, ex_data->trusted_store_ptr);
-            auto status = parsed_status.status();
+            const auto status = parsed_status.status();
 
             ex_data->setPeerStatus(peer_cert, status);
             log_debug_printf(stapling, "Client OCSP stapled response is: %s\n", parsed_status.ocsp_status.s.c_str());
@@ -713,7 +713,7 @@ void Connection::tickEchoS(evutil_socket_t fd, short evt, void *raw)
 
 void Connection::retryChannelCreationS(evutil_socket_t fd, short evt, void *raw)
 {
-    auto conn = static_cast<Connection*>(raw);
+    const auto conn = static_cast<Connection*>(raw);
     conn->retryChannelCreation();
 }
 

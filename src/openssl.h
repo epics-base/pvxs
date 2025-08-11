@@ -127,7 +127,6 @@ struct SSLPeerStatusAndMonitor {
      * @param serial_number the serial number of the certificate that we're monitoring
      * @param ex_data_ptr the ex_data structure that the list of peer status and monitors is stored, for cleanup
      * @param fn function to call when the status changes
-     * @param status optional initial status to set
      */
     SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const std::function<void(bool)>& fn)
         : fn(fn), serial_number{serial_number}, ex_data_ptr{ex_data_ptr} {}
@@ -138,7 +137,7 @@ struct SSLPeerStatusAndMonitor {
      * @param ex_data_ptr the ex_data structure that the list of peer status and monitors is stored, for cleanup
      * @param status permanent status to set
      */
-    SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, certs::CertificateStatus& status)
+    SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const certs::CertificateStatus& status)
         : serial_number{serial_number}, ex_data_ptr{ex_data_ptr}, status{status} {}
 
     void updateStatus(const certs::CertificateStatus& status);
@@ -147,7 +146,7 @@ struct SSLPeerStatusAndMonitor {
     // Also remove from peer cert status map
     ~SSLPeerStatusAndMonitor();
 
-    bool isSubscribed() { return subscribed; }
+    bool isSubscribed() const { return subscribed; }
 };
 
 struct StatusValidityExpirationHandlerParam;
@@ -171,7 +170,7 @@ struct CertStatusExData {
     // To lock changes to ex data
     epicsMutex lock;
     // The event loop to create timers for the status validity countdown
-    const impl::evbase& loop;
+    const evbase& loop;
     // The entity certificate
     ossl_ptr<X509> cert{};
     // The Trusted Root Certificate Authority
@@ -197,7 +196,7 @@ struct CertStatusExData {
      * @param status_check_enabled - Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not
      * configured
      */
-    CertStatusExData(const impl::evbase& loop, bool status_check_enabled) : loop(loop), status_check_enabled(status_check_enabled) {}
+    CertStatusExData(const evbase& loop, bool status_check_enabled) : loop(loop), status_check_enabled(status_check_enabled) {}
 
     /**
      * @brief Returns the CertStatusExData from the SSL_CTX
@@ -224,8 +223,8 @@ struct CertStatusExData {
      * @return The serial number
      */
     static serial_number_t getSerialNumber(X509* cert_ptr) {
-        ASN1_INTEGER* serial = X509_get_serialNumber(cert_ptr);
-        ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
+        const ASN1_INTEGER* serial = X509_get_serialNumber(cert_ptr);
+        const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
         if (!bn) {
             return 0;
         }
@@ -234,7 +233,7 @@ struct CertStatusExData {
             return 0;
         }
 
-        return (serial_number_t)BN_get_word(bn.get());
+        return BN_get_word(bn.get());
     }
 
     std::shared_ptr<SSLPeerStatusAndMonitor> createPeerStatus(serial_number_t serial_number, const std::function<void(bool)> &fn);
@@ -246,12 +245,12 @@ struct CertStatusExData {
      * @param fn - the function to call
      * @return The peer status that was set
      */
-    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(ossl_ptr<X509>& peer_cert, const certs::CertificateStatus& new_status,
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(const ossl_ptr<X509>& peer_cert, const certs::CertificateStatus& new_status,
                                                            const std::function<void(bool)>& fn = nullptr) {
         return setPeerStatus(peer_cert.get(), new_status, fn);
     }
 
-    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(ossl_ptr<X509>& peer_cert, const std::function<void(bool)>& fn = nullptr) {
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(const ossl_ptr<X509>& peer_cert, const std::function<void(bool)>& fn = nullptr) {
         return setPeerStatus(peer_cert.get(), {}, fn);
     }
 
@@ -266,8 +265,8 @@ struct CertStatusExData {
      * @param serial_number - Serial number
      * @return The cached peer status
      */
-    std::shared_ptr<SSLPeerStatusAndMonitor> getCachedPeerStatus(serial_number_t serial_number) const {
-        auto it = peer_statuses.find(serial_number);
+    std::shared_ptr<SSLPeerStatusAndMonitor> getCachedPeerStatus(const serial_number_t serial_number) const {
+        const auto it = peer_statuses.find(serial_number);
         if (it != peer_statuses.end()) {
             auto peer_status = it->second.lock();
             if (peer_status) return peer_status;
@@ -374,7 +373,7 @@ struct SSLContext {
     void monitorStatusAndSetState(const ossl_ptr<X509>& cert, X509_STORE* trusted_store_ptr);
     void setDegradedMode(bool clear = false);
     void setTlsOrTcpMode();
-    void setTlsOrTcpMode(const bool is_good);
+    void setTlsOrTcpMode(bool is_good);
 
     /**
      * @brief Creates a client TLS context
@@ -382,7 +381,7 @@ struct SSLContext {
      * @param loop - The event loop
      * @return The client TLS context
      */
-    static std::shared_ptr<SSLContext> for_client(const impl::ConfigCommon& conf, const impl::evbase &loop);
+    static std::shared_ptr<SSLContext> for_client(const ConfigCommon& conf, const evbase &loop);
 
     /**
      * @brief Creates a server TLS context
@@ -390,7 +389,7 @@ struct SSLContext {
      * @param loop - The event loop
      * @return The server TLS context
      */
-    static std::shared_ptr<SSLContext> for_server(const impl::ConfigCommon& conf, impl::evbase loop);
+    static std::shared_ptr<SSLContext> for_server(const ConfigCommon& conf, const evbase &loop);
 
     /**
      * @brief Get the CertStatusExData from the PVXS SSL context
@@ -402,7 +401,7 @@ struct SSLContext {
      */
     CertStatusExData* getCertStatusExData() const;
 
-    explicit SSLContext(impl::evbase loop);
+    explicit SSLContext(evbase loop);
     SSLContext(const SSLContext& o);
     SSLContext(SSLContext& o) noexcept;
 
@@ -413,7 +412,7 @@ struct SSLContext {
     bool hasExpired() const;
 
     static bool getPeerCredentials(PeerCredentials& cred, const SSL* ctx);
-    static std::shared_ptr<SSLPeerStatusAndMonitor>  subscribeToPeerCertStatus(const SSL* ctx, const std::function<void(bool)> &fn);
+    static std::shared_ptr<SSLPeerStatusAndMonitor>  subscribeToPeerCertStatus(const SSL* ssl, const std::function<void(bool)> &fn);
     const certs::PVACertificateStatus& get_cert_status() { return cert_status; }
 
    private:
