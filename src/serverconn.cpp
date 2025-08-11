@@ -320,7 +320,7 @@ void ServerConn::processConnectionValidation(const std::string& selected, const 
             log_debug_printf(connsetup, "Client %s certificate status not ready, will retry in 100ms\n", peerName.c_str());
 
             // Schedule a retry after a short delay
-            timeval retry_delay{0, 100000}; // 100ms
+            timeval retry_delay{0, 1000}; // 1ms
             event_add(authRetryTimer.get(), &retry_delay);
             return; // Backoff - don't complete authentication yet
         }
