@@ -568,10 +568,10 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
     if (event_add(searchRx6.get(), nullptr)) log_err_printf(setup, "Error enabling search RX6\n%s", "");
     if (event_add(beaconCleaner.get(), &beaconCleanInterval)) log_err_printf(setup, "Error enabling beacon clean timer on\n%s", "");
     if (event_add(cacheCleaner.get(), &channelCacheCleanInterval)) log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
-#ifndef PVXS_ENABLE_OPENSSL
-    state = Running;
+#ifdef PVXS_ENABLE_OPENSSL
+    initializeState();
 #else
-    initialiseState();
+    state = Running;
 #endif
 }
 
@@ -785,7 +785,7 @@ static void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peer
 
 #ifdef PVXS_ENABLE_OPENSSL
     bool isTLS = proto == "tls";
-    if (!found || !(isTCP || (isTLS && self.canAcceptTlsConnectionValidation())))
+    if (!found || !(isTCP || isTLS))
 #else
     if (!found || !isTCP)
 #endif
@@ -963,7 +963,7 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked) {
             to_wire(M, uint8_t(0u));
 
 #ifdef PVXS_ENABLE_OPENSSL
-        } else if (readyToEmitTlsSearch()) {
+        } else if (isTlsConfigured()) {
             to_wire(M, uint8_t(2u));
             to_wire(M, "tls");
             to_wire(M, "tcp");
@@ -1275,19 +1275,21 @@ void Context::certExpirationHandler() {
 #ifdef PVXS_ENABLE_OPENSSL
 /**
  * @brief Enable TLS with the optional config if provided
- * @param new_config optional config (check the is_initialized flag to see if its blank or not)
+ * @param new_config optional config (check the is_initialized flag to see if it's blank or not)
  */
 void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
-    // If already valid then don't do anything
-    if (isContextReadyForTls()) return;
+    // If the context is already in the TlsReady state, then don't do anything
+    if (isTlsReady()) return;
     try {
         const auto& config_to_use = new_config.is_initialized ? new_config : effective;
         const auto new_context = ossl::SSLContext::for_client(config_to_use, tcp_loop);
 
-        // If unsuccessful in getting cert then don't do anything
-        if (!isInitialisedForTls(new_context)) return;
+        // If unsuccessful in getting a certificate, or it has EXPIRED, then don't enable TLS
+        if (!isTlsConfigured(new_context) || new_context->hasExpired()) return;
 
-        enableTlsForPeerConnection();
+        // Remove all peer (server) connections.  They will be reconnected as TLS automatically
+        // TODO verify assertion that they will reconnect automatically
+        removePeer();
 
         tls_context = new_context;
         effective = config_to_use;
@@ -1299,16 +1301,13 @@ void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
 
 #ifdef PVXS_ENABLE_OPENSSL
 /**
- * @brief Enable TLS for the given client peer connection
+ * @brief Clean up all peer connections or the specified peer connection
  *
- * This is called when a peer subscription monitor reports a status of GOOD for a peer certificate.
- * It works by simply removing the specified server connection and waiting for it to be
- * reconnected again as TLS.  This time the peer credential status will already be cached so
- * will be validated immediately
+ * Remove the specified peer connection or if not specified then remove all peer connections.
  *
- * @param client_conn the peer connection to enable TLS for
+ * @param client_conn the peer connection to clean up, nullptr to remove all peers
  */
-void ContextImpl::enableTlsForPeerConnection(const Connection* client_conn) {
+void ContextImpl::removePeer(const Connection* client_conn) {
     // Find the connection(s) to clean-up
     auto conns(std::move(connByAddr));
     std::vector<std::weak_ptr<Connection>> to_cleanup;
@@ -1319,7 +1318,7 @@ void ContextImpl::enableTlsForPeerConnection(const Connection* client_conn) {
         }
     }
 
-    log_debug_printf(watcher, "Closing %zu connections to replace with TLS ones\n", to_cleanup.size());
+    log_debug_printf(watcher, "Closing %zu connections\n", to_cleanup.size());
 
     // Clean them up
     for (auto& weak_conn : to_cleanup) {
@@ -1335,24 +1334,24 @@ void ContextImpl::enableTlsForPeerConnection(const Connection* client_conn) {
 
 #ifdef PVXS_ENABLE_OPENSSL
 /**
- * @brief Called to disable TLS - if TLS is not enabled then this will do nothing.  It is idempotent
+ * @brief Called to disable TLS - if TLS is not Enabled, then this will do nothing.  It is idempotent
  */
 void ContextImpl::enterDegradedMode() const {
-    if (!isTlsEnabled()) return;
+    if (!isTlsConfigured()) return;
 
     tls_context->setDegradedMode(true);
 
     // Remove all TLS peer connections
-    removePeerTlsConnections();
+    removeTlsPeer();
 }
 #endif
 
 #ifdef PVXS_ENABLE_OPENSSL
 /**
- * @brief Called to disable TLS - if TLS is not enabled then this will do nothing.  It is idempotent
+ * @brief Called to remove any existing TLS connections in this client context
  */
-void ContextImpl::removePeerTlsConnections(const Connection* client_conn) const {
-    // Collect tls connections to clean-up
+void ContextImpl::removeTlsPeer(const Connection* client_conn) const {
+    // Collect tls connections to clean up
     std::vector<std::weak_ptr<Connection>> to_cleanup;
     for (auto& pair : connByAddr) {
         auto conn = pair.second.lock();

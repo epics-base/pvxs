@@ -1,8 +1,10 @@
 UAG(DEFAULT) {
-    "george"
+    "client"
 }
 
-AUTHORITY(EPICS_ROOT, "EPICS Root Certificate Authority")
+AUTHORITY("EPICS Root Certificate Authority") {
+    AUTHORITY(CMS_AUTH, "intermediateCA")
+}
 
 UAG(BAR) {
     "michael"
@@ -16,7 +18,7 @@ ASG(SPECIAL) {
     RULE(1,WRITE,TRAPWRITE) {
         UAG(DEFAULT)
         UAG(BAR)
-	AUTHORITY(EPICS_ROOT)
+	AUTHORITY(CMS_AUTH)
 	METHOD(x509)
 	PROTOCOL(tls)
     }

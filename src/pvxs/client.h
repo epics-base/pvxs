@@ -204,7 +204,7 @@ public:
     //! PV name
     inline const std::string& name() { return _name(); }
 
-    //! Explicitly cancel a active subscription.
+    //! Explicitly cancel an active subscription.
     //! Blocks until any in-progress callback has completed.
     virtual bool cancel() =0;
 
@@ -213,7 +213,7 @@ public:
     //! Shorthand for @code pause(false) @endcode
     inline void resume() { pause(false); }
 
-    /** De-queue update from subscription event queue.
+    /** De-queue update from the subscription event queue.
      *
      * If the queue is empty, return an empty/invalid Value (Value::valid()==false).
      * A data update is returned as a Value.

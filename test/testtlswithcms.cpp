@@ -27,7 +27,7 @@
 #include "certstatusfactory.h"
 #include "certstatusmanager.h"
 #include "openssl.h"
-#include "testcerts.h"
+#include "certcontext.h"
 #include "utilpvt.h"
 
 /**
@@ -59,43 +59,49 @@ struct Tester {
     const CertDate revocation_date;
 
     const Value status_value_prototype{CertStatus::getStatusPrototype()};
-    DEFINE_MEMBERS(cert_auth)
-    DEFINE_MEMBERS(super_server)
-    DEFINE_MEMBERS(intermediate_server)
-    DEFINE_MEMBERS(server1)
-    DEFINE_MEMBERS(server2)
-    DEFINE_MEMBERS(ioc)
-    DEFINE_MEMBERS(client1)
-    DEFINE_MEMBERS(client2)
+    CertCtx<tag::cert_auth> cert_auth;
+    CertCtx<tag::super_server> super_server;
+    CertCtx<tag::intermediate_server> intermediate_server;
+    CertCtx<tag::server1> server1;
+    CertCtx<tag::server2> server2;
+    CertCtx<tag::ioc> ioc;
+    CertCtx<tag::client1> client1;
+    CertCtx<tag::client2> client2;
 
-    const std::string issuer_id{CertStatus::getSkId(cert_auth_cert.cert)};
+    const std::string issuer_id{CertStatus::getSkId(cert_auth.cert.cert)};
 
-    ossl_ptr<X509_STORE> trusted_store{cert_auth_cert.createTrustStore()};
-
+    server::StaticSource source{server::StaticSource::build()};
     server::SharedWildcardPV status_pv{server::SharedWildcardPV::buildMailbox()};
     server::Server pvacms;
     client::Context client;
+    CounterMap cert_status_request_counters;
 
     Tester()
         : now(time(nullptr)),
           status_valid_until_time(now.t + STATUS_VALID_FOR_SECS),
           revocation_date(now.t - REVOKED_SINCE_SECS)
 
-              INIT_CERT_MEMBER_FROM_FILE(cert_auth, CERT_AUTH) INIT_CERT_MEMBER_FROM_FILE(super_server, SUPER_SERVER)
-                  INIT_CERT_MEMBER_FROM_FILE(intermediate_server, INTERMEDIATE_SERVER) INIT_CERT_MEMBER_FROM_FILE(server1, SERVER1)
-                      INIT_CERT_MEMBER_FROM_FILE(server2, SERVER2) INIT_CERT_MEMBER_FROM_FILE(ioc, IOC1) INIT_CERT_MEMBER_FROM_FILE(client1, CLIENT1)
-                          INIT_CERT_MEMBER_FROM_FILE(client2, CLIENT2)
-
     {
         // Set up the Mock PVACMS server certificate (does not contain custom status extension)
+        source.add(getCertStatusPv("CERT", issuer_id), status_pv);
+        auto pvacms_inner_mock = source.source();
+        // Set up mock source that counts requests
+        const auto pvacms_mock   = std::make_shared<server::MockSource>(pvacms_inner_mock, [this] (std::string const& pv_name) {
+            if (cert_status_request_counters.find(pv_name) == cert_status_request_counters.end()) {
+                cert_status_request_counters[pv_name] = std::make_shared<std::atomic<uint32_t>>(0);
+            }
+            cert_status_request_counters[pv_name]->fetch_add(1);
+
+        });
+
         auto pvacms_config = server::Config::forCms();
         pvacms_config.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
-        pvacms = pvacms_config.build().addPV(getCertStatusPv("CERT", issuer_id), status_pv);
+        pvacms = pvacms_config.build().addSource(getCertStatusPv("CERT", issuer_id), pvacms_mock);
         client = pvacms.clientConfig().build();
 
-        if (CHECK_CERT_MEMBER_CONDITION(cert_auth) || CHECK_CERT_MEMBER_CONDITION(super_server) || CHECK_CERT_MEMBER_CONDITION(intermediate_server) ||
-            CHECK_CERT_MEMBER_CONDITION(server1) || CHECK_CERT_MEMBER_CONDITION(server2) || CHECK_CERT_MEMBER_CONDITION(ioc) ||
-            CHECK_CERT_MEMBER_CONDITION(client1) || CHECK_CERT_MEMBER_CONDITION(client2)) {
+        if (!cert_auth.cert.cert || !cert_auth.cert.pkey || !super_server.cert.cert || !super_server.cert.pkey || !intermediate_server.cert.cert || !intermediate_server.cert.pkey ||
+            !server1.cert.cert || !server1.cert.pkey || !server2.cert.cert || !server2.cert.pkey || !ioc.cert.cert || !ioc.cert.pkey ||
+            !client1.cert.cert || !client1.cert.pkey || !client2.cert.cert || !client2.cert.pkey) {
             testFail("Error loading one or more certificates");
             return;
         }
@@ -113,14 +119,14 @@ struct Tester {
     void createCertStatuses() { // NOLINT(*-convert-member-functions-to-static)
         testShow() << __func__;
         try {
-            const auto cert_status_creator(CertStatusFactory(cert_auth_cert.cert, cert_auth_cert.pkey, cert_auth_cert.chain, 0, STATUS_VALID_FOR_SECS));
-            CREATE_CERT_STATUS(cert_auth, {VALID})
-            CREATE_CERT_STATUS(intermediate_server, {VALID})
-            CREATE_CERT_STATUS(server1, {VALID})
-            CREATE_CERT_STATUS(server2, {VALID})
-            CREATE_CERT_STATUS(ioc, {VALID})
-            CREATE_CERT_STATUS(client1, {VALID})
-            CREATE_CERT_STATUS(client2, {VALID})
+            const auto cert_status_creator(CertStatusFactory(cert_auth.cert.cert, cert_auth.cert.pkey, cert_auth.cert.chain, 0, STATUS_VALID_FOR_SECS));
+            createCertStatus(cert_auth, {VALID},cert_status_creator, now,{});
+            createCertStatus(intermediate_server, {VALID},cert_status_creator, now,{});
+            createCertStatus(server1, {VALID},cert_status_creator, now,{});
+            createCertStatus(server2, {VALID},cert_status_creator, now,{});
+            createCertStatus(ioc, {VALID},cert_status_creator, now,{});
+            createCertStatus(client1, {VALID},cert_status_creator, now,{});
+            createCertStatus(client2, {VALID},cert_status_creator, now,{});
         } catch (std::exception& e) {
             testFail("Failed to read certificate in from file: %s\n", e.what());
         }
@@ -128,17 +134,19 @@ struct Tester {
 
     /**
      * @brief Make PVAccess Certificate Status Responses for each of the certificates
+     *
+     * @param status_validity_secs the optional number ofd seconds the validity of the status is.  Default = STATUS_VALID_FOR_SECS
      */
-    void makeStatusResponses() { // NOLINT(*-convert-member-functions-to-static)
-        testShow() << __func__;
-        const auto cert_status_creator(CertStatusFactory(cert_auth_cert.cert, cert_auth_cert.pkey, cert_auth_cert.chain, 0, STATUS_VALID_FOR_SECS));
-        MAKE_STATUS_RESPONSE(cert_auth)
-        MAKE_STATUS_RESPONSE(intermediate_server)
-        MAKE_STATUS_RESPONSE(server1)
-        MAKE_STATUS_RESPONSE(server2)
-        MAKE_STATUS_RESPONSE(ioc)
-        MAKE_STATUS_RESPONSE(client1)
-        MAKE_STATUS_RESPONSE(client2)
+    void makeStatusResponses(const uint32_t status_validity_secs = STATUS_VALID_FOR_SECS) { // NOLINT(*-convert-member-functions-to-static)
+        testShow() << "- " <<  __func__ ;
+        const auto cert_status_creator(CertStatusFactory(cert_auth.cert.cert, cert_auth.cert.pkey, cert_auth.cert.chain, 0, status_validity_secs));
+        makeStatusResponse(cert_auth,cert_status_creator,now,revocation_date);
+        makeStatusResponse(intermediate_server,cert_status_creator,now,revocation_date);
+        makeStatusResponse(server1,cert_status_creator,now,revocation_date);
+        makeStatusResponse(server2,cert_status_creator,now,revocation_date);
+        makeStatusResponse(ioc,cert_status_creator,now,revocation_date);
+        makeStatusResponse(client1,cert_status_creator,now,revocation_date);
+        makeStatusResponse(client2,cert_status_creator,now,revocation_date);
     }
 
     /**
@@ -176,44 +184,23 @@ struct Tester {
         try {
             testDiag("Setting up: %s", "Mock PVACMS Server");
 
-            SET_PV(cert_auth)
-            SET_PV(intermediate_server)
-            SET_PV(server1)
-            SET_PV(server2)
-            SET_PV(ioc)
-            SET_PV(client1)
-            SET_PV(client2)
-
             status_pv.onFirstConnect([this](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>& parameters) {
                 auto it = parameters.begin();
                 const std::string& serial_string = *it;
                 serial_number_t serial = std::stoull(serial_string);
 
-                if (pv.isOpen(pv_name)) {
-                    switch (serial) {
-                        POST_VALUE_CASE(cert_auth, post)
-                        POST_VALUE_CASE(intermediate_server, post)
-                        POST_VALUE_CASE(server1, post)
-                        POST_VALUE_CASE(server2, post)
-                        POST_VALUE_CASE(ioc, post)
-                        POST_VALUE_CASE(client1, post)
-                        POST_VALUE_CASE(client2, post)
-                        default:
-                            testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
-                    }
-                } else {
-                    switch (serial) {
-                        POST_VALUE_CASE(cert_auth, open)
-                        POST_VALUE_CASE(intermediate_server, open)
-                        POST_VALUE_CASE(server1, open)
-                        POST_VALUE_CASE(server2, open)
-                        POST_VALUE_CASE(ioc, open)
-                        POST_VALUE_CASE(client1, open)
-                        POST_VALUE_CASE(client2, open)
-                        default:
-                            testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
-                    }
-                }
+                if (
+                    postValueCase(serial, pv, pv_name, cert_auth, true) ||
+                    postValueCase(serial, pv, pv_name, intermediate_server, true) ||
+                    postValueCase(serial, pv, pv_name, server1, true) ||
+                    postValueCase(serial, pv, pv_name, server2, true) ||
+                    postValueCase(serial, pv, pv_name, ioc, true) ||
+                    postValueCase(serial, pv, pv_name, client1, true) ||
+                    postValueCase(serial, pv, pv_name, client2, true)
+                    )
+                    ; // Handled
+                else
+                    testFail("Unknown PV Accessed for Status Request: %s", pv_name.c_str());
             });
             status_pv.onLastDisconnect([](server::SharedWildcardPV& pv, const std::string& pv_name, const std::list<std::string>&) {
                 testOk(1, "Closing Status Request Connection: %s", pv_name.c_str());
@@ -221,7 +208,7 @@ struct Tester {
             });
 
             pvacms.start();
-            TEST_STATUS_REQUEST(cert_auth)
+            testStatusRequest(cert_auth, client, cert_auth.cert.trusted_store.get());
 
             testDiag("Set up: %s", "Mock PVACMS Server");
         } catch (std::exception& e) {
@@ -301,7 +288,7 @@ struct Tester {
      */
     void testServerOnly() {
         testShow() << __func__;
-        RESET_COUNTER(server1)
+        resetCounter(cert_status_request_counters, server1);
 
         auto initial(nt::NTScalar{TypeCode::Int32}.create());
         auto mbox(server::SharedPV::buildReadonly());
@@ -326,7 +313,8 @@ struct Tester {
         try {
             auto reply(cli.get(TEST_PV).exec()->wait(5.0));
             testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-            TEST_COUNTER_EQ(server1, 1)
+            // Both client and server should verify the server's certificate
+            testCounterEq(cert_status_request_counters, server1, 2);
         } catch (std::exception& e) {
             testFail("Timeout: %s", e.what());
         }
@@ -342,9 +330,9 @@ struct Tester {
      * We chose the SERVER1 and CLIENT1 certificates for this test which as well as both being
      * certificates that have an intermediate certificate between them and the root Certificate Authority, they
      * also have the certificate status extension embedded in them.  So this test will
-     * verify that the statuses are verified and the TLS proceeds as expected.  If the
-     * statuses are not verified, then the test count will be off because there is a test
-     * in the Mock PVACMS when certificate statuses are posted.
+     * verify that the statuses are mutually verified and the TLS proceeds as expected.  If the
+     * statuses are not verified, then the request count will be off because there is a test
+     * in the Mock PVACMS when certificate statuses are requested.
      *
      * The test to make sure that the connection is a tls connection here serves to verify that
      * the successful status verification does indeed result in a secure PVAccess connection being
@@ -352,8 +340,8 @@ struct Tester {
      */
     void testGetIntermediate() {
         testShow() << __func__;
-        RESET_COUNTER(server1)
-        RESET_COUNTER(client1)
+        resetCounter(cert_status_request_counters, server1);
+        resetCounter(cert_status_request_counters, client1);
 
         auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
         auto test_pv(server::SharedPV::buildReadonly());
@@ -365,18 +353,27 @@ struct Tester {
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
-        auto cli(cli_conf.build());
 
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
         serv.start();
+
+        sleep(1); // Enough time for the server status request to be processed
+        testCounterEq(cert_status_request_counters, server1, 1);
+        testCounterEq(cert_status_request_counters, client1, 0);
+
+        auto cli(cli_conf.build());
+        sleep(1); // Enough time for the client status request to be processed
+        testCounterEq(cert_status_request_counters, server1, 1);
+        testCounterEq(cert_status_request_counters, client1, 1);
 
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
 
         try {
             auto reply(cli.get(TEST_PV).exec()->wait(5.0));
             testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-            TEST_COUNTER_EQ(server1, 1)
-            TEST_COUNTER_EQ(client1, 1)
+            // peer status requests must have been processed by time we have a value
+            testCounterEq(cert_status_request_counters, server1, 2);
+            testCounterEq(cert_status_request_counters, client1, 2);
         } catch (std::exception& e) {
             testFail("Timeout: %s", e.what());
         }
@@ -403,9 +400,9 @@ struct Tester {
      */
     void testClientReconfig() {
         testShow() << __func__;
-        RESET_COUNTER(ioc)
-        RESET_COUNTER(client1)
-        RESET_COUNTER(client2)
+        resetCounter(cert_status_request_counters, ioc);
+        resetCounter(cert_status_request_counters, client1);
+        resetCounter(cert_status_request_counters, client2);
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
@@ -431,17 +428,17 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
-            TEST_COUNTER_EQ(ioc, 1)
-            TEST_COUNTER_EQ(client1, 1)
-            TEST_COUNTER_EQ(client2, 0)
+            testCounterEq(cert_status_request_counters, ioc, 2);
+            testCounterEq(cert_status_request_counters, client1, 2);
+            testCounterEq(cert_status_request_counters, client2, 0);
         }
         testDiag("Connect");
 
         Value update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        TEST_COUNTER_EQ(ioc, 1)
-        TEST_COUNTER_EQ(client1, 1)
-        TEST_COUNTER_EQ(client2, 0)
+        testCounterEq(cert_status_request_counters, ioc, 2);
+        testCounterEq(cert_status_request_counters, client1, 2);
+        testCounterEq(cert_status_request_counters, client2, 0);
 
         cli_conf = cli.config();
         cli_conf.tls_keychain_file = CLIENT2_KEYCHAIN_FILE;
@@ -457,9 +454,9 @@ struct Tester {
             testFail("Missing expected Connected");
         } catch (client::Connected& e) {
             testOk1(e.cred && e.cred->isTLS);
-            TEST_COUNTER_EQ(ioc, 1)
-            TEST_COUNTER_EQ(client1, 1)
-            TEST_COUNTER_EQ(client2, 1)
+            testCounterEq(cert_status_request_counters, ioc, 3);
+            testCounterEq(cert_status_request_counters, client1, 2);
+            testCounterEq(cert_status_request_counters, client2, 2);
         } catch (...) {
             testFail("Unexpected exception instead of Connected");
         }
@@ -468,9 +465,9 @@ struct Tester {
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2);
         // Cached responses so no checks
-        TEST_COUNTER_EQ(ioc, 1)
-        TEST_COUNTER_EQ(client1, 1)
-        TEST_COUNTER_EQ(client2, 1)
+        testCounterEq(cert_status_request_counters, ioc, 3);
+        testCounterEq(cert_status_request_counters, client1, 2);
+        testCounterEq(cert_status_request_counters, client2, 2);
     }
 
     /**
@@ -483,9 +480,9 @@ struct Tester {
      */
     void testServerReconfig() {
         testShow() << __func__;
-        RESET_COUNTER(server1)
-        RESET_COUNTER(client1)
-        RESET_COUNTER(ioc)
+        resetCounter(cert_status_request_counters, server1);
+        resetCounter(cert_status_request_counters, client1);
+        resetCounter(cert_status_request_counters, ioc);
 
         auto serv_conf(server::Config::isolated());
         serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
@@ -511,17 +508,17 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_SERVER1);
-            TEST_COUNTER_EQ(server1, 1)
-            TEST_COUNTER_EQ(client1, 1)
-            TEST_COUNTER_EQ(ioc, 0)
+            testCounterEq(cert_status_request_counters, server1, 2);
+            testCounterEq(cert_status_request_counters, client1, 2);
+            testCounterEq(cert_status_request_counters, ioc, 0);
         }
         testDiag("Connect");
 
         Value update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        TEST_COUNTER_EQ(server1, 1)
-        TEST_COUNTER_EQ(client1, 1)
-        TEST_COUNTER_EQ(ioc, 0)
+        testCounterEq(cert_status_request_counters, server1, 2);
+        testCounterEq(cert_status_request_counters, client1, 2);
+        testCounterEq(cert_status_request_counters, ioc, 0);
 
         serv_conf = serv.config();
         serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
@@ -539,17 +536,17 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
-            TEST_COUNTER_EQ(server1, 1)
-            TEST_COUNTER_EQ(client1, 1)
-            TEST_COUNTER_EQ(ioc, 1)
+            testCounterEq(cert_status_request_counters, server1, 2);
+            testCounterEq(cert_status_request_counters, client1, 3);
+            testCounterEq(cert_status_request_counters, ioc, 2);
         }
         testDiag("Reconnect");
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        TEST_COUNTER_EQ(server1, 1)
-        TEST_COUNTER_EQ(client1, 1)
-        TEST_COUNTER_EQ(ioc, 1)
+        testCounterEq(cert_status_request_counters, server1, 2);
+        testCounterEq(cert_status_request_counters, client1, 3);
+        testCounterEq(cert_status_request_counters, ioc, 2);
     }
 
     /**
@@ -570,17 +567,10 @@ struct Tester {
      */
     void testUnCachedStatus() {
         testShow() << __func__;
-        const auto cert_status_creator(CertStatusFactory(cert_auth_cert.cert, cert_auth_cert.pkey, cert_auth_cert.chain, 0, STATUS_VALID_FOR_SHORT_SECS));
-        MAKE_STATUS_RESPONSE(cert_auth)
-        MAKE_STATUS_RESPONSE(intermediate_server)
-        MAKE_STATUS_RESPONSE(server1)
-        MAKE_STATUS_RESPONSE(server2)
-        MAKE_STATUS_RESPONSE(ioc)
-        MAKE_STATUS_RESPONSE(client1)
-        MAKE_STATUS_RESPONSE(client2)
+        makeStatusResponses(STATUS_VALID_FOR_SHORT_SECS);
 
-        RESET_COUNTER(server1)
-        RESET_COUNTER(client1)
+        resetCounter(cert_status_request_counters, server1);
+        resetCounter(cert_status_request_counters, client1);
 
         auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
         auto test_pv(server::SharedPV::buildReadonly());
@@ -601,8 +591,8 @@ struct Tester {
         testDiag("Get with uncached-status");
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-        TEST_COUNTER_EQ(server1, 1)
-        TEST_COUNTER_EQ(client1, 1)
+        testCounterEq(cert_status_request_counters, server1, 2);
+        testCounterEq(cert_status_request_counters, client1, 2);
 
         // Sleep a bit, but not long enough for the status validity to expire
         sleep(1);
@@ -611,8 +601,8 @@ struct Tester {
         auto reply_2(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply_2[TEST_PV_FIELD].as<int32_t>(), 42);
         // Note that counters don't increment
-        TEST_COUNTER_EQ(server1, 1)
-        TEST_COUNTER_EQ(client1, 1)
+        testCounterEq(cert_status_request_counters, server1, 2);
+        testCounterEq(cert_status_request_counters, client1, 2);
     }
 
     /**
@@ -698,10 +688,11 @@ MAIN(testtlswithcms) {
     // Initialize SSL
     ossl::sslInit();
 
-    testPlan(187);
+    testPlan(134);
     testSetup();
     logger_config_env();
     const auto tester = new Tester();
+
     tester->createCertStatuses();
     tester->makeStatusResponses();
     tester->startMockCMS();

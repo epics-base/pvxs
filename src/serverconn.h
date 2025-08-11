@@ -121,6 +121,11 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
 
     std::shared_ptr<const server::ClientCredentials> cred;
 
+#ifdef PVXS_ENABLE_OPENSSL
+    // Timer for retrying connection validation when waiting for certificate status
+    const evevent authRetryTimer;
+#endif
+
     uint32_t nextSID=0x07050301;
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanBySID;
     std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID;
@@ -136,10 +141,16 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
 
     const std::shared_ptr<ServerChan>& lookupSID(uint32_t sid);
 
-#ifdef PVXS_ENABLE_OPENSSL
-    ossl::CertStatusExData *getCertStatusExData() override;
-#endif
 private:
+#ifdef PVXS_ENABLE_OPENSSL
+    void retryConnectionValidation();
+    static void retryConnectionValidationS(evutil_socket_t fd, short evt, void *raw);
+    void processConnectionValidation(const std::string& selected, const Value& auth);
+
+    std::string pending_selected;
+    Value pending_auth;
+    bool has_pending_validation = false;
+#endif
 #define CASE(Op) virtual void handle_##Op() override final;
     CASE(ECHO);
     CASE(CONNECTION_VALIDATION);
@@ -309,10 +320,6 @@ struct Server::Pvt
     static void doCustomServerCallback(evutil_socket_t fd, short evt, void* raw);
 
     bool isContextReadyForTls() const { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
-
-  public:
-    void removePeerTlsConnections(const ServerConn* server_conn = nullptr);
-    void enableTlsForPeerConnection(const ServerConn* server_conn = nullptr);
 #endif
 };
 

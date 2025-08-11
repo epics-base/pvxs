@@ -9,6 +9,7 @@
 #include "evhelper.h"
 #include "dataimpl.h"
 #include "certstatus.h"
+#include "openssl.h"
 #include "utilpvt.h"
 
 namespace pvxs {
@@ -99,8 +100,8 @@ protected:
     // @endcode
     //
     // `SSLPeerStatusAndMonitor()` will remove itself from this table using the internally stored key.
-    std::shared_ptr<ossl::SSLPeerStatusAndMonitor> peer_status_and_monitor;
-    inline virtual ossl::CertStatusExData* getCertStatusExData() = 0;
+    std::shared_ptr<ossl::SSLPeerStatusAndMonitor> peer_status;
+    bool isPeerStatusGood() const ;
 
   public:
     const bool isTLS;
@@ -182,12 +183,7 @@ public:
     virtual std::shared_ptr<ConnBase> self_from_this() = 0;
     virtual void cleanup() =0;
 
-#ifdef PVXS_ENABLE_OPENSSL
-    virtual void bevEvent(short events) = 0;
-    void bevEvent(short events, std::function<void(bool)>fn);
-#else
     virtual void bevEvent(short events);
-#endif
     virtual void bevRead();
     virtual void bevWrite();
     static void bevEventS(struct bufferevent *bev, short events, void *ptr);

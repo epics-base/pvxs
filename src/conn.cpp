@@ -62,6 +62,12 @@ const char* ConnBase::peerLabel() const
     return isClient ? "Server" : "Client";
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
+bool ConnBase::isPeerStatusGood() const {
+    return peer_status && peer_status->status.isGood();
+}
+#endif
+
 void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
 {
     if(!bev)
@@ -133,45 +139,24 @@ void ConnBase::handle_DESTROY_REQUEST() {};
 
 void ConnBase::handle_MESSAGE() {};
 
-#ifndef PVXS_ENABLE_OPENSSL
-void ConnBase::bevEvent(short events)
-#else
-void ConnBase::bevEvent(short events, std::function<void(bool)> fn)
-#endif
-{
-
+void ConnBase::bevEvent(short events) {
+#ifdef PVXS_ENABLE_OPENSSL
     if (bev && isTLS) {
         if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
-            while (auto err = bufferevent_get_openssl_error(bev.get())) {
-                auto error_reason = ERR_reason_error_string(err);
+            while (const auto err = bufferevent_get_openssl_error(bev.get())) {
+                const auto error_reason = ERR_reason_error_string(err);
                 if (error_reason) log_debug_printf(connio, "%s: TLS Error (0x%lx) %s\n", peerLabel(), err, error_reason);
             }
         }
-
-#ifndef PVXS_ENABLE_OPENSSL
-        // If this is a connect then subscribe to peer status is required
-        if (events & BEV_EVENT_CONNECTED) {
-            auto ctx = bufferevent_openssl_get_ssl(bev.get());
-            assert(ctx);
-            try {
-                if (!ossl::SSLContext::subscribeToPeerCertStatus(ctx, fn)) {
-                    log_warn_printf(connio, "unable to subscribe to %s %s certificate status\n", peerLabel(), peerName.c_str());
-                }
-            } catch (certs::CertStatusNoExtensionException &e) {
-                log_debug_printf(connio, "status monitoring not required for %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
-            } catch (std::exception &e) {
-                log_debug_printf(connio, "unexpected error subscribing to %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
-            }
-        }
-#endif
     }
+#endif
 
-    // If any socket warnings / errors then log and disconnect
+    // If any socket warnings / errors, then log and disconnect
     if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT)) {
         if (events & BEV_EVENT_ERROR) {
-            int err = EVUTIL_SOCKET_ERROR();
+            const int err = EVUTIL_SOCKET_ERROR();
             const char *msg = evutil_socket_error_to_string(err);
-            if ( err) {
+            if (err) {
                 log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
             } else {
                 log_debug_printf(connio, "connection to %s %s closed\n", peerLabel(), peerName.c_str());

@@ -41,7 +41,6 @@ using namespace impl;
 
 DEFINE_LOGGER(serversetup, "pvxs.svr.init");
 DEFINE_LOGGER(osslsetup, "pvxs.ossl.init");
-DEFINE_LOGGER(watcher, "pvxs.certs.mon");
 DEFINE_LOGGER(serverio, "pvxs.svr.io");
 DEFINE_LOGGER(serversearch, "pvxs.svr.search");
 
@@ -1073,60 +1072,6 @@ void Server::reconfigure(const Config& inconf) {
     }
 }
 
-/**
- * @brief Enable TLS for the given server peer connection
- *
- * This is called when a peer subscription monitor reports a status of GOOD for a peer certificate.
- * It works by simply removing the specified connection and waiting for it to be
- * reconnected again as TLS.  This time the peer credential status will already be cached so
- * will be validated immediately
- *
- * @param server_conn the peer connection to enable TLS for
- */
-void Server::Pvt::enableTlsForPeerConnection(const ServerConn* server_conn) {
-    // Find the connection to clean-up
-    std::vector<std::weak_ptr<ServerConn>> to_cleanup;
-    for (auto& pair : connections) {
-        auto conn = pair.first;
-        if (conn && !conn->iface->isTLS && (!server_conn || conn == server_conn)) {
-            to_cleanup.push_back(pair.second);
-        }
-    }
-
-    log_debug_printf(watcher, "Closing %zu TCP connections\n", to_cleanup.size());
-
-    // Clean it up
-    for (auto& weak_conn : to_cleanup) {
-        auto conn = weak_conn.lock();
-        if (conn) conn->cleanup();
-    }
-}
-
-/**
- * @brief Remove one or more peer TLS connections so that it will reconnect in degraded mode
- *
- * @param server_conn optionally specified peer server connection to remove
- */
-void Server::Pvt::removePeerTlsConnections(const ServerConn* server_conn) {
-    // Collect tls connections to clean-up
-    std::vector<std::weak_ptr<ServerConn>> to_cleanup;
-    for (auto& pair : connections) {
-        auto conn = pair.first;
-        if (conn && conn->iface->isTLS && (!server_conn || conn == server_conn)) {
-            to_cleanup.push_back(pair.second);
-        }
-    }
-
-    log_debug_printf(watcher, "Closing %zu TLS connections\n", to_cleanup.size());
-
-    // Clean them up
-    for (auto& weak_conn : to_cleanup) {
-        auto conn = weak_conn.lock();
-        if (conn) {
-            conn->cleanup();
-        }
-    }
-}
 #endif
 
 Source::~Source() {}

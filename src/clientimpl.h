@@ -98,6 +98,11 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
     // While Connected, periodic Echo
     const evevent echoTimer;
 
+#ifdef PVXS_ENABLE_OPENSSL
+    // Timer for retrying channel creation when waiting for certificate status
+    const evevent channelRetryTimer;
+#endif
+
     bool ready = false;
     bool nameserver = false;
 
@@ -135,9 +140,6 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 #endif
                                       );
 
-#ifdef PVXS_ENABLE_OPENSSL
-    ossl::CertStatusExData *getCertStatusExData() override;
-#endif
 private:
     void startConnecting();
     virtual void bevEvent(short events) override final;
@@ -176,6 +178,10 @@ public:
 protected:
     void tickEcho();
     static void tickEchoS(evutil_socket_t fd, short evt, void *raw);
+#ifdef PVXS_ENABLE_OPENSSL
+    void retryChannelCreation();
+    static void retryChannelCreationS(evutil_socket_t fd, short evt, void *raw);
+#endif
 };
 
 struct ConnectImpl final : public Connect
@@ -284,28 +290,6 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     bool isRunning() const { return state == Running; }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    bool isContextReadyForTls() const { return tls_context && tls_context->state == ossl::SSLContext::TlsReady && !tls_context->hasExpired(); }
-    bool isInitialisedForTls(const std::shared_ptr<ossl::SSLContext> &context) const {
-        return context && context->state >= ossl::SSLContext::TcpReady && !((certs::CertificateStatus)context->get_status()).isRevokedOrExpired() && !tls_context->hasExpired();
-    }
-    bool isTlsEnabled() const { return tls_context && tls_context->state > ossl::SSLContext::DegradedMode && !tls_context->hasExpired(); }
-    void initialiseState() {
-        if (!tls_context || !tls_context->ctx) {
-            state = Running;
-        } else {
-            switch (tls_context->state) {
-                case ossl::SSLContext::DegradedMode:
-                case ossl::SSLContext::TcpReady:
-                case ossl::SSLContext::TlsReady:
-                    state = Running;
-                    break;
-                default:
-                    state = Init;
-                    break;
-            }
-        }
-    }
-
     void configureExpirationHandler(Context * context) const {
         if ( tls_context && tls_context->state >= ossl::SSLContext::TcpReady) {
             // Only do this if we have a valid tls_context
@@ -320,7 +304,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
                 // Set up the callback to point to this context
                 event_assign(cert_expiration_timer.get(), tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &certExpirationHandlerS, context);
 
-                // Add the event for 2 second after expiration while ignoring errors
+                // Add the event 2 seconds after expiration while ignoring errors
                 const auto expires_in = (expiry_date.t - now) + 2;
                 const timeval expirationInterval{expires_in, 0};
                 event_add(cert_expiration_timer.get(), &expirationInterval);
@@ -448,13 +432,52 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 #ifdef PVXS_ENABLE_OPENSSL
     static void certExpirationHandlerS(evutil_socket_t fd, short evt, void *raw);
 
-    void enterDegradedMode() const;
-    void removePeerTlsConnections(const Connection* client_conn = nullptr) const;
-    void reloadTlsFromConfig(const Config& new_config = {});
-    void enableTlsForPeerConnection(const Connection* client_conn = nullptr);
+    /**
+     * Initialize the Client context state based on the tls context
+     */
+    void initializeState() {
+        state = !tls_context || !tls_context->ctx || tls_context->state != ossl::SSLContext::Init ? Running : Init;
+    }
 
-    bool canAcceptTlsConnectionValidation() const { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
-    bool readyToEmitTlsSearch() const { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady; }
+    /**
+     * Is TLS Configured (not Degraded)?
+     * @return True if a certificate is configured and has not been forced into a Degraded state
+     */
+    bool isTlsConfigured() const { return tls_context && tls_context->state > ossl::SSLContext::DegradedMode; }
+
+    /**
+     * Is TLS Configured for server-only?
+     * @return True if TLS is configured for server-only
+     */
+    bool isTlsServerOnly() const {
+        if (!isTlsConfigured()) return false;
+        const auto cert = tls_context->getEntityCertificate();
+        return !cert;
+    }
+
+    /**
+     * Is the TLS context completely ready for TLS connections?  This means that certificate status
+     * must have been checked as VALID if a check is required.
+     * Also the peer certificate must have also been checked if required
+     * @return True if the tls context is completely ready for TLS connections
+     */
+    bool isTlsReady() const {
+        return tls_context && tls_context->state == ossl::SSLContext::TlsReady;
+    }
+
+    /**
+     * Is given context configured for TLS.
+     * @param tls_context_to_check the context to check
+     * @return true if the context has loaded a certificate whose status is not known to be REVOKED or EXPIRED
+     */
+    static bool isTlsConfigured(const std::shared_ptr<ossl::SSLContext> &tls_context_to_check) {
+        return tls_context_to_check && tls_context_to_check->state > ossl::SSLContext::DegradedMode && !static_cast<certs::CertificateStatus>(tls_context_to_check->get_cert_status()).isRevokedOrExpired() ;
+    }
+
+    void removePeer(const Connection* client_conn = nullptr);
+    void enterDegradedMode() const;
+    void removeTlsPeer(const Connection* client_conn = nullptr) const;
+    void reloadTlsFromConfig(const Config& new_config = {});
 #endif
 };
 

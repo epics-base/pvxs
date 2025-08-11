@@ -309,13 +309,7 @@ class Auth {
      */
     template <typename T>
     static void setValue(Value &target, const std::string &field, const T &new_value) {
-        const auto current_field = target[field];
-        auto current_value = current_field.as<T>();
-        if (current_value == new_value) {
-            target[field].unmark();
-        } else {
-            target[field] = new_value;
-        }
+        target[field] = new_value;
     }
 
     CCRManager ccr_manager_{};

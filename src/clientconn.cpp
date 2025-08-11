@@ -50,7 +50,7 @@ int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
     }
 
     try {
-        // Try to get stapled OCSP response
+        // Try to get the stapled OCSP response
         uint8_t* ocsp_response_ptr;
         auto len = SSL_get_tlsext_status_ocsp_resp(ctx, &ocsp_response_ptr);
 
@@ -107,6 +107,9 @@ Connection::Connection(const std::shared_ptr<ContextImpl>& context,
     ,context(context)
     ,echoTimer(__FILE__, __LINE__,
                event_new(context->tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &tickEchoS, this))
+#ifdef PVXS_ENABLE_OPENSSL
+    , channelRetryTimer(event_new(context->tcp_loop.base, -1, EV_TIMEOUT, &retryChannelCreationS, this))
+#endif
 {
     if(reconn) {
         log_debug_printf(io, "start holdoff timer for %s\n", peerName.c_str());
@@ -127,10 +130,6 @@ Connection::~Connection()
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-
-ossl::CertStatusExData *Connection::getCertStatusExData() {
-    return context->tls_context->getCertStatusExData();
-}
 
 std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
                                               const SockAddr& serv, bool reconn, bool tls)
@@ -166,7 +165,7 @@ void Connection::startConnecting() {
 
 #ifdef PVXS_ENABLE_OPENSSL
     if (isTLS) {
-        if (!context || !context->isContextReadyForTls()) {
+        if (!context || !context->isTlsConfigured()) {
             log_debug_printf(connsetup, "Client context not ready for TLS connection%s\n", "");
             return;
         }
@@ -213,7 +212,7 @@ void Connection::startConnecting() {
 void Connection::configureClientOCSPCallback(SSL* ssl) const {
     // If stapling is not disabled
     if (!context->tls_context->stapling_disabled) {
-        // And client was not previously set to request the stapled OCSP Response
+        // And a client was not previously set to request the stapled OCSP Response
         if (SSL_get_tlsext_status_type(ssl) == -1) {
             // Then enable OCSP status request extension
             if (SSL_set_tlsext_status_type(ssl, TLSEXT_STATUSTYPE_ocsp)) {
@@ -234,6 +233,18 @@ void Connection::createChannels()
 {
     if(!ready)
         return; // defer until CONNECTION_VALIDATED
+
+#ifdef PVXS_ENABLE_OPENSSL
+    if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
+        // Certificate status monitoring is active, but status is not good yet
+        // Schedule a retry after a short delay
+        log_debug_printf(io, "Peer certificate status not ready for %s, will retry in 100ms\n", peerName.c_str());
+
+        constexpr timeval retry_delay{0, 1000}; // 1ms
+        event_add(channelRetryTimer.get(), &retry_delay);
+        return;
+    }
+#endif
 
     (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
@@ -280,28 +291,10 @@ void Connection::sendDestroyRequest(uint32_t sid, uint32_t ioid)
 }
 
 void Connection::bevEvent(short events) {
-#ifdef PVXS_ENABLE_OPENSSL
-    ConnBase::bevEvent(events, [=](bool enable) {
-        if (context) {
-            std::weak_ptr<ContextImpl> weak_context(context);
-            if (enable)
-                context->tcp_loop.dispatch([weak_context, this]() mutable {
-                    const auto context = weak_context.lock();
-                    if (context) context->enableTlsForPeerConnection(this);
-                });
-            else
-                context->tcp_loop.dispatch([weak_context, this]() mutable {
-                    const auto context = weak_context.lock();
-                    if (context) context->removePeerTlsConnections(this);
-                });
-        }
-    });
-#else
     ConnBase::bevEvent(events);
-#endif
-    // called Connection::cleanup()
 
-    if(bev && (events&BEV_EVENT_CONNECTED)) {
+    // Handle BEV_EVENT_CONNECTED specifically for a client
+    if(bev && events & BEV_EVENT_CONNECTED) {
         log_debug_printf(io, "Connected to %s\n", peerName.c_str());
         connTime = epicsTime::getCurrent();
 
@@ -313,18 +306,32 @@ void Connection::bevEvent(short events) {
 
         if (isTLS) {
             const auto ctx = bufferevent_openssl_get_ssl(bev.get());
-            assert(ctx);
-            ossl::SSLContext::getPeerCredentials(*peerCred, ctx);
+            if (ctx) {
+                ossl::SSLContext::getPeerCredentials(*peerCred, ctx);
+
+                if (!peer_status) {
+                    try {
+                        peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [](const bool enable) {});
+                        if (!peer_status)
+                            log_debug_printf(io, "no certificate status to subscribe to for %s %s\n", peerLabel(), peerName.c_str());
+                    } catch (certs::CertStatusNoExtensionException &e) {
+                        log_debug_printf(io, "status monitoring not required for %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
+                    } catch (std::exception &e) {
+                        log_debug_printf(io, "unexpected error subscribing to %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
+                    }
+                }
+            }
         }
-#endif
+
+        #endif
         cred = std::move(peerCred);
 
         {
             // after async connect() to avoid winsock specific race.
-            auto fd(bufferevent_getfd(bev.get()));
+            const auto fd(bufferevent_getfd(bev.get()));
             int opt = 1;
             if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
-                auto err(SOCKERRNO);
+                const auto err(SOCKERRNO);
                 log_warn_printf(io, "Unable to TCP_NODELAY: %d on %d\n", err, fd);
             }
         }
@@ -335,7 +342,7 @@ void Connection::bevEvent(short events) {
         // start echo timer
         // tcpTimeout(40) -> 15 second echo period
         // bound echo to range [1, 15]
-        timeval tmo(totv(std::max(1.0, std::min(15.0, context->effective.tcpTimeout*3.0/8.0))));
+        const timeval tmo(totv(std::max(1.0, std::min(15.0, context->effective.tcpTimeout*3.0/8.0))));
         if(event_add(echoTimer.get(), &tmo))
             log_err_printf(io, "Server %s error starting echoTimer\n", peerName.c_str());
 
@@ -420,8 +427,7 @@ void Connection::handle_CONNECTION_VALIDATION()
         if(method=="ca" || (method=="anonymous" && selected!="ca"))
             selected = method;
 #ifdef PVXS_ENABLE_OPENSSL
-        // Only validate as TLS if we are ready to handle TLS connections
-        else if (isTLS && method == "x509" && context->isContextReadyForTls())
+        else if (isTLS && method == "x509" && context->isTlsConfigured())
             selected = method;
 #endif
     }
@@ -509,7 +515,7 @@ void Connection::handle_CONNECTION_VALIDATED()
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    ready = !isTLS || context->canAcceptTlsConnectionValidation();
+    ready = !isTLS || context->isTlsReady();
 #else
     ready = true;
 #endif
@@ -526,7 +532,7 @@ void Connection::handle_CONNECTION_VALIDATED()
 
 void Connection::handle_CREATE_CHANNEL()
 {
-    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
+    const auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t cid, sid;
@@ -546,7 +552,7 @@ void Connection::handle_CREATE_CHANNEL()
 
     std::shared_ptr<Channel> chan;
     {
-        auto it = creatingByCID.find(cid);
+        const auto it = creatingByCID.find(cid);
         if(it==creatingByCID.end() || !(chan = it->second.lock())) {
 
             if(it!=creatingByCID.end())
@@ -704,5 +710,18 @@ void Connection::tickEchoS(evutil_socket_t fd, short evt, void *raw)
         log_exc_printf(io, "Unhandled error in echo timer callback: %s\n", e.what());
     }
 }
+
+void Connection::retryChannelCreationS(evutil_socket_t fd, short evt, void *raw)
+{
+    auto conn = static_cast<Connection*>(raw);
+    conn->retryChannelCreation();
+}
+
+void Connection::retryChannelCreation()
+{
+    log_debug_printf(io, "Retrying channel creation for %s\n", peerName.c_str());
+    createChannels();
+}
+
 } // namespace client
 } // namespace pvxs
