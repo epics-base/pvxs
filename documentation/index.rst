@@ -44,6 +44,7 @@ See :ref:`relpolicy` for details.
    spvaqstartstd.rst
    spvaqstartkrb
    spvaqstartldap
+   spvaqstartjwt
    spva
    spvaauth
    spvacerts

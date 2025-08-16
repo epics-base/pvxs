@@ -134,6 +134,7 @@ public:
     enum {
         Holdoff,
         Connecting,
+        AwaitingPeerCertValidity,
         Connected,
         Disconnected,
     } state;
@@ -184,6 +185,9 @@ public:
     virtual void cleanup() =0;
 
     virtual void bevEvent(short events);
+#ifdef PVXS_ENABLE_OPENSSL
+    virtual void peerStatusCallback(bool enable) = 0;
+#endif
     virtual void bevRead();
     virtual void bevWrite();
     static void bevEventS(struct bufferevent *bev, short events, void *ptr);

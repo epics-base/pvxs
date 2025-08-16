@@ -60,7 +60,3 @@ RUN cd pvxs && \
     make distclean && make -j10 all
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
-
-# Test comment to verify workflow changes
-
-# Test comment to verify workflow changes - take 2

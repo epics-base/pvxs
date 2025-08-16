@@ -145,7 +145,7 @@ private:
 #ifdef PVXS_ENABLE_OPENSSL
     void retryConnectionValidation();
     static void retryConnectionValidationS(evutil_socket_t fd, short evt, void *raw);
-    void processConnectionValidation(const std::string& selected, const Value& auth);
+    void proceedWithConnectionValidation();
 
     std::string pending_selected;
     Value pending_auth;
@@ -179,6 +179,9 @@ public:
     virtual void cleanup() override final;
 private:
     virtual void bevEvent(short events) override final;
+#ifdef PVXS_ENABLE_OPENSSL
+    void peerStatusCallback(bool enable) override;
+#endif
     virtual void bevRead() override final;
     virtual void bevWrite() override final;
 };

@@ -143,9 +143,13 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 private:
     void startConnecting();
     virtual void bevEvent(short events) override final;
-public:
+#ifdef PVXS_ENABLE_OPENSSL
+    void peerStatusCallback(bool enable) override;
+#endif
+    public:
 
     void createChannels();
+    void proceedWithCreatingChannels();
 
     void sendDestroyRequest(uint32_t sid, uint32_t ioid);
 

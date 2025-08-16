@@ -283,6 +283,7 @@ Though it is recommended that you create your own site-specific Authenticators P
 - ``authnstd`` : Standard Authenticator - Uses explicitly specified and unverified credentials
 - ``authnkrb`` : Kerberos Authenticator - Kerberos credentials verified by the KDC
 - ``authnldap``: LDAP Authenticator     - Login to LDAP directory to establish identity
+- ``authnjwt`` : JWT Authenticator      - Uses a JSON Web Token (JWT) to obtain a certificate verified by the JWT issuer.
 
 authstd Configuration and Usage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -564,7 +565,7 @@ LDAP Credentials Verifier for :ref:`pvacms` at runtime.
 | Env. *authnldap*   | Env. *pvacms*            | Params. *authldap*       | Params. *pvacms*         | Keys and Values                       | Description                                                |
 +====================+==========================+==========================+==========================+=======================================+============================================================+
 || EPICS_AUTH_LDAP   ||                         ||                         ||                         || {location of password file}          || file containing password for the given LDAP user account  |
-|| _ACCOUNT_PWD_FILE ||                         ||                         ||                         || e.g. ``~/.config/ldap.pass/``        ||                                                           |
+|| _ACCOUNT_PWD_FILE ||                         ||                         ||                         || e.g. ``~/.config/pva/1.3/ldap.pass`` ||                                                           |
 +--------------------+--------------------------+--------------------------+--------------------------+---------------------------------------+------------------------------------------------------------+
 ||                   ||                         || ``-p``                  ||                         || {LDAP account password}              || password for the given LDAP user account                  |
 ||                   ||                         || ``--password``          ||                         || e.g. ``secret``                      ||                                                           |
@@ -592,6 +593,189 @@ that contains a working LDAP with the following characteristics:
 
   - LDAP service + example schemas
   - PVACMS
+
+authjwt Configuration and Usage (OUT OF SCOPE!)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    OUT OF SCOPE!  This feature is not Included in the scope of this project
+
+The Secure PVAccess framework supports JWT-based authentication.
+This Authenticator allows clients and servers to use JSON Web Tokens (JWTs) as
+credentials to obtain X.509 certificates on the fly. The JWT Authenticator integrates with the EPICS Certificate Management
+Service (PVACMS) to exchange a token for a short-lived certificate,
+enabling seamless use of EPICS access control with externally authenticated identities.
+
+This Authenticator is a Type 1 Authenticator – Independently Verifiable Tokens, meaning the token’s
+authenticity can be checked by PVACMS without additional client interaction.
+PVACMS verifies the JWT’s signature and claims (e.g. issuer, audience, expiration)
+against a configured trusted issuer. If the token is valid, PVACMS issues a signed certificate
+carrying the identity information from the token.
+
+Notably, the JWT Authenticator introduces the concept of an in-memory certificate – instead of requiring
+a keychain file on disk, the certificate and private key can be handled entirely in memory via the API.
+
+    Note: These certificates are appropriate for some client scenarios.  Use for IOCs and Gateways is strongly discouraged
+
+.. code-block:: shell
+
+    kinit -l 24h greg@SLAC.STANFORD.EDU
+
+- `CN` field in the certificate will be kerberos username
+- `O` field in the certificate will be the kerberos realm
+- `OU` field in the certificate will not be set
+- `C` field in the certificate will be set to the local country code
+
+
+**usage**
+
+Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain,
+and password file locations.
+
+.. code-block::
+
+        authnjwt – Secure PVAccess JWT Authenticator
+
+        Generates client, server, or IOC certificates based on a JSON Web Token.  Use for server or IOC is discouraged.
+        Uses the provided JWT to create certificates that are valid for the token’s lifetime.
+
+        usage:
+            authnjwt [options]                   Create certificate (token-verified; results in VALID certificate)
+            authnjwt (-h | --help)               Show this help message and exit
+            authnjwt (-V | --version)            Print version and exit
+
+        options:
+            (-u | --cert-usage) <usage>         Specify certificate usage: `client` (default), `server`, or `ioc`.
+                --token-file <file>             Read the JWT from a file.
+                --ou <org-unit>                 Specify organisational unit for the certificate. Default <blank>
+            (-c | --country) <country>          Specify country for the certificate. Default locale setting if detectable otherwise `US`
+            (-t | --time) <minutes>             Duration of the certificate in minutes (total renew until time).  e.g. 30 or 1d or 1y3M2d4m
+            (-D | --daemon)                     Run as a daemon to automatically renew the certificate on expiration.
+                --cert-pv-prefix <prefix>       PV prefix for contacting PVACMS (default: `CERT`).
+                --add-config-uri                Add a configuration URI to the generated certificate.
+                --force                         Overwrite any existing certificate file for this usage.
+            (-s | --no-status)                  Do not request status monitoring for this certificate.
+            (-i | --issuer) <issuer_id>         Specify the PVACMS issuer ID (8-char SKID) to contact (if multiple CAs are available).
+            (-v | --verbose)                    Verbose output.
+            (-d | --debug)                      Debug output.
+
+**Extra options that are available in PVACMS**
+
+.. code-block:: shell
+
+    usage:
+      pvacms [jwt options]                      Run PVACMS.  Interrupt to quit
+
+    jwt options
+            --jwt-request-format <format>       Verification Payload format
+            --jwt-request-method <methodt>      GET or POST - method to call verification URI
+            --jwt-response-format <format>      Verification Response Format
+            --jwt-trusted-uri <uri>             The Verification URI (mandatory)
+            --jwt-use-response-code             Use HTTP response code to determine validity
+
+**Environment Variables for AuthnJWT Credentials Verifier**
+
+The environment variables and parameters in the following table configure the JWT
+Credentials Verifier for :ref:`pvacms` at runtime.
+
++---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+| Env. *pvacms*       | Params. *pvacms*             | Keys and Values                                | Description                                                           |
++=====================+==============================+================================================+=======================================================================+
+|  EPICS_AUTH_JWT_    |  ``--jwt-request-format``    | string format for verification request payload |  A string that is used verbatim as the payload for the verification   |
+|  REQUEST_FORMAT     |                              |                                                |  request while substituting the string ``#token#`` for the token      |
+|                     |                              |                                                |  value, and ``#kid#`` for the key id. This is used when the           |
+|                     |                              | e.g. ``{ "token": "#token#" }``                |  verification server requires a formatted payload for the             |
+|                     |                              |                                                |  verification request. If the string is simply ``#token#`` (default)  |
+|                     |                              | e.g. ``#token#``                               |  then the verification endpoint is called with the raw token as       |
+|                     |                              |                                                |  the payload.                                                         |
++---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_    |  ``--jwt-request-method``    | ``POST`` (default)                             |  This determines whether the endpoint will be called with             |
+|  REQUEST_METHOD     |                              | ``GET```                                       |  ``HTTP GET`` or ``POST`` .                                           |
+|                     |                              |                                                |  If called with ``POST``, then the payload is exactly what is defined |
+|                     |                              | e.g. of call made for GET:                     |  by the ``EPICS_AUTH_JWT_RESPONSE_FORMAT`` variable.                  |
+|                     |                              |                                                |  If called with GET, then the token is passed in the                  |
+|                     |                              | **GET** /api/validate-token HTTP/1.1           |  **Authorization** header of the ``HTTP GET`` request                 |
+|                     |                              |                                                |                                                                       |
+|                     |                              | **Authorization**: Bearer eyJhbGcXVCJ9...      |                                                                       |
++---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_    |  ``--jwt-response-format``   | string format for verification response value  |  A pattern string that we can use to decode the response from a       |
+|  RESPONSE_FORMAT    |                              |                                                |  verification endpoint if the response is formatted text. All white   |
+|                     |                              |                                                |  space is removed in the given string and in the response. Then all   |
+|                     |                              | e.g. ``{ "payload": { * },``                   |  the text prior to ``#response#`` is matched and removed from the     |
+|                     |                              |      ``  "valid": #response# }``               |  response and all the text after the response is likewise removed,    |
+|                     |                              |                                                |  what remains is the response value.                                  |
+|                     |                              | e.g. ``#response#``                            |  An asterisk in the string matches any sequence of characters in the  |
+|                     |                              |                                                |  response. It is converted to lowercase and interpreted as valid      |
+|                     |                              |                                                |  if it equals ``valid``, ``ok``, ``true``, ``t``, ``yes``, ``y``, or  |
+|                     |                              |                                                |  ``1``.  If the string is ``#response#`` (default) then the response  |
+|                     |                              |                                                |  is raw and is converted to lowercase and compared without removing   |
+|                     |                              |                                                |  any formatting                                                       |
++---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_    | ``--jwt-trusted-uri``        | uri of JWT validation endpoint                 |  Trusted URI of the validation endpoint including the ``http://``,    |
+|  TRUSTED_URI        |                              |                                                |  ``https://``, and port number.  There is no default, it must be      |
+|                     |                              | e.g. ``http://issuer/api/validate-token``      |  the text prior to ``#response#`` is matched and removed from the     |
+|                     |                              |                                                |  specified.  This is used to compare to the ``iss`` field in the      |
+|                     |                              |                                                |  decoded token payload if it is provided.  If it is not the same,     |
+|                     |                              |                                                |  then the validation fails.  If the ``iss`` field is missing, then    |
+|                     |                              |                                                |  the value of this variable is taken as the validation URI.           |
++---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_    | ``--jwt-use-response-code``  | case insensitive:                              |  If set this tells PVACMS that when it receives a ``200``             |
+|  USE_RESPONSE_CODE  |                              | ``YES``, ``TRUE``,  or ``1``                   |  HTTP-response code from the HTTP request then the token is valid,    |
+|                     |                              |                                                |  and invalid for any other response code.                             |
++---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+
+
++----------------------+-----------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+| Env. *authnjwt*      | Params. *authjwt*           | Keys and Values                                | Description                                                           |
++======================+=============================+================================================+=======================================================================+
+| EPICS_AUTH_JWT_FILE  | ``--token-file <file>``     | location of JWT file                           | file containing JWT token text                                        |
+|                      |                             | e.g. ``~/.config/pva/1.3/jwt.txt``             |                                                                       |
++----------------------+-----------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+
+
+**Setup of JWT in Docker Container for testing**
+
+In the source code under ``/examples/docker/spva_jwt`` you'll find a Dockerfile and supporting resources for creating an environment
+that contains a working JWT issuer and validator with the following characteristics:
+
+- users (both unix and kerberos principals)
+
+  - ``pvacms`` - service with password "secret"
+  - ``admin``  - principal with password "secret" (includes a configured PVACMS administrator certificate)
+  - ``softioc`` - service principal with password "secret"
+  - ``client`` - principal with password "secret"
+
+- services
+
+  - JWT issuer    ``GET``  ``http://localhost/api/token?name=client`` to get token for ``client``
+  - JWT validator ``POST`` ``http://localhost/api/validate-token`` payload is raw token
+  - PVACMS
+
+
+In Session JWT (Planned Support 2027)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+New API:
+
+.. code-block:: cpp
+
+    pvxs::client::Config::fromToken(const std::string &token)
+
+When using the JWT Authenticator through the PVXS API, the certificate can be kept in memory.
+This call transparently exchanges the token for an in-memory certificate and
+stores the certificate and private key within the client’s session (without writing a .p12 file to disk).
+
+The private key is generated and held in memory, and PVACMS returns a signed certificate
+for the corresponding public key. The certificate will automatically be
+revoked (via PVACMS) when the client’s session ends, and it will share
+the same lifetime as the JWT that generated it.
+
+Clients can renew the in-memory certificate indefinitely by providing fresh JWTs (with the same identity claims) before expiration.
+Behind the scenes a certificate with a long lifetime is always requested for the first request for any identity, then
+subsequent renewal tokens will just extend the status validity of the existing certificate without replacing the TLS
+connection.
+
+This mechanism enables EPICS Access Control RULES (ACF files) to recognize principals from
+ external identity systems via the certificates obtained from JWTs.
 
 .. _epics_security:
 

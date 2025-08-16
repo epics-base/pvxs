@@ -229,19 +229,34 @@ void Connection::configureClientOCSPCallback(SSL* ssl) const {
 }
 #endif
 
+/**
+ * @brief Create channels for the connection
+ *
+ * This function is called when a create channel message is received from the server
+ * It verifies that the connection is ready to create channels and then proceeds with creating channels
+ */
 void Connection::createChannels()
 {
     if(!ready)
         return; // defer until CONNECTION_VALIDATED
 
+    proceedWithCreatingChannels();
+}
+
+/**
+ * @brief Proceed with creating channels
+ *
+ * This function is called when a create channel message is received from the server and the connection is ready to create channels
+ * It will create the channels and remove them from the pending list
+ * If the peer certificate status is being monitored but has not yet been validated, it will set the state to AwaitingPeerCertValidity
+ * and return, waiting for the certificate status to be validated before proceeding with creating channels
+ */
+void Connection::proceedWithCreatingChannels()
+{
 #ifdef PVXS_ENABLE_OPENSSL
     if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
         // Certificate status monitoring is active, but status is not good yet
-        // Schedule a retry after a short delay
-        log_debug_printf(io, "Peer certificate status not ready for %s, will retry in 100ms\n", peerName.c_str());
-
-        constexpr timeval retry_delay{0, 1000}; // 1ms
-        event_add(channelRetryTimer.get(), &retry_delay);
+        state = AwaitingPeerCertValidity;
         return;
     }
 #endif
@@ -308,22 +323,10 @@ void Connection::bevEvent(short events) {
             const auto ctx = bufferevent_openssl_get_ssl(bev.get());
             if (ctx) {
                 ossl::SSLContext::getPeerCredentials(*peerCred, ctx);
-
-                if (!peer_status) {
-                    try {
-                        peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [](const bool enable) {});
-                        if (!peer_status)
-                            log_debug_printf(io, "no certificate status to subscribe to for %s %s\n", peerLabel(), peerName.c_str());
-                    } catch (certs::CertStatusNoExtensionException &e) {
-                        log_debug_printf(io, "status monitoring not required for %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
-                    } catch (std::exception &e) {
-                        log_debug_printf(io, "unexpected error subscribing to %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
-                    }
-                }
             }
         }
 
-        #endif
+#endif
         cred = std::move(peerCred);
 
         {
@@ -349,6 +352,30 @@ void Connection::bevEvent(short events) {
         state = Connected;
     }
 }
+
+/**
+ * @brief Peer status callback
+ *
+ * This function is called when the peer status changes.
+ *
+ * It will be given a boolean value indicating whether the peer certificate status is good or not.
+ *
+ * - If the peer certificate status is GOOD, and we're waiting for certificate validity before creating channels,
+ *   it will set the state to Connected and proceed with creating channels.
+ * - If the peer certificate status is not GOOD, it will disconnect from the server
+ */
+#ifdef PVXS_ENABLE_OPENSSL
+void Connection::peerStatusCallback(bool enable) {
+    if (enable) {
+        if (state == AwaitingPeerCertValidity ) {
+            state = Connected;
+            proceedWithCreatingChannels();
+        }
+    } else {
+        disconnect();
+    }
+}
+#endif
 
 std::shared_ptr<ConnBase> Connection::self_from_this()
 {

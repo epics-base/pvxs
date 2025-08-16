@@ -19,6 +19,7 @@ Other Quick Start Guides:
 - :ref:`quick_start`
 - :ref:`quick_start_krb`
 - :ref:`quick_start_ldap`
+- :ref:`quick_start_jwt`
 
 |learn| You will learn
 *********************************

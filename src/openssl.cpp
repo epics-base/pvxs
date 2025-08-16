@@ -67,9 +67,34 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
             const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
             cert_monitor = certs::CertStatusManager::subscribe(trusted_store_ptr, status_pv, [=](const certs::PVACertificateStatus &pva_status) {
                 {
-                    Guard G(lock);
-                    cert_status = pva_status;
+                    {
+                        Guard G(lock);
+                        cert_status = pva_status;
+                    }
+
+                    // Cancel any existing status validity timer
+                    if (event_pending(status_validity_timer.get(), EV_TIMEOUT, nullptr)) {
+                        Guard G(lock);
+                        event_del(status_validity_timer.get());
+                    }
+
+                    // Start a new timer based on the status validity period
+                    const time_t now = time(nullptr);
+                    const time_t valid_until = pva_status.status_valid_until_date.t;
+                    const time_t valid_from = pva_status.status_date.t;
+
+                    if (valid_until > now && valid_from <= now) {
+                        timeval delay;
+                        delay.tv_sec = valid_until - now;
+                        delay.tv_usec = 0;
+                        event_add(status_validity_timer.get(), &delay);
+                    } else {
+                        log_debug_printf(watcher, "Certificate status is no longer valid: %s\n", pva_status.status.s.c_str());
+                        setTlsOrTcpMode(false);
+                        return;
+                    }
                 }
+
                 if (!cert_status.isGood())
                     log_warn_printf(watcher, "Certificate not valid: %s\n", CERT_STATE(cert_status.status.i));
                 // set TLS context state appropriately based on the new status
@@ -89,6 +114,20 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
 }
 
 /**
+ * @brief Called back when the entity certificate status becomes invalid
+ * @param fd
+ * @param evt
+ * @param raw
+ */
+void SSLContext::statusValidityTimerCallback(evutil_socket_t fd, short evt, void* raw) {
+    auto* ctx = static_cast<SSLContext*>(raw);
+    log_debug_printf(watcher, "Certificate status validity expired - marking status as %s\n", "UNKNOWN");
+
+    // Set certificate state to UNKNOWN
+    ctx->setTlsOrTcpMode();
+}
+
+/**
  * @brief Set degraded mode
  *
  * Clear all monitors and statuses, then set tls context state to Degraded
@@ -96,7 +135,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
 void SSLContext::setDegradedMode(const bool clear) {
     Guard G(lock);
     if (clear) {
-        cert_monitor.reset();  // Unsubscribe from the certificate status monitor if any
+        cert_monitor.reset();   // Unsubscribe from the certificate status monitor if any
         cert_status = {};    // Set the certificate status to be UNKNOWN
     }
     state = DegradedMode;
@@ -125,14 +164,67 @@ void SSLContext::setTlsOrTcpMode() {
     setTlsOrTcpMode(cert_status.isGood());
 }
 
-SSLContext::SSLContext(const impl::evbase loop) : loop(loop) {}
+SSLContext::SSLContext(const impl::evbase loop) : loop(loop)
+    , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))
+{}
 
 SSLContext::SSLContext(const SSLContext &o)
-    : loop(o.loop), ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) {}
+    : loop(o.loop)
+    , ctx(o.ctx)
+    , state(o.state)
+    , status_check_disabled(o.status_check_disabled)
+    , stapling_disabled(o.stapling_disabled)
+    , cert_monitor(o.cert_monitor)  // Copy the monitor
+    , cert_status(o.cert_status)    // Copy the status
+    , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create a new timer for this instance
+{
+    // If the original timer was pending, restart ours with the remaining time
+    if (o.status_validity_timer.get() && event_pending(o.status_validity_timer.get(), EV_TIMEOUT, nullptr)) {
+        restartStatusValidityTimerFromCertStatus();
+    }
+}
 
 SSLContext::SSLContext(SSLContext &o) noexcept
-    : loop(o.loop), ctx(o.ctx), state(o.state), status_check_disabled(o.status_check_disabled), stapling_disabled(o.stapling_disabled) {}
+    : loop(o.loop)
+    , ctx(std::move(o.ctx))
+    , state(o.state)
+    , status_check_disabled(o.status_check_disabled)
+    , stapling_disabled(o.stapling_disabled)
+    , cert_monitor(std::move(o.cert_monitor))  // Move the monitor
+    , cert_status(std::move(o.cert_status))    // Move the status
+    , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create new timer
+{
+    // If the original timer was pending, restart ours and cancel the original
+    if (o.status_validity_timer.get() && event_pending(o.status_validity_timer.get(), EV_TIMEOUT, nullptr)) {
+        restartStatusValidityTimerFromCertStatus();
+        // Cancel the timer in the source object since we're moving
+        event_del(o.status_validity_timer.get());
+    }
 
+}
+
+void SSLContext::restartStatusValidityTimerFromCertStatus() const {
+    if (!status_validity_timer.get()) {
+        return; // Timer is not initialized
+    }
+
+    // Calculate the remaining time from the status validity date
+    if (cert_status.status_valid_until_date.t > 0) {
+        const time_t now = time(nullptr);
+        if (cert_status.status_valid_until_date.t > now) {
+            timeval delay{};
+            delay.tv_sec = cert_status.status_valid_until_date.t - now;
+            delay.tv_usec = 0;
+            event_add(status_validity_timer.get(), &delay);
+        }
+    }
+}
+
+SSLContext::~SSLContext() {
+    if (status_validity_timer.get()) {
+        event_del(status_validity_timer.get());
+    }
+}
 namespace {
 
 constexpr int ossl_verify_depth = 5;
@@ -771,7 +863,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> SSLContext::subscribeToPeerCertStatus(c
             return ex_data->subscribeToPeerCertStatus(cert, [=](const bool is_good) { fn(is_good); });
         }
     }
-    return nullptr;
+    throw certs::CertStatusNoExtensionException("No Certificate");
 }
 
 std::shared_ptr<SSLContext> SSLContext::for_client(const ConfigCommon &conf, const evbase &loop) {

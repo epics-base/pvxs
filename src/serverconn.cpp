@@ -240,7 +240,7 @@ void ServerConn::retryConnectionValidation()
 
     if (has_pending_validation) {
         // Process the stored validation data
-        processConnectionValidation(pending_selected, pending_auth);
+        proceedWithConnectionValidation();
     }
 }
 #endif
@@ -288,15 +288,10 @@ void ServerConn::handle_CONNECTION_VALIDATION()
     pending_auth = auth;
     has_pending_validation = true;
 
-    // Process the validation
-    processConnectionValidation(selected, auth);
-}
-
-void ServerConn::processConnectionValidation(const std::string& selected, const Value& auth)
-{
     log_debug_printf(connsetup, "Client %s authenticates using %s and %s\n",
                      peerName.c_str(), selected.c_str(),
                      std::string(SB()<<auth).c_str());
+
 
     auto C(std::make_shared<server::ClientCredentials>(*cred));
 #ifdef PVXS_ENABLE_OPENSSL
@@ -305,25 +300,21 @@ void ServerConn::processConnectionValidation(const std::string& selected, const 
 
     if(selected=="ca") {
         auth["user"].as<std::string>([&C, &selected](const std::string& user) {
+            const auto pos = user.find_last_of('/');
+            if ( pos  == std::string::npos) {
+                C->account = user;
+            } else {
+                C->account = user.substr(pos + 1);
+            }
             C->method = selected;
-            C->account = user;
         });
     }
 #ifdef PVXS_ENABLE_OPENSSL
+    // Don't rely on the selected being "x509" - see Hacker Central
     else if (iface->isTLS && selected == "x509" && bev) {
         const auto ctx = bufferevent_openssl_get_ssl(bev.get());
         assert(ctx);
         ossl::SSLContext::getPeerCredentials(*C, ctx);
-
-        // Check peer certificate status if required
-        if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
-            log_debug_printf(connsetup, "Client %s certificate status not ready, will retry in 100ms\n", peerName.c_str());
-
-            // Schedule a retry after a short delay
-            constexpr timeval retry_delay{0, 1000}; // 1ms
-            event_add(authRetryTimer.get(), &retry_delay);
-            return; // Backoff - don't complete authentication yet
-        }
     }
 #endif
 
@@ -333,6 +324,7 @@ void ServerConn::processConnectionValidation(const std::string& selected, const 
     C->raw = auth;
 
     cred = std::move(C);
+
     log_debug_printf(connsetup, "Client credentials. account: %s, method: %s, authority: %s\n",
                      cred->account.c_str(), cred->method.c_str(), cred->authority.c_str());
 
@@ -342,6 +334,66 @@ void ServerConn::processConnectionValidation(const std::string& selected, const 
         return;
     }
     log_debug_printf(connsetup, "selected-%s: Client %s selects auth \"%s\" as \"%s\" on \"%s\" authority\n", selected.c_str(), peerName.c_str(), cred->method.c_str(), cred->account.c_str(), cred->authority.c_str());
+
+    // Proceed with the validation
+    proceedWithConnectionValidation();
+}
+
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief Peer status callback
+ *
+ * This function is called when the peer status changes.
+ *
+ * It will be given a boolean value indicating whether the peer certificate status is good or not.
+ *
+ * - If the peer certificate status is GOOD, and we're waiting for certificate validity
+ *   before proceeding with connection validation, it will proceed with connection validation.
+ * - If the peer certificate status is not GOOD, it will disconnect this client connection.
+ */
+void ServerConn::peerStatusCallback(bool enable) {
+    if ( enable ) {
+        if ( state == AwaitingPeerCertValidity ) {
+            proceedWithConnectionValidation();
+        }
+    } else {
+        disconnect();
+    }
+}
+#endif
+
+
+/**
+ * @brief Proceed with connection validation
+ *
+ * This function is called to proceed with connection validation.
+ *
+ * - If the peer does not have a certificate, or has a certificate that does not require us to wait for certificate validity,
+ *   then we will proceed with connection validation.
+ *
+ * - If the peer has a certificate that requires us to wait for certificate validity before proceeding with connection validation,
+ *   and the peer certificate status is GOOD, then we will proceed with connection validation.
+ *
+ * - If the peer has a certificate that requires us to wait for certificate validity before proceeding with connection validation,
+ *   and the peer certificate status is not GOOD, then we will set the state to AwaitingPeerCertValidity and return.
+ */
+void ServerConn::proceedWithConnectionValidation()
+{
+#ifdef PVXS_ENABLE_OPENSSL
+    if (iface->isTLS && bev) {
+        const auto ctx = bufferevent_openssl_get_ssl(bev.get());
+        assert(ctx);
+
+        // Check peer certificate status if required
+        // we won't be subscribed if we don't need to check peer status before continuing
+        if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
+            log_debug_printf(connsetup, "Client %s certificate status not ready, will retry in 100ms\n", peerName.c_str());
+
+            state = AwaitingPeerCertValidity;
+            return; // Backoff - don't complete validation yet until we get the status were waiting for
+        }
+    }
+#endif
 
     // Clear pending validation data since we're completing
     has_pending_validation = false;
@@ -483,26 +535,6 @@ void ServerConn::cleanup()
 
 void ServerConn::bevEvent(const short events) {
     ConnBase::bevEvent(events);
-
-#ifdef PVXS_ENABLE_OPENSSL
-    // Handle BEV_EVENT_CONNECTED specifically for a server
-    if (bev && events & BEV_EVENT_CONNECTED) {
-        const auto ctx = bufferevent_openssl_get_ssl(bev.get());
-        if (ctx) {
-            if (!peer_status) {
-                try {
-                    peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [](const bool enable) {});
-                    if (!peer_status)
-                        log_debug_printf(connio, "no certificate status to subscribe to for %s %s\n", peerLabel(), peerName.c_str());
-                } catch (certs::CertStatusNoExtensionException &e) {
-                    log_debug_printf(connio, "status monitoring not required for %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
-                } catch (std::exception &e) {
-                    log_debug_printf(connio, "unexpected error subscribing to %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
-                }
-            }
-        }
-    }
-#endif
 }
 
 void ServerConn::bevRead()

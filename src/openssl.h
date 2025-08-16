@@ -404,7 +404,7 @@ struct SSLContext {
     explicit SSLContext(evbase loop);
     SSLContext(const SSLContext& o);
     SSLContext(SSLContext& o) noexcept;
-
+    ~SSLContext();
 
     explicit operator bool() const { return ctx.get(); }
 
@@ -420,6 +420,11 @@ struct SSLContext {
     certs::cert_status_ptr<certs::CertStatusManager> cert_monitor;
     // The entity certificate status - note that this is a PVA certificate status because we will need the OCSP stapling data if this is a server
     certs::PVACertificateStatus cert_status{};
+    // Timer for entity certificate status validity expiration
+    evevent status_validity_timer;
+
+    static void statusValidityTimerCallback(evutil_socket_t fd, short evt, void* raw);
+    void restartStatusValidityTimerFromCertStatus() const;
 };
 
 PVXS_API void configureServerOCSPCallback(void* server, SSL* ssl);

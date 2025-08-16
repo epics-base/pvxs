@@ -141,7 +141,20 @@ void ConnBase::handle_MESSAGE() {};
 
 void ConnBase::bevEvent(const short events) {
 #ifdef PVXS_ENABLE_OPENSSL
-    if (bev && isTLS) {
+    if (bev && (events & BEV_EVENT_CONNECTED)) {
+        const auto ctx = bufferevent_openssl_get_ssl(bev.get());
+        if (ctx) {
+            if (!peer_status) {
+                try {
+                    peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [this](const bool enable) { peerStatusCallback(enable); });
+                } catch (certs::CertStatusNoExtensionException &e) {
+                    log_debug_printf(connio, "no status to monitor for peer %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
+                } catch (std::exception &e) {
+                    log_err_printf(connio, "unexpected error subscribing to peer %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
+                }
+            }
+        }
+
         if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
             while (const auto err = bufferevent_get_openssl_error(bev.get())) {
                 const auto error_reason = ERR_reason_error_string(err);

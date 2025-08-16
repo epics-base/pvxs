@@ -272,10 +272,12 @@ public:
         return Server(*this);
     }
 
+#ifdef PVXS_ENABLE_OPENSSL
     //! Create a new Server using the current configuration with a custom file event callback
-    inline Server build(CustomServerCallback &cert_file_event_callback) const {
+    Server build(const CustomServerCallback &cert_file_event_callback) const {
         return Server(*this, cert_file_event_callback);
     }
+#endif
 
 #ifdef PVXS_EXPERT_API_ENABLED
     // for protocol compatibility testing
