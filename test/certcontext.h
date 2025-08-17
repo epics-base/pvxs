@@ -1,5 +1,5 @@
 /**
-* Copyright - See the COPYRIGHT that is included with this distribution.
+ * Copyright - See the COPYRIGHT that is included with this distribution.
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
@@ -7,6 +7,7 @@
 #ifndef CERT_CONTEXT_H
 #define CERT_CONTEXT_H
 
+#include <unordered_map>
 #include <vector>
 
 #include <epicsUnitTest.h>
@@ -74,42 +75,47 @@ namespace pvxs {
  * @brief tags for gen_test_certs generated certs
  */
 namespace tag {
-struct cert_auth          {};   struct super_server      {};
-struct intermediate_server{};   struct server1           {};
-struct server2            {};   struct ioc               {};
-struct client1            {};   struct client2           {};
-} // namespace tag
+struct cert_auth {};
+struct super_server {};
+struct intermediate_server {};
+struct server1 {};
+struct server2 {};
+struct ioc {};
+struct client1 {};
+struct client2 {};
+}  // namespace tag
 
 namespace certs {
-
 
 /**
  * @brief define the traits to be used in the template class CertCtx below that will describe the individual certs
  * @tparam Tag the individual cert discriminator that will come from the CertCtx template
  */
 struct TestCert;
-template<typename Tag> struct CertTraits;
-template<typename Tag> TestCert getTestCert();
+template <typename Tag>
+struct CertTraits;
+template <typename Tag>
+TestCert getTestCert();
 
-#define TRAITS(TAG, FILE, PWD, SERIAL)            \
-template<> struct CertTraits<tag::TAG> {          \
-static constexpr const char *name  = #TAG;        \
-static constexpr const char *file  = FILE;        \
-static constexpr const char *pwd   = PWD;         \
-static constexpr std::uint64_t   serial = SERIAL; \
-}
+#define TRAITS(TAG, FILE, PWD, SERIAL)                  \
+    template <>                                         \
+    struct CertTraits<tag::TAG> {                       \
+        static constexpr const char *name = #TAG;       \
+        static constexpr const char *file = FILE;       \
+        static constexpr const char *pwd = PWD;         \
+        static constexpr std::uint64_t serial = SERIAL; \
+    }
 
 constexpr std::uint64_t FIRST_SERIAL = 9876543210ULL;
-TRAITS(cert_auth,          CERT_AUTH_KEYCHAIN_FILE,           CERT_AUTH_KEYCHAIN_FILE_PWD,              FIRST_SERIAL+0);
-TRAITS(super_server,       SUPER_SERVER_KEYCHAIN_FILE,        SUPER_SERVER_KEYCHAIN_FILE_PWD,           FIRST_SERIAL+1);
-TRAITS(intermediate_server,INTERMEDIATE_SERVER_KEYCHAIN_FILE, INTERMEDIATE_SERVER_KEYCHAIN_FILE_PWD,    FIRST_SERIAL+2);
-TRAITS(server1,            SERVER1_KEYCHAIN_FILE,             SERVER1_KEYCHAIN_FILE_PWD,                FIRST_SERIAL+3);
-TRAITS(server2,            SERVER2_KEYCHAIN_FILE,             SERVER2_KEYCHAIN_FILE_PWD,                FIRST_SERIAL+4);
-TRAITS(ioc,                IOC1_KEYCHAIN_FILE,                IOC1_KEYCHAIN_FILE_PWD,                   FIRST_SERIAL+5);
-TRAITS(client1,            CLIENT1_KEYCHAIN_FILE,             CLIENT1_KEYCHAIN_FILE_PWD,                FIRST_SERIAL+6);
-TRAITS(client2,            CLIENT2_KEYCHAIN_FILE,             CLIENT2_KEYCHAIN_FILE_PWD,                FIRST_SERIAL+7);
+TRAITS(cert_auth, CERT_AUTH_KEYCHAIN_FILE, CERT_AUTH_KEYCHAIN_FILE_PWD, FIRST_SERIAL + 0);
+TRAITS(super_server, SUPER_SERVER_KEYCHAIN_FILE, SUPER_SERVER_KEYCHAIN_FILE_PWD, FIRST_SERIAL + 1);
+TRAITS(intermediate_server, INTERMEDIATE_SERVER_KEYCHAIN_FILE, INTERMEDIATE_SERVER_KEYCHAIN_FILE_PWD, FIRST_SERIAL + 2);
+TRAITS(server1, SERVER1_KEYCHAIN_FILE, SERVER1_KEYCHAIN_FILE_PWD, FIRST_SERIAL + 3);
+TRAITS(server2, SERVER2_KEYCHAIN_FILE, SERVER2_KEYCHAIN_FILE_PWD, FIRST_SERIAL + 4);
+TRAITS(ioc, IOC1_KEYCHAIN_FILE, IOC1_KEYCHAIN_FILE_PWD, FIRST_SERIAL + 5);
+TRAITS(client1, CLIENT1_KEYCHAIN_FILE, CLIENT1_KEYCHAIN_FILE_PWD, FIRST_SERIAL + 6);
+TRAITS(client2, CLIENT2_KEYCHAIN_FILE, CLIENT2_KEYCHAIN_FILE_PWD, FIRST_SERIAL + 7);
 #undef TRAITS
-
 
 /**
  * @class TestCert
@@ -134,13 +140,14 @@ struct TestCert {
 
     TestCert &operator=(const TestCert &) = delete;
 
-    TestCert(TestCert &&other) noexcept { *this = std::move(other); }
+    TestCert(TestCert &&other) noexcept {
+        *this = std::move(other);
+    }
 
     explicit TestCert(ossl_ptr<X509> cert,
                       ossl_shared_ptr<STACK_OF(X509)> chain = nullptr,
                       ossl_ptr<EVP_PKEY> pkey = nullptr)
-        : cert(std::move(cert)), pkey(std::move(pkey)), chain(std::move(chain)), trusted_store(createTrustStore()) {
-    }
+        : cert(std::move(cert)), pkey(std::move(pkey)), chain(std::move(chain)), trusted_store(createTrustStore()) {}
 
     TestCert &operator=(TestCert &&rhs) noexcept {
         std::swap(cert, rhs.cert);
@@ -152,29 +159,33 @@ struct TestCert {
 
     ossl_ptr<X509_STORE> createTrustStore() const {
         auto trusted_store = ossl_ptr<X509_STORE>(X509_STORE_new(), false);
-        if (!trusted_store) throw std::runtime_error("X509_STORE_add_cert");
+        if (!trusted_store)
+            throw std::runtime_error("X509_STORE_add_cert");
         if (chain && (sk_X509_num(chain.get()) > 0)) {
-            const ossl_ptr<X509> &root_cert = ossl_ptr<X509>(sk_X509_value(chain.get(), sk_X509_num(chain.get())-1));
-            if (!X509_STORE_add_cert(trusted_store.get(), root_cert.get())) throw std::runtime_error(
-                "X509_STORE_add_cert");
+            const ossl_ptr<X509> &root_cert = ossl_ptr<X509>(sk_X509_value(chain.get(), sk_X509_num(chain.get()) - 1));
+            if (!X509_STORE_add_cert(trusted_store.get(), root_cert.get()))
+                throw std::runtime_error("X509_STORE_add_cert");
         } else {
-            if (!X509_STORE_add_cert(trusted_store.get(), cert.get())) throw std::runtime_error("X509_STORE_add_cert");
+            if (!X509_STORE_add_cert(trusted_store.get(), cert.get()))
+                throw std::runtime_error("X509_STORE_add_cert");
         }
         return trusted_store;
     }
 
-    explicit operator bool() const { return cert && pkey; }
+    explicit operator bool() const {
+        return cert && pkey;
+    }
 };
 
 /**
  * @brief The template class to use for test certs.  It uses traits to set values
  * @tparam Tag the tag to use as the certificate discriminator to pick up the correct traits
  */
-template<typename Tag>
+template <typename Tag>
 struct CertCtx {
     using traits = CertTraits<Tag>;
 
-    std::string name; // The name of this trait
+    std::string name;  // The name of this trait
     TestCert cert;
     Value status_val{CertStatus::getStatusPrototype()};
     std::string pv_name;
@@ -189,7 +200,9 @@ struct CertCtx {
         }
     }
 
-    static constexpr std::uint64_t serial() { return traits::serial; }
+    static constexpr std::uint64_t serial() {
+        return traits::serial;
+    }
 };
 
 /**
@@ -222,7 +235,7 @@ void setValue(Value &target, const std::string &field, const Type &new_value) {
  * @error If there is any error opening the file, reading the file, or parsing the PKCS#12 object,
  *        a TestCert object with nullptr values is returned and diagnostic messages are logged.
  */
-template<typename Tag>
+template <typename Tag>
 TestCert getTestCert() {
     using traits = CertTraits<Tag>;
 
@@ -263,16 +276,16 @@ TestCert getTestCert() {
         throw std::runtime_error(SB() << "Error loading certificate: " << filename.c_str());
     }
 
-    chain = chain_ptr
-                ? ossl_shared_ptr<STACK_OF(X509)>(chain_ptr)
-                : ossl_shared_ptr<STACK_OF(X509)>(sk_X509_new_null());
+    chain =
+        chain_ptr ? ossl_shared_ptr<STACK_OF(X509)>(chain_ptr) : ossl_shared_ptr<STACK_OF(X509)>(sk_X509_new_null());
 
     const auto chain_len = sk_X509_num(chain.get());
     if (filename == CERT_AUTH_KEYCHAIN_FILE)
         testOk(chain_len == 0, "Expected no chain for %s and got %d", filename.c_str(), chain_len);
     else if (filename == SUPER_SERVER_KEYCHAIN_FILE || filename == INTERMEDIATE_SERVER_KEYCHAIN_FILE)
-        testOk( chain_len == 1, "Expected 1 certificate chain for %s and got %d", filename.c_str(), chain_len);
-    else testOk(chain_len == 2, "Expected 2 certificate chain for %s and got %d", filename.c_str(), chain_len);
+        testOk(chain_len == 1, "Expected 1 certificate chain for %s and got %d", filename.c_str(), chain_len);
+    else
+        testOk(chain_len == 2, "Expected 2 certificate chain for %s and got %d", filename.c_str(), chain_len);
 
     // Test issuer load
     const X509_NAME *subject_name = X509_get_subject_name(cert.get());
@@ -289,7 +302,7 @@ TestCert getTestCert() {
  * @param now
  * @param revocation_date
  */
-template<typename Tag>
+template <typename Tag>
 void makeStatusResponse(CertCtx<Tag> &cert_context,
                         const CertStatusFactory &cert_status_factory,
                         const CertDate &now,
@@ -303,15 +316,19 @@ void makeStatusResponse(CertCtx<Tag> &cert_context,
         setValue(cert_context.status_val, "state", cert_context.status.status.s);
         setValue(cert_context.status_val, "ocsp_status.value.index", cert_context.status.ocsp_status.i);
         setValue(cert_context.status_val, "ocsp_status.timeStamp.secondsPastEpoch", now.t - POSIX_TIME_AT_EPICS_EPOCH);
-        setValue(cert_context.status_val, "ocsp_state", (SB() << "**UNCERTIFIED**: " << cert_context.status.ocsp_status.s).str());
+        setValue(cert_context.status_val,
+                 "ocsp_state",
+                 (SB() << "**UNCERTIFIED**: " << cert_context.status.ocsp_status.s).str());
 
         if (!cert_context.status.ocsp_bytes.empty()) {
             setValue<uint32_t>(cert_context.status_val, "ocsp_status.value.index", cert_context.status.ocsp_status.i);
             setValue<std::string>(cert_context.status_val, "ocsp_state", cert_context.status.ocsp_status.s);
             setValue<std::string>(cert_context.status_val, "ocsp_status_date", cert_context.status.status_date.s);
-            setValue<std::string>(cert_context.status_val, "ocsp_certified_until",
+            setValue<std::string>(cert_context.status_val,
+                                  "ocsp_certified_until",
                                   cert_context.status.status_valid_until_date.s);
-            setValue<std::string>(cert_context.status_val, "ocsp_revocation_date",
+            setValue<std::string>(cert_context.status_val,
+                                  "ocsp_revocation_date",
                                   cert_context.status.revocation_date.s);
             auto ocsp_bytes = shared_array<const uint8_t>(cert_context.status.ocsp_bytes.begin(),
                                                           cert_context.status.ocsp_bytes.end());
@@ -322,22 +339,26 @@ void makeStatusResponse(CertCtx<Tag> &cert_context,
 
         auto converted_response = PVACertificateStatus(cert_context.status_val, cert_context.cert.trusted_store.get());
         testOk(converted_response == cert_context.status,
-               "Converted status response matches expected status response for %s", cert_context.name.c_str());
+               "Converted status response matches expected status response for %s",
+               cert_context.name.c_str());
         const auto converted_ocsp_byte_len = converted_response.ocsp_bytes.size();
         const auto expected_ocsp_byte_len = cert_context.status.ocsp_bytes.size();
         testOk(converted_ocsp_byte_len == expected_ocsp_byte_len,
-               "Converted OCSP byte len (%lu) matches expected OCSP byte len (%zu)", converted_ocsp_byte_len,
+               "Converted OCSP byte len (%lu) matches expected OCSP byte len (%zu)",
+               converted_ocsp_byte_len,
                expected_ocsp_byte_len);
 
         if (!cert_context.pending.empty()) {
             cert_context.pending.erase(cert_context.pending.begin());
             if (cert_context.pending.empty()) {
                 auto status = cert_context.pending[0];
-                cert_context.status = (status == REVOKED)
-                                          ? cert_status_factory.createPVACertificateStatus(
-                                              cert_context.cert.cert, status, now, revocation_date.t)
-                                          : cert_status_factory.createPVACertificateStatus(
-                                              cert_context.cert.cert, status, now);
+                cert_context.status =
+                    (status == REVOKED)
+                        ? cert_status_factory.createPVACertificateStatus(cert_context.cert.cert,
+                                                                         status,
+                                                                         now,
+                                                                         revocation_date.t)
+                        : cert_status_factory.createPVACertificateStatus(cert_context.cert.cert, status, now);
             }
         }
     } catch (std::exception &e) {
@@ -345,30 +366,37 @@ void makeStatusResponse(CertCtx<Tag> &cert_context,
     }
 }
 
-template<typename Tag>
+template <typename Tag>
 void createCertStatus(CertCtx<Tag> &cert_context,
                       std::vector<certstatus_t> desired,
                       const CertStatusFactory &cert_status_factory,
                       const CertDate &now,
                       const CertDate &revocation_date) {
     cert_context.pending = std::move(desired);
-    if (cert_context.pending.empty()) throw std::logic_error("empty status list");
+    if (cert_context.pending.empty())
+        throw std::logic_error("empty status list");
 
     const auto status = cert_context.pending.front();
-    cert_context.status = (status == REVOKED)
-                     ? cert_status_factory.createPVACertificateStatus(cert_context.cert.cert, status, now, revocation_date.t)
-                     : cert_status_factory.createPVACertificateStatus(cert_context.cert.cert, status, now);
+    cert_context.status =
+        (status == REVOKED)
+            ? cert_status_factory.createPVACertificateStatus(cert_context.cert.cert, status, now, revocation_date.t)
+            : cert_status_factory.createPVACertificateStatus(cert_context.cert.cert, status, now);
 }
 
-template<typename Tag, typename SPV>
-bool postValueCase(std::uint64_t requested_serial, SPV &shared_pv, const std::string &name, CertCtx<Tag> &cert_context, bool first) {
-    if (requested_serial != cert_context.serial()) return false;
+template <typename Tag, typename SPV>
+bool postValueCase(std::uint64_t requested_serial,
+                   SPV &shared_pv,
+                   const std::string &name,
+                   CertCtx<Tag> &cert_context,
+                   bool first) {
+    if (requested_serial != cert_context.serial())
+        return false;
     cert_context.status_val.mark();
     first ? shared_pv.open(name, cert_context.status_val) : shared_pv.post(name, cert_context.status_val);
     return true;
 }
 
-template<typename Tag>
+template <typename Tag>
 void testStatusRequest(CertCtx<Tag> &cert_context, client::Context &client, X509_STORE *trust_store) {
     auto status_value = client.get(cert_context.pv_name).exec()->wait(5.0);
     auto pva_certificate_status = PVACertificateStatus(status_value, trust_store);
@@ -377,7 +405,7 @@ void testStatusRequest(CertCtx<Tag> &cert_context, client::Context &client, X509
 
 typedef std::unordered_map<std::string, std::shared_ptr<std::atomic<uint32_t> > > CounterMap;
 
-template<typename Tag>
+template <typename Tag>
 void resetCounter(CounterMap &counters, const CertCtx<Tag> &cert_context) {
     counters[cert_context.pv_name] = std::make_shared<std::atomic<uint32_t> >(0u);
 }
@@ -390,16 +418,20 @@ void resetCounter(CounterMap &counters, const CertCtx<Tag> &cert_context) {
  * @param cert_context
  * @param expected
  */
-template<typename Tag>
+template <typename Tag>
 void testCounterEq(const CounterMap &counters, const CertCtx<Tag> &cert_context, const uint32_t expected) {
     const auto it = counters.find(cert_context.pv_name);
     if (it == counters.end()) {
         testFail("No counter stored for PV \"%s\"", cert_context.pv_name.c_str());
         return;
     }
-    testOk(it->second->load() == expected, "Expected counter of requests for %s's cert to be %u, got %u", cert_context.name.c_str(), expected, it->second->load());
+    testOk(it->second->load() == expected,
+           "Expected counter of requests for %s's cert to be %u, got %u",
+           cert_context.name.c_str(),
+           expected,
+           it->second->load());
 }
-} // namespace certs
+}  // namespace certs
 
 namespace server {
 
@@ -407,25 +439,30 @@ class MockSource final : public Source {
     std::shared_ptr<Source> next_;
     std::function<void(const std::string &)> request_counter_;
 
-    public:
-        explicit MockSource(std::shared_ptr<Source> inner,
-                            std::function<void(const std::string &)> request_counter = [](const std::string &) {
-                            })
-            : next_(std::move(inner)), request_counter_(std::move(request_counter)) {
-        }
+ public:
+    explicit MockSource(
+        std::shared_ptr<Source> inner,
+        std::function<void(const std::string &)> request_counter = [](const std::string &) {})
+        : next_(std::move(inner)), request_counter_(std::move(request_counter)) {}
 
-        void onSearch(Search &req) override { next_->onSearch(req); }
+    void onSearch(Search &req) override {
+        next_->onSearch(req);
+    }
 
-        List onList() override { return next_->onList(); }
+    List onList() override {
+        return next_->onList();
+    }
 
-        void show(std::ostream &strm) override { next_->show(strm); }
+    void show(std::ostream &strm) override {
+        next_->show(strm);
+    }
 
-        void onCreate(std::unique_ptr<ChannelControl> &&chan) override {
-            request_counter_(chan->name());
-            next_->onCreate(std::move(chan));
-        }
+    void onCreate(std::unique_ptr<ChannelControl> &&chan) override {
+        request_counter_(chan->name());
+        next_->onCreate(std::move(chan));
+    }
 };
 
-} // server
-} // pvxs
-#endif //CERT_CONTEXT_H
+}  // namespace server
+}  // namespace pvxs
+#endif  // CERT_CONTEXT_H

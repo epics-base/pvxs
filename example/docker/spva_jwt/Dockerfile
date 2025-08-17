@@ -9,13 +9,11 @@ ENV PROJECT_HOME=/opt/epics
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-ENTRYPOINT ["top", "-b"]
-
 # Install Python and required packages
 RUN apt-get update && \
     apt-get install -y \
       python3 python3-pip \
-      python3-flask python3-pyjwt python3-cryptography \
+      python3-flask python3-jwt python3-cryptography \
       curl && \
     rm -rf /var/lib/apt/lists/*
 
