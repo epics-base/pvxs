@@ -98,11 +98,6 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
     // While Connected, periodic Echo
     const evevent echoTimer;
 
-#ifdef PVXS_ENABLE_OPENSSL
-    // Timer for retrying channel creation when waiting for certificate status
-    const evevent channelRetryTimer;
-#endif
-
     bool ready = false;
     bool nameserver = false;
 

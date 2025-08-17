@@ -121,11 +121,6 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
 
     std::shared_ptr<const server::ClientCredentials> cred;
 
-#ifdef PVXS_ENABLE_OPENSSL
-    // Timer for retrying connection validation when waiting for certificate status
-    const evevent authRetryTimer;
-#endif
-
     uint32_t nextSID=0x07050301;
     std::map<uint32_t, std::shared_ptr<ServerChan> > chanBySID;
     std::map<uint32_t, std::shared_ptr<ServerOp> > opByIOID;

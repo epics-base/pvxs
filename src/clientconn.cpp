@@ -107,9 +107,6 @@ Connection::Connection(const std::shared_ptr<ContextImpl>& context,
     ,context(context)
     ,echoTimer(__FILE__, __LINE__,
                event_new(context->tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &tickEchoS, this))
-#ifdef PVXS_ENABLE_OPENSSL
-    , channelRetryTimer(event_new(context->tcp_loop.base, -1, EV_TIMEOUT, &retryChannelCreationS, this))
-#endif
 {
     if(reconn) {
         log_debug_printf(io, "start holdoff timer for %s\n", peerName.c_str());

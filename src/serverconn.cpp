@@ -84,9 +84,6 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
             SockAddr(peer))
     ,iface(iface)
     ,tcp_tx_limit(evsocket::get_buffer_size(sock, true) * tcp_tx_limit_mult)
-#ifdef PVXS_ENABLE_OPENSSL
-    ,authRetryTimer(event_new(iface->server->acceptor_loop.base, -1, EV_TIMEOUT, &retryConnectionValidationS, this))
-#endif
 {
     log_debug_printf(connio, "Client %s connects%s, RX readahead %zu TX limit %zu\n", peerName.c_str(),
 #ifdef PVXS_ENABLE_OPENSSL
