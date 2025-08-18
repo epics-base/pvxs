@@ -128,8 +128,7 @@ struct SSLPeerStatusAndMonitor {
      * @param ex_data_ptr the ex_data structure that the list of peer status and monitors is stored, for cleanup
      * @param fn function to call when the status changes
      */
-    SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const std::function<void(bool)>& fn)
-        : fn(fn), serial_number{serial_number}, ex_data_ptr{ex_data_ptr} {}
+    SSLPeerStatusAndMonitor(serial_number_t serial_number, CertStatusExData* ex_data_ptr, const std::function<void(bool)>& fn);
 
     /**
      * @brief Constructor when no monitoring is needed
@@ -137,14 +136,17 @@ struct SSLPeerStatusAndMonitor {
      * @param ex_data_ptr the ex_data structure that the list of peer status and monitors is stored, for cleanup
      * @param status permanent status to set
      */
-    SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const certs::CertificateStatus& status)
-        : serial_number{serial_number}, ex_data_ptr{ex_data_ptr}, status{status} {}
+    SSLPeerStatusAndMonitor(serial_number_t serial_number, CertStatusExData* ex_data_ptr, const certs::CertificateStatus& status);
 
     void updateStatus(const certs::CertificateStatus& status);
 
     // Clean up peer status and monitor
     // Also remove from peer cert status map
     ~SSLPeerStatusAndMonitor();
+    evevent status_validity_timer;
+
+    static void statusValidityTimerCallback(evutil_socket_t fd, short evt, void* raw);
+    void restartStatusValidityTimerFromCertStatus();
 
     bool isSubscribed() const { return subscribed; }
 };

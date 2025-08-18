@@ -602,10 +602,67 @@ void configureServerOCSPCallback(void *server_ptr, SSL *) {
  * peer status and monitor from the tls context's list of statuses and monitors
  */
 SSLPeerStatusAndMonitor::~SSLPeerStatusAndMonitor() {
-    Guard G(lock);
-    // Remove self from the global list of peer statuses
-    ex_data_ptr->removePeerStatusAndMonitor(serial_number);
+    if (status_validity_timer) {
+        Guard G(lock);
+        event_del(status_validity_timer.get());
+    }
+    {
+        Guard G(lock);
+        // Remove self from the global list of peer statuses
+        ex_data_ptr->removePeerStatusAndMonitor(serial_number);
+    }
     subscribed = false;
+}
+
+/**
+ * @brief Callback triggered when the certificate status validity timer expires
+ *
+ * This function is invoked when the certificate status validity timer expires, indicating
+ * that the certificate status has become invalid. It notifies any registered listeners about
+ * this change in status.
+ *
+ * @param fd The file descriptor associated with the event (not used in this function)
+ * @param evt The event type that triggered the callback
+ * @param raw Pointer to the SSLPeerStatusAndMonitor instance managing the certificate status
+ */
+void SSLPeerStatusAndMonitor::statusValidityTimerCallback(evutil_socket_t fd, short evt, void* raw) {
+    const auto* peer_status_and_monitor = static_cast<SSLPeerStatusAndMonitor*>(raw);
+    log_debug_printf(watcher, "Certificate status validity expired - notifying listeners%s\n", "");
+
+    // Set notify listeners that status has changed
+    if (peer_status_and_monitor->fn) peer_status_and_monitor->fn(false);
+}
+
+/**
+ * @brief Restart the status validity timer based on the validity of the certificate.
+ *
+ * This method handles restarting a timer that monitors the validity of a peer certificate status.
+ * It ensures that any existing timers are canceled and calculates the remaining status validity
+ * duration to set up a new timer accordingly.
+ *
+ * If the certificate is marked as non-permanent and has a status valid expiration date
+ * greater than the current time, then the timer is scheduled to trigger after the remaining
+ * status validity period. Logs are generated for debugging purposes to indicate the countdown.
+ */
+void SSLPeerStatusAndMonitor::restartStatusValidityTimerFromCertStatus() {
+    if (!status_validity_timer.get()) return; // Timer is not initialized
+
+    // Cancel any existing status validity timer
+    if (event_pending(status_validity_timer.get(), EV_TIMEOUT, nullptr)) {
+        Guard G(lock);
+        event_del(status_validity_timer.get());
+    }
+
+    // Calculate the remaining time from the status validity date
+    if (!status.isPermanent() && status.status_valid_until_date.t > 0) {
+        const time_t now = time(nullptr);
+        if (status.status_valid_until_date.t > now) {
+            const auto status_validity_seconds_remaining = status.status_valid_until_date.t - now;
+            log_debug_printf(watcher, "Counting down Peer Certificate validity: %ld seconds\n", status_validity_seconds_remaining);
+            const timeval delay{status_validity_seconds_remaining};
+            event_add(status_validity_timer.get(), &delay);
+        }
+    }
 }
 
 /**
@@ -675,6 +732,16 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(seri
     return new_peer_status;
 };
 
+SSLPeerStatusAndMonitor::SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const std::function<void(bool)>& fn)
+    : fn(fn), serial_number{serial_number}, ex_data_ptr{ex_data_ptr}
+    , status_validity_timer(event_new(ex_data_ptr->loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create a new timer for this instance
+    {}
+
+SSLPeerStatusAndMonitor::SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const certs::CertificateStatus& status)
+    : serial_number{serial_number}, ex_data_ptr{ex_data_ptr}, status{status}
+    , status_validity_timer(event_new(ex_data_ptr->loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create a new timer for this instance
+    {}
+
 /**
  * @brief Update the status with the given value and call the callback if supplied and restart the status validity timer
  * @param new_status the new status to set
@@ -688,6 +755,9 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
     // Call the callback if there has been any state change
     const auto is_good = status.isGood();
     if (fn && is_good != was_good) fn(is_good);
+
+    // Restart status validity countdown timer for this new status
+    restartStatusValidityTimerFromCertStatus();
 }
 
 std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::subscribeToPeerCertStatus(X509 *cert_ptr, std::function<void(bool)> fn) noexcept {
