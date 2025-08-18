@@ -170,7 +170,7 @@ struct CertStatusExData {
     // To lock changes to ex data
     epicsMutex lock;
     // The event loop to create timers for the status validity countdown
-    const evbase& loop;
+    const evbase loop;
     // The entity certificate
     ossl_ptr<X509> cert{};
     // The Trusted Root Certificate Authority
@@ -196,7 +196,7 @@ struct CertStatusExData {
      * @param status_check_enabled - Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not
      * configured
      */
-    CertStatusExData(const evbase& loop, bool status_check_enabled) : loop(loop), status_check_enabled(status_check_enabled) {}
+    CertStatusExData(const evbase loop, const bool status_check_enabled) : loop(loop), status_check_enabled(status_check_enabled) {}
 
     /**
      * @brief Returns the CertStatusExData from the SSL_CTX
@@ -212,7 +212,7 @@ struct CertStatusExData {
      */
     static CertStatusExData* fromSSL(SSL* ssl);
 
-    void removePeerStatusAndMonitor(serial_number_t serial_number) {
+    void removePeerStatusAndMonitor(const serial_number_t serial_number) {
         Guard G(lock);
         peer_statuses.erase(serial_number);
     }

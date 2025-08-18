@@ -362,6 +362,7 @@ struct ContextImpl : std::enable_shared_from_this<ContextImpl>
     // explicitly broken by Context::close(), Context::cacheClear(), or ContextImpl::cacheClean()
     // chanByName key'd by (pv, forceServer)
     std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
+    const evbase tcp_loop;
 
 #ifdef PVXS_ENABLE_OPENSSL
     std::shared_ptr<ossl::SSLContext> tls_context;
@@ -382,7 +383,6 @@ struct ContextImpl : std::enable_shared_from_this<ContextImpl>
 
     std::vector<std::pair<SockEndpoint, std::shared_ptr<Connection>>> nameServers;
 
-    const evbase tcp_loop;
     const evevent searchRx4, searchRx6;
     const evevent searchTimer;
     const evevent initialSearcher;
