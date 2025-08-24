@@ -21,7 +21,7 @@ void SecurityClient::update(ASMEMBERPVT mem, int asl, Credentials& cred) {
     temp.cli.resize(cred.cred.size(), nullptr);
 
     for (size_t i = 0, N = temp.cli.size(); i < N; i++) {
-        /* asAddClient() fails secure to no-permission */
+        /* asAddClientIdentity() fails secure to no-permission */
         (void)asAddClientIdentity(&temp.cli[i], mem, asl,
                            (ASIDENTITY){
                                .user = cred.cred[i].c_str(),
@@ -36,7 +36,30 @@ void SecurityClient::update(ASMEMBERPVT mem, int asl, Credentials& cred) {
 }
 
 void SecurityClient::update(dbChannel* ch, Credentials& cred) {
+#if EPICS_VERSION_INT >= EPICS_SPVA_COMPAT_VERSION_INT
     update(dbChannelRecord(ch)->asp, dbChannelFldDes(ch)->as_level, cred);
+#else
+    SecurityClient temp;
+    temp.cli.resize(cred.cred.size(), nullptr);
+
+    for (size_t i = 0, N = temp.cli.size(); i < N; i++) {
+        // Append "x509/" to any account that is isTLS
+        std::string user = cred.cred[i];
+        if (cred.method == "x509") {
+            user = cred.method +  "/" + user;
+        }
+
+        /* asAddClient() fails secure to no-permission */
+        (void)asAddClient(&temp.cli[i],
+                dbChannelRecord(ch)->asp,
+                dbChannelFldDes(ch)->as_level,
+                user.c_str(),
+                // TODO switch to vector of char to accommodate inplace modifications to string
+                const_cast<char*>(cred.host.data()));
+    }
+
+    cli.swap(temp.cli);
+    #endif
 }
 
 SecurityClient::~SecurityClient() {
