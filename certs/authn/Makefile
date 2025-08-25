@@ -5,10 +5,10 @@ SRC_DIRS += $(AUTHN)
 SRCS += auth.cpp
 SRCS += configauthn.cpp
 SRCS += ccrmanager.cpp
+SRCS += certstatusmanager.cpp
 
 include $(AUTHN)/std/Makefile
 
-SRCS += certstatusmanager.cpp
 
 #--------------------------------------------
 #  ADD AUTHENTICATOR PLUGINS AFTER THIS LINE

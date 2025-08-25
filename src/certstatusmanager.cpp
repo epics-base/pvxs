@@ -19,12 +19,12 @@
 
 #include <pvxs/client.h>
 #include <pvxs/log.h>
-#include <pvxs/sslinit.h>
 
 #include "certstatus.h"
 #include "certstatusfactory.h"
 #include "configcms.h"
 #include "evhelper.h"
+#include "opensslgbl.h"
 #include "ownedptr.h"
 
 namespace pvxs {

@@ -25,9 +25,9 @@
 
 #include <pvxs/config.h>
 #include <pvxs/log.h>
-#include <pvxs/sslinit.h>
 
 #include "openssl.h"
+#include "opensslgbl.h"
 #include "osiFileName.h"
 #include "ownedptr.h"
 #include "security.h"

@@ -58,7 +58,6 @@
 #include <pvxs/server.h>
 #include <pvxs/sharedpv.h>
 #include <pvxs/sharedwildcardpv.h>
-#include <pvxs/sslinit.h>
 
 #include "auth.h"
 #include "authregistry.h"
@@ -2814,6 +2813,9 @@ int main(int argc, char *argv[]) {
     using namespace pvxs::server;
 
     try {
+        // Initialize SSL
+        pvxs::impl::threadOnce<&pvxs::ossl::osslInit>();
+
         std::map<serial_number_t, time_t> active_status_validity;
         // Get config
         auto config = ConfigCms::fromEnv();
@@ -2828,9 +2830,6 @@ int main(int argc, char *argv[]) {
         auto parse_result = readParameters(argc, argv, program_name, config, authn_config_map, verbose, admin_name);
         if (parse_result)
             exit(parse_result);
-
-        // Initialize SSL
-        pvxs::ossl::sslInit();
 
         // Logger config from environment (so environment overrides verbose setting)
         if (verbose)

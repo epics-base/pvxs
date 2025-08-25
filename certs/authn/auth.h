@@ -21,9 +21,9 @@
 #include "certstatusmanager.h"
 #include "configstd.h"
 #include "openssl.h"
+#include "opensslgbl.h"
 #include "security.h"
 #include "server.h"
-#include "sslinit.h"
 
 #include <CLI/App.hpp>
 
@@ -500,8 +500,6 @@ int runAuthenticator(int argc, char *argv[], std::function<void(ConfigT &, AuthT
     bool retrieved_credentials{false};
 
     try {
-        ossl::sslInit();
-
         auto config = ConfigT::fromEnv();
 
         bool verbose{false}, debug{false}, daemon_mode{false}, force{false};

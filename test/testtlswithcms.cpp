@@ -19,7 +19,6 @@
 #include <pvxs/server.h>
 #include <pvxs/sharedpv.h>
 #include <pvxs/source.h>
-#include <pvxs/sslinit.h>
 #include <pvxs/unittest.h>
 
 #include "certfactory.h"
@@ -27,6 +26,7 @@
 #include "certstatusfactory.h"
 #include "certstatusmanager.h"
 #include "openssl.h"
+#include "opensslgbl.h"
 #include "certcontext.h"
 #include "utilpvt.h"
 
@@ -686,7 +686,7 @@ struct Tester {
  */
 MAIN(testtlswithcms) {
     // Initialize SSL
-    ossl::sslInit();
+    pvxs::impl::threadOnce<&ossl::osslInit>();
 
     testPlan(134);
     testSetup();

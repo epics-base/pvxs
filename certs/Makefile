@@ -33,6 +33,7 @@ pvacms_SRCS += configcms.cpp
 pvacms_SRCS += certstatus.cpp
 pvacms_SRCS += certstatusfactory.cpp
 pvacms_SRCS += credentials.cpp
+pvacms_SRCS += opensslgbl.cpp
 pvacms_SRCS += securityclient.cpp
 
 pvacms_LIBS += $(EPICS_BASE_IOC_LIBS)

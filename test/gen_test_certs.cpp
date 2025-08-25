@@ -27,11 +27,10 @@
 
 #include <epicsGetopt.h>
 
-#include <pvxs/sslinit.h>
-
 #include "certfactory.h"
 #include "ownedptr.h"
 #include "openssl.h"
+#include "opensslgbl.h"
 
 constexpr std::uint64_t TEST_FIRST_SERIAL = 9876543210;
 
@@ -325,7 +324,7 @@ void usage(const char* argv0) {
 int main(int argc, char *argv[])
 {
     try {
-        pvxs::ossl::sslInit();
+        pvxs::impl::threadOnce<&pvxs::ossl::osslInit>();;
         std::string outdir(".");
         {
             int opt;

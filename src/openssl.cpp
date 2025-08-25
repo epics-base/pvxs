@@ -20,13 +20,13 @@
 #include <openssl/pkcs12.h>
 
 #include <pvxs/log.h>
-#include <pvxs/sslinit.h>
 
 #include "certfilefactory.h"
 #include "certstatus.h"
 #include "certstatusmanager.h"
 #include "evhelper.h"
 #include "ownedptr.h"
+#include "opensslgbl.h"
 #include "serverconn.h"
 #include "utilpvt.h"
 
@@ -225,83 +225,15 @@ SSLContext::~SSLContext() {
         event_del(status_validity_timer.get());
     }
 }
+
+CertStatusExData::~CertStatusExData() noexcept = default;
+
 namespace {
 
 constexpr int ossl_verify_depth = 5;
 
 // see NOTE in "man SSL_CTX_set_alpn_protos"
 const unsigned char pva_alpn[] = "\x05pva/1";
-
-struct OSSLGbl {
-    ossl_ptr<OSSL_LIB_CTX> libctx;
-    int SSL_CTX_ex_idx;
-#ifdef PVXS_ENABLE_SSLKEYLOGFILE
-    std::ofstream keylog;
-    epicsMutex keylock;
-#endif
-} *ossl_gbl;
-
-#ifdef PVXS_ENABLE_SSLKEYLOGFILE
-void sslkeylogfile_exit(void *) noexcept {
-    auto gbl = ossl_gbl;
-    try {
-        epicsGuard<epicsMutex> G(gbl->keylock);
-        if (gbl->keylog.is_open()) {
-            gbl->keylog.flush();
-            gbl->keylog.close();
-        }
-    } catch (std::exception &e) {
-        static bool once = false;
-        if (!once) {
-            fprintf(stderr, "Error while writing to SSLKEYLOGFILE\n");
-            once = true;
-        }
-    }
-}
-
-void sslkeylogfile_log(const SSL *, const char *line) noexcept {
-    auto gbl = ossl_gbl;
-    try {
-        epicsGuard<epicsMutex> G(gbl->keylock);
-        if (gbl->keylog.is_open()) {
-            gbl->keylog << line << '\n';
-            gbl->keylog.flush();
-        }
-    } catch (std::exception &e) {
-        static bool once = false;
-        if (!once) {
-            fprintf(stderr, "Error while writing to SSLKEYLOGFILE\n");
-            once = true;
-        }
-    }
-}
-#endif  // PVXS_ENABLE_SSLKEYLOGFILE
-
-void free_SSL_CTX_sidecar(void *, void *ptr, CRYPTO_EX_DATA *, int, long, void *) noexcept {
-    const auto car = static_cast<CertStatusExData *>(ptr);
-    delete car;
-}
-
-void OSSLGbl_init() {
-    ossl_ptr<OSSL_LIB_CTX> ctx(__FILE__, __LINE__, OSSL_LIB_CTX_new());
-    // read $OPENSSL_CONF or eg. /usr/lib/ssl/openssl.cnf
-    (void)CONF_modules_load_file_ex(ctx.get(), nullptr, "pvxs", CONF_MFLAGS_IGNORE_MISSING_FILE | CONF_MFLAGS_IGNORE_RETURN_CODES);
-    std::unique_ptr<OSSLGbl> gbl{new OSSLGbl};
-    gbl->SSL_CTX_ex_idx = SSL_CTX_get_ex_new_index(0, nullptr, nullptr, nullptr, free_SSL_CTX_sidecar);
-#ifdef PVXS_ENABLE_SSLKEYLOGFILE
-    if (auto env = getenv("SSLKEYLOGFILE")) {
-        epicsGuard<epicsMutex> G(gbl->keylock);
-        gbl->keylog.open(env);
-        if (gbl->keylog.is_open()) {
-            epicsAtExit(sslkeylogfile_exit, nullptr);
-            log_warn_printf(setup, "TLS Debug Enabled: logging TLS secrets to %s\n", env);
-        } else {
-            log_err_printf(setup, "TLS Debug Disabled: Unable to open SSL key log file: %s\n", env);
-        }
-    }
-#endif  // PVXS_ENABLE_SSLKEYLOGFILE
-    ossl_gbl = gbl.release();
-}
 
 int ossl_alpn_select(SSL *, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *) {
     unsigned char *selected;
@@ -410,8 +342,7 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
  * context so that they can connect to ssl servers without having a certificate
  */
 std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_for_client, const ConfigCommon &conf, const evbase &loop) {
-    impl::threadOnce<&OSSLGbl_init>();
-    sslInit();
+    impl::threadOnce<&osslInit>();
 
     auto tls_context = std::make_shared<SSLContext>(SSLContext(loop));
     assert(tls_context && "TLS context is null");

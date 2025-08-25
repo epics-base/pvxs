@@ -15,9 +15,6 @@
 
 #include <pvxs/log.h>
 #include <pvxs/server.h>
-#ifdef PVXS_ENABLE_OPENSSL
-#include <pvxs/sslinit.h>
-#endif
 
 #include "utilpvt.h"
 #include "evhelper.h"
@@ -242,9 +239,6 @@ struct App {
 int main(int argc, char *argv[])
 {
     try {
-#ifdef PVXS_ENABLE_OPENSSL
-        ossl::sslInit();
-#endif
         SockAttach attach;
         logger_config_env();
         App app;

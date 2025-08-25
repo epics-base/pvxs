@@ -16,7 +16,6 @@
 #endif
 #include <pvxs/client.h>
 #include <pvxs/log.h>
-#include <pvxs/sslinit.h>
 
 #include <CLI/CLI.hpp>
 
@@ -130,7 +129,6 @@ int readParameters(const int argc, char *argv[], const char *program_name, clien
 
 int main(int argc, char *argv[]) {
     try {
-        ossl::sslInit();
         logger_config_env();
         auto conf = client::Config::fromEnv();
         auto program_name = argv[0];
