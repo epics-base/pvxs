@@ -10,9 +10,6 @@
 #ifndef PVXS_SECURITYCLIENT_H
 #define PVXS_SECURITYCLIENT_H
 
-// The version of epics-base that first contains the new Secure PVAccess API
-#define EPICS_SPVA_COMPAT_VERSION_INT VERSION_INT(7, 0, 9, 1)
-
 #include <vector>
 #include <asLib.h>
 #include <dbChannel.h>

@@ -22,27 +22,7 @@ void SecurityClient::update(ASMEMBERPVT mem, int asl, Credentials& cred) {
 
     for (size_t i = 0, N = temp.cli.size(); i < N; i++) {
         /* asAddClientIdentity() fails secure to no-permission */
-        (void)asAddClientIdentity(&temp.cli[i], mem, asl,
-                           (ASIDENTITY){
-                               .user = cred.cred[i].c_str(),
-                               .host = const_cast<char*>(cred.host.data()),
-                               .method = cred.method.c_str(),
-                               .authority = cred.authority.c_str(),
-                               .protocol = AS_PROTOCOL_TLS }
-        );
-    }
-
-    cli.swap(temp.cli);
-}
-
-void SecurityClient::update(dbChannel* ch, Credentials& cred) {
-#if EPICS_VERSION_INT >= EPICS_SPVA_COMPAT_VERSION_INT
-    update(dbChannelRecord(ch)->asp, dbChannelFldDes(ch)->as_level, cred);
-#else
-    SecurityClient temp;
-    temp.cli.resize(cred.cred.size(), nullptr);
-
-    for (size_t i = 0, N = temp.cli.size(); i < N; i++) {
+#ifndef EPICS_ASLIB_HAS_IDENTITY
         // Append "x509/" to any account that is isTLS
         std::string user = cred.cred[i];
         if (cred.method == "x509") {
@@ -51,15 +31,27 @@ void SecurityClient::update(dbChannel* ch, Credentials& cred) {
 
         /* asAddClient() fails secure to no-permission */
         (void)asAddClient(&temp.cli[i],
-                dbChannelRecord(ch)->asp,
-                dbChannelFldDes(ch)->as_level,
+                mem, asl,
                 user.c_str(),
                 // TODO switch to vector of char to accommodate inplace modifications to string
                 const_cast<char*>(cred.host.data()));
+#else
+        (void)asAddClientIdentity(&temp.cli[i], mem, asl,
+                           (ASIDENTITY){
+                               .user = cred.cred[i].c_str(),
+                               .host = const_cast<char*>(cred.host.data()),
+                               .method = cred.method.c_str(),
+                               .authority = cred.authority.c_str(),
+                               .protocol = AS_PROTOCOL_TLS }
+        );
+#endif
     }
 
     cli.swap(temp.cli);
-    #endif
+}
+
+void SecurityClient::update(dbChannel* ch, Credentials& cred) {
+    update(dbChannelRecord(ch)->asp, dbChannelFldDes(ch)->as_level, cred);
 }
 
 SecurityClient::~SecurityClient() {
