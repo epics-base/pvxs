@@ -318,6 +318,8 @@ X509_EXTENSION *CertStatusManager::getStatusExtension(const X509 *certificate) {
  * @return the X509_EXTENSION object, if found, otherwise throws an exception
  */
 X509_EXTENSION *CertStatusManager::getConfigExtension(const X509 *certificate) {
+    // Make sure the custom extensions are configured before querying them
+    ossl::osslInit();
     const int extension_index = X509_get_ext_by_NID(certificate, ossl::NID_SPvaCertConfigURI, -1);
     if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find Certificate-Config-PV extension in certificate.");
 
@@ -337,6 +339,8 @@ X509_EXTENSION *CertStatusManager::getConfigExtension(const X509 *certificate) {
  * @return the X509_EXTENSION object, if found, otherwise throws an exception
  */
 X509_EXTENSION *CertStatusManager::getRenewByDateExtension(const X509 *certificate) {
+    // Make sure the custom extensions are configured before querying them
+    ossl::osslInit();
     const int extension_index = X509_get_ext_by_NID(certificate, ossl::NID_SPvaRenewByDate, -1);
     if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find Renew By Date extension in certificate.");
 

@@ -18,9 +18,9 @@
 
 #include <pvxs/log.h>
 
-#include "certstatusexdata.h"
 #include "certstatusmanager.h"
 #include "evhelper.h"
+#include "openssl.h"
 
 #ifndef TLS1_3_VERSION
 #error TLS 1.3 support required.  Upgrade to openssl >= 1.1.0
@@ -78,26 +78,21 @@ void sslkeylogfile_log(const SSL *, const char *line) noexcept {
 #endif  // PVXS_ENABLE_SSLKEYLOGFILE
 
 void free_SSL_CTX_sidecar(void *, void *ptr, CRYPTO_EX_DATA *, int, long, void *) noexcept {
-    delete static_cast<CertStatusExDataBase*>(ptr);
+    delete static_cast<CertStatusExData*>(ptr);
 }
 
-epicsMutex ssl_init_lock;
-
-void osslInit() {
-    if ( NID_SPvaCertStatusURI == NID_undef ) {
-        Guard G(ssl_init_lock);
-        NID_SPvaCertStatusURI = OBJ_create(NID_SPvaCertStatusURIID, SN_SPvaCertStatusURI, LN_SPvaCertStatusURI);
-        if(NID_SPvaCertStatusURI == NID_undef) {
-            throw std::runtime_error("Failed to create NID for " SN_SPvaCertStatusURI);
-        }
-        NID_SPvaCertConfigURI = OBJ_create(NID_SPvaCertConfigURIID, SN_SPvaCertConfigURI, LN_SPvaCertConfigURI);
-        if(NID_SPvaCertConfigURI == NID_undef) {
-            throw std::runtime_error("Failed to create NID for " SN_SPvaCertConfigURI);
-        }
-        NID_SPvaRenewByDate = OBJ_create(NID_SPvaRenewByDateID, SN_SPvaRenewByDate, LN_SPvaRenewByDate);
-        if(NID_SPvaRenewByDate == NID_undef) {
-            throw std::runtime_error("Failed to create NID for " SN_SPvaRenewByDate);
-        }
+static void osslInitImpl() {
+    NID_SPvaCertStatusURI = OBJ_create(NID_SPvaCertStatusURIID, SN_SPvaCertStatusURI, LN_SPvaCertStatusURI);
+    if(NID_SPvaCertStatusURI == NID_undef) {
+        throw std::runtime_error("Failed to create NID for " SN_SPvaCertStatusURI);
+    }
+    NID_SPvaCertConfigURI = OBJ_create(NID_SPvaCertConfigURIID, SN_SPvaCertConfigURI, LN_SPvaCertConfigURI);
+    if(NID_SPvaCertConfigURI == NID_undef) {
+        throw std::runtime_error("Failed to create NID for " SN_SPvaCertConfigURI);
+    }
+    NID_SPvaRenewByDate = OBJ_create(NID_SPvaRenewByDateID, SN_SPvaRenewByDate, LN_SPvaRenewByDate);
+    if(NID_SPvaRenewByDate == NID_undef) {
+        throw std::runtime_error("Failed to create NID for " SN_SPvaRenewByDate);
     }
 
     ossl_ptr<OSSL_LIB_CTX> ctx(__FILE__, __LINE__, OSSL_LIB_CTX_new());
@@ -119,6 +114,11 @@ void osslInit() {
 #endif  // PVXS_ENABLE_SSLKEYLOGFILE
     ossl_gbl = gbl.release();
 }
+
+void osslInit() {
+    impl::threadOnce<&osslInitImpl>();;
+}
+
 
 }  // namespace ossl
 }  // namespace pvxs

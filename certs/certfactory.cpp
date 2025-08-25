@@ -47,6 +47,9 @@ DEFINE_LOGGER(certs, "pvxs.certs.cms");
  * @return a unique pointer to an X.509 certificate
  */
 ossl_ptr<X509> CertFactory::create() {
+    // 0. Make sure the custom certificate extensions have been registered
+    ossl::osslInit();
+
     // 1. Create an empty certificate
     ossl_ptr<X509> certificate(X509_new());
 

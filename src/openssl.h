@@ -12,8 +12,6 @@
 #include <stdexcept>
 #include <string>
 
-#include "certstatusexdata.h"
-
 #ifdef _WIN32
 #include <winsock2.h>
 #else
@@ -170,13 +168,14 @@ struct StatusValidityExpirationHandlerParam;
  * The status validity expiration handler is fed a pointer to data it needs to update the peer status but this
  * data needs to be kept from going stale.  So we store the parameters in a map and use the serial number as the key.
  */
-struct CertStatusExData : CertStatusExDataBase {
-    // To lock changes to ex data
+struct CertStatusExData {
+    // To lock changes to exdata
     epicsMutex lock;
     // The event loop to create timers for the status validity countdown
     const evbase loop;
     // The entity certificate
     ossl_ptr<X509> cert{};
+    // TODO Verify lifetime of this raw pointer
     // The Trusted Root Certificate Authority
     X509_STORE* trusted_store_ptr;
     // Whether status checking is enabled for this context.
@@ -200,8 +199,8 @@ struct CertStatusExData : CertStatusExDataBase {
      * @param status_check_enabled - Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not
      * configured
      */
-    CertStatusExData(const evbase loop, const bool status_check_enabled) : loop(loop), status_check_enabled(status_check_enabled) {}
-    ~CertStatusExData() noexcept override;
+    CertStatusExData(const evbase &loop, const bool status_check_enabled) : loop(loop), status_check_enabled(status_check_enabled) {}
+    ~CertStatusExData() noexcept;
 
     /**
      * @brief Returns the CertStatusExData from the SSL_CTX

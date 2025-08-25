@@ -111,6 +111,7 @@ struct threadOnceInfo {
 PVXS_API
 void threadOnce_(threadOnceInfo *info) ;
 
+// Assumes that there is only once call site per function (onceFn)
 template<void (*onceFn)()>
 void threadOnce() noexcept {
     // global name qualified by onceFn address.

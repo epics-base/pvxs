@@ -127,15 +127,12 @@ USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 TESTPROD_HOST += gen_test_certs
 gen_test_certs_SRCS += gen_test_certs.cpp
 gen_test_certs_SRCS += certfactory.cpp
-gen_test_certs_SRCS += opensslgbl.cpp
-gen_test_certs_SRCS += certstatusexdata.cpp
 
 TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp
 testtls_SRCS += certstatusfactory.cpp
 testtls_SRCS += certstatusmanager.cpp
 testtls_SRCS += certstatus.cpp
-testtls_SRCS += opensslgbl.cpp
 TESTS += testtls
 TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
@@ -144,7 +141,6 @@ testtlswithcms_SRCS += testtlswithcms.cpp
 testtlswithcms_SRCS += certstatusfactory.cpp
 testtlswithcms_SRCS += certstatusmanager.cpp
 testtlswithcms_SRCS += certstatus.cpp
-testtlswithcms_SRCS += opensslgbl.cpp
 TESTS += testtlswithcms
 TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
@@ -153,7 +149,6 @@ testtlswithcmsandstapling_SRCS += testtlswithcmsandstapling.cpp
 testtlswithcmsandstapling_SRCS += certstatusfactory.cpp
 testtlswithcmsandstapling_SRCS += certstatusmanager.cpp
 testtlswithcmsandstapling_SRCS += certstatus.cpp
-testtlswithcmsandstapling_SRCS += opensslgbl.cpp
 TESTS += testtlswithcmsandstapling
 TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
@@ -166,7 +161,6 @@ testtlsstatus_SRCS += testtlsstatus.cpp
 testtlsstatus_SRCS += certstatusfactory.cpp
 testtlsstatus_SRCS += certstatusmanager.cpp
 testtlsstatus_SRCS += certstatus.cpp
-testtlsstatus_SRCS += opensslgbl.cpp
 TESTS += testtlsstatus
 
 endif # EVENT2_HAS_OPENSSL

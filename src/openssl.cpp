@@ -342,7 +342,7 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
  * context so that they can connect to ssl servers without having a certificate
  */
 std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_for_client, const ConfigCommon &conf, const evbase &loop) {
-    impl::threadOnce<&osslInit>();
+    osslInit();
 
     auto tls_context = std::make_shared<SSLContext>(SSLContext(loop));
     assert(tls_context && "TLS context is null");

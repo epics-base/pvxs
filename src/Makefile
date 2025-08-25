@@ -124,7 +124,6 @@ ifeq ($(EVENT2_HAS_OPENSSL),YES)
 LIB_SRCS += openssl.cpp
 LIB_SRCS += opensslgbl.cpp
 LIB_SRCS += certstatus.cpp
-LIB_SRCS += certstatusexdata.cpp
 LIB_SRCS += certstatusmanager.cpp
 LIB_SRCS += certfactory.cpp
 LIB_SRCS += certfilefactory.cpp

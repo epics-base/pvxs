@@ -705,9 +705,6 @@ struct Tester {
  * @return test runner status (non-zero for errors)
  */
 MAIN(testtlswithcmsandstapling) {
-    // Initialize SSL
-    pvxs::impl::threadOnce<&ossl::osslInit>();
-
     testPlan(128);
     testSetup();
     logger_config_env();

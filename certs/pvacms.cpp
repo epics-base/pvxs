@@ -2813,9 +2813,6 @@ int main(int argc, char *argv[]) {
     using namespace pvxs::server;
 
     try {
-        // Initialize SSL
-        pvxs::impl::threadOnce<&pvxs::ossl::osslInit>();
-
         std::map<serial_number_t, time_t> active_status_validity;
         // Get config
         auto config = ConfigCms::fromEnv();

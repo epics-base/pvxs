@@ -211,6 +211,8 @@ struct CertCreator {
 
     std::tuple<pvxs::ossl_ptr<EVP_PKEY>, pvxs::ossl_ptr<X509>> create(const bool add_status_extension=true)
     {
+        pvxs::ossl::osslInit();
+
         // generate a public/private key pair
         pvxs::ossl_ptr<EVP_PKEY> key;
         {
@@ -324,7 +326,6 @@ void usage(const char* argv0) {
 int main(int argc, char *argv[])
 {
     try {
-        pvxs::impl::threadOnce<&pvxs::ossl::osslInit>();;
         std::string outdir(".");
         {
             int opt;
