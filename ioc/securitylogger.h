@@ -45,6 +45,16 @@ public:
                    const Credentials& credentials,
                    const SecurityClient& securityClient)
         :pfieldsave(pDbChannel->addr.pfield)
+#ifndef EPICS_ASLIB_HAS_IDENTITY
+        ,pvt(asTrapWriteWithData((securityClient.cli)[0], // The user is the first element
+                         credentials.cred[0].c_str(),     // The user is the first element
+                         credentials.host.c_str(),
+                         pDbChannel,
+                         dbChannelFinalFieldType(pDbChannel),
+                         dbChannelFinalElements(pDbChannel),
+                         nullptr
+                 ))
+#else
         ,pvt(asTrapWriteBeforeWithIdentityData(
             (ASIDENTITY){
                 .user = credentials.cred[0].c_str(),
@@ -57,6 +67,7 @@ public:
             dbChannelFinalElements(pDbChannel),
             nullptr
         ))
+#endif
     {
         /* asTrapWrite callbacks may have called clobbered
          * see
