@@ -116,7 +116,7 @@ x509 Method
 ^^^^^^^^^^^^
 
 A new Authentication Method is added with Secure PVAccess - ``x509``.
-With ``x509`` EPICS clients provde authenticated credentials in the form of an X.509 certificate.
+With ``x509`` EPICS clients provide authenticated credentials in the form of an X.509 certificate.
 
 Optionally EPICS clients can use a variety of Site Authenticators that can create an X.509 certificate from a variety of sources including
 
@@ -943,7 +943,7 @@ New Security Features
    - Certificates provide cryptographically secure identity verification
 2. **Fine-grained Control**:
 
-   - Combine authentcation ``METHOD``, certifying ``AUTHORITY``, and transport ``PROTOCOL`` for precise access control
+   - Combine authentication ``METHOD``, certifying ``AUTHORITY``, and transport ``PROTOCOL`` for precise access control
 3. **Connection Security**:
 
    - Control access based on encrypted (``TLS``) vs. unencrypted (``TCP``) connections
@@ -955,7 +955,7 @@ New Security Features
    - Support legacy clients while providing enhanced security for modern clients
 6. **Centralized Management**:
 
-   - Revocation of permisions now managed through PVACMS with immediate effect
+   - Revocation of permissions now managed through PVACMS with immediate effect
 7. **Scalable Architecture**:
 
    - Support for multiple authentication methods via Authenticators
@@ -994,7 +994,7 @@ The above rule will match any client that presents an x509 certificate to assert
 AUTHORITY
 ~~~~~~~~~
 
-1. A new top level item in ACF files AUTHORITY declares the heirarchy of Certificate Authorities that can be
+1. A new top level item in ACF files AUTHORITY declares the hierarchy of Certificate Authorities that can be
 referenced, going all the way back to the Root Certificate Authority.
 
   - Specifies Certifying Authority:
@@ -1346,7 +1346,7 @@ e.g. for Kerberos shown below.
 New APIs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Secure PVAccess introduces new APIs for programatically managing security with authenticated identities:
+Secure PVAccess introduces new APIs for programmatically managing security with authenticated identities:
 
 .. _peer_info:
 

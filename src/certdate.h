@@ -31,7 +31,7 @@ class CertTimeParseException final : public std::runtime_error {
  * .
  * Certificate Dates have a string representation `s` as well as a time_t representation `t`
  *
- * They can be parsed from stings and converted to strings.
+ * They can be parsed from strings and converted to strings.
  */
 struct CertDate {
     // time_t representation of the status date

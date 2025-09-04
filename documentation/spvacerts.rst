@@ -58,7 +58,7 @@ A certificate is the document that is exchanged with a peer that identifies an a
   - Care must be taken when sharing a certificate as it is stored in the same file as the private key. Do not share the keychain file with others.
 
 - A certificate is valid for a specific period of time.
-- A certificate can be revoked by an administrator (if the status monitoring extension is addded to the certificate - by default it is)
+- A certificate can be revoked by an administrator (if the status monitoring extension is added to the certificate - by default it is)
 
 Certificate Attributes
 ----------------------
