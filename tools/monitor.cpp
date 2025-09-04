@@ -51,7 +51,9 @@ int main(int argc, char *argv[])
 {
     try {
         logger_config_env(); // from $PVXS_LOG
+#ifdef PVXS_ENABLE_OPENSSL
         double timeout{5.0};
+#endif
         bool verbose = false;
         std::string request;
         Value::Fmt::format_t format = Value::Fmt::Delta;

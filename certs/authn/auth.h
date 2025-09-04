@@ -11,21 +11,21 @@
 #include <string>
 #include <vector>
 
-#include <certstatusfactory.h>
+#include <CLI/App.hpp>
 
 #include <pvxs/client.h>
 #include <pvxs/data.h>
 
 #include "ccrmanager.h"
 #include "certfactory.h"
+#include "certstatusfactory.h"
 #include "certstatusmanager.h"
 #include "configstd.h"
 #include "openssl.h"
 #include "opensslgbl.h"
 #include "security.h"
 #include "server.h"
-
-#include <CLI/App.hpp>
+#include "serverev.h"
 
 #pragma once
 
@@ -258,7 +258,7 @@ class Auth {
     }
 
  private:
-    server::Server config_server_{};
+    server::ServerEv config_server_{};
     class ConfigMonitorParams {
      public:
         const ConfigAuthN &config_;

@@ -13,27 +13,53 @@
 #  endif
 #endif
 
+#ifdef __linux__
+#include <errno.h>
+#elif defined(__APPLE__) || defined(__FreeBSD__)
+#include <stdlib.h>
+#endif
+
 // for signal handling
 #include <signal.h>
 
 #include <iomanip>
-#include <cstring>
 #include <sstream>
 #include <stdexcept>
 #include <atomic>
 
+#include <climits>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <list>
+#include <map>
+#include <regex>
+
 #include <ctype.h>
+#include <libgen.h>
+#include <unistd.h>
+
+#ifdef __unix__
+#include <pwd.h>
+#endif
+
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <pwd.h>
 
 #include <pvxs/log.h>
 #include <pvxs/util.h>
-#include <pvxs/sharedArray.h>
 #include <pvxs/data.h>
+#include <pvxs/version.h>
 
-#include "certfactory.h"
+#include "osiFileName.h"
 #include "utilpvt.h"
 #include "udp_collector.h"
-
 #include "pvxsVCS.h"
+
+#ifdef PVXS_ENABLE_OPENSSL
+#include "certfactory.h"
+#endif
 
 extern "C" {
 // unofficial helpers for dynamic loading
@@ -815,6 +841,34 @@ bool parseTo<bool>(const std::string &s) {
     return lower == "yes" ||lower == "on" || lower == "enabled" || lower == "true" || lower == "1";
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief create a CertStatusSubscription flag based on a string parameter value
+ *
+ * YES for "yes"/"true"/"1"
+ * NO for "no"/"false"/"0"
+ * DEFAULT for default
+ *
+ * @param input the string parameter value
+ * @return the corresponding CertStatusSubscription value
+ * @throw std::invalid_argument if the string doesn't match any expected value
+ */
+template<>
+int8_t parseTo<int8_t>(const std::string& input) {
+    // Create a lowercase copy of the input string
+    std::string lower = input;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                  [](const unsigned char c) { return std::tolower(c); });
+
+    if (lower == "yes" || lower == "true" || lower == "enabled" || lower == "on" || lower == "1") return certs::YES;
+    if (lower == "no" || lower == "false" || lower == "disabled" || lower == "off" || lower == "0") return certs::NO;
+    if (lower == "default") return certs::DEFAULT;
+
+    // No match found - throw an exception
+    throw NoConvert(SB() << "Invalid value: must be 'yes'/'true'/'enabled'/'on'/'1', 'no'/'false'/'disabled'/'off'/'0', or 'default': " << input);
+}
+#endif
+
 static
 std::vector<std::string>
 splitLines(const char *inp)
@@ -890,5 +944,138 @@ done:
         out<<"+ \""<<escape(r_lines[R])<<"\"\n";
     }
 }
+
+/**
+ * @brief Convert given path to expand tilde, dot and dot-dot at beginning
+ * @param path the containing tilde, dot and/or dot-dot
+ * @return the expanded path
+ */
+std::string convertPath(std::string &path) {
+    std::string abs_path;
+
+    if (!path.empty()) {
+        if (path[0] == '~') {
+            char const *home = getenv("HOME");
+            if (home || ((home = getenv("USERPROFILE")))) {
+                abs_path = home + path.substr(1);
+            }
+#ifdef __unix__
+            else {
+                auto pw = getpwuid(getuid());
+                if (pw) abs_path = pw->pw_dir + path.substr(1);
+            }
+#endif
+        } else if (path[0] == '.') {
+            char temp[PATH_MAX];
+            if (getcwd(temp, sizeof(temp)) != nullptr) {
+                if (path.size() > 1 && path[1] == '.') {
+                    // Handle '..' to get parent directory
+                    abs_path = dirname(temp);
+                    // Append the rest of the path after the '..'
+                    abs_path += path.substr(2);
+                } else {
+                    // Handle '.'
+                    abs_path = temp + path.substr(1);  // remove '.' then append
+                }
+            }
+        }
+    }
+
+    if (abs_path.empty()) {
+        abs_path = path;
+    }
+
+    return (path = abs_path);
+}
+
+/**
+ * @brief Ensure that the directory specified in the path exist
+ * @param filepath the file path containing an optional directory component
+ * @param convert_path true to convert path first
+ */
+void PVXS_API ensureDirectoryExists(std::string &filepath, const bool convert_path) {
+    std::string temp_path = convert_path ? convertPath(filepath) : filepath;
+
+    const auto delimiter = std::string(OSI_PATH_SEPARATOR);
+    size_t pos = 0;
+    std::string path = "";
+    struct stat info {};
+    while ((pos = temp_path.find(delimiter)) != std::string::npos) {
+        std::string token = temp_path.substr(0, pos);
+        path += token + delimiter;
+        temp_path.erase(0, pos + delimiter.length());
+        if (stat(path.c_str(), &info) != 0 || !(info.st_mode & S_IFDIR)) {
+#ifdef _WIN32
+            mkdir(path.c_str());  // Windows version takes only the path
+#else
+            mkdir(path.c_str(), S_IRWXU);  // Unix version takes path and permissions
+#endif
+        }
+    }
+}
+
+std::string getHomeDir() {
+#ifdef _WIN32
+    const char* home = getenv("USERPROFILE");
+    if (!home) {
+        home = getenv("HOMEDRIVE");
+        if (home) {
+            static std::string homePath;
+            const char* homedir = getenv("HOMEPATH");
+            if (homedir) {
+                homePath = std::string(home) + homedir;
+                return homePath;
+            }
+        }
+    }
+#else
+    const auto pw = getpwuid(getuid());
+    const char* home = pw ? pw->pw_dir : nullptr;
+    if (!home) {
+        home = getenv("HOME");
+    }
+#endif
+    return home ? std::string(home) : std::string("");
+}
+
+std::string getFileContents(const std::string &file_name) {
+    std::ifstream ifs(file_name);
+    std::string contents((std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()));
+
+    if (!contents.empty() && contents.back() == '\n') {
+        contents.pop_back();
+    }
+
+    return contents;
+}
+
+std::string getXdgConfigHome(const std::string &default_home) {
+    const char* config_home = getenv("XDG_CONFIG_HOME");
+    return config_home ? config_home : default_home;
+}
+
+std::string getXdgDataHome(const std::string &default_data_home) {
+    const char* data_home = getenv("XDG_DATA_HOME");
+    return data_home ? data_home : default_data_home;
+}
+
+std::string getXdgPvaConfigHome(const std::string &default_home) {
+    const std::string suffix = SB() << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << versionString() ;
+    return getXdgConfigHome(default_home) + suffix;
+}
+
+std::string getXdgPvaDataHome(const std::string &default_data_home) {
+    const std::string suffix = SB() << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << versionString() ;
+    return getXdgDataHome(default_data_home) + suffix;
+}
+
+#define stringifyX(X) #X
+#define stringify(X) stringifyX(X)
+
+std::string versionString() {
+    return stringify(PVXS_MAJOR_VERSION) "."  stringify(PVXS_MINOR_VERSION);
+}
+#undef stringify
+#undef stringifyX
 
 }}

@@ -17,8 +17,9 @@ namespace certs {
 
 class ConfigLdap final : public ConfigAuthN {
    public:
-    ConfigLdap& applyEnv() {
-        Config::applyEnv(true, CLIENT);
+    ConfigLdap& applyEnv() override{
+        Config::applyEnv();
+        tls_disabled = true;
         return *this;
     }
 

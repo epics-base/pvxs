@@ -17,8 +17,9 @@ namespace certs {
 
 class ConfigStd final : public ConfigAuthN {
    public:
-    ConfigStd& applyEnv() {
-        Config::applyEnv(true, CLIENT);
+    ConfigStd& applyEnv() override {
+        Config::applyEnv();
+        tls_disabled = true;
         return *this;
     }
 

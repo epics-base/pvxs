@@ -14,17 +14,16 @@
 
 #include <pvxs/client.h>
 
-#include "certstatus.h"
-#include "certstatusmanager.h"
 #include "conn.h"
-#include "dataimpl.h"
 #include "evhelper.h"
-#include "openssl.h"
 #include "ownedptr.h"
 #include "udp_collector.h"
 #include "utilpvt.h"
 
 #ifdef PVXS_ENABLE_OPENSSL
+#include "certstatus.h"
+#include "certstatusmanager.h"
+#include "openssl.h"
 #define PVXS_OCSP_STAPLING_OK 1
 #define PVXS_OCSP_STAPLING_ERR -1
 #define PVXS_OCSP_STAPLING_NAK 0
@@ -476,7 +475,8 @@ struct ContextImpl : std::enable_shared_from_this<ContextImpl>
     void removePeer(const Connection* client_conn = nullptr);
     void enterDegradedMode() const;
     void removeTlsPeer(const Connection* client_conn = nullptr) const;
-    void reloadTlsFromConfig(const Config& new_config = {});
+    void reloadTls();
+    void reloadTlsFromConfig(const Config& new_config);
 #endif
 };
 

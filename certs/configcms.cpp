@@ -6,45 +6,34 @@
 
 #include "configcms.h"
 
-#include <authregistry.h>
+#include <osiFileName.h>
 
 #include <pvxs/log.h>
+
+#include "authregistry.h"
+#include "configcerts.h"
+#include "serverev.h"
 
 DEFINE_LOGGER(cert_cfg, "pvxs.certs.cfg");
 
 namespace pvxs {
-namespace impl {
-/**
- * @brief create a CertStatusSubscription flag based on a string parameter value
- *
- * YES for "yes"/"true"/"1"
- * NO for "no"/"false"/"0"
- * DEFAULT for default
- *
- * @param input the string parameter value
- * @return the corresponding CertStatusSubscription value
- * @throw std::invalid_argument if the string doesn't match any expected value
- */
-template<>
-certs::CertStatusSubscription parseTo<certs::CertStatusSubscription>(const std::string& input) {
-    // Create a lowercase copy of the input string
-    std::string lower = input;
-    std::transform(lower.begin(), lower.end(), lower.begin(),
-                  [](const unsigned char c) { return std::tolower(c); });
-
-    if (lower == "yes" || lower == "true" || lower == "enabled" || lower == "on" || lower == "1") return certs::YES;
-    if (lower == "no" || lower == "false" || lower == "disabled" || lower == "off" || lower == "0") return certs::NO;
-    if (lower == "default") return certs::DEFAULT;
-
-    // No match found - throw an exception
-    throw NoConvert(SB() << "Invalid value: must be 'yes'/'true'/'enabled'/'on'/'1', 'no'/'false'/'disabled'/'off'/'0', or 'default': " << input);
-}
-
-
-}
 namespace certs {
 
-void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
+/**
+ * @brief Create a Config object with default values suitable for testing a Mock CMS
+ *
+ * @return ConfigCms for CMS
+ */
+ConfigCms ConfigCms::forCms() {
+    auto ret = ConfigCms{};
+    ret.applyCertsEnv();
+    ret.applyCmsEnv({});
+    ret.tls_disable_status_check = true;
+    ret.tls_disable_stapling = true;
+    return ret;
+}
+
+void ConfigCms::applyCmsEnv(const std::map<std::string, std::string> &defs) {
     PickOne pickone{defs, true};
     PickOne pick_another_one{defs, true};
 
@@ -68,7 +57,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
             log_err_printf(cert_cfg, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
     } else {
-        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "pvacms.p12";
+        std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "pvacms.p12";
         ensureDirectoryExists(tls_keychain_file = filename);
     }
 
@@ -81,7 +70,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_PVACMS_ACF"})) {
         ensureDirectoryExists(pvacms_acf_filename = pickone.val);
     } else {
-        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "pvacms.acf";
+        std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "pvacms.acf";
         ensureDirectoryExists(pvacms_acf_filename = filename);
     }
 
@@ -89,7 +78,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
     if (pickone({"EPICS_PVACMS_DB"})) {
         ensureDirectoryExists(certs_db_filename = pickone.val);
     } else {
-        std::string filename = SB() << data_home << OSI_PATH_SEPARATOR << "certs.db";
+        std::string filename = SB() << getXdgPvaDataHome() << OSI_PATH_SEPARATOR << "certs.db";
         ensureDirectoryExists(filename);
         certs_db_filename = filename;
     }
@@ -111,7 +100,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
             }
         }
     } else {
-        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "cert_auth.p12";
+        std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "cert_auth.p12";
         ensureDirectoryExists(cert_auth_keychain_file = filename);
     }
     // EPICS_ADMIN_TLS_KEYCHAIN
@@ -130,7 +119,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
             }
         }
     } else {
-        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "admin.p12";
+        std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "admin.p12";
         ensureDirectoryExists(admin_keychain_file = filename);
     }
 
@@ -225,7 +214,7 @@ void ConfigCms::fromCmsEnv(const std::map<std::string, std::string> &defs) {
 
     // EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION
     if (pickone({"EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION"})) {
-        cert_status_subscription = parseTo<CertStatusSubscription>(pickone.val);
+        cert_status_subscription = static_cast<CertStatusSubscription>(parseTo<int8_t>(pickone.val));
     }
 }
 

@@ -43,7 +43,9 @@ std::string CCRManager::createCertificate(const std::shared_ptr<CertCreationRequ
     arg["path"] = create_pv;
     arg["query"].from(cert_creation_request->ccr);
 
-    auto client = client::Config::fromEnv(true).build();
+    auto config = client::Config::fromEnv();
+    config.tls_disabled = true;
+    auto client = config.build();
     auto value(client.rpc(create_pv, arg).exec()->wait(timeout));
 
     log_info_printf(auth_log, "X.509 CLIENT certificate(%s)\n", value["state"].as<std::string>().c_str());

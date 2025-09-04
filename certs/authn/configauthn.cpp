@@ -8,6 +8,7 @@
 
 #include <authnstd.h>
 #include <ifaddrs.h>
+#include <osiFileName.h>
 #include <osiProcess.h>
 
 #include "certdate.h"
@@ -71,7 +72,7 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
 
     // Fixup keychain files to make sure we have default values even when empty
     if (tls_keychain_file.empty()) {
-        tls_keychain_file = SB() << config_home << OSI_PATH_SEPARATOR << "client.p12";
+        tls_keychain_file = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "client.p12";
     }
 
     // EPICS_PVAS_TLS_KEYCHAIN
@@ -83,7 +84,7 @@ void ConfigAuthN::fromAuthEnv(const std::map<std::string, std::string> &defs) {
         } else
             tls_srv_keychain_pwd = tls_keychain_pwd;
     } else {
-        const std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "server.p12";
+        const std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "server.p12";
         ensureDirectoryExists(tls_srv_keychain_file = filename);
     }
 

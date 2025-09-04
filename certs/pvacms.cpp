@@ -49,7 +49,6 @@
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
-#include <openssl/x509v3.h>
 
 #include <pvxs/client.h>
 #include <pvxs/config.h>
@@ -57,11 +56,10 @@
 #include <pvxs/nt.h>
 #include <pvxs/server.h>
 #include <pvxs/sharedpv.h>
-#include <pvxs/sharedwildcardpv.h>
+#include <wildcardpv.h>
 
 #include "auth.h"
 #include "authregistry.h"
-#include "ccrmanager.h"
 #include "certfactory.h"
 #include "certfilefactory.h"
 #include "certstatus.h"
@@ -72,10 +70,12 @@
 #include "openssl.h"
 #include "ownedptr.h"
 #include "securityclient.h"
+#include "serverev.h"
 #include "sqlite3.h"
 #include "utilpvt.h"
 
 #include <CLI/CLI.hpp>
+
 
 DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
 DEFINE_LOGGER(pvacmsmonitor, "pvxs.certs.stat");
@@ -84,7 +84,7 @@ namespace pvxs {
 namespace certs {
 
 bool postUpdateToNextCertToExpire(const CertStatusFactory &cert_status_factory,
-                                  server::SharedWildcardPV &status_pv,
+                                  server::WildcardPV &status_pv,
                                   const sql_ptr &certs_db,
                                   const std::string &cert_pv_prefix,
                                   const std::string &issuer_id,
@@ -93,7 +93,7 @@ bool postUpdateToNextCertToExpire(const CertStatusFactory &cert_status_factory,
 DbCert getOriginalLinkedCert(CertFactory &cert_factory, const sql_ptr &certs_db, const std::string &issuer_id);
 
 bool postUpdateToNextCertToNeedRenewal(const CertStatusFactory &cert_status_creator,
-                                  server::SharedWildcardPV &status_pv,
+                                  server::WildcardPV &status_pv,
                                   const sql_ptr &certs_db,
                                   const std::string &cert_pv_prefix,
                                   const std::string &issuer_id);
@@ -868,7 +868,7 @@ bool getPriorApprovalStatus(const sql_ptr &certs_db,
  */
 void onCreateCertificate(ConfigCms &config,
                          sql_ptr &certs_db,
-                         server::SharedWildcardPV &shared_status_pv,
+                         server::WildcardPV &shared_status_pv,
                          std::unique_ptr<server::ExecOp> &&op,
                          Value &&args,
                          const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
@@ -1120,7 +1120,7 @@ void onCreateCertificate(ConfigCms &config,
  * @param config
  * @param certs_db A pointer to the SQL database object.
  * @param our_issuer_id The issuer ID of the server.  Must match the one provided in pv_name
- * @param status_pv The SharedWildcardPV object to store the retrieved status.
+ * @param status_pv The WildcardPV object to store the retrieved status.
  * @param pv_name The status pv requested.
  * @param serial serial number string broken out from the pv_name
  * @param issuer_id issuer id string broken out from the pv_name
@@ -1133,7 +1133,7 @@ void onCreateCertificate(ConfigCms &config,
 void onGetStatus(const ConfigCms &config,
                  const sql_ptr &certs_db,
                  const std::string &our_issuer_id,
-                 server::SharedWildcardPV &status_pv,
+                 server::WildcardPV &status_pv,
                  const std::string &pv_name,
                  const serial_number_t serial,
                  const std::string &issuer_id,
@@ -1187,7 +1187,7 @@ void onGetStatus(const ConfigCms &config,
  * @param config
  * @param certs_db A pointer to the SQL database object.
  * @param our_issuer_id The issuer ID of the server.  Must match the one provided in pv_name
- * @param status_pv The SharedWildcardPV object to update the status in.
+ * @param status_pv The WildcardPV object to update the status in.
  * @param op
  * @param pv_name The status PV to be updated to REVOKED.
  * @param parameters The issuer id and serial number strings broken out from the pv_name.
@@ -1200,7 +1200,7 @@ void onGetStatus(const ConfigCms &config,
 void onRevoke(const ConfigCms &config,
               const sql_ptr &certs_db,
               const std::string &our_issuer_id,
-              server::SharedWildcardPV &status_pv,
+              server::WildcardPV &status_pv,
               std::unique_ptr<server::ExecOp> &&op,
               const std::string &pv_name,
               const std::list<std::string> &parameters,
@@ -1236,7 +1236,7 @@ void onRevoke(const ConfigCms &config,
  * @param config
  * @param certs_db A pointer to the SQL database object.
  * @param our_issuer_id The issuer ID of the server.  Must match the one provided in pv_name
- * @param status_pv The SharedWildcardPV object to update the status in.
+ * @param status_pv The WildcardPV object to update the status in.
  * @param op
  * @param pv_name The status PV to be updated to APPROVED.
  * @param parameters The issuer id and serial number strings broken out from the pv_name.
@@ -1249,7 +1249,7 @@ void onRevoke(const ConfigCms &config,
 void onApprove(const ConfigCms &config,
                const sql_ptr &certs_db,
                const std::string &our_issuer_id,
-               server::SharedWildcardPV &status_pv,
+               server::WildcardPV &status_pv,
                std::unique_ptr<server::ExecOp> &&op,
                const std::string &pv_name,
                const std::list<std::string> &parameters,
@@ -1296,7 +1296,7 @@ void onApprove(const ConfigCms &config,
  * @param config
  * @param certs_db A pointer to the SQL database object.
  * @param our_issuer_id The issuer ID of the server.  Must match the one provided in pv_name
- * @param status_pv The SharedWildcardPV object to update the status in.
+ * @param status_pv The WildcardPV object to update the status in.
  * @param op
  * @param pv_name The status PV to be updated to DENIED.
  * @param parameters The issuer id and serial number strings broken out from the pv_name.
@@ -1309,7 +1309,7 @@ void onApprove(const ConfigCms &config,
 void onDeny(const ConfigCms &config,
             const sql_ptr &certs_db,
             const std::string &our_issuer_id,
-            server::SharedWildcardPV &status_pv,
+            server::WildcardPV &status_pv,
             std::unique_ptr<server::ExecOp> &&op,
             const std::string &pv_name,
             const std::list<std::string> &parameters,
@@ -1343,7 +1343,7 @@ void onDeny(const ConfigCms &config,
 /**
  * @brief Get the serial number from the parameters
  *
- * @param parameters The list of parameters from the SharedWildcardPV
+ * @param parameters The list of parameters from the WildcardPV
  * @return serial number
  */
 uint64_t getParameters(const std::list<std::string> &parameters) {
@@ -2075,7 +2075,7 @@ void setValue(Value &target, const std::string &field, const T &new_value) {
  * @param cert_status The status of the certificate (UNKNOWN, VALID, EXPIRED, REVOKED, PENDING_APPROVAL, PENDING).
  */
 
-Value postCertificateStatus(server::SharedWildcardPV &status_pv,
+Value postCertificateStatus(server::WildcardPV &status_pv,
                             const std::string &pv_name,
                             const uint64_t serial,
                             const PVACertificateStatus &cert_status) {
@@ -2187,7 +2187,7 @@ void postUpdateToNextCertBecomingValid(const CertStatusFactory &cert_status_crea
  * @param full_skid optional full SKID - if provided will search only for a certificate that matches
  */
 bool postUpdateToNextCertToExpire(const CertStatusFactory &cert_status_factory,
-                                  server::SharedWildcardPV &status_pv,
+                                  server::WildcardPV &status_pv,
                                   const sql_ptr &certs_db,
                                   const std::string &cert_pv_prefix,
                                   const std::string &issuer_id,
@@ -2315,7 +2315,7 @@ DbCert getOriginalLinkedCert(CertFactory &cert_factory, const sql_ptr &certs_db,
  * @param issuer_id The issuer ID of this PVACMS.
  */
 bool postUpdateToNextCertToNeedRenewal(const CertStatusFactory &cert_status_creator,
-                                  server::SharedWildcardPV &status_pv,
+                                  server::WildcardPV &status_pv,
                                   const sql_ptr &certs_db,
                                   const std::string &cert_pv_prefix,
                                   const std::string &issuer_id) {
@@ -2742,26 +2742,26 @@ int readParameters(int argc,
 
     // Make sure some directories exist and read some passwords
     if (!config.cert_auth_keychain_file.empty())
-        config.ensureDirectoryExists(config.cert_auth_keychain_file);
+        ensureDirectoryExists(config.cert_auth_keychain_file);
     if (!config.tls_keychain_file.empty())
-        config.ensureDirectoryExists(config.tls_keychain_file);
+        ensureDirectoryExists(config.tls_keychain_file);
     if (!config.pvacms_acf_filename.empty())
-        config.ensureDirectoryExists(config.pvacms_acf_filename);
+        ensureDirectoryExists(config.pvacms_acf_filename);
     if (!config.admin_keychain_file.empty())
-        config.ensureDirectoryExists(config.admin_keychain_file);
+        ensureDirectoryExists(config.admin_keychain_file);
     if (!config.certs_db_filename.empty())
-        config.ensureDirectoryExists(config.certs_db_filename);
+        ensureDirectoryExists(config.certs_db_filename);
     if (!cert_auth_password_file.empty()) {
-        config.ensureDirectoryExists(cert_auth_password_file);
-        config.cert_auth_keychain_pwd = config.getFileContents(cert_auth_password_file);
+        ensureDirectoryExists(cert_auth_password_file);
+        config.cert_auth_keychain_pwd = getFileContents(cert_auth_password_file);
     }
     if (!pvacms_password_file.empty()) {
-        config.ensureDirectoryExists(pvacms_password_file);
-        config.tls_keychain_pwd = config.getFileContents(pvacms_password_file);
+        ensureDirectoryExists(pvacms_password_file);
+        config.tls_keychain_pwd = getFileContents(pvacms_password_file);
     }
     if (!admin_password_file.empty()) {
-        config.ensureDirectoryExists(admin_password_file);
-        config.admin_keychain_pwd = config.getFileContents(admin_password_file);
+        ensureDirectoryExists(admin_password_file);
+        config.admin_keychain_pwd = getFileContents(admin_password_file);
     }
 
     if (create_all_certs_in_valid_state)
@@ -2795,7 +2795,7 @@ int readParameters(int argc,
 
     if (!cert_status_subscription.empty()) {
         try {
-            config.cert_status_subscription = parseTo<CertStatusSubscription>(cert_status_subscription);
+            config.cert_status_subscription = static_cast<CertStatusSubscription>(parseTo<int8_t>(cert_status_subscription));
         } catch (const NoConvert &e) {
             std::cerr << "Error: --status-monitoring-enabled: " << e.what() << std::endl;
             exit(11);
@@ -2815,7 +2815,7 @@ int main(int argc, char *argv[]) {
     try {
         std::map<serial_number_t, time_t> active_status_validity;
         // Get config
-        auto config = ConfigCms::fromEnv();
+        auto config = ConfigCms::forCms();
         // And, get all configured authn configs
         auto authn_config_map = getAuthNConfigMap();
 
@@ -2884,7 +2884,7 @@ int main(int argc, char *argv[]) {
         SharedPV create_pv(SharedPV::buildReadonly());
         SharedPV root_pv(SharedPV::buildReadonly());
         SharedPV issuer_pv(SharedPV::buildReadonly());
-        SharedWildcardPV status_pv(SharedWildcardPV::buildMailbox());
+        WildcardPV status_pv(WildcardPV::buildMailbox());
 
         // Create Root and issuer PV values which won't change
         pvxs::Value root_pv_value = getRootValue(our_issuer_id, cert_auth_root_cert);
@@ -2916,7 +2916,7 @@ int main(int argc, char *argv[]) {
                                   &cert_auth_cert,
                                   &cert_auth_chain,
                                   &our_issuer_id,
-                                  &active_status_validity](SharedWildcardPV &pv,
+                                  &active_status_validity](WildcardPV &pv,
                                                            const std::string &pv_name,
                                                            const std::list<std::string> &parameters) {
             serial_number_t serial = getParameters(parameters);
@@ -2934,7 +2934,7 @@ int main(int argc, char *argv[]) {
             // Add reference to this serial number
             active_status_validity.emplace(serial, 0);
         });
-        status_pv.onLastDisconnect([&active_status_validity](SharedWildcardPV &pv,
+        status_pv.onLastDisconnect([&active_status_validity](WildcardPV &pv,
                                                              const std::string &pv_name,
                                                              const std::list<std::string> &parameters) {
             pv.close(pv_name);
@@ -2949,7 +2949,7 @@ int main(int argc, char *argv[]) {
                          &our_issuer_id,
                          &cert_auth_pkey,
                          &cert_auth_cert,
-                         &cert_auth_chain](SharedWildcardPV &pv,
+                         &cert_auth_chain](WildcardPV &pv,
                                            std::unique_ptr<ExecOp> &&op,
                                            const std::string &pv_name,
                                            const std::list<std::string> &parameters,
@@ -3050,15 +3050,20 @@ int main(int argc, char *argv[]) {
         // Create a server with a certificate monitoring function attached to the cert file monitor timer
         // Return true to indicate that we want the file monitor time to run after this
         auto pva_server =
-            Server(config, [&status_monitor_params](short) { return statusMonitor(status_monitor_params); });
+            ServerEv(config, [&status_monitor_params](short) { return statusMonitor(status_monitor_params); });
 
+        // Add a Wildcard Source for the status PV
+        auto wildcard_source = WildcardSource::build();
+        wildcard_source->add(getCertStatusPv(config.cert_pv_prefix, our_issuer_id), status_pv);
+        pva_server.addSource("__wildcard", wildcard_source);
+
+        // Add ordinary PVs to regular Sources
         pva_server.addPV(getCertCreatePv(config.cert_pv_prefix), create_pv)
             .addPV(getCertCreatePv(config.cert_pv_prefix, our_issuer_id), create_pv)
             .addPV(getCertAuthRootPv(config.cert_pv_prefix), root_pv)
             .addPV(getCertAuthRootPv(config.cert_pv_prefix, our_issuer_id), root_pv)
             .addPV(getCertIssuerPv(config.cert_pv_prefix), issuer_pv)
-            .addPV(getCertIssuerPv(config.cert_pv_prefix, our_issuer_id), issuer_pv)
-            .addPV(getCertStatusPv(config.cert_pv_prefix, our_issuer_id), status_pv);
+            .addPV(getCertIssuerPv(config.cert_pv_prefix, our_issuer_id), issuer_pv);
         root_pv.open(root_pv_value);
         issuer_pv.open(issuer_pv_value);
 

@@ -8,9 +8,12 @@
 
 #include "evhelper.h"
 #include "dataimpl.h"
+#include "utilpvt.h"
+
+#ifdef PVXS_ENABLE_OPENSSL
 #include "certstatus.h"
 #include "openssl.h"
-#include "utilpvt.h"
+#endif
 
 namespace pvxs {
 namespace ossl{

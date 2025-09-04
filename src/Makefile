@@ -80,10 +80,6 @@ INC += pvxs/util.h
 INC += pvxs/version.h
 INC += pvxs/versionNum.h
 
-ifeq ($(EVENT2_HAS_OPENSSL),YES)
-INC += pvxs/sharedwildcardpv.h
-endif # EVENT2_HAS_OPENSSL
-
 LIBRARY = pvxs
 
 LIB_SRCS += bitmask.cpp
@@ -121,14 +117,16 @@ LIB_SRCS += unittest.cpp
 LIB_SRCS += util.cpp
 
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
-LIB_SRCS += openssl.cpp
-LIB_SRCS += opensslgbl.cpp
-LIB_SRCS += certstatus.cpp
-LIB_SRCS += certstatusmanager.cpp
+LIB_SRCS += configcerts.cpp
 LIB_SRCS += certfactory.cpp
 LIB_SRCS += certfilefactory.cpp
+LIB_SRCS += certstatus.cpp
+LIB_SRCS += certstatusmanager.cpp
+LIB_SRCS += openssl.cpp
+LIB_SRCS += opensslgbl.cpp
 LIB_SRCS += p12filefactory.cpp
-LIB_SRCS += sharedwildcardpv.cpp
+LIB_SRCS += serverev.cpp
+LIB_SRCS += wildcardpv.cpp
 endif # EVENT2_HAS_OPENSSL
 
 LIB_LIBS += Com

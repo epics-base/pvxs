@@ -13,12 +13,9 @@
 
 #include <configldap.h>
 
-#include <pvxs/config.h>
 #include <pvxs/data.h>
-#include <pvxs/version.h>
 
 #include "auth.h"
-#include "certfactory.h"
 #include "security.h"
 
 #define PVXS_LDAP_AUTH_TYPE "ldap"

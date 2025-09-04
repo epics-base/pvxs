@@ -735,6 +735,7 @@ void Connection::tickEchoS(evutil_socket_t fd, short evt, void *raw)
     }
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
 void Connection::retryChannelCreationS(evutil_socket_t fd, short evt, void *raw)
 {
     const auto conn = static_cast<Connection*>(raw);
@@ -746,6 +747,6 @@ void Connection::retryChannelCreation()
     log_debug_printf(io, "Retrying channel creation for %s\n", peerName.c_str());
     createChannels();
 }
-
+#endif
 } // namespace client
 } // namespace pvxs

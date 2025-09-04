@@ -15,17 +15,18 @@
 #include <openssl/x509.h>
 
 #include <pvxs/log.h>
-#include <pvxs/sharedwildcardpv.h>
 #include <pvxs/unittest.h>
 
+#include "certcontext.h"
 #include "certfactory.h"
 #include "certstatus.h"
 #include "certstatusfactory.h"
 #include "certstatusmanager.h"
+#include "configcms.h"
 #include "openssl.h"
 #include "opensslgbl.h"
 #include "ownedptr.h"
-#include "certcontext.h"
+#include "wildcardpv.h"
 
 namespace {
 using namespace pvxs;
@@ -44,8 +45,8 @@ struct Tester {
 
     const std::string issuer_id{CertStatus::getSkId(cert_auth.cert.cert)};
 
-    server::SharedWildcardPV status_pv{server::SharedWildcardPV::buildMailbox()};
-    server::Server pvacms;
+    server::WildcardPV status_pv{server::WildcardPV::buildMailbox()};
+    server::ServerEv pvacms;
     client::Context client;
     CounterMap cert_status_request_counters;
 
@@ -58,11 +59,10 @@ struct Tester {
             return;
         }
 
-        auto source = server::StaticSource::build();
-        source.add(getCertStatusPv("CERT", issuer_id), status_pv);
-        auto pvacms_inner_mock = source.source();
+        auto source = server::WildcardSource::build();
+        source->add(getCertStatusPv("CERT", issuer_id), status_pv);
         // Set up mock source that counts requests
-        auto pvacms_mock   = std::make_shared<server::MockSource>(pvacms_inner_mock, [this] (std::string const& pv_name) {
+        const auto pvacms_mock   = std::make_shared<server::MockSource>(source, [this] (std::string const& pv_name) {
             if (cert_status_request_counters.find(pv_name) == cert_status_request_counters.end()) {
                 cert_status_request_counters[pv_name] = std::make_shared<std::atomic<uint32_t>>(0);
             }
@@ -70,7 +70,7 @@ struct Tester {
 
         });
 
-        pvacms = server::Config::forCms().build().addSource(getCertStatusPv("CERT", issuer_id), pvacms_mock);
+        pvacms = ConfigCms::forCms().build().addSource("__wildcard", pvacms_mock);
         client = pvacms.clientConfig().build();
 
         testShow() << "Testing TLS Status Functions:\n";
@@ -277,7 +277,7 @@ struct Tester {
         try {
             testDiag("Setting up: %s", "Mock PVACMS Server");
 
-            status_pv.onFirstConnect([this](server::SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
+            status_pv.onFirstConnect([this](server::WildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
                 auto it = parameters.begin();
                 const std::string &serial_string = *it;
                 const serial_number_t serial = std::stoull(serial_string);
@@ -293,7 +293,7 @@ struct Tester {
 
                 testDiag("Posted Value for request: %s", pv_name.c_str());
             });
-            status_pv.onLastDisconnect([](server::SharedWildcardPV &pv, const std::string &pv_name, const std::list<std::string> &parameters) {
+            status_pv.onLastDisconnect([](server::WildcardPV &pv, const std::string &pv_name, const std::list<std::string> &) {
                 testOk(1, "Closing Status Request Connection: %s", pv_name.c_str());
                 pv.close(pv_name);
             });

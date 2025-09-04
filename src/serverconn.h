@@ -18,14 +18,16 @@
 #include <pvxs/sharedpv.h>
 #include <pvxs/source.h>
 
-#include "certstatus.h"
-#include "certstatusmanager.h"
 #include "conn.h"
-#include "dataimpl.h"
 #include "evhelper.h"
 #include "udp_collector.h"
 #include "utilpvt.h"
+
+#ifdef PVXS_ENABLE_OPENSSL
+#include "certstatus.h"
+#include "certstatusmanager.h"
 #include "openssl.h"
+#endif
 
 namespace pvxs {namespace impl {
 
@@ -137,10 +139,10 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
     const std::shared_ptr<ServerChan>& lookupSID(uint32_t sid);
 
 private:
+    void proceedWithConnectionValidation();
 #ifdef PVXS_ENABLE_OPENSSL
     void retryConnectionValidation();
     static void retryConnectionValidationS(evutil_socket_t fd, short evt, void *raw);
-    void proceedWithConnectionValidation();
 
     std::string pending_selected;
     Value pending_auth;
@@ -226,8 +228,10 @@ struct Server::Pvt
 {
     SockAttach attach;
 
-    std::weak_ptr<Server::Pvt> internal_self;
+    std::weak_ptr<Pvt> internal_self;
+#ifdef PVXS_ENABLE_OPENSSL
     Server &server;
+#endif
 
     // "const" after ctor
     Config effective;
@@ -287,8 +291,6 @@ struct Server::Pvt
     } state;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    CustomServerCallback custom_server_callback;
-    evevent custom_server_callback_timer;
     ossl_ptr<uint8_t> cached_ocsp_response;
     time_t cached_ocsp_status_date;
 #endif
@@ -298,16 +300,18 @@ struct Server::Pvt
 #ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
 #else
-    Pvt(Server &server, const Config& conf, CustomServerCallback custom_cert_event_callback = nullptr);
+    Pvt(Server &server, const Config& conf);
 #endif
     ~Pvt();
 
     void start();
     void stop();
 
+#ifdef PVXS_ENABLE_OPENSSL
     bool canRespondToTcpSearch() const { return !tls_context || tls_context->state >= ossl::SSLContext::DegradedMode; }
     bool canRespondToTlsSearch() const { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady && effective.tls_port; }
     bool isInDegradedMode() const { return !tls_context || tls_context->state <= ossl::SSLContext::DegradedMode; }
+#endif
 
    private:
     void onSearch(const UDPManager::Search& msg);
@@ -315,8 +319,6 @@ struct Server::Pvt
     static void doBeaconsS(evutil_socket_t fd, short evt, void *raw);
 
 #ifdef PVXS_ENABLE_OPENSSL
-    static void doCustomServerCallback(evutil_socket_t fd, short evt, void* raw);
-
     bool isContextReadyForTls() const { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
 #endif
 };

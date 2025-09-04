@@ -12,12 +12,6 @@ include $(TOP)/configure/CONFIG
 USR_CPPFLAGS += -I$(TOP)/src
 USR_CPPFLAGS += -I$(TOP)/ioc
 
-ifeq ($(EVENT2_HAS_OPENSSL),YES)
-USR_CPPFLAGS += -I$(TOP)/certs
-SRC_DIRS += $(TOP)/certs
-SRC_DIRS += $(TOP)/src
-endif
-
 PROD_LIBS = pvxs Com
 
 TESTPROD_HOST += testsock
@@ -123,6 +117,14 @@ TESTS += testudpfwd
 
 ifdef BASE_3_15
 ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -I$(TOP)/certs -I$(TOP)/bundle/CLI11/include
+SRC_DIRS += $(TOP)/certs
+SRC_DIRS += $(TOP)/certs/authn
+SRC_DIRS += $(TOP)/certs/authn/std
+SRC_DIRS += $(TOP)/src
+SRC_DIRS += $(TOP)/src/pvxs
+SRCS += configcms.cpp
+
 USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 TESTPROD_HOST += gen_test_certs
 gen_test_certs_SRCS += gen_test_certs.cpp
@@ -141,6 +143,7 @@ testtlswithcms_SRCS += testtlswithcms.cpp
 testtlswithcms_SRCS += certstatusfactory.cpp
 testtlswithcms_SRCS += certstatusmanager.cpp
 testtlswithcms_SRCS += certstatus.cpp
+testtlswithcms_SRCS += configcerts.cpp
 TESTS += testtlswithcms
 TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
@@ -149,6 +152,7 @@ testtlswithcmsandstapling_SRCS += testtlswithcmsandstapling.cpp
 testtlswithcmsandstapling_SRCS += certstatusfactory.cpp
 testtlswithcmsandstapling_SRCS += certstatusmanager.cpp
 testtlswithcmsandstapling_SRCS += certstatus.cpp
+testtlswithcmsandstapling_SRCS += configcerts.cpp
 TESTS += testtlswithcmsandstapling
 TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
 
@@ -161,6 +165,7 @@ testtlsstatus_SRCS += testtlsstatus.cpp
 testtlsstatus_SRCS += certstatusfactory.cpp
 testtlsstatus_SRCS += certstatusmanager.cpp
 testtlsstatus_SRCS += certstatus.cpp
+testtlsstatus_SRCS += configcerts.cpp
 TESTS += testtlsstatus
 
 endif # EVENT2_HAS_OPENSSL

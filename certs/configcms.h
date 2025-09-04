@@ -7,44 +7,18 @@
 #ifndef PVXS_CONFIGCMS_H_
 #define PVXS_CONFIGCMS_H_
 
-#include <certfactory.h>
-#include <memory>
-
 #include <pvxs/config.h>
 #include <pvxs/server.h>
 
-#include "ownedptr.h"
+#include "certfactory.h"
+#include "configcerts.h"
+#include "serverev.h"
 
 namespace pvxs {
 namespace certs {
 
-class ConfigCms final : public server::Config {
+class ConfigCms final : public Config {
    public:
-    ConfigCms& applyEnv() {
-        Config::applyEnv();
-        return *this;
-    }
-
-    /**
-     * @brief Create a CMS configuration from environment variables
-     *
-     * @return ConfigCms
-     */
-    static ConfigCms fromEnv() {
-        // Get default config
-        auto config = ConfigCms{}.applyEnv();
-
-        // Indicate that this is a CMS configuration
-        config.config_target = CMS;
-
-        // Disable status checking as this is the CMS itself
-        config.tls_disable_status_check = true;
-
-        // Override with any specific CMS configuration from environment variables
-        config.fromCmsEnv(std::map<std::string, std::string>());
-        return config;
-    }
-
     void updateDefs(defs_t& defs) const override;
 
     /**
@@ -265,7 +239,7 @@ class ConfigCms final : public server::Config {
      * then one will be created automatically.
      *
      * To provide the organizational unit (OU) to be used in the
-     * subject of the certificate authority certificate we can use this environment variable.
+     * subject of the certificate authority certificate, we can use this environment variable.
      */
     std::string cert_auth_organizational_unit = "EPICS Certificate Authority";
 
@@ -309,7 +283,8 @@ class ConfigCms final : public server::Config {
      */
     std::string pvacms_country{"US"};
 
-    void fromCmsEnv(const std::map<std::string, std::string>& defs);
+    void applyCmsEnv(const std::map<std::string, std::string>& defs);
+    static ConfigCms forCms();
 };
 
 }  // namespace certs

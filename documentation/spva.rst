@@ -183,8 +183,8 @@ Here are server-specific configuration options:
 - `pvxs::server::Config::tls_throw_if_no_cert` - Throw exception if certificate unavailable
 
 
-API Additions for Secure PVAccess
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+EXPERT API Additions for Secure PVAccess
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Runtime Reconfiguration
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -218,7 +218,7 @@ This addition is based on the Wildcard PV support included in epics-base since v
 extends this support to pvxs allowing PVs to be specified as wildcard patterns.  We use this
 to provide individualised PVs for each certificate's status management.
 
-- `pvxs::server::SharedWildcardPV`
+- `pvxs::server::WildcardPV`
 
 Example of support for pattern-matched PV names:
 
@@ -228,8 +228,8 @@ Example of support for pattern-matched PV names:
     // It will extract the 4-character part of the PV name as the `id` and
     // the last string as the `name`
 
-    SharedWildcardPV wildcard_pv(SharedWildcardPV::buildMailbox());
-    wildcard_pv.onFirstConnect([](SharedWildcardPV &pv, const std::string &pv_name,
+    WildcardPV wildcard_pv(WildcardPV::buildMailbox());
+    wildcard_pv.onFirstConnect([](WildcardPV &pv, const std::string &pv_name,
                                 const std::list<std::string> &parameters) {
         // Extract id and name from parameters
         auto it = parameters.begin();
@@ -243,13 +243,15 @@ Example of support for pattern-matched PV names:
             pv.open(pv_name, value);
         }
     });
-    wildcard_pv.onLastDisconnect([](SharedWildcardPV &pv, const std::string &pv_name,
+    wildcard_pv.onLastDisconnect([](WildcardPV &pv, const std::string &pv_name,
                                 const std::list<std::string> &parameters) {
         pv.close(pv_name);
     });
 
     // Add wildcard PV to server
-    serv.addPV("WILDCARD:PV:????:*", wildcard_pv);
+    auto wildcard_source = WildcardSource::build();
+    wildcard_source->add("WILDCARD:PV:????:*", wildcard_pv);
+    serv.addSource("__wildcard", wildcard_source);
 
 .. _protocol_operation:
 

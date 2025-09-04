@@ -257,7 +257,7 @@ void P12FileFactory::writePKCS12File() {
 
     if (!p12_ptr_) throw std::runtime_error("Insufficient configuration to create certificate");
 
-    ConfigCommon::ensureDirectoryExists(filename_);
+    ensureDirectoryExists(filename_);
 
     // Make a backup of the existing P12 file if it exists
     backupFileIfExists(filename_);

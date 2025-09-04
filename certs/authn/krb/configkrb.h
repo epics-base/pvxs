@@ -30,8 +30,9 @@ namespace certs {
  */
 class ConfigKrb final : public ConfigAuthN {
    public:
-    ConfigKrb& applyEnv() {
-        Config::applyEnv(true, CLIENT);
+    ConfigKrb& applyEnv() override {
+        Config::applyEnv();
+        tls_disabled = true;
         return *this;
     }
 

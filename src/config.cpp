@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <fstream>
 #include <limits>
 #include <stdexcept>
 
@@ -25,6 +26,7 @@
 
 #include <epicsStdlib.h>
 #include <epicsString.h>
+#include <osiFileName.h>
 #include <osiSock.h>
 
 #include <sys/stat.h>
@@ -43,57 +45,7 @@ DEFINE_LOGGER(config, "pvxs.config");
 namespace pvxs {
 
 namespace impl {
-std::string getHomeDir() {
-#ifdef _WIN32
-    const char* home = getenv("USERPROFILE");
-    if (!home) {
-        home = getenv("HOMEDRIVE");
-        if (home) {
-            static std::string homePath;
-            const char* homedir = getenv("HOMEPATH");
-            if (homedir) {
-                homePath = std::string(home) + homedir;
-                return homePath;
-            }
-        }
-    }
-#else
-    struct passwd* pw = getpwuid(getuid());
-    const char* home = pw ? pw->pw_dir : nullptr;
-    if (!home) {
-        home = getenv("HOME");
-    }
-#endif
-    return home ? std::string(home) : std::string("");
-}
-
-std::string getXdgConfigHome(std::string default_home) {
-    const std::string suffix = SB() << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << ConfigCommon::version ;
-    const char* config_home = getenv("XDG_CONFIG_HOME");
-    return SB() << (config_home ? config_home : default_home) << suffix;
-}
-
-std::string getXdgDataHome(std::string default_home) {
-    const std::string suffix = SB() << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << ConfigCommon::version ;
-    const char* data_home = getenv("XDG_DATA_HOME");
-    return SB() << (data_home ? data_home : default_home) << suffix;
-}
-
 ConfigCommon::~ConfigCommon() {}
-#define stringifyX(X) #X
-#define stringify(X) stringifyX(X)
-
-const std::string ConfigCommon::home = getHomeDir();
-const std::string ConfigCommon::version = stringify(PVXS_MAJOR_VERSION) "."  stringify(PVXS_MINOR_VERSION);
-#ifdef _WIN32
-const std::string ConfigCommon::config_home = SB() << home << "\\PVA\\" << version;
-const std::string ConfigCommon::data_home = SB() << "C:\\ProgramData\\PVA\\" << version;
-#else
-const std::string ConfigCommon::config_home = getXdgConfigHome(SB() << home << "/.config");
-const std::string ConfigCommon::data_home = getXdgDataHome(SB() << home << "/.local/share");
-#endif
-#undef stringifyX
-#undef stringify
 }  // namespace impl
 
 SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint16_t defdefport) {
@@ -563,7 +515,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVAS_TLS_KEYCHAIN
     if (pickone({"EPICS_PVAS_TLS_KEYCHAIN", "EPICS_PVA_TLS_KEYCHAIN"})) {
-        self.ensureDirectoryExists(self.tls_keychain_file = pickone.val);
+        ensureDirectoryExists(self.tls_keychain_file = pickone.val);
         // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
         std::string password_filename;
         if (pickone.name == "EPICS_PVAS_TLS_KEYCHAIN") {
@@ -573,14 +525,14 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
             pick_another_one({"EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"});
             password_filename = pick_another_one.val;
         }
-        self.ensureDirectoryExists(password_filename);
+        ensureDirectoryExists(password_filename);
         try {
-            self.tls_keychain_pwd = self.getFileContents(password_filename);
+            self.tls_keychain_pwd = getFileContents(password_filename);
         } catch (std::exception& e) {
             log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
     } else {
-        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "server.p12";
+        std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "server.p12";
         std::ifstream file(filename.c_str());
         if (file.good()) tls_keychain_file = filename;
     }
@@ -606,33 +558,10 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 
     if (pickone({"EPICS_PVAS_CERT_PV_PREFIX", "EPICS_PVA_CERT_PV_PREFIX"})) cert_pv_prefix = pickone.val;
 #endif  // PVXS_ENABLE_OPENSSL
-    is_initialized = true;
 }
-#ifndef PVXS_ENABLE_OPENSSL
-
 Config& Config::applyEnv() {
-#else
-Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
-    this->tls_disabled = tls_disabled;
-    this->config_target = target;
-#endif
     fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
-}
-
-/**
- * @brief Create a Config object with default values suitable for testing a Mock CMS
- *
- * @return Config for CMS
- */
-Config Config::forCms() {
-    Config ret;
-    ret.config_target = pvxs::impl::ConfigCommon::CMS;
-    ret.tls_disable_status_check = true;
-    ret.tls_disable_stapling = true;
-
-    ret.is_initialized = true;
-    return ret;
 }
 
 /**
@@ -659,11 +588,13 @@ Config Config::isolated(int family) {
         default:
             throw std::logic_error(SB() << "Unsupported address family " << family);
     }
+
+#ifdef PVXS_ENABLE_OPENSSL
     // For testing purposes disable status checking and stapling when using isolated config
     ret.tls_disable_status_check = true;
     ret.tls_disable_stapling = true;
+#endif
 
-    ret.is_initialized = true;
     return ret;
 }
 
@@ -682,8 +613,8 @@ void Config::updateDefs(defs_t& defs) const {
     if (!ignoreAddrs.empty()) defs["EPICS_PVAS_IGNORE_ADDR_LIST"] = join_addr(ignoreAddrs);
     defs["EPICS_PVA_CONN_TMO"] = std::to_string(tcpTimeout / tmoScale);
 
-    defs["EPICS_XDG_DATA_HOME"] = data_home;
-    defs["EPICS_XDG_CONFIG_HOME"] = config_home;
+    defs["XDG_DATA_HOME"] = getXdgDataHome();
+    defs["XDG_CONFIG_HOME"] = getXdgConfigHome();
 
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVAS_TLS_KEYCHAIN
@@ -824,9 +755,9 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVA_TLS_KEYCHAIN
     if (pickone({"EPICS_PVA_TLS_KEYCHAIN"})) {
-        self.ensureDirectoryExists(self.tls_keychain_file = pickone.val);
+        ensureDirectoryExists(self.tls_keychain_file = pickone.val);
     } else {
-        std::string filename = SB() << config_home << OSI_PATH_SEPARATOR << "client.p12";
+        std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "client.p12";
         std::ifstream file(filename.c_str());
         if (file.good()) tls_keychain_file = filename;
     }
@@ -835,8 +766,8 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     if (pickone({"EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"})) {
         std::string password_filename(pickone.val);
         try {
-            self.ensureDirectoryExists(password_filename);
-            self.tls_keychain_pwd = self.getFileContents(password_filename);
+            ensureDirectoryExists(password_filename);
+            self.tls_keychain_pwd = getFileContents(password_filename);
         } catch (std::exception& e) {
             log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
         }
@@ -858,16 +789,9 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 
     if (pickone({"EPICS_PVA_CERT_PV_PREFIX"})) cert_pv_prefix = pickone.val;
 #endif  // PVXS_ENABLE_OPENSSL
-    is_initialized = true;
 }
 
-#ifndef PVXS_ENABLE_OPENSSL
 Config& Config::applyEnv() {
-#else
-Config& Config::applyEnv(const bool tls_disabled, const ConfigTarget target) {
-    this->tls_disabled = tls_disabled;
-    this->config_target = target;
-#endif
     fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
@@ -886,8 +810,8 @@ void Config::updateDefs(defs_t& defs) const {
     defs["EPICS_PVA_CONN_TMO"] = std::to_string(tcpTimeout / tmoScale);
     if (!nameServers.empty()) defs["EPICS_PVA_NAME_SERVERS"] = join_addr(nameServers);
 
-    defs["XDG_DATA_HOME"] = data_home;
-    defs["XDG_CONFIG_HOME"] = config_home;
+    defs["XDG_DATA_HOME"] = getXdgDataHome();
+    defs["XDG_CONFIG_HOME"] = getXdgConfigHome();
 
 #ifdef PVXS_ENABLE_OPENSSL
     // EPICS_PVA_TLS_KEYCHAIN

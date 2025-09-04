@@ -186,7 +186,9 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509_STORE *trus
     try {
         // Subscribe to the service using the constructed URI
         // with TLS disabled to avoid recursive loop
-        auto client(std::make_shared<client::Context>(client::Context::fromEnv(true)));
+        auto config = client::Config::fromEnv();
+        config.tls_disabled = true;
+        auto client(std::make_shared<client::Context>(config.build()));
         cert_status_ptr<CertStatusManager> cert_status_manager(new CertStatusManager(std::move(client)));
         cert_status_manager->callback_ref = std::move(fn);
         std::weak_ptr<CertStatusManager> weak_cert_status_manager(cert_status_manager);

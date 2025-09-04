@@ -101,6 +101,24 @@ void strDiff(std::ostream& out,
              const char *lhs,
              const char *rhs);
 
+PVXS_API std::string convertPath(std::string &path);
+PVXS_API void ensureDirectoryExists(std::string &filepath, bool convert_path = true);
+std::string versionString();
+PVXS_API std::string getHomeDir();
+PVXS_API std::string getFileContents(const std::string &file_name);
+
+#ifdef _WIN32
+PVXS_API std::string getXdgDataHome(std::string default_data_home = "C:\\ProgramData");
+PVXS_API std::string getXdgConfigHome(std::string default_home = getHomeDir());
+PVXS_API std::string getXdgPvaDataHome(std::string default_data_home = "C:\\ProgramData");
+PVXS_API std::string getXdgPvaConfigHome(std::string default_home = getHomeDir());
+#else
+PVXS_API std::string getXdgDataHome(const std::string &default_data_home = getHomeDir() + "/.local/share");
+PVXS_API std::string getXdgConfigHome(const std::string &default_home = getHomeDir() + "/.config");
+PVXS_API std::string getXdgPvaDataHome(const std::string &default_data_home = getHomeDir() + "/.local/share");
+PVXS_API std::string getXdgPvaConfigHome(const std::string &default_home = getHomeDir() + "/.config");
+#endif
+
 struct threadOnceInfo {
     epicsThreadOnceId id = EPICS_THREAD_ONCE_INIT;
     void (* const fn)();
@@ -168,6 +186,10 @@ int64_t parseTo<int64_t>(const std::string& s);
 template<>
 PVXS_API
 bool parseTo<bool>(const std::string& s);
+
+template<>
+PVXS_API
+int8_t parseTo<int8_t>(const std::string& input);
 
 #ifdef _WIN32
 #  define RWLOCK_TYPE SRWLOCK

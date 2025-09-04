@@ -20,30 +20,17 @@
 #include <osiSock.h>
 
 #include <pvxs/data.h>
-#include <pvxs/sharedwildcardpv.h>
 #include <pvxs/netcommon.h>
 #include <pvxs/util.h>
 #include <pvxs/version.h>
 
+
 namespace pvxs {
 namespace client {
-struct Subscription;
 struct Config;
 }
 
-#ifdef PVXS_ENABLE_OPENSSL
-namespace ossl {
-struct SSLContext;
-}
-#endif
-
 namespace server {
-
-#ifdef PVXS_ENABLE_OPENSSL
-using CustomServerCallback = std::function<timeval(short)>;
-static constexpr timeval kCustomCallbackIntervalInitial{0, 0};
-static constexpr timeval kCustomCallbackInterval{15, 0};
-#endif
 
 struct SharedPV;
 struct Source;
@@ -74,9 +61,6 @@ public:
     //! Create/allocate, but do not start, a new server with the provided config.
     explicit Server(const Config&);
 
-#ifdef PVXS_ENABLE_OPENSSL
-    Server(const Config &config, CustomServerCallback custom_event_callback);
-#endif
     Server(const Server&) = default;
     Server(Server&& o) = default;
     Server& operator=(const Server&) = default;
@@ -89,12 +73,7 @@ public:
      * @since 0.2.1
      */
     static
-#ifndef PVXS_ENABLE_OPENSSL
     Server fromEnv();
-#else
-    Server fromEnv(bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
-    Server fromEnv(CustomServerCallback &custom_event_callback, bool tls_disabled = false, impl::ConfigCommon::ConfigTarget target = impl::ConfigCommon::SERVER);
-#endif // PVXS_ENABLE_OPENSSL
 
     //! Begin serving.  Does not block.
     Server& start();
@@ -135,7 +114,6 @@ public:
 
     //! Add a SharedPV to the "__builtin" StaticSource
     Server& addPV(const std::string& name, const SharedPV& pv);
-    Server& addPV(const std::string& name, const SharedWildcardPV& pv);
     //! Remove a SharedPV from the "__builtin" StaticSource
     Server& removePV(const std::string& name);
 
@@ -226,28 +204,17 @@ private:
     bool UDP = true;
 public:
 
-#ifndef PVXS_ENABLE_OPENSSL
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }
     //! Default configuration using process environment
     static inline Config fromEnv()  { return Config{}.applyEnv(); }
     //! update using defined EPICS_PVA* environment variables
     Config& applyEnv();
-#else
-    static inline Config from_env(const bool tls_disabled = false, const ConfigTarget target = SERVER) {
-        return Config{}.applyEnv(tls_disabled, target);
-    }
-    static inline Config fromEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER) { return Config{}.applyEnv(tls_disabled, target); }
-    Config &applyEnv(const bool tls_disabled = false, const ConfigTarget target = SERVER);
-#endif
 
     //! Configuration limited to the local loopback interface on a randomly chosen port.
     //! Suitable for use in self-contained unit-tests.
     //! @since 0.3.0 Address family argument added.
     static Config isolated(int family=AF_INET);
-
-    //! Configuration limited suitable for use as a Mock CMS in self-contained unit-tests.
-    static Config forCms();
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables.
@@ -271,13 +238,6 @@ public:
     inline Server build() const {
         return Server(*this);
     }
-
-#ifdef PVXS_ENABLE_OPENSSL
-    //! Create a new Server using the current configuration with a custom file event callback
-    Server build(const CustomServerCallback &cert_file_event_callback) const {
-        return Server(*this, cert_file_event_callback);
-    }
-#endif
 
 #ifdef PVXS_EXPERT_API_ENABLED
     // for protocol compatibility testing

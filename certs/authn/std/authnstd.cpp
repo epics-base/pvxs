@@ -12,7 +12,6 @@
 #include <pvxs/log.h>
 
 #include "authregistry.h"
-#include "certfilefactory.h"
 #include "certstatusfactory.h"
 #include "configstd.h"
 #include "openssl.h"

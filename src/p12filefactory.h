@@ -7,6 +7,7 @@
 #ifndef PVXS_P12_FILE_FACTORY_H
 #define PVXS_P12_FILE_FACTORY_H
 
+#include <iostream>
 #include <memory>
 #include <tuple>
 

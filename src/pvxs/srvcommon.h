@@ -6,7 +6,7 @@
 #ifndef PVXS_SRVCOMMON_H
 #define PVXS_SRVCOMMON_H
 
-#if !defined(PVXS_SHAREDPV_H) && !defined(PVXS_SOURCE_H)
+#if !defined(PVXS_SHAREDPV_H) && !defined(PVXS_WILDCARDPV_H) && !defined(PVXS_SOURCE_H)
 #  error Include <pvxs/sharedpv.h> or <pvxs/source.h>  Do not include srvcommon.h directly
 #endif
 

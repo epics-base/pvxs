@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include "serverconn.h"
+
 #include <limits>
 #include <system_error>
 #include <utility>
@@ -13,8 +15,10 @@
 #include <epicsAssert.h>
 
 #include <pvxs/log.h>
+
+#ifdef PVXS_ENABLE_OPENSSL
 #include "openssl.h"
-#include "serverconn.h"
+#endif
 
 // limit on size of TX buffer above which we suspend RX.
 // defined as multiple of OS socket TX buffer size
@@ -37,8 +41,11 @@ std::set<std::string> PeerCredentials::roles() const
 
 std::ostream& operator<<(std::ostream& strm, const PeerCredentials& cred)
 {
+#ifdef PVXS_ENABLE_OPENSSL
     if(cred.isTLS)
         strm<<"TLS ";
+#endif
+
     strm<<cred.method;
     if(!cred.issuer_id.empty())
         strm<<":"<<cred.issuer_id;
@@ -70,9 +77,11 @@ namespace pvxs {namespace impl {
 DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 // related to low level send/recv
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
-DEFINE_LOGGER(stapling, "pvxs.stapling");
-
 DEFINE_LOGGER(remote, "pvxs.remote.log");
+
+#ifdef PVXS_ENABLE_OPENSSL
+DEFINE_LOGGER(stapling, "pvxs.stapling");
+#endif
 
 ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen)
   : ConnBase(false,
@@ -280,10 +289,12 @@ void ServerConn::handle_CONNECTION_VALIDATION()
         }
     }
 
+#ifdef PVXS_ENABLE_OPENSSL
     // Store validation data for potential retry
     pending_selected = selected;
     pending_auth = auth;
     has_pending_validation = true;
+#endif
 
     log_debug_printf(connsetup, "Client %s authenticates using %s and %s\n",
                      peerName.c_str(), selected.c_str(),
@@ -390,10 +401,10 @@ void ServerConn::proceedWithConnectionValidation()
             return; // Backoff - don't complete validation yet until we get the status were waiting for
         }
     }
-#endif
 
     // Clear pending validation data since we're completing
     has_pending_validation = false;
+#endif
 
     // No practical way to handle auth failure.
     // So we accept all credentials but may not grant rights.
