@@ -36,8 +36,8 @@ class CertStatusManager;
  * @see ocspResponseToBytes
  */
 PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_ptr<X509>& cert, const certstatus_t status, const CertDate& status_date,
-                                                                   const CertDate& predicated_revocation_time) const {
-    return createPVACertificateStatus(getSerialNumber(cert), status, status_date, predicated_revocation_time);
+                                                                   const CertDate& predicated_revocation_time, const CertDate &renew_by, bool renewal_due) const {
+    return createPVACertificateStatus(getSerialNumber(cert), status, status_date, predicated_revocation_time, renew_by, renewal_due);
 }
 
 /**
@@ -47,11 +47,13 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const ossl_pt
  * @param status The status of the certificate (PENDING_VALIDATION, VALID, EXPIRED, or `REVOKED`).
  * @param status_date The status date of this status certification, normally ``now``.
  * @param predicated_revocation_time The time of revocation for the certificate if `REVOKED`.
+ * @param renew_by
+ * @param renewal_due
  *
  * @see createOCSPCertId
  * @see ocspResponseToBytes
  */
-PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const serial_number_t serial, const certstatus_t status, const CertDate &status_date, const CertDate &predicated_revocation_time) const {
+PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const serial_number_t serial, const certstatus_t status, const CertDate &status_date, const CertDate &predicated_revocation_time, const CertDate &renew_by, bool renewal_due) const {
     // Create OCSP response
     const ossl_ptr<OCSP_BASICRESP> basic_resp(OCSP_BASICRESP_new());
 
@@ -108,7 +110,7 @@ PVACertificateStatus CertStatusFactory::createPVACertificateStatus(const serial_
     log_debug_printf(status_setup, "Status Validity: %s\n", status_valid_until_time.s.c_str());
     log_debug_printf(status_setup, "Revocation Date: %s\n", revocation_time_to_use.s.c_str());
 
-    return PVACertificateStatus(status, ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time_to_use);
+    return PVACertificateStatus(status, ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time_to_use, renew_by, renewal_due);
 }
 
 /**

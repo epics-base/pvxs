@@ -133,34 +133,6 @@ struct PVXS_API ConfigCommon {
      */
     bool isTlsConfigured() const { return !tls_disabled && !tls_keychain_file.empty(); }
 #endif  // PVXS_ENABLE_OPENSSL
-
-    struct PickOne {
-        const std::map<std::string, std::string> &defs;
-        bool useenv;
-
-        std::string name, val;
-
-        bool operator()(std::initializer_list<const char *> names) {
-            for (auto candidate : names) {
-                if (useenv) {
-                    if (auto eval = getenv(candidate)) {
-                        name = candidate;
-                        val = eval;
-                        return true;
-                    }
-
-                } else {
-                    auto it = defs.find(candidate);
-                    if (it != defs.end()) {
-                        name = candidate;
-                        val = it->second;
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-    };
 };
 }  // namespace impl
 }  // namespace pvxs

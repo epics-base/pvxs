@@ -346,6 +346,34 @@ struct InstCounter {
 #define DEFINE_INST_COUNTER2(KLASS, NAME) std::atomic<size_t> KLASS::cnt_ ## NAME {0u}
 #define DEFINE_INST_COUNTER(KLASS) DEFINE_INST_COUNTER2(KLASS, KLASS)
 
+struct PickOne {
+    const std::map<std::string, std::string> &defs;
+    bool useenv;
+
+    std::string name, val;
+
+    bool operator()(std::initializer_list<const char *> names) {
+        for (auto candidate : names) {
+            if (useenv) {
+                if (auto eval = getenv(candidate)) {
+                    name = candidate;
+                    val = eval;
+                    return true;
+                }
+
+            } else {
+                auto it = defs.find(candidate);
+                if (it != defs.end()) {
+                    name = candidate;
+                    val = it->second;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+};
+
 } // namespace pvxs
 
 #endif // UTILPVT_H

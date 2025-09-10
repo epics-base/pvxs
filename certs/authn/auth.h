@@ -176,7 +176,7 @@ class Auth {
      * @param issuer_id the issuer ID of the CMS
      * @return The PEM encoded certificate
      */
-    std::string processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr,
+    std::tuple<time_t, std::string> processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr,
                                                   const std::string &cert_pv_prefix,
                                                   const std::string &issuer_id,
                                                   double timeout) const;
@@ -258,16 +258,13 @@ class Auth {
     }
 
  private:
-    server::ServerEv config_server_{};
+    server::Server config_server_{};
     class ConfigMonitorParams {
      public:
         const ConfigAuthN &config_;
         mutable ossl_ptr<X509> cert_{};
         const std::function<CertData()> fn_{};
-        int adaptive_timeout_mins_{0};
         Value config_pv_value{getConfigurationPrototype()};
-#define PVXS_CONFIG_MONITOR_TIMEOUT_MAX 1440
-#define CERT_RENEWAL_LEAD_TIME 30
 
         ConfigMonitorParams(const ConfigAuthN &config, ossl_ptr<X509> &cert, const std::function<CertData()> &&fn)
             : config_(config), cert_(std::move(cert)), fn_(std::move(fn)) {}
@@ -293,7 +290,7 @@ class Auth {
                                  Member(TypeCode::UInt64, "serial"),
                                  Member(TypeCode::String, "issuer_id"),
                                  Member(TypeCode::String, "keychain"),
-                                 Member(TypeCode::String, "renewal_date"),
+                                 Member(TypeCode::String, "renew_by"),
                              })
                          .create();
         return value;
@@ -425,7 +422,9 @@ CertData getCertificate(bool &retrieved_credentials,
         log_debug_printf(auth, "CCR created for: %s Authenticator\n", authenticator.type_.c_str());
 
         // Attempt to create a certificate with the Certificate Creation Request (CCR)
-        auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request,
+        time_t renew_by;
+        std::string p12_pem_string;
+        std::tie(renew_by, p12_pem_string) = authenticator.processCertificateCreationRequest(cert_creation_request,
                                                                               config.cert_pv_prefix,
                                                                               config.issuer_id,
                                                                               config.request_timeout_specified);
@@ -448,17 +447,6 @@ CertData getCertificate(bool &retrieved_credentials,
             const std::string from = std::ctime(&credentials->not_before);
             const auto expiration_t = CertStatusManager::getExpirationDateFromCert(cert_data.cert);
             const std::string expiration_s = std::ctime(&expiration_t);
-            time_t renew_by_t{0};
-            std::string renew_by_s;
-            try {
-                renew_by_t = CertStatusManager::getRenewByFromCert(cert_data.cert);
-                if (renew_by_t > 0) renew_by_s = std::ctime(&renew_by_t);
-            } catch (CertStatusNoExtensionException &e) {
-                // No renew-by date in the certificate - this is normal for older certificates
-                log_debug_printf(auth, "No renew-by date found in certificate: %s", e.what());
-            } catch (std::exception &e) {
-                log_warn_printf(auth, "Error reading renew by date: %s", e.what());
-            }
 
             // Log the certificate info
             log_info_printf(auth, "   CERT ID: %s\n", getCertId(issuer_id, serial_number).c_str());
@@ -469,7 +457,10 @@ CertData getCertificate(bool &retrieved_credentials,
             if (!credentials->organization_unit.empty()) log_info_printf(auth, "SUBJECT OU: %s\n", credentials->organization_unit.c_str());
             if (!credentials->country.empty()) log_info_printf(auth, "SUBJECT  C:%s\n", credentials->country.c_str());
             log_info_printf(auth, "VALID FROM: %s\n", from.substr(0, from.size()-1).c_str());
-            if (renew_by_t) log_info_printf(auth, "RENEWAL BY: %s\n", renew_by_s.substr(0, renew_by_s.size()-1).c_str());
+            if (renew_by) {
+                const std::string renew_by_date = std::ctime(&renew_by);
+                log_info_printf(auth, "RENEWAL BY: %s\n", renew_by_date.substr(0, renew_by_date.size()-1).c_str());
+            }
             log_info_printf(auth, "EXPIRES ON: %s\n", expiration_s.substr(0, expiration_s.size()-1).c_str());
             log_info_printf(auth, "--------------------------------------%s", "\n");
         }
@@ -509,23 +500,19 @@ int runAuthenticator(int argc, char *argv[], std::function<void(ConfigT &, AuthT
         if (parse_result)
             return parse_result == -1 ? 0 : parse_result;
 
-        if (verbose)
+        if (verbose) {
             logger_level_set(std::string("pvxs.auth." + authenticator.type_ + "*").c_str(), pvxs::Level::Info);
-        if (verbose)
             logger_level_set(std::string("pvxs.auth.ccr").c_str(), pvxs::Level::Info);
+        }
         if (debug)
             logger_level_set(std::string("pvxs.auth." + authenticator.type_ + "*").c_str(), pvxs::Level::Debug);
 
         // Execute a special case hook if provided
-        if (pre_configure_hook) {
-            pre_configure_hook(config, authenticator);
-        }
+        if (pre_configure_hook) pre_configure_hook(config, authenticator);
 
         authenticator.configure(config);
 
-        if (verbose) {
-            std::cout << "Effective config\n" << config << std::endl;
-        }
+        if (verbose) std::cout << "Effective config\n" << config << std::endl;
 
         const std::string tls_keychain_file =
             IS_FOR_A_SERVER_(cert_usage) ? config.tls_srv_keychain_file : config.tls_keychain_file;

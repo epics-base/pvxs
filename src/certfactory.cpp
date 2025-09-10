@@ -120,10 +120,6 @@ ossl_ptr<X509> CertFactory::create() {
         if (!cert_config_uri_base_.empty()) {
             addCustomExtensionByNid(certificate, ossl::NID_SPvaCertConfigURI, getConfigURI(cert_pv_prefix_, issuer_id, skid));
         }
-
-        if (renew_by_ > 0 &&  renew_by_ != not_after_) {
-            addCustomTimeExtensionByNid(certificate, ossl::NID_SPvaRenewByDate, renew_by_);
-        }
     }
 
     // 12. Create cert chain from issuer's chain and issuer's cert
@@ -435,14 +431,14 @@ void CertFactory::addCustomExtensionByNid(const ossl_ptr<X509> &certificate, con
         throw std::runtime_error("Adding custom extension: Failed to create ASN1_IA5STRING object");
     }
 
-    // Set the string data using IA5STRING
+    // Set the string data using ASN1_STRING_set
     if (!ASN1_STRING_set(string_data.get(), value.c_str(), value.size())) {
         const auto err = ERR_get_error();
         ERR_error_string_n(err, err_msg, sizeof(err_msg));
         throw std::runtime_error(SB() << "Adding custom extension: Failed to set ASN1_STRING: " << err_msg);
     }
 
-    // Create a new extension using your smart pointer
+    // Create a new extension using the smart pointer
     const ossl_ptr<X509_EXTENSION> ext(X509_EXTENSION_create_by_NID(nullptr, nid, false, string_data.get()), false);
     if (!ext) {
         const auto err = ERR_get_error();

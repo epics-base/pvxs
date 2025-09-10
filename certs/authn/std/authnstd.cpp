@@ -141,7 +141,7 @@ std::shared_ptr<Credentials> AuthNStd::getCredentials(const client::Config &conf
     const time_t now = time(nullptr);
     std_credentials->not_before = now;
     if (std_config.cert_validity_mins <= 0)
-        std_credentials->not_after = -1;
+        std_credentials->not_after = 0;
     else
         std_credentials->not_after = now + std_config.cert_validity_mins * 60;
 

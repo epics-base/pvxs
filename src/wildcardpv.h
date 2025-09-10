@@ -146,10 +146,8 @@ struct PVXS_API WildcardSource final : Source, std::enable_shared_from_this<Wild
   private:
     mutable RWLock lock;
     pv_list_t pvs;
-    decltype(List::names) list_names;
 
     bool wildcardMatch(const std::string& searched_name, WildcardPV& pv);
-    bool simpleMatch(const std::string& searched_name, WildcardPV& pv);
 
     static const std::string kEpicsWildcardChars;
 };

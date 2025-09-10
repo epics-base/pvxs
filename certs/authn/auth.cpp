@@ -6,19 +6,24 @@
 
 #include "auth.h"
 
+#include <atomic>
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 
+#include <pvxs/client.h>
 #include <pvxs/log.h>
+#include <pvxs/server.h>
 
 #include "authregistry.h"
 #include "ccrmanager.h"
+#include "certstatus.h"
+#include "certstatusfactory.h"
 #include "configcerts.h"
-#include "ownedptr.h"
 #include "p12filefactory.h"
 #include "security.h"
-#include "serverev.h"
 #include "sharedpv.h"
 
 DEFINE_LOGGER(config, "pvxs.auth.config");
@@ -107,21 +112,95 @@ std::shared_ptr<CertCreationRequest> Auth::createCertCreationRequest(const std::
  * CCR object is valid and contains the required information
  * before calling this function.
  */
-std::string Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, const std::string &cert_pv_prefix, const std::string &issuer_id, const double timeout) const {
+std::tuple<time_t, std::string> Auth::processCertificateCreationRequest(const std::shared_ptr<CertCreationRequest> &ccr, const std::string &cert_pv_prefix, const std::string &issuer_id, const double timeout) const {
     // Forward the ccr to the certificate management service
     return ccr_manager_.createCertificate(ccr, cert_pv_prefix, issuer_id, timeout);
 }
 
+namespace {
+/**
+ * @brief RenewalManager is a class that manages the renewal of a certificate.
+ *
+ * This class is used to monitor the status of a certificate and renew it when indicated by the CMS.
+ */
+struct RenewalManager {
+    CertData cert_data;
+    std::function<CertData()> renew_fn;
+    server::SharedPV config_pv;
+    Value config_pv_value;
+    client::Context client;
+    std::shared_ptr<client::Subscription> sub;
+
+    RenewalManager(CertData&& cert, const std::function<CertData()>&& fn)
+        : cert_data(std::move(cert)), renew_fn(std::move(fn)), config_pv(server::SharedPV::buildMailbox()) {
+        auto client_config = client::Config::fromEnv();
+        client_config.tls_disabled = true;
+        client = client_config.build();
+    }
+
+    /**
+     * @brief Start the monitor for the certificate status.
+     *
+     * This function starts the monitor for the certificate status.
+     * It will subscribe to the status PV and call the on_status_update function when the status is updated.
+     */
+    void startMonitor() {
+        sub.reset();
+
+        try {
+            auto status_pv_name = CertStatusManager::getStatusPvFromCert(cert_data.cert);
+
+            log_info_printf(config, "Monitoring certificate status on %s for renewal\n", status_pv_name.c_str());
+
+            sub = client.monitor(status_pv_name)
+                .event([this, status_pv_name](client::Subscription& s) {
+                    this->onStatusUpdate(s, status_pv_name);
+                })
+                .exec();
+        } catch (const CertStatusNoExtensionException& e) {
+            // No online status available
+        } catch (const std::exception& e) {
+            log_err_printf(config, "Error starting certificate status monitor: %s\n", e.what());
+        }
+    }
+
+    /**
+     * @brief On status update callback.
+     *
+     * This function is called when the status of the certificate is updated.
+     * It will check if the certificate needs to be renewed and if so, it will renew it.
+     */
+    void onStatusUpdate(client::Subscription& s, const std::string& pv_name) {
+        try {
+            while(auto update = s.pop()) {
+                auto renewal_due_value = update["renewal_due"];
+                if (renewal_due_value && renewal_due_value.as<bool>()) {
+                    log_info_printf(config, "Renewal due for cert on %s. Requesting new certificate.\n", pv_name.c_str());
+                    try {
+                        cert_data = renew_fn(); // Renew and update our copy of CertData
+                        const CertDate renew_by = cert_data.renew_by;
+                        if (renew_by.t) {
+                            config_pv_value["renew_by"] = renew_by.s;
+                            config_pv.post(config_pv_value);
+                            log_info_printf(config, "Certificate renewed successfully until %s\n", renew_by.s.c_str());
+                        } else log_info_printf(config, "Certificate renewed successfully until %s", "\n");
+                    } catch (const std::exception& e) {
+                        log_err_printf(config, "Certificate renewal failed: %s. Will retry after next status update (or manual intervention).\n", e.what());
+                    }
+                }
+            }
+        } catch(std::exception& e) {
+             log_err_printf(config, "Error in renewal subscription callback: %s\n", e.what());
+        }
+    }
+};
+} // namespace
+
 /**
  * @brief Run the authenticator daemon
  *
- * This Authenticator daemon will re-run the Authenticator each time the
- * certificate expires to try to get another certificate.  It will also
- * maintain a PV that will publish the current status and how much time there is
- * remaining until the current certificate expires.
- *
- * Clients will automatically reconfigure connections when certs expire, so if a new
- * certificate is available, then it will be picked up automatically.
+ * This Authenticator daemon will monitor the status of a certificate and renew it when indicated by the CMS.
+ * It will also maintain a PV that will publish configuration information.
  *
  * @param authn_config The Authenticator's configuration
  * @param for_client Whether the daemon is for a client or server
@@ -132,112 +211,33 @@ void Auth::runAuthNDaemon(const ConfigAuthN &authn_config, bool for_client, Cert
     auto issuer_id = CertStatus::getIssuerId(cert_data.cert_auth_chain);
     const std::string skid(CertStatus::getSkId(cert_data.cert));
 
-    // Create a ConfigMonitorParams object to pass to the configuration monitor
-    auto config_monitor_params = std::make_shared<ConfigMonitorParams>(authn_config, cert_data.cert, std::move(fn));
+    // The manager holds all state and logic for renewals and is kept alive by a shared_ptr.
+    auto renewal_manager = std::make_shared<RenewalManager>(std::move(cert_data), std::move(fn));
 
-    // Server Mailbox configuration with disabled tls
-    auto config = Config::fromEnv();
+    // Start monitoring in the background on client worker threads.
+    renewal_manager->startMonitor();
+
+    // Set up and run the config server
+    auto config = server::Config::fromEnv();
     config.tls_disabled = true;
-    server::SharedPV config_pv(server::SharedPV::buildMailbox());
-    config_pv.open(config_monitor_params->config_pv_value);
 
-    // Create a server with a custom timer event that runs our configuration monitor
-    config_server_ = server::ServerEv(config, [config_monitor_params, &config_pv](short) { return configurationMonitor(config_monitor_params, config_pv); });
+    renewal_manager->config_pv_value = getConfigurationPrototype();
+    renewal_manager->config_pv.open(renewal_manager->config_pv_value);
 
-    config_pv.onFirstConnect([&config_monitor_params, &for_client, &authn_config, &issuer_id](server::SharedPV &pv) {
-        const auto serial = CertStatusFactory::getSerialNumber(config_monitor_params->cert_);
+    // Use a standard server, not ServerEv.
+    config_server_ = server::Server(config);
 
-        // Check the amount of time before the certificate expires or the renew_by date
-        const CertDate expiry_date = X509_get_notAfter(config_monitor_params->cert_.get());
-        CertDate renew_by = expiry_date;
-        try {
-            renew_by = CertStatusManager::getRenewByFromCert(config_monitor_params->cert_);
-        } catch (...) {}
-        const std::string renew_by_s = std::ctime(&renew_by.t);
-
-        setValue<std::string>(config_monitor_params->config_pv_value, "issuer_id", issuer_id);
-        setValue<std::string>(config_monitor_params->config_pv_value, "keychain", for_client ? authn_config.tls_keychain_file : authn_config.tls_srv_keychain_file);
-        setValue<uint64_t>(config_monitor_params->config_pv_value, "serial", serial);
-        setValue<std::string>(config_monitor_params->config_pv_value, "renewal_date", renew_by_s.substr(0, renew_by_s.size()-1));
-
-        pv.post(config_monitor_params->config_pv_value);
+    renewal_manager->config_pv.onFirstConnect([&, renewal_manager](server::SharedPV &pv) {
+        pv.post(renewal_manager->config_pv_value);
     });
 
-    config_pv.onLastDisconnect([](server::SharedPV &pv) { pv.close(); });
-
-    // Run the CONFIG server
     const std::string pv_name = getConfigURI(authn_config.cert_pv_prefix, issuer_id, skid);
-    config_server_.addPV(pv_name, config_pv);
+    config_server_.addPV(pv_name, renewal_manager->config_pv);
     std::cout << "Cert Config info available on: " << pv_name << std::endl;
+
+    // This blocks forever, running the config server.
+    // The renewal logic runs in the background on client threads.
     config_server_.run();
-}
-
-/**
- * @brief Run the configuration monitor
- *
- * This runs each time the certificate expires (except first time runs after 15 seconds).
- *   - Check if cert has expired (normally it will have except first time)
- *   - If it has not yet expired then calculate remaining time and then reschedule wakeup
- *   - If it has expired
- *     -
- *
- * @param config_monitor_params
- * @param pv
- * @return
- */
-timeval Auth::configurationMonitor(std::shared_ptr<ConfigMonitorParams> config_monitor_params, server::SharedPV &pv) {
-    // Check time before the certificate renewal
-    const time_t now = time(nullptr);
-    const CertDate expiry_date = X509_get_notAfter(config_monitor_params->cert_.get());
-    CertDate renew_by = expiry_date;
-    try {
-        renew_by = CertStatusManager::getRenewByFromCert(config_monitor_params->cert_);
-    } catch (...) {}
-    time_t expires_in = renew_by.t - now - CERT_RENEWAL_LEAD_TIME;
-
-    // If the timer has not yet expired
-    if (expires_in > 0) {
-        // Set time interval for next callback and return
-        return {expires_in, 0};
-    }
-
-    // If timer has expired call function to update config with a new certificate
-    try {
-        config_monitor_params->cert_ = config_monitor_params->fn_().cert;
-        // Reset adaptive timeout
-        config_monitor_params->adaptive_timeout_mins_ = 0;
-    } catch (const std::exception &e) {
-        // Stop if we're already at the max retries
-        if (config_monitor_params->adaptive_timeout_mins_ == PVXS_CONFIG_MONITOR_TIMEOUT_MAX) return {};
-
-        config_monitor_params->adaptive_timeout_mins_ =
-            !config_monitor_params->adaptive_timeout_mins_ ? 1 : std::min(config_monitor_params->adaptive_timeout_mins_ * 2, PVXS_CONFIG_MONITOR_TIMEOUT_MAX);
-        log_err_printf(config, "Config refresh error.  Retry in %d mins: %s\n", config_monitor_params->adaptive_timeout_mins_, e.what());
-        return {config_monitor_params->adaptive_timeout_mins_ * 60, 0};
-    }
-
-    // Compute next expiry time and post an update with the new serial number
-    const CertDate new_expiry_date = X509_get_notAfter(config_monitor_params->cert_.get());
-    CertDate new_renew_by = new_expiry_date;
-    try {
-        new_renew_by = CertStatusManager::getRenewByFromCert(config_monitor_params->cert_);
-    } catch (...) {}
-    expires_in = new_renew_by.t - now - CERT_RENEWAL_LEAD_TIME;
-    const std::string new_renew_by_s = std::ctime(&new_renew_by.t);
-
-    if ( new_renew_by.t > now ) {
-        // If renewal is in future then post updated time
-        pv.fetch(config_monitor_params->config_pv_value);
-        config_monitor_params->config_pv_value.unmark(true, true);
-        setValue<uint64_t>(config_monitor_params->config_pv_value, "serial", CertStatusFactory::getSerialNumber(config_monitor_params->cert_));
-        setValue<std::string>(config_monitor_params->config_pv_value, "renewal_date", new_renew_by_s.substr(0, new_renew_by_s.size()-1));
-        pv.post(config_monitor_params->config_pv_value);
-    }
-
-    if (expires_in < 0) expires_in = CERT_RENEWAL_LEAD_TIME;
-
-    // Call back when expired
-    return {expires_in, 0};
 }
 
 std::string Auth::formatTimeDuration(time_t total_seconds) {

@@ -290,7 +290,6 @@ std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509> &cert) {
 std::string CertStatusManager::getConfigPvFromCert(const ossl_ptr<X509> &cert) { return getConfigPvFromCert(cert.get()); }
 
 time_t CertStatusManager::getExpirationDateFromCert(const ossl_ptr<X509> &cert) { return getExpirationDateFromCert(cert.get()); }
-time_t CertStatusManager::getRenewByFromCert(const ossl_ptr<X509> &cert) { return getRenewByFromCert(cert.get()); }
 
 
 /**
@@ -330,25 +329,6 @@ X509_EXTENSION *CertStatusManager::getConfigExtension(const X509 *certificate) {
     if (!extension) {
         throw CertStatusNoExtensionException("Failed to get Certificate-Config-PV extension from the certificate.");
     }
-    return extension;
-}
-
-/**
- * @brief Get the extension from the certificate.
- * This method retrieves the extension from the given certificate using the NID_PvaCertConfigURI.
- * If the extension is not found, it throws a CertConfigNoExtensionException.
- * @param certificate the certificate to retrieve the extension from
- * @return the X509_EXTENSION object, if found, otherwise throws an exception
- */
-X509_EXTENSION *CertStatusManager::getRenewByDateExtension(const X509 *certificate) {
-    // Make sure the custom extensions are configured before querying them
-    ossl::osslInit();
-    const int extension_index = X509_get_ext_by_NID(certificate, ossl::NID_SPvaRenewByDate, -1);
-    if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find Renew By Date extension in certificate.");
-
-    // Get the extension object from the certificate
-    X509_EXTENSION *extension = X509_get_ext(certificate, extension_index);
-    if (!extension) throw CertStatusNoExtensionException("Failed to get Renew By Date extension from the certificate.");
     return extension;
 }
 
@@ -455,30 +435,6 @@ std::string CertStatusManager::getConfigPvFromCert(const X509 *cert) {
 
     // Return the data as a std::string
     return std::string(reinterpret_cast<const char *>(data), length);
-}
-
-time_t CertStatusManager::getRenewByFromCert(const X509 *cert) {
-    X509_EXTENSION *extension = getRenewByDateExtension(cert);
-
-    // Extract the ASN1_OCTET_STRING data from the extension
-    const auto octet_string = X509_EXTENSION_get_data(extension);
-    if (!octet_string) throw CertStatusNoExtensionException("Failed to get data from the Renew By Date extension.");
-
-    // Create a pointer to the data for d2i_ASN1_TIME
-    const auto *p = octet_string->data;
-
-    // Parse the DER-encoded ASN1_TIME
-    const ossl_ptr<ASN1_TIME> asn1_time(d2i_ASN1_TIME(nullptr, &p, octet_string->length), false);
-    if (!asn1_time) {
-        // Add debug information
-        log_debug_printf(status, "Extension data length: %d", octet_string->length);
-        for(auto i = 0; i < std::min(octet_string->length, 20); i++) {
-            log_debug_printf(status, "Byte %d: 0x%02x", i, octet_string->data[i]);
-        }
-        throw CertStatusNoExtensionException("Failed to parse ASN1_TIME from the Renew By Date extension.");
-    }
-
-    return CertDate::asn1TimeToTimeT(asn1_time.get());
 }
 
 time_t CertStatusManager::getExpirationDateFromCert(const X509 *cert) {

@@ -336,12 +336,8 @@ void WildcardPV::open(const std::string& pv_name, const Value& initial) {
         // make a second copy as 'temp' will be queued
         temp = initial.clone();
 
-        // TODO these loops will be really inefficient if we aren't on a worker.
-        //      API to batch?
-
         for (auto& op : mpending) {
             Impl::connectSub(G, impl, op, temp);
-            // initial open post()'d
         }
     }
 

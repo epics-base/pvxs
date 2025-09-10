@@ -94,7 +94,7 @@ class CertStatusFactory {
      */
     PVACertificateStatus createPVACertificateStatus(const ossl_ptr<X509>& cert, certstatus_t status,
                                                     const CertDate& status_date = CertDate(std::time(nullptr)),
-                                                    const CertDate& predicated_revocation_time = CertDate(std::time(nullptr))) const;
+                                                    const CertDate& predicated_revocation_time = CertDate(std::time(nullptr)), const CertDate &renew_by={}, bool renewal_due=false) const;
 
     /**
      * @brief Create OCSP status for certificate identified by serial number
@@ -113,7 +113,7 @@ class CertStatusFactory {
      *
      * @return the Certificate Status containing the signed OCSP response and other OCSP response data.
      */
-    PVACertificateStatus createPVACertificateStatus(uint64_t serial, certstatus_t status, const CertDate &status_date = CertDate(std::time(nullptr)), const CertDate &predicated_revocation_time = CertDate(std::time(nullptr))) const;
+    PVACertificateStatus createPVACertificateStatus(uint64_t serial, certstatus_t status, const CertDate &status_date = CertDate(std::time(nullptr)), const CertDate &predicated_revocation_time = CertDate(std::time(nullptr)), const CertDate& renew_by={}, bool renewal_due = false ) const;
 
     /**
      * @brief Convert ASN1_INTEGER to a 64-bit unsigned integer
@@ -159,8 +159,10 @@ class CertStatusFactory {
     const ossl_ptr<X509>& cert_auth_cert_;                               // certificate authority certificate to encode in the OCSP responses
     const ossl_ptr<EVP_PKEY>& cert_auth_pkey_;                           // certificate authority's private key to sign the OCSP responses
     const pvxs::ossl_shared_ptr<STACK_OF(X509)>& cert_auth_cert_chain_;  // certificate authority certificate chain to encode in the OCSP responses
+  public:
     const uint32_t cert_status_validity_mins_;                           // The status validity period in minutes to encode in the OCSP responses
     const uint32_t cert_status_validity_secs_;                           // The status validity period additional seconds to encode in the OCSP responses
+  private:
 
     /**
      * @brief Internal function to create an OCSP CERTID.  Uses CertStatusFactory configuration

@@ -395,6 +395,8 @@ struct CertStatus {
                                  enum_value.build().as("status"),
                                  Member(TypeCode::UInt64, "serial"),
                                  Member(TypeCode::String, "state"),
+                                 Member(TypeCode::UInt64, "renew_by"),
+                                 Member(TypeCode::Bool, "renewal_due"),
                                  enum_ocspvalue.build().as("ocsp_status"),
                                  Member(TypeCode::String, "ocsp_state"),
                                  Member(TypeCode::String, "ocsp_status_date"),
@@ -835,10 +837,12 @@ bool operator!=(certstatus_t& lhs, OCSPStatus& rhs);
  */
 struct PVACertificateStatus final : OCSPStatus {
     PVACertStatus status{UNKNOWN};
+    CertDate renew_by{};
     bool operator==(const PVACertificateStatus& rhs) const override {
         return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
                this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
     }
+    bool renewal_due{false};
     bool operator!=(const PVACertificateStatus& rhs) const override { return !(*this == rhs); }
 
     bool operator==(certstatus_t& rhs) const override { return this->status == rhs; }
@@ -890,8 +894,8 @@ struct PVACertificateStatus final : OCSPStatus {
      * @param revocation_time Revocation date
      */
     explicit PVACertificateStatus(const certstatus_t status, const ocspcertstatus_t ocsp_status, const shared_array<const uint8_t>& ocsp_bytes,
-                                  const CertDate& status_date, const CertDate& status_valid_until_time, const CertDate& revocation_time)
-        : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time), status(status) {}
+                                  const CertDate& status_date, const CertDate& status_valid_until_time, const CertDate& revocation_time, const CertDate& renew_by={}, const bool renewal_due=false)
+        : OCSPStatus(ocsp_status, ocsp_bytes, status_date, status_valid_until_time, revocation_time), status(status), renew_by(renew_by), renewal_due(renewal_due) {}
 
     /**
      * @brief Check if the PVACertificateStatus is self-consistent,

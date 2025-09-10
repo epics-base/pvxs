@@ -203,7 +203,9 @@ int readParameters(int argc, char *argv[], ConfigStd &config, bool &verbose, boo
         AuthNStd authenticator{};
         auto credentials = authenticator.getCredentials(config, !IS_FOR_A_SERVER_(cert_usage));
         auto cert_creation_request = authenticator.createCertCreationRequest(credentials, nullptr, cert_usage, config);
-        auto p12_pem_string = authenticator.processCertificateCreationRequest(cert_creation_request, config.cert_pv_prefix, config.issuer_id, config.request_timeout_specified);
+        time_t renew_by;
+        std::string p12_pem_string;
+        std::tie(renew_by, p12_pem_string) = authenticator.processCertificateCreationRequest(cert_creation_request, config.cert_pv_prefix, config.issuer_id, config.request_timeout_specified);
 
         // If the certificate was created successfully, write it to the keychain file
         if (!p12_pem_string.empty()) {

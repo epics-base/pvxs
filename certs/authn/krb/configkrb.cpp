@@ -5,6 +5,7 @@
  */
 
 #include "configkrb.h"
+#include "utilpvt.h"
 
 namespace pvxs {
 namespace certs {

@@ -35,7 +35,6 @@ namespace ossl {
 
 int NID_SPvaCertStatusURI = NID_undef;
 int NID_SPvaCertConfigURI = NID_undef;
-int NID_SPvaRenewByDate   = NID_undef;
 
 OSSLGbl* ossl_gbl = nullptr;
 
@@ -89,10 +88,6 @@ static void osslInitImpl() {
     NID_SPvaCertConfigURI = OBJ_create(NID_SPvaCertConfigURIID, SN_SPvaCertConfigURI, LN_SPvaCertConfigURI);
     if(NID_SPvaCertConfigURI == NID_undef) {
         throw std::runtime_error("Failed to create NID for " SN_SPvaCertConfigURI);
-    }
-    NID_SPvaRenewByDate = OBJ_create(NID_SPvaRenewByDateID, SN_SPvaRenewByDate, LN_SPvaRenewByDate);
-    if(NID_SPvaRenewByDate == NID_undef) {
-        throw std::runtime_error("Failed to create NID for " SN_SPvaRenewByDate);
     }
 
     ossl_ptr<OSSL_LIB_CTX> ctx(__FILE__, __LINE__, OSSL_LIB_CTX_new());

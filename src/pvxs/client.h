@@ -1086,7 +1086,7 @@ public:
     //! Default configuration using process environment
     static inline Config fromEnv() { return Config{}.applyEnv(); }
     //! update using defined EPICS_PVA* environment variables
-    virtual Config &applyEnv(); // TODO sort out virtual problem
+    virtual Config &applyEnv();
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables

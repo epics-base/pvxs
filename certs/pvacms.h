@@ -43,7 +43,8 @@
     "     approved INTEGER,"            \
     "     not_before INTEGER,"          \
     "     not_after INTEGER,"           \
-    "     renew_by INTEGER,"       \
+    "     renew_by INTEGER,"            \
+    "     renewal_due INTEGER,"         \
     "     status INTEGER,"              \
     "     status_date INTEGER"          \
     "); "                               \
@@ -76,7 +77,8 @@
     "     approved,"                  \
     "     not_before,"                \
     "     not_after,"                 \
-    "     renew_by,"             \
+    "     renew_by,"                  \
+    "     renewal_due,"               \
     "     status,"                    \
     "     status_date"                \
     ") "                              \
@@ -90,7 +92,8 @@
     "     :approved,"                 \
     "     :not_before,"               \
     "     :not_after,"                \
-    "     :renew_by,"            \
+    "     :renew_by,"                 \
+    "     0,"                         \
     "     :status,"                   \
     "     :status_date"               \
     ")"
@@ -108,33 +111,11 @@
     "FROM certs "                       \
     "WHERE skid = :skid "
 
-// Delete certs that have become obsolete due to renewal
-#define SQL_DELETE_RENEWER_CERTS      \
-    "DELETE FROM certs "              \
-    "WHERE CN = :CN "                 \
-    "  AND O = :O "                   \
-    "  AND OU = :OU "                 \
-    "  AND C = :C "                   \
-    "  AND status IN (:status0, :status1, :status2, :status3) " \
-    "  AND NOT (serial = :serial OR not_before = (  "      \
-    "      SELECT not_before "       \
-    "        FROM certs "            \
-    "       WHERE CN = :CN "         \
-    "         AND O = :O "           \
-    "         AND OU = :OU "         \
-    "         AND C = :C "           \
-    "         AND status IN (:status0, :status1, :status2, :status3) " \
-    "         AND renew_by != 0 " \
-    "       ORDER BY not_before ASC " \
-    "       LIMIT 1 "                \
-    "      ) "                       \
-    "    )"
-
-// Get the original certificate being renewed
+// Get the certificate due to be renewed
 #define SQL_GET_RENEWED_CERT          \
     "SELECT serial"                   \
     "     , not_after "               \
-    "     , renew_by "           \
+    "     , renew_by "                \
     "     , status "                  \
     "FROM certs "                     \
     "WHERE CN = :CN "                 \
@@ -143,14 +124,26 @@
     "  AND C = :C "                   \
     "  AND status IN (:status0, :status1, :status2, :status3) " \
     "  AND serial != :serial "        \
-    "  AND renew_by != 0 "       \
+    "  AND renewal_due != 0 "         \
     "LIMIT 1 "                        \
+
+#define SQL_TOUCH_CERT_STATUS         \
+    "UPDATE certs "                   \
+    "SET status_date = :status_date " \
+    "WHERE serial = :serial "
 
 #define SQL_RENEW_CERTS               \
     "UPDATE certs "                   \
     "SET status = :status "           \
-    "  , renew_by = :renew_by " \
     "  , status_date = :status_date " \
+    "  , renew_by = :renew_by "       \
+    "  , renewal_due = 0 " \
+    "WHERE serial = :serial "
+
+#define SQL_FLAG_RENEW_CERTS          \
+    "UPDATE certs "                   \
+    "SET status_date = :status_date " \
+    "  , renewal_due = 1 " \
     "WHERE serial = :serial "
 
 #define SQL_CERT_STATUS               \
@@ -162,7 +155,7 @@
 #define SQL_CERT_VALIDITY             \
     "SELECT not_before "              \
     "     , not_after "               \
-    "     , renew_by "           \
+    "     , renew_by "                \
     "FROM certs "                     \
     "WHERE serial = :serial"
 
@@ -170,6 +163,7 @@
     "UPDATE certs "                   \
     "SET status = :status "           \
     "  , status_date = :status_date " \
+    "  , renewal_due = 0 "            \
     "WHERE serial = :serial "
 
 #define SQL_CERT_SET_STATUS_W_APPROVAL \
@@ -177,14 +171,15 @@
     "SET status = :status "            \
     "  , approved = :approved "        \
     "  , status_date = :status_date "  \
+    "  , renewal_due = 0 "            \
     "WHERE serial = :serial "
 
 #define SQL_CERT_TO_VALID              \
     "SELECT serial "                   \
     "FROM certs "                      \
-    "WHERE not_before <= strftime('%s', 'now') " \
-    "  AND not_after > strftime('%s', 'now') "   \
-    "  AND (renew_by = 0 OR renew_by > strftime('%s', 'now')) "
+    "WHERE not_before <= :now "        \
+    "  AND not_after > :now "          \
+    "  AND (renew_by = 0 OR renew_by > :now) "
 
 #define SQL_CERT_BECOMING_INVALID      \
     "SELECT serial, status "           \
@@ -194,21 +189,37 @@
 #define SQL_CERT_TO_EXPIRED            \
     "SELECT serial "                   \
     "FROM certs "                      \
-    "WHERE not_after <= strftime('%s', 'now') "
+    "WHERE not_after <= :now "
 
-#define SQL_CERT_TO_EXPIRED_WITH_FULL_SKID      \
-    "SELECT serial "                            \
-    "FROM certs "                               \
-    "WHERE not_after <= strftime('%s', 'now') " \
+#define SQL_CERT_TO_EXPIRED_WITH_FULL_SKID \
+    "SELECT serial "                       \
+    "FROM certs "                          \
+    "WHERE not_after <= :now "             \
     "  AND skid = :skid "
 
-#define SQL_CERT_TO_PENDING_RENEWAL    \
-    "SELECT serial "                   \
-    "FROM certs "                      \
-    "WHERE not_before <= strftime('%s', 'now') " \
-    "  AND not_after > strftime('%s', 'now') "   \
-    "  AND renew_by != 0 "        \
-    "  AND renew_by <= strftime('%s', 'now') "
+#define SQL_CERT_TO_PENDING_RENEWAL \
+    "SELECT serial "                \
+    "FROM certs "                   \
+    "WHERE not_before <= :now "     \
+    "  AND not_after > :now "       \
+    "  AND renew_by != 0 "          \
+    "  AND renew_by <= :now "
+
+#define SQL_CERT_STATUS_NEARLY_INVALID \
+    "SELECT serial, status "        \
+    "FROM certs "                   \
+    "WHERE not_before <= :now "     \
+    "  AND not_after > :now "       \
+    "  AND 2 * (:now - status_date) >= :status_validity "
+
+#define SQL_CERT_NEARING_RENEWAL   \
+    "SELECT serial "               \
+    "FROM certs "                  \
+    "WHERE renewal_due = 0 "       \
+    "  AND not_before <= :now "    \
+    "  AND not_after > :now "      \
+    "  AND renew_by != 0 "         \
+    "  AND 2 * :now >= status_date + renew_by "
 
 #define SQL_PRIOR_APPROVAL_STATUS \
     "SELECT approved "            \
@@ -230,7 +241,7 @@ namespace certs {
  * for all certificates that have just expired and all certificates that have just become valid.  If any
  * are found then the associated shared wildcard PV is updated and the new status stored in the database.
  *
- * @param certs_db The certificates database object.
+ * @param certs_db The certificates-database object.
  * @param issuer_id The issuer ID.
  * @param status_pv The shared wildcard PV to notify.
  *
@@ -247,7 +258,9 @@ class StatusMonitor {
     ossl_ptr<EVP_PKEY> &cert_auth_pkey_;
     pvxs::ossl_shared_ptr<STACK_OF(X509)> &cert_auth_cert_chain_;
     std::map<serial_number_t, time_t> &active_status_validity_;
-
+  private:
+    mutable epicsMutex lock_;
+  public:
     StatusMonitor(ConfigCms &config, sql_ptr &certs_db, std::string &issuer_id, server::WildcardPV &status_pv, ossl_ptr<X509> &cert_auth_cert,
                   ossl_ptr<EVP_PKEY> &cert_auth_pkey, ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain,
                   std::map<serial_number_t, time_t> &active_status_validity)
@@ -263,6 +276,7 @@ class StatusMonitor {
     std::vector<serial_number_t> getActiveSerials() const {
         const auto cutoff{time(nullptr) - static_cast<uint64_t>(config_.request_timeout_specified)};
         std::vector<serial_number_t> result;
+        Guard G(lock_);
         for (const auto &pair : active_status_validity_) {
             if (pair.second > cutoff) {
                 result.push_back(pair.first);
@@ -274,11 +288,11 @@ class StatusMonitor {
     /**
      * @brief Set the new validity timeout after we've updated the database
      * Note that its possible that the serial has been removed by another thread during the operation
-     * TODO make threadsafe
      * @param serial the serial number of the validity we need to update
      * @param validity_date the new validity date
      */
     void setValidity(const serial_number_t serial, const time_t validity_date) const {
+        Guard G(lock_);
         const auto it = active_status_validity_.find(serial);
         if (it != active_status_validity_.end()) {
             it->second = validity_date;
@@ -362,6 +376,8 @@ void updateCertificateStatus(const sql_ptr &certs_db, uint64_t serial, certstatu
 
 void updateCertificateRenewalStatus(const sql_ptr &certs_db, serial_number_t serial, certstatus_t cert_status, time_t renew_by);
 
+void touchCertificateStatus(const sql_ptr &certs_db, serial_number_t serial);
+
 certstatus_t storeCertificate(const sql_ptr &certs_db, CertFactory &cert_factory);
 
 timeval statusMonitor(const StatusMonitor &status_monitor_params);
@@ -369,7 +385,7 @@ timeval statusMonitor(const StatusMonitor &status_monitor_params);
 Value postCertificateStatus(server::WildcardPV &status_pv, const std::string &pv_name, uint64_t serial, const PVACertificateStatus &cert_status = {});
 
 std::string getValidStatusesClause(const std::vector<certstatus_t> &valid_status);
-void bindValidStatusClauses(sqlite3_stmt *sql_statement, const std::vector<certstatus_t> &valid_status);
+void bindValidStatusClauses(sqlite3_stmt *sql_statement, const std::vector<certstatus_t> &valid_status = {});
 uint64_t getParameters(const std::list<std::string> &parameters);
 
 template <typename T>

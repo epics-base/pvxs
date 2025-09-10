@@ -179,29 +179,29 @@ struct PVXS_API Config : public impl::ConfigCommon {
     //! Supplemented only if auto_beacon==true
     std::vector<std::string> beaconDestinations;
     //! Whether to populate the beacon address list automatically.  (recommended)
-    bool auto_beacon = true;
+    bool auto_beacon;
 
 #ifdef PVXS_ENABLE_OPENSSL
     /**
      * @brief true if server should stop if no cert is available or can be
      * verified if status check is enabled
      */
-    bool tls_stop_if_no_cert = false;
+    bool tls_stop_if_no_cert;
 
     /**
      * @brief true if server should throw an exception if no cert is available or can be
      * verified if status check is enabled
      */
-    bool tls_throw_if_no_cert = false;
+    bool tls_throw_if_no_cert;
 
 #endif // PVXS_ENABLE_OPENSSL
 
     //! Server unique ID.  Only meaningful in readback via Server::config()
-    ServerGUID guid{};
+    ServerGUID guid;
 
 private:
-    bool BE = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
-    bool UDP = true;
+    bool BE;
+    bool UDP;
 public:
 
     // compat
@@ -253,6 +253,17 @@ public:
     inline bool shareUDP() const { return UDP; }
 #endif
     void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);
+
+    Config()
+        : auto_beacon(true)
+#ifdef PVXS_ENABLE_OPENSSL
+        , tls_stop_if_no_cert(false)
+        , tls_throw_if_no_cert(false)
+#endif
+        , guid()
+        , BE(EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG)
+        , UDP(true)
+    {}
 };
 
 PVXS_API

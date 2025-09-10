@@ -30,7 +30,7 @@ class ConfigAuthN : public client::Config {
     std::string tls_srv_keychain_file{};
     std::string tls_srv_keychain_pwd{};
 
-    int64_t cert_validity_mins = -1; // Minutes for Custom Duration of requested certificate
+    int64_t cert_validity_mins = 0; // Minutes for Custom Duration of requested certificate
 
     void fromAuthEnv(const std::map<std::string, std::string>& defs);
     static std::string getIPAddress();

@@ -37,7 +37,7 @@ extern void sslkeylogfile_exit(void *) noexcept;
 
 // "1.3.6.1.4.1" OID prefix for custom OIDs
 
-// EPICS OID for "SPvaCertConfigURI" extension: "37427" DTMF for "EPICS" :)
+// EPICS OID for "SPvaCertStatusURI" extension: "37427" DTMF for "EPICS" :)
 #define NID_SPvaCertStatusURIID "1.3.6.1.4.1.37427.1"
 #define SN_SPvaCertStatusURI "ASN.1 - SPvaCertStatusURI"
 #define LN_SPvaCertStatusURI "EPICS SPVA Certificate Status URI"
@@ -47,16 +47,10 @@ extern void sslkeylogfile_exit(void *) noexcept;
 #define SN_SPvaCertConfigURI "ASN.1 - SPvaCertConfigURI"
 #define LN_SPvaCertConfigURI "EPICS SPVA Certificate Config URI"
 
-// EPICS OID for "SPvaRenewByDate" extension: "73639" DTMF for "RENEW" :)
-#define NID_SPvaRenewByDateID "1.3.6.1.4.1.73639.1"
-#define SN_SPvaRenewByDate "ASN.1 - SPvaRenewByDate"
-#define LN_SPvaRenewByDate "EPICS SPVA Renew By Date"
-
 PVXS_API extern void osslInit();
 
 PVXS_API extern int NID_SPvaCertStatusURI;
 PVXS_API extern int NID_SPvaCertConfigURI;
-PVXS_API extern int NID_SPvaRenewByDate;
 
 }  // namespace ossl
 }  // namespace pvxs

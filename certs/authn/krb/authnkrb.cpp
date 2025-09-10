@@ -80,8 +80,8 @@ std::shared_ptr<Credentials> AuthNKrb::getCredentials(const client::Config &conf
     // Set validity times.
     const time_t now = time(nullptr);
     kerberos_credentials->not_before = now;
-    if ( krb_config.cert_validity_mins == -1 ) {
-        kerberos_credentials->not_after =-1;
+    if ( krb_config.cert_validity_mins <= 0 ) {
+        kerberos_credentials->not_after = 0;
     } else {
         kerberos_credentials->not_after = now + krb_config.cert_validity_mins * 60;
     }

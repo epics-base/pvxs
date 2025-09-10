@@ -399,7 +399,7 @@ struct CertDate {
      */
     static std::string formatDurationMins(const int64_t duration) {
     if (duration == 0) return "0m";
-    if (duration < 0) throw CertTimeParseException("Cannot format negative duration");
+    if (duration < 0) throw CertTimeParseException(SB() << "Cannot format negative duration: " << duration);
 
     // Work with seconds for greater precision
     const int64_t seconds = duration * 60;

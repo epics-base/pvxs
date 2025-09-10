@@ -36,6 +36,7 @@ struct CertData {
     ossl_ptr<X509> cert;
     ossl_shared_ptr<STACK_OF(X509)> cert_auth_chain;
     std::shared_ptr<KeyPair> key_pair;
+    time_t renew_by{0};
 
     CertData(ossl_ptr<X509>& newCert, ossl_shared_ptr<STACK_OF(X509)>& newCa) : cert(std::move(newCert)), cert_auth_chain(newCa) {}
     CertData(ossl_ptr<X509>& newCert, ossl_shared_ptr<STACK_OF(X509)>& newCa, std::shared_ptr<KeyPair> key_pair)

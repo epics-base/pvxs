@@ -175,8 +175,8 @@ struct CertStatusExData {
     const evbase loop;
     // The entity certificate
     ossl_ptr<X509> cert{};
-    // TODO Verify lifetime of this raw pointer
-    // The Trusted Root Certificate Authority
+    // The Trusted Root Certificate Authority.  This is the store pointer
+    // from the SSL_CTX that this CertStatusExData is embedded in, so it will have the same lifetime as this object
     X509_STORE* trusted_store_ptr;
     // Whether status checking is enabled for this context.
     // If not then a permanent status is set and monitoring is not configured
