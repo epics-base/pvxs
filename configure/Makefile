@@ -13,7 +13,7 @@ include $(TOP)/configure/CONFIG
 #   leave unset to use implicit system search path
 # NOTE: only needed if not present in default search paths
 LIBEVENT ?= $(LIBEVENT_$(T_A))
-LIBEVENT_$(T_A) ?= $(wildcard $(abspath $(TOP)/bundle/usr/$(T_A)))
+LIBEVENT_$(T_A) ?= $(wildcard $(abspath $(INSTALL_LOCATION)/bundle/usr/$(T_A)))
 
 INCLUDES += $(if $(LIBEVENT),-I$(LIBEVENT)/include)
 
