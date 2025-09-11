@@ -3,6 +3,7 @@
 
 # we're appending so must be idempotent
 ifeq (,$(_PVXS_RULE_INCLUDED))
+ifdef T_A
 _PVXS_RULE_INCLUDED := YES
 
 ifneq ($(_PVXS_CONF_INCLUDED),YES)
@@ -34,4 +35,5 @@ endif
 
 $(foreach loc,$(_PVXS_CHECK_VARS),$(eval $(call _PVXS_ADD_LIBEVENT,$(loc))))
 
+endif # T_A
 endif # _PVXS_RULE_INCLUDED

@@ -27,10 +27,6 @@ endif
 # breaks on older ncurses (circa RHEL6) not using the INPUT() trick to pull in libtinfo.so
 #USR_LDFLAGS_Linux += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
 
-ifeq (,$(PVXS_MAJOR_VERSION))
-$(error PVXS_MAJOR_VERSION undefined, problem reading cfg/CONFIG_PVXS_VERSION)
-endif
-
 # see below for special case versionNum.h
 EXPAND += describe.h
 

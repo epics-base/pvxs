@@ -9,7 +9,7 @@ _PVXS_BOOTSTRAP = YES
 include $(TOP)/configure/CONFIG
 
 LIBEVENT ?= $(LIBEVENT_$(T_A))
-LIBEVENT_$(T_A) ?= $(wildcard $(abspath $(TOP)/bundle/usr/$(T_A)))
+LIBEVENT_$(T_A) ?= $(wildcard $(abspath $(INSTALL_LOCATION)/bundle/usr/$(T_A)))
 
 _LIBEVENT_BUNDLE_LIBS += event_core
 
