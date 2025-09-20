@@ -193,13 +193,15 @@ struct CertStatusExData {
     // map to keep status validity expiration handler parameters from going stale
     std::map<serial_number_t, StatusValidityExpirationHandlerParam> sveh_params{};
 
+    const client::Config client_config;
+
     /**
      * @brief Constructor
      * @param loop - The event loop
      * @param status_check_enabled - Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not
      * configured
      */
-    CertStatusExData(const evbase &loop, const bool status_check_enabled) : loop(loop), status_check_enabled(status_check_enabled) {}
+    CertStatusExData(const evbase &loop, const bool status_check_enabled, const client::Config &client_config) : loop(loop), status_check_enabled(status_check_enabled), client_config(client_config) {}
     ~CertStatusExData() noexcept;
 
     /**
@@ -284,7 +286,7 @@ struct CertStatusExData {
      * @param fn - Function to call when the peer status changes from good to bad or vice versa
      * @return a shared pointer to the peer status and optional monitor
      */
-    std::shared_ptr<SSLPeerStatusAndMonitor> subscribeToPeerCertStatus(X509* cert_ptr, std::function<void(bool)> fn) noexcept;
+    std::shared_ptr<SSLPeerStatusAndMonitor> subscribeToPeerCertStatus(X509* cert_ptr, std::function<void(bool)> fn);
 
    private:
     /**
@@ -382,18 +384,20 @@ struct SSLContext {
     /**
      * @brief Creates a client TLS context
      * @param conf - The client configuration
+     * @param client_config the client config to use to create any status subscriptions
      * @param loop - The event loop
      * @return The client TLS context
      */
-    static std::shared_ptr<SSLContext> for_client(const ConfigCommon& conf, const evbase &loop);
+    static std::shared_ptr<SSLContext> for_client(const ConfigCommon& conf, const client::Config &client_config, const evbase &loop);
 
     /**
      * @brief Creates a server TLS context
      * @param conf - The server configuration
+     * @param client_config the client config to use to create any status subscriptions
      * @param loop - The event loop
      * @return The server TLS context
      */
-    static std::shared_ptr<SSLContext> for_server(const ConfigCommon& conf, const evbase &loop);
+    static std::shared_ptr<SSLContext> for_server(const ConfigCommon& conf, const client::Config &client_config, const evbase &loop);
 
     /**
      * @brief Get the CertStatusExData from the PVXS SSL context

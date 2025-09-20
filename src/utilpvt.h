@@ -107,17 +107,10 @@ std::string versionString();
 PVXS_API std::string getHomeDir();
 PVXS_API std::string getFileContents(const std::string &file_name);
 
-#ifdef _WIN32
-PVXS_API std::string getXdgDataHome(std::string default_data_home = "C:\\ProgramData");
-PVXS_API std::string getXdgConfigHome(std::string default_home = getHomeDir());
-PVXS_API std::string getXdgPvaDataHome(std::string default_data_home = "C:\\ProgramData");
-PVXS_API std::string getXdgPvaConfigHome(std::string default_home = getHomeDir());
-#else
-PVXS_API std::string getXdgDataHome(const std::string &default_data_home = getHomeDir() + "/.local/share");
-PVXS_API std::string getXdgConfigHome(const std::string &default_home = getHomeDir() + "/.config");
-PVXS_API std::string getXdgPvaDataHome(const std::string &default_data_home = getHomeDir() + "/.local/share");
-PVXS_API std::string getXdgPvaConfigHome(const std::string &default_home = getHomeDir() + "/.config");
-#endif
+PVXS_API std::string getXdgDataHome();
+PVXS_API std::string getXdgConfigHome();
+PVXS_API std::string getXdgPvaDataHome();
+PVXS_API std::string getXdgPvaConfigHome();
 
 struct threadOnceInfo {
     epicsThreadOnceId id = EPICS_THREAD_ONCE_INIT;

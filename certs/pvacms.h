@@ -278,7 +278,7 @@ class StatusMonitor {
         std::vector<serial_number_t> result;
         Guard G(lock_);
         for (const auto &pair : active_status_validity_) {
-            if (pair.second > cutoff) {
+            if (static_cast<uint64_t>(pair.second) > cutoff) {
                 result.push_back(pair.first);
             }
         }

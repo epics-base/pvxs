@@ -6,12 +6,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <fstream>
 #include <limits>
 #include <stdexcept>
-
-#include <sys/types.h>
 
 #ifndef _WIN32
 #include <pwd.h>
@@ -21,7 +18,6 @@
 #include <cstdlib>
 #include <sstream>
 #include <string>
-#include <tuple>
 #include <vector>
 
 #include <epicsStdlib.h>

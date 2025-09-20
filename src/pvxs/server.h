@@ -93,7 +93,6 @@ public:
     //! Queue a request to break run()
     Server& interrupt();
 
-#ifdef PVXS_ENABLE_OPENSSL
     /** Apply (in part) updated configuration
      *
      * Currently, only updates TLS configuration.  Causes all in-progress
@@ -102,7 +101,6 @@ public:
      * @since UNRELEASED
      */
     void reconfigure(const Config&);
-#endif
 
     //! effective config
     //! @since UNRELEASED Reference invalidated by a call to reconfigure()
@@ -111,6 +109,7 @@ public:
     //! Create a client configuration which can communicate with this Server.
     //! Suitable for use in self-contained unit-tests.
     client::Config clientConfig() const;
+    static client::Config clientConfig(const Config &server_config);
 
     //! Add a SharedPV to the "__builtin" StaticSource
     Server& addPV(const std::string& name, const SharedPV& pv);

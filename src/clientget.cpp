@@ -160,9 +160,10 @@ struct GPROp : public OperationBase
             if(done)
                 done(std::move(result));
         } catch(std::exception& e) {
-            if(chan && chan->conn)
+            if(chan && chan->conn) {
                 log_err_printf(io, "Result Callback Error: Server %s channel %s\n", chan->conn->peerName.c_str(), chan->name.c_str());
-                log_err_printf(io, "Result Callback Error: %s\n", e.what());
+            }
+            log_err_printf(io, "Result Callback Error: %s\n", e.what());
 
             // keep first error (eg. from put builder)
             if(!result.error())

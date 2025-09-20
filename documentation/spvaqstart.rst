@@ -594,9 +594,9 @@ otherwise the certificate authority certificate will be created here
 
   Make a note of the certificates that are created
 
-  - `2535f0b8:7554235394877908901`  : Root Certificate Authority Certificate
-  - `2535f0b8:7810503273530005364`  : Admin User Certificate
-  - `2535f0b8:15782598755272381308` : PVACMS Server Certificate
+  - ``2535f0b8:7554235394877908901``  : Root Certificate Authority Certificate
+  - ``2535f0b8:7810503273530005364``  : Admin User Certificate
+  - ``2535f0b8:15782598755272381308`` : PVACMS Server Certificate
 
 .. _spva_qs_admin:
 

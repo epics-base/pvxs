@@ -238,7 +238,7 @@ int main(int argc, char *argv[]) {
                           << "Status        : " << result["state"].as<std::string>() << std::endl
                           << "Status Issued : " << result["ocsp_status_date"].as<std::string>() << std::endl
                           << "Status Expires: " << result["ocsp_certified_until"].as<std::string>() << std::endl;
-                if (result["status.value.index"].as<uint32_t>() == certs::REVOKED) {
+                if (result["value.index"].as<uint32_t>() == certs::REVOKED) {
                     std::cout << "Revocation Date: " << result["ocsp_revocation_date"].as<std::string>() << std::endl;
                 }
                 std::cout << "--------------------------------------------\n" << std::endl;

@@ -48,7 +48,7 @@ public:
     ServerEv& interrupt() {            base_.interrupt();             return *this; }
     void reconfigure(const Config&) { stopCb();  base_.reconfigure(Config()); startCb(); }
     const Config& config() const {return base_.config();}
-    client::Config clientConfig() const { return base_.clientConfig();}
+    client::Config clientConfig() const;
     ServerEv& addPV(const std::string& name, const SharedPV& pv) { base_.addPV(name, pv); return *this; }
     ServerEv& removePV(const std::string& name) { base_.removePV(name); return *this;}
     ServerEv& addSource(const std::string& name, const std::shared_ptr<Source>& src, int order =0) { base_.addSource(name, src, order); return *this; }

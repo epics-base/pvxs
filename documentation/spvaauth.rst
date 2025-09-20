@@ -228,52 +228,52 @@ Common Environment Variables for all Authenticators
 
 **Configuration options for Standard Authenticator**
 
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-| Name                 | Keys and Values                    | Description                                                           |
-+======================+====================================+=======================================================================+
-|| EPICS_PVA_AUTH_     || <number of minutes>               || Amount of minutes before the certificate expires.                    |
-|| _CERT_VALIDITY_MINS || e.g. ``1y`` for 1 year            || e.g. 1d or 1y 2w 1d or 24h                                           |
-||                     ||                                   || Where:                                                               |
-||                     ||                                   ||   1y = 365 days                                                      |
-||                     ||                                   ||   1M = 30 days                                                       |
-||                     ||                                   ||   1w = 7 days                                                        |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_AUTH      || {name to use}                     || Name to use in new certificates                                      |
-|| _NAME               || e.g. ``archiver``                 ||                                                                      |
-+----------------------+  e.g. ``IOC1``                     ||                                                                      |
-|| EPICS_PVAS_AUTH     || e.g. ``greg``                     ||                                                                      |
-|| _NAME               ||                                   ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_AUTH      || {organization to use}             || Organization to use in new certificates                              |
-|| _ORGANIZATION       || e.g. ``site.epics.org``           ||                                                                      |
-+----------------------+  e.g. ``SLAC.STANFORD.EDU``        ||                                                                      |
-|| EPICS_PVAS_AUTH     || e.g. ``KLYS:LI01:101``            ||                                                                      |
-|| _ORGANIZATION       || e.g. ``centos07``                 ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_AUTH_     || {organization unit to use}        || Organization Unit to use in new certificates                         |
-|| ORGANIZATIONAL_UNIT || e.g. ``data center``              ||                                                                      |
-+----------------------+  e.g. ``ops``                      ||                                                                      |
-|| EPICS_PVAS_AUTH_    || e.g. ``prod``                     ||                                                                      |
-|| ORGANIZATIONAL_UNIT || e.g. ``remote``                   ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_AUTH      || {country to use}                  || Country to use in new certificates.                                  |
-|| _COUNTRY            || e.g. ``US``                       || Must be a two digit country code                                     |
-+----------------------+  e.g. ``CA``                       ||                                                                      |
-|| EPICS_PVAS_AUTH     ||                                   ||                                                                      |
-|| _COUNTRY            ||                                   ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_AUTH      || {issuer of cert. mgmt. service}   || The issuer ID to contact for any certificate operation.              |
-|| _ISSUER             || e.g. ``f0a9e1b8``                 || Must be am 8 character SKID                                          |
-+----------------------+                                    ||                                                                      |
-|| EPICS_PVAS_AUTH     ||                                   || If there are PVACMS's from different certificate authorities         |
-|| _ISSUER             ||                                   || on the network, this allows you to specify the one you want          |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
-|| EPICS_PVA_CERT      || {certificate mgnt. prefix}        || Specify the prefix for the PVACMS PV to contact for new certificates |
-|| _PV_PREFIX          || e.g. ``SLAC_CERTS``               || default ``CERT``                                                     |
-+----------------------+                                    ||                                                                      |
-|| EPICS_PVAS_CERT     ||                                   ||                                                                      |
-|| _PV_PREFIX          ||                                   ||                                                                      |
-+----------------------+------------------------------------+-----------------------------------------------------------------------+
++--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
+| Name                                       | Keys and Values                    | Description                                                           |
++============================================+====================================+=======================================================================+
+|| EPICS_PVA_AUTH_CERT_VALIDITY_MIN          || <number of minutes>               || Amount of minutes before the certificate expires.                    |
+||                                           || e.g. ``1y`` for 1 year            || e.g. 1d or 1y 2w 1d or 24h                                           |
+||                                           ||                                   || Where:                                                               |
+||                                           ||                                   ||   1y = 365 days                                                      |
+||                                           ||                                   ||   1M = 30 days                                                       |
+||                                           ||                                   ||   1w = 7 days                                                        |
++--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_AUTH_NAME                       || {name to use}                     || Name to use in new certificates                                      |
+||                                           || e.g. ``archiver``                 ||                                                                      |
++--------------------------------------------+  e.g. ``IOC1``                     ||                                                                      |
+|| EPICS_PVAS_AUTH_NAME                      || e.g. ``greg``                     ||                                                                      |
+||                                           ||                                   ||                                                                      |
++--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_AUTH_ORGANIZATION               || {organization to use}             || Organization to use in new certificates                              |
+||                                           || e.g. ``site.epics.org``           ||                                                                      |
++--------------------------------------------+  e.g. ``SLAC.STANFORD.EDU``        ||                                                                      |
+|| EPICS_PVAS_AUTH_ORGANIZATION              || e.g. ``KLYS:LI01:101``            ||                                                                      |
+||                                           || e.g. ``centos07``                 ||                                                                      |
++--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT        || {organization unit to use}        || Organization Unit to use in new certificates                         |
+||                                           || e.g. ``data center``              ||                                                                      |
++--------------------------------------------+  e.g. ``ops``                      ||                                                                      |
+|| EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT       || e.g. ``prod``                     ||                                                                      |
+||                                           || e.g. ``remote``                   ||                                                                      |
++--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_AUTH_COUNTRY                    || {country to use}                  || Country to use in new certificates.                                  |
+||                                           || e.g. ``US``                       || Must be a two digit country code                                     |
++--------------------------------------------+  e.g. ``CA``                       ||                                                                      |
+|| EPICS_PVAS_AUTH_COUNTRY                   ||                                   ||                                                                      |
+||                                           ||                                   ||                                                                      |
++--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_AUTH_ISSUER                     || {issuer of cert. mgmt. service}   || The issuer ID to contact for any certificate operation.              |
+||                                           || e.g. ``f0a9e1b8``                 || Must be am 8 character SKID                                          |
++--------------------------------------------+                                    ||                                                                      |
+|| EPICS_PVAS_AUTH_ISSUER                    ||                                   || If there are PVACMS's from different certificate authorities         |
+||                                           ||                                   || on the network, this allows you to specify the one you want          |
++--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
+|| EPICS_PVA_CERT_PV_PREFIX                  || {certificate mgnt. prefix}        || Specify the prefix for the PVACMS PV to contact for new certificates |
+||                                           || e.g. ``SLAC_CERTS``               || default ``CERT``                                                     |
++--------------------------------------------+                                    ||                                                                      |
+|| EPICS_PVAS_CERT_PV_PREFIX                 ||                                   ||                                                                      |
+||                                           ||                                   ||                                                                      |
++--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
 
 Included Reference Authenticators
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -677,51 +677,51 @@ and password file locations.
 The environment variables and parameters in the following table configure the JWT
 Credentials Verifier for :ref:`pvacms` at runtime.
 
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
-| Env. *pvacms*       | Params. *pvacms*             | Keys and Values                                | Description                                                           |
-+=====================+==============================+================================================+=======================================================================+
-|  EPICS_AUTH_JWT_    |  ``--jwt-request-format``    | string format for verification request payload |  A string that is used verbatim as the payload for the verification   |
-|  REQUEST_FORMAT     |                              |                                                |  request while substituting the string ``#token#`` for the token      |
-|                     |                              |                                                |  value, and ``#kid#`` for the key id. This is used when the           |
-|                     |                              | e.g. ``{ "token": "#token#" }``                |  verification server requires a formatted payload for the             |
-|                     |                              |                                                |  verification request. If the string is simply ``#token#`` (default)  |
-|                     |                              | e.g. ``#token#``                               |  then the verification endpoint is called with the raw token as       |
-|                     |                              |                                                |  the payload.                                                         |
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
-|  EPICS_AUTH_JWT_    |  ``--jwt-request-method``    | ``POST`` (default)                             |  This determines whether the endpoint will be called with             |
-|  REQUEST_METHOD     |                              | ``GET```                                       |  ``HTTP GET`` or ``POST`` .                                           |
-|                     |                              |                                                |  If called with ``POST``, then the payload is exactly what is defined |
-|                     |                              | e.g. of call made for GET:                     |  by the ``EPICS_AUTH_JWT_RESPONSE_FORMAT`` variable.                  |
-|                     |                              |                                                |  If called with GET, then the token is passed in the                  |
-|                     |                              | **GET** /api/validate-token HTTP/1.1           |  **Authorization** header of the ``HTTP GET`` request                 |
-|                     |                              |                                                |                                                                       |
-|                     |                              | **Authorization**: Bearer eyJhbGcXVCJ9...      |                                                                       |
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
-|  EPICS_AUTH_JWT_    |  ``--jwt-response-format``   | string format for verification response value  |  A pattern string that we can use to decode the response from a       |
-|  RESPONSE_FORMAT    |                              |                                                |  verification endpoint if the response is formatted text. All white   |
-|                     |                              |                                                |  space is removed in the given string and in the response. Then all   |
-|                     |                              | e.g. ``{ "payload": { * },``                   |  the text prior to ``#response#`` is matched and removed from the     |
-|                     |                              |      ``  "valid": #response# }``               |  response and all the text after the response is likewise removed,    |
-|                     |                              |                                                |  what remains is the response value.                                  |
-|                     |                              | e.g. ``#response#``                            |  An asterisk in the string matches any sequence of characters in the  |
-|                     |                              |                                                |  response. It is converted to lowercase and interpreted as valid      |
-|                     |                              |                                                |  if it equals ``valid``, ``ok``, ``true``, ``t``, ``yes``, ``y``, or  |
-|                     |                              |                                                |  ``1``.  If the string is ``#response#`` (default) then the response  |
-|                     |                              |                                                |  is raw and is converted to lowercase and compared without removing   |
-|                     |                              |                                                |  any formatting                                                       |
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
-|  EPICS_AUTH_JWT_    | ``--jwt-trusted-uri``        | uri of JWT validation endpoint                 |  Trusted URI of the validation endpoint including the ``http://``,    |
-|  TRUSTED_URI        |                              |                                                |  ``https://``, and port number.  There is no default, it must be      |
-|                     |                              | e.g. ``http://issuer/api/validate-token``      |  the text prior to ``#response#`` is matched and removed from the     |
-|                     |                              |                                                |  specified.  This is used to compare to the ``iss`` field in the      |
-|                     |                              |                                                |  decoded token payload if it is provided.  If it is not the same,     |
-|                     |                              |                                                |  then the validation fails.  If the ``iss`` field is missing, then    |
-|                     |                              |                                                |  the value of this variable is taken as the validation URI.           |
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
-|  EPICS_AUTH_JWT_    | ``--jwt-use-response-code``  | case insensitive:                              |  If set this tells PVACMS that when it receives a ``200``             |
-|  USE_RESPONSE_CODE  |                              | ``YES``, ``TRUE``,  or ``1``                   |  HTTP-response code from the HTTP request then the token is valid,    |
-|                     |                              |                                                |  and invalid for any other response code.                             |
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
++---------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+| Env. *pvacms*                         | Params. *pvacms*             | Keys and Values                                | Description                                                           |
++=======================================+==============================+================================================+=======================================================================+
+|  EPICS_AUTH_JWT_REQUEST_FORMAT        |  ``--jwt-request-format``    | string format for verification request payload |  A string that is used verbatim as the payload for the verification   |
+|                                       |                              |                                                |  request while substituting the string ``#token#`` for the token      |
+|                                       |                              |                                                |  value, and ``#kid#`` for the key id. This is used when the           |
+|                                       |                              | e.g. ``{ "token": "#token#" }``                |  verification server requires a formatted payload for the             |
+|                                       |                              |                                                |  verification request. If the string is simply ``#token#`` (default)  |
+|                                       |                              | e.g. ``#token#``                               |  then the verification endpoint is called with the raw token as       |
+|                                       |                              |                                                |  the payload.                                                         |
++---------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_REQUEST_METHOD        |  ``--jwt-request-method``    | ``POST`` (default)                             |  This determines whether the endpoint will be called with             |
+|                                       |                              | ``GET```                                       |  ``HTTP GET`` or ``POST`` .                                           |
+|                                       |                              |                                                |  If called with ``POST``, then the payload is exactly what is defined |
+|                                       |                              | e.g. of call made for GET:                     |  by the ``EPICS_AUTH_JWT_RESPONSE_FORMAT`` variable.                  |
+|                                       |                              |                                                |  If called with GET, then the token is passed in the                  |
+|                                       |                              | **GET** /api/validate-token HTTP/1.1           |  **Authorization** header of the ``HTTP GET`` request                 |
+|                                       |                              |                                                |                                                                       |
+|                                       |                              | **Authorization**: Bearer eyJhbGcXVCJ9...      |                                                                       |
++---------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_RESPONSE_FORMAT       |  ``--jwt-response-format``   | string format for verification response value  |  A pattern string that we can use to decode the response from a       |
+|                                       |                              |                                                |  verification endpoint if the response is formatted text. All white   |
+|                                       |                              |                                                |  space is removed in the given string and in the response. Then all   |
+|                                       |                              | e.g. ``{ "payload": { * },``                   |  the text prior to ``#response#`` is matched and removed from the     |
+|                                       |                              |      ``  "valid": #response# }``               |  response and all the text after the response is likewise removed,    |
+|                                       |                              |                                                |  what remains is the response value.                                  |
+|                                       |                              | e.g. ``#response#``                            |  An asterisk in the string matches any sequence of characters in the  |
+|                                       |                              |                                                |  response. It is converted to lowercase and interpreted as valid      |
+|                                       |                              |                                                |  if it equals ``valid``, ``ok``, ``true``, ``t``, ``yes``, ``y``, or  |
+|                                       |                              |                                                |  ``1``.  If the string is ``#response#`` (default) then the response  |
+|                                       |                              |                                                |  is raw and is converted to lowercase and compared without removing   |
+|                                       |                              |                                                |  any formatting                                                       |
++---------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_TRUSTED_URI           | ``--jwt-trusted-uri``        | uri of JWT validation endpoint                 |  Trusted URI of the validation endpoint including the ``http://``,    |
+|                                       |                              |                                                |  ``https://``, and port number.  There is no default, it must be      |
+|                                       |                              | e.g. ``http://issuer/api/validate-token``      |  the text prior to ``#response#`` is matched and removed from the     |
+|                                       |                              |                                                |  specified.  This is used to compare to the ``iss`` field in the      |
+|                                       |                              |                                                |  decoded token payload if it is provided.  If it is not the same,     |
+|                                       |                              |                                                |  then the validation fails.  If the ``iss`` field is missing, then    |
+|                                       |                              |                                                |  the value of this variable is taken as the validation URI.           |
++---------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_USE_RESPONSE_CODE     | ``--jwt-use-response-code``  | case insensitive:                              |  If set this tells PVACMS that when it receives a ``200``             |
+|                                       |                              | ``YES``, ``TRUE``,  or ``1``                   |  HTTP-response code from the HTTP request then the token is valid,    |
+|                                       |                              |                                                |  and invalid for any other response code.                             |
++---------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
 
 
 +----------------------+-----------------------------+------------------------------------------------+-----------------------------------------------------------------------+
@@ -801,20 +801,20 @@ Specifying long running certificates
 Common to all Authenticators - commandline parameters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Use the `-t,--time` flag to specify a duration for the certificate using these components:
+Use the ``-t,--time`` flag to specify a duration for the certificate using these components:
 
-- `y` - Years (e.g., `2y` for two years)
-- `M` - Months (e.g., `6M` for six months)
-- `w` - Weeks (e.g., `1w` for one week)
-- `d` - Days (e.g., `15d` for 15 days)
-- `h` - Hours (e.g., `12h` for 12 hours)
-- `m` - Minutes (e.g., `30m` for 30 minutes, or simply `30`)
-- `s` - Seconds (e.g., `45s` for 45 seconds)
+- ``y`` - Years (e.g., ``2y`` for two years)
+- ``M`` - Months (e.g., ``6M`` for six months)
+- ``w`` - Weeks (e.g., ``1w`` for one week)
+- ``d`` - Days (e.g., ``15d`` for 15 days)
+- ``h`` - Hours (e.g., ``12h`` for 12 hours)
+- ``m`` - Minutes (e.g., ``30m`` for 30 minutes, or simply `30`)
+- ``s`` - Seconds (e.g., ``45s`` for 45 seconds)
 
 Examples:
 
-- `1y and 6M` - one year and six months
-- `2y3M15d` - two years, three months, and 15 days
+- ``1y and 6M`` - one year and six months
+- ``2y3M15d`` - two years, three months, and 15 days
 
 The system uses natural time understanding, accounting for daylight savings, leap years, etc. For example, if you specify 1
 year, the certificate will expire on the same calendar day next year, regardless of leap years.
@@ -829,28 +829,28 @@ PVACMS Defaults - Parameters
 
 PVACMS defaults to 6 months for certificate duration unless overridden by:
 
-- `--cert_validity <duration>` - default duration for all certificates
-- `--cert_validity-client <duration>` - default for client certificates
-- `--cert_validity-server <duration>` - default for server certificates
-- `--cert_validity-ioc <duration>` - default for IOC certificates
-- `--disallow-custom-durations` - prevents clients from specifying durations for any certificates
-- `--disallow-custom-durations-client` - restricts custom durations for client certificates
-- `--disallow-custom-durations-server` - restricts custom durations for server certificates
-- `--disallow-custom-durations-ioc` - restricts custom durations for IOC certificates
+- ``--cert_validity <duration>`` - default duration for all certificates
+- ``--cert_validity-client <duration>`` - default for client certificates
+- ``--cert_validity-server <duration>`` - default for server certificates
+- ``--cert_validity-ioc <duration>`` - default for IOC certificates
+- ``--disallow-custom-durations`` - prevents clients from specifying durations for any certificates
+- ``--disallow-custom-durations-client`` - restricts custom durations for client certificates
+- ``--disallow-custom-durations-server`` - restricts custom durations for server certificates
+- ``--disallow-custom-durations-ioc`` - restricts custom durations for IOC certificates
 
 PVACMS Defaults - Environment Variables
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Values can also be set using environment variables:
 
-- `EPICS_PVACMS_CERT_VALIDITY` - default duration for all certificates
-- `EPICS_PVACMS_CERT_VALIDITY_CLIENT` - default for client certificates
-- `EPICS_PVACMS_CERT_VALIDITY_SERVER` - default for server certificates
-- `EPICS_PVACMS_CERT_VALIDITY_IOC` - default for IOC certificates
-- `EPICS_PVACMS_DISALLOW_CUSTOM_DURATION` - YES/NO to prevent custom durations for any certificates
-- `EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION` - YES/NO for client certificates
-- `EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION` - YES/NO for server certificates
-- `EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION` - YES/NO for IOC certificates
+- ``EPICS_PVACMS_CERT_VALIDITY`` - default duration for all certificates
+- ``EPICS_PVACMS_CERT_VALIDITY_CLIENT`` - default for client certificates
+- ``EPICS_PVACMS_CERT_VALIDITY_SERVER`` - default for server certificates
+- ``EPICS_PVACMS_CERT_VALIDITY_IOC`` - default for IOC certificates
+- ``EPICS_PVACMS_DISALLOW_CUSTOM_DURATION`` - YES/NO to prevent custom durations for any certificates
+- ``EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION`` - YES/NO for client certificates
+- ``EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION`` - YES/NO for server certificates
+- ``EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION`` - YES/NO for IOC certificates
 
 The Authenticator Controls the Certificate Renewal Date
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

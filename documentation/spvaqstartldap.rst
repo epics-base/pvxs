@@ -189,7 +189,7 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
         -d ${PROJECT_HOME}/pvxs/test/testiocg.db \
         -d ${PROJECT_HOME}/pvxs/test/image.db \
         -G ${PROJECT_HOME}/pvxs/test/image.json \
-        -a ${PROJECT_HOME}/pvxs/test/testioc.acf
+        -a ${PROJECT_HOME}/pvxs/test/testioc.tls.acf
 
 .. code-block:: console
 
@@ -886,7 +886,7 @@ then generate X.509 certificates.
         -d ${PROJECT_HOME}/pvxs/test/testiocg.db \
         -d ${PROJECT_HOME}/pvxs/test/image.db \
         -G ${PROJECT_HOME}/pvxs/test/image.json \
-        -a ${PROJECT_HOME}/pvxs/test/testioc.acf
+        -a ${PROJECT_HOME}/pvxs/test/testioc.tls.acf
 
 .. code-block:: console
 

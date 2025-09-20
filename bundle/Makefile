@@ -16,6 +16,8 @@ endif
 
 CMAKEFLAGS = $(CMD_CMAKEFLAGS)
 
+CMAKEFLAGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.10
+
 # override definitions from CONFIG_PVXS_MODULE, but not from CLI arguments
 LIBEVENT = $(LIBEVENT_$(T_A))
 LIBEVENT_$(T_A) = $(INSTALL_LOCATION)/bundle/usr/$(T_A)
@@ -31,12 +33,19 @@ CMAKEFLAGS += -DEVENT__DISABLE_SAMPLES=ON
 CMAKEFLAGS += -DEVENT__DISABLE_TESTS=ON
 CMAKEFLAGS += -DEVENT__DISABLE_BENCHMARK=ON
 
+
 CMAKEFLAGS += -DCMAKE_MACOSX_RPATH=ON -DCMAKE_SKIP_INSTALL_RPATH=OFF
 
 # searched for toolchain files
 CMAKEFLAGS += -DCMAKE_MODULE_PATH:DIR="$(abspath $(TOP)/bundle/cmake)"
 
 CMAKEFLAGS += -DCMAKE_MAKE_PROGRAM="$(MAKE)"
+
+ifeq ($(OS_CLASS),WIN32)
+CMAKEFLAGS += -DCMAKE_STATIC_LIBRARY_SUFFIX=.lib -DCMAKE_STATIC_LIBRARY_PREFIX=
+CMAKEFLAGS += -DCMAKE_IMPORT_LIBRARY_SUFFIX=.lib -DCMAKE_IMPORT_LIBRARY_PREFIX=
+endif
+
 
 # check either $(HOST_OPT) or $(CROSS_OPT) depending on $(BUILD_CLASS)
 IS_OPT = $($(BUILD_CLASS)_OPT)
@@ -121,6 +130,7 @@ libevent.%: $(CMAKE_TOOLCHAIN_D)
 	$(CMAKE) -E env --unset=MAKEFLAGS --unset=CC $(CMAKE) --build . $(CBUILDFLAGS) --target install
 ifneq (,$(filter %mingw,$(T_A)))
 ifeq (NO,$(SHARED_LIBRARIES))
+ifneq ($(LIB_SUFFIX_A),YES)
 	$(CP) $(LIBEVENT_$(T_A))/lib/libevent_core.a $(LIBEVENT_$(T_A))/lib/event_core.lib
 # HACK: when STATIC_BUILD=YES we (in configure/RULES_PVXS_MODULE) inject the event_core
 #       dependency via <target>_LIBS += event_core which requires the existance of
@@ -128,6 +138,7 @@ ifeq (NO,$(SHARED_LIBRARIES))
 #       libevent_core.a (probably because it can coexist with the dll import library
 #       named libevent_core.dll.a).
 #       As a crutch we make a copy
+endif
 endif
 endif
 

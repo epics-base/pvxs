@@ -21,15 +21,17 @@
 #include <pvxs/source.h>
 #include <pvxs/unittest.h>
 
+#include "certcontext.h"
 #include "certfactory.h"
 #include "certstatus.h"
 #include "certstatusfactory.h"
 #include "certstatusmanager.h"
+#include "configcms.h"
 #include "openssl.h"
 #include "opensslgbl.h"
-#include "certcontext.h"
-#include "configcms.h"
+#include "serverev.h"
 #include "utilpvt.h"
+#include "wildcardpv.h"
 
 /**
  * @brief This tester uses a Tester object and a bunch of MACROS that rely on a very opinionated
@@ -72,9 +74,11 @@ struct Tester {
     const std::string issuer_id{CertStatus::getSkId(cert_auth.cert.cert)};
 
     server::WildcardPV status_pv{server::WildcardPV::buildMailbox()};
+    server::Config server_config;
     server::ServerEv pvacms;
     client::Context client;
     CounterMap cert_status_request_counters;
+    epicsMutex counter_lock;
 
     Tester()
         : now(time(nullptr)),
@@ -94,9 +98,12 @@ struct Tester {
 
         });
 
-        auto pvacms_config = certs::ConfigCms::forCms();
+        auto pvacms_config = ConfigCms::mockCms();
         pvacms_config.tls_keychain_file = SUPER_SERVER_KEYCHAIN_FILE;
         pvacms = pvacms_config.build().addSource("__wildcard", pvacms_mock);
+        server_config = pvacms.config();
+        server_config.tls_port+=2; // optional avoid clash with PVACMS
+        server_config.tcp_port+=4;
         client = pvacms.clientConfig().build();
 
         if (!cert_auth.cert.cert || !cert_auth.cert.pkey || !super_server.cert.cert || !super_server.cert.pkey || !intermediate_server.cert.cert || !intermediate_server.cert.pkey ||
@@ -292,7 +299,7 @@ struct Tester {
         auto initial(nt::NTScalar{TypeCode::Int32}.create());
         auto mbox(server::SharedPV::buildReadonly());
 
-        auto serv_conf(server::Config::isolated());
+        auto serv_conf = server_config;
         serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
         serv_conf.tls_disable_stapling = false;
@@ -345,7 +352,7 @@ struct Tester {
         auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
         auto test_pv(server::SharedPV::buildReadonly());
 
-        auto serv_conf(server::Config::isolated());
+        auto serv_conf = server_config;
         serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
         serv_conf.tls_disable_stapling = false;
@@ -392,7 +399,7 @@ struct Tester {
         resetCounter(cert_status_request_counters, client1);
         resetCounter(cert_status_request_counters, client2);
 
-        auto serv_conf(server::Config::isolated());
+        auto serv_conf = server_config;
         serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
         serv_conf.tls_disable_stapling = false;
@@ -474,7 +481,7 @@ struct Tester {
         resetCounter(cert_status_request_counters, client1);
         resetCounter(cert_status_request_counters, ioc);
 
-        auto serv_conf(server::Config::isolated());
+        auto serv_conf = server_config;
         serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
         serv_conf.tls_disable_stapling = false;
@@ -547,7 +554,7 @@ struct Tester {
      * The Mock PVACMS must be previously stopped prior to this test
      *
      */
-    static void testCMSUnavailable() {
+    static void testCMSUnavailable(const server::Config &server_config) {
         testShow() << __func__;
         // Create a test PV and set the value to 42
         auto test_pv_value(nt::NTScalar{TypeCode::Int32}.create());
@@ -555,7 +562,7 @@ struct Tester {
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
         {
             // Configure a server with status checking enabled
-            auto serv_conf(server::Config::isolated());
+            auto serv_conf = server_config;
             serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
             serv_conf.tls_disable_status_check = false;
             serv_conf.tls_throw_if_no_cert = true;
@@ -593,7 +600,7 @@ struct Tester {
 
         {
             // Configure a server with status checking and stapling disabled
-            auto serv_conf2(server::Config::isolated());
+            auto serv_conf2 = server_config;
             serv_conf2.tls_keychain_file = IOC1_KEYCHAIN_FILE;
             serv_conf2.tls_disable_status_check = false;
             serv_conf2.tls_disable_stapling = true;
@@ -629,7 +636,7 @@ struct Tester {
         auto initial(nt::NTScalar{TypeCode::Int32}.create());
         auto mbox(server::SharedPV::buildReadonly());
 
-        auto serv_conf(server::Config::isolated());
+        auto serv_conf = server_config;
         serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
         auto serv(serv_conf.build().addPV(TEST_PV, mbox));
@@ -668,7 +675,7 @@ struct Tester {
         auto initial(nt::NTScalar{TypeCode::Int32}.create());
         auto mbox(server::SharedPV::buildReadonly());
 
-        auto serv_conf(server::Config::isolated());
+        auto serv_conf = server_config;
         serv_conf.tls_keychain_file = SERVER1_KEYCHAIN_FILE;
         serv_conf.tls_disable_status_check = false;
         serv_conf.tls_disable_stapling = false;
@@ -748,7 +755,7 @@ MAIN(testtlswithcmsandstapling) {
         testFail("FAILED with errors: %s\n", e.what());
     }
     try {
-        Tester::testCMSUnavailable();
+        Tester::testCMSUnavailable(tester->server_config);
     } catch (std::runtime_error& e) {
         testFail("FAILED with errors: %s\n", e.what());
     }

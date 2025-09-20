@@ -119,9 +119,7 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
     Connection(const std::shared_ptr<ContextImpl>& context,
                const SockAddr &peerAddr,
                bool reconn
-#ifdef PVXS_ENABLE_OPENSSL
       , bool isTLS
-#endif
                );
     virtual ~Connection();
 

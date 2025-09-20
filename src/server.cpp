@@ -167,27 +167,30 @@ const Config& Server::config() const
     return pvt->effective;
 }
 
+client::Config Server::clientConfig(const Config &server_config) {
+    client::Config ret;
+    ret.udp_port = server_config.udp_port;
+    ret.tcp_port = server_config.tcp_port;
+    ret.interfaces = server_config.interfaces;
+    ret.addressList = server_config.interfaces;
+    ret.autoAddrList = false;
+
+#ifdef PVXS_ENABLE_OPENSSL
+    ret.tls_port = server_config.tls_port;
+    ret.tls_disabled = server_config.tls_disabled;
+    ret.tls_disable_status_check = server_config.tls_disable_status_check;
+    ret.tls_disable_stapling = server_config.tls_disable_stapling;
+#endif
+
+    return ret;
+}
+
 client::Config Server::clientConfig() const
 {
     if(!pvt)
         throw std::logic_error("NULL Server");
 
-    client::Config ret;
-    // do not copy tls_cert_file
-    ret.udp_port = pvt->effective.udp_port;
-    ret.tcp_port = pvt->effective.tcp_port;
-    ret.interfaces = pvt->effective.interfaces;
-    ret.addressList = pvt->effective.interfaces;
-    ret.autoAddrList = false;
-
-#ifdef PVXS_ENABLE_OPENSSL
-    ret.tls_port = pvt->effective.tls_port;
-    ret.tls_disabled = pvt->effective.tls_disabled;
-    ret.tls_disable_status_check = pvt->effective.tls_disable_status_check;
-    ret.tls_disable_stapling = pvt->effective.tls_disable_stapling;
-#endif
-
-    return ret;
+    return clientConfig(pvt->effective);
 }
 
 Server& Server::addPV(const std::string& name, const SharedPV& pv)
@@ -445,7 +448,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 #ifdef PVXS_ENABLE_OPENSSL
     if (effective.isTlsConfigured()) {
         try {
-            tls_context = ossl::SSLContext::for_server(effective, acceptor_loop);
+            tls_context = ossl::SSLContext::for_server(effective, clientConfig(effective), acceptor_loop);
         } catch (std::exception& e) {
             if (effective.tls_stop_if_no_cert) {
                 log_err_printf(osslsetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
@@ -929,7 +932,6 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
     }
 }
 
-#ifdef PVXS_ENABLE_OPENSSL
 void Server::reconfigure(const Config& inconf) {
     if (!pvt) throw std::logic_error("NULL Server");
 
@@ -982,7 +984,6 @@ void Server::reconfigure(const Config& inconf) {
     }
 }
 
-#endif
 
 Source::~Source() {}
 

@@ -85,9 +85,7 @@ DEFINE_LOGGER(stapling, "pvxs.stapling");
 
 ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *peer, int socklen)
   : ConnBase(false,
-#ifdef PVXS_ENABLE_OPENSSL
            iface->isTLS,
-#endif
            iface->server->effective.sendBE(),
             evbufferevent(__FILE__, __LINE__, bufferevent_socket_new(iface->server->acceptor_loop.base, sock, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS)),
             SockAddr(peer))
@@ -95,9 +93,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     ,tcp_tx_limit(evsocket::get_buffer_size(sock, true) * tcp_tx_limit_mult)
 {
     log_debug_printf(connio, "Client %s connects%s, RX readahead %zu TX limit %zu\n", peerName.c_str(),
-#ifdef PVXS_ENABLE_OPENSSL
                        iface->isTLS ? " TLS" :
-#endif
                       "", readahead, tcp_tx_limit);
     {
         int opt = 1;
@@ -586,11 +582,9 @@ void ServerConn::bevWrite()
 
 
 ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fallback, bool isTLS)
-    :server(server)
-#ifdef PVXS_ENABLE_OPENSSL
-  ,isTLS(isTLS)
-#endif
-    ,bind_addr(addr)
+    : server(server)
+    , isTLS(isTLS)
+    , bind_addr(addr)
 {
     server->acceptor_loop.assertInLoop();
     const auto orig_port = bind_addr.port();
@@ -635,11 +629,8 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
     listener = evlisten(__FILE__, __LINE__,
                         evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wtautological-constant-compare"
-    if(!LEV_OPT_DISABLED)
+    if(LEV_OPT_DISABLED==0)
         evconnlistener_disable(listener.get());
-#pragma GCC diagnostic pop
 }
 
 void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw)

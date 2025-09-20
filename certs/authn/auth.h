@@ -27,8 +27,6 @@
 #include "server.h"
 #include "serverev.h"
 
-#pragma once
-
 namespace pvxs {
 namespace certs {
 

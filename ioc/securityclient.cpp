@@ -36,14 +36,12 @@ void SecurityClient::update(ASMEMBERPVT mem, int asl, Credentials& cred) {
                 // TODO switch to vector of char to accommodate inplace modifications to string
                 const_cast<char*>(cred.host.data()));
 #else
-        (void)asAddClientIdentity(&temp.cli[i], mem, asl,
-                           (ASIDENTITY){
-                               .user = cred.cred[i].c_str(),
-                               .host = const_cast<char*>(cred.host.data()),
-                               .method = cred.method.c_str(),
-                               .authority = cred.authority.c_str(),
-                               .protocol = AS_PROTOCOL_TLS }
-        );
+        (void)asAddClientIdentity(&temp.cli[i], mem, asl, {
+               .user = cred.cred[i].c_str(),
+               .host = const_cast<char*>(cred.host.data()),
+               .method = cred.method.c_str(),
+               .authority = cred.authority.c_str(),
+               .protocol = AS_PROTOCOL_TLS });
 #endif
     }
 

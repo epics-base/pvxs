@@ -56,7 +56,7 @@ std::tuple<time_t, std::string> CCRManager::createCertificate(const std::shared_
     } else {
         log_info_printf(auth_log, "X.509 certificate RENEWED (%s)\n", value["state"].as<std::string>().c_str());
     }
-    log_debug_printf(auth_log, "%s\n", value["status.value.index"].as<std::string>().c_str());
+    log_debug_printf(auth_log, "%s\n", value["value.index"].as<std::string>().c_str());
     log_debug_printf(auth_log, "%llu\n", (unsigned long long)value["serial"].as<serial_number_t>());
     log_debug_printf(auth_log, "%s\n", value["issuer"].as<std::string>().c_str());
     log_debug_printf(auth_log, "%s\n", value["cert_id"].as<std::string>().c_str());

@@ -6,9 +6,6 @@
 
 #include "certfactory.h"
 
-#include <cstdio>
-#include <ctime>
-#include <iostream>
 #include <limits>
 #include <memory>
 #include <string>
@@ -19,7 +16,6 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
-#include <openssl/pkcs12.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
@@ -506,17 +502,17 @@ void CertFactory::writeCertToBio(const ossl_ptr<BIO> &bio, const ossl_ptr<X509> 
  * Output object
  *
  * @param bio the BIO to add the cert to
- * @param certs the certificate stack to add to the BIO stream
+ * @param chain the certificate stack to add to the BIO stream
  */
-void CertFactory::writeCertsToBio(const ossl_ptr<BIO> &bio, const STACK_OF(X509) * certs) {
-    if (certs) {
+void CertFactory::writeCertsToBio(const ossl_ptr<BIO> &bio, const STACK_OF(X509) * chain) {
+    if (chain) {
         ERR_clear_error();
-        // Get number of certificates in the stack
-        const int count = sk_X509_num(certs);
+        // Get the number of certificates in the stack
+        const int count = sk_X509_num(chain);
 
         for (int i = 0; i < count; i++) {
-            if (!PEM_write_bio_X509(bio.get(), sk_X509_value(certs, i))) {
-                std::cout << "STACK ERROR: " << getError() << std::endl;
+            if (!PEM_write_bio_X509(bio.get(), sk_X509_value(chain, i))) {
+                log_err_printf(certs, "STACK ERROR: %s\n", getError().c_str());
                 throw std::runtime_error(SB() << "Error writing certificate to BIO: " << getError());
             }
         }

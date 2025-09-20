@@ -232,19 +232,20 @@ struct CertCreator {
         // but we only add commonName (CN)
         {
             const auto sub(X509_get_subject_name(cert.get()));
-            if(CN)
+            if(CN) {
                 MUST(1, X509_NAME_add_entry_by_txt(sub, "CN", MBSTRING_ASC,
-                                                   reinterpret_cast<const unsigned char*>(CN),
-                                                   -1, -1, 0));
-                MUST(1, X509_NAME_add_entry_by_txt(sub, "C", MBSTRING_ASC,
-                                                   reinterpret_cast<const unsigned char*>("US"),
-                                                   -1, -1, 0));
-                MUST(1, X509_NAME_add_entry_by_txt(sub, "O", MBSTRING_ASC,
-                                                   reinterpret_cast<const unsigned char *>("certs.epics.org"),
-                                                   -1, -1, 0));
-                MUST(1, X509_NAME_add_entry_by_txt(sub, "OU", MBSTRING_ASC,
-                                                   reinterpret_cast<const unsigned char*>("epics.org Certificate Authority"),
-                                                   -1, -1, 0));
+                                                  reinterpret_cast<const unsigned char*>(CN),
+                                                  -1, -1, 0));
+            }
+            MUST(1, X509_NAME_add_entry_by_txt(sub, "C", MBSTRING_ASC,
+                                               reinterpret_cast<const unsigned char*>("US"),
+                                               -1, -1, 0));
+            MUST(1, X509_NAME_add_entry_by_txt(sub, "O", MBSTRING_ASC,
+                                               reinterpret_cast<const unsigned char *>("certs.epics.org"),
+                                               -1, -1, 0));
+            MUST(1, X509_NAME_add_entry_by_txt(sub, "OU", MBSTRING_ASC,
+                                               reinterpret_cast<const unsigned char*>("epics.org Certificate Authority"),
+                                               -1, -1, 0));
         }
         if(!issuer) {
             issuer = cert.get(); // self-signed

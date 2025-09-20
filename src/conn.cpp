@@ -30,16 +30,10 @@ namespace impl {
 static
 constexpr size_t tcp_readahead_mult = 2u;
 
-#ifdef PVXS_ENABLE_OPENSSL
 ConnBase::ConnBase(bool isClient, bool isTLS, bool sendBE, evbufferevent&& bev, const SockAddr& peerAddr)
-#else
-ConnBase::ConnBase(bool isClient, bool sendBE, evbufferevent&& bev, const SockAddr& peerAddr)
-#endif
     :peerAddr(peerAddr)
     ,peerName(peerAddr.tostring())
-#ifdef PVXS_ENABLE_OPENSSL
     ,isTLS(isTLS)
-#endif
     ,isClient(isClient)
     ,sendBE(sendBE)
     ,peerBE(true) // arbitrary choice, default should be overwritten before use
@@ -141,24 +135,26 @@ void ConnBase::handle_MESSAGE() {};
 
 void ConnBase::bevEvent(const short events) {
 #ifdef PVXS_ENABLE_OPENSSL
-    if (bev && (events & BEV_EVENT_CONNECTED)) {
-        const auto ctx = bufferevent_openssl_get_ssl(bev.get());
-        if (ctx) {
-            if (!peer_status) {
-                try {
-                    peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [this](const bool enable) { peerStatusCallback(enable); });
-                } catch (certs::CertStatusNoExtensionException &e) {
-                    log_debug_printf(connio, "no status to monitor for peer %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
-                } catch (std::exception &e) {
-                    log_err_printf(connio, "unexpected error subscribing to peer %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
-                }
-            }
-        }
-
+    if (isTLS && bev) {
         if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
             while (const auto err = bufferevent_get_openssl_error(bev.get())) {
                 const auto error_reason = ERR_reason_error_string(err);
                 if (error_reason) log_debug_printf(connio, "%s: TLS Error (0x%lx) %s\n", peerLabel(), err, error_reason);
+            }
+        }
+
+        if (events & BEV_EVENT_CONNECTED) {
+            const auto ctx = bufferevent_openssl_get_ssl(bev.get());
+            if (ctx) {
+                if (!peer_status) {
+                    try {
+                        peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [this](const bool enable) { peerStatusCallback(enable); });
+                    } catch (certs::CertStatusNoExtensionException &e) {
+                        log_debug_printf(connio, "no status to monitor for peer %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
+                    } catch (std::exception &e) {
+                        log_err_printf(connio, "unexpected error subscribing to peer %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
+                    }
+                }
             }
         }
     }

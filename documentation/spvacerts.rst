@@ -330,92 +330,92 @@ The environment variables in the following table configure the :ref:`pvacms` at 
    provide the ``EPICS_PVA_TLS_KEYCHAIN`` environment variable as long as neither
    ``EPICS_PVACMS_TLS_KEYCHAIN`` nor ``EPICS_PVAS_TLS_KEYCHAIN`` are configured.
 
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-| Name                     | Keys and Values                            | Description                                                              |
-+==========================+============================================+==========================================================================+
-|| EPICS_ADMIN_TLS         || <path to ADMIN user keychain file>        || The location of the :ref:`pvacms` ADMIN user keychain file.             |
-|| _KEYCHAIN               || e.g. ``~/.config/pva/1.3/admin.p12``      ||                                                                         |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_ADMIN_TLS         || <path to ADMIN user password text file>   || Location of a password file for :ref:`pvacms` ADMIN user keychain file. |
-|| _KEYCHAIN_PWD_FILE      || e.g. ``~/.config/pva/1.3/admin.pass``     ||                                                                         |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_CERT_AUTH_NAME    || <name of the certificate authority>       || To provide the name (CN) to be used in the subject of the               |
-||                         || e.g. ``Epics Root Certificate Authority`` || certificate authority's Certificate if :ref:`pvacms` creates it.        |
-||                         ||                                           || default: "EPICS Root Certificate Authority"                             |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_CERT_AUTH         || <certificate authority organisation name> || To provide the name (O) to be used in the subject of the certificate    |
-|| _ORGANIZATION           || e.g. ``certs.epics.org``                  || authority's certificate if :ref:`pvacms` creates it.                    |
-||                         ||                                           || default: "cert.authority.epics.org"                                     |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_CERT_AUTH         || <certificate authority org unit name>     || To provide the name (OU) to be used in the subject of the Certificate   |
-|| _ORGANIZATIONAL_UNIT    || e.g. ``EPICS Certificate Authority``      || Authority's certificate if :ref:`pvacms` creates it.                    |
-||                         ||                                           || default: "EPICS Certificate Authority"                                  |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_CERT_AUTH         || <certificate authority keychain file>     || fully qualified path to a file that will be used as the                 |
-|| _TLS_KEYCHAIN           || e.g.                                      || certificate authority keychain file.                                    |
-||                         || ``~/.config/pva/1.3/cert_auth.p12``       ||                                                                         |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_CERT_AUTH_        || <certificate authority password file>     || fully qualified path to a file that will be used as the                 |
-|| TLS_KEYCHAIN_PWD_FILE   || e.g. ``~/.config/pva/1.3/cert_auth.pass`` || certificate authority keychain password file.                           |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_ACF        || <path to ACF file>                        || fully qualified path to a file that will be used as the                 |
-||                         || e.g. ``~/.config/pva/1.3/pvacms.acf``     || ACF file that configures the permissions of :ref:`pvacms` peers.        |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERT       || <number of minutes>                       || Minutes that the ocsp status response will                              |
-|| _STATUS_VALIDITY_MINS   || e.g. ``30`` or ``1d``                     || be valid before a client must re-request an update                      |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERTS      || {``true`` (default) or ``false``}         || ``true`` if we require peers to                                         |
-|| _REQUIRE_SUBSCRIPTION   ||                                           || subscribe to certificate status for certificates to                     |
-||                         ||                                           || be deemed VALID. Adds extension to new certificates                     |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_DB         || <path to DB file>                         || fully qualified path to a file that will be used as the                 |
-||                         || e.g. ``~/.local/share/pva/1.3/certs.db``  || Certificate database file.                                              |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_REQUIRE    || {``true`` (default) or ``false`` }        || ``true`` if server should generate all new certificates in the          |
-|| _APPROVAL               ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_REQUIRE    || {``true`` (default) or ``false`` }        || ``true`` if server should generate new client certificates in the       |
-|| _CLIENT_APPROVAL        ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_REQUIRE    || {``true`` (default) or ``false`` }        || ``true`` if server should generate new IOC certificates in the          |
-|| _IOC_APPROVAL           ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_REQUIRE    || {``true`` (default) or ``false`` }        || ``true`` if server should generate new server certificates in the       |
-|| _SERVER_APPROVAL        ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_DISALLOW   || {``true`` (default) or ``false`` }        || ``true`` if client provided certificate durations should be ignored     |
-|| _CUSTOM_DURATION        ||                                           ||                                                                         |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_DISALLOW   || {``true`` (default) or ``false`` }        || ``true`` if client provided certificate durations should be ignored     |
-|| _CLIENT_CUSTOM_DURATION ||                                           || for Client certificate requests                                         |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_DISALLOW   || {``true`` (default) or ``false`` }        || ``true`` if client provided certificate durations should be ignored     |
-|| _IOC_CUSTOM_DURATION    ||                                           || for IOC certificate requests                                            |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_DISALLOW   || {``true`` (default) or ``false`` }        || ``true`` if client provided certificate durations should be ignored     |
-|| _SERVER_CUSTOM_DURATION ||                                           || for Server certificate requests                                         |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERT       || <duration of the certificate>             || The duration of the certificate.  All certificates will be              |
-|| _VALIDITY               || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERT       || <duration of the certificate>             || The duration of the certificate.  All Client certificates will be       |
-|| _VALIDITY_CLIENT        || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERT       || <duration of the certificate>             || The duration of the certificate.  All IOC certificates will be          |
-|| _VALIDITY_IOC           || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERT       || <duration of the certificate>             || The duration of the certificate.  All Server certificates will be       |
-|| VALIDITY_SERVER         || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS        || <path to keychain file>                   || The location of the :ref:`pvacms` keychain file.                        |
-|| _KEYCHAIN               || e.g. ``~/.config/pva/1.3/pvacms.p12``     ||                                                                         |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS        || <path to password text file>              || Location of a password file for :ref:`pvacms` keychain file.            |
-|| _KEYCHAIN_PWD_FILE      || e.g. ``~/.config/pva/1.3/pvacms.pass``    ||                                                                         |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS        || {``true`` or ``false`` (default) }        || ``true`` if server should stop if no cert is available or can be        |
-|| _STOP_IF_NO_CERT        ||                                           || verified if status check is enabled                                     |
-+--------------------------+--------------------------------------------+--------------------------------------------------------------------------+
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+| Name                                          | Keys and Values                            | Description                                                              |
++===============================================+============================================+==========================================================================+
+|| EPICS_ADMIN_TLS_KEYCHAIN                     || <path to ADMIN user keychain file>        || The location of the :ref:`pvacms` ADMIN user keychain file.             |
+||                                              || e.g. ``~/.config/pva/1.3/admin.p12``      ||                                                                         |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_ADMIN_TLS_KEYCHAIN_PWD_FILE            || <path to ADMIN user password text file>   || Location of a password file for :ref:`pvacms` ADMIN user keychain file. |
+||                                              || e.g. ``~/.config/pva/1.3/admin.pass``     ||                                                                         |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_CERT_AUTH_NAME                         || <name of the certificate authority>       || To provide the name (CN) to be used in the subject of the               |
+||                                              || e.g. ``Epics Root Certificate Authority`` || certificate authority's Certificate if :ref:`pvacms` creates it.        |
+||                                              ||                                           || default: "EPICS Root Certificate Authority"                             |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_CERT_AUTH_ORGANIZATION                 || <certificate authority organisation name> || To provide the name (O) to be used in the subject of the certificate    |
+||                                              || e.g. ``certs.epics.org``                  || authority's certificate if :ref:`pvacms` creates it.                    |
+||                                              ||                                           || default: "cert.authority.epics.org"                                     |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT          || <certificate authority org unit name>     || To provide the name (OU) to be used in the subject of the Certificate   |
+||                                              || e.g. ``EPICS Certificate Authority``      || Authority's certificate if :ref:`pvacms` creates it.                    |
+||                                              ||                                           || default: "EPICS Certificate Authority"                                  |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_CERT_AUTH_TLS_KEYCHAIN                 || <certificate authority keychain file>     || fully qualified path to a file that will be used as the                 |
+||                                              || e.g.                                      || certificate authority keychain file.                                    |
+||                                              || ``~/.config/pva/1.3/cert_auth.p12``       ||                                                                         |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_CERT_AUTH_TLS_KEYCHAIN_PWD_FILE        || <certificate authority password file>     || fully qualified path to a file that will be used as the                 |
+||                                              || e.g. ``~/.config/pva/1.3/cert_auth.pass`` || certificate authority keychain password file.                           |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_ACF                             || <path to ACF file>                        || fully qualified path to a file that will be used as the                 |
+||                                              || e.g. ``~/.config/pva/1.3/pvacms.acf``     || ACF file that configures the permissions of :ref:`pvacms` peers.        |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS       || <number of minutes>                       || Minutes that the ocsp status response will                              |
+||                                              || e.g. ``30`` or ``1d``                     || be valid before a client must re-request an update                      |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION      || {``true`` (default) or ``false``}         || ``true`` if we require peers to                                         |
+||                                              ||                                           || subscribe to certificate status for certificates to                     |
+||                                              ||                                           || be deemed VALID. Adds extension to new certificates                     |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_DB                              || <path to DB file>                         || fully qualified path to a file that will be used as the                 |
+||                                              || e.g. ``~/.local/share/pva/1.3/certs.db``  || Certificate database file.                                              |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_REQUIRE_APPROVAL                || {``true`` (default) or ``false`` }        || ``true`` if server should generate all new certificates in the          |
+||                                              ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_REQUIRE_CLIENT_APPROVAL         || {``true`` (default) or ``false`` }        || ``true`` if server should generate new client certificates in the       |
+||                                              ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_REQUIRE_IOC_APPROVAL            || {``true`` (default) or ``false`` }        || ``true`` if server should generate new IOC certificates in the          |
+||                                              ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_REQUIRE_SERVER_APPROVAL         || {``true`` (default) or ``false`` }        || ``true`` if server should generate new server certificates in the       |
+||                                              ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_DISALLOW_CUSTOM_DURATION        || {``true`` (default) or ``false`` }        || ``true`` if client provided certificate durations should be ignored     |
+||                                              ||                                           ||                                                                         |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION || {``true`` (default) or ``false`` }        || ``true`` if client provided certificate durations should be ignored     |
+||                                              ||                                           || for Client certificate requests                                         |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION    || {``true`` (default) or ``false`` }        || ``true`` if client provided certificate durations should be ignored     |
+||                                              ||                                           || for IOC certificate requests                                            |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION || {``true`` (default) or ``false`` }        || ``true`` if client provided certificate durations should be ignored     |
+||                                              ||                                           || for Server certificate requests                                         |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_CERT_VALIDITY                   || <duration of the certificate>             || The duration of the certificate.  All certificates will be              |
+||                                              || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_CERT_VALIDITY_CLIENT            || <duration of the certificate>             || The duration of the certificate.  All Client certificates will be       |
+||                                              || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_CERT_VALIDITY_IOC               || <duration of the certificate>             || The duration of the certificate.  All IOC certificates will be          |
+||                                              || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_CERT_VALIDITY_SERVER            || <duration of the certificate>             || The duration of the certificate.  All Server certificates will be       |
+||                                              || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_TLS_KEYCHAIN                    || <path to keychain file>                   || The location of the :ref:`pvacms` keychain file.                        |
+||                                              || e.g. ``~/.config/pva/1.3/pvacms.p12``     ||                                                                         |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE           || <path to password text file>              || Location of a password file for :ref:`pvacms` keychain file.            |
+||                                              || e.g. ``~/.config/pva/1.3/pvacms.pass``    ||                                                                         |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_TLS_STOP_IF_NO_CERT             || {``true`` or ``false`` (default) }        || ``true`` if server should stop if no cert is available or can be        |
+||                                              ||                                           || verified if status check is enabled                                     |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 
 Extensions to Config for PVACMS
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

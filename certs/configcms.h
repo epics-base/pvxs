@@ -284,6 +284,7 @@ class ConfigCms final : public Config {
     std::string pvacms_country{"US"};
 
     void applyCmsEnv(const std::map<std::string, std::string>& defs);
+    static ConfigCms mockCms(int family=AF_INET);
     static ConfigCms forCms();
 };
 

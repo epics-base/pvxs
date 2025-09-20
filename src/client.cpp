@@ -490,7 +490,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
 #ifdef PVXS_ENABLE_OPENSSL
     if (effective.isTlsConfigured()) {
         try {
-            tls_context = ossl::SSLContext::for_client(effective, tcp_loop);
+            tls_context = ossl::SSLContext::for_client(effective, effective, tcp_loop);
         } catch (std::exception& e) {
             if (tls_context) tls_context->setDegradedMode(true);
             log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
@@ -590,7 +590,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
 #endif
 }
 
-ContextImpl::~ContextImpl() { tcp_loop.sync(); };
+ContextImpl::~ContextImpl() = default;
 
 void ContextImpl::startNS() {
     if (nameServers.empty())  // vector size const after ctor, contents remain mutable
@@ -1301,7 +1301,7 @@ void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
     // If the context is already in the TlsReady state, then don't do anything
     if (isTlsReady()) return;
     try {
-        const auto new_context = ossl::SSLContext::for_client(new_config, tcp_loop);
+        const auto new_context = ossl::SSLContext::for_client(new_config, new_config, tcp_loop);
 
         // If unsuccessful in getting a certificate, or it has EXPIRED, then don't enable TLS
         if (!isTlsConfigured(new_context) || new_context->hasExpired()) return;

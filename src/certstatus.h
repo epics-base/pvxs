@@ -387,26 +387,31 @@ struct CertStatus {
      */
     static Value getStatusPrototype() {
         using namespace members;
-        constexpr nt::NTEnum enum_value;
-        constexpr nt::NTEnum enum_ocspvalue;
 
-        auto value = TypeDef(TypeCode::Struct,
-                             {
-                                 enum_value.build().as("status"),
-                                 Member(TypeCode::UInt64, "serial"),
-                                 Member(TypeCode::String, "state"),
-                                 Member(TypeCode::UInt64, "renew_by"),
-                                 Member(TypeCode::Bool, "renewal_due"),
-                                 enum_ocspvalue.build().as("ocsp_status"),
-                                 Member(TypeCode::String, "ocsp_state"),
-                                 Member(TypeCode::String, "ocsp_status_date"),
-                                 Member(TypeCode::String, "ocsp_certified_until"),
-                                 Member(TypeCode::String, "ocsp_revocation_date"),
-                                 Member(TypeCode::UInt8A, "ocsp_response"),
-                             })
-                         .create();
+        auto value = TypeDef(TypeCode::Struct, "epics:nt/NTEnum:1.0", {
+                        Struct("value", "enum_t", {
+                            Int32("index"),
+                            StringA("choices"),
+                        }),
+                        nt::Alarm{}.build().as("alarm"),
+                        nt::TimeStamp{}.build().as("timeStamp"),
+                        Struct("display", {
+                            String("description"),
+                        }),
+                        Member(TypeCode::UInt64, "serial"),
+                        Member(TypeCode::String, "state"),
+                        Member(TypeCode::UInt64, "renew_by"),
+                        Member(TypeCode::Bool, "renewal_due"),
+                        nt::NTEnum{}.build().as("ocsp_status"),
+                        Member(TypeCode::String, "ocsp_state"),
+                        Member(TypeCode::String, "ocsp_status_date"),
+                        Member(TypeCode::String, "ocsp_certified_until"),
+                        Member(TypeCode::String, "ocsp_revocation_date"),
+                        Member(TypeCode::UInt8A, "ocsp_response"),
+        }).create();
+
         shared_array<const std::string> choices(CERT_STATES);
-        value["status.value.choices"] = choices.freeze();
+        value["value.choices"] = choices.freeze();
         shared_array<const std::string> ocsp_choices(OCSP_CERT_STATES);
         value["ocsp_status.value.choices"] = ocsp_choices.freeze();
         return value;
@@ -864,7 +869,7 @@ struct PVACertificateStatus final : OCSPStatus {
         : OCSPStatus(ocsp_bytes, trusted_store_ptr), status(status) {}
 
     explicit PVACertificateStatus(const Value& status_value, X509_STORE* trusted_store_ptr)
-        : PVACertificateStatus(status_value["status.value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>(),
+        : PVACertificateStatus(status_value["value.index"].as<certstatus_t>(), status_value["ocsp_response"].as<shared_array<const uint8_t>>(),
                                trusted_store_ptr) {
         if (ocsp_bytes.empty()) return;
         log_debug_printf(status_setup, "Value Status: %s\n", (SB() << status_value).str().c_str());

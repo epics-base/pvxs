@@ -89,7 +89,7 @@
 
 - EPICS Security.
 
-  The EPICS technology that provides user Authorization.  It is configured using an :ref:`access_control_file_ACF`.
+  The EPICS technology that provides user Authorization.  It is configured using an Access Control File (ACF).
 
 .. _glossary_jwt:
 
@@ -139,7 +139,7 @@
   - the EPICS agent's certificate created using the public key.
   - the Certificate Authority keychain
 
-  The PKCS#12 files are referenced by environment variables described in the :ref:`secure_pvaccess_configuration`.
+  The PKCS#12 files are referenced by environment variables described in the :ref:`configuration`.
 
 .. _glossary_skid:
 

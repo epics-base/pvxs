@@ -29,23 +29,23 @@
 
 #include <climits>
 #include <fstream>
-#include <iostream>
 #include <iterator>
 #include <list>
 #include <map>
 #include <regex>
 
 #include <ctype.h>
+
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <pwd.h>
 #include <libgen.h>
 #include <unistd.h>
-
-#ifdef __unix__
-#include <pwd.h>
 #endif
 
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <pwd.h>
 
 #include <pvxs/log.h>
 #include <pvxs/util.h>
@@ -959,12 +959,11 @@ std::string convertPath(std::string &path) {
             if (home || ((home = getenv("USERPROFILE")))) {
                 abs_path = home + path.substr(1);
             }
-#ifdef __unix__
-            else {
+#ifndef _WIN32
+           else {
                 auto pw = getpwuid(getuid());
                 if (pw) abs_path = pw->pw_dir + path.substr(1);
             }
-#endif
         } else if (path[0] == '.') {
             char temp[PATH_MAX];
             if (getcwd(temp, sizeof(temp)) != nullptr) {
@@ -978,6 +977,7 @@ std::string convertPath(std::string &path) {
                     abs_path = temp + path.substr(1);  // remove '.' then append
                 }
             }
+#endif
         }
     }
 
@@ -1049,24 +1049,35 @@ std::string getFileContents(const std::string &file_name) {
     return contents;
 }
 
-std::string getXdgConfigHome(const std::string &default_home) {
+
+std::string getXdgConfigHome() {
+#ifdef _WIN32
+    const auto default_home = getHomeDir();
+#else
+    const auto default_home = getHomeDir() + "/.config";
+#endif
     const char* config_home = getenv("XDG_CONFIG_HOME");
     return config_home ? config_home : default_home;
 }
 
-std::string getXdgDataHome(const std::string &default_data_home) {
+std::string getXdgDataHome() {
+#ifdef _WIN32
+    const auto default_data_home = "C:\\ProgramData";
+#else
+    const auto default_data_home = getHomeDir() + "/.local/share";
+#endif
     const char* data_home = getenv("XDG_DATA_HOME");
     return data_home ? data_home : default_data_home;
 }
 
-std::string getXdgPvaConfigHome(const std::string &default_home) {
+std::string getXdgPvaConfigHome() {
     const std::string suffix = SB() << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << versionString() ;
-    return getXdgConfigHome(default_home) + suffix;
+    return getXdgConfigHome() + suffix;
 }
 
-std::string getXdgPvaDataHome(const std::string &default_data_home) {
+std::string getXdgPvaDataHome() {
     const std::string suffix = SB() << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << versionString() ;
-    return getXdgDataHome(default_data_home) + suffix;
+    return getXdgDataHome() + suffix;
 }
 
 #define stringifyX(X) #X

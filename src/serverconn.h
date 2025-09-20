@@ -186,9 +186,7 @@ private:
 struct ServIface
 {
     server::Server::Pvt * const server;
-#ifdef PVXS_ENABLE_OPENSSL
     const bool isTLS;
-#endif
 
     SockAddr bind_addr;
     std::string name;

@@ -26,6 +26,7 @@
 #include "openssl.h"
 #include "opensslgbl.h"
 #include "ownedptr.h"
+#include "serverev.h"
 #include "wildcardpv.h"
 
 namespace {
@@ -49,6 +50,7 @@ struct Tester {
     server::ServerEv pvacms;
     client::Context client;
     CounterMap cert_status_request_counters;
+    epicsMutex counter_lock;
 
     Tester()
         : now(time(nullptr)),
@@ -70,7 +72,7 @@ struct Tester {
 
         });
 
-        pvacms = ConfigCms::forCms().build().addSource("__wildcard", pvacms_mock);
+        pvacms = ConfigCms::mockCms().build().addSource("__wildcard", pvacms_mock);
         client = pvacms.clientConfig().build();
 
         testShow() << "Testing TLS Status Functions:\n";

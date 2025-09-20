@@ -47,15 +47,21 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             extra: "CMD_CPPFLAGS=-Werror"
+            doc: 1
+
+          - name: Native Linux (WError) + SPVA & PVACMS
+            os: ubuntu-latest
+            cmp: gcc
+            configuration: default
+            base: "7.0-secure-pvaccess"
+            extra: "CMD_CPPFLAGS=-Werror PVXS_ENABLE_PVACMS=YES"
             doc: 1
 
           - name: Native Linux (libc++ debug)
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             # https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_macros.html
             extra: "CMD_CPPFLAGS=\"-D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC\""
             doc: 1
@@ -64,50 +70,43 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             extra: "CMD_CXXFLAGS=-std=c++17"
 
           - name: Cross mingw64 DLL
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             cross: "windows-x64-mingw"
-            extra: "WITH_OPENSSL=YES"
+#            extra: "WITH_OPENSSL=YES"
 
           - name: Cross mingw64 static
             os: ubuntu-latest
             cmp: gcc
             configuration: static
-            base: "7.0"
             cross: "windows-x64-mingw"
-            extra: "WITH_OPENSSL=YES"
+#            extra: "WITH_OPENSSL=YES"
 
           - name: RTEMS5
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             cmp: gcc
             configuration: default
-            base: "7.0"
             cross: "RTEMS-pc686-qemu@5"
 
           - name: Native Linux with clang
             os: ubuntu-latest
             cmp: clang
             configuration: default
-            base: "7.0"
 
           - name: Native Linux with clang ubsan
             os: ubuntu-latest
             cmp: clang
             configuration: default
-            base: "7.0"
             extra: "CMD_CFLAGS=-fsanitize=undefined CMD_CXXFLAGS=-fsanitize=undefined CMD_LDFLAGS=-fsanitize=undefined"
 
           - name: Native Linux with libevent stable
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             libevent: "release-2.1.12-stable"
 
           - name: Native Linux with 7.0.2
@@ -138,20 +137,17 @@ jobs:
             os: macos-latest
             cmp: clang
             configuration: default
-            base: "7.0"
 
-          - name: vs2019 DLL
-            os: windows-2019
-            cmp: vs2019
+          - name: vs2022 DLL
+            os: windows-2022
+            cmp: vs2022
             configuration: debug
-            base: "7.0"
             extra: "CMD_CXXFLAGS=-analysis"
 
-          - name: vs2019 static
-            os: windows-2019
-            cmp: vs2019
+          - name: vs2022 static
+            os: windows-2022
+            cmp: vs2022
             configuration: static-debug
-            base: "7.0"
             extra: "CMD_CXXFLAGS=-analysis"
 
     steps:
@@ -162,6 +158,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get -y install libreadline-dev g++-mingw-w64-x86-64 cmake gdb qemu-system-x86 libssl-dev mingw-w64-x86-64-dev
+      if: runner.os == 'Linux'
 
     - name: Install OpenSSL for MinGW
       run: |
@@ -173,6 +170,7 @@ jobs:
         sudo make install
         cd ..
         rm -rf openssl-${OPENSSL_VERSION}*
+      if: runner.os == 'Linux'
 
     - name: Host Info
       run: openssl version -a
@@ -250,13 +248,11 @@ jobs:
             image: centos:7
             cmp: gcc
             configuration: default
-            base: "7.0"
 
           - name: Linux fedora latest
             image: fedora:latest
             cmp: gcc
             configuration: default
-            base: "7.0"
 
     steps:
     - uses: actions/checkout@v3

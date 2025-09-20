@@ -76,7 +76,6 @@
 
 #include <CLI/CLI.hpp>
 
-
 DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
 DEFINE_LOGGER(pvacmsmonitor, "pvxs.certs.stat");
 
@@ -153,29 +152,27 @@ std::string extractSubjectPart(const std::string &subject, const std::string &ke
  */
 Value getCreatePrototype() {
     using namespace members;
-    constexpr nt::NTEnum enum_value;
-    auto value = TypeDef(TypeCode::Struct,
-                         {
-                             enum_value.build().as("status"),
-                             Member(TypeCode::String, "issuer"),
-                             Member(TypeCode::UInt64, "serial"),
-                             Member(TypeCode::String, "state"),
-                             Member(TypeCode::String, "cert_id"),
-                             Member(TypeCode::String, "status_pv"),
-                             Member(TypeCode::UInt64, "renew_by"),
-                             Member(TypeCode::UInt64, "expiration"),
-                             Member(TypeCode::String, "cert"),
-                             Struct("alarm",
-                                    "alarm_t",
-                                    {
-                                        Int32("severity"),
-                                        Int32("status"),
-                                        String("message"),
-                                    }),
-                         })
-                     .create();
+    auto value = TypeDef(TypeCode::Struct, "epics:nt/NTEnum:1.0", {
+                    Struct("value", "enum_t", {
+                        Int32("index"),
+                        StringA("choices"),
+                    }),
+                    nt::Alarm{}.build().as("alarm"),
+                    nt::TimeStamp{}.build().as("timeStamp"),
+                    Struct("display", {
+                        String("description"),
+                    }),
+                    Member(TypeCode::String, "issuer"),
+                    Member(TypeCode::UInt64, "serial"),
+                    Member(TypeCode::String, "state"),
+                    Member(TypeCode::String, "cert_id"),
+                    Member(TypeCode::String, "status_pv"),
+                    Member(TypeCode::UInt64, "renew_by"),
+                    Member(TypeCode::UInt64, "expiration"),
+                    Member(TypeCode::String, "cert"),
+        }).create();
     shared_array<const std::string> choices(CERT_STATES);
-    value["status.value.choices"] = choices.freeze();
+    value["value.choices"] = choices.freeze();
     return value;
 }
 
@@ -202,13 +199,7 @@ static Value createCertificateValue(const std::string &issuer_id,
                              Member(TypeCode::String, "org"),
                              Member(TypeCode::String, "org_unit"),
                              Member(TypeCode::String, "cert"),
-                             Struct("alarm",
-                                    "alarm_t",
-                                    {
-                                        Int32("severity"),
-                                        Int32("status"),
-                                        String("message"),
-                                    }),
+                             nt::Alarm{}.build().as("alarm"),
                          })
                      .create();
     // Get subject
@@ -399,7 +390,7 @@ std::string getValidStatusesClause(const std::vector<certstatus_t> &valid_status
     if (n_valid_status > 0) {
         auto valid_status_clauses = SB();
         valid_status_clauses << " AND status IN (";
-        for (auto i = 0; i < n_valid_status; i++) {
+        for (size_t i = 0; i < n_valid_status; i++) {
             if (i != 0)
                 valid_status_clauses << ", ";
             valid_status_clauses << ":status" << i;
@@ -447,7 +438,7 @@ std::string getSelectedSerials(const std::vector<serial_number_t> &serials) {
 void bindValidStatusClauses(sqlite3_stmt *sql_statement, const std::vector<certstatus_t> &valid_status) {
     const auto n_valid_status = valid_status.size();
     sqlite3_bind_int(sql_statement, sqlite3_bind_parameter_index(sql_statement, ":now"), std::time(nullptr));
-    for (auto i = 0; i < n_valid_status; i++) {
+    for (size_t i = 0; i < n_valid_status; i++) {
         sqlite3_bind_int(sql_statement,
                          sqlite3_bind_parameter_index(sql_statement, (SB() << ":status" << i).str().c_str()),
                          valid_status[i]);
@@ -925,8 +916,8 @@ void onCreateCertificate(ConfigCms &config,
         auto status_pv = getCertStatusURI(config.cert_pv_prefix, cert_id);
         auto reply(getCreatePrototype());
         auto now(time(nullptr));
-        setValue<uint32_t>(reply, "status.value.index", VALID);
-        setValue<uint64_t>(reply, "status.timeStamp.secondsPastEpoch", now - POSIX_TIME_AT_EPICS_EPOCH);
+        setValue<uint32_t>(reply, "value.index", VALID);
+        setValue<uint64_t>(reply, "timeStamp.secondsPastEpoch", now - POSIX_TIME_AT_EPICS_EPOCH);
         setValue<std::string>(reply, "state", CERT_STATE(VALID));
         setValue<uint64_t>(reply, "serial", serial);
         setValue<std::string>(reply, "issuer", issuer_id);
@@ -1117,8 +1108,8 @@ void onCreateCertificate(ConfigCms &config,
 
         ///////////////////////////////////////////////
         // Construct and return the reply
-        reply["status.value.index"] = state;
-        reply["status.timeStamp.secondsPastEpoch"] = now - POSIX_TIME_AT_EPICS_EPOCH;
+        reply["value.index"] = state;
+        reply["timeStamp.secondsPastEpoch"] = now - POSIX_TIME_AT_EPICS_EPOCH;
         reply["state"] = CERT_STATE(state);
         reply["serial"] = serial;
         reply["issuer"] = issuer_id;
@@ -1207,7 +1198,7 @@ void onGetStatus(const ConfigCms &config,
         // Get all other serial numbers to check (certificate authority and certificate authority chain)
         cert_auth_serial_numbers.push_back(CertStatusFactory::getSerialNumber(cert_auth_cert));
         const auto N = sk_X509_num(cert_auth_chain.get());
-        for (auto i = 0u; i < N; ++i) {
+        for (int i = 0; i < N; ++i) {
             cert_auth_serial_numbers.push_back(
                 CertStatusFactory::getSerialNumber(sk_X509_value(cert_auth_chain.get(), i)));
         }
@@ -2133,15 +2124,15 @@ Value postCertificateStatus(server::WildcardPV &status_pv,
     const auto was_open = status_pv.isOpen(pv_name);
     if (was_open) {
         status_value = status_pv.fetch(pv_name);
-        status_value["status.value.choices"].unmark();
+        status_value["value.choices"].unmark();
         status_value["ocsp_status.value.choices"].unmark();
     } else {
         status_value = CertStatus::getStatusPrototype();
     }
     const auto now = time(nullptr);
     setValue<uint64_t>(status_value, "serial", serial);
-    setValue<uint32_t>(status_value, "status.value.index", cert_status.status.i);
-    setValue<time_t>(status_value, "status.timeStamp.secondsPastEpoch", now - POSIX_TIME_AT_EPICS_EPOCH);
+    setValue<uint32_t>(status_value, "value.index", cert_status.status.i);
+    setValue<time_t>(status_value, "timeStamp.secondsPastEpoch", now - POSIX_TIME_AT_EPICS_EPOCH);
     setValue<std::string>(status_value, "state", cert_status.status.s);
     setValue<time_t>(status_value, "renew_by", cert_status.renew_by.t - POSIX_TIME_AT_EPICS_EPOCH);
     setValue<bool>(status_value, "renewal_due", cert_status.renewal_due);

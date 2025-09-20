@@ -17,6 +17,7 @@
 
 #include <epicsVersion.h>
 #include <epicsEvent.h>
+#include <epicsGetopt.h>
 #include <osiSock.h>
 
 #include <pvxs/log.h>

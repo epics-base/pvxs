@@ -149,7 +149,9 @@ struct PVXS_API WildcardSource final : Source, std::enable_shared_from_this<Wild
 
     bool wildcardMatch(const std::string& searched_name, WildcardPV& pv);
 
-    static const std::string kEpicsWildcardChars;
+    const std::regex kRegexSpecialChars{R"([-[\]{}()+.,\^$|#\s])"};
+    const std::regex kWildcardStarPattern{"\\*"};
+    const char kWildcardQueryCharacter = '?';
 };
 
 

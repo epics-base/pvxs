@@ -220,7 +220,7 @@ If you want a prepackaged environment, try the following.  You will need three t
         -d ${PROJECT_HOME}/pvxs/test/testiocg.db \
         -d ${PROJECT_HOME}/pvxs/test/image.db \
         -G ${PROJECT_HOME}/pvxs/test/image.json \
-        -a ${PROJECT_HOME}/pvxs/test/testioc.acf
+        -a ${PROJECT_HOME}/pvxs/test/testioc.tls.acf
 
 .. code-block:: console
 
@@ -301,7 +301,7 @@ If you want a prepackaged environment, try the following.  You will need three t
 ||                     ||                    ||                         ||                     ||                                     ||                                                                      |
 +----------------------+---------------------+--------------------------+----------------------+--------------------------------------+-----------------------------------------------------------------------+
 || EPICS_AUTH_KRB_VALIDATOR_SERVICE          || ``--krb-validator``                            || {this is validator service name}    || The name of the service user created in the KDC that the pvacms      |
-||                                           ||                                                || e.g. ``pvacms``                     || service will log in as.  `/cluster@{realm}` will be added            |
+||                                           ||                                                || e.g. ``pvacms``                     || service will log in as.  ``/cluster@{realm}`` will be added          |
 +--------------------------------------------+-------------------------------------------------+--------------------------------------+-----------------------------------------------------------------------+
 || EPICS_AUTH_KRB_REALM                      || ``--krb-realm``                                || e.g. ``EPICS.ORG``                  || Kerberos REALM to authenticate against                               |
 +--------------------------------------------+-------------------------------------------------+--------------------------------------+-----------------------------------------------------------------------+
@@ -763,7 +763,7 @@ using the Kerberos Authenticator.
         -d ${PROJECT_HOME}/pvxs/test/testiocg.db \
         -d ${PROJECT_HOME}/pvxs/test/image.db \
         -G ${PROJECT_HOME}/pvxs/test/image.json \
-        -a ${PROJECT_HOME}/pvxs/test/testioc.acf
+        -a ${PROJECT_HOME}/pvxs/test/testioc.tls.acf
 
 .. code-block:: console
 

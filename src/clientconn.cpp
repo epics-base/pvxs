@@ -93,19 +93,11 @@ DEFINE_LOGGER(remote, "pvxs.remote.log");
 
 Connection::Connection(const std::shared_ptr<ContextImpl>& context,
                        const SockAddr& peerAddr,
-                       bool reconn
-#ifdef PVXS_ENABLE_OPENSSL
-                     , bool isTLS
-#endif
-                       )
-    :
-#ifdef PVXS_ENABLE_OPENSSL
-    ConnBase (true, isTLS, context->effective.sendBE(), nullptr, peerAddr)
-#else
-    ConnBase (true, context->effective.sendBE(), nullptr, peerAddr)
-#endif
-    ,context(context)
-    ,echoTimer(__FILE__, __LINE__,
+                       bool reconn,
+                       bool isTLS )
+    : ConnBase (true, isTLS, context->effective.sendBE(), nullptr, peerAddr)
+    , context(context)
+    , echoTimer(__FILE__, __LINE__,
                event_new(context->tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &tickEchoS, this))
 {
     if(reconn) {
@@ -149,7 +141,7 @@ std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>
     std::shared_ptr<Connection> ret;
     auto it = context->connByAddr.find(serv);
     if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
-        context->connByAddr[serv] = ret = std::make_shared<Connection>(context, serv, reconn);
+        context->connByAddr[serv] = ret = std::make_shared<Connection>(context, serv, reconn, false);
     }
 #endif
     return ret;

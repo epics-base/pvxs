@@ -9,6 +9,7 @@
 #include <list>
 
 #include <epicsThread.h>
+#include <epicsGetopt.h>
 
 #include <pvxs/client.h>
 #include <pvxs/nt.h>

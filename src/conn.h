@@ -106,11 +106,10 @@ protected:
     std::shared_ptr<ossl::SSLPeerStatusAndMonitor> peer_status;
     bool isPeerStatusGood() const ;
 
+#endif
   public:
     const bool isTLS;
 
-#endif
-public:
     TypeStore rxRegistry;
     /* Flag if some received delta could not be decoded due to
      * a non-existent IOID, which *may* leave this rxRegistry out
@@ -142,11 +141,7 @@ public:
         Disconnected,
     } state;
 
-#ifdef PVXS_ENABLE_OPENSSL
     ConnBase(bool isClient, bool isTLS, bool sendBE, evbufferevent &&bev, const SockAddr& peerAddr);
-#else
-    ConnBase(bool isClient, bool sendBE, evbufferevent &&bev, const SockAddr& peerAddr);
-#endif
     ConnBase(const ConnBase&) = delete;
     ConnBase& operator=(const ConnBase&) = delete;
     virtual ~ConnBase();

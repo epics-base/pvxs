@@ -206,7 +206,7 @@ If you want a prepackaged environment, try the following.  You will need three t
         -d ${PROJECT_HOME}/pvxs/test/testiocg.db \
         -d ${PROJECT_HOME}/pvxs/test/image.db \
         -G ${PROJECT_HOME}/pvxs/test/image.json \
-        -a ${PROJECT_HOME}/pvxs/test/testioc.acf
+        -a ${PROJECT_HOME}/pvxs/test/testioc.tls.acf
 
 .. code-block:: console
 
@@ -277,51 +277,51 @@ If you want a prepackaged environment, try the following.  You will need three t
 |step-by-step| Step-By-Step
 ********************************
 
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
-| Env. *pvacms*       | Params. *pvacms*             | Keys and Values                                | Description                                                           |
-+=====================+==============================+================================================+=======================================================================+
-|  EPICS_AUTH_JWT_    |  ``--jwt-request-format``    | string format for verification request payload |  A string that is used verbatim as the payload for the verification   |
-|  REQUEST_FORMAT     |                              |                                                |  request while substituting the string ``#token#`` for the token      |
-|                     |                              |                                                |  value, and ``#kid#`` for the key id. This is used when the           |
-|                     |                              | e.g. ``{ "token": "#token#" }``                |  verification server requires a formatted payload for the             |
-|                     |                              |                                                |  verification request. If the string is simply ``#token#`` (default)  |
-|                     |                              | e.g. ``#token#``                               |  then the verification endpoint is called with the raw token as       |
-|                     |                              |                                                |  the payload.                                                         |
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
-|  EPICS_AUTH_JWT_    |  ``--jwt-request-method``    | ``POST`` (default)                             |  This determines whether the endpoint will be called with             |
-|  REQUEST_METHOD     |                              | ``GET```                                       |  ``HTTP GET`` or ``POST`` .                                           |
-|                     |                              |                                                |  If called with ``POST``, then the payload is exactly what is defined |
-|                     |                              | e.g. of call made for GET:                     |  by the ``EPICS_AUTH_JWT_RESPONSE_FORMAT`` variable.                  |
-|                     |                              |                                                |  If called with GET, then the token is passed in the                  |
-|                     |                              | **GET** /api/validate-token HTTP/1.1           |  **Authorization** header of the ``HTTP GET`` request                 |
-|                     |                              |                                                |                                                                       |
-|                     |                              | **Authorization**: Bearer eyJhbGcXVCJ9...      |                                                                       |
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
-|  EPICS_AUTH_JWT_    |  ``--jwt-response-format``   | string format for verification response value  |  A pattern string that we can use to decode the response from a       |
-|  RESPONSE_FORMAT    |                              |                                                |  verification endpoint if the response is formatted text. All white   |
-|                     |                              |                                                |  space is removed in the given string and in the response. Then all   |
-|                     |                              | e.g. ``{ "payload": { * },``                   |  the text prior to ``#response#`` is matched and removed from the     |
-|                     |                              |      ``  "valid": #response# }``               |  response and all the text after the response is likewise removed,    |
-|                     |                              |                                                |  what remains is the response value.                                  |
-|                     |                              | e.g. ``#response#``                            |  An asterisk in the string matches any sequence of characters in the  |
-|                     |                              |                                                |  response. It is converted to lowercase and interpreted as valid      |
-|                     |                              |                                                |  if it equals ``valid``, ``ok``, ``true``, ``t``, ``yes``, ``y``, or  |
-|                     |                              |                                                |  ``1``.  If the string is ``#response#`` (default) then the response  |
-|                     |                              |                                                |  is raw and is converted to lowercase and compared without removing   |
-|                     |                              |                                                |  any formatting                                                       |
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
-|  EPICS_AUTH_JWT_    | ``--jwt-trusted-uri``        | uri of JWT validation endpoint                 |  Trusted URI of the validation endpoint including the ``http://``,    |
-|  TRUSTED_URI        |                              |                                                |  ``https://``, and port number.  There is no default, it must be      |
-|                     |                              | e.g. ``http://issuer/api/validate-token``      |  the text prior to ``#response#`` is matched and removed from the     |
-|                     |                              |                                                |  specified.  This is used to compare to the ``iss`` field in the      |
-|                     |                              |                                                |  decoded token payload if it is provided.  If it is not the same,     |
-|                     |                              |                                                |  then the validation fails.  If the ``iss`` field is missing, then    |
-|                     |                              |                                                |  the value of this variable is taken as the validation URI.           |
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
-|  EPICS_AUTH_JWT_    | ``--jwt-use-response-code``  | case insensitive:                              |  If set this tells PVACMS that when it receives a ``200``             |
-|  USE_RESPONSE_CODE  |                              | ``YES``, ``TRUE``,  or ``1``                   |  HTTP-response code from the HTTP request then the token is valid,    |
-|                     |                              |                                                |  and invalid for any other response code.                             |
-+---------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
++------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+| Env. *pvacms*                      | Params. *pvacms*             | Keys and Values                                | Description                                                           |
++====================================+==============================+================================================+=======================================================================+
+|  EPICS_AUTH_JWT_REQUEST_FORMAT     |  ``--jwt-request-format``    | string format for verification request payload |  A string that is used verbatim as the payload for the verification   |
+|                                    |                              |                                                |  request while substituting the string ``#token#`` for the token      |
+|                                    |                              |                                                |  value, and ``#kid#`` for the key id. This is used when the           |
+|                                    |                              | e.g. ``{ "token": "#token#" }``                |  verification server requires a formatted payload for the             |
+|                                    |                              |                                                |  verification request. If the string is simply ``#token#`` (default)  |
+|                                    |                              | e.g. ``#token#``                               |  then the verification endpoint is called with the raw token as       |
+|                                    |                              |                                                |  the payload.                                                         |
++------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_REQUEST_METHOD     |  ``--jwt-request-method``    | ``POST`` (default)                             |  This determines whether the endpoint will be called with             |
+|                                    |                              | ``GET```                                       |  ``HTTP GET`` or ``POST`` .                                           |
+|                                    |                              |                                                |  If called with ``POST``, then the payload is exactly what is defined |
+|                                    |                              | e.g. of call made for GET:                     |  by the ``EPICS_AUTH_JWT_RESPONSE_FORMAT`` variable.                  |
+|                                    |                              |                                                |  If called with GET, then the token is passed in the                  |
+|                                    |                              | **GET** /api/validate-token HTTP/1.1           |  **Authorization** header of the ``HTTP GET`` request                 |
+|                                    |                              |                                                |                                                                       |
+|                                    |                              | **Authorization**: Bearer eyJhbGcXVCJ9...      |                                                                       |
++------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_RESPONSE_FORMAT    |  ``--jwt-response-format``   | string format for verification response value  |  A pattern string that we can use to decode the response from a       |
+|                                    |                              |                                                |  verification endpoint if the response is formatted text. All white   |
+|                                    |                              |                                                |  space is removed in the given string and in the response. Then all   |
+|                                    |                              | e.g. ``{ "payload": { * },``                   |  the text prior to ``#response#`` is matched and removed from the     |
+|                                    |                              |      ``  "valid": #response# }``               |  response and all the text after the response is likewise removed,    |
+|                                    |                              |                                                |  what remains is the response value.                                  |
+|                                    |                              | e.g. ``#response#``                            |  An asterisk in the string matches any sequence of characters in the  |
+|                                    |                              |                                                |  response. It is converted to lowercase and interpreted as valid      |
+|                                    |                              |                                                |  if it equals ``valid``, ``ok``, ``true``, ``t``, ``yes``, ``y``, or  |
+|                                    |                              |                                                |  ``1``.  If the string is ``#response#`` (default) then the response  |
+|                                    |                              |                                                |  is raw and is converted to lowercase and compared without removing   |
+|                                    |                              |                                                |  any formatting                                                       |
++------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_TRUSTED_URI        | ``--jwt-trusted-uri``        | uri of JWT validation endpoint                 |  Trusted URI of the validation endpoint including the ``http://``,    |
+|                                    |                              |                                                |  ``https://``, and port number.  There is no default, it must be      |
+|                                    |                              | e.g. ``http://issuer/api/validate-token``      |  the text prior to ``#response#`` is matched and removed from the     |
+|                                    |                              |                                                |  specified.  This is used to compare to the ``iss`` field in the      |
+|                                    |                              |                                                |  decoded token payload if it is provided.  If it is not the same,     |
+|                                    |                              |                                                |  then the validation fails.  If the ``iss`` field is missing, then    |
+|                                    |                              |                                                |  the value of this variable is taken as the validation URI.           |
++------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
+|  EPICS_AUTH_JWT_USE_RESPONSE_CODE  | ``--jwt-use-response-code``  | case insensitive:                              |  If set this tells PVACMS that when it receives a ``200``             |
+|                                    |                              | ``YES``, ``TRUE``,  or ``1``                   |  HTTP-response code from the HTTP request then the token is valid,    |
+|                                    |                              |                                                |  and invalid for any other response code.                             |
++------------------------------------+------------------------------+------------------------------------------------+-----------------------------------------------------------------------+
 
 
 +----------------------+-----------------------------+------------------------------------------------+-----------------------------------------------------------------------+
@@ -788,7 +788,7 @@ using the Java Web Token (JWT) Authenticator.
         -d ${PROJECT_HOME}/pvxs/test/testiocg.db \
         -d ${PROJECT_HOME}/pvxs/test/image.db \
         -G ${PROJECT_HOME}/pvxs/test/image.json \
-        -a ${PROJECT_HOME}/pvxs/test/testioc.acf
+        -a ${PROJECT_HOME}/pvxs/test/testioc.tls.acf
 
 .. code-block:: console
 

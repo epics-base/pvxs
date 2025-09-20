@@ -523,14 +523,6 @@ void WildcardSource::onSearch(Search& op) {
     for(auto& name : op) {
         const auto searched_name = std::string(name.name());
 
-        // Don't allow `searched_name`s containing EPICS wildcard characters
-        if (std::find_first_of(
-                    searched_name.begin(), searched_name.end(),
-                    kEpicsWildcardChars.begin(), kEpicsWildcardChars.end()
-                ) != searched_name.end()) {
-            continue;
-                }
-
         // Try a wildcard match
         WildcardPV pv;
         if(wildcardMatch(searched_name, pv)) {
@@ -587,10 +579,6 @@ void WildcardSource::show(std::ostream& strm)
  * @return true if a match is found
  */
 bool WildcardSource::wildcardMatch(const std::string& searched_name, WildcardPV& pv) {
-    static const std::regex kRegexSpecialChars{R"([-[\]{}()+.,\^$|#\s])"};
-    static const std::regex kWildcardStarPattern("\\*");
-    static const char kWildcardQueryCharacter = '?';
-
     for (const auto &wildcard_shared_pv_pair : pvs) {
         // 1. Prepare PV regex pattern converting from the EPICS wildcard-style patterns to regex syntax
         std::string wildcard_pv = wildcard_shared_pv_pair.first;
@@ -664,8 +652,6 @@ WildcardSource::list_t WildcardSource::list() const {
     }
     return ret;
 }
-
-const std::string WildcardSource::kEpicsWildcardChars;
 
 }  // namespace server
 }  // namespace pvxs

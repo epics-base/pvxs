@@ -171,12 +171,13 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE>
  * subscriptions in the same context too.  The reference needs to remain valid until the subscription
  * is cancelled.
  *
- * @param ctx_cert the certificate to monitor
- * @param callback the callback to call
+ * @param client_config the client config to use to make the client connection for the subscription
  * @param trusted_store_ptr the trusted store to verify the status response against
+ * @param status_pv the status PV to subscribe to
+ * @param callback the callback to call
  * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
  */
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509_STORE *trusted_store_ptr, const std::string &status_pv, StatusCallback &&callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(client::Config client_config, X509_STORE *trusted_store_ptr, const std::string &status_pv, StatusCallback &&callback) {
     // Construct the URI
     log_debug_printf(status, "Starting Status Subscription: %s\n", status_pv.c_str());
 
@@ -186,9 +187,8 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(X509_STORE *trus
     try {
         // Subscribe to the service using the constructed URI
         // with TLS disabled to avoid recursive loop
-        auto config = client::Config::fromEnv();
-        config.tls_disabled = true;
-        auto client(std::make_shared<client::Context>(config.build()));
+        client_config.tls_disabled = true;
+        auto client(std::make_shared<client::Context>(client_config.build()));
         cert_status_ptr<CertStatusManager> cert_status_manager(new CertStatusManager(std::move(client)));
         cert_status_manager->callback_ref = std::move(fn);
         std::weak_ptr<CertStatusManager> weak_cert_status_manager(cert_status_manager);

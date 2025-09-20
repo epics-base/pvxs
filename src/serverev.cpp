@@ -34,6 +34,9 @@ ServerEv ServerEv::fromEnv(CustomServerCallback &custom_event_callback)
     return certs::Config::fromEnv().build(custom_event_callback);
 }
 
+client::Config ServerEv::clientConfig() const { return base_.clientConfig();}
+
+
 ServerEv::ServerEv(const certs::Config &config, const CustomServerCallback &custom_cert_event_callback) : base_(config) {
     auto internal(std::make_shared<Pvt>(*this, custom_cert_event_callback));
     internal->self = internal;
