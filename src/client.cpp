@@ -313,13 +313,19 @@ void ResultWaiter::complete(Result&& result, bool interrupt)
 OperationBase::OperationBase(operation_t op, const evbase& loop)
     :Operation(op)
     ,loop(loop)
+    , _name("")
 {}
 
 OperationBase::~OperationBase() {}
 
 const std::string& OperationBase::name()
 {
-    return chan->name;
+    // Channel creation happens after OperationBase construction
+    // return a default string if Channel not yet created
+    if (chan)
+        return chan->name;
+    else
+        return this->_name;
 }
 
 Value OperationBase::wait(double timeout)

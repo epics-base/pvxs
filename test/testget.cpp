@@ -313,6 +313,14 @@ struct Tester {
         op.reset();
     }
 
+    void name()
+    {
+        testShow()<<__func__;
+
+        auto op = cli.get("nonexistent").exec();
+        auto op_name = op->name();
+    }
+
     void manualExec()
     {
         testShow()<<__func__;
@@ -533,6 +541,7 @@ MAIN(testget)
     Tester().cancel();
     Tester().asyncCancel();
     Tester().orphan();
+    Tester().name();
     Tester().manualExec();
     Tester().badRequest();
     Tester().delayExec();
