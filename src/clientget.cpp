@@ -584,6 +584,7 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
 {
     auto internal(std::move(op));
     internal->internal_self = internal;
+    internal->channelName = name;
 
     std::shared_ptr<GPROp> external(internal.get(), [internal, syncCancel](GPROp*) mutable {
         // (maybe) user thread

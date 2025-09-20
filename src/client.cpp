@@ -319,7 +319,7 @@ OperationBase::~OperationBase() {}
 
 const std::string& OperationBase::name()
 {
-    return chan->name;
+    return channelName;
 }
 
 Value OperationBase::wait(double timeout)
