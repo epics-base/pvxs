@@ -85,7 +85,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
             _cancel(true);
     }
 
-    virtual const std::string& _name() override final {
+    virtual const std::string _name() override final {
         return channelName;
     }
 

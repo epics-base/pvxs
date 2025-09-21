@@ -117,7 +117,7 @@ struct PVXS_API Operation {
     virtual ~Operation() =0;
 
     //! PV name
-    virtual const std::string& name() =0;
+    virtual const std::string name() =0;
 
     //! Explicitly cancel a pending operation.
     //! Blocks until an in-progress callback has completed.
@@ -180,10 +180,10 @@ struct PVXS_API Subscription {
     virtual ~Subscription() =0;
 
 protected:
-    virtual const std::string& _name() =0;
+    virtual const std::string _name() =0;
 public:
     //! PV name
-    inline const std::string& name() { return _name(); }
+    inline const std::string name() { return _name(); }
 
     //! Explicitly cancel a active subscription.
     //! Blocks until any in-progress callback has completed.
@@ -268,7 +268,7 @@ struct PVXS_API Connect {
     virtual ~Connect() =0;
 
     //! Name passed to Context::connect()
-    virtual const std::string& name() const =0;
+    virtual const std::string name() const =0;
     //! Poll (momentary) connection status
     virtual bool connected() const =0;
 };

@@ -230,7 +230,7 @@ Connect::~Connect() {}
 
 ConnectImpl::~ConnectImpl() {}
 
-const std::string& ConnectImpl::name() const
+const std::string ConnectImpl::name() const
 {
     return _name;
 }
@@ -317,7 +317,7 @@ OperationBase::OperationBase(operation_t op, const evbase& loop)
 
 OperationBase::~OperationBase() {}
 
-const std::string& OperationBase::name()
+const std::string OperationBase::name()
 {
     return channelName;
 }
