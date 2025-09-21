@@ -116,7 +116,10 @@ struct PVXS_API Operation {
     Operation& operator=(const Operation&) = delete;
     virtual ~Operation() =0;
 
-    //! PV name
+    /** PV name
+     *
+     * Returned reference is valid for the lifetime of the Operation
+     */
     virtual const std::string& name() =0;
 
     //! Explicitly cancel a pending operation.
