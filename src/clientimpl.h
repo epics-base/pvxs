@@ -46,7 +46,7 @@ struct OperationBase : public Operation
     const evbase loop;
     // remaining members only accessibly from loop worker
     std::shared_ptr<Channel> chan;
-    std::string _name;
+    std::string channelName;
     uint32_t ioid = 0;
     Value result;
     bool done = false;
