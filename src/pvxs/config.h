@@ -42,7 +42,6 @@ struct PVXS_API ConfigCommon {
     //! @since 0.2.0
     double tcpTimeout = 40.0;
 
-#ifdef PVXS_ENABLE_OPENSSL
     //! TCP port to bind for TLS traffic.  Default is 5076
     //! @since UNRELEASED
     unsigned short tls_port = 5076;
@@ -59,6 +58,7 @@ struct PVXS_API ConfigCommon {
      */
     std::string tls_keychain_file;
 
+    // TODO: remove from public API
     /** Path to file containing password for keychain file.
      *  @since UNRELEASED
      */
@@ -99,17 +99,20 @@ struct PVXS_API ConfigCommon {
      */
     bool tls_disable_status_check{false};
 
+    // TODO: review for removal
     /**
      * @brief True if stapling is disabled irrespective of whether TLS is configured
      */
     bool tls_disable_stapling{false};
 
+    // TODO: review for removal
     /**
      * @brief True if we want to throw an exception if we can't verify a cert with the
      * PVACMS, otherwise we downgrade to a tcp connection
      */
     bool tls_throw_if_cant_verify{false};
 
+    // TODO: review for removal
     /**
      * @brief The request timeout specified in a user call
      * @note Cannot be set by an environment variable, but is passed in by commandline tools, or set programmatically
@@ -117,12 +120,14 @@ struct PVXS_API ConfigCommon {
     double request_timeout_specified{5.0};
 
 
+    // TODO: review for removal
     /**
      * @brief the prefix to append to the URI for CREATE, STATUS, ROOT, etc
      * default "CERT"
      */
     std::string cert_pv_prefix{"CERT"};
 
+    // TODO: review for removal
     /**
      * True if the environment is configured for TLS.  All this means is that
      * the location of the keychain file has been specified in
@@ -132,7 +137,6 @@ struct PVXS_API ConfigCommon {
      * false otherwise
      */
     bool isTlsConfigured() const { return !tls_disabled && !tls_keychain_file.empty(); }
-#endif  // PVXS_ENABLE_OPENSSL
 };
 }  // namespace impl
 }  // namespace pvxs

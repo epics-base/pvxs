@@ -325,12 +325,12 @@ public:
      * Shorthand for @code Config::fromEnv().build() @endcode.
      * @since 0.2.1
      */
-#ifndef PVXS_ENABLE_OPENSSL
     static Context fromEnv();
-#else
+#ifdef PVXS_ENABLE_OPENSSL
+    // TODO: remove from public API
     Context(const Config&, const std::function<int(int)>&);
-    static Context fromEnv();
 
+    // TODO: remove from public API
     /**
      * @brief Handle certificate expiration
      *

@@ -63,12 +63,11 @@ struct PVXS_API PeerCredentials {
      */
     std::set<std::string> roles() const;
 
-#ifdef PVXS_ENABLE_OPENSSL
-    /** Operation over secure transport
+    /** Context configured to use TLS?
+     *  Ignore as a setting.
      * @since UNRELEASED
      */
     bool isTLS = false;
-#endif
 };
 
 PVXS_API

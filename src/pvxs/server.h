@@ -180,20 +180,19 @@ struct PVXS_API Config : public impl::ConfigCommon {
     //! Whether to populate the beacon address list automatically.  (recommended)
     bool auto_beacon;
 
-#ifdef PVXS_ENABLE_OPENSSL
+    // TODO: review for removal
     /**
      * @brief true if server should stop if no cert is available or can be
      * verified if status check is enabled
      */
-    bool tls_stop_if_no_cert;
+    bool tls_stop_if_no_cert = false;
 
+    // TODO: review for removal
     /**
      * @brief true if server should throw an exception if no cert is available or can be
      * verified if status check is enabled
      */
-    bool tls_throw_if_no_cert;
-
-#endif // PVXS_ENABLE_OPENSSL
+    bool tls_throw_if_no_cert = false;
 
     //! Server unique ID.  Only meaningful in readback via Server::config()
     ServerGUID guid;
@@ -255,10 +254,6 @@ public:
 
     Config()
         : auto_beacon(true)
-#ifdef PVXS_ENABLE_OPENSSL
-        , tls_stop_if_no_cert(false)
-        , tls_throw_if_no_cert(false)
-#endif
         , guid()
         , BE(EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG)
         , UDP(true)
