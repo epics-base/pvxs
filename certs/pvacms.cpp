@@ -111,8 +111,8 @@ struct ASMember {
     ASMEMBERPVT mem{};
     ASMember() : ASMember("DEFAULT") {}
     explicit ASMember(const std::string &n) : name(n) {
-        if (asAddMember(&mem, name.c_str()))
-            throw std::runtime_error(SB() << "Unable to create ASMember " << n);
+        if (auto err = asAddMember(&mem, name.c_str()))
+            throw std::runtime_error(SB() << "Unable to create ASMember " << n<<" : "<<err);
         // mem references name.c_str()
     }
     ~ASMember() {
@@ -3017,7 +3017,8 @@ int main(int argc, char *argv[]) {
 
         // Set security if configured
         if (!config.pvacms_acf_filename.empty()) {
-            asInitFile(config.pvacms_acf_filename.c_str(), "");
+            if(auto err = asInitFile(config.pvacms_acf_filename.c_str(), ""))
+                throw std::runtime_error(SB()<<"Failed to load "<<config.pvacms_acf_filename<<" : "<<err);
         } else {
             log_err_printf(pvacms, "****EXITING****: PVACMS Access Security Policy File Required%s", "\n");
             return 1;
