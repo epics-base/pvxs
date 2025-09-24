@@ -175,12 +175,10 @@ client::Config Server::clientConfig(const Config &server_config) {
     ret.addressList = server_config.interfaces;
     ret.autoAddrList = false;
 
-#ifdef PVXS_ENABLE_OPENSSL
     ret.tls_port = server_config.tls_port;
     ret.tls_disabled = server_config.tls_disabled;
     ret.tls_disable_status_check = server_config.tls_disable_status_check;
     ret.tls_disable_stapling = server_config.tls_disable_stapling;
-#endif
 
     return ret;
 }
