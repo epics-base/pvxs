@@ -59,7 +59,7 @@ void linkGlobal_t::alloc()
     if (inUnitTest()) {
         linkGlobal->provider_remote = ioc::server().clientConfig().build();
     } else {
-        linkGlobal->provider_remote = client::Config().build();
+        linkGlobal->provider_remote = client::Config::from_env().build();
     }
 }
 
