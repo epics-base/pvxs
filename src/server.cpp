@@ -808,15 +808,11 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     }
 
     // "pvlist" breaks unless we honor mustReply flag
-    if (nreply == 0 && !msg.mustReply) {
-#ifdef PVXS_ENABLE_OPENSSL
-        if ((!msg.protoTCP || !canRespondToTcpSearch()) && (!msg.protoTLS || !canRespondToTlsSearch()))
-#else
-        if (msg.protoTCP || msg.protoTLS)
-#endif
-        {
-            return;
-        }
+    if (nreply == 0 && msg.mustReply) {} // discover
+    else if(nreply != 0 && msg.protoTCP && canRespondToTcpSearch()) {} // regular TCP
+    else if(nreply != 0 && msg.protoTLS && canRespondToTlsSearch()) {} // TLS
+    else {
+        return; // do not send
     }
 
     VectorOutBuf M(true, searchReply);
@@ -826,20 +822,14 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     _to_wire<12>(M, effective.guid.data(), false, __FILE__, __LINE__);
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
-#ifdef PVXS_ENABLE_OPENSSL
+
     if (msg.protoTLS && canRespondToTlsSearch()) {
         to_wire(M, effective.tls_port);
         to_wire(M, "tls");
-    } else if ((nreply == 0 && msg.mustReply) || (msg.protoTCP && canRespondToTcpSearch())) {
+    } else {
         to_wire(M, effective.tcp_port);
         to_wire(M, "tcp");
     }
-#else
-    {  // protoTCP
-        to_wire(M, uint16_t(effective.tcp_port));
-        to_wire(M, "tcp");
-    }
-#endif
     // "found" flag
     to_wire(M, uint8_t(nreply!=0 ? 1 : 0));
 
