@@ -65,7 +65,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
     if (!status_check_disabled) {
         try {
             const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
-            cert_monitor = certs::CertStatusManager::subscribe(getCertStatusExData()->client_config, trusted_store_ptr, status_pv, [=](const certs::PVACertificateStatus &pva_status) {
+            cert_monitor = certs::CertStatusManager::subscribe(getCertStatusExData()->client, trusted_store_ptr, status_pv, [=](const certs::PVACertificateStatus &pva_status) {
                 {
                     {
                         Guard G(lock);
@@ -341,7 +341,7 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
  * @return SSLContext initialised appropriately - clients can have an empty
  * context so that they can connect to ssl servers without having a certificate
  */
-std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_for_client, const ConfigCommon &conf, const client::Config &client_config, const evbase &loop) {
+std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_for_client, const ConfigCommon &conf, const client::Context &client, const evbase &loop) {
     osslInit();
 
     auto tls_context = std::make_shared<SSLContext>(SSLContext(loop));
@@ -356,7 +356,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
         // Add the CertStatusExData to the SSL context so that it will be available
         // any time the SSL context is available to provide access to the entity certificate,
         // peer statuses and other custom data.
-        std::unique_ptr<CertStatusExData> car{new CertStatusExData(loop, !tls_context->status_check_disabled, client_config)};
+        std::unique_ptr<CertStatusExData> car{new CertStatusExData(loop, !tls_context->status_check_disabled, client)};
         if (!SSL_CTX_set_ex_data(tls_context->ctx.get(), ossl_gbl->SSL_CTX_ex_idx, car.get())) throw SSLError("SSL_CTX_set_ex_data");
         car.release();  // SSL_CTX_free() now responsible (using our registered callback `free_SSL_CTX_sidecar`)
     }
@@ -636,7 +636,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
         std::weak_ptr<SSLPeerStatusAndMonitor> weak_peer_status = peer_status;
         Guard G(peer_status->lock);
         peer_status->cert_status_manager =
-            certs::CertStatusManager::subscribe(client_config, trusted_store_ptr, status_pv, [weak_peer_status](const certs::PVACertificateStatus &status) {
+            certs::CertStatusManager::subscribe(client, trusted_store_ptr, status_pv, [weak_peer_status](const certs::PVACertificateStatus &status) {
                 const auto peer_status_update = weak_peer_status.lock();
                 if (!status.isGood())
                     log_warn_printf(watcher, "Peer certificate not valid: %s\n", CERT_STATE(status.status.i));
@@ -875,8 +875,8 @@ std::shared_ptr<SSLPeerStatusAndMonitor> SSLContext::subscribeToPeerCertStatus(c
     throw certs::CertStatusNoExtensionException("No Certificate");
 }
 
-std::shared_ptr<SSLContext> SSLContext::for_client(const ConfigCommon &conf, const client::Config &client_config, const evbase &loop) {
-    auto ctx(commonSetup(TLS_client_method(), true, conf, client_config, loop));
+std::shared_ptr<SSLContext> SSLContext::for_client(const ConfigCommon &conf, const client::Context &client, const evbase &loop) {
+    auto ctx(commonSetup(TLS_client_method(), true, conf, client, loop));
 
     if (0 != SSL_CTX_set_alpn_protos(ctx->ctx.get(), pva_alpn, sizeof(pva_alpn) - 1))
         throw SSLError("Unable to agree on Application Layer Protocol to use: Both sides should use pva/1");
@@ -884,8 +884,8 @@ std::shared_ptr<SSLContext> SSLContext::for_client(const ConfigCommon &conf, con
     return ctx;
 }
 
-std::shared_ptr<SSLContext> SSLContext::for_server(const ConfigCommon &conf, const client::Config &client_config, const evbase &loop) {
-    auto ctx(commonSetup(TLS_server_method(), false, conf, client_config, loop));
+std::shared_ptr<SSLContext> SSLContext::for_server(const ConfigCommon &conf, const client::Context &client, const evbase &loop) {
+    auto ctx(commonSetup(TLS_server_method(), false, conf, client, loop));
 
     SSL_CTX_set_alpn_select_cb(ctx->ctx.get(), &ossl_alpn_select, nullptr);
 

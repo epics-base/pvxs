@@ -181,7 +181,7 @@ class CertStatusManager {
      *
      * @see unsubscribe()
      */
-    static cert_status_ptr<CertStatusManager> subscribe(client::Config client_config, X509_STORE *trusted_store_ptr, const std::string &status_pv, StatusCallback &&callback);
+    static cert_status_ptr<CertStatusManager> subscribe(const client::Context& client, X509_STORE *trusted_store_ptr, const std::string &status_pv, StatusCallback &&callback);
 
     /**
      * @brief Unsubscribe from listening to certificate status
@@ -195,13 +195,15 @@ class CertStatusManager {
     bool isValid() const noexcept { return status_ && status_->isValid(); }
 
    private:
-    CertStatusManager(std::shared_ptr<client::Context> &&client, std::shared_ptr<client::Subscription> sub) : client_(std::move(client)), sub_(sub) {};
-    explicit CertStatusManager(std::shared_ptr<client::Context> &&client) : client_(std::move(client)), sub_{} {};
+    CertStatusManager(const client::Context &client,
+                      std::shared_ptr<client::Subscription> sub = std::shared_ptr<client::Subscription>())
+        : client_(client), sub_(sub)
+    {};
 
     void subscribe(std::shared_ptr<client::Subscription> &sub) { sub_ = sub; }
 
     std::shared_ptr<StatusCallback> callback_ref{};  // Option placeholder for ref to callback if used
-    std::shared_ptr<client::Context> client_;
+    client::Context client_;
     std::shared_ptr<client::Subscription> sub_;
     std::shared_ptr<CertificateStatus> status_;
     std::shared_ptr<PVACertificateStatus> pva_status_;

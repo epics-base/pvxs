@@ -193,7 +193,7 @@ struct CertStatusExData {
     // map to keep status validity expiration handler parameters from going stale
     std::map<serial_number_t, StatusValidityExpirationHandlerParam> sveh_params{};
 
-    const client::Config client_config;
+    const client::Context client;
 
     /**
      * @brief Constructor
@@ -201,7 +201,7 @@ struct CertStatusExData {
      * @param status_check_enabled - Whether status checking is enabled for this context.  If not then a permanent status is set and monitoring is not
      * configured
      */
-    CertStatusExData(const evbase &loop, const bool status_check_enabled, const client::Config &client_config) : loop(loop), status_check_enabled(status_check_enabled), client_config(client_config) {}
+    CertStatusExData(const evbase &loop, const bool status_check_enabled, const client::Context &client) : loop(loop), status_check_enabled(status_check_enabled), client(client) {}
     ~CertStatusExData() noexcept;
 
     /**
@@ -388,7 +388,7 @@ struct SSLContext {
      * @param loop - The event loop
      * @return The client TLS context
      */
-    static std::shared_ptr<SSLContext> for_client(const ConfigCommon& conf, const client::Config &client_config, const evbase &loop);
+    static std::shared_ptr<SSLContext> for_client(const ConfigCommon& conf, const client::Context &client, const evbase &loop);
 
     /**
      * @brief Creates a server TLS context
@@ -397,7 +397,7 @@ struct SSLContext {
      * @param loop - The event loop
      * @return The server TLS context
      */
-    static std::shared_ptr<SSLContext> for_server(const ConfigCommon& conf, const client::Config &client_config, const evbase &loop);
+    static std::shared_ptr<SSLContext> for_server(const ConfigCommon& conf, const client::Context &client, const evbase &loop);
 
     /**
      * @brief Get the CertStatusExData from the PVXS SSL context

@@ -177,7 +177,7 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE>
  * @param callback the callback to call
  * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
  */
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(client::Config client_config, X509_STORE *trusted_store_ptr, const std::string &status_pv, StatusCallback &&callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Context &client, X509_STORE *trusted_store_ptr, const std::string &status_pv, StatusCallback &&callback) {
     // Construct the URI
     log_debug_printf(status, "Starting Status Subscription: %s\n", status_pv.c_str());
 
@@ -185,16 +185,12 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(client::Config c
     auto fn = std::make_shared<StatusCallback>(std::move(callback));
 
     try {
-        // Subscribe to the service using the constructed URI
-        // with TLS disabled to avoid recursive loop
-        client_config.tls_disabled = true;
-        auto client(std::make_shared<client::Context>(client_config.build()));
-        cert_status_ptr<CertStatusManager> cert_status_manager(new CertStatusManager(std::move(client)));
+        cert_status_ptr<CertStatusManager> cert_status_manager(new CertStatusManager(client));
         cert_status_manager->callback_ref = std::move(fn);
         std::weak_ptr<CertStatusManager> weak_cert_status_manager(cert_status_manager);
 
         log_debug_printf(status, "Subscribing to peer status: %s", "");
-        auto sub = cert_status_manager->client_->monitor(status_pv)
+        auto sub = cert_status_manager->client_.monitor(status_pv)
                        .maskConnected(true)
                        .maskDisconnected(true)
                        .event([trusted_store_ptr, weak_cert_status_manager](client::Subscription &s) {
