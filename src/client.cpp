@@ -563,6 +563,9 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
         nameServers.emplace_back(saddr, nullptr);
     }
 
+    if(searchDest.empty() && nameServers.empty())
+        log_err_printf(setup, "Client context created with no search destinations.  Nothing much will happen now%s", "\n");
+
     const auto cb([this](const UDPManager::Beacon& msg) { onBeacon(msg); });
 
     for (auto& iface : effective.interfaces) {
