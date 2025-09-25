@@ -189,7 +189,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
         cert_status_manager->callback_ref = std::move(fn);
         std::weak_ptr<CertStatusManager> weak_cert_status_manager(cert_status_manager);
 
-        log_debug_printf(status, "Subscribing to peer status: %s", "");
+        log_debug_printf(status, "Subscribing to status: %s\n", status_pv.c_str());
         auto sub = cert_status_manager->client_.monitor(status_pv)
                        .maskConnected(true)
                        .maskDisconnected(true)
@@ -201,33 +201,30 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                                if (update) {
                                    try {
                                        auto status_update{PVACertificateStatus(update, trusted_store_ptr)};
-                                       log_debug_printf(status, "Status subscription received: %s\n", status_update.status.s.c_str());
+                                       log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s.c_str());
                                        csm->status_ = std::make_shared<CertificateStatus>(status_update);
                                        (*csm->callback_ref)(status_update);
                                    } catch (OCSPParseException &e) {
-                                       log_debug_printf(status, "Ignoring invalid status update: %s\n", e.what());
+                                       log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::invalid_argument &e) {
-                                       log_debug_printf(status, "Ignoring invalid status update: %s\n", e.what());
+                                       log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::exception &e) {
                                        log_err_printf(status, "%s\n", e.what());
                                    }
                                }
-                           } catch (client::Finished &conn) {
-                               log_debug_printf(status, "Subscription Finished: %s\n", conn.what());
                            } catch (client::Connected &conn) {
-                               log_debug_printf(status, "Connected Subscription: %s\n", conn.peerName.c_str());
+                               log_debug_printf(status, "Connected Subscription %s: %s\n", s.name().c_str(), conn.peerName.c_str());
                            } catch (client::Disconnect &conn) {
-                               log_debug_printf(status, "Disconnected Subscription: %s\n", conn.what());
+                               log_debug_printf(status, "Disconnected Subscription %s: %s\n", s.name().c_str(), conn.what());
                            } catch (std::exception &e) {
-                               log_err_printf(status, "Error Getting Subscription: %s\n", e.what());
+                               log_err_printf(status, "Error Getting Subscription %s: %s\n", s.name().c_str(), e.what());
                            }
                        })
                        .exec();
         cert_status_manager->subscribe(sub);
-        log_debug_printf(status, "subscription address: %p\n", cert_status_manager.get());
         return cert_status_manager;
     } catch (std::exception &e) {
-        log_debug_printf(status, "Error subscribing to certificate status: %s\n", e.what());
+        log_debug_printf(status, "Error subscribing to certificate %s status: %s\n", status_pv.c_str(), e.what());
         throw CertStatusSubscriptionException(SB() << "Error subscribing to certificate status: " << e.what());
     }
 }

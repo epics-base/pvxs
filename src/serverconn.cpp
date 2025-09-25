@@ -391,11 +391,12 @@ void ServerConn::proceedWithConnectionValidation()
         // Check peer certificate status if required
         // we won't be subscribed if we don't need to check peer status before continuing
         if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
-            log_debug_printf(connsetup, "Client %s certificate status not ready, will retry in 100ms\n", peerName.c_str());
+            log_debug_printf(connsetup, "Wait for Client %s certificate status Good\n", peerName.c_str());
 
             state = AwaitingPeerCertValidity;
             return; // Backoff - don't complete validation yet until we get the status were waiting for
         }
+        log_debug_printf(connsetup, "Have Client %s certificate status Good\n", peerName.c_str());
     }
 
     // Clear pending validation data since we're completing
