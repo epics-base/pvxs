@@ -326,19 +326,6 @@ public:
      * @since 0.2.1
      */
     static Context fromEnv();
-#ifdef PVXS_ENABLE_OPENSSL
-    // TODO: remove from public API
-    Context(const Config&, const std::function<int(int)>&);
-
-    // TODO: remove from public API
-    /**
-     * @brief Handle certificate expiration
-     *
-     * @since UNRELEASED
-     */
-    void certExpirationHandler();
-
-#endif // PVXS_ENABLE_OPENSSL
 
     /** Apply (in part) updated configuration
      *

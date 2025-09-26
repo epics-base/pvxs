@@ -107,13 +107,6 @@ struct PVXS_API ConfigCommon {
 
     // TODO: review for removal
     /**
-     * @brief True if we want to throw an exception if we can't verify a cert with the
-     * PVACMS, otherwise we downgrade to a tcp connection
-     */
-    bool tls_throw_if_cant_verify{false};
-
-    // TODO: review for removal
-    /**
      * @brief The request timeout specified in a user call
      * @note Cannot be set by an environment variable, but is passed in by commandline tools, or set programmatically
      */

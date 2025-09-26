@@ -126,11 +126,6 @@ The following environment variables control SPVA behavior:
 |                          |                            |                                     |                                                               |
 |                          |                            |                                     | For a client standby has the same effect as shutdown.         |
 |                          +----------------------------+-------------------------------------+---------------------------------------------------------------+
-|                          | ``on_no_cms``              | ``fallback-to-tcp`` (default)       | If revocation status check is required but CMS cannot         |
-|                          |                            |                                     | degrade connections to tcp mode                               |
-|                          | Determines what to do when +-------------------------------------+---------------------------------------------------------------+
-|                          | CMS is unavailable         | ``throw``                           | Otherwise throw an exception                                  |
-|                          +----------------------------+-------------------------------------+---------------------------------------------------------------+
 |                          | ``no_revocation_check``    |                                     | This flag, if present, disables certificate revocation status |
 |                          |                            |                                     | monitoring meaning that this certificate will not be able to  |
 |                          | Determines whether cert    |                                     | be revoked.                                                   |
@@ -175,7 +170,6 @@ via their public base `pvxs::impl::ConfigCommon` class:
 - `pvxs::impl::ConfigCommon::tls_disable_status_check` - Disable certificate status checking
 - `pvxs::impl::ConfigCommon::tls_disabled` - Disable TLS
 - `pvxs::impl::ConfigCommon::tls_port` - Set TLS port number
-- `pvxs::impl::ConfigCommon::tls_throw_if_cant_verify` - Control verification failure behavior
 
 Here are server-specific configuration options:
 

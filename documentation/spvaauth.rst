@@ -616,16 +616,6 @@ a keychain file on disk, the certificate and private key can be handled entirely
 
     Note: These certificates are appropriate for some client scenarios.  Use for IOCs and Gateways is strongly discouraged
 
-.. code-block:: shell
-
-    kinit -l 24h greg@SLAC.STANFORD.EDU
-
-- `CN` field in the certificate will be kerberos username
-- `O` field in the certificate will be the kerberos realm
-- `OU` field in the certificate will not be set
-- `C` field in the certificate will be set to the local country code
-
-
 **usage**
 
 Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain,

@@ -405,14 +405,6 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
             } else {
                 log_warn_printf(config, "Ignore unknown TLS option `on_expiration` value %s.  expected `fallback-to-tcp`, `shutdown` or `standby`\n", opt.c_str());
             }
-        } else if (key == "on_no_cms") {
-            if (val == "fallback-to-tcp") {
-                conf.tls_throw_if_cant_verify = false;
-            } else if (val == "throw") {
-                conf.tls_throw_if_cant_verify = true;
-            } else {
-                log_warn_printf(config, "Ignore unknown TLS option `on_no_cms` value %s.  expected `fallback-to-tcp` or `throw`\n", opt.c_str());
-            }
         } else if (key == "no_revocation_check") {
             if ( val.empty())
                 conf.tls_disable_status_check = true;
@@ -456,10 +448,6 @@ std::string printTLSOptions(const ConfigCommon& conf) {
         opts.push_back("no_revocation_check");
     if ( conf.tls_disable_stapling)
         opts.push_back("no_stapling");
-    if ( conf.tls_throw_if_cant_verify)
-        opts.push_back("on_no_cms=throw");
-    else
-        opts.push_back("on_no_cms=fallback-to-tcp");
     return join_addr(opts);
 }
 #endif

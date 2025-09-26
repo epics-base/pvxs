@@ -210,7 +210,7 @@ std::shared_ptr<KeyPair> IdFileFactory::createKeyPair() {
     // Convert buffer containing public key data into std::string format
     const std::string public_key(bio_buffer_pub, public_key_length);
     key_pair->public_key = public_key;
-    log_debug_printf(certs, "Key Pair Generated: %s\n", public_key.c_str());
+    log_debug_printf(certs, "Key Pair Generated:\n%s\n", public_key.c_str());
 
     return key_pair;
 }

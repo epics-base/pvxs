@@ -90,7 +90,7 @@ If you want a prepackaged environment, try the following.  You will need two ter
     EPICS_PVAS_CERT_PV_PREFIX=CERT
     EPICS_PVAS_SERVER_PORT=5075
     EPICS_PVAS_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.3/pvacms.p12
-    EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check on_no_cms=fallback-to-tcp
+    EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check
     EPICS_PVAS_TLS_PORT=5076
     EPICS_PVAS_TLS_STOP_IF_NO_CERT=YES
 
@@ -574,7 +574,7 @@ otherwise the certificate authority certificate will be created here
     EPICS_PVAS_CERT_PV_PREFIX=CERT
     EPICS_PVAS_SERVER_PORT=5075
     EPICS_PVAS_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.3/pvacms.p12
-    EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check on_no_cms=fallback-to-tcp
+    EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check
     EPICS_PVAS_TLS_PORT=5076
     EPICS_PVAS_TLS_STOP_IF_NO_CERT=YES
 

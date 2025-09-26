@@ -283,6 +283,9 @@ class ConfigCms final : public Config {
      */
     std::string pvacms_country{"US"};
 
+    // Optional list of certificate files to preload into the certs DB on startup
+    std::vector<std::string> preload_cert_files{};
+
     void applyCmsEnv(const std::map<std::string, std::string>& defs);
     static ConfigCms mockCms(int family=AF_INET);
     static ConfigCms forCms();

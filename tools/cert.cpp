@@ -189,6 +189,9 @@ int main(int argc, char *argv[]) {
         if (!cert_file.empty()) {
             try {
                 auto cert_data = certs::IdFileFactory::create(cert_file, password)->getCertDataFromFile();
+                if (cert_data.cert == nullptr) {
+                    throw std::runtime_error("Failed to read certificate from file");
+                }
                 std::string config_id{};
                 try {
                     config_id = certs::CertStatusManager::getConfigPvFromCert(cert_data.cert);

@@ -277,7 +277,6 @@ void P12FileFactory::writePKCS12File() {
 
     chmod(filename_.c_str(),
           S_IRUSR | S_IWUSR);  // Protect P12 file
-    log_info_printf(filelogger, "Keychain file created   : %s\n", filename_.c_str());
 }
 
 #ifdef NID_oracle_jdk_trustedkeyusage

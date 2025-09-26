@@ -353,23 +353,11 @@ Operation::~Operation() = default;
 
 Subscription::~Subscription() {}
 
-#ifndef PVXS_ENABLE_OPENSSL
 Context Context::fromEnv() { return Config::fromEnv().build(); }
-#else
-Context Context::fromEnv() { return Config::fromEnv().build(); }
-Context::Context(const Config& conf, const std::function<int(int)>& fn) : pvt(std::make_shared<Pvt>(conf)) {
-    pvt->impl->startNS();
-#ifdef PVXS_ENABLE_OPENSSL
-    pvt->impl->configureExpirationHandler(this);
-#endif
-}
-
-#endif  // PVXS_ENABLE_OPENSSL
-
 Context::Context(const Config& conf) : pvt(std::make_shared<Pvt>(conf)) {
     pvt->impl->startNS();
 #ifdef PVXS_ENABLE_OPENSSL
-    pvt->impl->configureExpirationHandler(this);
+    pvt->impl->configureExpirationHandler(pvt->impl.get());
 #endif
 }
 
@@ -1190,7 +1178,7 @@ void ContextImpl::tickBeaconCleanS(evutil_socket_t fd, short evt, void* raw) {
 #ifdef PVXS_ENABLE_OPENSSL
 void ContextImpl::certExpirationHandlerS(evutil_socket_t, short, void* raw) {
     try {
-        static_cast<Context*>(raw)->certExpirationHandler();
+        static_cast<ContextImpl*>(raw)->certExpirationHandler();
     } catch (std::exception& e) {
         log_exc_printf(io, "Unhandled error in certificate expiration callback: %s\n", e.what());
     }
@@ -1274,22 +1262,23 @@ Context::Pvt::~Pvt() { impl->close(); }
 
 void Context::reconfigure(const Config& new_conf) {
     if (!pvt) throw std::logic_error("NULL Context");
+    pvt->impl->reconfigure(new_conf);
+}
 
+void ContextImpl::reconfigure(const Config& new_conf) {
 #ifdef PVXS_ENABLE_OPENSSL
     if (new_conf.isTlsConfigured()) {
-        if (pvt->impl->tls_context) pvt->impl->tls_context->setDegradedMode(true);
+        if (tls_context) tls_context->setDegradedMode(true);
         // Force reload of context from cert
-        pvt->impl->manager.loop().call([this, &new_conf]() mutable { pvt->impl->reloadTlsFromConfig(new_conf); });
-        pvt->impl->manager.loop().sync();
+        manager.loop().call([this, &new_conf]() mutable { reloadTlsFromConfig(new_conf); });
     }
-#else
-    pvt->impl->manager.loop().sync();
 #endif
+    manager.loop().sync();
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
-void Context::certExpirationHandler() {
-    reconfigure(pvt->impl->effective);
+void ContextImpl::certExpirationHandler() {
+    reconfigure(effective);
 }
 #endif
 

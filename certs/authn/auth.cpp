@@ -150,8 +150,7 @@ struct RenewalManager {
         try {
             auto status_pv_name = CertStatusManager::getStatusPvFromCert(cert_data.cert);
 
-            log_info_printf(config, "Monitoring certificate status on %s for renewal\n", status_pv_name.c_str());
-
+            std::cout << "Monitoring certificate status on " << status_pv_name << " for renewal" << std::endl;
             sub = client.monitor(status_pv_name)
                 .event([this, status_pv_name](client::Subscription& s) {
                     this->onStatusUpdate(s, status_pv_name);
@@ -175,15 +174,16 @@ struct RenewalManager {
             while(auto update = s.pop()) {
                 auto renewal_due_value = update["renewal_due"];
                 if (renewal_due_value && renewal_due_value.as<bool>()) {
-                    log_info_printf(config, "Renewal due for cert on %s. Requesting new certificate.\n", pv_name.c_str());
+                    std::cout << "Renewal due for cert on " << pv_name << ". Requesting new certificate." << std::endl;
                     try {
                         cert_data = renew_fn(); // Renew and update our copy of CertData
                         const CertDate renew_by = cert_data.renew_by;
                         if (renew_by.t) {
                             config_pv_value["renew_by"] = renew_by.s;
                             config_pv.post(config_pv_value);
-                            log_info_printf(config, "Certificate renewed successfully until %s\n", renew_by.s.c_str());
-                        } else log_info_printf(config, "Certificate renewed successfully until %s", "\n");
+                            std::cout << "Certificate renewed successfully until " << renew_by.s << std::endl;
+                        } else
+                            std::cout << "Certificate renewed successfully " << std::endl;
                     } catch (const std::exception& e) {
                         log_err_printf(config, "Certificate renewal failed: %s. Will retry after next status update (or manual intervention).\n", e.what());
                     }

@@ -172,7 +172,7 @@ If you want a prepackaged environment, try the following.  You will need four te
     EPICS_PVA_CONN_TMO=30
     EPICS_PVA_SERVER_PORT=5075
     EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.3/client.p12
-    EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp on_no_cms=fallback-to-tcp
+    EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp
     EPICS_PVA_TLS_PORT=5076
     XDG_CONFIG_HOME=/home/client/.config/pva/1.3
     XDG_DATA_HOME=/home/client/.local/share/pva/1.3
@@ -821,7 +821,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
     EPICS_PVA_CONN_TMO=30
     EPICS_PVA_SERVER_PORT=5075
     EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.3/client.p12
-    EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp on_no_cms=fallback-to-tcp
+    EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp
     EPICS_PVA_TLS_PORT=5076
     XDG_CONFIG_HOME=/home/client/.config/pva/1.3
     XDG_DATA_HOME=/home/client/.local/share/pva/1.3

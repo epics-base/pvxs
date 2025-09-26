@@ -293,6 +293,8 @@ time_t CertStatusManager::getExpirationDateFromCert(const ossl_ptr<X509> &cert) 
  * @return the X509_EXTENSION object, if found, otherwise throws an exception
  */
 X509_EXTENSION *CertStatusManager::getStatusExtension(const X509 *certificate) {
+    // Make sure the custom extensions are configured before querying them
+    ossl::osslInit();
     const int extension_index = X509_get_ext_by_NID(certificate, ossl::NID_SPvaCertStatusURI, -1);
     if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find Certificate-Status-PV extension in certificate.");
 
