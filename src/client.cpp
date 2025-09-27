@@ -480,7 +480,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
         try {
             auto innerConf = effective;
             // TODO: currently not possible to disable TLS for an individual search.
-            // until then, create a seperate inner context to retreive signed payload from CMS
+            // until then, create a separate inner context to retrieve signed payload from CMS
             innerConf.tls_disabled = true;
             auto inner = innerConf.build();
             tls_context = ossl::SSLContext::for_client(effective, inner, tcp_loop);
@@ -1299,7 +1299,7 @@ void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
     if (isTlsReady()) return;
     try {
         // TODO: currently not possible to disable TLS for an individual search.
-        // until then, create a seperate inner context to retreive signed payload from CMS
+        // until then, create a separate inner context to retrieve signed payload from CMS
         auto innerConf = new_config;
         innerConf.tls_disabled = true;
         const auto new_context = ossl::SSLContext::for_client(new_config, innerConf.build(), tcp_loop);

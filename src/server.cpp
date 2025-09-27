@@ -448,7 +448,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
         try {
             auto innerConf = clientConfig(effective);
             // TODO: currently not possible to disable TLS for an individual search.
-            // until then, create a seperate inner context to retreive signed payload from CMS
+            // until then, create a separate inner context to retrieve signed payload from CMS
             innerConf.tls_disabled = true;
 
             tls_context = ossl::SSLContext::for_server(effective, innerConf.build(), acceptor_loop);
