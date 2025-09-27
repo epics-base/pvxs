@@ -88,6 +88,7 @@ bool testFwdVia(const server::Config& base, const SockAddr& ifaddr)
             return false;
         }
     };
+    (void)doGet;
 
     // TODO fix required to resolve issue introduced by 9e9662f4970e513b61db9c547fa372dc44deb75f
     // ok &= doGet("testpv1");
