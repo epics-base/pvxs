@@ -817,7 +817,8 @@ void Config::updateDefs(defs_t& defs) const {
 }
 
 void Config::expand() {
-    if (udp_port == 0) throw std::runtime_error("Client can't use UDP random port");
+    // TODO Fix properly.  This HACK to remedy 9e9662f4970e513b61db9c547fa372dc44deb75f
+    // if (udp_port == 0) throw std::runtime_error("Client can't use UDP random port");
 
     if (tcp_port == 0) tcp_port = 5075;
 
