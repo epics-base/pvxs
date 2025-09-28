@@ -279,7 +279,7 @@ void printProgressBar(uint32_t elapsed, const std::string& prefix) {
 enum ScenarioType { TCP, TLS, TLS_CMS, TLS_CMS_STAPLED };
 
 /**
- * Payload type: This is used to specify the size of the payload that will be sent over the network.
+ * Payload type: This is used to specify the size of the PVAccess Payload that will be sent over the network.
  * Small is a single 32 but integer wrapped in an NT scalar.
  * Medium is a 32x32 ubyte array (1024 bytes) wrapped in an NT NDArray.
  * Large is a 4mpx image = 2000x2000 pixels, 4 bits per pixel (2,000,000 bytes) wrapped in an NT NDArray.
@@ -433,34 +433,74 @@ struct Result {
     /**
      * Print the results.
      * The results are printed in a table format with the following columns:
-     * - The average transmission time for the updates per second of the test.
-     * - The number of updates that were dropped per second of the test.
+     * - The connection type of the test.
+     * - The Transmission Rate.
+     * - The Throughput.
+     * - The PVAccess Payload.
      * - The minimum transmission time for the updates per second of the test.
      * - The maximum transmission time for the updates per second of the test.
+     * - The CPU% of 1 Core during the test.
+     * - The Memory Used.
+     * - The Network Load.
+     * - The Transmission Times per second of the test.
+     * - The Dropped updates per second of the test.
+     *
+     *  @param scenario_type The scenario type of the test.
+     *  @param payload_type The payload type of the test.
+     *  @param payload_label The label of the payload type.
+     *  @param rate The rate of the test.
+     *  @param rate_label The label of the rate.
+     *  @param cpu_percent The CPU% of 1 Core during the test.
+     *  @param rss_mb The memory used during the test.
+     *  @param bytes_captured The number of bytes captured during the test.
+     *  @param cpu_percent The CPU% of 1 Core during the test.
+     *  @param rss_mb The memory used during the test.
+     *  @param bytes_captured The number of bytes captured during the test.
      */
-    void print() const {
-        for (const auto value : values) {
-            if (value)
-                std::cout << value;
-            else
-                std::cout << "   ";
-            std::cout << ", ";
-        }
-        for (const auto value : dropped) {
-            if (value)
-                std::cout << value;
-            else
-                std::cout << "   ";
-            std::cout << ", ";
-        }
-        if (min < std::numeric_limits<double>::max())
-            std::cout << min;
-        else
-            std::cout << "  ";
-        if (max > 0)
-            std::cout << ", " << max;
-        else
-            std::cout << ",    ";
+    void print(const ScenarioType scenario_type, const PayloadType payload_type, const std::string &payload_label,
+        const uint32_t rate, const std::string &rate_label, const double cpu_percent, const double rss_mb, uint64_t bytes_captured) const {
+        // Display Data
+
+        // 1) Connection Type
+        std::cout << (scenario_type == TLS_CMS_STAPLED ? "TLS_CMS_STAPLED, "
+                      : scenario_type == TLS_CMS       ? "TLS_CMS, "
+                      : scenario_type == TLS           ? "TLS, "
+                                                       : "TCP, ");
+        std::string throughput_units = "bps";
+        auto throughput = (payload_type == LARGE_2MB ? 2000000.0 : payload_type == MEDIUM_1KB ? 1000.0 : 4.0) * 8.0 * static_cast<double>(rate);
+        if      ( throughput >= 1000000000 ) { throughput /= 1000000000; throughput_units = "Gbps"; }
+        else if ( throughput >= 1000000    ) { throughput /= 1000000;    throughput_units = "Mbps"; }
+        else if ( throughput >= 1000       ) { throughput /= 1000;       throughput_units = "Kbps"; }
+
+        // 2) PVAccess Payload
+        std::cout << payload_label << ", ";
+
+        // 3) Tx Rate
+        std::cout << rate_label << ", ";
+
+        // 4) Throughput
+        std::cout << throughput << throughput_units << ", ";
+
+        // 5) minimum transmission time
+        if (min < std::numeric_limits<double>::max()) std::cout << min << ", "; else std::cout << " , ";
+
+        // 6) maximum transmission time
+        if (max > 0) std::cout << max << ", "; else std::cout << " ,  ";
+
+        // 7) CPU% of 1 Core
+        std::cout << cpu_percent << ", " ;
+
+        // 8) Memory used
+        std::cout << rss_mb << ", " ;
+
+        // 9) Network load
+        std::cout << bytes_captured << ", ";
+
+        // 10) Transmission times
+        for (const auto value : values) { if (value) std::cout << value << ", "; else std::cout << " , "; }
+
+        // 11) Dropped
+        for (const auto value : dropped) { if (value) std::cout << value << ", "; else std::cout << ", "; }
     }
 };
 
@@ -737,16 +777,16 @@ struct Scenario {
      * @param payload_type The type of payload to test - SMALL, MEDIUM, or LARGE.
      * @param rate The rate to test - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
      * @param payload_label The label for the payload type - SMALL, MEDIUM, or LARGE.
-     * @param speed_label The label for the rate - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
+     * @param rate_label The label for the rate - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
      */
     void run(const PayloadType payload_type,
              const long rate,
              const std::string& payload_label,
-             const std::string& speed_label) {
+             const std::string& rate_label) {
         counter = 0;
-        if (payload_type == LARGE_2MB && rate > 1000) {
-            // Greater than 20 Mbps is beyond reasonable
-            log_warn_printf(perf, "Skipping LARGE payloads where rate is greater that 1K: %s\n", speed_label.c_str());
+        if (payload_type == LARGE_2MB && rate > 100) {
+            // Greater than 2 Gbps is beyond reasonable
+            log_warn_printf(perf, "Skipping LARGE payloads where rate is greater that 100Hz: %s\n", rate_label.c_str());
             return;
         }
 
@@ -773,7 +813,7 @@ struct Scenario {
 
             // 60-second window
             uint32_t last_index = std::numeric_limits<uint32_t>::max();
-            const std::string progress_prefix = std::string(payload_label) + ", " + std::string(speed_label) + ", ";
+            const std::string progress_prefix = std::string(payload_label) + ", " + std::string(rate_label) + ", ";
 
             // Make the first Post and Mark the start time for this sequence
             epicsTimeStamp start{};
@@ -832,14 +872,8 @@ struct Scenario {
         const double rss_mb = static_cast<double>(getRssBytes()) / (1024 * 1024);
         const auto cpu_percent = cpuPercentSince(w0, c0);
 
-        // Display Data
-        std::cout << (scenario_type == TLS_CMS_STAPLED ? "TLS_CMS_STAPLED, "
-                      : scenario_type == TLS_CMS       ? "TLS_CMS, "
-                      : scenario_type == TLS           ? "TLS, "
-                                                       : "TCP, ");
-        std::cout << payload_label << ", " << speed_label << ", ";
-        result.print();
-        std::cout << ", " << cpu_percent << ", " << rss_mb << ",  " << bytes_captured << std::endl;
+        result.print(scenario_type, payload_type, payload_label, rate, rate_label, cpu_percent, rss_mb, bytes_captured);
+        std::cout << std::endl;
     }
 
     /**
@@ -1196,14 +1230,8 @@ int main(int argc, char* argv[]) {
     // Run selected scenarios
     for (auto scenario_type : scenarios_sel) {
         pvxs::Scenario scenario(scenario_type);
-        std::cout << "               "
-                     "=========================================================================ELAPSED=TIME============"
-                     "=================================================================================="
-                  << "               "
-                     "=========================================================================DROPPED=PACKETS========="
-                     "=================================================================================="
-                  << std::endl;
-        std::cout << "Type, Size, Rate, "
+        std::cout << "Connection Type, PVAccess Payload, Tx Rate, Throughput, "
+                  << "Min(ms), Max,(ms) CPU(% core), Memory(MB), Network Load(bytes), "
                   << " 1, 2, 3, 4, 5, 6, 7, 8, 9,10,"
                   << "11,12,13,14,15,16,17,18,19,20,"
                   << "21,22,23,24,25,26,27,28,29,30,"
@@ -1215,8 +1243,7 @@ int main(int argc, char* argv[]) {
                   << "21,22,23,24,25,26,27,28,29,30,"
                   << "31,32,33,34,35,36,37,38,39,40,"
                   << "41,42,43,44,45,46,47,48,49,50,"
-                  << "51,52,53,54,55,56,57,58,59,60,"
-                  << "Min, Max, CPU(%), Memory(MB), Network Bandwidth(bytes)" << std::endl;
+                  << "51,52,53,54,55,56,57,58,59,60 " << std::endl;
 
         for (auto payload_type : payloads_sel) {
             if (opt_rates.empty()) {
