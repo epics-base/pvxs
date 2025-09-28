@@ -248,7 +248,11 @@ struct PortSniffer {
 };
 #endif
 
-
+/**
+ * Print a progress bar to the console
+ * @param elapsed The elapsed time in seconds
+ * @param prefix The prefix to print before the progress bar
+ */
 void printProgressBar(uint32_t elapsed, const std::string &prefix)
 {
     constexpr uint32_t total = 60;
@@ -263,6 +267,10 @@ void printProgressBar(uint32_t elapsed, const std::string &prefix)
     std::cout << bar << "\r" << std::flush;
 }
 
+/**
+ * Scenario type: This is used to specify whether the test will use tcp or tls connections,
+ * and whether the status checking and stapling is enabled or disabled.
+ */
 enum ScenarioType {
     TCP,
     TLS,
@@ -270,6 +278,12 @@ enum ScenarioType {
     TLS_CMS_STAPLED
 };
 
+/**
+ * Payload type: This is used to specify the size of the payload that will be sent over the network.
+ * Small is a single 32 but integer wrapped in an NT scalar.
+ * Medium is a 32x32 ubyte array (1024 bytes) wrapped in an NT NDArray.
+ * Large is a 100x100x10 ubyte array (100,000 bytes) wrapped in an NT NDArray.
+ */
 enum PayloadType {
     SMALL,
     MEDIUM,
@@ -277,44 +291,44 @@ enum PayloadType {
 };
 
 // Helpers for CLI parsing and labels
-static inline std::string toUpperStr(std::string s) {
+inline std::string toUpperStr(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::toupper(c); });
     return s;
 }
 
-static bool parseScenarioType(const std::string& name, ScenarioType& out) {
+bool parseScenarioType(const std::string& name, ScenarioType& out) {
     auto n = toUpperStr(name);
-    if(n=="TCP") { out = TCP; return true; }
-    if(n=="TLS") { out = TLS; return true; }
-    if(n=="TLS_CMS" || n=="TLS-CMS" || n=="TLSCMS") { out = TLS_CMS; return true; }
-    if(n=="TLS_CMS_STAPLED" || n=="TLS-CMS-STAPLED" || n=="TLSSTAPLED" || n=="TLSCMSSTAPLED") { out = TLS_CMS_STAPLED; return true; }
+    if ( n == "TCP" ) { out = TCP; return true; }
+    if ( n == "TLS" ) { out = TLS; return true; }
+    if ( n == "TLS_CMS" || n == "TLS-CMS" || n == "TLSCMS" ) { out = TLS_CMS; return true; }
+    if ( n == "TLS_CMS_STAPLED" || n == "TLS-CMS-STAPLED" || n == "TLSSTAPLED" || n == "TLSCMSSTAPLED") { out = TLS_CMS_STAPLED; return true; }
     return false;
 }
 
-static bool parsePayloadType(const std::string& name, PayloadType& out) {
-    auto n = toUpperStr(name);
+    bool parsePayloadType(const std::string &name, PayloadType &out) {
+        auto n = toUpperStr(name);
     if ( n == "SMALL"  ) { out = SMALL; return true; }
     if ( n == "MEDIUM" ) { out = SMALL; return true; }
     if ( n == "LARGE"  ) { out = LARGE; return true; }
-    return false;
-}
+        return false;
+    }
 
-static std::string formatRateLabel(long rate) {
-    if(rate>=1000000 && rate%1000000==0) {
+std::string formatRateLabel(long rate) {
+    if ( rate >= 1000000 && rate % 1000000 == 0 ) {
         long v = rate/1000000;
         char buf[32];
         std::snprintf(buf, sizeof(buf), "%3ldMHz", v);
         return std::string(buf);
-    } else if(rate>=1000 && rate%1000==0) {
-        long v = rate/1000;
+    }
+    if ( rate >= 1000 && rate % 1000 == 0 ) {
+        long v = rate / 1000;
         char buf[32];
         std::snprintf(buf, sizeof(buf), "%3ldKHz", v);
         return std::string(buf);
-    } else {
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), "%3ld Hz", rate);
-        return std::string(buf);
     }
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%3ld Hz", rate);
+    return std::string(buf);
 }
 
 struct Result {
@@ -404,7 +418,7 @@ struct Scenario {
 
         // 1k payloads (plus NT scaffolding)
         medium_value = def.create();
-        // Build 32x32 = 1024 bytes ubyte array
+        // 1K: Build 32x32 = 1024 bytes ubyte array
         {
             constexpr int d0 = 32, d1 = 32;
             shared_array<uint8_t> buf(d0*d1);
@@ -419,25 +433,56 @@ struct Scenario {
             medium_value["dimension"] = small_dimensions.freeze();
         }
 
-        // 100k payloads (plus NT scaffolding)
+        // 2MB = 4 Mega-Pixels: 2000 x 2000 mono (4 Mpx), 4 bits/pixel => 2,000,000 bytes
         large_value = def.create();
-        // Build 100 x 100 x 10 = 100,000 bytes ubyte array
-        {
-            constexpr int d0 = 100, d1 = 100, d2 = 10;
-            shared_array<uint8_t> buf(d0 * d1 * d2);
-            for(size_t i = 0u; i < buf.size(); ++i) buf[i] = static_cast<uint8_t>(i);
-            shared_array<const uint8_t> large_data(buf.freeze());
-            shared_array<pvxs::Value> large_dimensions;
-            large_dimensions.resize(3);
-            large_dimensions[0] = large_value["dimension"].allocMember().update("size", d0);
-            large_dimensions[1] = large_dimensions[0].cloneEmpty().update("size", d1);
-            large_dimensions[2] = large_dimensions[1].cloneEmpty().update("size", d2);
+        constexpr int height = 2000;
+        constexpr int width  = 2000;
+        constexpr size_t n_pixels = static_cast<size_t>(height) * static_cast<size_t>(width);
+        constexpr size_t n_bytes  = (n_pixels + 1u) / 2u; // two pixels per byte
 
-            large_value["value->ubyteValue"] = large_data;
-            large_value["dimension"] = large_dimensions.freeze();
-        }
+        // allocate packed buffer (each byte holds two 4-bit pixels)
+        shared_array<uint8_t> buf(n_bytes);
 
-        // Open PVs so clients can subscribe (open with full initial values, not empty)
+        // ---- dimensions (pixel sizes) ----
+        shared_array<Value> dims;
+        dims.resize(2);
+        dims[0] = large_value["dimension"].allocMember()
+                     .update("size", height)
+                     .update("offset", 0)
+                     .update("fullSize", height)
+                     .update("binning", 1)
+                     .update("reverse", false);
+        dims[1] = dims[0].cloneEmpty()
+                     .update("size", width)
+                     .update("fullSize", width);
+        large_value["dimension"] = dims.freeze();
+
+        // ---- data ----
+        large_value["value->ubyteValue"] = shared_array<const uint8_t>(buf.freeze());
+
+        // ---- sizes / codec ----
+        large_value["uncompressedSize"] = static_cast<int64_t>(n_bytes);
+        large_value["compressedSize"]   = static_cast<int64_t>(n_bytes); // raw
+        large_value["codec.name"]       = "raw";
+
+        // ---- attributes: at least ColorMode and BitsPerPixel ----
+        auto mkAttr = [&](const char* name, const uint32_t n) {
+            auto attribute = large_value["attribute"].allocMember();
+            attribute["name"]        = name;
+            attribute["value"]       = n;
+            attribute["descriptor"]  = "auto";
+            attribute["sourceType"]  = 0;
+            attribute["source"]      = "";
+            return attribute;
+        };
+        pvxs::shared_array<Value> attrs;
+        attrs.resize(2);
+        attrs[0] = mkAttr("ColorMode", 0); // 0 = Mono (convention)
+        attrs[1] = mkAttr("BitsPerPixel", 4);
+        large_value["attribute"] = attrs.freeze();
+
+        // finalize dims
+
         small_pv.open(small_value);
         medium_pv.open(medium_value);
         large_pv.open(large_value);
@@ -479,14 +524,16 @@ struct Scenario {
     }
 
     void run(const PayloadType payload_type) {
-        const auto payload_label = (payload_type == LARGE ? "Large" : payload_type == MEDIUM ? "Medium" : "SMALL");
+        const auto payload_label = (payload_type == LARGE ? "Large(4MB)" : payload_type == MEDIUM ? "Medium(1KB)" : "SMALL(4B)");
         run(payload_type, 1, payload_label, "  1 Hz");
         run(payload_type, 10, payload_label, " 10 Hz");
         run(payload_type, 100, payload_label, "100 Hz");
         run(payload_type, 1000, payload_label, "  1KHz");
-        run(payload_type, 10000, payload_label, " 10KHz");
-        run(payload_type, 100000, payload_label, "100KHz");
-        run(payload_type, 1000000, payload_label, "  1MHz");
+        if ( payload_type != LARGE ) {
+            run(payload_type, 10000, payload_label, " 10KHz");
+            run(payload_type, 100000, payload_label, "100KHz");
+            run(payload_type, 1000000, payload_label, "  1MHz");
+        }
     }
 
     void startMonitor(const PayloadType payload_type) {
@@ -599,6 +646,11 @@ struct Scenario {
     }
 
     void run(const PayloadType payload_type, const long rate, const std::string &payload_label, const std::string &speed_label) {
+        if ( payload_type == LARGE && rate > 1000 ) {
+            log_warn_printf(perf, "Skipping LARGE payloads where rate is greater that 1K: %s\n", speed_label.c_str());
+            return;
+        }
+
         Result result{};
 
         // Collect Data
@@ -775,7 +827,7 @@ Child pvacms_subprocess;
 // Simple Ctrl-C (SIGINT) trap: print message then exit
 static void onSigint(int)
 {
-    const char msg[] = "Caught Ctrl-C (SIGINT). Exiting...\n";
+    const char msg[] = "\nExiting...\n";
     write(STDERR_FILENO, msg, sizeof(msg)-1);
     stopPVACMS(pvacms_subprocess);
     _exit(130);
@@ -797,6 +849,7 @@ int main(int argc, char* argv[])
     std::vector<std::string> opt_scenarios;
     std::vector<std::string> opt_payloads;
     std::vector<long> opt_rates;
+
     CLI::App app{"PVXS TLS performance tests"};
     app.add_option("-s,--scenario-type", opt_scenarios, "Scenario type(s): TCP, TLS, TLS_CMS, TLS_CMS_STAPLED. May be repeated.");
     app.add_option("-p,--payload-type", opt_payloads, "Payload type(s): SMALL, MEDIUM, LARGE. May be repeated.");
@@ -925,7 +978,7 @@ int main(int argc, char* argv[])
             if(opt_rates.empty()) {
                 scenario.run(payload_type);
             } else {
-                const std::string payload_label = (payload_type == pvxs::LARGE ? "Large" : (payload_type == pvxs::MEDIUM ? "Medium" : "Small"));
+                const std::string payload_label = (payload_type == pvxs::LARGE ? "Large(4MB)" : (payload_type == pvxs::MEDIUM ? "Medium(1KB)" : "Small(4B)"));
                 for (auto rate : opt_rates) {
                     const std::string speed_label = pvxs::formatRateLabel(rate);
                     scenario.run(payload_type, rate, payload_label, speed_label);
