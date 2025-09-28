@@ -22,13 +22,12 @@
 #include <unistd.h>
 #include <time.h>
 #elif defined(__APPLE__) || defined(__FreeBSD__)
+#include <ctime>
 #include <mach/mach.h>
 #include <sys/resource.h>
 #include <sys/time.h>
-#include <time.h>
 #include <ifaddrs.h>
 #include <net/if.h>
-#include <iostream>
 #endif
 
 #include <libgen.h>
@@ -106,7 +105,7 @@ double procCPUSeconds() {
 std::uint64_t getRssBytes() {
     mach_task_basic_info info{};
     mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
-    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) {
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count) != KERN_SUCCESS) {
         return 0;
     }
     return info.resident_size;
@@ -116,8 +115,8 @@ std::uint64_t getRssBytes() {
 double procCPUSeconds() {
     rusage ru{};
     getrusage(RUSAGE_SELF, &ru);
-    double user = ru.ru_utime.tv_sec + ru.ru_utime.tv_usec/1e6;
-    double sys  = ru.ru_stime.tv_sec + ru.ru_stime.tv_usec/1e6;
+    double user = static_cast<double>(ru.ru_utime.tv_sec) + ru.ru_utime.tv_usec/1e6;
+    double sys  = static_cast<double>(ru.ru_stime.tv_sec) + ru.ru_stime.tv_usec/1e6;
     return user + sys;
 }
 
@@ -142,8 +141,8 @@ double cpuPercentSince(const double w0, const double c0) {
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
 // Packet capture helper to measure bytes for specific ports during an interval
 struct PortSniffer {
-    std::vector<pcap_t*> handles;
-    std::string bpf;
+    std::vector<pcap_t*> handles{};
+    std::string bpf{};
     std::uint64_t total{0};
     int tcp_port{0};
     int udp_port{0};
@@ -162,15 +161,15 @@ struct PortSniffer {
     }
 
     bool openAll(std::string& err) {
-        char ebuf[PCAP_ERRBUF_SIZE] = {0};
+        char error_buf[PCAP_ERRBUF_SIZE] = {0};
         pcap_if_t* alldevs = nullptr;
-        if (pcap_findalldevs(&alldevs, ebuf) != 0) {
-            err = ebuf;
+        if (pcap_findalldevs(&alldevs, error_buf) != 0) {
+            err = error_buf;
             return false;
         }
         for (pcap_if_t* d = alldevs; d; d = d->next) {
             // Build handles via pcap_create to enable immediate mode
-            pcap_t* h = pcap_create(d->name, ebuf);
+            pcap_t* h = pcap_create(d->name, error_buf);
             if (!h) continue;
             // Snaplen, promisc, timeout
             pcap_set_snaplen(h, 65535);
@@ -190,7 +189,7 @@ struct PortSniffer {
                 continue;
             }
             // Non-blocking to allow polling without stalls
-            pcap_setnonblock(h, 1, ebuf);
+            pcap_setnonblock(h, 1, error_buf);
 
             bpf_program prog{};
             if (pcap_compile(h, &prog, bpf.c_str(), 1, PCAP_NETMASK_UNKNOWN) != 0) {
@@ -250,7 +249,7 @@ struct PortSniffer {
 
 /**
  * Print a progress bar to the console
- * @param elapsed The elapsed time in seconds
+ * @param elapsed The elapsed-time in seconds
  * @param prefix The prefix to print before the progress bar
  */
 void printProgressBar(uint32_t elapsed, const std::string &prefix)
@@ -268,8 +267,8 @@ void printProgressBar(uint32_t elapsed, const std::string &prefix)
 }
 
 /**
- * Scenario type: This is used to specify whether the test will use tcp or tls connections,
- * and whether the status checking and stapling is enabled or disabled.
+ * Scenario type: This is used to specify whether the test will use TCP or TLS connections,
+ * and whether the status-checking and/or stapling will be enabled or disabled.
  */
 enum ScenarioType {
     TCP,
@@ -282,20 +281,32 @@ enum ScenarioType {
  * Payload type: This is used to specify the size of the payload that will be sent over the network.
  * Small is a single 32 but integer wrapped in an NT scalar.
  * Medium is a 32x32 ubyte array (1024 bytes) wrapped in an NT NDArray.
- * Large is a 100x100x10 ubyte array (100,000 bytes) wrapped in an NT NDArray.
+ * Large is a 4mpx image = 2000x2000 pixels, 4 bits per pixel (2,000,000 bytes) wrapped in an NT NDArray.
  */
 enum PayloadType {
-    SMALL,
-    MEDIUM,
-    LARGE,
+    SMALL_4B,
+    MEDIUM_1KB,
+    LARGE_2MB,
 };
 
 // Helpers for CLI parsing and labels
+
+/**
+ * Convert a string to uppercase
+ * @param s The string to convert
+ * @return The uppercase string
+ */
 inline std::string toUpperStr(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::toupper(c); });
     return s;
 }
 
+/**
+ * Parse a scenario type from a string
+ * @param name The string to parse
+ * @param out The output scenario type
+ * @return True if the string was parsed successfully, false otherwise
+ */
 bool parseScenarioType(const std::string& name, ScenarioType& out) {
     auto n = toUpperStr(name);
     if ( n == "TCP" ) { out = TCP; return true; }
@@ -305,14 +316,25 @@ bool parseScenarioType(const std::string& name, ScenarioType& out) {
     return false;
 }
 
-    bool parsePayloadType(const std::string &name, PayloadType &out) {
+/**
+ * Parse a payload type from a string
+ * @param name The string to parse
+ * @param out The output payload type
+ * @return True if the string was parsed successfully, false otherwise
+ */
+bool parsePayloadType(const std::string &name, PayloadType &out) {
         auto n = toUpperStr(name);
-    if ( n == "SMALL"  ) { out = SMALL; return true; }
-    if ( n == "MEDIUM" ) { out = SMALL; return true; }
-    if ( n == "LARGE"  ) { out = LARGE; return true; }
+    if ( n == "SMALL"  ) { out = SMALL_4B; return true; }
+    if ( n == "MEDIUM" ) { out = SMALL_4B; return true; }
+    if ( n == "LARGE"  ) { out = LARGE_2MB; return true; }
         return false;
     }
 
+/**
+ * Format a rate label
+ * @param rate The rate to format
+ * @return The formatted rate label
+ */
 std::string formatRateLabel(long rate) {
     if ( rate >= 1000000 && rate % 1000000 == 0 ) {
         long v = rate/1000000;
@@ -331,6 +353,20 @@ std::string formatRateLabel(long rate) {
     return std::string(buf);
 }
 
+/**
+ * Result: This is used to store the results of the performance tests.
+ * It stores the average transmission times (values) taken from the time the updates are
+ * sent to the time they are read by the client.  The values are grouped by the corresponding update send-time.
+ * The values are grouped by second that they are sent.
+ * Alongside the values we store the number of updates (expected_count) and the number of updates that
+ * were dropped (dropped) grouped by second that they are sent.
+ * We also store the minimum and maximum transmission times (min and max).
+ * We print the results in a table format with the following columns:
+ * - The average transmission time for the updates per second of the test.
+ * - The number of updates that were dropped per second of the test.
+ * - The minimum transmission time for the updates per second of the test.
+ * - The maximum transmission time for the updates per second of the test.
+ */
 struct Result {
     epicsMutex lock;
     std::array<uint64_t, 60> counts;
@@ -340,23 +376,41 @@ struct Result {
     double min=std::numeric_limits<double>::max();
     double max=-1.0;
 
+    /**
+     * Add a value to the result
+     * @param index The index of the result
+     * @param value The value to add
+     * @param this_count The count which was embedded in the update, to be compared to the expected count to see if any updates were dropped
+     * @param rate The rate of the updates
+     */
     void add(const uint index, const double value, const uint32_t this_count, const uint32_t rate) {
         if (value <= 0.0) return;
 
         Guard G(lock);
+        // Get the actual number of updates that have been received in this second, and increment the count
         const auto count = counts[index]++;
-        // Calculate moving average
+        // Calculate moving average of transmission times by incorporating the new value with the running average
         values[index] = (values[index] * count + value)/(count+1);
-        // Calculate dropped packets
+        // Update max and min transmission times
+        if (value < min) min = value;
+        if (value > max) max = value;
+        // Calculate dropped packets.  If the counter embedded in the update is greater than the expected count, then we have dropped updates.
         for (; expected_count < this_count; ++expected_count) {
             const auto dropped_index = expected_count / rate;
             dropped[dropped_index]++;
         }
+        // Increment the expected count ready for the next update
         expected_count++;
-        if (value < min) min = value;
-        if (value > max) max = value;
     }
 
+    /**
+     * Print the results.
+     * The results are printed in a table format with the following columns:
+     * - The average transmission time for the updates per second of the test.
+     * - The number of updates that were dropped per second of the test.
+     * - The minimum transmission time for the updates per second of the test.
+     * - The maximum transmission time for the updates per second of the test.
+     */
     void print() const {
         for (const auto value: values) {
             if (value) std::cout << value ; else std::cout << "   ";
@@ -371,54 +425,81 @@ struct Result {
     }
 };
 
+/**
+ * Scenario: This is the configuration for a performance test scenario.
+ * A scenario is one of TCP, TLS, TLS_CMS, or TLS_CMS_STAPLED.
+ * - TCP uses a plain TCP connection.
+ * - TLS uses a TLS connection.
+ * - TLS_CMS uses a TLS connection with CMS status checking.
+ * - TLS_CMS_STAPLED uses a TLS connection with CMS status checking and stapling.
+ * When a scenario is created it builds the server and client.
+ * It builds three sizes of payload to be used if the associated payload type is selected in the run methods.
+ * The payload types are SMALL, MEDIUM, or LARGE.
+ * - SMALL is a single 32 but integer wrapped in an NT scalar.
+ * - MEDIUM is a 32x32 ubyte array (1024 bytes) wrapped in an NT NDArray.
+ * - LARGE is a 2000x2000 ubyte array (4,000,000 bytes): 4 bits/pixel equivalent to a 4 mega-pixel image.
+ * It also builds the shared PVs for each of the payload types: PERF:SMALL, PERF:MEDIUM, or PERF:LARGE.
+ */
 struct Scenario {
     epicsEvent event;
-    server::Server serv;
-    client::Context cli;
+
+    // Server and client to use for each side of the performance test scenario
+    server::Server server;
+    client::Context client;
+
+    // Shared PV and small payload  the SMALL payload type test
     server::SharedPV small_pv;
-    server::SharedPV medium_pv;
-    server::SharedPV large_pv;
     Value small_value;
+
+    // Shared PV and medium payload for the MEDIUM payload type test
+    server::SharedPV medium_pv;
     Value medium_value;
+
+    // Shared PV and large payload for the LARGE payload type test
+    server::SharedPV large_pv;
     Value large_value;
+
+    // Subscription the client will make for this performance test scenario
     std::shared_ptr<client::Subscription> sub;
+
+    // Counter for the updates
     uint32_t counter{0};
+
+    // Ports for the server and client
     int tcp_port{0};
     int udp_port{0};
 
-    Scenario(ScenarioType scenario_type) {
-        // Build Server
-        auto serv_conf = pvxs::server::Config::fromEnv();
-        serv_conf.tls_keychain_file = "server1.p12";
-        // Use ephemeral port to avoid conflicts with pvacms child process
-        serv_conf.udp_port = 0;
-        serv_conf.tls_disabled = scenario_type == TCP;
-        serv_conf.tls_disable_status_check = scenario_type < TLS_CMS;
-        serv_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
-        serv = serv_conf.build();
-
-
-        // Build PVs
+    /**
+     * Initialise the SMALL payload type test and add its PV to the server
+     */
+    void initSmallScenarios() {
+        // Build PV
         small_pv = server::SharedPV::buildReadonly();
-        serv.addPV("PERF:SMALL", small_pv);
-        medium_pv = server::SharedPV::buildReadonly();
-        serv.addPV("PERF:MEDIUM", medium_pv);
-        large_pv = server::SharedPV::buildReadonly();
-        serv.addPV("PERF:LARGE", large_pv);
+        server.addPV("PERF:SMALL", small_pv);
 
         // Build data
         // 4 byte data payload (plus NT scaffolding)
         auto s_def (nt::NTScalar{TypeCode::Int32}.build());
         s_def += { Int32("counter") };
-        small_value = s_def.create();
 
+        small_value = s_def.create();
+        small_pv.open(small_value);
+    }
+
+    /**
+     * Initialise the MEDIUM payload type test and add its PV to the server
+     */
+    void initMediumScenarios() {
+        medium_pv = server::SharedPV::buildReadonly();
+        server.addPV("PERF:MEDIUM", medium_pv);
+
+        // Build data
+        // 1k payloads (plus NT scaffolding)
         auto def(nt::NTNDArray{}.build());
         def += { Int32("counter") };
         def += { StructA("dimensions", { Int32("value"), }), };
 
-        // 1k payloads (plus NT scaffolding)
         medium_value = def.create();
-        // 1K: Build 32x32 = 1024 bytes ubyte array
         {
             constexpr int d0 = 32, d1 = 32;
             shared_array<uint8_t> buf(d0*d1);
@@ -432,8 +513,23 @@ struct Scenario {
             medium_value["value->ubyteValue"] = medium_data;
             medium_value["dimension"] = small_dimensions.freeze();
         }
+        medium_pv.open(medium_value);
+    }
+
+    /**
+     * Initialise the LARGE payload type test and add its PV to the server
+     */
+    void initLargeScenarios() {
+        // Build PV
+        auto def(nt::NTNDArray{}.build());
+        def += { Int32("counter") };
+        def += { StructA("dimensions", { Int32("value"), }), };
+
+        large_pv = server::SharedPV::buildReadonly();
+        server.addPV("PERF:LARGE", large_pv);
 
         // 2MB = 4 Mega-Pixels: 2000 x 2000 mono (4 Mpx), 4 bits/pixel => 2,000,000 bytes
+        // Create the value
         large_value = def.create();
         constexpr int height = 2000;
         constexpr int width  = 2000;
@@ -447,14 +543,14 @@ struct Scenario {
         shared_array<Value> dims;
         dims.resize(2);
         dims[0] = large_value["dimension"].allocMember()
-                     .update("size", height)
-                     .update("offset", 0)
-                     .update("fullSize", height)
-                     .update("binning", 1)
-                     .update("reverse", false);
+            .update("size", height)
+            .update("offset", 0)
+            .update("fullSize", height)
+            .update("binning", 1)
+            .update("reverse", false);
         dims[1] = dims[0].cloneEmpty()
-                     .update("size", width)
-                     .update("fullSize", width);
+            .update("size", width)
+            .update("fullSize", width);
         large_value["dimension"] = dims.freeze();
 
         // ---- data ----
@@ -475,39 +571,65 @@ struct Scenario {
             attribute["source"]      = "";
             return attribute;
         };
+
         pvxs::shared_array<Value> attrs;
         attrs.resize(2);
         attrs[0] = mkAttr("ColorMode", 0); // 0 = Mono (convention)
         attrs[1] = mkAttr("BitsPerPixel", 4);
         large_value["attribute"] = attrs.freeze();
-
-        // finalize dims
-
-        small_pv.open(small_value);
-        medium_pv.open(medium_value);
         large_pv.open(large_value);
+    }
 
-        serv.start();
-        // After server starts, query effective bound ports and build client
+    /**
+     * Configure the server for the performance test scenario
+     * The server is configured to use the isolated configuration and the TLS keychain file is set to the server1.p12 file that has been generated
+     * for the other tls tests.
+     * @param scenario_type The type of scenario to build. Determines the tls, status-checking, and stapling configuration.
+     */
+    void configureServer(ScenarioType scenario_type) {
+        // Build Server
+        auto serv_conf = server::Config::isolated();
+        serv_conf.tls_keychain_file = "server1.p12";
+
+        // Use ephemeral port to avoid conflicts with pvacms child process
+        serv_conf.tls_disabled = scenario_type == TCP;
+        serv_conf.tls_disable_status_check = scenario_type < TLS_CMS;
+        serv_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
+        server = serv_conf.build();
+    }
+
+    /**
+     * Start the server and query the effective bound ports.  These will be used to build a compatible client.
+     */
+    void startServer() {
+        server.start();
+        // After server starts, query effective bound ports
         {
-            const auto& eff = serv.config();
-            udp_port = eff.udp_port;
-            tcp_port = eff.tcp_port;
+            const auto& config = server.config();
+            udp_port = config.udp_port;
+            tcp_port = config.tcp_port;
         }
+    }
 
+    /**
+     * Start the client and configure it to use the server's effective ports.
+     * The client is configured to use the isolated configuration and the TLS keychain file is set to the client1.p12 file that has been generated
+     * for the other tls tests.
+     * @param scenario_type The type of scenario to build. Determines the tls, status-checking, and stapling configuration.
+     */
+    void startClient(ScenarioType scenario_type) {
         // Build Client (force network over loopback, using the server's actual ports)
         {
-            auto cli_conf = client::Config::fromEnv();
-#ifdef PVXS_ENABLE_OPENSSL
-            // Mirror TLS flags from scenario
-            cli_conf.tls_disabled = (scenario_type == TCP);
-            cli_conf.tls_disable_status_check = scenario_type < TLS_CMS;
-            cli_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
-#endif
+            auto cli_conf = server.clientConfig();
+            // Mirror TLS flags from the Scenario
+            // cli_conf.tls_disabled = (scenario_type == TCP);
+            // cli_conf.tls_disable_status_check = scenario_type < TLS_CMS;
+            // cli_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
             cli_conf.tls_keychain_file = "client1.p12";
+
             // Direct all discovery and name resolution to localhost using our server's ports
-            cli_conf.udp_port = udp_port;
-            cli_conf.tcp_port = tcp_port;
+            // cli_conf.udp_port = udp_port;
+            // cli_conf.tcp_port = tcp_port;
             cli_conf.addressList.clear();
             cli_conf.addressList.push_back(std::string("127.0.0.1:") + std::to_string(udp_port));
             cli_conf.nameServers.clear();
@@ -515,21 +637,44 @@ struct Scenario {
             cli_conf.interfaces.clear();
             cli_conf.interfaces.push_back("127.0.0.1");
             cli_conf.autoAddrList = false;
-            cli = cli_conf.build();
+            client = cli_conf.build();
         }
     }
 
+    /**
+     * Constructor for the Scenario
+     * @param scenario_type The type of scenario to build.
+     * - TCP: Plain TCP connection.
+     * - TLS: TLS connection.
+     * - TLS_CMS: TLS connection with CMS status checking.
+     * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
+     */
+    explicit Scenario(ScenarioType scenario_type) {
+        // Configure the server
+        configureServer(scenario_type);
+
+        // Initialise scenarios
+        initSmallScenarios();
+        initMediumScenarios();
+        initLargeScenarios();
+
+        // Start the server
+        startServer();
+        // Configure a client that is compatible with the server
+        startClient(scenario_type);
+    }
+
     ~Scenario() {
-        serv.stop();
+        server.stop();
     }
 
     void run(const PayloadType payload_type) {
-        const auto payload_label = (payload_type == LARGE ? "Large(4MB)" : payload_type == MEDIUM ? "Medium(1KB)" : "SMALL(4B)");
+        const auto payload_label = (payload_type == LARGE_2MB ? "Large(2MB)" : payload_type == MEDIUM_1KB ? "Medium(1KB)" : "SMALL(4B)");
         run(payload_type, 1, payload_label, "  1 Hz");
         run(payload_type, 10, payload_label, " 10 Hz");
         run(payload_type, 100, payload_label, "100 Hz");
         run(payload_type, 1000, payload_label, "  1KHz");
-        if ( payload_type != LARGE ) {
+        if ( payload_type != LARGE_2MB ) {
             run(payload_type, 10000, payload_label, " 10KHz");
             run(payload_type, 100000, payload_label, "100KHz");
             run(payload_type, 1000000, payload_label, "  1MHz");
@@ -538,9 +683,9 @@ struct Scenario {
 
     void startMonitor(const PayloadType payload_type) {
         // Set up monitor subscription and consume updates using epicsEvent pattern
-        const char* pv_name = (payload_type == LARGE) ? "PERF:LARGE" : (payload_type == MEDIUM) ? "PERF:MEDIUM" : "PERF:SMALL";
+        const char* pv_name = (payload_type == LARGE_2MB) ? "PERF:LARGE" : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM" : "PERF:SMALL";
 
-        sub = cli.monitor(pv_name)
+        sub = client.monitor(pv_name)
             .maskConnected(true)   // suppress Connected events from throwing
             .maskDisconnected(true)
             .event([this](client::Subscription&){
@@ -554,7 +699,7 @@ struct Scenario {
         return [this, payload_type]() {
             try {
                 // Build update value and post to the appropriate PV
-                if (payload_type == LARGE) {
+                if (payload_type == LARGE_2MB) {
                     auto v = large_value.clone();
                     v["counter"] = counter++;
                     auto ts = v["timeStamp"];
@@ -566,7 +711,7 @@ struct Scenario {
                     }
                     v.mark(true);
                     large_pv.post(v);
-                } else if (payload_type == MEDIUM) {
+                } else if (payload_type == MEDIUM_1KB) {
                     auto v = medium_value.clone();
                     v["counter"] = counter++;
                     auto ts = v["timeStamp"];
@@ -646,7 +791,9 @@ struct Scenario {
     }
 
     void run(const PayloadType payload_type, const long rate, const std::string &payload_label, const std::string &speed_label) {
-        if ( payload_type == LARGE && rate > 1000 ) {
+        counter = 0;
+        if ( payload_type == LARGE_2MB && rate > 1000 ) {
+            // Greater that 20 Mbps is beyond reasonable
             log_warn_printf(perf, "Skipping LARGE payloads where rate is greater that 1K: %s\n", speed_label.c_str());
             return;
         }
@@ -685,9 +832,9 @@ struct Scenario {
                 constexpr double window = 60.0;
                 constexpr double receive_window = 120.0;
                 // Check if the time window has expired
-                epicsTimeStamp nows{};
-                epicsTimeGetCurrent(&nows);
-                double elapsed = epicsTimeDiffInSeconds(&nows, &start);
+                epicsTimeStamp now{};
+                epicsTimeGetCurrent(&now);
+                double elapsed = epicsTimeDiffInSeconds(&now, &start);
                 const double remaining_time = window - elapsed;
                 const double remaining_wait_time = receive_window - elapsed;
                 if (remaining_time <= 0.0) break;
@@ -817,18 +964,17 @@ void stopPVACMS(Child& child)
         }
         // Force kill if still running
         kill(child.pid, SIGKILL);
-        waitpid(child.pid, 0, 0);
+        waitpid(child.pid, nullptr, 0);
         child.pid = -1;
     }
 }
 
 Child pvacms_subprocess;
 
-// Simple Ctrl-C (SIGINT) trap: print message then exit
-static void onSigint(int)
+// Simple Ctrl-C (SIGINT) trap: print the exit message then exit
+ void onSigint(int)
 {
-    const char msg[] = "\nExiting...\n";
-    write(STDERR_FILENO, msg, sizeof(msg)-1);
+    std::cerr << std::endl << "Exiting..." << std::endl;
     stopPVACMS(pvacms_subprocess);
     _exit(130);
 }
@@ -873,7 +1019,7 @@ int main(int argc, char* argv[])
 
     std::vector<pvxs::PayloadType> payloads_sel;
     if(opt_payloads.empty()) {
-        payloads_sel = {pvxs::SMALL, pvxs::MEDIUM, pvxs::LARGE};
+        payloads_sel = {pvxs::SMALL_4B, pvxs::MEDIUM_1KB, pvxs::LARGE_2MB};
     } else {
         for(const auto& p : opt_payloads) {
             pvxs::PayloadType pt{};
@@ -978,7 +1124,7 @@ int main(int argc, char* argv[])
             if(opt_rates.empty()) {
                 scenario.run(payload_type);
             } else {
-                const std::string payload_label = (payload_type == pvxs::LARGE ? "Large(4MB)" : (payload_type == pvxs::MEDIUM ? "Medium(1KB)" : "Small(4B)"));
+                const std::string payload_label = (payload_type == pvxs::LARGE_2MB ? "Large(4MB)" : (payload_type == pvxs::MEDIUM_1KB ? "Medium(1KB)" : "Small(4B)"));
                 for (auto rate : opt_rates) {
                     const std::string speed_label = pvxs::formatRateLabel(rate);
                     scenario.run(payload_type, rate, payload_label, speed_label);
