@@ -802,8 +802,8 @@ struct Scenario {
             PortSniffer sniffer(tcp_port, udp_port);
             sniffer.startCapture();
 
-            // Start a monitor subscription for the given payload type.
-            startMonitor(payload_type);
+            // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
+            startMonitor(payload_type, static_cast<uint32_t>(rate));
 
             // Calculate the posting cadence
             const double period = 1.0 / static_cast<double>(rate);
@@ -881,13 +881,34 @@ struct Scenario {
      * The PV to monitor is based on the payload type.
      * @param payload_type The type of payload to monitor.
      */
-    void startMonitor(const PayloadType payload_type) {
+    void startMonitor(const PayloadType payload_type, const uint32_t rate) {
         // Set up monitor subscription and consume updates using epicsEvent pattern
         const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
                               : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
                                                              : "PERF:SMALL";
 
+        // Heuristic to limit coalescing: ensure a large enough client-side queue.
+        // Larger queues reduce bias where only the newest updates are delivered at high rates.
+        auto queue_size = 0u;
+        switch (payload_type) {
+            case SMALL_4B:
+                // Allow up to ~100k small updates buffered, but not less than 2*rate
+                queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 100000u), 1000u);
+                break;
+            case MEDIUM_1KB:
+                // Medium payloads: cap at 20k to bound memory; but allow at least 2*rate
+                queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 20000u), 100u);
+                break;
+            case LARGE_2MB:
+                // Large payloads are expensive; queue just a small number
+                queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 10u), 2u);
+                break;
+        }
+
         sub = client.monitor(pv_name)
+                  .record("queueSize", queue_size)
+                  .record("pipeline", true)
+                  .record("ackAny", std::string("50%"))
                   .maskConnected(true)  // suppress Connected events from throwing
                   .maskDisconnected(true)
                   .event([this](client::Subscription&) {
