@@ -945,16 +945,16 @@ struct Scenario {
                                uint32_t& last_index,
                                const std::string& progress_prefix,
                                const uint32_t rate) const {
-        bool first_event_in_batch = true;
+        // Measure receive time for each individual update to avoid rate-dependent bias.
+        // Previously, the code sampled 'now' once per batch, which caused transit_time to
+        // appear progressively smaller within a batch as 'sent' advanced while 'now' stayed
+        // constant. Higher publish rates increased batch sizes and thus exaggerated this bias.
         epicsTimeStamp now{};
         while (true) {
             try {
                 if (auto val = sub->pop()) {
-                    // Get now only when we get the first update in this batch
-                    if (first_event_in_batch)
-                        epicsTimeGetCurrent(&now);
-
-                    first_event_in_batch = false;
+                    // Capture receive timestamp for this specific update
+                    epicsTimeGetCurrent(&now);
 
                     // Get the timestamp that shows when the data was sent
                     const auto timestamp = val["timeStamp"];
