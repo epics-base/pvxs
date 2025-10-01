@@ -582,6 +582,9 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
                                      std::shared_ptr<GPROp>&& op,
                                      bool syncCancel)
 {
+    if(name.empty())
+        throw std::logic_error("Empty channel name");
+
     auto internal(std::move(op));
     internal->internal_self = internal;
 

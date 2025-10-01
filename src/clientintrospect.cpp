@@ -184,6 +184,8 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
         throw std::logic_error("NULL Builder");
     if(!_autoexec)
         throw std::logic_error("autoExec(false) not possible for info()");
+    if(_name.empty())
+        throw std::logic_error("Empty channel name");
 
     auto context(ctx->impl->shared_from_this());
 

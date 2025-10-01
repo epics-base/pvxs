@@ -739,6 +739,8 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 {
     if(!ctx)
         throw std::logic_error("NULL Builder");
+    if(_name.empty())
+        throw std::logic_error("Empty channel name");
 
     auto context(ctx->impl->shared_from_this());
 
