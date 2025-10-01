@@ -716,6 +716,9 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
 
 GetAddrInfo::GetAddrInfo(const char *name)
 {
+    // evutil_getaddrinfo() wrapper implicitly expects result pointer to be zerod
+    // when applying various compatibility "hacks" on some targets.
+    info = nullptr;
     if(auto err = evutil_getaddrinfo(name, nullptr, nullptr, &info)) {
         throw std::runtime_error(SB()<<"Error resolving \""<<escape(name)<<"\" : "<<evutil_gai_strerror(err));
     }
