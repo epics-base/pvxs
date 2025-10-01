@@ -698,6 +698,7 @@ bool evsocket::init_canIPv6() noexcept
 #endif
 
 struct IfMapDaemon : private epicsThreadRunable {
+    SockAttach attach;
     epicsMutex lock;
     epicsEvent wake;
     std::shared_ptr<const IfaceMap::Current> latest;
