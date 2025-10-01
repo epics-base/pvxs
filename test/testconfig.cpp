@@ -175,17 +175,48 @@ void testClientAuto()
     testFalse(conf.addressList.empty())<<conf.addressList;
 }
 
+void testDNS()
+{
+    testShow()<<__func__;
+
+    {
+        std::vector<std::string> expect({"127.0.0.1"});
+        client::Config conf;
+        conf.addressList = expect; // copy
+        conf.autoAddrList = false;
+        conf.expand();
+        testArrEq(conf.addressList, expect)<<" numeric address";
+    }
+    {
+        std::vector<std::string> expect({"127.0.0.1"});
+        client::Config conf;
+        conf.addressList.push_back("localhost"); // copy
+        conf.autoAddrList = false;
+        conf.expand();
+        testArrEq(conf.addressList, expect)<<" localhost";
+    }
+    {
+        std::vector<std::string> expect;
+        client::Config conf;
+        conf.addressList.push_back("16name.invalid"); // expect failure unless host resolver is hijacking
+        conf.autoAddrList = false;
+        conf.expand();
+        testArrEq(conf.addressList, expect)<<" invalid hostname";
+    }
+}
+
 } // namespace
 
 MAIN(testconfig)
 {
-    testPlan(31);
+    testPlan(34);
     testSetup();
     testDefs();
     logger_config_env();
     testParse();
     testServerAuto();
     testClientAuto();
+    testDNS();
     cleanup_for_valgrind();
     return testDone();
 }
