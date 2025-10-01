@@ -44,15 +44,15 @@ struct ResultWaiter {
 struct OperationBase : public Operation
 {
     const evbase loop;
+    const std::string channelName;
     // remaining members only accessibly from loop worker
     std::shared_ptr<Channel> chan;
-    std::string channelName;
     uint32_t ioid = 0;
     Value result;
     bool done = false;
     std::shared_ptr<ResultWaiter> waiter;
 
-    OperationBase(operation_t op, const evbase& loop);
+    OperationBase(operation_t op, const evbase& loop, const std::string& name);
     virtual ~OperationBase();
 
     virtual void createOp() =0;
@@ -231,7 +231,7 @@ struct Discovery final : public OperationBase
     std::function<void(const Discovered &)> notify;
     bool running = false;
 
-    Discovery(const std::shared_ptr<ContextImpl>& context);
+    Discovery(const std::shared_ptr<ContextImpl>& context, const std::string& name);
     ~Discovery();
 
     virtual bool cancel() override final;

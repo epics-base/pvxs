@@ -30,8 +30,8 @@ struct InfoOp : public OperationBase
 
     INST_COUNTER(InfoOp);
 
-    explicit InfoOp(const evbase& loop)
-        :OperationBase(Info, loop)
+    explicit InfoOp(const evbase& loop, const std::string& name)
+        :OperationBase(Info, loop, name)
     {}
 
     virtual ~InfoOp()
@@ -187,7 +187,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
 
     auto context(ctx->impl->shared_from_this());
 
-    auto op(std::make_shared<InfoOp>(context->tcp_loop));
+    auto op(std::make_shared<InfoOp>(context->tcp_loop, _name));
     if(_result) {
         op->done = std::move(_result);
     } else {

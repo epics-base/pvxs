@@ -310,9 +310,10 @@ void ResultWaiter::complete(Result&& result, bool interrupt)
     notify.signal();
 }
 
-OperationBase::OperationBase(operation_t op, const evbase& loop)
+OperationBase::OperationBase(operation_t op, const evbase& loop, const std::string &name)
     :Operation(op)
     ,loop(loop)
+    ,channelName(name)
 {}
 
 OperationBase::~OperationBase() {}
