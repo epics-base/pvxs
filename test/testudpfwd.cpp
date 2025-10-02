@@ -39,6 +39,7 @@ bool testFwdVia(const server::Config& base, const SockAddr& ifaddr)
         if(ifaddr.family()!=AF_UNSPEC)
             sconf.interfaces.push_back(ifaddr.tostring());
         sconf.auto_beacon = false;
+        sconf.beaconDestinations.push_back(ifaddr.withPort(sconf.udp_port).tostring());
 
         srv1 = sconf.build();
 
