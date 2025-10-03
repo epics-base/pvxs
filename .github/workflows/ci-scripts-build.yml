@@ -142,14 +142,14 @@ jobs:
             cmp: vs2022
             configuration: debug
             base: "7.0"
-            extra: "CMD_CXXFLAGS=-analysis"
+            extra: "CMD_CXXFLAGS=-analyze"
 
           - name: vs2022 static
             os: windows-2022
             cmp: vs2022
             configuration: static-debug
             base: "7.0"
-            extra: "CMD_CXXFLAGS=-analysis"
+            extra: "CMD_CXXFLAGS=-analyze"
 
     steps:
     - uses: actions/checkout@v4
