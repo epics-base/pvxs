@@ -253,20 +253,20 @@ struct PortSniffer {
 
 /**
  * Print a progress bar to the console
- * @param elapsed The elapsed-time in seconds
+ * @param progress_percentage The percentage done
  * @param prefix The prefix to print before the progress bar
  */
-void printProgressBar(uint32_t elapsed, const std::string& prefix) {
-    constexpr uint32_t total = 60;
-    if (elapsed > total)
-        elapsed = total;
+void printProgressBar(uint32_t progress_percentage, const std::string& prefix) {
+    if (progress_percentage > 100u)
+        progress_percentage = 100u;
     std::string bar;
-    bar.reserve(prefix.size() + total * 3 + 16);
+    bar.reserve(prefix.size() + 100u * 3 + 16);
     bar += prefix;
     bar += "▏";  // left cap
-    for (uint32_t i = 0u; i < elapsed; ++i)
+    uint32_t i;
+    for (i = 0u; i < progress_percentage; ++i)
         bar += "█";
-    for (uint32_t i = elapsed; i < total; ++i)
+    for (; i < 100u; ++i)
         bar += "░";
     bar += "▕";  // right cap
     std::cout << bar << "\r" << std::flush;
@@ -808,59 +808,63 @@ struct Scenario {
             // Calculate the posting cadence
             const double period = 1.0 / static_cast<double>(rate);
 
-            // Post a value to the PV to start the test.
-            const auto postOnce = postValue(payload_type);
-
             // 60-second window
             uint32_t last_index = std::numeric_limits<uint32_t>::max();
+            uint32_t last_percentage = std::numeric_limits<uint32_t>::max();
             const std::string progress_prefix = std::string(payload_label) + ", " + std::string(rate_label) + ", ";
 
             // Make the first Post and Mark the start time for this sequence
             epicsTimeStamp start{};
             epicsTimeGetCurrent(&start);
-            postOnce();
 
+            bool signaled = false;
             while (true) {
-                // Continuously capture packets during the test window
-                sniffer.poll();
+                constexpr double window = 60.0;
+                constexpr double receive_window = 90.0;
 
-                // Process any updates that have been received from the server by the monitor client,
-                // measuring the difference between the send time and the receive-time, and storing the delta in the
-                // `result` object.
-                processPendingUpdates(result, start, last_index, progress_prefix, rate);
-
-                constexpr double window = 60.0;  // The send window is the duration of the test.
-                constexpr double receive_window =
-                    90.0;  // The receive-window is larger than the send window to allow late packets to be received.
-
-                // Check if the test window has expired
+                // Get time now
                 epicsTimeStamp now{};
                 epicsTimeGetCurrent(&now);
+                // Get elapsed time from start of test window
                 double elapsed = epicsTimeDiffInSeconds(&now, &start);
+
+                // Remaining time for test
                 const double remaining_test_window = window - elapsed;
-                const double remaining_wait_time = receive_window - elapsed;
+                // Remaining time including extra time at the end of the test where we wait for late results
+                double remaining_wait_time = receive_window - elapsed;
+
+                // Check if the test window plus extra wait time has expired
                 if (remaining_wait_time <= 0.0)
                     break;
 
-                // Determine time until next post
-                double until_next = period - std::fmod(elapsed, period);
-                if (until_next < 0.0)
-                    until_next = 0.0;
-                const double time_to_wait = std::min(remaining_wait_time, until_next);
-
-                // Wait for the next update or the next time to post a new value
-                const bool signaled = event.wait(time_to_wait);
-
-                // drain again after wait to catch bursts
-                sniffer.poll();
-
-                // If the event was not signaled (i.e. the timer expired) and the test window has not expired, then post
-                // a new value
-                if (!signaled && remaining_test_window > 0.0) {
-                    postOnce();
+                if (signaled) {
+                    // An update was signaled by the monitor. Process any pending updates
+                    processPendingUpdates(result, start, last_index, progress_prefix, rate);
+                } else if (remaining_test_window >= 0.0) {
+                    // this is the first time or, it's time to post a new value, and there's still time
+                    postValue(payload_type);
                     // Poll network stats after posting too
                     sniffer.poll();
                 }
+
+                // Determine time until next post
+                epicsTimeGetCurrent(&now);
+                elapsed = epicsTimeDiffInSeconds(&now, &start);
+                double until_next = period - std::fmod(elapsed, period);
+                remaining_wait_time = receive_window - elapsed;
+                const double time_to_wait = std::min(remaining_wait_time, until_next);
+
+                // Wait for the next update or the next time to post a new value
+                signaled = event.wait(time_to_wait);
+
+                // // Update the progress bar each time the bucket index changes (i.e., when we go to the next second)
+                const auto progress_percentage = static_cast<uint32_t>(100* (receive_window-remaining_wait_time) / receive_window);
+                if (progress_percentage != last_percentage) {
+                    last_percentage = progress_percentage;
+                    printProgressBar(progress_percentage, progress_prefix);
+                }
+                // drain again after wait to catch bursts
+                sniffer.poll();
             }
 
             // End of Tests
@@ -919,34 +923,27 @@ struct Scenario {
     }
 
     /**
-     * Lambda function to post a value to the appropriate PV based on the payload type.
-     * This function creates a new value, updates the counter field, and timestamps the value.
-     * It then marks all fields as updates so that the server will send the full data to the client.
+     * Post a value to the appropriate PV based on the payload type.
+     * This function creates a new value, updates the counter-field, and timestamps the value.
+     * It then marks all fields as updated so that the server will send the full data to the client.
      * It then posts the value to the appropriate PV.
      *
      * @param payload_type The type of payload to post.
-     * @return A function that can be used to post a value to the appropriate PV.
      */
-    std::function<void()> postValue(const PayloadType payload_type) {
-        return [this, payload_type]() {
-            try {
-                auto value = (payload_type == SMALL_4B)     ? small_value.clone()
-                             : (payload_type == MEDIUM_1KB) ? medium_value.clone()
-                                                            : large_value.clone();
-                value["counter"] = counter++;
-                auto timestamp = value["timeStamp"];
-                if (timestamp) {
-                    epicsTimeStamp now{};
-                    epicsTimeGetCurrent(&now);
-                    timestamp["secondsPastEpoch"] = now.secPastEpoch;
-                    timestamp["nanoseconds"] = now.nsec;
-                }
-                value.mark(true);
-                (payload_type == SMALL_4B ? small_pv : payload_type == MEDIUM_1KB ? medium_pv : large_pv).post(value);
-            } catch (std::exception& e) {
-                log_warn_printf(perf, "post_once error: %s\n", e.what());
-            }
-        };
+    void postValue(const PayloadType payload_type) {
+        try {
+            auto value = (payload_type == SMALL_4B) ? small_value : (payload_type == MEDIUM_1KB) ? medium_value : large_value;
+            value["counter"] = counter++;
+            auto timestamp = value["timeStamp"];
+            epicsTimeStamp now{};
+            epicsTimeGetCurrent(&now);
+            timestamp["secondsPastEpoch"] = now.secPastEpoch;
+            timestamp["nanoseconds"] = now.nsec;
+            value.mark(true);
+            (payload_type == SMALL_4B ? small_pv : payload_type == MEDIUM_1KB ? medium_pv : large_pv).post(value);
+        } catch (std::exception& e) {
+            log_warn_printf(perf, "post_once error: %s\n", e.what());
+        }
     }
 
     /**
@@ -966,7 +963,7 @@ struct Scenario {
                                uint32_t& last_index,
                                const std::string& progress_prefix,
                                const uint32_t rate) const {
-        // Measure receive time for each individual update to avoid rate-dependent bias.
+        // Measure the receive-time for each update to avoid rate-dependent bias.
         // Previously, the code sampled 'now' once per batch, which caused transit_time to
         // appear progressively smaller within a batch as 'sent' advanced while 'now' stayed
         // constant. Higher publish rates increased batch sizes and thus exaggerated this bias.
@@ -974,6 +971,7 @@ struct Scenario {
         while (true) {
             try {
                 if (auto val = sub->pop()) {
+                    constexpr double window = 60.0;
                     // Capture receive timestamp for this specific update
                     epicsTimeGetCurrent(&now);
 
@@ -988,8 +986,7 @@ struct Scenario {
                     // Determine how much time the data was in transit
                     const double transit_time = epicsTimeDiffInSeconds(&now, &sent);
 
-                    // We should never get anything sent after end of window but out of an abundance of caution we break if so
-                    constexpr double window = 60.0;
+                    // We should never get anything sent after the end of the window, but out of an abundance of caution we break if so
                     if (elapsed >= window)
                         break;
 
@@ -999,12 +996,6 @@ struct Scenario {
                     // Another check to make sure that we are not beyond the end of the results buffer and then add the results
                     if (bucket_index < result.values.size())
                         result.add(bucket_index, transit_time, received_count, rate);
-
-                    // Update progress bar each time the bucket index changes (i.e. when we go to the next second)
-                    if (bucket_index != last_index) {
-                        last_index = bucket_index;
-                        printProgressBar(bucket_index, progress_prefix);
-                    }
                 } else
                     break;
             } catch (const client::Connected&) {
@@ -1025,9 +1016,9 @@ struct Scenario {
 std::string extractTargetArch(const std::string& path) {
     if (path.empty())
         return std::string();
-    auto terminated_by_path_separator = (path.back() == '/');
+    const auto terminated_by_path_separator = (path.back() == '/');
     const auto base_path = path.substr(0, std::string::npos - (terminated_by_path_separator ? 1 : 0));
-    std::string target_arch = basename(const_cast<char*>(base_path.c_str()));
+    const std::string target_arch = basename(const_cast<char*>(base_path.c_str()));
     const auto ta = target_arch.substr(2, std::string::npos);
     log_debug_printf(perf, "Target architecture: %s\n", ta.c_str());
     return ta;
