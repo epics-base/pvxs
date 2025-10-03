@@ -59,6 +59,8 @@ struct MonitorOp final : public ServerOp
     // is doReply() scheduled to run
     bool scheduled=false;
     bool pipeline=false; // const after setup
+    // set until first update queued
+    bool first=true;
     // finish() called
     bool finished=false;
     size_t window=0u, limit=4u;
@@ -253,7 +255,11 @@ struct ServerMonitorControl : public server::MonitorControlOp
             throw std::logic_error("Type change not allowed in post().  Recommend pvxs::Value::cloneEmpty()");
 
         // pvMask is const at this point, so no need to lock
-        bool real = testmask(val, mon->pvMask);
+        bool real = mon->first; // always post through first update
+        if(real)
+            mon->first = false;
+        else
+            real = testmask(val, mon->pvMask); // consider mask for subsequent updates
 
         Guard G(mon->lock);
         if(mon->finished)
