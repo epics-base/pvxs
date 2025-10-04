@@ -504,6 +504,12 @@ struct Result {
     }
 };
 
+struct Update {
+    Value value;
+    const epicsTimeStamp receive_time;
+    Update(const Value& value, const epicsTimeStamp &receive_time) : value {value}, receive_time{receive_time} {}
+};
+
 /**
  * Scenario: This is the configuration for a performance test scenario.
  * A scenario is one of TCP, TLS, TLS_CMS, or TLS_CMS_STAPLED.
@@ -511,7 +517,7 @@ struct Result {
  * - TLS uses a TLS connection.
  * - TLS_CMS uses a TLS connection with CMS status checking.
  * - TLS_CMS_STAPLED uses a TLS connection with CMS status checking and stapling.
- * When a scenario is created it builds the server and client.
+ * When a scenario is created, it builds the server and client.
  * It builds three sizes of payload to be used if the associated payload type is selected in the run methods.
  * The payload types are SMALL, MEDIUM, or LARGE.
  * - SMALL is a single 32 but integer wrapped in an NT scalar.
@@ -521,6 +527,7 @@ struct Result {
  */
 struct Scenario {
     epicsEvent event;
+    MPMCFIFO<Update>& update_queue;
     const ScenarioType scenario_type;
 
     // Server and client to use for each side of the performance test scenario
@@ -811,8 +818,6 @@ struct Scenario {
             // Calculate the posting cadence
             const double period = 1.0 / static_cast<double>(rate);
 
-            // 60-second window
-            uint32_t last_index = std::numeric_limits<uint32_t>::max();
             uint32_t last_percentage = std::numeric_limits<uint32_t>::max();
             const std::string progress_prefix = std::string(payload_label) + ", " + std::string(rate_label) + ", ";
 
@@ -820,7 +825,7 @@ struct Scenario {
             epicsTimeStamp start{};
             epicsTimeGetCurrent(&start);
 
-            bool signaled = false;
+            bool signaled = true;
             while (true) {
                 constexpr double window = 60.0;
                 constexpr double receive_window = 90.0;
@@ -828,7 +833,7 @@ struct Scenario {
                 // Get time now
                 epicsTimeStamp now{};
                 epicsTimeGetCurrent(&now);
-                // Get elapsed time from start of test window
+                // Get elapsed time from the start of the test window
                 double elapsed = epicsTimeDiffInSeconds(&now, &start);
 
                 // Remaining time for test
@@ -842,7 +847,7 @@ struct Scenario {
 
                 if (signaled) {
                     // An update was signaled by the monitor. Process any pending updates
-                    processPendingUpdates(result, start, last_index, progress_prefix, rate);
+                    processPendingUpdates(result, start, rate);
                 } else if (remaining_test_window >= 0.0) {
                     // this is the first time or, it's time to post a new value, and there's still time
                     postValue(payload_type);
@@ -920,6 +925,11 @@ struct Scenario {
                   .maskConnected(true)  // suppress Connected events from throwing
                   .maskDisconnected(true)
                   .event([this](client::Subscription&) {
+                      epicsTimeStamp now{};
+                      // Store the update
+                      epicsTimeGetCurrent(&now);
+                      update_queue.push({sub.get()->pop(), now});
+
                       // signal our Scenario epicsEvent when an update arrives
                       event.signal();
                   })
@@ -951,58 +961,50 @@ struct Scenario {
     }
 
     /**
-     * Process the pending updates from the monitor subscription.
-     * This method is called when the event is signaled by the monitor subscription.
-     * It processes the queue of received updates, updating the result object with the delta between the send time and
-     * the received time (transit time). It also updates the progress bar to show the progress of the test.
+     * Process the pending updates from the update_queue.
+     * This method is called when the event is signaled by the monitor subscription or when this is the first time.
+     * It processes the queue of received updates, updating the result object with the delta between the send-time and
+     * the received-time (transit time)
      *
      * @param result The result object to update with the received updates.
      * @param start The start time of the test.
-     * @param last_index The last index of the result object.
-     * @param progress_prefix The prefix to use for the progress bar.
      * @param rate The rate of the updates.
      */
-    void processPendingUpdates(Result& result,
-                               const epicsTimeStamp& start,
-                               uint32_t& last_index,
-                               const std::string& progress_prefix,
+    void processPendingUpdates(Result &result,
+                               const epicsTimeStamp &start,
                                const uint32_t rate) const {
-        // Measure the receive-time for each update to avoid rate-dependent bias.
-        // Previously, the code sampled 'now' once per batch, which caused transit_time to
-        // appear progressively smaller within a batch as 'sent' advanced while 'now' stayed
-        // constant. Higher publish rates increased batch sizes and thus exaggerated this bias.
         epicsTimeStamp now{};
-        while (true) {
+        epicsTimeGetCurrent(&now);
+
+        while (update_queue.size()) {
             try {
-                if (auto val = sub->pop()) {
-                    constexpr double window = 60.0;
-                    // Capture receive timestamp for this specific update
-                    epicsTimeGetCurrent(&now);
+                epicsTimeGetCurrent(&now);
+                const auto &&update = update_queue.pop();
+                if ( epicsTimeDiffInSeconds(&now, &update.receive_time) < 0.0 ) break;
 
-                    // Get the timestamp that shows when the data was sent
-                    const auto timestamp = val["timeStamp"];
-                    const auto received_count = val["counter"].as<uint32_t>();
-                    epicsTimeStamp sent{timestamp["secondsPastEpoch"].as<epicsUInt32>(),
-                                        timestamp["nanoseconds"].as<epicsUInt32>()};
-                    if (received_count < 0) break;
+                // Get the timestamp that shows when the data was sent
+                const auto timestamp = update.value["timeStamp"];
+                const auto received_count = update.value["counter"].as<uint32_t>();
+                epicsTimeStamp sent{timestamp["secondsPastEpoch"].as<epicsUInt32>(),
+                                    timestamp["nanoseconds"].as<epicsUInt32>()};
+                if (received_count < 0) continue;
 
-                    // Determine how much time has elapsed from the beginning of the test sequence
-                    const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
-                    // Determine how much time the data was in transit
-                    const double transit_time = epicsTimeDiffInSeconds(&now, &sent);
+                // Determine how much time has elapsed from the beginning of the test sequence
+                const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
+                // Determine how much time the data was in transit
+                const double transit_time = epicsTimeDiffInSeconds(&update.receive_time, &sent);
 
-                    // We should never get anything sent after the end of the window, but out of an abundance of caution we break if so
-                    if (elapsed >= window)
-                        break;
-
-                    // Calculate the 0-based bucket index based on the seconds since the beginning of the test
-                    const auto bucket_index = static_cast<uint32_t>(elapsed);
-
-                    // Another check to make sure that we are not beyond the end of the results buffer and then add the results
-                    if (bucket_index < result.values.size())
-                        result.add(bucket_index, transit_time, received_count, rate);
-                } else
+                // We should never get anything sent after the end of the window, but out of an abundance of caution we break if so
+                constexpr double window = 60.0;
+                if (elapsed >= window)
                     break;
+
+                // Calculate the 0-based bucket index based on the seconds since the beginning of the test
+                const auto bucket_index = static_cast<uint32_t>(elapsed);
+
+                // Another check to make sure that we are not beyond the end of the results buffer and then add the results
+                if (bucket_index < result.values.size())
+                    result.add(bucket_index, transit_time, received_count, rate);
             } catch (const client::Connected&) {
                 // ignore
             } catch (const client::Disconnect&) {
