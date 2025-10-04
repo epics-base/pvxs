@@ -521,13 +521,13 @@ struct Result {
  */
 struct Scenario {
     epicsEvent event;
-    ScenarioType scenario_type;
+    const ScenarioType scenario_type;
 
     // Server and client to use for each side of the performance test scenario
     server::Server server;
     client::Context client;
 
-    // Shared PV and small payload  the SMALL payload type test
+    // Shared PV and small payload the SMALL payload type test
     server::SharedPV small_pv;
     Value small_value;
 
@@ -550,6 +550,33 @@ struct Scenario {
     int udp_port{0};
 
     /**
+     * Constructor for the Scenario
+     * @param scenario_type The type of scenario to build.
+     * - TCP: Plain TCP connection.
+     * - TLS: TLS connection.
+     * - TLS_CMS: TLS connection with CMS status checking.
+     * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
+     */
+    explicit Scenario(const ScenarioType scenario_type) : scenario_type(scenario_type) {
+        // Configure the server
+        configureServer();
+
+        // Initialise scenarios
+        initSmallScenarios();
+        initMediumScenarios();
+        initLargeScenarios();
+
+        // Start the server
+        startServer();
+        // Configure a client that is compatible with the server
+        buildClientContext();
+    }
+
+    ~Scenario() {
+        server.stop();
+    }
+
+    /**
      * Initialise the SMALL payload type test and add its PV to the server
      */
     void initSmallScenarios() {
@@ -563,6 +590,7 @@ struct Scenario {
         s_def += {Int32("counter")};
 
         small_value = s_def.create();
+        small_value["counter"] = -1; // Set an initial value.  This will be ignored
         small_pv.open(small_value);
     }
 
@@ -599,6 +627,7 @@ struct Scenario {
             medium_value["value->ubyteValue"] = medium_data;
             medium_value["dimension"] = small_dimensions.freeze();
         }
+        medium_value["counter"] = -1; // Set an initial value.  This will be ignored
         medium_pv.open(medium_value);
     }
 
@@ -667,6 +696,7 @@ struct Scenario {
         attrs[0] = mkAttr("ColorMode", 0);  // 0 = Mono (convention)
         attrs[1] = mkAttr("BitsPerPixel", 4);
         large_value["attribute"] = attrs.freeze();
+        large_value["counter"] = -1; // Set an initial value.  This will be ignored
         large_pv.open(large_value);
     }
 
@@ -702,43 +732,16 @@ struct Scenario {
     }
 
     /**
-     * Start the client and configure it to use the server's effective ports.
-     * The client is configured to use the isolated configuration and the TLS keychain file is set to the client1.p12
+     * Build the client and configure it to use the server's effective ports.
+     * The client is configured to use the isolated configuration, and the TLS keychain file is set to the client1.p12
      * file that has been generated for the other tls tests.
      */
-    void startClient() {
+    void buildClientContext() {
         {
             auto cli_conf = server.clientConfig();
             cli_conf.tls_keychain_file = "client1.p12";
             client = cli_conf.build();
         }
-    }
-
-    /**
-     * Constructor for the Scenario
-     * @param scenario_type The type of scenario to build.
-     * - TCP: Plain TCP connection.
-     * - TLS: TLS connection.
-     * - TLS_CMS: TLS connection with CMS status checking.
-     * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
-     */
-    explicit Scenario(ScenarioType scenario_type) : scenario_type(scenario_type) {
-        // Configure the server
-        configureServer();
-
-        // Initialise scenarios
-        initSmallScenarios();
-        initMediumScenarios();
-        initLargeScenarios();
-
-        // Start the server
-        startServer();
-        // Configure a client that is compatible with the server
-        startClient();
-    }
-
-    ~Scenario() {
-        server.stop();
     }
 
     /**
@@ -884,9 +887,9 @@ struct Scenario {
      * Start a monitor subscription for the given payload type.
      * The PV to monitor is based on the payload type.
      * @param payload_type The type of payload to monitor.
+     * @param rate the rate at which we expect to get
      */
     void startMonitor(const PayloadType payload_type, const uint32_t rate) {
-        // Set up monitor subscription and consume updates using epicsEvent pattern
         const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
                               : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
                                                              : "PERF:SMALL";
@@ -909,6 +912,7 @@ struct Scenario {
                 break;
         }
 
+        // Set up a subscription monitor
         sub = client.monitor(pv_name)
                   .record("queueSize", queue_size)
                   .record("pipeline", true)
@@ -980,6 +984,7 @@ struct Scenario {
                     const auto received_count = val["counter"].as<uint32_t>();
                     epicsTimeStamp sent{timestamp["secondsPastEpoch"].as<epicsUInt32>(),
                                         timestamp["nanoseconds"].as<epicsUInt32>()};
+                    if (received_count < 0) break;
 
                     // Determine how much time has elapsed from the beginning of the test sequence
                     const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
