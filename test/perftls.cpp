@@ -526,9 +526,9 @@ struct Update {
  * It also builds the shared PVs for each of the payload types: PERF:SMALL, PERF:MEDIUM, or PERF:LARGE.
  */
 struct Scenario {
-    epicsEvent event;
-    MPMCFIFO<Update>& update_queue;
     const ScenarioType scenario_type;
+    epicsEvent event;
+    MPMCFIFO<Update> update_queue;
 
     // Server and client to use for each side of the performance test scenario
     server::Server server;
@@ -925,10 +925,10 @@ struct Scenario {
                   .maskConnected(true)  // suppress Connected events from throwing
                   .maskDisconnected(true)
                   .event([this](client::Subscription&) {
-                      epicsTimeStamp now{};
-                      // Store the update
-                      epicsTimeGetCurrent(&now);
-                      update_queue.push({sub.get()->pop(), now});
+                      // Queue the update
+                      epicsTimeStamp receive_time{};
+                      epicsTimeGetCurrent(&receive_time);
+                      update_queue.push({sub.get()->pop(), receive_time});
 
                       // signal our Scenario epicsEvent when an update arrives
                       event.signal();
@@ -972,14 +972,14 @@ struct Scenario {
      */
     void processPendingUpdates(Result &result,
                                const epicsTimeStamp &start,
-                               const uint32_t rate) const {
+                               const uint32_t rate) {
         epicsTimeStamp now{};
         epicsTimeGetCurrent(&now);
 
         while (update_queue.size()) {
             try {
                 epicsTimeGetCurrent(&now);
-                const auto &&update = update_queue.pop();
+                const auto update = update_queue.pop();
                 if ( epicsTimeDiffInSeconds(&now, &update.receive_time) < 0.0 ) break;
 
                 // Get the timestamp that shows when the data was sent

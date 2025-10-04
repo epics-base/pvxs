@@ -285,13 +285,23 @@ public:
     /** Remove an element from the queue.
      *
      * Blocks while queue is empty.
+     *
+     * Backward-compatibility note:
+     * - Public API and semantics are unchanged. This method still returns a T by value
+     *   and wakes writers/readers exactly as before.
+     * - The implementation move-constructs the return value directly from the front() entry
+     *   instead of default-constructing then move-assigning. This removes an incidental
+     *   requirement that T be default-constructible and move-assignable. Only being
+     *   move-constructible is required, which is a relaxation and thus backward compatible
+     *   for previously working types. Types that worked before will continue to work.
      */
     T pop() {
         bool wakeupW, wakeupR;
-        T ret;
-        {
+        // move-construct the return value directly from the queue entry to avoid
+        // requiring T to be default-constructible or move-assignable
+        T ret = [&]() -> T {
             Guard G(lock);
-            // wait for queue to become not empty
+            // wait for the queue to become not empty
             while(Q.empty()) {
                 nreaders++;
                 {
@@ -300,13 +310,14 @@ public:
                 }
                 nreaders--;
             }
-            // wakeup a writer since the queue will have an empty entry
+            // wake up a writer since the queue will have an empty entry
             wakeupW = nwriters;
-            ret = std::move(Q.front());
+            T tmp(std::move(Q.front()));
             Q.pop_front();
             // wakeup next reader if entries remain
             wakeupR = !Q.empty() && nreaders;
-        }
+            return tmp;
+        }();
         if(wakeupR)
             notifyR.signal();
         if(wakeupW)
