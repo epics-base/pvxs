@@ -826,9 +826,10 @@ struct Scenario {
             epicsTimeGetCurrent(&start);
 
             bool signaled = true; // Force first time processing of initial value to remove connection delay
+            auto first_time = true;
             while (true) {
                 constexpr double window = 60.0;
-                constexpr double receive_window = 65.0;
+                constexpr double receive_window = window * 1.0 / 0.9; // make that 90% of total `recieve_window`
 
                 // Get time now
                 epicsTimeStamp now{};
@@ -842,13 +843,14 @@ struct Scenario {
                 double remaining_wait_time = receive_window - elapsed;
 
                 // Check if the test window plus extra wait time has expired
-                // TODO stop as soon as we've got the expected count
-                if (counter >= (static_cast<double>(rate) * elapsed) || remaining_wait_time < 0.0)
+                if (counter >= (static_cast<double>(rate) * window) || remaining_wait_time < 0.0)
                     break;
 
                 processPendingUpdates(result, start, rate);
-                if (!signaled && remaining_test_window >= 0.0) {
-                    // If this is the first time or, it's the time to post a new value, and there's still time
+
+                // If this is the first time or, it's the time to post a new value, and there's still time
+                if (first_time || (!signaled && remaining_test_window >= 0.0)) {
+                    first_time = false;
                     postValue(payload_type);
                     // Poll network stats after posting too
                     sniffer.poll();
@@ -1269,8 +1271,8 @@ int main(int argc, char* argv[]) {
     // Run selected scenarios
     for (auto scenario_type : scenarios_sel) {
         pvxs::Scenario scenario(scenario_type);
-        std::cout << "Connection Type, PVAccess Payload, Tx Rate, Throughput, "
-                  << "Min(ms), Max,(ms) CPU(% core), Memory(MB), Network Load(bytes), "
+        std::cout << "Connection Type, PVAccess Payload, Tx Rate(Hz), Throughput(bps), "
+                  << "Min(ms), Max(ms), CPU(% core), Memory(MB), Network Load(bytes), "
                   << " 1, 2, 3, 4, 5, 6, 7, 8, 9,10,"
                   << "11,12,13,14,15,16,17,18,19,20,"
                   << "21,22,23,24,25,26,27,28,29,30,"
