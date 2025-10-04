@@ -413,7 +413,7 @@ struct Result {
         Guard G(lock);
         // Get the actual number of updates that have been received in this second, and increment the count
         const auto count = counts[index]++;
-        // Calculate moving average of transmission times by incorporating the new value with the running average
+        // Calculate the moving average of transmission times by incorporating the new value with the running average
         values[index] = (values[index] * count + value) / (count + 1);
         // Update max and min transmission times
         if (value < min)
@@ -550,7 +550,7 @@ struct Scenario {
     std::shared_ptr<client::Subscription> sub;
 
     // Counter for the updates
-    uint32_t counter{0};
+    int32_t counter{0};
 
     // Ports for the server and client
     int tcp_port{0};
@@ -828,7 +828,7 @@ struct Scenario {
             bool signaled = true; // Force first time processing of initial value to remove connection delay
             while (true) {
                 constexpr double window = 60.0;
-                constexpr double receive_window = 90.0;
+                constexpr double receive_window = 65.0;
 
                 // Get time now
                 epicsTimeStamp now{};
@@ -842,20 +842,19 @@ struct Scenario {
                 double remaining_wait_time = receive_window - elapsed;
 
                 // Check if the test window plus extra wait time has expired
-                if (remaining_wait_time <= 0.0)
+                // TODO stop as soon as we've got the expected count
+                if (counter >= (static_cast<double>(rate) * elapsed) || remaining_wait_time < 0.0)
                     break;
 
-                if (signaled) {
-                    // An update was signaled by the monitor. Process any pending updates
-                    processPendingUpdates(result, start, rate);
-                } else if (remaining_test_window >= 0.0) {
-                    // this is the first time or, it's time to post a new value, and there's still time
+                processPendingUpdates(result, start, rate);
+                if (!signaled && remaining_test_window >= 0.0) {
+                    // If this is the first time or, it's the time to post a new value, and there's still time
                     postValue(payload_type);
                     // Poll network stats after posting too
                     sniffer.poll();
                 }
 
-                // Determine time until next post
+                // Determine the time until the next post
                 epicsTimeGetCurrent(&now);
                 elapsed = epicsTimeDiffInSeconds(&now, &start);
                 double until_next = period - std::fmod(elapsed, period);
@@ -921,17 +920,39 @@ struct Scenario {
         sub = client.monitor(pv_name)
                   .record("queueSize", queue_size)
                   .record("pipeline", true)
-                  .record("ackAny", std::string("50%"))
                   .maskConnected(true)  // suppress Connected events from throwing
                   .maskDisconnected(true)
                   .event([this](client::Subscription&) {
-                      // Queue the update
+                      // Drain all currently queued updates from the subscription and enqueue locally.
+                      // Important: only signaling when the client queue transitions from empty->non-empty.
+                      // If we leave entries in the subscription queue, further events may not be delivered.
+                      size_t n_enqueued = 0u;
                       epicsTimeStamp receive_time{};
                       epicsTimeGetCurrent(&receive_time);
-                      update_queue.push({sub.get()->pop(), receive_time});
 
-                      // signal our Scenario epicsEvent when an update arrives
-                      event.signal();
+                      while (true) {
+                          try {
+                              const auto val = sub->pop();
+                              if (!val) break; // queue empty
+                              update_queue.push(Update{val, receive_time});
+                              ++n_enqueued;
+                          } catch (const client::Connected&) {
+                              // ignore connection state notifications
+                              continue;
+                          } catch (const client::Disconnect&) {
+                              // ignore disconnection notifications; loop will break on empty
+                              continue;
+                          } catch (const std::exception& e) {
+                              // log and stop draining to avoid tight loop on errors
+                              log_warn_printf(perf, "Monitor pop() error: %s\n", e.what());
+                              break;
+                          }
+                      }
+
+                      if (n_enqueued) {
+                          // signal our Scenario epicsEvent once after enqueueing one or more updates
+                          event.signal();
+                      }
                   })
                   .exec();
     }
@@ -980,11 +1001,10 @@ struct Scenario {
             try {
                 epicsTimeGetCurrent(&now);
                 const auto update = update_queue.pop();
-                if ( epicsTimeDiffInSeconds(&now, &update.receive_time) < 0.0 ) break;
 
                 // Get the timestamp that shows when the data was sent
                 const auto timestamp = update.value["timeStamp"];
-                const auto received_count = update.value["counter"].as<uint32_t>();
+                const auto received_count = update.value["counter"].as<int32_t>();
                 epicsTimeStamp sent{timestamp["secondsPastEpoch"].as<epicsUInt32>(),
                                     timestamp["nanoseconds"].as<epicsUInt32>()};
                 if (received_count < 0) continue;
