@@ -825,7 +825,7 @@ struct Scenario {
             epicsTimeStamp start{};
             epicsTimeGetCurrent(&start);
 
-            bool signaled = true;
+            bool signaled = true; // Force first time processing of initial value to remove connection delay
             while (true) {
                 constexpr double window = 60.0;
                 constexpr double receive_window = 90.0;
