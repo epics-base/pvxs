@@ -825,6 +825,12 @@ struct Scenario {
             epicsTimeStamp start{};
             epicsTimeGetCurrent(&start);
 
+            // Connect and get first update before test starts
+            processPendingUpdates(result, start, rate);
+
+            sleep(2); // quiesce before test
+            epicsTimeGetCurrent(&start);
+
             bool signaled = true; // Force first time processing of initial value to remove connection delay
             auto first_time = true;
             while (true) {
@@ -934,16 +940,12 @@ struct Scenario {
 
                       while (true) {
                           try {
-                              const auto val = sub->pop();
-                              if (!val) break; // queue empty
-                              update_queue.push(Update{val, receive_time});
+                              const auto value = sub->pop();
+                              if (!value) break; // queue empty
+                              update_queue.push(Update{value, receive_time});
                               ++n_enqueued;
                           } catch (const client::Connected&) {
-                              // ignore connection state notifications
-                              continue;
                           } catch (const client::Disconnect&) {
-                              // ignore disconnection notifications; loop will break on empty
-                              continue;
                           } catch (const std::exception& e) {
                               // log and stop draining to avoid tight loop on errors
                               log_warn_printf(perf, "Monitor pop() error: %s\n", e.what());
