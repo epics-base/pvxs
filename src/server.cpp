@@ -172,8 +172,8 @@ client::Config Server::clientConfig(const Config &server_config) {
     ret.udp_port = server_config.udp_port;
     ret.tcp_port = server_config.tcp_port;
     ret.interfaces = server_config.interfaces;
-    ret.addressList = server_config.beaconDestinations;
-    ret.autoAddrList = server_config.auto_beacon;
+    ret.addressList = server_config.interfaces;
+    ret.autoAddrList = false;
 
     ret.tls_port = server_config.tls_port;
     ret.tls_disabled = server_config.tls_disabled;
@@ -599,7 +599,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 #endif
 
             for (const auto& addr : effective.beaconDestinations) {
-                beaconDest.emplace_back(addr.c_str(), nullptr, effective.udp_port);
+                beaconDest.emplace_back(addr.c_str(), &effective);
                 log_debug_printf(serversetup, "Will send beacons to %s\n", std::string(SB() << beaconDest.back()).c_str());
             }
     });
