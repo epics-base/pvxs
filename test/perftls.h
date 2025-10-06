@@ -228,16 +228,17 @@ struct UpdateConsumer final : epicsThreadRunable {
     const uint32_t rate;
     epicsTimeStamp start;
     std::shared_ptr<PortSniffer> sniffer;
-    const std::string progress_prefix;
+    const std::string payload_label;
+    const std::string rate_label;
     uint32_t prior_percentage = std::numeric_limits<uint32_t>::max();
     const double window = 60.0;
     const double receive_window = window * 1.0 / 0.9;
 
-    UpdateConsumer(Scenario &s, Result & result, const uint32_t rate, const epicsTimeStamp &start, const std::shared_ptr<PortSniffer> &sniffer, const std::string& progress_prefix)
-        : self{s}, result{result}, rate{rate}, start{start}, sniffer{sniffer}, progress_prefix{progress_prefix} {}
+    UpdateConsumer(Scenario &s, Result & result, const uint32_t rate, const epicsTimeStamp &start, const std::shared_ptr<PortSniffer> &sniffer, const std::string &payload_label, const std::string &rate_label)
+        : self{s}, result{result}, rate{rate}, start{start}, sniffer{sniffer}, payload_label{payload_label}, rate_label{rate_label} {}
 
     void run() override;
-    void printProgressBar(uint32_t progress_percentage, const std::string& prefix) ;
+    void printProgressBar(uint32_t progress_percentage) ;
 
 };
 

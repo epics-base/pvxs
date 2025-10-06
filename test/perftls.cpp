@@ -199,45 +199,48 @@ int32_t Result::add(const double value) {
  */
 void Result::print(const ScenarioType scenario_type, const PayloadType payload_type, const std::string &payload_label,
     const uint32_t rate, const std::string &rate_label, const double cpu_percent, const double rss_mb, uint64_t bytes_captured) const {
-    // Display Data
-    std::cout <<"                                                                                                                              \r";
+    // Wipe the progress bar
+    std::cout << std::right << std::setw(155) <<" \r";
 
     // 1) Connection Type
-    std::cout << (scenario_type == TLS_CMS_STAPLED ? "TLS_CMS_STAPLED, "
-                  : scenario_type == TLS_CMS       ? "TLS_CMS, "
-                  : scenario_type == TLS           ? "TLS, "
-                                                   : "TCP, ");
-    std::string throughput_units = "bps";
+    std::cout  << std::right << std::setw(15)
+               << (scenario_type == TLS_CMS_STAPLED ? "TLS_CMS_STAPLED"
+                  : scenario_type == TLS_CMS       ? "TLS_CMS"
+                  : scenario_type == TLS           ? "TLS"
+                                                   : "TCP")
+               << ", ";
+
+    // 2) PVAccess Payload
+    std::cout << std::right << std::setw(11) << payload_label << ", ";
+
+    // 3) Tx Rate
+    std::cout << std::right << std::setw(11) << rate_label << ", ";
+
+    // 4) Throughput
+    std::string throughput_units = " bps";
     auto throughput = (payload_type == LARGE_2MB ? 2000000.0 : payload_type == MEDIUM_1KB ? 1000.0 : 4.0) * 8.0 * static_cast<double>(rate);
     if      ( throughput >= 1000000000 ) { throughput /= 1000000000; throughput_units = "Gbps"; }
     else if ( throughput >= 1000000    ) { throughput /= 1000000;    throughput_units = "Mbps"; }
     else if ( throughput >= 1000       ) { throughput /= 1000;       throughput_units = "Kbps"; }
-
-    // 2) PVAccess Payload
-    std::cout << payload_label << ", ";
-
-    // 3) Tx Rate
-    std::cout << rate_label << ", ";
-
-    // 4) Throughput
-    std::cout << throughput << throughput_units << ", ";
+    std::cout << std::right << std::setw(11) << throughput << throughput_units << ", ";
 
     // 5) n, minimum / maximum transmission time
-    std::cout << n << ", ";
-    if (min < std::numeric_limits<double>::max()) std::cout << min << ", "; else std::cout << " , ";
-    if (max > std::numeric_limits<double>::lowest()) std::cout << max << ", "; else std::cout << " ,  ";
+    std::cout << std::right << std::setw(8) << n << ", ";
+    if (min < std::numeric_limits<double>::max())    std::cout << std::right << std::setw(10) << min*1000.0 << ", "; else std::cout << " , ";
+    if (max > std::numeric_limits<double>::lowest()) std::cout << std::right << std::setw(10) << max*1000.0 << ", "; else std::cout << " ,  ";
 
     // 6) Mean, StdDev
-    std::cout << mean << ", " << stddev() <<  ", ";
+    std::cout << std::right << std::setw(10) << mean*1000.0 << ", ";
+    std::cout << std::right << std::setw(10) << stddev()*1000.0 <<  ", ";
 
     // 7) CPU% of 1 Core
-    std::cout << cpu_percent << ", " ;
+    std::cout << std::right << std::setw(12) << cpu_percent << ", " ;
 
     // 8) Memory used
-    std::cout << rss_mb << ", " ;
+    std::cout << std::right << std::setw(12) << rss_mb << ", " ;
 
     // 9) Network load
-    std::cout << bytes_captured << ", ";
+    std::cout << std::right << std::setw(19) << bytes_captured << ", ";
 }
 
 void UpdateProducer::run() {
@@ -252,7 +255,10 @@ void UpdateProducer::run() {
         epicsTimeGetCurrent(&now);
         const double elapsed_since_start = epicsTimeDiffInSeconds(&now, &start);
         const double next_emission_secs_from_start = static_cast<double>(counter + 1)  * time_per_update ;
-        const auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
+        auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
+        // while (time_till_next_emission > 1e-3) {
+        //     epicsThreadSleep(1e-3); time_till_next_emission -= 1e-3;
+        // }
         if (time_till_next_emission > 0.0) epicsThreadSleep(time_till_next_emission);
     }
 }
@@ -276,7 +282,7 @@ void UpdateConsumer::run() {
         const auto progress_percentage = elapsed_since_start >= window ? 100.00 : static_cast<uint32_t>(100 * (elapsed_since_start / window));
         if (progress_percentage != prior_percentage) {
             prior_percentage = progress_percentage;
-            printProgressBar(progress_percentage, progress_prefix);
+            printProgressBar(progress_percentage);
         }
 
         // Poll network capture
@@ -292,9 +298,24 @@ void UpdateConsumer::run() {
 /**
  * Print a progress bar to the console
  * @param progress_percentage The percentage done
- * @param prefix The prefix to print before the progress bar
  */
-void UpdateConsumer::printProgressBar(uint32_t progress_percentage, const std::string& prefix) {
+void UpdateConsumer::printProgressBar(uint32_t progress_percentage) {
+    // 1) Connection Type
+    std::ostringstream oss;
+    oss << std::right << std::setw(15)
+        << ( self.scenario_type == TLS_CMS_STAPLED ? "TLS_CMS_STAPLED"
+           : self.scenario_type == TLS_CMS         ? "TLS_CMS"
+           : self.scenario_type == TLS             ? "TLS"
+                                                   : "TCP")
+        << ", "
+
+    // 2) PVAccess Payload
+    << std::right << std::setw(11) << payload_label << ", "
+
+    // 3) Tx Rate
+    << std::right << std::setw(11) << rate_label << ": ";
+    auto prefix = oss.str();
+
     if (progress_percentage > 100u)
         progress_percentage = 100u;
     std::string bar;
@@ -329,20 +350,20 @@ inline std::string toUpperStr(std::string s) {
  * @return True if the string was parsed successfully, false otherwise
  */
 bool parseScenarioType(const std::string& name, ScenarioType& out) {
-    auto n = toUpperStr(name);
-    if (n == "TCP") {
+    const auto uppercase_name = toUpperStr(name);
+    if (uppercase_name == "TCP") {
         out = TCP;
         return true;
     }
-    if (n == "TLS") {
+    if (uppercase_name == "TLS") {
         out = TLS;
         return true;
     }
-    if (n == "TLS_CMS" || n == "TLS-CMS" || n == "TLSCMS") {
+    if (uppercase_name == "TLS_CMS" || uppercase_name == "TLS-CMS" || uppercase_name == "TLSCMS") {
         out = TLS_CMS;
         return true;
     }
-    if (n == "TLS_CMS_STAPLED" || n == "TLS-CMS-STAPLED" || n == "TLSSTAPLED" || n == "TLSCMSSTAPLED") {
+    if (uppercase_name == "TLS_CMS_STAPLED" || uppercase_name == "TLS-CMS-STAPLED" || uppercase_name == "TLSSTAPLED" || uppercase_name == "TLSCMSSTAPLED") {
         out = TLS_CMS_STAPLED;
         return true;
     }
@@ -594,16 +615,17 @@ void Scenario::buildClientContext() {
  * @param payload_type The type of payload to test.
  */
 void Scenario::run(const ScenarioType &scenario_type, PayloadType payload_type) {
-    const auto payload_label = (payload_type == LARGE_2MB    ? "Large(2MB)"
-                                : payload_type == MEDIUM_1KB ? "Medium(1KB)"
-                                                             : "SMALL(4B)");
-    Scenario {scenario_type}.run(payload_type, 1, payload_label, "  1 Hz");
-    Scenario {scenario_type}.run(payload_type, 10, payload_label, " 10 Hz");
-    Scenario {scenario_type}.run(payload_type, 100, payload_label, "100 Hz");
-    Scenario {scenario_type}.run(payload_type, 1000, payload_label, "  1KHz");
+    const auto payload_label =
+        (payload_type == LARGE_2MB  ? " LARGE(2MB)"
+       : payload_type == MEDIUM_1KB ? "MEDIUM(1KB)"
+       :                              "  SMALL(4B)");
+    Scenario {scenario_type}.run(payload_type,           1, payload_label, "   1Hz");
+    Scenario {scenario_type}.run(payload_type,          10, payload_label, "  10Hz");
+    Scenario {scenario_type}.run(payload_type,         100, payload_label, " 100Hz");
+    Scenario {scenario_type}.run(payload_type,        1000, payload_label, "  1KHz");
     if (payload_type != LARGE_2MB) {
-        Scenario {scenario_type}.run(payload_type, 10000, payload_label, " 10KHz");
-        Scenario {scenario_type}.run(payload_type, 100000, payload_label, "100KHz");
+        Scenario {scenario_type}.run(payload_type,   10000, payload_label, " 10KHz");
+        Scenario {scenario_type}.run(payload_type,  100000, payload_label, "100KHz");
         Scenario {scenario_type}.run(payload_type, 1000000, payload_label, "  1MHz");
     }
 }
@@ -666,7 +688,7 @@ void Scenario::run(const PayloadType payload_type,
 
         // Create and start threads
         UpdateProducer update_producer{*this, payload_type, rate, start};
-        UpdateConsumer update_consumer{*this, result, rate,  start, sniffer, std::string(payload_label) + ", " + std::string(rate_label) + ", "};
+        UpdateConsumer update_consumer{*this, result, rate,  start, sniffer, payload_label, rate_label};
 
         epicsThread consumer_thread(update_consumer, "PERF-Consumer", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityMedium);
 
@@ -728,14 +750,14 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
                   // Drain all currently queued updates from the subscription and enqueue locally.
                   // Important: only signaling when the client queue transitions from empty->non-empty.
                   // If we leave entries in the subscription queue, further events may not be delivered.
-                  epicsTimeStamp receive_time{};
-                  epicsTimeGetCurrent(&receive_time);
-
                   while (true) {
                       try {
-                          const auto value = sub->pop();
-                          if (!value) break; // queue empty
-                          update_queue.push(Update{value, receive_time});
+                          while (const auto value = sub->pop()) {
+                              epicsTimeStamp receive_time{};
+                              epicsTimeGetCurrent(&receive_time);
+                              update_queue.push(Update{value, receive_time});
+                          }
+                          break;
                       } catch (const client::Connected&) {
                       } catch (const client::Disconnect&) {
                       } catch (const std::exception& e) {
@@ -822,6 +844,7 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
         } catch (const client::Disconnect&) {
             // ignore
         }
+        epicsThreadSleep(-1);
     }
     return next_count;
 }
@@ -1049,8 +1072,18 @@ int main(int argc, char* argv[]) {
 
     // Run selected scenarios
     for (auto scenario_type : scenarios_sel) {
-        std::cout << "Connection Type, PVAccess Payload, Tx Rate(Hz), Throughput(bps), "
-                  << "N, Min(ms), Max(ms), Mean(ms), StdDev(ms), CPU(% core), Memory(MB), Network Load(bytes), "
+        std::cout << std::right << std::setw(15) << "Connection Type" << ", "
+                  << std::right << std::setw(11) << "Payload" << ", "
+                  << std::right << std::setw(11) << "Tx Rate(Hz)" << ", "
+                  << std::right << std::setw(15) << "Throughput(bps)" << ", "
+                  << std::right << std::setw( 8) << "N" << ", "
+                  << std::right << std::setw(10) << "Min(ms)" << ", "
+                  << std::right << std::setw(10) << "Max(ms" << ", "
+                  << std::right << std::setw(10) << "Mean(ms)" << ", "
+                  << std::right << std::setw(10) << "StdDev(ms)" << ", "
+                  << std::right << std::setw(12) << "CPU(% core)" << ", "
+                  << std::right << std::setw(12) << "Memory(MB)" << ", "
+                  << std::right << std::setw(19) << "Network Load(bytes)"
                   << std::endl;
 
         for (auto payload_type : payloads_sel) {
@@ -1059,8 +1092,8 @@ int main(int argc, char* argv[]) {
             } else {
                 const std::string payload_label =
                     (payload_type == LARGE_2MB
-                         ? "Large(4MB)"
-                         : (payload_type == MEDIUM_1KB ? "Medium(1KB)" : "Small(4B)"));
+                         ? "LARGE(4MB)"
+                         : (payload_type == MEDIUM_1KB ? "MEDIUM(1KB)" : "SMALL(4B)"));
                 for (auto rate : opt_rates) {
                     const std::string speed_label = formatRateLabel(rate);
                     Scenario scenario(scenario_type);
