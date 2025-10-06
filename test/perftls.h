@@ -216,6 +216,15 @@ struct Scenario {
     int32_t processPendingUpdates(Result &result, const epicsTimeStamp &start);
 };
 
+struct SubscriptionMonitor final : epicsThreadRunable {
+    Scenario &self;
+    const PayloadType payload;
+    const uint32_t rate;
+    SubscriptionMonitor(Scenario &scenario, const PayloadType payload, uint32_t rate)
+        : self{scenario}, payload{payload}, rate{rate} {}
+    void run();
+};
+
 struct UpdateProducer final {
     Scenario &self;
     PayloadType payload;
@@ -241,8 +250,8 @@ struct UpdateConsumer final : epicsThreadRunable {
     const double window = 60.0;
     const double receive_window = window * 1.0 / 0.9;
 
-    UpdateConsumer(Scenario &s, Result & result, const uint32_t rate, const epicsTimeStamp &start, const std::shared_ptr<PortSniffer> &sniffer, const std::string &payload_label, const std::string &rate_label)
-        : self{s}, result{result}, rate{rate}, start{start}, sniffer{sniffer}, payload_label{payload_label}, rate_label{rate_label} {}
+    UpdateConsumer(Scenario &scenario, Result & result, const uint32_t rate, const epicsTimeStamp &start, const std::shared_ptr<PortSniffer> &sniffer, const std::string &payload_label, const std::string &rate_label)
+        : self{scenario}, result{result}, rate{rate}, start{start}, sniffer{sniffer}, payload_label{payload_label}, rate_label{rate_label} {}
 
     void run() override;
     void printProgressBar(double progress_percentage) ;

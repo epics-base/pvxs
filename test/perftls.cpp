@@ -83,6 +83,7 @@ static double wireSizeBytes(const Value& val) {
 
 DEFINE_LOGGER(perflog, "pvxs.perf");
 DEFINE_LOGGER(producerlog, "pvxs.perf.scenario.producer");
+DEFINE_LOGGER(consumerlog, "pvxs.perf.scenario.consumer");
 
 using namespace pvxs::members;
 
@@ -255,6 +256,20 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
     std::cout << std::right << std::setw(19) << bytes_captured;
 }
 
+void SubscriptionMonitor::run() {
+    // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
+    self.startMonitor(payload, rate);
+
+    auto end = std::time(nullptr);
+    end += 67; // add 10% extra time to read everything
+
+    // Wait until everything has finished
+    while (end > std::time(nullptr)) {
+        epicsThreadSleep(-1);
+        if (self.stop_early.load(std::memory_order_relaxed)) break;
+    }
+}
+
 void UpdateProducer::run() {
     const auto total = static_cast<uint32_t>(rate * window);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
@@ -309,6 +324,8 @@ void UpdateConsumer::run() {
         const auto time_till_next_tick = next_tick_secs_from_start - elapsed_since_start;
         if (time_till_next_tick > 0.0) epicsThreadSleep(time_till_next_tick);
     }
+    // Flag everyone else to stop early too
+    self.stop_early.store(true, std::memory_order_relaxed);
 }
 
 /**
@@ -345,7 +362,7 @@ void UpdateConsumer::printProgressBar(double progress_percentage) {
     bar.reserve(170);
     bar += prefix;
     bar += "▏";  // left cap
-    const double bar_len = 164.0 - static_cast<double>(prefix.size()) - 2.0;
+    const double bar_len = 167.0 - static_cast<double>(prefix.size()) - 2.0;
     uint32_t i;
     for (i = 0; i < 0.01 * progress_percentage * bar_len; ++i)
         bar += "█";
@@ -688,26 +705,26 @@ void Scenario::run(const PayloadType payload_type,
     const double c0 = procCPUSeconds();
     std::uint64_t bytes_captured = 0;
     {
+        // Three-threaded execution
+        // - Producer: posts updates on a fixed cadence (Main thread)
+        // - Monitor: responds to subscription updates and posts to consumer's queue
+        // - Consumer: drains monitor updates, computes transit times, polls sniffer, and prints progress on a fixed cadence
+
         // This is used to collect the network traffic appearing on the test ports.
         const auto sniffer = std::make_shared<PortSniffer>(tcp_port, udp_port);
         sniffer->startCapture();
 
         // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
-        startMonitor(payload_type, rate);
+        SubscriptionMonitor subscription_monitor{*this, payload_type, rate};
+        epicsThread subscription_thread(subscription_monitor, "PERF-Monitor", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityHigh);
+        subscription_thread.start();
 
-        // Drain any initial connection update
+        // quiesce before test
+        epicsThreadSleep(1.0);
+
+        // Mark the start time for this sequence, and quiesce before the test
         epicsTimeStamp start{};
         epicsTimeGetCurrent(&start);
-        epicsThreadSleep(1.0);
-        processPendingUpdates(result, start);
-
-        // Mark the start time for this sequence and quiesce before the test
-        epicsThreadSleep(1.0);
-        epicsTimeGetCurrent(&start);
-
-        // Two-threaded execution
-        // - Producer: posts updates on a fixed cadence
-        // - Consumer: drains monitor updates, computes transit times, polls sniffer, and prints progress on a fixed cadence
 
         // Reset the early-stop flag for this run
         stop_early.store(false, std::memory_order_relaxed);
@@ -716,12 +733,13 @@ void Scenario::run(const PayloadType payload_type,
         UpdateProducer update_producer{*this, payload_type, rate, start};
         UpdateConsumer update_consumer{*this, result, rate,  start, sniffer, payload_label, rate_label};
 
-        epicsThread consumer_thread(update_consumer, "PERF-Consumer", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityMedium);
+        epicsThread consumer_thread(update_consumer, "PERF-Consumer", epicsThreadGetStackSize(epicsThreadStackBig), epicsThreadPriorityMedium);
 
         consumer_thread.start();   // Run in the background
         update_producer.run();     // Block this thread
 
         // Wait for consumer to complete
+        subscription_thread.exitWait();
         consumer_thread.exitWait();
 
         // Final drain/capture
@@ -766,34 +784,23 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
     }
 
     // Set up a subscription monitor
-    sub = client.monitor(pv_name)
-              .record("queueSize", queue_size)
-              .record("pipeline", true)
-              .record("ackAny", std::string("50%"))
-              .maskConnected(true)  // suppress Connected events from throwing
-              .maskDisconnected(true)
-              .event([this](client::Subscription&) {
-                  // Drain all currently queued updates from the subscription and enqueue locally.
-                  // Important: only signaling when the client queue transitions from empty->non-empty.
-                  // If we leave entries in the subscription queue, further events may not be delivered.
-                  while (true) {
-                      try {
-                          while (const auto value = sub->pop()) {
-                              epicsTimeStamp receive_time{};
-                              epicsTimeGetCurrent(&receive_time);
-                              update_queue.push(Update{value, receive_time});
-                          }
-                          break;
-                      } catch (const client::Connected&) {
-                      } catch (const client::Disconnect&) {
-                      } catch (const std::exception& e) {
-                          // log and stop draining to avoid tight loop on errors
-                          log_warn_printf(consumerlog, "Monitor pop() error: %s\n", e.what());
-                          break;
-                      }
-                  }
-              })
-              .exec();
+    sub = client.monitor(pv_name).record("queueSize", queue_size).record("pipeline", true).
+        record("ackAny", std::string("50%")).maskConnected(true) // suppress Connected events from throwing
+        .maskDisconnected(true).event([this](client::Subscription &) {
+            // Drain all currently queued updates from the subscription and enqueue locally.
+            // Important: only signaling when the client queue transitions from empty->non-empty.
+            // If we leave entries in the subscription queue, further events may not be delivered.
+            try {
+                while (const auto value = sub->pop()) {
+                    epicsTimeStamp receive_time{};
+                    epicsTimeGetCurrent(&receive_time);
+                    update_queue.push(Update{value, receive_time});
+                }
+            } catch (const std::exception &e) {
+                // log and stop draining to avoid tight loop on errors
+                log_warn_printf(consumerlog, "Monitor pop() error: %s\n", e.what());
+            }
+        }).exec();
 }
 
 /**
@@ -852,6 +859,7 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
             if (received_count != count) {
                 // Stop this test early on the first detected-drop
                 stop_early.store(true, std::memory_order_relaxed);
+                break;
             }
 
             // Determine how much time has elapsed from the beginning of the test sequence
@@ -1102,8 +1110,11 @@ int main(int argc, char* argv[]) {
     std::cout << "PVACMS Ready" << std::endl;
 
     // Run selected scenarios
+    auto first = true;
     for (auto scenario_type : scenarios_sel) {
-        std::cout << std::right << std::setw(15) << "Connection Type" << ", "
+        if (first)
+            std::cout
+                  << std::right << std::setw(15) << "Connection Type" << ", "
                   << std::right << std::setw(13) << "Payload" << ", "
                   << std::right << std::setw(13) << "Tx Rate(Hz)" << ", "
                   << std::right << std::setw(13) << "Throughput" << ", "
@@ -1116,6 +1127,7 @@ int main(int argc, char* argv[]) {
                   << std::right << std::setw(12) << "Memory(MB)" << ", "
                   << std::right << std::setw(19) << "Network Load(bytes)"
                   << std::endl;
+        first = false;
 
         for (auto payload_type : payloads_sel) {
             if (opt_rates.empty()) {
