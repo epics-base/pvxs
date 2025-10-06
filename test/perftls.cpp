@@ -4,6 +4,8 @@
  * C++11, helpers in anonymous namespace inside pvxs namespace as requested.
  */
 
+#include "perftls.h"
+
 #include <algorithm>
 #include <csignal>
 #include <cstring>
@@ -12,6 +14,9 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <atomic>
+#include <epicsThread.h>
+#include <epicsEvent.h>
 
 #ifdef __linux__
 #include <chrono>
@@ -61,10 +66,14 @@
 #include <pcap.h>
 #endif
 
-DEFINE_LOGGER(perf, "pvxs.perf");
-
 namespace pvxs {
-namespace {
+namespace perf {
+
+DEFINE_LOGGER(perflog, "pvxs.perf");
+DEFINE_LOGGER(scenariolog, "pvxs.perf.scenario");
+DEFINE_LOGGER(producerlog, "pvxs.perf.scenario.producer");
+DEFINE_LOGGER(consumerlog, "pvxs.perf.scenario.consumer");
+
 using namespace pvxs::members;
 
 #ifdef __linux__
@@ -110,7 +119,7 @@ std::uint64_t getRssBytes() {
     if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count) !=
         KERN_SUCCESS) {
         return 0;
-    }
+        }
     return info.resident_size;
 }
 
@@ -141,122 +150,169 @@ double cpuPercentSince(const double w0, const double c0) {
     return dw > 0.0 ? dc / dw * 100.0 : 0.0;
 }
 
-#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
-// Packet capture helper to measure bytes for specific ports during an interval
-struct PortSniffer {
-    std::vector<pcap_t*> handles{};
-    std::string bpf{};
-    std::uint64_t total{0};
-    int tcp_port{0};
-    int udp_port{0};
+/**
+ * Add a value to the result
+ * @param index The index of the result
+ * @param value The value to add
+ * @param this_count The count which was embedded in the update, to be compared to the expected count to see if any
+ * updates were dropped
+ * @param rate The rate of the updates
+ */
+int32_t Result::add(const uint index, const double value, const uint32_t this_count, const uint32_t rate) {
+    if (value <= 0.0)
+        return -1;
 
-    explicit PortSniffer(int tcp_port_, int udp_port_) : tcp_port(tcp_port_), udp_port(udp_port_) {
-        char buf[128];
-        std::snprintf(buf, sizeof(buf), "(tcp or udp) and (port %d or port %d)", tcp_port, udp_port);
-        bpf.assign(buf);
+    Guard G(lock);
+    // Get the actual number of updates that have been received in this second, and increment the count
+    const auto count = counts[index]++;
+    // Calculate the moving average of transmission times by incorporating the new value with the running average
+    values[index] = (values[index] * count + value) / (count + 1);
+    // Update max and min transmission times
+    if (value < min)
+        min = value;
+    if (value > max)
+        max = value;
+    // Calculate dropped packets.  If the counter embedded in the update is greater than the expected count, then we
+    // have dropped updates.
+    for (; expected_count < this_count; ++expected_count) {
+        const auto dropped_index = expected_count / rate;
+        dropped[dropped_index]++;
     }
+    // Increment the expected count ready for the next update
+    return ++expected_count;
+}
 
-    static void onPacket(u_char* user, const struct pcap_pkthdr* h, const u_char* /*bytes*/) {
-        auto* total = reinterpret_cast<std::uint64_t*>(user);
-        *total += static_cast<std::uint64_t>(h->len);
+/**
+ * Print the results.
+ * The results are printed in a table format with the following columns:
+ * - The connection type of the test.
+ * - The Transmission Rate.
+ * - The Throughput.
+ * - The PVAccess Payload.
+ * - The minimum transmission time for the updates per second of the test.
+ * - The maximum transmission time for the updates per second of the test.
+ * - The CPU% of 1 Core during the test.
+ * - The Memory Used.
+ * - The Network Load.
+ * - The Transmission Times per second of the test.
+ * - The Dropped updates per second of the test.
+ *
+ *  @param scenario_type The scenario type of the test.
+ *  @param payload_type The payload type of the test.
+ *  @param payload_label The label of the payload type.
+ *  @param rate The rate of the test.
+ *  @param rate_label The label of the rate.
+ *  @param cpu_percent The CPU% of 1 Core during the test.
+ *  @param rss_mb The memory used during the test.
+ *  @param bytes_captured The number of bytes captured during the test.
+ *  @param cpu_percent The CPU% of 1 Core during the test.
+ *  @param rss_mb The memory used during the test.
+ *  @param bytes_captured The number of bytes captured during the test.
+ */
+void Result::print(const ScenarioType scenario_type, const PayloadType payload_type, const std::string &payload_label,
+    const uint32_t rate, const std::string &rate_label, const double cpu_percent, const double rss_mb, uint64_t bytes_captured) const {
+    // Display Data
+
+    // 1) Connection Type
+    std::cout << (scenario_type == TLS_CMS_STAPLED ? "TLS_CMS_STAPLED, "
+                  : scenario_type == TLS_CMS       ? "TLS_CMS, "
+                  : scenario_type == TLS           ? "TLS, "
+                                                   : "TCP, ");
+    std::string throughput_units = "bps";
+    auto throughput = (payload_type == LARGE_2MB ? 2000000.0 : payload_type == MEDIUM_1KB ? 1000.0 : 4.0) * 8.0 * static_cast<double>(rate);
+    if      ( throughput >= 1000000000 ) { throughput /= 1000000000; throughput_units = "Gbps"; }
+    else if ( throughput >= 1000000    ) { throughput /= 1000000;    throughput_units = "Mbps"; }
+    else if ( throughput >= 1000       ) { throughput /= 1000;       throughput_units = "Kbps"; }
+
+    // 2) PVAccess Payload
+    std::cout << payload_label << ", ";
+
+    // 3) Tx Rate
+    std::cout << rate_label << ", ";
+
+    // 4) Throughput
+    std::cout << throughput << throughput_units << ", ";
+
+    // 5) minimum transmission time
+    if (min < std::numeric_limits<double>::max()) std::cout << min << ", "; else std::cout << " , ";
+
+    // 6) maximum transmission time
+    if (max > 0) std::cout << max << ", "; else std::cout << " ,  ";
+
+    // 7) CPU% of 1 Core
+    std::cout << cpu_percent << ", " ;
+
+    // 8) Memory used
+    std::cout << rss_mb << ", " ;
+
+    // 9) Network load
+    std::cout << bytes_captured << ", ";
+
+    // 10) Transmission times
+    for (const auto value : values) { if (value) std::cout << value << ", "; else std::cout << " , "; }
+
+    // 11) Dropped
+    for (const auto value : dropped) { if (value) std::cout << value << ", "; else std::cout << ", "; }
+}
+
+void UpdateProducer::run() {
+    std::cout << "Starting UpdateProducer" << std::endl;
+    const auto total = static_cast<uint32_t>(rate * window);
+    const auto time_per_update = 1.0 / static_cast<double>(rate);
+    for (auto counter = 0; counter < total; ++counter) {
+        // Post 1 update
+        self.postValue(payload, counter);
+
+        // Sleep until the next emission time
+        epicsTimeStamp now{};
+        epicsTimeGetCurrent(&now);
+        const double elapsed_since_start = epicsTimeDiffInSeconds(&now, &start);
+        const double next_emission_secs_from_start = static_cast<double>(counter + 1)  * time_per_update ;
+        const auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
+        if (time_till_next_emission > 0.0) epicsThreadSleep(time_till_next_emission);
     }
+    std::cout << "UpdateProducer finished" << std::endl;
+}
 
-    bool openAll(std::string& err) {
-        char error_buf[PCAP_ERRBUF_SIZE] = {0};
-        pcap_if_t* all_devices = nullptr;
-        if (pcap_findalldevs(&all_devices, error_buf) != 0) {
-            err = error_buf;
-            return false;
+void UpdateConsumer::run() {
+    std::cout << "Starting UpdateConsumer" << std::endl;
+    const auto window_count = static_cast<int32_t>(rate * window);
+    const auto total_receive_ticks = static_cast<int32_t>(receive_window * rate);
+    const auto time_per_update = 1.0 / static_cast<double>(rate);
+    int32_t running_count{-1}; // Keeps track of actual counted packets consumed
+    for (auto tick = 0; tick < total_receive_ticks && running_count < window_count; ++tick) {
+        std::cout << "Tick: " << tick << std::endl;
+        // Get any available updates
+        running_count = self.processPendingUpdates(result, start, rate);
+
+        epicsTimeStamp now{};
+        epicsTimeGetCurrent(&now);
+        const double elapsed_since_start = epicsTimeDiffInSeconds(&now, &start);
+
+        // Update the progress bar once per percentage change
+        const auto progress_percentage = elapsed_since_start >= window ? 100.00 : static_cast<uint32_t>(100 * (elapsed_since_start / window));
+        if (progress_percentage != prior_percentage) {
+            prior_percentage = progress_percentage;
+            printProgressBar(progress_percentage, progress_prefix);
         }
-        for (pcap_if_t* d = all_devices; d; d = d->next) {
-            // Build handles via pcap_create to enable immediate mode
-            pcap_t* h = pcap_create(d->name, error_buf);
-            if (!h)
-                continue;
-            pcap_set_snaplen(h, 65535);
-            pcap_set_promisc(h, 1);
-            pcap_set_timeout(h, 50);
-#if defined(PCAP_ERROR_BREAK)
-            (void)0;  // placeholder to keep preprocessor happy in some environments
-#endif
-#ifdef PCAP_TSTAMP_PRECISION_NANO
-            // Prefer microsecond default; leave as-is
-#endif
-#ifdef HAVE_PCAP_SET_IMMEDIATE_MODE
-            pcap_set_immediate_mode(h, 1);
-#endif
-            if (pcap_activate(h) != 0) {
-                pcap_close(h);
-                continue;
-            }
-            // Non-blocking to allow polling without stalls
-            pcap_setnonblock(h, 1, error_buf);
 
-            bpf_program prog{};
-            if (pcap_compile(h, &prog, bpf.c_str(), 1, PCAP_NETMASK_UNKNOWN) != 0) {
-                pcap_close(h);
-                continue;
-            }
-            if (pcap_setfilter(h, &prog) != 0) {
-                pcap_freecode(&prog);
-                pcap_close(h);
-                continue;
-            }
-            pcap_freecode(&prog);
-            handles.push_back(h);
-        }
-        pcap_freealldevs(all_devices);
-        if (handles.empty()) {
-            err = "pcap: no capture handles opened";
-            return false;
-        }
-        return true;
-    }
+        // Poll network capture
+        sniffer->poll();
 
-    void closeAll() {
-        for (auto* h : handles)
-            pcap_close(h);
-        handles.clear();
+        // Sleep until the tick
+        const double next_tick_secs_from_start = static_cast<double>(tick + 1)  * time_per_update ;
+        const auto time_till_next_tick = next_tick_secs_from_start - elapsed_since_start;
+        if (time_till_next_tick > 0.0) epicsThreadSleep(time_till_next_tick);
     }
-
-    void startCapture() {
-        total = 0;
-        std::string err;
-        if (handles.empty() && !openAll(err)) {
-            std::cerr << "PortSniffer init failed: " << err << std::endl;
-            return;
-        }
-        // no initial dispatch; polling will drain continuously during the test window
-    }
-
-    // Poll all handles and drain all currently buffered packets
-    void poll() {
-        for (auto* h : handles) {
-            // -1 => process all currently buffered packets
-            pcap_dispatch(h, -1, &PortSniffer::onPacket, reinterpret_cast<u_char*>(&total));
-        }
-    }
-
-    std::uint64_t endCapture() {
-        // final drain
-        for (auto* h : handles) {
-            pcap_dispatch(h, -1, &PortSniffer::onPacket, reinterpret_cast<u_char*>(&total));
-        }
-        return total;
-    }
-
-    ~PortSniffer() {
-        closeAll();
-    }
-};
-#endif
+    std::cout << "UpdateConsumer finished" << std::endl;
+}
 
 /**
  * Print a progress bar to the console
  * @param progress_percentage The percentage done
  * @param prefix The prefix to print before the progress bar
  */
-void printProgressBar(uint32_t progress_percentage, const std::string& prefix) {
+void UpdateConsumer::printProgressBar(uint32_t progress_percentage, const std::string& prefix) {
     if (progress_percentage > 100u)
         progress_percentage = 100u;
     std::string bar;
@@ -271,24 +327,6 @@ void printProgressBar(uint32_t progress_percentage, const std::string& prefix) {
     bar += "▕";  // right cap
     std::cout << bar << "\r" << std::flush;
 }
-
-/**
- * Scenario type: This is used to specify whether the test will use TCP or TLS connections,
- * and whether the status-checking and/or stapling will be enabled or disabled.
- */
-enum ScenarioType { TCP, TLS, TLS_CMS, TLS_CMS_STAPLED };
-
-/**
- * Payload type: This is used to specify the size of the PVAccess Payload that will be sent over the network.
- * Small is a single 32 but integer wrapped in an NT scalar.
- * Medium is a 32x32 ubyte array (1024 bytes) wrapped in an NT NDArray.
- * Large is a 4mpx image = 2000x2000 pixels, 4 bits per pixel (2,000,000 bytes) wrapped in an NT NDArray.
- */
-enum PayloadType {
-    SMALL_4B,
-    MEDIUM_1KB,
-    LARGE_2MB,
-};
 
 // Helpers for CLI parsing and labels
 
@@ -376,667 +414,438 @@ std::string formatRateLabel(long rate) {
 }
 
 /**
- * Result: This is used to store the results of the performance tests.
- * It stores the average transmission times (values) taken from the time the updates are
- * sent to the time they are read by the client.  The values are grouped by the corresponding update send-time.
- * The values are grouped by second that they are sent.
- * Alongside the values we store the number of updates (expected_count) and the number of updates that
- * were dropped (dropped) grouped by second that they are sent.
- * We also store the minimum and maximum transmission times (min and max).
- * We print the results in a table format with the following columns:
- * - The average transmission time for the updates per second of the test.
- * - The number of updates that were dropped per second of the test.
- * - The minimum transmission time for the updates per second of the test.
- * - The maximum transmission time for the updates per second of the test.
+ * Constructor for the Scenario
+ * @param scenario_type The type of scenario to build.
+ * - TCP: Plain TCP connection.
+ * - TLS: TLS connection.
+ * - TLS_CMS: TLS connection with CMS status checking.
+ * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
  */
-struct Result {
-    epicsMutex lock;
-    std::array<uint64_t, 60> counts;
-    std::array<double, 60> values;
-    uint32_t expected_count{0};
-    std::array<uint32_t, 60> dropped;
-    double min = std::numeric_limits<double>::max();
-    double max = -1.0;
+Scenario::Scenario(const ScenarioType scenario_type) : scenario_type(scenario_type) {
+    // Configure the server
+    configureServer();
 
-    /**
-     * Add a value to the result
-     * @param index The index of the result
-     * @param value The value to add
-     * @param this_count The count which was embedded in the update, to be compared to the expected count to see if any
-     * updates were dropped
-     * @param rate The rate of the updates
-     */
-    void add(const uint index, const double value, const uint32_t this_count, const uint32_t rate) {
-        if (value <= 0.0)
-            return;
+    // Initialise scenarios
+    initSmallScenarios();
+    initMediumScenarios();
+    initLargeScenarios();
 
-        Guard G(lock);
-        // Get the actual number of updates that have been received in this second, and increment the count
-        const auto count = counts[index]++;
-        // Calculate the moving average of transmission times by incorporating the new value with the running average
-        values[index] = (values[index] * count + value) / (count + 1);
-        // Update max and min transmission times
-        if (value < min)
-            min = value;
-        if (value > max)
-            max = value;
-        // Calculate dropped packets.  If the counter embedded in the update is greater than the expected count, then we
-        // have dropped updates.
-        for (; expected_count < this_count; ++expected_count) {
-            const auto dropped_index = expected_count / rate;
-            dropped[dropped_index]++;
-        }
-        // Increment the expected count ready for the next update
-        expected_count++;
-    }
-
-    /**
-     * Print the results.
-     * The results are printed in a table format with the following columns:
-     * - The connection type of the test.
-     * - The Transmission Rate.
-     * - The Throughput.
-     * - The PVAccess Payload.
-     * - The minimum transmission time for the updates per second of the test.
-     * - The maximum transmission time for the updates per second of the test.
-     * - The CPU% of 1 Core during the test.
-     * - The Memory Used.
-     * - The Network Load.
-     * - The Transmission Times per second of the test.
-     * - The Dropped updates per second of the test.
-     *
-     *  @param scenario_type The scenario type of the test.
-     *  @param payload_type The payload type of the test.
-     *  @param payload_label The label of the payload type.
-     *  @param rate The rate of the test.
-     *  @param rate_label The label of the rate.
-     *  @param cpu_percent The CPU% of 1 Core during the test.
-     *  @param rss_mb The memory used during the test.
-     *  @param bytes_captured The number of bytes captured during the test.
-     *  @param cpu_percent The CPU% of 1 Core during the test.
-     *  @param rss_mb The memory used during the test.
-     *  @param bytes_captured The number of bytes captured during the test.
-     */
-    void print(const ScenarioType scenario_type, const PayloadType payload_type, const std::string &payload_label,
-        const uint32_t rate, const std::string &rate_label, const double cpu_percent, const double rss_mb, uint64_t bytes_captured) const {
-        // Display Data
-
-        // 1) Connection Type
-        std::cout << (scenario_type == TLS_CMS_STAPLED ? "TLS_CMS_STAPLED, "
-                      : scenario_type == TLS_CMS       ? "TLS_CMS, "
-                      : scenario_type == TLS           ? "TLS, "
-                                                       : "TCP, ");
-        std::string throughput_units = "bps";
-        auto throughput = (payload_type == LARGE_2MB ? 2000000.0 : payload_type == MEDIUM_1KB ? 1000.0 : 4.0) * 8.0 * static_cast<double>(rate);
-        if      ( throughput >= 1000000000 ) { throughput /= 1000000000; throughput_units = "Gbps"; }
-        else if ( throughput >= 1000000    ) { throughput /= 1000000;    throughput_units = "Mbps"; }
-        else if ( throughput >= 1000       ) { throughput /= 1000;       throughput_units = "Kbps"; }
-
-        // 2) PVAccess Payload
-        std::cout << payload_label << ", ";
-
-        // 3) Tx Rate
-        std::cout << rate_label << ", ";
-
-        // 4) Throughput
-        std::cout << throughput << throughput_units << ", ";
-
-        // 5) minimum transmission time
-        if (min < std::numeric_limits<double>::max()) std::cout << min << ", "; else std::cout << " , ";
-
-        // 6) maximum transmission time
-        if (max > 0) std::cout << max << ", "; else std::cout << " ,  ";
-
-        // 7) CPU% of 1 Core
-        std::cout << cpu_percent << ", " ;
-
-        // 8) Memory used
-        std::cout << rss_mb << ", " ;
-
-        // 9) Network load
-        std::cout << bytes_captured << ", ";
-
-        // 10) Transmission times
-        for (const auto value : values) { if (value) std::cout << value << ", "; else std::cout << " , "; }
-
-        // 11) Dropped
-        for (const auto value : dropped) { if (value) std::cout << value << ", "; else std::cout << ", "; }
-    }
-};
-
-struct Update {
-    Value value;
-    const epicsTimeStamp receive_time;
-    Update(const Value& value, const epicsTimeStamp &receive_time) : value {value}, receive_time{receive_time} {}
-};
+    // Start the server
+    startServer();
+    // Configure a client that is compatible with the server
+    buildClientContext();
+}
 
 /**
- * Scenario: This is the configuration for a performance test scenario.
- * A scenario is one of TCP, TLS, TLS_CMS, or TLS_CMS_STAPLED.
- * - TCP uses a plain TCP connection.
- * - TLS uses a TLS connection.
- * - TLS_CMS uses a TLS connection with CMS status checking.
- * - TLS_CMS_STAPLED uses a TLS connection with CMS status checking and stapling.
- * When a scenario is created, it builds the server and client.
- * It builds three sizes of payload to be used if the associated payload type is selected in the run methods.
- * The payload types are SMALL, MEDIUM, or LARGE.
- * - SMALL is a single 32 but integer wrapped in an NT scalar.
- * - MEDIUM is a 32x32 ubyte array (1024 bytes) wrapped in an NT NDArray.
- * - LARGE is a 2000x2000 ubyte array (4,000,000 bytes): 4 bits/pixel equivalent to a 4 mega-pixel image.
- * It also builds the shared PVs for each of the payload types: PERF:SMALL, PERF:MEDIUM, or PERF:LARGE.
+ * Initialize the SMALL payload type test and add its PV to the server
  */
-struct Scenario {
-    const ScenarioType scenario_type;
-    epicsEvent event;
-    MPMCFIFO<Update> update_queue;
+void Scenario::initSmallScenarios() {
+    // Build PV
+    small_pv = server::SharedPV::buildReadonly();
+    server.addPV("PERF:SMALL", small_pv);
 
-    // Server and client to use for each side of the performance test scenario
-    server::Server server;
-    client::Context client;
+    // Build data
+    // 4 byte data payload (plus NT scaffolding)
+    auto s_def(nt::NTScalar{TypeCode::Int32}.build());
+    s_def += {Int32("counter")};
 
-    // Shared PV and small payload the SMALL payload type test
-    server::SharedPV small_pv;
-    Value small_value;
+    small_value = s_def.create();
+    small_value["counter"] = -1; // Set an initial value.  This will be ignored
+    small_pv.open(small_value);
+}
 
-    // Shared PV and medium payload for the MEDIUM payload type test
-    server::SharedPV medium_pv;
-    Value medium_value;
+/**
+ * Initialize the MEDIUM payload type test and add its PV to the server
+ */
+void Scenario::initMediumScenarios() {
+    medium_pv = server::SharedPV::buildReadonly();
+    server.addPV("PERF:MEDIUM", medium_pv);
 
-    // Shared PV and large payload for the LARGE payload type test
-    server::SharedPV large_pv;
-    Value large_value;
+    // Build data
+    // 1k payloads (plus NT scaffolding)
+    auto def(nt::NTNDArray{}.build());
+    def += {Int32("counter")};
+    def += {
+        StructA("dimensions",
+                {
+                    Int32("value"),
+                }),
+    };
 
-    // Subscription the client will make for this performance test scenario
-    std::shared_ptr<client::Subscription> sub;
+    medium_value = def.create();
+    {
+        constexpr int d0 = 32, d1 = 32;
+        shared_array<uint8_t> buf(d0 * d1);
+        for (size_t i = 0u; i < buf.size(); ++i)
+            buf[i] = static_cast<uint8_t>(i);
+        shared_array<const uint8_t> medium_data(buf.freeze());
+        shared_array<Value> small_dimensions;
+        small_dimensions.resize(2);
+        small_dimensions[0] = medium_value["dimension"].allocMember().update("size", d0);
+        small_dimensions[1] = small_dimensions[0].cloneEmpty().update("size", d1);
 
-    // Counter for the updates
-    int32_t counter{0};
+        medium_value["value->ubyteValue"] = medium_data;
+        medium_value["dimension"] = small_dimensions.freeze();
+    }
+    medium_value["counter"] = -1; // Set an initial value.  This will be ignored
+    medium_pv.open(medium_value);
+}
 
-    // Ports for the server and client
-    int tcp_port{0};
-    int udp_port{0};
+/**
+ * Initialize the LARGE payload type test and add its PV to the server
+ */
+void Scenario::initLargeScenarios() {
+    // Build PV
+    auto def(nt::NTNDArray{}.build());
+    def += {Int32("counter")};
+    def += {
+        StructA("dimensions",
+                {
+                    Int32("value"),
+                }),
+    };
 
-    /**
-     * Constructor for the Scenario
-     * @param scenario_type The type of scenario to build.
-     * - TCP: Plain TCP connection.
-     * - TLS: TLS connection.
-     * - TLS_CMS: TLS connection with CMS status checking.
-     * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
-     */
-    explicit Scenario(const ScenarioType scenario_type) : scenario_type(scenario_type) {
-        // Configure the server
-        configureServer();
+    large_pv = server::SharedPV::buildReadonly();
+    server.addPV("PERF:LARGE", large_pv);
 
-        // Initialise scenarios
-        initSmallScenarios();
-        initMediumScenarios();
-        initLargeScenarios();
+    // 2MB = 4 Mega-Pixels: 2000 x 2000 mono (4 Mpx), 4 bits/pixel => 2,000,000 bytes
+    // Create the value
+    large_value = def.create();
+    constexpr int height = 2000;
+    constexpr int width = 2000;
+    constexpr size_t n_pixels = static_cast<size_t>(height) * static_cast<size_t>(width);
+    constexpr size_t n_bytes = (n_pixels + 1u) / 2u;  // two pixels per byte
 
-        // Start the server
-        startServer();
-        // Configure a client that is compatible with the server
-        buildClientContext();
+    // allocate packed buffer (each byte holds two 4-bit pixels)
+    shared_array<uint8_t> buf(n_bytes);
+
+    // ---- dimensions (pixel sizes) ----
+    shared_array<Value> dims;
+    dims.resize(2);
+    dims[0] = large_value["dimension"]
+                  .allocMember()
+                  .update("size", height)
+                  .update("offset", 0)
+                  .update("fullSize", height)
+                  .update("binning", 1)
+                  .update("reverse", false);
+    dims[1] = dims[0].cloneEmpty().update("size", width).update("fullSize", width);
+    large_value["dimension"] = dims.freeze();
+
+    // ---- data ----
+    large_value["value->ubyteValue"] = shared_array<const uint8_t>(buf.freeze());
+
+    // ---- sizes / codec ----
+    large_value["uncompressedSize"] = static_cast<int64_t>(n_bytes);
+    large_value["compressedSize"] = static_cast<int64_t>(n_bytes);  // raw
+    large_value["codec.name"] = "raw";
+
+    // ---- attributes: at least ColorMode and BitsPerPixel ----
+    auto mkAttr = [&](const char* name, const uint32_t n) {
+        auto attribute = large_value["attribute"].allocMember();
+        attribute["name"] = name;
+        attribute["value"] = n;
+        attribute["descriptor"] = "auto";
+        attribute["sourceType"] = 0;
+        attribute["source"] = "";
+        return attribute;
+    };
+
+    pvxs::shared_array<Value> attrs;
+    attrs.resize(2);
+    attrs[0] = mkAttr("ColorMode", 0);  // 0 = Mono (convention)
+    attrs[1] = mkAttr("BitsPerPixel", 4);
+    large_value["attribute"] = attrs.freeze();
+    large_value["counter"] = -1; // Set an initial value.  This will be ignored
+    large_pv.open(large_value);
+}
+
+/**
+ * Configure the server for the performance test scenario
+ * The server is configured to use the isolated configuration and the TLS keychain file is set to the server1.p12
+ * file that has been generated for the other tls tests.
+ */
+void Scenario::configureServer() {
+    // Build Server
+    auto serv_conf = server::Config::isolated();
+    serv_conf.tls_keychain_file = "server1.p12";
+    serv_conf.udp_port = 55076;
+
+    // Use ephemeral port to avoid conflicts with pvacms child process
+    serv_conf.tls_disabled = scenario_type == TCP;
+    serv_conf.tls_disable_status_check = scenario_type < TLS_CMS;
+    serv_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
+    server = serv_conf.build();
+}
+
+/**
+ * Start the server and query the effective bound ports.  These will be used to build a compatible client.
+ */
+void Scenario::startServer() {
+    server.start();
+    // After the server starts, query effective bound ports
+    {
+        const auto& config = server.config();
+        udp_port = config.udp_port;
+        tcp_port = config.tcp_port;
+    }
+}
+
+/**
+ * Build the client and configure it to use the server's effective ports.
+ * The client is configured to use the isolated configuration, and the TLS keychain file is set to the client1.p12
+ * file that has been generated for the other tls tests.
+ */
+void Scenario::buildClientContext() {
+    {
+        auto cli_conf = server.clientConfig();
+        cli_conf.tls_keychain_file = "client1.p12";
+        client = cli_conf.build();
+    }
+}
+
+/**
+ * Run the performance test Scenario for the given payload type.  This method runs tests for all the different rates
+ * for the given payload type. The rates are 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, and 1 MHz. For the Large payload
+ * type, the rates are 1 Hz, 10 Hz, 100 Hz, and 1 KHz. Each rate test runs for 60 seconds.
+ * @param payload_type The type of payload to test.
+ */
+void Scenario::run(const PayloadType payload_type) {
+    const auto payload_label = (payload_type == LARGE_2MB    ? "Large(2MB)"
+                                : payload_type == MEDIUM_1KB ? "Medium(1KB)"
+                                                             : "SMALL(4B)");
+    run(payload_type, 1, payload_label, "  1 Hz");
+    run(payload_type, 10, payload_label, " 10 Hz");
+    run(payload_type, 100, payload_label, "100 Hz");
+    run(payload_type, 1000, payload_label, "  1KHz");
+    if (payload_type != LARGE_2MB) {
+        run(payload_type, 10000, payload_label, " 10KHz");
+        run(payload_type, 100000, payload_label, "100KHz");
+        run(payload_type, 1000000, payload_label, "  1MHz");
+    }
+}
+
+/**
+ * Run the performance test Scenario for the given payload type and rate.
+ * This method runs a single test for the given payload type and rate.  Each test runs for 60 seconds.
+ * The method does both sides of the communication - the server and the client. A single `event` is used for both.
+ * - A timer is set on the `event`, based on the specified rate, and when it expires a value is Posted to the
+ * server's SharedPV. A special test is made to ensure that we don't Post anything after the test window has expired
+ * when we're waiting for tardy packets.
+ * - At the same time whenever the client monitor receives an update it signals the same `event` thus interrupting
+ * the timer. In this case the queue of received updates is processed, and a new timer is set with the remaining
+ * time to the next Post.
+ * - The loop continues until the test window expires.
+ *
+ * @param payload_type The type of payload to test - SMALL, MEDIUM, or LARGE.
+ * @param rate The rate to test - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
+ * @param payload_label The label for the payload type - SMALL, MEDIUM, or LARGE.
+ * @param rate_label The label for the rate - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
+ */
+void Scenario::run(const PayloadType payload_type,
+         const uint32_t rate,
+         const std::string& payload_label,
+         const std::string& rate_label) {
+    if (payload_type == LARGE_2MB && rate > 100) {
+        // Greater than 2 Gbps is beyond reasonable
+        log_warn_printf(scenariolog, "Skipping LARGE payloads where rate is greater that 100Hz: %s\n", rate_label.c_str());
+        return;
     }
 
-    ~Scenario() {
-        server.stop();
+    // To collect the results of the test
+    Result result{};
+
+    // Collect Data
+    const double w0 = wallSeconds();
+    const double c0 = procCPUSeconds();
+    std::uint64_t bytes_captured = 0;
+    {
+        // This is used to collect the network traffic appearing on the test ports.
+        auto sniffer = std::make_shared<PortSniffer>(tcp_port, udp_port);
+        sniffer->startCapture();
+
+        // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
+        startMonitor(payload_type, rate);
+
+        // Drain any initial connection update
+        epicsTimeStamp start{};
+        epicsTimeGetCurrent(&start);
+        processPendingUpdates(result, start, rate);
+
+        // Mark the start time for this sequence and quiesce before the test
+        sleep(2);
+        epicsTimeGetCurrent(&start);
+
+        // Two-threaded execution
+        // - Producer: posts updates on a fixed cadence
+        // - Consumer: drains monitor updates, computes transit times, polls sniffer, and prints progress on a fixed cadence
+
+        // Create and start threads
+        UpdateProducer update_producer{*this, payload_type, rate, start};
+        UpdateConsumer update_consumer{*this, result, rate,  start, sniffer, std::string(payload_label) + ", " + std::string(rate_label) + ", "};
+
+        epicsThread producer_thread(update_producer, "PERF-Producer", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityMedium);
+        epicsThread consumer_thread(update_consumer, "PERF-Consumer", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityMedium);
+
+        consumer_thread.start();
+        producer_thread.start();
+
+        // Wait for both to complete
+        consumer_thread.exitWait();
+        producer_thread.exitWait();
+
+        // Final drain/capture
+        sniffer->poll();
+        bytes_captured = sniffer->endCapture();
     }
 
-    /**
-     * Initialise the SMALL payload type test and add its PV to the server
-     */
-    void initSmallScenarios() {
-        // Build PV
-        small_pv = server::SharedPV::buildReadonly();
-        server.addPV("PERF:SMALL", small_pv);
+    const double rss_mb = static_cast<double>(getRssBytes()) / (1024 * 1024);
+    const auto cpu_percent = cpuPercentSince(w0, c0);
 
-        // Build data
-        // 4 byte data payload (plus NT scaffolding)
-        auto s_def(nt::NTScalar{TypeCode::Int32}.build());
-        s_def += {Int32("counter")};
+    result.print(scenario_type, payload_type, payload_label, rate, rate_label, cpu_percent, rss_mb, bytes_captured);
+    std::cout << std::endl;
+}
 
-        small_value = s_def.create();
-        small_value["counter"] = -1; // Set an initial value.  This will be ignored
-        small_pv.open(small_value);
+/**
+ * Start a monitor subscription for the given payload type.
+ * The PV to monitor is based on the payload type.
+ * @param payload_type The type of payload to monitor.
+ * @param rate the rate at which we expect to get
+ */
+void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate) {
+    const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
+                          : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
+                                                         : "PERF:SMALL";
+
+    /*
+    // Heuristic to limit coalescing: ensure a large enough client-side queue.
+    // Larger queues reduce bias where only the newest updates are delivered at high rates.
+    auto queue_size = 0u;
+    switch (payload_type) {
+        case SMALL_4B:
+            // Allow up to ~100k small updates buffered, but not less than 2*rate
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 100000u), 1000u);
+            break;
+        case MEDIUM_1KB:
+            // Medium payloads: cap at 20k to bound memory; but allow at least 2*rate
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 20000u), 100u);
+            break;
+        case LARGE_2MB:
+            // Large payloads are expensive; queue just a small number
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 10u), 2u);
+            break;
     }
+    */
 
-    /**
-     * Initialise the MEDIUM payload type test and add its PV to the server
-     */
-    void initMediumScenarios() {
-        medium_pv = server::SharedPV::buildReadonly();
-        server.addPV("PERF:MEDIUM", medium_pv);
+    // Set up a subscription monitor
+    sub = client.monitor(pv_name)
+              // .record("queueSize", queue_size)
+              // .record("pipeline", true)
+              .maskConnected(true)  // suppress Connected events from throwing
+              .maskDisconnected(true)
+              .event([this](client::Subscription&) {
+                  // Drain all currently queued updates from the subscription and enqueue locally.
+                  // Important: only signaling when the client queue transitions from empty->non-empty.
+                  // If we leave entries in the subscription queue, further events may not be delivered.
+                  epicsTimeStamp receive_time{};
+                  epicsTimeGetCurrent(&receive_time);
 
-        // Build data
-        // 1k payloads (plus NT scaffolding)
-        auto def(nt::NTNDArray{}.build());
-        def += {Int32("counter")};
-        def += {
-            StructA("dimensions",
-                    {
-                        Int32("value"),
-                    }),
-        };
-
-        medium_value = def.create();
-        {
-            constexpr int d0 = 32, d1 = 32;
-            shared_array<uint8_t> buf(d0 * d1);
-            for (size_t i = 0u; i < buf.size(); ++i)
-                buf[i] = static_cast<uint8_t>(i);
-            shared_array<const uint8_t> medium_data(buf.freeze());
-            shared_array<Value> small_dimensions;
-            small_dimensions.resize(2);
-            small_dimensions[0] = medium_value["dimension"].allocMember().update("size", d0);
-            small_dimensions[1] = small_dimensions[0].cloneEmpty().update("size", d1);
-
-            medium_value["value->ubyteValue"] = medium_data;
-            medium_value["dimension"] = small_dimensions.freeze();
-        }
-        medium_value["counter"] = -1; // Set an initial value.  This will be ignored
-        medium_pv.open(medium_value);
-    }
-
-    /**
-     * Initialise the LARGE payload type test and add its PV to the server
-     */
-    void initLargeScenarios() {
-        // Build PV
-        auto def(nt::NTNDArray{}.build());
-        def += {Int32("counter")};
-        def += {
-            StructA("dimensions",
-                    {
-                        Int32("value"),
-                    }),
-        };
-
-        large_pv = server::SharedPV::buildReadonly();
-        server.addPV("PERF:LARGE", large_pv);
-
-        // 2MB = 4 Mega-Pixels: 2000 x 2000 mono (4 Mpx), 4 bits/pixel => 2,000,000 bytes
-        // Create the value
-        large_value = def.create();
-        constexpr int height = 2000;
-        constexpr int width = 2000;
-        constexpr size_t n_pixels = static_cast<size_t>(height) * static_cast<size_t>(width);
-        constexpr size_t n_bytes = (n_pixels + 1u) / 2u;  // two pixels per byte
-
-        // allocate packed buffer (each byte holds two 4-bit pixels)
-        shared_array<uint8_t> buf(n_bytes);
-
-        // ---- dimensions (pixel sizes) ----
-        shared_array<Value> dims;
-        dims.resize(2);
-        dims[0] = large_value["dimension"]
-                      .allocMember()
-                      .update("size", height)
-                      .update("offset", 0)
-                      .update("fullSize", height)
-                      .update("binning", 1)
-                      .update("reverse", false);
-        dims[1] = dims[0].cloneEmpty().update("size", width).update("fullSize", width);
-        large_value["dimension"] = dims.freeze();
-
-        // ---- data ----
-        large_value["value->ubyteValue"] = shared_array<const uint8_t>(buf.freeze());
-
-        // ---- sizes / codec ----
-        large_value["uncompressedSize"] = static_cast<int64_t>(n_bytes);
-        large_value["compressedSize"] = static_cast<int64_t>(n_bytes);  // raw
-        large_value["codec.name"] = "raw";
-
-        // ---- attributes: at least ColorMode and BitsPerPixel ----
-        auto mkAttr = [&](const char* name, const uint32_t n) {
-            auto attribute = large_value["attribute"].allocMember();
-            attribute["name"] = name;
-            attribute["value"] = n;
-            attribute["descriptor"] = "auto";
-            attribute["sourceType"] = 0;
-            attribute["source"] = "";
-            return attribute;
-        };
-
-        pvxs::shared_array<Value> attrs;
-        attrs.resize(2);
-        attrs[0] = mkAttr("ColorMode", 0);  // 0 = Mono (convention)
-        attrs[1] = mkAttr("BitsPerPixel", 4);
-        large_value["attribute"] = attrs.freeze();
-        large_value["counter"] = -1; // Set an initial value.  This will be ignored
-        large_pv.open(large_value);
-    }
-
-    /**
-     * Configure the server for the performance test scenario
-     * The server is configured to use the isolated configuration and the TLS keychain file is set to the server1.p12
-     * file that has been generated for the other tls tests.
-     */
-    void configureServer() {
-        // Build Server
-        auto serv_conf = server::Config::isolated();
-        serv_conf.tls_keychain_file = "server1.p12";
-        serv_conf.udp_port = 55076;
-
-        // Use ephemeral port to avoid conflicts with pvacms child process
-        serv_conf.tls_disabled = scenario_type == TCP;
-        serv_conf.tls_disable_status_check = scenario_type < TLS_CMS;
-        serv_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
-        server = serv_conf.build();
-    }
-
-    /**
-     * Start the server and query the effective bound ports.  These will be used to build a compatible client.
-     */
-    void startServer() {
-        server.start();
-        // After server starts, query effective bound ports
-        {
-            const auto& config = server.config();
-            udp_port = config.udp_port;
-            tcp_port = config.tcp_port;
-        }
-    }
-
-    /**
-     * Build the client and configure it to use the server's effective ports.
-     * The client is configured to use the isolated configuration, and the TLS keychain file is set to the client1.p12
-     * file that has been generated for the other tls tests.
-     */
-    void buildClientContext() {
-        {
-            auto cli_conf = server.clientConfig();
-            cli_conf.tls_keychain_file = "client1.p12";
-            client = cli_conf.build();
-        }
-    }
-
-    /**
-     * Run the performance test Scenario for the given payload type.  This method runs tests for all the different rates
-     * for the given payload type. The rates are 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, and 1 MHz. For the Large payload
-     * type, the rates are 1 Hz, 10 Hz, 100 Hz, and 1 KHz. Each rate test runs for 60 seconds.
-     * @param payload_type The type of payload to test.
-     */
-    void run(const PayloadType payload_type) {
-        const auto payload_label = (payload_type == LARGE_2MB    ? "Large(2MB)"
-                                    : payload_type == MEDIUM_1KB ? "Medium(1KB)"
-                                                                 : "SMALL(4B)");
-        run(payload_type, 1, payload_label, "  1 Hz");
-        run(payload_type, 10, payload_label, " 10 Hz");
-        run(payload_type, 100, payload_label, "100 Hz");
-        run(payload_type, 1000, payload_label, "  1KHz");
-        if (payload_type != LARGE_2MB) {
-            run(payload_type, 10000, payload_label, " 10KHz");
-            run(payload_type, 100000, payload_label, "100KHz");
-            run(payload_type, 1000000, payload_label, "  1MHz");
-        }
-    }
-
-    /**
-     * Run the performance test Scenario for the given payload type and rate.
-     * This method runs a single test for the given payload type and rate.  Each test runs for 60 seconds.
-     * The method does both sides of the communication - the server and the client. A single `event` is used for both.
-     * - A timer is set on the `event`, based on the specified rate, and when it expires a value is Posted to the
-     * server's SharedPV. A special test is made to ensure that we don't Post anything after the test window has expired
-     * when we're waiting for tardy packets.
-     * - At the same time whenever the client monitor receives an update it signals the same `event` thus interrupting
-     * the timer. In this case the queue of received updates is processed, and a new timer is set with the remaining
-     * time to the next Post.
-     * - The loop continues until the test window expires.
-     *
-     * @param payload_type The type of payload to test - SMALL, MEDIUM, or LARGE.
-     * @param rate The rate to test - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
-     * @param payload_label The label for the payload type - SMALL, MEDIUM, or LARGE.
-     * @param rate_label The label for the rate - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
-     */
-    void run(const PayloadType payload_type,
-             const long rate,
-             const std::string& payload_label,
-             const std::string& rate_label) {
-        counter = 0;
-        if (payload_type == LARGE_2MB && rate > 100) {
-            // Greater than 2 Gbps is beyond reasonable
-            log_warn_printf(perf, "Skipping LARGE payloads where rate is greater that 100Hz: %s\n", rate_label.c_str());
-            return;
-        }
-
-        // To collect the results of the test
-        Result result{};
-
-        // Collect Data
-        const double w0 = wallSeconds();
-        const double c0 = procCPUSeconds();
-        std::uint64_t bytes_captured = 0;
-        {
-            // This is used to collect the network traffic appearing on the test ports.
-            PortSniffer sniffer(tcp_port, udp_port);
-            sniffer.startCapture();
-
-            // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
-            startMonitor(payload_type, static_cast<uint32_t>(rate));
-
-            // Calculate the posting cadence
-            const double period = 1.0 / static_cast<double>(rate);
-
-            uint32_t last_percentage = std::numeric_limits<uint32_t>::max();
-            const std::string progress_prefix = std::string(payload_label) + ", " + std::string(rate_label) + ", ";
-
-            // Make the first Post and Mark the start time for this sequence
-            epicsTimeStamp start{};
-            epicsTimeGetCurrent(&start);
-
-            // Connect and get first update before test starts
-            processPendingUpdates(result, start, rate);
-
-            sleep(2); // quiesce before test
-            epicsTimeGetCurrent(&start);
-
-            bool signaled = true; // Force first time processing of initial value to remove connection delay
-            auto first_time = true;
-            while (true) {
-                constexpr double window = 60.0;
-                constexpr double receive_window = window * 1.0 / 0.9; // make that 90% of total `recieve_window`
-
-                // Get time now
-                epicsTimeStamp now{};
-                epicsTimeGetCurrent(&now);
-                // Get elapsed time from the start of the test window
-                double elapsed = epicsTimeDiffInSeconds(&now, &start);
-
-                // Remaining time for test
-                const double remaining_test_window = window - elapsed;
-                // Remaining time including extra time at the end of the test where we wait for late results
-                double remaining_wait_time = receive_window - elapsed;
-
-                // Check if the test window plus extra wait time has expired
-                if (counter >= (static_cast<double>(rate) * window) || remaining_wait_time < 0.0)
-                    break;
-
-                processPendingUpdates(result, start, rate);
-
-                // If this is the first time or, it's the time to post a new value, and there's still time
-                if (first_time || (!signaled && remaining_test_window >= 0.0)) {
-                    first_time = false;
-                    postValue(payload_type);
-                    // Poll network stats after posting too
-                    sniffer.poll();
-                }
-
-                // Determine the time until the next post
-                epicsTimeGetCurrent(&now);
-                elapsed = epicsTimeDiffInSeconds(&now, &start);
-                double until_next = period - std::fmod(elapsed, period);
-                remaining_wait_time = receive_window - elapsed;
-                const double time_to_wait = std::min(remaining_wait_time, until_next);
-
-                // Wait for the next update or the next time to post a new value
-                signaled = event.wait(time_to_wait);
-
-                // // Update the progress bar each time the bucket index changes (i.e., when we go to the next second)
-                const auto progress_percentage = static_cast<uint32_t>(100* (receive_window-remaining_wait_time) / receive_window);
-                if (progress_percentage != last_percentage) {
-                    last_percentage = progress_percentage;
-                    printProgressBar(progress_percentage, progress_prefix);
-                }
-                // drain again after wait to catch bursts
-                sniffer.poll();
-            }
-
-            // End of Tests
-            // final drain before reading total
-            sniffer.poll();
-            bytes_captured = sniffer.endCapture();
-        }
-
-        const double rss_mb = static_cast<double>(getRssBytes()) / (1024 * 1024);
-        const auto cpu_percent = cpuPercentSince(w0, c0);
-
-        result.print(scenario_type, payload_type, payload_label, rate, rate_label, cpu_percent, rss_mb, bytes_captured);
-        std::cout << std::endl;
-    }
-
-    /**
-     * Start a monitor subscription for the given payload type.
-     * The PV to monitor is based on the payload type.
-     * @param payload_type The type of payload to monitor.
-     * @param rate the rate at which we expect to get
-     */
-    void startMonitor(const PayloadType payload_type, const uint32_t rate) {
-        const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
-                              : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
-                                                             : "PERF:SMALL";
-
-        // Heuristic to limit coalescing: ensure a large enough client-side queue.
-        // Larger queues reduce bias where only the newest updates are delivered at high rates.
-        auto queue_size = 0u;
-        switch (payload_type) {
-            case SMALL_4B:
-                // Allow up to ~100k small updates buffered, but not less than 2*rate
-                queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 100000u), 1000u);
-                break;
-            case MEDIUM_1KB:
-                // Medium payloads: cap at 20k to bound memory; but allow at least 2*rate
-                queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 20000u), 100u);
-                break;
-            case LARGE_2MB:
-                // Large payloads are expensive; queue just a small number
-                queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 10u), 2u);
-                break;
-        }
-
-        // Set up a subscription monitor
-        sub = client.monitor(pv_name)
-                  .record("queueSize", queue_size)
-                  .record("pipeline", true)
-                  .maskConnected(true)  // suppress Connected events from throwing
-                  .maskDisconnected(true)
-                  .event([this](client::Subscription&) {
-                      // Drain all currently queued updates from the subscription and enqueue locally.
-                      // Important: only signaling when the client queue transitions from empty->non-empty.
-                      // If we leave entries in the subscription queue, further events may not be delivered.
-                      size_t n_enqueued = 0u;
-                      epicsTimeStamp receive_time{};
-                      epicsTimeGetCurrent(&receive_time);
-
-                      while (true) {
-                          try {
-                              const auto value = sub->pop();
-                              if (!value) break; // queue empty
-                              update_queue.push(Update{value, receive_time});
-                              ++n_enqueued;
-                          } catch (const client::Connected&) {
-                          } catch (const client::Disconnect&) {
-                          } catch (const std::exception& e) {
-                              // log and stop draining to avoid tight loop on errors
-                              log_warn_printf(perf, "Monitor pop() error: %s\n", e.what());
-                              break;
-                          }
+                  while (true) {
+                      try {
+                          const auto value = sub->pop();
+                          if (!value) break; // queue empty
+                          update_queue.push(Update{value, receive_time});
+                      } catch (const client::Connected&) {
+                      } catch (const client::Disconnect&) {
+                      } catch (const std::exception& e) {
+                          // log and stop draining to avoid tight loop on errors
+                          log_warn_printf(consumerlog, "Monitor pop() error: %s\n", e.what());
+                          break;
                       }
+                  }
+              })
+              .exec();
+}
 
-                      if (n_enqueued) {
-                          // signal our Scenario epicsEvent once after enqueueing one or more updates
-                          event.signal();
-                      }
-                  })
-                  .exec();
+/**
+ * Post a value to the appropriate PV based on the payload type.
+ * This function creates a new value, updates the counter-field, and timestamps the value.
+ * It then marks all fields as updated so that the server will send the full data to the client.
+ * It then posts the value to the appropriate PV.
+ *
+ * @param payload_type The type of payload to post.
+ * @param counter the counter to embed in the value posted
+ */
+void Scenario::postValue(const PayloadType payload_type, const int32_t counter) {
+    try {
+        auto value = (payload_type == SMALL_4B) ? small_value : (payload_type == MEDIUM_1KB) ? medium_value : large_value;
+        value["counter"] = counter;
+        auto timestamp = value["timeStamp"];
+        epicsTimeStamp sent_time{};
+        epicsTimeGetCurrent(&sent_time);
+        timestamp["secondsPastEpoch"] = sent_time.secPastEpoch;
+        timestamp["nanoseconds"] = sent_time.nsec;
+        value.mark(true);
+        (payload_type == SMALL_4B ? small_pv : payload_type == MEDIUM_1KB ? medium_pv : large_pv).post(value);
+    } catch (std::exception& e) {
+        log_warn_printf(producerlog, "post_once error: %s\n", e.what());
     }
+}
 
-    /**
-     * Post a value to the appropriate PV based on the payload type.
-     * This function creates a new value, updates the counter-field, and timestamps the value.
-     * It then marks all fields as updated so that the server will send the full data to the client.
-     * It then posts the value to the appropriate PV.
-     *
-     * @param payload_type The type of payload to post.
-     */
-    void postValue(const PayloadType payload_type) {
+/**
+ * Process the pending updates from the update_queue.
+ * This method is called when the event is signaled by the monitor subscription or when this is the first time.
+ * It processes the queue of received updates, updating the result object with the delta between the send-time and
+ * the received-time (transit time)
+ *
+ * @param result The result object to update with the received updates.
+ * @param start The start time of the test.
+ * @param rate The rate of the updates.
+ * @return the next expected counter
+ */
+int32_t Scenario::processPendingUpdates(Result &result,
+                           const epicsTimeStamp &start,
+                           const uint32_t rate) {
+    epicsTimeStamp now{};
+    epicsTimeGetCurrent(&now);
+    int32_t next_count{0};
+
+    while (update_queue.size()) {
         try {
-            auto value = (payload_type == SMALL_4B) ? small_value : (payload_type == MEDIUM_1KB) ? medium_value : large_value;
-            value["counter"] = counter++;
-            auto timestamp = value["timeStamp"];
-            epicsTimeStamp now{};
             epicsTimeGetCurrent(&now);
-            timestamp["secondsPastEpoch"] = now.secPastEpoch;
-            timestamp["nanoseconds"] = now.nsec;
-            value.mark(true);
-            (payload_type == SMALL_4B ? small_pv : payload_type == MEDIUM_1KB ? medium_pv : large_pv).post(value);
-        } catch (std::exception& e) {
-            log_warn_printf(perf, "post_once error: %s\n", e.what());
+            const auto update = update_queue.pop();
+
+            // Get the timestamp that shows when the data was sent
+            const auto timestamp = update.value["timeStamp"];
+            const auto received_count = update.value["counter"].as<int32_t>();
+            epicsTimeStamp sent{timestamp["secondsPastEpoch"].as<epicsUInt32>(),
+                                timestamp["nanoseconds"].as<epicsUInt32>()};
+            if (received_count < 0) continue;
+
+            // Determine how much time has elapsed from the beginning of the test sequence
+            const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
+            // Determine how much time the data was in transit
+            const double transit_time = epicsTimeDiffInSeconds(&update.receive_time, &sent);
+
+            // We should never get anything sent after the end of the window, but out of an abundance of caution we break if so
+            constexpr double window = 60.0;
+            if (elapsed >= window)
+                break;
+
+            // Calculate the 0-based bucket index based on the seconds since the beginning of the test
+            const auto bucket_index = static_cast<uint32_t>(elapsed);
+
+            // Another check to make sure that we are not beyond the end of the results buffer and then add the results
+            if (bucket_index < result.values.size())
+                next_count = result.add(bucket_index, transit_time, received_count, rate);
+        } catch (const client::Connected&) {
+            // ignore
+        } catch (const client::Disconnect&) {
+            // ignore
         }
     }
-
-    /**
-     * Process the pending updates from the update_queue.
-     * This method is called when the event is signaled by the monitor subscription or when this is the first time.
-     * It processes the queue of received updates, updating the result object with the delta between the send-time and
-     * the received-time (transit time)
-     *
-     * @param result The result object to update with the received updates.
-     * @param start The start time of the test.
-     * @param rate The rate of the updates.
-     */
-    void processPendingUpdates(Result &result,
-                               const epicsTimeStamp &start,
-                               const uint32_t rate) {
-        epicsTimeStamp now{};
-        epicsTimeGetCurrent(&now);
-
-        while (update_queue.size()) {
-            try {
-                epicsTimeGetCurrent(&now);
-                const auto update = update_queue.pop();
-
-                // Get the timestamp that shows when the data was sent
-                const auto timestamp = update.value["timeStamp"];
-                const auto received_count = update.value["counter"].as<int32_t>();
-                epicsTimeStamp sent{timestamp["secondsPastEpoch"].as<epicsUInt32>(),
-                                    timestamp["nanoseconds"].as<epicsUInt32>()};
-                if (received_count < 0) continue;
-
-                // Determine how much time has elapsed from the beginning of the test sequence
-                const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
-                // Determine how much time the data was in transit
-                const double transit_time = epicsTimeDiffInSeconds(&update.receive_time, &sent);
-
-                // We should never get anything sent after the end of the window, but out of an abundance of caution we break if so
-                constexpr double window = 60.0;
-                if (elapsed >= window)
-                    break;
-
-                // Calculate the 0-based bucket index based on the seconds since the beginning of the test
-                const auto bucket_index = static_cast<uint32_t>(elapsed);
-
-                // Another check to make sure that we are not beyond the end of the results buffer and then add the results
-                if (bucket_index < result.values.size())
-                    result.add(bucket_index, transit_time, received_count, rate);
-            } catch (const client::Connected&) {
-                // ignore
-            } catch (const client::Disconnect&) {
-                // ignore
-            }
-        }
-    }
-};
+    return next_count;
+}
 
 /**
  * Extract target architecture from the given test executable path name
@@ -1051,21 +860,9 @@ std::string extractTargetArch(const std::string& path) {
     const auto base_path = path.substr(0, std::string::npos - (terminated_by_path_separator ? 1 : 0));
     const std::string target_arch = basename(const_cast<char*>(base_path.c_str()));
     const auto ta = target_arch.substr(2, std::string::npos);
-    log_debug_printf(perf, "Target architecture: %s\n", ta.c_str());
+    log_debug_printf(perflog, "Target architecture: %s\n", ta.c_str());
     return ta;
 }
-
-/**
- * Child process struct to store the process ID and environment variables.
- */
-struct Child {
-    pid_t pid;
-    std::vector<std::string> env{};
-
-    Child() : pid(-1) {}
-
-    explicit Child(const std::initializer_list<std::string>& key_value_pairs) : pid(-1), env(key_value_pairs) {}
-};
 
 /**
  * Start the PVACMS process
@@ -1093,11 +890,11 @@ bool startPVACMS(const std::string& pvacms_executable_path, Child& pvacms_subpro
             } else {
                 if (env_part.empty()) {
                     if (unsetenv(key.c_str()) != 0) {
-                        log_err_printf(perf, "Failed to unset environment variable: %s \n", key.c_str());
+                        log_err_printf(perflog, "Failed to unset environment variable: %s \n", key.c_str());
                     }
                 } else {
                     if (setenv(key.c_str(), env_part.c_str(), 1) != 0) {
-                        log_err_printf(perf,
+                        log_err_printf(perflog,
                                        "Failed to set environment variable: %s = \"%s\"\n",
                                        key.c_str(),
                                        env_part.c_str());
@@ -1108,11 +905,11 @@ bool startPVACMS(const std::string& pvacms_executable_path, Child& pvacms_subpro
         }
 
         const char* argv0 = pvacms_executable_path.c_str();
-        log_info_printf(perf, "Starting child process: %s %s\n", pvacms_executable_path.c_str(), "pvacms");
+        log_info_printf(perflog, "Starting child process: %s %s\n", pvacms_executable_path.c_str(), "pvacms");
         execlp(argv0, "pvacms", "--preload-cert", "server1.p12", "client1.p12", nullptr);
 
         // If exec fails
-        log_err_printf(perf, "Failed to start child process: %s %s\n", pvacms_executable_path.c_str(), "pvacms");
+        log_err_printf(perflog, "Failed to start child process: %s %s\n", pvacms_executable_path.c_str(), "pvacms");
         _exit(127);
     }
 
@@ -1159,17 +956,18 @@ void onSigint(int) {
     _exit(130);
 }
 
-}  // anonymous namespace
+}  // namespace perf
 }  // namespace pvxs
 
 int main(int argc, char* argv[]) {
+    using namespace pvxs::perf;
 #if defined(EPICS_VERSION_INT) && EPICS_VERSION_INT >= VERSION_INT(7, 0, 3, 1)
     (void)argc;
     (void)argv;
-    pvxs::logger_level_set(perf.name, pvxs::Level::Info);
+    pvxs::logger_level_set(perflog.name, pvxs::Level::Info);
     pvxs::logger_config_env();
     // Install simple Ctrl-C trap
-    signal(SIGINT, pvxs::onSigint);
+    signal(SIGINT, onSigint);
 
     // CLI argument parsing
     std::vector<std::string> opt_scenarios;
@@ -1185,13 +983,13 @@ int main(int argc, char* argv[]) {
     CLI11_PARSE(app, argc, argv);
 
     // Build selected lists (defaults to all if no selection)
-    std::vector<pvxs::ScenarioType> scenarios_sel;
+    std::vector<ScenarioType> scenarios_sel;
     if (opt_scenarios.empty()) {
-        scenarios_sel = {pvxs::TCP, pvxs::TLS, pvxs::TLS_CMS, pvxs::TLS_CMS_STAPLED};
+        scenarios_sel = {TCP, TLS, TLS_CMS, TLS_CMS_STAPLED};
     } else {
         for (const auto& s : opt_scenarios) {
-            pvxs::ScenarioType st{};
-            if (!pvxs::parseScenarioType(s, st)) {
+            ScenarioType st{};
+            if (!parseScenarioType(s, st)) {
                 std::cerr << "Unknown scenario type: " << s << std::endl;
                 return 2;
             }
@@ -1200,13 +998,13 @@ int main(int argc, char* argv[]) {
     }
 
     // Build selected lists (defaults to all if no selection)
-    std::vector<pvxs::PayloadType> payloads_sel;
+    std::vector<PayloadType> payloads_sel;
     if (opt_payloads.empty()) {
-        payloads_sel = {pvxs::SMALL_4B, pvxs::MEDIUM_1KB, pvxs::LARGE_2MB};
+        payloads_sel = {SMALL_4B, MEDIUM_1KB, LARGE_2MB};
     } else {
         for (const auto& p : opt_payloads) {
-            pvxs::PayloadType pt{};
-            if (!pvxs::parsePayloadType(p, pt)) {
+            PayloadType pt{};
+            if (!parsePayloadType(p, pt)) {
                 std::cerr << "Unknown payload type: " << p << std::endl;
                 return 2;
             }
@@ -1236,7 +1034,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Extract the target architecture from the test directory name
-    const std::string target_arch = pvxs::extractTargetArch(test_dir);
+    const std::string target_arch = extractTargetArch(test_dir);
 
     // Determine the pvacms executable location
     const std::string pvacms_executable_path = test_dir
@@ -1248,7 +1046,7 @@ int main(int argc, char* argv[]) {
     std::cout << "pvacms executable: " << pvacms_executable_path << std::endl;
 
     // Create a child process to run PVACMS
-    pvxs::pvacms_subprocess = pvxs::Child{
+    pvacms_subprocess = Child{
         "SSLKEYLOGFILE",                  {},
         "XDG_DATA_HOME",                    test_dir+"perf/data",
         "XDG_CONFIG_HOME",                  test_dir+"perf/config",
@@ -1260,7 +1058,7 @@ int main(int argc, char* argv[]) {
         "EPICS_CERT_AUTH_TLS_KEYCHAIN",     "cert_auth.p12",
         "EPICS_PVAS_TLS_KEYCHAIN",          "superserver1.p12",
     };
-    if (!pvxs::startPVACMS(pvacms_executable_path, pvxs::pvacms_subprocess)) {
+    if (!startPVACMS(pvacms_executable_path, pvacms_subprocess)) {
         std::cerr << "Failed to start pvacms: " << pvacms_executable_path << std::endl;
         return 1;
     }
@@ -1272,7 +1070,7 @@ int main(int argc, char* argv[]) {
 
     // Run selected scenarios
     for (auto scenario_type : scenarios_sel) {
-        pvxs::Scenario scenario(scenario_type);
+        Scenario scenario(scenario_type);
         std::cout << "Connection Type, PVAccess Payload, Tx Rate(Hz), Throughput(bps), "
                   << "Min(ms), Max(ms), CPU(% core), Memory(MB), Network Load(bytes), "
                   << " 1, 2, 3, 4, 5, 6, 7, 8, 9,10,"
@@ -1293,11 +1091,11 @@ int main(int argc, char* argv[]) {
                 scenario.run(payload_type);
             } else {
                 const std::string payload_label =
-                    (payload_type == pvxs::LARGE_2MB
+                    (payload_type == LARGE_2MB
                          ? "Large(4MB)"
-                         : (payload_type == pvxs::MEDIUM_1KB ? "Medium(1KB)" : "Small(4B)"));
+                         : (payload_type == MEDIUM_1KB ? "Medium(1KB)" : "Small(4B)"));
                 for (auto rate : opt_rates) {
-                    const std::string speed_label = pvxs::formatRateLabel(rate);
+                    const std::string speed_label = formatRateLabel(rate);
                     scenario.run(payload_type, rate, payload_label, speed_label);
                 }
             }
@@ -1306,7 +1104,7 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl;
     }
 
-    pvxs::stopPVACMS(pvxs::pvacms_subprocess);
+    stopPVACMS(pvacms_subprocess);
 
     std::cout << "Performance Tests Complete" << std::endl;
 #endif
