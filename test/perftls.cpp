@@ -75,7 +75,7 @@ namespace perf {
 static double wireSizeBytes(const Value& val) {
     using namespace pvxs::impl;
     std::vector<uint8_t> buf;
-    buf.reserve(1024);
+    buf.reserve(4096000);
     VectorOutBuf M(true, buf);
     to_wire_full(M, val);
     return static_cast<double>(M.consumed());
