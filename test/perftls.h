@@ -96,7 +96,7 @@ enum ScenarioType { TCP, TLS, TLS_CMS, TLS_CMS_STAPLED };
  * Large is a 4mpx image = 2000x2000 pixels, 4 bits per pixel (2,000,000 bytes) wrapped in an NT NDArray.
  */
 enum PayloadType {
-    SMALL_4B,
+    SMALL_32B,
     MEDIUM_1KB,
     LARGE_2MB,
 };

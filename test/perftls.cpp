@@ -82,9 +82,7 @@ static double wireSizeBytes(const Value& val) {
 }
 
 DEFINE_LOGGER(perflog, "pvxs.perf");
-DEFINE_LOGGER(scenariolog, "pvxs.perf.scenario");
 DEFINE_LOGGER(producerlog, "pvxs.perf.scenario.producer");
-DEFINE_LOGGER(consumerlog, "pvxs.perf.scenario.consumer");
 
 using namespace pvxs::members;
 
@@ -225,10 +223,10 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
                << ", ";
 
     // 2) PVAccess Payload
-    std::cout << std::right << std::setw(10) << payload_label << ", ";
+    std::cout << std::right << std::setw(13) << payload_label << ", ";
 
     // 3) Tx Rate
-    std::cout << std::right << std::setw(10) << rate_label << ", ";
+    std::cout << std::right << std::setw(13) << rate_label << ", ";
 
     // 4) Throughput
     std::string throughput_units = " bps";
@@ -236,7 +234,7 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
     if      ( throughput >= 1000000000 ) { throughput /= 1000000000; throughput_units = "Gbps"; }
     else if ( throughput >= 1000000    ) { throughput /= 1000000;    throughput_units = "Mbps"; }
     else if ( throughput >= 1000       ) { throughput /= 1000;       throughput_units = "Kbps"; }
-    std::cout << std::right << std::setw(6) << throughput << throughput_units << ", ";
+    std::cout << std::right << std::setw(9) << throughput << throughput_units << ", ";
 
     // 5) n, minimum / maximum transmission time
     std::cout << std::right << std::setw(8) << n << ", ";
@@ -319,6 +317,7 @@ void UpdateConsumer::run() {
  */
 void UpdateConsumer::printProgressBar(double progress_percentage) {
     // 1) Connection Type
+    const std::string bps_placeholder = SB() << (static_cast<uint32_t>(progress_percentage) % 2 ? "\\" : "/") << " bps";
     std::ostringstream oss;
     oss << std::right << std::setw(15)
         << ( self.scenario_type == TLS_CMS_STAPLED ? "TLS_CMS_STAPLED"
@@ -328,19 +327,25 @@ void UpdateConsumer::printProgressBar(double progress_percentage) {
         << ", "
 
     // 2) PVAccess Payload
-    << std::right << std::setw(11) << payload_label << ", "
+    << std::right << std::setw(13) << payload_label << ", "
 
     // 3) Tx Rate
-    << std::right << std::setw(11) << rate_label << ": ";
+    << std::right << std::setw(13) << rate_label << ", "
+
+    // 4) Throughput
+    << std::right << std::setw(13) << bps_placeholder << ", "
+
+    // 5) N
+    << std::right << std::setw(8) << result.n << ": ";
     auto prefix = oss.str();
 
     if (progress_percentage > 100.0)
         progress_percentage = 100.0;
     std::string bar;
-    bar.reserve(165);
+    bar.reserve(170);
     bar += prefix;
     bar += "▏";  // left cap
-    const double bar_len = 159.0 - static_cast<double>(prefix.size()) - 2.0;
+    const double bar_len = 164.0 - static_cast<double>(prefix.size()) - 2.0;
     uint32_t i;
     for (i = 0; i < 0.01 * progress_percentage * bar_len; ++i)
         bar += "█";
@@ -398,11 +403,11 @@ bool parseScenarioType(const std::string& name, ScenarioType& out) {
 bool parsePayloadType(const std::string& name, PayloadType& out) {
     auto n = toUpperStr(name);
     if (n == "SMALL") {
-        out = SMALL_4B;
+        out = SMALL_32B;
         return true;
     }
     if (n == "MEDIUM") {
-        out = SMALL_4B;
+        out = SMALL_32B;
         return true;
     }
     if (n == "LARGE") {
@@ -635,9 +640,9 @@ void Scenario::buildClientContext() {
  */
 void Scenario::run(const ScenarioType &scenario_type, PayloadType payload_type) {
     const auto payload_label =
-        (payload_type == LARGE_2MB  ? " LARGE(2MB)"
+        (payload_type == LARGE_2MB  ? "LARGE(2MB)"
        : payload_type == MEDIUM_1KB ? "MEDIUM(1KB)"
-       :                              "  SMALL(4B)");
+       :                              "SMALL(32B)");
     Scenario {scenario_type}.run(payload_type,           1, payload_label, "   1Hz");
     Scenario {scenario_type}.run(payload_type,          10, payload_label, "  10Hz");
     Scenario {scenario_type}.run(payload_type,         100, payload_label, " 100Hz");
@@ -670,11 +675,7 @@ void Scenario::run(const PayloadType payload_type,
          const uint32_t rate,
          const std::string& payload_label,
          const std::string& rate_label) {
-    if (payload_type == LARGE_2MB && rate > 100) {
-        // Greater than 2 Gbps is beyond reasonable
-        log_warn_printf(scenariolog, "Skipping LARGE payloads where rate is greater that 100Hz: %s\n", rate_label.c_str());
-        return;
-    }
+    if (payload_type == LARGE_2MB && rate > 100) return;
 
     // To collect the results of the test
     Result result{
@@ -750,7 +751,7 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
     // Larger queues reduce bias where only the newest updates are delivered at high rates.
     auto queue_size = 0u;
     switch (payload_type) {
-        case SMALL_4B:
+        case SMALL_32B:
             // Allow up to ~100k small updates buffered, but not less than 2*rate
             queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 100000u), 1000u);
             break;
@@ -806,7 +807,7 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
  */
 void Scenario::postValue(const PayloadType payload_type, const int32_t counter) {
     try {
-        auto value = (payload_type == SMALL_4B) ? small_value : (payload_type == MEDIUM_1KB) ? medium_value : large_value;
+        auto value = (payload_type == SMALL_32B) ? small_value : (payload_type == MEDIUM_1KB) ? medium_value : large_value;
         value["counter"] = counter;
         auto timestamp = value["timeStamp"];
         epicsTimeStamp sent_time{};
@@ -814,7 +815,7 @@ void Scenario::postValue(const PayloadType payload_type, const int32_t counter) 
         timestamp["secondsPastEpoch"] = sent_time.secPastEpoch;
         timestamp["nanoseconds"] = sent_time.nsec;
         value.mark(true);
-        (payload_type == SMALL_4B ? small_pv : payload_type == MEDIUM_1KB ? medium_pv : large_pv).post(value);
+        (payload_type == SMALL_32B ? small_pv : payload_type == MEDIUM_1KB ? medium_pv : large_pv).post(value);
     } catch (std::exception& e) {
         log_warn_printf(producerlog, "post_once error: %s\n", e.what());
     }
@@ -1032,7 +1033,7 @@ int main(int argc, char* argv[]) {
     // Build selected lists (defaults to all if no selection)
     std::vector<PayloadType> payloads_sel;
     if (opt_payloads.empty()) {
-        payloads_sel = {SMALL_4B, MEDIUM_1KB, LARGE_2MB};
+        payloads_sel = {SMALL_32B, MEDIUM_1KB, LARGE_2MB};
     } else {
         for (const auto& p : opt_payloads) {
             PayloadType pt{};
@@ -1103,12 +1104,12 @@ int main(int argc, char* argv[]) {
     // Run selected scenarios
     for (auto scenario_type : scenarios_sel) {
         std::cout << std::right << std::setw(15) << "Connection Type" << ", "
-                  << std::right << std::setw(10) << "Payload" << ", "
-                  << std::right << std::setw(10) << "Tx Rate(Hz)" << ", "
-                  << std::right << std::setw(10) << "Throughput" << ", "
+                  << std::right << std::setw(13) << "Payload" << ", "
+                  << std::right << std::setw(13) << "Tx Rate(Hz)" << ", "
+                  << std::right << std::setw(13) << "Throughput" << ", "
                   << std::right << std::setw( 8) << "N" << ", "
                   << std::right << std::setw(10) << "Min(ms)" << ", "
-                  << std::right << std::setw(10) << "Max(ms" << ", "
+                  << std::right << std::setw(10) << "Max(ms)" << ", "
                   << std::right << std::setw(10) << "Mean(ms)" << ", "
                   << std::right << std::setw(10) << "StdDev(ms)" << ", "
                   << std::right << std::setw(12) << "CPU(% core)" << ", "
@@ -1122,8 +1123,8 @@ int main(int argc, char* argv[]) {
             } else {
                 const std::string payload_label =
                     (payload_type == LARGE_2MB
-                         ? "LARGE(4MB)"
-                         : (payload_type == MEDIUM_1KB ? "MEDIUM(1KB)" : "SMALL(4B)"));
+                         ? "LARGE(2MB)"
+                         : (payload_type == MEDIUM_1KB ? "MEDIUM(1KB)" : "SMALL(32B)"));
                 for (auto rate : opt_rates) {
                     const std::string speed_label = formatRateLabel(rate);
                     Scenario scenario(scenario_type);
