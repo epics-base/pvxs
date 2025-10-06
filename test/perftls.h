@@ -9,15 +9,12 @@
 
 #include <algorithm>
 #include <csignal>
-#include <cstring>
 #include <functional>
 #include <iostream>
 #include <limits>
 #include <string>
 #include <vector>
-#include <atomic>
 #include <epicsThread.h>
-#include <epicsEvent.h>
 
 #ifdef __linux__
 #include <chrono>
@@ -120,15 +117,23 @@ enum PayloadType {
  */
 struct Result {
     epicsMutex lock;
-    std::array<uint64_t, 60> counts;
-    std::array<double, 60> values;
-    uint32_t expected_count{0};
-    std::array<uint32_t, 60> dropped;
-    double min = std::numeric_limits<double>::max();
-    double max = -1.0;
 
-    int32_t add(uint index, double value, uint32_t this_count, uint32_t rate) ;
+    int32_t n = 0;
+    double mean = 0.0;
+    double M2 = 0.0; // the sum, of the squares, of the differences from the current mean
+    double min = std::numeric_limits<double>::max();
+    double max = std::numeric_limits<double>::lowest();
+
+    int32_t add(double value) ;
     void print(ScenarioType scenario_type, PayloadType payload_type, const std::string &payload_label, uint32_t rate, const std::string &rate_label, double cpu_percent, double rss_mb, uint64_t bytes_captured) const ;
+
+    double variance() const {
+        return n > 1 ? M2 / (static_cast<double>(n) - 1) : 0.0;
+    }
+
+    double stddev() const {
+        return std::sqrt(variance());
+    }
 };
 
 struct Update {
@@ -197,14 +202,14 @@ struct Scenario {
     void configureServer();
     void startServer() ;
     void buildClientContext();
-    void run(PayloadType payload_type);
+    static void run(const ScenarioType &scenario_type, PayloadType payload_type);
     void run(PayloadType payload_type, uint32_t rate, const std::string& payload_label, const std::string& rate_label);
     void startMonitor(PayloadType payload_type, uint32_t rate);
     void postValue(PayloadType payload_type, int32_t counter = -1);
-    int32_t processPendingUpdates(Result &result, const epicsTimeStamp &start, uint32_t rate);
+    int32_t processPendingUpdates(Result &result, const epicsTimeStamp &start);
 };
 
-struct UpdateProducer final : epicsThreadRunable {
+struct UpdateProducer final {
     Scenario &self;
     PayloadType payload;
     const uint32_t rate;
@@ -214,7 +219,7 @@ struct UpdateProducer final : epicsThreadRunable {
     UpdateProducer(Scenario &scenario, const PayloadType payload_type, const uint32_t rate, const epicsTimeStamp& start)
         : self{scenario}, payload{payload_type}, rate{rate}, start{start} {}
 
-   void run() override;
+   void run();
 };
 
 struct UpdateConsumer final : epicsThreadRunable {

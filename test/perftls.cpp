@@ -16,7 +16,6 @@
 #include <vector>
 #include <atomic>
 #include <epicsThread.h>
-#include <epicsEvent.h>
 
 #ifdef __linux__
 #include <chrono>
@@ -35,7 +34,6 @@
 #include <mach/mach.h>
 #include <net/if.h>
 #include <sys/resource.h>
-#include <sys/time.h>
 #endif
 
 #include <libgen.h>
@@ -152,34 +150,24 @@ double cpuPercentSince(const double w0, const double c0) {
 
 /**
  * Add a value to the result
- * @param index The index of the result
  * @param value The value to add
- * @param this_count The count which was embedded in the update, to be compared to the expected count to see if any
- * updates were dropped
- * @param rate The rate of the updates
  */
-int32_t Result::add(const uint index, const double value, const uint32_t this_count, const uint32_t rate) {
+int32_t Result::add(const double value) {
     if (value <= 0.0)
         return -1;
 
     Guard G(lock);
-    // Get the actual number of updates that have been received in this second, and increment the count
-    const auto count = counts[index]++;
-    // Calculate the moving average of transmission times by incorporating the new value with the running average
-    values[index] = (values[index] * count + value) / (count + 1);
+
+    const double delta = value - mean;
+    mean += delta / static_cast<double>(++n);
+    const double delta2 = value - mean;
+    M2 += delta * delta2;
+
     // Update max and min transmission times
-    if (value < min)
-        min = value;
-    if (value > max)
-        max = value;
-    // Calculate dropped packets.  If the counter embedded in the update is greater than the expected count, then we
-    // have dropped updates.
-    for (; expected_count < this_count; ++expected_count) {
-        const auto dropped_index = expected_count / rate;
-        dropped[dropped_index]++;
-    }
-    // Increment the expected count ready for the next update
-    return ++expected_count;
+    if (value < min) min = value;
+    if (value > max) max = value;
+
+    return n;
 }
 
 /**
@@ -212,6 +200,7 @@ int32_t Result::add(const uint index, const double value, const uint32_t this_co
 void Result::print(const ScenarioType scenario_type, const PayloadType payload_type, const std::string &payload_label,
     const uint32_t rate, const std::string &rate_label, const double cpu_percent, const double rss_mb, uint64_t bytes_captured) const {
     // Display Data
+    std::cout <<"                                                                                                                              \r";
 
     // 1) Connection Type
     std::cout << (scenario_type == TLS_CMS_STAPLED ? "TLS_CMS_STAPLED, "
@@ -233,11 +222,13 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
     // 4) Throughput
     std::cout << throughput << throughput_units << ", ";
 
-    // 5) minimum transmission time
+    // 5) n, minimum / maximum transmission time
+    std::cout << n << ", ";
     if (min < std::numeric_limits<double>::max()) std::cout << min << ", "; else std::cout << " , ";
+    if (max > std::numeric_limits<double>::lowest()) std::cout << max << ", "; else std::cout << " ,  ";
 
-    // 6) maximum transmission time
-    if (max > 0) std::cout << max << ", "; else std::cout << " ,  ";
+    // 6) Mean, StdDev
+    std::cout << mean << ", " << stddev() <<  ", ";
 
     // 7) CPU% of 1 Core
     std::cout << cpu_percent << ", " ;
@@ -247,16 +238,9 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
 
     // 9) Network load
     std::cout << bytes_captured << ", ";
-
-    // 10) Transmission times
-    for (const auto value : values) { if (value) std::cout << value << ", "; else std::cout << " , "; }
-
-    // 11) Dropped
-    for (const auto value : dropped) { if (value) std::cout << value << ", "; else std::cout << ", "; }
 }
 
 void UpdateProducer::run() {
-    std::cout << "Starting UpdateProducer" << std::endl;
     const auto total = static_cast<uint32_t>(rate * window);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
     for (auto counter = 0; counter < total; ++counter) {
@@ -271,19 +255,18 @@ void UpdateProducer::run() {
         const auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
         if (time_till_next_emission > 0.0) epicsThreadSleep(time_till_next_emission);
     }
-    std::cout << "UpdateProducer finished" << std::endl;
 }
 
 void UpdateConsumer::run() {
-    std::cout << "Starting UpdateConsumer" << std::endl;
     const auto window_count = static_cast<int32_t>(rate * window);
     const auto total_receive_ticks = static_cast<int32_t>(receive_window * rate);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
     int32_t running_count{-1}; // Keeps track of actual counted packets consumed
-    for (auto tick = 0; tick < total_receive_ticks && running_count < window_count; ++tick) {
-        std::cout << "Tick: " << tick << std::endl;
+    auto tick = 0;
+    while (tick < total_receive_ticks && running_count < window_count) {
         // Get any available updates
-        running_count = self.processPendingUpdates(result, start, rate);
+        running_count = self.processPendingUpdates(result, start);
+        tick = std::max(++tick, running_count);
 
         epicsTimeStamp now{};
         epicsTimeGetCurrent(&now);
@@ -300,11 +283,10 @@ void UpdateConsumer::run() {
         sniffer->poll();
 
         // Sleep until the tick
-        const double next_tick_secs_from_start = static_cast<double>(tick + 1)  * time_per_update ;
+        const auto next_tick_secs_from_start = time_per_update * tick ;
         const auto time_till_next_tick = next_tick_secs_from_start - elapsed_since_start;
         if (time_till_next_tick > 0.0) epicsThreadSleep(time_till_next_tick);
     }
-    std::cout << "UpdateConsumer finished" << std::endl;
 }
 
 /**
@@ -608,20 +590,21 @@ void Scenario::buildClientContext() {
  * Run the performance test Scenario for the given payload type.  This method runs tests for all the different rates
  * for the given payload type. The rates are 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, and 1 MHz. For the Large payload
  * type, the rates are 1 Hz, 10 Hz, 100 Hz, and 1 KHz. Each rate test runs for 60 seconds.
+ * @param scenario_type
  * @param payload_type The type of payload to test.
  */
-void Scenario::run(const PayloadType payload_type) {
+void Scenario::run(const ScenarioType &scenario_type, PayloadType payload_type) {
     const auto payload_label = (payload_type == LARGE_2MB    ? "Large(2MB)"
                                 : payload_type == MEDIUM_1KB ? "Medium(1KB)"
                                                              : "SMALL(4B)");
-    run(payload_type, 1, payload_label, "  1 Hz");
-    run(payload_type, 10, payload_label, " 10 Hz");
-    run(payload_type, 100, payload_label, "100 Hz");
-    run(payload_type, 1000, payload_label, "  1KHz");
+    Scenario {scenario_type}.run(payload_type, 1, payload_label, "  1 Hz");
+    Scenario {scenario_type}.run(payload_type, 10, payload_label, " 10 Hz");
+    Scenario {scenario_type}.run(payload_type, 100, payload_label, "100 Hz");
+    Scenario {scenario_type}.run(payload_type, 1000, payload_label, "  1KHz");
     if (payload_type != LARGE_2MB) {
-        run(payload_type, 10000, payload_label, " 10KHz");
-        run(payload_type, 100000, payload_label, "100KHz");
-        run(payload_type, 1000000, payload_label, "  1MHz");
+        Scenario {scenario_type}.run(payload_type, 10000, payload_label, " 10KHz");
+        Scenario {scenario_type}.run(payload_type, 100000, payload_label, "100KHz");
+        Scenario {scenario_type}.run(payload_type, 1000000, payload_label, "  1MHz");
     }
 }
 
@@ -661,7 +644,7 @@ void Scenario::run(const PayloadType payload_type,
     std::uint64_t bytes_captured = 0;
     {
         // This is used to collect the network traffic appearing on the test ports.
-        auto sniffer = std::make_shared<PortSniffer>(tcp_port, udp_port);
+        const auto sniffer = std::make_shared<PortSniffer>(tcp_port, udp_port);
         sniffer->startCapture();
 
         // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
@@ -670,10 +653,11 @@ void Scenario::run(const PayloadType payload_type,
         // Drain any initial connection update
         epicsTimeStamp start{};
         epicsTimeGetCurrent(&start);
-        processPendingUpdates(result, start, rate);
+        epicsThreadSleep(1.0);
+        processPendingUpdates(result, start);
 
         // Mark the start time for this sequence and quiesce before the test
-        sleep(2);
+        epicsThreadSleep(1.0);
         epicsTimeGetCurrent(&start);
 
         // Two-threaded execution
@@ -684,15 +668,13 @@ void Scenario::run(const PayloadType payload_type,
         UpdateProducer update_producer{*this, payload_type, rate, start};
         UpdateConsumer update_consumer{*this, result, rate,  start, sniffer, std::string(payload_label) + ", " + std::string(rate_label) + ", "};
 
-        epicsThread producer_thread(update_producer, "PERF-Producer", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityMedium);
         epicsThread consumer_thread(update_consumer, "PERF-Consumer", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityMedium);
 
-        consumer_thread.start();
-        producer_thread.start();
+        consumer_thread.start();   // Run in the background
+        update_producer.run();     // Block this thread
 
-        // Wait for both to complete
+        // Wait for consumer to complete
         consumer_thread.exitWait();
-        producer_thread.exitWait();
 
         // Final drain/capture
         sniffer->poll();
@@ -717,7 +699,6 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
                           : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
                                                          : "PERF:SMALL";
 
-    /*
     // Heuristic to limit coalescing: ensure a large enough client-side queue.
     // Larger queues reduce bias where only the newest updates are delivered at high rates.
     auto queue_size = 0u;
@@ -735,12 +716,12 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
             queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 10u), 2u);
             break;
     }
-    */
 
     // Set up a subscription monitor
     sub = client.monitor(pv_name)
-              // .record("queueSize", queue_size)
-              // .record("pipeline", true)
+              .record("queueSize", queue_size)
+              .record("pipeline", true)
+              .record("ackAny", std::string("50%"))
               .maskConnected(true)  // suppress Connected events from throwing
               .maskDisconnected(true)
               .event([this](client::Subscription&) {
@@ -800,15 +781,12 @@ void Scenario::postValue(const PayloadType payload_type, const int32_t counter) 
  *
  * @param result The result object to update with the received updates.
  * @param start The start time of the test.
- * @param rate The rate of the updates.
  * @return the next expected counter
  */
-int32_t Scenario::processPendingUpdates(Result &result,
-                           const epicsTimeStamp &start,
-                           const uint32_t rate) {
+int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &start) {
     epicsTimeStamp now{};
     epicsTimeGetCurrent(&now);
-    int32_t next_count{0};
+    int32_t next_count{-1};
 
     while (update_queue.size()) {
         try {
@@ -820,7 +798,8 @@ int32_t Scenario::processPendingUpdates(Result &result,
             const auto received_count = update.value["counter"].as<int32_t>();
             epicsTimeStamp sent{timestamp["secondsPastEpoch"].as<epicsUInt32>(),
                                 timestamp["nanoseconds"].as<epicsUInt32>()};
-            if (received_count < 0) continue;
+            if (received_count < 0)
+                continue;
 
             // Determine how much time has elapsed from the beginning of the test sequence
             const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
@@ -836,8 +815,8 @@ int32_t Scenario::processPendingUpdates(Result &result,
             const auto bucket_index = static_cast<uint32_t>(elapsed);
 
             // Another check to make sure that we are not beyond the end of the results buffer and then add the results
-            if (bucket_index < result.values.size())
-                next_count = result.add(bucket_index, transit_time, received_count, rate);
+            if (bucket_index < 60)
+                next_count = result.add(transit_time);
         } catch (const client::Connected&) {
             // ignore
         } catch (const client::Disconnect&) {
@@ -1070,25 +1049,13 @@ int main(int argc, char* argv[]) {
 
     // Run selected scenarios
     for (auto scenario_type : scenarios_sel) {
-        Scenario scenario(scenario_type);
         std::cout << "Connection Type, PVAccess Payload, Tx Rate(Hz), Throughput(bps), "
-                  << "Min(ms), Max(ms), CPU(% core), Memory(MB), Network Load(bytes), "
-                  << " 1, 2, 3, 4, 5, 6, 7, 8, 9,10,"
-                  << "11,12,13,14,15,16,17,18,19,20,"
-                  << "21,22,23,24,25,26,27,28,29,30,"
-                  << "31,32,33,34,35,36,37,38,39,40,"
-                  << "41,42,43,44,45,46,47,48,49,50,"
-                  << "51,52,53,54,55,56,57,58,59,60,"
-                  << " 1, 2, 3, 4, 5, 6, 7, 8, 9,10,"
-                  << "11,12,13,14,15,16,17,18,19,20,"
-                  << "21,22,23,24,25,26,27,28,29,30,"
-                  << "31,32,33,34,35,36,37,38,39,40,"
-                  << "41,42,43,44,45,46,47,48,49,50,"
-                  << "51,52,53,54,55,56,57,58,59,60 " << std::endl;
+                  << "N, Min(ms), Max(ms), Mean(ms), StdDev(ms), CPU(% core), Memory(MB), Network Load(bytes), "
+                  << std::endl;
 
         for (auto payload_type : payloads_sel) {
             if (opt_rates.empty()) {
-                scenario.run(payload_type);
+                Scenario::run(scenario_type, payload_type);
             } else {
                 const std::string payload_label =
                     (payload_type == LARGE_2MB
@@ -1096,6 +1063,7 @@ int main(int argc, char* argv[]) {
                          : (payload_type == MEDIUM_1KB ? "Medium(1KB)" : "Small(4B)"));
                 for (auto rate : opt_rates) {
                     const std::string speed_label = formatRateLabel(rate);
+                    Scenario scenario(scenario_type);
                     scenario.run(payload_type, rate, payload_label, speed_label);
                 }
             }
