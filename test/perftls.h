@@ -238,7 +238,7 @@ struct UpdateConsumer final : epicsThreadRunable {
         : self{s}, result{result}, rate{rate}, start{start}, sniffer{sniffer}, payload_label{payload_label}, rate_label{rate_label} {}
 
     void run() override;
-    void printProgressBar(uint32_t progress_percentage) ;
+    void printProgressBar(double progress_percentage) ;
 
 };
 

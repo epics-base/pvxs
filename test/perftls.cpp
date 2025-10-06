@@ -240,7 +240,7 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
     std::cout << std::right << std::setw(12) << rss_mb << ", " ;
 
     // 9) Network load
-    std::cout << std::right << std::setw(19) << bytes_captured << ", ";
+    std::cout << std::right << std::setw(19) << bytes_captured;
 }
 
 void UpdateProducer::run() {
@@ -299,7 +299,7 @@ void UpdateConsumer::run() {
  * Print a progress bar to the console
  * @param progress_percentage The percentage done
  */
-void UpdateConsumer::printProgressBar(uint32_t progress_percentage) {
+void UpdateConsumer::printProgressBar(double progress_percentage) {
     // 1) Connection Type
     std::ostringstream oss;
     oss << std::right << std::setw(15)
@@ -316,16 +316,17 @@ void UpdateConsumer::printProgressBar(uint32_t progress_percentage) {
     << std::right << std::setw(11) << rate_label << ": ";
     auto prefix = oss.str();
 
-    if (progress_percentage > 100u)
-        progress_percentage = 100u;
+    if (progress_percentage > 100.0)
+        progress_percentage = 100.0;
     std::string bar;
-    bar.reserve(prefix.size() + 100u * 3 + 16);
+    bar.reserve(165);
     bar += prefix;
     bar += "▏";  // left cap
+    const double bar_len = 165.0 - static_cast<double>(prefix.size()) - 2.0;
     uint32_t i;
-    for (i = 0u; i < progress_percentage; ++i)
+    for (i = 0; i < 0.01 * progress_percentage * bar_len; ++i)
         bar += "█";
-    for (; i < 100u; ++i)
+    for (; i < bar_len; ++i)
         bar += "░";
     bar += "▕";  // right cap
     std::cout << bar << "\r" << std::flush;
