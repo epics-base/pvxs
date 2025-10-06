@@ -56,6 +56,9 @@
 #define PVXS_ENABLE_EXPERT_API
 #include "evhelper.h"
 #include "openssl.h"
+// Internal wire helpers for computing encoded Value sizes (test-only)
+#include "pvaproto.h"
+#include "dataimpl.h"
 
 // CLI11 for command-line parsing
 #include <CLI/CLI.hpp>
@@ -66,6 +69,17 @@
 
 namespace pvxs {
 namespace perf {
+
+// Compute the PVA wire size (bytes) of a Value (type + data), for throughput calculations.
+// Performance Test only: uses internal wire encoder.
+static double wireSizeBytes(const Value& val) {
+    using namespace pvxs::impl;
+    std::vector<uint8_t> buf;
+    buf.reserve(1024);
+    VectorOutBuf M(true, buf);
+    to_wire_full(M, val);
+    return static_cast<double>(M.consumed());
+}
 
 DEFINE_LOGGER(perflog, "pvxs.perf");
 DEFINE_LOGGER(scenariolog, "pvxs.perf.scenario");
@@ -211,18 +225,18 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
                << ", ";
 
     // 2) PVAccess Payload
-    std::cout << std::right << std::setw(11) << payload_label << ", ";
+    std::cout << std::right << std::setw(10) << payload_label << ", ";
 
     // 3) Tx Rate
-    std::cout << std::right << std::setw(11) << rate_label << ", ";
+    std::cout << std::right << std::setw(10) << rate_label << ", ";
 
     // 4) Throughput
     std::string throughput_units = " bps";
-    auto throughput = (payload_type == LARGE_2MB ? 2000000.0 : payload_type == MEDIUM_1KB ? 1000.0 : 4.0) * 8.0 * static_cast<double>(rate);
+    auto throughput = (payload_type == LARGE_2MB ? large_size : payload_type == MEDIUM_1KB ? medium_size : small_size) * 8.0 * static_cast<double>(rate);
     if      ( throughput >= 1000000000 ) { throughput /= 1000000000; throughput_units = "Gbps"; }
     else if ( throughput >= 1000000    ) { throughput /= 1000000;    throughput_units = "Mbps"; }
     else if ( throughput >= 1000       ) { throughput /= 1000;       throughput_units = "Kbps"; }
-    std::cout << std::right << std::setw(11) << throughput << throughput_units << ", ";
+    std::cout << std::right << std::setw(6) << throughput << throughput_units << ", ";
 
     // 5) n, minimum / maximum transmission time
     std::cout << std::right << std::setw(8) << n << ", ";
@@ -247,6 +261,7 @@ void UpdateProducer::run() {
     const auto total = static_cast<uint32_t>(rate * window);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
     for (auto counter = 0; counter < total; ++counter) {
+        if (self.stop_early.load(std::memory_order_relaxed)) break;
         // Post 1 update
         self.postValue(payload, counter);
 
@@ -256,6 +271,7 @@ void UpdateProducer::run() {
         const double elapsed_since_start = epicsTimeDiffInSeconds(&now, &start);
         const double next_emission_secs_from_start = static_cast<double>(counter + 1)  * time_per_update ;
         auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
+        if (self.stop_early.load(std::memory_order_relaxed)) break;
         // while (time_till_next_emission > 1e-3) {
         //     epicsThreadSleep(1e-3); time_till_next_emission -= 1e-3;
         // }
@@ -270,8 +286,10 @@ void UpdateConsumer::run() {
     int32_t running_count{-1}; // Keeps track of actual counted packets consumed
     auto tick = 0;
     while (tick < total_receive_ticks && running_count < window_count) {
+        if (self.stop_early.load(std::memory_order_relaxed)) break;
         // Get any available updates
         running_count = self.processPendingUpdates(result, start);
+        if (self.stop_early.load(std::memory_order_relaxed)) break;
         tick = std::max(++tick, running_count);
 
         epicsTimeStamp now{};
@@ -322,7 +340,7 @@ void UpdateConsumer::printProgressBar(double progress_percentage) {
     bar.reserve(165);
     bar += prefix;
     bar += "▏";  // left cap
-    const double bar_len = 165.0 - static_cast<double>(prefix.size()) - 2.0;
+    const double bar_len = 159.0 - static_cast<double>(prefix.size()) - 2.0;
     uint32_t i;
     for (i = 0; i < 0.01 * progress_percentage * bar_len; ++i)
         bar += "█";
@@ -659,7 +677,10 @@ void Scenario::run(const PayloadType payload_type,
     }
 
     // To collect the results of the test
-    Result result{};
+    Result result{
+        wireSizeBytes(small_value),
+        wireSizeBytes(medium_value),
+        wireSizeBytes(large_value)};
 
     // Collect Data
     const double w0 = wallSeconds();
@@ -686,6 +707,9 @@ void Scenario::run(const PayloadType payload_type,
         // Two-threaded execution
         // - Producer: posts updates on a fixed cadence
         // - Consumer: drains monitor updates, computes transit times, polls sniffer, and prints progress on a fixed cadence
+
+        // Reset the early-stop flag for this run
+        stop_early.store(false, std::memory_order_relaxed);
 
         // Create and start threads
         UpdateProducer update_producer{*this, payload_type, rate, start};
@@ -809,7 +833,7 @@ void Scenario::postValue(const PayloadType payload_type, const int32_t counter) 
 int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &start) {
     epicsTimeStamp now{};
     epicsTimeGetCurrent(&now);
-    int32_t next_count{-1};
+    int32_t count{result.n};
 
     while (update_queue.size()) {
         try {
@@ -823,6 +847,11 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
                                 timestamp["nanoseconds"].as<epicsUInt32>()};
             if (received_count < 0)
                 continue;
+
+            if (received_count != count) {
+                // Stop this test early on the first detected-drop
+                stop_early.store(true, std::memory_order_relaxed);
+            }
 
             // Determine how much time has elapsed from the beginning of the test sequence
             const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
@@ -839,7 +868,7 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
 
             // Another check to make sure that we are not beyond the end of the results buffer and then add the results
             if (bucket_index < 60)
-                next_count = result.add(transit_time);
+                count = result.add(transit_time);
         } catch (const client::Connected&) {
             // ignore
         } catch (const client::Disconnect&) {
@@ -847,7 +876,7 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
         }
         epicsThreadSleep(-1);
     }
-    return next_count;
+    return count;
 }
 
 /**
@@ -1074,9 +1103,9 @@ int main(int argc, char* argv[]) {
     // Run selected scenarios
     for (auto scenario_type : scenarios_sel) {
         std::cout << std::right << std::setw(15) << "Connection Type" << ", "
-                  << std::right << std::setw(11) << "Payload" << ", "
-                  << std::right << std::setw(11) << "Tx Rate(Hz)" << ", "
-                  << std::right << std::setw(15) << "Throughput(bps)" << ", "
+                  << std::right << std::setw(10) << "Payload" << ", "
+                  << std::right << std::setw(10) << "Tx Rate(Hz)" << ", "
+                  << std::right << std::setw(10) << "Throughput" << ", "
                   << std::right << std::setw( 8) << "N" << ", "
                   << std::right << std::setw(10) << "Min(ms)" << ", "
                   << std::right << std::setw(10) << "Max(ms" << ", "

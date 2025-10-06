@@ -14,6 +14,7 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <atomic>
 #include <epicsThread.h>
 
 #ifdef __linux__
@@ -123,6 +124,11 @@ struct Result {
     double M2 = 0.0; // the sum, of the squares, of the differences from the current mean
     double min = std::numeric_limits<double>::max();
     double max = std::numeric_limits<double>::lowest();
+    double small_size;
+    double medium_size;
+    double large_size;
+
+    Result(const double small_size_, const double medium_size_, const double large_size_) : small_size(small_size_), medium_size(medium_size_), large_size(large_size_) {}
 
     int32_t add(double value) ;
     void print(ScenarioType scenario_type, PayloadType payload_type, const std::string &payload_label, uint32_t rate, const std::string &rate_label, double cpu_percent, double rss_mb, uint64_t bytes_captured) const ;
@@ -160,6 +166,7 @@ struct Update {
 struct Scenario {
     const ScenarioType scenario_type;
     MPMCFIFO<Update> update_queue;
+    std::atomic<bool> stop_early{false};
 
     // Server and client to use for each side of the performance test scenario
     server::Server server;
