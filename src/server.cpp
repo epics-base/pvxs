@@ -444,25 +444,6 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 {
     effective.expand();
 
-#ifdef PVXS_ENABLE_OPENSSL
-    if (effective.isTlsConfigured()) {
-        try {
-            auto innerConf = clientConfig(effective);
-            // TODO: currently not possible to disable TLS for an individual search.
-            // until then, create a separate inner context to retrieve signed payload from CMS
-            innerConf.tls_disabled = true;
-
-            tls_context = ossl::SSLContext::for_server(effective, innerConf.build(), acceptor_loop);
-        } catch (std::exception& e) {
-            log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
-            effective.tls_disabled = true; // HACK!
-            effective.tls_keychain_file.clear();
-        }
-    } else if (tls_context) {
-        tls_context->setDegradedMode(true);
-    }
-#endif
-
     beaconSender4.set_broadcast(true);
 
     auto manager = UDPManager::instance(effective.shareUDP());
@@ -559,11 +540,27 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
         ignoreList.push_back(temp);
     }
 
-
     acceptor_loop.call([this, &tcpifaces](){
         // from accepter worker
 
 #ifdef PVXS_ENABLE_OPENSSL
+        if (effective.isTlsConfigured()) {
+            try {
+                auto innerConf = clientConfig(effective);
+                // TODO: currently not possible to disable TLS for an individual search.
+                // until then, create a separate inner context to retrieve signed payload from CMS
+                innerConf.tls_disabled = true;
+
+                tls_context = ossl::SSLContext::for_server(effective, innerConf.build(), acceptor_loop);
+            } catch (std::exception& e) {
+                log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
+                effective.tls_disabled = true; // HACK!
+                effective.tls_keychain_file.clear();
+            }
+        } else if (tls_context) {
+            tls_context->setDegradedMode(true);
+        }
+
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
 #endif
             bool firstiface = true;
