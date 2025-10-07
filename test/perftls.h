@@ -61,9 +61,79 @@
 // CLI11 for command-line parsing
 #include <CLI/CLI.hpp>
 
+#include <sqlite3.h>
+
 #if defined(__APPLE__)
 #include <pcap.h>
 #endif
+
+#define PERF_CREATE_SQL \
+    "CREATE TABLE IF NOT EXISTS results ("\
+    "  RUN_ID TEXT NOT NULL," \
+    "  PACKET_ID INTEGER NOT NULL," \
+    "  PAYLOAD_ID INTEGER NOT NULL," \
+    "  RATE INTEGER NOT NULL," \
+    "  TCP REAL," \
+    "  TLS REAL," \
+    "  TLS_CMS REAL," \
+    "  TLS_CMS_STAPLED REAL," \
+    "  PRIMARY KEY ( "\
+    "    RUN_ID, "\
+    "    PAYLOAD_ID, "\
+    "    RATE, "\
+    "    PACKET_ID"\
+    "  )" \
+    ");"
+
+#define PERF_INSERT_SQL \
+    "INSERT INTO results ("\
+    "  RUN_ID, "\
+    "  PACKET_ID, "\
+    "  PAYLOAD_ID, "\
+    "  RATE, "\
+    "  TCP, "\
+    "  TLS, "\
+    "  TLS_CMS, "\
+    "  TLS_CMS_STAPLED"\
+    ")" \
+    "VALUES (?,?,?,?,?,?,?,?);"
+
+#define PERF_UPDATE_TCP_SQL \
+    "UPDATE results "\
+    "SET "\
+    "  TCP=?1 "\
+    "WHERE RUN_ID=?2 "\
+    "  AND PAYLOAD_ID=?3 "\
+    "  AND RATE=?4 "\
+    "  AND PACKET_ID=?5;"
+
+#define PERF_UPDATE_TLS_SQL \
+    "UPDATE results "\
+    "SET "\
+    "  TLS=?1 "\
+    "WHERE RUN_ID=?2 "\
+    "  AND PAYLOAD_ID=?3 "\
+    "  AND RATE=?4 "\
+    "  AND PACKET_ID=?5;"
+
+#define PERF_UPDATE_TLS_CMS_SQL \
+    "UPDATE results "\
+    "SET "\
+    "  TLS_CMS=?1 "\
+    "WHERE RUN_ID=?2 "\
+    "  AND PAYLOAD_ID=?3 "\
+    "  AND RATE=?4 "\
+    "  AND PACKET_ID=?5;"
+
+#define PERF_UPDATE_TLS_CMS_STAPLED_SQL \
+    "UPDATE results "\
+    "SET "\
+    "  TLS_CMS_STAPLED=?1 "\
+    "WHERE RUN_ID=?2 "\
+    "  AND PAYLOAD_ID=?3 "\
+    "  AND RATE=?4 "\
+    "  AND PACKET_ID=?5;"
+
 
 namespace pvxs {
 namespace perf {
@@ -165,6 +235,14 @@ struct Update {
  */
 struct Scenario {
     const ScenarioType scenario_type;
+    // Optional SQLite database for detailed per-packet output
+    sqlite3* db{nullptr};
+    sqlite3_stmt* stmt_insert{nullptr};
+    sqlite3_stmt* stmt_update_tcp{nullptr};
+    sqlite3_stmt* stmt_update_tls{nullptr};
+    sqlite3_stmt* stmt_update_tls_cms{nullptr};
+    sqlite3_stmt* stmt_update_tls_cms_stapled{nullptr};
+    std::string run_id; // 8-hex id for this program run
     MPMCFIFO<Update> update_queue;
     std::atomic<bool> stop_early{false};
 
@@ -199,9 +277,9 @@ struct Scenario {
      * - TLS_CMS: TLS connection with CMS status checking.
      * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
      */
-    explicit Scenario(ScenarioType scenario_type);
+    explicit Scenario(ScenarioType scenario_type, const std::string &db_file_name = {}, const std::string &run_id = {});
 
-    ~Scenario() { server.stop(); }
+    ~Scenario() { server.stop(); closeDB(); }
 
     void initSmallScenarios();
     void initMediumScenarios();
@@ -209,11 +287,20 @@ struct Scenario {
     void configureServer();
     void startServer() ;
     void buildClientContext();
-    static void run(const ScenarioType &scenario_type, PayloadType payload_type);
+    static void run(const ScenarioType &scenario_type, PayloadType payload_type, const std::string &output_file_name);
     void run(PayloadType payload_type, uint32_t rate, const std::string& payload_label, const std::string& rate_label);
     void startMonitor(PayloadType payload_type, uint32_t rate);
     void postValue(PayloadType payload_type, int32_t counter = -1);
     int32_t processPendingUpdates(Result &result, const epicsTimeStamp &start);
+
+    // SQLite helpers
+    void initDB(const std::string &db_path);
+    void closeDB();
+    void insertOrUpdateSample(int payload_id, uint32_t rate, int32_t packet_id, double transit_time) const;
+
+    // Context for DB writes during a run
+    uint32_t current_rate{0};
+    PayloadType current_payload{SMALL_32B};
 };
 
 struct SubscriptionMonitor final : epicsThreadRunable {

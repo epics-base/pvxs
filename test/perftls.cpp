@@ -218,9 +218,9 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
     // 1) Connection Type
     std::cout  << std::right << std::setw(15)
                << (scenario_type == TLS_CMS_STAPLED ? "TLS_CMS_STAPLED"
-                  : scenario_type == TLS_CMS       ? "TLS_CMS"
-                  : scenario_type == TLS           ? "TLS"
-                                                   : "TCP")
+                  : scenario_type == TLS_CMS        ? "TLS_CMS"
+                  : scenario_type == TLS            ? "TLS"
+                                                    : "TCP")
                << ", ";
 
     // 2) PVAccess Payload
@@ -464,8 +464,18 @@ std::string formatRateLabel(long rate) {
  * - TLS: TLS connection.
  * - TLS_CMS: TLS connection with CMS status checking.
  * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
+ * @param db_file_name optional db file name to output detailed data to
+ * @param run_id the unique program run ID
  */
-Scenario::Scenario(const ScenarioType scenario_type) : scenario_type(scenario_type) {
+Scenario::Scenario(const ScenarioType scenario_type, const std::string &db_file_name, const std::string &run_id) : scenario_type(scenario_type), run_id(run_id) {
+    // Initialize optional SQLite DB once per Scenario instance
+    if (!db_file_name.empty()) {
+        try {
+            initDB(db_file_name);
+        } catch (const std::exception& e) {
+            log_err_printf(consumerlog, "Could not open sqlite db (%s): %s\n", db_file_name.c_str(), e.what());
+        }
+    }
     // Configure the server
     configureServer();
 
@@ -654,20 +664,21 @@ void Scenario::buildClientContext() {
  * type, the rates are 1 Hz, 10 Hz, 100 Hz, and 1 KHz. Each rate test runs for 60 seconds.
  * @param scenario_type
  * @param payload_type The type of payload to test.
+ * @param output_file_name the optional output filename to outout detailed results to
  */
-void Scenario::run(const ScenarioType &scenario_type, PayloadType payload_type) {
+void Scenario::run(const ScenarioType &scenario_type, PayloadType payload_type, const std::string &output_file_name) {
     const auto payload_label =
         (payload_type == LARGE_2MB  ? "LARGE(2MB)"
        : payload_type == MEDIUM_1KB ? "MEDIUM(1KB)"
        :                              "SMALL(32B)");
-    Scenario {scenario_type}.run(payload_type,           1, payload_label, "   1Hz");
-    Scenario {scenario_type}.run(payload_type,          10, payload_label, "  10Hz");
-    Scenario {scenario_type}.run(payload_type,         100, payload_label, " 100Hz");
-    Scenario {scenario_type}.run(payload_type,        1000, payload_label, "  1KHz");
+    Scenario {scenario_type, output_file_name}.run(payload_type,           1, payload_label, "   1Hz");
+    Scenario {scenario_type, output_file_name}.run(payload_type,          10, payload_label, "  10Hz");
+    Scenario {scenario_type, output_file_name}.run(payload_type,         100, payload_label, " 100Hz");
+    Scenario {scenario_type, output_file_name}.run(payload_type,        1000, payload_label, "  1KHz");
     if (payload_type != LARGE_2MB) {
-        Scenario {scenario_type}.run(payload_type,   10000, payload_label, " 10KHz");
-        Scenario {scenario_type}.run(payload_type,  100000, payload_label, "100KHz");
-        Scenario {scenario_type}.run(payload_type, 1000000, payload_label, "  1MHz");
+        Scenario {scenario_type, output_file_name}.run(payload_type,   10000, payload_label, " 10KHz");
+        Scenario {scenario_type, output_file_name}.run(payload_type,  100000, payload_label, "100KHz");
+        Scenario {scenario_type, output_file_name}.run(payload_type, 1000000, payload_label, "  1MHz");
     }
 }
 
@@ -704,48 +715,49 @@ void Scenario::run(const PayloadType payload_type,
     const double w0 = wallSeconds();
     const double c0 = procCPUSeconds();
     std::uint64_t bytes_captured = 0;
-    {
-        // Three-threaded execution
-        // - Producer: posts updates on a fixed cadence (Main thread)
-        // - Monitor: responds to subscription updates and posts to consumer's queue
-        // - Consumer: drains monitor updates, computes transit times, polls sniffer, and prints progress on a fixed cadence
 
-        // This is used to collect the network traffic appearing on the test ports.
-        const auto sniffer = std::make_shared<PortSniffer>(tcp_port, udp_port);
-        sniffer->startCapture();
+    // Three-threaded execution
+    // - Producer: posts updates on a fixed cadence (Main thread)
+    // - Monitor: responds to subscription updates and posts to consumer's queue
+    // - Consumer: drains monitor updates, computes transit times, polls sniffer, and prints progress on a fixed cadence
 
-        // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
-        SubscriptionMonitor subscription_monitor{*this, payload_type, rate};
-        epicsThread subscription_thread(subscription_monitor, "PERF-Monitor", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityHigh);
-        subscription_thread.start();
+    // This is used to collect the network traffic appearing on the test ports.
+    const auto sniffer = std::make_shared<PortSniffer>(tcp_port, udp_port);
+    sniffer->startCapture();
 
-        // quiesce before test
-        epicsThreadSleep(1.0);
+    // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
+    SubscriptionMonitor subscription_monitor{*this, payload_type, rate};
+    epicsThread subscription_thread(subscription_monitor, "PERF-Monitor", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityHigh);
+    subscription_thread.start();
 
-        // Mark the start time for this sequence, and quiesce before the test
-        epicsTimeStamp start{};
-        epicsTimeGetCurrent(&start);
+    // quiesce before test
+    epicsThreadSleep(1.0);
 
-        // Reset the early-stop flag for this run
-        stop_early.store(false, std::memory_order_relaxed);
+    // Mark the start time for this sequence, and quiesce before the test
+    epicsTimeStamp start{};
+    epicsTimeGetCurrent(&start);
 
-        // Create and start threads
-        UpdateProducer update_producer{*this, payload_type, rate, start};
-        UpdateConsumer update_consumer{*this, result, rate,  start, sniffer, payload_label, rate_label};
+    // Reset the early-stop flag for this run
+    stop_early.store(false, std::memory_order_relaxed);
 
-        epicsThread consumer_thread(update_consumer, "PERF-Consumer", epicsThreadGetStackSize(epicsThreadStackBig), epicsThreadPriorityMedium);
+    // Create and start threads
+    current_rate = rate;
+    current_payload = payload_type;
+    UpdateProducer update_producer{*this, payload_type, rate, start};
+    UpdateConsumer update_consumer{*this, result, rate,  start, sniffer, payload_label, rate_label};
 
-        consumer_thread.start();   // Run in the background
-        update_producer.run();     // Block this thread
+    epicsThread consumer_thread(update_consumer, "PERF-Consumer", epicsThreadGetStackSize(epicsThreadStackBig), epicsThreadPriorityMedium);
 
-        // Wait for consumer to complete
-        subscription_thread.exitWait();
-        consumer_thread.exitWait();
+    consumer_thread.start();   // Run in the background
+    update_producer.run();     // Block this thread
 
-        // Final drain/capture
-        sniffer->poll();
-        bytes_captured = sniffer->endCapture();
-    }
+    // Wait for consumer to complete
+    subscription_thread.exitWait();
+    consumer_thread.exitWait();
+
+    // Final drain/capture
+    sniffer->poll();
+    bytes_captured = sniffer->endCapture();
 
     const double rss_mb = static_cast<double>(getRssBytes()) / (1024 * 1024);
     const auto cpu_percent = cpuPercentSince(w0, c0);
@@ -760,6 +772,86 @@ void Scenario::run(const PayloadType payload_type,
  * @param payload_type The type of payload to monitor.
  * @param rate the rate at which we expect to get
  */
+void Scenario::closeDB() {
+    if (stmt_insert) { sqlite3_finalize(stmt_insert); stmt_insert = nullptr; }
+    if (stmt_update_tcp) { sqlite3_finalize(stmt_update_tcp); stmt_update_tcp = nullptr; }
+    if (stmt_update_tls) { sqlite3_finalize(stmt_update_tls); stmt_update_tls = nullptr; }
+    if (stmt_update_tls_cms) { sqlite3_finalize(stmt_update_tls_cms); stmt_update_tls_cms = nullptr; }
+    if (stmt_update_tls_cms_stapled) { sqlite3_finalize(stmt_update_tls_cms_stapled); stmt_update_tls_cms_stapled = nullptr; }
+    if (db) { sqlite3_close(db); db = nullptr; }
+}
+
+void Scenario::initDB(const std::string &db_path) {
+    if (sqlite3_open(db_path.c_str(), &db) != SQLITE_OK)
+        throw std::runtime_error(SB() << "Can't open results db: " << sqlite3_errmsg(db));
+    const int rc = sqlite3_exec(db, PERF_CREATE_SQL, nullptr, nullptr, nullptr);
+    if (rc != SQLITE_OK) throw std::runtime_error(SB() << "Can't create schema: " << sqlite3_errmsg(db));
+
+    if (sqlite3_prepare_v2(db, PERF_INSERT_SQL, -1, &stmt_insert, nullptr) != SQLITE_OK)
+        throw std::runtime_error(SB() << "prepare insert failed: " << sqlite3_errmsg(db));
+    if (sqlite3_prepare_v2(db, PERF_UPDATE_TCP_SQL, -1, &stmt_update_tcp, nullptr) != SQLITE_OK)
+        throw std::runtime_error(SB() << "prepare update TCP failed: " << sqlite3_errmsg(db));
+    if (sqlite3_prepare_v2(db, PERF_UPDATE_TLS_SQL, -1, &stmt_update_tls, nullptr) != SQLITE_OK)
+        throw std::runtime_error(SB() << "prepare update TLS failed: " << sqlite3_errmsg(db));
+    if (sqlite3_prepare_v2(db, PERF_UPDATE_TLS_CMS_SQL, -1, &stmt_update_tls_cms, nullptr) != SQLITE_OK)
+        throw std::runtime_error(SB() << "prepare update TLS_CMS failed: " << sqlite3_errmsg(db));
+    if (sqlite3_prepare_v2(db, PERF_UPDATE_TLS_CMS_STAPLED_SQL, -1, &stmt_update_tls_cms_stapled, nullptr) != SQLITE_OK)
+        throw std::runtime_error(SB() << "prepare update TLS_CMS_STAPLED failed: " << sqlite3_errmsg(db));
+}
+
+void Scenario::insertOrUpdateSample(const int payload_id, const uint32_t rate, const int32_t packet_id, const double transit_time) const {
+    if (!db) return;
+
+    // Bind INSERT
+    sqlite3_reset(stmt_insert);
+    sqlite3_clear_bindings(stmt_insert);
+    sqlite3_bind_text(stmt_insert, 1, run_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt_insert, 2, packet_id);
+    sqlite3_bind_int(stmt_insert, 3, payload_id);
+    sqlite3_bind_int(stmt_insert, 4, static_cast<int>(rate));
+
+    // Columns 5..8 depend on scenario
+    auto bind_col = [&](const int col, const bool setval) {
+        if (setval) sqlite3_bind_double(stmt_insert, col, transit_time);
+        else sqlite3_bind_null(stmt_insert, col);
+    };
+    bind_col(5, scenario_type == TCP);
+    bind_col(6, scenario_type == TLS);
+    bind_col(7, scenario_type == TLS_CMS);
+    bind_col(8, scenario_type == TLS_CMS_STAPLED);
+
+    int rc = sqlite3_step(stmt_insert);
+    if (rc == SQLITE_DONE) {
+        sqlite3_reset(stmt_insert);
+        sqlite3_clear_bindings(stmt_insert);
+        return;
+    }
+    // If a row exists, update the appropriate column only
+    sqlite3_reset(stmt_insert);
+    sqlite3_clear_bindings(stmt_insert);
+
+    sqlite3_stmt* stmt_update = nullptr;
+    switch (scenario_type) {
+        case TCP: stmt_update = stmt_update_tcp; break;
+        case TLS: stmt_update = stmt_update_tls; break;
+        case TLS_CMS: stmt_update = stmt_update_tls_cms; break;
+        case TLS_CMS_STAPLED: stmt_update = stmt_update_tls_cms_stapled; break;
+    }
+    sqlite3_reset(stmt_update);
+    sqlite3_clear_bindings(stmt_update);
+    sqlite3_bind_double(stmt_update, 1, transit_time);
+    sqlite3_bind_text(stmt_update, 2, run_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt_update, 3, payload_id);
+    sqlite3_bind_int(stmt_update, 4, static_cast<int>(rate));
+    sqlite3_bind_int(stmt_update, 5, packet_id);
+    rc = sqlite3_step(stmt_update);
+    if (rc != SQLITE_DONE) {
+        log_warn_printf(consumerlog, "sqlite update failed: %s\n", sqlite3_errmsg(db));
+    }
+    sqlite3_reset(stmt_update);
+    sqlite3_clear_bindings(stmt_update);
+}
+
 void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate) {
     const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
                           : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
@@ -876,8 +968,10 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
             const auto bucket_index = static_cast<uint32_t>(elapsed);
 
             // Another check to make sure that we are not beyond the end of the results buffer and then add the results
-            if (bucket_index < 60)
+            if (bucket_index < 60) {
                 count = result.add(transit_time);
+                if (db) insertOrUpdateSample(current_payload, current_rate, received_count, transit_time);
+            }
         } catch (const client::Connected&) {
             // ignore
         } catch (const client::Disconnect&) {
@@ -991,7 +1085,7 @@ Child pvacms_subprocess;
  * Simple Ctrl-C (SIGINT) trap: print the exit message, stop PVACMS, then exit
  * @param sig The signal number
  */
-void onSigint(int) {
+void onExit(int) {
     std::cerr << std::endl << "Exiting..." << std::endl;
     stopPVACMS(pvacms_subprocess);
     _exit(130);
@@ -1008,20 +1102,36 @@ int main(int argc, char* argv[]) {
     pvxs::logger_level_set(perflog.name, pvxs::Level::Info);
     pvxs::logger_config_env();
     // Install simple Ctrl-C trap
-    signal(SIGINT, onSigint);
+    signal(SIGHUP, onExit);
+    signal(SIGINT, onExit);
+    signal(SIGQUIT, onExit);
+    signal(SIGKILL, onExit);
 
     // CLI argument parsing
     std::vector<std::string> opt_scenarios;
     std::vector<std::string> opt_payloads;
     std::vector<long> opt_rates;
+    std::string output_file;
 
     CLI::App app{"PVXS TLS performance tests"};
     app.add_option("-s,--scenario-type",
                    opt_scenarios,
                    "Scenario type(s): TCP, TLS, TLS_CMS, TLS_CMS_STAPLED. May be repeated.");
+    app.add_option("-o,--output", output_file, "SQLite database file to store per-packet results (optional)");
     app.add_option("-p,--payload-type", opt_payloads, "Payload type(s): SMALL, MEDIUM, LARGE. May be repeated.");
     app.add_option("-r,--rate", opt_rates, "Update rate(s) in Hz. May be repeated.");
     CLI11_PARSE(app, argc, argv);
+
+    // calculate the run_id
+    std::string run_id;
+    if (!output_file.empty()) {
+        const auto t = static_cast<unsigned int>(std::time(nullptr));
+        char run_id_buffer[9];
+        std::snprintf(run_id_buffer, sizeof(run_id_buffer), "%08x", t);
+
+        run_id = run_id_buffer;
+        std::cout << "Using SQLite DB: " << output_file << ", RUN_ID: " << run_id << std::endl;
+    }
 
     // Build selected lists (defaults to all if no selection)
     std::vector<ScenarioType> scenarios_sel;
@@ -1131,7 +1241,7 @@ int main(int argc, char* argv[]) {
 
         for (auto payload_type : payloads_sel) {
             if (opt_rates.empty()) {
-                Scenario::run(scenario_type, payload_type);
+                Scenario::run(scenario_type, payload_type, output_file);
             } else {
                 const std::string payload_label =
                     (payload_type == LARGE_2MB
@@ -1139,7 +1249,7 @@ int main(int argc, char* argv[]) {
                          : (payload_type == MEDIUM_1KB ? "MEDIUM(1KB)" : "SMALL(32B)"));
                 for (auto rate : opt_rates) {
                     const std::string speed_label = formatRateLabel(rate);
-                    Scenario scenario(scenario_type);
+                    Scenario scenario(scenario_type, output_file);
                     scenario.run(payload_type, rate, payload_label, speed_label);
                 }
             }
