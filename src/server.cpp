@@ -174,6 +174,7 @@ client::Config Server::clientConfig(const Config &server_config) {
     ret.interfaces = server_config.interfaces;
     ret.addressList = server_config.beaconDestinations;
     ret.autoAddrList = server_config.auto_beacon;
+    // server_config.ignoreAddrs; no equivalent with client config
 
     ret.tls_port = server_config.tls_port;
     ret.tls_disabled = server_config.tls_disabled;
@@ -443,30 +444,6 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 {
     effective.expand();
 
-#ifdef PVXS_ENABLE_OPENSSL
-    if (effective.isTlsConfigured()) {
-        try {
-            auto innerConf = clientConfig(effective);
-            // TODO: currently not possible to disable TLS for an individual search.
-            // until then, create a separate inner context to retrieve signed payload from CMS
-            innerConf.tls_disabled = true;
-
-            tls_context = ossl::SSLContext::for_server(effective, innerConf.build(), acceptor_loop);
-        } catch (std::exception& e) {
-            if (effective.tls_stop_if_no_cert) {
-                log_err_printf(osslsetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
-                exit(1);
-            }
-            if (effective.tls_throw_if_no_cert) {
-                throw(std::runtime_error(e.what()));
-            }
-            log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
-        }
-    } else if (tls_context) {
-        tls_context->setDegradedMode(true);
-    }
-#endif
-
     beaconSender4.set_broadcast(true);
 
     auto manager = UDPManager::instance(effective.shareUDP());
@@ -563,11 +540,27 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
         ignoreList.push_back(temp);
     }
 
-
     acceptor_loop.call([this, &tcpifaces](){
         // from accepter worker
 
 #ifdef PVXS_ENABLE_OPENSSL
+        if (effective.isTlsConfigured()) {
+            try {
+                auto innerConf = clientConfig(effective);
+                // TODO: currently not possible to disable TLS for an individual search.
+                // until then, create a separate inner context to retrieve signed payload from CMS
+                innerConf.tls_disabled = true;
+
+                tls_context = ossl::SSLContext::for_server(effective, innerConf.build(), acceptor_loop);
+            } catch (std::exception& e) {
+                log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
+                effective.tls_disabled = true; // HACK!
+                effective.tls_keychain_file.clear();
+            }
+        } else if (tls_context) {
+            tls_context->setDegradedMode(true);
+        }
+
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
 #endif
             bool firstiface = true;
@@ -599,7 +592,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 #endif
 
             for (const auto& addr : effective.beaconDestinations) {
-                beaconDest.emplace_back(addr.c_str(), nullptr, effective.udp_port);
+                beaconDest.emplace_back(addr.c_str(), &effective);
                 log_debug_printf(serversetup, "Will send beacons to %s\n", std::string(SB() << beaconDest.back()).c_str());
             }
     });

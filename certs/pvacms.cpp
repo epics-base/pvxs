@@ -3097,7 +3097,6 @@ int readParameters(int argc,
         config.cert_disallow_ioc_custom_duration = true;
 
     // Override some settings for PVACMS
-    config.tls_stop_if_no_cert = true;
     config.tls_client_cert_required = ConfigCommon::Optional;
 
     if (!cert_status_subscription.empty()) {
