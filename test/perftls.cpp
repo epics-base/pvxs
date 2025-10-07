@@ -12,6 +12,7 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <iomanip>
 #include <string>
 #include <vector>
 #include <atomic>
@@ -168,19 +169,8 @@ double cpuPercentSince(const double w0, const double c0) {
 int32_t Result::add(const double value) {
     if (value <= 0.0)
         return -1;
-
-    Guard G(lock);
-
-    const double delta = value - mean;
-    mean += delta / static_cast<double>(++n);
-    const double delta2 = value - mean;
-    M2 += delta * delta2;
-
-    // Update max and min transmission times
-    if (value < min) min = value;
-    if (value > max) max = value;
-
-    return n;
+    accumulator.add(value);
+    return accumulator.N;
 }
 
 /**
@@ -238,12 +228,12 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
     std::cout << std::right << std::setw(9) << throughput << throughput_units << ", ";
 
     // 5) n, minimum / maximum transmission time
-    std::cout << std::right << std::setw(8) << n << ", ";
-    if (min < std::numeric_limits<double>::max())    std::cout << std::right << std::setw(10) << min*1000.0 << ", "; else std::cout << " , ";
-    if (max > std::numeric_limits<double>::lowest()) std::cout << std::right << std::setw(10) << max*1000.0 << ", "; else std::cout << " ,  ";
+    std::cout << std::right << std::setw(8) << accumulator.N << ", ";
+    if (accumulator.vmin < std::numeric_limits<double>::max())    std::cout << std::right << std::setw(10) << accumulator.vmin*1000.0 << ", "; else std::cout << " , ";
+    if (accumulator.vmax > std::numeric_limits<double>::lowest()) std::cout << std::right << std::setw(10) << accumulator.vmax*1000.0 << ", "; else std::cout << " ,  ";
 
     // 6) Mean, StdDev
-    std::cout << std::right << std::setw(10) << mean*1000.0 << ", ";
+    std::cout << std::right << std::setw(10) << accumulator.mean*1000.0 << ", ";
     std::cout << std::right << std::setw(10) << stddev()*1000.0 <<  ", ";
 
     // 7) CPU% of 1 Core
@@ -353,7 +343,7 @@ void UpdateConsumer::printProgressBar(double progress_percentage) {
     << std::right << std::setw(13) << bps_placeholder << ", "
 
     // 5) N
-    << std::right << std::setw(8) << result.n << ": ";
+    << std::right << std::setw(8) << result.accumulator.N << ": ";
     auto prefix = oss.str();
 
     if (progress_percentage > 100.0)
@@ -440,20 +430,10 @@ bool parsePayloadType(const std::string& name, PayloadType& out) {
  * @return The formatted rate label
  */
 std::string formatRateLabel(long rate) {
-    if (rate >= 1000000 && rate % 1000000 == 0) {
-        long v = rate / 1000000;
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), "%3ldMHz", v);
-        return std::string(buf);
-    }
-    if (rate >= 1000 && rate % 1000 == 0) {
-        long v = rate / 1000;
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), "%3ldKHz", v);
-        return std::string(buf);
-    }
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "%3ld Hz", rate);
+    if (rate >= 1000000) std::snprintf(buf, sizeof(buf), "%3ldMHz", rate / 1000000);
+    else if (rate >= 1000) std::snprintf(buf, sizeof(buf), "%3ldKHz", rate / 1000);
+    else std::snprintf(buf, sizeof(buf), "%3ld Hz", rate);
     return std::string(buf);
 }
 
@@ -664,21 +644,23 @@ void Scenario::buildClientContext() {
  * type, the rates are 1 Hz, 10 Hz, 100 Hz, and 1 KHz. Each rate test runs for 60 seconds.
  * @param scenario_type
  * @param payload_type The type of payload to test.
- * @param output_file_name the optional output filename to outout detailed results to
+ * @param db_file_name the db filename to output detailed results to
+ * @param run_id the optional run id to label this run
  */
-void Scenario::run(const ScenarioType &scenario_type, PayloadType payload_type, const std::string &output_file_name) {
+void Scenario::run(const ScenarioType &scenario_type, const PayloadType payload_type, const std::string &db_file_name, const std::string &run_id) {
     const auto payload_label =
         (payload_type == LARGE_2MB  ? "LARGE(2MB)"
        : payload_type == MEDIUM_1KB ? "MEDIUM(1KB)"
        :                              "SMALL(32B)");
-    Scenario {scenario_type, output_file_name}.run(payload_type,           1, payload_label, "   1Hz");
-    Scenario {scenario_type, output_file_name}.run(payload_type,          10, payload_label, "  10Hz");
-    Scenario {scenario_type, output_file_name}.run(payload_type,         100, payload_label, " 100Hz");
-    Scenario {scenario_type, output_file_name}.run(payload_type,        1000, payload_label, "  1KHz");
+    uint32_t rate = 1;
+    rate =    1; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,           rate, payload_label, formatRateLabel(rate));
+    rate =   10; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,          rate, payload_label, formatRateLabel(rate));
+    rate =  100; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,         rate, payload_label, formatRateLabel(rate));
+    rate = 1000; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,        rate, payload_label, formatRateLabel(rate));
     if (payload_type != LARGE_2MB) {
-        Scenario {scenario_type, output_file_name}.run(payload_type,   10000, payload_label, " 10KHz");
-        Scenario {scenario_type, output_file_name}.run(payload_type,  100000, payload_label, "100KHz");
-        Scenario {scenario_type, output_file_name}.run(payload_type, 1000000, payload_label, "  1MHz");
+        rate =   10000; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,   rate, payload_label, formatRateLabel(rate));
+        rate =  100000; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,  rate, payload_label, formatRateLabel(rate));
+        rate = 1000000; Scenario {scenario_type, db_file_name, run_id}.run(payload_type, rate, payload_label, formatRateLabel(rate));
     }
 }
 
@@ -805,31 +787,25 @@ void Scenario::insertOrUpdateSample(const int payload_id, const uint32_t rate, c
     // Bind INSERT
     sqlite3_reset(stmt_insert);
     sqlite3_clear_bindings(stmt_insert);
-    sqlite3_bind_text(stmt_insert, 1, run_id.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt_insert, 2, packet_id);
-    sqlite3_bind_int(stmt_insert, 3, payload_id);
-    sqlite3_bind_int(stmt_insert, 4, static_cast<int>(rate));
+    sqlite3_bind_text(stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":run_id"), run_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int (stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":packet_id"), packet_id);
+    sqlite3_bind_int (stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":payload_id"), payload_id);
+    sqlite3_bind_int (stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":rate"), static_cast<int>(rate));
 
     // Columns 5..8 depend on scenario
-    auto bind_col = [&](const int col, const bool setval) {
-        if (setval) sqlite3_bind_double(stmt_insert, col, transit_time);
+    auto bind_col = [&](const int col, const bool selected) {
+        if (selected) sqlite3_bind_double(stmt_insert, col, transit_time);
         else sqlite3_bind_null(stmt_insert, col);
     };
-    bind_col(5, scenario_type == TCP);
-    bind_col(6, scenario_type == TLS);
-    bind_col(7, scenario_type == TLS_CMS);
-    bind_col(8, scenario_type == TLS_CMS_STAPLED);
+    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tcp"), scenario_type == TCP);
+    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tls"), scenario_type == TLS);
+    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tls_cms"), scenario_type == TLS_CMS);
+    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tls_cms_stapled"), scenario_type == TLS_CMS_STAPLED);
 
     int rc = sqlite3_step(stmt_insert);
-    if (rc == SQLITE_DONE) {
-        sqlite3_reset(stmt_insert);
-        sqlite3_clear_bindings(stmt_insert);
-        return;
-    }
-    // If a row exists, update the appropriate column only
-    sqlite3_reset(stmt_insert);
-    sqlite3_clear_bindings(stmt_insert);
+    if (rc == SQLITE_DONE) return;
 
+    // If a row exists, update the appropriate column only
     sqlite3_stmt* stmt_update = nullptr;
     switch (scenario_type) {
         case TCP: stmt_update = stmt_update_tcp; break;
@@ -839,17 +815,15 @@ void Scenario::insertOrUpdateSample(const int payload_id, const uint32_t rate, c
     }
     sqlite3_reset(stmt_update);
     sqlite3_clear_bindings(stmt_update);
-    sqlite3_bind_double(stmt_update, 1, transit_time);
-    sqlite3_bind_text(stmt_update, 2, run_id.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt_update, 3, payload_id);
-    sqlite3_bind_int(stmt_update, 4, static_cast<int>(rate));
-    sqlite3_bind_int(stmt_update, 5, packet_id);
+    sqlite3_bind_double(stmt_update, sqlite3_bind_parameter_index(stmt_update, ":value"), transit_time);
+    sqlite3_bind_text  (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":run_id"), run_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int   (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":payload_id"), payload_id);
+    sqlite3_bind_int   (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":rate"), static_cast<int>(rate));
+    sqlite3_bind_int   (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":packet_id"), packet_id);
     rc = sqlite3_step(stmt_update);
     if (rc != SQLITE_DONE) {
         log_warn_printf(consumerlog, "sqlite update failed: %s\n", sqlite3_errmsg(db));
     }
-    sqlite3_reset(stmt_update);
-    sqlite3_clear_bindings(stmt_update);
 }
 
 void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate) {
@@ -933,7 +907,7 @@ void Scenario::postValue(const PayloadType payload_type, const int32_t counter) 
 int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &start) {
     epicsTimeStamp now{};
     epicsTimeGetCurrent(&now);
-    int32_t count{result.n};
+    int32_t count{result.accumulator.N};
 
     while (update_queue.size()) {
         try {
@@ -1091,6 +1065,275 @@ void onExit(int) {
     _exit(130);
 }
 
+
+namespace {
+
+WireSizes computeWireSizes() {
+    using namespace pvxs;
+    using namespace pvxs::nt;
+
+    WireSizes ws{};
+    // SMALL: NTScalar<Int32>
+    auto s_def(NTScalar{TypeCode::Int32}.build());
+    s_def += {Int32("counter")};
+    const Value s_val = s_def.create();
+    ws.small = wireSizeBytes(s_val);
+
+    // MEDIUM: NTNDArray with 32x32 ubyte and counter
+    auto m_def(NTNDArray{}.build());
+    m_def += {Int32("counter")};
+    m_def += {
+        StructA("dimensions",
+                {
+                    Int32("value"),
+                }),
+    };
+    const Value m_val = m_def.create();
+    ws.medium = wireSizeBytes(m_val);
+
+    // LARGE: NTNDArray 2000x2000 4bpp (size approximated by structure);
+    auto l_def(NTNDArray{}.build());
+    l_def += {Int32("counter")};
+    l_def += {
+        StructA("dimensions",
+                {
+                    Int32("value"),
+                }),
+    };
+    const Value l_val = l_def.create();
+    ws.large = wireSizeBytes(l_val);
+
+    return ws;
+}
+
+std::string decodeRunID(const std::string& run_id) {
+    if (run_id.size()!=8) return std::string("?");
+
+    char* end=nullptr;
+    const unsigned long run_time = std::strtoul(run_id.c_str(), &end, 16);
+
+    if (!end || *end!='\0') return std::string("?");
+    const auto run_time_posix = static_cast<time_t>(run_time);
+    char run_id_string[64];
+    std::tm g{};
+    gmtime_r(&run_time_posix, &g);
+    std::strftime(run_id_string, sizeof(run_id_string), "%Y-%m-%d %H:%M:%S UTC", &g);
+    return std::string(run_id_string);
+}
+
+int sqliteBusyTimeout(sqlite3* db) {
+    return sqlite3_busy_timeout(db, 60000); // 60s
+}
+
+uint64_t countSamples(sqlite3* db, const std::string& run_id) {
+    sqlite3_stmt* statement=nullptr;
+    uint64_t samples=0;
+    if (sqlite3_prepare_v2(db, PERF_COUNT_SAMPLES_SQL, -1, &statement, nullptr)==SQLITE_OK) {
+        sqlite3_bind_text(statement, sqlite3_bind_parameter_index(statement, ":run_id"), run_id.c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(statement)==SQLITE_ROW)
+            samples = static_cast<uint64_t>(sqlite3_column_int64(statement, 0));
+    }
+    if (statement) sqlite3_finalize(statement);
+    return samples;
+}
+
+bool latestRunID(sqlite3* db, std::string& run_id) {
+    sqlite3_stmt* statement=nullptr;
+    bool ok=false;
+    if (sqlite3_prepare_v2(db, PERF_GET_LATEST_RUN_ID_SQL, -1, &statement, nullptr)==SQLITE_OK) {
+        if (sqlite3_step(statement)==SQLITE_ROW) {
+            const unsigned char* run_id_string = sqlite3_column_text(statement, 0);
+            if (run_id_string) run_id = reinterpret_cast<const char*>(run_id_string); ok=true;
+        }
+    }
+    if (statement) sqlite3_finalize(statement);
+    return ok;
+}
+
+void listRuns(sqlite3* db) {
+    sqlite3_stmt* statement=nullptr;
+    if (sqlite3_prepare_v2(db, PERF_LIST_SAMPLES_SQL, -1, &statement, nullptr)!=SQLITE_OK) {
+        std::cerr << "SQLite error: " << sqlite3_errmsg(db) << std::endl; return;
+    }
+    while (sqlite3_step(statement)==SQLITE_ROW) {
+        const auto run_id = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+        const auto samples = static_cast<unsigned long long>(sqlite3_column_int64(statement, 1));
+        std::cout << run_id << " - Generated at: " << decodeRunID(run_id) << " - " << samples << " samples" << std::endl;
+    }
+    sqlite3_finalize(statement);
+}
+
+std::vector<std::string> splitIDs(const std::string& s) {
+    std::vector<std::string> run_ids; std::string cur;
+    for (const char c : s) {
+        if (c==',' || c==' ' || c=='\t') { if (!cur.empty()) { run_ids.push_back(cur); cur.clear(); } }
+        else cur.push_back(c);
+    }
+    if (!cur.empty()) run_ids.push_back(cur);
+    return run_ids;
+}
+
+void infoRuns(sqlite3* db, const std::vector<std::string>& run_ids) {
+    for (const auto& run_id: run_ids) {
+        const auto samples = countSamples(db, run_id);
+        std::cout << run_id << " - Generated at: " << decodeRunID(run_id) << " -  " << samples << " samples" << std::endl;
+    }
+}
+
+void deleteRuns(sqlite3* db, const std::vector<std::string>& run_ids) {
+    sqlite3_stmt* statement=nullptr;
+    if (sqlite3_prepare_v2(db, PERF_DELETE_SQL, -1, &statement, nullptr)!=SQLITE_OK) {
+        std::cerr << "SQLite error: " << sqlite3_errmsg(db) << std::endl; return;
+    }
+    for (const auto& run_id : run_ids) {
+        sqlite3_reset(statement); sqlite3_clear_bindings(statement);
+        sqlite3_bind_text(statement, 1, run_id.c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(statement)!=SQLITE_DONE) {
+            std::cerr << "SQLite delete error for RUN_ID=" << run_id << ": " << sqlite3_errmsg(db) << std::endl;
+        } else {
+            std::cout << "Deleted RUN_ID: " << run_id << std::endl;
+        }
+    }
+    sqlite3_finalize(statement);
+}
+
+std::string payloadLabel(PayloadType payload_id) {
+    switch (payload_id) {
+        case SMALL_32B:  return "SMALL(32B)";
+        case MEDIUM_1KB: return "MEDIUM(1KB)";
+        case LARGE_2MB:  return "LARGE(2MB)";
+        default: return "?";
+    }
+}
+
+// scenario index to column name
+std::string scenarioLabel(ScenarioType scenario_id) {
+    switch (scenario_id) {
+        case TCP:               return "TCP";
+        case TLS:               return "TLS";
+        case TLS_CMS:           return "TLS_CMS";
+        case TLS_CMS_STAPLED:   return "TLS_CMS_STAPLED";
+        default: return {};
+    }
+}
+
+void doReport(sqlite3* db, const std::string& run_id) {
+    // precompute payload wire sizes for throughput
+    const auto wire_sizes = computeWireSizes();
+
+    std::cout << run_id << " -  Generated at: " << decodeRunID(run_id) << ":  " << countSamples(db, run_id) << " samples" << std::endl;
+    std::cout << std::setw(15) << "Connection Type" << ", "
+              << std::setw(12) << "Payload" << ", "
+              << std::setw(13) << "Tx Rate(Hz)" << ", "
+              << std::setw(12) << "Throughput" << ", "
+              << std::setw(10) << "N" << ", "
+              << std::setw(10) << "Min(ms)" << ", "
+              << std::setw(10) << "Max(ms)" << ", "
+              << std::setw(10) << "Mean(ms)" << ", "
+              << std::setw(12) << "StdDev(ms)" << ", "
+              << "Drops" << std::endl;
+
+    // For each scenario, return values if they are non-zero
+    for (auto scenario_index = 0; scenario_index < 4; ++scenario_index) {
+        const auto scenario_id = static_cast<ScenarioType>(scenario_index);
+        const auto scenario_label = scenarioLabel(scenario_id);
+
+        // Get the list of payload IDs and rates for this report
+        sqlite3_stmt* payloads_statement=nullptr;
+        if (sqlite3_prepare_v2(db, PERF_REPORT_PAYLOADS_SQL, -1, &payloads_statement, nullptr)!=SQLITE_OK) {
+            std::cerr << "SQLite error: " << sqlite3_errmsg(db) << std::endl;
+            return;
+        }
+        sqlite3_bind_text(payloads_statement, sqlite3_bind_parameter_index(payloads_statement, ":run_id"), run_id.c_str(), -1, SQLITE_TRANSIENT);
+
+        while (sqlite3_step(payloads_statement)==SQLITE_ROW) {
+            const auto payload_id = static_cast<PayloadType>(sqlite3_column_int(payloads_statement, 0));
+            const int rate = sqlite3_column_int(payloads_statement, 1);
+
+            // Count samples for this scenario, payload, and rate
+            sqlite3_stmt* count_statement=nullptr;
+            int64_t samples=0;
+            if (sqlite3_prepare_v2(db, PERF_REPORT_SAMPLE_COUNT_SQL, -1, &count_statement, nullptr)==SQLITE_OK) {
+                sqlite3_bind_text(count_statement, sqlite3_bind_parameter_index(count_statement, ":scenario_type"), scenario_label.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(count_statement, sqlite3_bind_parameter_index(count_statement, ":run_id"), run_id.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_int (count_statement, sqlite3_bind_parameter_index(count_statement, ":payload_id"), payload_id);
+                sqlite3_bind_int (count_statement, sqlite3_bind_parameter_index(count_statement, ":rate"), rate);
+                if (sqlite3_step (count_statement) == SQLITE_ROW)
+                    samples = sqlite3_column_int64(count_statement, scenario_index);
+            }
+            if (count_statement) sqlite3_finalize(count_statement);
+            if (samples==0) continue;
+
+            // If rows exist, then stream the rows, ordered by PACKET_ID, to compute stats and detect drops
+            sqlite3_stmt* samples_statement=nullptr;
+            if (sqlite3_prepare_v2(db, PERF_REPORT_SAMPLE_DATA, -1, &samples_statement, nullptr)!=SQLITE_OK) {
+                std::cerr << "SQLite error: " << sqlite3_errmsg(db) << std::endl;
+                continue;
+            }
+
+            sqlite3_bind_text(samples_statement, sqlite3_bind_parameter_index(samples_statement, ":scenario_type"), scenario_label.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(samples_statement, sqlite3_bind_parameter_index(samples_statement, ":run_id"), run_id.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int (samples_statement, sqlite3_bind_parameter_index(samples_statement, ":payload_id"), payload_id);
+            sqlite3_bind_int (samples_statement, sqlite3_bind_parameter_index(samples_statement, ":rate"), rate);
+
+            Accumulator accumulator;
+            bool drops=false;
+            bool first=true;
+            int64_t prior_packet_id=-1;
+            while (sqlite3_step(samples_statement) == SQLITE_ROW) {
+                const int64_t packet_id = sqlite3_column_int64(samples_statement, 0);
+                const double value = sqlite3_column_double(samples_statement, scenario_index+1);
+                if (!first) {
+                    if (packet_id != prior_packet_id + 1) drops = true;
+                } else {
+                    if (packet_id != 0) drops = true; // expect to start at 0
+                    first = false;
+                }
+                prior_packet_id = packet_id;
+                accumulator.add(value*1000.0); // convert to ms
+            }
+            sqlite3_finalize(samples_statement);
+            if (first) throw std::logic_error(SB() << "Found no samples but we counted samples before "); // no samples
+
+            /*
+            // Remove first and last if unique
+            auto new_N = accumulator.N - 2;
+            auto new_sum = accumulator.mean * static_cast<double>(accumulator.N) - accumulator.vmax - accumulator.vmin;
+            double new_mean = new_sum / new_N;
+
+            accumulator.M2 = accumulator.M2
+                - (accumulator.vmax - accumulator.mean) * (accumulator.vmax - new_mean)
+                - (accumulator.vmin - accumulator.mean) * (accumulator.vmin - new_mean);
+            accumulator.mean = new_mean;
+            accumulator.N = new_N;
+            */
+
+            // 4) Throughput
+            std::string throughput_units = " bps";
+            auto throughput = (payload_id == LARGE_2MB ? wire_sizes.large : payload_id == MEDIUM_1KB ? wire_sizes.medium : wire_sizes.small) * 8.0 * static_cast<double>(rate);
+            if      ( throughput >= 1000000000 ) { throughput /= 1000000000; throughput_units = "Gbps"; }
+            else if ( throughput >= 1000000    ) { throughput /= 1000000;    throughput_units = "Mbps"; }
+            else if ( throughput >= 1000       ) { throughput /= 1000;       throughput_units = "Kbps"; }
+
+            std::cout << std::setw(15) << scenarioLabel(scenario_id) << ", "
+                      << std::setw(12) << payloadLabel(payload_id) << ", "
+                      << std::setw(13) << formatRateLabel(rate) << ", "
+                      << std::fixed << std::setprecision(2) << std::setw(8) << throughput << throughput_units << ", "
+                      << std::defaultfloat << std::setw(10) << accumulator.N << ", "
+                      << std::setprecision(6)
+                      << std::setw(10) << accumulator.vmin << ", "
+                      << std::setw(10) << accumulator.vmax << ", "
+                      << std::setw(10) << accumulator.mean << ", "
+                      << std::setw(12) << accumulator.stddev() << ", "
+                      << (drops? "yes" : "no")
+                      << std::endl;
+        }
+        sqlite3_finalize(payloads_statement);
+    }
+}
+
+} // anonymous namespace
+
 }  // namespace perf
 }  // namespace pvxs
 
@@ -1111,26 +1354,69 @@ int main(int argc, char* argv[]) {
     std::vector<std::string> opt_scenarios;
     std::vector<std::string> opt_payloads;
     std::vector<long> opt_rates;
-    std::string output_file;
+    std::string db_file_name;
+    bool opt_report_list = false;
+    std::string opt_report_id; // optional single run id
+    std::string opt_report_del_ids; // comma-separated list
+    std::string opt_report_info_ids; // comma-separated list
 
     CLI::App app{"PVXS TLS performance tests"};
     app.add_option("-s,--scenario-type",
                    opt_scenarios,
                    "Scenario type(s): TCP, TLS, TLS_CMS, TLS_CMS_STAPLED. May be repeated.");
-    app.add_option("-o,--output", output_file, "SQLite database file to store per-packet results (optional)");
+    app.add_option("-f,--db", db_file_name, "SQLite database file for per-packet results to write or to read reports");
     app.add_option("-p,--payload-type", opt_payloads, "Payload type(s): SMALL, MEDIUM, LARGE. May be repeated.");
     app.add_option("-r,--rate", opt_rates, "Update rate(s) in Hz. May be repeated.");
+    app.add_option("--report", opt_report_id, "Generate a report for RUN_ID. Use 'last' for last report" )->expected(1,1);
+    app.add_flag("--report-list", opt_report_list, "List all RUN_IDs and their generated time with sample counts");
+    app.add_option("--report-del", opt_report_del_ids, "Delete entries for comma-separated RUN_ID list")->expected(1,50);
+    app.add_option("--report-info", opt_report_info_ids, "Show info for comma-separated RUN_ID list")->expected(1,50);
+
     CLI11_PARSE(app, argc, argv);
 
-    // calculate the run_id
+    // If any report options are set, process them and exit
+    if (opt_report_list || !opt_report_id.empty() || !opt_report_del_ids.empty() || !opt_report_info_ids.empty()) {
+        if (db_file_name.empty()) {
+            std::cerr << "--output <dbfile> is required for report operations" << std::endl;
+            return 2;
+        }
+        sqlite3* rdb=nullptr;
+        if (sqlite3_open(db_file_name.c_str(), &rdb)!=SQLITE_OK) {
+            std::cerr << "Failed to open DB: " << db_file_name << ": " << sqlite3_errmsg(rdb) << std::endl;
+            if (rdb) sqlite3_close(rdb);
+            return 2;
+        }
+        sqliteBusyTimeout(rdb);
+        if (opt_report_list) {
+            listRuns(rdb);
+        }
+        if (!opt_report_info_ids.empty()) {
+            infoRuns(rdb, splitIDs(opt_report_info_ids));
+        }
+        if (!opt_report_del_ids.empty()) {
+            deleteRuns(rdb, splitIDs(opt_report_del_ids));
+        }
+        if (!opt_report_id.empty()) {
+            if (opt_report_id == "last") {
+                if (!latestRunID(rdb, opt_report_id)) {
+                    std::cerr << "No runs found in DB" << std::endl;
+                    sqlite3_close(rdb);
+                    return 2;
+                }
+            }
+            doReport(rdb, opt_report_id);
+        }
+        sqlite3_close(rdb);
+        return 0;
+    }
+
+    // calculate the run_id (only for write path)
     std::string run_id;
-    if (!output_file.empty()) {
+    if (!db_file_name.empty()) {
         const auto t = static_cast<unsigned int>(std::time(nullptr));
         char run_id_buffer[9];
         std::snprintf(run_id_buffer, sizeof(run_id_buffer), "%08x", t);
-
         run_id = run_id_buffer;
-        std::cout << "Using SQLite DB: " << output_file << ", RUN_ID: " << run_id << std::endl;
     }
 
     // Build selected lists (defaults to all if no selection)
@@ -1222,7 +1508,11 @@ int main(int argc, char* argv[]) {
     // Run selected scenarios
     auto first = true;
     for (auto scenario_type : scenarios_sel) {
-        if (first)
+        if (first) {
+            if (!run_id.empty())
+                std::cout
+                  << "Recording Samples to Database: " << db_file_name << std::endl
+                  << "Run ID                       : " << run_id << std::endl;
             std::cout
                   << std::right << std::setw(15) << "Connection Type" << ", "
                   << std::right << std::setw(13) << "Payload" << ", "
@@ -1237,20 +1527,20 @@ int main(int argc, char* argv[]) {
                   << std::right << std::setw(12) << "Memory(MB)" << ", "
                   << std::right << std::setw(19) << "Network Load(bytes)"
                   << std::endl;
-        first = false;
+            first = false;
+        }
 
         for (auto payload_type : payloads_sel) {
             if (opt_rates.empty()) {
-                Scenario::run(scenario_type, payload_type, output_file);
+                Scenario::run(scenario_type, payload_type, db_file_name, run_id);
             } else {
                 const std::string payload_label =
                     (payload_type == LARGE_2MB
                          ? "LARGE(2MB)"
                          : (payload_type == MEDIUM_1KB ? "MEDIUM(1KB)" : "SMALL(32B)"));
                 for (auto rate : opt_rates) {
-                    const std::string speed_label = formatRateLabel(rate);
-                    Scenario scenario(scenario_type, output_file);
-                    scenario.run(payload_type, rate, payload_label, speed_label);
+                    Scenario scenario(scenario_type, db_file_name, run_id);
+                    scenario.run(payload_type, rate, payload_label, formatRateLabel(rate));
                 }
             }
         }

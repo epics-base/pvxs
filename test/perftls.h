@@ -67,6 +67,10 @@
 #include <pcap.h>
 #endif
 
+// 68e54a41|59145|0|10000|3.2e-05|||
+// 68e54a41|59146|0|10000|2.7e-05|||
+// 68e54a41|59147|0|10000|3.5e-05|||
+// 68e54a41|59148|0|10000|3.1e-05|||
 #define PERF_CREATE_SQL \
     "CREATE TABLE IF NOT EXISTS results ("\
     "  RUN_ID TEXT NOT NULL," \
@@ -96,44 +100,113 @@
     "  TLS_CMS, "\
     "  TLS_CMS_STAPLED"\
     ")" \
-    "VALUES (?,?,?,?,?,?,?,?);"
+    "VALUES (" \
+    "  :run_id," \
+    "  :packet_id," \
+    "  :payload_id," \
+    "  :rate," \
+    "  :s_tcp," \
+    "  :s_tls," \
+    "  :s_tls_cms," \
+    "  :s_tls_cms_stapled " \
+    ");"
 
 #define PERF_UPDATE_TCP_SQL \
     "UPDATE results "\
     "SET "\
-    "  TCP=?1 "\
-    "WHERE RUN_ID=?2 "\
-    "  AND PAYLOAD_ID=?3 "\
-    "  AND RATE=?4 "\
-    "  AND PACKET_ID=?5;"
+    "  TCP=:value "\
+    "WHERE RUN_ID=:run_id "\
+    "  AND PAYLOAD_ID=:payload_id "\
+    "  AND RATE=:rate "\
+    "  AND PACKET_ID=:packet_id;"
 
 #define PERF_UPDATE_TLS_SQL \
     "UPDATE results "\
     "SET "\
-    "  TLS=?1 "\
-    "WHERE RUN_ID=?2 "\
-    "  AND PAYLOAD_ID=?3 "\
-    "  AND RATE=?4 "\
-    "  AND PACKET_ID=?5;"
+    "  TLS=:value "\
+    "WHERE RUN_ID=:run_id "\
+    "  AND PAYLOAD_ID=:payload_id "\
+    "  AND RATE=:rate "\
+    "  AND PACKET_ID=:packet_id;"
 
 #define PERF_UPDATE_TLS_CMS_SQL \
     "UPDATE results "\
     "SET "\
-    "  TLS_CMS=?1 "\
-    "WHERE RUN_ID=?2 "\
-    "  AND PAYLOAD_ID=?3 "\
-    "  AND RATE=?4 "\
-    "  AND PACKET_ID=?5;"
+    "  TLS_CMS=:value "\
+    "WHERE RUN_ID=:run_id "\
+    "  AND PAYLOAD_ID=:payload_id "\
+    "  AND RATE=:rate "\
+    "  AND PACKET_ID=:packet_id;"
 
 #define PERF_UPDATE_TLS_CMS_STAPLED_SQL \
     "UPDATE results "\
     "SET "\
-    "  TLS_CMS_STAPLED=?1 "\
-    "WHERE RUN_ID=?2 "\
-    "  AND PAYLOAD_ID=?3 "\
-    "  AND RATE=?4 "\
-    "  AND PACKET_ID=?5;"
+    "  TLS_CMS_STAPLED=:value "\
+    "WHERE RUN_ID=:run_id "\
+    "  AND PAYLOAD_ID=:payload_id "\
+    "  AND RATE=:rate "\
+    "  AND PACKET_ID=:packet_id;"
 
+#define PERF_DELETE_SQL \
+    "DELETE FROM results "\
+    "WHERE RUN_ID=?;"
+
+#define PERF_COUNT_SAMPLES_SQL \
+    "SELECT COUNT(*) " \
+    "FROM results " \
+    "WHERE " \
+    "  RUN_ID=:run_id;"
+
+#define PERF_LIST_SAMPLES_SQL \
+    "SELECT " \
+    "  RUN_ID, " \
+    "  COUNT(*) AS N " \
+    "FROM results " \
+    "GROUP BY RUN_ID " \
+    "ORDER BY RUN_ID DESC;"
+
+#define PERF_GET_LATEST_RUN_ID_SQL \
+    "SELECT " \
+    "  RUN_ID " \
+    "FROM results " \
+    "GROUP BY RUN_ID " \
+    "ORDER BY RUN_ID DESC LIMIT 1;"
+
+#define PERF_REPORT_PAYLOADS_SQL \
+    "SELECT " \
+    "  PAYLOAD_ID, " \
+    "  RATE " \
+    "FROM results " \
+    "WHERE RUN_ID=:run_id " \
+    "GROUP BY " \
+    "  PAYLOAD_ID, " \
+    "  RATE " \
+    "ORDER BY " \
+    "  PAYLOAD_ID, " \
+    "  RATE;"
+
+#define PERF_REPORT_SAMPLE_COUNT_SQL \
+    "SELECT " \
+    "  COUNT(TCP), " \
+    "  COUNT(TLS), " \
+    "  COUNT(TLS_CMS), " \
+    "  COUNT(TLS_CMS_STAPLED) " \
+    "FROM results " \
+    "WHERE RUN_ID=:run_id " \
+    "  AND PAYLOAD_ID=:payload_id " \
+    "  AND RATE=:rate " \
+    "  AND :scenario_type IS NOT NULL;"
+
+#define PERF_REPORT_SAMPLE_DATA \
+    "SELECT " \
+    "  PACKET_ID, " \
+    "  TCP, TLS, TLS_CMS, TLS_CMS_STAPLED " \
+    "FROM results " \
+    "WHERE RUN_ID=:run_id " \
+    "  AND PAYLOAD_ID=:payload_id " \
+    "  AND RATE=:rate " \
+    "  AND :scenario_type IS NOT NULL " \
+    "ORDER BY PAYLOAD_ID, RATE, PACKET_ID ;"
 
 namespace pvxs {
 namespace perf {
@@ -171,6 +244,52 @@ enum PayloadType {
     LARGE_2MB,
 };
 
+struct WireSizes { double small; double medium; double large; };
+
+struct Accumulator {
+    int32_t N=0;     // Size of sample
+    double mean=0.0; // Mean of sample
+    double M2=0.0;
+    double vmin=std::numeric_limits<double>::max();
+    double vmax=std::numeric_limits<double>::lowest();
+    uint32_t max_count{0}, min_count{0};
+
+    /**
+     * Welford's online algorithm for computing mean, variance, and standard deviation in a single pass
+     *
+     * @see https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
+     *
+     * @param value value to add
+     */
+    void add(const double value) {
+        if (value == vmin) ++min_count;
+        else if (value < vmin) { vmin = value; min_count = 1; }
+        if (value == vmax) ++max_count;
+        else if (value > vmax) { vmax = value; max_count = 1; }
+        ++N;
+
+        const double delta = value - mean;
+        mean += delta/static_cast<double>(N);
+        const double delta2 = value - mean;
+        M2 += delta*delta2;
+    }
+
+    /**
+     * Calculate the variance
+     * @return the variance
+     */
+    double variance() const {
+        return N > 1 ? M2 / (static_cast<double>(N) - 1) : 0.0;
+    }
+
+    /**
+     * Calculate the standard deviation
+     * @return the standard deviation
+     */
+    double stddev() const {
+        return std::sqrt(variance());
+    }
+};
 
 /**
  * Result: This is used to store the results of the performance tests.
@@ -187,13 +306,7 @@ enum PayloadType {
  * - The maximum transmission time for the updates per second of the test.
  */
 struct Result {
-    epicsMutex lock;
-
-    int32_t n = 0;
-    double mean = 0.0;
-    double M2 = 0.0; // the sum, of the squares, of the differences from the current mean
-    double min = std::numeric_limits<double>::max();
-    double max = std::numeric_limits<double>::lowest();
+    Accumulator accumulator;
     double small_size;
     double medium_size;
     double large_size;
@@ -204,11 +317,11 @@ struct Result {
     void print(ScenarioType scenario_type, PayloadType payload_type, const std::string &payload_label, uint32_t rate, const std::string &rate_label, double cpu_percent, double rss_mb, uint64_t bytes_captured) const ;
 
     double variance() const {
-        return n > 1 ? M2 / (static_cast<double>(n) - 1) : 0.0;
+        return accumulator.variance();
     }
 
     double stddev() const {
-        return std::sqrt(variance());
+        return accumulator.stddev();
     }
 };
 
@@ -276,6 +389,8 @@ struct Scenario {
      * - TLS: TLS connection.
      * - TLS_CMS: TLS connection with CMS status checking.
      * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
+     * @param db_file_name the db file name.  If ommited then no detailed output
+     * @param run_id the run id to use for this scenario
      */
     explicit Scenario(ScenarioType scenario_type, const std::string &db_file_name = {}, const std::string &run_id = {});
 
@@ -287,7 +402,7 @@ struct Scenario {
     void configureServer();
     void startServer() ;
     void buildClientContext();
-    static void run(const ScenarioType &scenario_type, PayloadType payload_type, const std::string &output_file_name);
+    static void run(const ScenarioType &scenario_type, PayloadType payload_type, const std::string &db_file_name = {}, const std::string &run_id = {});
     void run(PayloadType payload_type, uint32_t rate, const std::string& payload_label, const std::string& rate_label);
     void startMonitor(PayloadType payload_type, uint32_t rate);
     void postValue(PayloadType payload_type, int32_t counter = -1);
