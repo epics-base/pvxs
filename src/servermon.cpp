@@ -542,7 +542,7 @@ void ServerConn::handle_MONITOR()
 
         if(op->pipeline) {
             if(!nack) {
-                // before UNRELEASED initial nack=0 clamped the window size to zero!
+                // before 1.4.0 initial nack=0 clamped the window size to zero!
                 log_err_printf(connsetup,
                                "Client %s \"%s\" pipeline monitor w/o initial nack incompatible\n",
                                peerName.c_str(), chan->name.c_str());

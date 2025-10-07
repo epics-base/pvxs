@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.4.1 (UNRELEASED)
-------------------
+1.4.1 (Aug 2025)
+----------------
 
 * Restore lookup of host names in address lists (regression introduced with 1.4.0).
 * Fix builds where ``$(INSTALL_LOCATION) != $(TOP)``.
