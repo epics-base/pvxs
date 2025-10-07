@@ -413,9 +413,6 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 || EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE           || <path to password text file>              || Location of a password file for :ref:`pvacms` keychain file.            |
 ||                                              || e.g. ``~/.config/pva/1.3/pvacms.pass``    ||                                                                         |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS_STOP_IF_NO_CERT             || {``true`` or ``false`` (default) }        || ``true`` if server should stop if no cert is available or can be        |
-||                                              ||                                           || verified if status check is enabled                                     |
-+-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 
 Extensions to Config for PVACMS
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -141,10 +141,6 @@ The following environment variables control SPVA behavior:
 +--------------------------+ e.g. ``8076``                                                    | for clients to connect to - PVA, or as the local port number  |
 | EPICS_PVAS_TLS_PORT      |                                                                  | for Secure PVAccess servers to listen on - PVAS.              |
 +--------------------------+----------------------------+-------------------------------------+---------------------------------------------------------------+
-| EPICS_PVAS_TLS_STOP      | ``yes``, ``true``, ``1``                                         | For servers only. Stop if no certificate is provided.         |
-| _IF_NO_CERT.             +------------------------------------------------------------------+                                                               |
-|                          | ``no``, ``false``, ``0`` (default)                               |                                                               |
-+--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | SSLKEYLOGFILE            | {fully qualified path to key log file}                           | This is the path to the SSL key log file that, in conjunction |
 |                          |                                                                  | with the build-time macro `PVXS_ENABLE_SSLKEYLOGFILE`,        |
 |                          | e.g. ``~/.config/keylog``                                        | controls where and whether we store the session key for TLS   |
@@ -318,7 +314,7 @@ The state transitions based on:
 
 - Certificate validity and configuration
 - Certificate status monitoring results
-- :ref:`configuration` options (e.g., ``EPICS_PVAS_TLS_STOP_IF_NO_CERT``)
+- :ref:`configuration` options
 
 States:
 

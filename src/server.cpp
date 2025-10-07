@@ -546,12 +546,12 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 #ifdef PVXS_ENABLE_OPENSSL
         if (effective.isTlsConfigured()) {
             try {
-                auto innerConf = clientConfig(effective);
+                auto inner_conf = clientConfig(effective);
                 // TODO: currently not possible to disable TLS for an individual search.
                 // until then, create a separate inner context to retrieve signed payload from CMS
-                innerConf.tls_disabled = true;
+                inner_conf.tls_disabled = true;
 
-                tls_context = ossl::SSLContext::for_server(effective, innerConf.build(), acceptor_loop);
+                tls_context = ossl::SSLContext::for_server(effective, inner_conf.build(), acceptor_loop);
             } catch (std::exception& e) {
                 log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
                 effective.tls_disabled = true; // HACK!
