@@ -1220,8 +1220,13 @@ std::string scenarioLabel(ScenarioType scenario_id) {
 void doReport(sqlite3* db, const std::string& run_id) {
     // precompute payload wire sizes for throughput
     const auto wire_sizes = computeWireSizes();
+    const auto samples = countSamples(db, run_id);
+    if ( !samples ) {
+        std::cout << "No samples found for RUN_ID=" << run_id << std::endl;
+        return;
+    }
 
-    std::cout << run_id << " -  Generated at: " << decodeRunID(run_id) << ":  " << countSamples(db, run_id) << " samples" << std::endl;
+    std::cout << run_id << " -  Generated at: " << decodeRunID(run_id) << ":  " << samples << " samples" << std::endl;
     std::cout << std::setw(15) << "Connection Type" << ", "
               << std::setw(12) << "Payload" << ", "
               << std::setw(13) << "Tx Rate(Hz)" << ", "
