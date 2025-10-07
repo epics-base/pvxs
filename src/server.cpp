@@ -454,14 +454,9 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 
             tls_context = ossl::SSLContext::for_server(effective, innerConf.build(), acceptor_loop);
         } catch (std::exception& e) {
-            if (effective.tls_stop_if_no_cert) {
-                log_err_printf(osslsetup, "***EXITING***: TLS disabled for server: %s\n", e.what());
-                exit(1);
-            }
-            if (effective.tls_throw_if_no_cert) {
-                throw(std::runtime_error(e.what()));
-            }
             log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
+            effective.tls_disabled = true; // HACK!
+            effective.tls_keychain_file.clear();
         }
     } else if (tls_context) {
         tls_context->setDegradedMode(true);

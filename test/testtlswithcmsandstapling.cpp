@@ -565,7 +565,6 @@ struct Tester {
             auto serv_conf = server_config;
             serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
             serv_conf.tls_disable_status_check = false;
-            serv_conf.tls_throw_if_no_cert = true;
             serv_conf.tls_disable_stapling = false;
 
             try {

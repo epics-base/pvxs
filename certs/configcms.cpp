@@ -96,11 +96,6 @@ void ConfigCms::applyCmsEnv(const std::map<std::string, std::string> &defs) {
         ensureDirectoryExists(tls_keychain_file = filename);
     }
 
-    // EPICS_PVAS_TLS_STOP_IF_NO_CERT
-    if (pickone({"EPICS_PVACMS_TLS_STOP_IF_NO_CERT", "EPICS_PVAS_TLS_STOP_IF_NO_CERT"})) {
-        tls_stop_if_no_cert = parseTo<bool>(pickone.val);
-    }
-
     // EPICS_PVACMS_ACF
     if (pickone({"EPICS_PVACMS_ACF"})) {
         ensureDirectoryExists(pvacms_acf_filename = pickone.val);
@@ -268,7 +263,6 @@ void ConfigCms::applyCmsEnv(const std::map<std::string, std::string> &defs) {
  */
 void ConfigCms::updateDefs(defs_t &defs) const {
     Config::updateDefs(defs);
-    defs["EPICS_PVACMS_TLS_STOP_IF_NO_CERT"] = tls_stop_if_no_cert ? "YES" : "NO";
     defs["EPICS_PVACMS_ACF"] = pvacms_acf_filename;
     defs["EPICS_PVACMS_DB"] = certs_db_filename;
     defs["EPICS_CERT_AUTH_TLS_KEYCHAIN"] = cert_auth_keychain_file;
