@@ -55,7 +55,6 @@
 
 // Enable expert API (Timer, evbase)
 #define PVXS_ENABLE_EXPERT_API
-#include "evhelper.h"
 #include "openssl.h"
 // Internal wire helpers for computing encoded Value sizes (test-only)
 #include "pvaproto.h"
@@ -160,6 +159,104 @@ double cpuPercentSince(const double w0, const double c0) {
     const double dw = w1 - w0;
     const double dc = c1 - c0;
     return dw > 0.0 ? dc / dw * 100.0 : 0.0;
+}
+
+// SMALL: NTScalar<Int32>
+Value createSmallValue() {
+    auto s_def(nt::NTScalar{TypeCode::Int32}.build());
+    s_def += {Int32("counter")};
+    auto value = s_def.create();
+    value["counter"] = -1; // Set an initial value.  This will be ignored
+    return value;
+}
+
+// MEDIUM: NTNDArray with 32x32 ubyte and counter
+Value createMediumValue() {
+    auto m_def(nt::NTNDArray{}.build());
+    m_def += {Int32("counter")};
+    m_def += {
+        StructA("dimensions",
+                {
+                    Int32("value"),
+                }),
+    };
+    Value value = m_def.create();
+    constexpr int d0 = 32, d1 = 32;
+    shared_array<uint8_t> buf(d0 * d1);
+    for (size_t i = 0u; i < buf.size(); ++i)
+        buf[i] = static_cast<uint8_t>(i);
+    shared_array<const uint8_t> medium_data(buf.freeze());
+    shared_array<Value> small_dimensions;
+    small_dimensions.resize(2);
+    small_dimensions[0] = value["dimension"].allocMember().update("size", d0);
+    small_dimensions[1] = small_dimensions[0].cloneEmpty().update("size", d1);
+
+    value["value->ubyteValue"] = medium_data;
+    value["dimension"] = small_dimensions.freeze();
+    value["counter"] = -1; // Set an initial value.  This will be ignored
+  return value;
+}
+
+
+// LARGE: NTNDArray 2000x2000 4bpp (size approximated by structure);
+Value createLargeValue() {
+    auto l_def(nt::NTNDArray{}.build());
+    l_def += {Int32("counter")};
+    l_def += {
+        StructA("dimensions",
+                {
+                    Int32("value"),
+                }),
+    };
+    Value value = l_def.create();
+
+    constexpr int height = 2000;
+    constexpr int width = 2000;
+    constexpr size_t n_pixels = static_cast<size_t>(height) * static_cast<size_t>(width);
+    constexpr size_t n_bytes = (n_pixels + 1u) / 2u;  // two pixels per byte
+
+    // allocate packed buffer (each byte holds two 4-bit pixels)
+    shared_array<uint8_t> buf(n_bytes);
+
+    // ---- dimensions (pixel sizes) ----
+    shared_array<Value> dims;
+    dims.resize(2);
+    dims[0] = value["dimension"]
+        .allocMember()
+        .update("size", height)
+        .update("offset", 0)
+        .update("fullSize", height)
+        .update("binning", 1)
+        .update("reverse", false);
+    dims[1] = dims[0].cloneEmpty().update("size", width).update("fullSize", width);
+    value["dimension"] = dims.freeze();
+
+    // ---- data ----
+    value["value->ubyteValue"] = shared_array<const uint8_t>(buf.freeze());
+
+    // ---- sizes / codec ----
+    value["uncompressedSize"] = static_cast<int64_t>(n_bytes);
+    value["compressedSize"] = static_cast<int64_t>(n_bytes);  // raw
+    value["codec.name"] = "raw";
+
+    // ---- attributes: at least ColorMode and BitsPerPixel ----
+    auto mkAttr = [&](const char* name, const uint32_t n) {
+        auto attribute = value["attribute"].allocMember();
+        attribute["name"] = name;
+        attribute["value"] = n;
+        attribute["descriptor"] = "auto";
+        attribute["sourceType"] = 0;
+        attribute["source"] = "";
+        return attribute;
+    };
+
+    pvxs::shared_array<Value> attrs;
+    attrs.resize(2);
+    attrs[0] = mkAttr("ColorMode", 0);  // 0 = Mono (convention)
+    attrs[1] = mkAttr("BitsPerPixel", 4);
+    value["attribute"] = attrs.freeze();
+    value["counter"] = -1; // Set an initial value.  This will be ignored
+    return value;
 }
 
 /**
@@ -474,17 +571,9 @@ Scenario::Scenario(const ScenarioType scenario_type, const std::string &db_file_
  * Initialize the SMALL payload type test and add its PV to the server
  */
 void Scenario::initSmallScenarios() {
-    // Build PV
     small_pv = server::SharedPV::buildReadonly();
     server.addPV("PERF:SMALL", small_pv);
-
-    // Build data
-    // 4 byte data payload (plus NT scaffolding)
-    auto s_def(nt::NTScalar{TypeCode::Int32}.build());
-    s_def += {Int32("counter")};
-
-    small_value = s_def.create();
-    small_value["counter"] = -1; // Set an initial value.  This will be ignored
+    small_value = createSmallValue();
     small_pv.open(small_value);
 }
 
@@ -494,34 +583,7 @@ void Scenario::initSmallScenarios() {
 void Scenario::initMediumScenarios() {
     medium_pv = server::SharedPV::buildReadonly();
     server.addPV("PERF:MEDIUM", medium_pv);
-
-    // Build data
-    // 1k payloads (plus NT scaffolding)
-    auto def(nt::NTNDArray{}.build());
-    def += {Int32("counter")};
-    def += {
-        StructA("dimensions",
-                {
-                    Int32("value"),
-                }),
-    };
-
-    medium_value = def.create();
-    {
-        constexpr int d0 = 32, d1 = 32;
-        shared_array<uint8_t> buf(d0 * d1);
-        for (size_t i = 0u; i < buf.size(); ++i)
-            buf[i] = static_cast<uint8_t>(i);
-        shared_array<const uint8_t> medium_data(buf.freeze());
-        shared_array<Value> small_dimensions;
-        small_dimensions.resize(2);
-        small_dimensions[0] = medium_value["dimension"].allocMember().update("size", d0);
-        small_dimensions[1] = small_dimensions[0].cloneEmpty().update("size", d1);
-
-        medium_value["value->ubyteValue"] = medium_data;
-        medium_value["dimension"] = small_dimensions.freeze();
-    }
-    medium_value["counter"] = -1; // Set an initial value.  This will be ignored
+    medium_value = createMediumValue();
     medium_pv.open(medium_value);
 }
 
@@ -529,68 +591,9 @@ void Scenario::initMediumScenarios() {
  * Initialize the LARGE payload type test and add its PV to the server
  */
 void Scenario::initLargeScenarios() {
-    // Build PV
-    auto def(nt::NTNDArray{}.build());
-    def += {Int32("counter")};
-    def += {
-        StructA("dimensions",
-                {
-                    Int32("value"),
-                }),
-    };
-
     large_pv = server::SharedPV::buildReadonly();
     server.addPV("PERF:LARGE", large_pv);
-
-    // 2MB = 4 Mega-Pixels: 2000 x 2000 mono (4 Mpx), 4 bits/pixel => 2,000,000 bytes
-    // Create the value
-    large_value = def.create();
-    constexpr int height = 2000;
-    constexpr int width = 2000;
-    constexpr size_t n_pixels = static_cast<size_t>(height) * static_cast<size_t>(width);
-    constexpr size_t n_bytes = (n_pixels + 1u) / 2u;  // two pixels per byte
-
-    // allocate packed buffer (each byte holds two 4-bit pixels)
-    shared_array<uint8_t> buf(n_bytes);
-
-    // ---- dimensions (pixel sizes) ----
-    shared_array<Value> dims;
-    dims.resize(2);
-    dims[0] = large_value["dimension"]
-                  .allocMember()
-                  .update("size", height)
-                  .update("offset", 0)
-                  .update("fullSize", height)
-                  .update("binning", 1)
-                  .update("reverse", false);
-    dims[1] = dims[0].cloneEmpty().update("size", width).update("fullSize", width);
-    large_value["dimension"] = dims.freeze();
-
-    // ---- data ----
-    large_value["value->ubyteValue"] = shared_array<const uint8_t>(buf.freeze());
-
-    // ---- sizes / codec ----
-    large_value["uncompressedSize"] = static_cast<int64_t>(n_bytes);
-    large_value["compressedSize"] = static_cast<int64_t>(n_bytes);  // raw
-    large_value["codec.name"] = "raw";
-
-    // ---- attributes: at least ColorMode and BitsPerPixel ----
-    auto mkAttr = [&](const char* name, const uint32_t n) {
-        auto attribute = large_value["attribute"].allocMember();
-        attribute["name"] = name;
-        attribute["value"] = n;
-        attribute["descriptor"] = "auto";
-        attribute["sourceType"] = 0;
-        attribute["source"] = "";
-        return attribute;
-    };
-
-    pvxs::shared_array<Value> attrs;
-    attrs.resize(2);
-    attrs[0] = mkAttr("ColorMode", 0);  // 0 = Mono (convention)
-    attrs[1] = mkAttr("BitsPerPixel", 4);
-    large_value["attribute"] = attrs.freeze();
-    large_value["counter"] = -1; // Set an initial value.  This will be ignored
+    large_value = createLargeValue();
     large_pv.open(large_value);
 }
 
@@ -1065,44 +1068,18 @@ void onExit(int) {
     _exit(130);
 }
 
-
 namespace {
-
 WireSizes computeWireSizes() {
     using namespace pvxs;
     using namespace pvxs::nt;
 
     WireSizes ws{};
-    // SMALL: NTScalar<Int32>
-    auto s_def(NTScalar{TypeCode::Int32}.build());
-    s_def += {Int32("counter")};
-    const Value s_val = s_def.create();
+    const auto s_val{createSmallValue()};
     ws.small = wireSizeBytes(s_val);
-
-    // MEDIUM: NTNDArray with 32x32 ubyte and counter
-    auto m_def(NTNDArray{}.build());
-    m_def += {Int32("counter")};
-    m_def += {
-        StructA("dimensions",
-                {
-                    Int32("value"),
-                }),
-    };
-    const Value m_val = m_def.create();
+    const auto m_val{createMediumValue()};
     ws.medium = wireSizeBytes(m_val);
-
-    // LARGE: NTNDArray 2000x2000 4bpp (size approximated by structure);
-    auto l_def(NTNDArray{}.build());
-    l_def += {Int32("counter")};
-    l_def += {
-        StructA("dimensions",
-                {
-                    Int32("value"),
-                }),
-    };
-    const Value l_val = l_def.create();
+    const auto l_val{createLargeValue()};
     ws.large = wireSizeBytes(l_val);
-
     return ws;
 }
 
@@ -1228,14 +1205,14 @@ void doReport(sqlite3* db, const std::string& run_id) {
 
     std::cout << run_id << " -  Generated at: " << decodeRunID(run_id) << ":  " << samples << " samples" << std::endl;
     std::cout << std::setw(15) << "Connection Type" << ", "
-              << std::setw(12) << "Payload" << ", "
+              << std::setw(13) << "Payload" << ", "
               << std::setw(13) << "Tx Rate(Hz)" << ", "
-              << std::setw(12) << "Throughput" << ", "
-              << std::setw(10) << "N" << ", "
+              << std::setw(13) << "Throughput" << ", "
+              << std::setw(8) << "N" << ", "
               << std::setw(10) << "Min(ms)" << ", "
               << std::setw(10) << "Max(ms)" << ", "
               << std::setw(10) << "Mean(ms)" << ", "
-              << std::setw(12) << "StdDev(ms)" << ", "
+              << std::setw(10) << "StdDev(ms)" << ", "
               << "Drops" << std::endl;
 
     // For each scenario, return values if they are non-zero
@@ -1282,36 +1259,38 @@ void doReport(sqlite3* db, const std::string& run_id) {
             sqlite3_bind_int (samples_statement, sqlite3_bind_parameter_index(samples_statement, ":rate"), rate);
 
             Accumulator accumulator;
-            bool drops=false;
-            bool first=true;
-            int64_t prior_packet_id=-1;
+            const auto expected_samples = rate * 60;
+            const bool drops=samples != expected_samples;
             while (sqlite3_step(samples_statement) == SQLITE_ROW) {
-                const int64_t packet_id = sqlite3_column_int64(samples_statement, 0);
                 const double value = sqlite3_column_double(samples_statement, scenario_index+1);
-                if (!first) {
-                    if (packet_id != prior_packet_id + 1) drops = true;
-                } else {
-                    if (packet_id != 0) drops = true; // expect to start at 0
-                    first = false;
-                }
-                prior_packet_id = packet_id;
-                accumulator.add(value*1000.0); // convert to ms
+                if (value > 0.0) accumulator.add(value*1000.0); // convert to ms
             }
             sqlite3_finalize(samples_statement);
-            if (first) throw std::logic_error(SB() << "Found no samples but we counted samples before "); // no samples
 
-            /*
-            // Remove first and last if unique
-            auto new_N = accumulator.N - 2;
-            auto new_sum = accumulator.mean * static_cast<double>(accumulator.N) - accumulator.vmax - accumulator.vmin;
-            double new_mean = new_sum / new_N;
+            // Remove max if unique and vastly different (2 standard deviations)
+            if (!drops) {
+                if ( accumulator.max_count == 1 && accumulator.vmax > accumulator.mean + accumulator.stddev() * 2 ) {
+                    const auto new_N = accumulator.N - 1;
+                    const auto new_sum = accumulator.mean * static_cast<double>(accumulator.N) - accumulator.vmax;
+                    const double new_mean = new_sum / new_N;
 
-            accumulator.M2 = accumulator.M2
-                - (accumulator.vmax - accumulator.mean) * (accumulator.vmax - new_mean)
-                - (accumulator.vmin - accumulator.mean) * (accumulator.vmin - new_mean);
-            accumulator.mean = new_mean;
-            accumulator.N = new_N;
-            */
+                    accumulator.M2 = accumulator.M2
+                        - (accumulator.vmax - accumulator.mean) * (accumulator.vmax - new_mean);
+                    accumulator.mean = new_mean;
+                    accumulator.N = new_N;
+                }
+                // Remove min if unique and vastly different
+                if ( accumulator.min_count == 1 && accumulator.vmin < accumulator.mean - accumulator.stddev() * 2 ) {
+                    const auto new_N = accumulator.N - 1;
+                    const auto new_sum = accumulator.mean * static_cast<double>(accumulator.N) - accumulator.vmin;
+                    const double new_mean = new_sum / new_N;
+
+                    accumulator.M2 = accumulator.M2
+                        - (accumulator.vmin - accumulator.mean) * (accumulator.vmin - new_mean);
+                    accumulator.mean = new_mean;
+                    accumulator.N = new_N;
+                }
+            }
 
             // 4) Throughput
             std::string throughput_units = " bps";
@@ -1321,15 +1300,15 @@ void doReport(sqlite3* db, const std::string& run_id) {
             else if ( throughput >= 1000       ) { throughput /= 1000;       throughput_units = "Kbps"; }
 
             std::cout << std::setw(15) << scenarioLabel(scenario_id) << ", "
-                      << std::setw(12) << payloadLabel(payload_id) << ", "
+                      << std::setw(13) << payloadLabel(payload_id) << ", "
                       << std::setw(13) << formatRateLabel(rate) << ", "
-                      << std::fixed << std::setprecision(2) << std::setw(8) << throughput << throughput_units << ", "
-                      << std::defaultfloat << std::setw(10) << accumulator.N << ", "
+                      << std::right << std::setw(9)  << throughput << throughput_units << ", "
+                      << std::defaultfloat << std::setw(8) << accumulator.N << ", "
                       << std::setprecision(6)
                       << std::setw(10) << accumulator.vmin << ", "
                       << std::setw(10) << accumulator.vmax << ", "
                       << std::setw(10) << accumulator.mean << ", "
-                      << std::setw(12) << accumulator.stddev() << ", "
+                      << std::setw(10) << accumulator.stddev() << ", "
                       << (drops? "yes" : "no")
                       << std::endl;
         }
