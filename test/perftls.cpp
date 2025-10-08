@@ -455,10 +455,10 @@ void UpdateConsumer::printProgressBar(double progress_percentage) {
     if (progress_percentage > 100.0)
         progress_percentage = 100.0;
     std::string bar;
-    bar.reserve(170);
+    bar.reserve(210);
     bar += prefix;
     bar += "▏";  // left cap
-    const double bar_len = 167.0 - static_cast<double>(prefix.size()) - 2.0;
+    const double bar_len = 203.0 - static_cast<double>(prefix.size()) - 2.0;
     uint32_t i;
     for (i = 0; i < 0.01 * progress_percentage * bar_len; ++i)
         bar += "█";
