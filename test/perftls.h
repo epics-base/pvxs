@@ -247,31 +247,56 @@ enum PayloadType {
 struct WireSizes { double small; double medium; double large; };
 
 struct Accumulator {
+    // Primary sample statistics
     int32_t N=0;     // Size of sample
     double mean=0.0; // Mean of sample
-    double M2=0.0;
+    double M2=0.0;   // Sum of the squares, of differences from the mean
     double vmin=std::numeric_limits<double>::max();
     double vmax=std::numeric_limits<double>::lowest();
     uint32_t max_count{0}, min_count{0};
 
+    // Jitter statistics computed online from successive differences (value[n] - value[n-1])
+    int32_t Nj=0;        // Number of successive differences accumulated
+    double meanj=0.0;    // Mean of the sum, of successive differences
+    double M2j=0.0;      // Sum of the squares, of the successive differences
+    double prev=0.0;     // Previous value to compute a difference
+    bool has_prev=false; // Flag to indicate if previous value is valid
+
     /**
      * Welford's online algorithm for computing mean, variance, and standard deviation in a single pass
+     * Also maintains jitter statistics as the standard deviation of successive deltas, without
+     * storing the full data set.
      *
      * @see https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
      *
      * @param value value to add
      */
     void add(const double value) {
+        // Track min/max and counts
         if (value == vmin) ++min_count;
         else if (value < vmin) { vmin = value; min_count = 1; }
         if (value == vmax) ++max_count;
         else if (value > vmax) { vmax = value; max_count = 1; }
-        ++N;
 
+        // Primary stats
+        ++N;
         const double delta = value - mean;
         mean += delta/static_cast<double>(N);
         const double delta2 = value - mean;
         M2 += delta*delta2;
+
+        // Jitter stats (successive differences)
+        if (has_prev) {
+            const double d = value - prev;
+            ++Nj;
+            const double dj = d - meanj;
+            meanj += dj/static_cast<double>(Nj);
+            const double dj2 = d - meanj;
+            M2j += dj*dj2;
+        } else {
+            has_prev = true;
+        }
+        prev = value;
     }
 
     /**
@@ -288,6 +313,44 @@ struct Accumulator {
      */
     double stddev() const {
         return std::sqrt(variance());
+    }
+
+    /**
+     * Precision of the mean (standard error). Useful to gauge confidence in the mean without
+     * storing all samples.
+     * @return standard error of the mean
+     */
+    double sem() const {
+        return N > 0 ? stddev() / std::sqrt(static_cast<double>(N)) : 0.0;
+    }
+
+    /**
+     * Jitter variance from successive differences
+     */
+    double jitter_variance() const {
+        return Nj > 1 ? M2j / (static_cast<double>(Nj) - 1) : 0.0;
+    }
+
+    /**
+     * Jitter (standard deviation of successive deltas)
+     */
+    double jitter() const {
+        return std::sqrt(jitter_variance());
+    }
+
+    /**
+     *
+     * @param factor
+     * - Mean ==> multiply by factor.
+     * - M2   ==> multiply by factor squared
+     */
+    void scale(const double factor) {
+        vmin *= factor;
+        vmax *= factor;
+        mean *= factor;
+        meanj *= factor;
+        M2 *= factor*factor;
+        M2j *= factor*factor;
     }
 };
 
@@ -314,15 +377,7 @@ struct Result {
     Result(const double small_size_, const double medium_size_, const double large_size_) : small_size(small_size_), medium_size(medium_size_), large_size(large_size_) {}
 
     int32_t add(double value) ;
-    void print(ScenarioType scenario_type, PayloadType payload_type, const std::string &payload_label, uint32_t rate, const std::string &rate_label, double cpu_percent, double rss_mb, uint64_t bytes_captured) const ;
-
-    double variance() const {
-        return accumulator.variance();
-    }
-
-    double stddev() const {
-        return accumulator.stddev();
-    }
+    void print(ScenarioType scenario_type, PayloadType payload_type, const std::string &payload_label, uint32_t rate, const std::string &rate_label, double cpu_percent, double rss_mb, uint64_t bytes_captured)  ;
 };
 
 struct Update {

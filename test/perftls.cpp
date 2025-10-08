@@ -298,7 +298,10 @@ int32_t Result::add(const double value) {
  *  @param bytes_captured The number of bytes captured during the test.
  */
 void Result::print(const ScenarioType scenario_type, const PayloadType payload_type, const std::string &payload_label,
-    const uint32_t rate, const std::string &rate_label, const double cpu_percent, const double rss_mb, uint64_t bytes_captured) const {
+    const uint32_t rate, const std::string &rate_label, const double cpu_percent, const double rss_mb, uint64_t bytes_captured)  {
+    // Scale results
+    accumulator.scale(1000); // to milliseconds
+
     // Wipe the progress bar
     std::cout << std::right << std::setw(155) <<" \r";
 
@@ -325,21 +328,27 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
     std::cout << std::right << std::setw(9) << throughput << throughput_units << ", ";
 
     // 5) n, minimum / maximum transmission time
-    std::cout << std::right << std::setw(8) << accumulator.N << ", ";
-    if (accumulator.vmin < std::numeric_limits<double>::max())    std::cout << std::right << std::setw(10) << accumulator.vmin*1000.0 << ", "; else std::cout << " , ";
-    if (accumulator.vmax > std::numeric_limits<double>::lowest()) std::cout << std::right << std::setw(10) << accumulator.vmax*1000.0 << ", "; else std::cout << " ,  ";
-
+    std::cout << std::right << std::setw(8) << accumulator.N << ", "; // Total number of readings (sample size)
+    if (accumulator.vmin < std::numeric_limits<double>::max())    std::cout << std::right << std::setw(10) << accumulator.vmin << ", "; else std::cout << " , ";
+    if (accumulator.vmax > std::numeric_limits<double>::lowest()) std::cout << std::right << std::setw(10) << accumulator.vmax << ", "; else std::cout << " ,  ";
     // 6) Mean, StdDev
-    std::cout << std::right << std::setw(10) << accumulator.mean*1000.0 << ", ";
-    std::cout << std::right << std::setw(10) << stddev()*1000.0 <<  ", ";
+    std::cout << std::right << std::setw(10) << accumulator.mean << ", ";        // The Mean Transmission Time
+    std::cout << std::right << std::setw(10) << accumulator.stddev() <<  ", ";   // Standard Deviation from the Mean
 
-    // 7) CPU% of 1 Core
+    // 7) SEM, Jitter
+    std::cout << std::right << std::setw(11) << accumulator.sem() << ", ";       // Standard Error on the Mean (Precision)
+    std::cout << std::right << std::setw(11) << accumulator.jitter() <<  ", ";   // Standard Deviation of successive deltas
+
+    // 8) Drops?
+    std::cout << std::right << std::setw(10) << (accumulator.N < rate * 60.0 ? "yes" : "no")  << ", ";
+
+    // 9) CPU% of 1 Core
     std::cout << std::right << std::setw(12) << cpu_percent << ", " ;
 
-    // 8) Memory used
+    // 10) Memory used
     std::cout << std::right << std::setw(12) << rss_mb << ", " ;
 
-    // 9) Network load
+    // 11) Network load
     std::cout << std::right << std::setw(19) << bytes_captured;
 }
 
@@ -1060,7 +1069,6 @@ Child pvacms_subprocess;
 
 /**
  * Simple Ctrl-C (SIGINT) trap: print the exit message, stop PVACMS, then exit
- * @param sig The signal number
  */
 void onExit(int) {
     std::cerr << std::endl << "Exiting..." << std::endl;
@@ -1174,7 +1182,7 @@ void deleteRuns(sqlite3* db, const std::vector<std::string>& run_ids) {
     sqlite3_finalize(statement);
 }
 
-std::string payloadLabel(PayloadType payload_id) {
+std::string payloadLabel(const PayloadType payload_id) {
     switch (payload_id) {
         case SMALL_32B:  return "SMALL(32B)";
         case MEDIUM_1KB: return "MEDIUM(1KB)";
@@ -1184,7 +1192,7 @@ std::string payloadLabel(PayloadType payload_id) {
 }
 
 // scenario index to column name
-std::string scenarioLabel(ScenarioType scenario_id) {
+std::string scenarioLabel(const ScenarioType scenario_id) {
     switch (scenario_id) {
         case TCP:               return "TCP";
         case TLS:               return "TLS";
@@ -1208,11 +1216,13 @@ void doReport(sqlite3* db, const std::string& run_id) {
               << std::setw(13) << "Payload" << ", "
               << std::setw(13) << "Tx Rate(Hz)" << ", "
               << std::setw(13) << "Throughput" << ", "
-              << std::setw(8) << "N" << ", "
-              << std::setw(10) << "Min(ms)" << ", "
-              << std::setw(10) << "Max(ms)" << ", "
-              << std::setw(10) << "Mean(ms)" << ", "
-              << std::setw(10) << "StdDev(ms)" << ", "
+              << std::setw( 8) << "N" << ", "           // Total number of readings (sample size)
+              << std::setw(10) << "Min(ms)" << ", "     // Min Transmission Time
+              << std::setw(10) << "Max(ms)" << ", "     // Max Transmission Time
+              << std::setw(10) << "Mean(ms)" << ", "    // The Mean Transmission Time
+              << std::setw(10) << "StdDev(ms)" << ", "  // Standard Deviation from the Mean
+              << std::setw(11) << "SEM(ms)" << ", "     // Standard Error on the Mean (Precision)
+              << std::setw(11) << "Jitter(ms)" << ", "  // Standard Deviation of successive deltas
               << "Drops" << std::endl;
 
     // For each scenario, return values if they are non-zero
@@ -1263,7 +1273,7 @@ void doReport(sqlite3* db, const std::string& run_id) {
             const bool drops=samples != expected_samples;
             while (sqlite3_step(samples_statement) == SQLITE_ROW) {
                 const double value = sqlite3_column_double(samples_statement, scenario_index+1);
-                if (value > 0.0) accumulator.add(value*1000.0); // convert to ms
+                if (value > 0.0) accumulator.add(value); // convert to ms
             }
             sqlite3_finalize(samples_statement);
 
@@ -1292,6 +1302,9 @@ void doReport(sqlite3* db, const std::string& run_id) {
                 }
             }
 
+            // Scale results
+            accumulator.scale(1000); // to milliseconds
+
             // 4) Throughput
             std::string throughput_units = " bps";
             auto throughput = (payload_id == LARGE_2MB ? wire_sizes.large : payload_id == MEDIUM_1KB ? wire_sizes.medium : wire_sizes.small) * 8.0 * static_cast<double>(rate);
@@ -1303,12 +1316,14 @@ void doReport(sqlite3* db, const std::string& run_id) {
                       << std::setw(13) << payloadLabel(payload_id) << ", "
                       << std::setw(13) << formatRateLabel(rate) << ", "
                       << std::right << std::setw(9)  << throughput << throughput_units << ", "
-                      << std::defaultfloat << std::setw(8) << accumulator.N << ", "
+                      << std::defaultfloat << std::setw(8) << accumulator.N << ", " // Total number of readings (sample size)
                       << std::setprecision(6)
-                      << std::setw(10) << accumulator.vmin << ", "
-                      << std::setw(10) << accumulator.vmax << ", "
-                      << std::setw(10) << accumulator.mean << ", "
-                      << std::setw(10) << accumulator.stddev() << ", "
+                      << std::setw(10) << accumulator.vmin << ", "                  // Min Transmission Time
+                      << std::setw(10) << accumulator.vmax << ", "                  // Max Transmission Time
+                      << std::setw(10) << accumulator.mean<< ", "                   // The Mean Transmission Time
+                      << std::setw(10) << accumulator.stddev() << ", "              // Standard Deviation from the Mean
+                      << std::setw(11) << accumulator.sem() << ", "                 // Standard Error on the Mean (Precision)
+                      << std::setw(11) << accumulator.jitter() << ", "              // Standard Deviation of successive deltas
                       << (drops? "yes" : "no")
                       << std::endl;
         }
@@ -1502,11 +1517,14 @@ int main(int argc, char* argv[]) {
                   << std::right << std::setw(13) << "Payload" << ", "
                   << std::right << std::setw(13) << "Tx Rate(Hz)" << ", "
                   << std::right << std::setw(13) << "Throughput" << ", "
-                  << std::right << std::setw( 8) << "N" << ", "
-                  << std::right << std::setw(10) << "Min(ms)" << ", "
-                  << std::right << std::setw(10) << "Max(ms)" << ", "
-                  << std::right << std::setw(10) << "Mean(ms)" << ", "
-                  << std::right << std::setw(10) << "StdDev(ms)" << ", "
+                  << std::right << std::setw( 8) << "N" << ", "            // Total number of readings (sample size)
+                  << std::right << std::setw(10) << "Min(ms)" << ", "      // Min Transmission Time
+                  << std::right << std::setw(10) << "Max(ms)" << ", "      // Max Transmission Time
+                  << std::right << std::setw(10) << "Mean(ms)" << ", "     // The Mean Transmission Time
+                  << std::right << std::setw(10) << "StdDev(ms)" << ", "   // Standard Deviation from the Mean
+                  << std::right << std::setw(11) << "SEM(ms)" << ", "      // Standard Error on the Mean (Precision)
+                  << std::right << std::setw(11) << "Jitter(ms)" << ", "   // Standard Deviation of successive deltas
+                  << std::right << std::setw(10) << "Drops(y/n)" << ", "
                   << std::right << std::setw(12) << "CPU(% core)" << ", "
                   << std::right << std::setw(12) << "Memory(MB)" << ", "
                   << std::right << std::setw(19) << "Network Load(bytes)"
