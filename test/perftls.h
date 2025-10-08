@@ -339,10 +339,17 @@ struct Accumulator {
     }
 
     /**
+     * Scale accumulated statistics by a constant factor.
+     * Intended to convert units (e.g., seconds -> milliseconds) after accumulation.
+     * Safe to call after accumulation; if called mid-stream, `prev` is also scaled
+     * so subsequent jitter calculations remain consistent with the new units.
      *
      * @param factor
-     * - Mean ==> multiply by factor.
-     * - M2   ==> multiply by factor squared
+     * - Mean                ==> Multiply by factor
+     * - M2                  ==> Multiply by factor squared
+     * - Jitter mean (meanj) ==> multiply by factor
+     * - Jitter M2 (M2j)     ==> multiply by factor squared
+     * - Min/Max/Prev values ==> multiply by factor
      */
     void scale(const double factor) {
         vmin *= factor;
@@ -351,16 +358,22 @@ struct Accumulator {
         meanj *= factor;
         M2 *= factor*factor;
         M2j *= factor*factor;
+        if (has_prev) prev *= factor;
     }
 };
 
 /**
- * Result: This is used to store the results of the performance tests.
+ * Result: Manager
+ *
+ * This is used to store the results of the performance tests.
+ *
  * It stores the average transmission times (values) taken from the time the updates are
- * sent to the time they are read by the client.  The values are grouped by the corresponding update send-time.
- * The values are grouped by second that they are sent.
+ * sent to the time they are read by the client.
+ *
+ * The values are grouped by the second in which they are sent.
+ *
  * Alongside the values we store the number of updates (expected_count) and the number of updates that
- * were dropped (dropped) grouped by second that they are sent.
+ * were dropped (dropped) grouped by the second in which they are sent.
  * We also store the minimum and maximum transmission times (min and max).
  * We print the results in a table format with the following columns:
  * - The average transmission time for the updates per second of the test.
