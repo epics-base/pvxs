@@ -70,105 +70,28 @@
 namespace pvxs {
 namespace perf {
 
-// Compute the PVA wire size (bytes) of a Value (type + data), for throughput calculations.
-// Performance Test only: uses internal wire encoder.
-static double wireSizeBytes(const Value& val) {
-    using namespace pvxs::impl;
-    std::vector<uint8_t> buf;
-    buf.reserve(4096000);
-    VectorOutBuf M(true, buf);
-    to_wire_full(M, val);
-    return static_cast<double>(M.consumed());
-}
-
 DEFINE_LOGGER(perflog, "pvxs.perf");
 DEFINE_LOGGER(producerlog, "pvxs.perf.scenario.producer");
 DEFINE_LOGGER(consumerlog, "pvxs.perf.scenario.consumer");
 
 using namespace pvxs::members;
 
-#ifdef __linux__
-/**
- * Retrieve the current RSS (Resident Set Size) memory usage of the process
- *
- * @return The RSS memory usage in bytes
- */
-std::uint64_t getRssBytes() {
-    // Fast path: /proc/self/statm (field 2 = resident pages)
-    FILE* f = std::fopen("/proc/self/statm", "r");
-    if (!f)
-        return 0;
-    long pages_res = 0;
-    long pages_total = 0;
-    if (std::fscanf(f, "%ld %ld", &pages_total, &pages_res) != 2) {
-        std::fclose(f);
-        return 0;
-    }
-    std::fclose(f);
-    const long page_size = sysconf(_SC_PAGESIZE);  // bytes per page
-    return static_cast<std::uint64_t>(pages_res) * static_cast<std::uint64_t>(page_size);
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Forward declarations
+namespace {
+Value createSmallValue();
 }
 
-// Return process CPU time (user+sys) in seconds
-/**
- *
- * @return
- */
-double procCPUSeconds() {
-    timespec ts{};
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts) != 0)
-        return 0.0;
-    return ts.tv_sec + ts.tv_nsec / 1e9;
-}
-
-#elif defined(__APPLE__) || defined(__FreeBSD__)
-
-// Return resident set size in bytes
-std::uint64_t getRssBytes() {
-    mach_task_basic_info info{};
-    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
-    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count) !=
-        KERN_SUCCESS) {
-        return 0;
-        }
-    return info.resident_size;
-}
-
-// Return process CPU time (user+sys) in seconds
-double procCPUSeconds() {
-    rusage ru{};
-    getrusage(RUSAGE_SELF, &ru);
-    double user = static_cast<double>(ru.ru_utime.tv_sec) + ru.ru_utime.tv_usec / 1e6;
-    double sys = static_cast<double>(ru.ru_stime.tv_sec) + ru.ru_stime.tv_usec / 1e6;
-    return user + sys;
-}
-
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
+std::uint64_t getRssBytes();
+double procCPUSeconds();
+double wallSeconds();
+double cpuPercentSince(const double w0, const double c0);
 #endif
+double wallSeconds();
+double cpuPercentSince(const double w0, const double c0);
+static double wireSizeBytes(const Value& val);
 
-// Return wall clock (monotonic) in seconds
-double wallSeconds() {
-    timespec ts{};
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) / 1e9;
-}
-
-// Sample CPU usage since prior reading (percentage of one core)
-double cpuPercentSince(const double w0, const double c0) {
-    const double w1 = wallSeconds();
-    const double c1 = procCPUSeconds();
-    const double dw = w1 - w0;
-    const double dc = c1 - c0;
-    return dw > 0.0 ? dc / dw * 100.0 : 0.0;
-}
-
-// SMALL: NTScalar<Int32>
-Value createSmallValue() {
-    auto s_def(nt::NTScalar{TypeCode::Int32}.build());
-    s_def += {Int32("counter")};
-    auto value = s_def.create();
-    value["counter"] = -1; // Set an initial value.  This will be ignored
-    return value;
-}
 
 // MEDIUM: NTNDArray with 32x32 ubyte and counter
 Value createMediumValue() {
@@ -185,7 +108,7 @@ Value createMediumValue() {
     shared_array<uint8_t> buf(d0 * d1);
     for (size_t i = 0u; i < buf.size(); ++i)
         buf[i] = static_cast<uint8_t>(i);
-    shared_array<const uint8_t> medium_data(buf.freeze());
+    const shared_array<const uint8_t> medium_data(buf.freeze());
     shared_array<Value> small_dimensions;
     small_dimensions.resize(2);
     small_dimensions[0] = value["dimension"].allocMember().update("size", d0);
@@ -458,7 +381,7 @@ void UpdateConsumer::printProgressBar(double progress_percentage) {
     bar.reserve(210);
     bar += prefix;
     bar += "▏";  // left cap
-    const double bar_len = 203.0 - static_cast<double>(prefix.size()) - 2.0;
+    const double bar_len = 205.0 - static_cast<double>(prefix.size()) - 2.0;
     uint32_t i;
     for (i = 0; i < 0.01 * progress_percentage * bar_len; ++i)
         bar += "█";
@@ -1331,7 +1254,101 @@ void doReport(sqlite3* db, const std::string& run_id) {
     }
 }
 
+// SMALL: NTScalar<Int32>
+Value createSmallValue() {
+    auto s_def(nt::NTScalar{TypeCode::Int32}.build());
+    s_def += {Int32("counter")};
+    auto value = s_def.create();
+    value["counter"] = -1; // Set an initial value.  This will be ignored
+    return value;
+}
+
 } // anonymous namespace
+
+// Compute the PVA wire size (bytes) of a Value (type + data), for throughput calculations.
+// Performance Test only: uses internal wire encoder.
+static double wireSizeBytes(const Value& val) {
+    using namespace pvxs::impl;
+    std::vector<uint8_t> buf;
+    buf.reserve(4096000);
+    VectorOutBuf M(true, buf);
+    to_wire_full(M, val);
+    return static_cast<double>(M.consumed());
+}
+
+#ifdef __linux__
+/**
+ * Retrieve the current RSS (Resident Set Size) memory usage of the process
+ *
+ * @return The RSS memory usage in bytes
+ */
+std::uint64_t getRssBytes() {
+    // Fast path: /proc/self/statm (field 2 = resident pages)
+    FILE* f = std::fopen("/proc/self/statm", "r");
+    if (!f)
+        return 0;
+    long pages_res = 0;
+    long pages_total = 0;
+    if (std::fscanf(f, "%ld %ld", &pages_total, &pages_res) != 2) {
+        std::fclose(f);
+        return 0;
+    }
+    std::fclose(f);
+    const long page_size = sysconf(_SC_PAGESIZE);  // bytes per page
+    return static_cast<std::uint64_t>(pages_res) * static_cast<std::uint64_t>(page_size);
+}
+
+// Return process CPU time (user+sys) in seconds
+/**
+ *
+ * @return
+ */
+double procCPUSeconds() {
+    timespec ts{};
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts) != 0)
+        return 0.0;
+    return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+#elif defined(__APPLE__) || defined(__FreeBSD__)
+
+// Return resident set size in bytes
+std::uint64_t getRssBytes() {
+    mach_task_basic_info info{};
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count) !=
+        KERN_SUCCESS) {
+        return 0;
+        }
+    return info.resident_size;
+}
+
+// Return process CPU time (user+sys) in seconds
+double procCPUSeconds() {
+    rusage ru{};
+    getrusage(RUSAGE_SELF, &ru);
+    double user = static_cast<double>(ru.ru_utime.tv_sec) + ru.ru_utime.tv_usec / 1e6;
+    double sys = static_cast<double>(ru.ru_stime.tv_sec) + ru.ru_stime.tv_usec / 1e6;
+    return user + sys;
+}
+
+#endif
+
+// Return wall clock (monotonic) in seconds
+double wallSeconds() {
+    timespec ts{};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) / 1e9;
+}
+
+// Sample CPU usage since prior reading (percentage of one core)
+double cpuPercentSince(const double w0, const double c0) {
+    const double w1 = wallSeconds();
+    const double c1 = procCPUSeconds();
+    const double dw = w1 - w0;
+    const double dc = c1 - c0;
+    return dw > 0.0 ? dc / dw * 100.0 : 0.0;
+}
 
 }  // namespace perf
 }  // namespace pvxs
