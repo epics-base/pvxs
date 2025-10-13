@@ -392,6 +392,8 @@ void ServerConn::handle_DESTROY_CHANNEL()
                    unsigned(sid), unsigned(chan->cid), unsigned(cid), chan->name.c_str());
     }
 
+    chanBySID.erase(it);
+
     chan->cleanup();
 
     {
