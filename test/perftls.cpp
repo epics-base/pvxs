@@ -53,7 +53,7 @@
 #include <pvxs/server.h>
 #include <pvxs/sharedpv.h>
 
-// Enable expert API (Timer, evbase)
+// Enable expert API
 #define PVXS_ENABLE_EXPERT_API
 #include "openssl.h"
 // Internal wire helpers for computing encoded Value sizes (test-only)
@@ -76,24 +76,57 @@ DEFINE_LOGGER(consumerlog, "pvxs.perf.scenario.consumer");
 
 using namespace pvxs::members;
 
+// Global child process struct to store the process ID and environment variables.
+Child pvacms_subprocess;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Forward declarations
-namespace {
-Value createSmallValue();
-}
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
 std::uint64_t getRssBytes();
 double procCPUSeconds();
 double wallSeconds();
-double cpuPercentSince(const double w0, const double c0);
+double cpuPercentSince(double w0, double c0);
 #endif
-double wallSeconds();
-double cpuPercentSince(const double w0, const double c0);
-static double wireSizeBytes(const Value& val);
+static double wireSizeBytes(const Value& value_to_size);
+
+/**
+ * Create a performance test control value which is an NTEnum of the scenario_code to run,
+ * with two extra fields indicating the payload and the rate
+ *
+ * @param scenario_code the scenario to run
+ * @param payload_code the payload size to push through
+ * @param rate and the rate to run it at
+ * @return A performance test control value ready to post
+ */
+Value createPerfControlValue(const unsigned scenario_code, const unsigned payload_code = 0, const long rate = 0) {
+    auto m_def(nt::NTEnum{}.build());
+    m_def += {Int32("payload_code")};
+    m_def += {Int32("rate")};
+    Value value = m_def.create();
+    value["value.index"] = scenario_code;
+    if ( payload_code != 0) value["payload_code"] = payload_code;
+    if (rate != 0) value["rate"] = rate;
+    return value;
+}
+
+/**
+ * Create the SMALL size test payload.  This is an NTScalar<Int32> and a counter
+ * @return a SMALL size test payload value
+ */
+Value createSmallValue() {
+    auto s_def(nt::NTScalar{TypeCode::Int32}.build());
+    s_def += {Int32("counter")};
+    auto value = s_def.create();
+    value["counter"] = -1; // Set an initial value.  This will be ignored
+    return value;
+}
 
 
-// MEDIUM: NTNDArray with 32x32 ubyte and counter
+/**
+ * Create the MEDIUM size test payload.  This is an NTNDArray with 32x32 ubyte and counter
+ * @return a MEDIUM size test payload value
+ */
 Value createMediumValue() {
     auto m_def(nt::NTNDArray{}.build());
     m_def += {Int32("counter")};
@@ -121,7 +154,10 @@ Value createMediumValue() {
 }
 
 
-// LARGE: NTNDArray 2000x2000 4bpp (size approximated by structure);
+/**
+ * Create the MEDIUM size test payload.  This is an NTNDArray 2000x2000 4bpp (size approximated by structure)
+ * @return a MEDIUM size test payload value
+ */
 Value createLargeValue() {
     auto l_def(nt::NTNDArray{}.build());
     l_def += {Int32("counter")};
@@ -289,7 +325,7 @@ void SubscriptionMonitor::run() {
     }
 }
 
-void UpdateProducer::run() {
+void Producer::run() const {
     const auto total = static_cast<uint32_t>(rate * window);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
     for (auto counter = 0; counter < total; ++counter) {
@@ -302,16 +338,13 @@ void UpdateProducer::run() {
         epicsTimeGetCurrent(&now);
         const double elapsed_since_start = epicsTimeDiffInSeconds(&now, &start);
         const double next_emission_secs_from_start = static_cast<double>(counter + 1)  * time_per_update ;
-        auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
+        const auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
         if (self.stop_early.load(std::memory_order_relaxed)) break;
-        // while (time_till_next_emission > 1e-3) {
-        //     epicsThreadSleep(1e-3); time_till_next_emission -= 1e-3;
-        // }
         if (time_till_next_emission > 0.0) epicsThreadSleep(time_till_next_emission);
     }
 }
 
-void UpdateConsumer::run() {
+void Consumer::run() {
     const auto window_count = static_cast<int32_t>(rate * window);
     const auto total_receive_ticks = static_cast<int32_t>(receive_window * rate);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
@@ -351,7 +384,7 @@ void UpdateConsumer::run() {
  * Print a progress bar to the console
  * @param progress_percentage The percentage done
  */
-void UpdateConsumer::printProgressBar(double progress_percentage) {
+void Consumer::printProgressBar(double progress_percentage) const {
     // 1) Connection Type
     const std::string bps_placeholder = SB() << (static_cast<uint32_t>(progress_percentage) % 2 ? "\\" : "/") << " bps";
     std::ostringstream oss;
@@ -437,7 +470,7 @@ bool parseScenarioType(const std::string& name, ScenarioType& out) {
  * @return True if the string was parsed successfully, false otherwise
  */
 bool parsePayloadType(const std::string& name, PayloadType& out) {
-    auto n = toUpperStr(name);
+    const auto n = toUpperStr(name);
     if (n == "SMALL") {
         out = SMALL_32B;
         return true;
@@ -467,7 +500,8 @@ std::string formatRateLabel(long rate) {
 }
 
 /**
- * Constructor for the Scenario
+ * Constructor for the Scenario for a server
+ * @param is_consumer true if this a consumer, false if its a producer
  * @param scenario_type The type of scenario to build.
  * - TCP: Plain TCP connection.
  * - TLS: TLS connection.
@@ -476,27 +510,41 @@ std::string formatRateLabel(long rate) {
  * @param db_file_name optional db file name to output detailed data to
  * @param run_id the unique program run ID
  */
-Scenario::Scenario(const ScenarioType scenario_type, const std::string &db_file_name, const std::string &run_id) : scenario_type(scenario_type), run_id(run_id) {
-    // Initialize optional SQLite DB once per Scenario instance
-    if (!db_file_name.empty()) {
-        try {
-            initDB(db_file_name);
-        } catch (const std::exception& e) {
-            log_err_printf(consumerlog, "Could not open sqlite db (%s): %s\n", db_file_name.c_str(), e.what());
+Scenario::Scenario(const bool is_consumer, const ScenarioType scenario_type, const std::string &db_file_name, const std::string &run_id) : scenario_type(scenario_type), run_id(run_id), is_consumer(is_consumer) {
+    if (is_consumer) {
+        small_value = createSmallValue();
+        medium_value = createMediumValue();
+        large_value = createLargeValue();
+
+        // Initialize optional SQLite DB once per Scenario instance
+        if (!db_file_name.empty()) {
+            try {
+                initDB(db_file_name);
+            } catch (const std::exception& e) {
+                log_err_printf(consumerlog, "Could not open sqlite db (%s): %s\n", db_file_name.c_str(), e.what());
+            }
         }
+        buildConsumerContext();
+
+        // Host PERF:CONTROL
+        control_server = server::Config::isolated().build();
+        control_pv = server::SharedPV::buildReadonly();
+        control_server.addPV("PERF:CONTROL", control_pv);
+        control_value = createPerfControlValue(scenario_type);
+        control_pv.open(control_value);
+        control_server.start();
+    } else {
+        // Configure the Producer
+        buildProducerContext();
+
+        // Initialise scenario payloads
+        initSmallScenarios();
+        initMediumScenarios();
+        initLargeScenarios();
+
+        // Start the producer
+        producer.start();
     }
-    // Configure the server
-    configureServer();
-
-    // Initialise scenarios
-    initSmallScenarios();
-    initMediumScenarios();
-    initLargeScenarios();
-
-    // Start the server
-    startServer();
-    // Configure a client that is compatible with the server
-    buildClientContext();
 }
 
 /**
@@ -504,7 +552,7 @@ Scenario::Scenario(const ScenarioType scenario_type, const std::string &db_file_
  */
 void Scenario::initSmallScenarios() {
     small_pv = server::SharedPV::buildReadonly();
-    server.addPV("PERF:SMALL", small_pv);
+    producer.addPV("PERF:SMALL", small_pv);
     small_value = createSmallValue();
     small_pv.open(small_value);
 }
@@ -514,7 +562,7 @@ void Scenario::initSmallScenarios() {
  */
 void Scenario::initMediumScenarios() {
     medium_pv = server::SharedPV::buildReadonly();
-    server.addPV("PERF:MEDIUM", medium_pv);
+    producer.addPV("PERF:MEDIUM", medium_pv);
     medium_value = createMediumValue();
     medium_pv.open(medium_value);
 }
@@ -524,482 +572,11 @@ void Scenario::initMediumScenarios() {
  */
 void Scenario::initLargeScenarios() {
     large_pv = server::SharedPV::buildReadonly();
-    server.addPV("PERF:LARGE", large_pv);
+    producer.addPV("PERF:LARGE", large_pv);
     large_value = createLargeValue();
     large_pv.open(large_value);
 }
 
-/**
- * Configure the server for the performance test scenario
- * The server is configured to use the isolated configuration and the TLS keychain file is set to the server1.p12
- * file that has been generated for the other tls tests.
- */
-void Scenario::configureServer() {
-    // Build Server
-    auto serv_conf = server::Config::isolated();
-    serv_conf.tls_keychain_file = "server1.p12";
-    serv_conf.udp_port = 55076;
-
-    // Use ephemeral port to avoid conflicts with pvacms child process
-    serv_conf.tls_disabled = scenario_type == TCP;
-    serv_conf.tls_disable_status_check = scenario_type < TLS_CMS;
-    serv_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
-    server = serv_conf.build();
-}
-
-/**
- * Start the server and query the effective bound ports.  These will be used to build a compatible client.
- */
-void Scenario::startServer() {
-    server.start();
-    // After the server starts, query effective bound ports
-    {
-        const auto& config = server.config();
-        udp_port = config.udp_port;
-        tcp_port = config.tcp_port;
-    }
-}
-
-/**
- * Build the client and configure it to use the server's effective ports.
- * The client is configured to use the isolated configuration, and the TLS keychain file is set to the client1.p12
- * file that has been generated for the other tls tests.
- */
-void Scenario::buildClientContext() {
-    {
-        auto cli_conf = server.clientConfig();
-        cli_conf.tls_keychain_file = "client1.p12";
-        client = cli_conf.build();
-    }
-}
-
-/**
- * Run the performance test Scenario for the given payload type.  This method runs tests for all the different rates
- * for the given payload type. The rates are 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, and 1 MHz. For the Large payload
- * type, the rates are 1 Hz, 10 Hz, 100 Hz, and 1 KHz. Each rate test runs for 60 seconds.
- * @param scenario_type
- * @param payload_type The type of payload to test.
- * @param db_file_name the db filename to output detailed results to
- * @param run_id the optional run id to label this run
- */
-void Scenario::run(const ScenarioType &scenario_type, const PayloadType payload_type, const std::string &db_file_name, const std::string &run_id) {
-    const auto payload_label =
-        (payload_type == LARGE_2MB  ? "LARGE(2MB)"
-       : payload_type == MEDIUM_1KB ? "MEDIUM(1KB)"
-       :                              "SMALL(32B)");
-    uint32_t rate = 1;
-    rate =    1; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,           rate, payload_label, formatRateLabel(rate));
-    rate =   10; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,          rate, payload_label, formatRateLabel(rate));
-    rate =  100; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,         rate, payload_label, formatRateLabel(rate));
-    rate = 1000; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,        rate, payload_label, formatRateLabel(rate));
-    if (payload_type != LARGE_2MB) {
-        rate =   10000; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,   rate, payload_label, formatRateLabel(rate));
-        rate =  100000; Scenario {scenario_type, db_file_name, run_id}.run(payload_type,  rate, payload_label, formatRateLabel(rate));
-        rate = 1000000; Scenario {scenario_type, db_file_name, run_id}.run(payload_type, rate, payload_label, formatRateLabel(rate));
-    }
-}
-
-/**
- * Run the performance test Scenario for the given payload type and rate.
- * This method runs a single test for the given payload type and rate.  Each test runs for 60 seconds.
- * The method does both sides of the communication - the server and the client. A single `event` is used for both.
- * - A timer is set on the `event`, based on the specified rate, and when it expires a value is Posted to the
- * server's SharedPV. A special test is made to ensure that we don't Post anything after the test window has expired
- * when we're waiting for tardy packets.
- * - At the same time whenever the client monitor receives an update it signals the same `event` thus interrupting
- * the timer. In this case the queue of received updates is processed, and a new timer is set with the remaining
- * time to the next Post.
- * - The loop continues until the test window expires.
- *
- * @param payload_type The type of payload to test - SMALL, MEDIUM, or LARGE.
- * @param rate The rate to test - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
- * @param payload_label The label for the payload type - SMALL, MEDIUM, or LARGE.
- * @param rate_label The label for the rate - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
- */
-void Scenario::run(const PayloadType payload_type,
-         const uint32_t rate,
-         const std::string& payload_label,
-         const std::string& rate_label) {
-    if (payload_type == LARGE_2MB && rate > 100) return;
-
-    // To collect the results of the test
-    Result result{
-        wireSizeBytes(small_value),
-        wireSizeBytes(medium_value),
-        wireSizeBytes(large_value)};
-
-    // Collect Data
-    const double w0 = wallSeconds();
-    const double c0 = procCPUSeconds();
-    std::uint64_t bytes_captured = 0;
-
-    // Three-threaded execution
-    // - Producer: posts updates on a fixed cadence (Main thread)
-    // - Monitor: responds to subscription updates and posts to consumer's queue
-    // - Consumer: drains monitor updates, computes transit times, polls sniffer, and prints progress on a fixed cadence
-
-    // This is used to collect the network traffic appearing on the test ports.
-    const auto sniffer = std::make_shared<PortSniffer>(tcp_port, udp_port);
-    sniffer->startCapture();
-
-    // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
-    SubscriptionMonitor subscription_monitor{*this, payload_type, rate};
-    epicsThread subscription_thread(subscription_monitor, "PERF-Monitor", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityHigh);
-    subscription_thread.start();
-
-    // quiesce before test
-    epicsThreadSleep(1.0);
-
-    // Mark the start time for this sequence, and quiesce before the test
-    epicsTimeStamp start{};
-    epicsTimeGetCurrent(&start);
-
-    // Reset the early-stop flag for this run
-    stop_early.store(false, std::memory_order_relaxed);
-
-    // Create and start threads
-    current_rate = rate;
-    current_payload = payload_type;
-    UpdateProducer update_producer{*this, payload_type, rate, start};
-    UpdateConsumer update_consumer{*this, result, rate,  start, sniffer, payload_label, rate_label};
-
-    epicsThread consumer_thread(update_consumer, "PERF-Consumer", epicsThreadGetStackSize(epicsThreadStackBig), epicsThreadPriorityMedium);
-
-    consumer_thread.start();   // Run in the background
-    update_producer.run();     // Block this thread
-
-    // Wait for consumer to complete
-    subscription_thread.exitWait();
-    consumer_thread.exitWait();
-
-    // Final drain/capture
-    sniffer->poll();
-    bytes_captured = sniffer->endCapture();
-
-    const double rss_mb = static_cast<double>(getRssBytes()) / (1024 * 1024);
-    const auto cpu_percent = cpuPercentSince(w0, c0);
-
-    result.print(scenario_type, payload_type, payload_label, rate, rate_label, cpu_percent, rss_mb, bytes_captured);
-    std::cout << std::endl;
-}
-
-/**
- * Start a monitor subscription for the given payload type.
- * The PV to monitor is based on the payload type.
- * @param payload_type The type of payload to monitor.
- * @param rate the rate at which we expect to get
- */
-void Scenario::closeDB() {
-    if (stmt_insert) { sqlite3_finalize(stmt_insert); stmt_insert = nullptr; }
-    if (stmt_update_tcp) { sqlite3_finalize(stmt_update_tcp); stmt_update_tcp = nullptr; }
-    if (stmt_update_tls) { sqlite3_finalize(stmt_update_tls); stmt_update_tls = nullptr; }
-    if (stmt_update_tls_cms) { sqlite3_finalize(stmt_update_tls_cms); stmt_update_tls_cms = nullptr; }
-    if (stmt_update_tls_cms_stapled) { sqlite3_finalize(stmt_update_tls_cms_stapled); stmt_update_tls_cms_stapled = nullptr; }
-    if (db) { sqlite3_close(db); db = nullptr; }
-}
-
-void Scenario::initDB(const std::string &db_path) {
-    if (sqlite3_open(db_path.c_str(), &db) != SQLITE_OK)
-        throw std::runtime_error(SB() << "Can't open results db: " << sqlite3_errmsg(db));
-    const int rc = sqlite3_exec(db, PERF_CREATE_SQL, nullptr, nullptr, nullptr);
-    if (rc != SQLITE_OK) throw std::runtime_error(SB() << "Can't create schema: " << sqlite3_errmsg(db));
-
-    if (sqlite3_prepare_v2(db, PERF_INSERT_SQL, -1, &stmt_insert, nullptr) != SQLITE_OK)
-        throw std::runtime_error(SB() << "prepare insert failed: " << sqlite3_errmsg(db));
-    if (sqlite3_prepare_v2(db, PERF_UPDATE_TCP_SQL, -1, &stmt_update_tcp, nullptr) != SQLITE_OK)
-        throw std::runtime_error(SB() << "prepare update TCP failed: " << sqlite3_errmsg(db));
-    if (sqlite3_prepare_v2(db, PERF_UPDATE_TLS_SQL, -1, &stmt_update_tls, nullptr) != SQLITE_OK)
-        throw std::runtime_error(SB() << "prepare update TLS failed: " << sqlite3_errmsg(db));
-    if (sqlite3_prepare_v2(db, PERF_UPDATE_TLS_CMS_SQL, -1, &stmt_update_tls_cms, nullptr) != SQLITE_OK)
-        throw std::runtime_error(SB() << "prepare update TLS_CMS failed: " << sqlite3_errmsg(db));
-    if (sqlite3_prepare_v2(db, PERF_UPDATE_TLS_CMS_STAPLED_SQL, -1, &stmt_update_tls_cms_stapled, nullptr) != SQLITE_OK)
-        throw std::runtime_error(SB() << "prepare update TLS_CMS_STAPLED failed: " << sqlite3_errmsg(db));
-}
-
-void Scenario::insertOrUpdateSample(const int payload_id, const uint32_t rate, const int32_t packet_id, const double transit_time) const {
-    if (!db) return;
-
-    // Bind INSERT
-    sqlite3_reset(stmt_insert);
-    sqlite3_clear_bindings(stmt_insert);
-    sqlite3_bind_text(stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":run_id"), run_id.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int (stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":packet_id"), packet_id);
-    sqlite3_bind_int (stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":payload_id"), payload_id);
-    sqlite3_bind_int (stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":rate"), static_cast<int>(rate));
-
-    // Columns 5..8 depend on scenario
-    auto bind_col = [&](const int col, const bool selected) {
-        if (selected) sqlite3_bind_double(stmt_insert, col, transit_time);
-        else sqlite3_bind_null(stmt_insert, col);
-    };
-    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tcp"), scenario_type == TCP);
-    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tls"), scenario_type == TLS);
-    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tls_cms"), scenario_type == TLS_CMS);
-    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tls_cms_stapled"), scenario_type == TLS_CMS_STAPLED);
-
-    int rc = sqlite3_step(stmt_insert);
-    if (rc == SQLITE_DONE) return;
-
-    // If a row exists, update the appropriate column only
-    sqlite3_stmt* stmt_update = nullptr;
-    switch (scenario_type) {
-        case TCP: stmt_update = stmt_update_tcp; break;
-        case TLS: stmt_update = stmt_update_tls; break;
-        case TLS_CMS: stmt_update = stmt_update_tls_cms; break;
-        case TLS_CMS_STAPLED: stmt_update = stmt_update_tls_cms_stapled; break;
-    }
-    sqlite3_reset(stmt_update);
-    sqlite3_clear_bindings(stmt_update);
-    sqlite3_bind_double(stmt_update, sqlite3_bind_parameter_index(stmt_update, ":value"), transit_time);
-    sqlite3_bind_text  (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":run_id"), run_id.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int   (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":payload_id"), payload_id);
-    sqlite3_bind_int   (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":rate"), static_cast<int>(rate));
-    sqlite3_bind_int   (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":packet_id"), packet_id);
-    rc = sqlite3_step(stmt_update);
-    if (rc != SQLITE_DONE) {
-        log_warn_printf(consumerlog, "sqlite update failed: %s\n", sqlite3_errmsg(db));
-    }
-}
-
-void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate) {
-    const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
-                          : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
-                                                         : "PERF:SMALL";
-
-    // Heuristic to limit coalescing: ensure a large enough client-side queue.
-    // Larger queues reduce bias where only the newest updates are delivered at high rates.
-    auto queue_size = 0u;
-    switch (payload_type) {
-        case SMALL_32B:
-            // Allow up to ~100k small updates buffered, but not less than 2*rate
-            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 100000u), 1000u);
-            break;
-        case MEDIUM_1KB:
-            // Medium payloads: cap at 20k to bound memory; but allow at least 2*rate
-            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 20000u), 100u);
-            break;
-        case LARGE_2MB:
-            // Large payloads are expensive; queue just a small number
-            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 10u), 2u);
-            break;
-    }
-
-    // Set up a subscription monitor
-    sub = client.monitor(pv_name).record("queueSize", queue_size).record("pipeline", true).
-        record("ackAny", std::string("50%")).maskConnected(true) // suppress Connected events from throwing
-        .maskDisconnected(true).event([this](client::Subscription &) {
-            // Drain all currently queued updates from the subscription and enqueue locally.
-            // Important: only signaling when the client queue transitions from empty->non-empty.
-            // If we leave entries in the subscription queue, further events may not be delivered.
-            try {
-                while (const auto value = sub->pop()) {
-                    epicsTimeStamp receive_time{};
-                    epicsTimeGetCurrent(&receive_time);
-                    update_queue.push(Update{value, receive_time});
-                }
-            } catch (const std::exception &e) {
-                // log and stop draining to avoid tight loop on errors
-                log_warn_printf(consumerlog, "Monitor pop() error: %s\n", e.what());
-            }
-        }).exec();
-}
-
-/**
- * Post a value to the appropriate PV based on the payload type.
- * This function creates a new value, updates the counter-field, and timestamps the value.
- * It then marks all fields as updated so that the server will send the full data to the client.
- * It then posts the value to the appropriate PV.
- *
- * @param payload_type The type of payload to post.
- * @param counter the counter to embed in the value posted
- */
-void Scenario::postValue(const PayloadType payload_type, const int32_t counter) {
-    try {
-        auto value = (payload_type == SMALL_32B) ? small_value : (payload_type == MEDIUM_1KB) ? medium_value : large_value;
-        value["counter"] = counter;
-        auto timestamp = value["timeStamp"];
-        epicsTimeStamp sent_time{};
-        epicsTimeGetCurrent(&sent_time);
-        timestamp["secondsPastEpoch"] = sent_time.secPastEpoch;
-        timestamp["nanoseconds"] = sent_time.nsec;
-        value.mark(true);
-        (payload_type == SMALL_32B ? small_pv : payload_type == MEDIUM_1KB ? medium_pv : large_pv).post(value);
-    } catch (std::exception& e) {
-        log_warn_printf(producerlog, "post_once error: %s\n", e.what());
-    }
-}
-
-/**
- * Process the pending updates from the update_queue.
- * This method is called when the event is signaled by the monitor subscription or when this is the first time.
- * It processes the queue of received updates, updating the result object with the delta between the send-time and
- * the received-time (transit time)
- *
- * @param result The result object to update with the received updates.
- * @param start The start time of the test.
- * @return the next expected counter
- */
-int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &start) {
-    epicsTimeStamp now{};
-    epicsTimeGetCurrent(&now);
-    int32_t count{result.accumulator.N};
-
-    while (update_queue.size()) {
-        try {
-            epicsTimeGetCurrent(&now);
-            const auto update = update_queue.pop();
-
-            // Get the timestamp that shows when the data was sent
-            const auto timestamp = update.value["timeStamp"];
-            const auto received_count = update.value["counter"].as<int32_t>();
-            epicsTimeStamp sent{timestamp["secondsPastEpoch"].as<epicsUInt32>(),
-                                timestamp["nanoseconds"].as<epicsUInt32>()};
-            if (received_count < 0)
-                continue;
-
-            if (received_count != count) {
-                // Stop this test early on the first detected-drop
-                stop_early.store(true, std::memory_order_relaxed);
-                break;
-            }
-
-            // Determine how much time has elapsed from the beginning of the test sequence
-            const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
-            // Determine how much time the data was in transit
-            const double transit_time = epicsTimeDiffInSeconds(&update.receive_time, &sent);
-
-            // We should never get anything sent after the end of the window, but out of an abundance of caution we break if so
-            constexpr double window = 60.0;
-            if (elapsed >= window)
-                break;
-
-            // Calculate the 0-based bucket index based on the seconds since the beginning of the test
-            const auto bucket_index = static_cast<uint32_t>(elapsed);
-
-            // Another check to make sure that we are not beyond the end of the results buffer and then add the results
-            if (bucket_index < 60) {
-                count = result.add(transit_time);
-                if (db) insertOrUpdateSample(current_payload, current_rate, received_count, transit_time);
-            }
-        } catch (const client::Connected&) {
-            // ignore
-        } catch (const client::Disconnect&) {
-            // ignore
-        }
-        epicsThreadSleep(-1);
-    }
-    return count;
-}
-
-/**
- * Extract target architecture from the given test executable path name
- *
- * @param path
- * @return
- */
-std::string extractTargetArch(const std::string& path) {
-    if (path.empty())
-        return std::string();
-    const auto terminated_by_path_separator = (path.back() == '/');
-    const auto base_path = path.substr(0, std::string::npos - (terminated_by_path_separator ? 1 : 0));
-    const std::string target_arch = basename(const_cast<char*>(base_path.c_str()));
-    const auto ta = target_arch.substr(2, std::string::npos);
-    log_debug_printf(perflog, "Target architecture: %s\n", ta.c_str());
-    return ta;
-}
-
-/**
- * Start the PVACMS process
- * @param pvacms_executable_path The path to the PVACMS executable
- * @param pvacms_subprocess The child process struct
- * @return True if the process was started successfully, false otherwise
- */
-bool startPVACMS(const std::string& pvacms_executable_path, Child& pvacms_subprocess) {
-    const pid_t pid = fork();
-    if (pid < 0) {
-        // Failure to create the subprocess
-        return false;
-    }
-
-    if (pid == 0) {
-        // Child process
-        // Detach from any controlling terminal group so signals don't propagate unexpectedly
-        setsid();
-
-        // Apply environment setup
-        std::string key{};
-        for (const auto& env_part : pvacms_subprocess.env) {
-            if (key.empty()) {
-                key = env_part;
-            } else {
-                if (env_part.empty()) {
-                    if (unsetenv(key.c_str()) != 0) {
-                        log_err_printf(perflog, "Failed to unset environment variable: %s \n", key.c_str());
-                    }
-                } else {
-                    if (setenv(key.c_str(), env_part.c_str(), 1) != 0) {
-                        log_err_printf(perflog,
-                                       "Failed to set environment variable: %s = \"%s\"\n",
-                                       key.c_str(),
-                                       env_part.c_str());
-                    }
-                }
-                key = {};
-            }
-        }
-
-        const char* argv0 = pvacms_executable_path.c_str();
-        log_info_printf(perflog, "Starting child process: %s %s\n", pvacms_executable_path.c_str(), "pvacms");
-        execlp(argv0, "pvacms", "--preload-cert", "server1.p12", "client1.p12", nullptr);
-
-        // If exec fails
-        log_err_printf(perflog, "Failed to start child process: %s %s\n", pvacms_executable_path.c_str(), "pvacms");
-        _exit(127);
-    }
-
-    // Parent process
-    pvacms_subprocess.pid = pid;
-    return true;
-}
-
-/**
- * Stop the PVACMS process
- * @param child The child process struct
- */
-void stopPVACMS(Child& child) {
-    if (child.pid > 0) {
-        // Try SIGTERM first
-        kill(child.pid, SIGTERM);
-        // Wait briefly
-        for (int i = 0; i < 30; ++i) {
-            int status = 0;
-            pid_t r = waitpid(child.pid, &status, WNOHANG);
-            if (r == child.pid) {
-                child.pid = -1;
-                return;
-            }
-            usleep(100000);  // 100ms
-        }
-        // Force kill if still running
-        kill(child.pid, SIGKILL);
-        waitpid(child.pid, nullptr, 0);
-        child.pid = -1;
-    }
-}
-
-// Global child process struct to store the process ID and environment variables.
-Child pvacms_subprocess;
-
-/**
- * Simple Ctrl-C (SIGINT) trap: print the exit message, stop PVACMS, then exit
- */
-void onExit(int) {
-    std::cerr << std::endl << "Exiting..." << std::endl;
-    stopPVACMS(pvacms_subprocess);
-    _exit(130);
-}
-
-namespace {
 WireSizes computeWireSizes() {
     using namespace pvxs;
     using namespace pvxs::nt;
@@ -1125,32 +702,555 @@ std::string scenarioLabel(const ScenarioType scenario_id) {
     }
 }
 
-void doReport(sqlite3* db, const std::string& run_id) {
-    // precompute payload wire sizes for throughput
-    const auto wire_sizes = computeWireSizes();
-    const auto samples = countSamples(db, run_id);
-    if ( !samples ) {
-        std::cout << "No samples found for RUN_ID=" << run_id << std::endl;
-        return;
+/**
+ * Configure the server for the performance test scenario
+ * The TLS keychain file is set to the server1.p12 file that has been generated for the other tls tests.
+ */
+void Scenario::buildProducerContext() {
+    // Build Server
+    auto serv_conf = server::Config::fromEnv();
+    serv_conf.tls_keychain_file = "server1.p12";
+
+    serv_conf.tls_disabled = scenario_type == TCP;
+    serv_conf.tls_disable_status_check = scenario_type < TLS_CMS;
+    serv_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
+    producer = serv_conf.build();
+}
+
+/**
+ * Build the client context for the performance test scenario
+ * The TLS keychain file is set to the client1.p12 file that has been generated for the other tls tests.
+ */
+void Scenario::buildConsumerContext() {
+    // Build Client
+    auto cli_conf = client::Config::fromEnv();
+    cli_conf.tls_keychain_file = "client1.p12";
+
+    cli_conf.tls_disabled = scenario_type == TCP;
+    cli_conf.tls_disable_status_check = scenario_type < TLS_CMS;
+    cli_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
+    consumer = cli_conf.build();
+}
+
+/**
+ * Run the performance test Scenario for the given payload type.  This method runs tests for all the different rates
+ * for the given payload type. The rates are 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, and 1 MHz. For the Large payload
+ * type, the rates are 1 Hz, 10 Hz, 100 Hz, and 1 KHz. Each rate test runs for 60 seconds.
+ * @param scenario_type the type of scenario.  TCP, TLS, TLS with CMS, TLS with CMS, and stapling
+ * @param payload_type The type of payload to test.
+ * @param db_file_name the db filename to output detailed results to
+ * @param run_id the optional run id to label this run
+ */
+void Scenario::run(const ScenarioType &scenario_type, const PayloadType payload_type, const std::string &db_file_name, const std::string &run_id) {
+    const auto payload_label =
+        (payload_type == LARGE_2MB  ? "LARGE(2MB)"
+       : payload_type == MEDIUM_1KB ? "MEDIUM(1KB)"
+       :                              "SMALL(32B)");
+    uint32_t rate = 1;
+    rate =    1; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type,           rate, payload_label, formatRateLabel(rate));
+    rate =   10; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type,          rate, payload_label, formatRateLabel(rate));
+    rate =  100; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type,         rate, payload_label, formatRateLabel(rate));
+    rate = 1000; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type,        rate, payload_label, formatRateLabel(rate));
+    if (payload_type != LARGE_2MB) {
+        rate =   10000; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type, rate, payload_label, formatRateLabel(rate));
+        rate =  100000; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type,  rate, payload_label, formatRateLabel(rate));
+        rate = 1000000; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type, rate, payload_label, formatRateLabel(rate));
+    }
+}
+
+/**
+ * Run the performance test Scenario for the given payload type and rate.
+ * This method runs a single test for the given payload type and rate.  Each test runs for 60 seconds.
+ * The method does both sides of the communication - the server and the client. A single `event` is used for both.
+ * - A timer is set on the `event`, based on the specified rate, and when it expires, a value is Posted to the
+ * server's SharedPV. A special test is made to ensure that we don't Post anything after the test window has expired
+ * when we're waiting for tardy packets.
+ * - At the same time, whenever the client monitor receives an update, it signals the same `event` thus interrupting
+ * the timer. In this case the queue of received updates is processed, and a new timer is set with the remaining
+ * time to the next Post.
+ * - The loop continues until the test window expires.
+ *
+ * @param payload_type The type of payload to test - SMALL, MEDIUM, or LARGE.
+ * @param rate The rate to test - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
+ * @param payload_label The label for the payload type - SMALL, MEDIUM, or LARGE.
+ * @param rate_label The label for the rate - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
+ */
+void Scenario::run(const PayloadType payload_type,
+         const uint32_t rate,
+         const std::string& payload_label,
+         const std::string& rate_label) {
+    if (payload_type == LARGE_2MB && rate > 100) return;
+
+    // To collect the results of the test
+    Result result{
+        wireSizeBytes(small_value),
+        wireSizeBytes(medium_value),
+        wireSizeBytes(large_value)};
+
+    // Collect Data
+    const double w0 = wallSeconds();
+    const double c0 = procCPUSeconds();
+    std::uint64_t bytes_captured = 0;
+
+    // This is used to collect the network traffic appearing on the test ports.
+    const auto sniffer = std::make_shared<PortSniffer>(5075, 5076);
+    sniffer->startCapture();
+
+    // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
+    SubscriptionMonitor subscription_monitor{*this, payload_type, rate};
+    epicsThread subscription_thread(subscription_monitor, "PERF-Monitor", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityHigh);
+    subscription_thread.start();
+
+    // quiesce before test
+    epicsThreadSleep(1.0);
+
+    // Mark the start time for this sequence, and quiesce before the test
+    epicsTimeStamp start{};
+    epicsTimeGetCurrent(&start);
+
+    // Reset the early-stop flag for this run
+    stop_early.store(false, std::memory_order_relaxed);
+
+    // Create and start threads
+    current_rate = rate;
+    current_payload = payload_type;
+    Consumer update_consumer{*this, result, rate,  start, sniffer, payload_label, rate_label};
+
+    // Signal the producer to send data
+    control_value["value.index"] = scenario_type;
+    control_value["payload_code"] = payload_type;
+    control_value["rate"] = rate;
+    control_pv.post(control_value);
+
+    update_consumer.run();   // Run the consumer
+
+    // Wait for the update-subscription monitor to complete
+    subscription_thread.exitWait();
+
+    // Final drain/capture
+    sniffer->poll();
+    bytes_captured = sniffer->endCapture();
+
+    const double rss_mb = static_cast<double>(getRssBytes()) / (1024 * 1024);
+    const auto cpu_percent = cpuPercentSince(w0, c0);
+
+    result.print(scenario_type, payload_type, payload_label, rate, rate_label, cpu_percent, rss_mb, bytes_captured);
+    std::cout << std::endl;
+}
+
+void Scenario::closeDB() {
+    if (stmt_insert) { sqlite3_finalize(stmt_insert); stmt_insert = nullptr; }
+    if (stmt_update_tcp) { sqlite3_finalize(stmt_update_tcp); stmt_update_tcp = nullptr; }
+    if (stmt_update_tls) { sqlite3_finalize(stmt_update_tls); stmt_update_tls = nullptr; }
+    if (stmt_update_tls_cms) { sqlite3_finalize(stmt_update_tls_cms); stmt_update_tls_cms = nullptr; }
+    if (stmt_update_tls_cms_stapled) { sqlite3_finalize(stmt_update_tls_cms_stapled); stmt_update_tls_cms_stapled = nullptr; }
+    if (db) { sqlite3_close(db); db = nullptr; }
+}
+
+void Scenario::initDB(const std::string &db_path) {
+    if (sqlite3_open(db_path.c_str(), &db) != SQLITE_OK)
+        throw std::runtime_error(SB() << "Can't open results db: " << sqlite3_errmsg(db));
+    const int rc = sqlite3_exec(db, PERF_CREATE_SQL, nullptr, nullptr, nullptr);
+    if (rc != SQLITE_OK) throw std::runtime_error(SB() << "Can't create schema: " << sqlite3_errmsg(db));
+
+    if (sqlite3_prepare_v2(db, PERF_INSERT_SQL, -1, &stmt_insert, nullptr) != SQLITE_OK)
+        throw std::runtime_error(SB() << "prepare insert failed: " << sqlite3_errmsg(db));
+    if (sqlite3_prepare_v2(db, PERF_UPDATE_TCP_SQL, -1, &stmt_update_tcp, nullptr) != SQLITE_OK)
+        throw std::runtime_error(SB() << "prepare update TCP failed: " << sqlite3_errmsg(db));
+    if (sqlite3_prepare_v2(db, PERF_UPDATE_TLS_SQL, -1, &stmt_update_tls, nullptr) != SQLITE_OK)
+        throw std::runtime_error(SB() << "prepare update TLS failed: " << sqlite3_errmsg(db));
+    if (sqlite3_prepare_v2(db, PERF_UPDATE_TLS_CMS_SQL, -1, &stmt_update_tls_cms, nullptr) != SQLITE_OK)
+        throw std::runtime_error(SB() << "prepare update TLS_CMS failed: " << sqlite3_errmsg(db));
+    if (sqlite3_prepare_v2(db, PERF_UPDATE_TLS_CMS_STAPLED_SQL, -1, &stmt_update_tls_cms_stapled, nullptr) != SQLITE_OK)
+        throw std::runtime_error(SB() << "prepare update TLS_CMS_STAPLED failed: " << sqlite3_errmsg(db));
+}
+
+void Scenario::insertOrUpdateSample(const int payload_id, const uint32_t rate, const int32_t packet_id, const double transit_time) const {
+    if (!db) return;
+
+    // Bind INSERT
+    sqlite3_reset(stmt_insert);
+    sqlite3_clear_bindings(stmt_insert);
+    sqlite3_bind_text(stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":run_id"), run_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int (stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":packet_id"), packet_id);
+    sqlite3_bind_int (stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":payload_id"), payload_id);
+    sqlite3_bind_int (stmt_insert, sqlite3_bind_parameter_index(stmt_insert, ":rate"), static_cast<int>(rate));
+
+    // Columns 5..8 depend on scenario
+    auto bind_col = [&](const int col, const bool selected) {
+        if (selected) sqlite3_bind_double(stmt_insert, col, transit_time);
+        else sqlite3_bind_null(stmt_insert, col);
+    };
+    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tcp"), scenario_type == TCP);
+    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tls"), scenario_type == TLS);
+    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tls_cms"), scenario_type == TLS_CMS);
+    bind_col(sqlite3_bind_parameter_index(stmt_insert, ":s_tls_cms_stapled"), scenario_type == TLS_CMS_STAPLED);
+
+    int rc = sqlite3_step(stmt_insert);
+    if (rc == SQLITE_DONE) return;
+
+    // If a row exists, update the appropriate column only
+    sqlite3_stmt* stmt_update = nullptr;
+    switch (scenario_type) {
+        case TCP: stmt_update = stmt_update_tcp; break;
+        case TLS: stmt_update = stmt_update_tls; break;
+        case TLS_CMS: stmt_update = stmt_update_tls_cms; break;
+        case TLS_CMS_STAPLED: stmt_update = stmt_update_tls_cms_stapled; break;
+    }
+    sqlite3_reset(stmt_update);
+    sqlite3_clear_bindings(stmt_update);
+    sqlite3_bind_double(stmt_update, sqlite3_bind_parameter_index(stmt_update, ":value"), transit_time);
+    sqlite3_bind_text  (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":run_id"), run_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int   (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":payload_id"), payload_id);
+    sqlite3_bind_int   (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":rate"), static_cast<int>(rate));
+    sqlite3_bind_int   (stmt_update, sqlite3_bind_parameter_index(stmt_update, ":packet_id"), packet_id);
+    rc = sqlite3_step(stmt_update);
+    if (rc != SQLITE_DONE) {
+        log_warn_printf(consumerlog, "sqlite update failed: %s\n", sqlite3_errmsg(db));
+    }
+}
+
+/**
+ * Start a monitor subscription for the given payload type.
+ * The PV to monitor is based on the payload type.
+ * @param payload_type The type of payload to monitor.
+ * @param rate the rate at which we expect to get
+ */
+void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate) {
+    const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
+                          : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
+                                                         : "PERF:SMALL";
+
+    // Heuristic to limit coalescing: ensure a large enough client-side queue.
+    // Larger queues reduce bias where only the newest updates are delivered at high rates.
+    auto queue_size = 0u;
+    switch (payload_type) {
+        case SMALL_32B:
+            // Allow up to ~100k small updates buffered, but not less than 2*rate
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 100000u), 1000u);
+            break;
+        case MEDIUM_1KB:
+            // Medium payloads: cap at 20k to bound memory; but allow at least 2*rate
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 20000u), 100u);
+            break;
+        case LARGE_2MB:
+            // Large payloads are expensive; queue just a small number
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 10u), 2u);
+            break;
     }
 
-    std::cout << run_id << " -  Generated at: " << decodeRunID(run_id) << ":  " << samples << " samples" << std::endl;
-    std::cout << std::setw(15) << "Connection Type" << ", "
-              << std::setw(13) << "Payload" << ", "
-              << std::setw(13) << "Tx Rate(Hz)" << ", "
-              << std::setw(13) << "Throughput" << ", "
-              << std::setw( 8) << "N" << ", "           // Total number of readings (sample size)
-              << std::setw(10) << "Min(ms)" << ", "     // Min Transmission Time
-              << std::setw(10) << "Max(ms)" << ", "     // Max Transmission Time
-              << std::setw(10) << "Mean(ms)" << ", "    // The Mean Transmission Time
-              << std::setw(10) << "StdDev(ms)" << ", "  // Standard Deviation from the Mean
-              << std::setw(11) << "SEM(ms)" << ", "     // Standard Error on the Mean (Precision)
-              << std::setw(11) << "Jitter(ms)" << ", "  // Standard Deviation of successive deltas
-              << "Drops" << std::endl;
+    // Set up a subscription monitor
+    sub = consumer.monitor(pv_name).record("queueSize", queue_size).record("pipeline", true).
+        record("ackAny", std::string("50%")).maskConnected(true) // suppress Connected events from throwing
+        .maskDisconnected(true).event([this](client::Subscription &) {
+            // Drain all currently queued updates from the subscription and enqueue locally.
+            // Important: only signaling when the client queue transitions from empty->non-empty.
+            // If we leave entries in the subscription queue, further events may not be delivered.
+            try {
+                while (const auto value = sub->pop()) {
+                    epicsTimeStamp receive_time{};
+                    epicsTimeGetCurrent(&receive_time);
+                    update_queue.push(Update{value, receive_time});
+                }
+            } catch (const std::exception &e) {
+                // log and stop draining to avoid tight loop on errors
+                log_warn_printf(consumerlog, "Monitor pop() error: %s\n", e.what());
+            }
+        }).exec();
+}
+
+/**
+ * Post a value to the appropriate PV based on the payload type.
+ * This function creates a new value, updates the counter-field, and timestamps the value.
+ * It then marks all fields as updated so that the server will send the full data to the client.
+ * It then posts the value to the appropriate PV.
+ *
+ * @param payload_type The type of payload to post.
+ * @param counter the counter to embed in the value posted
+ */
+void Scenario::postValue(const PayloadType payload_type, const int32_t counter) {
+    try {
+        auto value = (payload_type == SMALL_32B) ? small_value : (payload_type == MEDIUM_1KB) ? medium_value : large_value;
+        value["counter"] = counter;
+        auto timestamp = value["timeStamp"];
+        epicsTimeStamp sent_time{};
+        epicsTimeGetCurrent(&sent_time);
+        timestamp["secondsPastEpoch"] = sent_time.secPastEpoch;
+        timestamp["nanoseconds"] = sent_time.nsec;
+        value.mark(true);
+        (payload_type == SMALL_32B ? small_pv : payload_type == MEDIUM_1KB ? medium_pv : large_pv).post(value);
+    } catch (std::exception& e) {
+        log_warn_printf(producerlog, "post_once error: %s\n", e.what());
+    }
+}
+
+/**
+ * Process the pending updates from the update_queue.
+ * This method is called when the event is signaled by the monitor subscription or when this is the first time.
+ * It processes the queue of received updates, updating the result object with the delta between the send-time and
+ * the received-time (transit time)
+ *
+ * @param result The result object to update with the received updates.
+ * @param start The start time of the test.
+ * @return the next expected counter
+ */
+int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &start) {
+    epicsTimeStamp now{};
+    epicsTimeGetCurrent(&now);
+    int32_t count{result.accumulator.N};
+
+    while (update_queue.size()) {
+        try {
+            epicsTimeGetCurrent(&now);
+            const auto update = update_queue.pop();
+
+            // Get the timestamp that shows when the data was sent
+            const auto timestamp = update.value["timeStamp"];
+            const auto received_count = update.value["counter"].as<int32_t>();
+            epicsTimeStamp sent{timestamp["secondsPastEpoch"].as<epicsUInt32>(),
+                                timestamp["nanoseconds"].as<epicsUInt32>()};
+            if (received_count < 0)
+                continue;
+
+            if (received_count != count) {
+                // Stop this test early on the first detected-drop
+                stop_early.store(true, std::memory_order_relaxed);
+                break;
+            }
+
+            // Determine how much time has elapsed from the beginning of the test sequence
+            const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
+            // Determine how much time the data was in transit
+            const double transit_time = epicsTimeDiffInSeconds(&update.receive_time, &sent);
+
+            // We should never get anything sent after the end of the window, but out of an abundance of caution we break if so
+            constexpr double window = 60.0;
+            if (elapsed >= window)
+                break;
+
+            // Calculate the 0-based bucket index based on the seconds since the beginning of the test
+            const auto bucket_index = static_cast<uint32_t>(elapsed);
+
+            // Another check to make sure that we are not beyond the end of the results buffer and then add the results
+            if (bucket_index < 60) {
+                count = result.add(transit_time);
+                if (db) insertOrUpdateSample(current_payload, current_rate, received_count, transit_time);
+            }
+        } catch (const client::Connected&) {
+            // ignore
+        } catch (const client::Disconnect&) {
+            // ignore
+        }
+        epicsThreadSleep(-1);
+    }
+    return count;
+}
+
+/**
+ * Extract target architecture from the given test executable path name
+ *
+ * @param path
+ * @return
+ */
+std::string extractTargetArch(const std::string& path) {
+    if (path.empty())
+        return std::string();
+    const auto terminated_by_path_separator = (path.back() == '/');
+    const auto base_path = path.substr(0, std::string::npos - (terminated_by_path_separator ? 1 : 0));
+    const std::string target_arch = basename(const_cast<char*>(base_path.c_str()));
+    const auto ta = target_arch.substr(2, std::string::npos);
+    log_debug_printf(perflog, "Target architecture: %s\n", ta.c_str());
+    return ta;
+}
+
+/**
+ * Start the PVACMS process
+ * @param pvacms_executable_path The path to the PVACMS executable
+ * @param pvacms_subprocess_ref Reference to the child process object to construct
+ * @return True if the process was started successfully, false otherwise
+ */
+bool startPVACMS(const std::string& pvacms_executable_path, Child& pvacms_subprocess_ref) {
+    const pid_t pid = fork();
+    if (pid < 0) {
+        // Failure to create the subprocess
+        return false;
+    }
+
+    if (pid == 0) {
+        // Child process
+        // Detach from any controlling terminal group so signals don't propagate unexpectedly
+        setsid();
+
+        // Apply environment setup
+        std::string key{};
+        for (const auto& env_part : pvacms_subprocess_ref.env) {
+            if (key.empty()) {
+                key = env_part;
+            } else {
+                if (env_part.empty()) {
+                    if (unsetenv(key.c_str()) != 0) {
+                        log_err_printf(perflog, "Failed to unset environment variable: %s \n", key.c_str());
+                    }
+                } else {
+                    if (setenv(key.c_str(), env_part.c_str(), 1) != 0) {
+                        log_err_printf(perflog,
+                                       "Failed to set environment variable: %s = \"%s\"\n",
+                                       key.c_str(),
+                                       env_part.c_str());
+                    }
+                }
+                key = {};
+            }
+        }
+
+        const char* argv0 = pvacms_executable_path.c_str();
+        log_info_printf(perflog, "Starting child process: %s %s\n", pvacms_executable_path.c_str(), "pvacms");
+        execlp(argv0, "pvacms", "--preload-cert", "server1.p12", "client1.p12", nullptr);
+
+        // If exec fails
+        log_err_printf(perflog, "Failed to start child process: %s %s\n", pvacms_executable_path.c_str(), "pvacms");
+        _exit(127);
+    }
+
+    // Parent process
+    pvacms_subprocess_ref.pid = pid;
+    return true;
+}
+
+/**
+ * Stop the PVACMS process
+ * @param child The child process struct
+ */
+void stopPVACMS(Child& child) {
+    if (child.pid > 0) {
+        // Try SIGTERM first
+        kill(child.pid, SIGTERM);
+        // Wait briefly
+        for (int i = 0; i < 30; ++i) {
+            int status = 0;
+            pid_t r = waitpid(child.pid, &status, WNOHANG);
+            if (r == child.pid) {
+                child.pid = -1;
+                return;
+            }
+            usleep(100000);  // 100ms
+        }
+        // Force kill if still running
+        kill(child.pid, SIGKILL);
+        waitpid(child.pid, nullptr, 0);
+        child.pid = -1;
+    }
+}
+
+/**
+ * Simple Ctrl-C (SIGINT) trap: print the exit message, stop PVACMS, then exit
+ */
+void onExit(int) {
+    std::cerr << std::endl << "Exiting..." << std::endl;
+    stopPVACMS(pvacms_subprocess);
+    _exit(130);
+}
+
+bool configureAndStartPVACMS(const std::string &test_dir, const std::string &target_arch) {
+    // Determine the pvacms executable location
+    const std::string pvacms_executable_path = test_dir
+        + ".."
+        + OSI_PATH_SEPARATOR + ".."
+        + OSI_PATH_SEPARATOR + "bin"
+        + OSI_PATH_SEPARATOR + target_arch
+        + OSI_PATH_SEPARATOR + "pvacms";
+    std::cout << "pvacms executable: " << pvacms_executable_path << std::endl;
+
+    // Create a child process to run PVACMS
+    pvxs::perf::pvacms_subprocess = pvxs::perf::Child{
+        "SSLKEYLOGFILE",                  {},
+        "XDG_DATA_HOME",                    test_dir+"perf/data",
+        "XDG_CONFIG_HOME",                  test_dir+"perf/config",
+        "EPICS_PVACMS_SERVER_PORT",         "55075",
+        "EPICS_PVACMS_TLS_PORT",            "55076",
+        "EPICS_CERT_AUTH_TLS_KEYCHAIN",     "cert_auth.p12",
+        "EPICS_PVAS_TLS_KEYCHAIN",          "superserver1.p12",
+    };
+
+    if (!startPVACMS(pvacms_executable_path, pvxs::perf::pvacms_subprocess)) {
+        std::cerr << "Failed to start pvacms: " << pvacms_executable_path << std::endl;
+        return false;
+    }
+
+    // Wait for pvacms to start up
+    std::cout << "Waiting for pvacms to start before running tests" << std::endl;
+    sleep(2);
+    std::cout << "PVACMS Ready" << std::endl;
+    return true;
+}
+
+
+void runProducer(const std::string &test_dir, const std::string &target_arch) {
+    if (configureAndStartPVACMS(test_dir, target_arch)) {
+        MPMCFIFO<std::shared_ptr<client::Subscription>> perf_control_update_queue(2);
+
+        // Subscribe to PERF:CONTROL to get instructions on which test to run
+        auto perf_control_client = client::Context::fromEnv();
+        auto sub = perf_control_client
+            .monitor("PERF:CONTROL")
+            .maskConnected(true)
+            .maskDisconnected(true)
+            .event([&](const pvxs::client::Subscription& perf_control_monitor){ perf_control_update_queue.push(perf_control_monitor.shared_from_this()); })
+            .exec();
+        perf_control_client.hurryUp();
+        std::cout << "Server waiting for PERF:CONTROL..." << std::endl;
+
+        // Loop indefinitely for performance test operations, stop by interrupt
+        while(const auto perf_control_update = perf_control_update_queue.pop()) {
+            if (auto perf_control_update_value = perf_control_update->pop()) {
+                epicsTimeStamp start;
+                epicsTimeGetCurrent(&start);
+
+                const auto scenario_type = static_cast<ScenarioType>(perf_control_update_value["scenario_code"].as<uint32_t>());
+                const auto payload_type_value = perf_control_update_value["payload_code"];
+                if (!payload_type_value) continue; // Skip initial values
+
+                const auto payload_type = static_cast<PayloadType>(payload_type_value.as<uint32_t>());
+                const auto rate = perf_control_update_value["rate"].as<int32_t>();
+
+                Scenario scenario = {false, scenario_type};
+                auto producer = Producer(scenario, payload_type, rate, start);
+                std::cout << "Serving " << payloadLabel(payload_type) << " data at " << rate << "Hz" << " for the " << scenarioLabel(scenario_type) << " scenario" << std::endl;
+                producer.run();
+            }
+        }
+    }
+}
+
+void doReport(sqlite3* db, const std::string& run_id) {
+    {
+        const auto samples = countSamples(db, run_id);
+        if ( !samples ) {
+            std::cout << "No samples found for RUN_ID=" << run_id << std::endl;
+            return;
+        }
+
+        std::cout << run_id << " -  Generated at: " << decodeRunID(run_id) << ":  " << samples << " samples" << std::endl;
+        std::cout << std::setw(15) << "Connection Type" << ", "
+                  << std::setw(13) << "Payload" << ", "
+                  << std::setw(13) << "Tx Rate(Hz)" << ", "
+                  << std::setw(13) << "Throughput" << ", "
+                  << std::setw( 8) << "N" << ", "           // Total number of readings (sample size)
+                  << std::setw(10) << "Min(ms)" << ", "     // Min Transmission Time
+                  << std::setw(10) << "Max(ms)" << ", "     // Max Transmission Time
+                  << std::setw(10) << "Mean(ms)" << ", "    // The Mean Transmission Time
+                  << std::setw(10) << "StdDev(ms)" << ", "  // Standard Deviation from the Mean
+                  << std::setw(11) << "SEM(ms)" << ", "     // Standard Error on the Mean (Precision)
+                  << std::setw(11) << "Jitter(ms)" << ", "  // Standard Deviation of successive deltas
+                  << "Drops" << std::endl;
+    }
+
+    // precompute payload wire sizes for throughput
+    const auto wire_sizes = computeWireSizes();
 
     // For each scenario, return values if they are non-zero
-    for (auto scenario_index = 0; scenario_index < 4; ++scenario_index) {
-        const auto scenario_id = static_cast<ScenarioType>(scenario_index);
+    for (auto scenario_code = 0; scenario_code < 4; ++scenario_code) {
+        const auto scenario_id = static_cast<ScenarioType>(scenario_code);
         const auto scenario_label = scenarioLabel(scenario_id);
 
         // Get the list of payload IDs and rates for this report
@@ -1174,7 +1274,7 @@ void doReport(sqlite3* db, const std::string& run_id) {
                 sqlite3_bind_int (count_statement, sqlite3_bind_parameter_index(count_statement, ":payload_id"), payload_id);
                 sqlite3_bind_int (count_statement, sqlite3_bind_parameter_index(count_statement, ":rate"), rate);
                 if (sqlite3_step (count_statement) == SQLITE_ROW)
-                    samples = sqlite3_column_int64(count_statement, scenario_index);
+                    samples = sqlite3_column_int64(count_statement, scenario_code);
             }
             if (count_statement) sqlite3_finalize(count_statement);
             if (samples==0) continue;
@@ -1195,7 +1295,7 @@ void doReport(sqlite3* db, const std::string& run_id) {
             const auto expected_samples = rate * 60;
             const bool drops=samples != expected_samples;
             while (sqlite3_step(samples_statement) == SQLITE_ROW) {
-                const double value = sqlite3_column_double(samples_statement, scenario_index+1);
+                const double value = sqlite3_column_double(samples_statement, scenario_code+1);
                 if (value > 0.0) accumulator.add(value); // convert to ms
             }
             sqlite3_finalize(samples_statement);
@@ -1254,25 +1354,14 @@ void doReport(sqlite3* db, const std::string& run_id) {
     }
 }
 
-// SMALL: NTScalar<Int32>
-Value createSmallValue() {
-    auto s_def(nt::NTScalar{TypeCode::Int32}.build());
-    s_def += {Int32("counter")};
-    auto value = s_def.create();
-    value["counter"] = -1; // Set an initial value.  This will be ignored
-    return value;
-}
-
-} // anonymous namespace
-
 // Compute the PVA wire size (bytes) of a Value (type + data), for throughput calculations.
 // Performance Test only: uses internal wire encoder.
-static double wireSizeBytes(const Value& val) {
+static double wireSizeBytes(const Value& value_to_size) {
     using namespace pvxs::impl;
     std::vector<uint8_t> buf;
     buf.reserve(4096000);
     VectorOutBuf M(true, buf);
-    to_wire_full(M, val);
+    to_wire_full(M, value_to_size);
     return static_cast<double>(M.consumed());
 }
 
@@ -1375,20 +1464,32 @@ int main(int argc, char* argv[]) {
     std::string opt_report_id; // optional single run id
     std::string opt_report_del_ids; // comma-separated list
     std::string opt_report_info_ids; // comma-separated list
+    bool opt_consumer = false;
+    {
+        bool opt_producer = false;
+        CLI::App app{"PVXS TLS performance tests"};
+        app.add_flag("--consumer", opt_consumer, "Run in consumer mode: publish PERF:CONTROL and subscribe to data PV");
+        app.add_flag("--producer", opt_producer, "Run in producer mode: subscribe to PERF:CONTROL and publish requested performance data");
+        app.add_option("-s,--scenario-type", opt_scenarios, "Scenario type(s): TCP, TLS, TLS_CMS, TLS_CMS_STAPLED. May be repeated.");    app.add_option("-f,--db", db_file_name, "SQLite database file for per-packet results to write or to read reports");
+        app.add_option("-p,--payload-type", opt_payloads, "Payload type(s): SMALL, MEDIUM, LARGE. May be repeated.");
+        app.add_option("-r,--rate", opt_rates, "Update rate(s) in Hz. May be repeated.");
+        app.add_option("--report", opt_report_id, "Generate a report for RUN_ID. Use 'last' for last report" )->expected(1,1);
+        app.add_flag("--report-list", opt_report_list, "List all RUN_IDs and their generated time with sample counts");
+        app.add_option("--report-del", opt_report_del_ids, "Delete entries for comma-separated RUN_ID list")->expected(1,50);
+        app.add_option("--report-info", opt_report_info_ids, "Show info for comma-separated RUN_ID list")->expected(1,50);
 
-    CLI::App app{"PVXS TLS performance tests"};
-    app.add_option("-s,--scenario-type",
-                   opt_scenarios,
-                   "Scenario type(s): TCP, TLS, TLS_CMS, TLS_CMS_STAPLED. May be repeated.");
-    app.add_option("-f,--db", db_file_name, "SQLite database file for per-packet results to write or to read reports");
-    app.add_option("-p,--payload-type", opt_payloads, "Payload type(s): SMALL, MEDIUM, LARGE. May be repeated.");
-    app.add_option("-r,--rate", opt_rates, "Update rate(s) in Hz. May be repeated.");
-    app.add_option("--report", opt_report_id, "Generate a report for RUN_ID. Use 'last' for last report" )->expected(1,1);
-    app.add_flag("--report-list", opt_report_list, "List all RUN_IDs and their generated time with sample counts");
-    app.add_option("--report-del", opt_report_del_ids, "Delete entries for comma-separated RUN_ID list")->expected(1,50);
-    app.add_option("--report-info", opt_report_info_ids, "Show info for comma-separated RUN_ID list")->expected(1,50);
+        CLI11_PARSE(app, argc, argv);
 
-    CLI11_PARSE(app, argc, argv);
+        if ( opt_consumer && opt_producer) {
+            std::cerr << "--producer and --consumer cannot both be specified" << std::endl;
+            return 1;
+        }
+        if ( opt_consumer && opt_producer) {
+            std::cerr << "at least --producer or --consumer must be specified" << std::endl;
+            return 10;
+        }
+        opt_consumer = !opt_producer;
+    }
 
     // If any report options are set, process them and exit
     if (opt_report_list || !opt_report_id.empty() || !opt_report_del_ids.empty() || !opt_report_info_ids.empty()) {
@@ -1426,7 +1527,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // calculate the run_id (only for write path)
+    // calculate the run_id
     std::string run_id;
     if (!db_file_name.empty()) {
         const auto t = static_cast<unsigned int>(std::time(nullptr));
@@ -1489,39 +1590,14 @@ int main(int argc, char* argv[]) {
     // Extract the target architecture from the test directory name
     const std::string target_arch = extractTargetArch(test_dir);
 
-    // Determine the pvacms executable location
-    const std::string pvacms_executable_path = test_dir
-        + ".."
-        + OSI_PATH_SEPARATOR + ".."
-        + OSI_PATH_SEPARATOR + "bin"
-        + OSI_PATH_SEPARATOR + target_arch
-        + OSI_PATH_SEPARATOR + "pvacms";
-    std::cout << "pvacms executable: " << pvacms_executable_path << std::endl;
-
-    // Create a child process to run PVACMS
-    pvacms_subprocess = Child{
-        "SSLKEYLOGFILE",                  {},
-        "XDG_DATA_HOME",                    test_dir+"perf/data",
-        "XDG_CONFIG_HOME",                  test_dir+"perf/config",
-        "EPICS_PVA_BROADCAST_PORT",         "55076",
-        "EPICS_PVACMS_SERVER_PORT",         "55075",
-        "EPICS_PVACMS_TLS_PORT",            "55076",
-        "EPICS_PVA_SERVER_PORT",            "55077",
-        "EPICS_PVA_TLS_PORT",               "55078",
-        "EPICS_CERT_AUTH_TLS_KEYCHAIN",     "cert_auth.p12",
-        "EPICS_PVAS_TLS_KEYCHAIN",          "superserver1.p12",
-    };
-    if (!startPVACMS(pvacms_executable_path, pvacms_subprocess)) {
-        std::cerr << "Failed to start pvacms: " << pvacms_executable_path << std::endl;
+    // For Producer
+    if (!opt_consumer) {
+        runProducer(test_dir, target_arch);
+        std::cerr << "Producer failed to start" << std::endl;
         return 1;
     }
 
-    // Wait for pvacms to start up
-    std::cout << "Waiting for pvacms to start before running tests" << std::endl;
-    sleep(2);
-    std::cout << "PVACMS Ready" << std::endl;
-
-    // Run selected scenarios
+    // Run selected consumer scenarios
     auto first = true;
     for (auto scenario_type : scenarios_sel) {
         if (first) {
@@ -1558,7 +1634,7 @@ int main(int argc, char* argv[]) {
                          ? "LARGE(2MB)"
                          : (payload_type == MEDIUM_1KB ? "MEDIUM(1KB)" : "SMALL(32B)"));
                 for (auto rate : opt_rates) {
-                    Scenario scenario(scenario_type, db_file_name, run_id);
+                    Scenario scenario(true, scenario_type, db_file_name, run_id);
                     scenario.run(payload_type, rate, payload_label, formatRateLabel(rate));
                 }
             }

@@ -423,14 +423,45 @@ struct Scenario {
     sqlite3_stmt* stmt_update_tls{nullptr};
     sqlite3_stmt* stmt_update_tls_cms{nullptr};
     sqlite3_stmt* stmt_update_tls_cms_stapled{nullptr};
-    std::string run_id; // 8-hex id for this program run
+    std::string run_id{}; // 8-hex id for this program run
     MPMCFIFO<Update> update_queue;
     std::atomic<bool> stop_early{false};
+    bool is_consumer{true};
 
-    // Server and client to use for each side of the performance test scenario
-    server::Server server;
-    client::Context client;
+    // Server (producer) and client (consumer) to use for each side of the performance test scenario
+    server::Server producer;
+    client::Context consumer;
 
+    /**
+     * Constructor for the Scenario
+     * @param is_consumer is this scenario for the consumer end of the performance tests
+     * @param scenario_type The type of scenario to build.
+     * - TCP: Plain TCP connection.
+     * - TLS: TLS connection.
+     * - TLS_CMS: TLS connection with CMS status checking.
+     * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
+     * @param db_file_name The db file name.  If omitted, then no detailed output
+     * @param run_id The run id to use for this scenario
+     */
+    Scenario (bool is_consumer, ScenarioType scenario_type, const std::string &db_file_name = {}, const std::string &run_id = {});
+
+    ~Scenario() {
+        if (is_consumer) {
+            control_pv.close();
+            control_server.stop();
+            closeDB();
+        }
+        else
+            producer.stop();
+    }
+
+    void postValue(PayloadType payload_type, int32_t counter = -1);
+    void startMonitor(PayloadType payload_type, uint32_t rate);
+    int32_t processPendingUpdates(Result &result, const epicsTimeStamp &start);
+    static void run(const ScenarioType &scenario_type, PayloadType payload_type, const std::string &db_file_name = {}, const std::string &run_id = {});
+    void run(PayloadType payload_type, uint32_t rate, const std::string& payload_label, const std::string& rate_label);
+
+  private:
     // Shared PV and small payload the SMALL payload type test
     server::SharedPV small_pv;
     Value small_value;
@@ -446,35 +477,16 @@ struct Scenario {
     // Subscription the client will make for this performance test scenario
     std::shared_ptr<client::Subscription> sub;
 
-    // Ports for the server and client
-    int tcp_port{0};
-    int udp_port{0};
-
-    /**
-     * Constructor for the Scenario
-     * @param scenario_type The type of scenario to build.
-     * - TCP: Plain TCP connection.
-     * - TLS: TLS connection.
-     * - TLS_CMS: TLS connection with CMS status checking.
-     * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
-     * @param db_file_name the db file name.  If ommited then no detailed output
-     * @param run_id the run id to use for this scenario
-     */
-    explicit Scenario(ScenarioType scenario_type, const std::string &db_file_name = {}, const std::string &run_id = {});
-
-    ~Scenario() { server.stop(); closeDB(); }
+    server::Server control_server;
+    server::SharedPV control_pv;
+    Value control_value;
 
     void initSmallScenarios();
     void initMediumScenarios();
     void initLargeScenarios();
-    void configureServer();
-    void startServer() ;
-    void buildClientContext();
-    static void run(const ScenarioType &scenario_type, PayloadType payload_type, const std::string &db_file_name = {}, const std::string &run_id = {});
-    void run(PayloadType payload_type, uint32_t rate, const std::string& payload_label, const std::string& rate_label);
-    void startMonitor(PayloadType payload_type, uint32_t rate);
-    void postValue(PayloadType payload_type, int32_t counter = -1);
-    int32_t processPendingUpdates(Result &result, const epicsTimeStamp &start);
+    void buildProducerContext();
+
+    void buildConsumerContext();
 
     // SQLite helpers
     void initDB(const std::string &db_path);
@@ -492,23 +504,23 @@ struct SubscriptionMonitor final : epicsThreadRunable {
     const uint32_t rate;
     SubscriptionMonitor(Scenario &scenario, const PayloadType payload, uint32_t rate)
         : self{scenario}, payload{payload}, rate{rate} {}
-    void run();
+    void run() override;
 };
 
-struct UpdateProducer final {
+struct Producer final {
     Scenario &self;
     PayloadType payload;
     const uint32_t rate;
     const double window = 60.0;
     const epicsTimeStamp start;
 
-    UpdateProducer(Scenario &scenario, const PayloadType payload_type, const uint32_t rate, const epicsTimeStamp& start)
+    Producer(Scenario &scenario, const PayloadType payload_type, const uint32_t rate, const epicsTimeStamp& start)
         : self{scenario}, payload{payload_type}, rate{rate}, start{start} {}
 
-   void run();
+   void run() const;
 };
 
-struct UpdateConsumer final : epicsThreadRunable {
+struct Consumer final {
     Scenario &self;
     Result &result;
     const uint32_t rate;
@@ -520,11 +532,11 @@ struct UpdateConsumer final : epicsThreadRunable {
     const double window = 60.0;
     const double receive_window = window * 1.0 / 0.9;
 
-    UpdateConsumer(Scenario &scenario, Result & result, const uint32_t rate, const epicsTimeStamp &start, const std::shared_ptr<PortSniffer> &sniffer, const std::string &payload_label, const std::string &rate_label)
+    Consumer(Scenario &scenario, Result & result, const uint32_t rate, const epicsTimeStamp &start, const std::shared_ptr<PortSniffer> &sniffer, const std::string &payload_label, const std::string &rate_label)
         : self{scenario}, result{result}, rate{rate}, start{start}, sniffer{sniffer}, payload_label{payload_label}, rate_label{rate_label} {}
 
-    void run() override;
-    void printProgressBar(double progress_percentage) ;
+    void run();
+    void printProgressBar(double progress_percentage) const;
 
 };
 
