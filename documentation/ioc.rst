@@ -37,6 +37,20 @@ served by the Integrated PVA server.
     Print information about module versions, target, and toolchain.
     May be requested when reporting a bug.
 
+.. cpp:function:: void pvxs_log_config(const char *config)
+
+    Enable additional :ref:`logconfig` as if more comma separated key=VALUE pairs
+    were appended to the **$PVXS_LOG** environment variable.
+
+    Since UNRELEASED
+
+.. cpp:function:: void pvxs_log_reset()
+
+    Reset logging to defaults.  Negates the effects of **$PVXS_LOG** and later
+    configuration.
+
+    Since UNRELEASED
+
 Adding custom PVs to Server
 ---------------------------
 

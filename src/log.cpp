@@ -340,12 +340,8 @@ void logger_level_clear()
     logger_gbl->config.clear();
 }
 
-void logger_config_env()
+void logger_config_str(const char *env)
 {
-    const char *env = getenv("PVXS_LOG");
-    if(!env || !*env)
-        return;
-
     threadOnce<&logger_prepare>();
 
     Guard G(logger_gbl->lock);
@@ -387,6 +383,15 @@ void logger_config_env()
     }
 
     errlogFlush();
+}
+
+void logger_config_env()
+{
+    const char *env = getenv("PVXS_LOG");
+    if(!env || !*env)
+        return;
+
+    logger_config_str(env);
 }
 
 } // namespace pvxs

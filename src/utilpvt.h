@@ -252,6 +252,9 @@ using aligned_union = std::aligned_union<Len, Types...>;
 } // namespace impl
 using namespace impl;
 
+PVXS_API
+void logger_config_str(const char *env);
+
 inline
 timeval totv(double t)
 {
