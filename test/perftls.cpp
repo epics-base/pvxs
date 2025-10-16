@@ -1,7 +1,36 @@
 /*
  * Minimal performance test harness.
- * Starts pvacms from project_root/bin, prints progress messages, then stops it.
- * C++11, helpers in anonymous namespace inside pvxs namespace as requested.
+ * Usage Instructions:
+ * 1. Generate the TLS keychains:
+ *    - project_root/test/<arch>/gen_test_certs
+ * 3. Run the test:
+ *    - project_root/test/<arch>/perftls --consumer # run the consumer side of the test
+ *    - project_root/test/<arch>/perftls --producer # run the producer side of the test
+ *
+ * You can choose to run the test with different scenario types, payload types, and rates by adding parameters to the consumer side of the test.
+ * For example:
+ *   - # run the consumer side of the test with TCP scenario, SMALL payload, and 100 Hz rate
+ *     project_root/test/<arch>/perftls --consumer --scenario-type TCP --payload-type SMALL --rate 100
+ *
+ *   - # run the consumer side of the test with the TLS_CMS and TLS_CMS_STAPLED scenarios, SMALL, MEDIUM, and LARGE payloads, and 1000, 10000, and 100000 Hz rates
+ *     project_root/test/<arch>/perftls --consumer --scenario-type TLS_CMS TLS_CMS_STAPLED --payload-type SMALL MEDIUM LARGE --rate 1000 10000 100000
+ *
+ *   - # run the consumer side of the test with all permutations of payload and rate for the TLS_CMS_STAPLED scenario
+ *     project_root/test/<arch>/perftls --consumer --scenario-type TLS_CMS_STAPLED
+ *
+ * Behind the scenes:
+ * - The producer will configure the PVACMS and start it
+ * - The producer will subscribe to the PERF:CONTROL pv to await instructions for what tests to produce tests for
+ * - The consumer will start the PERF:CONTROL pv and post a request for a PREPARE message for a specific type of test
+ * - The producer will post an initial acknowledgement message (initial value) that has a counter value of -1 on the appropriate test PV
+ * - The consumer will not do anything until the acknowledgement message is received and discarded
+ * - Once the acknowledgement message has been received the consumer will post a START message for the specific type of the test on PERF:CONTROL
+ * - Once the START message is received the producer will start posting periodic messages to the appropriate test PV at the specified rate for 60 seconds
+ * - The consumer will consumer all of the messages posted by the producer and measure the elapsed transit time
+ * - If at any time the producer receives a new PREPARE message it will interrupt the prior sending sequence
+ * - If the consumer receives a counter out of sequence it will immediately stop its capture of the messages and send a STOP on the PERF:CONTROL channel
+ * - If a STOP is received at any time the producer will immediately stop the sequence of sending messages and will post an acknowledgement of the STOP
+ * - Once the acknowledgement of the STOP is received a consumer can proceed to the next scenario or exit if it is the last scenario scheduled
  */
 
 #include "perftls.h"
@@ -218,6 +247,16 @@ Value createLargeValue() {
     return value;
 }
 
+std::string getPathToFileInTestDir(const std::string &file_name = {}) {
+    std::string path_to_file{};
+    char* executable_path = epicsGetExecDir();
+    if (executable_path) {
+        path_to_file = executable_path;
+        free(executable_path);
+    }
+    return path_to_file + file_name;
+}
+
 /**
  * Add a value to the result
  * @param value The value to add
@@ -320,28 +359,42 @@ void SubscriptionMonitor::run() {
 
     // Wait until everything has finished
     while (end > std::time(nullptr)) {
-        epicsThreadSleep(-1);
-        if (self.stop_early.load(std::memory_order_relaxed)) break;
+        if (self.interrupted.wait(1.0/rate)) break;
     }
 }
 
 void Producer::run() const {
     const auto total = static_cast<uint32_t>(rate * window);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
+    double prior_percentage = std::numeric_limits<double>::max();
+
+    self.postValue(payload, -1); // Reset
     for (auto counter = 0; counter < total; ++counter) {
-        if (self.stop_early.load(std::memory_order_relaxed)) break;
         // Post 1 update
         self.postValue(payload, counter);
 
-        // Sleep until the next emission time
+        // Calculate elapsed time and time till the next tick
         epicsTimeStamp now{};
         epicsTimeGetCurrent(&now);
         const double elapsed_since_start = epicsTimeDiffInSeconds(&now, &start);
         const double next_emission_secs_from_start = static_cast<double>(counter + 1)  * time_per_update ;
-        const auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
-        if (self.stop_early.load(std::memory_order_relaxed)) break;
-        if (time_till_next_emission > 0.0) epicsThreadSleep(time_till_next_emission);
+        auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
+        if (time_till_next_emission < 0.0) time_till_next_emission = 1.0 / 100000000.0; // Should not get there, but if so set a very small amount of time
+
+        // Update the progress bar once per percentage change
+        const auto progress_percentage = elapsed_since_start >= window ? 100.00 : static_cast<uint32_t>(100 * (elapsed_since_start / window));
+        if (progress_percentage != prior_percentage) {
+            prior_percentage = progress_percentage;
+            printProgressBar(progress_percentage, counter + 1);
+        }
+
+        // Sleep until the next emission time
+        if (self.interrupted.wait(time_till_next_emission) ) {
+            std::cout << "\nInterrupted\n";
+            break;
+        }
     }
+    self.ready.signal();
 }
 
 void Consumer::run() {
@@ -350,11 +403,11 @@ void Consumer::run() {
     const auto time_per_update = 1.0 / static_cast<double>(rate);
     int32_t running_count{-1}; // Keeps track of actual counted packets consumed
     auto tick = 0;
+    double prior_percentage = std::numeric_limits<double>::max();
+    self.ready.wait();  // wait for first update
     while (tick < total_receive_ticks && running_count < window_count) {
-        if (self.stop_early.load(std::memory_order_relaxed)) break;
         // Get any available updates
         running_count = self.processPendingUpdates(result, start);
-        if (self.stop_early.load(std::memory_order_relaxed)) break;
         tick = std::max(++tick, running_count);
 
         epicsTimeStamp now{};
@@ -365,7 +418,7 @@ void Consumer::run() {
         const auto progress_percentage = elapsed_since_start >= window ? 100.00 : static_cast<uint32_t>(100 * (elapsed_since_start / window));
         if (progress_percentage != prior_percentage) {
             prior_percentage = progress_percentage;
-            printProgressBar(progress_percentage);
+            printProgressBar(progress_percentage, running_count);
         }
 
         // Poll network capture
@@ -374,17 +427,16 @@ void Consumer::run() {
         // Sleep until the tick
         const auto next_tick_secs_from_start = time_per_update * tick ;
         const auto time_till_next_tick = next_tick_secs_from_start - elapsed_since_start;
-        if (time_till_next_tick > 0.0) epicsThreadSleep(time_till_next_tick);
+        if (self.interrupted.wait(time_till_next_tick)) break;
     }
-    // Flag everyone else to stop early too
-    self.stop_early.store(true, std::memory_order_relaxed);
 }
 
 /**
  * Print a progress bar to the console
  * @param progress_percentage The percentage done
+ * @param N the current count of packets received
  */
-void Consumer::printProgressBar(double progress_percentage) const {
+void Timed::printProgressBar(double progress_percentage, const int32_t N) const {
     // 1) Connection Type
     const std::string bps_placeholder = SB() << (static_cast<uint32_t>(progress_percentage) % 2 ? "\\" : "/") << " bps";
     std::ostringstream oss;
@@ -405,7 +457,7 @@ void Consumer::printProgressBar(double progress_percentage) const {
     << std::right << std::setw(13) << bps_placeholder << ", "
 
     // 5) N
-    << std::right << std::setw(8) << result.accumulator.N << ": ";
+    << std::right << std::setw(8) << N << ": ";
     auto prefix = oss.str();
 
     if (progress_percentage > 100.0)
@@ -500,8 +552,23 @@ std::string formatRateLabel(long rate) {
 }
 
 /**
- * Constructor for the Scenario for a server
- * @param is_consumer true if this a consumer, false if its a producer
+ * Constructor for the Scenario for a producer
+ * @param scenario_type The type of scenario to build.
+ * - TCP: Plain TCP connection.
+ * - TLS: TLS connection.
+ * - TLS_CMS: TLS connection with CMS status checking.
+ * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
+ */
+Scenario::Scenario(const ScenarioType scenario_type) : scenario_type(scenario_type), is_consumer(false) {
+    buildProducerContext();
+    initSmallScenarios();
+    initMediumScenarios();
+    initLargeScenarios();
+    producer.start();
+}
+
+/**
+ * Constructor for the Scenario for a consumer
  * @param scenario_type The type of scenario to build.
  * - TCP: Plain TCP connection.
  * - TLS: TLS connection.
@@ -510,41 +577,20 @@ std::string formatRateLabel(long rate) {
  * @param db_file_name optional db file name to output detailed data to
  * @param run_id the unique program run ID
  */
-Scenario::Scenario(const bool is_consumer, const ScenarioType scenario_type, const std::string &db_file_name, const std::string &run_id) : scenario_type(scenario_type), run_id(run_id), is_consumer(is_consumer) {
-    if (is_consumer) {
-        small_value = createSmallValue();
-        medium_value = createMediumValue();
-        large_value = createLargeValue();
+Scenario::Scenario(const ScenarioType scenario_type, const std::string &db_file_name, const std::string &run_id) : scenario_type(scenario_type), run_id(run_id), is_consumer(true) {
+    small_value = createSmallValue();
+    medium_value = createMediumValue();
+    large_value = createLargeValue();
 
-        // Initialize optional SQLite DB once per Scenario instance
-        if (!db_file_name.empty()) {
-            try {
-                initDB(db_file_name);
-            } catch (const std::exception& e) {
-                log_err_printf(consumerlog, "Could not open sqlite db (%s): %s\n", db_file_name.c_str(), e.what());
-            }
+    // Initialize optional SQLite DB once per Scenario instance
+    if (!db_file_name.empty()) {
+        try {
+            initDB(db_file_name);
+        } catch (const std::exception& e) {
+            log_err_printf(consumerlog, "Could not open sqlite db (%s): %s\n", db_file_name.c_str(), e.what());
         }
-        buildConsumerContext();
-
-        // Host PERF:CONTROL
-        control_server = server::Config::isolated().build();
-        control_pv = server::SharedPV::buildReadonly();
-        control_server.addPV("PERF:CONTROL", control_pv);
-        control_value = createPerfControlValue(scenario_type);
-        control_pv.open(control_value);
-        control_server.start();
-    } else {
-        // Configure the Producer
-        buildProducerContext();
-
-        // Initialise scenario payloads
-        initSmallScenarios();
-        initMediumScenarios();
-        initLargeScenarios();
-
-        // Start the producer
-        producer.start();
     }
+    buildConsumerContext();
 }
 
 /**
@@ -709,7 +755,7 @@ std::string scenarioLabel(const ScenarioType scenario_id) {
 void Scenario::buildProducerContext() {
     // Build Server
     auto serv_conf = server::Config::fromEnv();
-    serv_conf.tls_keychain_file = "server1.p12";
+    serv_conf.tls_keychain_file = getPathToFileInTestDir("server1.p12");
 
     serv_conf.tls_disabled = scenario_type == TCP;
     serv_conf.tls_disable_status_check = scenario_type < TLS_CMS;
@@ -724,7 +770,7 @@ void Scenario::buildProducerContext() {
 void Scenario::buildConsumerContext() {
     // Build Client
     auto cli_conf = client::Config::fromEnv();
-    cli_conf.tls_keychain_file = "client1.p12";
+    cli_conf.tls_keychain_file = getPathToFileInTestDir("client1.p12");
 
     cli_conf.tls_disabled = scenario_type == TCP;
     cli_conf.tls_disable_status_check = scenario_type < TLS_CMS;
@@ -741,20 +787,20 @@ void Scenario::buildConsumerContext() {
  * @param db_file_name the db filename to output detailed results to
  * @param run_id the optional run id to label this run
  */
-void Scenario::run(const ScenarioType &scenario_type, const PayloadType payload_type, const std::string &db_file_name, const std::string &run_id) {
+void Scenario::run(server::SharedPV &control_pv, const ScenarioType &scenario_type, const PayloadType payload_type, const std::string &db_file_name, const std::string &run_id) {
     const auto payload_label =
         (payload_type == LARGE_2MB  ? "LARGE(2MB)"
        : payload_type == MEDIUM_1KB ? "MEDIUM(1KB)"
        :                              "SMALL(32B)");
     uint32_t rate = 1;
-    rate =    1; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type,           rate, payload_label, formatRateLabel(rate));
-    rate =   10; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type,          rate, payload_label, formatRateLabel(rate));
-    rate =  100; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type,         rate, payload_label, formatRateLabel(rate));
-    rate = 1000; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type,        rate, payload_label, formatRateLabel(rate));
+    rate =    1; Scenario {scenario_type, db_file_name, run_id}.run(control_pv, payload_type,        rate, payload_label, formatRateLabel(rate));
+    rate =   10; Scenario {scenario_type, db_file_name, run_id}.run(control_pv, payload_type,        rate, payload_label, formatRateLabel(rate));
+    rate =  100; Scenario {scenario_type, db_file_name, run_id}.run(control_pv, payload_type,        rate, payload_label, formatRateLabel(rate));
+    rate = 1000; Scenario {scenario_type, db_file_name, run_id}.run(control_pv, payload_type,        rate, payload_label, formatRateLabel(rate));
     if (payload_type != LARGE_2MB) {
-        rate =   10000; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type, rate, payload_label, formatRateLabel(rate));
-        rate =  100000; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type,  rate, payload_label, formatRateLabel(rate));
-        rate = 1000000; Scenario {true, scenario_type, db_file_name, run_id}.run(payload_type, rate, payload_label, formatRateLabel(rate));
+        rate =   10000; Scenario {scenario_type, db_file_name, run_id}.run(control_pv, payload_type, rate, payload_label, formatRateLabel(rate));
+        rate =  100000; Scenario {scenario_type, db_file_name, run_id}.run(control_pv, payload_type, rate, payload_label, formatRateLabel(rate));
+        rate = 1000000; Scenario {scenario_type, db_file_name, run_id}.run(control_pv, payload_type, rate, payload_label, formatRateLabel(rate));
     }
 }
 
@@ -775,7 +821,7 @@ void Scenario::run(const ScenarioType &scenario_type, const PayloadType payload_
  * @param payload_label The label for the payload type - SMALL, MEDIUM, or LARGE.
  * @param rate_label The label for the rate - 1 Hz, 10 Hz, 100 Hz, 1 KHz, 10 KHz, or 1 MHz.
  */
-void Scenario::run(const PayloadType payload_type,
+void Scenario::run(server::SharedPV &control_pv, const PayloadType payload_type,
          const uint32_t rate,
          const std::string& payload_label,
          const std::string& rate_label) {
@@ -801,15 +847,9 @@ void Scenario::run(const PayloadType payload_type,
     epicsThread subscription_thread(subscription_monitor, "PERF-Monitor", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityHigh);
     subscription_thread.start();
 
-    // quiesce before test
-    epicsThreadSleep(1.0);
-
     // Mark the start time for this sequence, and quiesce before the test
     epicsTimeStamp start{};
     epicsTimeGetCurrent(&start);
-
-    // Reset the early-stop flag for this run
-    stop_early.store(false, std::memory_order_relaxed);
 
     // Create and start threads
     current_rate = rate;
@@ -817,9 +857,10 @@ void Scenario::run(const PayloadType payload_type,
     Consumer update_consumer{*this, result, rate,  start, sniffer, payload_label, rate_label};
 
     // Signal the producer to send data
-    control_value["value.index"] = scenario_type;
-    control_value["payload_code"] = payload_type;
-    control_value["rate"] = rate;
+    auto control_value = control_pv.fetch();
+    if (control_value["value.index"].as<int32_t>() != scenario_type) control_value["value.index"] = scenario_type;
+    if (control_value["payload_code"].as<int32_t>() != payload_type) control_value["payload_code"] = payload_type;
+    if (control_value["rate"].as<int32_t>() != rate) control_value["rate"] = rate;
     control_pv.post(control_value);
 
     update_consumer.run();   // Run the consumer
@@ -947,10 +988,15 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
             // Important: only signaling when the client queue transitions from empty->non-empty.
             // If we leave entries in the subscription queue, further events may not be delivered.
             try {
+                Guard G(lock);
                 while (const auto value = sub->pop()) {
-                    epicsTimeStamp receive_time{};
-                    epicsTimeGetCurrent(&receive_time);
-                    update_queue.push(Update{value, receive_time});
+                    const auto N = value["counter"].as<int32_t>();
+                    if (N >= 0) {
+                        epicsTimeStamp receive_time{};
+                        epicsTimeGetCurrent(&receive_time);
+                        update_queue.push(Update{value, receive_time});
+                        ready.signal();
+                    }
                 }
             } catch (const std::exception &e) {
                 // log and stop draining to avoid tight loop on errors
@@ -995,11 +1041,13 @@ void Scenario::postValue(const PayloadType payload_type, const int32_t counter) 
  * @return the next expected counter
  */
 int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &start) {
+    Guard G(lock);
     epicsTimeStamp now{};
     epicsTimeGetCurrent(&now);
     int32_t count{result.accumulator.N};
 
-    while (update_queue.size()) {
+    auto items = update_queue.size();
+    while (items--) {
         try {
             epicsTimeGetCurrent(&now);
             const auto update = update_queue.pop();
@@ -1012,11 +1060,13 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
             if (received_count < 0)
                 continue;
 
+            /*
             if (received_count != count) {
                 // Stop this test early on the first detected-drop
-                stop_early.store(true, std::memory_order_relaxed);
+                interrupted.signal();
                 break;
             }
+            */
 
             // Determine how much time has elapsed from the beginning of the test sequence
             const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
@@ -1041,26 +1091,41 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
         } catch (const client::Disconnect&) {
             // ignore
         }
-        epicsThreadSleep(-1);
     }
     return count;
 }
 
 /**
- * Extract target architecture from the given test executable path name
+ * Get target architecture
  *
- * @param path
  * @return
  */
-std::string extractTargetArch(const std::string& path) {
+std::string getTargetArch() {
+    const std::string path = getPathToFileInTestDir();
     if (path.empty())
-        return std::string();
-    const auto terminated_by_path_separator = (path.back() == '/');
+        return {};
+    const auto terminated_by_path_separator = path.back() == '/';
     const auto base_path = path.substr(0, std::string::npos - (terminated_by_path_separator ? 1 : 0));
     const std::string target_arch = basename(const_cast<char*>(base_path.c_str()));
-    const auto ta = target_arch.substr(2, std::string::npos);
-    log_debug_printf(perflog, "Target architecture: %s\n", ta.c_str());
-    return ta;
+    return target_arch.substr(2, std::string::npos);
+}
+
+/**
+ * Get get bin dir
+ *
+ * @return
+ */
+std::string getBinDir(const std::string &executable = {}) {
+    const std::string test_path = getPathToFileInTestDir();
+    const std::string target_arch = getTargetArch();
+    if (test_path.empty() || target_arch.empty())
+        return executable;
+    return test_path
+        + ".."
+        + OSI_PATH_SEPARATOR + ".."
+        + OSI_PATH_SEPARATOR + "bin"
+        + OSI_PATH_SEPARATOR + target_arch
+        + OSI_PATH_SEPARATOR + executable;
 }
 
 /**
@@ -1105,7 +1170,7 @@ bool startPVACMS(const std::string& pvacms_executable_path, Child& pvacms_subpro
 
         const char* argv0 = pvacms_executable_path.c_str();
         log_info_printf(perflog, "Starting child process: %s %s\n", pvacms_executable_path.c_str(), "pvacms");
-        execlp(argv0, "pvacms", "--preload-cert", "server1.p12", "client1.p12", nullptr);
+        execlp(argv0, "pvacms", "--preload-cert", getPathToFileInTestDir("server1.p12").c_str(), getPathToFileInTestDir("client1.p12").c_str(), nullptr);
 
         // If exec fails
         log_err_printf(perflog, "Failed to start child process: %s %s\n", pvacms_executable_path.c_str(), "pvacms");
@@ -1151,28 +1216,39 @@ void onExit(int) {
     _exit(130);
 }
 
-bool configureAndStartPVACMS(const std::string &test_dir, const std::string &target_arch) {
+void outputColumnHeadings() {
+    std::cout
+        << std::right << std::setw(15) << "Connection Type" << ", "
+        << std::right << std::setw(13) << "Payload" << ", "
+        << std::right << std::setw(13) << "Tx Rate(Hz)" << ", "
+        << std::right << std::setw(13) << "Throughput" << ", "
+        << std::right << std::setw( 8) << "N" << ", "            // Total number of readings (sample size)
+        << std::right << std::setw(10) << "Min(ms)" << ", "      // Min Transmission Time
+        << std::right << std::setw(10) << "Max(ms)" << ", "      // Max Transmission Time
+        << std::right << std::setw(10) << "Mean(ms)" << ", "     // The Mean Transmission Time
+        << std::right << std::setw(10) << "StdDev(ms)" << ", "   // Standard Deviation from the Mean
+        << std::right << std::setw(11) << "SEM(ms)" << ", "      // Standard Error on the Mean (Precision)
+        << std::right << std::setw(11) << "Jitter(ms)" << ", "   // Standard Deviation of successive deltas
+        << std::right << std::setw(10) << "Drops(y/n)" << ", "
+        << std::right << std::setw(12) << "CPU(% core)" << ", "
+        << std::right << std::setw(12) << "Memory(MB)" << ", "
+        << std::right << std::setw(19) << "Network Load(bytes)"
+        << std::endl;
+}
+
+bool configureAndStartPVACMS() {
     // Determine the pvacms executable location
-    const std::string pvacms_executable_path = test_dir
-        + ".."
-        + OSI_PATH_SEPARATOR + ".."
-        + OSI_PATH_SEPARATOR + "bin"
-        + OSI_PATH_SEPARATOR + target_arch
-        + OSI_PATH_SEPARATOR + "pvacms";
-    std::cout << "pvacms executable: " << pvacms_executable_path << std::endl;
+    const std::string pvacms_executable_path = getBinDir("pvacms");
 
     // Create a child process to run PVACMS
-    pvxs::perf::pvacms_subprocess = pvxs::perf::Child{
-        "SSLKEYLOGFILE",                  {},
-        "XDG_DATA_HOME",                    test_dir+"perf/data",
-        "XDG_CONFIG_HOME",                  test_dir+"perf/config",
+    pvacms_subprocess = Child{
         "EPICS_PVACMS_SERVER_PORT",         "55075",
         "EPICS_PVACMS_TLS_PORT",            "55076",
-        "EPICS_CERT_AUTH_TLS_KEYCHAIN",     "cert_auth.p12",
-        "EPICS_PVAS_TLS_KEYCHAIN",          "superserver1.p12",
+        "EPICS_CERT_AUTH_TLS_KEYCHAIN",     getPathToFileInTestDir("cert_auth.p12"),
+        "EPICS_PVAS_TLS_KEYCHAIN",          getPathToFileInTestDir("superserver1.p12"),
     };
 
-    if (!startPVACMS(pvacms_executable_path, pvxs::perf::pvacms_subprocess)) {
+    if (!startPVACMS(pvacms_executable_path, pvacms_subprocess)) {
         std::cerr << "Failed to start pvacms: " << pvacms_executable_path << std::endl;
         return false;
     }
@@ -1185,39 +1261,57 @@ bool configureAndStartPVACMS(const std::string &test_dir, const std::string &tar
 }
 
 
-void runProducer(const std::string &test_dir, const std::string &target_arch) {
-    if (configureAndStartPVACMS(test_dir, target_arch)) {
-        MPMCFIFO<std::shared_ptr<client::Subscription>> perf_control_update_queue(2);
+void runProducer() {
+    if (!configureAndStartPVACMS()) {
+        std::cerr << "Producer failed to start" << std::endl;
+        exit(51);
+    }
 
-        // Subscribe to PERF:CONTROL to get instructions on which test to run
-        auto perf_control_client = client::Context::fromEnv();
-        auto sub = perf_control_client
-            .monitor("PERF:CONTROL")
-            .maskConnected(true)
-            .maskDisconnected(true)
-            .event([&](const pvxs::client::Subscription& perf_control_monitor){ perf_control_update_queue.push(perf_control_monitor.shared_from_this()); })
-            .exec();
-        perf_control_client.hurryUp();
-        std::cout << "Server waiting for PERF:CONTROL..." << std::endl;
+    MPMCFIFO<std::shared_ptr<client::Subscription>> perf_control_update_queue(2);
 
-        // Loop indefinitely for performance test operations, stop by interrupt
-        while(const auto perf_control_update = perf_control_update_queue.pop()) {
-            if (auto perf_control_update_value = perf_control_update->pop()) {
-                epicsTimeStamp start;
-                epicsTimeGetCurrent(&start);
+    // Subscribe to PERF:CONTROL to get instructions on which test to run
+    Scenario scenario{TCP}; // default TCP
+    bool first_time = true;
+    auto perf_control_client = client::Context::fromEnv();
+    auto sub = perf_control_client
+        .monitor("PERF:CONTROL")
+        .maskConnected(true)
+        .maskDisconnected(true)
+        .event([&](const client::Subscription& perf_control_monitor) {
+            std::cout << "Received PERF:CONTROL update" << std::endl;
+            if (!first_time ) {
+                std::cout << "Interrupting prior scenario" << std::endl;
+                scenario.interrupted.signal();
+                scenario.ready.wait(); // wait till prior is done before starting a new one
+                std::cout << "Prior scenario has finished\n";
+            } else first_time = false;
+            perf_control_update_queue.push(perf_control_monitor.shared_from_this());
+        })
+        .exec();
+    perf_control_client.hurryUp();
 
-                const auto scenario_type = static_cast<ScenarioType>(perf_control_update_value["scenario_code"].as<uint32_t>());
-                const auto payload_type_value = perf_control_update_value["payload_code"];
-                if (!payload_type_value) continue; // Skip initial values
+    std::cout << "Connection Type,       Payload,   Tx Rate(Hz),    Throughput,        N" << std::endl;
+    // Loop indefinitely for performance test operations, stop by interrupt
+    while(const auto perf_control_update = perf_control_update_queue.pop()) {
+        while (auto perf_control_update_value = perf_control_update->pop()) {
+            epicsTimeStamp start;
+            epicsTimeGetCurrent(&start);
 
-                const auto payload_type = static_cast<PayloadType>(payload_type_value.as<uint32_t>());
-                const auto rate = perf_control_update_value["rate"].as<int32_t>();
+            const auto scenario_code = perf_control_update_value["value.index"].as<uint32_t>();
+            if (scenario_code < 0) continue;
+            const auto scenario_type = static_cast<ScenarioType>(scenario_code);
+            const auto payload_type_value = perf_control_update_value["payload_code"];
+            if (!payload_type_value) continue; // Skip initial values
 
-                Scenario scenario = {false, scenario_type};
-                auto producer = Producer(scenario, payload_type, rate, start);
-                std::cout << "Serving " << payloadLabel(payload_type) << " data at " << rate << "Hz" << " for the " << scenarioLabel(scenario_type) << " scenario" << std::endl;
-                producer.run();
-            }
+            const auto payload_type = static_cast<PayloadType>(payload_type_value.as<uint32_t>());
+            const auto rate = perf_control_update_value["rate"].as<int32_t>();
+
+            scenario.scenario_type = scenario_type;
+            auto producer = Producer(scenario, payload_type, rate, start);
+            producer.payload_label = payloadLabel(payload_type);
+            producer.rate_label = formatRateLabel(rate);
+            producer.run();
+            std::cout << std::endl;
         }
     }
 }
@@ -1439,69 +1533,60 @@ double cpuPercentSince(const double w0, const double c0) {
     return dw > 0.0 ? dc / dw * 100.0 : 0.0;
 }
 
-}  // namespace perf
-}  // namespace pvxs
+int parseCommandlineOptions(const int argc,
+                            char **argv,
+                            std::vector<std::string> opt_scenarios,
+                            std::vector<std::string> opt_payloads,
+                            std::vector<long> opt_rates,
+                            std::string db_file_name,
+                            bool opt_report_list,
+                            std::string opt_report_id,
+                            std::string opt_report_del_ids,
+                            std::string opt_report_info_ids,
+                            bool &opt_consumer) {
+    bool opt_producer = false;
+    CLI::App app{"PVXS TLS performance tests"};
+    app.add_flag("--consumer", opt_consumer, "Run in consumer mode: publish PERF:CONTROL and subscribe to data PV");
+    app.add_flag("--producer", opt_producer,
+                 "Run in producer mode: subscribe to PERF:CONTROL and publish requested performance data");
+    app.add_option("-s,--scenario-type", opt_scenarios,
+                   "Scenario type(s): TCP, TLS, TLS_CMS, TLS_CMS_STAPLED. May be repeated.");
+    app.add_option("-f,--db", db_file_name, "SQLite database file for per-packet results to write or to read reports");
+    app.add_option("-p,--payload-type", opt_payloads, "Payload type(s): SMALL, MEDIUM, LARGE. May be repeated.");
+    app.add_option("-r,--rate", opt_rates, "Update rate(s) in Hz. May be repeated.");
+    app.add_option("--report", opt_report_id, "Generate a report for RUN_ID. Use 'last' for last report")->
+        expected(1, 1);
+    app.add_flag("--report-list", opt_report_list, "List all RUN_IDs and their generated time with sample counts");
+    app.add_option("--report-del", opt_report_del_ids, "Delete entries for comma-separated RUN_ID list")->
+        expected(1, 50);
+    app.add_option("--report-info", opt_report_info_ids, "Show info for comma-separated RUN_ID list")->expected(1, 50);
 
-int main(int argc, char* argv[]) {
-    using namespace pvxs::perf;
-#if defined(EPICS_VERSION_INT) && EPICS_VERSION_INT >= VERSION_INT(7, 0, 3, 1)
-    (void)argc;
-    (void)argv;
-    pvxs::logger_level_set(perflog.name, pvxs::Level::Info);
-    pvxs::logger_config_env();
-    // Install simple Ctrl-C trap
-    signal(SIGHUP, onExit);
-    signal(SIGINT, onExit);
-    signal(SIGQUIT, onExit);
-    signal(SIGKILL, onExit);
+    CLI11_PARSE(app, argc, argv);
 
-    // CLI argument parsing
-    std::vector<std::string> opt_scenarios;
-    std::vector<std::string> opt_payloads;
-    std::vector<long> opt_rates;
-    std::string db_file_name;
-    bool opt_report_list = false;
-    std::string opt_report_id; // optional single run id
-    std::string opt_report_del_ids; // comma-separated list
-    std::string opt_report_info_ids; // comma-separated list
-    bool opt_consumer = false;
-    {
-        bool opt_producer = false;
-        CLI::App app{"PVXS TLS performance tests"};
-        app.add_flag("--consumer", opt_consumer, "Run in consumer mode: publish PERF:CONTROL and subscribe to data PV");
-        app.add_flag("--producer", opt_producer, "Run in producer mode: subscribe to PERF:CONTROL and publish requested performance data");
-        app.add_option("-s,--scenario-type", opt_scenarios, "Scenario type(s): TCP, TLS, TLS_CMS, TLS_CMS_STAPLED. May be repeated.");    app.add_option("-f,--db", db_file_name, "SQLite database file for per-packet results to write or to read reports");
-        app.add_option("-p,--payload-type", opt_payloads, "Payload type(s): SMALL, MEDIUM, LARGE. May be repeated.");
-        app.add_option("-r,--rate", opt_rates, "Update rate(s) in Hz. May be repeated.");
-        app.add_option("--report", opt_report_id, "Generate a report for RUN_ID. Use 'last' for last report" )->expected(1,1);
-        app.add_flag("--report-list", opt_report_list, "List all RUN_IDs and their generated time with sample counts");
-        app.add_option("--report-del", opt_report_del_ids, "Delete entries for comma-separated RUN_ID list")->expected(1,50);
-        app.add_option("--report-info", opt_report_info_ids, "Show info for comma-separated RUN_ID list")->expected(1,50);
-
-        CLI11_PARSE(app, argc, argv);
-
-        if ( opt_consumer && opt_producer) {
-            std::cerr << "--producer and --consumer cannot both be specified" << std::endl;
-            return 1;
-        }
-        if ( opt_consumer && opt_producer) {
-            std::cerr << "at least --producer or --consumer must be specified" << std::endl;
-            return 10;
-        }
-        opt_consumer = !opt_producer;
+    if (opt_consumer && opt_producer) {
+        std::cerr << "--producer and --consumer cannot both be specified" << std::endl;
+        return 10;
     }
+    if (opt_consumer && opt_producer) {
+        std::cerr << "at least --producer or --consumer must be specified" << std::endl;
+        return 11;
+    }
+    opt_consumer = !opt_producer;
+    return 0;
+}
 
+void processReportOptions(const std::string &db_file_name, const bool opt_report_list, std::string opt_report_id, const std::string &opt_report_del_ids, const std::string &opt_report_info_ids) {
     // If any report options are set, process them and exit
     if (opt_report_list || !opt_report_id.empty() || !opt_report_del_ids.empty() || !opt_report_info_ids.empty()) {
         if (db_file_name.empty()) {
             std::cerr << "--output <dbfile> is required for report operations" << std::endl;
-            return 2;
+            exit(21);
         }
         sqlite3* rdb=nullptr;
         if (sqlite3_open(db_file_name.c_str(), &rdb)!=SQLITE_OK) {
             std::cerr << "Failed to open DB: " << db_file_name << ": " << sqlite3_errmsg(rdb) << std::endl;
             if (rdb) sqlite3_close(rdb);
-            return 2;
+            exit(22);
         }
         sqliteBusyTimeout(rdb);
         if (opt_report_list) {
@@ -1518,132 +1603,145 @@ int main(int argc, char* argv[]) {
                 if (!latestRunID(rdb, opt_report_id)) {
                     std::cerr << "No runs found in DB" << std::endl;
                     sqlite3_close(rdb);
-                    return 2;
+                    exit(23);
                 }
             }
             doReport(rdb, opt_report_id);
         }
         sqlite3_close(rdb);
-        return 0;
+        exit(0);
     }
+}
+std::string generateRunID() {
+    const auto now = static_cast<unsigned int>(std::time(nullptr));
+    char run_id_buffer[9];
+    std::snprintf(run_id_buffer, sizeof(run_id_buffer), "%08x", now);
+    return {run_id_buffer};
+}
 
-    // calculate the run_id
-    std::string run_id;
-    if (!db_file_name.empty()) {
-        const auto t = static_cast<unsigned int>(std::time(nullptr));
-        char run_id_buffer[9];
-        std::snprintf(run_id_buffer, sizeof(run_id_buffer), "%08x", t);
-        run_id = run_id_buffer;
-    }
-
-    // Build selected lists (defaults to all if no selection)
+std::vector<ScenarioType> determineScenarios(const std::vector<std::string> &opt_scenarios) {
     std::vector<ScenarioType> scenarios_sel;
     if (opt_scenarios.empty()) {
         scenarios_sel = {TCP, TLS, TLS_CMS, TLS_CMS_STAPLED};
     } else {
-        for (const auto& s : opt_scenarios) {
-            ScenarioType st{};
-            if (!parseScenarioType(s, st)) {
-                std::cerr << "Unknown scenario type: " << s << std::endl;
-                return 2;
+        for (const auto& scenario_type_name : opt_scenarios) {
+            ScenarioType scenario_type;
+            if (!parseScenarioType(scenario_type_name, scenario_type)) {
+                std::cerr << "Unknown scenario type: " << scenario_type_name << std::endl;
+                exit(31);
             }
-            scenarios_sel.push_back(st);
+            scenarios_sel.push_back(scenario_type);
         }
     }
+    return scenarios_sel;
+}
 
-    // Build selected lists (defaults to all if no selection)
+std::vector<PayloadType> determinePayloads(const std::vector<std::string> &opt_payloads) {
     std::vector<PayloadType> payloads_sel;
     if (opt_payloads.empty()) {
         payloads_sel = {SMALL_32B, MEDIUM_1KB, LARGE_2MB};
     } else {
-        for (const auto& p : opt_payloads) {
-            PayloadType pt{};
-            if (!parsePayloadType(p, pt)) {
-                std::cerr << "Unknown payload type: " << p << std::endl;
-                return 2;
+        for (const auto& payload_type_name : opt_payloads) {
+            PayloadType payload_type;
+            if (!parsePayloadType(payload_type_name, payload_type)) {
+                std::cerr << "Unknown payload type: " << payload_type_name << std::endl;
+                exit(41);
             }
-            payloads_sel.push_back(pt);
+            payloads_sel.push_back(payload_type);
         }
     }
+    return payloads_sel;
+}
 
-    std::cout << "Starting Performance Tests" << std::endl;
+void runConsumers(const std::vector<ScenarioType> &scenarios, const std::vector<PayloadType> &payloads, const std::vector<long> &rates, const std::string &run_id, const std::string &db_file_name) {
+    // Host PERF:CONTROL
 
-    // Determine test install dir
-    std::string test_dir;
-    char* executable_path = epicsGetExecDir();
-    if (executable_path) {
-        try {
-            test_dir = executable_path;
-            free(executable_path);
-        } catch (...) {
-            free(executable_path);
-            throw;
-        }
-    }
+    auto config = server::Config::fromEnv();
+    // config.tcp_port +=51000;
+    config.tls_disabled = true;
+    server::Server control_server = config.build();
+    server::SharedPV control_pv = server::SharedPV::buildReadonly();
+    control_server.addPV("PERF:CONTROL", control_pv);
 
-    // Change working dir to test dir
-    if ( chdir(test_dir.c_str()) ) {
-        std::cerr << "Failed to change to test directory: " << test_dir << std::endl;
-        return 2;
-    }
+    const Value control_value = createPerfControlValue(-1);
+    control_pv.open(control_value);
+    control_server.start();
 
-    // Extract the target architecture from the test directory name
-    const std::string target_arch = extractTargetArch(test_dir);
-
-    // For Producer
-    if (!opt_consumer) {
-        runProducer(test_dir, target_arch);
-        std::cerr << "Producer failed to start" << std::endl;
-        return 1;
-    }
-
-    // Run selected consumer scenarios
     auto first = true;
-    for (auto scenario_type : scenarios_sel) {
+    for (auto scenario_type : scenarios) {
         if (first) {
             if (!run_id.empty())
                 std::cout
-                  << "Recording Samples to Database: " << db_file_name << std::endl
-                  << "Run ID                       : " << run_id << std::endl;
-            std::cout
-                  << std::right << std::setw(15) << "Connection Type" << ", "
-                  << std::right << std::setw(13) << "Payload" << ", "
-                  << std::right << std::setw(13) << "Tx Rate(Hz)" << ", "
-                  << std::right << std::setw(13) << "Throughput" << ", "
-                  << std::right << std::setw( 8) << "N" << ", "            // Total number of readings (sample size)
-                  << std::right << std::setw(10) << "Min(ms)" << ", "      // Min Transmission Time
-                  << std::right << std::setw(10) << "Max(ms)" << ", "      // Max Transmission Time
-                  << std::right << std::setw(10) << "Mean(ms)" << ", "     // The Mean Transmission Time
-                  << std::right << std::setw(10) << "StdDev(ms)" << ", "   // Standard Deviation from the Mean
-                  << std::right << std::setw(11) << "SEM(ms)" << ", "      // Standard Error on the Mean (Precision)
-                  << std::right << std::setw(11) << "Jitter(ms)" << ", "   // Standard Deviation of successive deltas
-                  << std::right << std::setw(10) << "Drops(y/n)" << ", "
-                  << std::right << std::setw(12) << "CPU(% core)" << ", "
-                  << std::right << std::setw(12) << "Memory(MB)" << ", "
-                  << std::right << std::setw(19) << "Network Load(bytes)"
-                  << std::endl;
+                    << "Recording Samples to Database: " << db_file_name << std::endl
+                    << "Run ID                       : " << run_id << std::endl;
+            outputColumnHeadings();
             first = false;
         }
 
-        for (auto payload_type : payloads_sel) {
-            if (opt_rates.empty()) {
-                Scenario::run(scenario_type, payload_type, db_file_name, run_id);
+        for (const auto payload_type : payloads) {
+            if (rates.empty()) {
+                Scenario::run(control_pv, scenario_type, payload_type, db_file_name, run_id);
             } else {
                 const std::string payload_label =
-                    (payload_type == LARGE_2MB
-                         ? "LARGE(2MB)"
-                         : (payload_type == MEDIUM_1KB ? "MEDIUM(1KB)" : "SMALL(32B)"));
-                for (auto rate : opt_rates) {
-                    Scenario scenario(true, scenario_type, db_file_name, run_id);
-                    scenario.run(payload_type, rate, payload_label, formatRateLabel(rate));
+                (payload_type == LARGE_2MB
+                     ? "LARGE(2MB)"
+                     : (payload_type == MEDIUM_1KB ? "MEDIUM(1KB)" : "SMALL(32B)"));
+                for (const auto rate : rates) {
+                    Scenario {scenario_type, db_file_name, run_id}.run(control_pv, payload_type, rate, payload_label, formatRateLabel(rate));
                 }
             }
         }
     }
-
-    stopPVACMS(pvacms_subprocess);
-
+    control_pv.close();
+    control_server.start();
     std::cout << "Performance Tests Complete" << std::endl;
+}
+
+}  // namespace perf
+}  // namespace pvxs
+
+int main(int argc, char* argv[]) {
+#if defined(EPICS_VERSION_INT) && EPICS_VERSION_INT >= VERSION_INT(7, 0, 3, 1)
+    using namespace pvxs::perf;
+    pvxs::logger_level_set(perflog.name, pvxs::Level::Info);
+    pvxs::logger_config_env();
+
+    // Install simple Ctrl-C trap
+    signal(SIGHUP, onExit);
+    signal(SIGINT, onExit);
+    signal(SIGQUIT, onExit);
+    signal(SIGKILL, onExit);
+
+    // CLI argument parsing
+    std::vector<std::string> opt_scenarios, opt_payloads;
+    std::vector<long> opt_rates;
+    std::string db_file_name;
+    bool opt_report_list = false;
+    std::string opt_report_id, opt_report_del_ids, opt_report_info_ids;
+    bool opt_consumer = false;
+
+    // Parse commandline options and exit
+    int parse_result = parseCommandlineOptions(argc, argv, opt_scenarios, opt_payloads, opt_rates, db_file_name, opt_report_list,
+                                         opt_report_id, opt_report_del_ids, opt_report_info_ids, opt_consumer);
+    if (parse_result) return parse_result;
+
+    // If the options are for reporting only, then run the report and exit
+    processReportOptions(db_file_name, opt_report_list, opt_report_id, opt_report_del_ids, opt_report_info_ids);
+
+    // calculate the run_id if the db filename is specified
+    std::string run_id;
+    if (!db_file_name.empty()) run_id = generateRunID();
+
+    // Build selected lists (defaults to all if no selection)
+    auto scenarios_sel = determineScenarios(opt_scenarios);
+
+    // Build selected lists (defaults to all if no selection)
+    auto payloads_sel = determinePayloads(opt_payloads);
+
+    std::cout << "Starting Performance Tests" << std::endl;
+
+    if (opt_consumer) runConsumers(scenarios_sel, payloads_sel, opt_rates, run_id, db_file_name); else runProducer();
+
 #endif
-    return 0;
+    exit(0);
 }

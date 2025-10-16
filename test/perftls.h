@@ -27,25 +27,19 @@
 #include <time.h>
 #include <unistd.h>
 #elif defined(__APPLE__) || defined(__FreeBSD__)
-#include <ctime>
-
 #include <ifaddrs.h>
 
 #include <mach/mach.h>
 #include <net/if.h>
-#include <sys/resource.h>
 #include <sys/time.h>
 #endif
 
 #include <libgen.h>
-#include <osiFileName.h>
 #include <unistd.h>
 
 #include <sys/types.h>
-#include <sys/wait.h>
 
 #include <epicsTime.h>
-#include <epicsVersion.h>
 
 #include <pvxs/client.h>
 #include <pvxs/log.h>
@@ -67,10 +61,6 @@
 #include <pcap.h>
 #endif
 
-// 68e54a41|59145|0|10000|3.2e-05|||
-// 68e54a41|59146|0|10000|2.7e-05|||
-// 68e54a41|59147|0|10000|3.5e-05|||
-// 68e54a41|59148|0|10000|3.1e-05|||
 #define PERF_CREATE_SQL \
     "CREATE TABLE IF NOT EXISTS results ("\
     "  RUN_ID TEXT NOT NULL," \
@@ -210,7 +200,7 @@
 
 namespace pvxs {
 namespace perf {
-
+struct PortSniffer;
 /**
  * Child process struct to store the process ID and environment variables.
  */
@@ -222,9 +212,6 @@ struct Child {
 
     explicit Child(const std::initializer_list<std::string>& key_value_pairs) : pid(-1), env(key_value_pairs) {}
 };
-
-
-struct PortSniffer;
 
 /**
  * Scenario type: This is used to specify whether the test will use TCP or TLS connections,
@@ -415,7 +402,8 @@ struct Update {
  * It also builds the shared PVs for each of the payload types: PERF:SMALL, PERF:MEDIUM, or PERF:LARGE.
  */
 struct Scenario {
-    const ScenarioType scenario_type;
+    epicsMutex lock;
+    ScenarioType scenario_type;
     // Optional SQLite database for detailed per-packet output
     sqlite3* db{nullptr};
     sqlite3_stmt* stmt_insert{nullptr};
@@ -425,7 +413,8 @@ struct Scenario {
     sqlite3_stmt* stmt_update_tls_cms_stapled{nullptr};
     std::string run_id{}; // 8-hex id for this program run
     MPMCFIFO<Update> update_queue;
-    std::atomic<bool> stop_early{false};
+    epicsEvent interrupted;
+    epicsEvent ready;
     bool is_consumer{true};
 
     // Server (producer) and client (consumer) to use for each side of the performance test scenario
@@ -434,7 +423,16 @@ struct Scenario {
 
     /**
      * Constructor for the Scenario
-     * @param is_consumer is this scenario for the consumer end of the performance tests
+     * @param scenario_type The type of scenario to build.
+     * - TCP: Plain TCP connection.
+     * - TLS: TLS connection.
+     * - TLS_CMS: TLS connection with CMS status checking.
+     * - TLS_CMS_STAPLED: TLS connection with CMS status checking and stapling.
+     */
+    Scenario (ScenarioType scenario_type);
+
+    /**
+     * Constructor for the Scenario
      * @param scenario_type The type of scenario to build.
      * - TCP: Plain TCP connection.
      * - TLS: TLS connection.
@@ -443,23 +441,17 @@ struct Scenario {
      * @param db_file_name The db file name.  If omitted, then no detailed output
      * @param run_id The run id to use for this scenario
      */
-    Scenario (bool is_consumer, ScenarioType scenario_type, const std::string &db_file_name = {}, const std::string &run_id = {});
+    Scenario (ScenarioType scenario_type, const std::string &db_file_name , const std::string &run_id);
 
     ~Scenario() {
-        if (is_consumer) {
-            control_pv.close();
-            control_server.stop();
-            closeDB();
-        }
-        else
-            producer.stop();
+        if (is_consumer) closeDB(); else producer.stop();
     }
 
     void postValue(PayloadType payload_type, int32_t counter = -1);
     void startMonitor(PayloadType payload_type, uint32_t rate);
     int32_t processPendingUpdates(Result &result, const epicsTimeStamp &start);
-    static void run(const ScenarioType &scenario_type, PayloadType payload_type, const std::string &db_file_name = {}, const std::string &run_id = {});
-    void run(PayloadType payload_type, uint32_t rate, const std::string& payload_label, const std::string& rate_label);
+    static void run(server::SharedPV &control_pv, const ScenarioType &scenario_type, PayloadType payload_type, const std::string &db_file_name = {}, const std::string &run_id = {});
+    void run(server::SharedPV &control_pv, PayloadType payload_type, uint32_t rate, const std::string& payload_label, const std::string& rate_label);
 
   private:
     // Shared PV and small payload the SMALL payload type test
@@ -476,10 +468,6 @@ struct Scenario {
 
     // Subscription the client will make for this performance test scenario
     std::shared_ptr<client::Subscription> sub;
-
-    server::Server control_server;
-    server::SharedPV control_pv;
-    Value control_value;
 
     void initSmallScenarios();
     void initMediumScenarios();
@@ -507,37 +495,38 @@ struct SubscriptionMonitor final : epicsThreadRunable {
     void run() override;
 };
 
-struct Producer final {
+struct Timed {
     Scenario &self;
+    std::string payload_label;
+    std::string rate_label;
+    explicit Timed(Scenario &scenario, const std::string &payload_label = {}, const std::string &rate_label = {}) : self{scenario}, payload_label(payload_label), rate_label(rate_label) {}
+    void printProgressBar(double progress_percentage, int32_t N) const;
+};
+
+struct Producer final : Timed {
     PayloadType payload;
     const uint32_t rate;
     const double window = 60.0;
     const epicsTimeStamp start;
 
     Producer(Scenario &scenario, const PayloadType payload_type, const uint32_t rate, const epicsTimeStamp& start)
-        : self{scenario}, payload{payload_type}, rate{rate}, start{start} {}
+        : Timed{scenario}, payload{payload_type}, rate{rate}, start{start} {}
 
    void run() const;
 };
 
-struct Consumer final {
-    Scenario &self;
+struct Consumer final : Timed {
     Result &result;
     const uint32_t rate;
     epicsTimeStamp start;
     std::shared_ptr<PortSniffer> sniffer;
-    const std::string payload_label;
-    const std::string rate_label;
-    uint32_t prior_percentage = std::numeric_limits<uint32_t>::max();
     const double window = 60.0;
-    const double receive_window = window * 1.0 / 0.9;
+    const double receive_window = window / 0.9;
 
     Consumer(Scenario &scenario, Result & result, const uint32_t rate, const epicsTimeStamp &start, const std::shared_ptr<PortSniffer> &sniffer, const std::string &payload_label, const std::string &rate_label)
-        : self{scenario}, result{result}, rate{rate}, start{start}, sniffer{sniffer}, payload_label{payload_label}, rate_label{rate_label} {}
+        : Timed{scenario, payload_label, rate_label}, result{result}, rate{rate}, start{start}, sniffer{sniffer} {}
 
     void run();
-    void printProgressBar(double progress_percentage) const;
-
 };
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
