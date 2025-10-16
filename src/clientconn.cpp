@@ -381,13 +381,24 @@ void Connection::handle_CREATE_CHANNEL()
     chan->statRx += rxlen;
 
     if(!sts.isSuccess()) {
-        // server refuses to create a channel, but presumably responded positively to search
+        if(chan->forcedServer.family()==AF_UNSPEC) {
+            // server refuses to create a channel, but presumably responded positively to search.
+            // try again
 
-        chan->state = Channel::Searching;
-        context->searchBuckets[context->currentBucket].push_back(chan);
+            log_warn_printf(io, "Server %s refuses channel to '%s' : %s\n", peerName.c_str(),
+                            chan->name.c_str(), sts.msg.c_str());
 
-        log_warn_printf(io, "Server %s refuses channel to '%s' : %s\n", peerName.c_str(),
-                        chan->name.c_str(), sts.msg.c_str());
+            chan->state = Channel::Searching;
+            context->searchBuckets[context->currentBucket].push_back(chan);
+
+        } else {
+            // server refused after we bypassed search, so can't use usual retry method.
+            // refuse to create a tight retry loop, and drop on the floor for now.
+            // retry on reconnect.
+            log_err_printf(io, "Server %s refuses direct channel to '%s' : %s\n", peerName.c_str(),
+                            chan->name.c_str(), sts.msg.c_str());
+            return;
+        }
 
     } else {
         chan->state = Channel::Active;
