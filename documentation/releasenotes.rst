@@ -3,6 +3,15 @@
 Release Notes
 =============
 
+1.4.2 (UNRELEASED)
+------------------
+
+* server: plug channel cache leak when close Channel while reusing Connection.
+* server: disable one-sided attempt to handle saturated connection.
+* ioc: add `pvxs_log_config()` and `pvxs_log_reset()` IOCsh functions.
+* tools: pvxvct can use endpoint syntax to listen for multicast on a specific interface.
+         eg. ``pvxvct -B 224.1.2.23@eth0`` or ``pvxvct -B 224.1.2.23@10.1.1.100``.
+
 1.4.1 (Aug 2025)
 ----------------
 

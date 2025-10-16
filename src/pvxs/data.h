@@ -739,7 +739,7 @@ public:
     const Value lookup(const std::string& name) const;
 
     //! Number of child fields.
-    //! only Struct, StructA, Union, UnionA return non-zero
+    //! Only Struct, StructA, Union, UnionA return non-zero
     //! \since 1.1.3 correctly return non-zero for StructA and UnionA
     size_t nmembers() const;
 

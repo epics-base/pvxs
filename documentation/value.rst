@@ -15,12 +15,12 @@ Value Container API
 
 `pvxs::Value` is the primary data container type used with PVXS.
 A `pvxs::Value` may be obtained via the remote peer (client or server),
-or created locally.  See `ntapi` or `typedefapi`.
+or created locally.  See :ref:`ntapi` or :ref:`typedefapi`.
 
 `pvxs::Value` is a safe pointer-like object which, maybe, references
 a node in a tree of sub-structures and leaf fields.
 This tree will be referred to as a Structure as it behaves
-in many ways like a C 'struct'.
+in many ways like a C struct.
 
 For example, the following code:
 
@@ -35,7 +35,7 @@ For example, the following code:
     fld = top["fldname"];
     fld = 2;
 
-Is analogous to the following pseudo code.
+Is analogous to the following pseudo C code.
 
 .. code-block:: c++
 
@@ -67,10 +67,10 @@ All operations on an invalid Value should be safe and well defined.
 .. code-block:: c++
 
     Value top(nt::NTScalar{TypeCode::Int32}.create());
-    int32_t val = top["nonexistent"].as<int32_t>();
+    int32_t val = top["nonexistent"].as<int32_t>(); // throws NoField
 
 In this example, the operator[] lookup of a non-existent field returns an invalid Value.
-Attempting to extract an integer from this will then throw a `pvxs::NoField` exception.
+Attempting to extract an integer from this will then throw a `pvxs::NoField` exception for the ``as<T>()`` method.
 
 Value
 -----
@@ -90,12 +90,12 @@ Iteration
 may be iterated.  Iteration comes in three variations: `pvxs::Value::iall`, `pvxs::Value::ichildren`,
 and `pvxs::Value::imarked`.
 
-For a Struct, iall() is a depth first traversal of all fields.
-ichildren() traverses all child fields (excluding eg. grandchildren
+For a Struct, ``iall()`` is a depth first traversal of all fields.
+ichildren() traverses only child fields (excluding eg. grandchildren
 and further).  imarked() considers all fields, but only visits
 those which have beem marked (`pvxs::Value::isMarked`).
 
-For a Union.  iall() and ichildren() are identical, and will
+For a Union.  ``iall()`` and ``ichildren()`` are identical, and will
 visit all possible Union members, excluding the implicit NULL member.
 Traversal does not effect member selection.
 imarked() for a Union will visit at most one member (if one is selected)>

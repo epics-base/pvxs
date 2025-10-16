@@ -17,8 +17,8 @@ The recommended starting point is creating new context configured from ``EPICS_P
 Use `pvxs::client::Context::fromEnv`.
 
 EPICS_PVA_ADDR_LIST
-    A list of destination addresses to which UDP search messages will be sent.
-    May contain unicast and/or broadcast addresses.
+    A space separated list of destination addresses to which UDP search messages will be sent.
+    May contain unicast, multicast, and/or broadcast addresses.
 
 EPICS_PVA_AUTO_ADDR_LIST
     If "YES" then all local broadcast addresses will be implicitly appended to $EPICS_PVA_ADDR_LIST.

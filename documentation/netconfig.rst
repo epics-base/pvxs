@@ -83,7 +83,7 @@ or fallback to use the associated ``$EPICS_PVA_*`` if set.
 Address Spec.
 -------------
 
-Entries in **EPICS_PVA*_ADDR_LIST** variables must be in one of the following forms:
+Space separated entries in **EPICS_PVA*_ADDR_LIST** variables must be in one of the following forms:
 
 * ``<ip4-or-host>[:<port#>][,TTL#][@ifacename]``
 * ``"["<ip6-or-host>"]"[:<port#>][,TTL#][@ifacename]``
