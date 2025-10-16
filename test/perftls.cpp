@@ -374,6 +374,7 @@ void SubscriptionMonitor::run() {
 }
 
 void Producer::run() const {
+    self.run_active.store(true, std::memory_order_release);
     const auto total = static_cast<uint32_t>(rate * window);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
     double prior_percentage = std::numeric_limits<double>::max();
@@ -404,6 +405,7 @@ void Producer::run() const {
             break;
         }
     }
+    self.run_active.store(false, std::memory_order_release);
     self.ok.signal();
 }
 
@@ -1309,11 +1311,13 @@ void runProducer() {
         .maskConnected(true)
         .maskDisconnected(true)
         .event([&](const client::Subscription& perf_control_monitor) {
-            if (!first_time ) {
-                // Interrupt prior scenario before handling new control message
+            // If a producer run is currently active, interrupt and wait for it to finish
+            if (scenario.run_active.load(std::memory_order_acquire)) {
                 scenario.interrupted.signal();
                 scenario.ok.wait(); // wait till prior is done before starting a new one
-            } else first_time = false;
+            } else {
+                first_time = false; // no active run; ensure later logic knows we've seen first event
+            }
             perf_control_update_queue.push(perf_control_monitor.shared_from_this());
         })
         .exec();

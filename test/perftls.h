@@ -422,6 +422,7 @@ struct Scenario {
                                // - Producer: signaled at end of Producer::run() to tell control loop prior scenario finished
     epicsEvent ack_ready;      // signaled when initial -1 ACK is seen on data PV
     epicsEvent stop_ack_ready; // signaled when STOP ACK (-2) is seen on data PV
+    std::atomic<bool> run_active{false}; // true when Producer::run() is active
     bool is_consumer{true};
 
     // Server (producer) and client (consumer) to use for each side of the performance test scenario
