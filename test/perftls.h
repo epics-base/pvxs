@@ -413,8 +413,15 @@ struct Scenario {
     sqlite3_stmt* stmt_update_tls_cms_stapled{nullptr};
     std::string run_id{}; // 8-hex id for this program run
     MPMCFIFO<Update> update_queue;
-    epicsEvent interrupted;
-    epicsEvent ready;
+    epicsEvent interrupted;    // Used to cancel sleeps and terminate worker loops:
+                               // - Producer: STOP/interrupts early (control handler sets this)
+                               // - Consumer: set on out-of-sequence to break sleep/poll loops
+                               // - Subscription monitor: checked periodically to exit promptly
+    epicsEvent ok;             // Dual-purpose depending on role:
+                               // - Consumer: signaled when a positive-count data update is enqueued (first data arrival gate)
+                               // - Producer: signaled at end of Producer::run() to tell control loop prior scenario finished
+    epicsEvent ack_ready;      // signaled when initial -1 ACK is seen on data PV
+    epicsEvent stop_ack_ready; // signaled when STOP ACK (-2) is seen on data PV
     bool is_consumer{true};
 
     // Server (producer) and client (consumer) to use for each side of the performance test scenario
@@ -520,11 +527,12 @@ struct Consumer final : Timed {
     const uint32_t rate;
     epicsTimeStamp start;
     std::shared_ptr<PortSniffer> sniffer;
+    server::SharedPV &control_pv;
     const double window = 60.0;
     const double receive_window = window / 0.9;
 
-    Consumer(Scenario &scenario, Result & result, const uint32_t rate, const epicsTimeStamp &start, const std::shared_ptr<PortSniffer> &sniffer, const std::string &payload_label, const std::string &rate_label)
-        : Timed{scenario, payload_label, rate_label}, result{result}, rate{rate}, start{start}, sniffer{sniffer} {}
+    Consumer(Scenario &scenario, Result & result, const uint32_t rate, const epicsTimeStamp &start, const std::shared_ptr<PortSniffer> &sniffer, server::SharedPV &control_pv, const std::string &payload_label, const std::string &rate_label)
+        : Timed{scenario, payload_label, rate_label}, result{result}, rate{rate}, start{start}, sniffer{sniffer}, control_pv{control_pv} {}
 
     void run();
 };

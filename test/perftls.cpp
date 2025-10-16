@@ -18,19 +18,27 @@
  *   - # run the consumer side of the test with all permutations of payload and rate for the TLS_CMS_STAPLED scenario
  *     project_root/test/<arch>/perftls --consumer --scenario-type TLS_CMS_STAPLED
  *
- * Behind the scenes:
- * - The producer will configure the PVACMS and start it
- * - The producer will subscribe to the PERF:CONTROL pv to await instructions for what tests to produce tests for
- * - The consumer will start the PERF:CONTROL pv and post a request for a PREPARE message for a specific type of test
- * - The producer will post an initial acknowledgement message (initial value) that has a counter value of -1 on the appropriate test PV
- * - The consumer will not do anything until the acknowledgement message is received and discarded
- * - Once the acknowledgement message has been received the consumer will post a START message for the specific type of the test on PERF:CONTROL
- * - Once the START message is received the producer will start posting periodic messages to the appropriate test PV at the specified rate for 60 seconds
- * - The consumer will consumer all of the messages posted by the producer and measure the elapsed transit time
- * - If at any time the producer receives a new PREPARE message it will interrupt the prior sending sequence
- * - If the consumer receives a counter out of sequence it will immediately stop its capture of the messages and send a STOP on the PERF:CONTROL channel
- * - If a STOP is received at any time the producer will immediately stop the sequence of sending messages and will post an acknowledgement of the STOP
- * - Once the acknowledgement of the STOP is received a consumer can proceed to the next scenario or exit if it is the last scenario scheduled
+ * Behind the scenes (protocol overview):
+ * - Producer side:
+ *   - Starts PVACMS, hosts data PVs: PERF:SMALL, PERF:MEDIUM, PERF:LARGE.
+ *   - Subscribes to PERF:CONTROL and enforces a strict command sequence.
+ * - Consumer side:
+ *   - Hosts PERF:CONTROL (NTEnum of scenario with fields: Int32 op, Int32 payload_code, Int32 rate).
+ *   - For each test step:
+ *     1) PREPARE: set op=0 with desired scenario, payload_code, and rate, then post to PERF:CONTROL.
+ *     2) Wait for ACK on the selected data PV: an initial counter value of -1 indicates PREPARE acknowledged.
+ *     3) START: set op=1 with the same parameters and post to PERF:CONTROL.
+ *     4) Consume data for up to 60s, measuring transit time from producer timestamp to consumer receipt.
+ * - Producer behavior:
+ *   - On PREPARE (op=0): stop any current send, then post a single update on the requested data PV with counter=-1 (ACK), and wait for START.
+ *   - On START (op=1): begin sending periodic updates on the requested data PV at the specified rate for 60 seconds, or until interrupted.
+ *   - On STOP (op=2): immediately stop sending and post a single update with counter=-2 (STOP-ACK).
+ * - Consumer behavior:
+ *   - Ignores negative counter values except to treat -1 as PREPARE-ACK and -2 as STOP-ACK.
+ *   - If a counter is observed out-of-sequence, immediately posts STOP (op=2) to PERF:CONTROL and waits for STOP-ACK (-2) before proceeding.
+ * - Notes:
+ *   - A new PREPARE at any time interrupts a prior sending sequence on the producer.
+ *   - After receiving STOP-ACK, the consumer proceeds to the next test (or exits if done).
  */
 
 #include "perftls.h"
@@ -130,10 +138,12 @@ static double wireSizeBytes(const Value& value_to_size);
  */
 Value createPerfControlValue(const unsigned scenario_code, const unsigned payload_code = 0, const long rate = 0) {
     auto m_def(nt::NTEnum{}.build());
+    m_def += {Int32("op")};      // 0=PREPARE, 1=START, 2=STOP
     m_def += {Int32("payload_code")};
     m_def += {Int32("rate")};
     Value value = m_def.create();
     value["value.index"] = scenario_code;
+    value["op"] = 0; // default PREPARE
     if ( payload_code != 0) value["payload_code"] = payload_code;
     if (rate != 0) value["rate"] = rate;
     return value;
@@ -394,7 +404,7 @@ void Producer::run() const {
             break;
         }
     }
-    self.ready.signal();
+    self.ok.signal();
 }
 
 void Consumer::run() {
@@ -404,10 +414,18 @@ void Consumer::run() {
     int32_t running_count{-1}; // Keeps track of actual counted packets consumed
     auto tick = 0;
     double prior_percentage = std::numeric_limits<double>::max();
-    self.ready.wait();  // wait for first update
+    self.ok.wait();  // wait for first update
     while (tick < total_receive_ticks && running_count < window_count) {
         // Get any available updates
         running_count = self.processPendingUpdates(result, start);
+        if (running_count == -2) {
+            // Out-of-sequence detected: send STOP and wait for ACK
+            auto control_value = control_pv.fetch();
+            control_value["op"] = 2; // STOP
+            control_pv.post(control_value);
+            self.stop_ack_ready.wait();
+            break;
+        }
         tick = std::max(++tick, running_count);
 
         epicsTimeStamp now{};
@@ -854,13 +872,23 @@ void Scenario::run(server::SharedPV &control_pv, const PayloadType payload_type,
     // Create and start threads
     current_rate = rate;
     current_payload = payload_type;
-    Consumer update_consumer{*this, result, rate,  start, sniffer, payload_label, rate_label};
+    Consumer update_consumer{*this, result, rate,  start, sniffer, control_pv, payload_label, rate_label};
 
-    // Signal the producer to send data
+    // Handshake: PREPARE -> wait for ACK(-1) -> START
     auto control_value = control_pv.fetch();
     if (control_value["value.index"].as<int32_t>() != scenario_type) control_value["value.index"] = scenario_type;
-    if (control_value["payload_code"].as<int32_t>() != payload_type) control_value["payload_code"] = payload_type;
-    if (control_value["rate"].as<int32_t>() != rate) control_value["rate"] = rate;
+    if (control_value["payload_code"].as<int32_t>() != static_cast<int32_t>(payload_type)) control_value["payload_code"] = static_cast<int32_t>(payload_type);
+    if (control_value["rate"].as<int32_t>() != static_cast<int32_t>(rate)) control_value["rate"] = static_cast<int32_t>(rate);
+
+    // PREPARE
+    control_value["op"] = 0;
+    control_pv.post(control_value);
+
+    // Wait for initial ACK (-1) on data PV before starting
+    ack_ready.wait();
+
+    // START
+    control_value["op"] = 1;
     control_pv.post(control_value);
 
     update_consumer.run();   // Run the consumer
@@ -985,8 +1013,6 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
         record("ackAny", std::string("50%")).maskConnected(true) // suppress Connected events from throwing
         .maskDisconnected(true).event([this](client::Subscription &) {
             // Drain all currently queued updates from the subscription and enqueue locally.
-            // Important: only signaling when the client queue transitions from empty->non-empty.
-            // If we leave entries in the subscription queue, further events may not be delivered.
             try {
                 Guard G(lock);
                 while (const auto value = sub->pop()) {
@@ -995,7 +1021,13 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
                         epicsTimeStamp receive_time{};
                         epicsTimeGetCurrent(&receive_time);
                         update_queue.push(Update{value, receive_time});
-                        ready.signal();
+                        ok.signal();
+                    } else if (N == -1) {
+                        // Initial ACK from producer that PREPARE has been received
+                        ack_ready.signal();
+                    } else if (N == -2) {
+                        // STOP ACK from producer
+                        stop_ack_ready.signal();
                     }
                 }
             } catch (const std::exception &e) {
@@ -1060,13 +1092,12 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
             if (received_count < 0)
                 continue;
 
-            /*
             if (received_count != count) {
                 // Stop this test early on the first detected-drop
                 interrupted.signal();
-                break;
+                // return special code to indicate out-of-sequence
+                return -2;
             }
-            */
 
             // Determine how much time has elapsed from the beginning of the test sequence
             const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
@@ -1278,12 +1309,10 @@ void runProducer() {
         .maskConnected(true)
         .maskDisconnected(true)
         .event([&](const client::Subscription& perf_control_monitor) {
-            std::cout << "Received PERF:CONTROL update" << std::endl;
             if (!first_time ) {
-                std::cout << "Interrupting prior scenario" << std::endl;
+                // Interrupt prior scenario before handling new control message
                 scenario.interrupted.signal();
-                scenario.ready.wait(); // wait till prior is done before starting a new one
-                std::cout << "Prior scenario has finished\n";
+                scenario.ok.wait(); // wait till prior is done before starting a new one
             } else first_time = false;
             perf_control_update_queue.push(perf_control_monitor.shared_from_this());
         })
@@ -1298,7 +1327,8 @@ void runProducer() {
             epicsTimeGetCurrent(&start);
 
             const auto scenario_code = perf_control_update_value["value.index"].as<uint32_t>();
-            if (scenario_code < 0) continue;
+            const auto op = perf_control_update_value["op"] ? perf_control_update_value["op"].as<int32_t>() : 0;
+            if (scenario_code > 3u) continue;
             const auto scenario_type = static_cast<ScenarioType>(scenario_code);
             const auto payload_type_value = perf_control_update_value["payload_code"];
             if (!payload_type_value) continue; // Skip initial values
@@ -1307,11 +1337,22 @@ void runProducer() {
             const auto rate = perf_control_update_value["rate"].as<int32_t>();
 
             scenario.scenario_type = scenario_type;
-            auto producer = Producer(scenario, payload_type, rate, start);
-            producer.payload_label = payloadLabel(payload_type);
-            producer.rate_label = formatRateLabel(rate);
-            producer.run();
-            std::cout << std::endl;
+
+            if (op == 0) {
+                // PREPARE: post initial ACK (-1) on data PV
+                scenario.postValue(payload_type, -1);
+            } else if (op == 1) {
+                // START: begin sending
+                auto producer = Producer(scenario, payload_type, rate, start);
+                producer.payload_label = payloadLabel(payload_type);
+                producer.rate_label = formatRateLabel(rate);
+                producer.run();
+                std::cout << std::endl;
+            } else if (op == 2) {
+                // STOP: interrupt and post STOP ACK (-2)
+                scenario.interrupted.signal();
+                scenario.postValue(payload_type, -2);
+            }
         }
     }
 }
