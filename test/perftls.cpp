@@ -386,7 +386,8 @@ void Producer::run() {
 
     self.postValue(payload, -1); // Reset
     epicsTimeGetCurrent(&start);
-    for (auto counter = 0; counter < total; ++counter) {
+    int counter;
+    for (counter = 0; counter < total; ++counter) {
         // Post 1 update
         self.postValue(payload, counter);
 
@@ -400,7 +401,7 @@ void Producer::run() {
 
         // Update the progress bar once per percentage change
         const auto progress_percentage = elapsed_since_start >= window ? 100.0 : static_cast<uint32_t>(100 * (elapsed_since_start / window));
-        if (progress_percentage == 100.0 || progress_percentage != prior_percentage) {
+        if (progress_percentage != prior_percentage) {
             prior_percentage = progress_percentage;
             printProgressBar(progress_percentage, counter + 1);
         }
@@ -411,6 +412,7 @@ void Producer::run() {
             break;
         }
     }
+    printProgressBar(100.00, counter);
     self.run_active.store(false, std::memory_order_release);
     self.ok.signal();
 }
@@ -1005,8 +1007,30 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
     const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
                           : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
                                                          : "PERF:SMALL";
+
+    // Heuristic to limit coalescing: ensure a large enough client-side queue.
+    // Larger queues reduce bias where only the newest updates are delivered at high rates.
+    auto queue_size = 0u;
+    switch (payload_type) {
+        case SMALL_32B:
+            // Allow up to ~100k small updates buffered, but not less than 2*rate
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 100000u), 1000u);
+            break;
+        case MEDIUM_1KB:
+            // Medium payloads: cap at 20k to bound memory; but allow at least 2*rate
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 20000u), 100u);
+            break;
+        case LARGE_2MB:
+            // Large payloads are expensive; queue just a small number
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 10u), 2u);
+            break;
+    }
+
     // Set up a subscription monitor
     sub = consumer.monitor(pv_name)
+        .record("queueSize", queue_size)
+        .record("pipeline", true)
+        .record("ackAny", std::string("50%"))
         .maskConnected(true) // suppress Connected events from throwing
         .maskDisconnected(true)
         .event([this](client::Subscription &) {
