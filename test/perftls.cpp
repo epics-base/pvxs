@@ -1004,25 +1004,30 @@ void Scenario::insertOrUpdateSample(const int payload_id, const uint32_t rate, c
  * @param rate the rate at which we expect to get
  */
 void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate) {
+    const auto wire_sizes = computeWireSizes();
     const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
                           : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
                                                          : "PERF:SMALL";
 
     // Heuristic to limit coalescing: ensure a large enough client-side queue.
-    // Larger queues reduce bias where only the newest updates are delivered at high rates.
+    // As we are the producers, we will also throttle production based on the number of slots
+    // free in the server queue (pressure).
+    // We will calculate the queue sizes and limits to keep the amount of memory allocated to the queue
+    // constant across all payload types and rates
+    constexpr uint32_t available_memory_for_queue=1024u*1024u*1024u; // 1GB
     auto queue_size = 0u;
     switch (payload_type) {
         case SMALL_32B:
-            // Allow up to ~100k small updates buffered, but not less than 2*rate
-            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 100000u), 1000u);
+            // Use a capacity of 2*rate, with a minimum capacity of 1,000, and the maximum capacity based on these payloads that will fit in the available memory
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, available_memory_for_queue / wire_sizes.small), 1000u);
             break;
         case MEDIUM_1KB:
-            // Medium payloads: cap at 20k to bound memory; but allow at least 2*rate
-            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 20000u), 100u);
+            // Use a capacity of 2*rate, with a minimum capacity of 100, and the maximum capacity based on these payloads that will fit in the available memory
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, available_memory_for_queue / wire_sizes.medium), 100u);
             break;
         case LARGE_2MB:
-            // Large payloads are expensive; queue just a small number
-            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 10u), 2u);
+            // Use a capacity of 2*rate, with a minimum capacity of 2, and the maximum capacity based on these payloads that will fit in the available memory
+            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, available_memory_for_queue / wire_sizes.large), 2u);
             break;
     }
 
@@ -1324,7 +1329,6 @@ void runProducer() {
 
     // Subscribe to PERF:CONTROL to get instructions on which test to run
     Scenario scenario{TCP}; // default TCP
-    bool first_time = true;
     auto perf_control_client = client::Context::fromEnv();
     auto sub = perf_control_client
         .monitor("PERF:CONTROL")
@@ -1335,8 +1339,6 @@ void runProducer() {
             if (scenario.run_active.load(std::memory_order_acquire)) {
                 scenario.interrupted.signal();
                 scenario.ok.wait(); // wait till prior is done before starting a new one
-            } else {
-                first_time = false; // no active run; ensure later logic knows we've seen first event
             }
             perf_control_queue.push(perf_control_monitor.shared_from_this());
         })
@@ -1601,14 +1603,14 @@ double cpuPercentSince(const double w0, const double c0) {
 
 int parseCommandlineOptions(const int argc,
                             char **argv,
-                            std::vector<std::string> opt_scenarios,
-                            std::vector<std::string> opt_payloads,
-                            std::vector<long> opt_rates,
-                            std::string db_file_name,
-                            bool opt_report_list,
-                            std::string opt_report_id,
-                            std::string opt_report_del_ids,
-                            std::string opt_report_info_ids,
+                            std::vector<std::string> &opt_scenarios,
+                            std::vector<std::string> &opt_payloads,
+                            std::vector<long> &opt_rates,
+                            std::string &db_file_name,
+                            bool &opt_report_list,
+                            std::string &opt_report_id,
+                            std::string &opt_report_del_ids,
+                            std::string &opt_report_info_ids,
                             bool &opt_consumer) {
     bool opt_producer = false;
     CLI::App app{"PVXS TLS performance tests"};

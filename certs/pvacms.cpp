@@ -3277,7 +3277,7 @@ int main(int argc, char *argv[]) {
                 pv.open(pv_name, CertStatus::getStatusPrototype());
             }
 
-            serial_number_t serial = getParameters(parameters);
+            const serial_number_t serial = getParameters(parameters);
 
             // Get the desired state
             auto state = value["state"].as<std::string>();
