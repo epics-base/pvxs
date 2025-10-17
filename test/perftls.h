@@ -198,6 +198,13 @@
     "  AND :scenario_type IS NOT NULL " \
     "ORDER BY PAYLOAD_ID, RATE, PACKET_ID ;"
 
+#define PERF_OP_PREPARE 0
+#define PERF_OP_START 1
+#define PERF_OP_STOP 2
+#define PERF_OUT_OF_SEQUENCE (-1)
+#define PERF_ACK (-1)
+#define PERF_STOP_ACK (-2)
+
 namespace pvxs {
 namespace perf {
 struct PortSniffer;
@@ -420,8 +427,8 @@ struct Scenario {
     epicsEvent ok;             // Dual-purpose depending on role:
                                // - Consumer: signaled when a positive-count data update is enqueued (first data arrival gate)
                                // - Producer: signaled at end of Producer::run() to tell control loop prior scenario finished
-    epicsEvent ack_ready;      // signaled when initial -1 ACK is seen on data PV
-    epicsEvent stop_ack_ready; // signaled when STOP ACK (-2) is seen on data PV
+    epicsEvent ack;            // signaled when initial -1 ACK is seen on data PV
+    epicsEvent stop_ack;       // signaled when STOP ACK (-2) is seen on data PV
     std::atomic<bool> run_active{false}; // true when Producer::run() is active
     bool is_consumer{true};
 
@@ -515,12 +522,12 @@ struct Producer final : Timed {
     PayloadType payload;
     const uint32_t rate;
     const double window = 60.0;
-    const epicsTimeStamp start;
+    epicsTimeStamp start;
 
-    Producer(Scenario &scenario, const PayloadType payload_type, const uint32_t rate, const epicsTimeStamp& start)
-        : Timed{scenario}, payload{payload_type}, rate{rate}, start{start} {}
+    Producer(Scenario &scenario, const PayloadType payload_type, const uint32_t rate)
+        : Timed{scenario}, payload{payload_type}, rate{rate} {}
 
-   void run() const;
+   void run();
 };
 
 struct Consumer final : Timed {
@@ -530,10 +537,10 @@ struct Consumer final : Timed {
     std::shared_ptr<PortSniffer> sniffer;
     server::SharedPV &control_pv;
     const double window = 60.0;
-    const double receive_window = window / 0.9;
+    const double receive_window = 120.0;
 
-    Consumer(Scenario &scenario, Result & result, const uint32_t rate, const epicsTimeStamp &start, const std::shared_ptr<PortSniffer> &sniffer, server::SharedPV &control_pv, const std::string &payload_label, const std::string &rate_label)
-        : Timed{scenario, payload_label, rate_label}, result{result}, rate{rate}, start{start}, sniffer{sniffer}, control_pv{control_pv} {}
+    Consumer(Scenario &scenario, Result & result, const uint32_t rate, const std::shared_ptr<PortSniffer> &sniffer, server::SharedPV &control_pv, const std::string &payload_label, const std::string &rate_label)
+        : Timed{scenario, payload_label, rate_label}, result{result}, rate{rate}, sniffer{sniffer}, control_pv{control_pv} {}
 
     void run();
 };

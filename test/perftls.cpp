@@ -25,17 +25,17 @@
  * - Consumer side:
  *   - Hosts PERF:CONTROL (NTEnum of scenario with fields: Int32 op, Int32 payload_code, Int32 rate).
  *   - For each test step:
- *     1) PREPARE: set op=0 with desired scenario, payload_code, and rate, then post to PERF:CONTROL.
- *     2) Wait for ACK on the selected data PV: an initial counter value of -1 indicates PREPARE acknowledged.
- *     3) START: set op=1 with the same parameters and post to PERF:CONTROL.
- *     4) Consume data for up to 60s, measuring transit time from producer timestamp to consumer receipt.
+ *     1) PREPARE: set op=PERF_OP_PREPARE with desired scenario, payload_code, and rate, then post to PERF:CONTROL.
+ *     2) Wait for PERF_ACK on the selected data PV: indicates PREPARE acknowledged.
+ *     3) START: set op=PERF_OP_START with the same parameters and post to PERF:CONTROL.
+ *     4) Consume data for up to 120s, measuring transit time from producer timestamp to consumer receipt.
  * - Producer behavior:
- *   - On PREPARE (op=0): stop any current send, then post a single update on the requested data PV with counter=-1 (ACK), and wait for START.
- *   - On START (op=1): begin sending periodic updates on the requested data PV at the specified rate for 60 seconds, or until interrupted.
- *   - On STOP (op=2): immediately stop sending and post a single update with counter=-2 (STOP-ACK).
+ *   - On PERF_OP_PREPARE: stop any current send, then post a single update on the requested data PV with counter=PERF_ACK, and wait for START.
+ *   - On PERF_OP_START: begin sending periodic updates on the requested data PV at the specified rate for 60 seconds, or until interrupted.
+ *   - On PERF_OP_STOP: immediately stop sending and post a single update with counter=PERF_STOP_ACK.
  * - Consumer behavior:
- *   - Ignores negative counter values except to treat -1 as PREPARE-ACK and -2 as STOP-ACK.
- *   - If a counter is observed out-of-sequence, immediately posts STOP (op=2) to PERF:CONTROL and waits for STOP-ACK (-2) before proceeding.
+ *   - Ignores negative counter-values except to treat PERF_ACK and PERF_STOP_ACK.
+ *   - If a counter is observed out-of-sequence, immediately posts PERF_OP_STOP to PERF:CONTROL and waits for PERF_STOP_ACK before proceeding.
  * - Notes:
  *   - A new PREPARE at any time interrupts a prior sending sequence on the producer.
  *   - After receiving STOP-ACK, the consumer proceeds to the next test (or exits if done).
@@ -138,12 +138,14 @@ static double wireSizeBytes(const Value& value_to_size);
  */
 Value createPerfControlValue(const unsigned scenario_code, const unsigned payload_code = 0, const long rate = 0) {
     auto m_def(nt::NTEnum{}.build());
-    m_def += {Int32("op")};      // 0=PREPARE, 1=START, 2=STOP
+    m_def += {Int32("op")};
     m_def += {Int32("payload_code")};
     m_def += {Int32("rate")};
+
     Value value = m_def.create();
     value["value.index"] = scenario_code;
-    value["op"] = 0; // default PREPARE
+    value["op"] = PERF_OP_PREPARE; // default PREPARE
+
     if ( payload_code != 0) value["payload_code"] = payload_code;
     if (rate != 0) value["rate"] = rate;
     return value;
@@ -364,22 +366,26 @@ void SubscriptionMonitor::run() {
     // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
     self.startMonitor(payload, rate);
 
-    auto end = std::time(nullptr);
-    end += 67; // add 10% extra time to read everything
+    epicsTimeStamp end{};
+    epicsTimeGetCurrent(&end);
+    end.secPastEpoch += 120; // wait up to 120s for late arrivals
 
     // Wait until everything has finished
-    while (end > std::time(nullptr)) {
-        if (self.interrupted.wait(1.0/rate)) break;
+    while (true) {
+        epicsTimeStamp now{};
+        epicsTimeGetCurrent(&now);
+        if (epicsTimeDiffInSeconds(&end, &now) <= 0.0 || self.interrupted.wait(1.0 / rate)) break;
     }
 }
 
-void Producer::run() const {
+void Producer::run() {
     self.run_active.store(true, std::memory_order_release);
     const auto total = static_cast<uint32_t>(rate * window);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
     double prior_percentage = std::numeric_limits<double>::max();
 
     self.postValue(payload, -1); // Reset
+    epicsTimeGetCurrent(&start);
     for (auto counter = 0; counter < total; ++counter) {
         // Post 1 update
         self.postValue(payload, counter);
@@ -393,8 +399,8 @@ void Producer::run() const {
         if (time_till_next_emission < 0.0) time_till_next_emission = 1.0 / 100000000.0; // Should not get there, but if so set a very small amount of time
 
         // Update the progress bar once per percentage change
-        const auto progress_percentage = elapsed_since_start >= window ? 100.00 : static_cast<uint32_t>(100 * (elapsed_since_start / window));
-        if (progress_percentage != prior_percentage) {
+        const auto progress_percentage = elapsed_since_start >= window ? 100.0 : static_cast<uint32_t>(100 * (elapsed_since_start / window));
+        if (progress_percentage == 100.0 || progress_percentage != prior_percentage) {
             prior_percentage = progress_percentage;
             printProgressBar(progress_percentage, counter + 1);
         }
@@ -416,16 +422,21 @@ void Consumer::run() {
     int32_t running_count{-1}; // Keeps track of actual counted packets consumed
     auto tick = 0;
     double prior_percentage = std::numeric_limits<double>::max();
+    bool stop_sent = false;
+
     self.ok.wait();  // wait for first update
+    // Mark the start time for this sequence, and quiesce before the test
+    epicsTimeGetCurrent(&start);
     while (tick < total_receive_ticks && running_count < window_count) {
         // Get any available updates
         running_count = self.processPendingUpdates(result, start);
-        if (running_count == -2) {
+        if (running_count == PERF_OUT_OF_SEQUENCE) {
             // Out-of-sequence detected: send STOP and wait for ACK
             auto control_value = control_pv.fetch();
-            control_value["op"] = 2; // STOP
+            control_value["op"] = PERF_OP_STOP;
             control_pv.post(control_value);
-            self.stop_ack_ready.wait();
+            self.stop_ack.wait();
+            stop_sent = true;
             break;
         }
         tick = std::max(++tick, running_count);
@@ -448,6 +459,15 @@ void Consumer::run() {
         const auto next_tick_secs_from_start = time_per_update * tick ;
         const auto time_till_next_tick = next_tick_secs_from_start - elapsed_since_start;
         if (self.interrupted.wait(time_till_next_tick)) break;
+    }
+    self.interrupted.signal(); // Tell monitor to stop listening as we're done
+
+    // If we timed out before receiving all expected data, send STOP and wait for ACK
+    if (!stop_sent && running_count < window_count) {
+        auto control_value = control_pv.fetch();
+        control_value["op"] = PERF_OP_STOP;
+        control_pv.post(control_value);
+        self.stop_ack.wait();
     }
 }
 
@@ -867,14 +887,10 @@ void Scenario::run(server::SharedPV &control_pv, const PayloadType payload_type,
     epicsThread subscription_thread(subscription_monitor, "PERF-Monitor", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityHigh);
     subscription_thread.start();
 
-    // Mark the start time for this sequence, and quiesce before the test
-    epicsTimeStamp start{};
-    epicsTimeGetCurrent(&start);
-
     // Create and start threads
     current_rate = rate;
     current_payload = payload_type;
-    Consumer update_consumer{*this, result, rate,  start, sniffer, control_pv, payload_label, rate_label};
+    Consumer update_consumer{*this, result, rate,  sniffer, control_pv, payload_label, rate_label};
 
     // Handshake: PREPARE -> wait for ACK(-1) -> START
     auto control_value = control_pv.fetch();
@@ -882,15 +898,13 @@ void Scenario::run(server::SharedPV &control_pv, const PayloadType payload_type,
     if (control_value["payload_code"].as<int32_t>() != static_cast<int32_t>(payload_type)) control_value["payload_code"] = static_cast<int32_t>(payload_type);
     if (control_value["rate"].as<int32_t>() != static_cast<int32_t>(rate)) control_value["rate"] = static_cast<int32_t>(rate);
 
-    // PREPARE
-    control_value["op"] = 0;
+    control_value["op"] = PERF_OP_PREPARE;
     control_pv.post(control_value);
 
-    // Wait for initial ACK (-1) on data PV before starting
-    ack_ready.wait();
+    // Wait for initial PERF_ACK on data PV before starting
+    ack.wait();
 
-    // START
-    control_value["op"] = 1;
+    control_value["op"] = PERF_OP_START;
     control_pv.post(control_value);
 
     update_consumer.run();   // Run the consumer
@@ -991,29 +1005,11 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
     const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
                           : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
                                                          : "PERF:SMALL";
-
-    // Heuristic to limit coalescing: ensure a large enough client-side queue.
-    // Larger queues reduce bias where only the newest updates are delivered at high rates.
-    auto queue_size = 0u;
-    switch (payload_type) {
-        case SMALL_32B:
-            // Allow up to ~100k small updates buffered, but not less than 2*rate
-            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 100000u), 1000u);
-            break;
-        case MEDIUM_1KB:
-            // Medium payloads: cap at 20k to bound memory; but allow at least 2*rate
-            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 20000u), 100u);
-            break;
-        case LARGE_2MB:
-            // Large payloads are expensive; queue just a small number
-            queue_size = std::max<unsigned>(std::min<unsigned>(rate * 2u, 10u), 2u);
-            break;
-    }
-
     // Set up a subscription monitor
-    sub = consumer.monitor(pv_name).record("queueSize", queue_size).record("pipeline", true).
-        record("ackAny", std::string("50%")).maskConnected(true) // suppress Connected events from throwing
-        .maskDisconnected(true).event([this](client::Subscription &) {
+    sub = consumer.monitor(pv_name)
+        .maskConnected(true) // suppress Connected events from throwing
+        .maskDisconnected(true)
+        .event([this](client::Subscription &) {
             // Drain all currently queued updates from the subscription and enqueue locally.
             try {
                 Guard G(lock);
@@ -1026,10 +1022,10 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
                         ok.signal();
                     } else if (N == -1) {
                         // Initial ACK from producer that PREPARE has been received
-                        ack_ready.signal();
+                        ack.signal();
                     } else if (N == -2) {
-                        // STOP ACK from producer
-                        stop_ack_ready.signal();
+                        // STOP ACK from the producer
+                        stop_ack.signal();
                     }
                 }
             } catch (const std::exception &e) {
@@ -1098,7 +1094,7 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
                 // Stop this test early on the first detected-drop
                 interrupted.signal();
                 // return special code to indicate out-of-sequence
-                return -2;
+                return PERF_OUT_OF_SEQUENCE;
             }
 
             // Determine how much time has elapsed from the beginning of the test sequence
@@ -1300,7 +1296,7 @@ void runProducer() {
         exit(51);
     }
 
-    MPMCFIFO<std::shared_ptr<client::Subscription>> perf_control_update_queue(2);
+    MPMCFIFO<std::shared_ptr<client::Subscription>> perf_control_queue(2);
 
     // Subscribe to PERF:CONTROL to get instructions on which test to run
     Scenario scenario{TCP}; // default TCP
@@ -1318,44 +1314,45 @@ void runProducer() {
             } else {
                 first_time = false; // no active run; ensure later logic knows we've seen first event
             }
-            perf_control_update_queue.push(perf_control_monitor.shared_from_this());
+            perf_control_queue.push(perf_control_monitor.shared_from_this());
         })
         .exec();
     perf_control_client.hurryUp();
 
     std::cout << "Connection Type,       Payload,   Tx Rate(Hz),    Throughput,        N" << std::endl;
     // Loop indefinitely for performance test operations, stop by interrupt
-    while(const auto perf_control_update = perf_control_update_queue.pop()) {
-        while (auto perf_control_update_value = perf_control_update->pop()) {
-            epicsTimeStamp start;
-            epicsTimeGetCurrent(&start);
+    while(const auto control_update = perf_control_queue.pop()) {
+        while (auto control = control_update->pop()) {
+            const auto scenario_code = control["value.index"].as<uint32_t>();
+            if (scenario_code > TLS_CMS_STAPLED) continue; // Skip invalid scenarios
 
-            const auto scenario_code = perf_control_update_value["value.index"].as<uint32_t>();
-            const auto op = perf_control_update_value["op"] ? perf_control_update_value["op"].as<int32_t>() : 0;
-            if (scenario_code > 3u) continue;
-            const auto scenario_type = static_cast<ScenarioType>(scenario_code);
-            const auto payload_type_value = perf_control_update_value["payload_code"];
-            if (!payload_type_value) continue; // Skip initial values
-
+            scenario.scenario_type = static_cast<ScenarioType>(scenario_code);
+            const auto payload_type_value = control["payload_code"];
+            if (!payload_type_value) continue;  // Skip invalid values
             const auto payload_type = static_cast<PayloadType>(payload_type_value.as<uint32_t>());
-            const auto rate = perf_control_update_value["rate"].as<int32_t>();
+            const auto rate = control["rate"].as<int32_t>();
 
-            scenario.scenario_type = scenario_type;
+            const auto op = control["op"] ? control["op"].as<int32_t>() : PERF_OP_PREPARE;
 
-            if (op == 0) {
-                // PREPARE: post initial ACK (-1) on data PV
-                scenario.postValue(payload_type, -1);
-            } else if (op == 1) {
+            if (op == PERF_OP_PREPARE) {
+                // PREPARE: post initial PERF_ACK on data PV
+                scenario.postValue(payload_type, PERF_ACK);
+            } else if (op == PERF_OP_START) {
                 // START: begin sending
-                auto producer = Producer(scenario, payload_type, rate, start);
+                auto producer = Producer(scenario, payload_type, rate);
                 producer.payload_label = payloadLabel(payload_type);
                 producer.rate_label = formatRateLabel(rate);
                 producer.run();
                 std::cout << std::endl;
-            } else if (op == 2) {
-                // STOP: interrupt and post STOP ACK (-2)
-                scenario.interrupted.signal();
-                scenario.postValue(payload_type, -2);
+            } else if (op == PERF_OP_STOP) {
+                if (scenario.run_active.load(std::memory_order_acquire)) {
+                    // STOP: interrupt
+                    scenario.interrupted.signal();
+                    scenario.ok.wait(); // wait till it stops
+                };
+
+                // STOP: post PERF_STOP_ACK
+                scenario.postValue(payload_type, PERF_STOP_ACK);
             }
         }
     }
@@ -1658,9 +1655,14 @@ void processReportOptions(const std::string &db_file_name, const bool opt_report
     }
 }
 std::string generateRunID() {
-    const auto now = static_cast<unsigned int>(std::time(nullptr));
+    // Use EPICS time to derive a POSIX seconds value for display/compatibility
+    epicsTimeStamp now{};
+    epicsTimeGetCurrent(&now);
+    time_t now_posix = 0;
+    epicsTimeToTime_t(&now_posix, &now);
+    const auto now_u = static_cast<unsigned int>(now_posix);
     char run_id_buffer[9];
-    std::snprintf(run_id_buffer, sizeof(run_id_buffer), "%08x", now);
+    std::snprintf(run_id_buffer, sizeof(run_id_buffer), "%08x", now_u);
     return {run_id_buffer};
 }
 
