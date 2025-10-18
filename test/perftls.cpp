@@ -28,9 +28,9 @@
  *     1) PREPARE: set op=PERF_OP_PREPARE with desired scenario, payload_code, and rate, then post to PERF:CONTROL.
  *     2) Wait for PERF_ACK on the selected data PV: indicates PREPARE acknowledged.
  *     3) START: set op=PERF_OP_START with the same parameters and post to PERF:CONTROL.
- *     4) Consume data for up to 120s, measuring transit time from producer timestamp to consumer receipt.
+ *     4) Consume data for up to 120 s, measuring transit time from producer timestamp to consumer receipt.
  * - Producer behavior:
- *   - On PERF_OP_PREPARE: stop any current send, then post a single update on the requested data PV with counter=PERF_ACK, and wait for START.
+ *   - On PERF_OP_PREPARE: stop any current SEND, then post a single update on the requested data PV with counter=PERF_ACK, and wait for START.
  *   - On PERF_OP_START: begin sending periodic updates on the requested data PV at the specified rate for 60 seconds, or until interrupted.
  *   - On PERF_OP_STOP: immediately stop sending and post a single update with counter=PERF_STOP_ACK.
  * - Consumer behavior:
@@ -368,7 +368,7 @@ void SubscriptionMonitor::run() {
 
     epicsTimeStamp end{};
     epicsTimeGetCurrent(&end);
-    end.secPastEpoch += 120; // wait up to 120s for late arrivals
+    end.secPastEpoch += 120; // wait up to 120 s for late arrivals
 
     // Wait until everything has finished
     while (true) {
@@ -426,7 +426,7 @@ void Consumer::run() {
     double prior_percentage = std::numeric_limits<double>::max();
     bool stop_sent = false;
 
-    self.ok.wait();  // wait for first update
+    self.ok.wait();  // wait for the first update
     // Mark the start time for this sequence, and quiesce before the test
     epicsTimeGetCurrent(&start);
     while (tick < total_receive_ticks && running_count < window_count) {
@@ -642,6 +642,7 @@ void Scenario::initSmallScenarios() {
     small_pv = server::SharedPV::buildReadonly();
     producer.addPV("PERF:SMALL", small_pv);
     small_value = createSmallValue();
+    if (perf_source) perf_source->setPrototype(SMALL_32B, small_value);
     small_pv.open(small_value);
 }
 
@@ -652,6 +653,7 @@ void Scenario::initMediumScenarios() {
     medium_pv = server::SharedPV::buildReadonly();
     producer.addPV("PERF:MEDIUM", medium_pv);
     medium_value = createMediumValue();
+    if (perf_source) perf_source->setPrototype(MEDIUM_1KB, medium_value);
     medium_pv.open(medium_value);
 }
 
@@ -662,6 +664,7 @@ void Scenario::initLargeScenarios() {
     large_pv = server::SharedPV::buildReadonly();
     producer.addPV("PERF:LARGE", large_pv);
     large_value = createLargeValue();
+    if (perf_source) perf_source->setPrototype(LARGE_2MB, large_value);
     large_pv.open(large_value);
 }
 
@@ -803,6 +806,10 @@ void Scenario::buildProducerContext() {
     serv_conf.tls_disable_status_check = scenario_type < TLS_CMS;
     serv_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
     producer = serv_conf.build();
+
+    // Register a custom source with higher priority (lower order value)
+    perf_source = std::make_shared<PerfSource>();
+    producer.addSource("perf", perf_source, -2);
 }
 
 /**
@@ -1075,15 +1082,7 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
  */
 void Scenario::postValue(const PayloadType payload_type, const int32_t counter) {
     try {
-        auto value = (payload_type == SMALL_32B) ? small_value : (payload_type == MEDIUM_1KB) ? medium_value : large_value;
-        value["counter"] = counter;
-        auto timestamp = value["timeStamp"];
-        epicsTimeStamp sent_time{};
-        epicsTimeGetCurrent(&sent_time);
-        timestamp["secondsPastEpoch"] = sent_time.secPastEpoch;
-        timestamp["nanoseconds"] = sent_time.nsec;
-        value.mark(true);
-        (payload_type == SMALL_32B ? small_pv : payload_type == MEDIUM_1KB ? medium_pv : large_pv).post(value);
+        perf_source->enqueue(payload_type, counter);
     } catch (std::exception& e) {
         log_warn_printf(producerlog, "post_once error: %s\n", e.what());
     }
@@ -1169,7 +1168,7 @@ std::string getTargetArch() {
 }
 
 /**
- * Get get bin dir
+ * Get the bin dir
  *
  * @return
  */
@@ -1647,7 +1646,7 @@ void processReportOptions(const std::string &db_file_name, const bool opt_report
     // If any report options are set, process them and exit
     if (opt_report_list || !opt_report_id.empty() || !opt_report_del_ids.empty() || !opt_report_info_ids.empty()) {
         if (db_file_name.empty()) {
-            std::cerr << "--output <dbfile> is required for report operations" << std::endl;
+            std::cerr << "--output <db_file> is required for report operations" << std::endl;
             exit(21);
         }
         sqlite3* rdb=nullptr;

@@ -46,9 +46,153 @@
 #include <pvxs/nt.h>
 #include <pvxs/server.h>
 #include <pvxs/sharedpv.h>
+#include <memory>
 
 // Enable expert API (Timer, evbase)
 #define PVXS_ENABLE_EXPERT_API
+
+#include <pvxs/source.h>
+
+namespace pvxs { namespace perf {
+
+enum PayloadType {
+    SMALL_32B,
+    MEDIUM_1KB,
+    LARGE_2MB,
+};
+
+struct PerfSource : server::Source {
+    struct PVState {
+        Value prototype;
+        std::unique_ptr<server::MonitorControlOp> mon;
+        epicsEvent space;
+        std::atomic<bool> started{false};
+        std::atomic<int32_t> last_req{-1};
+        std::atomic<int32_t> last_sent{-1};
+    };
+
+    std::shared_ptr<PVState> small{std::make_shared<PVState>()};
+    std::shared_ptr<PVState> medium{std::make_shared<PVState>()};
+    std::shared_ptr<PVState> large{std::make_shared<PVState>()};
+
+    std::shared_ptr<PVState> get(PayloadType p) {
+        switch (p) {
+            case SMALL_32B:  return small;
+            case MEDIUM_1KB: return medium;
+            case LARGE_2MB:  return large;
+        }
+        return {};
+    }
+
+    std::shared_ptr<PVState> getByName(const std::string& name) const {
+        if (name=="PERF:SMALL") return small;
+        if (name=="PERF:MEDIUM") return medium;
+        if (name=="PERF:LARGE") return large;
+        return {};
+    }
+
+    void setPrototype(PayloadType p, const Value& v) {
+        auto st = get(p);
+        if (st) st->prototype = v;
+    }
+
+    void onSearch(Search& op) override {
+        for (auto& n : op) {
+            const auto st = getByName(n.name());
+            if (st) n.claim();
+        }
+    }
+
+    void onCreate(std::unique_ptr<server::ChannelControl>&& ch) override {
+        const auto st = getByName(ch->name());
+        if (!st) return; // not ours
+
+        ch->onSubscribe([st](std::unique_ptr<server::MonitorSetupOp>&& sop){
+            try {
+                auto mon = sop->connect(st->prototype);
+                if (!mon) {
+                    sop->error("connect failed");
+                    return;
+                }
+                mon->setWatermarks(0u, 0u);
+                mon->onStart([st](bool start){
+                    st->started.store(start, std::memory_order_release);
+                    if (start) st->space.signal();
+                });
+                mon->onHighMark([st](){ st->space.signal(); });
+                st->mon = std::move(mon);
+            } catch (std::exception& e) {
+                sop->error(e.what());
+            }
+        });
+
+        ch->onClose([st](const std::string&){
+            st->mon.reset();
+            st->started.store(false, std::memory_order_release);
+            st->last_req.store(-1, std::memory_order_release);
+            st->last_sent.store(-1, std::memory_order_release);
+        });
+    }
+
+    bool sendOne(const std::shared_ptr<PVState>& st, int32_t counter) {
+        // Wait for start and available space; then try to post
+        while (true) {
+            if (!st->mon) return false; // no subscriber
+            if (!st->started.load(std::memory_order_acquire)) {
+                st->space.wait(0.01);
+                continue;
+            }
+            Value value = st->prototype;
+            value["counter"] = counter;
+            auto timestamp = value["timeStamp"];
+            epicsTimeStamp sent_time{};
+            epicsTimeGetCurrent(&sent_time);
+            timestamp["secondsPastEpoch"] = sent_time.secPastEpoch;
+            timestamp["nanoseconds"] = sent_time.nsec;
+            value.mark(true);
+            if (st->mon->tryPost(value)) {
+                return true;
+            }
+            // No space, wait until high-water callback signals
+            st->space.wait(0.001);
+        }
+    }
+
+    void enqueue(PayloadType p, int32_t counter) {
+        const auto st = get(p);
+        if (!st) return;
+
+        if (counter < 0) {
+            // control/ACK messages: send as a single post when there is space
+            (void)sendOne(st, counter);
+            return;
+        }
+
+        // Update last requested counter, only increasing
+        while (true) {
+            auto prev = st->last_req.load(std::memory_order_acquire);
+            if (counter <= prev) break;
+            if (st->last_req.compare_exchange_weak(prev, counter, std::memory_order_acq_rel)) break;
+        }
+
+        // Send as many as allowed up to last requested
+        while (true) {
+            const auto sent = st->last_sent.load(std::memory_order_acquire);
+            const auto want = st->last_req.load(std::memory_order_acquire);
+            if (sent >= want) break;
+            const auto next = sent + 1;
+            if (sendOne(st, next)) {
+                st->last_sent.store(next, std::memory_order_release);
+            } else {
+                // No subscriber (or closed) — nothing else to do
+                break;
+            }
+        }
+    }
+};
+
+}} // namespace pvxs::perf
+
 #include "evhelper.h"
 #include "openssl.h"
 
@@ -232,11 +376,6 @@ enum ScenarioType { TCP, TLS, TLS_CMS, TLS_CMS_STAPLED };
  * Medium is a 32x32 ubyte array (1024 bytes) wrapped in an NT NDArray.
  * Large is a 4mpx image = 2000x2000 pixels, 4 bits per pixel (2,000,000 bytes) wrapped in an NT NDArray.
  */
-enum PayloadType {
-    SMALL_32B,
-    MEDIUM_1KB,
-    LARGE_2MB,
-};
 
 struct WireSizes { double small; double medium; double large; };
 
@@ -435,6 +574,9 @@ struct Scenario {
     // Server (producer) and client (consumer) to use for each side of the performance test scenario
     server::Server producer;
     client::Context consumer;
+
+    // Custom Source used by the producer to implement backpressure and a virtual queue
+    std::shared_ptr<PerfSource> perf_source;
 
     /**
      * Constructor for the Scenario
