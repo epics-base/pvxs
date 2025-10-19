@@ -125,26 +125,29 @@ double procCPUSeconds();
 double wallSeconds();
 double cpuPercentSince(double w0, double c0);
 #endif
-static double wireSizeBytes(const Value& value_to_size);
 
 /**
  * Create a performance test control value which is an NTEnum of the scenario_code to run,
  * with two extra fields indicating the payload and the rate
  *
+ * @param value prototype or empty to create a new prototype
  * @param scenario_code the scenario to run
  * @param payload_code the payload size to push through
  * @param rate and the rate to run it at
+ * @param op operation to set
  * @return A performance test control value ready to post
  */
-Value createPerfControlValue(const unsigned scenario_code, const unsigned payload_code = 0, const long rate = 0) {
-    auto m_def(nt::NTEnum{}.build());
-    m_def += {Int32("op")};
-    m_def += {Int32("payload_code")};
-    m_def += {Int32("rate")};
+Value createPerfControlValue(Value value = {}, const int32_t scenario_code = PERF_NULL_SCENARIO, const uint32_t payload_code = 0, const uint32_t rate = 0, const int32_t op = PERF_OP_PREPARE) {
+    if (!value) {
+        auto m_def(nt::NTEnum{}.build());
+        m_def += {Int32("op")};
+        m_def += {UInt32("payload_code")};
+        m_def += {UInt32("rate")};
+        value = m_def.create();
+    }
 
-    Value value = m_def.create();
     value["value.index"] = scenario_code;
-    value["op"] = PERF_OP_PREPARE; // default PREPARE
+    value["op"] = op;
 
     if ( payload_code != 0) value["payload_code"] = payload_code;
     if (rate != 0) value["rate"] = rate;
@@ -159,7 +162,7 @@ Value createSmallValue() {
     auto s_def(nt::NTScalar{TypeCode::Int32}.build());
     s_def += {Int32("counter")};
     auto value = s_def.create();
-    value["counter"] = -1; // Set an initial value.  This will be ignored
+    value["counter"] = PERF_ACK; // Set an initial value.  This will be ignored
     return value;
 }
 
@@ -190,7 +193,7 @@ Value createMediumValue() {
 
     value["value->ubyteValue"] = medium_data;
     value["dimension"] = small_dimensions.freeze();
-    value["counter"] = -1; // Set an initial value.  This will be ignored
+    value["counter"] = PERF_ACK; // Set an initial value.  This will be ignored
   return value;
 }
 
@@ -255,7 +258,7 @@ Value createLargeValue() {
     attrs[0] = mkAttr("ColorMode", 0);  // 0 = Mono (convention)
     attrs[1] = mkAttr("BitsPerPixel", 4);
     value["attribute"] = attrs.freeze();
-    value["counter"] = -1; // Set an initial value.  This will be ignored
+    value["counter"] = PERF_ACK; // Set an initial value.  This will be ignored
     return value;
 }
 
@@ -384,7 +387,7 @@ void Producer::run() {
     const auto time_per_update = 1.0 / static_cast<double>(rate);
     double prior_percentage = std::numeric_limits<double>::max();
 
-    self.postValue(payload, -1); // Reset
+    self.postValue(payload, PERF_ACK); // Reset
     epicsTimeGetCurrent(&start);
     int counter;
     for (counter = 0; counter < total; ++counter) {
@@ -421,7 +424,7 @@ void Consumer::run() {
     const auto window_count = static_cast<int32_t>(rate * window);
     const auto total_receive_ticks = static_cast<int32_t>(receive_window * rate);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
-    int32_t running_count{-1}; // Keeps track of actual counted packets consumed
+    int32_t running_count{PERF_ACK}; // Keeps track of actual counted packets consumed
     auto tick = 0;
     double prior_percentage = std::numeric_limits<double>::max();
     bool stop_sent = false;
@@ -580,12 +583,22 @@ bool parsePayloadType(const std::string& name, PayloadType& out) {
     return false;
 }
 
+ProducerSource::ProducerSource()
+    : small_pv_state  (std::make_shared<PVState>(createSmallValue()))
+    , medium_pv_state (std::make_shared<PVState>(createMediumValue()))
+    , large_pv_state  (std::make_shared<PVState>(createLargeValue()))
+{
+    small_pv.open(small_pv_state->prototype);
+    medium_pv.open(medium_pv_state->prototype);
+    large_pv.open(large_pv_state->prototype);
+}
+
 /**
  * Format a rate label
  * @param rate The rate to format
  * @return The formatted rate label
  */
-std::string formatRateLabel(long rate) {
+std::string formatRateLabel(const long rate) {
     char buf[32];
     if (rate >= 1000000) std::snprintf(buf, sizeof(buf), "%3ldMHz", rate / 1000000);
     else if (rate >= 1000) std::snprintf(buf, sizeof(buf), "%3ldKHz", rate / 1000);
@@ -619,11 +632,7 @@ Scenario::Scenario(const ScenarioType scenario_type) : scenario_type(scenario_ty
  * @param db_file_name optional db file name to output detailed data to
  * @param run_id the unique program run ID
  */
-Scenario::Scenario(const ScenarioType scenario_type, const std::string &db_file_name, const std::string &run_id) : scenario_type(scenario_type), run_id(run_id), is_consumer(true) {
-    small_value = createSmallValue();
-    medium_value = createMediumValue();
-    large_value = createLargeValue();
-
+Scenario::Scenario(const ScenarioType scenario_type, const std::string &db_file_name, const std::string &run_id) : scenario_type(scenario_type), run_id(run_id) {
     // Initialize optional SQLite DB once per Scenario instance
     if (!db_file_name.empty()) {
         try {
@@ -639,48 +648,45 @@ Scenario::Scenario(const ScenarioType scenario_type, const std::string &db_file_
  * Initialize the SMALL payload type test and add its PV to the server
  */
 void Scenario::initSmallScenarios() {
-    small_pv = server::SharedPV::buildReadonly();
-    producer.addPV("PERF:SMALL", small_pv);
-    small_value = createSmallValue();
-    if (perf_source) perf_source->setPrototype(SMALL_32B, small_value);
-    small_pv.open(small_value);
+    producer.addPV("PERF:SMALL", producer_source->small_pv);
+    std::cout << "Posting initial PV PERF:SMALL" << std::endl;
 }
 
 /**
  * Initialize the MEDIUM payload type test and add its PV to the server
  */
 void Scenario::initMediumScenarios() {
-    medium_pv = server::SharedPV::buildReadonly();
-    producer.addPV("PERF:MEDIUM", medium_pv);
-    medium_value = createMediumValue();
-    if (perf_source) perf_source->setPrototype(MEDIUM_1KB, medium_value);
-    medium_pv.open(medium_value);
+    producer.addPV("PERF:MEDIUM", producer_source->medium_pv);
 }
 
 /**
  * Initialize the LARGE payload type test and add its PV to the server
  */
 void Scenario::initLargeScenarios() {
-    large_pv = server::SharedPV::buildReadonly();
-    producer.addPV("PERF:LARGE", large_pv);
-    large_value = createLargeValue();
-    if (perf_source) perf_source->setPrototype(LARGE_2MB, large_value);
-    large_pv.open(large_value);
+    producer.addPV("PERF:LARGE", producer_source->large_pv);
+}
+
+// Compute the PVA wire size (bytes) of a Value (type + data), for throughput calculations.
+// Performance Test only: uses internal wire encoder.
+static double wireSizeBytes(const Value& value_to_size) {
+    using namespace pvxs::impl;
+    std::vector<uint8_t> buf;
+    buf.reserve(4096000);
+    VectorOutBuf M(true, buf);
+    to_wire_full(M, value_to_size);
+    return static_cast<double>(M.consumed());
 }
 
 WireSizes computeWireSizes() {
-    using namespace pvxs;
-    using namespace pvxs::nt;
-
-    WireSizes ws{};
-    const auto s_val{createSmallValue()};
-    ws.small = wireSizeBytes(s_val);
-    const auto m_val{createMediumValue()};
-    ws.medium = wireSizeBytes(m_val);
-    const auto l_val{createLargeValue()};
-    ws.large = wireSizeBytes(l_val);
-    return ws;
+    return{
+        wireSizeBytes(createSmallValue()),
+        wireSizeBytes(createMediumValue()),
+        wireSizeBytes(createLargeValue())
+    };
 }
+
+// global set of wire sizes
+const auto k_wire_sizes = computeWireSizes();
 
 std::string decodeRunID(const std::string& run_id) {
     if (run_id.size()!=8) return std::string("?");
@@ -807,9 +813,8 @@ void Scenario::buildProducerContext() {
     serv_conf.tls_disable_stapling = scenario_type < TLS_CMS_STAPLED;
     producer = serv_conf.build();
 
-    // Register a custom source with higher priority (lower order value)
-    perf_source = std::make_shared<PerfSource>();
-    producer.addSource("perf", perf_source, -2);
+    producer_source = std::make_shared<ProducerSource>();
+    producer.addSource("producer", producer_source);
 }
 
 /**
@@ -877,10 +882,7 @@ void Scenario::run(server::SharedPV &control_pv, const PayloadType payload_type,
     if (payload_type == LARGE_2MB && rate > 100) return;
 
     // To collect the results of the test
-    Result result{
-        wireSizeBytes(small_value),
-        wireSizeBytes(medium_value),
-        wireSizeBytes(large_value)};
+    Result result{ k_wire_sizes.small, k_wire_sizes.medium, k_wire_sizes.large };
 
     // Collect Data
     const double w0 = wallSeconds();
@@ -901,12 +903,8 @@ void Scenario::run(server::SharedPV &control_pv, const PayloadType payload_type,
     current_payload = payload_type;
     Consumer update_consumer{*this, result, rate,  sniffer, control_pv, payload_label, rate_label};
 
-    // Handshake: PREPARE -> wait for ACK(-1) -> START
-    auto control_value = control_pv.fetch();
-    if (control_value["value.index"].as<int32_t>() != scenario_type) control_value["value.index"] = scenario_type;
-    if (control_value["payload_code"].as<int32_t>() != static_cast<int32_t>(payload_type)) control_value["payload_code"] = static_cast<int32_t>(payload_type);
-    if (control_value["rate"].as<int32_t>() != static_cast<int32_t>(rate)) control_value["rate"] = static_cast<int32_t>(rate);
-
+    // Handshake: PREPARE -> wait for PERF_ACK -> START
+    Value control_value = createPerfControlValue(control_pv.fetch(), scenario_type, payload_type, rate);
     control_value["op"] = PERF_OP_PREPARE;
     control_pv.post(control_value);
 
@@ -1012,9 +1010,9 @@ void Scenario::insertOrUpdateSample(const int payload_id, const uint32_t rate, c
  */
 void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate) {
     const auto wire_sizes = computeWireSizes();
-    const char* pv_name = (payload_type == LARGE_2MB)    ? "PERF:LARGE"
-                          : (payload_type == MEDIUM_1KB) ? "PERF:MEDIUM"
-                                                         : "PERF:SMALL";
+    const char* pv_name =   payload_type == LARGE_2MB  ? "PERF:LARGE"
+                          : payload_type == MEDIUM_1KB ? "PERF:MEDIUM"
+                                                       : "PERF:SMALL";
 
     // Heuristic to limit coalescing: ensure a large enough client-side queue.
     // As we are the producers, we will also throttle production based on the number of slots
@@ -1056,10 +1054,10 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
                         epicsTimeGetCurrent(&receive_time);
                         update_queue.push(Update{value, receive_time});
                         ok.signal();
-                    } else if (N == -1) {
+                    } else if (N == PERF_ACK) {
                         // Initial ACK from producer that PREPARE has been received
                         ack.signal();
-                    } else if (N == -2) {
+                    } else if (N == PERF_STOP_ACK) {
                         // STOP ACK from the producer
                         stop_ack.signal();
                     }
@@ -1069,6 +1067,9 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
                 log_warn_printf(consumerlog, "Monitor pop() error: %s\n", e.what());
             }
         }).exec();
+
+    // Ensure subscription is actively delivering updates
+    if (sub) sub->resume();
 }
 
 /**
@@ -1082,7 +1083,7 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
  */
 void Scenario::postValue(const PayloadType payload_type, const int32_t counter) {
     try {
-        perf_source->enqueue(payload_type, counter);
+        producer_source->enqueue(payload_type, counter);
     } catch (std::exception& e) {
         log_warn_printf(producerlog, "post_once error: %s\n", e.what());
     }
@@ -1515,17 +1516,6 @@ void doReport(sqlite3* db, const std::string& run_id) {
     }
 }
 
-// Compute the PVA wire size (bytes) of a Value (type + data), for throughput calculations.
-// Performance Test only: uses internal wire encoder.
-static double wireSizeBytes(const Value& value_to_size) {
-    using namespace pvxs::impl;
-    std::vector<uint8_t> buf;
-    buf.reserve(4096000);
-    VectorOutBuf M(true, buf);
-    to_wire_full(M, value_to_size);
-    return static_cast<double>(M.consumed());
-}
-
 #ifdef __linux__
 /**
  * Retrieve the current RSS (Resident Set Size) memory usage of the process
@@ -1735,7 +1725,7 @@ void runConsumers(const std::vector<ScenarioType> &scenarios, const std::vector<
     server::SharedPV control_pv = server::SharedPV::buildReadonly();
     control_server.addPV("PERF:CONTROL", control_pv);
 
-    const Value control_value = createPerfControlValue(-1);
+    const Value control_value = createPerfControlValue();
     control_pv.open(control_value);
     control_server.start();
 
@@ -1765,7 +1755,7 @@ void runConsumers(const std::vector<ScenarioType> &scenarios, const std::vector<
         }
     }
     control_pv.close();
-    control_server.start();
+    control_server.stop();
     std::cout << "Performance Tests Complete" << std::endl;
 }
 

@@ -53,146 +53,6 @@
 
 #include <pvxs/source.h>
 
-namespace pvxs { namespace perf {
-
-enum PayloadType {
-    SMALL_32B,
-    MEDIUM_1KB,
-    LARGE_2MB,
-};
-
-struct PerfSource : server::Source {
-    struct PVState {
-        Value prototype;
-        std::unique_ptr<server::MonitorControlOp> mon;
-        epicsEvent space;
-        std::atomic<bool> started{false};
-        std::atomic<int32_t> last_req{-1};
-        std::atomic<int32_t> last_sent{-1};
-    };
-
-    std::shared_ptr<PVState> small{std::make_shared<PVState>()};
-    std::shared_ptr<PVState> medium{std::make_shared<PVState>()};
-    std::shared_ptr<PVState> large{std::make_shared<PVState>()};
-
-    std::shared_ptr<PVState> get(PayloadType p) {
-        switch (p) {
-            case SMALL_32B:  return small;
-            case MEDIUM_1KB: return medium;
-            case LARGE_2MB:  return large;
-        }
-        return {};
-    }
-
-    std::shared_ptr<PVState> getByName(const std::string& name) const {
-        if (name=="PERF:SMALL") return small;
-        if (name=="PERF:MEDIUM") return medium;
-        if (name=="PERF:LARGE") return large;
-        return {};
-    }
-
-    void setPrototype(PayloadType p, const Value& v) {
-        auto st = get(p);
-        if (st) st->prototype = v;
-    }
-
-    void onSearch(Search& op) override {
-        for (auto& n : op) {
-            const auto st = getByName(n.name());
-            if (st) n.claim();
-        }
-    }
-
-    void onCreate(std::unique_ptr<server::ChannelControl>&& ch) override {
-        const auto st = getByName(ch->name());
-        if (!st) return; // not ours
-
-        ch->onSubscribe([st](std::unique_ptr<server::MonitorSetupOp>&& sop){
-            try {
-                auto mon = sop->connect(st->prototype);
-                if (!mon) {
-                    sop->error("connect failed");
-                    return;
-                }
-                mon->setWatermarks(0u, 0u);
-                mon->onStart([st](bool start){
-                    st->started.store(start, std::memory_order_release);
-                    if (start) st->space.signal();
-                });
-                mon->onHighMark([st](){ st->space.signal(); });
-                st->mon = std::move(mon);
-            } catch (std::exception& e) {
-                sop->error(e.what());
-            }
-        });
-
-        ch->onClose([st](const std::string&){
-            st->mon.reset();
-            st->started.store(false, std::memory_order_release);
-            st->last_req.store(-1, std::memory_order_release);
-            st->last_sent.store(-1, std::memory_order_release);
-        });
-    }
-
-    bool sendOne(const std::shared_ptr<PVState>& st, int32_t counter) {
-        // Wait for start and available space; then try to post
-        while (true) {
-            if (!st->mon) return false; // no subscriber
-            if (!st->started.load(std::memory_order_acquire)) {
-                st->space.wait(0.01);
-                continue;
-            }
-            Value value = st->prototype;
-            value["counter"] = counter;
-            auto timestamp = value["timeStamp"];
-            epicsTimeStamp sent_time{};
-            epicsTimeGetCurrent(&sent_time);
-            timestamp["secondsPastEpoch"] = sent_time.secPastEpoch;
-            timestamp["nanoseconds"] = sent_time.nsec;
-            value.mark(true);
-            if (st->mon->tryPost(value)) {
-                return true;
-            }
-            // No space, wait until high-water callback signals
-            st->space.wait(0.001);
-        }
-    }
-
-    void enqueue(PayloadType p, int32_t counter) {
-        const auto st = get(p);
-        if (!st) return;
-
-        if (counter < 0) {
-            // control/ACK messages: send as a single post when there is space
-            (void)sendOne(st, counter);
-            return;
-        }
-
-        // Update last requested counter, only increasing
-        while (true) {
-            auto prev = st->last_req.load(std::memory_order_acquire);
-            if (counter <= prev) break;
-            if (st->last_req.compare_exchange_weak(prev, counter, std::memory_order_acq_rel)) break;
-        }
-
-        // Send as many as allowed up to last requested
-        while (true) {
-            const auto sent = st->last_sent.load(std::memory_order_acquire);
-            const auto want = st->last_req.load(std::memory_order_acquire);
-            if (sent >= want) break;
-            const auto next = sent + 1;
-            if (sendOne(st, next)) {
-                st->last_sent.store(next, std::memory_order_release);
-            } else {
-                // No subscriber (or closed) — nothing else to do
-                break;
-            }
-        }
-    }
-};
-
-}} // namespace pvxs::perf
-
 #include "evhelper.h"
 #include "openssl.h"
 
@@ -345,12 +205,175 @@ struct PerfSource : server::Source {
 #define PERF_OP_PREPARE 0
 #define PERF_OP_START 1
 #define PERF_OP_STOP 2
+#define PERF_NULL_SCENARIO (-1)
 #define PERF_OUT_OF_SEQUENCE (-1)
 #define PERF_ACK (-1)
 #define PERF_STOP_ACK (-2)
 
 namespace pvxs {
 namespace perf {
+
+enum PayloadType {
+    SMALL_32B,
+    MEDIUM_1KB,
+    LARGE_2MB,
+};
+
+struct ProducerSource : server::Source {
+    struct PVState {
+        Value prototype;
+        std::unique_ptr<server::MonitorControlOp> monitor_control_op;
+        epicsEvent space;
+        std::atomic<bool> started{false};
+        std::atomic<int32_t> last_req{PERF_ACK};
+        std::atomic<int32_t> last_sent{PERF_ACK};
+        explicit PVState(const Value &prototype) : prototype(prototype) {}
+    };
+
+    ProducerSource();
+
+    server::SharedPV small_pv{server::SharedPV::buildReadonly()};
+    server::SharedPV medium_pv{server::SharedPV::buildReadonly()};
+    server::SharedPV large_pv{server::SharedPV::buildReadonly()};
+    const std::shared_ptr<PVState> small_pv_state;
+    const std::shared_ptr<PVState> medium_pv_state;
+    const std::shared_ptr<PVState> large_pv_state;
+
+    const std::map<PayloadType,std::shared_ptr<PVState>> payload_type_state_map = {
+        {SMALL_32B, small_pv_state},
+        {MEDIUM_1KB, medium_pv_state},
+        {LARGE_2MB, large_pv_state}
+    };
+
+    const std::map<std::string,std::shared_ptr<PVState>> pv_name_state_map = {
+        {"PERF:SMALL", small_pv_state},
+        {"PERF:MEDIUM", medium_pv_state},
+        {"PERF:LARGE", large_pv_state}
+    };
+
+    std::shared_ptr<PVState> getPVStateByPayload(const PayloadType payload_type) const {
+        try {
+            return payload_type_state_map.at(payload_type);
+        } catch (const std::out_of_range&) { return {}; }
+    }
+
+    std::shared_ptr<PVState> getPVStateByPVName(const std::string& pv_name) const {
+        try {
+            return pv_name_state_map.at(pv_name);
+        } catch (const std::out_of_range&) { return {}; }
+    }
+
+    void onSearch(Search& op) override {
+        for (auto& pv : op) {
+            if (getPVStateByPVName(pv.name())) pv.claim();
+        }
+    }
+
+    void onCreate(std::unique_ptr<server::ChannelControl>&& channel_control_op) override {
+        const auto pv_state = getPVStateByPVName(channel_control_op->name());
+        if (!pv_state) return;
+
+        channel_control_op->onSubscribe([pv_state, this](std::unique_ptr<server::MonitorSetupOp>&& monitor_setup_op){
+            try {
+                // Ensure cleanup if a client aborts or a channel closes
+                monitor_setup_op->onClose([pv_state](const std::string&){
+                    pv_state->monitor_control_op.reset();
+                    pv_state->started.store(false, std::memory_order_release);
+                    pv_state->last_req.store(PERF_ACK, std::memory_order_release);
+                    pv_state->last_sent.store(PERF_ACK, std::memory_order_release);
+                    pv_state->space.signal();
+                });
+
+                pv_state->monitor_control_op = monitor_setup_op->connect(pv_state->prototype);
+                if (!pv_state->monitor_control_op) {
+                    monitor_setup_op->error("connect failed");
+                    return;
+                }
+                pv_state->monitor_control_op->setWatermarks(0u, 0u);
+
+                pv_state->monitor_control_op->onStart([pv_state](const bool is_start){
+                    pv_state->started.store(is_start, std::memory_order_release);
+                    if (is_start) pv_state->space.signal();
+                });
+
+                pv_state->monitor_control_op->onHighMark([pv_state](){ pv_state->space.signal(); });
+
+                // Proactively send an initial PERF_ACK so the consumer can proceed even if PREPARE races with subscribe
+                try {
+                    (void)sendOne(pv_state, PERF_ACK);
+                } catch(...) {}
+            } catch (std::exception& e) {
+                monitor_setup_op->error(e.what());
+            }
+        });
+    }
+
+    bool sendOne(const std::shared_ptr<PVState>& pv_state, const int32_t counter) {
+        // Build the value to send
+        auto makeValue = [&](const int32_t counter_to_send){
+            Value value = pv_state->prototype;
+            value["counter"] = counter_to_send;
+            auto timestamp = value["timeStamp"];
+            epicsTimeStamp sent_time{};
+            epicsTimeGetCurrent(&sent_time);
+            timestamp["secondsPastEpoch"] = sent_time.secPastEpoch;
+            timestamp["nanoseconds"] = sent_time.nsec;
+            value.mark(true);
+            return value;
+        };
+
+        while (true) {
+            if (!pv_state->monitor_control_op) return false; // no subscriber
+
+            if (counter < 0) {
+                // For control messages (PERF_ACK, PERF_STOP_ACK), bypass flow-control and force post.
+                // This ensures the consumer can receive the ACK promptly.
+                const auto value = makeValue(counter);
+                (void)pv_state->monitor_control_op->forcePost(value);
+                return true;
+            }
+
+            // Always attempt to enqueue; allow server-side queueing even if the client hasn't
+            // signaled start/resume yet. Backpressure is honored via tryPost() and onHighMark().
+            auto value = makeValue(counter);
+            if (pv_state->monitor_control_op->tryPost(value)) {
+                return true;
+            }
+            // No space, wait until high-water callback signals there is room.
+            pv_state->space.wait(1.0); // TODO This is mad!!  Should simply block until we can send then return false if interrupted or timeout
+        }
+    }
+
+    void enqueue(const PayloadType payload_type, const int32_t counter) {
+        const auto pv_state = getPVStateByPayload(payload_type);
+        if (!pv_state) return;
+
+        if (counter < 0) {
+            // control/ACK messages: always send immediately (bypass start and flow control)
+            (void)sendOne(pv_state, counter);
+            return;
+        }
+
+        // Update the last requested counter, only increasing
+        while (true) {
+            auto prev = pv_state->last_req.load(std::memory_order_acquire);
+            if (counter <= prev) break;
+            if (pv_state->last_req.compare_exchange_weak(prev, counter, std::memory_order_acq_rel)) break;
+        }
+
+        // Send as many as allowed up to the last requested
+        while (true) {
+            const auto sent = pv_state->last_sent.load(std::memory_order_acquire);
+            const auto want = pv_state->last_req.load(std::memory_order_acquire);
+            if (sent >= want) break;
+            const auto next = sent + 1;
+            if (!sendOne(pv_state, next))  // No subscriber (or closed, or waited too long) — nothing else to do
+                break;
+            pv_state->last_sent.store(next, std::memory_order_release);
+        }
+    }
+};
+
 struct PortSniffer;
 /**
  * Child process struct to store the process ID and environment variables.
@@ -566,8 +589,8 @@ struct Scenario {
     epicsEvent ok;             // Dual-purpose depending on role:
                                // - Consumer: signaled when a positive-count data update is enqueued (first data arrival gate)
                                // - Producer: signaled at end of Producer::run() to tell control loop prior scenario finished
-    epicsEvent ack;            // signaled when initial -1 ACK is seen on data PV
-    epicsEvent stop_ack;       // signaled when STOP ACK (-2) is seen on data PV
+    epicsEvent ack;            // signaled when the initial PERF_ACK is seen on data PV
+    epicsEvent stop_ack;       // signaled when PERF_STOP_ACK is seen on data PV
     std::atomic<bool> run_active{false}; // true when Producer::run() is active
     bool is_consumer{true};
 
@@ -576,7 +599,7 @@ struct Scenario {
     client::Context consumer;
 
     // Custom Source used by the producer to implement backpressure and a virtual queue
-    std::shared_ptr<PerfSource> perf_source;
+    std::shared_ptr<ProducerSource> producer_source;
 
     /**
      * Constructor for the Scenario
@@ -604,25 +627,13 @@ struct Scenario {
         if (is_consumer) closeDB(); else producer.stop();
     }
 
-    void postValue(PayloadType payload_type, int32_t counter = -1);
+    void postValue(PayloadType payload_type, int32_t counter = PERF_ACK);
     void startMonitor(PayloadType payload_type, uint32_t rate);
     int32_t processPendingUpdates(Result &result, const epicsTimeStamp &start);
     static void run(server::SharedPV &control_pv, const ScenarioType &scenario_type, PayloadType payload_type, const std::string &db_file_name = {}, const std::string &run_id = {});
     void run(server::SharedPV &control_pv, PayloadType payload_type, uint32_t rate, const std::string& payload_label, const std::string& rate_label);
 
   private:
-    // Shared PV and small payload the SMALL payload type test
-    server::SharedPV small_pv;
-    Value small_value;
-
-    // Shared PV and medium payload for the MEDIUM payload type test
-    server::SharedPV medium_pv;
-    Value medium_value;
-
-    // Shared PV and large payload for the LARGE payload type test
-    server::SharedPV large_pv;
-    Value large_value;
-
     // Subscription the client will make for this performance test scenario
     std::shared_ptr<client::Subscription> sub;
 
