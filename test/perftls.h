@@ -213,6 +213,12 @@
 namespace pvxs {
 namespace perf {
 
+DEFINE_LOGGER(perflog, "pvxs.perf");
+DEFINE_LOGGER(producerlog, "pvxs.perf.producer");
+DEFINE_LOGGER(producerdatalog, "pvxs.perf.producer.data");
+DEFINE_LOGGER(consumerlog, "pvxs.perf.consumer");
+DEFINE_LOGGER(consumerdatalog, "pvxs.perf.consumer.data");
+
 enum PayloadType {
     SMALL_32B,
     MEDIUM_1KB,
@@ -273,7 +279,7 @@ struct ProducerSource : server::Source {
         const auto pv_state = getPVStateByPVName(channel_control_op->name());
         if (!pv_state) return;
 
-        channel_control_op->onSubscribe([pv_state, this](std::unique_ptr<server::MonitorSetupOp>&& monitor_setup_op){
+        channel_control_op->onSubscribe([pv_state](std::unique_ptr<server::MonitorSetupOp>&& monitor_setup_op){
             try {
                 // Ensure cleanup if a client aborts or a channel closes
                 monitor_setup_op->onClose([pv_state](const std::string&){
@@ -296,12 +302,7 @@ struct ProducerSource : server::Source {
                     if (is_start) pv_state->space.signal();
                 });
 
-                pv_state->monitor_control_op->onHighMark([pv_state](){ pv_state->space.signal(); });
-
-                // Proactively send an initial PERF_ACK so the consumer can proceed even if PREPARE races with subscribe
-                try {
-                    (void)sendOne(pv_state, PERF_ACK);
-                } catch(...) {}
+                pv_state->monitor_control_op->onHighMark([pv_state] { pv_state->space.signal(); });
             } catch (std::exception& e) {
                 monitor_setup_op->error(e.what());
             }
@@ -311,6 +312,7 @@ struct ProducerSource : server::Source {
     bool sendOne(const std::shared_ptr<PVState>& pv_state, const int32_t counter) {
         // Build the value to send
         auto makeValue = [&](const int32_t counter_to_send){
+            log_debug_printf(producerlog, "Making Payload for: %s\n", counter_to_send >= 0 ? (SB() << counter_to_send).str().c_str() : counter_to_send == PERF_ACK ? "PERF_ACK" : "PERF_STOP_ACK");
             Value value = pv_state->prototype;
             value["counter"] = counter_to_send;
             auto timestamp = value["timeStamp"];
@@ -329,6 +331,7 @@ struct ProducerSource : server::Source {
                 // For control messages (PERF_ACK, PERF_STOP_ACK), bypass flow-control and force post.
                 // This ensures the consumer can receive the ACK promptly.
                 const auto value = makeValue(counter);
+                log_debug_printf(producerlog, "Posting Control Payload: %s\n",  counter == PERF_ACK ? "PERF_ACK" : "PERF_STOP_ACK");
                 (void)pv_state->monitor_control_op->forcePost(value);
                 return true;
             }
@@ -336,11 +339,12 @@ struct ProducerSource : server::Source {
             // Always attempt to enqueue; allow server-side queueing even if the client hasn't
             // signaled start/resume yet. Backpressure is honored via tryPost() and onHighMark().
             auto value = makeValue(counter);
+            log_debug_printf(producerlog, "Posting Payload for: %d\n", counter);
             if (pv_state->monitor_control_op->tryPost(value)) {
                 return true;
             }
             // No space, wait until high-water callback signals there is room.
-            pv_state->space.wait(1.0); // TODO This is mad!!  Should simply block until we can send then return false if interrupted or timeout
+            pv_state->space.wait();
         }
     }
 
@@ -357,7 +361,6 @@ struct ProducerSource : server::Source {
         // Update the last requested counter, only increasing
         while (true) {
             auto prev = pv_state->last_req.load(std::memory_order_acquire);
-            if (counter <= prev) break;
             if (pv_state->last_req.compare_exchange_weak(prev, counter, std::memory_order_acq_rel)) break;
         }
 
@@ -594,7 +597,7 @@ struct Scenario {
     std::atomic<bool> run_active{false}; // true when Producer::run() is active
     bool is_consumer{true};
 
-    // Server (producer) and client (consumer) to use for each side of the performance test scenario
+    // Server (producer) and client (consumer) to be used for each side of the performance test scenario
     server::Server producer;
     client::Context consumer;
 
@@ -671,16 +674,21 @@ struct Timed {
     void printProgressBar(double progress_percentage, int32_t N) const;
 };
 
-struct Producer final : Timed {
+struct Producer final : Timed, epicsThreadRunable {
     PayloadType payload;
-    const uint32_t rate;
-    const double window = 60.0;
-    epicsTimeStamp start;
+    uint32_t rate;
+    double window = 60.0;
+    epicsTimeStamp start_time{};
 
     Producer(Scenario &scenario, const PayloadType payload_type, const uint32_t rate)
         : Timed{scenario}, payload{payload_type}, rate{rate} {}
 
-   void run();
+   void run() override;
+
+    void configure(const PayloadType payload_type, const uint32_t new_rate) {
+        payload = payload_type;
+        rate = new_rate;
+    };
 };
 
 struct Consumer final : Timed {

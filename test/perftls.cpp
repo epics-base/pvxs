@@ -107,10 +107,6 @@
 namespace pvxs {
 namespace perf {
 
-DEFINE_LOGGER(perflog, "pvxs.perf");
-DEFINE_LOGGER(producerlog, "pvxs.perf.scenario.producer");
-DEFINE_LOGGER(consumerlog, "pvxs.perf.scenario.consumer");
-
 using namespace pvxs::members;
 
 // Global child process struct to store the process ID and environment variables.
@@ -382,22 +378,23 @@ void SubscriptionMonitor::run() {
 }
 
 void Producer::run() {
+    log_debug_printf(producerlog, "Starting New Producer Run%s", "\n");
     self.run_active.store(true, std::memory_order_release);
     const auto total = static_cast<uint32_t>(rate * window);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
     double prior_percentage = std::numeric_limits<double>::max();
 
-    self.postValue(payload, PERF_ACK); // Reset
-    epicsTimeGetCurrent(&start);
+    epicsTimeGetCurrent(&start_time);
     int counter;
     for (counter = 0; counter < total; ++counter) {
         // Post 1 update
+        log_debug_printf(producerdatalog, "%06d / %06d\n", counter, total);
         self.postValue(payload, counter);
 
         // Calculate elapsed time and time till the next tick
         epicsTimeStamp now{};
         epicsTimeGetCurrent(&now);
-        const double elapsed_since_start = epicsTimeDiffInSeconds(&now, &start);
+        const double elapsed_since_start = epicsTimeDiffInSeconds(&now, &start_time);
         const double next_emission_secs_from_start = static_cast<double>(counter + 1)  * time_per_update ;
         auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
         if (time_till_next_emission < 0.0) time_till_next_emission = 1.0 / 100000000.0; // Should not get there, but if so set a very small amount of time
@@ -411,11 +408,12 @@ void Producer::run() {
 
         // Sleep until the next emission time
         if (self.interrupted.wait(time_till_next_emission) ) {
-            std::cout << "\nInterrupted\n";
+            log_warn_printf(producerlog, "\nInterrupted%s", "\n");
             break;
         }
     }
     printProgressBar(100.00, counter);
+    std::cout << std::endl;
     self.run_active.store(false, std::memory_order_release);
     self.ok.signal();
 }
@@ -452,7 +450,7 @@ void Consumer::run() {
 
         // Update the progress bar once per percentage change
         const auto progress_percentage = elapsed_since_start >= window ? 100.00 : static_cast<uint32_t>(100 * (elapsed_since_start / window));
-        if (progress_percentage != prior_percentage) {
+        if (progress_percentage == 100.00 || progress_percentage != prior_percentage) {
             prior_percentage = progress_percentage;
             printProgressBar(progress_percentage, running_count);
         }
@@ -649,7 +647,6 @@ Scenario::Scenario(const ScenarioType scenario_type, const std::string &db_file_
  */
 void Scenario::initSmallScenarios() {
     producer.addPV("PERF:SMALL", producer_source->small_pv);
-    std::cout << "Posting initial PV PERF:SMALL" << std::endl;
 }
 
 /**
@@ -814,7 +811,9 @@ void Scenario::buildProducerContext() {
     producer = serv_conf.build();
 
     producer_source = std::make_shared<ProducerSource>();
-    producer.addSource("producer", producer_source);
+    // Register with higher priority than the builtin SharedPV Source, so our onCreate/onSubscribe
+    // handles the PERF:* channels, and we gain access to MonitorControlOp for backpressure.
+    producer.addSource("producer", producer_source, -2);
 }
 
 /**
@@ -1068,8 +1067,9 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
             }
         }).exec();
 
-    // Ensure subscription is actively delivering updates
+    // Ensure the subscription is actively delivering updates
     if (sub) sub->resume();
+    consumer.hurryUp();
 }
 
 /**
@@ -1116,10 +1116,13 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
             const auto received_count = update.value["counter"].as<int32_t>();
             epicsTimeStamp sent{timestamp["secondsPastEpoch"].as<epicsUInt32>(),
                                 timestamp["nanoseconds"].as<epicsUInt32>()};
+            log_debug_printf(consumerlog, "received counter: %d, expected counter: %d\n", received_count, count);
+
             if (received_count < 0)
                 continue;
 
             if (received_count != count) {
+                log_debug_printf(consumerlog, "Out of Sequence.  Got: %d, Expected: %d\n", received_count, count);
                 // Stop this test early on the first detected-drop
                 interrupted.signal();
                 // return special code to indicate out-of-sequence
@@ -1130,17 +1133,21 @@ int32_t Scenario::processPendingUpdates(Result &result, const epicsTimeStamp &st
             const double elapsed = epicsTimeDiffInSeconds(&sent, &start);
             // Determine how much time the data was in transit
             const double transit_time = epicsTimeDiffInSeconds(&update.receive_time, &sent);
+            log_debug_printf(consumerdatalog, "%06d: %lf s\n", received_count, transit_time);
 
             // We should never get anything sent after the end of the window, but out of an abundance of caution we break if so
             constexpr double window = 60.0;
-            if (elapsed >= window)
+            constexpr double margin = 30.0;
+            if (elapsed >= window+margin)
                 break;
 
             // Calculate the 0-based bucket index based on the seconds since the beginning of the test
-            const auto bucket_index = static_cast<uint32_t>(elapsed);
+            const auto bucket_index = received_count / current_rate;
+            log_debug_printf(consumerlog, "Add to bucket: %d\n", bucket_index);
 
             // Another check to make sure that we are not beyond the end of the results buffer and then add the results
             if (bucket_index < 60) {
+                log_debug_printf(consumerlog, "Accumulating%s","\n");
                 count = result.add(transit_time);
                 if (db) insertOrUpdateSample(current_payload, current_rate, received_count, transit_time);
             }
@@ -1251,7 +1258,7 @@ void stopPVACMS(Child& child) {
         // Wait briefly
         for (int i = 0; i < 30; ++i) {
             int status = 0;
-            pid_t r = waitpid(child.pid, &status, WNOHANG);
+            const pid_t r = waitpid(child.pid, &status, WNOHANG);
             if (r == child.pid) {
                 child.pid = -1;
                 return;
@@ -1335,49 +1342,65 @@ void runProducer() {
         .maskConnected(true)
         .maskDisconnected(true)
         .event([&](const client::Subscription& perf_control_monitor) {
-            // If a producer run is currently active, interrupt and wait for it to finish
-            if (scenario.run_active.load(std::memory_order_acquire)) {
-                scenario.interrupted.signal();
-                scenario.ok.wait(); // wait till prior is done before starting a new one
-            }
+            log_debug_printf(producerlog, "Queued PERF:CONTROL update%s", "\n");
             perf_control_queue.push(perf_control_monitor.shared_from_this());
         })
         .exec();
     perf_control_client.hurryUp();
 
     std::cout << "Connection Type,       Payload,   Tx Rate(Hz),    Throughput,        N" << std::endl;
+
+    // Fill in the thread with placeholder-data until we actually have to run a test
+    auto producer = Producer(scenario, {}, {});
+    epicsThread producer_thread(producer, "PERF-Producer", epicsThreadGetStackSize(epicsThreadStackBig), epicsThreadPriorityHigh);
+
     // Loop indefinitely for performance test operations, stop by interrupt
     while(const auto control_update = perf_control_queue.pop()) {
+        log_debug_printf(producerlog, "Received PERF:CONTROL update%s", "\n");
         while (auto control = control_update->pop()) {
+            // Whatever control we receive, we need to interrupt the prior job first before continuing
+            const auto op = control["op"] ? control["op"].as<int32_t>() : PERF_OP_PREPARE;
+            log_debug_printf(producerlog, "Received PERF:CONTROL update value: %s\n", op == PERF_OP_PREPARE ? "PERF_OP_PREPARE" : op == PERF_OP_START ? "PERF_OP_START" : "PERF_OP_STOP");
+            if (scenario.run_active.load(std::memory_order_acquire) ) {
+                log_debug_printf(producerlog, "Interrupting prior run%s", "\n");
+                scenario.interrupted.signal();
+                log_debug_printf(producerlog, "Waiting for prior run to signal stopped%s", "\n");
+                scenario.ok.wait(); // wait till it stops
+                log_debug_printf(producerlog, "Waiting run thread to stop%s", "\n");
+                producer_thread.exitWait();
+            }
+            log_debug_printf(producerlog, "Processing PERF:CONTROL update value: %s\n", op == PERF_OP_PREPARE ? "PERF_OP_PREPARE" : op == PERF_OP_START ? "PERF_OP_START" : "PERF_OP_STOP");
+
+            // Extract scenario
             const auto scenario_code = control["value.index"].as<uint32_t>();
             if (scenario_code > TLS_CMS_STAPLED) continue; // Skip invalid scenarios
-
+            log_debug_printf(producerlog, "Processing Scenario Code: %s\n", scenario_code == TCP ? "TCP" : scenario_code == TLS ? "TLS" : scenario_code == TLS_CMS ? "TLS_CMS" : "TLS_CMS_STAPLED");
             scenario.scenario_type = static_cast<ScenarioType>(scenario_code);
+
+            // Extract payload type
             const auto payload_type_value = control["payload_code"];
-            if (!payload_type_value) continue;  // Skip invalid values
+            if (!payload_type_value) {
+                log_warn_printf(producerlog, "Skipping non-existant payload type code%s", "\n");
+                continue;
+            }  // Skip invalid values
             const auto payload_type = static_cast<PayloadType>(payload_type_value.as<uint32_t>());
             const auto rate = control["rate"].as<int32_t>();
 
-            const auto op = control["op"] ? control["op"].as<int32_t>() : PERF_OP_PREPARE;
-
+            // Process operation
             if (op == PERF_OP_PREPARE) {
+                log_debug_printf(producerlog, "Processing: %s operation\n", "PERF_OP_PREPARE");
                 // PREPARE: post initial PERF_ACK on data PV
                 scenario.postValue(payload_type, PERF_ACK);
             } else if (op == PERF_OP_START) {
                 // START: begin sending
-                auto producer = Producer(scenario, payload_type, rate);
+                producer.configure(payload_type, rate);
                 producer.payload_label = payloadLabel(payload_type);
                 producer.rate_label = formatRateLabel(rate);
-                producer.run();
-                std::cout << std::endl;
+                log_debug_printf(producerlog, "Starting a new run: %s, %s\n", producer.payload_label.c_str(), producer.rate_label.c_str());
+                producer_thread.start(); // Start the producer thread, stop by interrupt
             } else if (op == PERF_OP_STOP) {
-                if (scenario.run_active.load(std::memory_order_acquire)) {
-                    // STOP: interrupt
-                    scenario.interrupted.signal();
-                    scenario.ok.wait(); // wait till it stops
-                };
-
                 // STOP: post PERF_STOP_ACK
+                log_debug_printf(producerlog, "Processing: %s operation\n", "PERF_OP_STOP");
                 scenario.postValue(payload_type, PERF_STOP_ACK);
             }
         }
