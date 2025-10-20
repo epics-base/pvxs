@@ -295,7 +295,9 @@ struct ProducerSource : server::Source {
                     monitor_setup_op->error("connect failed");
                     return;
                 }
-                pv_state->monitor_control_op->setWatermarks(0u, 0u);
+                server::MonitorStat stats;
+                pv_state->monitor_control_op->stats(stats);
+                pv_state->monitor_control_op->setWatermarks(0u, stats.limitQueue);
 
                 pv_state->monitor_control_op->onStart([pv_state](const bool is_start){
                     pv_state->started.store(is_start, std::memory_order_release);
@@ -313,14 +315,14 @@ struct ProducerSource : server::Source {
         // Build the value to send
         auto makeValue = [&](const int32_t counter_to_send){
             log_debug_printf(producerlog, "Making Payload for: %s\n", counter_to_send >= 0 ? (SB() << counter_to_send).str().c_str() : counter_to_send == PERF_ACK ? "PERF_ACK" : "PERF_STOP_ACK");
-            Value value = pv_state->prototype;
+            Value value = pv_state->prototype.clone();
             value["counter"] = counter_to_send;
             auto timestamp = value["timeStamp"];
             epicsTimeStamp sent_time{};
             epicsTimeGetCurrent(&sent_time);
             timestamp["secondsPastEpoch"] = sent_time.secPastEpoch;
             timestamp["nanoseconds"] = sent_time.nsec;
-            value.mark(true);
+            // value.mark(true);
             return value;
         };
 
@@ -674,7 +676,7 @@ struct Timed {
     void printProgressBar(double progress_percentage, int32_t N) const;
 };
 
-struct Producer final : Timed, epicsThreadRunable {
+struct Producer final : Timed {
     PayloadType payload;
     uint32_t rate;
     double window = 60.0;
@@ -683,7 +685,7 @@ struct Producer final : Timed, epicsThreadRunable {
     Producer(Scenario &scenario, const PayloadType payload_type, const uint32_t rate)
         : Timed{scenario}, payload{payload_type}, rate{rate} {}
 
-   void run() override;
+   void run();
 
     void configure(const PayloadType payload_type, const uint32_t new_rate) {
         payload = payload_type;

@@ -1352,7 +1352,6 @@ void runProducer() {
 
     // Fill in the thread with placeholder-data until we actually have to run a test
     auto producer = Producer(scenario, {}, {});
-    epicsThread producer_thread(producer, "PERF-Producer", epicsThreadGetStackSize(epicsThreadStackBig), epicsThreadPriorityHigh);
 
     // Loop indefinitely for performance test operations, stop by interrupt
     while(const auto control_update = perf_control_queue.pop()) {
@@ -1366,8 +1365,6 @@ void runProducer() {
                 scenario.interrupted.signal();
                 log_debug_printf(producerlog, "Waiting for prior run to signal stopped%s", "\n");
                 scenario.ok.wait(); // wait till it stops
-                log_debug_printf(producerlog, "Waiting run thread to stop%s", "\n");
-                producer_thread.exitWait();
             }
             log_debug_printf(producerlog, "Processing PERF:CONTROL update value: %s\n", op == PERF_OP_PREPARE ? "PERF_OP_PREPARE" : op == PERF_OP_START ? "PERF_OP_START" : "PERF_OP_STOP");
 
@@ -1380,7 +1377,7 @@ void runProducer() {
             // Extract payload type
             const auto payload_type_value = control["payload_code"];
             if (!payload_type_value) {
-                log_warn_printf(producerlog, "Skipping non-existant payload type code%s", "\n");
+                log_warn_printf(producerlog, "Skipping non-existent payload type code%s", "\n");
                 continue;
             }  // Skip invalid values
             const auto payload_type = static_cast<PayloadType>(payload_type_value.as<uint32_t>());
@@ -1397,7 +1394,7 @@ void runProducer() {
                 producer.payload_label = payloadLabel(payload_type);
                 producer.rate_label = formatRateLabel(rate);
                 log_debug_printf(producerlog, "Starting a new run: %s, %s\n", producer.payload_label.c_str(), producer.rate_label.c_str());
-                producer_thread.start(); // Start the producer thread, stop by interrupt
+                producer.run(); // Start the producer thread, stop by interrupt
             } else if (op == PERF_OP_STOP) {
                 // STOP: post PERF_STOP_ACK
                 log_debug_printf(producerlog, "Processing: %s operation\n", "PERF_OP_STOP");
