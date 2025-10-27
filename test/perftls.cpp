@@ -381,11 +381,10 @@ void SubscriptionMonitor::run() {
         epicsTimeGetCurrent(&now);
         if (epicsTimeDiffInSeconds(&end, &now) <= 0.0)
             break;
-        if (self.interrupted.wait(std::max(1.0 / static_cast<double>(std::max<uint32_t>(rate, 1u)), 0.001)))
+        if (self.interrupted.wait(1.0 / static_cast<double>(rate)))
             break;
-
         // Also wait for a callback signal to avoid busy polling
-        (void)self.sub_event.wait(0.001);
+        (void)self.sub_event.wait(0.5 / static_cast<double>(rate));
     }
 
     // Final drain on exit
