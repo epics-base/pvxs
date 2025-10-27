@@ -203,13 +203,16 @@
     "ORDER BY PAYLOAD_ID, RATE, PACKET_ID ;"
 
 #define PERF_OP_PREPARE 0
-#define PERF_OP_START 1
-#define PERF_OP_STOP 2
-#define PERF_NULL_SCENARIO (-1)
-#define PERF_OUT_OF_SEQUENCE (-1)
-#define PERF_ACK (-1)
-#define PERF_STOP_ACK (-2)
-#define PERF_BAD_OP (-99)
+#define PERF_OP_START  1
+#define PERF_OP_STOP   2
+
+// Distinct negative codes for control and error paths
+#define PERF_NULL_SCENARIO      (-100)
+#define PERF_OUT_OF_SEQUENCE    (-1001)
+
+#define PERF_ACK                (-2001)
+#define PERF_STOP_ACK           (-2002)
+#define PERF_BAD_OP             (-2999)
 
 namespace pvxs {
 namespace perf {
@@ -372,7 +375,9 @@ struct ProducerSource : server::Source {
             const auto sent = pv_state->last_sent.load(std::memory_order_acquire);
             const auto want = pv_state->last_req.load(std::memory_order_acquire);
             if (sent >= want) break;
-            const auto next = sent + 1;
+            // If 'sent' is negative (e.g., initial PERF_ACK or STOP_ACK), the next valid data counter is 0
+            int32_t next = sent + 1;
+            if (next < 0) next = 0;
             if (!sendOne(pv_state, next))  // No subscriber (or closed, or waited too long) — nothing else to do
                 break;
             pv_state->last_sent.store(next, std::memory_order_release);

@@ -437,7 +437,7 @@ void Consumer::run() {
     const auto window_count = static_cast<int32_t>(rate * window);
     const auto total_receive_ticks = static_cast<int32_t>(receive_window * rate);
     const auto time_per_update = 1.0 / static_cast<double>(rate);
-    int32_t running_count{PERF_ACK}; // Keeps track of actual counted packets consumed
+    int32_t running_count{0}; // Keeps track of actual counted packets consumed
     auto tick = 0;
     double prior_percentage = std::numeric_limits<double>::max();
     bool stop_sent = false;
@@ -453,7 +453,9 @@ void Consumer::run() {
             auto control_value = control_pv.fetch();
             control_value["op"] = PERF_OP_STOP;
             control_pv.post(control_value);
-            self.stop_ack.wait();
+            if (!self.stop_ack.wait(5.0)) {
+                log_warn_printf(consumerlog, "Timeout waiting for STOP_ACK%s", "\n");
+            }
             stop_sent = true;
             break;
         }
@@ -586,7 +588,7 @@ bool parsePayloadType(const std::string& name, PayloadType& out) {
         return true;
     }
     if (n == "MEDIUM") {
-        out = SMALL_32B;
+        out = MEDIUM_1KB;
         return true;
     }
     if (n == "LARGE") {
