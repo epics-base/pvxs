@@ -362,19 +362,34 @@ void Result::print(const ScenarioType scenario_type, const PayloadType payload_t
 }
 
 void SubscriptionMonitor::run() {
-    // Start a monitor subscription for the given payload type and set an appropriate queue size to avoid coalescing.
+    // Start a monitor subscription for the given payload type with the appropriate queue size to avoid coalescing.
     self.startMonitor(payload, rate);
 
+    // Allow up to 120 s for late arrivals after the consumer indicates completion
     epicsTimeStamp end{};
     epicsTimeGetCurrent(&end);
     end.secPastEpoch += 120; // wait up to 120 s for late arrivals
 
-    // Wait until everything has finished
+    // Drain updates on a dedicated thread separate from the subscription callback.
+    // The callback only signals self.sub_event.
     while (true) {
+        // Drain any currently queued updates from the subscription
+        self.drainSubscription();
+
+        // Check for termination conditions (timeout or external interrupt)
         epicsTimeStamp now{};
         epicsTimeGetCurrent(&now);
-        if (epicsTimeDiffInSeconds(&end, &now) <= 0.0 || self.interrupted.wait(1.0 / rate)) break;
+        if (epicsTimeDiffInSeconds(&end, &now) <= 0.0)
+            break;
+        if (self.interrupted.wait(std::max(1.0 / static_cast<double>(std::max<uint32_t>(rate, 1u)), 0.001)))
+            break;
+
+        // Also wait for a callback signal to avoid busy polling
+        (void)self.sub_event.wait(0.001);
     }
+
+    // Final drain on exit
+    self.drainSubscription();
 }
 
 void Producer::run() {
@@ -1043,33 +1058,63 @@ void Scenario::startMonitor(const PayloadType payload_type, const uint32_t rate)
         .maskConnected(true) // suppress Connected events from throwing
         .maskDisconnected(true)
         .event([this](client::Subscription &) {
-            // Drain all currently queued updates from the subscription and enqueue locally.
-            try {
-                Guard G(lock);
-                while (const auto value = sub->pop()) {
-                    const auto N = value["counter"].as<int32_t>();
-                    if (N >= 0) {
-                        epicsTimeStamp receive_time{};
-                        epicsTimeGetCurrent(&receive_time);
-                        update_queue.push(Update{value, receive_time});
-                        ok.signal();
-                    } else if (N == PERF_ACK) {
-                        // Initial ACK from producer that PREPARE has been received
-                        ack.signal();
-                    } else if (N == PERF_STOP_ACK) {
-                        // STOP ACK from the producer
-                        stop_ack.signal();
-                    }
-                }
-            } catch (const std::exception &e) {
-                // log and stop draining to avoid tight loop on errors
-                log_warn_printf(consumerlog, "Monitor pop() error: %s\n", e.what());
-            }
+            sub_event.signal();
         }).exec();
 
     // Ensure the subscription is actively delivering updates
     if (sub) sub->resume();
     consumer.hurryUp();
+}
+
+// Drain any queued subscription updates into the local update_queue on a worker thread.
+void Scenario::drainSubscription() {
+    if (!sub) return;
+
+    while (true) {
+        Value value;
+        try {
+            value = sub->pop();
+        } catch (const client::Connected&) {
+            continue;
+        } catch (const client::Disconnect&) {
+            continue;
+        } catch (const std::exception& e) {
+            log_warn_printf(consumerlog, "Monitor pop() error: %s\n", e.what());
+            break;
+        }
+
+        // empty value == queue drained
+        if (!value)
+            break;
+
+        // Examine the counter-field to determine the message type
+        int32_t N = PERF_BAD_OP;
+        try {
+            const auto cnt_field = value["counter"];
+            if (cnt_field) N = cnt_field.as<int32_t>();
+        } catch (...) {
+            // ignore malformed counter-field
+        }
+
+        if (N >= 0) {
+            // Data update: enqueue with receive timestamp and signal first-arrival gate
+            epicsTimeStamp receive_time{};
+            epicsTimeGetCurrent(&receive_time);
+            {
+                Guard G(lock);
+                update_queue.push(Update{value, receive_time});
+            }
+            ok.signal();
+
+        } else if (N == PERF_ACK) {
+            // Initial ACK from producer that PREPARE has been received
+            ack.signal();
+
+        } else if (N == PERF_STOP_ACK) {
+            // STOP ACK from the producer
+            stop_ack.signal();
+        }
+    }
 }
 
 /**
@@ -1827,3 +1872,4 @@ int main(int argc, char* argv[]) {
 #endif
     exit(0);
 }
+

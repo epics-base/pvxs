@@ -209,6 +209,7 @@
 #define PERF_OUT_OF_SEQUENCE (-1)
 #define PERF_ACK (-1)
 #define PERF_STOP_ACK (-2)
+#define PERF_BAD_OP (-99)
 
 namespace pvxs {
 namespace perf {
@@ -596,6 +597,7 @@ struct Scenario {
                                // - Producer: signaled at end of Producer::run() to tell control loop prior scenario finished
     epicsEvent ack;            // signaled when the initial PERF_ACK is seen on data PV
     epicsEvent stop_ack;       // signaled when PERF_STOP_ACK is seen on data PV
+    epicsEvent sub_event;      // signaled by subscription callback to wake drain worker
     std::atomic<bool> run_active{false}; // true when Producer::run() is active
     bool is_consumer{true};
 
@@ -634,6 +636,7 @@ struct Scenario {
 
     void postValue(PayloadType payload_type, int32_t counter = PERF_ACK);
     void startMonitor(PayloadType payload_type, uint32_t rate);
+    void drainSubscription();
     int32_t processPendingUpdates(Result &result, const epicsTimeStamp &start);
     static void run(server::SharedPV &control_pv, const ScenarioType &scenario_type, PayloadType payload_type, const std::string &db_file_name = {}, const std::string &run_id = {});
     void run(server::SharedPV &control_pv, PayloadType payload_type, uint32_t rate, const std::string& payload_label, const std::string& rate_label);
