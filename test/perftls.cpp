@@ -392,6 +392,14 @@ void SubscriptionMonitor::run() {
     self.drainSubscription();
 }
 
+void ProducerRunner::run() {
+    try {
+        prod.run();
+    } catch (const std::exception& e) {
+        log_warn_printf(producerlog, "Producer thread error: %s\n", e.what());
+    }
+}
+
 void Producer::run() {
     log_debug_printf(producerlog, "Starting New Producer Run%s", "\n");
     self.run_active.store(true, std::memory_order_release);
@@ -412,7 +420,7 @@ void Producer::run() {
         const double elapsed_since_start = epicsTimeDiffInSeconds(&now, &start_time);
         const double next_emission_secs_from_start = static_cast<double>(counter + 1)  * time_per_update ;
         auto time_till_next_emission = next_emission_secs_from_start - elapsed_since_start;
-        if (time_till_next_emission < 0.0) time_till_next_emission = 1.0 / 100000000.0; // Should not get there, but if so set a very small amount of time
+        if (time_till_next_emission < 0.0) time_till_next_emission = -1;
 
         // Update the progress bar once per percentage change
         const auto progress_percentage = elapsed_since_start >= window ? 100.0 : static_cast<uint32_t>(100 * (elapsed_since_start / window));
@@ -1400,20 +1408,16 @@ void runProducer() {
     // Fill in the thread with placeholder-data until we actually have to run a test
     auto producer = Producer(scenario, {}, {});
 
+    // Dedicated worker wrapper and thread handle for Producer::run()
+    std::unique_ptr<ProducerRunner> producer_runner;
+    std::unique_ptr<epicsThread> producer_thread;
+
     // Loop indefinitely for performance test operations, stop by interrupt
     while(const auto control_update = perf_control_queue.pop()) {
         log_debug_printf(producerlog, "Received PERF:CONTROL update%s", "\n");
         while (auto control = control_update->pop()) {
-            // Whatever control we receive, we need to interrupt the prior job first before continuing
             const auto op = control["op"] ? control["op"].as<int32_t>() : PERF_OP_PREPARE;
             log_debug_printf(producerlog, "Received PERF:CONTROL update value: %s\n", op == PERF_OP_PREPARE ? "PERF_OP_PREPARE" : op == PERF_OP_START ? "PERF_OP_START" : "PERF_OP_STOP");
-            if (scenario.run_active.load(std::memory_order_acquire) ) {
-                log_debug_printf(producerlog, "Interrupting prior run%s", "\n");
-                scenario.interrupted.signal();
-                log_debug_printf(producerlog, "Waiting for prior run to signal stopped%s", "\n");
-                scenario.ok.wait(); // wait till it stops
-            }
-            log_debug_printf(producerlog, "Processing PERF:CONTROL update value: %s\n", op == PERF_OP_PREPARE ? "PERF_OP_PREPARE" : op == PERF_OP_START ? "PERF_OP_START" : "PERF_OP_STOP");
 
             // Extract scenario
             const auto scenario_code = control["value.index"].as<uint32_t>();
@@ -1430,24 +1434,53 @@ void runProducer() {
             const auto payload_type = static_cast<PayloadType>(payload_type_value.as<uint32_t>());
             const auto rate = control["rate"].as<int32_t>();
 
-            // Process operation
+            // Process operation without blocking the control loop
             if (op == PERF_OP_PREPARE) {
                 log_debug_printf(producerlog, "Processing: %s operation\n", "PERF_OP_PREPARE");
                 // PREPARE: post initial PERF_ACK on data PV
                 scenario.postValue(payload_type, PERF_ACK);
+
             } else if (op == PERF_OP_START) {
-                // START: begin sending
+                // START: begin sending in a dedicated thread. Ensure the prior run has finished first.
+                if (scenario.run_active.load(std::memory_order_acquire)) {
+                    log_debug_printf(producerlog, "Interrupting prior run%s", "\n");
+                    scenario.interrupted.signal();
+                }
+                if (producer_thread) {
+                    log_debug_printf(producerlog, "Waiting for prior Producer thread to exit%s", "\n");
+                    producer_thread->exitWait();
+                    producer_thread.reset();
+                    producer_runner.reset();
+                }
+                // Clear any stale interrupt signals so the new run doesn't exit immediately
+                while (scenario.interrupted.wait(0.0)) {}
+
                 producer.configure(payload_type, rate);
                 producer.payload_label = payloadLabel(payload_type);
                 producer.rate_label = formatRateLabel(rate);
                 log_debug_printf(producerlog, "Starting a new run: %s, %s\n", producer.payload_label.c_str(), producer.rate_label.c_str());
-                producer.run(); // Start the producer thread, stop by interrupt
+
+                producer_runner.reset(new ProducerRunner(producer));
+                producer_thread.reset(new epicsThread(*producer_runner, "PERF-Producer", epicsThreadGetStackSize(epicsThreadStackMedium), epicsThreadPriorityHigh));
+                producer_thread->start();
+
             } else if (op == PERF_OP_STOP) {
-                // STOP: post PERF_STOP_ACK
+                // STOP: interrupt the run if active, but do not wait. Post STOP_ACK immediately.
                 log_debug_printf(producerlog, "Processing: %s operation\n", "PERF_OP_STOP");
+                if (scenario.run_active.load(std::memory_order_acquire)) {
+                    scenario.interrupted.signal();
+                }
                 scenario.postValue(payload_type, PERF_STOP_ACK);
             }
         }
+    }
+
+    // Cleanup on exit: ensure any running Producer thread is stopped and joined
+    if (producer_thread) {
+        scenario.interrupted.signal();
+        producer_thread->exitWait();
+        producer_thread.reset();
+        producer_runner.reset();
     }
 }
 

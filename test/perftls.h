@@ -364,17 +364,13 @@ struct ProducerSource : server::Source {
             return;
         }
 
-        // Update the last requested counter, only increasing
-        while (true) {
-            auto prev = pv_state->last_req.load(std::memory_order_acquire);
-            if (pv_state->last_req.compare_exchange_weak(prev, counter, std::memory_order_acq_rel)) break;
-        }
+        // Update the last requested counter
+        pv_state->last_req.store(counter, std::memory_order_release);
 
         // Send as many as allowed up to the last requested
         while (true) {
             const auto sent = pv_state->last_sent.load(std::memory_order_acquire);
-            const auto want = pv_state->last_req.load(std::memory_order_acquire);
-            if (sent >= want) break;
+            if (sent >= counter) break;
             // If 'sent' is negative (e.g., initial PERF_ACK or STOP_ACK), the next valid data counter is 0
             int32_t next = sent + 1;
             if (next < 0) next = 0;
@@ -699,6 +695,13 @@ struct Producer final : Timed {
         payload = payload_type;
         rate = new_rate;
     };
+};
+
+// Worker wrapper to run Producer::run() on a dedicated thread
+struct ProducerRunner final : epicsThreadRunable {
+    Producer &prod;
+    explicit ProducerRunner(Producer &p) : prod(p) {}
+    void run() override; // defined in perftls.cpp
 };
 
 struct Consumer final : Timed {
