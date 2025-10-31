@@ -209,6 +209,62 @@ int Detailed::level(std::ostream &strm)
 
 namespace detail {
 
+static
+bool needQuote(const char* s, size_t l) {
+    for(size_t i=0; i<l; i++) {
+        char c = s[i];
+        // omit quoting only if all within
+        //  [32, 33] | [35, 126]
+        if(c<'!' || c=='"' || c>'~')
+            return true;
+    }
+    return false;
+}
+
+// for single char. ASCII escapes, return what should follow the '\'
+static
+char special_escape(char c) {
+    char next = '\0';
+    switch(c) {
+    case '\a': next = 'a'; break;
+    case '\b': next = 'b'; break;
+    case '\f': next = 'f'; break;
+    case '\n': next = 'n'; break;
+    case '\r': next = 'r'; break;
+    case '\t': next = 't'; break;
+    case '\v': next = 'v'; break;
+    case '\\': next = '\\'; break;
+    case '\'': next = '\''; break;
+    case '\"': next = '\"'; break;
+    }
+    return next;
+}
+
+// length of utf-8 code point
+// return 0 for non-utf8 or 1..4
+static
+unsigned symlen(const char* c, size_t count) {
+    uint8_t c0 = *c; // assume count>=1
+    unsigned int l = 0;
+    if       ((c0&0x80)==0x00) { // 0b0xxxxxxx
+        return 1; // ASCII
+    } else if((c0&0xe0)==0xc0) { // 0b110xxxxx
+        l = 2;
+    } else if((c0&0xf0)==0xe0) { // 0b1110xxxx
+        l = 3;
+    } else if((c0&0xf8)==0xf0) { // 0b11110xxx
+        l = 4;
+    }
+    if(l>count)
+        return 0;
+    for(unsigned n=1; n<l; n++) {
+        uint8_t cn = c[n];
+        if((cn&0xc0)!=0x80) // 0b10xxxxxx
+            return 0;
+    }
+    return l;
+}
+
 Escaper::Escaper(const char* v)
     :val(v)
     ,count(v ? strlen(v) : 0)
@@ -216,34 +272,53 @@ Escaper::Escaper(const char* v)
 
 std::ostream& operator<<(std::ostream& strm, const Escaper& esc)
 {
-    const char *s = esc.val;
+    auto s = esc.val;
+    auto count = esc.count;
     if(!s) {
         strm<<"<NULL>";
     } else {
-        for(size_t n=0; n<esc.count; n++,s++) {
-            char c = *s, next;
-            switch(c) {
-            case '\a': next = 'a'; break;
-            case '\b': next = 'b'; break;
-            case '\f': next = 'f'; break;
-            case '\n': next = 'n'; break;
-            case '\r': next = 'r'; break;
-            case '\t': next = 't'; break;
-            case '\v': next = 'v'; break;
-            case '\\': next = '\\'; break;
-            case '\'': next = '\''; break;
-            case '\"': next = '\"'; break;
-            default:
-                if(c>=' ' && c<='~') { // isprint()
-                    strm.put(c);
+        auto quoting = esc.quoting;
+        if(quoting==0)
+            quoting = needQuote(s, count) ? 1 : -1;
+
+        if(quoting>0)
+            strm.put('"');
+
+        while(count) {
+            if(auto l = symlen(s, count)) { // ASCII or utf-8 char
+
+                if(l==1) { // ASCII
+                    if(char nextc = special_escape(*s)) {
+                        strm.put('\\').put(nextc);
+                        s++;
+                        count--;
+                        continue;
+
+                    } else if(*s>=' ' && *s<='~') {
+                        strm.put(*s);
+                        s++;
+                        count--;
+                        continue;
+                    }
+
                 } else {
-                    Restore R(strm);
-                    strm<<"\\x"<<std::hex<<std::setw(2)<<std::setfill('0')<<unsigned(c&0xff);
+                    strm.write(s, l); // TODO: try to identify utf-8 whitespace chars?
+                    s += l;
+                    count -= l;
+                    continue;
                 }
-                continue;
+
+                // fall through to escape
             }
-            strm.put('\\').put(next);
+
+            Restore R(strm);
+            strm<<"\\x"<<std::hex<<std::setw(2)<<std::setfill('0')<<unsigned((*s)&0xff);
+            s++;
+            count--;
         }
+
+        if(quoting>0)
+            strm.put('"');
     }
     return strm;
 }
