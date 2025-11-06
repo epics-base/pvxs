@@ -9,10 +9,7 @@
 
 #include <functional>
 #include <memory>
-#include <tuple>
-#include <set>
 #include <vector>
-#include <array>
 
 #include <pvxs/version.h>
 #include "evhelper.h"
@@ -37,7 +34,7 @@ struct PVXS_API UDPManager
         std::string proto;
         SockAddr server;
         ServerGUID guid;
-        uint8_t peerVersion;
+        uint8_t peerVersion=0;
         Beacon(const SockAddr& src) :src(src) {}
     };
     //! Create subscription for Beacon messages.
@@ -53,10 +50,10 @@ struct PVXS_API UDPManager
         SockAddr dest; // destination IP used by client
         SockAddr server;
         const IfaceMap::Iface* srcIface = nullptr;
-        uint32_t searchID;
-        uint8_t peerVersion;
+        uint32_t searchID=0;
+        uint8_t peerVersion=0;
         bool protoTCP = false; // included protocol "tcp"
-        bool mustReply;
+        bool mustReply=false;
         struct Name {
             const char *name;
             uint32_t id;
