@@ -28,6 +28,7 @@
 #include <pvaproto.h>
 
 namespace pva = pvxs;
+using pvxs::impl::SB;
 namespace {
 
 DEFINE_LOGGER(out, "pvxvct");
@@ -124,7 +125,7 @@ int main(int argc, char *argv[])
             }
         } opts;
 
-        std::vector<pva::SockAddr> bindaddrs;
+        std::vector<pva::SockEndpoint> bindaddrs;
 
         {
             int opt;
@@ -149,16 +150,8 @@ int main(int argc, char *argv[])
                 case 'S':
                     opts.server = true;
                     break;
-                case 'B': {
-                    pva::SockAddr addr;
-                    int slen = addr.size();
-                    if(evutil_parse_sockaddr_port(optarg, &addr->sa, &slen)) {
-                        throw std::runtime_error(pva::SB()<<"Expected address[:port] to bind.  Not "<<optarg);
-                    }
-                    if(addr.port()==0)
-                        addr.setPort(5076);
-                    bindaddrs.push_back(addr);
-                }
+                case 'B':
+                    bindaddrs.emplace_back(optarg, 5076);
                     break;
                 case 'P':
                     opts.pvnames.insert(optarg);
@@ -212,8 +205,7 @@ int main(int argc, char *argv[])
             if(!opts.pvnames.empty()) {
                 bool show = false;
                 for(const auto pv : msg.names) {
-                    show = opts.pvnames.find(pv.name)!=opts.pvnames.end();
-                    if((show = opts.pvnames.find(pv.name)!=opts.pvnames.end()))
+                    if((show = (opts.pvnames.find(pv.name)!=opts.pvnames.end())))
                         break;
                 }
                 if(!show)
@@ -245,7 +237,7 @@ int main(int argc, char *argv[])
                                    manager.onBeacon(baddr, beaconCB));
             listeners.back().first->start();
             listeners.back().second->start();
-            log_debug_printf(out, "Bind: %s\n", baddr.tostring().c_str());
+            log_debug_printf(out, "Bind: %s\n", (SB()<<baddr).str().c_str());
         }
 
 
