@@ -669,20 +669,20 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     // on UDPManager worker
 
     for(const auto& addr : ignoreList) { // expected to be a short list
-        if(msg.src.family()!=addr.family()) {
+        if(msg.origSrc.family()!=addr.family()) {
             // skip
-        } else if(msg.src->in.sin_addr.s_addr != addr->in.sin_addr.s_addr) {
+        } else if(msg.origSrc->in.sin_addr.s_addr != addr->in.sin_addr.s_addr) {
             // skip
         } else if(addr->in.sin_port==0) {
             // ignore all ports
             return;
-        } else if(msg.src->in.sin_port == addr->in.sin_port) {
+        } else if(msg.origSrc->in.sin_port == addr->in.sin_port) {
             // ignore specific sender port
             return;
         }
     }
 
-    log_debug_printf(serverio, "%s searching\n", msg.src.tostring().c_str());
+    log_debug_printf(serverio, "%s searching\n", msg.origSrc.tostring().c_str());
 
     searchOp._names.resize(msg.names.size());
     for(auto i : range(msg.names.size())) {
@@ -690,13 +690,13 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
         searchOp._names[i]._claim = false;
     }
     static_assert(sizeof(searchOp._src) >= INET6_ADDRSTRLEN+1, "");
-    switch(msg.server.family()) {
+    switch(msg.replyDest.family()) {
     case AF_INET:
-        evutil_inet_ntop(AF_INET, &msg.server->in.sin_addr,
+        evutil_inet_ntop(AF_INET, &msg.replyDest->in.sin_addr,
                          searchOp._src, sizeof(searchOp._src)-1);
         break;
     case AF_INET6:
-        evutil_inet_ntop(AF_INET6, msg.server->in6.sin6_addr.s6_addr,
+        evutil_inet_ntop(AF_INET6, msg.replyDest->in6.sin6_addr.s6_addr,
                          searchOp._src, sizeof(searchOp._src)-1);
         break;
     default:
