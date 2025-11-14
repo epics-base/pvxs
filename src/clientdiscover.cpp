@@ -15,8 +15,8 @@ DEFINE_LOGGER(io, "pvxs.client.io");
 namespace pvxs {
 namespace client {
 
-Discovery::Discovery(const std::shared_ptr<ContextImpl> &context)
-    :OperationBase (Operation::Discover, context->tcp_loop)
+Discovery::Discovery(const std::shared_ptr<ContextImpl> &context, const std::string& name)
+    :OperationBase (Operation::Discover, context->tcp_loop, name)
     ,context(context)
 {}
 
@@ -63,7 +63,7 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
     auto context(ctx->impl->shared_from_this());
     auto ping(_ping);
 
-    auto op(std::make_shared<Discovery>(context));
+    auto op(std::make_shared<Discovery>(context, std::string()));
     op->notify = std::move(_fn);
 
     auto syncCancel(_syncCancel);

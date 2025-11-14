@@ -1,5 +1,7 @@
 TOP=..
 
+_PVXS_BOOTSTRAP = YES
+
 include $(TOP)/configure/CONFIG
 
 CMAKE ?= cmake
@@ -13,6 +15,8 @@ LIBEVENT_USE_CMAKE?=NO
 endif
 
 CMAKEFLAGS = $(CMD_CMAKEFLAGS)
+
+CMAKEFLAGS += -DCMAKE_POLICY_VERSION_MINIMUM=3.10
 
 # override definitions from CONFIG_PVXS_MODULE, but not from CLI arguments
 LIBEVENT = $(LIBEVENT_$(T_A))

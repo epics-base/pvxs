@@ -3,13 +3,40 @@
 Release Notes
 =============
 
-1.3.3 (UNRELEASED)
+1.4.1 (Aug 2025)
+----------------
+
+* Restore lookup of host names in address lists (regression introduced with 1.4.0).
+* Fix builds where ``$(INSTALL_LOCATION) != $(TOP)``.
+* client: Avoid crash when calling `pvxs::client::Operation::name()` while disconnected.  (Thanks to Mike Smith)
+* client: Log ``Client context created with no search destinations`` when creating a client context which can never connect channels.
+* server: `pvxs::server::Server::clientConfig()` Avoid mixing TCP interface list with UDP search destination list.
+* server: do not mask initial update when empty.
+* ioc: PVA link respect environment variables.  Previously defaults always used.
+
+1.4.0 (July 2025)
 ------------------
+
+* Rename generated CONFIG_SITE to TOOLCHAIN.
+  Existing clones need to remove previously generated ``configure/os/CONFIG_SITE.Common.*``.
+* Fix rendering of IPv6 addresses in QSRV credential (ACF and asTrapWrite/caputlog) and `pvxs::server::Source::Search`.
+* Add server to client remote logging.
+  Several `pvxs::server::Source` related objects gain the `pvxs::server::RemoteLogger` interface.
+* Add remote logging for some malformed pvRequest.
+* ioc: record._options.process accept numeric values as true/false.
+* server: handle protocol corner case of monitor create without initial ACK.
+* Add support for Python 3.13
+
+1.3.3 (Apr 2025)
+----------------
 
 * Client: search retry step reset on channel reconnection (Anze Zagar)
 * Various documentation improvements!  (Érico Nogueira)
-* Fix dbLoadGroups (Érico Nogueira)
 * Fix build with epics-base 7.0.7 (Rémi NICOLE)
+* Fix NTNDArray definition for floating point types (Joao Paulo Martins)
+* ioc: Fix dbLoadGroups (Érico Nogueira)
+* ioc: Fix handling of ``DBE_ARCHIVE`` when requested via ``records._options.DBE``
+* ioc: Fix pvalink targeting Union field (Joao Paulo Martins)
 
 1.3.2 (Oct 2024)
 ------------------

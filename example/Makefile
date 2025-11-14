@@ -1,10 +1,6 @@
 TOP=..
 
 include $(TOP)/configure/CONFIG
-# cfg/ sometimes isn't correctly included due to a Base bug
-# so we do here (maybe again) as workaround
-include $(TOP)/configure/CONFIG_PVXS_MODULE
-include $(TOP)/configure/CONFIG_PVXS_VERSION
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
@@ -35,7 +31,6 @@ rpc_client_SRCS += rpc_client.cpp
 #===========================
 
 include $(TOP)/configure/RULES
-include $(TOP)/configure/RULES_PVXS_MODULE
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 

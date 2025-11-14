@@ -310,16 +310,17 @@ void ResultWaiter::complete(Result&& result, bool interrupt)
     notify.signal();
 }
 
-OperationBase::OperationBase(operation_t op, const evbase& loop)
+OperationBase::OperationBase(operation_t op, const evbase& loop, const std::string &name)
     :Operation(op)
     ,loop(loop)
+    ,channelName(name)
 {}
 
 OperationBase::~OperationBase() {}
 
 const std::string& OperationBase::name()
 {
-    return chan->name;
+    return channelName;
 }
 
 Value OperationBase::wait(double timeout)
@@ -516,8 +517,7 @@ Value buildCAMethod()
 }
 
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
-    :ifmap(IfaceMap::instance())
-    ,effective([conf]() -> Config{
+    :effective([conf]() -> Config{
         Config eff(conf);
         eff.expand();
         return eff;
@@ -606,6 +606,9 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
         log_info_printf(io, "Searching to TCP %s\n", saddr.tostring().c_str());
         nameServers.emplace_back(saddr, nullptr);
     }
+
+    if(searchDest.empty() && nameServers.empty())
+        log_err_printf(setup, "Client context created with no search destinations.  Nothing much will happen now%s", "\n");
 
     const auto cb([this](const UDPManager::Beacon& msg) {
         onBeacon(msg);
@@ -1023,14 +1026,17 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
     if(kind == SearchKind::check)
         currentBucket = (currentBucket+1u)%searchBuckets.size();
 
-    log_debug_printf(io, "Search tick %zu\n", idx);
-
     decltype (searchBuckets)::value_type bucket;
     if (kind == SearchKind::initial) {
         initialSearchBucket.swap(bucket);
     } else if(kind == SearchKind::check) {
         searchBuckets[idx].swap(bucket);
     }
+
+    log_debug_printf(io, "%s tick %zu for %zu\n",
+                     kind == SearchKind::discover ? "Discover" : "Search",
+                     idx,
+                     bucket.size());
 
     while(!bucket.empty() || kind == SearchKind::discover) {
         // when 'discover' we only loop once

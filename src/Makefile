@@ -1,10 +1,6 @@
 TOP=..
 
 include $(TOP)/configure/CONFIG
-# cfg/ sometimes isn't correctly included due to a Base bug
-# so we do here (maybe again) as workaround
-include $(TOP)/configure/CONFIG_PVXS_MODULE
-include $(TOP)/configure/CONFIG_PVXS_VERSION
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
@@ -14,7 +10,7 @@ USR_CPPFLAGS += -DPVXS_ENABLE_EXPERT_API
 
 ifdef T_A
 ifneq ($(CONFIG_LOADED),YES)
-$(error Toolchain inspection failed $(MAKEFILE_LIST))
+$(warning Toolchain inspection failed $(MAKEFILE_LIST))
 endif
 endif
 
@@ -30,10 +26,6 @@ endif
 # fault on any undefined symbols (eg. from missing LIB_SYS_LIBS)
 # breaks on older ncurses (circa RHEL6) not using the INPUT() trick to pull in libtinfo.so
 #USR_LDFLAGS_Linux += -Wl,--no-undefined -Wl,--no-allow-shlib-undefined
-
-ifeq (,$(PVXS_MAJOR_VERSION))
-$(error PVXS_MAJOR_VERSION undefined, problem reading cfg/CONFIG_PVXS_VERSION)
-endif
 
 # see below for special case versionNum.h
 EXPAND += describe.h
@@ -111,7 +103,7 @@ LIB_SRCS += clientdiscover.cpp
 LIB_LIBS += Com
 
 # special case matching configure/RULES_PVXS_MODULE
-ifeq (,$(LIBEVENT))
+ifeq (,$(LIBEVENT_PREFIX))
 LIB_SYS_LIBS += $(LIBEVENT_BUNDLE_LIBS)
 else
 LIB_LIBS += $(LIBEVENT_BUNDLE_LIBS)
@@ -124,7 +116,6 @@ BIN_INSTALLS_WIN32 += $(wildcard $(LIBEVENT)/lib/*.dll)
 #===========================
 
 include $(TOP)/configure/RULES
-include $(TOP)/configure/RULES_PVXS_MODULE
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 

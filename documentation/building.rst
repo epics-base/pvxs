@@ -32,6 +32,11 @@ On Debian/Ubuntu. ::
 
     apt-get install libevent-dev
 
+On macOS / Homebrew. ::
+
+    brew install libevent
+    export LIBEVENT=$(brew --prefix)
+
 To build from source (Requires `CMake <https://cmake.org/>`_): ::
 
     make -C pvxs/bundle libevent # implies .$(EPICS_HOST_ARCH)
@@ -98,4 +103,4 @@ Add the pvxs library as a dependency to your executable or library. eg. ::
 libevent will be automatically added for linking.
 
 For those interested, this is accomplished with the logic found in
-"cfg/CONFIG_PVXS_MODULE".
+``$(INSTALL_LOCATION)/cfg/CONFIG_PVXS_MODULE``.

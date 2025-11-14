@@ -155,6 +155,24 @@ struct BasicTest {
             testShow()<<pop(sub, evt);
         });
     }
+
+    void testNoMark()
+    {
+        initial.unmark();
+        mbox.open(initial);
+        serv.start();
+        subscribe("mailbox");
+
+        testThrows<client::Connected>([this](){
+            pop(sub, evt);
+        });
+
+        if(auto val = pop(sub, evt)) {
+            testEq(val["value"].as<int32_t>(), 0);
+        } else {
+            testFail("Missing initial data update");
+        }
+    }
 };
 
 struct TestLifeCycle : public BasicTest
@@ -363,7 +381,7 @@ struct TestReconn : public BasicTest
 
 MAIN(testmon)
 {
-    testPlan(41);
+    testPlan(43);
     testSetup();
     try{
         logger_config_env();
@@ -371,6 +389,7 @@ MAIN(testmon)
         BasicTest().cancel();
         BasicTest().asyncCancel();
         BasicTest().badRequest();
+        BasicTest().testNoMark();
         TestLifeCycle().testBasic(true);
         TestLifeCycle().testBasic(false);
         TestLifeCycle().testSecond();

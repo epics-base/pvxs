@@ -7,6 +7,7 @@
 #include <epicsString.h>
 #include <alarm.h>
 #include <recGbl.h>
+#include <dbLink.h>
 
 #include <pvxs/log.h>
 #include "dbentry.h"
@@ -16,6 +17,26 @@
 #include <epicsStdio.h> // redirect stdout/stderr; include after libevent/util.h
 
 DEFINE_LOGGER(_logger, "pvxs.ioc.link.lset");
+
+#if EPICS_VERSION_INT <= VERSION_INT(3, 16, 1, 0)
+static
+const char * dbLinkFieldName(const struct link *plink)
+{
+    const struct dbCommon *precord = plink->precord;
+    const dbRecordType *pdbRecordType = precord->rdes;
+    dbFldDes * const *papFldDes = pdbRecordType->papFldDes;
+    const short *link_ind = pdbRecordType->link_ind;
+    int i;
+
+    for (i = 0; i < pdbRecordType->no_links; i++) {
+        const dbFldDes *pdbFldDes = papFldDes[link_ind[i]];
+
+        if (plink == (DBLINK *)((char *)precord + pdbFldDes->offset))
+            return pdbFldDes->name;
+    }
+    return "????";
+}
+#endif
 
 namespace pvxs {
 namespace ioc {
@@ -70,6 +91,7 @@ void pvaOpenLink(DBLINK *plink) noexcept
         // also, no pvaLinkChannel::lock yet
 
         self->plink = plink;
+        self->pfieldname = dbLinkFieldName(plink);
 
         if(self->channelName.empty())
             return; // nothing to do...
@@ -241,7 +263,8 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
 
         if(!self->valid()) {
             // disconnected
-            (void)recGblSetSevr(plink->precord, LINK_ALARM, INVALID_ALARM);
+            (void)recGblSetSevrMsg(plink->precord, LINK_ALARM, INVALID_ALARM, "%s Disconn",
+                                   self->pfieldname);
             if(self->time) {
                 plink->precord->time = self->snap_time;
             }
@@ -252,7 +275,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
         auto nReq(pnRequest ? *pnRequest : 1);
         auto value(self->fld_value);
 
-        if(value.type()==TypeCode::Any)
+        if(value.type()==TypeCode::Any || value.type()==TypeCode::Union)
             value = value.lookup("->");
 
         if(nReq <= 0 || !value) {
@@ -397,15 +420,16 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
         {
             log_debug_printf(_logger, "%s: %s recGblSetSevr %d\n", __func__, plink->precord->name,
                              self->snap_severity);
-            recGblSetSevr(plink->precord, LINK_ALARM, self->snap_severity);
+            recGblSetSevrMsg(plink->precord, LINK_ALARM, self->snap_severity,
+                             "%s", self->snap_message.c_str());
         }
 
         if(self->time) {
             plink->precord->time = self->snap_time;
         }
 
-        log_debug_printf(_logger, "%s: %s %s snapsevr=%d OK\n", __func__, plink->precord->name,
-                         self->channelName.c_str(), self->snap_severity);
+        log_debug_printf(_logger, "%s: %s %s snapalrm=%d,\"%s\" OK\n", __func__, plink->precord->name,
+                         self->channelName.c_str(), self->snap_severity, self->snap_message.c_str());
         return 0;
     }CATCH()
     return -1;

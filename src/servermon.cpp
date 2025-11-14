@@ -59,6 +59,8 @@ struct MonitorOp final : public ServerOp
     // is doReply() scheduled to run
     bool scheduled=false;
     bool pipeline=false; // const after setup
+    // set until first update queued
+    bool first=true;
     // finish() called
     bool finished=false;
     size_t window=0u, limit=4u;
@@ -128,7 +130,11 @@ struct MonitorOp final : public ServerOp
         uint8_t subcmd = 0u;
         if(self->state==Creating) {
             subcmd = 0x08;
-            self->state = self->type ? Idle : Dead;
+            if(self->type) {
+                self->state = Idle;
+            } else {
+                self->cleanup();
+            }
 
         } else if(self->state==Executing) {
             if(self->queue.empty() || (self->pipeline && !self->window && !self->finished)) {
@@ -138,7 +144,7 @@ struct MonitorOp final : public ServerOp
 
             } else if(!self->queue.front()) {
                 subcmd = 0x10;
-                self->state = Dead;
+                self->cleanup();
                 log_debug_printf(connio, "Client %s IOID %u finishes\n",
                                  conn->peerName.c_str(), unsigned(self->ioid));
             }
@@ -177,7 +183,6 @@ struct MonitorOp final : public ServerOp
         ch->statTx += conn->enqueueTxBody(pva_app_msg_t::CMD_MONITOR);
 
         if(self->state == ServerOp::Dead) {
-            self->cleanup();
             return;
         }
 
@@ -250,7 +255,11 @@ struct ServerMonitorControl : public server::MonitorControlOp
             throw std::logic_error("Type change not allowed in post().  Recommend pvxs::Value::cloneEmpty()");
 
         // pvMask is const at this point, so no need to lock
-        bool real = testmask(val, mon->pvMask);
+        bool real = mon->first; // always post through first update
+        if(real)
+            mon->first = false;
+        else
+            real = testmask(val, mon->pvMask); // consider mask for subsequent updates
 
         Guard G(mon->lock);
         if(mon->finished)
@@ -355,6 +364,11 @@ struct ServerMonitorControl : public server::MonitorControlOp
         });
     }
 
+    virtual void logRemote(Level lvl, const std::string& msg) override final
+    {
+        doLogRemote(this, lvl, msg);
+    }
+
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<MonitorOp> op;
 
@@ -432,6 +446,11 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
         });
     }
 
+    virtual void logRemote(Level lvl, const std::string& msg) override final
+    {
+        doLogRemote(this, lvl, msg);
+    }
+
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<MonitorOp> op;
 
@@ -491,50 +510,73 @@ void ServerConn::handle_MONITOR()
         chan->statRx += rxlen;
 
         auto op(std::make_shared<MonitorOp>(chan, ioid));
-        op->window = nack;
-        (void)pvRequest["record._options.pipeline"].as(op->pipeline);
-
-        pvRequest["record._options.queueSize"].as<uint32_t>([&op](size_t qSize){
-            op->limit = qSize;
-        });
-
-        if(op->limit < op->window)
-            op->limit = op->window;
-
-        if(!op->limit)
-            op->limit = 1u;
-
-        auto ackAny = pvRequest["record._options.ackAny"];
-        if(ackAny.type()==TypeCode::String) {
-            auto sval = ackAny.as<std::string>();
-            if(sval.size()>1 && sval.back()=='%') {
-                try {
-                    auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
-                    op->ackAt = std::max(0.0, std::min(percent, 100.0)) * op->limit;
-                }catch(std::exception&){
-                    log_warn_printf(connio, "Error parsing as percent ackAny: \"%s\"\n", sval.c_str());
-                }
-            }
-
-        }
-
-        if(op->ackAt==0u){
-            uint32_t count=0u;
-
-            if(ackAny.as(count)) {
-                op->ackAt = count;
-            }
-        }
-
-        if(op->ackAt==0u){
-            op->ackAt = op->limit/2u;
-        }
-
-        op->ackAt = std::max<size_t>(1u, std::min(op->ackAt, op->limit));
-
         std::unique_ptr<ServerMonitorSetup> ctrl(new ServerMonitorSetup(this, iface->server->internal_self, chan->name, pvRequest, op));
 
         op->state = ServerOp::Creating;
+        op->window = nack;
+
+        // process pvRequest
+
+        if(auto pipeline = pvRequest["record._options.pipeline"]) {
+            bool v;
+            if(pipeline.as(v)) {
+                op->pipeline = v;
+
+            } else {
+                logRemote(ioid, Level::Warn, SB()<<"Unable to parse "<<pvRequest.nameOf(pipeline)<<" : "<<pipeline);
+            }
+        }
+
+        if(auto queueSize = pvRequest["record._options.queueSize"]) {
+            uint32_t qSize = op->limit;
+            if(queueSize.as(qSize) && qSize>=2) {
+                op->limit = qSize;
+            } else if(op->pipeline) {
+                // pipeline sub-protocol requires agreement on queueSize.
+                ctrl->error(SB()<<"can not pipeline invalid queueSize : "<<queueSize);
+                return;
+            } else {
+                logRemote(ioid, Level::Warn, SB()<<"Unable to use "<<pvRequest.nameOf(queueSize)<<" : "<<queueSize);
+            }
+        }
+
+        if(op->pipeline) {
+            if(!nack) {
+                // before 1.4.0 initial nack=0 clamped the window size to zero!
+                log_err_printf(connsetup,
+                               "Client %s \"%s\" pipeline monitor w/o initial nack incompatible\n",
+                               peerName.c_str(), chan->name.c_str());
+            }
+
+            if(auto ackAny = pvRequest["record._options.ackAny"]) {
+                uint32_t ival;
+                auto sval = ackAny.as<std::string>();
+                if(ackAny.as(ival)) { // plain integer
+                    op->ackAt = ival;
+
+                } else if(ackAny.as(sval)) { // maybe given as a percentage
+                    if(sval.size()>1 && sval.back()=='%') {
+                        try {
+                            auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
+                            op->ackAt = std::max(0.0, std::min(percent, 100.0)) * op->limit;
+                        }catch(std::exception& e){
+                            logRemote(ioid, Level::Crit,
+                                      SB()<<"Unable to parse% "<<pvRequest.nameOf(ackAny)<<" : "<<sval<<" : "<<e.what());
+                        }
+                    }
+                } else {
+                    logRemote(ioid, Level::Crit,
+                              SB()<<"Unable to parse "<<pvRequest.nameOf(ackAny)<<" : "<<ackAny);
+                }
+
+            }
+
+            if(op->ackAt==0u){
+                op->ackAt = op->limit/2u;
+            }
+
+            op->ackAt = std::max<size_t>(1u, std::min(op->ackAt, op->limit));
+        } // pipeline
 
         opByIOID[ioid] = op;
         chan->opByIOID[ioid] = op;

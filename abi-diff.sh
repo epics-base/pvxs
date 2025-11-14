@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e -x
 
-# need abi-dumper vtable-dumper abi-compliance-checker ctags-universal
-# circa >= Debian 11
+# need abi-dumper vtable-dumper abi-compliance-checker universal-ctags
+# circa >= Debian 12
 
 die() {
     echo "$1" >&1
@@ -10,10 +10,23 @@ die() {
 }
 
 OLD="$1"
-NEW="${2:-HEAD}"
+NEW="$2"
+# default to eg. "1.2.3-5-adfjlad"
+[ "$NEW" ] || NEW="$(git describe --tags)"
 
-# default to tag before $NEW
-[ "$OLD" ] || OLD="$(git describe --abbrev=0 "$NEW")"
+if ! [ "$OLD" ]
+then
+    # default to tag before $NEW (eg. "1.2.3")
+    OLD="$(git describe --tags --abbrev=0 "$NEW")"
+    if [ "$OLD" = "$NEW" ]
+    then
+        # $NEW is a tagged revision, so nothing to abbreviate.
+        # look back for a previous tag.  May be confused by merging
+        OLD="$(git describe --tags --abbrev=0 "$NEW"~)"
+    fi
+
+    [ "$OLD" = "$NEW" ] && die "Refusing self-diff of $NEW"
+fi
 
 [ "$OLD" -a "$NEW" ] || die "usage: $0 <oldrev> <newrev>"
 
@@ -51,7 +64,10 @@ setupsrc() {
     #make -C "$2/bundle" libevent -j8
     make -C "$2" CROSS_COMPILER_TARGET_ARCHS= OPT_CFLAGS='-g -Og' OPT_CXXFLAGS='-g -Og' ioc -j8
 
+    install -C -d compat_reports/libpvxs
+    install -C -d compat_reports/libpvxsIoc
     nm -g "$2"/lib/linux-*/libpvxs.so.* |sed -e 's|^[0-9a-f]*\s*||' > "compat_reports/libpvxs/$1.nm"
+    nm -g "$2"/lib/linux-*/libpvxsIoc.so.* |sed -e 's|^[0-9a-f]*\s*||' > "compat_reports/libpvxsIoc/$1.nm"
 
     abi-dumper "$2"/lib/linux-*/libpvxs.so.* -o "compat_reports/libpvxs/$1.dump" -public-headers "$2/include" -lver "$1"
     abi-dumper "$2"/lib/linux-*/libpvxsIoc.so.* -o "compat_reports/libpvxsIoc/$1.dump" -public-headers "$2/include" -lver "$1"
@@ -64,11 +80,17 @@ setupsrc "$NEW" "$TDIR/new"
 diff -u "compat_reports/libpvxs/$OLD.nm" "compat_reports/libpvxs/$NEW.nm" || true
 diff -u "compat_reports/libpvxsIoc/$OLD.nm" "compat_reports/libpvxsIoc/$NEW.nm" || true
 
-abi-compliance-checker -l libpvxs \
+RET=0
+if ! abi-compliance-checker -l libpvxs \
  -report-path "compat_reports/compat_report-${OLD}_to_${NEW}.html" \
  -old "compat_reports/libpvxs/$OLD.dump" \
  -new "compat_reports/libpvxs/$NEW.dump"
+then
+  RET=1
+fi
 abi-compliance-checker -l libpvxsIoc \
  -report-path "compat_reports/compat_report-${OLD}_to_${NEW}-ioc.html" \
  -old "compat_reports/libpvxsIoc/$OLD.dump" \
  -new "compat_reports/libpvxsIoc/$NEW.dump"
+
+exit $RET

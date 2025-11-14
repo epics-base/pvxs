@@ -67,3 +67,6 @@ API
 
 .. doxygenstruct:: pvxs::server::ClientCredentials
     :members:
+
+.. doxygenstruct:: pvxs::server::RemoteLogger
+    :members:

@@ -224,6 +224,7 @@ struct pvaLink final : public pvaLinkConfig
     dbfType type = (dbfType)-1;
 
     DBLINK * plink = nullptr;
+    const char *pfieldname = nullptr;
 
     std::shared_ptr<pvaLinkChannel> lchan;
 

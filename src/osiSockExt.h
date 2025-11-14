@@ -50,7 +50,7 @@ private:
     store_t  store;
 public:
 
-    explicit SockAddr(int af = AF_UNSPEC);
+    explicit SockAddr(int af = AF_UNSPEC, unsigned short port=0);
     explicit SockAddr(const char *address, unsigned short port=0);
     explicit SockAddr(const sockaddr *addr, socklen_t alen=0);
     inline explicit SockAddr(const std::string& address, unsigned short port=0) :SockAddr(address.c_str(), port) {}
@@ -78,6 +78,7 @@ public:
     bool isMCast() const noexcept;
 
     SockAddr map4to6() const;
+    SockAddr map6to4() const;
 
     store_t* operator->() { return &store; }
     const store_t* operator->() const { return &store; }
@@ -209,6 +210,18 @@ struct recvfromx {
     SockAddr* dst;  // if enable_IP_PKTINFO()
     int64_t dstif;  // if enable_IP_PKTINFO(), destination interface index
     uint32_t ndrop; // if enable_SO_RXQ_OVFL()
+
+    PVXS_API
+    int call();
+};
+
+struct sendtox {
+    evutil_socket_t sock;
+    const void *buf;
+    size_t buflen;
+    const SockAddr* dst;
+    const SockAddr* src; // if !NULL override UDP source address
+    uint64_t srcif;      // if !=0 override routing to send through this interface
 
     PVXS_API
     int call();

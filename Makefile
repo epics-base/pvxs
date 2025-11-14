@@ -6,8 +6,11 @@ include $(TOP)/configure/CONFIG
 DIRS += configure
 DIRS += bundle
 
+DIRS += setup
+setup_DEPEND_DIRS = configure
+
 DIRS += src
-src_DEPEND_DIRS = configure bundle
+src_DEPEND_DIRS = setup bundle
 
 DIRS += tools
 tools_DEPEND_DIRS = src

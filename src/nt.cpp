@@ -215,8 +215,8 @@ TypeDef NTNDArray::build() const
                         UInt16A("ushortValue"),
                         UInt32A("uintValue"),
                         UInt64A("ulongValue"),
-                        Float32("floatValue"),
-                        Float64("doubleValue"),
+                        Float32A("floatValue"),
+                        Float64A("doubleValue"),
                     }),
                     Struct("codec", "codec_t", {
                         String("name"),

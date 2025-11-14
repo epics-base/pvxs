@@ -179,7 +179,7 @@ void GroupSource::onOp(Group& group,
                         fieldIndex++;
                     }
                     auto& pvRequest = putOperation->pvRequest();
-                    IOCSource::setForceProcessingFlag(pvRequest, securityCache);
+                    IOCSource::setForceProcessingFlag(putOperation.get(), pvRequest, securityCache);
                     securityCache->done = true;
                 }
 

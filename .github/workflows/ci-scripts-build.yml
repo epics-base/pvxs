@@ -81,7 +81,7 @@ jobs:
             cross: "windows-x64-mingw"
 
           - name: RTEMS5
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             cmp: gcc
             configuration: default
             base: "7.0"
@@ -137,19 +137,19 @@ jobs:
             configuration: default
             base: "7.0"
 
-          - name: vs2019 DLL
-            os: windows-2019
-            cmp: vs2019
+          - name: vs2022 DLL
+            os: windows-2022
+            cmp: vs2022
             configuration: debug
             base: "7.0"
-            extra: "CMD_CXXFLAGS=-analysis"
+            extra: "CMD_CXXFLAGS=-analyze"
 
-          - name: vs2019 static
-            os: windows-2019
-            cmp: vs2019
+          - name: vs2022 static
+            os: windows-2022
+            cmp: vs2022
             configuration: static-debug
             base: "7.0"
-            extra: "CMD_CXXFLAGS=-analysis"
+            extra: "CMD_CXXFLAGS=-analyze"
 
     steps:
     - uses: actions/checkout@v4

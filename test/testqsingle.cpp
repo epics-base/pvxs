@@ -18,6 +18,7 @@
 #include <asTrapWrite.h>
 #include <generalTimeSup.h>
 
+#include "dblocker.h"
 #include "testioc.h"
 #include "utilpvt.h"
 
@@ -588,6 +589,9 @@ void testPutLog()
         static
         void message(asTrapWriteMessage *pmessage,int after)
         {
+            testTrue(strcmp(pmessage->hostid, "127.0.0.1")==0 || strcmp(pmessage->hostid, "::1")==0)
+                    <<" asTrapWriteMessage "<<escape(pmessage->hostid);
+
             // caPutLog assumes "serverSpecific" is always available, and a dbChannel*
             // (or dbAddr* with 3.14)
             auto *pchan = (dbChannel*)pmessage->serverSpecific;
@@ -874,11 +878,39 @@ void testMonitorAIFilt(TestClient& ctxt)
     sub2.testEmpty();
 }
 
+void testMonitorDBE(TestClient& ctxt)
+{
+    testDiag("%s", __func__);
+
+    TestSubscription sub(ctxt.monitor("test:ai.TPRO")
+                         .record("DBE", DBE_ARCHIVE)
+                         .maskConnected(true)
+                         .maskDisconnected(true));
+
+    auto val(sub.waitForUpdate());
+    testShow()<<val.format().delta();
+
+    auto prec(testdbRecordPtr("test:ai"));
+
+    {
+        ioc::DBLocker L(prec);
+
+        prec->tpro = 42; // event discarded
+        db_post_events(prec, &prec->tpro, DBE_VALUE);
+        prec->tpro = 43;
+        db_post_events(prec, &prec->tpro, DBE_VALUE|DBE_ARCHIVE);
+    }
+
+    val = sub.waitForUpdate();
+    testShow()<<val.format().delta();
+    testEq(val["value"].as<int32_t>(), 43);
+}
+
 } // namespace
 
 MAIN(testqsingle)
 {
-    testPlan(88);
+    testPlan(95);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -921,6 +953,7 @@ MAIN(testqsingle)
             testMonitorAI(mctxt);
             testMonitorBO(mctxt);
             testMonitorAIFilt(mctxt);
+            testMonitorDBE(mctxt);
         }
         timeSim = false;
         testPutBlock();

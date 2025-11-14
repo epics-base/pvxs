@@ -1,0 +1,65 @@
+name: GH pages
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    env:
+      SETUP_PATH: .ci-local
+      SET: defaults
+      CMP: gcc
+      BCFG: default
+      BASE: "7.0"
+      _PVXS_ABORT_ON_CRIT: 1
+      PVXS_LOG: pvxs.*=WARN
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: "0"
+        submodules: true
+    - name: "apt-get install"
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install libreadline-dev libevent-dev \
+         python3-sphinx python3-breathe inkscape
+
+    - name: Prepare and compile dependencies
+      run: python .ci/cue.py prepare
+
+    - name: headers
+      run: python .ci/cue.py build inc
+
+    - name: sphinx
+      run: |
+        make -C documentation gen
+        touch documentation/html/.nojekyll
+
+    - name: Upload gh-pages preview
+      id: ghpages
+      uses: actions/upload-pages-artifact@v3
+      with:
+        retention-days: 7
+        path: documentation/html/
+
+
+  publish:
+    runs-on: ubuntu-latest
+
+    if: github.ref=='refs/heads/master'
+    needs: generate
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.ghpages.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

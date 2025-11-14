@@ -1,5 +1,7 @@
+.. _iocintegration:
+
 IOC Integration
-###############
+===============
 
 .. code-block:: c++
 
@@ -9,12 +11,13 @@ IOC Integration
 The separate ``pvxsIoc`` library exists to run a PVXS server as part of an IOC.
 See also :ref:`includepvxs`.
 
-IOC Integration respects the **$PVXS_LOG** as well as the **$EPICS_PVA\*** environment variables.
+IOC Integration respects the **$PVXS_LOG** as well as the **$EPICS_PVA\*** environment variables
+to configure :ref:`logconfig`.
 Changes to this environment variable are possible prior to
 calling ``*_registerRecordDeviceDriver(pdbbase)``.
 
 IOC shell
-^^^^^^^^^
+---------
 
 The ``pvxsIoc`` library adds several IOC shell functions which apply to all PVs
 served by the Integrated PVA server.
@@ -35,18 +38,18 @@ served by the Integrated PVA server.
     May be requested when reporting a bug.
 
 Adding custom PVs to Server
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------
 
 .. doxygenfunction:: pvxs::ioc::server
 
 .. _qsrv2:
 
 QSRV 2
-######
+======
 
 Beginning with PVXS 1.2.0 the functionality of `QSRV <https://epics-base.github.io/pva2pva>`_
 is replicated in the ``pvxsIoc`` library.
-As of 1.3.0 this feature preview is considered **beta** level with equivalent functionality.
+As of 1.4.0 QSRV2 is considered to be a complete replacement.
 
 It is recommended not to load both ``pvxsIoc.dbd`` and ``qsrv.dbd`` in the same IOC process.
 However, if this is done.  Users may opt out at runtime by setting
@@ -127,6 +130,22 @@ Currently supported format hints are:
 - Hex
 - Exponential
 - Engineering
+
+When subscribing, the client provided ``pvRequest`` Value may contain the field
+``records._options.DBE`` with a string or unsigned integer.
+This value is mapped to a DataBase Event (DBE) bit mask.
+
+``DBE`` may be either a string or an unsigned integer.
+Use of an integer is recommended.
+The ``DBE_*`` macros from the ``caeventmask.h`` header may be used
+(``DBE_VALUE=1``, ``DBE_ARCHIVE=2``, ``DBE_ALARM=4``).
+``DBE_PROPERTY`` will be ignored if given as this event is always
+handled specially.
+Alternately, ``DBE`` may be a string using the old caProvider "parsing"
+rules.  This is not recommended.
+
+Until 1.3.3 ``DBE_ARCHIVE`` was not handled correctly.
+
 
 Group PV
 ^^^^^^^^

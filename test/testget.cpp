@@ -313,6 +313,15 @@ struct Tester {
         op.reset();
     }
 
+    void name()
+    {
+        testShow()<<__func__;
+
+        auto op = cli.get("nonexistent").exec();
+        auto op_name = op->name();
+        testEq(op_name, "nonexistent");
+    }
+
     void manualExec()
     {
         testShow()<<__func__;
@@ -516,7 +525,7 @@ void testError(bool phase)
 
 MAIN(testget)
 {
-    testPlan(62);
+    testPlan(63);
     testSetup();
     logger_config_env();
     const bool canIPv6 = pvxs::impl::evsocket::canIPv6;
@@ -533,6 +542,7 @@ MAIN(testget)
     Tester().cancel();
     Tester().asyncCancel();
     Tester().orphan();
+    Tester().name();
     Tester().manualExec();
     Tester().badRequest();
     Tester().delayExec();
