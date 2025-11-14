@@ -5,12 +5,13 @@ include $(TOP)/configure/CONFIG
 # Directories to build, any order
 DIRS += configure
 DIRS += bundle
+configure_DEPEND_DIRS = bundle
 
 DIRS += setup
 setup_DEPEND_DIRS = configure
 
 DIRS += src
-src_DEPEND_DIRS = setup bundle
+src_DEPEND_DIRS = setup
 
 DIRS += tools
 tools_DEPEND_DIRS = src
