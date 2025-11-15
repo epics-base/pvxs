@@ -322,6 +322,9 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                 auto& first = serv.pvt->interfaces.front();
                 strm<<" TCP_Port: "<<first.bind_addr.port();
             }
+            if(auto evmethod = event_base_get_method(serv.pvt->acceptor_loop.base)) {
+                strm<<" evmethod: "<<evmethod;
+            }
             strm<<"\n";
 
             Indented I(strm);
