@@ -111,7 +111,7 @@ endif
 
 LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
 
-BIN_INSTALLS_WIN32 += $(wildcard $(LIBEVENT)/lib/*.dll)
+BIN_INSTALLS_WIN32 += $(wildcard $(LIBEVENT_PREFIX)/lib/*.dll)
 
 #===========================
 
