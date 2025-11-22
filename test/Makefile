@@ -167,17 +167,6 @@ testtlsstatus_SRCS += certstatusmanager.cpp
 testtlsstatus_SRCS += certstatus.cpp
 testtlsstatus_SRCS += configcerts.cpp
 TESTS += testtlsstatus
-
-ifeq ($(PVXS_ENABLE_PERF),YES)
-# Performance test harness (not a unittest)
-TESTPROD_HOST += perftls
-perftls_SRCS += perftls.cpp
-perftls_SYS_LIBS += sqlite3
-ifneq ($(OS_CLASS),Linux)
-perftls_SYS_LIBS += pcap
-endif # Not for linux
-endif # If Perf
-
 endif # EVENT2_HAS_OPENSSL
 endif
 
