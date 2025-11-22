@@ -1361,8 +1361,6 @@ bool configureAndStartPVACMS() {
 
     // Create a child process to run PVACMS
     pvacms_subprocess = Child{
-        "EPICS_PVACMS_SERVER_PORT",         "55075",
-        "EPICS_PVACMS_TLS_PORT",            "55076",
         "EPICS_CERT_AUTH_TLS_KEYCHAIN",     getPathToFileInTestDir("cert_auth.p12"),
         "EPICS_PVAS_TLS_KEYCHAIN",          getPathToFileInTestDir("superserver1.p12"),
     };
