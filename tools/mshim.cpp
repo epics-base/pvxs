@@ -103,9 +103,9 @@ struct App {
                     uint8_t(msg.mustReply ? pva_search_flags::MustReply : 0u),
                     0,0,0
                 });
-        assert(!msg.server.isAny() && msg.server.family()==AF_INET); // UDPManager has already handled this case
-        to_wire(buf, msg.server);
-        to_wire(buf, uint16_t(msg.server.port()));
+        assert(!msg.replyDest.isAny() && msg.replyDest.family()==AF_INET); // UDPManager has already handled this case
+        to_wire(buf, msg.replyDest);
+        to_wire(buf, uint16_t(msg.replyDest.port()));
 
         size_t nproto = msg.otherproto.size();
         if(msg.protoTCP)
@@ -166,8 +166,8 @@ struct App {
 
             } else {
                 log_debug_printf(applog, "Forwarded search to %s -> %s -> %s?\n",
-                                 msg.src.tostring().c_str(),
-                                 msg.server.tostring().c_str(),
+                                 msg.origSrc.tostring().c_str(),
+                                 msg.replyDest.tostring().c_str(),
                                  std::string(SB()<<dest).c_str());
             }
         }

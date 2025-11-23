@@ -91,7 +91,8 @@ void usage(const char *name)
                "  -V               Print version and exit.\n"
                "  -C               Show only client Searches\n"
                "  -S               Show only server Beacons\n"
-               "  -B hostip[:port] Listen on the given interface(s).  May be repeated.\n"
+               "  -B <host/ip>[:port] Listen on the given interface(s).  May be repeated.\n"
+               "  -B <mcast>[,ttl#][@iface][:port]\n"
                "  -H host          Show only message sent from this peer.  May be repeated.\n"
                "  -P pvname        Show only searches for this PV name.  May be repeated.\n"
               <<std::endl;
@@ -199,7 +200,7 @@ int main(int argc, char *argv[])
 
         auto searchCB = [&opts](const pva::UDPManager::Search& msg)
         {
-            if(!opts.client || !opts.allowPeer(msg.src))
+            if(!opts.client || !opts.allowPeer(msg.origSrc))
                 return;
 
             if(!opts.pvnames.empty()) {
@@ -211,7 +212,7 @@ int main(int argc, char *argv[])
                 if(!show)
                     return;
             }
-            log_info_printf(out, "%s Searching for:\n", msg.src.tostring().c_str());
+            log_info_printf(out, "%s Searching for:\n", msg.origSrc.tostring().c_str());
             for(const auto pv : msg.names) {
                 log_info_printf(out, "  \"%s\"\n", pv.name);
             }

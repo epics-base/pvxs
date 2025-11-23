@@ -46,9 +46,10 @@ struct PVXS_API UDPManager
 
     struct PVXS_API Search {
         std::vector<std::string> otherproto; // any protocols other than "tcp"
-        SockAddr src; // sender/client address
-        SockAddr dest; // destination IP used by client
-        SockAddr server;
+        SockAddr origSrc; // sender/client address
+        SockAddr origDest; // destination IP used by client
+        SockAddr replySrc;
+        SockAddr replyDest;
         const IfaceMap::Iface* srcIface = nullptr;
         uint32_t searchID=0;
         uint8_t peerVersion=0;
