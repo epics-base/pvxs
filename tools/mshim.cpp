@@ -57,7 +57,7 @@ SockEndpoint parseEP(const char* optarg, const server::Config& conf)
 {
     SockEndpoint ep;
     try {
-        ep = SockEndpoint(optarg, conf.udp_port);
+        ep = SockEndpoint(optarg, nullptr, conf.udp_port);
 
     }catch(std::exception& e){
         std::cerr<<"Error: Invalid group spec. '"<<escape(optarg)<<"' : "<<e.what()<<std::endl;
@@ -103,15 +103,19 @@ struct App {
                     uint8_t(msg.mustReply ? pva_search_flags::MustReply : 0u),
                     0,0,0
                 });
-        assert(!msg.server.isAny() && msg.server.family()==AF_INET); // UDPManager has already handled this case
-        to_wire(buf, msg.server);
-        to_wire(buf, uint16_t(msg.server.port()));
+        assert(!msg.replyDest.isAny() && msg.replyDest.family()==AF_INET); // UDPManager has already handled this case
+        to_wire(buf, msg.replyDest);
+        to_wire(buf, uint16_t(msg.replyDest.port()));
 
         size_t nproto = msg.otherproto.size();
         if(msg.protoTCP)
             nproto++;
+        if(msg.protoTLS)
+            nproto++;
 
         to_wire(buf, Size{nproto});
+        if(msg.protoTLS)
+            to_wire(buf, "tls");
         if(msg.protoTCP)
             to_wire(buf, "tcp");
         for(auto& prot : msg.otherproto) {
@@ -166,8 +170,8 @@ struct App {
 
             } else {
                 log_debug_printf(applog, "Forwarded search to %s -> %s -> %s?\n",
-                                 msg.src.tostring().c_str(),
-                                 msg.server.tostring().c_str(),
+                                 msg.origSrc.tostring().c_str(),
+                                 msg.replyDest.tostring().c_str(),
                                  std::string(SB()<<dest).c_str());
             }
         }

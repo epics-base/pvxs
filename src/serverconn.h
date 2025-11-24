@@ -183,13 +183,14 @@ private:
 public:
     virtual void cleanup() override final;
 private:
-    //void bevEvent(short events);
+    virtual void bevEvent(short events) override final;
     virtual void bevWrite() override final;
 };
 
 struct ServIface
 {
     server::Server::Pvt * const server;
+    const bool isTLS;
 
     SockAddr bind_addr;
     std::string name;
@@ -197,7 +198,7 @@ struct ServIface
     evsocket sock;
     evlisten listener;
 
-    ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fallback);
+    ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fallback, bool isTLS);
 
     static void onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw);
 };
@@ -272,6 +273,10 @@ struct Server::Pvt
         Running,
         Stopping,
     } state;
+
+#ifdef PVXS_ENABLE_OPENSSL
+    ossl::SSLContext tls_context;
+#endif
 
     INST_COUNTER(ServerPvt);
 

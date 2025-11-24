@@ -119,7 +119,7 @@ class PVXS_API VectorOutBuf : public Buffer
 public:
     // note: vector::data() is not constexpr in c++11
     VectorOutBuf(bool be, std::vector<uint8_t>& b)
-        :base_type(be, b.data(), b.size())
+        :base_type(be, b.data()+b.size(), 0u)
         ,backing(b)
     {}
     virtual ~VectorOutBuf();
@@ -580,8 +580,8 @@ void from_wire(Buffer& buf, shared_array<const void>& varr)
 
 struct pva_version {
     enum {
-        client = 2,
-        server = 2,
+        client = 3,
+        server = 3,
     };
 };
 
@@ -641,6 +641,7 @@ enum pva_app_msg_t : uint8_t {
 struct pva_search_flags {
     enum type_t : uint8_t {
         MustReply = 0x01,
+        ReplySrcPort = 0x02,
         Unicast   = 0x80,
     };
 };
