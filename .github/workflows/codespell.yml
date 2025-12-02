@@ -27,4 +27,4 @@ jobs:
         sudo apt-get update
         sudo apt-get -y install codespell
     - name: codespell
-      run: git ls-files | grep -vE 'test|bundle|.ci|.\db' | xargs codespell -I .ci-local/codespell.dic
+      run: git ls-files | grep -vE 'test|bundle|\.ci|\.db' | xargs codespell -I .ci-local/codespell.dic
