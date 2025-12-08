@@ -61,7 +61,7 @@ int ossl_verify(int preverify_ok, X509_STORE_CTX *x509_ctx) {
  * @param trusted_store_ptr the trusted store that we'll use to verify the peer OCSP status responses
  */
 void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE *trusted_store_ptr) {
-    bool no_status{false};
+    bool no_status_extension{false};
     if (!status_check_disabled) {
         try {
             const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
@@ -101,7 +101,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
                 setTlsOrTcpMode();
             });
         } catch (certs::CertStatusNoExtensionException &e) {
-            no_status = true;
+            no_status_extension = true;
             log_debug_printf(watcher, "No certificate status extension found in certificate: %s\n", e.what());
         }
     } else {
@@ -110,7 +110,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
 
     // Set the state
     Guard G(lock);
-    state = (status_check_disabled || no_status || cert_status.isGood()) ? TlsReady : TcpReady;
+    state = (status_check_disabled || no_status_extension || cert_status.isGood()) ? TlsReady : TcpReady;
 }
 
 /**

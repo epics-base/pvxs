@@ -179,8 +179,6 @@ int main(int argc, char *argv[]) {
         auto client = conf.build();
 
         if (verbose) std::cout << "Effective config\n" << conf;
-        epicsThreadSleep(0.01); // Kludge - for some reason there is a race condition that prevents TLS connection until a short time has passed.
-        // TODO investigate reason for race condition and implement a proper fix
 
         std::list<std::shared_ptr<client::Operation>> ops;
 

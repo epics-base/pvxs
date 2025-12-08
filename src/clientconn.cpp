@@ -535,8 +535,6 @@ void Connection::handle_CONNECTION_VALIDATED()
 #else
     ready = true;
 #endif
-    if ( !ready )
-        return;
 
     createChannels();
 
