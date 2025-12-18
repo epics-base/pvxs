@@ -65,6 +65,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
     if (!status_check_disabled) {
         try {
             const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
+            log_debug_printf(watcher, "Installing Certificate Status Monitor: %s\n", status_pv.c_str());
             cert_monitor = certs::CertStatusManager::subscribe(getCertStatusExData()->client, trusted_store_ptr, status_pv, [=](const certs::PVACertificateStatus &pva_status) {
                 {
                     {
@@ -100,6 +101,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
                 // set TLS context state appropriately based on the new status
                 setTlsOrTcpMode();
             });
+            log_debug_printf(watcher, "Installed Certificate Status Monitor: %s\n", status_pv.c_str());
         } catch (certs::CertStatusNoExtensionException &e) {
             no_status_extension = true;
             log_debug_printf(watcher, "No certificate status extension found in certificate: %s\n", e.what());
@@ -111,6 +113,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
     // Set the state
     Guard G(lock);
     state = (status_check_disabled || no_status_extension || cert_status.isGood()) ? TlsReady : TcpReady;
+    log_debug_printf(watcher, "Setting initial TLS connection state to: %s\n", state == TlsReady ? "TlsReady": "TcpReady");
 }
 
 /**
@@ -144,13 +147,26 @@ void SSLContext::setDegradedMode(const bool clear) {
 /**
  * @brief Transition TLS mode based on the given certificate status
  *
+ * Will never be called if cert is EXPIRED of REVOKED so we can set to TcpReady if NOT GOOD because it may become GOOD again later
+ *
  * @param is_good the given certificate status
  */
 void SSLContext::setTlsOrTcpMode(const bool is_good) {
     Guard G(lock);
     if (is_good) {
-        if (state == TcpReady) state = TlsReady;
-    } else if (state == TlsReady) state = TcpReady;
+        log_debug_printf(watcher, "Received a GOOD certificate status from the status monitor%s", "\n");
+        if (state == TcpReady || state == Init) {
+            log_debug_printf(watcher, "Setting TLS Ready State: Because the certificate status is VALID%s", "\n");
+            state = TlsReady;
+        } else if (state == TlsReady) {
+            log_debug_printf(watcher, "Skipping setting TLS Ready State: Because the state is already%s\n", "TlsReady");
+        } else {
+            log_warn_printf(watcher, "Logic Error. Should not be monitoring certificate status: Because the context state is %s\n", "DegradedMode");
+        }
+    } else {
+        log_debug_printf(watcher, "Received %s certificate status from the status monitor.  Switching TLS state to TcpReady until a new VALID status is received\n", cert_status.status.s.c_str());
+        state = TcpReady;
+    }
 }
 
 /**
@@ -158,6 +174,7 @@ void SSLContext::setTlsOrTcpMode(const bool is_good) {
  */
 void SSLContext::setTlsOrTcpMode() {
     if (static_cast<certs::CertificateStatus>(cert_status).isRevokedOrExpired()) {
+        log_debug_printf(watcher, "Setting TLS Degraded State (TCP): Because the certificate is %s\n", cert_status.status.s.c_str());
         setDegradedMode();
         return;
     }
@@ -335,7 +352,7 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
  * @param method The SSL_METHOD object representing the SSL method to use.
  * @param is_for_client A boolean indicating whether the setup is for a client or a server.
  * @param conf The common configuration object.
- * @param client_config the client config to use to create any status subscriptions
+ * @param client the inner client to use to create any status subscriptions
  * @param loop The event loop used to schedule custom events
  *
  * @return SSLContext initialised appropriately - clients can have an empty
@@ -364,7 +381,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     // Read back a pointer to cert ext data
     const auto cert_status_ex_data = tls_context->getCertStatusExData();
     if (!cert_status_ex_data) {
-        throw std::runtime_error("Invalid certificate data");
+        throw std::runtime_error("Unable to attach extended certificate data to tls context");
     }
 
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
@@ -383,10 +400,12 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
         return tls_context;
     }
 
-    // TLS is configured, so get the key and certificate from the file or files
+    // Get the key and certificate from the file or files
+    log_debug_printf(setup, "Getting private key and certificate from configured keychain file: %s\n", conf.tls_keychain_file.c_str());
     const std::string &filename = conf.tls_keychain_file, &password = conf.tls_keychain_pwd;
     auto cert_data = certs::IdFileFactory::createReader(filename, password)->getCertDataFromFile();
 
+    log_debug_printf(setup, "Getting trusted root from certificate chain. %s\n", "");
     const ossl_ptr<X509> trusted_root_ca(extractCAs(tls_context, cert_data.cert_auth_chain));
     if (!trusted_root_ca) throw SSLError("Could not find Trusted Root Certificate Authority Certificate in keychain");
 
@@ -401,10 +420,12 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     if (!cert_data.cert) {
         // But this is a client then try a server-only tls connection
         if (is_for_client) {
+            log_debug_printf(setup, "No certificate found in keychain file.  Setting up server-only TLS context%s\n", "");
             tls_context->state = SSLContext::TlsReady;
             log_info_printf(setup, "TLS server-only mode selected%s", "\n");
             return tls_context;
         }
+        log_debug_printf(setup, "No certificate found in keychain file but %s\n", "");
         // otherwise we can't continue to create a TLS connection
         throw std::runtime_error("No Certificate");
     }

@@ -81,6 +81,7 @@ void free_SSL_CTX_sidecar(void *, void *ptr, CRYPTO_EX_DATA *, int, long, void *
 }
 
 static void osslInitImpl() {
+    log_debug_printf(setup, "One-time initialisation of OpenSSL subsystem starting ...%s\n", "");
     NID_SPvaCertStatusURI = OBJ_create(NID_SPvaCertStatusURIID, SN_SPvaCertStatusURI, LN_SPvaCertStatusURI);
     if(NID_SPvaCertStatusURI == NID_undef) {
         throw std::runtime_error("Failed to create NID for " SN_SPvaCertStatusURI);

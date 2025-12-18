@@ -68,6 +68,7 @@ void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
         throw BAD_ALLOC();
     assert(!this->bev && state==Holdoff);
 
+    log_debug_printf(connsetup, "ConnBase::connect(): Peer = %s\n", peerLabel());
     readahead = evsocket::get_buffer_size(bufferevent_getfd(bev.get()), false);
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02010000
@@ -82,6 +83,7 @@ void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
     (void)bufferevent_set_max_single_write(bev.get(), EV_SSIZE_MAX);
 #endif
 
+    log_debug_printf(connsetup, "Setting my %s peer state to %s state\n", peerLabel(), isClient ? "Connecting" : "Connected");
     state = isClient ? Connecting : Connected;
 
     this->bev = std::move(bev);
@@ -92,6 +94,7 @@ void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
 
 void ConnBase::disconnect()
 {
+    log_debug_printf(connsetup, "ConnBase::disconnect(): disconnecting a %s\n", peerLabel());
     bev.reset();
     state = Disconnected;
 }
@@ -144,10 +147,12 @@ void ConnBase::bevEvent(const short events) {
         }
 
         if (events & BEV_EVENT_CONNECTED) {
+            log_debug_printf(connsetup, "ConnBase::bevEvent(): A %s CONNECTED event \n", peerLabel());
             const auto ctx = bufferevent_openssl_get_ssl(bev.get());
             if (ctx) {
                 if (!peer_status) {
                     try {
+                        log_debug_printf(connsetup, "ConnBase::bevEvent().  Subscribe to %s peer certificate status \n", peerLabel());
                         peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [this](const bool enable) { peerStatusCallback(enable); });
                     } catch (certs::CertStatusNoExtensionException &e) {
                         log_debug_printf(connio, "no status to monitor for peer %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());

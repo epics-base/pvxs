@@ -270,7 +270,7 @@ void ServerConn::handle_SEARCH()
         for(const auto i : range(op._names.size())) {
             if(op._names[i]._claim) {
                 to_wire(R, static_cast<uint32_t>(nameStorage[i].first));
-                log_debug_printf(serversearch, "Search claimed '%s'\n", op._names[i]._name);
+                log_debug_printf(serversearch, "handle_SEARCH(): Search claimed '%s'\n", op._names[i]._name);
             }
         }
     }

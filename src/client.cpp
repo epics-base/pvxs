@@ -477,19 +477,27 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
 {
 #ifdef PVXS_ENABLE_OPENSSL
     if (effective.isTlsConfigured()) {
+        log_debug_printf(setup, "TLS is configured.  Attempting to create a TLS context for: %s\n", effective.tls_keychain_file.c_str());
         try {
-            auto innerConf = effective;
             // TODO: currently not possible to disable TLS for an individual search.
-            // until then, create a separate inner context to retrieve signed payload from CMS
+            //   until then, create a separate inner context to retrieve certificate status as a signed payload from CMS
+            log_debug_printf(setup, "Creating a client context for certificate status to use in TLS context creation%s", "\n");
+            auto innerConf = effective;
             innerConf.tls_disabled = true;
             auto inner = innerConf.build();
+            log_debug_printf(setup, "Created a client context for certificate status%s", "\n");
             tls_context = ossl::SSLContext::for_client(effective, inner, tcp_loop);
+            log_debug_printf(setup, "Created TLS context for: %s\n", effective.tls_keychain_file.c_str());
         } catch (std::exception& e) {
-            if (tls_context) tls_context->setDegradedMode(true);
-            log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
+            log_debug_printf(setup, "Failed to configure TLS for client: %s\n", e.what());
+            if (tls_context) {
+                tls_context->setDegradedMode(true);
+                log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
+            }
         }
     } else if (tls_context) {
         tls_context->setDegradedMode(true);
+        log_debug_printf(setup, "TLS is not configured.  Setting Degraded Mode.%s", "\n");
     }
 #endif
 
@@ -1298,22 +1306,26 @@ void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
     // If the context is already in the TlsReady state, then don't do anything
     if (isTlsReady()) return;
     try {
+        log_debug_printf(setup, "Attempting to recreate a TLS context using: %s\n", new_config.tls_keychain_file.c_str());
         // TODO: currently not possible to disable TLS for an individual search.
-        // until then, create a separate inner context to retrieve signed payload from CMS
+        //   until then, create a separate inner context to retrieve signed payload from CMS
         auto innerConf = new_config;
         innerConf.tls_disabled = true;
         const auto new_context = ossl::SSLContext::for_client(new_config, innerConf.build(), tcp_loop);
 
         // If unsuccessful in getting a certificate, or it has EXPIRED, then don't enable TLS
-        if (!isTlsConfigured(new_context) || new_context->hasExpired()) return;
+        if (!isTlsPossible(new_context) || new_context->hasExpired()) {
+            log_debug_printf(setup, "TLS was not reconfigured.  Skipping recreation of TLS context.%s", "\n");
+            return;
+        }
 
         // Remove all peer (server) connections.  They will be reconnected as TLS automatically
-        // TODO verify assertion that they will reconnect automatically
         removePeer();
 
         tls_context = new_context;
         effective = new_config;
     } catch (std::exception& e) {
+        log_debug_printf(setup, "Failed to reconfigure TLS for client: %s\n", e.what());
         if (tls_context && tls_context->state != ossl::SSLContext::DegradedMode) tls_context->setDegradedMode(true);
     }
 }

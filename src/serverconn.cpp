@@ -213,6 +213,7 @@ const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
 
 void ServerConn::handle_ECHO()
 {
+    log_debug_printf(connsetup, "PVA: %s ==> ECHO\n", peerName.c_str());
     // Client requests echo as a keep-alive check
 
     auto tx = bufferevent_get_output(bev.get());
@@ -265,6 +266,7 @@ void auth_complete(ServerConn *self, const Status& sts)
 
 void ServerConn::handle_CONNECTION_VALIDATION()
 {
+    log_debug_printf(connio, "PVA: %s ==> CONNECTION_VALIDATION\n", peerName.c_str());
     // Client begins (restarts?) Auth handshake
 
     EvInBuf M(peerBE, segBuf.get(), 16);
@@ -411,13 +413,16 @@ void ServerConn::proceedWithConnectionValidation()
 void ServerConn::handle_AUTHNZ()
 {
     // ignored (so far no auth plugin actually uses)
+    log_debug_printf(connsetup, "PVA: %s ==> AUTHNZ\n", peerName.c_str());
 }
 
-void ServerConn::handle_PUT_GET()
-{}
+void ServerConn::handle_PUT_GET() {
+    log_debug_printf(connsetup, "PVA: %s ==> PUT_GET\n", peerName.c_str());
+}
 
 void ServerConn::handle_CANCEL_REQUEST()
 {
+    log_debug_printf(connsetup, "PVA: %s ==> CREATE_CHANNEL\n", peerName.c_str());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid=0, ioid=0;
@@ -453,6 +458,7 @@ void ServerConn::handle_CANCEL_REQUEST()
 
 void ServerConn::handle_DESTROY_REQUEST()
 {
+    log_debug_printf(connsetup, "PVA: %s ==> DESTROY_REQUEST\n", peerName.c_str());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid=0, ioid=0;
@@ -479,6 +485,7 @@ void ServerConn::handle_DESTROY_REQUEST()
 
 void ServerConn::handle_MESSAGE()
 {
+    log_debug_printf(connsetup, "PVA: %s ==> MESSAGE\n", peerName.c_str());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t ioid = 0;

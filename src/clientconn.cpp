@@ -299,7 +299,7 @@ void Connection::bevEvent(short events) {
 
     // Handle BEV_EVENT_CONNECTED specifically for a client
     if(bev && events & BEV_EVENT_CONNECTED) {
-        log_debug_printf(io, "Connected to %s\n", peerName.c_str());
+        log_debug_printf(io, "PVA-NETWORK: %s ==> BEV_EVENT_CONNECTED\n", peerName.c_str());
         connTime = epicsTime::getCurrent();
 
         auto peerCred(std::make_shared<ServerCredentials>());
@@ -354,7 +354,7 @@ void Connection::bevEvent(short events) {
  * - If the peer certificate status is not GOOD, it will disconnect from the server
  */
 #ifdef PVXS_ENABLE_OPENSSL
-void Connection::peerStatusCallback(bool enable) {
+void Connection::peerStatusCallback(const bool enable) {
     if (enable) {
         if (state == AwaitingPeerCertValidity ) {
             state = Connected;
@@ -416,7 +416,7 @@ void Connection::cleanup()
 
 void Connection::handle_CONNECTION_VALIDATION()
 {
-    log_debug_printf(io, "Server %s begins validation handshake\n", peerName.c_str());
+    log_debug_printf(io, "PVA: %s ==> CONNECTION_VALIDATION\n", peerName.c_str());
 
     EvInBuf M(peerBE, segBuf.get(), 16);
 
@@ -511,6 +511,7 @@ void Connection::handle_CONNECTION_VALIDATION()
 
 void Connection::handle_CONNECTION_VALIDATED()
 {
+    log_debug_printf(io, "PVA: %s ==> CONNECTION_VALIDATED\n", peerName.c_str());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     Status sts{};
@@ -546,6 +547,7 @@ void Connection::handle_CONNECTION_VALIDATED()
 
 void Connection::handle_CREATE_CHANNEL()
 {
+    log_debug_printf(io, "PVA: %s ==> CREATE_CHANNEL\n", peerName.c_str());
     const auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
@@ -623,6 +625,7 @@ void Connection::handle_CREATE_CHANNEL()
 
 void Connection::handle_DESTROY_CHANNEL()
 {
+    log_debug_printf(io, "PVA: %s ==> DESTROY_CHANNEL\n", peerName.c_str());
     uint32_t cid=0, sid=0;
     {
         EvInBuf M(peerBE, segBuf.get(), 16);

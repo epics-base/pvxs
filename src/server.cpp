@@ -545,19 +545,26 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 
 #ifdef PVXS_ENABLE_OPENSSL
         if (effective.isTlsConfigured()) {
+            log_debug_printf(osslsetup, "TLS is configured for server.  Attempting to create a server TLS context for: %s\n", effective.tls_keychain_file.c_str());
             try {
-                auto inner_conf = clientConfig(effective);
                 // TODO: currently not possible to disable TLS for an individual search.
-                // until then, create a separate inner context to retrieve signed payload from CMS
+                //   until then, create a separate inner context to retrieve signed payload from CMS
+                log_debug_printf(osslsetup, "Creating a client context for certificate status to use in server TLS context creation%s", "\n");
+                auto inner_conf = clientConfig(effective);
                 inner_conf.tls_disabled = true;
+                log_debug_printf(osslsetup, "Created a client context for server certificate status%s", "\n");
+                const auto inner_client = inner_conf.build();
 
-                tls_context = ossl::SSLContext::for_server(effective, inner_conf.build(), acceptor_loop);
+                tls_context = ossl::SSLContext::for_server(effective, inner_client, acceptor_loop);
+                log_debug_printf(osslsetup, "Created server TLS context for: %s\n", effective.tls_keychain_file.c_str());
             } catch (std::exception& e) {
+                log_debug_printf(osslsetup, "Failed to configure TLS for server: %s\n", e.what());
                 log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
-                effective.tls_disabled = true; // HACK!
+                effective.tls_disabled = true;
                 effective.tls_keychain_file.clear();
             }
         } else if (tls_context) {
+            log_debug_printf(osslsetup, "TLS is not configured but we have a server TLS context.  Set it to TCP only (DegradedMode)%s", "\n");
             tls_context->setDegradedMode(true);
         }
 
@@ -833,7 +840,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     for(auto i : range(msg.names.size())) {
         if(searchOp._names[i]._claim) {
             to_wire(M, uint32_t(msg.names[i].id));
-            log_debug_printf(serversearch, "Search claimed '%s'\n", msg.names[i].name);
+            log_debug_printf(serversearch, "onSearch(): Search claimed '%s'\n", msg.names[i].name);
         }
     }
     auto pktlen = M.save()-searchReply.data();

@@ -463,11 +463,11 @@ struct ContextImpl : std::enable_shared_from_this<ContextImpl>
     }
 
     /**
-     * Is given context configured for TLS.
+     * Is TLS possible in the given context?
      * @param tls_context_to_check the context to check
      * @return true if the context has loaded a certificate whose status is not known to be REVOKED or EXPIRED
      */
-    static bool isTlsConfigured(const std::shared_ptr<ossl::SSLContext> &tls_context_to_check) {
+    static bool isTlsPossible(const std::shared_ptr<ossl::SSLContext> &tls_context_to_check) {
         return tls_context_to_check && tls_context_to_check->state > ossl::SSLContext::DegradedMode && !static_cast<certs::CertificateStatus>(tls_context_to_check->get_cert_status()).isRevokedOrExpired() ;
     }
 
