@@ -79,33 +79,8 @@ endif # BASE_3_15
 LIB_LIBS += pvxs
 LIB_LIBS += $(EPICS_BASE_IOC_LIBS)
 
-# Tell Make where to find the DBD source files (works from any build context)
-vpath pvxs7x.dbd $(CURDIR) $(TOP)/ioc
-vpath pvxs3x.dbd $(CURDIR) $(TOP)/ioc
-
-# Ensure pvxsIoc.dbd source file exists before DBD expansion in RULES
-# This must be defined before RULES is included so it's available when expansion runs
-# Create the file at Makefile parse time to ensure it exists before any processing
-$(shell \
-	if [ -f $(TOP)/ioc/pvxs7x.dbd ] && [ ! -f $(TOP)/ioc/pvxsIoc.dbd ]; then \
-		cp $(TOP)/ioc/pvxs7x.dbd $(TOP)/ioc/pvxsIoc.dbd; \
-	elif [ -f $(TOP)/ioc/pvxs3x.dbd ] && [ ! -f $(TOP)/ioc/pvxsIoc.dbd ]; then \
-		cp $(TOP)/ioc/pvxs3x.dbd $(TOP)/ioc/pvxsIoc.dbd; \
-	fi \
-)
-
-# Also provide the rule for explicit builds and to keep file up to date
-ifdef BASE_7_0
-pvxsIoc.dbd: pvxs7x.dbd
-	$(CP) $< $@
-else
-pvxsIoc.dbd: pvxs3x.dbd
-	$(CP) $< $@
-endif
-
-# Ensure the source file exists before DBD expansion
-# Make library build depend on DBD file existing (ensures it's created early)
-pvxsIoc$(LIB): pvxsIoc.dbd
+# Clean up generated DBD file (pvxsIoc.dbd is generated from pvxs7x.dbd or pvxs3x.dbd)
+CLEANS += pvxsIoc.dbd
 
 #===========================
 
@@ -113,15 +88,22 @@ include $(TOP)/configure/RULES
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
-# Make DBD expansion depend on source file existing
-# This ensures pvxsIoc.dbd is created before dbdExpand.pl runs
-# The file must exist before EPICS tries to expand it
-../O.Common/pvxsIoc.dbd$(DEP): pvxsIoc.dbd
-$(COMMON_DIR)/pvxsIoc.dbd$(DEP): pvxsIoc.dbd
-
-# Clean up generated DBD file (pvxsIoc.dbd is generated from pvxs7x.dbd or pvxs3x.dbd)
-# Hook into EPICS clean process by making archsCommonClean depend on our cleanup
-archsCommonClean: clean-pvxsIoc-dbd
-
-clean-pvxsIoc-dbd:
-	$(RM) pvxsIoc.dbd
+# Rules to generate pvxsIoc.dbd from pvxs7x.dbd or pvxs3x.dbd before DBD expansion
+# Following the exact pattern suggested for softIoc.dbd (as per PR review):
+# - .dbd$(DEP) rule creates dependency file (in O.<arch>)
+# - $(COMMON_DIR)/pvxsIoc.dbd rule creates source file that EPICS will expand
+ifdef BASE_7_0
+pvxsIoc.dbd$(DEP): ../pvxs7x.dbd
+$(COMMON_DIR)/pvxsIoc.dbd: ../pvxs7x.dbd
+	$(CP) $< $@
+# Also create in source directory for builds from ioc directory
+pvxsIoc.dbd: pvxs7x.dbd
+	$(CP) $< $@
+else
+pvxsIoc.dbd$(DEP): ../pvxs3x.dbd
+$(COMMON_DIR)/pvxsIoc.dbd: ../pvxs3x.dbd
+	$(CP) $< $@
+# Also create in source directory for builds from ioc directory
+pvxsIoc.dbd: pvxs3x.dbd
+	$(CP) $< $@
+endif
