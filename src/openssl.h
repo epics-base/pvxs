@@ -112,7 +112,7 @@ struct SSLPeerStatusAndMonitor {
     bool subscribed{false};
 
     // The function to call when the peer status changes
-    const std::function<void(bool)> fn;
+    const std::function<void(certs::cert_status_category_t)> fn;
 
     // The serial number of the certificate being monitored.  We get the status PV from the cert, so we know that it is from the right certificate authority
     const serial_number_t serial_number;
@@ -128,7 +128,7 @@ struct SSLPeerStatusAndMonitor {
      * @param ex_data_ptr the ex_data structure that the list of peer status and monitors is stored, for cleanup
      * @param fn function to call when the status changes
      */
-    SSLPeerStatusAndMonitor(serial_number_t serial_number, CertStatusExData* ex_data_ptr, const std::function<void(bool)>& fn);
+    SSLPeerStatusAndMonitor(serial_number_t serial_number, CertStatusExData* ex_data_ptr, const std::function<void(certs::cert_status_category_t)>& fn);
 
     /**
      * @brief Constructor when no monitoring is needed
@@ -242,7 +242,7 @@ struct CertStatusExData {
         return BN_get_word(bn.get());
     }
 
-    std::shared_ptr<SSLPeerStatusAndMonitor> createPeerStatus(serial_number_t serial_number, const std::function<void(bool)> &fn);
+    std::shared_ptr<SSLPeerStatusAndMonitor> createPeerStatus(serial_number_t serial_number, const std::function<void(certs::cert_status_category_t)> &fn);
 
     /**
      * @brief Sets the peer status for the given certificate
@@ -252,19 +252,19 @@ struct CertStatusExData {
      * @return The peer status that was set
      */
     std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(const ossl_ptr<X509>& peer_cert, const certs::CertificateStatus& new_status,
-                                                           const std::function<void(bool)>& fn = nullptr) {
+                                                           const std::function<void(certs::cert_status_category_t)>& fn = nullptr) {
         return setPeerStatus(peer_cert.get(), new_status, fn);
     }
 
-    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(const ossl_ptr<X509>& peer_cert, const std::function<void(bool)>& fn = nullptr) {
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(const ossl_ptr<X509>& peer_cert, const std::function<void(certs::cert_status_category_t)>& fn = nullptr) {
         return setPeerStatus(peer_cert.get(), {}, fn);
     }
 
-    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(X509* peer_cert_ptr, const std::function<void(bool)>& fn = nullptr) {
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(X509* peer_cert_ptr, const std::function<void(certs::cert_status_category_t)>& fn = nullptr) {
         return setPeerStatus(peer_cert_ptr, {}, fn);
     }
 
-    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(X509* peer_cert_ptr, const certs::CertificateStatus& new_status, const std::function<void(bool)> &fn = nullptr);
+    std::shared_ptr<SSLPeerStatusAndMonitor> setPeerStatus(X509* peer_cert_ptr, const certs::CertificateStatus& new_status, const std::function<void(certs::cert_status_category_t)> &fn = nullptr);
 
     /**
      * @brief Returns the currently cached peer status and monitor if any.  Null if none cached
@@ -286,7 +286,7 @@ struct CertStatusExData {
      * @param fn - Function to call when the peer status changes from good to bad or vice versa
      * @return a shared pointer to the peer status and optional monitor
      */
-    std::shared_ptr<SSLPeerStatusAndMonitor> subscribeToPeerCertStatus(X509* cert_ptr, std::function<void(bool)> fn);
+    std::shared_ptr<SSLPeerStatusAndMonitor> subscribeToPeerCertStatus(X509* cert_ptr, const std::function<void(certs::cert_status_category_t)> &fn);
 
    private:
     /**
@@ -299,7 +299,7 @@ struct CertStatusExData {
      * @param fn - Function to call when the peer status changes
      * @return The peer status that was created or found
      */
-    std::shared_ptr<SSLPeerStatusAndMonitor> getOrCreatePeerStatus(serial_number_t serial_number, const std::string& status_pv = {}, const std::function<void(bool)> &fn = nullptr);
+    std::shared_ptr<SSLPeerStatusAndMonitor> getOrCreatePeerStatus(serial_number_t serial_number, const std::string& status_pv = {}, const std::function<void(certs::cert_status_category_t)> &fn = nullptr);
 };
 
 /**
@@ -379,7 +379,7 @@ struct SSLContext {
     void monitorStatusAndSetState(const ossl_ptr<X509>& cert, X509_STORE* trusted_store_ptr);
     void setDegradedMode(bool clear = false);
     void setTlsOrTcpMode();
-    void setTlsOrTcpMode(bool is_good);
+    void setTlsOrTcpMode(certs::cert_status_category_t cert_status_category);
 
     /**
      * @brief Creates a client TLS context
@@ -420,7 +420,7 @@ struct SSLContext {
     bool hasExpired() const;
 
     static bool getPeerCredentials(PeerCredentials& cred, const SSL* ctx);
-    static std::shared_ptr<SSLPeerStatusAndMonitor>  subscribeToPeerCertStatus(const SSL* ssl, const std::function<void(bool)> &fn);
+    static std::shared_ptr<SSLPeerStatusAndMonitor>  subscribeToPeerCertStatus(const SSL* ssl, const std::function<void(certs::cert_status_category_t)> &fn);
     const certs::PVACertificateStatus& get_cert_status() { return cert_status; }
 
    private:
