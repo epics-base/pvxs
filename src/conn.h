@@ -184,7 +184,7 @@ protected:
 
     virtual void bevEvent(short events);
 #ifdef PVXS_ENABLE_OPENSSL
-    virtual void peerStatusCallback(bool enable) = 0;
+    virtual void peerStatusCallback(certs::cert_status_category_t status_category) = 0;
 #endif
     virtual void bevRead();
     virtual void bevWrite();
