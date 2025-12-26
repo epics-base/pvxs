@@ -351,20 +351,23 @@ void ServerConn::handle_CONNECTION_VALIDATION()
  *
  * This function is called when the peer status changes.
  *
- * It will be given a boolean value indicating whether the peer certificate status is good or not.
+ * It will be given a status category indicating whether the peer certificate status is GOOD, BAD, or UNKNOWN.
  *
  * - If the peer certificate status is GOOD, and we're waiting for certificate validity
  *   before proceeding with connection validation, it will proceed with connection validation.
- * - If the peer certificate status is not GOOD, it will disconnect this client connection.
+ * - If the peer certificate status is BAD, it will disconnect this client connection.
  */
-void ServerConn::peerStatusCallback(bool enable) {
-    if ( enable ) {
-        if ( state == AwaitingPeerCertValidity ) {
-            proceedWithConnectionValidation();
-        }
-    } else {
+void ServerConn::peerStatusCallback(certs::cert_status_category_t status_category) {
+    if (status_category == certs::GOOD_STATUS) {
+        log_debug_printf(certs, "Ready to proceed with connection validation: %s %s\n", state == AwaitingPeerCertValidity ? "Awaiting Peer Cert Validity": "Connecting", peerName.c_str());
+        proceedWithConnectionValidation();
+    } else if (status_category == certs::BAD_STATUS) {
+        log_debug_printf(certs, "Cancel Wait for Connection Validation: BAD CERT STATUS%s\n", "");
         disconnect();
+    } else {
+        log_debug_printf(certs, "Continue Waiting for Connection Validation: UNKNOWN CERT STATUS%s\n", "");
     }
+
 }
 #endif
 

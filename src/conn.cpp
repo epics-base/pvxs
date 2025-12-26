@@ -58,7 +58,7 @@ const char* ConnBase::peerLabel() const
 
 #ifdef PVXS_ENABLE_OPENSSL
 bool ConnBase::isPeerStatusGood() const {
-    return peer_status && peer_status->status.isGood();
+    return peer_status && peer_status->status.getEffectiveStatusCategory() == certs::GOOD_STATUS;
 }
 #endif
 
@@ -153,7 +153,7 @@ void ConnBase::bevEvent(const short events) {
                 if (!peer_status) {
                     try {
                         log_debug_printf(connsetup, "ConnBase::bevEvent().  Subscribe to %s peer certificate status \n", peerLabel());
-                        peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [this](const bool enable) { peerStatusCallback(enable); });
+                        peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [this](certs::cert_status_category_t status_category) { peerStatusCallback(status_category); });
                     } catch (certs::CertStatusNoExtensionException &e) {
                         log_debug_printf(connio, "no status to monitor for peer %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
                     } catch (std::exception &e) {
