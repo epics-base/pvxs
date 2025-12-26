@@ -537,38 +537,38 @@ def define_DSOS(self):
     src_core = [os.path.join('bundle', 'libevent', src) for src in src_core]
 
     src_pvxs = [
-        'describe.cpp',
-        'log.cpp',
-        'unittest.cpp',
-        'util.cpp',
-        'osgroups.cpp',
-        'sharedarray.cpp',
         'bitmask.cpp',
-        'type.cpp',
-        'data.cpp',
-        'datafmt.cpp',
-        'pvrequest.cpp',
-        'dataencode.cpp',
-        'nt.cpp',
-        'evhelper.cpp',
-        'udp_collector.cpp',
+        'client.cpp',
+        'clientconn.cpp',
+        'clientdiscover.cpp',
+        'clientget.cpp',
+        'clientintrospect.cpp',
+        'clientmon.cpp',
+        'clientreq.cpp',
         'config.cpp',
         'conn.cpp',
+        'data.cpp',
+        'dataencode.cpp',
+        'datafmt.cpp',
+        'describe.cpp',
+        'evhelper.cpp',
+        'log.cpp',
+        'nt.cpp',
+        'osgroups.cpp',
+        'pvrequest.cpp',
         'server.cpp',
-        'serverconn.cpp',
         'serverchan.cpp',
-        'serverintrospect.cpp',
+        'serverconn.cpp',
         'serverget.cpp',
+        'serverintrospect.cpp',
         'servermon.cpp',
         'serversource.cpp',
+        'sharedarray.cpp',
         'sharedpv.cpp',
-        'client.cpp',
-        'clientreq.cpp',
-        'clientconn.cpp',
-        'clientintrospect.cpp',
-        'clientget.cpp',
-        'clientmon.cpp',
-        'clientdiscover.cpp',
+        'type.cpp',
+        'udp_collector.cpp',
+        'unittest.cpp',
+        'util.cpp',
     ]
 
     src_pvxs = [os.path.join('src', src) for src in src_pvxs]
@@ -579,7 +579,16 @@ def define_DSOS(self):
         src_pvxs += ['src/os/default/osdSockExt.cpp']
     if DEFS['EVENT__HAVE_OPENSSL']=='1':
         src_pvxs += [
-            'src/openssl.cpp'
+            'certs/configcerts.cpp',
+            'src/certfactory.cpp',
+            'src/certfilefactory.cpp',
+            'src/certstatus.cpp',
+            'src/certstatusmanager.cpp',
+            'src/openssl.cpp',
+            'src/opensslgbl.cpp',
+            'src/p12filefactory.cpp',
+            'src/serverev.cpp',
+            'src/wildcardpv.cpp',
         ]
 
     event_libs = []
@@ -587,7 +596,7 @@ def define_DSOS(self):
         event_libs = ['ws2_32','shell32','advapi32','bcrypt','iphlpapi']
 
     if DEFS['EVENT__HAVE_OPENSSL']=='1':
-        event_libs += ['ssl', 'crypto']
+        event_libs += ['ssl', 'crypto', 'event_openssl']
 
     src_pvxsIoc = [
         "ioc/channel.cpp",
@@ -671,6 +680,7 @@ def define_DSOS(self):
             include_dirs=[
                 'bundle/libevent/include',
                 'src',
+                'certs',
                 '.', # generated headers under build/tmp
                 'pvxslibs/include', # generated headers under build/lib
                 epicscorelibs.path.include_path
@@ -689,6 +699,7 @@ def define_DSOS(self):
             include_dirs=[
                 'bundle/libevent/include',
                 'src',
+                'certs',
                 'ioc',
                 '.', # generated headers under build/tmp
                 'pvxslibs/include', # generated headers under build/lib

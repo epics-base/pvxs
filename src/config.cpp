@@ -31,6 +31,7 @@
 
 #include "clientimpl.h"
 #include "evhelper.h"
+#include "opensslgbl.h"
 #include "serverconn.h"
 #include "utilpvt.h"
 
@@ -234,10 +235,22 @@ void split_into(std::vector<std::string>& out, const std::string& inp) {
     removeDups(out);
 }
 
+/**
+ * Replace vector with given string list if string list is not empty
+ * @param name the environment variable to read from
+ * @param out the vector to replace with the given string list
+ * @param inp the string list to replace with (space separated)
+ * @param conf
+ * @param defaultPort
+ * @param required
+ */
 void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp, const impl::ConfigCommon* conf, uint16_t defaultPort,
                      bool required = false) {
     std::vector<std::string> raw;
     split_into(raw, inp);
+
+    if (raw.empty()) return;
+    out.clear(); // Remove existing and replace with new
 
     // parse, resolve host names, then re-print.
     // Catch syntax errors early, and normalize prior to removing duplicates

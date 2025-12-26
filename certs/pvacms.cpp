@@ -77,7 +77,7 @@
 #include <CLI/CLI.hpp>
 
 DEFINE_LOGGER(pvacms, "pvxs.certs.cms");
-DEFINE_LOGGER(pvacmsmonitor, "pvxs.certs.stat");
+DEFINE_LOGGER(pvacmsmonitor, "pvxs.certs");
 
 namespace pvxs {
 namespace certs {
@@ -1096,7 +1096,7 @@ void onCreateCertificate(ConfigCms &config,
 
                 updateCertificateRenewalStatus(certs_db, original_certificate.serial, new_status, new_renewal_date);
                 postCertificateStatus(shared_status_pv, pv_name, original_certificate.serial, cert_status);
-                log_info_printf(pvacmsmonitor, "%s ==> %s\n", getCertId(issuer_id, original_certificate.serial).c_str(), CERT_STATE(new_status));
+                log_info_printf(pvacmsmonitor, "%s ==> %s\n", getCertId(issuer_id, original_certificate.serial).c_str(), cert_status.status.s.c_str());
             } else { // VALID, PENDING_APPROVAL, PENDING
                 // Update the renew_by date if it's less than the new one but don't change status and post an update to listeners
                 if (original_certificate.renew_by < new_renewal_date) {
@@ -1189,7 +1189,6 @@ void onGetStatus(const ConfigCms &config,
                  const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
                  const ossl_ptr<X509> &cert_auth_cert,
                  const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain) {
-    Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(
         CertStatusFactory(cert_auth_cert, cert_auth_pkey, cert_auth_chain, config.cert_status_validity_mins));
     try {
@@ -1256,7 +1255,6 @@ void onRevoke(const ConfigCms &config,
               const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
               const ossl_ptr<X509> &cert_auth_cert,
               const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain) {
-    Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(
         CertStatusFactory(cert_auth_cert, cert_auth_pkey, cert_auth_chain, config.cert_status_validity_mins));
     try {
@@ -1305,7 +1303,6 @@ void onApprove(const ConfigCms &config,
                const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
                const ossl_ptr<X509> &cert_auth_cert,
                const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain) {
-    Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(
         CertStatusFactory(cert_auth_cert, cert_auth_pkey, cert_auth_chain, config.cert_status_validity_mins));
     try {
@@ -1365,7 +1362,6 @@ void onDeny(const ConfigCms &config,
             const ossl_ptr<EVP_PKEY> &cert_auth_pkey,
             const ossl_ptr<X509> &cert_auth_cert,
             const ossl_shared_ptr<STACK_OF(X509)> &cert_auth_chain) {
-    Value status_value(CertStatus::getStatusPrototype());
     const auto cert_status_creator(
         CertStatusFactory(cert_auth_cert, cert_auth_pkey, cert_auth_chain, config.cert_status_validity_mins));
     try {
@@ -2619,7 +2615,7 @@ bool postUpdatesToNextCertStatusToBecomeInvalid(const CertStatusFactory &cert_st
                 const auto status_date = std::time(nullptr);
                 const auto cert_status = cert_status_creator.createPVACertificateStatus(serial, status, status_date);
                 postCertificateStatus(status_pv, pv_name, serial, cert_status);
-                log_info_printf(pvacmsmonitor, "%s *\n", getCertId(issuer_id, serial).c_str());
+                log_info_printf(pvacmsmonitor, "%s Certificate Status Keep Alive\n", getCertId(issuer_id, serial).c_str());
             } catch (const std::runtime_error &e) {
                 log_err_printf(pvacmsmonitor, "PVACMS Certificate Monitor Error: %s\n", e.what());
             }
@@ -2961,7 +2957,7 @@ int readParameters(int argc,
             << "  (-c | --cert-auth-keychain) <cert_auth_keychain>\n"
             << "                                             Specify Certificate Authority keychain file location. "
                "Default "
-               "${XDG_CONFIG_HOME}/pva/1.3/cert_auth.p12\n"
+               "${XDG_CONFIG_HOME}/pva/1.4/cert_auth.p12\n"
             << "        --cert-auth-keychain-pwd <file>      Specify location of file containing Certificate Authority "
                "keychain file's password\n"
             << "        --cert-auth-name <name>              Specify name (CN) to be used for certificate authority "
@@ -2977,9 +2973,9 @@ int readParameters(int argc,
             << "        --cert-auth-country <name>           Specify country (C) to be used for certificate authority "
                "certificate. Default `US`\n"
             << "  (-d | --cert-db) <db_name>                 Specify cert db file location. Default "
-               "${XDG_DATA_HOME}/pva/1.3/certs.db\n"
+               "${XDG_DATA_HOME}/pva/1.4/certs.db\n"
             << "  (-p | --pvacms-keychain) <pvacms_keychain> Specify PVACMS keychain file location. Default "
-               "${XDG_CONFIG_HOME}/pva/1.3/pvacms.p12\n"
+               "${XDG_CONFIG_HOME}/pva/1.4/pvacms.p12\n"
             << "        --pvacms-keychain-pwd <file>         Specify location of file containing PVACMS keychain "
                "file's password\n"
             << "        --pvacms-name <name>                 Specify name (CN) to be used for PVACMS certificate. "
@@ -3014,9 +3010,9 @@ int readParameters(int argc,
             << std::endl
             << "admin options:\n"
             << "        --acf <acf_file>                     Specify Admin Security Configuration File. Default "
-               "${XDG_CONFIG_HOME}/pva/1.3/pvacms.acf\n"
+               "${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf\n"
             << "  (-a | --admin-keychain) <admin_keychain>   Specify Admin User's keychain file location. Default "
-               "${XDG_CONFIG_HOME}/pva/1.3/admin.p12\n"
+               "${XDG_CONFIG_HOME}/pva/1.4/admin.p12\n"
             << "        --admin-keychain-pwd <file>          Specify location of file containing Admin User's keychain "
                "file password\n"
             << authn_help << std::endl;

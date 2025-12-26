@@ -28,11 +28,6 @@ struct OSSLGbl {
 
 PVXS_API extern OSSLGbl* ossl_gbl;
 
-#ifdef PVXS_ENABLE_SSLKEYLOGFILE
-extern void sslkeylogfile_log(const SSL *, const char *line) noexcept;
-extern void sslkeylogfile_exit(void *) noexcept;
-#endif
-
 // Custom OIDs
 // TODO Register these unassigned OIDs for EPICS
 

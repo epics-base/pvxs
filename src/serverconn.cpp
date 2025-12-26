@@ -68,6 +68,8 @@ std::ostream& operator<<(std::ostream& strm, const PeerCredentials& cred)
 namespace server {
 
 DEFINE_INST_COUNTER2(Server::Pvt, ServerPvt);
+std::set<std::string> ClientCredentials::roles() const { return PeerCredentials::roles(); };
+
 
 }} // namespace pvxs::server
 
@@ -76,6 +78,7 @@ namespace pvxs {namespace impl {
 // message related to client state and errors
 DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 // related to low level send/recv
+DEFINE_LOGGER(certs, "pvxs.certs.con");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 DEFINE_LOGGER(remote, "pvxs.remote.log");
 
@@ -396,7 +399,7 @@ void ServerConn::proceedWithConnectionValidation()
         // Check peer certificate status if required
         // we won't be subscribed if we don't need to check peer status before continuing
         if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
-            log_debug_printf(connsetup, "Wait for Client %s certificate status Good\n", peerName.c_str());
+            log_debug_printf(connsetup, "Wait for Client %s certificate status to become GOOD\n", peerName.c_str());
 
             state = AwaitingPeerCertValidity;
             return; // Backoff - don't complete validation yet until we get the status were waiting for

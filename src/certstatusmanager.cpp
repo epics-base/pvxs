@@ -203,7 +203,9 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                                        auto status_update{PVACertificateStatus(update, trusted_store_ptr)};
                                        log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s.c_str());
                                        csm->status_ = std::make_shared<CertificateStatus>(status_update);
+                                       log_debug_printf(status, "Calling (*csm->callback_ref)(status_update)%s\n", "");
                                        (*csm->callback_ref)(status_update);
+                                       log_debug_printf(status, "Called (*csm->callback_ref)(status_update)%s\n", "");
                                    } catch (OCSPParseException &e) {
                                        log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::invalid_argument &e) {

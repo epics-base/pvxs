@@ -129,7 +129,7 @@ struct PVXS_API ConfigCommon {
      * @return true if the location of the keychain file has been specified,
      * false otherwise
      */
-    bool isTlsConfigured() const { return !tls_disabled && !tls_keychain_file.empty(); }
+    bool isTlsConfigured() const ;
 };
 }  // namespace impl
 }  // namespace pvxs

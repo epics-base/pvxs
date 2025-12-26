@@ -30,7 +30,7 @@ Credentials::Credentials(const server::ClientCredentials& clientCredentials) {
     serial = clientCredentials.serial;
     cred.emplace_back(clientCredentials.account);
 
-    for (const auto& role: clientCredentials.roles()) {
+    for (const auto& role: static_cast<PeerCredentials>(clientCredentials).roles()) {
         cred.emplace_back(SB() << "role/" << role);
     }
 }

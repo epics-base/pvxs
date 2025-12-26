@@ -12,6 +12,7 @@
 #include "conn.h"
 
 #ifdef PVXS_ENABLE_OPENSSL
+#include <openssl/err.h>
 #include "openssl.h"
 #endif
 
@@ -140,7 +141,7 @@ void ConnBase::bevEvent(const short events) {
 #ifdef PVXS_ENABLE_OPENSSL
     if (isTLS && bev) {
         if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
-            while (const auto err = bufferevent_get_openssl_error(bev.get())) {
+            while (const auto err = ERR_get_error()) {
                 const auto error_reason = ERR_reason_error_string(err);
                 if (error_reason) log_debug_printf(connio, "%s: TLS Error (0x%lx) %s\n", peerLabel(), err, error_reason);
             }

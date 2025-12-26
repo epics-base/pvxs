@@ -34,7 +34,7 @@ namespace server {
 template <typename T>
 using ptr_set = std::set<T, std::owner_less<T>>;
 
-struct WildcardPV::Impl : public std::enable_shared_from_this<Impl> {
+struct WildcardPV::Impl : std::enable_shared_from_this<Impl> {
     mutable epicsMutex lock;
 
     std::function<void(WildcardPV&, std::unique_ptr<ExecOp>&&, const std::string& pv_name, const std::list<std::string>& parameters, Value&&)> onPut;
@@ -56,7 +56,7 @@ struct WildcardPV::Impl : public std::enable_shared_from_this<Impl> {
             conn->connect(current);
         } catch (std::exception& e) {
             log_warn_printf(logshared, "%s Client %s: Can't attach() get: %s\n", conn->name().c_str(), conn->peerName().c_str(), e.what());
-            // not re-throwing for consistency
+            // not re-throwing for consistency,
             // we couldn't deliver an error after pending
             conn->error(e.what());
         }

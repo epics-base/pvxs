@@ -190,9 +190,7 @@ class CertStatusManager {
      */
     void unsubscribe();
 
-    bool available(double timeout = 5.0) const noexcept { return isValid() || waitedTooLong(timeout); }
     bool waitedTooLong(double timeout = 5.0) const noexcept { return (manager_start_time_ + (time_t)timeout) < std::time(nullptr); }
-    bool isValid() const noexcept { return status_ && status_->isValid(); }
 
    private:
     CertStatusManager(const client::Context &client,

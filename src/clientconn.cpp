@@ -89,6 +89,7 @@ namespace client {
 
 DEFINE_LOGGER(io, "pvxs.cli.io");
 DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
+DEFINE_LOGGER(certs, "pvxs.certs.con");
 DEFINE_LOGGER(remote, "pvxs.remote.log");
 
 Connection::Connection(const std::shared_ptr<ContextImpl>& context,
@@ -244,11 +245,14 @@ void Connection::proceedWithCreatingChannels()
 {
 #ifdef PVXS_ENABLE_OPENSSL
     if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
+        log_debug_printf(certs, "Wait for Server %s certificate status to become GOOD\n", peerName.c_str());
         // Certificate status monitoring is active, but status is not good yet
         state = AwaitingPeerCertValidity;
         return;
     }
 #endif
+
+    state = Connected;
 
     (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
@@ -347,11 +351,11 @@ void Connection::bevEvent(short events) {
  *
  * This function is called when the peer status changes.
  *
- * It will be given a boolean value indicating whether the peer certificate status is good or not.
+ * It will be given a status category indicating whether the peer certificate status is GOOD, BAD, or UNKNOWN.
  *
  * - If the peer certificate status is GOOD, and we're waiting for certificate validity before creating channels,
  *   it will set the state to Connected and proceed with creating channels.
- * - If the peer certificate status is not GOOD, it will disconnect from the server
+ * - If the peer certificate status is BAD, it will disconnect from the server
  */
 #ifdef PVXS_ENABLE_OPENSSL
 void Connection::peerStatusCallback(certs::cert_status_category_t status_category) {
