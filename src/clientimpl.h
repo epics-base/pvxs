@@ -16,6 +16,7 @@
 
 #include "conn.h"
 #include "evhelper.h"
+#include "opensslgbl.h"
 #include "ownedptr.h"
 #include "udp_collector.h"
 #include "utilpvt.h"
@@ -468,7 +469,12 @@ struct ContextImpl : std::enable_shared_from_this<ContextImpl>
      * @return true if the context has loaded a certificate whose status is not known to be REVOKED or EXPIRED
      */
     static bool isTlsPossible(const std::shared_ptr<ossl::SSLContext> &tls_context_to_check) {
-        return tls_context_to_check && tls_context_to_check->state > ossl::SSLContext::DegradedMode && !static_cast<certs::CertificateStatus>(tls_context_to_check->get_cert_status()).isRevokedOrExpired() ;
+        ossl::osslInit();
+        return
+            !ossl::ossl_gbl->tls_disabled &&
+            tls_context_to_check &&
+            tls_context_to_check->state > ossl::SSLContext::DegradedMode &&
+            !static_cast<certs::CertificateStatus>(tls_context_to_check->get_cert_status()).isRevokedOrExpired();
     }
 
     void removePeer(const Connection* client_conn = nullptr);

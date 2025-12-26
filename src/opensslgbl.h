@@ -17,6 +17,7 @@ namespace pvxs {
 namespace ossl {
 
 struct OSSLGbl {
+    bool tls_disabled {false};
     ossl_ptr<OSSL_LIB_CTX> libctx;
     int SSL_CTX_ex_idx;
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE

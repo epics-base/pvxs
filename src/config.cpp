@@ -44,6 +44,11 @@ namespace impl {
 ConfigCommon::~ConfigCommon() {}
 }  // namespace impl
 
+bool ConfigCommon::isTlsConfigured() const {
+    ossl::osslInit();
+    return !ossl::ossl_gbl->tls_disabled && !tls_disabled && !tls_keychain_file.empty();
+}
+
 SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint16_t defdefport) {
     uint16_t defport = conf ? conf->tcp_port : defdefport;
     // look for URI-ish prefix

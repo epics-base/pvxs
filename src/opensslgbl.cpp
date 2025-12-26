@@ -7,6 +7,7 @@
 #include "opensslgbl.h"
 
 #include <algorithm>
+#include <dlfcn.h>
 #include <fstream>
 #include <stdexcept>
 
@@ -14,7 +15,8 @@
 
 #include <openssl/conf.h>
 #include <openssl/err.h>
-#include <openssl/pkcs12.h>
+#include <openssl/opensslv.h>
+#include <openssl/crypto.h>
 
 #include <pvxs/log.h>
 
@@ -38,6 +40,52 @@ int NID_SPvaCertConfigURI = NID_undef;
 
 OSSLGbl* ossl_gbl = nullptr;
 
+void free_SSL_CTX_sidecar(void *, void *ptr, CRYPTO_EX_DATA *, int, long, void *) noexcept {
+    delete static_cast<CertStatusExData*>(ptr);
+}
+
+void logOsslVersions()
+{
+    log_debug_printf(setup, "pvxs: OpenSSL build:  %s (0x%lx)\n", OPENSSL_VERSION_TEXT, (unsigned long)OPENSSL_VERSION_NUMBER);
+    log_debug_printf(setup, "pvxs: OpenSSL runtime:%s (0x%lx)\n", OpenSSL_version(OPENSSL_VERSION), (unsigned long)OpenSSL_version_num());
+}
+
+
+void logSymbolOrigin(const char* name, const void* sym)
+{
+    Dl_info info;
+    if(dladdr(sym, &info) && info.dli_fname) {
+        log_debug_printf(setup, "pvxs: %s from %s\n", name, info.dli_fname);
+    } else {
+        log_debug_printf(setup, "pvxs: %s origin unknown\n", name);
+    }
+}
+
+void logOsslSymbolOrigins()
+{
+    logSymbolOrigin("OpenSSL_version", (const void*)&OpenSSL_version);   // crypto
+    logSymbolOrigin("ERR_get_error",   (const void*)&ERR_get_error);     // crypto
+    logSymbolOrigin("EVP_MD_fetch",    (const void*)&EVP_MD_fetch);      // crypto (OpenSSL 3)
+    logSymbolOrigin("SSL_CTX_new_ex",  (const void*)&SSL_CTX_new_ex);    // ssl
+}
+
+void verifySSLLibraries() {
+    // Test creating an SSL context, and if it fails, then we know we are going to have problems later on
+    const auto ssl_ctx = SSL_CTX_new_ex(ossl_gbl->libctx.get(), nullptr, TLS_method());
+    if (!ssl_ctx) {
+        if (ERR_peek_error()==0) {
+            logOsslVersions();
+            logOsslSymbolOrigins();
+            log_err_printf(setup, "OpenSSL library mismatch detected; disabling TLS%s", "\n");
+        } else {
+            log_err_printf(setup, "SSL_CTX_new_ex failed: %s\n", SSLError("SSL_CTX_new_ex").what());
+        }
+        ossl_gbl->tls_disabled = true;
+        return;
+    }
+    SSL_CTX_free(ssl_ctx);
+}
+
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
 void sslkeylogfile_exit(void *) noexcept {
     if (!ossl_gbl) return;
@@ -56,29 +104,7 @@ void sslkeylogfile_exit(void *) noexcept {
         }
     }
 }
-
-void sslkeylogfile_log(const SSL *, const char *line) noexcept {
-    if (!ossl_gbl) return;
-    auto gbl = ossl_gbl;
-    try {
-        epicsGuard<epicsMutex> G(gbl->keylock);
-        if (gbl->keylog.is_open()) {
-            gbl->keylog << line << '\n';
-            gbl->keylog.flush();
-        }
-    } catch (std::exception &e) {
-        static bool once = false;
-        if (!once) {
-            fprintf(stderr, "Error while writing to SSLKEYLOGFILE\n");
-            once = true;
-        }
-    }
-}
-#endif  // PVXS_ENABLE_SSLKEYLOGFILE
-
-void free_SSL_CTX_sidecar(void *, void *ptr, CRYPTO_EX_DATA *, int, long, void *) noexcept {
-    delete static_cast<CertStatusExData*>(ptr);
-}
+#endif
 
 static void osslInitImpl() {
     log_debug_printf(setup, "One-time initialisation of OpenSSL subsystem starting ...%s\n", "");
@@ -109,6 +135,12 @@ static void osslInitImpl() {
     }
 #endif  // PVXS_ENABLE_SSLKEYLOGFILE
     ossl_gbl = gbl.release();
+    ossl_gbl->libctx = std::move(ctx);
+
+    // Disable SSL if libraries are incompatible
+    verifySSLLibraries();
+
+    log_debug_printf(setup, "One-time initialisation of OpenSSL subsystem complete%s\n", "");
 }
 
 void osslInit() {
