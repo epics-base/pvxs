@@ -326,6 +326,13 @@ enum ocspcertstatus_t { OCSP_CERT_STATUS_LIST };
 #define CERT_STATE(index) ((const char*[])CERT_STATES[(index)])
 #define OCSP_CERT_STATE(index) ((const char*[])OCSP_CERT_STATES[(index)])
 
+// Certificate status categories
+enum cert_status_category_t : int {
+    BAD_STATUS = -1,
+    UNKNOWN_STATUS = 0,
+    GOOD_STATUS = 1,
+};
+
 // Forward declarations
 struct PVACertStatus;
 struct OCSPCertStatus;
@@ -968,23 +975,12 @@ struct CertificateStatus {
                             cs.revocation_date) {}
 
     /**
-     * @brief Check if the certificate status is GOOD
+     * @brief Get the status category
      *
-     * First checks if the status is still valid, then checks if the ocsp_status is GOOD
-     *
-     * @return true if the certificate status is GOOD, false otherwise
+     * @return GOOD_STATUS (VALID), BAD_STATUS (REVOKED, EXPIRED), or UNKNOWN_STATUS (everything else)
      */
-    bool isGood() const noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
-
-    /**
-     * @brief Check if the certificate status is ostensibly GOOD
-     *
-     * This is true if the ocsp_status is GOOD irrespective of whether the status is valid or not.
-     * Useful to determine the status a certificate had before that status' validity expired.
-     *
-     * @return true if the certificate status is ostensibly GOOD, false otherwise
-     */
-    bool isOstensiblyGood() const noexcept { return ocsp_status == OCSP_CERTSTATUS_GOOD; }
+    cert_status_category_t getStatusCategory() const noexcept { return status == VALID ? GOOD_STATUS : isRevokedOrExpired() ? BAD_STATUS : UNKNOWN_STATUS; }
+    cert_status_category_t getEffectiveStatusCategory() const noexcept { return isValid() ? getStatusCategory() : UNKNOWN_STATUS; }
 
     /**
      * @brief Check if the certificate is Expired of Revoked
