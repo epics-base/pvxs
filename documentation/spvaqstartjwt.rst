@@ -101,12 +101,12 @@ If you want a prepackaged environment, try the following.  You will need three t
 
 .. code-block:: console
 
-    Keychain file created   : /home/softioc/.config/pva/1.3/server.p12
+    Keychain file created   : /home/softioc/.config/pva/1.4/server.p12
     Certificate identifier  : 47530d89:3826361579604613180
 
 .. code-block:: shell
 
-    pvxcert -f ~/.config/pva/1.3/server.p12
+    pvxcert -f ~/.config/pva/1.4/server.p12
 
 .. code-block:: console
 
@@ -165,12 +165,12 @@ If you want a prepackaged environment, try the following.  You will need three t
 
 .. code-block:: console
 
-    Keychain file created   : /home/client/.config/pva/1.3/client.p12
+    Keychain file created   : /home/client/.config/pva/1.4/client.p12
     Certificate identifier  : 47530d89:15177030356392297708
 
 .. code-block:: shell
 
-    pvxcert -f ~/.config/pva/1.3/client.p12
+    pvxcert -f ~/.config/pva/1.4/client.p12
 
 .. code-block:: console
 
@@ -239,11 +239,11 @@ If you want a prepackaged environment, try the following.  You will need three t
     EPICS_PVA_BROADCAST_PORT=5076
     EPICS_PVA_CONN_TMO=30
     EPICS_PVA_SERVER_PORT=5075
-    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.3/client.p12
+    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.4/client.p12
     EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp
     EPICS_PVA_TLS_PORT=5076
-    XDG_CONFIG_HOME=/home/client/.config/pva/1.3
-    XDG_DATA_HOME=/home/client/.local/share/pva/1.3
+    XDG_CONFIG_HOME=/home/client/.config/pva/1.4
+    XDG_DATA_HOME=/home/client/.local/share/pva/1.4
     # TLS x509:47530d89:3826361579604613181:EPICS Root Certificate Authority/client@172.17.0.2:34381
     test:enumExample from 172.17.0.2:34381
     struct "epics:nt/NTEnum:1.0" {
@@ -328,7 +328,7 @@ If you want a prepackaged environment, try the following.  You will need three t
 | Env. *authnjwt*      | Params. *authjwt*           | Keys and Values                                | Description                                                           |
 +======================+=============================+================================================+=======================================================================+
 | EPICS_AUTH_JWT_FILE  | ``--token-file <file>``     | location of JWT file                           | file containing JWT token text                                        |
-|                      |                             | e.g. ``~/.config/pva/1.3/jwt.txt``             |                                                                       |
+|                      |                             | e.g. ``~/.config/pva/1.4/jwt.txt``             |                                                                       |
 +----------------------+-----------------------------+------------------------------------------------+-----------------------------------------------------------------------+
 
 
@@ -731,7 +731,7 @@ using the Java Web Token (JWT) Authenticator.
 - create a client server certificate
 
   - creates client server certificate
-  - at location specified by ``EPICS_PVAS_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.3/server.p12`` by default
+  - at location specified by ``EPICS_PVAS_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.4/server.p12`` by default
 
 .. code-block:: shell
 
@@ -739,7 +739,7 @@ using the Java Web Token (JWT) Authenticator.
 
 .. code-block:: console
 
-    Keychain file created   : /home/client/.config/pva/1.3/server.p12
+    Keychain file created   : /home/client/.config/pva/1.4/server.p12
     Certificate identifier  : b271f07a:12421554925305118824
 
 |4| Check the certificate status is VALID
@@ -753,7 +753,7 @@ using the Java Web Token (JWT) Authenticator.
 
 .. code-block:: shell
 
-    pvxcert -f ~/.config/pva/1.3/server.p12
+    pvxcert -f ~/.config/pva/1.4/server.p12
 
 .. code-block:: console
 
@@ -849,7 +849,7 @@ using the Java Web Token (JWT) Authenticator.
 - create a client certificate
 
   - creates a client certificate
-  - at location specified by ``EPICS_PVA_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.3/client.p12`` by default
+  - at location specified by ``EPICS_PVA_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.4/client.p12`` by default
 
 .. code-block:: shell
 
@@ -857,7 +857,7 @@ using the Java Web Token (JWT) Authenticator.
 
 .. code-block:: console
 
-    Keychain file created   : /home/client/.config/pva/1.3/client.p12
+    Keychain file created   : /home/client/.config/pva/1.4/client.p12
     Certificate identifier  : b271f07a:1204731550645534180
 
 |4| Check the certificate status is VALID
@@ -871,7 +871,7 @@ using the Java Web Token (JWT) Authenticator.
 
 .. code-block:: shell
 
-    pvxcert -f ~/.config/pva/1.3/client.p12
+    pvxcert -f ~/.config/pva/1.4/client.p12
 
 .. code-block:: console
 
@@ -917,11 +917,11 @@ using the Java Web Token (JWT) Authenticator.
     EPICS_PVA_BROADCAST_PORT=5076
     EPICS_PVA_CONN_TMO=30
     EPICS_PVA_SERVER_PORT=5075
-    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.3/client.p12
+    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.4/client.p12
     EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp
     EPICS_PVA_TLS_PORT=5076
-    XDG_CONFIG_HOME=/home/client/.config/pva/1.3
-    XDG_DATA_HOME=/home/client/.local/share/pva/1.3
+    XDG_CONFIG_HOME=/home/client/.config/pva/1.4
+    XDG_DATA_HOME=/home/client/.local/share/pva/1.4
     # TLS x509:b271f07a:12421554925305118824:EPICS Root Certificate Authority/client@172.17.0.2:37027
     test:enumExample from 172.17.0.2:37027
     struct "epics:nt/NTEnum:1.0" {

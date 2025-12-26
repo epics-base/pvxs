@@ -47,10 +47,10 @@ RUN mkdir -p /var/log/supervisor && \
 RUN su - pvacms -c "/bin/bash -c '/opt/epics/pvxs/bin/$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)/pvacms --admin-keychain-new admin >> /var/log/supervisor/pvacms.out.log 2>> /var/log/supervisor/pvacms.err.log'"
 
 # Copy the administrator certificate to the admin user
-RUN mkdir -p /home/admin/.config/pva/1.3 && \
-    mv /home/pvacms/.config/pva/1.3/admin.p12 /home/admin/.config/pva/1.3/client.p12 && \
-    chown admin:admin /home/admin/.config/pva/1.3/client.p12 && \
-    chmod 400 /home/admin/.config/pva/1.3/client.p12
+RUN mkdir -p /home/admin/.config/pva/1.4 && \
+    mv /home/pvacms/.config/pva/1.4/admin.p12 /home/admin/.config/pva/1.4/client.p12 && \
+    chown admin:admin /home/admin/.config/pva/1.4/client.p12 && \
+    chmod 400 /home/admin/.config/pva/1.4/client.p12
 
 # Copy the top-level Supervisor config
 COPY supervisord.conf /etc/supervisor/supervisord.conf

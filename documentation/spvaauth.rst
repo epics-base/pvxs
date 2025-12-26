@@ -481,7 +481,7 @@ that contains a working kerberos KDC with the following characteristics:
 
 - users (both unix and kerberos principals)
 
-  - ``pvacms`` - service principal with private keytab file for authentication in ``~/.config/pva/1.3/pvacms.keytab``
+  - ``pvacms`` - service principal with private keytab file for authentication in ``~/.config/pva/1.4/pvacms.keytab``
   - ``admin`` - principal with password "secret" (includes a configured PVACMS administrator certificate)
   - ``softioc`` - service principal with password "secret"
   - ``client`` - principal with password "secret"
@@ -565,7 +565,7 @@ LDAP Credentials Verifier for :ref:`pvacms` at runtime.
 | Env. *authnldap*   | Env. *pvacms*            | Params. *authldap*       | Params. *pvacms*         | Keys and Values                       | Description                                                |
 +====================+==========================+==========================+==========================+=======================================+============================================================+
 || EPICS_AUTH_LDAP   ||                         ||                         ||                         || {location of password file}          || file containing password for the given LDAP user account  |
-|| _ACCOUNT_PWD_FILE ||                         ||                         ||                         || e.g. ``~/.config/pva/1.3/ldap.pass`` ||                                                           |
+|| _ACCOUNT_PWD_FILE ||                         ||                         ||                         || e.g. ``~/.config/pva/1.4/ldap.pass`` ||                                                           |
 +--------------------+--------------------------+--------------------------+--------------------------+---------------------------------------+------------------------------------------------------------+
 ||                   ||                         || ``-p``                  ||                         || {LDAP account password}              || password for the given LDAP user account                  |
 ||                   ||                         || ``--password``          ||                         || e.g. ``secret``                      ||                                                           |
@@ -718,7 +718,7 @@ Credentials Verifier for :ref:`pvacms` at runtime.
 | Env. *authnjwt*      | Params. *authjwt*           | Keys and Values                                | Description                                                           |
 +======================+=============================+================================================+=======================================================================+
 | EPICS_AUTH_JWT_FILE  | ``--token-file <file>``     | location of JWT file                           | file containing JWT token text                                        |
-|                      |                             | e.g. ``~/.config/pva/1.3/jwt.txt``             |                                                                       |
+|                      |                             | e.g. ``~/.config/pva/1.4/jwt.txt``             |                                                                       |
 +----------------------+-----------------------------+------------------------------------------------+-----------------------------------------------------------------------+
 
 
