@@ -18,6 +18,7 @@ USR_CPPFLAGS += -I$(TOP)/src
 USR_CPPFLAGS += -DPVXS_IOC_API_BUILDING
 
 DBD += pvxsIoc.dbd
+CLEANS += pvxsIoc.dbd
 
 INC += pvxs/iochooks.h
 
@@ -78,32 +79,21 @@ endif # BASE_3_15
 
 LIB_LIBS += pvxs
 LIB_LIBS += $(EPICS_BASE_IOC_LIBS)
-
-# Clean up generated DBD file (pvxsIoc.dbd is generated from pvxs7x.dbd or pvxs3x.dbd)
-CLEANS += pvxsIoc.dbd
-
 #===========================
+
+# select DBD file depending on supported syntax
+ifdef BASE_7_0
+PVXS_DBD = pvxs7x.dbd
+else
+PVXS_DBD = pvxs3x.dbd
+endif
 
 include $(TOP)/configure/RULES
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
-# Rules to generate pvxsIoc.dbd from pvxs7x.dbd or pvxs3x.dbd before DBD expansion
-# Following the exact pattern suggested for softIoc.dbd (as per PR review):
-# - .dbd$(DEP) rule creates dependency file (in O.<arch>)
-# - $(COMMON_DIR)/pvxsIoc.dbd rule creates source file that EPICS will expand
-ifdef BASE_7_0
-pvxsIoc.dbd$(DEP): ../pvxs7x.dbd
-$(COMMON_DIR)/pvxsIoc.dbd: ../pvxs7x.dbd
+$(COMMON_DIR)/pvxsIoc.dbd: ../$(PVXS_DBD)
 	$(CP) $< $@
-# Also create in source directory for builds from ioc directory
-pvxsIoc.dbd: pvxs7x.dbd
-	$(CP) $< $@
-else
-pvxsIoc.dbd$(DEP): ../pvxs3x.dbd
-$(COMMON_DIR)/pvxsIoc.dbd: ../pvxs3x.dbd
-	$(CP) $< $@
-# Also create in source directory for builds from ioc directory
-pvxsIoc.dbd: pvxs3x.dbd
-	$(CP) $< $@
-endif
+
+pvxsIoc.dbd$(DEP):
+	echo "$(COMMONDEP_TARGET): ../Makefile" > $@
