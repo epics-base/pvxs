@@ -18,6 +18,7 @@
 #include <openssl/pkcs12.h>
 #include <openssl/rsa.h>
 #include <openssl/ssl.h>
+#include <openssl/types.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
