@@ -16,7 +16,6 @@
 
 #include "conn.h"
 #include "evhelper.h"
-#include "opensslgbl.h"
 #include "ownedptr.h"
 #include "udp_collector.h"
 #include "utilpvt.h"
@@ -25,6 +24,7 @@
 #include "certstatus.h"
 #include "certstatusmanager.h"
 #include "openssl.h"
+#include "opensslgbl.h"
 #define PVXS_OCSP_STAPLING_OK 1
 #define PVXS_OCSP_STAPLING_ERR -1
 #define PVXS_OCSP_STAPLING_NAK 0
