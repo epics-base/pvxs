@@ -37,6 +37,21 @@ See :ref:`building`, and :ref:`includepvxs`.
 With QSRV2 included, all local database records will be served via PVA.
 For most user IOCs, no further action is necessary.
 
+User Guides (Markdown)
+-----------------------
+
+In addition to this API reference documentation, user-friendly guides are available
+in Markdown format:
+
+* `README.md <../README.md>`_ - Project overview and quick start (in repository root)
+* `QUICKSTART.md <../docs/QUICKSTART.md>`_ - Step-by-step tutorial for new users
+* `INSTALLATION.md <../docs/INSTALLATION.md>`_ - Detailed installation guide
+* `TROUBLESHOOTING.md <../docs/TROUBLESHOOTING.md>`_ - Common issues and solutions
+* `ARCHITECTURE.md <../docs/ARCHITECTURE.md>`_ - System architecture overview
+* `CONTRIBUTING.md <../docs/CONTRIBUTING.md>`_ - Contributor guidelines
+
+See also `documentation/README.md <README.md>`_ for documentation navigation.
+
 Contents
 --------
 

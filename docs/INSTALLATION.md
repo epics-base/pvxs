@@ -571,11 +571,28 @@ If you encounter issues not covered here:
 
 After successful installation:
 
-1. Read the [README.md](README.md) for an overview
+1. Read the [README.md](../README.md) for an overview
 2. Explore the [Examples](https://github.com/epics-base/pvxs/tree/master/example)
 3. Review the [API Documentation](https://epics-base.github.io/pvxs/)
 4. Check [ARCHITECTURE.md](ARCHITECTURE.md) for design details
 5. Integrate PVXS into your application
+
+## Related Documentation
+
+**Detailed Build Documentation:**
+- [Building from Source (Detailed)](../documentation/building.rst) - Advanced build options and cross-compilation details
+- [Network Configuration](../documentation/netconfig.rst) - Network setup and environment variables
+- [Running Tests](../documentation/building.rst#runtests) - Test suite execution
+
+**Installation-Related Guides:**
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common installation issues and solutions
+- [README.md](../README.md) - Quick start and overview
+- [Building from Source](https://epics-base.github.io/pvxs/building.html) - Online build documentation
+
+**Python Bindings:**
+- Python bindings (pvxslibs) installation is handled separately via pip
+- See [Python package](https://pypi.org/project/pvxslibs/) for installation instructions
+- Note: Python bindings require EPICS Base and PVXS to be installed first
 
 ## Additional Resources
 
@@ -583,6 +600,10 @@ After successful installation:
 - **PVAccess Specification**: https://epics.anl.gov/base/R3-16/0-docs/EPICS_Network_Protocols.pdf
 - **EPICS Controls Homepage**: https://epics-controls.org/
 - **PVXS GitHub Repository**: https://github.com/epics-base/pvxs
+
+## Acknowledgments
+
+This installation documentation was created and organized by **K. Gofron**, Oak Ridge National Laboratory, December 28, 2025.
 
 ---
 

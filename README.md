@@ -101,7 +101,7 @@ In EPICS, a Process Variable (PV) is a globally addressable data structure that 
 
 ### Installation
 
-For detailed installation instructions, see [INSTALLATION.md](INSTALLATION.md).
+For detailed installation instructions, see [INSTALLATION.md](docs/INSTALLATION.md).
 
 **Basic installation from source:**
 
@@ -197,7 +197,7 @@ For comprehensive installation instructions covering:
 - Cross-compilation
 - Testing
 
-See [INSTALLATION.md](INSTALLATION.md).
+See [INSTALLATION.md](docs/INSTALLATION.md).
 
 ## Documentation
 
@@ -227,11 +227,25 @@ make html
 - **[Network Configuration](https://epics-base.github.io/pvxs/netconfig.html)** - PVAccess network setup
 - **[Command Line Tools](https://epics-base.github.io/pvxs/cli.html)** - CLI utilities
 
-### Additional Documentation Files
+### Documentation Quick Links
 
-- [INSTALLATION.md](INSTALLATION.md) - Detailed installation guide
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Architecture overview
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
+**User Guides (Markdown):**
+- [Installation Guide](docs/INSTALLATION.md) - Detailed installation instructions
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [Architecture Guide](docs/ARCHITECTURE.md) - System design overview
+
+**API Reference (Online RST Documentation):**
+- [Client API - Get/Info](https://epics-base.github.io/pvxs/client.html#get-info) - Get operations and info queries
+- [Client API - Put](https://epics-base.github.io/pvxs/client.html#clientputapi) - Put operations
+- [Client API - Monitor](https://epics-base.github.io/pvxs/client.html#clientmonapi) - Monitor subscriptions
+- [Client API - RPC](https://epics-base.github.io/pvxs/client.html#clientrpcapi) - Remote procedure calls
+- [Server API](https://epics-base.github.io/pvxs/server.html) - Server implementation guide
+- [Value Container API](https://epics-base.github.io/pvxs/value.html) - Data structure handling
+- [Value API - Field Lookup](https://epics-base.github.io/pvxs/value.html#field-lookup) - Accessing fields
+- [Value API - Arrays](https://epics-base.github.io/pvxs/value.html#array-fields) - Array handling
+- [Network Configuration](https://epics-base.github.io/pvxs/netconfig.html) - PVAccess network setup
+- [IOC Integration](https://epics-base.github.io/pvxs/ioc.html) - EPICS IOC integration
+- [QSRV 2](https://epics-base.github.io/pvxs/qgroup.html) - High-level IOC integration
 
 ## Examples
 
@@ -247,13 +261,37 @@ make
 
 ### Available Examples
 
-- **simpleget.cpp** - Minimal client GET operation
-- **simplesrv.cpp** - Minimal server example
-- **client.cpp** - Comprehensive client demonstration
-- **mailbox.cpp** - Mailbox server with PUT handler
-- **rpc_client.cpp** - RPC client example
-- **rpc_server.cpp** - RPC server example
-- **ticker.cpp** - Periodic update server
+Browse the example source code in the [`example/`](example/) directory:
+
+- **[simpleget.cpp](example/simpleget.cpp)** - Minimal client GET operation
+  - Demonstrates basic client usage with blocking `wait()` call
+  - See [Client API - Get/Info](https://epics-base.github.io/pvxs/client.html#get-info) for details
+  
+- **[simplesrv.cpp](example/simplesrv.cpp)** - Minimal server example
+  - Shows how to create and serve a simple PV
+  - See [Server API](https://epics-base.github.io/pvxs/server.html) for details
+  
+- **[client.cpp](example/client.cpp)** - Comprehensive client demonstration
+  - Demonstrates Get, Put with present value fetching, and result handling
+  - See [Client API](https://epics-base.github.io/pvxs/client.html) for all client operations
+  
+- **[mailbox.cpp](example/mailbox.cpp)** - Mailbox server with PUT handler
+  - Shows custom PUT validation, range checking, and timestamp handling
+  - See [SharedPV API](https://epics-base.github.io/pvxs/sharedpv.html) for server-side handlers
+  
+- **[rpc_client.cpp](example/rpc_client.cpp)** - RPC client example
+  - Demonstrates remote procedure calls
+  - See [Client API - RPC](https://epics-base.github.io/pvxs/client.html#clientrpcapi) for details
+  
+- **[rpc_server.cpp](example/rpc_server.cpp)** - RPC server example
+  - Shows how to implement RPC handlers
+  - See [SharedPV API](https://epics-base.github.io/pvxs/sharedpv.html) for RPC handlers
+  
+- **[ticker.cpp](example/ticker.cpp)** - Periodic update server
+  - Demonstrates periodic updates using `post()` to notify subscribers
+  - See [SharedPV - Posting Updates](https://epics-base.github.io/pvxs/sharedpv.html) for monitor updates
+
+See also the [Examples documentation](https://epics-base.github.io/pvxs/example.html) for detailed explanations.
 
 ### Running Examples
 
@@ -302,7 +340,7 @@ For detailed tool documentation, see the [CLI Tools documentation](https://epics
 
 ## Architecture
 
-For a detailed architecture overview, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For a detailed architecture overview, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### High-Level Overview
 
@@ -400,7 +438,7 @@ PVXS is distributed subject to a Software License Agreement found in the [LICENS
 
 ### Getting Help
 
-1. Check the [TROUBLESHOOTING.md](TROUBLESHOOTING.md) guide
+1. Check the [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) guide
 2. Search existing [GitHub Issues](https://github.com/epics-base/pvxs/issues)
 3. Consult the [online documentation](https://epics-base.github.io/pvxs/)
 4. Post questions on [EPICS Tech-Talk](https://epics.anl.gov/tech-talk/)
@@ -410,6 +448,12 @@ PVXS is distributed subject to a Software License Agreement found in the [LICENS
 Current version information can be found in:
 - `configure/CONFIG_PVXS_VERSION`
 - `pvxs/version.h` (after building)
+
+---
+
+## Acknowledgments
+
+This comprehensive documentation suite (README.md, INSTALLATION.md, TROUBLESHOOTING.md, ARCHITECTURE.md, and related documentation) was created and organized by **K. Gofron**, Oak Ridge National Laboratory, December 28, 2025.
 
 ---
 

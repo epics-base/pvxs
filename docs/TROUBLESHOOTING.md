@@ -722,9 +722,12 @@ If you cannot resolve your issue:
 
 1. **Check Documentation:**
    - [Online Documentation](https://epics-base.github.io/pvxs/)
-   - [README.md](README.md)
+   - [README.md](../README.md)
    - [INSTALLATION.md](INSTALLATION.md)
    - [ARCHITECTURE.md](ARCHITECTURE.md)
+   - [Bug Reporting Process](../documentation/details.rst#reportbug) - How to report bugs
+   - [Release Notes](../documentation/releasenotes.rst) - Known issues by version
+   - [Network Configuration Guide](../documentation/netconfig.rst) - Network troubleshooting details
 
 2. **Search Existing Issues:**
    - [GitHub Issues](https://github.com/epics-base/pvxs/issues)
@@ -748,6 +751,28 @@ If you cannot resolve your issue:
    - [EPICS Tech-Talk](https://epics.anl.gov/tech-talk/)
    - Search archives for similar issues
    - Post questions with detailed information
+
+## Related Documentation
+
+**API Reference:**
+- [Client API](https://epics-base.github.io/pvxs/client.html) - Client configuration and operations
+- [Server API](https://epics-base.github.io/pvxs/server.html) - Server configuration and setup
+- [Value Container API](https://epics-base.github.io/pvxs/value.html) - Data structure handling
+- [Network Configuration](https://epics-base.github.io/pvxs/netconfig.html) - Detailed network setup
+
+**Reference Documentation:**
+- [Command Line Tools](../documentation/cli.rst) - CLI utility documentation
+- [Examples](../documentation/example.rst) - Code examples and walkthroughs
+- [Logging Configuration](https://epics-base.github.io/pvxs/util.html#logconfig) - Logging setup
+
+**Troubleshooting Resources:**
+- See example code in `../example/` directory for working patterns
+- Check `../example/simpleget.cpp` for basic client usage
+- Check `../example/simplesrv.cpp` for basic server setup
+
+## Acknowledgments
+
+This troubleshooting documentation was created and organized by **K. Gofron**, Oak Ridge National Laboratory, December 28, 2025.
 
 ---
 

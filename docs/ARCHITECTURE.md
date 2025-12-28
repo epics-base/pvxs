@@ -169,6 +169,8 @@ PVXS leverages C++11 features:
 
 The `Value` class is the central data container in PVXS. It represents a single data structure, field, or array element.
 
+See [Value Container API](https://epics-base.github.io/pvxs/value.html) for detailed API documentation.
+
 **Key Features:**
 - **Type Safety**: Compile-time and runtime type checking
 - **Change Tracking**: Automatic marking of modified fields
@@ -293,6 +295,8 @@ PVXS implements the PVAccess protocol version 1.x, providing:
 
 The `Context` class manages all client-side operations:
 
+See [Client API](https://epics-base.github.io/pvxs/client.html) for detailed API documentation.
+
 ```
 Context
 ├── Config (network settings)
@@ -365,6 +369,8 @@ This allows:
 ## Server Architecture
 
 ### Server Structure
+
+See [Server API](https://epics-base.github.io/pvxs/server.html) and [SharedPV API](https://epics-base.github.io/pvxs/sharedpv.html) for detailed API documentation.
 
 ```
 Server
@@ -664,12 +670,42 @@ field(value)field(extra)  # Multiple selections
 - More efficient
 - Better suited for complex data
 
+## Detailed API Documentation
+
+This architecture document provides a high-level overview. For detailed API documentation, see:
+
+**Core APIs:**
+- [Value Container API](https://epics-base.github.io/pvxs/value.html) - Detailed Value class documentation, field lookup, iteration, arrays
+- [Client API](https://epics-base.github.io/pvxs/client.html) - Detailed Context, GetBuilder, PutBuilder, MonitorBuilder, RPCBuilder documentation
+  - [Get/Info Operations](https://epics-base.github.io/pvxs/client.html#get-info)
+  - [Put Operations](https://epics-base.github.io/pvxs/client.html#clientputapi)
+  - [Monitor Operations](https://epics-base.github.io/pvxs/client.html#clientmonapi)
+  - [RPC Operations](https://epics-base.github.io/pvxs/client.html#clientrpcapi)
+- [Server API](https://epics-base.github.io/pvxs/server.html) - Detailed Server, Config, Source documentation
+- [SharedPV API](https://epics-base.github.io/pvxs/sharedpv.html) - SharedPV and operation handlers
+
+**Comparisons:**
+- [Overview - Comparison with pvDataCPP](https://epics-base.github.io/pvxs/overview.html#comparison-with-pvdatacpp) - Detailed comparison examples
+- [Overview - Comparison with pvAccessCPP](https://epics-base.github.io/pvxs/overview.html#comparison-with-pvaccescpp) - API design differences
+
+**Integration:**
+- [IOC Integration](https://epics-base.github.io/pvxs/ioc.html) - Detailed IOC hooks and integration
+- [QSRV 2](https://epics-base.github.io/pvxs/qgroup.html) - Database integration details
+
+**Implementation:**
+- [Protocol Details](https://epics-base.github.io/pvxs/netconfig.html) - Network protocol implementation
+- [Examples](https://epics-base.github.io/pvxs/example.html) - Source code examples
+
 ## Additional Resources
 
-- [PVXS API Documentation](https://epics-base.github.io/pvxs/)
+- [PVXS API Documentation](https://epics-base.github.io/pvxs/) - Complete online documentation
 - [PVAccess Specification](https://epics.anl.gov/base/R3-16/0-docs/EPICS_Network_Protocols.pdf)
 - [EPICS Base Documentation](https://epics.anl.gov/base/)
 - [Source Code](https://github.com/epics-base/pvxs)
+
+## Acknowledgments
+
+This architecture documentation was created and organized by **K. Gofron**, Oak Ridge National Laboratory, December 28, 2025.
 
 ---
 
