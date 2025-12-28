@@ -9,8 +9,6 @@
 
 #include <fstream>
 
-#include <openssl/types.h>
-
 #include "ownedptr.h"
 
 namespace pvxs {
