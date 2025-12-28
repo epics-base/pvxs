@@ -252,8 +252,6 @@ void Connection::proceedWithCreatingChannels()
     }
 #endif
 
-    state = Connected;
-
     (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
     auto todo = std::move(pending);
