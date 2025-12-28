@@ -31,9 +31,12 @@
 
 #include "clientimpl.h"
 #include "evhelper.h"
-#include "opensslgbl.h"
 #include "serverconn.h"
 #include "utilpvt.h"
+#ifdef PVXS_ENABLE_OPENSSL
+#include "opensslgbl.h"
+#endif
+
 
 DEFINE_LOGGER(serversetup, "pvxs.svr.init");
 DEFINE_LOGGER(clientsetup, "pvxs.cli.init");
@@ -46,8 +49,12 @@ ConfigCommon::~ConfigCommon() {}
 }  // namespace impl
 
 bool ConfigCommon::isTlsConfigured() const {
+#ifdef PVXS_ENABLE_OPENSSL
     ossl::osslInit();
     return !ossl::ossl_gbl->tls_disabled && !tls_disabled && !tls_keychain_file.empty();
+#else
+    return false;
+#endif
 }
 
 SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint16_t defdefport) {
