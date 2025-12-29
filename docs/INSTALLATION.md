@@ -571,11 +571,12 @@ If you encounter issues not covered here:
 
 After successful installation:
 
-1. Read the [README.md](../README.md) for an overview
-2. Explore the [Examples](https://github.com/epics-base/pvxs/tree/master/example)
-3. Review the [API Documentation](https://epics-base.github.io/pvxs/)
-4. Check [ARCHITECTURE.md](ARCHITECTURE.md) for design details
-5. Integrate PVXS into your application
+1. Follow the [Quick Start Guide](QUICKSTART.md) for hands-on experience
+2. Read the [README.md](../README.md) for an overview
+3. Explore the [Examples](https://github.com/epics-base/pvxs/tree/master/example)
+4. Review the [API Documentation](https://epics-base.github.io/pvxs/)
+5. Check [ARCHITECTURE.md](ARCHITECTURE.md) for design details
+6. Integrate PVXS into your application
 
 ## Related Documentation
 

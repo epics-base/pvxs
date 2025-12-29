@@ -199,6 +199,8 @@ For comprehensive installation instructions covering:
 
 See [INSTALLATION.md](docs/INSTALLATION.md).
 
+For a quick start guide, see [QUICKSTART.md](docs/QUICKSTART.md).
+
 ## Documentation
 
 ### Online Documentation
@@ -230,9 +232,12 @@ make html
 ### Documentation Quick Links
 
 **User Guides (Markdown):**
+- [Quick Start Guide](docs/QUICKSTART.md) - Step-by-step tutorial for new users
 - [Installation Guide](docs/INSTALLATION.md) - Detailed installation instructions
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [Architecture Guide](docs/ARCHITECTURE.md) - System design overview
+- [Contributing Guide](docs/CONTRIBUTING.md) - How to contribute to PVXS
+- [Documentation Index](docs/DOCUMENTATION.md) - Complete documentation navigation
 
 **API Reference (Online RST Documentation):**
 - [Client API - Get/Info](https://epics-base.github.io/pvxs/client.html#get-info) - Get operations and info queries
@@ -400,7 +405,9 @@ See [Network Configuration documentation](https://epics-base.github.io/pvxs/netc
 
 ## Contributing
 
-Contributions are welcome! Please see the [Contributing Guidelines](https://epics-base.github.io/pvxs/details.html#contributing) for details.
+Contributions are welcome! Please see the [Contributing Guide](docs/CONTRIBUTING.md) for details.
+
+For detailed contribution guidelines, see the [Contributing Guidelines](https://epics-base.github.io/pvxs/details.html#contributing) in the online API documentation.
 
 ### Development Workflow
 
