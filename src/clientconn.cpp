@@ -367,6 +367,7 @@ void Connection::bevEvent(short events) {
 void Connection::peerStatusCallback(certs::cert_status_category_t status_category) {
     if (status_category == certs::GOOD_STATUS) {
         log_debug_printf(certs, "Ready to proceed with creating channels: %s %s\n", state == AwaitingPeerCertValidity ? "Awaiting Peer Cert Validity": "Connecting", peerName.c_str());
+        ready = true;
         proceedWithCreatingChannels();
     } else if (status_category == certs::BAD_STATUS) {
         log_debug_printf(certs, "Cancel Wait to Creating Channels: BAD CERT STATUS%s\n", "");
