@@ -137,7 +137,7 @@ static void osslInitImpl() {
     ossl_gbl = gbl.release();
     ossl_gbl->libctx = std::move(ctx);
 
-    // Disable SSL if libraries are incompatible
+    // Disable SSL if libraries are incompatible (can happen with incorrect python bindings)
     verifySSLLibraries();
 
     log_debug_printf(setup, "One-time initialisation of OpenSSL subsystem complete%s\n", "");

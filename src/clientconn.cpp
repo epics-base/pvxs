@@ -184,7 +184,16 @@ void Connection::startConnecting() {
     timeval tmo(totv(context->effective.tcpTimeout));
     bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
-    if (bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size())) throw std::runtime_error("Unable to begin connecting");
+    if (bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size())) {
+        // non-blocking connect() failed immediately.
+        // try to defer notification.
+        state = Disconnected;
+        constexpr timeval immediate{0, 0};
+        if(event_add(echoTimer.get(), &immediate))
+            throw std::runtime_error(SB()<<"Unable to begin connecting or schedule deferred notification "<<peerName);
+        log_warn_printf(io, "Unable to connect() to %s\n", peerName.c_str());
+        return;
+    }
 
     connect(std::move(bev));
 
@@ -227,8 +236,13 @@ void Connection::configureClientOCSPCallback(SSL* ssl) const {
  */
 void Connection::createChannels()
 {
-    if(!ready)
-        return; // defer until CONNECTION_VALIDATED
+#ifdef PVXS_ENABLE_OPENSSL
+    if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
+        log_debug_printf(certs, "Wait for Server %s certificate status to become GOOD\n", peerName.c_str());
+        state = AwaitingPeerCertValidity;
+        return; // defer until peer certificate status validated
+    }
+#endif
 
     proceedWithCreatingChannels();
 }
@@ -243,14 +257,8 @@ void Connection::createChannels()
  */
 void Connection::proceedWithCreatingChannels()
 {
-#ifdef PVXS_ENABLE_OPENSSL
-    if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
-        log_debug_printf(certs, "Wait for Server %s certificate status to become GOOD\n", peerName.c_str());
-        // Certificate status monitoring is active, but status is not good yet
-        state = AwaitingPeerCertValidity;
-        return;
-    }
-#endif
+    if(!ready)
+        return; // defer until CONNECTION_VALIDATED
 
     (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 

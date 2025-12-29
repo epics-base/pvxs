@@ -426,7 +426,7 @@ struct Tester {
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
             testCounterEq(cert_status_request_counters, ioc, 2);
-            testCounterEq(cert_status_request_counters, client1, 1);
+            testCounterEq(cert_status_request_counters, client1, 2);
             testCounterEq(cert_status_request_counters, client2, 0);
         }
         testDiag("Connect");
@@ -453,7 +453,7 @@ struct Tester {
             testOk1(e.cred && e.cred->isTLS);
             testCounterEq(cert_status_request_counters, ioc, 3);
             testCounterEq(cert_status_request_counters, client1, 2);
-            testCounterEq(cert_status_request_counters, client2, 1);
+            testCounterEq(cert_status_request_counters, client2, 2);
         } catch (...) {
             testFail("Unexpected exception instead of Connected");
         }
@@ -508,7 +508,7 @@ struct Tester {
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_SERVER1);
             testCounterEq(cert_status_request_counters, server1, 2);
-            testCounterEq(cert_status_request_counters, client1, 1);
+            testCounterEq(cert_status_request_counters, client1, 2);
             testCounterEq(cert_status_request_counters, ioc, 0);
         }
         testDiag("Connect");
@@ -536,7 +536,7 @@ struct Tester {
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
             testCounterEq(cert_status_request_counters, server1, 2);
-            testCounterEq(cert_status_request_counters, client1, 2);
+            testCounterEq(cert_status_request_counters, client1, 3);
             testCounterEq(cert_status_request_counters, ioc, 2);
         }
         testDiag("Reconnect");

@@ -170,7 +170,7 @@ void SSLContext::setDegradedMode(const bool clear) {
  */
 void SSLContext::setTlsOrTcpMode(const certs::cert_status_category_t cert_status_category) {
     log_debug_printf(watcher, "Received a %s certificate status from the status monitor\n", cert_status.status.s.c_str());
-    if ( state == DegradedMode) {
+    if (state == DegradedMode) {
         log_warn_printf(watcher, "Logic Error. Should not be monitoring certificate status: Because the context state is %s\n", "DegradedMode");
         return;
     }
