@@ -220,18 +220,21 @@ make html
 
 ### Key Documentation Sections
 
-- **[Overview](https://epics-base.github.io/pvxs/overview.html)** - Introduction and concepts
-- **[Client API](https://epics-base.github.io/pvxs/client.html)** - Client usage and examples
-- **[Server API](https://epics-base.github.io/pvxs/server.html)** - Server implementation guide
-- **[Value Container API](https://epics-base.github.io/pvxs/value.html)** - Data structure handling
-- **[IOC Integration](https://epics-base.github.io/pvxs/ioc.html)** - EPICS IOC integration
-- **[QSRV 2](https://epics-base.github.io/pvxs/qgroup.html)** - High-level IOC integration
-- **[Network Configuration](https://epics-base.github.io/pvxs/netconfig.html)** - PVAccess network setup
-- **[Command Line Tools](https://epics-base.github.io/pvxs/cli.html)** - CLI utilities
+| Section | Description |
+|:--------|:------------|
+| [Overview](https://epics-base.github.io/pvxs/overview.html) | Introduction and concepts |
+| [Client API](https://epics-base.github.io/pvxs/client.html) | Client usage and examples |
+| [Server API](https://epics-base.github.io/pvxs/server.html) | Server implementation guide |
+| [Value Container API](https://epics-base.github.io/pvxs/value.html) | Data structure handling |
+| [IOC Integration](https://epics-base.github.io/pvxs/ioc.html) | EPICS IOC integration |
+| [QSRV 2](https://epics-base.github.io/pvxs/qgroup.html) | High-level IOC integration |
+| [Network Configuration](https://epics-base.github.io/pvxs/netconfig.html) | PVAccess network setup |
+| [Command Line Tools](https://epics-base.github.io/pvxs/cli.html) | CLI utilities |
 
 ### Documentation Quick Links
 
 **User Guides (Markdown):**
+
 - [Quick Start Guide](docs/QUICKSTART.md) - Step-by-step tutorial for new users
 - [Installation Guide](docs/INSTALLATION.md) - Detailed installation instructions
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
@@ -240,6 +243,7 @@ make html
 - [Documentation Index](docs/DOCUMENTATION.md) - Complete documentation navigation
 
 **API Reference (Online RST Documentation):**
+
 - [Client API - Get/Info](https://epics-base.github.io/pvxs/client.html#get-info) - Get operations and info queries
 - [Client API - Put](https://epics-base.github.io/pvxs/client.html#clientputapi) - Put operations
 - [Client API - Monitor](https://epics-base.github.io/pvxs/client.html#clientmonapi) - Monitor subscriptions
@@ -313,7 +317,7 @@ See also the [Examples documentation](https://epics-base.github.io/pvxs/example.
 PVXS provides several command-line tools for testing and debugging:
 
 | Tool | Description |
-|------|-------------|
+|:-----|:------------|
 | `pvxget` | Get PV value (analogous to `pvget`) |
 | `pvxput` | Put PV value (analogous to `pvput`) |
 | `pvxmonitor` | Monitor PV updates (analogous to `pvmonitor`) |
@@ -349,31 +353,33 @@ For a detailed architecture overview, see [ARCHITECTURE.md](docs/ARCHITECTURE.md
 
 ### High-Level Overview
 
+The PVXS library follows a layered architecture:
+
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    PVXS Library                         │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │   Client     │  │    Server    │  │   Value      │ │
-│  │     API      │  │     API      │  │     API      │ │
-│  └──────────────┘  └──────────────┘  └──────────────┘ │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│  │   Client     │  │    Server    │  │   Value      │   │
+│  │     API      │  │     API      │  │     API      │   │
+│  └──────────────┘  └──────────────┘  └──────────────┘   │
 │         │                  │                  │         │
 │         └──────────────────┼──────────────────┘         │
 │                            │                            │
-│                   ┌────────┴────────┐                   │
-│                   │  PVA Protocol   │                   │
-│                   │   Implementation │                   │
-│                   └────────┬────────┘                   │
+│                 ┌──────────┴──────────┐                 │
+│                 │  PVA Protocol       │                 │
+│                 │  Implementation     │                 │
+│                 └──────────┬──────────┘                 │
 │                            │                            │
 └────────────────────────────┼────────────────────────────┘
                              │
-                ┌────────────┴────────────┐
-                │                         │
-         ┌──────▼──────┐          ┌──────▼──────┐
-         │  EPICS Base │          │  libevent   │
+                ┌────────────┴───────────┐
+                │                        │
+         ┌──────▼──────┐          ┌──────▼───────┐
+         │  EPICS Base │          │  libevent    │
          │   (OSD)     │          │  (Networking)│
-         └─────────────┘          └─────────────┘
+         └─────────────┘          └──────────────┘
 ```
 
 ### Key Components
@@ -386,22 +392,24 @@ For a detailed architecture overview, see [ARCHITECTURE.md](docs/ARCHITECTURE.md
 
 ## Network Configuration
 
-PVXS uses environment variables for network configuration:
+PVXS uses environment variables for network configuration. See the [Network Configuration documentation](https://epics-base.github.io/pvxs/netconfig.html) for complete details.
 
 ### Client Configuration (`$EPICS_PVA_*`)
 
-- `EPICS_PVA_ADDR_LIST` - Server address list
-- `EPICS_PVA_AUTO_ADDR_LIST` - Enable/disable auto-discovery
-- `EPICS_PVA_SERVER_PORT` - Server port (default: 5075)
-- `EPICS_PVA_BROADCAST_PORT` - Broadcast port (default: 5076)
+| Variable | Description |
+|:---------|:------------|
+| `EPICS_PVA_ADDR_LIST` | Server address list |
+| `EPICS_PVA_AUTO_ADDR_LIST` | Enable/disable auto-discovery |
+| `EPICS_PVA_SERVER_PORT` | Server port (default: 5075) |
+| `EPICS_PVA_BROADCAST_PORT` | Broadcast port (default: 5076) |
 
 ### Server Configuration (`$EPICS_PVAS_*` or `$EPICS_PVA_*`)
 
-- `EPICS_PVAS_SERVER_PORT` - Server listening port
-- `EPICS_PVAS_BEACON_ADDR_LIST` - Beacon destination addresses
-- `EPICS_PVAS_AUTO_BEACON_ADDR_LIST` - Enable/disable auto-beaconing
-
-See [Network Configuration documentation](https://epics-base.github.io/pvxs/netconfig.html) for details.
+| Variable | Description |
+|:---------|:------------|
+| `EPICS_PVAS_SERVER_PORT` | Server listening port |
+| `EPICS_PVAS_BEACON_ADDR_LIST` | Beacon destination addresses |
+| `EPICS_PVAS_AUTO_BEACON_ADDR_LIST` | Enable/disable auto-beaconing |
 
 ## Contributing
 
