@@ -47,7 +47,7 @@ ConnBase::ConnBase(bool isClient, bool isTLS, bool sendBE, evbufferevent&& bev, 
     ,txBody(__FILE__, __LINE__, evbuffer_new())
     ,state(Holdoff)
 {
-    log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::ConnBase()\n", "ConnBase::state", "Holdoff");
+    log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::ConnBase(): Peer=%s\n", "ConnBase::state", "Holdoff", peerName.c_str());
     if(bev) { // true for server connection.  client will call connect() shortly
         connect(std::move(bev));
     }
@@ -88,7 +88,7 @@ void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
 #endif
 
     state = isClient ? Connecting : Connected;
-    log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::connect()\n", "ConnBase::state", isClient ? "Connecting" : "Connected");
+    log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::connect(): %s\n", "ConnBase::state", isClient ? "Connecting" : "Connected", peerName.c_str());
 
     this->bev = std::move(bev);
 
@@ -101,7 +101,7 @@ void ConnBase::disconnect()
     log_debug_printf(connsetup, "ConnBase::disconnect(): disconnecting a %s\n", peerLabel());
     bev.reset();
     state = Disconnected;
-    log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::connect()\n", "ConnBase::state", "Disconnected");
+    log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::connect(): %s\n", "ConnBase::state", "Disconnected", peerName.c_str());
 }
 
 size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
@@ -188,7 +188,7 @@ void ConnBase::bevEvent(const short events) {
             log_warn_printf(connio, "connection to %s %s timeout\n", peerLabel(), peerName.c_str());
         }
         state = Disconnected;
-        log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::bevEvent()\n", "ConnBase::state", "Disconnected");
+        log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::bevEvent(): %s\n", "ConnBase::state", "Disconnected", peerName.c_str());
         bev.reset();
     }
 

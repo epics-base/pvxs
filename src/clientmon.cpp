@@ -141,7 +141,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
                 chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
 
                 state = p ? Idle : Running;
-                log_debug_printf(status_cli, "%30.30s = %-15s : SubscriptionImpl::pause()\n", "SubscriptionImpl::state", state == Idle ? "Idle" : "Running");
+                log_debug_printf(status_cli, "%30.30s = %-15s : SubscriptionImpl::pause(): %s\n", "SubscriptionImpl::state", state == Idle ? "Idle" : "Running", chan->name.c_str());
             }
         });
     }
@@ -313,7 +313,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
         }
         bool ret = state!=Done;
         state = Done;
-        log_debug_printf(status_cli, "%30.30s = %-15s : SubscriptionImpl::_cancel()\n", "SubscriptionImpl::state", "Done");
+        log_debug_printf(status_cli, "%30.30s = %-15s : SubscriptionImpl::_cancel(): %s\n", "SubscriptionImpl::state", "Done", channelName.c_str());
         return ret;
     }
 
@@ -354,7 +354,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
                          unsigned(queueSize), unsigned(ackAt));
 
         state = Creating;
-        log_debug_printf(status_cli, "%30.30s = %-15s : SubscriptionImpl::createOp()\n", "SubscriptionImpl::state", "Creating");
+        log_debug_printf(status_cli, "%30.30s = %-15s : SubscriptionImpl::createOp(): %s\n", "SubscriptionImpl::state", "Creating", channelName.c_str());
 
         bool notify = false;
         if(!maskConn || pipeline) {
@@ -617,7 +617,7 @@ void Connection::handle_MONITOR()
     if(!sts.isSuccess()) {
         update.exc = std::make_exception_ptr(RemoteError(sts.msg));
         mon->state = SubscriptionImpl::Done;
-        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_MONITOR()\n", "SubscriptionImpl::state", "Done");
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_MONITOR(): %s\n", "SubscriptionImpl::state", "Done", mon->channelName.c_str());
 
     } else if(mon->state==SubscriptionImpl::Creating) {
         log_debug_printf(io, "Server %s channel %s monitor Created\n",
@@ -625,14 +625,14 @@ void Connection::handle_MONITOR()
                         mon->chan->name.c_str());
 
         mon->state = SubscriptionImpl::Idle;
-        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_MONITOR()\n", "SubscriptionImpl::state", "Idle");
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_MONITOR(): %s\n", "SubscriptionImpl::state", "Idle", mon->channelName.c_str());
 
         try {
             if(mon->onInit)
                 mon->onInit(*mon, info->prototype);
         }catch(std::exception& e){
             mon->state = SubscriptionImpl::Done;
-            log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_MONITOR()\n", "SubscriptionImpl::state", "Done");
+            log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_MONITOR(): %s\n", "SubscriptionImpl::state", "Done", mon->channelName.c_str());
             update.exc = std::current_exception();
             log_debug_printf(io, "Server %s channel %s monitor Create error: %s\n",
                             peerName.c_str(),
@@ -732,7 +732,7 @@ void Connection::handle_MONITOR()
 
     if(mon->state==SubscriptionImpl::Done || final) {
         mon->state=SubscriptionImpl::Done;
-        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_MONITOR()\n", "SubscriptionImpl::state", "Done");
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_MONITOR(): %s\n", "SubscriptionImpl::state", "Done", mon->channelName.c_str());
 
         opByIOID.erase(ioid);
         mon->chan->opByIOID.erase(ioid);

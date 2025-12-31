@@ -165,7 +165,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self) {
     }
 
     state = Channel::Searching;
-    log_debug_printf(status_cli, "%30.30s = %-15s : Channel::disconnect()\n", "Channel::state", "Searching");
+    log_debug_printf(status_cli, "%30.30s = %-15s : Channel::disconnect(): %s\n", "Channel::state", "Searching", name.c_str());
     sid = 0xdeadbeef;  // spoil
 
     auto conns(connectors);  // copy list
@@ -202,7 +202,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self) {
 
         conn->pending[cid] = self;
         state = Connecting;
-        log_debug_printf(status_cli, "%30.30s = %-15s : Channel::disconnect()\n", "Channel::state", "Connecting");
+        log_debug_printf(status_cli, "%30.30s = %-15s : Channel::disconnect(): %s\n", "Channel::state", "Connecting", name.c_str());
 
         conn->createChannels();
     }
@@ -846,7 +846,7 @@ static void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peer
 
             chan->conn->pending[chan->cid] = chan;
             chan->state = Channel::Connecting;
-            log_debug_printf(status_cli, "%30.30s = %-15s : procSearchReply()\n", "Channel::state", "Connecting");
+            log_debug_printf(status_cli, "%30.30s = %-15s : procSearchReply(): %s\n", "Channel::state", "Connecting", chan->name.c_str());
 
             chan->conn->createChannels();
 

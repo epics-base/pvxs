@@ -285,7 +285,7 @@ void Connection::proceedWithCreatingChannels()
 
         creatingByCID[chan->cid] = chan;
         chan->state = Channel::Creating;
-        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::proceedWithCreatingChannels()\n", "Channel::state", "Creating");
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::proceedWithCreatingChannels(): %s\n", "Channel::state", "Creating", chan->name.c_str());
 
         log_debug_printf(io, "Server %s creating channel '%s' (%u)\n", peerName.c_str(),
                          chan->name.c_str(), unsigned(chan->cid));
@@ -389,7 +389,7 @@ std::shared_ptr<ConnBase> Connection::self_from_this()
 
 void Connection::cleanup()
 {
-    log_debug_printf(status_cli, "%30.30s = %-15s : Connection::cleanup()\n", "Connection::ready", ready ? "true" : "false");
+    log_debug_printf(status_cli, "%30.30s = %-15s : Connection::cleanup(): %s\n", "Connection::ready", ready ? "true" : "false", peerName.c_str());
     ready = false;
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -553,7 +553,7 @@ void Connection::handle_CONNECTION_VALIDATED()
 #else
     ready = true;
 #endif
-    log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_CONNECTION_VALIDATED()\n", "Connection::ready", ready ? "true" : "false");
+    log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_CONNECTION_VALIDATED(): %s\n", "Connection::ready", ready ? "true" : "false", peerName.c_str());
 
     createChannels();
 
@@ -615,7 +615,7 @@ void Connection::handle_CREATE_CHANNEL()
         // server refuses to create a channel, but presumably responded positively to search
 
         chan->state = Channel::Searching;
-        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_CREATE_CHANNEL()\n", "Channel::state", "Searching");
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_CREATE_CHANNEL(): %s\n", "Channel::state", "Searching", chan->name.c_str());
         context->searchBuckets[context->currentBucket].push_back(chan);
 
         log_warn_printf(io, "Server %s refuses channel to '%s' : %s\n", peerName.c_str(),
@@ -623,7 +623,7 @@ void Connection::handle_CREATE_CHANNEL()
 
     } else {
         chan->state = Channel::Active;
-        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_CREATE_CHANNEL()\n", "Channel::state", "Active");
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_CREATE_CHANNEL(): %s\n", "Channel::state", "Active", chan->name.c_str());
         chan->sid = sid;
 
         chanBySID[sid] = chan;
