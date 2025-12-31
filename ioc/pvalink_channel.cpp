@@ -17,7 +17,7 @@
 DEFINE_LOGGER(_logger, "pvxs.ioc.link.channel");
 DEFINE_LOGGER(_logupdate, "pvxs.ioc.link.channel.update");
 
-int pvaLinkNWorkers = 1;
+int pvxLinkNWorkers = 1;
 
 namespace pvxs {
 namespace ioc {
@@ -42,7 +42,7 @@ linkGlobal_t::linkGlobal_t()
             // worker should be above PVA worker priority?
             epicsThreadPriorityMedium)
 {
-    // TODO respect pvaLinkNWorkers?
+    // TODO respect pvxLinkNWorkers?
     worker.start();
 }
 

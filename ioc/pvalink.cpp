@@ -320,7 +320,7 @@ const iocshVarDef pvaLinkNWorkersDef[] = {
     {
         "pvaLinkNWorkers",
         iocshArgInt,
-        &pvaLinkNWorkers
+        &pvxLinkNWorkers
     },
     {0, iocshArgInt, 0}
 };
