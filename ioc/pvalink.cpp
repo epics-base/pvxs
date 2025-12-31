@@ -182,7 +182,7 @@ QSrvWaitForLinkUpdate::~QSrvWaitForLinkUpdate()
 }
 
 extern "C"
-void dbpvar(const char *precordname, int level)
+void dbpvxr(const char *precordname, int level)
 {
     try {
         if(!linkGlobal) {
@@ -327,8 +327,8 @@ const iocshVarDef pvaLinkNWorkersDef[] = {
 
 void pvalink_enable()
 {
-    IOCShCommand<const char*, int>("dbpvar", "dbpvar", "record name", "level")
-            .implementation<&dbpvar>();
+    IOCShCommand<const char*, int>("dbpvar", "record name", "level")
+            .implementation<&dbpvxr>();
     iocshRegisterVariable(pvaLinkNWorkersDef);
 
 }
