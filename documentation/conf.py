@@ -27,11 +27,10 @@ def git_date():
         return time.strftime('%Y-%m-%d')
 
 def git_describe():
-    from subprocess import check_output
+    from subprocess import check_output, DEVNULL
     try:
-        return check_output(['git','describe','--tags']).decode('ascii')
-    except Exception as e:
-        print(f'Unable to find Git revision: {e}')
+        return check_output(['git','describe','--tags'], stderr=DEVNULL).decode('ascii')
+    except Exception:
         return None # fallback
 
 def read_version(fmt):
@@ -71,7 +70,9 @@ today = git_date()
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.githubpages',
+    'sphinx.ext.graphviz',
     'breathe',
+    'myst_parser',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -81,7 +82,7 @@ templates_path = ['_templates']
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = '.rst'
+source_suffix = ['.rst', '.md']
 
 # The master toctree document.
 master_doc = 'index'
@@ -96,7 +97,7 @@ language = 'en'
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'README.md']
 
 default_role = "any"
 primary_domain = "cpp"
@@ -121,7 +122,7 @@ html_theme = 'alabaster'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = []
+html_static_path = ['images']
 
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
@@ -219,3 +220,12 @@ breathe_default_project = "PVXS"
 breathe_projects = {
     "PVXS": "xml"
 }
+
+# -- MyST Parser configuration ------------------------------------------------
+
+myst_enable_extensions = [
+    "colon_fence",
+    # "linkify",  # Requires linkify-it-py package - disabled to avoid extra dependency
+]
+
+myst_heading_anchors = 3
