@@ -60,7 +60,7 @@ struct pvaLink;
 struct pvaLinkChannel;
 
 extern lset pva_lset;
-extern jlif lsetPVA;
+extern jlif lsetPVX;
 
 struct pvaLinkConfig : public jlink
 {

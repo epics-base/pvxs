@@ -104,7 +104,7 @@ std::shared_ptr<pvaLinkChannel> testGetPVALink(struct link *plink)
 {
     DBLocker lock(plink->precord);
 
-    if(plink->type!=JSON_LINK || !plink->value.json.jlink || plink->value.json.jlink->pif!=&lsetPVA) {
+    if(plink->type!=JSON_LINK || !plink->value.json.jlink || plink->value.json.jlink->pif!=&lsetPVX) {
         testAbort("Not a PVA link");
     }
     pvaLink *pval = static_cast<pvaLink*>(plink->value.json.jlink);

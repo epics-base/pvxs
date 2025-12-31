@@ -283,7 +283,7 @@ void pva_report(const jlink *rpjlink, int lvl, int indent) noexcept
 
 } //namespace
 
-jlif lsetPVA = {
+jlif lsetPVX = {
     "pva",
     &pva_alloc_jlink,
     &pva_free_jlink,
@@ -306,6 +306,6 @@ jlif lsetPVA = {
 }} //namespace pvxs::ioc
 
 extern "C" {
-using pvxs::ioc::lsetPVA;
-epicsExportAddress(jlif, lsetPVA);
+using pvxs::ioc::lsetPVX;
+epicsExportAddress(jlif, lsetPVX);
 }

@@ -1,5 +1,5 @@
 registrar(pvxsBaseRegistrar)
-link("pva", "lsetPVA")
+link("pva", "lsetPVX")
 
 # from demo.cpp
 device(waveform, CONSTANT, devWfPDBQ2Demo, "QSRV2 Demo")
