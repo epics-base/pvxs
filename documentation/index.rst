@@ -37,39 +37,54 @@ See :ref:`building`, and :ref:`includepvxs`.
 With QSRV2 included, all local database records will be served via PVA.
 For most user IOCs, no further action is necessary.
 
-User Guides (Markdown)
------------------------
-
-In addition to this API reference documentation, user-friendly guides are available
-in Markdown format:
-
-* `README.md <../README.md>`_ - Project overview and quick start (in repository root)
-* `QUICKSTART.md <../docs/QUICKSTART.md>`_ - Step-by-step tutorial for new users
-* `INSTALLATION.md <../docs/INSTALLATION.md>`_ - Detailed installation guide
-* `TROUBLESHOOTING.md <../docs/TROUBLESHOOTING.md>`_ - Common issues and solutions
-* `ARCHITECTURE.md <../docs/ARCHITECTURE.md>`_ - System architecture overview
-* `CONTRIBUTING.md <../docs/CONTRIBUTING.md>`_ - Contributor guidelines
-
-See also `documentation/README.md <README.md>`_ for documentation navigation.
-
 Contents
 --------
 
 .. toctree::
    :maxdepth: 3
+   :caption: Getting Started
 
-   overview
-   netconfig
-   example
-   building
-   cli
-   ioc
-   value
-   client
-   server
-   util
-   details
-   releasenotes
+   guides/quickstart
+   guides/installation
+
+.. toctree::
+   :maxdepth: 3
+   :caption: User Guides
+
+   guides/architecture
+   guides/troubleshooting
+   reference/building
+   reference/netconfig
+   reference/cli
+
+.. toctree::
+   :maxdepth: 3
+   :caption: API Reference
+
+   api/overview
+   api/value
+   api/client
+   api/server
+   api/ioc
+   api/util
+   api/details
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Reference Documentation
+
+   reference/nt
+   reference/ntscalar
+   reference/qgroup
+   reference/pvalink
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Examples & Additional
+
+   examples/example
+   examples/releasenotes
+   examples/contributing
 
 Indices and tables
 ==================

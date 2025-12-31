@@ -4,178 +4,172 @@ This directory contains the comprehensive documentation for PVXS, the PVAccess P
 
 ## Documentation Structure
 
-The PVXS documentation is organized into two complementary formats:
+The PVXS documentation is now fully integrated into a unified Sphinx environment, combining both RST (API reference) and Markdown (user guides) formats for seamless cross-referencing.
 
-### 1. RST Documentation (API Reference)
+### Directory Organization
 
-The `*.rst` files in this directory are the **source files for the official API reference documentation** published at https://epics-base.github.io/pvxs/.
-
-**Purpose:** Detailed API reference, generated from code documentation and structured for technical reference.
-
-**Key Documents:**
-- `index.rst` - Main documentation index
-- `overview.rst` - Overview and concepts
-- `client.rst` - Client API reference
-- `server.rst` - Server API reference
-- `value.rst` - Value Container API reference
-- `ioc.rst` - IOC Integration documentation
-- `building.rst` - Building from source (detailed)
-- `netconfig.rst` - Network configuration
-- `cli.rst` - Command-line tools
-- `example.rst` - Code examples
-- `details.rst` - Bug reporting, contributing, release policy
-- `releasenotes.rst` - Release notes
-
-**Building the Documentation:**
-
-To build the HTML documentation locally:
-
-```bash
-cd documentation
-make html
-# Documentation will be in _build/html/
 ```
-
-### 2. Markdown Documentation (User Guides)
-
-User-friendly guides in Markdown format located in the `docs/` directory:
-
-**Purpose:** Practical guides for getting started, installation, troubleshooting, and understanding the system.
-
-**User Guides:**
-- [`README.md`](../README.md) - Main project overview and quick start (in repository root)
-- [`QUICKSTART.md`](../docs/QUICKSTART.md) - Step-by-step tutorial for new users
-- [`INSTALLATION.md`](../docs/INSTALLATION.md) - Detailed installation guide
-- [`TROUBLESHOOTING.md`](../docs/TROUBLESHOOTING.md) - Common issues and solutions
-- [`ARCHITECTURE.md`](../docs/ARCHITECTURE.md) - System architecture overview
-- [`CONTRIBUTING.md`](../docs/CONTRIBUTING.md) - Contributor guidelines
-
-## Documentation Navigation
-
-### For New Users
-
-1. Start with [`README.md`](../README.md) for an overview
-2. Follow [`QUICKSTART.md`](../docs/QUICKSTART.md) for hands-on experience
-3. Refer to [`INSTALLATION.md`](../docs/INSTALLATION.md) for detailed setup
-4. Use [`TROUBLESHOOTING.md`](../docs/TROUBLESHOOTING.md) if you encounter issues
-
-### For Developers
-
-1. Review [`ARCHITECTURE.md`](../docs/ARCHITECTURE.md) for system design
-2. Consult the [online API documentation](https://epics-base.github.io/pvxs/) for detailed APIs
-3. Check [`CONTRIBUTING.md`](../docs/CONTRIBUTING.md) for development guidelines
-4. See `example.rst` and the [`example/`](../example/) directory for code examples
-
-### For API Reference
-
-1. Browse the [online documentation](https://epics-base.github.io/pvxs/) (generated from RST files)
-2. Or build locally: `make html` in this directory
-3. See `index.rst` for the table of contents
+documentation/
+├── guides/              # User guides (Markdown)
+│   ├── quickstart.md
+│   ├── installation.md
+│   ├── troubleshooting.md
+│   └── architecture.md
+├── api/                 # API reference (RST)
+│   ├── overview.rst
+│   ├── value.rst
+│   ├── client.rst
+│   ├── server.rst
+│   ├── ioc.rst
+│   ├── util.rst
+│   ├── details.rst
+│   ├── typedef.rst
+│   ├── sharedpv.rst
+│   └── source.rst
+├── reference/           # Reference documentation (RST)
+│   ├── building.rst
+│   ├── netconfig.rst
+│   ├── cli.rst
+│   ├── nt.rst
+│   ├── ntscalar.rst
+│   ├── qgroup.rst
+│   └── pvalink.rst
+├── examples/            # Examples and additional content
+│   ├── example.rst
+│   ├── releasenotes.rst
+│   └── contributing.md
+├── images/              # Images and graphics (SVG, PNG, etc.)
+│   ├── nt_table1.svg
+│   ├── nt_table2.svg
+│   ├── nt_table3.svg
+│   └── nt_table4.svg
+├── index.rst            # Main documentation index
+└── conf.py              # Sphinx configuration
+```
 
 ## Documentation Types
 
-### API Reference (RST)
-
-**Best for:**
-- Looking up function/class signatures
-- Understanding method parameters
-- Finding available classes and methods
-- Detailed technical specifications
-
-**Format:** ReStructuredText (RST) with Sphinx
-**Location:** Files in this directory (`*.rst`)
-**Online:** https://epics-base.github.io/pvxs/
-
 ### User Guides (Markdown)
 
+**Location:** `guides/` and `examples/` directories
+
+**Purpose:** Practical guides for getting started, installation, troubleshooting, and understanding the system.
+
+**Key Documents:**
+
+- [Quick Start Guide](https://epics-base.github.io/pvxs/guides/quickstart.html) - Step-by-step tutorial for new users
+- [Installation Guide](https://epics-base.github.io/pvxs/guides/installation.html) - Detailed installation guide
+- [Troubleshooting Guide](https://epics-base.github.io/pvxs/guides/troubleshooting.html) - Common issues and solutions
+- [Architecture Guide](https://epics-base.github.io/pvxs/guides/architecture.html) - System architecture overview
+- [Contributing Guide](https://epics-base.github.io/pvxs/examples/contributing.html) - Contributor guidelines
+
 **Best for:**
+
 - Getting started quickly
 - Step-by-step tutorials
 - Installation instructions
 - Troubleshooting common problems
 - Understanding concepts and architecture
 
-**Format:** Markdown
-**Location:** `docs/` directory (`docs/*.md`), with `README.md` in repository root
+### API Reference (RST)
 
-## Cross-Referencing
+**Location:** `api/` directory
 
-The documentation is designed to work together:
+**Purpose:** Detailed API reference, generated from code documentation and structured for technical reference.
 
-- **Markdown guides** link to specific RST sections for detailed API information
-- **RST documentation** references markdown guides for user-friendly introductions
-- **Both formats** link to code examples in the `example/` directory
+**Key Documents:**
 
-## Contributing to Documentation
+- `api/overview.rst` - Overview, concepts, comparisons with other modules
+- `api/client.rst` - Complete Client API reference
+- `api/server.rst` - Complete Server API reference
+- `api/value.rst` - Value Container API reference
+- `api/ioc.rst` - IOC Integration and QSRV 2
+- `api/util.rst` - Utility functions (logging, version, etc.)
+- `api/details.rst` - Bug reporting, contributing, release policy
+- `api/typedef.rst` - Type definition API
+- `api/sharedpv.rst` - SharedPV API
+- `api/source.rst` - Source API
 
-### Updating API Documentation (RST)
+**Best for:**
 
-1. Modify the relevant `*.rst` file in this directory
-2. If documenting code, ensure Doxygen comments are up to date
-3. Build locally to verify: `make html`
-4. Follow RST/Sphinx conventions
+- Looking up function/class signatures
+- Understanding method parameters
+- Finding available classes and methods
+- Detailed technical specifications
 
-### Updating User Guides (Markdown)
+### Reference Documentation (RST)
 
-1. Modify the relevant `*.md` file in the repository root
-2. Follow Markdown best practices
-3. Maintain cross-references to RST documentation
-4. Test all links
+**Location:** `reference/` directory
 
-### Documentation Standards
+**Purpose:** Reference documentation for specific features and tools.
 
-- **Clarity:** Write clearly and concisely
-- **Examples:** Include code examples where helpful
-- **Links:** Cross-reference related documentation
-- **Accuracy:** Keep documentation in sync with code
-- **Organization:** Follow the existing structure
+**Key Documents:**
 
-## Key Documentation Files
+- `reference/building.rst` - Detailed build instructions
+- `reference/netconfig.rst` - Network configuration details
+- `reference/cli.rst` - Command-line tools documentation
+- `reference/nt.rst`, `reference/ntscalar.rst` - Normative Types documentation
+- `reference/qgroup.rst` - Group PV documentation
+- `reference/pvalink.rst` - PVA Links documentation
 
-### RST Files (API Reference)
+### Examples and Additional Content
 
-| File | Description |
-|------|-------------|
-| `index.rst` | Main documentation index |
-| `overview.rst` | Overview, concepts, comparisons with other modules |
-| `client.rst` | Complete Client API reference |
-| `server.rst` | Complete Server API reference |
-| `value.rst` | Value Container API reference |
-| `ioc.rst` | IOC Integration and QSRV 2 |
-| `building.rst` | Detailed build instructions |
-| `netconfig.rst` | Network configuration details |
-| `cli.rst` | Command-line tools documentation |
-| `example.rst` | Code examples overview |
-| `util.rst` | Utility functions (logging, version, etc.) |
-| `details.rst` | Bug reporting, contributing, release policy |
-| `releasenotes.rst` | Release notes and changelog |
+**Location:** `examples/` directory
 
-### Sub-documents
+- `examples/example.rst` - Code examples overview
+- `examples/releasenotes.rst` - Release notes and changelog
+- `examples/contributing.md` - Contributor guidelines
 
-- `nt.rst`, `ntscalar.rst` - Normative Types documentation
-- `typedef.rst` - Type definition API
-- `sharedpv.rst` - SharedPV API
-- `source.rst` - Source API
-- `qgroup.rst` - Group PV documentation
-- `pvalink.rst` - PVA Links documentation
+## Quick Navigation
 
-### Markdown Files (User Guides)
+### For New Users
 
-Located in `docs/` directory (except README.md which is in repository root):
-- `../README.md` - Main overview (in repository root)
-- `../docs/QUICKSTART.md` - Quick start tutorial
-- `../docs/INSTALLATION.md` - Installation guide
-- `../docs/TROUBLESHOOTING.md` - Troubleshooting guide
-- `../docs/ARCHITECTURE.md` - Architecture overview
-- `../docs/CONTRIBUTING.md` - Contributor guide
+1. Start with [`README.md`](../README.md) in the repository root for an overview
+2. Follow the [Quick Start Guide](https://epics-base.github.io/pvxs/guides/quickstart.html) for hands-on experience
+3. Refer to the [Installation Guide](https://epics-base.github.io/pvxs/guides/installation.html) for detailed setup
+4. Use the [Troubleshooting Guide](https://epics-base.github.io/pvxs/guides/troubleshooting.html) if you encounter issues
+
+### For Developers
+
+1. Review the [Architecture Guide](https://epics-base.github.io/pvxs/guides/architecture.html) for system design
+2. Consult the [online API documentation](https://epics-base.github.io/pvxs/) for detailed APIs
+3. Check the [Contributing Guide](https://epics-base.github.io/pvxs/examples/contributing.html) for development guidelines
+4. See [Examples](https://epics-base.github.io/pvxs/examples/example.html) and the [`example/`](../example/) directory for code examples
+
+### For API Reference
+
+1. Browse the [online documentation](https://epics-base.github.io/pvxs/) (generated from RST and Markdown files)
+2. Or build locally: `make html` in this directory
+3. See `index.rst` for the table of contents
 
 ## Building Documentation
 
 ### Prerequisites
 
-- Sphinx (Python package)
-- Doxygen (for API extraction)
-- Required Python packages (see `conf.py`)
+- **Doxygen** - For extracting API documentation from source code
+- **Sphinx** - Python documentation generator
+- **Python packages:**
+  - `sphinx`
+  - `breathe` - Bridge between Sphinx and Doxygen
+  - `myst-parser` - Markdown parser for Sphinx
+- **Optional:**
+  - `inkscape` - For processing SVG images (falls back to copying if not available)
+  - `graphviz` - For generating diagrams
+
+### Installation
+
+**On Debian/Ubuntu:**
+
+```bash
+sudo apt-get install doxygen python3-sphinx python3-breathe python3-myst-parser inkscape graphviz
+```
+
+**On RHEL/CentOS:**
+
+```bash
+sudo yum install doxygen python3-sphinx python3-breathe inkscape graphviz
+pip3 install myst-parser
+```
 
 ### Build Commands
 
@@ -191,14 +185,53 @@ make clean
 make
 ```
 
-Output will be in `_build/html/` directory.
+Output will be in `html/` directory (or `_build/html/` depending on configuration).
+
+## Cross-Referencing
+
+The documentation is designed to work together seamlessly:
+
+- **Markdown guides** can reference RST sections using `:doc:` and `:ref:` syntax
+- **RST documentation** can reference markdown guides using the same syntax
+- **Both formats** link to code examples in the `example/` directory
+- All cross-references are resolved by Sphinx during the build process
+
+## Contributing to Documentation
+
+### Updating API Documentation (RST)
+
+1. Modify the relevant `*.rst` file in the `api/` or `reference/` directories
+2. If documenting code, ensure Doxygen comments are up to date in the source files
+3. Build locally to verify: `make html`
+4. Follow RST/Sphinx conventions
+
+### Updating User Guides (Markdown)
+
+1. Modify the relevant `*.md` file in the `guides/` or `examples/` directories
+2. Use Sphinx cross-reference syntax (`:doc:` and `:ref:`) for linking to other documentation
+3. Build locally to verify: `make html`
+4. Follow Markdown best practices
+
+### Adding Images
+
+1. Place image files (SVG, PNG, etc.) in the `images/` directory
+2. Reference them in RST using: `.. image:: ../images/filename.svg`
+3. Reference them in Markdown using: `![Alt text](../images/filename.svg)`
+
+### Documentation Standards
+
+- **Clarity:** Write clearly and concisely
+- **Examples:** Include code examples where helpful
+- **Links:** Cross-reference related documentation using Sphinx syntax
+- **Accuracy:** Keep documentation in sync with code
+- **Organization:** Follow the existing directory structure
 
 ## Online Documentation
 
 The latest documentation is always available online at:
 **https://epics-base.github.io/pvxs/**
 
-The online documentation is automatically generated from the RST files in this directory and is updated with each release.
+The online documentation is automatically generated from the RST and Markdown files in this directory and is updated with each release via GitHub Actions.
 
 ## Getting Help
 
@@ -209,4 +242,3 @@ The online documentation is automatically generated from the RST files in this d
 ## Acknowledgments
 
 This documentation structure was created and organized by **K. Gofron**, Oak Ridge National Laboratory, December 28, 2025.
-
