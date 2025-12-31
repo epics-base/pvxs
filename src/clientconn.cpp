@@ -91,6 +91,7 @@ DEFINE_LOGGER(io, "pvxs.cli.io");
 DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 DEFINE_LOGGER(certs, "pvxs.certs.con");
 DEFINE_LOGGER(remote, "pvxs.remote.log");
+DEFINE_LOGGER(status_cli, "pvxs.st.cli");
 
 Connection::Connection(const std::shared_ptr<ContextImpl>& context,
                        const SockAddr& peerAddr,
@@ -188,6 +189,7 @@ void Connection::startConnecting() {
         // non-blocking connect() failed immediately.
         // try to defer notification.
         state = Disconnected;
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::startConnecting()\n", "ConnBase::state", "Disconnected");
         constexpr timeval immediate{0, 0};
         if(event_add(echoTimer.get(), &immediate))
             throw std::runtime_error(SB()<<"Unable to begin connecting or schedule deferred notification "<<peerName);
@@ -240,6 +242,7 @@ void Connection::createChannels()
     if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
         log_debug_printf(certs, "Wait for Server %s certificate status to become GOOD\n", peerName.c_str());
         state = AwaitingPeerCertValidity;
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::createChannels()\n", "ConnBase::state", "AwaitingPeerCertValidity");
         return; // defer until peer certificate status validated
     }
 #endif
@@ -282,6 +285,7 @@ void Connection::proceedWithCreatingChannels()
 
         creatingByCID[chan->cid] = chan;
         chan->state = Channel::Creating;
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::proceedWithCreatingChannels()\n", "Channel::state", "Creating");
 
         log_debug_printf(io, "Server %s creating channel '%s' (%u)\n", peerName.c_str(),
                          chan->name.c_str(), unsigned(chan->cid));
@@ -349,6 +353,7 @@ void Connection::bevEvent(short events) {
             log_err_printf(io, "Server %s error starting echoTimer\n", peerName.c_str());
 
         state = Connected;
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::bevEvent()\n", "ConnBase::state", "Connected");
     }
 }
 
@@ -384,6 +389,7 @@ std::shared_ptr<ConnBase> Connection::self_from_this()
 
 void Connection::cleanup()
 {
+    log_debug_printf(status_cli, "%30.30s = %-15s : Connection::cleanup()\n", "Connection::ready", ready ? "true" : "false");
     ready = false;
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -547,6 +553,7 @@ void Connection::handle_CONNECTION_VALIDATED()
 #else
     ready = true;
 #endif
+    log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_CONNECTION_VALIDATED()\n", "Connection::ready", ready ? "true" : "false");
 
     createChannels();
 
@@ -608,6 +615,7 @@ void Connection::handle_CREATE_CHANNEL()
         // server refuses to create a channel, but presumably responded positively to search
 
         chan->state = Channel::Searching;
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_CREATE_CHANNEL()\n", "Channel::state", "Searching");
         context->searchBuckets[context->currentBucket].push_back(chan);
 
         log_warn_printf(io, "Server %s refuses channel to '%s' : %s\n", peerName.c_str(),
@@ -615,6 +623,7 @@ void Connection::handle_CREATE_CHANNEL()
 
     } else {
         chan->state = Channel::Active;
+        log_debug_printf(status_cli, "%30.30s = %-15s : Connection::handle_CREATE_CHANNEL()\n", "Channel::state", "Active");
         chan->sid = sid;
 
         chanBySID[sid] = chan;

@@ -38,6 +38,8 @@ DEFINE_LOGGER(setup, "pvxs.ossl.init");
 DEFINE_LOGGER(stapling, "pvxs.stapling");
 DEFINE_LOGGER(watcher, "pvxs.certs.mon");
 DEFINE_LOGGER(io, "pvxs.ossl.io");
+DEFINE_LOGGER(status_cli, "pvxs.st.cli");
+DEFINE_LOGGER(status_svr, "pvxs.st.svr");
 
 namespace pvxs {
 namespace ossl {
@@ -128,7 +130,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
     } else { // GOOD and UNKNOWN
         Guard G(lock);
         state = (status_check_disabled || no_status_extension || cert_status.isGood()) ? TlsReady : TcpReady;
-        log_debug_printf(watcher, "Setting initial TLS connection state to: %s\n", state == TlsReady ? "TlsReady": "TcpReady");
+        log_debug_printf(is_client ? status_cli : status_svr, "%30.30s = %-15s : SSLContext::monitorStatusAndSetState()\n", "SSLContext::state", state == TlsReady ? "TlsReady" : "TcpReady");
     }
 }
 
@@ -159,6 +161,7 @@ void SSLContext::setDegradedMode(const bool clear) {
         cert_status = {};    // Set the certificate status to be UNKNOWN
     }
     state = DegradedMode;
+    log_debug_printf(is_client ? status_cli : status_svr, "%30.30s = %-15s : SSLContext::setDegradedMode()\n", "SSLContext::state", "DegradedMode");
 }
 
 /**
@@ -184,6 +187,7 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_category_t cert_status
                     {
                         Guard G(lock);
                         state = TlsReady;
+                        log_debug_printf(is_client ? status_cli : status_svr, "%30.30s = %-15s : SSLContext::setTlsOrTcpMode()\n", "SSLContext::state", "TlsReady");
                     }
                     break;
                 case TlsReady:
@@ -206,6 +210,7 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_category_t cert_status
                     {
                         Guard G(lock);
                         state = TcpReady;
+                        log_debug_printf(is_client ? status_cli : status_svr, "%30.30s = %-15s : SSLContext::setTlsOrTcpMode()\n", "SSLContext::state", "TcpReady");
                     }
                 case TcpReady:
                 default:
@@ -224,13 +229,14 @@ void SSLContext::setTlsOrTcpMode() {
     setTlsOrTcpMode(status.getEffectiveStatusCategory());
 }
 
-SSLContext::SSLContext(const impl::evbase loop) : loop(loop)
+SSLContext::SSLContext(const impl::evbase loop, const bool is_client) : loop(loop), is_client(is_client)
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))
 {}
 
 SSLContext::SSLContext(const SSLContext &o)
     : loop(o.loop)
     , ctx(o.ctx)
+    , is_client(o.is_client)
     , state(o.state)
     , status_check_disabled(o.status_check_disabled)
     , stapling_disabled(o.stapling_disabled)
@@ -247,6 +253,7 @@ SSLContext::SSLContext(const SSLContext &o)
 SSLContext::SSLContext(SSLContext &o) noexcept
     : loop(o.loop)
     , ctx(std::move(o.ctx))
+    , is_client(o.is_client)
     , state(o.state)
     , status_check_disabled(o.status_check_disabled)
     , stapling_disabled(o.stapling_disabled)
@@ -425,7 +432,8 @@ ossl_ptr<X509> extractCAs(std::shared_ptr<SSLContext> ctx, const ossl_shared_ptr
 std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_for_client, const ConfigCommon &conf, const client::Context &client, const evbase &loop) {
     osslInit();
 
-    auto tls_context = std::make_shared<SSLContext>(SSLContext(loop));
+    auto tls_context = std::make_shared<SSLContext>(SSLContext(loop, is_for_client));
+    log_debug_printf(tls_context->is_client ? status_cli : status_svr, "%30.30s = %-15s : commonSetup()\n", "SSLContext::state", "Init");
     assert(tls_context && "TLS context is null");
 
     tls_context->status_check_disabled = conf.tls_disable_status_check;
@@ -461,6 +469,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     // only TCP connections will be accepted.
     if (conf.tls_disabled || !conf.isTlsConfigured()) {
         tls_context->state = SSLContext::DegradedMode;
+        log_debug_printf(tls_context->is_client ? status_cli : status_svr, "%30.30s = %-15s : commonSetup()\n", "SSLContext::state", "DegradedMode");
         return tls_context;
     }
 
@@ -486,6 +495,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
         if (is_for_client) {
             log_debug_printf(setup, "No certificate found in keychain file.  Setting up server-only TLS context%s\n", "");
             tls_context->state = SSLContext::TlsReady;
+            log_debug_printf(status_cli, "%30.30s = %-15s : commonSetup()\n", "SSLContext::state", "TlsReady");
             log_info_printf(setup, "TLS server-only mode selected%s", "\n");
             return tls_context;
         }

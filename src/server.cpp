@@ -41,6 +41,7 @@ using namespace impl;
 DEFINE_LOGGER(serversetup, "pvxs.svr.init");
 DEFINE_LOGGER(serverio, "pvxs.svr.io");
 DEFINE_LOGGER(serversearch, "pvxs.svr.search");
+DEFINE_LOGGER(status_svr, "pvxs.st.svr");
 
 #ifdef PVXS_ENABLE_OPENSSL
 DEFINE_LOGGER(osslsetup, "pvxs.ossl.init");
@@ -442,6 +443,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
       builtinsrc(StaticSource::build()),
       state(Stopped)
 {
+    log_debug_printf(status_svr, "%30.30s = %-15s : Server::Pvt::Pvt()\n", "Server::Pvt::state", "Stopped");
     effective.expand();
 
     beaconSender4.set_broadcast(true);
@@ -676,6 +678,7 @@ void Server::Pvt::start()
             return;
         }
         state = Starting;
+        log_debug_printf(status_svr, "%30.30s = %-15s : Server::Pvt::start()\n", "Server::Pvt::state", "Starting");
         log_debug_printf(serversetup, "Server starting\n%s", "");
 
         for(auto& iface : interfaces) {
@@ -706,6 +709,7 @@ void Server::Pvt::start()
             log_err_printf(serversetup, "Error enabling beacon timer on\n%s", "");
 
         state = Running;
+        log_debug_printf(status_svr, "%30.30s = %-15s : Server::Pvt::start()\n", "Server::Pvt::state", "Running");
     });
 }
 
@@ -723,6 +727,7 @@ void Server::Pvt::stop()
             return;
         }
         state = Stopping;
+        log_debug_printf(status_svr, "%30.30s = %-15s : Server::Pvt::stop()\n", "Server::Pvt::state", "Stopping");
 
         if(event_del(beaconTimer.get()))
             log_err_printf(serversetup, "Error disabling beacon timer\n%s", "");
@@ -753,7 +758,8 @@ void Server::Pvt::stop()
         }
 
         state = Stopped;
-    });
+        log_debug_printf(status_svr, "%30.30s = %-15s : Server::Pvt::stop()\n", "Server::Pvt::state", "Stopped");
+});
 
     /* Cycle through once more to ensure any callbacks queue during the previous call have completed.
      * TODO: this is partly a crutch as eg. SharedPV::attach() binds strong self references

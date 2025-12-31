@@ -18,6 +18,8 @@
 
 DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
+DEFINE_LOGGER(status_cli, "pvxs.st.cli");
+DEFINE_LOGGER(status_svr, "pvxs.st.svr");
 
 namespace pvxs {
 namespace impl {
@@ -45,6 +47,7 @@ ConnBase::ConnBase(bool isClient, bool isTLS, bool sendBE, evbufferevent&& bev, 
     ,txBody(__FILE__, __LINE__, evbuffer_new())
     ,state(Holdoff)
 {
+    log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::ConnBase()\n", "ConnBase::state", "Holdoff");
     if(bev) { // true for server connection.  client will call connect() shortly
         connect(std::move(bev));
     }
@@ -84,8 +87,8 @@ void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
     (void)bufferevent_set_max_single_write(bev.get(), EV_SSIZE_MAX);
 #endif
 
-    log_debug_printf(connsetup, "Setting my %s peer state to %s state\n", peerLabel(), isClient ? "Connecting" : "Connected");
     state = isClient ? Connecting : Connected;
+    log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::connect()\n", "ConnBase::state", isClient ? "Connecting" : "Connected");
 
     this->bev = std::move(bev);
 
@@ -98,6 +101,7 @@ void ConnBase::disconnect()
     log_debug_printf(connsetup, "ConnBase::disconnect(): disconnecting a %s\n", peerLabel());
     bev.reset();
     state = Disconnected;
+    log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::connect()\n", "ConnBase::state", "Disconnected");
 }
 
 size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
@@ -184,6 +188,7 @@ void ConnBase::bevEvent(const short events) {
             log_warn_printf(connio, "connection to %s %s timeout\n", peerLabel(), peerName.c_str());
         }
         state = Disconnected;
+        log_debug_printf(isClient ? status_cli : status_svr, "%30.30s = %-15s : ConnBase::bevEvent()\n", "ConnBase::state", "Disconnected");
         bev.reset();
     }
 

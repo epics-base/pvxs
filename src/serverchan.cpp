@@ -16,6 +16,7 @@ namespace pvxs {namespace impl {
 DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 // related to low level send/recv
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
+DEFINE_LOGGER(status_svr, "pvxs.st.svr");
 
 DEFINE_LOGGER(serversearch, "pvxs.svr.search");
 
@@ -27,8 +28,9 @@ ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
     ,sid(sid)
     ,cid(cid)
     ,name(name)
-    ,state(Creating)
-{}
+    ,state(Creating) {
+    log_debug_printf(status_svr, "%30.30s = %-15s : ServerChan::ServerChan()\n", "ServerChan::state", "Creating");
+}
 
 ServerChan::~ServerChan() {
     assert(state==Destroy);
@@ -45,6 +47,7 @@ void ServerChan::cleanup()
     if(state==ServerChan::Destroy)
         return;
     state = ServerChan::Destroy;
+    log_debug_printf(status_svr, "%30.30s = %-15s : ServerChan::cleanup()\n", "ServerChan::state", "Destroy");
 
     {
         auto ops(std::move(opByIOID));
@@ -352,12 +355,14 @@ void ServerConn::handle_CREATE_CHANNEL()
             if(claimed && chan->state==ServerChan::Creating) {
                 chanBySID[sid] = chan;
                 chan->state = ServerChan::Active;
+                log_debug_printf(status_svr, "%30.30s = %-15s : ServerChan::handle_CREATE_CHANNEL()\n", "ServerChan::state", "Active");
 
             } else {
                 sts.code = Status::Fatal;
                 sts.msg = "Refused to create Channel";
                 sts.trace = "pvx:serv:refusechan:";
                 chan->state = ServerChan::Destroy;
+                log_debug_printf(status_svr, "%30.30s = %-15s : ServerChan::handle_CREATE_CHANNEL()\n", "ServerChan::state", "Destroy");
 
                 sid = -1;
             }

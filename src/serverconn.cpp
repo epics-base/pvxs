@@ -81,6 +81,7 @@ DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 DEFINE_LOGGER(certs, "pvxs.certs.con");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
 DEFINE_LOGGER(remote, "pvxs.remote.log");
+DEFINE_LOGGER(status_svr, "pvxs.st.svr");
 
 #ifdef PVXS_ENABLE_OPENSSL
 DEFINE_LOGGER(stapling, "pvxs.stapling");
@@ -402,6 +403,7 @@ void ServerConn::proceedWithConnectionValidation()
             log_debug_printf(connsetup, "Wait for Client %s certificate status to become GOOD\n", peerName.c_str());
 
             state = AwaitingPeerCertValidity;
+            log_debug_printf(status_svr, "%30.30s = %-15s : ServerConn::proceedWithConnectionValidation()\n", "ConnBase::state", "AwaitingPeerCertValidity");
             return; // Backoff - don't complete validation yet until we get the status were waiting for
         }
         log_debug_printf(connsetup, "Have Client %s certificate status Good\n", peerName.c_str());

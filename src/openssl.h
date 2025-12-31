@@ -344,6 +344,7 @@ struct SSLContext {
     const impl::evbase loop;
 
     ossl_shared_ptr<SSL_CTX> ctx;
+    const bool is_client;
 
     /**
      * @brief The state of the TLS context
@@ -409,7 +410,7 @@ struct SSLContext {
      */
     CertStatusExData* getCertStatusExData() const;
 
-    explicit SSLContext(evbase loop);
+    explicit SSLContext(evbase loop, bool is_client);
     SSLContext(const SSLContext& o);
     SSLContext(SSLContext& o) noexcept;
     ~SSLContext();
