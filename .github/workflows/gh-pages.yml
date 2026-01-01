@@ -23,7 +23,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get -y install libreadline-dev libevent-dev \
-         python3-sphinx python3-breathe inkscape
+         python3-sphinx python3-breathe python3-myst-parser inkscape graphviz
 
     - name: Prepare and compile dependencies
       run: python .ci/cue.py prepare
