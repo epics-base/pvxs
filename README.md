@@ -468,7 +468,7 @@ Current version information can be found in:
 
 ## Acknowledgments
 
-This comprehensive documentation suite (README.md, INSTALLATION.md, TROUBLESHOOTING.md, ARCHITECTURE.md, and related documentation) was created and organized by **K. Gofron**, Oak Ridge National Laboratory, December 28, 2025.
+This comprehensive documentation suite (README.md, INSTALLATION.md, TROUBLESHOOTING.md, ARCHITECTURE.md, and related documentation) was created and organized by **K. Gofron**, Oak Ridge National Laboratory, December 28, 2025. The integration of markdown user guides into the unified Sphinx environment and reorganization into logical subdirectories was completed in December 2025.
 
 ---
 

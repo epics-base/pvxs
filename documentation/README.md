@@ -241,4 +241,4 @@ The online documentation is automatically generated from the RST and Markdown fi
 
 ## Acknowledgments
 
-This documentation structure was created and organized by **K. Gofron**, Oak Ridge National Laboratory, December 28, 2025.
+This documentation structure was created and organized by **K. Gofron**, Oak Ridge National Laboratory, December 28, 2025. The integration of markdown user guides into the Sphinx environment and reorganization into logical subdirectories was completed in December 2025.
