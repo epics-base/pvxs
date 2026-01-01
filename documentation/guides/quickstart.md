@@ -161,6 +161,7 @@ int main() {
 ```
 
 **Key concepts:**
+
 - `Context::fromEnv()` - Creates client configured from `$EPICS_PVA_*` environment variables
 - `.get("pv:name")` - Creates a GetBuilder for the named PV
 - `.exec()` - Starts the network operation, returns an Operation handle
@@ -196,6 +197,7 @@ int main() {
 ```
 
 **Key concepts:**
+
 - `nt::NTScalar{TypeCode::Float64}` - Creates a standard EPICS scalar type
 - `SharedPV::buildMailbox()` - Creates a PV that stores PUT values
 - `.open(initial)` - Sets the data type and initial value
@@ -231,16 +233,19 @@ Now that you have PVXS working, explore further:
 ## Common Issues
 
 **Server not found:**
+
 - Check that server is running
 - Verify `$EPICS_PVA_ADDR_LIST` environment variable (if needed)
 - Check firewall settings (ports 5075 TCP, 5076 UDP)
 
 **Connection timeout:**
+
 - Verify network connectivity
 - Check server logs for errors
 - Ensure client and server are on same network (or configure addresses explicitly)
 
 **Build errors:**
+
 - See :doc:`guides/installation` for troubleshooting
 - Check that EPICS Base is built and accessible
 - Verify libevent is installed

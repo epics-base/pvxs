@@ -50,6 +50,7 @@ PVXS is a modern C++ library implementing the PVAccess (PVA) protocol for EPICS.
 PVXS eliminates the need for explicit downcasting and NULL pointer checks common in pvDataCPP. The `Value` class uses a single type that handles all data types internally.
 
 **Before (pvDataCPP):**
+
 ```cpp
 PVStructurePtr top = ...;
 PVIntPtr value = top->getSubField<PVInt>("value");
@@ -59,6 +60,7 @@ int32_t val = value->get();
 ```
 
 **After (PVXS):**
+
 ```cpp
 Value top = ...;
 int32_t val = top["value"].as<int32_t>();  // Throws if missing or wrong type
@@ -73,6 +75,7 @@ PVXS uses exceptions for error handling rather than return codes, making error p
 Instead of requiring interface classes (as in pvAccessCPP), PVXS uses C++ functors/lambdas for callbacks, reducing boilerplate code.
 
 **Before (pvAccessCPP):**
+
 ```cpp
 struct MyCallback : public pvac::GetCallback {
     void getDone(const GetEvent& evt) override { ... }
@@ -82,6 +85,7 @@ chan.get(&cb);
 ```
 
 **After (PVXS):**
+
 ```cpp
 ctxt.get("pv:name")
     .result([](Result&& r) { ... })
@@ -93,6 +97,7 @@ ctxt.get("pv:name")
 Change tracking is built into the `Value` class, eliminating the need for separate `BitSet` objects.
 
 **Before (pvDataCPP):**
+
 ```cpp
 PVStructurePtr top = ...;
 BitSetPtr changed(new BitSet(...));
@@ -101,6 +106,7 @@ changed->set(value->getFieldOffset());
 ```
 
 **After (PVXS):**
+
 ```cpp
 Value top = ...;
 top["value"] = 42;  // Automatically marked as changed
@@ -157,6 +163,7 @@ The `Value` class is the central data container in PVXS. It represents a single 
 See :doc:`api/value` for detailed API documentation.
 
 **Key Features:**
+
 - **Type Safety**: Compile-time and runtime type checking
 - **Change Tracking**: Automatic marking of modified fields
 - **Efficient Access**: Direct field access via `operator[]`
@@ -175,6 +182,7 @@ Value
 ```
 
 **Example Usage:**
+
 ```cpp
 // Create an NTScalar structure
 Value pv = nt::NTScalar{TypeCode::Float64}.create();
@@ -204,6 +212,7 @@ for(Value field : pv.ichildren()) {
 PVXS supports all EPICS data types:
 
 **Scalar Types:**
+
 - `TypeCode::Int8`, `Int16`, `Int32`, `Int64`
 - `TypeCode::UInt8`, `UInt16`, `UInt32`, `UInt64`
 - `TypeCode::Float32`, `Float64`
@@ -211,15 +220,18 @@ PVXS supports all EPICS data types:
 - `TypeCode::Bool`
 
 **Array Types:**
+
 - Arrays of any scalar type
 - Efficient storage with `shared_array<T>`
 
 **Structures:**
+
 - Nested structures
 - Union types
 - Variant unions
 
 **Normative Types:**
+
 - `NTScalar` - Scalar with metadata
 - `NTScalarArray` - Array with metadata
 - `NTEnum` - Enumeration
@@ -234,6 +246,7 @@ PVXS supports all EPICS data types:
 PVXS implements the PVAccess protocol version 1.x, providing:
 
 **Operations:**
+
 - **GET_FIELD (Info)** - Query PV structure
 - **GET** - Fetch present value
 - **PUT** - Update PV value
@@ -242,6 +255,7 @@ PVXS implements the PVAccess protocol version 1.x, providing:
 - **SEARCH** - Server discovery (UDP)
 
 **Protocol Features:**
+
 - Binary encoding (efficient)
 - Field selection (partial updates)
 - Flow control (for Monitor)
@@ -251,12 +265,14 @@ PVXS implements the PVAccess protocol version 1.x, providing:
 ### Connection Management
 
 **Client Side:**
+
 - Automatic server discovery via UDP broadcast
 - Connection pooling (reuse connections)
 - Automatic reconnection on failure
 - Connection health monitoring
 
 **Server Side:**
+
 - Accept multiple concurrent connections
 - Per-connection state management
 - Connection lifecycle tracking
@@ -297,6 +313,7 @@ Context
 ```
 
 **Key Responsibilities:**
+
 - Server discovery and connection management
 - Operation lifecycle (Get, Put, Monitor, RPC)
 - Error handling and retry logic
@@ -376,13 +393,16 @@ Server
 Sources provide a pluggable architecture for PV registration:
 
 **Built-in Sources:**
+
 - **`__builtin`** - Static PVs added via `addPV()`
 - **`__server`** - Server information PV
 
 **IOC Source:**
+
 - **QSRV2** - Database record integration
 
 **Custom Sources:**
+
 - User-defined sources implementing `Source` interface
 - Dynamic PV registration
 - Priority-based ordering
@@ -418,11 +438,13 @@ Sources provide a pluggable architecture for PV registration:
 ### SharedPV Modes
 
 **Mailbox Mode:**
+
 - Stores last received value
 - Automatically sends updates to subscribers
 - Simple PUT handler stores value verbatim
 
 **Custom Handler Mode:**
+
 - User-defined PUT handler
 - Validation and processing
 - Custom update logic
@@ -448,6 +470,7 @@ IOC Database
 ```
 
 **Features:**
+
 - Automatic database record serving
 - Group-based operations (reduce network traffic)
 - Access security integration
@@ -476,17 +499,20 @@ IOC Database
 ### Client Threading
 
 **Thread Safety:**
+
 - `Context` is thread-safe for concurrent operations
 - Multiple threads can call `get()`, `put()`, etc. simultaneously
 - Operations are independent
 
 **Event Loop:**
+
 - Uses libevent for async I/O
 - Single event loop per Context (by default)
 - Operations complete in event loop thread
 - Callbacks execute in event loop thread
 
 **Blocking Operations:**
+
 - `wait()` blocks calling thread
 - Suitable for synchronous code
 - Use with care in event-driven code
@@ -494,15 +520,18 @@ IOC Database
 ### Server Threading
 
 **Accept Thread:**
+
 - Accepts new connections
 - Creates connection handlers
 
 **Worker Threads:**
+
 - Handle client requests
 - Execute user callbacks
 - Send responses
 
 **Callback Threading:**
+
 - PUT/RPC handlers execute in worker threads
 - User code must be thread-safe
 - SharedPV access is internally synchronized
@@ -534,11 +563,13 @@ PVXS uses modern C++ memory management:
 ### Value Storage
 
 **Structure:**
+
 - Values use efficient storage (variant-based)
 - Arrays use `shared_array` for zero-copy
 - Structures share type definitions
 
 **Ownership:**
+
 - Values can be moved (not copied when possible)
 - Arrays use reference counting
 - Type definitions are shared/immutable
@@ -546,6 +577,7 @@ PVXS uses modern C++ memory management:
 ### Memory Patterns
 
 **Efficient Patterns:**
+
 ```cpp
 // Move Value (no copy)
 Value v1 = ...;
@@ -557,6 +589,7 @@ Value instance = template.cloneEmpty();
 ```
 
 **Avoid:**
+
 ```cpp
 // Unnecessary copies
 Value v2 = v1;  // Prefer std::move(v1) if v1 no longer needed
@@ -570,12 +603,14 @@ Value& ref = createValue();  // Dangerous!
 ### Message Encoding
 
 **Binary Format:**
+
 - Efficient binary encoding
 - Network byte order (big-endian)
 - Variable-length encoding for integers
 - String encoding (UTF-8)
 
 **Message Structure:**
+
 ```
 Message Header
 ├── Command ID
@@ -590,6 +625,7 @@ Message Header
 ### Field Selection
 
 **pvRequest Format:**
+
 ```
 field(value)              # Single field
 field(value,alarm)        # Multiple fields
@@ -597,6 +633,7 @@ field(value)field(extra)  # Multiple selections
 ```
 
 **Implementation:**
+
 - Parse pvRequest into field mask
 - Filter data before encoding
 - Reduces network traffic
@@ -604,11 +641,13 @@ field(value)field(extra)  # Multiple selections
 ### Flow Control (Monitor)
 
 **Mechanism:**
+
 - Client specifies queue size
 - Server respects queue limits
 - Backpressure when queue full
 
 **Implementation:**
+
 - Per-subscription queue
 - Drop oldest or reject new (configurable)
 - Automatic flow control messages
@@ -618,12 +657,14 @@ field(value)field(extra)  # Multiple selections
 ### vs. pvDataCPP
 
 **pvDataCPP:**
+
 - Class hierarchy (PVField base class)
 - Explicit downcasting required
 - Separate BitSet for change tracking
 - Interface classes for callbacks
 
 **PVXS:**
+
 - Single Value class
 - Type-safe access
 - Built-in change tracking
@@ -632,11 +673,13 @@ field(value)field(extra)  # Multiple selections
 ### vs. pvAccessCPP
 
 **pvAccessCPP:**
+
 - Interface classes for callbacks
 - More verbose code
 - Older C++ style
 
 **PVXS:**
+
 - Functor-based (lambdas)
 - Builder pattern
 - Modern C++ (C++11+)
@@ -645,11 +688,13 @@ field(value)field(extra)  # Multiple selections
 ### vs. Channel Access (CA)
 
 **CA:**
+
 - Older protocol
 - Less structured data
 - Different API model
 
 **PVXS (PVAccess):**
+
 - Modern protocol
 - Rich structured data
 - More efficient
@@ -660,6 +705,7 @@ field(value)field(extra)  # Multiple selections
 This architecture document provides a high-level overview. For detailed API documentation, see:
 
 **Core APIs:**
+
 - :doc:`api/value` - Detailed Value class documentation, field lookup, iteration, arrays
 - :doc:`api/client` - Detailed Context, GetBuilder, PutBuilder, MonitorBuilder, RPCBuilder documentation
   - :ref:`get-info <api/client:get-info>` - Get/Info Operations
@@ -670,14 +716,17 @@ This architecture document provides a high-level overview. For detailed API docu
 - :doc:`api/sharedpv` - SharedPV and operation handlers
 
 **Comparisons:**
+
 - :ref:`comparison-with-pvdatacpp <api/overview:comparison-with-pvdatacpp>` - Detailed comparison examples
 - :ref:`comparison-with-pvaccescpp <api/overview:comparison-with-pvaccescpp>` - API design differences
 
 **Integration:**
+
 - :doc:`api/ioc` - Detailed IOC hooks and integration
 - :doc:`reference/qgroup` - Database integration details
 
 **Implementation:**
+
 - :doc:`reference/netconfig` - Network protocol implementation
 - :doc:`examples/example` - Source code examples
 

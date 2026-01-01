@@ -125,28 +125,33 @@ libevent is required for networking functionality. You have two options:
 #### Option A: Install via System Package Manager (Recommended)
 
 **On Debian/Ubuntu:**
+
 ```bash
 sudo apt-get update
 sudo apt-get install libevent-dev
 ```
 
 **On RHEL/CentOS 7 and later:**
+
 ```bash
 sudo yum install libevent-devel
 ```
 
 **On RHEL 6 and earlier:**
+
 ```bash
 sudo yum install libevent2-devel
 ```
 
 **On macOS (Homebrew):**
+
 ```bash
 brew install libevent
 export LIBEVENT=$(brew --prefix)
 ```
 
 **On Fedora:**
+
 ```bash
 sudo dnf install libevent-devel
 ```
@@ -183,6 +188,7 @@ make EPICS_HOST_ARCH=linux-x86_64
 ```
 
 The build process will:
+
 1. Compile all source files
 2. Create libraries (`libpvxs.so`/`libpvxs.a` and `libpvxsIoc.so`/`libpvxsIoc.a`)
 3. Build command-line tools (pvxget, pvxput, etc.)
@@ -205,6 +211,7 @@ If tests pass, your installation is successful!
 ### Linux
 
 PVXS has been tested on:
+
 - Ubuntu 16.04 and later
 - Debian 9 and later
 - RHEL/CentOS 7 and later
@@ -212,16 +219,19 @@ PVXS has been tested on:
 - openSUSE Leap
 
 **Notes:**
+
 - Ensure development tools are installed: `build-essential` (Debian/Ubuntu) or `Development Tools` group (RHEL/Fedora)
 - On older distributions, you may need to build bundled libevent
 
 ### macOS
 
 **Requirements:**
+
 - Xcode Command Line Tools (install via `xcode-select --install`)
 - Homebrew (recommended for libevent)
 
 **Building:**
+
 ```bash
 # Install libevent via Homebrew
 brew install libevent
@@ -232,12 +242,14 @@ make
 ```
 
 **Notes:**
+
 - macOS versions 10.12 (Sierra) and later are supported
 - If using Homebrew libevent, ensure `LIBEVENT` environment variable is set
 
 ### Windows
 
 PVXS can be built on Windows using:
+
 - **MinGW/MSYS2** (recommended)
 - **Visual Studio** (with appropriate modifications)
 
@@ -332,6 +344,7 @@ Then ensure PVXS can find it (may require setting `LIBEVENT` environment variabl
 ## Building Bundled libevent
 
 PVXS includes the ability to build libevent as a bundled dependency. This is useful when:
+
 - System package manager doesn't provide libevent
 - You need a specific version of libevent
 - Cross-compiling
@@ -568,16 +581,19 @@ After successful installation:
 ## Related Documentation
 
 **Detailed Build Documentation:**
+
 - :doc:`reference/building` - Advanced build options and cross-compilation details
 - :doc:`reference/netconfig` - Network setup and environment variables
 - :ref:`runtests <reference/building:runtests>` - Test suite execution
 
 **Installation-Related Guides:**
+
 - :doc:`guides/troubleshooting` - Common installation issues and solutions
 - `README.md <../README.md>`_ - Quick start and overview (external reference)
 - :doc:`reference/building` - Build documentation
 
 **Python Bindings:**
+
 - Python bindings (pvxslibs) installation is handled separately via pip
 - See [Python package](https://pypi.org/project/pvxslibs/) for installation instructions
 - Note: Python bindings require EPICS Base and PVXS to be installed first
