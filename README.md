@@ -101,7 +101,7 @@ In EPICS, a Process Variable (PV) is a globally addressable data structure that 
 
 ### Installation
 
-For detailed installation instructions, see [INSTALLATION.md](docs/INSTALLATION.md).
+For detailed installation instructions, see the [Installation Guide](https://epics-base.github.io/pvxs/guides/installation.html).
 
 **Basic installation from source:**
 
@@ -197,9 +197,9 @@ For comprehensive installation instructions covering:
 - Cross-compilation
 - Testing
 
-See [INSTALLATION.md](docs/INSTALLATION.md).
+See the [Installation Guide](https://epics-base.github.io/pvxs/guides/installation.html).
 
-For a quick start guide, see [QUICKSTART.md](docs/QUICKSTART.md).
+For a quick start guide, see the [Quick Start Guide](https://epics-base.github.io/pvxs/guides/quickstart.html).
 
 ## Documentation
 
@@ -233,14 +233,13 @@ make html
 
 ### Documentation Quick Links
 
-**User Guides (Markdown):**
+**User Guides:**
 
-- [Quick Start Guide](docs/QUICKSTART.md) - Step-by-step tutorial for new users
-- [Installation Guide](docs/INSTALLATION.md) - Detailed installation instructions
-- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
-- [Architecture Guide](docs/ARCHITECTURE.md) - System design overview
-- [Contributing Guide](docs/CONTRIBUTING.md) - How to contribute to PVXS
-- [Documentation Index](docs/DOCUMENTATION.md) - Complete documentation navigation
+- [Quick Start Guide](https://epics-base.github.io/pvxs/guides/quickstart.html) - Step-by-step tutorial for new users
+- [Installation Guide](https://epics-base.github.io/pvxs/guides/installation.html) - Detailed installation instructions
+- [Troubleshooting Guide](https://epics-base.github.io/pvxs/guides/troubleshooting.html) - Common issues and solutions
+- [Architecture Guide](https://epics-base.github.io/pvxs/guides/architecture.html) - System design overview
+- [Contributing Guide](https://epics-base.github.io/pvxs/examples/contributing.html) - How to contribute to PVXS
 
 **API Reference (Online RST Documentation):**
 
@@ -349,7 +348,7 @@ For detailed tool documentation, see the [CLI Tools documentation](https://epics
 
 ## Architecture
 
-For a detailed architecture overview, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For a detailed architecture overview, see the [Architecture Guide](https://epics-base.github.io/pvxs/guides/architecture.html).
 
 ### High-Level Overview
 
@@ -413,7 +412,7 @@ PVXS uses environment variables for network configuration. See the [Network Conf
 
 ## Contributing
 
-Contributions are welcome! Please see the [Contributing Guide](docs/CONTRIBUTING.md) for details.
+Contributions are welcome! Please see the [Contributing Guide](https://epics-base.github.io/pvxs/examples/contributing.html) for details.
 
 For detailed contribution guidelines, see the [Contributing Guidelines](https://epics-base.github.io/pvxs/details.html#contributing) in the online API documentation.
 
@@ -453,7 +452,7 @@ PVXS is distributed subject to a Software License Agreement found in the [LICENS
 
 ### Getting Help
 
-1. Check the [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) guide
+1. Check the [Troubleshooting Guide](https://epics-base.github.io/pvxs/guides/troubleshooting.html)
 2. Search existing [GitHub Issues](https://github.com/epics-base/pvxs/issues)
 3. Consult the [online documentation](https://epics-base.github.io/pvxs/)
 4. Post questions on [EPICS Tech-Talk](https://epics.anl.gov/tech-talk/)
