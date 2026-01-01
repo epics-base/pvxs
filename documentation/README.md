@@ -36,8 +36,8 @@ documentation/
 │   └── pvalink.rst
 ├── examples/            # Examples and additional content
 │   ├── example.rst
-│   ├── releasenotes.rst
 │   └── contributing.md
+├── releasenotes.rst     # Release notes and changelog
 ├── images/              # Images and graphics (SVG, PNG, etc.)
 │   ├── nt_table1.svg
 │   ├── nt_table2.svg
@@ -114,11 +114,11 @@ documentation/
 
 ### Examples and Additional Content
 
-**Location:** `examples/` directory
+**Location:** `examples/` directory and root
 
 - `examples/example.rst` - Code examples overview
-- `examples/releasenotes.rst` - Release notes and changelog
 - `examples/contributing.md` - Contributor guidelines
+- `releasenotes.rst` - Release notes and changelog (in root directory)
 
 ## Quick Navigation
 

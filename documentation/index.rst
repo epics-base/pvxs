@@ -83,7 +83,7 @@ Contents
    :caption: Examples & Additional
 
    examples/example
-   examples/releasenotes
+   releasenotes
    examples/contributing
 
 Indices and tables

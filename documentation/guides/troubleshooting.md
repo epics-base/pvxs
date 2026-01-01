@@ -713,7 +713,7 @@ If you cannot resolve your issue:
    - :doc:`guides/installation` - Installation guide
    - :doc:`guides/architecture` - Architecture overview
    - :ref:`reportbug <api/details:reportbug>` - How to report bugs
-   - :doc:`examples/releasenotes` - Known issues by version
+   - :doc:`releasenotes` - Known issues by version
    - :doc:`reference/netconfig` - Network troubleshooting details
 
 2. **Search Existing Issues:**
