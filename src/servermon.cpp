@@ -174,7 +174,7 @@ struct MonitorOp final : public ServerOp
                                 << std::setfill('0')
                                 << serial_number;
                             cert_id = "CERT:STATUS:xxxxxxxx:" + oss.str();
-                        } catch (std::exception& e) {}
+                        } catch (...) {}
                         if ( !state.empty() && !cert_id.empty())
                             log_debug_printf(status_cms, "%24.24s = %-12s : %-41s: %s\n", "Value::state", state.c_str(), "MonitorOp::doReply()", cert_id.c_str());
                     }
