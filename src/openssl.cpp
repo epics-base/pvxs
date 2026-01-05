@@ -130,7 +130,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
     } else { // GOOD and UNKNOWN
         Guard G(lock);
         state = (status_check_disabled || no_status_extension || cert_status.isGood()) ? TlsReady : TcpReady;
-        log_debug_printf(is_client ? status_cli : status_svr, "%30.30s = %-15s : SSLContext::monitorStatusAndSetState()\n", "SSLContext::state", state == TlsReady ? "TlsReady" : "TcpReady");
+        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", state == TlsReady ? "TlsReady" : "TcpReady", "SSLContext::monitorStatusAndSetState()", this);
     }
 }
 
@@ -161,7 +161,7 @@ void SSLContext::setDegradedMode(const bool clear) {
         cert_status = {};    // Set the certificate status to be UNKNOWN
     }
     state = DegradedMode;
-    log_debug_printf(is_client ? status_cli : status_svr, "%30.30s = %-15s : SSLContext::setDegradedMode()\n", "SSLContext::state", "DegradedMode");
+    log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-11s : SSLContext::setDegradedMode()\n", "SSLContext::state", "DegradedMode");
 }
 
 /**
@@ -187,7 +187,7 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_category_t cert_status
                     {
                         Guard G(lock);
                         state = TlsReady;
-                        log_debug_printf(is_client ? status_cli : status_svr, "%30.30s = %-15s : SSLContext::setTlsOrTcpMode()\n", "SSLContext::state", "TlsReady");
+                        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TlsReady", "SSLContext::setTlsOrTcpMode()", this);
                     }
                     break;
                 case TlsReady:
@@ -210,7 +210,7 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_category_t cert_status
                     {
                         Guard G(lock);
                         state = TcpReady;
-                        log_debug_printf(is_client ? status_cli : status_svr, "%30.30s = %-15s : SSLContext::setTlsOrTcpMode()\n", "SSLContext::state", "TcpReady");
+                        log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TcpReady", "SSLContext::setTlsOrTcpMode()", this);
                     }
                 case TcpReady:
                 default:
@@ -433,7 +433,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     osslInit();
 
     auto tls_context = std::make_shared<SSLContext>(SSLContext(loop, is_for_client));
-    log_debug_printf(tls_context->is_client ? status_cli : status_svr, "%30.30s = %-15s : commonSetup()\n", "SSLContext::state", "Init");
+    log_debug_printf(tls_context->is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "Init", "commonSetup()", tls_context.get());
     assert(tls_context && "TLS context is null");
 
     tls_context->status_check_disabled = conf.tls_disable_status_check;
@@ -469,7 +469,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     // only TCP connections will be accepted.
     if (conf.tls_disabled || !conf.isTlsConfigured()) {
         tls_context->state = SSLContext::DegradedMode;
-        log_debug_printf(tls_context->is_client ? status_cli : status_svr, "%30.30s = %-15s : commonSetup()\n", "SSLContext::state", "DegradedMode");
+        log_debug_printf(tls_context->is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "DegradedMode", "commonSetup()", tls_context.get());
         return tls_context;
     }
 
@@ -495,7 +495,7 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
         if (is_for_client) {
             log_debug_printf(setup, "No certificate found in keychain file.  Setting up server-only TLS context%s\n", "");
             tls_context->state = SSLContext::TlsReady;
-            log_debug_printf(status_cli, "%30.30s = %-15s : commonSetup()\n", "SSLContext::state", "TlsReady");
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TlsReady", "commonSetup()", tls_context.get());
             log_info_printf(setup, "TLS server-only mode selected%s", "\n");
             return tls_context;
         }

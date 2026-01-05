@@ -29,7 +29,7 @@ ServerChan::ServerChan(const std::shared_ptr<ServerConn> &conn,
     ,cid(cid)
     ,name(name)
     ,state(Creating) {
-    log_debug_printf(status_svr, "%30.30s = %-15s : ServerChan::ServerChan(): %s\n", "ServerChan::state", "Creating", name.c_str());
+    log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %s\n", "ServerChan::state", "Creating", "ServerChan::ServerChan()", name.c_str());
 }
 
 ServerChan::~ServerChan() {
@@ -47,7 +47,7 @@ void ServerChan::cleanup()
     if(state==ServerChan::Destroy)
         return;
     state = ServerChan::Destroy;
-    log_debug_printf(status_svr, "%30.30s = %-15s : ServerChan::cleanup(): %s\n", "ServerChan::state", "Destroy", name.c_str());
+    log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %s\n", "ServerChan::state", "Destroy", "ServerChan::cleanup()", name.c_str());
 
     {
         auto ops(std::move(opByIOID));
@@ -355,14 +355,14 @@ void ServerConn::handle_CREATE_CHANNEL()
             if(claimed && chan->state==ServerChan::Creating) {
                 chanBySID[sid] = chan;
                 chan->state = ServerChan::Active;
-                log_debug_printf(status_svr, "%30.30s = %-15s : ServerChan::handle_CREATE_CHANNEL(): %s\n", "ServerChan::state", "Active", chan->name.c_str());
+                log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %s\n", "ServerChan::state", "Active", "ServerChan::handle_CREATE_CHANNEL()", chan->name.c_str());
 
             } else {
                 sts.code = Status::Fatal;
                 sts.msg = "Refused to create Channel";
                 sts.trace = "pvx:serv:refusechan:";
                 chan->state = ServerChan::Destroy;
-                log_debug_printf(status_svr, "%30.30s = %-15s : ServerChan::handle_CREATE_CHANNEL(): %s\n", "ServerChan::state", "Destroy", chan->name.c_str());
+                log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %s\n", "ServerChan::state", "Destroy", "ServerChan::handle_CREATE_CHANNEL()", chan->name.c_str());
 
                 sid = -1;
             }

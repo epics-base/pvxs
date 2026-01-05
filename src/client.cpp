@@ -165,7 +165,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self) {
     }
 
     state = Channel::Searching;
-    log_debug_printf(status_cli, "%30.30s = %-15s : Channel::disconnect(): %s\n", "Channel::state", "Searching", name.c_str());
+    log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Searching", "Channel::disconnect()", name.c_str());
     sid = 0xdeadbeef;  // spoil
 
     auto conns(connectors);  // copy list
@@ -202,7 +202,8 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self) {
 
         conn->pending[cid] = self;
         state = Connecting;
-        log_debug_printf(status_cli, "%30.30s = %-15s : Channel::disconnect(): %s\n", "Channel::state", "Connecting", name.c_str());
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", "false", "Connection::build()", name.c_str());
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Connecting", "Channel::disconnect()", name.c_str());
 
         conn->createChannels();
     }
@@ -344,7 +345,8 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
 
             chan->conn->pending[chan->cid] = chan;
             chan->state = Connecting;
-            log_debug_printf(status_cli, "%30.30s = %-15s : Channel::build()\n", "Channel::state", "Connecting");
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", "false", "Connection::build()", name.c_str());
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Connecting", "Channel::build()", name.c_str());
 
             chan->conn->createChannels();
         }
@@ -596,7 +598,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
 #else
     state = Running;
 #endif
-    log_debug_printf(status_cli, "%30.30s = %-15s : ContextImpl::ContextImpl()\n", "ContextImpl::state", state == Running ? "Running" : "Init");
+    log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %p\n", "ContextImpl::state", state == Running ? "Running" : "Init", "ContextImpl::ContextImpl()", this);
 }
 
 ContextImpl::~ContextImpl() = default;
@@ -634,7 +636,7 @@ void ContextImpl::close() {
     tcp_loop.call([this]() {
         if (state == Stopped) return;
         state = Stopped;
-        log_debug_printf(status_cli, "%30.30s = %-15s : ContextImpl::close()\n", "ContextImpl::state", "Stopped");
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %p\n", "ContextImpl::state", "Stopped", "ContextImpl::close()", this);
 
         (void)event_del(searchTimer.get());
         (void)event_del(searchRx4.get());
@@ -846,7 +848,8 @@ static void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peer
 
             chan->conn->pending[chan->cid] = chan;
             chan->state = Channel::Connecting;
-            log_debug_printf(status_cli, "%30.30s = %-15s : procSearchReply(): %s\n", "Channel::state", "Connecting", chan->name.c_str());
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", "false", "Connection::build()", chan->name.c_str());
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Connecting", "procSearchReply()", chan->name.c_str());
 
             chan->conn->createChannels();
 

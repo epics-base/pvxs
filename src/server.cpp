@@ -443,7 +443,9 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
       builtinsrc(StaticSource::build()),
       state(Stopped)
 {
-    log_debug_printf(status_svr, "%30.30s = %-15s : Server::Pvt::Pvt()\n", "Server::Pvt::state", "Stopped");
+#ifdef PVXS_ENABLE_OPENSSL
+    log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Stopped", "Server::Pvt::Pvt()", tls_context.get());
+#endif
     effective.expand();
 
     beaconSender4.set_broadcast(true);
@@ -678,7 +680,9 @@ void Server::Pvt::start()
             return;
         }
         state = Starting;
-        log_debug_printf(status_svr, "%30.30s = %-15s : Server::Pvt::start()\n", "Server::Pvt::state", "Starting");
+#ifdef PVXS_ENABLE_OPENSSL
+        log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Starting", "Server::Pvt::start()", tls_context.get());
+#endif
         log_debug_printf(serversetup, "Server starting\n%s", "");
 
         for(auto& iface : interfaces) {
@@ -709,7 +713,9 @@ void Server::Pvt::start()
             log_err_printf(serversetup, "Error enabling beacon timer on\n%s", "");
 
         state = Running;
-        log_debug_printf(status_svr, "%30.30s = %-15s : Server::Pvt::start()\n", "Server::Pvt::state", "Running");
+#ifdef PVXS_ENABLE_OPENSSL
+        log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Running", "Server::Pvt::start()", tls_context.get());
+#endif
     });
 }
 
@@ -727,7 +733,9 @@ void Server::Pvt::stop()
             return;
         }
         state = Stopping;
-        log_debug_printf(status_svr, "%30.30s = %-15s : Server::Pvt::stop()\n", "Server::Pvt::state", "Stopping");
+#ifdef PVXS_ENABLE_OPENSSL
+        log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Stopping", "Server::Pvt::stop()", tls_context.get());
+#endif
 
         if(event_del(beaconTimer.get()))
             log_err_printf(serversetup, "Error disabling beacon timer\n%s", "");
@@ -758,7 +766,9 @@ void Server::Pvt::stop()
         }
 
         state = Stopped;
-        log_debug_printf(status_svr, "%30.30s = %-15s : Server::Pvt::stop()\n", "Server::Pvt::state", "Stopped");
+#ifdef PVXS_ENABLE_OPENSSL
+        log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Stopped", "Server::Pvt::stop()", tls_context.get());
+#endif
 });
 
     /* Cycle through once more to ensure any callbacks queue during the previous call have completed.

@@ -403,7 +403,7 @@ void ServerConn::proceedWithConnectionValidation()
             log_debug_printf(connsetup, "Wait for Client %s certificate status to become GOOD\n", peerName.c_str());
 
             state = AwaitingPeerCertValidity;
-            log_debug_printf(status_svr, "%30.30s = %-15.15s : ServerConn::proceedWithConnectionValidation(): %s\n", "ConnBase::state", "AwaitingPeerCertValidity", peerName.c_str());
+            log_debug_printf(status_svr, "%24.24s = %-12.12s : %-41.41s: %s\n", "ConnBase::state", "AwaitingPeerCertValidity", "ServerConn::proceedWithConnectionValidation()", peerName.c_str());
             return; // Backoff - don't complete validation yet until we get the status were waiting for
         }
         log_debug_printf(connsetup, "Have Client %s certificate status Good\n", peerName.c_str());
