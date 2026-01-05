@@ -27,6 +27,7 @@ typedef epicsGuardRelease<epicsMutex> UnGuard;
 DEFINE_LOGGER(logshared, "pvxs.svr.pvwild");
 DEFINE_LOGGER(logmailbox, "pvxs.mailbox");
 DEFINE_LOGGER(logsource, "pvxs.svr.src");
+DEFINE_LOGGER(status_cms, "pvxs.st.cms");
 
 namespace pvxs {
 namespace server {
@@ -178,6 +179,8 @@ void WildcardPV::attach(std::unique_ptr<ChannelControl>&& ctrlop, const std::lis
                 if (self->current_vals[op->name()]) got = self->current_vals[op->name()].clone();
             }
             if (got) {
+                if (op->name().substr(0,12) == "CERT:STATUS:")
+                    log_debug_printf(status_cms, "%24.24s = %-12s : %-41s: %s\n", "Value::state", got["state"].as<std::string>().c_str(), "WildcardPV::attach(op->onOp(op->onGet()", op->name().c_str());
                 op->reply(got);
             } else {
                 op->error("Get races with type change");
