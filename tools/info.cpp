@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
             return 2;
         }
     }catch(std::exception& e){
-        std::cerr<<"Error: "<<e.what()<<"\n";
+        std::cerr<<ERL_ERROR ": "<<e.what()<<"\n";
         return 1;
     }
 }

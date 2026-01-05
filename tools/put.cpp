@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
                 auto sep = fv.find_first_of('=');
 
                 if(sep==std::string::npos) {
-                    std::cerr<<"Error: expected <fld>=<value> not \""<<escape(fv)<<"\"\n";
+                    std::cerr<<ERL_ERROR ": expected <fld>=<value> not \""<<escape(fv)<<"\"\n";
                     return 1;
                 }
 
@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
                     try {
                         result();
                     }catch(std::exception& e){
-                        std::cerr<<"Error "<<typeid(e).name()<<" : "<<e.what()<<"\n";
+                        std::cerr<<ERL_ERROR " "<<typeid(e).name()<<" : "<<e.what()<<"\n";
                         ret=1;
                     }
                     done.signal();
@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
             return ret;
         }
     }catch(std::exception& e){
-        std::cerr<<"Error: "<<e.what()<<"\n";
+        std::cerr<<ERL_ERROR ": "<<e.what()<<"\n";
         return 1;
     }
 }

@@ -60,7 +60,7 @@ SockEndpoint parseEP(const char* optarg, const server::Config& conf)
         ep = SockEndpoint(optarg, conf.udp_port);
 
     }catch(std::exception& e){
-        std::cerr<<"Error: Invalid group spec. '"<<escape(optarg)<<"' : "<<e.what()<<std::endl;
+        std::cerr<<ERL_ERROR ": Invalid group spec. '"<<escape(optarg)<<"' : "<<e.what()<<std::endl;
         exit(1);
     }
     if(ep.addr.family()!=AF_INET) {
@@ -278,7 +278,7 @@ int main(int argc, char *argv[])
 
         if(argc!=optind) {
             usage(argv[0]);
-            std::cerr<<"Error: Unexpected arguments."<<std::endl;
+            std::cerr<<ERL_ERROR ": Unexpected arguments."<<std::endl;
             return 1;
         }
 
@@ -294,7 +294,7 @@ int main(int argc, char *argv[])
 
         return 0;
     }catch(std::exception& e){
-        std::cerr<<"Error: "<<e.what()<<"\n";
+        std::cerr<<ERL_ERROR ": "<<e.what()<<"\n";
         return 1;
     }
 }

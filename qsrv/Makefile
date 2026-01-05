@@ -5,6 +5,8 @@ include $(TOP)/configure/CONFIG
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
 
+USR_CPPFLAGS += -I$(TOP)/src
+
 PROD_IOC += softIocPVX
 
 softIocPVX_SRCS += softMain.cpp

@@ -86,14 +86,14 @@ int main(int argc, char *argv[])
             auto sep = fv.find_first_of('=');
 
             if(sep==std::string::npos) {
-                std::cerr<<"Error: expected <fld>=<value> not \""<<escape(fv)<<"\"\n";
+                std::cerr<<ERL_ERROR ": expected <fld>=<value> not \""<<escape(fv)<<"\"\n";
                 return 1;
             }
 
             auto key(fv.substr(0, sep));
 
             if(values.find(key)!=values.end()) {
-                std::cerr<<"Error: duplicate argument name "<<key<<"\n";
+                std::cerr<<ERL_ERROR ": duplicate argument name "<<key<<"\n";
                 return 1;
             }
 
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
                     std::cout<<val;
                 ret=0;
             }catch(std::exception& e){
-                std::cerr<<"Error "<<typeid(e).name()<<" : "<<e.what()<<"\n";
+                std::cerr<<ERL_ERROR " "<<typeid(e).name()<<" : "<<e.what()<<"\n";
                 ret=1;
             }
             done.signal();
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
             return ret;
         }
     }catch(std::exception& e){
-        std::cerr<<"Error: "<<e.what()<<"\n";
+        std::cerr<<ERL_ERROR ": "<<e.what()<<"\n";
         return 1;
     }
 }

@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
         return 0;
     }catch(std::runtime_error& e) {
         errlogFlush();
-        std::cerr<<"Error: "<<e.what()<<std::endl;
+        std::cerr<<ERL_ERROR ": "<<e.what()<<std::endl;
         return 1;
     }
 }

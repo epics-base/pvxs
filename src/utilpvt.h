@@ -30,6 +30,7 @@
 
 #include <compilerDependencies.h>
 #include <epicsThread.h>
+#include <errlog.h>
 
 #include <pvxs/version.h>
 #include <pvxs/util.h>
@@ -44,6 +45,10 @@
 #  else
 #    define EPICS_ALWAYS_INLINE inline
 #  endif
+#endif
+
+#ifndef ERL_ERROR
+#  define ERL_ERROR "ERROR"
 #endif
 
 #include <epicsThread.h>

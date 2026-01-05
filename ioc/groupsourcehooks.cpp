@@ -23,15 +23,13 @@
 #include <pvxs/iochooks.h>
 
 #include "qsrvpvt.h"
+#include "utilpvt.h"
 #include "groupsource.h"
 #include "groupconfigprocessor.h"
 #include "iocshcommand.h"
 
 #if EPICS_VERSION_INT < VERSION_INT(7, 0, 3, 1)
 #  define iocshSetError(ret) do { (void)ret; }while(0)
-#endif
-#ifndef ERL_ERROR
-#  define ERL_ERROR "ERROR"
 #endif
 
 // include last to avoid clash of #define printf with other headers
