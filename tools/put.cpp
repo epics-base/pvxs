@@ -116,6 +116,8 @@ int main(int argc, char *argv[])
                 .pvRequest(request)
                 .build([&values](Value&& prototype) -> Value {
                     auto val = std::move(prototype);
+                    // clear all defined fields, but retain "current" values for NTEnum lookup.
+                    val.unmark(false, true);
                     for(auto& pair : values) {
                         try{
                             val[pair.first] = pair.second;
