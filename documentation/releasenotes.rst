@@ -3,7 +3,7 @@
 Release Notes
 =============
 
-1.4.2 (UNRELEASED)
+1.5.0 (UNRELEASED)
 ------------------
 
 * server: plug channel cache leak when close Channel while reusing Connection.
