@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
 
         auto op =ctxt.put(pvname)
                 .pvRequest(request)
-                .build([&values](Value&& prototype) -> Value {
+                .build([&values, verbose](Value&& prototype) -> Value {
                     auto val = std::move(prototype);
                     // clear all defined fields, but retain "current" values for NTEnum lookup.
                     val.unmark(false, true);
@@ -124,6 +124,11 @@ int main(int argc, char *argv[])
                         }catch(NoConvert& e){
                             throw std::runtime_error(SB()<<"Unable to assign "<<pair.first<<" from \""<<escape(pair.second)<<"\"");
                         }
+                    }
+                    if(verbose) {
+                        std::cout<<"Writing fields:\n";
+                        Indented I(std::cout);
+                        std::cout<<val.format().delta()<<"\n";
                     }
                     return val;
                 })
