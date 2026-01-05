@@ -498,17 +498,24 @@ static
 bool putGroupField(const Value& value,
                    const Field& field,
                    const SecurityClient& securityClient,
-                   const GroupSecurityCache& groupSecurityCache) {
+                   const GroupSecurityCache& groupSecurityCache,
+                   server::RemoteLogger& notify) {
     // find the leaf node that the field refers to in the given value
     auto leafNode = field.findIn(value);
-    bool marked = leafNode.isMarked() && field.value && field.info.putOrder!=std::numeric_limits<int64_t>::min();
+    bool putable = field.info.putOrder!=std::numeric_limits<int64_t>::min();
+    bool marked = leafNode.isMarked(true, true) && field.value;
+    bool changing = marked && putable;
+
+    if(marked && !putable) {
+        notify.logRemote(Level::Warn, SB()<<field.fieldName<<": no putorder, ignore write");
+    }
 
     // If the field references a valid part of the given value then we can send it to the database
-    if (marked) {
+    if (changing) {
         IOCSource::doFieldPreProcessing(securityClient); // pre-process field
         IOCSource::put(field.value, leafNode, field.info);
     }
-    if (marked || field.info.type==MappingInfo::Proc) {
+    if (changing || field.info.type==MappingInfo::Proc) {
         // Do processing if required
         IOCSource::doPostProcessing(field.value, groupSecurityCache.forceProcessing);
         return true;
@@ -567,7 +574,8 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
                 // Put the field
                 didSomething |= putGroupField(value, field,
                                               groupSecurityCache.securityClients[fieldIndex],
-                                              groupSecurityCache);
+                                              groupSecurityCache,
+                                              *putOperation);
                 fieldIndex++;
             }
 
@@ -587,7 +595,8 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
                 // Put the field
                 didSomething |= putGroupField(value, field,
                                               groupSecurityCache.securityClients[fieldIndex],
-                                              groupSecurityCache);
+                                              groupSecurityCache,
+                                              *putOperation);
                 fieldIndex++;
                 // Unlock this field when locker goes out of scope
             }
