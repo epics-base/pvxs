@@ -140,11 +140,6 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
 
 private:
     void proceedWithConnectionValidation();
-#ifdef PVXS_ENABLE_OPENSSL
-    std::string pending_selected;
-    Value pending_auth;
-    bool has_pending_validation = false;
-#endif
 #define CASE(Op) virtual void handle_##Op() override final;
     CASE(ECHO);
     CASE(CONNECTION_VALIDATION);

@@ -241,15 +241,6 @@ void Connection::createChannels()
 #ifdef PVXS_ENABLE_OPENSSL
     if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
         log_debug_printf(certs, "Wait for Server %s certificate status to become GOOD\n", peerName.c_str());
-        state = AwaitingPeerCertValidity;
-        if(status_cli.test(Level::Debug)) {
-            for(auto& pair : pending) {
-                const auto chan = pair.second.lock();
-                if(!chan || chan->state!=Channel::Connecting)
-                    continue;
-                log_debug_printf(status_cli, "%24.24s = %-12.12s : %-41s: %s\n", "ConnBase::state", "AwaitingPeerCertValidity", "Connection::createChannels()", chan->name.c_str());
-            }
-        }
         return; // defer until peer certificate status validated
     }
 #endif
@@ -376,7 +367,7 @@ void Connection::bevEvent(short events) {
 #ifdef PVXS_ENABLE_OPENSSL
 void Connection::peerStatusCallback(certs::cert_status_category_t status_category) {
     if (status_category == certs::GOOD_STATUS) {
-        log_debug_printf(certs, "Ready to proceed with creating channels: %s %s\n", state == AwaitingPeerCertValidity ? "Awaiting Peer Cert Validity": "Connecting", peerName.c_str());
+        log_debug_printf(certs, "Ready to proceed with creating channels: %s %s\n", "Connecting", peerName.c_str());
         proceedWithCreatingChannels();
     } else if (status_category == certs::BAD_STATUS) {
         log_debug_printf(certs, "Cancel Wait to Creating Channels: BAD CERT STATUS%s\n", "");
@@ -541,6 +532,8 @@ void Connection::handle_CONNECTION_VALIDATION()
         if(cred)
             to_wire_full(R, cred);
     }
+    state = Validated;
+    log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "ConnBase::state", "Validated", "Connection::handle_CONNECTION_VALIDATION()", peerName.c_str());
     enqueueTxBody(CMD_CONNECTION_VALIDATION);
 }
 

@@ -136,8 +136,8 @@ protected:
     enum {
         Holdoff,
         Connecting,
-        AwaitingPeerCertValidity,
         Connected,
+        Validated,
         Disconnected,
     } state;
 

@@ -272,13 +272,6 @@ void ServerConn::handle_CONNECTION_VALIDATION()
         }
     }
 
-#ifdef PVXS_ENABLE_OPENSSL
-    // Store validation data for potential retry
-    pending_selected = selected;
-    pending_auth = auth;
-    has_pending_validation = true;
-#endif
-
     log_debug_printf(connsetup, "Client %s authenticates using %s and %s\n",
                      peerName.c_str(), selected.c_str(),
                      std::string(SB()<<auth).c_str());
@@ -344,7 +337,7 @@ void ServerConn::handle_CONNECTION_VALIDATION()
  */
 void ServerConn::peerStatusCallback(certs::cert_status_category_t status_category) {
     if (status_category == certs::GOOD_STATUS) {
-        log_debug_printf(certs, "Ready to proceed with connection validation: %s %s\n", state == AwaitingPeerCertValidity ? "Awaiting Peer Cert Validity": "Connecting", peerName.c_str());
+        log_debug_printf(certs, "Ready to proceed with connection validation: %s %s\n", "Connecting", peerName.c_str());
         proceedWithConnectionValidation();
     } else if (status_category == certs::BAD_STATUS) {
         log_debug_printf(certs, "Cancel Wait for Connection Validation: BAD CERT STATUS%s\n", "");
@@ -374,28 +367,18 @@ void ServerConn::peerStatusCallback(certs::cert_status_category_t status_categor
 void ServerConn::proceedWithConnectionValidation()
 {
 #ifdef PVXS_ENABLE_OPENSSL
-    if (iface->isTLS && bev) {
-        const auto ctx = bufferevent_openssl_get_ssl(bev.get());
-        assert(ctx);
-
-        // Check peer certificate status if required
-        // we won't be subscribed if we don't need to check peer status before continuing
-        if (peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
-            log_debug_printf(connsetup, "Wait for Client %s certificate status to become GOOD\n", peerName.c_str());
-
-            state = AwaitingPeerCertValidity;
-            log_debug_printf(status_svr, "%24.24s = %-12.12s : %-41.41s: %s\n", "ConnBase::state", "AwaitingPeerCertValidity", "ServerConn::proceedWithConnectionValidation()", peerName.c_str());
-            return; // Backoff - don't complete validation yet until we get the status were waiting for
-        }
-        log_debug_printf(connsetup, "Have Client %s certificate status Good\n", peerName.c_str());
+    // Check peer certificate status if required
+    // we won't be subscribed if we don't need to check peer status before continuing
+    if (state != Validated && peer_status && peer_status->isSubscribed() && !isPeerStatusGood()) {
+        log_debug_printf(connsetup, "Wait for Client %s certificate status to become GOOD\n", peerName.c_str());
+        return; // Backoff - don't complete validation yet until we get the status were waiting for
     }
-
-    // Clear pending validation data since we're completing
-    has_pending_validation = false;
 #endif
 
     // No practical way to handle auth failure.
     // So we accept all credentials but may not grant rights.
+    log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %s\n", "ConnBase::state", "Validated", "ServerConn::proceedWithConnectionValidation()", peerName.c_str());
+    state = Validated;
     auth_complete(this, Status{Status::Ok});
 }
 
