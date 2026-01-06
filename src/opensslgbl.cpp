@@ -7,7 +7,9 @@
 #include "opensslgbl.h"
 
 #include <algorithm>
+#ifndef _WIN32
 #include <dlfcn.h>
+#endif
 #include <fstream>
 #include <stdexcept>
 
@@ -44,6 +46,7 @@ void free_SSL_CTX_sidecar(void *, void *ptr, CRYPTO_EX_DATA *, int, long, void *
     delete static_cast<CertStatusExData*>(ptr);
 }
 
+#ifndef _WIN32
 void logOsslVersions()
 {
     log_debug_printf(setup, "pvxs: OpenSSL build:  %s (0x%lx)\n", OPENSSL_VERSION_TEXT, (unsigned long)OPENSSL_VERSION_NUMBER);
@@ -68,14 +71,17 @@ void logOsslSymbolOrigins()
     logSymbolOrigin("EVP_MD_fetch",    (const void*)&EVP_MD_fetch);      // crypto (OpenSSL 3)
     logSymbolOrigin("SSL_CTX_new_ex",  (const void*)&SSL_CTX_new_ex);    // ssl
 }
+#endif
 
 void verifySSLLibraries() {
     // Test creating an SSL context, and if it fails, then we know we are going to have problems later on
     const auto ssl_ctx = SSL_CTX_new_ex(ossl_gbl->libctx.get(), nullptr, TLS_method());
     if (!ssl_ctx) {
         if (ERR_peek_error()==0) {
+#ifndef _WIN32
             logOsslVersions();
             logOsslSymbolOrigins();
+#endif
             log_err_printf(setup, "OpenSSL library mismatch detected; disabling TLS%s", "\n");
         } else {
             log_err_printf(setup, "SSL_CTX_new_ex failed: %s\n", SSLError("SSL_CTX_new_ex").what());
