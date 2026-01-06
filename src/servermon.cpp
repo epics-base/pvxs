@@ -7,6 +7,7 @@
 #include <cassert>
 
 #include <deque>
+#include <iomanip>
 
 #include <epicsMutex.h>
 #include <epicsGuard.h>
