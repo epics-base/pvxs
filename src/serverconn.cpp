@@ -234,25 +234,6 @@ void ServerConn::handle_ECHO()
     statTx += 8u + len;
 }
 
-#ifdef PVXS_ENABLE_OPENSSL
-void ServerConn::retryConnectionValidationS(evutil_socket_t fd, short evt, void *raw)
-{
-    const auto conn = static_cast<ServerConn*>(raw);
-    conn->retryConnectionValidation();
-}
-
-void ServerConn::retryConnectionValidation()
-{
-    log_debug_printf(connsetup, "Retrying connection validation for %s\n", peerName.c_str());
-
-    if (has_pending_validation) {
-        // Process the stored validation data
-        proceedWithConnectionValidation();
-    }
-}
-#endif
-
-
 static
 void auth_complete(ServerConn *self, const Status& sts)
 {

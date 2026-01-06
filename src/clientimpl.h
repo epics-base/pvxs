@@ -175,10 +175,6 @@ private:
 protected:
     void tickEcho();
     static void tickEchoS(evutil_socket_t fd, short evt, void *raw);
-#ifdef PVXS_ENABLE_OPENSSL
-    void retryChannelCreation();
-    static void retryChannelCreationS(evutil_socket_t fd, short evt, void *raw);
-#endif
 };
 
 struct ConnectImpl final : public Connect

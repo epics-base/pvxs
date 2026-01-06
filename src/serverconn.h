@@ -141,9 +141,6 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
 private:
     void proceedWithConnectionValidation();
 #ifdef PVXS_ENABLE_OPENSSL
-    void retryConnectionValidation();
-    static void retryConnectionValidationS(evutil_socket_t fd, short evt, void *raw);
-
     std::string pending_selected;
     Value pending_auth;
     bool has_pending_validation = false;
