@@ -5,7 +5,7 @@ Value Container API
    :maxdepth: 2
    :caption: Contents:
 
-   nt
+   ../reference/nt
    typedef
 
 .. code-block:: c++

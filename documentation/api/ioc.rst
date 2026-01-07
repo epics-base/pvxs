@@ -168,7 +168,7 @@ Group PV
    :maxdepth: 2
    :caption: Contents:
 
-   qgroup
+   ../reference/qgroup
 
 Access Security
 ^^^^^^^^^^^^^^^
@@ -215,4 +215,4 @@ using JSON link support syntax. ::
    :maxdepth: 2
    :caption: Contents:
 
-   pvalink
+   ../reference/pvalink

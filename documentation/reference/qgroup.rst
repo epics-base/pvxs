@@ -200,7 +200,7 @@ and on the right the output of ``pvget TST:Tbl``.
 
    <hr/>
 
-.. image:: _image/nt_table1.svg
+.. image:: ../images/nt_table1.svg
 
 Here the ``TST:Labels_`` record contributes two mappings to the ``TST:Tbl`` Group.
 (a record might contribute mappings to more than one group)
@@ -216,7 +216,7 @@ With ``+type: "plain"``, this appears as a string array ("string[]").
 
    <hr/>
 
-.. image:: _image/nt_table2.svg
+.. image:: ../images/nt_table2.svg
 
 The ``TST:A`` record contributes only a ``value.A`` field.
 With ``+type: "plain"``, this appears as a string array ("double[]").
@@ -230,7 +230,7 @@ Processing occurs in order of increasing ``+putorder``.
 
    <hr/>
 
-.. image:: _image/nt_table3.svg
+.. image:: ../images/nt_table3.svg
 
 The ``TST:B`` record contributes both a ``value.B`` field in the same manner as the A field/column.
 
@@ -242,7 +242,7 @@ fields ``alarm`` and ``timeStamp``.
 
    <hr/>
 
-.. image:: _image/nt_table4.svg
+.. image:: ../images/nt_table4.svg
 
 The final record ``TST:Save`` does not contribute any data fields.
 Instead it contributes a special ``+type: "proc"`` mapping.
@@ -259,5 +259,5 @@ Loading the following with. ::
 
     dbLoadRecords("table.db", "N=TST:,LBL1=Label A,LBL2=Label B,PO1=0,PO2=1")
 
-.. literalinclude:: ../test/table.db
+.. literalinclude:: ../../test/table.db
     :linenos:

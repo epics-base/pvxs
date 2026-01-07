@@ -42,19 +42,49 @@ Contents
 
 .. toctree::
    :maxdepth: 3
+   :caption: Getting Started
 
-   overview
-   netconfig
-   example
-   building
-   cli
-   ioc
-   value
-   client
-   server
-   util
-   details
+   guides/quickstart
+   guides/installation
+
+.. toctree::
+   :maxdepth: 3
+   :caption: User Guides
+
+   guides/architecture
+   guides/troubleshooting
+   reference/building
+   reference/netconfig
+   reference/cli
+
+.. toctree::
+   :maxdepth: 3
+   :caption: API Reference
+
+   api/overview
+   api/value
+   api/client
+   api/server
+   api/ioc
+   api/util
+   api/details
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Reference Documentation
+
+   reference/nt
+   reference/ntscalar
+   reference/qgroup
+   reference/pvalink
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Examples & Additional
+
+   examples/example
    releasenotes
+   examples/contributing
 
 Indices and tables
 ==================
