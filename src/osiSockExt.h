@@ -42,9 +42,7 @@ struct PVXS_API SockAddr {
     union store_t {
         sockaddr sa;
         sockaddr_in in;
-#ifdef AF_INET6
         sockaddr_in6 in6;
-#endif
     };
 private:
     store_t  store;
