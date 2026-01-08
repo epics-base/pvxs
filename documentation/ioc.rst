@@ -42,14 +42,14 @@ served by the Integrated PVA server.
     Enable additional :ref:`logconfig` as if more comma separated key=VALUE pairs
     were appended to the **$PVXS_LOG** environment variable.
 
-    Since UNRELEASED
+    Since 1.5.0
 
 .. cpp:function:: void pvxs_log_reset()
 
     Reset logging to defaults.  Negates the effects of **$PVXS_LOG** and later
     configuration.
 
-    Since UNRELEASED
+    Since 1.5.0
 
 Adding custom PVs to Server
 ---------------------------

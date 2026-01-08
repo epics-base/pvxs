@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.5.0 (UNRELEASED)
-------------------
+1.5.0 (Jan 2026)
+----------------
 
 * server: plug channel cache leak when close Channel while reusing Connection.
 * server: disable one-sided attempt to handle saturated connection.
@@ -12,6 +12,7 @@ Release Notes
 * ioc: renamed semi-internal C symbol names to avoid conflicts with QSRV1:
        `dbpvar()` -> ``dbpvxr()`, ``pvaLinkNWorkers`` -> ``pvxLinkNWorkers``.
        Names in IOC shell remain unchanged.
+* ioc: fix PUT to scalar mapping
 * tools: pvxvct can use endpoint syntax to listen for multicast on a specific interface.
          eg. ``pvxvct -B 224.1.2.23@eth0`` or ``pvxvct -B 224.1.2.23@10.1.1.100``.
 
