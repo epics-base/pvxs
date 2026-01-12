@@ -72,7 +72,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
                 const auto cert_status_category = static_cast<certs::CertificateStatus>(pva_status).getStatusCategory();
                 log_debug_printf(watcher, "Received: %s certificate status\n", pva_status.status.s.c_str());
                 if (cert_status_category != certs::GOOD_STATUS) {
-                    log_warn_printf(watcher, "Certificate not valid: %s\n", cert_status.status.s.c_str());
+                    log_warn_printf(watcher, "Certificate not valid: %s\n", pva_status.status.s.c_str());
                 }
 
                 {
