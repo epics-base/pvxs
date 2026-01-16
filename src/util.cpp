@@ -16,6 +16,11 @@
 // for signal handling
 #include <signal.h>
 
+#if defined(__linux__) || defined(__APPLE__)
+#  include <sys/file.h>
+#  define USE_POSIX_FLOCK
+#endif
+
 #include <iomanip>
 #include <cstring>
 #include <sstream>
@@ -46,6 +51,8 @@ unsigned long pvxs_version_abi_int()
     return PVXS_ABI_VERSION;
 }
 }
+
+DEFINE_LOGGER(_log, "pvxs.util");
 
 namespace pvxs {
 
@@ -908,6 +915,28 @@ done:
     for(; R < r_lines.size(); R++) {
         out<<"+ \""<<escape(r_lines[R])<<"\"\n";
     }
+}
+
+FLock::FLock(FILE *fp, bool writing)
+    :fp(fp)
+    ,writing(writing)
+{
+#ifdef USE_POSIX_FLOCK
+    if(flock(fileno(fp), writing ? LOCK_EX : LOCK_SH)) {
+        int err = errno;
+        throw std::runtime_error(SB()<<"Unable to flock(): "<<err);
+    }
+#endif
+}
+
+FLock::~FLock()
+{
+#ifdef USE_POSIX_FLOCK
+    if(flock(fileno(fp), LOCK_UN)) {
+        int err = errno;
+        log_warn_printf(_log, "Unable to un-flock(): %d", err);
+    }
+#endif
 }
 
 }}
