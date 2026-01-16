@@ -29,6 +29,10 @@ namespace pvxs {
 namespace ossl {
 
 template<>
+struct ssl_delete<FILE> {
+    inline void operator()(FILE* fp) { if(fp) fclose(fp); }
+};
+template<>
 struct ssl_delete<OSSL_LIB_CTX> {
     inline void operator()(OSSL_LIB_CTX* fp) { if(fp) OSSL_LIB_CTX_free(fp); }
 };
@@ -67,7 +71,7 @@ struct OSSLGbl {
     ossl_ptr<OSSL_LIB_CTX> libctx;
     int SSL_CTX_ex_idx;
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
-    std::ofstream keylog;
+    ossl_ptr<FILE> keylog;
     epicsMutex keylock;
 #endif
 } *ossl_gbl;
@@ -77,15 +81,15 @@ void sslkeylogfile_exit(void*) noexcept
 {
     auto gbl = ossl_gbl;
     try {
-        epicsGuard<epicsMutex> G(gbl->keylock);
-        if(gbl->keylog.is_open()) {
-            gbl->keylog.flush();
-            gbl->keylog.close();
+        decltype(gbl->keylog) trash;
+        {
+            epicsGuard<epicsMutex> G(gbl->keylock);
+            trash = std::move(gbl->keylog);
         }
     }catch(std::exception& e){
         static bool once = false;
         if(!once) {
-            fprintf(stderr, "Error while writing to SSLKEYLOGFILE\n");
+            fprintf(stderr, "Error while closing to SSLKEYLOGFILE: %s\n", e.what());
             once = true;
         }
     }
@@ -96,14 +100,20 @@ void sslkeylogfile_log(const SSL*, const char *line) noexcept
     auto gbl = ossl_gbl;
     try {
         epicsGuard<epicsMutex> G(gbl->keylock);
-        if(gbl->keylog.is_open()) {
-            gbl->keylog << line << '\n';
-            gbl->keylog.flush();
+        if(gbl->keylog) {
+            FLock lk(gbl->keylog.get(), true);
+            int ret = fseek(gbl->keylog.get(), 0, SEEK_END);
+            if(ret>=0)
+                ret = fprintf(gbl->keylog.get(), "%s\n", line);
+            if(ret>=0)
+                ret = fflush(gbl->keylog.get());
+            if(ret<0)
+                throw std::runtime_error("I/O");
         }
     }catch(std::exception& e){
         static bool once = false;
         if(!once) {
-            fprintf(stderr, "Error while writing to SSLKEYLOGFILE\n");
+            fprintf(stderr, "Error while writing to SSLKEYLOGFILE: %s\n", e.what());
             once = true;
         }
     }
@@ -134,14 +144,15 @@ void OSSLGbl_init()
                                                    nullptr,
                                                    free_SSL_CTX_sidecar);
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
-    if(auto env = getenv("SSLKEYLOGFILE")) {
+    auto keylog = getenv("SSLKEYLOGFILE");
+    if(keylog && keylog[0]) {
         epicsGuard<epicsMutex> G(gbl->keylock);
-        gbl->keylog.open(env);
-        if(gbl->keylog.is_open()) {
+        gbl->keylog.reset(fopen(keylog, "a"));
+        if(gbl->keylog) {
             epicsAtExit(sslkeylogfile_exit, nullptr);
-            fprintf(stderr, "NOTICE: debug logging TLS SECRETS to SSLKEYLOGFILE=%s\n", env);
+            fprintf(stderr, "NOTICE: debug logging TLS SECRETS to SSLKEYLOGFILE=%s\n", keylog);
         } else {
-            fprintf(stderr, "Warning: Unable to open.  SSLKEYLOGFILE disabled : %s\n", env);
+            fprintf(stderr, "Warning: Unable to open.  SSLKEYLOGFILE disabled : %s\n", keylog);
         }
     }
 #endif // PVXS_ENABLE_SSLKEYLOGFILE
