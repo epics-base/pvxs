@@ -301,9 +301,22 @@ void sslkeylogfile_log(const SSL *, const char *line) noexcept {
     auto gbl = ossl_gbl;
     try {
         epicsGuard<epicsMutex> G(gbl->keylock);
-        if (gbl->keylog.is_open()) {
-            gbl->keylog << line << '\n';
-            gbl->keylog.flush();
+        if(gbl->keylog) {
+            size_t n = strlen(line);
+            FLock lk(gbl->keylog.get(), true);
+            int pos = fseek(gbl->keylog.get(), 0, SEEK_END);
+            if(pos==-1)
+                throw std::runtime_error("seek");
+            auto ret = fwrite(line, 1, n, gbl->keylog.get());
+            if(ret>=0)
+                ret = fputc('\n', gbl->keylog.get());
+            if(ret>=0)
+                ret = fflush(gbl->keylog.get());
+            else
+                ret = -1;
+            if(ret) {
+                throw std::runtime_error("I/O");
+            }
         }
     } catch (std::exception &e) {
         static bool once = false;

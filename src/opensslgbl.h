@@ -19,7 +19,7 @@ struct OSSLGbl {
     ossl_ptr<OSSL_LIB_CTX> libctx;
     int SSL_CTX_ex_idx;
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
-    std::ofstream keylog;
+    file_ptr keylog;
     epicsMutex keylock;
 #endif
 };

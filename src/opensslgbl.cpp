@@ -98,14 +98,15 @@ void sslkeylogfile_exit(void *) noexcept {
     auto gbl = ossl_gbl;
     try {
         epicsGuard<epicsMutex> G(gbl->keylock);
-        if (gbl->keylog.is_open()) {
-            gbl->keylog.flush();
-            gbl->keylog.close();
+        decltype(gbl->keylog) trash;
+        {
+            epicsGuard<epicsMutex> G(gbl->keylock);
+            trash = std::move(gbl->keylog);
         }
     } catch (std::exception &e) {
         static bool once = false;
         if (!once) {
-            fprintf(stderr, "Error while writing to SSLKEYLOGFILE\n");
+            fprintf(stderr, "Error while closing to SSLKEYLOGFILE: %s\n", e.what());
             once = true;
         }
     }
@@ -129,14 +130,15 @@ static void osslInitImpl() {
     std::unique_ptr<OSSLGbl> gbl{new OSSLGbl};
     gbl->SSL_CTX_ex_idx = SSL_CTX_get_ex_new_index(0, nullptr, nullptr, nullptr, free_SSL_CTX_sidecar);
 #ifdef PVXS_ENABLE_SSLKEYLOGFILE
-    if (auto env = getenv("SSLKEYLOGFILE")) {
+    auto keylog = getenv("SSLKEYLOGFILE");
+    if(keylog && keylog[0]) {
         epicsGuard<epicsMutex> G(gbl->keylock);
-        gbl->keylog.open(env);
-        if (gbl->keylog.is_open()) {
+        gbl->keylog.reset(fopen(keylog, "a"));
+        if(gbl->keylog) {
             epicsAtExit(sslkeylogfile_exit, nullptr);
-            log_warn_printf(setup, "TLS Debug Enabled: logging TLS secrets to %s\n", env);
+            log_warn_printf(setup, "TLS Debug Enabled: logging TLS secrets to %s\n", keylog);
         } else {
-            log_err_printf(setup, "TLS Debug Disabled: Unable to open SSL key log file: %s\n", env);
+            log_err_printf(setup, "TLS Debug Disabled: Unable to open SSL key log file: %s\n", keylog);
         }
     }
 #endif  // PVXS_ENABLE_SSLKEYLOGFILE

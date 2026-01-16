@@ -239,6 +239,14 @@ public:
 #undef RWLOCK_RLOCK
 #undef RWLOCK_RUNLOCK
 
+class FLock {
+    FILE * const fp = nullptr;
+    bool writing = false;
+public:
+    FLock(FILE* fp, bool writing);
+    ~FLock();
+};
+
 PVXS_API
 void osdGetRoles(const std::string& account, std::set<std::string>& roles);
 
