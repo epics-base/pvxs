@@ -225,6 +225,14 @@ public:
 #undef RWLOCK_RLOCK
 #undef RWLOCK_RUNLOCK
 
+class FLock {
+    FILE * const fp = nullptr;
+    bool writing = false;
+public:
+    FLock(FILE* fp, bool writing);
+    ~FLock();
+};
+
 PVXS_API
 void osdGetRoles(const std::string& account, std::set<std::string>& roles);
 
@@ -262,6 +270,7 @@ struct aligned_union
 
 template <size_t Len, typename... Types>
 using aligned_union = std::aligned_union<Len, Types...>;
+
 #endif
 
 } // namespace impl
