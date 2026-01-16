@@ -22,6 +22,8 @@ env:
   CMP: gcc
   _PVXS_ABORT_ON_CRIT: 1
   PVXS_LOG: pvxs.*=WARN
+  # test debugging logic in testtls
+  SSLKEYLOGFILE: key.log
 
 jobs:
   native:
