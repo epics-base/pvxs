@@ -397,6 +397,17 @@ evsocket::evsocket(int af, evutil_socket_t sock, bool blocking)
 
     evutil_make_socket_closeonexec(sock);
 
+#ifdef SO_NOSIGPIPE
+    // probably OSX only
+    {
+        int val = 1;
+        if(setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, (char*)&val, sizeof(val))) {
+            log_warn_printf(logerr, "Unable to set SO_NOSIGPIPE (err=%d).\n",
+                            evutil_socket_geterror(sock));
+        }
+    }
+#endif
+
     if(!blocking && evutil_make_socket_nonblocking(sock)) {
         evutil_closesocket(sock);
         throw std::runtime_error("Unable to make non-blocking socket");
@@ -451,6 +462,11 @@ evsocket::~evsocket()
 {
     if(sock!=evutil_socket_t(-1))
         evutil_closesocket(sock);
+}
+
+void evsocket::release()
+{
+    sock = evutil_socket_t(-1);
 }
 
 SockAddr evsocket::sockname() const

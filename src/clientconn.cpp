@@ -61,9 +61,12 @@ void Connection::startConnecting()
 {
     assert(!this->bev);
 
+    evsocket sock(peerAddr.family(), SOCK_STREAM, 0);
     decltype(this->bev) bev(__FILE__, __LINE__,
-                bufferevent_socket_new(context->tcp_loop.base, -1,
+                bufferevent_socket_new(context->tcp_loop.base, sock.sock,
                                        BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
+
+    sock.release(); // hand-off ownership to bev
 
     bufferevent_setcb(bev.get(), &bevReadS, nullptr, &bevEventS, this);
 

@@ -251,6 +251,9 @@ struct PVXS_API evsocket
 
     ~evsocket();
 
+    // caller takes ownership of socket
+    void release();
+
     SockAddr sockname() const;
 
     // test validity
