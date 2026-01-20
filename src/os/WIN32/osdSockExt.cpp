@@ -17,6 +17,7 @@
 #include "evhelper.h"
 
 #include <epicsThread.h>
+#include <epicsSignal.h>
 #include <cantProceed.h>
 
 #  include <windows.h>
@@ -69,6 +70,8 @@ void oseDoOnce()
 
     evsocket::canIPv6 = evsocket::init_canIPv6();
     evsocket::ipstack = is_wine() ? evsocket::Linsock : evsocket::Winsock;
+
+    epicsSignalInstallSigPipeIgnore(); // so far a no-op
 }
 
 void osiSockAttachExt()
