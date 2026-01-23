@@ -1215,11 +1215,48 @@ void testEmptyRequest()
            "[0] struct  parent=[0]  [0:1)\n")<<"\nActual descs2\n"<<descs2.data();
 }
 
+void testPartialXCode()
+{
+    testDiag("%s", __func__);
+
+    auto top = nt::NTScalar().create();
+    auto time(top["timeStamp"]);
+
+    testToBytes(true, [&](Buffer& B) {
+        to_wire(B, Value::Helper::desc(time));
+    }, "\x80\x06time_t\x03\x10secondsPastEpoch\x23\x0bnanoseconds\x22\x07userTag\x22");
+
+    time["secondsPastEpoch"] = 0x10203040;
+
+    testToBytes(true, [&](Buffer& B) {
+        to_wire_full(B, time);
+    }, "\x00\x00\x00\x00\x10\x20\x30\x40\x00\x00\x00\x00\x00\x00\x00\x00");
+
+    // from top, secondsPastEpoch is 8th bit
+    testToBytes(true, [&](Buffer& B) {
+        to_wire_valid(B, top);
+    }, "\x01\x80\x00\x00\x00\x00\x10\x20\x30\x40");
+
+    // under timeStamp, secondsPastEpoch is 2nd bit
+    testToBytes(true, [&](Buffer& B) {
+        to_wire_valid(B, time);
+    }, "\x01\x02\x00\x00\x00\x00\x10\x20\x30\x40");
+
+    top.unmark();
+    TypeStore ctxt;
+    testFromBytes(true, "\x01\x02\x00\x00\x00\x00\x10\x20\x30\x50", [&](Buffer& B) {
+        from_wire_valid(B, ctxt, time);
+    });
+
+    testTrue(top["timeStamp.secondsPastEpoch"].isMarked(false));
+    testEq(top["timeStamp.secondsPastEpoch"].as<int64_t>(), 0x10203050);
+}
+
 } // namespace
 
 MAIN(testxcode)
 {
-    testPlan(143);
+    testPlan(150);
     testSetup();
     testDeserializeString();
     testSerialize1();
@@ -1237,5 +1274,6 @@ MAIN(testxcode)
     testRegressBadBitMask();
     testBadFieldName();
     testEmptyRequest();
+    testPartialXCode();
     return testDone();
 }
