@@ -315,7 +315,7 @@ struct GPROp : public OperationBase
                 // nothing more needed
 
             } else {
-                throw std::logic_error("Invalid state in GPR sendReply()");
+                throw std::logic_error(SB()<<"Invalid state "<<state<<" for GPR sendReply() ");
             }
         }
         chan->statTx += chan->conn->enqueueTxBody(state==GPROp::Done ? CMD_DESTROY_REQUEST :  (pva_app_msg_t)op);
