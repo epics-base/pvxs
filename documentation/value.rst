@@ -120,9 +120,16 @@ Array fields
 ------------
 
 Array fields are represented with the `pvxs::shared_array` container
-using void vs. non-void, and const vs. non-const element types.
+using void vs. non-void, and const vs. mutable element types.
 
-Arrays are initially created as non-const and non-void.
+.. code-block:: c++
+
+    shared_array<uint32_t>       typed_mutable;
+    shared_array<const uint32_t> typed_const;
+    shared_array<void>           void_mutable;
+    shared_array<const void>     void_const;
+
+Arrays may be initially created as mutable and non-void.
 After being populated, an array must be transformed using
 `pvxs::shared_array::freeze` to become const before
 being stored in a `pvxs::Value`.
@@ -133,8 +140,8 @@ being stored in a `pvxs::Value`.
     Value top = nt::NTScalar{TypeCode::Float64A}.create();
 
     top["value"] = arr.freeze();
-    # freeze() acts like std::move().  arr is now empty
-    # only the read-only reference remains!
+    // freeze() acts like std::move().  arr is now empty
+    // only the read-only reference remains!
 
 The `pvxs::shared_array::freeze` method is special in that it
 acts like std::move() in that it moves the array reference into the returned object.
@@ -146,7 +153,7 @@ The const non-void option is a convenience which may **allocate** and do an elem
 
 .. code-block:: c++
 
-    # extract reference, or converted copy
+    // extract reference, or converted copy
     arr = top["value"].as<shared_array<const double>>();
 
 When it is desirable to avoid an implicit allocate and convert,
@@ -156,10 +163,10 @@ of the underlying array prior to using `pvxs::shared_array::castTo`.
 
 .. code-block:: c++
 
-    # extract untyped reference.  Never copies
+    // extract untyped reference.  Never copies
     shared_array<const void> varr = top["value"].as<shared_array<const void>>();
     if(varr.original_type()==ArrayType::Float64) {
-        # castTo() throws std::logic_error if the underlying type is not 'double'.
+        // castTo() throws std::logic_error if the underlying type is not 'double'.
         shared_array<const double> temp = varr.castTo<const double>();
     }
 
