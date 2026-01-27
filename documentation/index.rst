@@ -41,19 +41,32 @@ Contents
 --------
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 1
 
    overview
-   netconfig
    example
    building
-   cli
+
+.. toctree::
+   :maxdepth: 2
+
+   netconfig
    ioc
+   cli
+
+.. toctree::
+   :caption: API References
+   :maxdepth: 2
+
    value
    client
    server
    util
    details
+
+.. toctree::
+   :maxdepth: 1
+
    releasenotes
 
 Indices and tables
