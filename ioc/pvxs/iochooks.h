@@ -145,6 +145,7 @@ void testCleanupPrepare();
  *      }
  *      epicsExitCallAtExits();
  *      pvxs::cleanup_for_valgrind();
+ *      return testDone();
  *  }
  @endcode
  *
