@@ -89,7 +89,7 @@ Release Notes
   released promptly when that operation is ended.
 * server: relax post() after finish().  Return false instead of throwing ``std::logic_error``.
 * ioc: ensure db_cancel_event() before ~MonitorControlOp
-   * Workaround for [db_cancel_event()](https://github.com/epics-base/epics-base/issues/423) bug.
+   * Workaround for `db_cancel_event() <https://github.com/epics-base/epics-base/issues/423>`_ bug.
 * ioc: Fix typo preventing processing of DBR_STRING fields.
 * ioc: fix group put always `dbProcess()`.
 * ioc: fix block=true to DBF_ENUM.
