@@ -152,6 +152,7 @@ When possible, use of the ``TestIOC`` class is recommended for both
 forward and backward compatibility with EPICS Base (>= 3.15.0.1).
 
 .. doxygenclass:: pvxs::ioc::TestIOC
+    :members:
 
 
 Utilities
