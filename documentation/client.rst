@@ -308,3 +308,7 @@ Misc
 
 .. doxygenstruct:: pvxs::client::RemoteError
     :members:
+
+.. doxygenstruct:: pvxs::client::Timeout
+
+.. doxygenstruct:: pvxs::client::Interrupted
