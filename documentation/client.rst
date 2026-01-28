@@ -13,7 +13,7 @@ Client API
 Configuration
 -------------
 
-The recommended starting point is creating new context configured from ``EPICS_PVA_*`` :ref:`environ`.
+The recommended starting point is creating new context configured from ``$EPICS_PVA_*`` :ref:`environ`.
 Use `pvxs::client::Context::fromEnv`.
 
 EPICS_PVA_ADDR_LIST
@@ -308,3 +308,7 @@ Misc
 
 .. doxygenstruct:: pvxs::client::RemoteError
     :members:
+
+.. doxygenstruct:: pvxs::client::Timeout
+
+.. doxygenstruct:: pvxs::client::Interrupted
