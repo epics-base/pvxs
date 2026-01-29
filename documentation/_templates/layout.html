@@ -1,0 +1,14 @@
+{# _templates/layout.html #}
+{% extends "!layout.html" %}
+
+{% block extrahead %}
+{{ super() }}
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+{% if pagename.startswith('spva') %}
+<!-- Inject extra CSS for pages starting with 'spva' -->
+<link rel="stylesheet" type="text/css" href="{{ pathto('_static/style.css', 1) }}" />
+{% endif %}
+{% endblock %}

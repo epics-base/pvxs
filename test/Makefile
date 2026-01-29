@@ -1,11 +1,14 @@
 TOP=..
 
 include $(TOP)/configure/CONFIG
+# cfg/ sometimes isn't correctly included due to a Base bug
+# so we do here (maybe again) as workaround
+-include $(wildcard $(TOP)/cfg/CONFIG*)
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
 
-# access to private headers
+# access to private headers and source
 USR_CPPFLAGS += -I$(TOP)/src
 USR_CPPFLAGS += -I$(TOP)/ioc
 
@@ -113,15 +116,58 @@ testudpfwd_SRCS += testudpfwd.cpp
 TESTS += testudpfwd
 
 ifdef BASE_3_15
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -I$(TOP)/certs -I$(TOP)/bundle/CLI11/include
+SRC_DIRS += $(TOP)/certs
+SRC_DIRS += $(TOP)/certs/authn
+SRC_DIRS += $(TOP)/certs/authn/std
+SRC_DIRS += $(TOP)/src
+SRC_DIRS += $(TOP)/src/pvxs
+SRCS += configcms.cpp
+
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 TESTPROD_HOST += gen_test_certs
-gen_test_certs += gen_test_certs.cpp
+gen_test_certs_SRCS += gen_test_certs.cpp
+gen_test_certs_SRCS += certfactory.cpp
 
 TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp
+testtls_SRCS += certstatusfactory.cpp
+testtls_SRCS += certstatusmanager.cpp
+testtls_SRCS += certstatus.cpp
 TESTS += testtls
-TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
-endif
+TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+
+TESTPROD_HOST += testtlswithcms
+testtlswithcms_SRCS += testtlswithcms.cpp
+testtlswithcms_SRCS += certstatusfactory.cpp
+testtlswithcms_SRCS += certstatusmanager.cpp
+testtlswithcms_SRCS += certstatus.cpp
+testtlswithcms_SRCS += configcerts.cpp
+TESTS += testtlswithcms
+TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+
+TESTPROD_HOST += testtlswithcmsandstapling
+testtlswithcmsandstapling_SRCS += testtlswithcmsandstapling.cpp
+testtlswithcmsandstapling_SRCS += certstatusfactory.cpp
+testtlswithcmsandstapling_SRCS += certstatusmanager.cpp
+testtlswithcmsandstapling_SRCS += certstatus.cpp
+testtlswithcmsandstapling_SRCS += configcerts.cpp
+TESTS += testtlswithcmsandstapling
+TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
+
+TESTPROD_HOST += testtlstime
+testtlstime_SRCS += testtlstime.cpp
+TESTS += testtlstime
+
+TESTPROD_HOST += testtlsstatus
+testtlsstatus_SRCS += testtlsstatus.cpp
+testtlsstatus_SRCS += certstatusfactory.cpp
+testtlsstatus_SRCS += certstatusmanager.cpp
+testtlsstatus_SRCS += certstatus.cpp
+testtlsstatus_SRCS += configcerts.cpp
+TESTS += testtlsstatus
+endif # EVENT2_HAS_OPENSSL
 endif
 
 ifdef BASE_7_0
@@ -168,9 +214,6 @@ TESTFILES += ../image.json
 TESTFILES += ../iq.db
 TESTFILES += ../ntenum.db
 TESTFILES += ../const.db
-TESTFILES += ../batch.db
-TESTFILES += ../qgroup.cmd
-TESTFILES += ../qgroup.json
 TESTS += testqgroup
 
 PROD_SRCS_RTEMS += rtemsTestData.c
@@ -200,6 +243,7 @@ endif
 #===========================
 
 include $(TOP)/configure/RULES
+-include $(wildcard $(TOP)/cfg/RULES*)
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
@@ -207,16 +251,16 @@ ifdef BASE_3_15
 rtemsTestData.c : $(TESTFILES) $(TOOLS)/epicsMakeMemFs.pl
 	$(PERL) $(TOOLS)/epicsMakeMemFs.pl $@ epicsRtemsFSImage $(TESTFILES)
 
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
-testtls$(EXE): | ca.p12
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+testtls$(EXE): | cert_auth.p12
 
 # generate test certs only with EPICS_HOST_ARCH
 ifdef T_A
-ca.p12 :
+cert_auth.p12 :
 	$(RM) *.p12
 	../O.$(EPICS_HOST_ARCH)/gen_test_certs$(HOSTEXE) -O .
 ifeq ($(T_A),$(EPICS_HOST_ARCH))
-ca.p12 : gen_test_certs$(HOSTEXE)
+cert_auth.p12 : gen_test_certs$(HOSTEXE)
 endif # T_A==EPICS_HOST_ARCH
 endif # T_A
 endif # EVENT2_HAS_OPENSSL

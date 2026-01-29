@@ -8,15 +8,16 @@
 #define PVXS_SHAREDPV_H
 
 #include <functional>
+#include <list>
 #include <memory>
 #include <map>
+#include <string>
 
 #include <pvxs/version.h>
 #include "srvcommon.h"
 
 namespace pvxs {
 class Value;
-
 namespace server {
 
 struct ChannelControl;
@@ -35,14 +36,14 @@ struct Source;
  * The onPut() and onRPC() methods attach functors which will be called each time a Put or RPC
  * operation is executed by a client.
  */
-struct PVXS_API SharedPV
-{
+struct PVXS_API SharedPV {
     //! Create a new SharedPV with a Put handler which post() s any client provided Value.
     static SharedPV buildMailbox();
+
     //! Create a new SharedPV with a Put handler which rejects any client provided Value.
     static SharedPV buildReadonly();
 
-    ~SharedPV();
+    virtual ~SharedPV();
 
     inline explicit operator bool() const { return !!impl; }
 
@@ -79,7 +80,7 @@ struct PVXS_API SharedPV
     Value fetch() const;
 
     struct Impl;
-private:
+  private:
     std::shared_ptr<Impl> impl;
 };
 
@@ -107,6 +108,7 @@ struct PVXS_API StaticSource
     //! Remove a single name
     StaticSource& remove(const std::string& name);
 
+    typedef std::map<std::string, std::shared_ptr<SharedPV>> pv_list_t;
     typedef std::map<std::string, SharedPV> list_t;
     list_t list() const;
 

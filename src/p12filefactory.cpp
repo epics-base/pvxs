@@ -1,0 +1,327 @@
+/**
+ * Copyright - See the COPYRIGHT that is included with this distribution.
+ * pvxs is distributed subject to a Software License Agreement found
+ * in file LICENSE that is included with this distribution.
+ */
+
+#include <climits>
+#include <cstdio>
+#include <memory>
+
+#include <libgen.h>
+
+#ifdef __unix__
+#include <pwd.h>
+#endif
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <unordered_set>
+
+#include <unistd.h>
+
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/pkcs12.h>
+#include <openssl/ssl.h>
+#include <openssl/x509.h>
+
+#include <pvxs/config.h>
+#include <pvxs/log.h>
+
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#include "certfactory.h"
+#include "openssl.h"
+#include "osiFileName.h"
+#include "ownedptr.h"
+#include "p12filefactory.h"
+#include "security.h"
+#include "utilpvt.h"
+
+namespace pvxs {
+namespace certs {
+
+DEFINE_LOGGER(filelogger, "pvxs.p12");
+
+/**
+ * @brief Get a key pair from a P12 file
+ *
+ * @return a shared pointer to the KeyPair object
+ * @throw std::runtime_error if the file cannot be opened
+ * @throw ossl::SSLError if file cannot be parsed
+ */
+std::shared_ptr<KeyPair> P12FileFactory::getKeyFromFile() {
+    const file_ptr fp(fopen(filename_.c_str(), "rb"), false);
+    if (!fp) {
+        throw std::runtime_error(SB() << "Error getting private key from file: \"" << filename_ << "\": " << strerror(errno));
+    }
+
+    const ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr), false);
+    if (!p12) {
+        throw std::runtime_error(SB() << "Error opening private key file as a PKCS#12 object: " << filename_);
+    }
+
+    ossl_ptr<EVP_PKEY> pkey;
+    if (!PKCS12_parse(p12.get(), password_.c_str(), pkey.acquire(), nullptr, nullptr)) {
+        throw ossl::SSLError(SB() << "Error parsing private key file: " << filename_);
+    }
+
+    return std::make_shared<KeyPair>(std::move(pkey));
+}
+
+/**
+ * @brief Get the certificate data from a P12 file
+ *
+ * The P12 file is parsed to extract the certificate and chain.
+ * If it contains a private key too then it is read and returned in the CertData object.
+ *
+ * @return a CertData object
+ * @throw std::runtime_error if the file cannot be opened or parsed
+ */
+CertData P12FileFactory::getCertDataFromFile() {
+    ossl_ptr<X509> cert;
+    ossl_ptr<STACK_OF(X509)> chain(sk_X509_new_null(), false);
+    std::shared_ptr<KeyPair> key_pair;
+    ossl_ptr<EVP_PKEY> pkey;
+
+    // Get cert from configured file
+    const file_ptr fp(fopen(filename_.c_str(), "rb"), false);
+    if (!fp) {
+        throw std::runtime_error(SB() << "Error opening keychain file for reading binary contents: \"" << filename_ << "\"");
+    }
+
+    const ossl_ptr<PKCS12> p12(d2i_PKCS12_fp(fp.get(), nullptr), false);
+    if (!p12) {
+        throw std::runtime_error(SB() << "Error opening keychain file as a PKCS#12 object: " << filename_);
+    }
+
+    // Try to get private key and certificates
+    if (!PKCS12_parse(p12.get(), password_.c_str(), pkey.acquire(), cert.acquire(), chain.acquire())) {
+        throw std::runtime_error(SB() << "Error parsing keychain file: " << filename_);
+    }
+
+    if (!!cert ^ !!pkey) {
+        log_warn_printf(filelogger, "Inconsistency between certificate and key: %s\n", filename_.c_str());
+        cert.reset();
+        pkey.reset();
+    }
+
+    if (!chain) {
+        chain.reset(sk_X509_new_null());
+    }
+    // If no certificate authority certificate chain was provided, then check if the entity cert is self-signed.
+    // If it is, add it as a single-entry chain.
+    if (!chain || sk_X509_num(chain.get()) == 0) {
+        if (cert && X509_check_issued(cert.get(), cert.get()) == X509_V_OK) {
+            if (!sk_X509_push(chain.get(), X509_dup(cert.get()))) {
+                throw std::runtime_error("Error adding self-signed certificate to chain");
+            }
+        }
+    }
+
+    ossl_shared_ptr<STACK_OF(X509)> shared_chain(std::move(chain));
+
+    return {cert, shared_chain, (pkey ? std::make_shared<KeyPair>(std::move(pkey)) : nullptr)};
+}
+
+/**
+ * @brief Convert a PEM string to a P12 object
+ *
+ * @param password the optional password for the file. If blank then the password is not used.
+ * @param keys_ptr the private key to include in the P12 file.  Note that this is required if there are any certificates in the PEM string.
+ * @param pem_string the PEM string to convert.  May contain certificates, and certificate chains.  We will
+ *                   read the first certificate and use is as the subject of the P12 file.  The remaining certificates
+ *                   will be added to the chain of the P12 file.  As a convention the order of the certificates in the
+ *                   PEM string is the entity certificate first, intermediate certificates next and then finally the certificate authority certificate.
+ * @return an owned pointer to the PKCS12 object
+ * @throw std::runtime_error if the PEM string cannot be parsed
+ */
+ossl_ptr<PKCS12> P12FileFactory::pemStringToP12(const std::string &password, EVP_PKEY *keys_ptr, const std::string &pem_string) {
+    // Read PEM data into a new BIO
+    const ossl_ptr<BIO> bio(BIO_new_mem_buf(pem_string.c_str(), -1), false);
+    if (!bio) {
+        throw std::runtime_error("Unable to allocate BIO");
+    }
+
+    // Get first Cert as Certificate
+    const ossl_ptr<X509> cert(PEM_read_bio_X509_AUX(bio.get(), nullptr, nullptr, (void *)password.c_str()), false);
+    if (!cert) {
+        throw std::runtime_error("Unable to read certificate");
+    }
+
+    // Get the chain
+    const ossl_ptr<STACK_OF(X509)> certs(sk_X509_new_null());
+    if (!certs) {
+        throw std::runtime_error("Unable to allocate certificate stack");
+    }
+
+    // Get whole of certificate chain and push to certs
+    while (X509 *cert_auth_ptr = PEM_read_bio_X509(bio.get(), nullptr, nullptr, (void *)password.c_str())) {
+        auto cert_auth = ossl_ptr<X509>(cert_auth_ptr);
+        if (!sk_X509_push(certs.get(), cert_auth.release())) {
+            throw std::runtime_error("Unable to add certificate stack");
+        }
+    }
+    if ( !keys_ptr && sk_X509_num(certs.get()) == 0) {
+        const auto trust_anchor_ptr = X509_dup(cert.get());
+        if (!sk_X509_push(certs.get(), trust_anchor_ptr)) {
+            throw std::runtime_error("Unable to add trust anchor stack");
+        }
+        return toP12(password, nullptr, nullptr, certs.get());
+    }
+
+    return toP12(password, keys_ptr, cert.get(), certs.get());
+}
+
+/**
+ * @brief Convert an entity certificate and the certificate chain to a P12 object
+ *
+ * @param password the optional password for the p12 object. If blank then the password is not used.
+ * @param keys_ptr the private key to include in the p12 object.  Note that this is required if there are any certificates in the PEM string.
+ * @param cert_ptr the entity (subject) certificate of the p12 object
+ * @param cert_chain_ptr the chain of certificates to include in the p12 object
+ * @return a shared pointer to the PKCS12 object
+ * @throw std::runtime_error if the certificate and key cannot be found or an error occurs
+ */
+ossl_ptr<PKCS12> P12FileFactory::toP12(const std::string &password, EVP_PKEY *keys_ptr, X509 *cert_ptr, STACK_OF(X509) * cert_chain_ptr) {
+    // Get the subject name of the certificate
+    if (!cert_ptr && !keys_ptr) {
+        ossl_ptr<PKCS12> p12{
+            PKCS12_create_ex2(password.c_str(), "", nullptr, nullptr,
+                cert_chain_ptr, 0, 0, 0, 0, 0,
+                nullptr, nullptr, &jdkTrust, nullptr)};
+        return p12;
+    };
+
+    ossl_ptr<PKCS12> p12;
+    if (!cert_ptr) {
+        p12.reset(PKCS12_create_ex2(password.c_str(), nullptr, keys_ptr, nullptr, nullptr, 0, 0, 0, 0, 0, nullptr, nullptr, nullptr, nullptr));
+    } else {
+        const auto subject_name(X509_get_subject_name(cert_ptr));
+        const auto subject_string(X509_NAME_oneline(subject_name, nullptr, 0));
+        const ossl_ptr<char> subject(subject_string, false);
+        if (!subject) {
+            throw std::runtime_error("Unable to get the subject of the certificate");
+        }
+
+        // Create the p12 structure
+        if (sk_X509_num(cert_chain_ptr) < 1) {
+            // Use null cert and construct chain from cert
+            chainFromRootCertPtr(cert_chain_ptr, cert_ptr);
+            ERR_clear_error();
+            p12.reset(
+                PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, nullptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr, nullptr, &jdkTrust, nullptr));
+        } else {
+            p12.reset(
+                PKCS12_create_ex2(password.c_str(), subject.get(), keys_ptr, cert_ptr, cert_chain_ptr, 0, 0, 0, 0, 0, nullptr, nullptr, &jdkTrust, nullptr));
+        }
+    }
+
+    if (!p12) {
+        throw std::runtime_error(SB() << "Unable to create PKCS12: " << CertFactory::getError());
+    }
+
+    return p12;
+}
+
+/**
+ * @brief Write the P12 object to a file
+ *
+ * If a pem string has been specified then it is converted to a p12 object.
+ * If a cert has been specified then it is converted to a p12 object.
+ * If the only thing specified is a key pair then it is converted to a p12 object.
+ *
+ * If the file already exists then it will be backed up.
+ *
+ * @throw std::runtime_error if the file cannot be written
+ */
+void P12FileFactory::writePKCS12File() {
+    // If a pem string has been specified then convert to p12
+    ossl_ptr<PKCS12> p12;
+    if (!pem_string_.empty()) {
+        p12 = pemStringToP12(password_, (!key_pair_) ? nullptr : key_pair_->pkey.get(), pem_string_);
+    } else if (cert_ptr_) {
+        // If a cert has been specified then convert to p12
+        p12 = toP12(password_, key_pair_->pkey.get(), cert_ptr_, certs_ptr_);
+    } else if (key_pair_->pkey.get()) {
+        // If private key only
+        p12 = toP12(password_, key_pair_->pkey.get(), nullptr, nullptr);
+    }
+
+    // ReSharper disable once CppDFALocalValueEscapesFunction
+    p12_ptr_ = p12.get();
+
+    if (!p12_ptr_) throw std::runtime_error("Insufficient configuration to create certificate");
+
+    ensureDirectoryExists(filename_);
+
+    // Make a backup of the existing P12 file if it exists
+    backupFileIfExists(filename_);
+
+    // Open file for writing.
+    const file_ptr file(fopen(filename_.c_str(), "wb"), false);
+    if (!file) {
+        throw std::runtime_error(SB() << "Error opening P12 file for writing: " << filename_);
+    }
+
+    // Write PKCS12 object to file
+    if (i2d_PKCS12_fp(file.get(), p12_ptr_) != 1) throw std::runtime_error(SB() << "Error writing keychain data to file: " << filename_);
+
+    // flush the output to the file
+    fflush(file.get());
+
+    p12_ptr_ = nullptr;
+
+    chmod(filename_.c_str(),
+          S_IRUSR | S_IWUSR);  // Protect P12 file
+}
+
+#ifdef NID_oracle_jdk_trustedkeyusage
+    /**
+     * @brief Add the JDK trusted key usage attribute to the p12 object
+     *
+     * This is done by using the callback mechanism that is triggered by PKCS12_create_ex2 for every bag.
+     * We can then ignore all bags except X509 certificates with an associated key.
+     *
+     * This is conditionally compiled in for platforms that support it.
+     *
+     * @param bag the p12 safe bag to add the attribute to
+     * @return 1 if the attribute was added, 0 if it was not added
+     */
+    int P12FileFactory::jdkTrust(PKCS12_SAFEBAG *bag, void *) noexcept {
+        try {
+            // Only add trustedkeyusage when bag is an X509 cert. with an
+            // associated key (when localKeyID is present) which does not
+            // already have trustedkeyusage.
+            if (PKCS12_SAFEBAG_get_nid(bag) != NID_certBag || PKCS12_SAFEBAG_get_bag_nid(bag) != NID_x509Certificate ||
+                !!PKCS12_SAFEBAG_get0_attr(bag, NID_localKeyID) || !!PKCS12_SAFEBAG_get0_attr(bag, NID_oracle_jdk_trustedkeyusage))
+                return 1;
+
+            const auto curattrs(PKCS12_SAFEBAG_get0_attrs(bag));
+            pvxs::ossl_ptr<STACK_OF(X509_ATTRIBUTE)> newattrs(sk_X509_ATTRIBUTE_deep_copy(curattrs, &X509_ATTRIBUTE_dup, &X509_ATTRIBUTE_free));
+
+            const ossl_ptr<ASN1_OBJECT> trust(OBJ_txt2obj("anyExtendedKeyUsage", 0));
+            ossl_ptr<X509_ATTRIBUTE> attr(X509_ATTRIBUTE_create(NID_oracle_jdk_trustedkeyusage, V_ASN1_OBJECT, trust.get()));
+
+            if (sk_X509_ATTRIBUTE_push(newattrs.get(), attr.get()) != 1) {
+                log_err_printf(filelogger, "Unable to add JDK trust attribute%s\n", "");
+                return 1;
+            }
+            attr.release();
+
+            PKCS12_SAFEBAG_set0_attrs(bag, newattrs.get());
+            newattrs.release();
+
+            return 1;
+        } catch (std::exception &e) {
+            log_err_printf(filelogger, "Unable to add JDK trust attribute: %s\n", e.what());
+            return 0;
+        }
+    }
+#endif
+
+}  // namespace certs
+}  // namespace pvxs

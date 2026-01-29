@@ -7,6 +7,7 @@
 #include <cassert>
 
 #include <deque>
+#include <iomanip>
 
 #include <epicsMutex.h>
 #include <epicsGuard.h>
@@ -17,8 +18,9 @@
 #include "pvrequest.h"
 
 namespace pvxs { namespace impl {
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
+DEFINE_LOGGER(status_cms, "pvxs.st.cms");
 
 namespace {
 
@@ -59,8 +61,6 @@ struct MonitorOp final : public ServerOp
     // is doReply() scheduled to run
     bool scheduled=false;
     bool pipeline=false; // const after setup
-    // set until first update queued
-    bool first=true;
     // finish() called
     bool finished=false;
     size_t window=0u, limit=4u;
@@ -83,16 +83,14 @@ struct MonitorOp final : public ServerOp
         {
             // based on operation state, yes
             server->acceptor_loop.dispatch([op](){
-                auto ch(op->chan.lock());
+                const auto ch(op->chan.lock());
                 if(!ch)
                     return;
-                auto conn(ch->conn.lock());
+                const auto conn(ch->conn.lock());
                 if(!conn || conn->state==ConnBase::Disconnected)
                     return;
 
-                auto bev(conn->connection());
-
-                if(bev && evbuffer_get_length(bufferevent_get_output(bev)) < conn->tcp_tx_limit) {
+                if(conn->connection() && (bufferevent_get_enabled(conn->connection())&EV_READ)) {
                     doReply(op);
                 } else {
                     // connection TX queue is too full
@@ -132,11 +130,7 @@ struct MonitorOp final : public ServerOp
         uint8_t subcmd = 0u;
         if(self->state==Creating) {
             subcmd = 0x08;
-            if(self->type) {
-                self->state = Idle;
-            } else {
-                self->cleanup();
-            }
+            self->state = self->type ? Idle : Dead;
 
         } else if(self->state==Executing) {
             if(self->queue.empty() || (self->pipeline && !self->window && !self->finished)) {
@@ -146,7 +140,7 @@ struct MonitorOp final : public ServerOp
 
             } else if(!self->queue.front()) {
                 subcmd = 0x10;
-                self->cleanup();
+                self->state = Dead;
                 log_debug_printf(connio, "Client %s IOID %u finishes\n",
                                  conn->peerName.c_str(), unsigned(self->ioid));
             }
@@ -170,6 +164,21 @@ struct MonitorOp final : public ServerOp
             } else if(!self->queue.empty()) {
                 auto& ent = self->queue.front();
                 if(ent) {
+                    // Log certificate status subscriptions if requested
+                    if(status_cms.test(Level::Debug)) {
+                        std::string cert_id, state;
+                        try {
+                            state = ent["state"].as<std::string>();
+                            auto serial_number = ent["serial"].as<uint64_t>();
+                            std::ostringstream oss;
+                            oss << std::setw(20)
+                                << std::setfill('0')
+                                << serial_number;
+                            cert_id = "CERT:STATUS:xxxxxxxx:" + oss.str();
+                        } catch (...) {}
+                        if ( !state.empty() && !cert_id.empty())
+                            log_debug_printf(status_cms, "%24.24s = %-12s : %-41s: %s\n", "Value::state", state.c_str(), "MonitorOp::doReply()", cert_id.c_str());
+                    }
                     to_wire_valid(R, ent, &self->pvMask);
                     // TODO: placeholder for overrun mask
                     to_wire(R, uint8_t(0u));
@@ -185,6 +194,7 @@ struct MonitorOp final : public ServerOp
         ch->statTx += conn->enqueueTxBody(pva_app_msg_t::CMD_MONITOR);
 
         if(self->state == ServerOp::Dead) {
+            self->cleanup();
             return;
         }
 
@@ -257,11 +267,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
             throw std::logic_error("Type change not allowed in post().  Recommend pvxs::Value::cloneEmpty()");
 
         // pvMask is const at this point, so no need to lock
-        bool real = mon->first; // always post through first update
-        if(real)
-            mon->first = false;
-        else
-            real = testmask(val, mon->pvMask); // consider mask for subsequent updates
+        bool real = testmask(val, mon->pvMask);
 
         Guard G(mon->lock);
         if(mon->finished)
@@ -326,7 +332,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
         if(!serv)
             return;
         serv->acceptor_loop.call([this, low, high](){
-            if(auto oper = op.lock()) {
+            if(const auto oper = op.lock()) {
                 Guard G(oper->lock);
                 oper->low = std::min(low, oper->ackAt-1u);
                 oper->high = std::min(high, oper->ackAt-1u);
@@ -337,38 +343,33 @@ struct ServerMonitorControl : public server::MonitorControlOp
     }
     virtual void onStart(std::function<void (bool)> &&fn) override final
     {
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
+            if(const auto oper = op.lock())
                 oper->onStart = std::move(fn);
         });
     }
     virtual void onHighMark(std::function<void ()> &&fn) override final
     {
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
+            if(const auto oper = op.lock())
                 oper->onHighMark = std::move(fn);
         });
     }
     virtual void onLowMark(std::function<void ()> &&fn) override final
     {
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
+            if(const auto oper = op.lock())
                 oper->onLowMark = std::move(fn);
         });
-    }
-
-    virtual void logRemote(Level lvl, const std::string& msg) override final
-    {
-        doLogRemote(this, lvl, msg);
     }
 
     const std::weak_ptr<server::Server::Pvt> server;
@@ -402,11 +403,11 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
 
         std::unique_ptr<server::MonitorControlOp> ret;
 
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return ret;
         serv->acceptor_loop.call([this, &type, &ret, &mask](){
-            if(auto oper = op.lock()) {
+            if(const auto oper = op.lock()) {
                 if(oper->state!=ServerOp::Creating)
                     return;
                 oper->type = type;
@@ -424,12 +425,12 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
     {
         if(msg.empty())
             throw std::invalid_argument("Must provide error message");
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         auto op(this->op);
         serv->acceptor_loop.dispatch([op, msg]() mutable {
-            if(auto oper = op.lock()) {
+            if(const auto oper = op.lock()) {
                 if(oper->state==ServerOp::Creating) {
                     oper->msg = std::move(msg);
                     MonitorOp::doReply(oper);
@@ -439,18 +440,13 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
     }
     virtual void onClose(std::function<void (const std::string &)> &&fn) override final
     {
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
+            if(const auto oper = op.lock())
                 oper->onClose = std::move(fn);
         });
-    }
-
-    virtual void logRemote(Level lvl, const std::string& msg) override final
-    {
-        doLogRemote(this, lvl, msg);
     }
 
     const std::weak_ptr<server::Server::Pvt> server;
@@ -465,7 +461,7 @@ ServerMonitorControl::ServerMonitorControl(ServerMonitorSetup* setup,
                                            const std::weak_ptr<server::Server::Pvt>& server,
                                            const std::string& name,
                                            const std::weak_ptr<MonitorOp>& op)
-    :server::MonitorControlOp(name, setup->credentials(), Info)
+    :MonitorControlOp(name, setup->credentials(), Info)
     ,server(server)
     ,op(op)
 {}
@@ -474,7 +470,7 @@ ServerMonitorControl::ServerMonitorControl(ServerMonitorSetup* setup,
 
 void ServerConn::handle_MONITOR()
 {
-    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
+    const auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid = -1, ioid = -1;
@@ -512,73 +508,50 @@ void ServerConn::handle_MONITOR()
         chan->statRx += rxlen;
 
         auto op(std::make_shared<MonitorOp>(chan, ioid));
+        op->window = nack;
+        (void)pvRequest["record._options.pipeline"].as(op->pipeline);
+
+        pvRequest["record._options.queueSize"].as<uint32_t>([&op](size_t qSize){
+            op->limit = qSize;
+        });
+
+        if(op->limit < op->window)
+            op->limit = op->window;
+
+        if(!op->limit)
+            op->limit = 1u;
+
+        const auto ackAny = pvRequest["record._options.ackAny"];
+        if(ackAny.type()==TypeCode::String) {
+            const auto sval = ackAny.as<std::string>();
+            if(sval.size()>1 && sval.back()=='%') {
+                try {
+                    const auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
+                    op->ackAt = std::max(0.0, std::min(percent, 100.0)) * op->limit;
+                }catch(std::exception&){
+                    log_warn_printf(connio, "Error parsing as percent ackAny: \"%s\"\n", sval.c_str());
+                }
+            }
+
+        }
+
+        if(op->ackAt==0u){
+            uint32_t count=0u;
+
+            if(ackAny.as(count)) {
+                op->ackAt = count;
+            }
+        }
+
+        if(op->ackAt==0u){
+            op->ackAt = op->limit/2u;
+        }
+
+        op->ackAt = std::max<size_t>(1u, std::min(op->ackAt, op->limit));
+
         std::unique_ptr<ServerMonitorSetup> ctrl(new ServerMonitorSetup(this, iface->server->internal_self, chan->name, pvRequest, op));
 
         op->state = ServerOp::Creating;
-        op->window = nack;
-
-        // process pvRequest
-
-        if(auto pipeline = pvRequest["record._options.pipeline"]) {
-            bool v;
-            if(pipeline.as(v)) {
-                op->pipeline = v;
-
-            } else {
-                logRemote(ioid, Level::Warn, SB()<<"Unable to parse "<<pvRequest.nameOf(pipeline)<<" : "<<pipeline);
-            }
-        }
-
-        if(auto queueSize = pvRequest["record._options.queueSize"]) {
-            uint32_t qSize = op->limit;
-            if(queueSize.as(qSize) && qSize>=2) {
-                op->limit = qSize;
-            } else if(op->pipeline) {
-                // pipeline sub-protocol requires agreement on queueSize.
-                ctrl->error(SB()<<"can not pipeline invalid queueSize : "<<queueSize);
-                return;
-            } else {
-                logRemote(ioid, Level::Warn, SB()<<"Unable to use "<<pvRequest.nameOf(queueSize)<<" : "<<queueSize);
-            }
-        }
-
-        if(op->pipeline) {
-            if(!nack) {
-                // before 1.4.0 initial nack=0 clamped the window size to zero!
-                log_err_printf(connsetup,
-                               "Client %s \"%s\" pipeline monitor w/o initial nack incompatible\n",
-                               peerName.c_str(), chan->name.c_str());
-            }
-
-            if(auto ackAny = pvRequest["record._options.ackAny"]) {
-                uint32_t ival;
-                auto sval = ackAny.as<std::string>();
-                if(ackAny.as(ival)) { // plain integer
-                    op->ackAt = ival;
-
-                } else if(ackAny.as(sval)) { // maybe given as a percentage
-                    if(sval.size()>1 && sval.back()=='%') {
-                        try {
-                            auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
-                            op->ackAt = std::max(0.0, std::min(percent, 100.0)) * op->limit;
-                        }catch(std::exception& e){
-                            logRemote(ioid, Level::Crit,
-                                      SB()<<"Unable to parse% "<<pvRequest.nameOf(ackAny)<<" : "<<sval<<" : "<<e.what());
-                        }
-                    }
-                } else {
-                    logRemote(ioid, Level::Crit,
-                              SB()<<"Unable to parse "<<pvRequest.nameOf(ackAny)<<" : "<<ackAny);
-                }
-
-            }
-
-            if(op->ackAt==0u){
-                op->ackAt = op->limit/2u;
-            }
-
-            op->ackAt = std::max<size_t>(1u, std::min(op->ackAt, op->limit));
-        } // pipeline
 
         opByIOID[ioid] = op;
         chan->opByIOID[ioid] = op;
@@ -691,10 +664,10 @@ void ServerConn::handle_MONITOR()
             // destroy
 
             chan->opByIOID.erase(ioid);
-            auto it = opByIOID.find(ioid);
-            if(it!=opByIOID.end()) {
-                auto self(it->second);
-                opByIOID.erase(it);
+            const auto iter = opByIOID.find(ioid);
+            if(iter!=opByIOID.end()) {
+                auto self(iter->second);
+                opByIOID.erase(iter);
 
                 iface->server->acceptor_loop.dispatch([self](){
                     self->cleanup();

@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
     // (throws an exception on error, including timeout)
     Value reply = ctxt.get("some:pv:name").exec()->wait(5.0);
 
-    // Reply is printed to stdout.
+            // Reply is printed to stdout.
     std::cout<<reply;
 
     return 0;

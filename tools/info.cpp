@@ -14,6 +14,7 @@
 
 #include <pvxs/client.h>
 #include <pvxs/log.h>
+
 #include "utilpvt.h"
 #include "evhelper.h"
 
@@ -67,16 +68,21 @@ int main(int argc, char *argv[])
                     break;
                 default:
                     usage(argv[0]);
-                    std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
+                    std::cerr<<"\nUnknown argument: -"<<char(optopt)<<std::endl;
                     return 1;
                 }
             }
         }
 
-        auto ctxt(client::Context::fromEnv());
+        // Get the timeout from the environment and build the context
+        auto conf = client::Config::fromEnv();
+#ifdef PVXS_ENABLE_OPENSSL
+        conf.request_timeout_specified = timeout;
+#endif
+        auto ctxt = conf.build();
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
+            std::cout<<"Effective config\n"<<conf;
 
         std::list<std::shared_ptr<client::Operation>> ops;
         std::list<std::shared_ptr<client::Connect>> conns;

@@ -647,7 +647,7 @@ long pvaPutValueX(DBLINK *plink, short dbrType,
         if(!self->defer) self->lchan->put();
 
         log_debug_printf(_logger, "%s: %s %s %s\n", __func__, plink->precord->name, self->channelName.c_str(), self->lchan->root.valid() ? "valid": "not valid");
-        
+
         return 0;
     }CATCH()
     return -1;

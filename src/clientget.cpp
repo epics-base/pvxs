@@ -13,8 +13,8 @@
 namespace pvxs {
 namespace client {
 
-DEFINE_LOGGER(setup, "pvxs.client.setup");
-DEFINE_LOGGER(io, "pvxs.client.io");
+DEFINE_LOGGER(setup, "pvxs.cli.init");
+DEFINE_LOGGER(io, "pvxs.cli.io");
 
 namespace detail {
 
@@ -160,9 +160,10 @@ struct GPROp : public OperationBase
             if(done)
                 done(std::move(result));
         } catch(std::exception& e) {
-            if(chan && chan->conn)
-                log_err_printf(io, "Server %s channel %s error in result cb : %s\n",
-                               chan->conn->peerName.c_str(), chan->name.c_str(), e.what());
+            if(chan && chan->conn) {
+                log_err_printf(io, "Result Callback Error: Server %s channel %s\n", chan->conn->peerName.c_str(), chan->name.c_str());
+            }
+            log_err_printf(io, "Result Callback Error: %s\n", e.what());
 
             // keep first error (eg. from put builder)
             if(!result.error())
@@ -315,7 +316,7 @@ struct GPROp : public OperationBase
                 // nothing more needed
 
             } else {
-                throw std::logic_error("Invalid state in GPR sendReply()");
+                throw std::logic_error(SB()<<"Invalid state "<<state<<" for GPR sendReply() ");
             }
         }
         chan->statTx += chan->conn->enqueueTxBody(state==GPROp::Done ? CMD_DESTROY_REQUEST :  (pva_app_msg_t)op);
@@ -603,9 +604,8 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
                        }, std::move(temp)));
     });
 
-    context->tcp_loop.dispatch([internal, context, name, server]() {
+    context->tcp_loop.dispatch([context, internal, name, server]() {
         // on worker
-
         try {
             internal->chan = Channel::build(context, name, server);
 
@@ -615,6 +615,7 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
             internal->result = Result(std::current_exception());
             internal->notify();
         }
+        // on worker
     });
 
     return external;
@@ -626,7 +627,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    auto context(ctx->impl->shared_from_this());
+    const auto context(ctx->impl->shared_from_this());
 
     auto op(std::make_shared<GPROp>(Operation::Get, context->tcp_loop, _name));
     op->setDone(std::move(_result), std::move(_onInit));
@@ -641,7 +642,7 @@ std::shared_ptr<Operation> PutBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    auto context(ctx->impl->shared_from_this());
+    const auto context(ctx->impl->shared_from_this());
 
     auto op(std::make_shared<GPROp>(Operation::Put, context->tcp_loop, _name));
     op->setDone(std::move(_result), std::move(_onInit));
@@ -673,7 +674,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
     if(!_autoexec)
         throw std::logic_error("autoExec(false) not possible for rpc()");
 
-    auto context(ctx->impl->shared_from_this());
+    const auto context(ctx->impl->shared_from_this());
 
     auto op(std::make_shared<GPROp>(Operation::RPC, context->tcp_loop, _name));
     op->setDone(std::move(_result), nullptr);

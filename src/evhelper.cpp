@@ -103,7 +103,7 @@ struct ThreadEvent
         return evt;
     }
 
-    inline epicsEvent* operator->() { return get(); }
+    epicsEvent* operator->() { return get(); }
 };
 
 namespace {
@@ -397,6 +397,17 @@ evsocket::evsocket(int af, evutil_socket_t sock, bool blocking)
 
     evutil_make_socket_closeonexec(sock);
 
+#ifdef SO_NOSIGPIPE
+    // probably OSX only
+    {
+        int val = 1;
+        if(setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, (char*)&val, sizeof(val))) {
+            log_warn_printf(logerr, "Unable to set SO_NOSIGPIPE (err=%d).\n",
+                            evutil_socket_geterror(sock));
+        }
+    }
+#endif
+
     if(!blocking && evutil_make_socket_nonblocking(sock)) {
         evutil_closesocket(sock);
         throw std::runtime_error("Unable to make non-blocking socket");
@@ -451,6 +462,11 @@ evsocket::~evsocket()
 {
     if(sock!=evutil_socket_t(-1))
         evutil_closesocket(sock);
+}
+
+void evsocket::release()
+{
+    sock = evutil_socket_t(-1);
 }
 
 SockAddr evsocket::sockname() const
@@ -1091,17 +1107,17 @@ Timer Timer::Pvt::buildOneShot(double delay, const evbase& base, std::function<v
     if(!cb)
         throw std::invalid_argument("NULL cb");
 
-    auto internal(std::make_shared<Timer::Pvt>(base, std::move(cb)));
+    auto internal(std::make_shared<Pvt>(base, std::move(cb)));
 
     Timer ret;
-    ret.pvt = decltype (internal)(internal.get(), [internal](Timer::Pvt*) mutable {
+    ret.pvt = decltype (internal)(internal.get(), [internal](Pvt*) mutable {
         // from user thread
         auto temp(std::move(internal));
         auto loop(temp->base);
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
 
-        loop.tryCall(std::bind([](std::shared_ptr<Timer::Pvt>& internal) {
+        loop.tryCall(std::bind([](std::shared_ptr<Pvt>& internal) {
                          // on worker
                          // ordering of dispatch()/call() ensures creation before destruction
                          internal->cancel();

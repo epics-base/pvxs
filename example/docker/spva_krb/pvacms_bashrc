@@ -1,0 +1,3 @@
+export KRB5_KTNAME=/home/pvacms/.config/krb5/pvacms.keytab
+export KRB5_CLIENT_KTNAME=/home/pvacms/.config/krb5/pvacms.keytab
+export EPICS_AUTH_KRB_REALM=EPICS.ORG

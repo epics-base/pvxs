@@ -18,6 +18,7 @@
 #include <pvxs/client.h>
 #include <pvxs/nt.h>
 #include <pvxs/log.h>
+
 #include "utilpvt.h"
 #include "evhelper.h"
 
@@ -100,7 +101,7 @@ int main(int argc, char *argv[])
                     break;
                 default:
                     usage(argv[0]);
-                    std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
+                    std::cerr<<"\nUnknown argument: -"<<char(optopt)<<std::endl;
                     return 1;
                 }
             }
@@ -112,8 +113,12 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        auto ctxt(client::Context::fromEnv());
-        auto conf = ctxt.config();
+        // Get the timeout from the environment and build the context
+        auto conf = client::Config::fromEnv();
+#ifdef PVXS_ENABLE_OPENSSL
+        conf.request_timeout_specified = timeout;
+#endif
+        auto ctxt = conf.build();
 
         epicsEvent done;
         SigInt H([&done]() {

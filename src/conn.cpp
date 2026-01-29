@@ -11,8 +11,15 @@
 #include <pvxs/log.h>
 #include "conn.h"
 
+#ifdef PVXS_ENABLE_OPENSSL
+#include <openssl/err.h>
+#include "openssl.h"
+#endif
+
 DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
+DEFINE_LOGGER(status_cli, "pvxs.st.cli");
+DEFINE_LOGGER(status_svr, "pvxs.st.svr");
 
 namespace pvxs {
 namespace impl {
@@ -26,9 +33,10 @@ namespace impl {
 static
 constexpr size_t tcp_readahead_mult = 2u;
 
-ConnBase::ConnBase(bool isClient, bool sendBE, evbufferevent&& bev, const SockAddr& peerAddr)
+ConnBase::ConnBase(bool isClient, bool isTLS, bool sendBE, evbufferevent&& bev, const SockAddr& peerAddr)
     :peerAddr(peerAddr)
     ,peerName(peerAddr.tostring())
+    ,isTLS(isTLS)
     ,isClient(isClient)
     ,sendBE(sendBE)
     ,peerBE(true) // arbitrary choice, default should be overwritten before use
@@ -39,6 +47,7 @@ ConnBase::ConnBase(bool isClient, bool sendBE, evbufferevent&& bev, const SockAd
     ,txBody(__FILE__, __LINE__, evbuffer_new())
     ,state(Holdoff)
 {
+    log_debug_printf(isClient ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %s\n", "ConnBase::state", "Holdoff", "ConnBase::ConnBase()", peerName.c_str());
     if(bev) { // true for server connection.  client will call connect() shortly
         connect(std::move(bev));
     }
@@ -51,12 +60,19 @@ const char* ConnBase::peerLabel() const
     return isClient ? "Server" : "Client";
 }
 
-void ConnBase::connect(evbufferevent&& bev)
+#ifdef PVXS_ENABLE_OPENSSL
+bool ConnBase::isPeerStatusGood() const {
+    return peer_status && peer_status->status.getEffectiveStatusCategory() == certs::GOOD_STATUS;
+}
+#endif
+
+void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
 {
     if(!bev)
         throw BAD_ALLOC();
     assert(!this->bev && state==Holdoff);
 
+    log_debug_printf(connsetup, "ConnBase::connect(): Peer = %s\n", peerLabel());
     readahead = evsocket::get_buffer_size(bufferevent_getfd(bev.get()), false);
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02010000
@@ -72,6 +88,7 @@ void ConnBase::connect(evbufferevent&& bev)
 #endif
 
     state = isClient ? Connecting : Connected;
+    log_debug_printf(isClient ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %s\n", "ConnBase::state", isClient ? "Connecting" : "Connected", "ConnBase::connect()", peerName.c_str());
 
     this->bev = std::move(bev);
 
@@ -81,8 +98,10 @@ void ConnBase::connect(evbufferevent&& bev)
 
 void ConnBase::disconnect()
 {
+    log_debug_printf(connsetup, "ConnBase::disconnect(): disconnecting a %s\n", peerLabel());
     bev.reset();
     state = Disconnected;
+    log_debug_printf(isClient ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %s\n", "ConnBase::state", "Disconnected", "ConnBase::disconnect()", peerName.c_str());
 }
 
 size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
@@ -99,48 +118,81 @@ size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
     return 8u + blen;
 }
 
-#define CASE(Op) void ConnBase::handle_##Op() {}
-    CASE(ECHO);
-    CASE(CONNECTION_VALIDATION);
-    CASE(CONNECTION_VALIDATED);
-    CASE(SEARCH);
-    CASE(SEARCH_RESPONSE);
-    CASE(AUTHNZ);
+void ConnBase::handle_ECHO() {};
+void ConnBase::handle_SEARCH() {};
+void ConnBase::handle_SEARCH_RESPONSE() {};
 
-    CASE(CREATE_CHANNEL);
-    CASE(DESTROY_CHANNEL);
+void ConnBase::handle_CONNECTION_VALIDATION() {};
+void ConnBase::handle_CONNECTION_VALIDATED() {};
+void ConnBase::handle_AUTHNZ() {};
 
-    CASE(GET);
-    CASE(PUT);
-    CASE(PUT_GET);
-    CASE(MONITOR);
-    CASE(RPC);
-    CASE(CANCEL_REQUEST);
-    CASE(DESTROY_REQUEST);
-    CASE(GET_FIELD);
+void ConnBase::handle_CREATE_CHANNEL() {};
+void ConnBase::handle_DESTROY_CHANNEL() {};
 
-    CASE(MESSAGE);
-#undef CASE
+void ConnBase::handle_GET() {};
+void ConnBase::handle_PUT() {};
+void ConnBase::handle_PUT_GET() {};
+void ConnBase::handle_MONITOR() {};
+void ConnBase::handle_RPC() {};
+void ConnBase::handle_GET_FIELD() {};
 
-void ConnBase::bevEvent(short events)
-{
-    if(events&(BEV_EVENT_EOF|BEV_EVENT_ERROR|BEV_EVENT_TIMEOUT)) {
-        if(events&BEV_EVENT_ERROR) {
-            int err = EVUTIL_SOCKET_ERROR();
-            const char *msg = evutil_socket_error_to_string(err);
-            log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
+void ConnBase::handle_CANCEL_REQUEST() {};
+void ConnBase::handle_DESTROY_REQUEST() {};
+
+void ConnBase::handle_MESSAGE() {};
+
+void ConnBase::bevEvent(const short events) {
+    const int err = EVUTIL_SOCKET_ERROR(); // Read errors early before potential clobbering
+#ifdef PVXS_ENABLE_OPENSSL
+    if (isTLS && bev) {
+        if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
+            while (const auto err = ERR_get_error()) {
+                const auto error_reason = ERR_reason_error_string(err);
+                if (error_reason) log_debug_printf(connio, "%s: TLS Error (0x%lx) %s\n", peerLabel(), err, error_reason);
+            }
         }
-        if(events&BEV_EVENT_EOF) {
+
+        if (events & BEV_EVENT_CONNECTED) {
+            log_debug_printf(connsetup, "ConnBase::bevEvent(): A %s CONNECTED event \n", peerLabel());
+            const auto ctx = bufferevent_openssl_get_ssl(bev.get());
+            if (ctx) {
+                if (!peer_status) {
+                    try {
+                        log_debug_printf(connsetup, "ConnBase::bevEvent().  Subscribe to %s peer certificate status \n", peerLabel());
+                        peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [this](certs::cert_status_category_t status_category) { peerStatusCallback(status_category); });
+                    } catch (certs::CertStatusNoExtensionException &e) {
+                        log_debug_printf(connio, "no status to monitor for peer %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
+                    } catch (std::exception &e) {
+                        log_err_printf(connio, "unexpected error subscribing to peer %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
+                    }
+                }
+            }
+        }
+    }
+#endif
+
+    // If any socket warnings / errors, then log and disconnect
+    if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT)) {
+        if (events & BEV_EVENT_ERROR) {
+            const char *msg = evutil_socket_error_to_string(err);
+            if (err) {
+                log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
+            } else {
+                log_debug_printf(connio, "connection to %s %s closed\n", peerLabel(), peerName.c_str());
+            }
+        }
+        if (events & BEV_EVENT_EOF) {
             log_debug_printf(connio, "connection to %s %s closed by peer\n", peerLabel(), peerName.c_str());
         }
-        if(events&BEV_EVENT_TIMEOUT) {
+        if (events & BEV_EVENT_TIMEOUT) {
             log_warn_printf(connio, "connection to %s %s timeout\n", peerLabel(), peerName.c_str());
         }
         state = Disconnected;
+        log_debug_printf(isClient ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %s\n", "ConnBase::state", "Disconnected", "ConnBase::bevEvent()", peerName.c_str());
         bev.reset();
     }
 
-    if(!bev)
+    if (!bev)
         cleanup();
 }
 
@@ -155,8 +207,7 @@ void ConnBase::bevRead()
         auto ret = evbuffer_copyout(rx, header, sizeof(header));
         assert(ret==sizeof(header)); // previously verified
 
-        if(header[0]!=0xca || header[1]==0
-                || (isClient ^ !!(header[2]&pva_flags::Server))) {
+        if(header[0]!=0xca || header[1]==0 || (isClient ^ !!(header[2]&pva_flags::Server))) {
             log_hex_printf(connio, Level::Err, header, sizeof(header),
                            "%s %s Protocol decode fault.  Force disconnect.\n", peerLabel(), peerName.c_str());
             bev.reset();
@@ -246,32 +297,34 @@ void ConnBase::bevRead()
             // ready to process segBuf
             try {
                 switch(segCmd) {
-                default:
-                    log_debug_printf(connio, "%s %s Ignore unexpected command 0x%02x\n", peerLabel(), peerName.c_str(), segCmd);
-                    evbuffer_drain(segBuf.get(), evbuffer_get_length(segBuf.get()));
-                    break;
-    #define CASE(OP) case CMD_##OP: handle_##OP(); break
-                    CASE(ECHO);
-                    CASE(CONNECTION_VALIDATION);
-                    CASE(CONNECTION_VALIDATED);
-                    CASE(SEARCH);
-                    CASE(SEARCH_RESPONSE);
-                    CASE(AUTHNZ);
+                    case CMD_ECHO: handle_ECHO(); break;
 
-                    CASE(CREATE_CHANNEL);
-                    CASE(DESTROY_CHANNEL);
+                    case CMD_SEARCH: handle_SEARCH(); break;
+                    case CMD_SEARCH_RESPONSE: handle_SEARCH_RESPONSE(); break;
 
-                    CASE(GET);
-                    CASE(PUT);
-                    CASE(PUT_GET);
-                    CASE(MONITOR);
-                    CASE(RPC);
-                    CASE(CANCEL_REQUEST);
-                    CASE(DESTROY_REQUEST);
-                    CASE(GET_FIELD);
+                    case CMD_CONNECTION_VALIDATION: handle_CONNECTION_VALIDATION(); break;
+                    case CMD_CONNECTION_VALIDATED: handle_CONNECTION_VALIDATED(); break;
+                    case CMD_AUTHNZ: handle_AUTHNZ(); break;
 
-                    CASE(MESSAGE);
-    #undef CASE
+                    case CMD_CREATE_CHANNEL: handle_CREATE_CHANNEL(); break;
+                    case CMD_DESTROY_CHANNEL: handle_DESTROY_CHANNEL(); break;
+
+                    case CMD_GET: handle_GET(); break;
+                    case CMD_PUT: handle_PUT(); break;
+                    case CMD_PUT_GET: handle_PUT_GET(); break;
+                    case CMD_MONITOR: handle_MONITOR(); break;
+                    case CMD_RPC: handle_RPC(); break;
+                    case CMD_GET_FIELD: handle_GET_FIELD(); break;
+
+                    case CMD_CANCEL_REQUEST: handle_CANCEL_REQUEST(); break;
+                    case CMD_DESTROY_REQUEST: handle_DESTROY_REQUEST(); break;
+
+                    case CMD_MESSAGE: handle_MESSAGE(); break;
+
+                    default:
+                        log_debug_printf(connio, "%s %s Ignore unexpected command 0x%02x\n", peerLabel(), peerName.c_str(), segCmd);
+                        evbuffer_drain(segBuf.get(), evbuffer_get_length(segBuf.get()));
+                        break;
                 }
             }catch(std::exception& e){
                 log_exc_printf(connio, "%s Error while processing cmd 0x%02x%s: %s\n",

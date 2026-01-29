@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-pvacms
+  labels:
+    {{- include "pvxs-lab.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: pvacms
+    release: {{ .Release.Name }}
+  ports:
+    - name: pva-tcp
+      port: {{ .Values.ports.pvaTcp }}
+      targetPort: pva-tcp
+      protocol: TCP
+    - name: pva-udp
+      port: {{ .Values.ports.pvaUdp }}
+      targetPort: pva-udp
+      protocol: UDP
+    {{- if .Values.ports.exposePvaTls }}
+    - name: pva-tls
+      port: {{ .Values.ports.pvaTls }}
+      targetPort: pva-tls
+      protocol: TCP
+    {{- end }}

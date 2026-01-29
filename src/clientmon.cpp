@@ -18,8 +18,9 @@ namespace client {
 
 typedef epicsGuard<epicsMutex> Guard;
 
-DEFINE_LOGGER(monevt, "pvxs.client.monitor");
-DEFINE_LOGGER(io, "pvxs.client.io");
+DEFINE_LOGGER(monevt, "pvxs.cli.mon");
+DEFINE_LOGGER(io, "pvxs.cli.io");
+DEFINE_LOGGER(status_cli, "pvxs.st.cli");
 
 namespace {
 struct Entry {
@@ -137,6 +138,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
                 chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
 
                 state = p ? Idle : Running;
+                log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", state == Idle ? "Idle" : "Running", "SubscriptionImpl::pause()", chan->name.c_str());
             }
         });
     }
@@ -308,6 +310,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
         }
         bool ret = state!=Done;
         state = Done;
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Done", "SubscriptionImpl::_cancel()", channelName.c_str());
         return ret;
     }
 
@@ -348,6 +351,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
                          unsigned(queueSize), unsigned(ackAt));
 
         state = Creating;
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Creating", "SubscriptionImpl::createOp()", channelName.c_str());
 
         bool notify = false;
         if(!maskConn || pipeline) {
@@ -403,6 +407,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
 
             chan->pending.push_back(self);
             state = Connecting;
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Connecting", "SubscriptionImpl::disconnected()", chan->name.c_str());
 
             if(notify)
                 doNotify();
@@ -609,6 +614,7 @@ void Connection::handle_MONITOR()
     if(!sts.isSuccess()) {
         update.exc = std::make_exception_ptr(RemoteError(sts.msg));
         mon->state = SubscriptionImpl::Done;
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Done", "Connection::handle_MONITOR()", mon->channelName.c_str());
 
     } else if(mon->state==SubscriptionImpl::Creating) {
         log_debug_printf(io, "Server %s channel %s monitor Created\n",
@@ -616,12 +622,14 @@ void Connection::handle_MONITOR()
                         mon->chan->name.c_str());
 
         mon->state = SubscriptionImpl::Idle;
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Idle", "Connection::handle_MONITOR()", mon->channelName.c_str());
 
         try {
             if(mon->onInit)
                 mon->onInit(*mon, info->prototype);
         }catch(std::exception& e){
             mon->state = SubscriptionImpl::Done;
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Done", "Connection::handle_MONITOR()", mon->channelName.c_str());
             update.exc = std::current_exception();
             log_debug_printf(io, "Server %s channel %s monitor Create error: %s\n",
                             peerName.c_str(),
@@ -721,6 +729,7 @@ void Connection::handle_MONITOR()
 
     if(mon->state==SubscriptionImpl::Done || final) {
         mon->state=SubscriptionImpl::Done;
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Done", "Connection::handle_MONITOR()", mon->channelName.c_str());
 
         opByIOID.erase(ioid);
         mon->chan->opByIOID.erase(ioid);
@@ -744,7 +753,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     if(_name.empty())
         throw std::logic_error("Empty channel name");
 
-    auto context(ctx->impl->shared_from_this());
+    const auto context(ctx->impl->shared_from_this());
 
     auto op(std::make_shared<SubscriptionImpl>(context->tcp_loop, _name));
     op->self = op;
@@ -771,7 +780,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
 
     (void)options["pipeline"].as(op->pipeline);
 
-    auto ackAny = options["ackAny"];
+    const auto ackAny = options["ackAny"];
 
     if(ackAny.type()==TypeCode::String) {
         auto sval = ackAny.as<std::string>();
@@ -808,7 +817,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     std::shared_ptr<SubscriptionImpl> external(op.get(), [op, syncCancel](SubscriptionImpl*) mutable {
         // from user thread
         auto temp(std::move(op));
-        auto loop(temp->loop);
+        const auto loop(temp->loop);
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
         loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<SubscriptionImpl>& op) {
@@ -820,10 +829,9 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
                        }, std::move(temp)));
     });
 
-    auto server(std::move(_server));
-    context->tcp_loop.dispatch([op, context, server]() {
+    const auto server(std::move(_server));
+    context->tcp_loop.dispatch([=]() {
         // on worker
-
         try {
             op->chan = Channel::build(context, op->channelName, server);
 

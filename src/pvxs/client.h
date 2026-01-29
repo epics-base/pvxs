@@ -3,6 +3,8 @@
  * pvxs is distributed subject to a Software License Agreement found
  * in file LICENSE that is included with this distribution.
  */
+
+// Test comment to verify non-Docker changes
 #ifndef PVXS_CLIENT_H
 #define PVXS_CLIENT_H
 
@@ -133,10 +135,7 @@ struct PVXS_API Operation {
     Operation& operator=(const Operation&) = delete;
     virtual ~Operation() =0;
 
-    /** PV name
-     *
-     * Returned reference is valid for the lifetime of the Operation
-     */
+    //! PV name
     virtual const std::string& name() =0;
 
     //! Explicitly cancel a pending operation.
@@ -205,7 +204,7 @@ public:
     //! PV name
     inline const std::string& name() { return _name(); }
 
-    //! Explicitly cancel a active subscription.
+    //! Explicitly cancel an active subscription.
     //! Blocks until any in-progress callback has completed.
     virtual bool cancel() =0;
 
@@ -214,7 +213,7 @@ public:
     //! Shorthand for @code pause(false) @endcode
     inline void resume() { pause(false); }
 
-    /** De-queue update from subscription event queue.
+    /** De-queue update from the subscription event queue.
      *
      * If the queue is empty, return an empty/invalid Value (Value::valid()==false).
      * A data update is returned as a Value.
@@ -326,8 +325,7 @@ public:
      * Shorthand for @code Config::fromEnv().build() @endcode.
      * @since 0.2.1
      */
-    static
-    Context fromEnv();
+    static Context fromEnv();
 
     /** Apply (in part) updated configuration
      *
@@ -918,7 +916,7 @@ public:
     MonitorBuilder& maskDisconnected(bool m = true) { _maskDisconn = m; return *this; }
 
 #ifdef PVXS_EXPERT_API_ENABLED
-    // called during operation INIT phase for Get/Put/Monitor when remote type
+    // called during operation INIT phase for Get/Put/Monitor when the remote type
     // description is available.
     MonitorBuilder& onInit(std::function<void (Subscription&, const Value&)>&& cb) { this->_onInit = std::move(cb); return *this; }
 #endif
@@ -1030,7 +1028,7 @@ public:
     /** Controls whether Operation::cancel() synchronizes.
      *
      * When true (the default) explicit or implicit cancel blocks until any
-     * in progress callback has completed.  This makes safe some use of
+     * in-progress callback has completed.  This makes safe some use of
      * references in callbacks.
      */
     DiscoverBuilder& syncCancel(bool b) { this->_syncCancel = b; return *this; }
@@ -1042,6 +1040,8 @@ public:
 DiscoverBuilder Context::discover(std::function<void (const Discovered &)> && fn) { return DiscoverBuilder(pvt, std::move(fn)); }
 
 struct PVXS_API Config : public impl::ConfigCommon {
+    virtual ~Config() = default;
+
     /** List of unicast, multicast, and broadcast addresses to which search requests will be sent.
      *
      * Entries may take the forms:
@@ -1070,12 +1070,10 @@ public:
 
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }
-
     //! Default configuration using process environment
-    static inline Config fromEnv()  { return Config{}.applyEnv(); }
-
+    static inline Config fromEnv() { return Config{}.applyEnv(); }
     //! update using defined EPICS_PVA* environment variables
-    Config& applyEnv();
+    virtual Config &applyEnv();
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables
@@ -1083,8 +1081,7 @@ public:
     Config& applyDefs(const defs_t& defs);
 
     //! extract definitions with environment variable names as keys.
-    //! Process environment is not changed.
-    void updateDefs(defs_t& defs) const;
+    virtual void updateDefs(defs_t& defs) const;
 
     /** Apply rules to translate current requested configuration
      *  into one which can actually be loaded based on current host network configuration.
@@ -1109,6 +1106,8 @@ public:
     inline Config& overrideShareUDP(bool share) { UDP = share; return *this; }
     inline bool shareUDP() const { return UDP; }
 #endif
+
+    void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);
 };
 
 PVXS_API

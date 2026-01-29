@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-pvacms
+  labels:
+    {{- include "pvxs-lab.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.pvacms.replicas }}
+  selector:
+    matchLabels:
+      app: pvacms
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: pvacms
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: pvacms
+          image: {{ include "pvxs-lab.image" (dict "Values" .Values "name" .Values.images.pvacms.name "tag" .Values.images.pvacms.tag) | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: pva-tcp
+              containerPort: {{ .Values.ports.pvaTcp }}
+              protocol: TCP
+            - name: pva-udp
+              containerPort: {{ .Values.ports.pvaUdp }}
+              protocol: UDP
+            {{- if .Values.ports.exposePvaTls }}
+            - name: pva-tls
+              containerPort: {{ .Values.ports.pvaTls }}
+              protocol: TCP
+            {{- end }}
+          {{- if .Values.pvacms.debug.enabled }}
+          env:
+            - name: PVXS_LOG
+              value: {{ .Values.pvacms.debug.logLevel | quote }}
+          {{- end }}
+          volumeMounts:
+            - name: pva-config
+              mountPath: /home/pvacms/.config/pva
+            - name: pva-data
+              mountPath: /home/pvacms/.local/share/pva
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/bash
+                  - -lc
+                  - |
+                    set -euo pipefail
+          
+                    src=/home/pvacms/.config/pva/1.4/admin.p12
+                    dst=/home/admin/.config/pva/1.4/client.p12
+          
+                    mkdir -p "$(dirname "$dst")"
+                    chown -R admin:admin /home/admin/.config/pva || true
+          
+                    # Wait for pvacms to generate admin.p12
+                    for i in {1..60}; do
+                      if [ -s "$src" ]; then
+                        cp -f "$src" "$dst"
+                        chown admin:admin "$dst" || true
+                        chmod 0600 "$dst" || true
+                        exit 0
+                      fi
+                      sleep 0.5
+                    done
+          
+                    echo "admin.p12 not found after timeout" >&2
+                    exit 1
+      volumes:
+        - name: pva-config
+          {{- if .Values.pvacms.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "pvxs-lab.fullname" . }}-pvacms-config
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: pva-data
+          {{- if .Values.pvacms.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "pvxs-lab.fullname" . }}-pvacms-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

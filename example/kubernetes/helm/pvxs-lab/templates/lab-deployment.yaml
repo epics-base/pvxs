@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-lab
+  labels:
+    {{- include "pvxs-lab.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.lab.replicas }}
+  selector:
+    matchLabels:
+      app: lab
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: lab
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: lab
+          image: {{ include "pvxs-lab.image" (dict "Values" .Values "name" .Values.images.lab.name "tag" .Values.images.lab.tag) | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          {{- if .Values.lab.keepalive.enabled }}
+          command: {{ toJson .Values.lab.keepalive.command }}
+          args: {{ toJson .Values.lab.keepalive.args }}
+          {{- end }}
+          volumeMounts:
+            - name: pva-config
+              mountPath: /home/guest/.config/pva/1.4
+              subPath: guest
+            - name: pva-config
+              mountPath: /home/operator/.config/pva/1.4
+              subPath: operator
+      volumes:
+        - name: pva-config
+          {{- if .Values.lab.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "pvxs-lab.fullname" . }}-lab-pva
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

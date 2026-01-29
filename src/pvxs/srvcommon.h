@@ -6,7 +6,7 @@
 #ifndef PVXS_SRVCOMMON_H
 #define PVXS_SRVCOMMON_H
 
-#if !defined(PVXS_SHAREDPV_H) && !defined(PVXS_SOURCE_H)
+#if !defined(PVXS_SHAREDPV_H) && !defined(PVXS_WILDCARDPV_H) && !defined(PVXS_SOURCE_H)
 #  error Include <pvxs/sharedpv.h> or <pvxs/source.h>  Do not include srvcommon.h directly
 #endif
 
@@ -21,7 +21,6 @@
 #include <pvxs/netcommon.h>
 
 namespace pvxs {
-enum struct Level;
 namespace server {
 
 /** Credentials presented by a client.
@@ -31,9 +30,11 @@ namespace server {
  * @since 0.2.0
  * @since UNRELEASED Add PeerCredentials base class
  */
-struct ClientCredentials : public PeerCredentials {
+struct PVXS_API ClientCredentials : public PeerCredentials {
     //! (Copy of) Credentials blob as presented by the client.
     Value raw;
+    // For ABI backwards compatibility
+    std::set<std::string> roles() const ;
 };
 
 //! Base for all operation classes
@@ -70,18 +71,9 @@ public:
     OpBase& operator=(const OpBase&) = delete;
     virtual ~OpBase() =0;
 };
-//! Log to remote peer
-//! @since 1.4.0
-struct PVXS_API RemoteLogger {
-    virtual ~RemoteLogger() =0;
-
-    //! Request log message to peer
-    //! @since 1.4.0
-    virtual void logRemote(Level lvl, const std::string& msg) =0;
-};
 
 //! Handle when an operation is being executed
-struct PVXS_API ExecOp : public OpBase, public RemoteLogger {
+struct PVXS_API ExecOp : public OpBase {
     //! Issue a reply without data.  (eg. to complete a PUT)
     virtual void reply() =0;
     //! Issue a reply with data.  For a GET or RPC  (or PUT/Get)
@@ -113,9 +105,7 @@ public:
 #ifdef PVXS_EXPERT_API_ENABLED
     //! Create/start timer.  cb runs on worker associated with Channel of this Operation.
     //! @since 0.2.0
-    Timer timerOneShot(double delay, std::function<void()>&& cb) {
-        return _timerOneShot(delay, std::move(cb));
-    }
+    Timer timerOneShot(double delay, std::function<void()>&& cb) { return _timerOneShot(delay, std::move(cb)); }
 #endif // PVXS_EXPERT_API_ENABLED
 private:
     virtual Timer _timerOneShot(double delay, std::function<void()>&& cb) =0;

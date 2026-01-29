@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-testioc
+  labels:
+    {{- include "pvxs-lab.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.testioc.replicas }}
+  selector:
+    matchLabels:
+      app: testioc
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: testioc
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: testioc
+          image: {{ include "pvxs-lab.image" (dict "Values" .Values "name" .Values.images.testioc.name "tag" .Values.images.testioc.tag) | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: pva-tcp
+              containerPort: {{ .Values.ports.pvaTcp }}
+              protocol: TCP
+            - name: pva-udp
+              containerPort: {{ .Values.ports.pvaUdp }}
+              protocol: UDP
+            {{- if .Values.ports.exposePvaTls }}
+            - name: pva-tls
+              containerPort: {{ .Values.ports.pvaTls }}
+              protocol: TCP
+            {{- end }}
+          env:
+            - name: EPICS_PVA_AUTO_ADDR_LIST
+              value: "NO"
+            - name: EPICS_PVA_ADDR_LIST
+              value: "{{ include "pvxs-lab.pvacmsService" . }} {{ include "pvxs-lab.testiocService" . }}"
+            {{- if .Values.testioc.debug.enabled }}
+            - name: PVXS_LOG
+              value: {{ .Values.testioc.debug.logLevel | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: pva-config
+              mountPath: /home/testioc/.config/pva/1.4
+      volumes:
+        - name: pva-config
+          {{- if .Values.testioc.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "pvxs-lab.fullname" . }}-testioc-pva
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

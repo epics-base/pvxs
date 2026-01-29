@@ -23,12 +23,15 @@
 #include <pvxs/log.h>
 #include <pvxs/util.h>
 
-#include <udp_collector.h>
-#include <utilpvt.h>
-#include <pvaproto.h>
+#include "pvaproto.h"
+#include "udp_collector.h"
+#include "utilpvt.h"
+
+#ifdef PVXS_ENABLE_OPENSSL
+#include "openssl.h"
+#endif
 
 namespace pva = pvxs;
-using pvxs::impl::SB;
 namespace {
 
 DEFINE_LOGGER(out, "pvxvct");
@@ -65,7 +68,7 @@ parsePeer(const char *optarg)
             // only # of bits.  eg. "/24"
             std::istringstream strm(match[2].str());
             unsigned nbit=0;
-            if(!(strm>>nbit).good() || nbit>32) {
+            if((strm>>nbit).good()) {
                 throw std::runtime_error(pva::SB()<<"Expected number of bits.  not "<<match[2]);
             }
             mask.s_addr = htonl(0xffffffff<<(32-nbit));
@@ -82,17 +85,16 @@ void usage(const char *name)
 {
     std::cerr<<"Usage: "<<name<<" [-C|-S] [-B hostip[:port]] [-H hostip]\n"
                "\n"
-               "PV Access Virtual Cable Tester\n"
+               "PVAccess Virtual Cable Tester\n"
                "\n"
-               "Assist in troubleshooting network configuration by listening\n"
+               "Assist in troubleshooting network configuration / misconfiguration by listening\n"
                "for (some) PVA client/server UDP traffic.\n"
                "\n"
                "  -h               Print this message\n"
                "  -V               Print version and exit.\n"
                "  -C               Show only client Searches\n"
                "  -S               Show only server Beacons\n"
-               "  -B <host/ip>[:port] Listen on the given interface(s).  May be repeated.\n"
-               "  -B <mcast>[,ttl#][@iface][:port]\n"
+               "  -B hostip[:port] Listen on the given interface(s).  May be repeated.\n"
                "  -H host          Show only message sent from this peer.  May be repeated.\n"
                "  -P pvname        Show only searches for this PV name.  May be repeated.\n"
               <<std::endl;
@@ -126,7 +128,7 @@ int main(int argc, char *argv[])
             }
         } opts;
 
-        std::vector<pva::SockEndpoint> bindaddrs;
+        std::vector<pva::SockAddr> bindaddrs;
 
         {
             int opt;
@@ -151,8 +153,16 @@ int main(int argc, char *argv[])
                 case 'S':
                     opts.server = true;
                     break;
-                case 'B':
-                    bindaddrs.emplace_back(optarg, nullptr, 5076);
+                case 'B': {
+                    pva::SockAddr addr;
+                    int slen = addr.size();
+                    if(evutil_parse_sockaddr_port(optarg, &addr->sa, &slen)) {
+                        throw std::runtime_error(pva::SB()<<"Expected address[:port] to bind.  Not "<<optarg);
+                    }
+                    if(addr.port()==0)
+                        addr.setPort(5076);
+                    bindaddrs.push_back(addr);
+                }
                     break;
                 case 'P':
                     opts.pvnames.insert(optarg);
@@ -200,19 +210,20 @@ int main(int argc, char *argv[])
 
         auto searchCB = [&opts](const pva::UDPManager::Search& msg)
         {
-            if(!opts.client || !opts.allowPeer(msg.origSrc))
+            if(!opts.client || !opts.allowPeer(msg.src))
                 return;
 
             if(!opts.pvnames.empty()) {
                 bool show = false;
                 for(const auto pv : msg.names) {
-                    if((show = (opts.pvnames.find(pv.name)!=opts.pvnames.end())))
+                    show = opts.pvnames.find(pv.name)!=opts.pvnames.end();
+                    if((show = opts.pvnames.find(pv.name)!=opts.pvnames.end()))
                         break;
                 }
                 if(!show)
                     return;
             }
-            log_info_printf(out, "%s Searching for:\n", msg.origSrc.tostring().c_str());
+            log_info_printf(out, "%s Searching for:\n", msg.src.tostring().c_str());
             for(const auto pv : msg.names) {
                 log_info_printf(out, "  \"%s\"\n", pv.name);
             }
@@ -238,7 +249,7 @@ int main(int argc, char *argv[])
                                    manager.onBeacon(baddr, beaconCB));
             listeners.back().first->start();
             listeners.back().second->start();
-            log_debug_printf(out, "Bind: %s\n", (SB()<<baddr).str().c_str());
+            log_debug_printf(out, "Bind: %s\n", baddr.tostring().c_str());
         }
 
 
@@ -254,7 +265,7 @@ int main(int argc, char *argv[])
         return 0;
     }catch(std::runtime_error& e) {
         errlogFlush();
-        std::cerr<<ERL_ERROR ": "<<e.what()<<std::endl;
+        std::cerr<<"Error: "<<e.what()<<std::endl;
         return 1;
     }
 }

@@ -14,11 +14,21 @@
 
 #include <pvxs/client.h>
 
-#include "evhelper.h"
-#include "dataimpl.h"
-#include "utilpvt.h"
-#include "udp_collector.h"
 #include "conn.h"
+#include "evhelper.h"
+#include "ownedptr.h"
+#include "udp_collector.h"
+#include "utilpvt.h"
+
+#ifdef PVXS_ENABLE_OPENSSL
+#include "certstatus.h"
+#include "certstatusmanager.h"
+#include "openssl.h"
+#include "opensslgbl.h"
+#define PVXS_OCSP_STAPLING_OK 1
+#define PVXS_OCSP_STAPLING_ERR -1
+#define PVXS_OCSP_STAPLING_NAK 0
+#endif
 
 namespace pvxs {
 namespace client {
@@ -44,7 +54,6 @@ struct ResultWaiter {
 struct OperationBase : public Operation
 {
     const evbase loop;
-    const std::string channelName;
     // remaining members only accessibly from loop worker
     std::shared_ptr<Channel> chan;
     uint32_t ioid = 0;
@@ -52,7 +61,7 @@ struct OperationBase : public Operation
     bool done = false;
     std::shared_ptr<ResultWaiter> waiter;
 
-    OperationBase(operation_t op, const evbase& loop, const std::string& name);
+    OperationBase(operation_t op, const evbase& loop);
     virtual ~OperationBase();
 
     virtual void createOp() =0;
@@ -83,12 +92,11 @@ struct RequestInfo {
 };
 
 struct Connection final : public ConnBase, public std::enable_shared_from_this<Connection> {
-    const std::shared_ptr<ContextImpl> context;
-    const bool isTLS;
+    epicsMutex lock;
+    std::shared_ptr<ContextImpl> context;
 
     // While HoldOff, the time until re-connection
     // While Connected, periodic Echo
-    // After early connect() failure, deferred notification
     const evevent echoTimer;
 
     bool ready = false;
@@ -112,27 +120,39 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 
     Connection(const std::shared_ptr<ContextImpl>& context,
                const SockAddr &peerAddr,
-               bool reconn, bool isTLS);
+               bool reconn
+      , bool isTLS
+               );
     virtual ~Connection();
 
     static
     std::shared_ptr<Connection> build(const std::shared_ptr<ContextImpl>& context,
                                       const SockAddr& serv,
-                                      bool reconn,
-                                      bool isTLS);
+                                      bool reconn
+#ifdef PVXS_ENABLE_OPENSSL
+                                    , bool isTLS
+#endif
+                                      );
 
 private:
     void startConnecting();
-public:
+    virtual void bevEvent(short events) override final;
+#ifdef PVXS_ENABLE_OPENSSL
+    void peerStatusCallback(certs::cert_status_category_t status_category) override;
+#endif
+    public:
 
     void createChannels();
+    void proceedWithCreatingChannels();
 
     void sendDestroyRequest(uint32_t sid, uint32_t ioid);
 
-    virtual void bevEvent(short events) override final;
-
-    virtual std::shared_ptr<ConnBase> self_from_this() override final;
+    virtual std::shared_ptr<ConnBase> self_from_this() override;
     virtual void cleanup() override final;
+
+#ifdef PVXS_ENABLE_OPENSSL
+    void configureClientOCSPCallback(SSL *ssl) const;
+#endif
 
 #define CASE(Op) virtual void handle_##Op() override final;
     CASE(CONNECTION_VALIDATION);
@@ -236,12 +256,12 @@ struct Discovery final : public OperationBase
     std::function<void(const Discovered &)> notify;
     bool running = false;
 
-    Discovery(const std::shared_ptr<ContextImpl>& context, const std::string& name);
+    Discovery(const std::shared_ptr<ContextImpl>& context);
     ~Discovery();
 
     virtual bool cancel() override final;
 private:
-    bool _cancel(bool implicit);
+    bool _cancel();
 
     // unused for this special case
     virtual void _reExecGet(std::function<void (Result &&)> &&resultcb) override final;
@@ -250,9 +270,10 @@ private:
     virtual void disconnected(const std::shared_ptr<OperationBase> &self) override final;
 };
 
-struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
+struct ContextImpl : std::enable_shared_from_this<ContextImpl>
 {
     SockAttach attach;
+    IfaceMap& ifmap;
 
     enum state_t {
         Init,
@@ -260,7 +281,34 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
         Stopped,
     } state = Init;
 
-    const Config effective;
+    bool isRunning() const { return state == Running; }
+
+#ifdef PVXS_ENABLE_OPENSSL
+    void configureExpirationHandler(ContextImpl * context_impl) const {
+        if ( tls_context && tls_context->state >= ossl::SSLContext::TcpReady) {
+            // Only do this if we have a valid tls_context
+
+            const auto cert = tls_context->getEntityCertificate();
+            if (!cert) return;  // If no cert (server-only) then don't set up handler
+            const certs::CertDate expiry_date = X509_get_notAfter(cert);
+
+            // If not yet expired
+            const auto now = time(nullptr);
+            if (expiry_date.t > now) {
+                // Set up the callback to point to this context
+                event_assign(cert_expiration_timer.get(), tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &certExpirationHandlerS, context_impl);
+
+                // Add the event 2 seconds after expiration while ignoring errors
+                const auto expires_in = (expiry_date.t - now) + 2;
+                const timeval expirationInterval{expires_in, 0};
+                event_add(cert_expiration_timer.get(), &expirationInterval);
+            }
+        }
+    }
+
+#endif
+
+    Config effective;
 
     const Value caMethod;
 
@@ -294,14 +342,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::vector<uint8_t> searchMsg;
 
     // search destination address and whether to set the unicast flag
-    struct SearchDest {
-        const SockEndpoint dest;
-        const bool isucast;
-        bool lastSuccess = true;
-        SearchDest(SockEndpoint dest, bool isu) :dest(dest), isucast(isu) {}
-    };
-
-    std::vector<SearchDest> searchDest;
+    std::vector<std::pair<SockEndpoint, bool>> searchDest;
 
     size_t currentBucket = 0u;
     // Channels where we have yet to send out an initial search request
@@ -316,13 +357,27 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     // explicitly broken by Context::close(), Context::cacheClear(), or ContextImpl::cacheClean()
     // chanByName key'd by (pv, forceServer)
     std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
+    const evbase tcp_loop;
+
+#ifdef PVXS_ENABLE_OPENSSL
+    std::shared_ptr<ossl::SSLContext> tls_context;
 
     // pair (addr, useTLS)
+    // @note order member `pvxs::client::ContextImpl::connByAddr` after
+    //      `pvxs::client::ContextImpl::tls_context` so that
+    //       destruction order will be `connByAddr`'s `Connections`
+    //       then `tls_context`'s `SSL_CTX ctx` .
+    //       ~Connection() will clean up ALL the `SSLPeerStatusAndMonitor`s
+    //       stored in `CertStatusExData` which is attached to the SSL_CTX,
+    //       so that by time SSL_CTX is freed there won't be any peer statuses
+    //       left
     std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
+#else
+    std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
+#endif
 
     std::vector<std::pair<SockEndpoint, std::shared_ptr<Connection>>> nameServers;
 
-    evbase tcp_loop;
     const evevent searchRx4, searchRx6;
     const evevent searchTimer;
     const evevent initialSearcher;
@@ -336,14 +391,12 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent beaconCleaner;
     const evevent cacheCleaner;
     const evevent nsChecker;
-
 #ifdef PVXS_ENABLE_OPENSSL
-    ossl::SSLContext tls_context;
+    const evevent cert_expiration_timer;
 #endif
-
     INST_COUNTER(ClientContextImpl);
 
-    ContextImpl(const Config& conf, const evbase &tcp_loop);
+    ContextImpl(const Config& conf, evbase tcp_loop);
     ~ContextImpl();
 
     void startNS();
@@ -370,6 +423,64 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
     void onNSCheck();
     static void onNSCheckS(evutil_socket_t fd, short evt, void *raw);
+    void reconfigure(const Config&);
+#ifdef PVXS_ENABLE_OPENSSL
+    static void certExpirationHandlerS(evutil_socket_t fd, short evt, void *raw);
+
+    /**
+     * Initialize the Client context state based on the tls context
+     */
+    void initializeState() {
+        state = !tls_context || !tls_context->ctx || tls_context->state != ossl::SSLContext::Init ? Running : Init;
+    }
+
+    /**
+     * Is TLS Configured (not Degraded)?
+     * @return True if a certificate is configured and has not been forced into a Degraded state
+     */
+    bool isTlsConfigured() const { return tls_context && tls_context->state > ossl::SSLContext::DegradedMode; }
+
+    /**
+     * Is TLS Configured for server-only?
+     * @return True if TLS is configured for server-only
+     */
+    bool isTlsServerOnly() const {
+        if (!isTlsConfigured()) return false;
+        const auto cert = tls_context->getEntityCertificate();
+        return !cert;
+    }
+
+    /**
+     * Is the TLS context completely ready for TLS connections?  This means that certificate status
+     * must have been checked as VALID if a check is required.
+     * Also the peer certificate must have also been checked if required
+     * @return True if the tls context is completely ready for TLS connections
+     */
+    bool isTlsReady() const {
+        return tls_context && tls_context->state == ossl::SSLContext::TlsReady;
+    }
+
+    /**
+     * Is TLS possible in the given context?
+     * @param tls_context_to_check the context to check
+     * @return true if the context has loaded a certificate whose status is not known to be REVOKED or EXPIRED
+     */
+    static bool isTlsPossible(const std::shared_ptr<ossl::SSLContext> &tls_context_to_check) {
+        ossl::osslInit();
+        return
+            !ossl::ossl_gbl->tls_disabled &&
+            tls_context_to_check &&
+            tls_context_to_check->state > ossl::SSLContext::DegradedMode &&
+            !static_cast<certs::CertificateStatus>(tls_context_to_check->get_cert_status()).isRevokedOrExpired();
+    }
+
+    void removePeer(const Connection* client_conn = nullptr);
+    void enterDegradedMode() const;
+    void removeTlsPeer(const Connection* client_conn = nullptr) const;
+    void reloadTls();
+    void reloadTlsFromConfig(const Config& new_config);
+    void certExpirationHandler();
+#endif
 };
 
 struct Context::Pvt {

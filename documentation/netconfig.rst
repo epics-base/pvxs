@@ -6,7 +6,7 @@ PVA Network Configuration
 Big Picture
 -----------
 
-A PV Access network protocol operation proceeds in two phases:
+A PVAccess network protocol operation proceeds in two phases:
 PV name resolution, and data transfer.
 Name resolution is the process is determining which PVA server claims to provide each PV name.
 Once this is known, a TCP connection is open to that server, and the operation(s) are executed.
@@ -43,6 +43,7 @@ Environment variables
 
 This table lists all of the ``$EPICS_PVA*`` environment variables understood by PVXS.
 See Client :ref:`clientconf` and Server :ref:`serverconf` for detailed explanations.
+For additional environment variables used for Secure PVAccess see :ref:`environment_variables`.
 
 Many variables come in pairs of ``$EPICS_PVA_*`` and ``$EPICS_PVAS_*``.
 A Client will look at only ``$EPICS_PVA_*``.

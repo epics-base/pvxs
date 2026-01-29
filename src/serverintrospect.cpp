@@ -11,7 +11,7 @@
 #include "serverconn.h"
 
 namespace pvxs { namespace impl {
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 
 namespace {
 struct ServerIntrospect final : public ServerOp
@@ -88,23 +88,23 @@ struct ServerIntrospectControl : public server::ConnectOp
 
     void doReply(const FieldDesc* type, const Status& sts)
     {
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return; // soft fail if already completed, canceled, disconnected, ....
 
         serv->acceptor_loop.call([this, type, &sts](){
-            if(auto oper = op.lock())
+            if(const auto oper = op.lock())
                 oper->doReply(type, sts);
         });
     }
 
     virtual void onClose(std::function<void(const std::string&)>&& fn) override final
     {
-        auto serv = server.lock();
+        const auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
+            if(const auto oper = op.lock())
                 oper->onClose = std::move(fn);
         });
     }

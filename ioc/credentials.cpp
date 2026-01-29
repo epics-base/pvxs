@@ -15,32 +15,22 @@ namespace pvxs {
 namespace ioc {
 
 /**
- * eg.
- * "username"  implies "ca/" prefix
- * "krb/principle"
- * "role/groupname"
+ * @brief Credentials constructor
  *
- * @param clientCredentials
+ * @param clientCredentials The client credentials to be used for the credentials object
  */
 
 Credentials::Credentials(const server::ClientCredentials& clientCredentials) {
-    SockAddr addr(clientCredentials.peer);
-    addr.setPort(0);
-    host = std::string(SB()<<addr.map6to4());
+    // Extract host name part (or whole thing if no colon present)
+    auto pos = clientCredentials.peer.find_first_of(':');
+    host = clientCredentials.peer.substr(0, pos);
+    method = clientCredentials.method;
+    authority = clientCredentials.authority;
+    issuer_id = clientCredentials.issuer_id;
+    serial = clientCredentials.serial;
+    cred.emplace_back(clientCredentials.account);
 
-    // "ca" style credentials
-    if (clientCredentials.method == "ca") {
-        auto pos = clientCredentials.account.find_last_of('/');
-        if (pos == std::string::npos) {
-            cred.emplace_back(clientCredentials.account);
-        } else {
-            cred.emplace_back(clientCredentials.account.substr(pos + 1));
-        }
-    } else {
-        cred.emplace_back(SB() << clientCredentials.method << '/' << clientCredentials.account);
-    }
-
-    for (const auto& role: clientCredentials.roles()) {
+    for (const auto& role: static_cast<PeerCredentials>(clientCredentials).roles()) {
         cred.emplace_back(SB() << "role/" << role);
     }
 }

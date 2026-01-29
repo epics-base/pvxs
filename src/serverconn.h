@@ -7,21 +7,27 @@
 #ifndef SERVERCONN_H
 #define SERVERCONN_H
 
+#include <atomic>
 #include <list>
 #include <map>
 #include <memory>
-#include <atomic>
 
 #include <epicsEvent.h>
 
 #include <pvxs/server.h>
-#include <pvxs/source.h>
 #include <pvxs/sharedpv.h>
-#include "evhelper.h"
-#include "utilpvt.h"
-#include "dataimpl.h"
-#include "udp_collector.h"
+#include <pvxs/source.h>
+
 #include "conn.h"
+#include "evhelper.h"
+#include "udp_collector.h"
+#include "utilpvt.h"
+
+#ifdef PVXS_ENABLE_OPENSSL
+#include "certstatus.h"
+#include "certstatusmanager.h"
+#include "openssl.h"
+#endif
 
 namespace pvxs {namespace impl {
 
@@ -56,27 +62,6 @@ struct ServerOp
     virtual void cleanup();
     virtual void show(std::ostream& strm) const =0;
 };
-
-// helper for implementing OpBase::logRemote
-template<typename Control>
-void doLogRemote(Control *self, Level lvl, const std::string& msg)
-{
-    auto serv = self->server.lock();
-    if(!serv)
-        return;
-    std::string m(msg); // copy for bind
-    auto wop(self->op); // copy weak for bind
-    serv->acceptor_loop.dispatch([wop, lvl, m](){
-        // op, chan, or conn may be dead or dissociated by this point...
-        if(auto oper = wop.lock()) {
-            if(auto chan = oper->chan.lock()) {
-                if(auto conn = chan->conn.lock()) {
-                    conn->logRemote(oper->ioid, lvl, m);
-                }
-            }
-        }
-    });
-}
 
 struct ServerChannelControl : public server::ChannelControl
 {
@@ -153,9 +138,8 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
 
     const std::shared_ptr<ServerChan>& lookupSID(uint32_t sid);
 
-    void logRemote(uint32_t ioid, Level lvl, const std::string& msg);
-
 private:
+    void proceedWithConnectionValidation();
 #define CASE(Op) virtual void handle_##Op() override final;
     CASE(ECHO);
     CASE(CONNECTION_VALIDATION);
@@ -184,6 +168,10 @@ public:
     virtual void cleanup() override final;
 private:
     virtual void bevEvent(short events) override final;
+#ifdef PVXS_ENABLE_OPENSSL
+    void peerStatusCallback(certs::cert_status_category_t status_category) override;
+#endif
+    virtual void bevRead() override final;
     virtual void bevWrite() override final;
 };
 
@@ -230,7 +218,10 @@ struct Server::Pvt
 {
     SockAttach attach;
 
-    std::weak_ptr<Server::Pvt> internal_self;
+    std::weak_ptr<Pvt> internal_self;
+#ifdef PVXS_ENABLE_OPENSSL
+    Server &server;
+#endif
 
     // "const" after ctor
     Config effective;
@@ -246,11 +237,26 @@ struct Server::Pvt
     // accept new connections and send beacons
     evbase acceptor_loop;
 
+#ifdef PVXS_ENABLE_OPENSSL
+    // @note order member `pvxs::client::ContextImpl::connections` after
+    //      `pvxs::client::ContextImpl::tls_context` so that
+    //       destruction order will be `connections`'s `ServerConn`
+    //       then `tls_context`'s `SSL_CTX ctx`.
+    //       ~ServerConn() will clean up ALL the `SSLPeerStatusAndMonitor`s
+    //       stored in `CertStatusExData` which is attached to the SSL_CTX,
+    //       so that by time SSL_CTX is freed there won't be any peer statuses
+    //       left
+    // @brief the server's tls context object
+    std::shared_ptr<ossl::SSLContext> tls_context;
+#endif
+
+    // The server listeners (@see pvxs::client::ContextImpl::tls_context)
     std::list<std::unique_ptr<UDPListener> > listeners;
     std::vector<SockEndpoint> beaconDest;
     std::vector<SockAddr> ignoreList;
 
     std::list<ServIface> interfaces;
+    // The server connections (@see pvxs::client::ContextImpl::tls_context)
     std::map<ServerConn*, std::shared_ptr<ServerConn> > connections;
 
     evsocket beaconSender4, beaconSender6;
@@ -275,21 +281,38 @@ struct Server::Pvt
     } state;
 
 #ifdef PVXS_ENABLE_OPENSSL
-    ossl::SSLContext tls_context;
+    ossl_ptr<uint8_t> cached_ocsp_response;
+    time_t cached_ocsp_status_date;
 #endif
 
     INST_COUNTER(ServerPvt);
 
+#ifndef PVXS_ENABLE_OPENSSL
     Pvt(const Config& conf);
+#else
+    Pvt(Server &server, const Config& conf);
+#endif
     ~Pvt();
 
     void start();
     void stop();
 
-private:
+#ifdef PVXS_ENABLE_OPENSSL
+    bool canRespondToTcpSearch() const { return !tls_context || tls_context->state >= ossl::SSLContext::DegradedMode; }
+    bool canRespondToTlsSearch() const { return tls_context && tls_context->state >= ossl::SSLContext::TcpReady && effective.tls_port; }
+#else
+    bool canRespondToTcpSearch() const { return true; }
+    bool canRespondToTlsSearch() const { return false; }
+#endif
+
+   private:
     void onSearch(const UDPManager::Search& msg);
     void doBeacons(short evt);
     static void doBeaconsS(evutil_socket_t fd, short evt, void *raw);
+
+#ifdef PVXS_ENABLE_OPENSSL
+    bool isContextReadyForTls() const { return tls_context && tls_context->state == ossl::SSLContext::TlsReady; }
+#endif
 };
 
 }} // namespace pvxs::server

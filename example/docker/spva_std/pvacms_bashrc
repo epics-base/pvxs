@@ -1,0 +1,45 @@
+
+export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+export PROJECT_HOME=/opt/epics
+
+#### [optional] Set path and name of the certificate database file (default: ./certs.db)
+# Environment: EPICS_PVACMS_DB
+# Default    : ${XDG_DATA_HOME}/pva/1.4/certs.db
+# export EPICS_PVACMS_DB=${XDG_DATA_HOME}/pva/1.4/certs.db
+
+#### SETUP Certificate Authority KEYCHAIN FILE
+# Place your certificate authority's certificate and key in this file if you have one
+# otherwise the certificate authority certificate will be created by PVACMS
+# Environment: EPICS_CERT_AUTH_TLS_KEYCHAIN
+# Default    : ${XDG_CONFIG_HOME}/pva/1.4/cert_auth.p12
+# export EPICS_CERT_AUTH_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/cert_auth.p12
+
+# Specify the name of your certificate authority
+# Environment: EPICS_CERT_AUTH_NAME, EPICS_CERT_AUTH_ORGANIZATION, EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT
+# Default    : CN=EPICS Root Certificate Authority, O=certs.epics.org, OU=EPICS Certificate Authority,
+# export EPICS_CERT_AUTH_NAME="EPICS Root Certificate Authority"
+# export EPICS_CERT_AUTH_ORGANIZATION="certs.epics.org"
+# export EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT="EPICS Certificate Authority"
+
+#### SETUP PVACMS KEYCHAIN FILE
+# Environment: EPICS_PVACMS_TLS_KEYCHAIN
+# Default    : ${XDG_CONFIG_HOME}/pva/1.4/pvacms.p12
+# export EPICS_PVACMS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/pvacms.p12
+
+# Configure ADMIN user client certificate (will be created for you)
+# This file will be copied to the admin user
+# Environment: EPICS_ADMIN_TLS_KEYCHAIN
+# Default    : ${XDG_CONFIG_HOME}/pva/1.4/admin.p12
+# export EPICS_ADMIN_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/admin.p12
+
+# Configure PVACMS ADMIN user access control file
+# Environment: EPICS_PVACMS_ACF
+# Default    : ${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf
+# export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf
+
+# set path
+export EPICS_HOST_ARCH=$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
+export PATH="${PROJECT_HOME}/pvxs/bin/${EPICS_HOST_ARCH}:$PATH"
+
+cd ~

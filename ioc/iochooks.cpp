@@ -165,17 +165,9 @@ void testCleanupPrepare()
     resetGroups();
 }
 
-static
-void pvxs_log_config(const char *str)
-{
-    logger_config_str(str);
-}
-
-static
-void pvxs_log_reset()
-{
-    logger_level_clear();
-}
+////////////////////////////////////
+// Two ioc shell commands for pvxs
+////////////////////////////////////
 
 /**
  * Show the PVXS server report.
@@ -311,6 +303,7 @@ void pvxrefdiff() {
     }
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
 void pvxreconfigure()
 {
     Guard (pvxServer->lock);
@@ -324,7 +317,7 @@ void pvxreconfigure()
         fprintf(stderr, "Warning: QSRV not running\n");
     }
 }
-
+#endif
 } // namespace
 
 static
@@ -478,12 +471,6 @@ void pvxsBaseRegistrar() noexcept {
 
         bool enableQ = enable2();
 
-        IOCShCommand<const char*>("pvxs_log_config", "KEY=VAL,KEY=VAL,...",
-                                  "Append logger configuration.  eg. pvxs_log_config \"pvxs.*=DEBUG\"")
-                .implementation<&pvxs_log_config>();
-        IOCShCommand<>("pvxs_log_clear",
-                       "Reset logger configuration to defaults")
-                .implementation<&pvxs_log_reset>();
         IOCShCommand<int>("pvxsr", "[show_detailed_information?]", "PVXS Server Report.  "
                                                                    "Shows information about server config (level==0)\n"
                                                                    "or about connected clients (level>0).\n")
@@ -496,9 +483,11 @@ void pvxsBaseRegistrar() noexcept {
                        "Save the current set of instance counters for reference by later pvxrefdiff.\n").implementation<&pvxrefsave>();
         IOCShCommand<>("pvxrefdiff",
                        "Show different of current instance counts with those when pvxrefsave was called.\n").implementation<&pvxrefdiff>();
+#ifdef PVXS_ENABLE_OPENSSL
         IOCShCommand<>("pvxreconfigure",
                        "Reconfigure QSRV using current values of EPICS_PVA*.  Only disconnects TLS clients\n")
                 .implementation<&pvxreconfigure>();
+#endif
 
         // Initialise the PVXS Server
         initialisePvxsServer();

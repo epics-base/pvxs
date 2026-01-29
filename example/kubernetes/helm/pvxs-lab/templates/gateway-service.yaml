@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-gateway
+  labels:
+    {{- include "pvxs-lab.labels" . | nindent 4 }}
+spec:
+  {{- if eq .Values.gateway.expose.mode "NodePort" }}
+  type: NodePort
+  externalTrafficPolicy: Local
+  {{- else }}
+  type: ClusterIP
+  {{- end }}
+  selector:
+    app: gateway
+    release: {{ .Release.Name }}
+  ports:
+    - name: pva-tcp
+      protocol: TCP
+      port: {{ if eq .Values.gateway.expose.mode "NodePort" }}{{ .Values.gateway.expose.tcpPort }}{{ else }}{{ .Values.ports.pvaTcp }}{{ end }}
+      targetPort: pva-tcp
+      {{- if eq .Values.gateway.expose.mode "NodePort" }}
+      nodePort: {{ .Values.gateway.expose.nodePortTcp }}
+      {{- end }}
+    {{- if .Values.ports.exposePvaTls }}
+    - name: pva-tls
+      protocol: TCP
+      port: {{ if eq .Values.gateway.expose.mode "NodePort" }}{{ .Values.gateway.expose.tlsPort }}{{ else }}{{ .Values.ports.pvaTls }}{{ end }}
+      targetPort: pva-tls
+      {{- if eq .Values.gateway.expose.mode "NodePort" }}
+      nodePort: {{ .Values.gateway.expose.nodePortTls }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.gateway.expose.enableUdp }}
+    - name: pva-udp
+      protocol: UDP
+      port: {{ if eq .Values.gateway.expose.mode "NodePort" }}{{ .Values.gateway.expose.udpPort }}{{ else }}{{ .Values.ports.pvaUdp }}{{ end }}
+      targetPort: pva-udp
+      {{- if eq .Values.gateway.expose.mode "NodePort" }}
+      nodePort: {{ .Values.gateway.expose.nodePortUdp }}
+      {{- end }}
+  {{- end }}

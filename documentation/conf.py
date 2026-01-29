@@ -34,6 +34,74 @@ def git_describe():
         print(f'Unable to find Git revision: {e}')
         return None # fallback
 
+rst_prolog = """
+.. |security| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">security</i>
+.. |guide| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">developer_guide</i>
+.. |terminal| raw:: html
+
+   <i class="material-icons" style="vertical-align: middle;">computer</i>
+.. |1| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">counter_1</i>
+.. |2| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">counter_2</i>
+.. |3| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">counter_3</i>
+.. |4| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">counter_4</i>
+.. |5| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">counter_5</i>
+.. |6| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">counter_6</i>
+.. |7| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">counter_7</i>
+.. |8| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">counter_8</i>
+.. |9| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">counter_9</i>
+.. |10%| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">clock_loader_10</i>
+.. |20%| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">clock_loader_20</i>
+.. |40%| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">clock_loader_40</i>
+.. |60%| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">clock_loader_60</i>
+.. |80%| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">clock_loader_80</i>
+.. |90%| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">clock_loader_90</i>
+.. |pre-packaged| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">deployed_code</i>
+.. |step-by-step| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">checklist</i>
+.. |step| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">done_all</i>
+.. |learn| raw:: html
+
+   <i class="material-symbols-outlined" style="vertical-align: middle;">local_library</i>
+"""
 def read_version(fmt):
     import os, re
 
@@ -48,8 +116,8 @@ def read_version(fmt):
 # -- Project information -----------------------------------------------------
 
 project = 'PVXS'
-copyright = time.strftime('%Y Michael Davidsaver and Osprey DCS LLC')
-author = 'Michael Davidsaver'
+copyright = time.strftime('%Y Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC')
+author = 'Michael Davidsaver and George McIntyre'
 
 # The short X.Y version
 version = git_describe() or read_version('{PVXS_MAJOR_VERSION}.{PVXS_MINOR_VERSION}.{PVXS_MAINTENANCE_VERSION}')
@@ -121,8 +189,7 @@ html_theme = 'alabaster'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = []
-
+html_static_path = ['_static']
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
 #

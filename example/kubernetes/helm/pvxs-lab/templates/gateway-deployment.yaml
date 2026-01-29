@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-gateway
+  labels:
+    {{- include "pvxs-lab.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  selector:
+    matchLabels:
+      app: gateway
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: gateway
+        release: {{ .Release.Name }}
+    spec:
+      {{- if .Values.gateway.hostNetwork }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
+      initContainers:
+        - name: gateway-conf-init
+          image: {{ include "pvxs-lab.image" (dict "Values" .Values "name" .Values.images.gateway.name "tag" .Values.images.gateway.tag) | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh","-lc"]
+          args:
+            - |
+              set -e
+              install -d -m 0755 -o gateway -g gateway /work
+              install -m 0644 -o gateway -g gateway /conf-src/gateway.conf /work/gateway.conf
+          volumeMounts:
+            - name: gw-conf-src
+              mountPath: /conf-src
+              readOnly: true
+            - name: gw-conf
+              mountPath: /work
+      containers:
+        - name: gateway
+          image: {{ include "pvxs-lab.image" (dict "Values" .Values "name" .Values.images.gateway.name "tag" .Values.images.gateway.tag) | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: pva-tcp
+              containerPort: {{ ternary .Values.gateway.expose.tcpPort .Values.ports.pvaTcp (eq .Values.gateway.expose.mode "NodePort") }}
+              protocol: TCP
+            - name: pva-tls
+              containerPort: {{ ternary .Values.gateway.expose.tlsPort .Values.ports.pvaTcp (eq .Values.gateway.expose.mode "NodePort") }}
+              protocol: TCP
+            {{- if .Values.gateway.expose.enableUdp }}
+            - name: pva-udp
+              containerPort: {{ ternary .Values.gateway.expose.udpPort .Values.ports.pvaUdp (eq .Values.gateway.expose.mode "NodePort") }}
+              protocol: UDP
+            {{- end }}
+          env:
+            - name: EPICS_PVA_TLS_KEYCHAIN
+              value: "/home/gateway/.config/pva/1.4/gateway.p12"
+            - name: EPICS_PVAS_TLS_KEYCHAIN
+              value: {{ if .Values.gateway.separate_server_keychain }}{{ "/home/gateway/.config/pva/1.4/gatewayS.p12" }}{{ else }}{{ "/home/gateway/.config/pva/1.4/gateway.p12" }}{{ end }}
+            {{- if .Values.gateway.debug.enabled }}
+            - name: PVXS_LOG
+              value: {{ .Values.gateway.debug.logLevel | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: gw-conf
+              mountPath: /home/gateway/gateway.conf
+              subPath: gateway.conf
+            - name: pva-config
+              mountPath: /home/gateway/.config/pva/1.4
+      volumes:
+        - name: gw-conf-src
+          configMap:
+            name: {{ include "pvxs-lab.fullname" . }}-gateway-conf
+        - name: gw-conf
+          emptyDir: {}
+        - name: pva-config
+          {{- if .Values.gateway.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "pvxs-lab.fullname" . }}-gateway-pva
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+

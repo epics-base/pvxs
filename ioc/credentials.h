@@ -19,15 +19,21 @@ namespace pvxs {
 namespace ioc {
 
 /**
- * eg.
- * "username"  implies "ca/" prefix
- * "krb/principle"
- * "role/groupname"
+ * @brief Credentials class
+ *
+ * @details This class is used to store the credentials for a client or server.
+ *
+ * @param clientCredentials The client credentials to be used for the credentials object
+ *
  */
 class Credentials {
 public:
     std::vector<std::string> cred;
+    std::string method;
+    std::string authority;
     std::string host;
+    std::string issuer_id;
+    std::string serial;
     explicit Credentials(const server::ClientCredentials& clientCredentials);
     Credentials(const Credentials&) = delete;
     Credentials(Credentials&&) = default;

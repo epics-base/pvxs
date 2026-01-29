@@ -1,0 +1,96 @@
+{{- $sc := "" -}}
+
+{{- if .Values.pvacms.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-pvacms-config
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if .Values.pvacms.persistence.storageClassName }}
+  storageClassName: {{ .Values.pvacms.persistence.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.pvacms.persistence.size | quote }}
+---
+{{- end }}
+
+{{- if .Values.pvacms.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-pvacms-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if .Values.pvacms.persistence.storageClassName }}
+  storageClassName: {{ .Values.pvacms.persistence.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.pvacms.persistence.dataSize | default "256Mi" }}
+---
+{{- end }}
+
+{{- if .Values.testioc.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-testioc-pva
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if .Values.testioc.persistence.storageClassName }}
+  storageClassName: {{ .Values.testioc.persistence.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.testioc.persistence.size | quote }}
+---
+{{- end }}
+
+{{- if .Values.tstioc.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-tstioc-pva
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if .Values.tstioc.persistence.storageClassName }}
+  storageClassName: {{ .Values.tstioc.persistence.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.tstioc.persistence.size | quote }}
+---
+{{- end }}
+
+{{- if .Values.gateway.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-gateway-pva
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if .Values.gateway.persistence.storageClassName }}
+  storageClassName: {{ .Values.gateway.persistence.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.gateway.persistence.size | quote }}
+---
+{{- end }}
+
+{{- if .Values.lab.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-lab-pva
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if .Values.lab.persistence.storageClassName }}
+  storageClassName: {{ .Values.lab.persistence.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.lab.persistence.size | quote }}
+{{- end }}

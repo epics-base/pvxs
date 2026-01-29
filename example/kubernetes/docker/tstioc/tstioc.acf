@@ -1,0 +1,31 @@
+AUTHORITY(EPICS_CA, "EPICS Root Certificate Authority")
+
+UAG(USERS) {
+    "gateway",
+    "operator"
+}
+
+UAG(SPECIAL_USERS) {
+    "gateway",
+    "operator"
+}
+
+ASG(SPECIAL) {
+    RULE(1,WRITE,TRAPWRITE) {
+        UAG(SPECIAL_USERS)
+        AUTHORITY(EPICS_CA)
+        PROTOCOL(TLS)
+        METHOD(X509)
+    }
+}
+
+ASG(DEFAULT) {
+    RULE(0,READ)
+    RULE(1,WRITE,TRAPWRITE) {
+        UAG(USERS)
+        AUTHORITY(EPICS_CA)
+        PROTOCOL(TLS)
+        METHOD(X509)
+    }
+}
+

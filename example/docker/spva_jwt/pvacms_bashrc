@@ -1,0 +1,5 @@
+export EPICS_AUTH_JWT_REQUEST_FORMAT='#token#'
+export EPICS_AUTH_JWT_REQUEST_METHOD='GET'
+export EPICS_AUTH_JWT_RESPONSE_FORMAT='{ *, "valid": "#response#" }'
+export EPICS_AUTH_JWT_TRUSTED_URI='http://localhost:8080/default/verify'
+#export EPICS_AUTH_JWT_USE_RESPONSE_CODE=NO

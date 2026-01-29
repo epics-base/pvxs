@@ -1,0 +1,101 @@
+{{- if .Values.networkPolicy.enabled }}
+
+# 1) PVACMS ingress: allow from any pod in this Helm release
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-pvacms-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: pvacms
+      release: {{ .Release.Name }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              release: {{ .Release.Name }}
+
+---
+# 2) IOC ingress: allow ONLY from lab and gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-ioc-ingress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: ["testioc","tstioc"]
+    matchLabels:
+      release: {{ .Release.Name }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: lab
+              release: {{ .Release.Name }}
+        - podSelector:
+            matchLabels:
+              app: gateway
+              release: {{ .Release.Name }}
+
+---
+# 3) Gateway ingress: deny all in-cluster pod traffic to gateway
+#    (hostNetwork traffic from outside the cluster is not governed by NetworkPolicy)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-gateway-ingress-deny
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway
+      release: {{ .Release.Name }}
+  policyTypes: ["Ingress"]
+  ingress: []
+
+---
+# 4) Lab egress: allow ONLY to pvacms/testioc/tstioc + DNS
+#    This blocks lab -> gateway (by Service name, Pod IP, or hostNetwork IP).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "pvxs-lab.fullname" . }}-lab-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: lab
+      release: {{ .Release.Name }}
+  policyTypes: ["Egress"]
+  egress:
+    # Allow to the three internal services
+    - to:
+        - podSelector:
+            matchLabels:
+              app: pvacms
+              release: {{ .Release.Name }}
+        - podSelector:
+            matchLabels:
+              app: testioc
+              release: {{ .Release.Name }}
+        - podSelector:
+            matchLabels:
+              app: tstioc
+              release: {{ .Release.Name }}
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+{{- end }}

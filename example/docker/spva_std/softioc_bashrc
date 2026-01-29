@@ -1,0 +1,20 @@
+
+export XDG_DATA_HOME=${XDG_DATA_HOME-~/.local/share}
+export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
+export PROJECT_HOME=/opt/epics
+
+#### SETUP SOFTIOC KEYCHAIN FILE
+# Environment: EPICS_PVAS_TLS_KEYCHAIN
+# Default    : ${XDG_CONFIG_HOME}/pva/1.4/server.p12
+export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/server.p12
+
+#### SETUP SOFTIOC Organisation
+# Environment: EPICS_PVAS_AUTH_ORGANIZATION
+# Default    : <hostname>
+export EPICS_PVAS_AUTH_ORGANIZATION=epics.org
+
+# set path
+export EPICS_HOST_ARCH=$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
+export PATH="${PROJECT_HOME}/pvxs/bin/${EPICS_HOST_ARCH}:$PATH"
+
+cd ~

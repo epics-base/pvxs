@@ -1,0 +1,27 @@
+#!/bin/zsh
+set -e # Exit immediately if a command exits with a non-zero status.
+
+DOCKER_DIR="$(dirname "$0")"
+DOCKER_DIR=${DOCKER_DIR:A}
+
+pushd "${DOCKER_DIR}"
+
+# Add trap to ensure we return to original directory on exit
+trap "popd" EXIT
+
+BASE_IMAGE_NAME="lab_base"
+BASE_IMAGE_TAG="latest"
+TARGET_IMAGE_NAME="lab"
+TARGET_IMAGE_TAG="latest"
+
+echo "--- Building ${TARGET_IMAGE_NAME} Docker image ---"
+
+docker build \
+  --build-arg BASE_IMAGE=${BASE_IMAGE_NAME} \
+  --build-arg BASE_IMAGE_TAG=${BASE_IMAGE_TAG} \
+  ${*} \
+  -t "${DOCKER_USERNAME:-georgeleveln}/${TARGET_IMAGE_NAME}:${TARGET_IMAGE_TAG}" \
+  -f "${DOCKER_DIR}/Dockerfile" \
+  .
+
+echo "--- Successfully built ${TARGET_IMAGE_NAME}:${TARGET_IMAGE_TAG} ---"

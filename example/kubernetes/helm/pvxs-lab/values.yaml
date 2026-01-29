@@ -1,0 +1,139 @@
+dockerUsername: "georgeleveln"
+
+images:
+  pvacms:
+    name: "pvacms"
+    tag: "latest"
+  testioc:
+    name: "testioc"
+    tag: "latest"
+  tstioc:
+    name: "tstioc"
+    tag: "latest"
+  gateway:
+    name: "gateway"
+    tag: "latest"
+  lab:
+    name: "lab"
+    tag: "latest"
+
+imagePullPolicy: IfNotPresent
+
+pvacms:
+  replicas: 1
+  debug:
+    enabled: false
+    logLevel: "pvxs.*=DEBUG"
+  persistence:
+    enabled: true
+    size: 64Mi
+    dataSize: 256Mi
+    storageClassName: ""
+
+testioc:
+  replicas: 1
+  debug:
+    enabled: false
+    logLevel: "pvxs.*=DEBUG"
+  persistence:
+    enabled: true
+    size: 64Mi
+    storageClassName: ""
+
+tstioc:
+  replicas: 1
+  debug:
+    enabled: false
+    logLevel: "pvxs.*=DEBUG"
+  persistence:
+    enabled: true
+    size: 64Mi
+    storageClassName: ""
+
+gateway:
+  replicas: 1
+  hostNetwork: false    # for NodePort mode
+  # externalInterface: 123.45.6.7   # egress if defined
+  separate_server_keychain: false
+
+  expose:
+    mode: NodePort      # ClusterIP | NodePort
+    tcpPort: 31075      # pvagw serverport inside the pod
+    tlsPort: 31076      # pvagw tls serverport inside the pod
+    udpPort: 31076      # pvagw bcastport inside the pod
+    nodePortTcp: 31075  # must equal tcpPort for sanity
+    nodePortTls: 31076  # must equal tlsPort for sanity
+    nodePortUdp: 31076  # must equal udpPort
+    enableUdp: false    # recommend false if you will use TCP search only
+
+  config: |
+    {
+      "version": 2,
+      "readOnly": false,
+      "clients": [
+        {
+          "name": "upstream",
+          "autoaddrlist": false,
+          "addrlist": "{{ include "pvxs-lab.pvacmsService" . }} {{ include "pvxs-lab.testiocService" . }} {{ include "pvxs-lab.tstiocService" . }}",
+          "tls_keychain": "/home/gateway/.config/pva/1.4/gateway.p12"
+        }
+      ],
+      "servers": [
+        {
+          "name": "downstream",
+          "clients": ["upstream"],
+          "statusprefix": "GW:STS:",
+          "autoaddrlist": false,
+          "addrlist": "{{ include "pvxs-lab.gatewayService" . }} {{ include "pvxs-lab.pvacmsService" . }}",
+          "tls_keychain": "/home/gateway/.config/pva/1.4/gateway{{ if .Values.gateway.separate_server_keychain }}{{ "S" }}{{ end }}.p12",
+          {{- if eq .Values.gateway.expose.mode "NodePort" }}
+          "serverport": "{{ toJson .Values.gateway.expose.tcpPort }}",
+          "EPICS_PVAS_TLS_PORT": "{{ toJson .Values.gateway.expose.tlsPort }}",
+            {{- if .Values.gateway.expose.enableUdp }}
+          "bcastport": "{{ .Values.gateway.expose.udpPort }}",
+            {{- end }}
+          {{- end }}
+          "access": "gateway.acf",
+          "pvlist": "gateway.pvlist"
+        },
+        {
+          "name": "downstream_status",
+          "clients": [],
+          "interface": ["127.0.0.1"],
+          "statusprefix": "GW:STS:"
+        }
+      ]
+    }
+
+  debug:
+    enabled: false
+    logLevel: "p4p.gw*=DEBUG"
+
+  persistence:
+    enabled: true
+    size: 64Mi
+    storageClassName: ""
+
+lab:
+  image: "lab:latest"
+  replicas: 1
+
+  persistence:
+    enabled: true
+    size: 64Mi
+    storageClassName: ""
+
+  keepalive:
+    enabled: true
+    command: ["/bin/sh", "-lc"]
+    args: ["sleep infinity"]
+
+# Internal PVAccess ports (PVXS/P4P defaults)
+ports:
+  pvaTcp: 5075
+  pvaUdp: 5076
+  pvaTls: 5076
+  exposePvaTls: true
+
+networkPolicy:
+  enabled: false

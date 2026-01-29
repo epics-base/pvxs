@@ -4,41 +4,48 @@
  * in file LICENSE that is included with this distribution.
  */
 
-
-#include <list>
-#include <map>
-#include <system_error>
-#include <functional>
 #include <atomic>
 #include <cstdlib>
-
-#include <signal.h>
+#include <functional>
+#include <list>
+#include <map>
 
 #include <dbDefs.h>
-#include <envDefs.h>
+#include <epicsString.h>
 #include <epicsThread.h>
 #include <epicsTime.h>
-#include <epicsGuard.h>
-#include <epicsString.h>
+#include <signal.h>
 
-#include <pvxs/server.h>
 #include <pvxs/client.h>
+#include <pvxs/config.h>
 #include <pvxs/log.h>
+#include <pvxs/server.h>
+#include <pvxs/sharedpv.h>
+
 #include "evhelper.h"
 #include "serverconn.h"
-#include "utilpvt.h"
 #include "udp_collector.h"
+#include "utilpvt.h"
+
+#ifdef PVXS_ENABLE_OPENSSL
+#include "certstatusmanager.h"
+#endif
 
 namespace pvxs {
 namespace impl {
 ReportInfo::~ReportInfo() {}
-}
+}  // namespace impl
 namespace server {
 using namespace impl;
 
-DEFINE_LOGGER(serversetup, "pvxs.server.setup");
-DEFINE_LOGGER(serverio, "pvxs.server.io");
-DEFINE_LOGGER(serversearch, "pvxs.server.search");
+DEFINE_LOGGER(serversetup, "pvxs.svr.init");
+DEFINE_LOGGER(serverio, "pvxs.svr.io");
+DEFINE_LOGGER(serversearch, "pvxs.svr.search");
+DEFINE_LOGGER(status_svr, "pvxs.st.svr");
+
+#ifdef PVXS_ENABLE_OPENSSL
+DEFINE_LOGGER(osslsetup, "pvxs.ossl.init");
+#endif
 
 // mimic pvAccessCPP server (almost)
 // send a "burst" of beacons, then fallback to a longer interval
@@ -63,7 +70,11 @@ Server::Server(const Config& conf)
      * Which need to safely access server storage, but should not
      * prevent a server from stopping.
      */
+#ifdef PVXS_ENABLE_OPENSSL
+    auto internal(std::make_shared<Pvt>(*this, conf));
+#else
     auto internal(std::make_shared<Pvt>(conf));
+#endif
     internal->internal_self = internal;
 
     // external
@@ -71,6 +82,7 @@ Server::Server(const Config& conf)
         auto trash(std::move(internal));
         trash->stop();
     });
+
     // we don't keep a weak_ptr to the external reference.
     // Caller is entirely responsible for keeping this server running
 }
@@ -148,59 +160,6 @@ std::vector<std::pair<std::string, int> > Server::listSource()
     return names;
 }
 
-void Server::reconfigure(const Config& inconf)
-{
-    if(!pvt)
-        throw std::logic_error("NULL Server");
-
-    auto newconf(inconf);
-    newconf.expand(); // maybe catch some errors early
-
-    log_info_printf(serversetup, "Reconfigure%s", "\n");
-
-    // is the current server running?
-
-    Pvt::state_t prev_state;
-    pvt->acceptor_loop.call([this, &prev_state]() {
-        prev_state = pvt->state;
-    });
-
-    bool was_running = prev_state==Pvt::Running || prev_state==Pvt::Starting;
-
-    if(was_running)
-        pvt->stop();
-
-    decltype(pvt->sources) transfers;
-    decltype(pvt->builtinsrc) builtin;
-
-    // copy all Source, including builtin
-    {
-        auto G(pvt->sourcesLock.lockReader());
-
-        transfers = pvt->sources;
-        builtin = pvt->builtinsrc;
-    }
-
-    // completely destroy the current/old server to free up TCP ports
-    pvt.reset();
-
-    // build up a new, empty, server
-    Server newsrv(newconf);
-    pvt = std::move(newsrv.pvt);
-
-    {
-        auto G(pvt->sourcesLock.lockWriter());
-
-        pvt->sources = transfers;
-        pvt->builtinsrc = builtin;
-    }
-
-    if(was_running) {
-        pvt->start();
-        log_info_printf(serversetup, "Resume%s", "\n");
-    }
-}
-
 const Config& Server::config() const
 {
     if(!pvt)
@@ -209,22 +168,29 @@ const Config& Server::config() const
     return pvt->effective;
 }
 
+client::Config Server::clientConfig(const Config &server_config) {
+    client::Config ret;
+    ret.udp_port = server_config.udp_port;
+    ret.tcp_port = server_config.tcp_port;
+    ret.interfaces = server_config.interfaces;
+    ret.addressList = server_config.beaconDestinations;
+    ret.autoAddrList = server_config.auto_beacon;
+    // server_config.ignoreAddrs; no equivalent with client config
+
+    ret.tls_port = server_config.tls_port;
+    ret.tls_disabled = server_config.tls_disabled;
+    ret.tls_disable_status_check = server_config.tls_disable_status_check;
+    ret.tls_disable_stapling = server_config.tls_disable_stapling;
+
+    return ret;
+}
+
 client::Config Server::clientConfig() const
 {
     if(!pvt)
         throw std::logic_error("NULL Server");
 
-    client::Config ret;
-    // do not copy tls_keychain_file
-    ret.udp_port = pvt->effective.udp_port;
-    ret.tcp_port = pvt->effective.tcp_port;
-    ret.tls_port = pvt->effective.tls_port;
-    ret.interfaces = pvt->effective.interfaces;
-    ret.addressList = pvt->effective.beaconDestinations;
-    ret.autoAddrList = pvt->effective.auto_beacon;
-    // pvt->effective.ignoreAddrs; no equivalent with client config
-
-    return ret;
+    return clientConfig(pvt->effective);
 }
 
 Server& Server::addPV(const std::string& name, const SharedPV& pv)
@@ -377,18 +343,15 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                 auto& first = serv.pvt->interfaces.front();
                 strm<<" TCP_Port: "<<first.bind_addr.port();
             }
-            if(auto evmethod = event_base_get_method(serv.pvt->acceptor_loop.base)) {
-                strm<<" evmethod: "<<evmethod;
-            }
             strm<<"\n";
 
 #ifdef PVXS_ENABLE_OPENSSL
-            if(serv.pvt->tls_context) {
-                auto cert(serv.pvt->tls_context.certificate0());
+            if (serv.pvt->tls_context && serv.pvt->tls_context->ctx) {
+                auto cert(serv.pvt->tls_context->getEntityCertificate());
                 assert(cert);
-                strm<<indent{}<<"TLS Cert. "<<ossl::ShowX509{cert}<<"\n";
+                strm << indent{} << "TLS Cert. " << ossl::ShowX509{cert} << "\n";
             } else {
-                strm<<indent{}<<"TLS Cert. not loaded\n";
+                strm << indent{} << "TLS Cert. not loaded\n";
             }
 #else
             strm<<indent{}<<"TLS Support not enabled\n";
@@ -402,8 +365,10 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                 strm<<indent{}<<"Peer"<<conn->peerName
                     <<" backlog="<<conn->backlog.size()
                     <<" TX="<<conn->statTx<<" RX="<<conn->statRx
-                    <<" auth="<<conn->cred->method
-                    <<(conn->iface->isTLS ? " TLS" : "")
+                    <<" auth="<<(conn->cred? conn->cred->method :"")
+#ifdef PVXS_ENABLE_OPENSSL
+                  <<(conn->iface && conn->iface->isTLS ? " TLS" : "")
+#endif
                     <<"\n";
 
                 if(detail<=2)
@@ -413,11 +378,10 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 
                 strm<<indent{}<<"Cred: "<<*conn->cred<<"\n";
 #ifdef PVXS_ENABLE_OPENSSL
-                if(conn->iface->isTLS && conn->connection()) {
-                    auto ctx = bufferevent_openssl_get_ssl(conn->connection());
+                if (conn->iface && conn->iface->isTLS && conn->connection()) {
+                    const auto ctx = bufferevent_openssl_get_ssl(conn->connection());
                     assert(ctx);
-                    if(auto cert = SSL_get0_peer_certificate(ctx))
-                        strm<<indent{}<<"Cert: "<<ossl::ShowX509{cert}<<"\n";
+                    if (const auto cert = SSL_get0_peer_certificate(ctx)) strm << indent{} << "Cert: " << ossl::ShowX509{cert} << "\n";
                 }
 #endif
 
@@ -459,29 +423,30 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
     return strm;
 }
 
-Server::Pvt::Pvt(const Config &conf)
-    :effective(conf)
-    ,beaconMsg(128)
-    ,acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow-2)
-    ,beaconSender4(AF_INET, SOCK_DGRAM, 0)
-    ,beaconSender6(AF_INET6, SOCK_DGRAM, 0)
-    ,beaconTimer(__FILE__, __LINE__,
-                 event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this))
-    ,searchReply(0x10000)
-    ,builtinsrc(StaticSource::build())
-    ,state(Stopped)
-{
-    effective.expand();
-
-#ifdef PVXS_ENABLE_OPENSSL
-    if(!effective.tls_keychain_file.empty()) {
-        try {
-            tls_context = ossl::SSLContext::for_server(effective);
-        }catch(std::exception& e){
-            log_err_printf(serversetup, "Unable to setup TLS.  Disabled for server : %s\n", e.what());
-        }
-    }
+#ifndef PVXS_ENABLE_OPENSSL
+Server::Pvt::Pvt(const Config& conf)
+    :
+#else
+Server::Pvt::Pvt(Server& svr, const Config& conf)
+    : server(svr),
 #endif
+      effective(conf),
+      beaconMsg(128),
+      acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow - 2),
+#ifdef PVXS_ENABLE_OPENSSL
+      tls_context(nullptr),
+#endif
+      beaconSender4(AF_INET, SOCK_DGRAM, 0),
+      beaconSender6(AF_INET6, SOCK_DGRAM, 0),
+      beaconTimer(__FILE__, __LINE__, event_new(acceptor_loop.base, -1, EV_TIMEOUT, doBeaconsS, this)),
+      searchReply(0x10000),
+      builtinsrc(StaticSource::build()),
+      state(Stopped)
+{
+#ifdef PVXS_ENABLE_OPENSSL
+    log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Stopped", "Server::Pvt::Pvt()", tls_context.get());
+#endif
+    effective.expand();
 
     beaconSender4.set_broadcast(true);
 
@@ -532,7 +497,14 @@ Server::Pvt::Pvt(const Config &conf)
             listeners.push_back(manager.onSearch(any4, cb));
         }
 
-        if(addr.addr.family()==AF_INET && !addr.addr.isAny() && !addr.addr.isMCast()) {
+        if(evsocket::ipstack!=evsocket::Winsock
+                && addr.addr.family()==AF_INET && !addr.addr.isAny() && !addr.addr.isMCast()) {
+            /* An oddness of BSD sockets (not winsock) is that binding to
+             * INADDR_ANY will receive unicast and broadcast, but binding to
+             * a specific interface address receives only unicast.  The trick
+             * is to bind a second socket to the interface broadcast address,
+             * which will then receive only broadcasts.
+             */
             for(auto bcast : dummy.broadcasts(&addr.addr)) {
                 bcast.setPort(addr.addr.port());
                 listeners.push_back(manager.onSearch(bcast, cb));
@@ -572,47 +544,68 @@ Server::Pvt::Pvt(const Config &conf)
         ignoreList.push_back(temp);
     }
 
-
     acceptor_loop.call([this, &tcpifaces](){
         // from accepter worker
 
 #ifdef PVXS_ENABLE_OPENSSL
+        if (effective.isTlsConfigured()) {
+            log_debug_printf(osslsetup, "TLS is configured for server.  Attempting to create a server TLS context for: %s\n", effective.tls_keychain_file.c_str());
+            try {
+                // TODO: currently not possible to disable TLS for an individual search.
+                //   until then, create a separate inner context to retrieve signed payload from CMS
+                log_debug_printf(osslsetup, "Creating a client context for certificate status to use in server TLS context creation%s", "\n");
+                auto inner_conf = clientConfig(effective);
+                inner_conf.tls_disabled = true;
+                log_debug_printf(osslsetup, "Created a client context for server certificate status%s", "\n");
+                const auto inner_client = inner_conf.build();
+
+                tls_context = ossl::SSLContext::for_server(effective, inner_client, acceptor_loop);
+                log_debug_printf(osslsetup, "Created server TLS context for: %s\n", effective.tls_keychain_file.c_str());
+            } catch (std::exception& e) {
+                log_debug_printf(osslsetup, "Failed to configure TLS for server: %s\n", e.what());
+                log_warn_printf(osslsetup, "TLS disabled for server: %s\n", e.what());
+                effective.tls_disabled = true;
+                effective.tls_keychain_file.clear();
+            }
+        } else if (tls_context) {
+            log_debug_printf(osslsetup, "TLS is not configured but we have a server TLS context.  Set it to TCP only (DegradedMode)%s", "\n");
+            tls_context->setDegradedMode(true);
+        }
+
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
 #endif
+            bool firstiface = true;
+            for (auto& addr : tcpifaces) {
+                if (addr.port() == 0) addr.setPort(effective.tcp_port);
 
-        bool firstiface = true;
-        for(auto& addr : tcpifaces) {
-            if(addr.port()==0)
-                addr.setPort(effective.tcp_port);
+                interfaces.emplace_back(addr, this, firstiface, false);
 
-            interfaces.emplace_back(addr, this, firstiface, false);
-
-            if(firstiface || effective.tcp_port==0)
-                effective.tcp_port = interfaces.back().bind_addr.port();
-            firstiface = false;
-        }
-
-#ifdef PVXS_ENABLE_OPENSSL
-        if(tls_context) {
-            firstiface = true;
-            for(auto& addr : tlsifaces) {
-                // unconditionally set port to avoid clash with plain TCP listener
-                addr.setPort(effective.tls_port);
-
-                interfaces.emplace_back(addr, this, firstiface, true);
-
-                if(firstiface || effective.tls_port==0)
-                    effective.tls_port = interfaces.back().bind_addr.port();
+                if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
                 firstiface = false;
             }
-        }
+
+#ifdef PVXS_ENABLE_OPENSSL
+            // Set this up as long as TLS is configured, even if its configured badly
+            // or if the certificates are invalid, because the state may change and
+            // we may need to listen for TLS traffic once it does
+            if (effective.isTlsConfigured()) {
+                firstiface = true;
+                for (auto& addr : tlsifaces) {
+                    // unconditionally set port to avoid clash with plain TCP listener
+                    addr.setPort(effective.tls_port);
+
+                    interfaces.emplace_back(addr, this, firstiface, true);
+
+                    if (firstiface || effective.tls_port == 0) effective.tls_port = interfaces.back().bind_addr.port();
+                    firstiface = false;
+                }
+            }
 #endif
 
-        for(const auto& addr : effective.beaconDestinations) {
-            beaconDest.emplace_back(addr.c_str(), nullptr, effective.udp_port);
-            log_debug_printf(serversetup, "Will send beacons to %s\n",
-                             std::string(SB()<<beaconDest.back()).c_str());
-        }
+            for (const auto& addr : effective.beaconDestinations) {
+                beaconDest.emplace_back(addr.c_str(), &effective);
+                log_debug_printf(serversetup, "Will send beacons to %s\n", std::string(SB() << beaconDest.back()).c_str());
+            }
     });
 
     {
@@ -687,20 +680,26 @@ void Server::Pvt::start()
             return;
         }
         state = Starting;
+#ifdef PVXS_ENABLE_OPENSSL
+        log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Starting", "Server::Pvt::start()", tls_context.get());
+#endif
         log_debug_printf(serversetup, "Server starting\n%s", "");
 
         for(auto& iface : interfaces) {
             if(evconnlistener_enable(iface.listener.get())) {
                 log_err_printf(serversetup, "Error enabling listener on %s\n", iface.name.c_str());
             }
-            log_debug_printf(serversetup, "Server enabled%s listener on %s\n",
-                             iface.isTLS ? " TLS" : "", iface.name.c_str());
+#ifdef PVXS_ENABLE_OPENSSL
+            log_debug_printf(serversetup, "Server enabled%s listener on %s\n", iface.isTLS ? " TLS" : "", iface.name.c_str());
+#else
+            log_debug_printf(serversetup, "Server enabled%s listener on %s\n", "", iface.name.c_str());
+#endif
         }
     });
     if(prev_state!=Stopped)
         return;
 
-    // being processing Searches
+    // begin processing Searches
     for(auto& L : listeners) {
         L->start();
     }
@@ -714,9 +713,10 @@ void Server::Pvt::start()
             log_err_printf(serversetup, "Error enabling beacon timer on\n%s", "");
 
         state = Running;
+#ifdef PVXS_ENABLE_OPENSSL
+        log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Running", "Server::Pvt::start()", tls_context.get());
+#endif
     });
-
-
 }
 
 void Server::Pvt::stop()
@@ -733,9 +733,12 @@ void Server::Pvt::stop()
             return;
         }
         state = Stopping;
+#ifdef PVXS_ENABLE_OPENSSL
+        log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Stopping", "Server::Pvt::stop()", tls_context.get());
+#endif
 
         if(event_del(beaconTimer.get()))
-            log_err_printf(serversetup, "Error disabling beacon timer on\n%s", "");
+            log_err_printf(serversetup, "Error disabling beacon timer\n%s", "");
     });
     if(prev_state!=Running)
         return;
@@ -763,7 +766,10 @@ void Server::Pvt::stop()
         }
 
         state = Stopped;
-    });
+#ifdef PVXS_ENABLE_OPENSSL
+        log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Stopped", "Server::Pvt::stop()", tls_context.get());
+#endif
+});
 
     /* Cycle through once more to ensure any callbacks queue during the previous call have completed.
      * TODO: this is partly a crutch as eg. SharedPV::attach() binds strong self references
@@ -777,40 +783,27 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     // on UDPManager worker
 
     for(const auto& addr : ignoreList) { // expected to be a short list
-        if(msg.origSrc.family()!=addr.family()) {
+        if(msg.src.family()!=addr.family()) {
             // skip
-        } else if(msg.origSrc->in.sin_addr.s_addr != addr->in.sin_addr.s_addr) {
+        } else if(msg.src->in.sin_addr.s_addr != addr->in.sin_addr.s_addr) {
             // skip
         } else if(addr->in.sin_port==0) {
             // ignore all ports
             return;
-        } else if(msg.origSrc->in.sin_port == addr->in.sin_port) {
+        } else if(msg.src->in.sin_port == addr->in.sin_port) {
             // ignore specific sender port
             return;
         }
     }
 
-    log_debug_printf(serverio, "%s searching\n", msg.origSrc.tostring().c_str());
+    log_debug_printf(serverio, "%s searching\n", msg.src.tostring().c_str());
 
     searchOp._names.resize(msg.names.size());
     for(auto i : range(msg.names.size())) {
         searchOp._names[i]._name = msg.names[i].name;
         searchOp._names[i]._claim = false;
     }
-    static_assert(sizeof(searchOp._src) >= INET6_ADDRSTRLEN+1, "");
-    switch(msg.replyDest.family()) {
-    case AF_INET:
-        evutil_inet_ntop(AF_INET, &msg.replyDest->in.sin_addr,
-                         searchOp._src, sizeof(searchOp._src)-1);
-        break;
-    case AF_INET6:
-        evutil_inet_ntop(AF_INET6, msg.replyDest->in6.sin6_addr.s6_addr,
-                         searchOp._src, sizeof(searchOp._src)-1);
-        break;
-    default:
-        strcpy(searchOp._src, "?");
-        break;
-    }
+    ipAddrToDottedIP(&msg.server->in, searchOp._src, sizeof(searchOp._src));
 
     {
         auto G(sourcesLock.lockReader());
@@ -834,8 +827,12 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     }
 
     // "pvlist" breaks unless we honor mustReply flag
-    if(!msg.mustReply && (nreply==0 || !(msg.protoTCP || msg.protoTLS)))
-        return; // no result, and no forced reply
+    if (nreply == 0 && msg.mustReply) {} // discover
+    else if(nreply != 0 && msg.protoTCP && canRespondToTcpSearch()) {} // regular TCP
+    else if(nreply != 0 && msg.protoTLS && canRespondToTlsSearch()) {} // TLS
+    else {
+        return; // do not send
+    }
 
     VectorOutBuf M(true, searchReply);
 
@@ -844,14 +841,12 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     _to_wire<12>(M, effective.guid.data(), false, __FILE__, __LINE__);
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
-#ifdef PVXS_ENABLE_OPENSSL
-    if(msg.protoTLS && tls_context && effective.tls_port) {
-        to_wire(M, uint16_t(effective.tls_port));
+
+    if (msg.protoTLS && canRespondToTlsSearch()) {
+        to_wire(M, effective.tls_port);
         to_wire(M, "tls");
-    } else
-#endif
-    { // protoTCP
-        to_wire(M, uint16_t(effective.tcp_port));
+    } else {
+        to_wire(M, effective.tcp_port);
         to_wire(M, "tcp");
     }
     // "found" flag
@@ -861,7 +856,7 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     for(auto i : range(msg.names.size())) {
         if(searchOp._names[i]._claim) {
             to_wire(M, uint32_t(msg.names[i].id));
-            log_debug_printf(serversearch, "Search claimed '%s'\n", msg.names[i].name);
+            log_debug_printf(serversearch, "onSearch(): Search claimed '%s'\n", msg.names[i].name);
         }
     }
     auto pktlen = M.save()-searchReply.data();
@@ -914,8 +909,7 @@ void Server::Pvt::doBeacons(short evt)
             auto lvl = Level::Warn;
             if(err==EINTR || err==EPERM)
                 lvl = Level::Debug;
-            log_printf(serverio, lvl, "Beacon tx %s error (%d) %s\n",
-                       (SB()<<dest).str().c_str(),
+            log_printf(serverio, lvl, "Beacon tx error (%d) %s\n",
                        err, evutil_socket_error_to_string(err));
 
         } else if(unsigned(ntx)<pktlen) {
@@ -947,6 +941,59 @@ void Server::Pvt::doBeaconsS(evutil_socket_t fd, short evt, void *raw)
     }
 }
 
+void Server::reconfigure(const Config& inconf) {
+    if (!pvt) throw std::logic_error("NULL Server");
+
+    auto newconf(inconf);
+    newconf.expand();  // maybe catch some errors early
+
+    log_info_printf(serversetup, "Reconfiguring Server Context%s", "\n");
+
+    // is the current server running?
+
+    Pvt::state_t prev_state;
+    pvt->acceptor_loop.call([this, &prev_state]() { prev_state = pvt->state; });
+
+    bool was_running = prev_state == Pvt::Running || prev_state == Pvt::Starting;
+
+    if (was_running) pvt->stop();
+
+    decltype(pvt->sources) transfers;
+    decltype(pvt->builtinsrc) builtin;
+
+    // copy all Source, including builtin
+    {
+        auto G(pvt->sourcesLock.lockReader());
+
+        transfers = pvt->sources;
+        builtin = pvt->builtinsrc;
+    }
+
+    // completely destroy the current/old server to free up TCP ports
+    pvt.reset();
+
+    // build up a new, empty, server
+    try {
+        Server newsrv(newconf);
+        pvt = std::move(newsrv.pvt);
+    } catch (std::exception& e) {
+        log_warn_printf(serversetup, "Server Reconfiguration failed: %s\n", e.what());
+    }
+
+    {
+        auto G(pvt->sourcesLock.lockWriter());
+
+        pvt->sources = transfers;
+        pvt->builtinsrc = builtin;
+    }
+
+    if (was_running) {
+        pvt->start();
+        log_info_printf(serversetup, "Resuming Server after Reconfiguration%s", "\n");
+    }
+}
+
+
 Source::~Source() {}
 
 Source::List Source::onList() {
@@ -966,7 +1013,6 @@ void Source::show(std::ostream& strm)
 }
 
 OpBase::~OpBase() {}
-RemoteLogger::~RemoteLogger() {}
 
 ChannelControl::~ChannelControl() {}
 

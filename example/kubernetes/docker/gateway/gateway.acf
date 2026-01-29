@@ -1,0 +1,32 @@
+UAG(USERS) {
+    "x509/guest",
+    "x509/operator",
+    "x509/remote"
+}
+
+UAG(SPECIAL_USERS) {
+    "x509/operator"
+}
+
+ASG(SPECIAL) {
+    RULE(1,READ) {
+        UAG(USERS)
+    }
+    RULE(1,WRITE,TRAPWRITE) {
+        UAG(SPECIAL_USERS)
+    }
+}
+
+ASG(CERT_CREATE) {
+    RULE(1,WRITE)
+}
+
+ASG(CERT_STATUS) {
+    RULE(1,READ)
+}
+
+ASG(DEFAULT) {
+    RULE(1,READ) {
+        UAG(USERS)
+    }
+}

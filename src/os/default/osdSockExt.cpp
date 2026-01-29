@@ -24,6 +24,8 @@ extern "C" {
 }
 #endif
 
+#include <epicsSignal.h>
+
 // some *BSD (OSX but not RTEMS5/libbsd) use IPV6_PKTINFO to enable RX
 #if defined(IPV6_PKTINFO) && !defined(IPV6_RECVPKTINFO)
 #  define IPV6_RECVPKTINFO IPV6_PKTINFO
@@ -47,6 +49,7 @@ void oseDoOnce()
 #else
     evsocket::ipstack = evsocket::GenericBSD;
 #endif
+    epicsSignalInstallSigPipeIgnore();
 }
 
 void osiSockAttachExt() {

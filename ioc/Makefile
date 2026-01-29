@@ -9,16 +9,22 @@
 TOP=..
 
 include $(TOP)/configure/CONFIG
+# cfg/ sometimes isn't correctly included due to an issue in epics-base
+# so we do here (maybe again) as workaround
+-include $(wildcard $(TOP)/cfg/CONFIG*)
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
+
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+endif
 
 # access to private headers
 USR_CPPFLAGS += -I$(TOP)/src
 USR_CPPFLAGS += -DPVXS_IOC_API_BUILDING
 
 DBD += pvxsIoc.dbd
-CLEANS += pvxsIoc.dbd
 
 INC += pvxs/iochooks.h
 
@@ -66,7 +72,8 @@ pvxsIoc_SRCS += dummygroup.cpp
 
 endif # BASE_7_0
 
-pvxsIoc_LIBS += $(EPICS_BASE_IOC_LIBS)
+# LIB_LIB already includes EPICS_BASE_IOC_LIBS: unnecessary here
+#pvxsIoc_LIBS += $(EPICS_BASE_IOC_LIBS)
 
 else # BASE_3_15
 
@@ -81,19 +88,15 @@ LIB_LIBS += pvxs
 LIB_LIBS += $(EPICS_BASE_IOC_LIBS)
 #===========================
 
-# select DBD file depending on supported syntax
-ifdef BASE_7_0
-PVXS_DBD = pvxs7x.dbd
-else
-PVXS_DBD = pvxs3x.dbd
-endif
-
 include $(TOP)/configure/RULES
+-include $(wildcard $(TOP)/cfg/RULES*)
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
-$(COMMON_DIR)/pvxsIoc.dbd: ../$(PVXS_DBD)
+ifdef BASE_7_0
+../O.Common/pvxsIoc.dbd: ../pvxs7x.dbd
 	$(CP) $< $@
-
-pvxsIoc.dbd$(DEP):
-	echo "$(COMMONDEP_TARGET): ../Makefile" > $@
+else
+../O.Common/pvxsIoc.dbd: ../pvxs3x.dbd
+	$(CP) $< $@
+endif
