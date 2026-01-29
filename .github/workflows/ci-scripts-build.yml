@@ -22,8 +22,7 @@ env:
   CMP: gcc
   _PVXS_ABORT_ON_CRIT: 1
   PVXS_LOG: pvxs.*=WARN
-  # test debugging logic in testtls
-  SSLKEYLOGFILE: key.log
+  OPENSSL_VERSION: "3.1.4"
 
 jobs:
   native:
@@ -48,7 +47,6 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0-secure-pvaccess"
             extra: "CMD_CPPFLAGS=-Werror"
             doc: 1
 
@@ -64,7 +62,6 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0-secure-pvaccess"
             # https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_macros.html
             extra: "CMD_CPPFLAGS=\"-D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC\""
             doc: 1
@@ -73,48 +70,43 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0-secure-pvaccess"
             extra: "CMD_CXXFLAGS=-std=c++17"
 
           - name: Cross mingw64 DLL
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0-secure-pvaccess"
             cross: "windows-x64-mingw"
+#            extra: "WITH_OPENSSL=YES"
 
           - name: Cross mingw64 static
             os: ubuntu-latest
             cmp: gcc
             configuration: static
-            base: "7.0-secure-pvaccess"
             cross: "windows-x64-mingw"
+#            extra: "WITH_OPENSSL=YES"
 
           - name: RTEMS5
             os: ubuntu-22.04
             cmp: gcc
             configuration: default
-            base: "7.0-secure-pvaccess"
             cross: "RTEMS-pc686-qemu@5"
 
           - name: Native Linux with clang
             os: ubuntu-latest
             cmp: clang
             configuration: default
-            base: "7.0-secure-pvaccess"
 
           - name: Native Linux with clang ubsan
             os: ubuntu-latest
             cmp: clang
             configuration: default
-            base: "7.0-secure-pvaccess"
             extra: "CMD_CFLAGS=-fsanitize=undefined CMD_CXXFLAGS=-fsanitize=undefined CMD_LDFLAGS=-fsanitize=undefined"
 
           - name: Native Linux with libevent stable
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0-secure-pvaccess"
             libevent: "release-2.1.12-stable"
 
           - name: Native Linux with 7.0.2
@@ -145,21 +137,18 @@ jobs:
             os: macos-latest
             cmp: clang
             configuration: default
-            base: "7.0-secure-pvaccess"
 
           - name: vs2022 DLL
             os: windows-2022
             cmp: vs2022
             configuration: debug
-            base: "7.0-secure-pvaccess"
-            extra: "CMD_CXXFLAGS=-analyze"
+            extra: "CMD_CXXFLAGS=-analysis"
 
           - name: vs2022 static
             os: windows-2022
             cmp: vs2022
             configuration: static-debug
-            base: "7.0-secure-pvaccess"
-            extra: "CMD_CXXFLAGS=-analyze"
+            extra: "CMD_CXXFLAGS=-analysis"
 
     steps:
     - uses: actions/checkout@v4
@@ -259,13 +248,11 @@ jobs:
             image: centos:7
             cmp: gcc
             configuration: default
-            base: "7.0-secure-pvaccess"
 
           - name: Linux fedora latest
             image: fedora:latest
             cmp: gcc
             configuration: default
-            base: "7.0-secure-pvaccess"
 
     steps:
     - uses: actions/checkout@v3
